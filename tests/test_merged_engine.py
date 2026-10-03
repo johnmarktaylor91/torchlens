@@ -249,7 +249,7 @@ class TestAuditMatrix:
     """Merge-side rows of the v5 1.3 PRE-JOIN audit matrix."""
 
     def test_asymmetric_arming_conflicts_with_zero_gaps_and_zero_joins(self):
-        # Sol's repro shape: rank 0 evidences {0: seeded (destroyed), 1: wrapped}
+        # The review's repro shape: rank 0 evidences {0: seeded (destroyed), 1: wrapped}
         # and captured the recreated group as uid (digest, 1); late-arming
         # rank 1 evidences {0: seeded} and captured it as (digest, 0). The
         # uids never join -- the audit must refuse BEFORE presence-gap

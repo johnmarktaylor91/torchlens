@@ -63,7 +63,7 @@ def test_fixture_model_is_module_level_picklable() -> None:
 
 
 def test_state_contracts_stay_unset_pending_fork_a() -> None:
-    """FORK-A is JMT's call; no template pre-empts it.
+    """FORK-A is a maintainer decision; no template pre-empts it.
 
     The 2-1 PURE_OBSERVER lean is real but was never stress-tested as a
     stable majority (the two moving labs swapped sides in round 3); the
@@ -75,7 +75,7 @@ def test_state_contracts_stay_unset_pending_fork_a() -> None:
         assert template.state_contract in PURITY_CONTRACTS
         assert template.state_contract == "UNSET", (
             f"{template.template_id} pre-empted FORK-A with "
-            f"{template.state_contract!r}; the fork is batched for JMT"
+            f"{template.state_contract!r}; the fork is batched for a maintainer decision"
         )
 
 

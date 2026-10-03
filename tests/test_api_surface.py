@@ -170,7 +170,7 @@ def test_all_matches_frozen_target_ledger() -> None:
 
     Phase 1a budget was 40; backward-parity sprint added 6 (grad_clip, grad_noise,
     grad_clamp, grad_fn, intervening, label) = 46; post-backward
-    megasprint P1 added `output` (multi-output module selector disambiguation
+    workstream P1 added `output` (multi-output module selector disambiguation
     per AD-7 / F-Multi) = 47; facets framework adds `facets` and B1 removes
     the duplicate `label` export = 47; v7 quantity types add 5 = 52; facets
     P2 adds `facet` and `head` selectors = 54; capture-unification P4 adds
@@ -197,7 +197,7 @@ def test_all_matches_frozen_target_ledger() -> None:
     top-level entry points; machinery lives in `torchlens.merged`) = 96.
     The grind R39 cache remedy exports `clear_capture_cache` (the agreed
     user-facing half of the capture-cache bounds fix) = 97.
-    The L6 selection algebra (feature megasprint, DOCUMENTED-UNSTABLE pending
+    The L6 selection algebra (feature work, DOCUMENTED-UNSTABLE pending
     naming-session ratification) adds `Selection`, `ResolvedSelection`,
     `units`, `params`, and `random_selection` = 102; its stage 2 adds
     `Edit` (public edit-object type; HelperSpec is the deprecated alias)
@@ -215,7 +215,7 @@ def test_all_matches_frozen_target_ledger() -> None:
     the others and every hand-derived subtotal was wrong. The subspace
     producer wave adds `subspace` (direction/subspace support selection with
     mandatory basis provenance, DOCUMENTED-UNSTABLE) on top of that. The
-    completeness-megasprint F39 unhide promotes the shipped streaming-stats
+    completeness work F39 unhide promotes the shipped streaming-stats
     surface `stats` and `aggregate` (conflict-ledger row 8) = 116.
     Paper-era compatibility shims remain available through ``__getattr__`` but
     are not advertised in ``__all__``.

@@ -1,6 +1,6 @@
 """Parameter truth (A2/A3/A12): object identity, executed split, tri-state.
 
-Lane A07 (megasprint 2026-08-27). Spec: trilabs/summary/MEMO.md 3.3 + build item 7.
+Lane A07 (2026-08-27). Spec: the summary design memo 3.3 + build item 7.
 Canonical rule: total_params == sum(p.numel() for p in model.parameters()) by
 construction; ties counted once and NAMED; storage aliasing disclosed, never merged.
 """

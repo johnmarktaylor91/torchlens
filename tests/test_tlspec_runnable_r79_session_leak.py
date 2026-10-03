@@ -1,6 +1,6 @@
 """Session-provenance-stamp leak closure (r79, r78 free HIGH).
 
-Round-78 (free, Fable) demonstrated ONE root bug outside the r77 predicate's
+Round-78 (free, review) demonstrated ONE root bug outside the r77 predicate's
 session-scoped world: session cleanup removed provenance stamps by RE-TRAVERSING
 the live model tree (``_restore_session_param_state`` iterated
 ``model.parameters()``; ``_undecorate_model_tensors`` iterated

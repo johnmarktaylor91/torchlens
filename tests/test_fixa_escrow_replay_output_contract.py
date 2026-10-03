@@ -1,6 +1,6 @@
 """A05 FIX-A: the replay output-contract fix (leverage B1, listA row 2).
 
-Root cause (Opus N4, triple-replicated): ``_run_replay`` sliced every replay
+Root cause (review N4, triple-replicated): ``_run_replay`` sliced every replay
 member's ``container_path`` into the replayed call's output. A synthesized
 boundary output node records the MODEL-output container path there (honest
 output-contract metadata) while replaying THROUGH its parent's function

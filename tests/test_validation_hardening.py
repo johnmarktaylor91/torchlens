@@ -994,7 +994,7 @@ def test_genuine_raw_hook_replacement_mints_journal_edit_and_validates() -> None
 def test_forged_journal_edit_does_not_bless_plain_placeholder() -> None:
     """FAIL-AFTER-WHERE-PASSED-BEFORE: a forged edit record stays inert.
 
-    Sol probe regression (extends the round-26 pin to the edit-record
+    Review probe regression (extends the round-26 pin to the edit-record
     surface): appending a bare ``InterventionAppliedEvent`` through the
     ordinary journal writer used to bless the exact plain-capture placeholder
     the 2026-06-02 lesson exists to fail, because corroboration matched on

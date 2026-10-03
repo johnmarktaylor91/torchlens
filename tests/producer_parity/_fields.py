@@ -431,10 +431,10 @@ TIER_CLASSIFICATION: dict[str, str] = {
 # Volatile-token buckets for the two-check parity discharge (DoR section 6.2).
 #
 # ``independent_root`` names the live-runtime observation path Check B uses;
-# it must NEVER route through the draft/record under test (Opus v4 note N1).
+# it must NEVER route through the draft/record under test (review v4 note N1).
 # ``attested=False`` buckets are the named presence-only residual class.
 # ``retention_premise`` records what keeps Check A's partition sound against
-# id() reuse (Opus v4 note N4).
+# id() reuse (review v4 note N4).
 # --------------------------------------------------------------------------
 
 VOLATILE_BUCKETS: dict[str, dict[str, object]] = {

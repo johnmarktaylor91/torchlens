@@ -1,6 +1,6 @@
 """External counter pins (A07 row gate): closed forms + gpt2@16 + oracles.
 
-Lane A07 (megasprint 2026-08-27). External oracles rank ABOVE internal
+Lane A07 (2026-08-27). External oracles rank ABOVE internal
 consistency (summary memo 3.1): summary and profile once agreed with each
 other while both +31% wrong. The gpt2 pin is the identity-partition figure
 3,974,725,648 (costreport item 24; supersedes the label-sweep 3,974,578,192).

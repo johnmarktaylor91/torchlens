@@ -800,7 +800,7 @@ def test_concat_clones_events_and_never_mutates_the_source_stream() -> None:
 def test_concat_rejects_invalid_source_sequencing() -> None:
     """FAIL-AFTER-WHERE-PASSED-BEFORE: an invalid source seq domain refuses to merge.
 
-    Sol be2-closure probe regression: a source whose cross-lane seq domain is
+    Review be2-closure probe regression: a source whose cross-lane seq domain is
     invalid (a duplicate, unstamped, or counter-bypassing stamp -- exactly what
     the journal seq invariants reject on a standalone stream) used to be
     silently sorted with dict-lane-order tie-breaking and re-stamped into a

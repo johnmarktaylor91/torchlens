@@ -148,8 +148,8 @@ def test_apply_refusal_axes(log):
 
 
 def test_param_and_mixed_plan_refusals(log):
-    """PARAM edits ride parameter substitution on the replay engine (the JMT
-    2026-08-17 param-operand ruling supersedes the D3 typed-refusal default
+    """PARAM edits ride parameter substitution on the replay engine (the
+    2026-08-17 param-operand decision supersedes the D3 typed-refusal default
     there; tests/test_param_substitution.py pins the substitution behavior).
     Off-replay engines and mixed plans still refuse typed."""
 

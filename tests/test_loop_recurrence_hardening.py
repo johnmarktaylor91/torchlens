@@ -4,14 +4,14 @@ Locks the fixes for the round-20 adversarial findings:
 
 * Multi-output calls (LSTMCell h/c, fused RNN/GRU/LSTM output/state slots) must
   produce one recurrent layer PER OUTPUT SLOT, never interleaved passes of one
-  layer (Fable F3, Sol fused-module generalization, seq2seq equivalence_symmetry).
+  layer (review F3, review's fused-module generalization, seq2seq equivalence_symmetry).
 * Grouping must be invariant to sibling capture order / ``data_children`` tuple
-  order (Opus H1) -- the load-bearing metamorphic property.
+  order (review H1) -- the load-bearing metamorphic property.
 * The ``recurrence_anchored`` bypass must work for its canonical two-call case
-  (Fable F1).
+  (review F1).
 * Param-free ops interleaved between weight-tied loops must respect loop
   boundaries; shared weights in structurally-disjoint branches must not induce
-  spurious recurrence in independent ops (Fable F2, Opus M1).
+  spurious recurrence in independent ops (review F2, review M1).
 """
 
 import dataclasses
@@ -69,7 +69,7 @@ def _assert_structurally_coherent(traced) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Direct-grouper order-invariance fuzz (LOAD-BEARING, Opus H1)
+# Direct-grouper order-invariance fuzz (LOAD-BEARING, review H1)
 # ---------------------------------------------------------------------------
 
 
@@ -277,7 +277,7 @@ def test_straight_chain_never_grouped() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Multi-output cells: per-output-slot layers (Fable F3 + Sol fused + capprov)
+# Multi-output cells: per-output-slot layers (review F3 + review fused + capprov)
 # ---------------------------------------------------------------------------
 
 
@@ -450,7 +450,7 @@ def test_co_outputs_of_single_call_not_recurrent() -> None:
 
 
 # ---------------------------------------------------------------------------
-# recurrence_anchored N=2 bypass (Fable F1)
+# recurrence_anchored N=2 bypass (review F1)
 # ---------------------------------------------------------------------------
 
 
@@ -481,7 +481,7 @@ def test_reused_module_two_calls_grouped(act, n_calls: int) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Loop-boundary respect for param-free ops (Fable F2 + Opus M1)
+# Loop-boundary respect for param-free ops (review F2 + review M1)
 # ---------------------------------------------------------------------------
 
 

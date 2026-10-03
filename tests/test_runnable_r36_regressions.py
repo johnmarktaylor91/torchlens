@@ -1205,7 +1205,7 @@ class TestContextFieldValidation:
 
 
 # ======================================================================================
-# Class-closure meta-gates (Sol r37): structural guards a round-38 hunter cannot bypass
+# Class-closure meta-gates (review r37): structural guards a round-38 hunter cannot bypass
 # ======================================================================================
 
 

@@ -2,7 +2,7 @@
 
 These files pin the EXECUTED vendor contract for the TorchLens Model Explorer
 exporter (`torchlens/export/_model_explorer/`). Three of the four data-loss
-bugs the 2026-08-22 tri-lab panel found are invisible to a dataclass parse and
+bugs the 2026-08-22 design-review panel found are invisible to a dataclass parse and
 visible only to Model Explorer's real graph processor, so the harness runs the
 real pinned worker under Node instead of trusting any schema reading.
 

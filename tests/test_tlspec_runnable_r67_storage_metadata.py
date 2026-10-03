@@ -233,7 +233,7 @@ def test_r67_placement_read_shared_state_refuses_every_spelling(
 ) -> None:
     """Observed True on a CPU slot refuses at save -- identically for every spelling.
 
-    Sol's re-run defect verbatim: ``self.b.untyped_storage().is_shared()`` on a shared
+    The review's re-run defect verbatim: ``self.b.untyped_storage().is_shared()`` on a shared
     registered buffer saved and replayed the captured arm ``verified`` while a fresh
     Oracle-1 destination was unshared and took the other arm.
     """

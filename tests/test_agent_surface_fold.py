@@ -206,7 +206,7 @@ def test_fold_seam_decision_rule_documented_on_gpt2() -> None:
 
     The reuse path (the renderer's collapse universe) shipped MEASURED-
     DEGENERATE at depth: no pinned context produced block-level boxes on
-    gpt2, so the run-aware fold ships agent-side. Opus's stated flip
+    gpt2, so the run-aware fold ships agent-side. the review's stated flip
     condition was "any pinned context that produces block-level boxes on
     gpt2" -- if the renderer improves and this test FAILS, revisit the seam
     (factor the repeat classifier into the shared structural core) instead
@@ -230,6 +230,6 @@ def test_fold_seam_decision_rule_documented_on_gpt2() -> None:
     assert fold.membership().keys() == {str(op.label) for op in log.layer_list}
     assert not block_level_boxes, (
         "the collapse plan now produces block-level boxes on gpt2 "
-        f"({box_names[:10]}...): Opus's D1 flip condition fired -- revisit "
+        f"({box_names[:10]}...): the review's D1 flip condition fired -- revisit "
         "the fold seam per the decision rule instead of keeping two grains"
     )

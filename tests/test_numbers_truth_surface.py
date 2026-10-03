@@ -1,6 +1,6 @@
 """Numbers-truth surface fixes: front door (A8), escape bytes (A11), memory footer (A7).
 
-Lane A07 (megasprint 2026-08-27). Spec: trilabs/summary/MEMO.md build items 1-3.
+Lane A07 (2026-08-27). Spec: the summary design memo build items 1-3.
 """
 
 from __future__ import annotations

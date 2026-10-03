@@ -1,7 +1,7 @@
 """Round-28/31 capture-attribution regression pins.
 
-Locks the fixes for the round-31 capture-reseal findings (Sol) and the
-validation false-negative hunt (Fable): H2 runtime tensor control-arg parents,
+Locks the fixes for the round-31 capture-reseal findings (review) and the
+validation false-negative hunt (review): H2 runtime tensor control-arg parents,
 H1/M3 foreach attribution, M4 element-overlap alias propagation, M5 in-place
 grad_fn metadata, M6 tensor property setters, and the identity-witness
 validation strengthening. Each test reproduces the original defect shape and

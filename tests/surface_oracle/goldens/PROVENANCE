@@ -262,7 +262,7 @@ recorded: 2026-08-19T15:49:11.834311+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: shim-removal lane 2026-08-19: the deprecated trace-level conditional_then/elif/else_entry_edges alias properties are deleted (JMT interim-phase ruling), removing them from the public record surface
+reason: shim-removal lane 2026-08-19: the deprecated trace-level conditional_then/elif/else_entry_edges alias properties are deleted (decided, interim phase), removing them from the public record surface
 env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 5bde32f0919538c641645bad9d75fee841d116f2 (dirty)
@@ -270,7 +270,7 @@ recorded: 2026-08-20T01:11:43.083650+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: shim-removal lane 2026-08-19: the deprecated trace-level conditional_then/elif/else_entry_edges alias properties are deleted (JMT interim-phase ruling), removing them from the public record surface
+reason: shim-removal lane 2026-08-19: the deprecated trace-level conditional_then/elif/else_entry_edges alias properties are deleted (decided, interim phase), removing them from the public record surface
 env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 5bde32f0919538c641645bad9d75fee841d116f2 (dirty)
@@ -278,7 +278,7 @@ recorded: 2026-08-20T01:11:43.102900+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: shim-removal lane 2026-08-19: the deprecated trace-level conditional_then/elif/else_entry_edges alias properties are deleted (JMT interim-phase ruling), removing them from the public record surface
+reason: shim-removal lane 2026-08-19: the deprecated trace-level conditional_then/elif/else_entry_edges alias properties are deleted (decided, interim phase), removing them from the public record surface
 env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 5bde32f0919538c641645bad9d75fee841d116f2 (dirty)
@@ -286,7 +286,7 @@ recorded: 2026-08-20T01:11:43.120512+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: shim-removal lane 2026-08-19: the deprecated trace-level conditional_then/elif/else_entry_edges alias properties are deleted (JMT interim-phase ruling), removing them from the public record surface
+reason: shim-removal lane 2026-08-19: the deprecated trace-level conditional_then/elif/else_entry_edges alias properties are deleted (decided, interim phase), removing them from the public record surface
 env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 5bde32f0919538c641645bad9d75fee841d116f2 (dirty)
@@ -294,7 +294,7 @@ recorded: 2026-08-20T01:11:43.141313+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: shim-removal lane 2026-08-19: the deprecated trace-level conditional_then/elif/else_entry_edges alias properties are deleted (JMT interim-phase ruling), removing them from the public record surface
+reason: shim-removal lane 2026-08-19: the deprecated trace-level conditional_then/elif/else_entry_edges alias properties are deleted (decided, interim phase), removing them from the public record surface
 env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 5bde32f0919538c641645bad9d75fee841d116f2 (dirty)
@@ -302,7 +302,7 @@ recorded: 2026-08-20T01:11:43.159230+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: shim-removal lane 2026-08-19: the deprecated trace-level conditional_then/elif/else_entry_edges alias properties are deleted (JMT interim-phase ruling), removing them from the public record surface
+reason: shim-removal lane 2026-08-19: the deprecated trace-level conditional_then/elif/else_entry_edges alias properties are deleted (decided, interim phase), removing them from the public record surface
 env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 5bde32f0919538c641645bad9d75fee841d116f2 (dirty)

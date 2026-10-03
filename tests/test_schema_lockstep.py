@@ -1204,7 +1204,7 @@ def test_facade_plumbing_allowance_stays_minimal() -> None:
 #: also update ``docs/reference/merged_trace_contract.md``, whose stated value
 #: is checked against the code below.
 VERSION_AUTHORITY_PINS: dict[str, int] = {
-    # v9: the completeness-megasprint coordinated schema write (2026-08-27,
+    # v9: the completeness-work coordinated schema write (2026-08-27,
     # lane C07) — audit-row grammar admissions (ACT site source, PARAM
     # rows/recipes, EVENT envelope + hash-chain extension), the sidecar
     # annotations flip to plain persistence, reserved annotation families

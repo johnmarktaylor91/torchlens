@@ -119,7 +119,7 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # 155 -> 156 (below): C02's sound stats kernel routes per dtype family
     # and per gate (_float_kernel/run_kernel/_distribution_zone) -- the
     # branching IS the per-family policy table; deliberate, reviewed.
-    # 455->464 / 196->198 / 264->267 (2026-08-28 megasprint F06 attribution):
+    # 455->464 / 196->198 / 264->267 (2026-08-28 workstream F06 attribution):
     # the attrib panel memo mandates SINGLE-owner method bodies whose branch
     # structure IS the specified contract -- integrated_gradients (chunked
     # step runner + audit + endpoints), text() (task-aware baseline ladder +
@@ -162,7 +162,7 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # and distribution_relation folded its lookup-failure arms into the
     # fail_open chokepoint reads; the F10 contribution stays at the landed
     # train's 199.
-    # 199->200 (2026-08-28 megasprint F16, stated reason): cardtree's
+    # 199->200 (2026-08-28 workstream F16, stated reason): cardtree's
     # ``_render_node`` is the closed per-kind CardNode leaf serializer --
     # one return per node kind by design (essential dispatch, the
     # engineering-rules carve-out); F16's CardHtml kind adds the seventh.
@@ -197,7 +197,7 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # dodge the count would be a worse surface). FOUR independent lanes each
     # raised this ceiling this sprint with a stated reason; the value is their
     # UNION, measured at merge, never a hand-derived subtotal or a pick-one.
-    # 2026-08-27 megasprint C06 (fix cycle 2): the lane's two new offenders
+    # 2026-08-27 workstream C06 (fix cycle 2): the lane's two new offenders
     # (HistoryCollector.__init__ / .step) were refactored below the ceiling
     # instead of ledgered -- plumbing knobs bundle into WatchSettings and the
     # per-step optimizer-truth disclosures into StepTruth (both frozen
@@ -207,7 +207,7 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # prepare/trace_kwargs seams) -- an argument object would be a worse API
     # for documented keyword knobs; every internal F24 helper was refactored
     # under the limit instead.
-    # 428->429 (2026-08-28 megasprint F31): the ONE new site is the public
+    # 428->429 (2026-08-28 workstream F31): the ONE new site is the public
     # LIT factory `tl.bridge.lit.model()` -- 12 keyword construction knobs
     # whose spellings the LIT-panel memo rules individually (D1-D11,
     # D18-D19); bundling user-facing knobs into a config object is a UX
@@ -215,7 +215,7 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # INTERNAL offenders (both `_package_rows` assemblers) were refactored
     # below the ceiling instead (redundant param dropped / products bundled
     # into the frozen `_GenerationProducts`), per the C06 precedent.
-    # 2026-08-28 megasprint F09 (fix cycle): the lane's two public offenders
+    # 2026-08-28 workstream F09 (fix cycle): the lane's two public offenders
     # were refactored below the ceiling instead of ledgered (C06 house
     # pattern) -- tl.report.mfu's three D16/D17 disclosure knobs bundle into
     # the frozen MfuProvenance dataclass (validation unchanged at the mfu()
@@ -225,7 +225,7 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # view surface. The lane's PRIVATE offenders (_remainder,
     # _assemble_level_rows, _rollup_row) were refactored in-lane. F09 adds
     # NO ledger raise; the ceiling stays at F31's granted 429.
-    # 429->440 (2026-08-28 megasprint F06 attribution): the kit's public
+    # 429->440 (2026-08-28 workstream F06 attribution): the kit's public
     # keyword-only surfaces are the panel-specified API shapes (noise_tunnel's
     # two-route binder args, gradient_shap's pool/draw-bank knobs, text()'s
     # baseline/ladder knobs, occlusion_map's geometry, sensitivity's ladder) --
@@ -234,7 +234,7 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # explicit state (B023 discipline binds loop state as keyword defaults).
     # F06's +11 lands atop F31's granted 429 (T52-tip reconcile); the ceiling
     # is the UNION measured at merge, never a hand-derived subtotal.
-    # 440->441 (2026-08-28 megasprint F26): torchlens.trackers.watch() is the
+    # 440->441 (2026-08-28 workstream F26): torchlens.trackers.watch() is the
     # ONE new ledgered site -- the flat keyword-only attach surface is the
     # trackers panel's designed public shape (memo 3.13: to=/signals=/select=/
     # optimizer=/step=/every=/...); packing user knobs into a sub-object to
@@ -243,7 +243,7 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # below the ceiling instead (_SessionConfig bundle; _settle_step reads
     # entry state off the session). F26's +1 lands atop the landed 440
     # (T59-tip reconcile); the value is the union measured at merge.
-    # 2026-08-28 megasprint F19: 428 -> 429 on the lane's own baseline for
+    # 2026-08-28 workstream F19: 428 -> 429 on the lane's own baseline for
     # exactly ONE site -- tl.transforms.srp()'s six parameters are the
     # transforms memo's PINNED placeholder surface (memo section 6 spells the
     # signature verbatim); spec-drives-code beats the arg count. The lane's
@@ -264,7 +264,7 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # spelling) -- only check_determinism's documented 9-knob public door
     # stays ledgered. Measured 442 on the merged tree (pinned ruff, isolated
     # mode, torchlens/ scope; sprint tip alone measured 441).
-    # 2026-08-29 megasprint F16 (T67f re-reconcile, MIN law): F16's prior +2
+    # 2026-08-29 workstream F16 (T67f re-reconcile, MIN law): F16's prior +2
     # stated-reason row (the offline-report doors tl.export.html and
     # export._report.write_report at 443) is WITHDRAWN -- the conflicted row
     # resolves to the MIN of both sides and F16 paid its own two sites down
@@ -331,7 +331,7 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # user's capture exception; it re-surfaces coded
     # (failed_capture_release_incomplete), the same never-mask class as the
     # existing teardown sites.
-    # 540->541 (2026-08-26 megasprint A10): snapshot_capture_state's clone
+    # 540->541 (2026-08-26 workstream A10): snapshot_capture_state's clone
     # loop moved INSIDE its guard (the historical try/except guarded only
     # state_dict(), so unclonable state CRASHED instead of honouring the
     # documented None contract); the guard is deliberately broad because the

@@ -1291,7 +1291,7 @@ def test_jax_builtin_output_pytree_container_reconstructs() -> None:
 
 
 def test_jax_end_to_end_bare_interventions_flip_refuses_typed() -> None:
-    """Sol probe, live: interventions=True flipped in place on the registered JAX
+    """Review probe, live: interventions=True flipped in place on the registered JAX
     spec must refuse typed at trace() — never return a trace with the
     intervention silently ignored.
     """

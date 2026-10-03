@@ -4,8 +4,8 @@ History: this module was the R48 deprecation census. It inventoried eleven
 families (~183 deprecated spellings: moved top-level names, paper-era API
 shims, warning flat option kwargs, renamed callables, alias properties,
 no-op kwargs/functions, deprecated values) with removal metadata, because the
-shims had accumulated with no expiry. The 2026-08-19 shim-removal lane (JMT
-ruling: interim-phase deprecation shims are not justified — remove them)
+shims had accumulated with no expiry. The 2026-08-19 shim-removal lane (decided:
+interim-phase deprecation shims are not justified — remove them)
 deleted every family outright, along with ``warn_deprecated_alias``,
 ``TorchLensDeprecationWarning``, and the ``REMOVED_IN`` window.
 

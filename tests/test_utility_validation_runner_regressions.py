@@ -1,6 +1,6 @@
 """Regression locks for three utility/validation-runner bugs.
 
-Covers (audit IDs from ``.project-context/todos.md``):
+Covers (audit IDs from the private maintainer task list):
 
 1. **FUNC-CALL-LOC-LEAK** — ``FuncCallLocation`` must not retain a strong
    reference to the captured frame's function object when source loading is

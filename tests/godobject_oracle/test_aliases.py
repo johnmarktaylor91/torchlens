@@ -130,7 +130,7 @@ def test_record_lifetime_pinned_by_trace() -> None:
 
 @pytest.mark.smoke
 def test_group_fields_return_live_immutable_views() -> None:
-    """Row 2 (JMT-FORK-1, decided 2026-08-12): live immutable group views.
+    """Row 2 (FORK-1, decided 2026-08-12): live immutable group views.
 
     ``equivalent_ops``/``recurrent_ops`` reads resolve to their group's ONE
     cached immutable view — identity-stable, O(1), and alias-safe because
@@ -162,7 +162,7 @@ def test_group_fields_return_live_immutable_views() -> None:
 
 @pytest.mark.smoke
 def test_relation_reads_are_immutable_views() -> None:
-    """Row 3 (JMT-FORK-1, decided 2026-08-12): relation reads are views.
+    """Row 3 (FORK-1, decided 2026-08-12): relation reads are views.
 
     Finished-trace relation accessors return IMMUTABLE views — ``tuple`` for
     label sequences, ``frozenset`` for label sets — with identity-stable
@@ -229,7 +229,7 @@ def test_multi_output_siblings_share_call_facts_not_identity() -> None:
     assert first.multi_output_index != second.multi_output_index
     assert first.layer_label != second.layer_label
 
-    # Relation views are immutable (JMT-FORK-1), so sibling cross-talk through
+    # Relation views are immutable (FORK-1), so sibling cross-talk through
     # in-place mutation is impossible by construction. Assignment stays
     # per-record: rebinding one sibling's cell never reaches the other.
     original_first, original_second = first.children, second.children
@@ -281,7 +281,7 @@ def test_op_copy_selective_depth() -> None:
         assert clone.parent_params is op.parent_params
 
     # Relation metadata: equal content; immutable views MAY be shared across
-    # records (JMT-FORK-1), so no distinct-identity requirement anymore.
+    # records (FORK-1), so no distinct-identity requirement anymore.
     assert clone.children == op.children
     assert isinstance(clone.children, tuple)
     # Rebinding the clone's cell never reaches the source op.
@@ -359,7 +359,7 @@ def test_source_trace_weakref_lifetime() -> None:
 
 @pytest.mark.smoke
 def test_equivalence_group_shared_live_view() -> None:
-    """Row 10 (JMT-FORK-1): one shared LIVE view per group, mutation impossible.
+    """Row 10 (FORK-1): one shared LIVE view per group, mutation impossible.
 
     Every member of an equivalence group reads THE same immutable view
     object (O(1), no per-read copies), and the one sanctioned group

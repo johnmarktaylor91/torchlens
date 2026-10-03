@@ -377,7 +377,7 @@ def test_record_dict_shadow_never_streams() -> None:
 def test_op_store_view_parent_mutation_never_leaks_after_isolation() -> None:
     """Eager fork isolation closes the parent->child first-read window.
 
-    Sol review finding 4: copy-on-first-read let a PARENT's in-place
+    Review finding 4: copy-on-first-read let a PARENT's in-place
     container mutation between fork time and the fork's first read leak
     into the fork. ``isolate_mutable_cells`` (called by the fork builder)
     snapshots every mutable-container cell at fork time.

@@ -45,7 +45,7 @@ _PLANT_FIELD = "_tl_save_selector_fire_count"
 #: time and retired only at the coordinated tlspec bump. Inventory assertions
 #: are made RELATIVE to this ledger so each new writer lane lands here as a
 #: reviewed one-line diff (registrar keeps the live inventory). The tlspec v8
-#: coordinated bump (2026-08-17) retired the entire feature-megasprint
+#: coordinated bump (2026-08-17) retired the entire feature-work
 #: inventory (FireRecord/HelperSpec edge families, the AtenOp primitive
 #: profile constellation, kernel telemetry, Op site_key + edge stores, the
 #: eight Trace markers, and the episode/_kernel_telemetry annotation keys):

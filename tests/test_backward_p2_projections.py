@@ -289,7 +289,7 @@ def test_higher_order_mixed_order_pass_records_reused_and_created_nodes() -> Non
 def test_backward_epoch_publication_is_atomic(monkeypatch: pytest.MonkeyPatch) -> None:
     """A failed epoch adoption publishes nothing, and the retry converges.
 
-    Sol review finding 2: revision/watermark were published and the epoch
+    Review finding 2: revision/watermark were published and the epoch
     list replaced BEFORE the three ``adopt_rows`` calls, so a mid-adoption
     failure left the facade holding the complete projection, the core epoch
     holding only ``grad_fn``, and the published revision suppressing retry

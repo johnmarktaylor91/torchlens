@@ -13,7 +13,7 @@ Consequences, locked here as the pre-migration contract:
 
 * The ONE reviewed expected-diff entry the design budgeted for this scenario
   is EMPTY; the P4 watermark transport must PRESERVE the no-loss behavior.
-* ``_raw_event_shape_hash`` is computed post-pre-0 on this path (Opus v4
+* ``_raw_event_shape_hash`` is computed post-pre-0 on this path (review v4
   note N7's claim, confirmed): the hash must stay byte-identical through the
   migration even in this scenario.
 """

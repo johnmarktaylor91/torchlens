@@ -1,6 +1,6 @@
 """F11 perf gates: B1 fingerprint memoization + B2 de-quadratic enumeration.
 
-Collapse memo items 6-7 (trilabs/collapse/MEMO.md, D6). These gates are
+Collapse memo items 6-7 (the collapse design memo, D6). These gates are
 deterministic COUNT instruments, never wall-clock: B1 pins that one sweep
 walks each member's wiring at most once and later sweeps on the same
 revision walk zero, and B2 pins that legality-grammar checks scale linearly

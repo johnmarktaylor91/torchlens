@@ -1,10 +1,10 @@
 """W1_F6 regression tests: facet scatter wrapper survival and spec graph-compat honesty.
 
-Sol-1 (CRITICAL): a sticky facet-slice hook (``tl.head(0, "q")`` + ``tl.zero_ablate()``)
+review-1 (CRITICAL): a sticky facet-slice hook (``tl.head(0, "q")`` + ``tl.zero_ablate()``)
 must fire through the slice-scatter wrapper on rerun; losing the wrapper silently
 applied the helper to the WHOLE home tensor (zeroing every head).
 
-Sol-2 (HIGH, REWORKED): ``check_spec_compat`` returns ``COMPATIBLE_WITH_CONFIRMATION``
+review-2 (HIGH, REWORKED): ``check_spec_compat`` returns ``COMPATIBLE_WITH_CONFIRMATION``
 for an EXECUTABLE spec whose saved ``graph_shape_hash`` mismatches but whose targets
 still resolve -- the honest coarse-preview verdict, since a hash mismatch cannot be told
 apart from cross-version hash drift on the SAME graph (the shipped v2.16 backcompat
@@ -101,7 +101,7 @@ def _traced_attention() -> tuple[nn.Module, torch.Tensor, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Sol-1: facet scatter wrapper must survive sticky storage and rerun.
+# review-1: facet scatter wrapper must survive sticky storage and rerun.
 # ---------------------------------------------------------------------------
 
 
@@ -183,7 +183,7 @@ def test_save_facet_hook_refuses_at_executable_levels(tmp_path: Any, level: str)
 
 
 # ---------------------------------------------------------------------------
-# Sol-2: executable spec compat verdict on graph_shape_hash mismatch.
+# review-2: executable spec compat verdict on graph_shape_hash mismatch.
 #
 # REWORK NOTE: the original W1_F6 change hard-raised GraphShapeMismatchError at
 # compat-preview time for ANY executable spec whose saved graph_shape_hash did not

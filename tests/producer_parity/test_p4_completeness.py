@@ -1,7 +1,7 @@
 """P4 completeness fixture: the live mutator sites against the closed registry.
 
 Originally captured against the LIVE legacy ``replace_op_event`` sites BEFORE
-any wiring or migration (DoR 4.2, Opus C7 / Sol 2 — that pre-migration form is
+any wiring or migration (DoR 4.2, review C7 / review 2 — that pre-migration form is
 preserved at commit d4b1738d); re-targeted in P4c onto the amendment lane's
 single chokepoint, ``CaptureEvents.append_amendment``. Four layers:
 
@@ -9,7 +9,7 @@ single chokepoint, ``CaptureEvents.append_amendment``. Four layers:
    checked as ``(facet path, flat field)`` PAIRs against its family's registry
    row joined through ``PATH_TO_FLAT``, in registry order, and its call site
    must be the family's ONE intended site. A same-set identity permutation
-   (Sol's ``intervention_fired <-> intervention_replaced`` swap) is red.
+   (the review's ``intervention_fired <-> intervention_replaced`` swap) is red.
 2. **Emit-site value round-trip** — at every live call the folded journal
    record must carry each patch value at its own flat field AND (decomposed
    leg) at its own facet path, by object identity for non-interned values.

@@ -2038,7 +2038,7 @@ def test_journal_seq_invariant_fires_on_event_deletion() -> None:
     check()  # positive control
     check_metadata_invariants(trace)
 
-    # Sol's exact repro: pop one op event out of the middle of the lane.
+    # The review's exact repro: pop one op event out of the middle of the lane.
     popped_op = stream.op_events.pop(1)
     with pytest.raises(MetadataInvariantError, match="not retained by any lane"):
         check()

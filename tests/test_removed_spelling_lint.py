@@ -121,7 +121,7 @@ _TL_MOVED_NEEDLE_NAMES = (
     "intervening",
     "replay",  # prefix also covers replay_from
     "rerun",
-    # "summary" left this needle list 2026-08-26 (megasprint lane A07, summary
+    # "summary" left this needle list 2026-08-26 (workstream A07, summary
     # memo A8): tl.summary is UN-removed as the first-class one-call front
     # door, so the spelling is canonical again.
     "show_model_graph",

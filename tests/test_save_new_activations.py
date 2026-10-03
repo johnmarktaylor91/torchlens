@@ -580,7 +580,7 @@ class TestGraphConsistencyValidation:
 
 
 # =============================================================================
-# D18: mode-aware buffer-sink projector (JMT-ruled capability narrowing)
+# D18: mode-aware buffer-sink projector (decided capability narrowing)
 #
 # The refusal decision is CLOSED-FORM: refuse iff any buffer sink carries
 # ``buffer_value_changed is not False``, with the recorded mode claims as a

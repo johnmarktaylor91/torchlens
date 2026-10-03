@@ -1,6 +1,6 @@
 """Two-term compute record + FMA convention (A5/A6).
 
-Lane A07 (megasprint 2026-08-27). Spec: trilabs/summary/MEMO.md 3.2 + build
+Lane A07 (2026-08-27). Spec: the summary design memo 3.2 + build
 item 9; costreport item 3 (MACs stop being flops//2 everywhere). True MACs =
 sum(fma_macs); a ReLU has ZERO MACs; a biased Linear(8,16) has 256 (never the
 272 that flops//2 fabricates); count_fma_as_two is honored or refuses typed,

@@ -1,16 +1,16 @@
 """Hardening tests for loop/recurrence grouping (round-21, follow-up 2).
 
-Locks the fixes for the two round-20 Sol findings the first r21 loop fixer did
+Locks the fixes for the two round-20 review findings the first r21 loop fixer did
 not cover:
 
 * Exact parameter identity must not override module identity or non-tensor call
-  semantics (Sol cluster 2). Two DISTINCT modules deliberately sharing one
+  semantics (review cluster 2). Two DISTINCT modules deliberately sharing one
   weight tensor (tied encoder/decoder) and one kernel applied with different
   ``padding``/``stride``/``dilation`` are different semantic sites, never a
   false recurrent layer. Genuine reuse of ONE module (ALBERT-style) and genuine
   variable-length recurrence must keep grouping.
 * Rolled variable-length recurrence must not silently project pass-1
-  shape/memory/FLOPs onto every pass (Sol cluster 4). Divergent passes publish
+  shape/memory/FLOPs onto every pass (review cluster 4). Divergent passes publish
   honest aggregates (per-dimension range shapes, per-pass maxima) plus the
   explicit machine-readable marker ``annotations["varying_across_passes"]``,
   and expanding every rolled Layer through ``Layer.ops`` reconstructs the exact
@@ -221,7 +221,7 @@ class _FusedLSTMLoop(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# Sol test #2 -- weight-tied distinct modules retain distinct identity
+# review test #2 -- weight-tied distinct modules retain distinct identity
 # ---------------------------------------------------------------------------
 
 
@@ -294,7 +294,7 @@ def test_untied_control_and_reused_module_control() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Sol test #3 -- non-tensor call structure is part of recurrence identity
+# review test #3 -- non-tensor call structure is part of recurrence identity
 # ---------------------------------------------------------------------------
 
 
@@ -391,7 +391,7 @@ def test_uniform_multi_pass_layer_left_untouched() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Sol test #10 -- rolled/unrolled conservation and honest rolled rendering
+# review test #10 -- rolled/unrolled conservation and honest rolled rendering
 # ---------------------------------------------------------------------------
 
 

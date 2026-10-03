@@ -249,13 +249,13 @@ PINNED_FINDINGS = {
     # (FieldPolicy.BLOB_RECURSIVE, round-tripped by the tlspec suite).
     # Root-cause fix (record _label_raw instead) changes a persisted
     # artifact's bytes: outside this lane's byte-identity mandate,
-    # deferred to JMT by name. NOT a probe — a data read into a persisted
+    # deferred to the maintainer by name. NOT a probe — a data read into a persisted
     # field is never an observe-not-set.
     ("3", "label"),
 }
 
 #: Declared-but-never-observed writes with their named config-gated
-#: exemptions (the Opus-4 phantom-declaration guard): each entry names WHY
+#: exemptions (the review-4 phantom-declaration guard): each entry names WHY
 #: the recording matrix cannot observe it. An exemption without a reason is
 #: a laundering channel; removing the code path must remove the row.
 PHANTOM_WRITE_EXEMPTIONS = {
@@ -655,7 +655,7 @@ def test_guard2_ledger_holds_on_default_capture(
 
 
 # ---------------------------------------------------------------------------
-# The two-key direction authority (Sol 1's counterexample, both halves)
+# The two-key direction authority (review 1's counterexample, both halves)
 # ---------------------------------------------------------------------------
 
 
@@ -673,7 +673,7 @@ def test_registry_swap_refused_by_r1_and_r2() -> None:
 def test_coordinated_reversal_refused_by_corpus() -> None:
     """Rank AND registry swapped together: R1/R2 pass, K1 refuses.
 
-    Sol round-2 finding 1, pinned: a coordinated 7/8 reversal re-orients
+    Review round-2 finding 1, pinned: a coordinated 7/8 reversal re-orients
     every derived edge to the new rank, so the drift detectors are blind —
     step 1 co-writes pass_index/recurrent_ops, so step 8's reads keep an
     earlier writer and no finding fires either. The ONLY mechanical catch

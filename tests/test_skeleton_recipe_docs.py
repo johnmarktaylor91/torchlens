@@ -1,4 +1,4 @@
-"""Realism gate for the skeleton-change recipe page (megasprint SKELETON-RECIPE).
+"""Realism gate for the skeleton-change recipe page (workstream SKELETON-RECIPE).
 
 ``docs/skeleton_change_recipe.md`` is the documented, tested capability that
 survived the dropped ``tl.edited`` verb (foldA D13/item 13): the user edits a

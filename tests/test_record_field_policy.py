@@ -488,7 +488,7 @@ def test_postprocess_write_audit_catches_in_place_container_mutation(
 ) -> None:
     """An in-place container mutation inside a step trips the write audit.
 
-    Sol review finding 6: the audit intercepted only cell assignment and
+    Review finding 6: the audit intercepted only cell assignment and
     deletion, so an in-place ``annotations[...] = ...`` mutation smuggled an
     undeclared write through a step with an EMPTY declared write set
     (step 10). The content-fingerprint diff now surfaces it.

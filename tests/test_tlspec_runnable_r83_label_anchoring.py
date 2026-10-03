@@ -1,4 +1,4 @@
-"""Label-rung current-session anchoring (r83 C1, r82 hon1/free/Sol HIGHs).
+"""Label-rung current-session anchoring (r83 C1, r82 hon1/free/review HIGHs).
 
 THREE INDEPENDENT r82 LANES broke the SAME class with three different vehicles:
 label provenance was validated by TEXT MEMBERSHIP in the active capture's live
@@ -15,7 +15,7 @@ blessed as current-session model state.
 * free -- an activation cached on a helper ``nn.Module``, then ``.data``-rebound
   into an input-derived layout branch: ``VERIFIED``, max-diff 20.0, where the
   fresh-tensor control ceils ``UNVERIFIABLE``/poisoned.
-* Sol -- a tensor in a list inside a ``types.ModuleType``, with a live
+* review -- a tensor in a list inside a ``types.ModuleType``, with a live
   ``x + 100.0`` regenerating the colliding label: ``VERIFIED``, max-diff 100.15.
 
 r79 gave the PARAM rung a per-session object-identity belt and r81 gave the
@@ -351,7 +351,7 @@ def test_helper_module_cached_stale_label_cannot_launder_layout(
 
 
 # --------------------------------------------------------------------------- #
-# C1 -- Sol's vehicle: a tensor nested in a list inside a types.ModuleType.
+# C1 -- the review's vehicle: a tensor nested in a list inside a types.ModuleType.
 # --------------------------------------------------------------------------- #
 
 
@@ -359,7 +359,7 @@ class _StashDonor(nn.Module):
     """Capture-1 model stashing a live op output in a ModuleType-nested list.
 
     r81's ModuleType cleanup sweep is SHALLOW, so a tensor one container deep
-    inside the module namespace is never reached by it -- the leak Sol used.
+    inside the module namespace is never reached by it -- the leak the review used.
     """
 
     def __init__(self, stash: types.ModuleType) -> None:
@@ -400,7 +400,7 @@ class _StashConsumer(nn.Module):
 
 
 def test_moduletype_nested_stale_label_cannot_launder(tmp_path: Path) -> None:
-    """Sol RED: a container-nested ModuleType stash must not resolve as provenance.
+    """Review RED: a container-nested ModuleType stash must not resolve as provenance.
 
     Pre-fix: ``VERIFIED``, ``poisoned=False``, no witness-coverage gap, replay
     vs fresh-oracle max-diff 100.15 -- and it falsified the shipped contract's
@@ -468,7 +468,7 @@ def test_moduletype_nested_stale_label_survivor_still_ceils(tmp_path: Path) -> N
 def test_moduletype_nested_honest_rebind_consumer_not_overceiled(tmp_path: Path) -> None:
     """No over-ceil: the swept nested stash's VALUE-honest consumer replays true.
 
-    The original Sol consumer discards the foreign tensor's incoming bytes
+    The original review consumer discards the foreign tensor's incoming bytes
     (``.data=`` rebind to input-derived data) before any read, so with the
     stale stamp swept at source its replay is fully input-determined. The
     deepened sweep must not push this honest-by-construction flow into a

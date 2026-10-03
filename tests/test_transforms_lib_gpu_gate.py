@@ -8,7 +8,7 @@ the hardware is absent — the claims stay off, the CPU merges stay ungated
 by hardware (ruling T3).
 
 What the gate proves (memo 10.3): cross-device generation determinism
-(integer hashing is REASONED bit-exact, measured on CPU only — Sol's 16.4
+(integer hashing is REASONED bit-exact, measured on CPU only — the review's 16.4
 rebuttal stands until this runs), on-device chain execution with NO hidden
 CPU transfer, canonical digest parity, dense_chunked-vs-CSR output parity
 with the realized kernel recorded, and an MPS tested path (the planner

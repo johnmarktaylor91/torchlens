@@ -28,7 +28,7 @@ from torchlens.postprocess._site_join import join_site_profiles, site_profile
 
 class _Insertable(nn.Module):
     """One class, one forward source: ``extra`` inserts a value-preserving
-    relu BEFORE the original relu line (the Opus T6 shape in miniature)."""
+    relu BEFORE the original relu line (the review T6 shape in miniature)."""
 
     def __init__(self, extra: bool) -> None:
         super().__init__()
@@ -95,7 +95,7 @@ def test_guarded_join_refuses_the_inserted_cohort() -> None:
 @pytest.mark.smoke
 def test_parent_site_key_signature_change_is_visible() -> None:
     """The output-side consumer's parent SIGNATURE changes across the
-    insertion (parent/child site-key agreement, Opus NEW-13's wording) --
+    insertion (parent/child site-key agreement, review NEW-13's wording) --
     exactly what artifact-at-a-time oracles cannot see."""
 
     base, inserted = _capture_pair()

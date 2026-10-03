@@ -1,4 +1,4 @@
-"""Buffer-rung full parity with the param rung (r81, r80 free/hon1/Sol HIGHs).
+"""Buffer-rung full parity with the param rung (r81, r80 free/hon1/review HIGHs).
 
 Round 80 demonstrated TWO HIGH false-VERIFIEDs sharing ONE root: the
 buffer/tensor-meta provenance rung trusted a STATIC buffer stamp

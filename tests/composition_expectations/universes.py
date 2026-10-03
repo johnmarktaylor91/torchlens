@@ -9,7 +9,7 @@ and fail on unexplained drift (baseline:
 built are DECLARED here as ``OPEN`` rows with owners -- counted as missing,
 never silently absent.
 
-Adequacy statuses (memo 3.2 + Dis-3, Sol's enforceable form):
+Adequacy statuses (memo 3.2 + Dis-3, the review's enforceable form):
 
 * ``planted`` -- a red-capability plant proves the derivation catches a
   member a weaker derivation would miss.

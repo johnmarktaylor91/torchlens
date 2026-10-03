@@ -929,7 +929,7 @@ class _InWindowEscapeModel(nn.Module):
 def _escape_witnessed(trace: Any) -> bool:
     """Return whether ANY escape witness (positive, fail-closed, OR cross-thread) recorded.
 
-    r43 (JMT-locked): a NON-owner captured-tensor touch no longer records a precise
+    r43 (locked by design): a NON-owner captured-tensor touch no longer records a precise
     source/fail-closed witness -- it sets the ONE cross-thread ceiling, which is the
     witness that downgrades the artifact to UNVERIFIABLE.
     """
@@ -948,7 +948,7 @@ def _escape_witnessed(trace: Any) -> bool:
 def test_in_window_thread_escape_witnessed(member: str) -> None:
     """Every declared escape vocabulary member on a CAPTURED tensor ceilings from a non-owner thread.
 
-    r43 (JMT-locked): a non-owner thread that touches a CAPTURED tensor (here the model
+    r43 (locked by design): a non-owner thread that touches a CAPTURED tensor (here the model
     inputs ``gate_f``/``gate_i``) via any escape spelling permanently ceilings the artifact
     -- the ONE cross-thread rule replaces the r41 in-window/foreign 3-class witness. A raw
     storage ``data_ptr()`` on a captured tensor is caught by storage identity, not the
@@ -1170,7 +1170,7 @@ def test_in_window_captured_tensor_op_ceilings_even_when_unused(tmp_path: Path) 
 def test_foreign_thread_captured_tensor_escape_ceilings(
     preexisting_worker: Any, tmp_path: Path
 ) -> None:
-    """A PRE-EXISTING thread's DIRECT `.item()` on a CAPTURED tensor CEILINGS (r43, JMT-locked).
+    """A PRE-EXISTING thread's DIRECT `.item()` on a CAPTURED tensor CEILINGS (r43, locked).
 
     Superseding the r41 "foreign positive-only witness -> VERIFIED" posture: concurrent host
     interaction with a captured tensor is outside the single-owner-thread replay model, so it
@@ -1346,7 +1346,7 @@ def test_untampered_device_literal_still_runs_verified(tmp_path: Path) -> None:
 
 
 # ======================================================================================
-# r43 (JMT-locked) immunizers -- ONE fail-closed cross-thread captured-tensor rule + RNG rows
+# r43 (locked by design) immunizers -- ONE fail-closed cross-thread captured-tensor rule + RNG rows
 # ======================================================================================
 
 import _thread  # noqa: E402

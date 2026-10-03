@@ -87,7 +87,7 @@ def test_tier_parity_transcripts_are_byte_identical() -> None:
 
 
 def test_selector_scope_with_held_ancestors() -> None:
-    """Scoped narration prints no unselected module noise (Sol's refinement)."""
+    """Scoped narration prints no unselected module noise (the review's refinement)."""
 
     sink = io.StringIO()
     tl.trace(

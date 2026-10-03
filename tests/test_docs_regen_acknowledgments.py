@@ -1,4 +1,4 @@
-"""Credit-required lint (megasprint D01 gate).
+"""Credit-required lint (workstream D01 gate).
 
 The acknowledgments page (docs/acknowledgments.md) is the assembled credit
 roster from every design memo's CREDIT section. The convert-memo maintenance

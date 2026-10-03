@@ -1,7 +1,7 @@
 """A05 escrow-spill fix: the four-panel red tests (leverage B2, brainpipe 2,
 transforms P7, tvscope B13).
 
-Root cause (Opus T3, conceded 3-0): deferred final-numbering selectors (op
+Root cause (review T3, conceded 3-0): deferred final-numbering selectors (op
 labels, positive ordinals, ``output``) escrow every candidate payload and
 spill past the 64 MiB RAM budget via ``torch.save``; a captured payload's
 ``TensorMeta.label_storage`` pins its own ``UntypedStorage``, rides the
@@ -9,7 +9,7 @@ tensor's ``__dict__`` into the pickle, and the writer refuses two views of
 one storage under different types ("Cannot save multiple tensors or storages
 that view the same data as different types"). The fix strips the TorchLens
 sidecar from the exclusively-owned payload at the spill line -- NO clone
-(Sol A12: cloning is a diagnostic, not the fix).
+(review A12: cloning is a diagnostic, not the fix).
 
 Realism axis 4 (BELOW THE MODEL): every arm here escrows tensors that came
 out of a real capture, never a bare constructor -- the bare-constructor

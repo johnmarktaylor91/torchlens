@@ -1,6 +1,6 @@
 """Regression coverage for tensor replacement during active TorchLens captures.
 
-These tests cover the fleet bug where user replacement tensors lacked
+These tests cover a reported bug where user replacement tensors lacked
 TorchLens raw-label metadata and broke the next module boundary. The audited access sites
 fall into two groups: output/module-exit paths now repair missing labels, while
 postprocess, visualization, and backward-hook consumers only run after forward

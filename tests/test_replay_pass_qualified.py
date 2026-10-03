@@ -1,6 +1,6 @@
 """Pass-qualified replay re-keying on multi-pass (recurrent) models.
 
-Pins the JMT 2026-08-17 ruling: the replay engine operates on pass-qualified
+Pins the 2026-08-17 decision: the replay engine operates on pass-qualified
 op labels internally (cone traversal, overlay, hook targets, pending
 commits), a bare label naming a multi-pass layer refuses typed with a
 teaching message, single-pass bare-label acceptance is unchanged, the

@@ -1,6 +1,6 @@
 """Parameter substitution ("as if" the parameter were changed) — replay-only.
 
-Pins the JMT-ruled param-operand contract (2026-08-17): ``fork.do(
+Pins the decided param-operand contract (2026-08-17): ``fork.do(
 tl.params(...), edit)`` substitutes the VALUE each consuming op sees at its
 derived occurrence address on the replay engine, through the shipped
 tier-(ii) edge-substitution store, and the live parameter object is never

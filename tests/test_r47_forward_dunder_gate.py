@@ -208,7 +208,7 @@ def test_immunizer_setstate_and_siblings_are_dunder_gate_load_bearing() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# FROZEN FIXTURE 2: the forward dunders that MUST resolve (Sol would have regressed the
+# FROZEN FIXTURE 2: the forward dunders that MUST resolve (review would have regressed the
 # ``torch._tensor`` ones). Denying ANY fails RED.
 # --------------------------------------------------------------------------- #
 

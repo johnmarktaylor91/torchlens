@@ -1,7 +1,7 @@
 """C07X amendment, payload A: episode row grammar v2 + root/step identity facts.
 
 Covers foldA s5 item 3 (i)-(vi) + foldB s4.4 items 3, 4, 5 riding the open
-tlspec-v9 window (SV-6 ruled GENERIC by JMT; TLSPEC_VERSION stays 9):
+tlspec-v9 window (SV-6 decided GENERIC; TLSPEC_VERSION stays 9):
 
 - episode ledger grammar v2 (family version 2): declared step-output kind +
   source (``step_output_kind``/``step_output_from``), generic

@@ -72,7 +72,7 @@ _NEW_FILE_LINE_CAP = 2000
 #: 2950->3000, auto_collapse 2400->2450) -- reviewed fixwave-7 growth
 #: (buffer-value channel gating, R29 lazy pair generation, admission
 #: ordering, collapse-ceiling honesty) landing in already-ledgered files.
-#: 2026-08-16 FEATURE MEGASPRINT wave-0 settle: seven ceilings re-stepped to the
+#: 2026-08-16 FEATURE WORK wave-0 settle: seven ceilings re-stepped to the
 #: next 50 above the merged-tree measurement. UNLIKE the fixwave raises above,
 #: this growth is NEW FEATURE MASS by design (L1 grouping, L2 episode capture,
 #: L3 aten layer, L4 S1 contract, L5 encoding channel, L7a structure-only, L8
@@ -579,7 +579,7 @@ _MAX_LEDGER_SLACK = 100
 #: the wave's reviewed invariant tripwires; test_merged_engine instead
 #: SPLIT (the r8 adversarial classes moved to
 #: test_merged_engine_hardening.py) and stays under the unledgered cap.
-#: 2026-08-17 FEATURE MEGASPRINT wave-0 settle debt record: the L3 telemetry
+#: 2026-08-17 FEATURE WORK wave-0 settle debt record: the L3 telemetry
 #: weak-launch-relation lifecycle row lands after census-settle growth;
 #: test_global_state_inventory re-steps 2450->2500 pending the debloat pass.
 #: 2026-08-19 post-tour sprint: test_global_state_inventory re-steps 2500->2509
@@ -592,7 +592,7 @@ _MAX_LEDGER_SLACK = 100
 #: count, while the census machinery and the assertions are what must be read
 #: together. Every new global in the package lands here, so the growth is
 #: structural and will recur until the data moves out.
-#: 2026-08-26 megasprint fix cycle: SPLIT EXECUTED at exactly that seam, after
+#: 2026-08-26 fix cycle: SPLIT EXECUTED at exactly that seam, after
 #: the _GOVERNED_LOAD_DEPTH row landed 4 lines over the exact-stepped ceiling.
 #: The lifecycle-class frozensets, _WEAKLY_HELD, and the _LIFECYCLE_CLASSES
 #: tuple moved to tests/_global_state_rows.py (pure data, ~690 lines); the

@@ -2,7 +2,7 @@
 
 Each gate runs a REAL capture at a size where a complexity regression is
 catastrophic but current behavior is comfortable (sizes calibrated 2026-08-19,
-torch 2.13, devbox: wide-equivalence 300 ~0.9s, 300-pass recurrence ~1.9s,
+torch 2.13, the benchmark host: wide-equivalence 300 ~0.9s, 300-pass recurrence ~1.9s,
 1400-op diameter ~3.9s, fan-out 300 ~1.0s). The wall-clock bar is the tier
 duration tripwire itself (smoke <5s / heavy <20s, load-scaled, min(wall, cpu)):
 a regression from linear to quadratic work blows the budget and fails the

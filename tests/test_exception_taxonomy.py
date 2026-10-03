@@ -1421,7 +1421,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     # -- Post-tour sprint (2026-08-19). All five ARE user-facing refusals from
     # newly shipped features, so registering them on torchlens.errors is the
     # right end state -- but that publishes five names, and the naming slate is
-    # explicitly the UI/API sprint's call (JMT 2026-08-19). Parked here on the
+    # explicitly the UI/API sprint's call (decided 2026-08-19). Parked here on the
     # same pre-ratification pattern as the S2-gated structure-only rows above,
     # to be retired by that sprint rather than expanded unilaterally. --
     "torchlens._io.streaming_async.AsyncWriteFailedError": (

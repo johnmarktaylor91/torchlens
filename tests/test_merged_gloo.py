@@ -650,7 +650,7 @@ def _tp_worker(rank: int, world_size: int, init_file: str, out_dir: str) -> None
 def _asymmetric_worker(
     rank: int, world_size: int, init_file: str, init_file_2: str, out_dir: str
 ) -> None:
-    """Sol's seed-discharge-negative shape, live: rank 0 arms before any
+    """The review's seed-discharge-negative shape, live: rank 0 arms before any
     group and witnesses a destroy/re-init cycle; rank 1 arms only after the
     re-init, so its restricted seed denotes generation 1 while claiming
     ordinal 0."""

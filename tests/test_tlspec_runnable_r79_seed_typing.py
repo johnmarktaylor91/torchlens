@@ -7,7 +7,7 @@ Round-78 found two values that escaped the r77 seed door
   run path uses ``default_generator.manual_seed``, which rejects bool with a
   raw ``RuntimeError: manual_seed expected a long, but got bool``.
 - an ``int`` outside torch's accepted ``[-0x8000_0000_0000_0000,
-  0xFFFF_FFFF_FFFF_FFFF]`` long range (Sol): pybind overflow, raw
+  0xFFFF_FFFF_FFFF_FFFF]`` long range (review): pybind overflow, raw
   ``RuntimeError: Overflow when unpacking long``.
 
 The r79 door mirrors the codebase's own capture-seed convention

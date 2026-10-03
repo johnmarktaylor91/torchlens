@@ -808,7 +808,7 @@ def test_user_call_into_witness_storage_helper_degrades_verification() -> None:
 def test_forged_frame_metadata_cannot_impersonate_witness_authorization() -> None:
     """FAIL-AFTER-WHERE-PASSED-BEFORE: frame-metadata forgery gains no authorization.
 
-    Sol be2-closure probe regression: the internal-caller check used to trust
+    Review be2-closure probe regression: the internal-caller check used to trust
     the caller frame's ``f_globals['__name__']`` and ``co_filename``, both of
     which user code controls -- a ``forward`` compiled with a torchlens-ish
     module name and a fabricated filename under the package directory was

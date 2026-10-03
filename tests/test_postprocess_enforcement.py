@@ -27,7 +27,7 @@ _AXIS_IDS = [name for name, _ in _AXES]
 
 #: Declared-but-never-observed writes with named config-gated exemptions —
 #: mirror of PHANTOM_WRITE_EXEMPTIONS in test_postprocess_dag.py, asserted
-#: here against the LIVE matrix union (the Opus-4 anti-laundering guard: a
+#: here against the LIVE matrix union (the review-4 anti-laundering guard: a
 #: fabricated declaration is red the day it lands).
 EXPECTED_PHANTOM_WRITES = {
     ("9", "args_template"),

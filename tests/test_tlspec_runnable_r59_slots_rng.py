@@ -311,7 +311,7 @@ def test_registered_module_seed_runs_exactly_once_per_module(monkeypatch: Any) -
     )
 
 
-# --- source meta-test (Sol): the seed loop must read slots, or carry no blanket premark --------
+# --- source meta-test (review): the seed loop must read slots, or carry no blanket premark -----
 
 
 def test_seed_loop_routes_registered_modules_through_custom_holder_children() -> None:

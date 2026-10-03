@@ -1,4 +1,4 @@
-"""THE marker algebra -- declared ONCE, here (megasprint conflict rule 16).
+"""THE marker algebra -- declared ONCE, here (conflict rule 16).
 
 Every pytest marker the suite declares in ``pyproject.toml`` has exactly one
 ROLE in this closed algebra, and ``tests/test_marker_lint.py`` enforces the

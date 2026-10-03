@@ -127,7 +127,7 @@ class _CustomStr(str):
 
 
 class _StatefulFloat(float):
-    """Scalar subclass carrying hidden instance state (Sol's r69 experiment)."""
+    """Scalar subclass carrying hidden instance state (the review's r69 experiment)."""
 
 
 _SEMANTIC_SPECIMENS: dict[str, Any] = {

@@ -1311,7 +1311,7 @@ def test_r69_secA_f1_structure_strip_no_longer_restores_weak_semantics(
 
 
 def test_r69_literal_fact_strip_breaks_the_cross_anchor(tmp_path: Path) -> None:
-    """Fable ADD-1: per-leaf literal stripping cannot hide behind site coverage."""
+    """Review ADD-1: per-leaf literal stripping cannot hide behind site coverage."""
 
     x = torch.randn(3)
     source = _save(_trace(_LitBranch(), [x.clone(), 1]), tmp_path / "anchor_src.tlspec")

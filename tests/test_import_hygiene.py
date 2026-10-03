@@ -72,7 +72,7 @@ _HEAVY_IMPORT_DENYLIST = frozenset(
 #: discipline tests/test_module_import_isolation.py uses for import cycles.
 _EAGER_TORCHLENS_MODULES = frozenset(
     {
-        # P4 cold-start laziness (JMT-rebaselined 2026-08-19): the package
+        # P4 cold-start laziness (rebaselined 2026-08-19): the package
         # root is the ONLY module a bare import executes. The former eager
         # block (options/captured_run+ir/observers/quantities/errors and
         # their transitive chains: _deprecations, _errors, _io, _literals,
@@ -99,7 +99,7 @@ _MAX_MARGINAL_NON_TORCHLENS_MODULES = 40
 #: this guard false-failed at 1.45s under orchestrator load while five fresh
 #: control runs measured 0.32-0.78s and every structural guard stayed green
 #: (grind b4, F31-A): wall stretches with box load, CPU time does not, and an
-#: eager heavy import inflates BOTH. RE-BASELINED (JMT 2026-08-19, P4): the
+#: eager heavy import inflates BOTH. RE-BASELINED (decided 2026-08-19, P4): the
 #: metric is TorchLens-MARGINAL import time on top of torch, target <= 10 ms
 #: -- total import is torch-dominated and not ours to control. Measured
 #: ~1.2 ms after the cold-start laziness pass (the package root is the only
@@ -115,7 +115,7 @@ _TORCHLENS_IMPORT_BUDGET_S = 0.010
 #: Marginal ru_maxrss budget for ``import torchlens`` with torch already
 #: resident (R31 axis b: the duration budget is blind to a CPU-cheap but
 #: RSS-fat eager import -- a large frozen table, an mmapped registry, a
-#: module-scope resources read). Measured ~4 MiB marginal on the devbox
+#: module-scope resources read). Measured ~4 MiB marginal on the benchmark host
 #: (torch 2.13); the budget is ~16x that, an order-of-magnitude tripwire in
 #: the same register as the duration budget above, never a perf gate.
 #: Caveat: ru_maxrss is a high-water mark, so the delta is a LOWER bound and
@@ -324,7 +324,7 @@ facades = {
     for name, (module_path, attr_name) in tl._LAZY_ATTRS.items()
     if attr_name is None
 }
-# The five-step facade order (megasprint A10) short-circuits underscore
+# The five-step facade order (workstream A10) short-circuits underscore
 # names to plain AttributeError before any table lookup, and the last
 # underscore lazy row (``_trace``) was deleted with it; pin the short-circuit.
 try:
@@ -373,7 +373,7 @@ assert collisions == {
     # one-backward read surface), the fastlog/intervention pattern.
     "attribution": ["onebackward"], "autoroute": ["input", "output"],
     "backends": [],
-    # Entry/facade repair (megasprint A10): the integration and appliance
+    # Entry/facade repair (workstream A10): the integration and appliance
     # namespaces gained root reachability rows; bridge/callbacks export
     # exactly their lazy child modules.
     # F16 (2026-08-29): treescope joins the bridge lazy-module roster, and

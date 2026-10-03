@@ -340,7 +340,7 @@ class _PlainLinear(nn.Module):
 def test_fast_live_admission_guard_failure_refuses_not_fail_open(monkeypatch) -> None:
     """A broken input-contract guard REFUSES the fast path (R22-2 layer 1).
 
-    Opus's fault injection: with the classifier machinery raising internally,
+    The review's fault injection: with the classifier machinery raising internally,
     the typed refusal used to silently vanish and the forward ran unguarded --
     guard failure was indistinguishable from inputs-match.
     """

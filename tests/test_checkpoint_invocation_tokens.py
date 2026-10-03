@@ -6,7 +6,7 @@ count-only (the forward-side slot->op binding is NOT claimed); unpack
 evidence points are backward-derived (fire brackets -> shipped user-op
 pairing -> read-only L1 site keys). The projected summary lands on the
 DROP-gated ``Trace.checkpoint_invocation_witness`` field. The typed
-ambiguity REFUSAL is S2-authored (R-L9-1) and deliberately NOT shipped here;
+ambiguity REFUSAL awaits a pending contract amendment and is deliberately NOT shipped here;
 no test below exercises an identity-read refusal. All spellings
 DOCUMENTED-UNSTABLE.
 """

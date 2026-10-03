@@ -1,6 +1,6 @@
 """One pass/op vocabulary across surfaces (A10) -- 3-pass fixture goldens.
 
-Lane A07 (megasprint 2026-08-27). Spec: trilabs/summary/MEMO.md build item 4:
+Lane A07 (2026-08-27). Spec: the summary design memo build item 4:
 "pass k/N" / "xN passes" spellings, one op denominator, headings follow row kind.
 """
 

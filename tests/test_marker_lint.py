@@ -1273,7 +1273,7 @@ def test_serial_marker_is_not_a_budget_exemption() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Marker ALGEBRA lockstep (megasprint P03, compo memo row 0.1 / conflict rule
+# Marker ALGEBRA lockstep (workstream P03, compo memo row 0.1 / conflict rule
 # 16). The algebra -- every marker's one role, incl. the ORTHOGONAL selection
 # markers `compo` and `real_model` -- is declared ONCE in
 # tests/composition_expectations/marker_algebra.py. This lint holds pyproject

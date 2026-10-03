@@ -53,7 +53,7 @@ def test_universe_descriptors_are_well_formed() -> None:
         if universe.independent_census == "single_derivation":
             assert universe.adequacy_status in {"open", "single_derivation"}, (
                 f"{universe.universe_id}: a planted status requires an independent census "
-                "that can see the plant (memo Dis-3, Sol's enforceable form)"
+                "that can see the plant (memo Dis-3, the review's enforceable form)"
             )
 
 

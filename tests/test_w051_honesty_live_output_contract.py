@@ -1,6 +1,6 @@
 """Lane W051-HONESTY: live ``run()`` output-contract honesty (AUD-HONESTY H1/H2/H3).
 
-The Fable-5.1 audit found that every tuple/dict/HF-container model settled
+The review-5.1 audit found that every tuple/dict/HF-container model settled
 ``unverifiable`` + poisoned on a DEFAULT-capture live ``run()`` with a remedy-less
 ``output_structure_mismatch`` (H2; closed for good by W051-CAPT2, which registers
 the final-output ContainerSpec on every capture), that a declared container carrying an opaque

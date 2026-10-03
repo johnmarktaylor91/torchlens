@@ -1,6 +1,6 @@
 """State-binder metadata/layout completeness (r63 C1) -- whole-class immunizers.
 
-Round-62/63 (both labs, JMT Option-A ruling) proved two false-VERIFIED families on the
+Round-62/63 (both labs, Option-A decision) proved two false-VERIFIED families on the
 sparse runnable-``.tlspec`` state surface:
 
 * **Captured physical form, READ then lost in transport**: a captured param/buffer with a
@@ -9,7 +9,7 @@ sparse runnable-``.tlspec`` state surface:
   codec NORMALIZE the form away, so the loaded replay reported ``verified`` on the captured
   arm while a fresh oracle flips. Root cause: the four metadata accessors routed ONLY
   through the model-input observer, which ignores registered state -- no witness existed
-  (Sol's r63 v4 probe). r63 closes the attribution gaps (each read now attributes a state
+  (the review's r63 v4 probe). r63 closes the attribution gaps (each read now attributes a state
   escape + a per-slot read-kind fact) and refuses the save ESCAPE-GATED
   (``state_metadata_mismatch`` at ``producer_state_metadata``): only a READ non-canonical
   dim refuses; the UNREAD non-canonical population (channels-last conv weights) stays
@@ -199,7 +199,7 @@ def test_r63_read_noncanonical_capture_refuses_at_save(
     """A READ non-canonical captured physical form refuses the runnable save typed.
 
     Pre-fix these saved, transport normalized the form, and the loaded replay reported a
-    false VERIFIED while the fresh oracle flipped (Sol r62/r63 probes verbatim).
+    false VERIFIED while the fresh oracle flipped (review r62/r63 probes verbatim).
     """
 
     trace = _trace(model_cls(), x)
@@ -380,7 +380,7 @@ def _exotic_sources() -> dict[str, torch.Tensor]:
 @pytest.mark.smoke
 @pytest.mark.skipif(not HAS_NAMED_TENSOR_API, reason="native named-tensor API is unavailable")
 def test_r63_named_user_state_refuses_before_staging(tmp_path: Path) -> None:
-    """Named source into an unnamed capture refuses at bind (Sol's 321-vs-3.0 repro class).
+    """Named source into an unnamed capture refuses at bind (the review's 321-vs-3.0 repro class).
 
     Under oracle 1 the names SURVIVE default copy and steer the fresh oracle onto the named
     branch while replay stays unnamed -- the r62 bind-side false VERIFIED. The refusal is

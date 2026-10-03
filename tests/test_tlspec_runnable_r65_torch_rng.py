@@ -1,6 +1,6 @@
 """r65 CLUSTER Z: torch RNG API surface completeness -- no false VERIFIED, no collateral.
 
-Finding (r64, Sol correctness Finding 2): the host-nondeterminism registry covered
+Finding (r64, review correctness Finding 2): the host-nondeterminism registry covered
 clocks / OS entropy / python-``random`` / numpy but NOT torch's OWN Python-level RNG
 APIs -- an in-forward ``torch.seed()`` / ``torch.initial_seed()`` (off-seed) /
 ``torch.manual_seed()`` produced a false VERIFIED. The deciding asymmetry: sparse

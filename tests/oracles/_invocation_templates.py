@@ -14,7 +14,7 @@ function-local fixture class, reported "False -> False", and would have
 exonerated a real defect through a dead channel.
 
 State contracts stay ``UNSET`` pending FORK-A (the default state contract of
-``tl.trace`` on a stateful model is JMT's call, 2-1 lean PURE_OBSERVER);
+``tl.trace`` on a stateful model is a maintainer decision, 2-1 lean PURE_OBSERVER);
 the harness, registry, and templates are identical under both branches --
 only the declared cell differs.
 """

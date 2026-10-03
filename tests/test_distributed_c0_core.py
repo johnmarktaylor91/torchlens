@@ -221,7 +221,7 @@ class TestPreJoinLineageAudit:
     """The v5 1.3 audit matrix, including sol's round-4 repro shape."""
 
     def test_asymmetric_arming_conflicts_structurally(self):
-        # Sol's repro: rank 0 armed early (epoch seeded) -- seeds g0, observes
+        # The review's repro: rank 0 armed early (epoch seeded) -- seeds g0, observes
         # destroy, wraps g1. Rank 1 armed after g0's destruction -- registry
         # shows one live group, restricted seeding legitimately fires at 0.
         rank0 = _ledger(

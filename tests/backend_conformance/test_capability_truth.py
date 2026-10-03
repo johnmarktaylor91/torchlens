@@ -261,7 +261,7 @@ def test_registration_refuses_bare_capability_flips() -> None:
 
 
 def test_in_place_capability_flip_refuses_end_to_end() -> None:
-    """Sol probe: mutating the frozen table in place must refuse typed at trace()."""
+    """Review probe: mutating the frozen table in place must refuse typed at trace()."""
 
     spec = get_backend_spec("mlx")
     object.__setattr__(spec.capabilities, "streaming", True)
@@ -284,7 +284,7 @@ def test_record_gate_reads_the_capability_table() -> None:
 
 
 def test_record_bare_fastlog_flip_never_runs_torch_recorder() -> None:
-    """Sol probe: fastlog=True flipped in place must refuse typed, never return a
+    """Review probe: fastlog=True flipped in place must refuse typed, never return a
     torch Recording for a non-torch backend."""
 
     model = nn.Linear(2, 2)
@@ -431,7 +431,7 @@ def test_backward_accessors_raise_for_all_non_backward_backends() -> None:
     ],
 )
 def test_torch_flag_false_refuses_the_surface(flag: str, trace_kwargs: dict) -> None:
-    """Sol probe (reverse direction): flipping a torch capability flag False in
+    """Review probe (reverse direction): flipping a torch capability flag False in
     place must refuse the corresponding trace() surface typed — the table is
     load-bearing on torch too, not only on previews."""
 

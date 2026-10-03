@@ -1,6 +1,6 @@
 """Zero-arithmetic reclassification + the named unknown ledger (costreport D2/D3).
 
-Lane A07 (megasprint 2026-08-27). Two-sided witnesses: every reclassified
+Lane A07 (2026-08-27). Two-sided witnesses: every reclassified
 construction name is proven zero-by-rule, AND ambiguous names (RNG draws,
 interpolating fills) are proven to STAY unknown -- a confident wrong zero is
 worse than an honest unknown. The four-way classification is total.

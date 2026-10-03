@@ -1,6 +1,6 @@
 """The identity-partition invariant suite (A1, accuracy pyramid top).
 
-Lane A07 (megasprint 2026-08-27). Spec: trilabs/summary/MEMO.md 3.1: every
+Lane A07 (2026-08-27). Spec: the summary design memo 3.1: every
 parameter identity, executed op event, and tracked tensor identity is owned by
 exactly ONE accounting row. Alias (input/output) rows display but own nothing
 -- input rows own only the external inputs' bytes.

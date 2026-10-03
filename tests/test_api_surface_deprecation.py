@@ -76,7 +76,7 @@ REMOVED_WRAPPER_NAMES = [
     "validate_forward_pass",
     "validate_backward_pass",
     "validate_saved_outs",
-    # "summary" left this ledger 2026-08-26 (megasprint lane A07, summary memo
+    # "summary" left this ledger 2026-08-26 (workstream A07, summary memo
     # A8): tl.summary is UN-removed as the first-class one-call front door.
     "show_model_graph",
     "draw_backward",

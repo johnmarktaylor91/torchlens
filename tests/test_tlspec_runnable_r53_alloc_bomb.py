@@ -355,7 +355,7 @@ def _big_slot(shape: tuple[int, ...], dtype: str) -> TensorSlotDescriptor:
 def test_legit_large_model_slot_passes_preflight() -> None:
     """A 2.20 GiB slot (Gemma-2-27B embed) passes the preflight -- pins no-static-cap."""
 
-    # This exceeds Sol's rejected static 1 GiB cap; on any normal CI host with a
+    # This exceeds the review's rejected static 1 GiB cap; on any normal CI host with a
     # few GiB free + swap it must NOT refuse.
     big = _big_slot((256128, 4608), "torch.float16")
     _preflight_random_init_allocation([big])  # must not raise

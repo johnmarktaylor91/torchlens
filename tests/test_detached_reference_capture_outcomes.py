@@ -16,7 +16,7 @@ the formerly-missed op is captured with wrapper fidelity and full disclosure
 ``rescue_rerun`` record). The silent-corruption class no longer exists: every
 escape is either recovered+disclosed or unrecovered+disclosed.
 
-Row inventory (safety-net verdict, tri-lab matrices):
+Row inventory (safety-net verdict, design-review matrices):
 
 - Formerly crawler-covered holders (module-level refs, class attrs, function
   defaults, model instance holders incl. partial internals): RESCUED since
@@ -467,7 +467,7 @@ def test_demoded_composite_interior_ref_is_disclosed_unrecovered(
     DELIBERATE FLIP (crawler deletion, verdict disposition D): the crawler
     used to patch the module global; now the escape signal fires, the rescue
     is attempted, recovers nothing, and the standing escape is DISCLOSED
-    (silence-vs-loud was the recorded tri-lab criterion; belt-extension only
+    (silence-vs-loud was the recorded design-review criterion; belt-extension only
     if real-world hits appear).
     """
     mod = types.ModuleType("_tl_outcome_composite_interior")

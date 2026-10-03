@@ -229,7 +229,7 @@ def test_commit_msg_layer_blocks_bang_and_passes_clean(push_repo, tmp_path: Path
 
 
 def test_explicit_override_allows_with_loud_notice(push_repo) -> None:
-    """TORCHLENS_ALLOW_MAJOR_BUMP=1 (JMT-authorized) permits but announces."""
+    """TORCHLENS_ALLOW_MAJOR_BUMP=1 (maintainer-authorized) permits but announces."""
 
     repo, env, base, _clean_tip, breaking_tip = push_repo
     result = _run_pre_push(

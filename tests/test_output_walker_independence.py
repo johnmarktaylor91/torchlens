@@ -1,6 +1,6 @@
 """Shared-root plant for ground-truth output enumeration (b9 R74/75-1).
 
-Sol's live probe: a planted drop-the-last-leaf mutation in the ONE backends
+The review's live probe: a planted drop-the-last-leaf mutation in the ONE backends
 output walker made capture AND the validation oracle omit output #2 of a
 2-tuple model, and ``validate_forward_pass`` returned True -- a dropped
 capture output survived the tripwire because both sides resolved through the
@@ -57,7 +57,7 @@ def test_validation_survives_pristine_tuple_output():
 
 
 def test_planted_walker_leaf_drop_fails_validation(monkeypatch: pytest.MonkeyPatch):
-    """Sol's shared-root plant now goes RED instead of validating True.
+    """The review's shared-root plant now goes RED instead of validating True.
 
     The plant wraps the real backends walker and drops the LAST yielded
     leaf -- the exact mutation that previously made both capture and the

@@ -1,7 +1,7 @@
 """Behavioral tests for the 2026-04-27 performance bundle.
 
 The bundle ships three independent performance fixes uncovered by the
-profiling audit at ``.project-context/research/profiling_audit_2026-04-27.md``:
+2026-04-27 profiling audit (private maintainer notes):
 
 1. **Bytecode column-offset cache** -- ``_get_col_offset`` no longer
    re-disassembles the same code object on every captured frame.

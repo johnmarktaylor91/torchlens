@@ -1,4 +1,4 @@
-"""Label/activation-rung STORAGE integrity (r85, r84 Sol SOL-1 HIGH).
+"""Label/activation-rung STORAGE integrity (r85, r84 review SOL-1 HIGH).
 
 The state-provenance trust decision is a ``{rung} x {axis}`` matrix. Each rung
 (param, buffer ``address``, label / ``buffer_source``) trusts a receiver as

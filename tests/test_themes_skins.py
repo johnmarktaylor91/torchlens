@@ -138,7 +138,7 @@ def test_okabe_ito_set_passes_all_four_cvd_gates() -> None:
 def test_legacy_palette_fails_deuteranopia_the_fork_evidence() -> None:
     """The measured defect: the legacy red/green input/output pair is
     confusable under deuteranopia. Pinned as FORK-2's evidence -- if this
-    starts PASSING the fork's premise changed and JMT should hear about it."""
+    starts PASSING the fork's premise changed and the maintainer should hear about it."""
 
     findings = {
         finding.check: finding

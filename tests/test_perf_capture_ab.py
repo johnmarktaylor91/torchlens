@@ -9,7 +9,7 @@ to measurements taken at the sprint merge-base, recorded in
 ceiling: a re-measured gate metric may not exceed its baseline by more than
 10%. The 2% strict advisory mode arrives with the post-features perf pass.
 
-**RATIFIED METRIC (JMT 2026-08-19): the TRACE FLOOR, not a ratio.** D14/D15
+**RATIFIED METRIC (decided 2026-08-19): the TRACE FLOOR, not a ratio.** D14/D15
 were worded around a native-vs-trace ratio; the ratio was measured to be both
 flaky-red and leaky-green (see the rejected-statistics list below) and is
 therefore superseded. The floor is now the locked gated statistic and the
@@ -30,7 +30,7 @@ Two workloads:
    rejects load spikes by construction.
 
    Two prior statistics were measured and rejected (2026-08-19, quiet
-   32-core devbox):
+   32-core Linux worker):
 
    * median-of-12 ratio (original): ~30% run-to-run spread (mlp ratios
      220-313 over 5 quiet runs, 2026-08-17) against a ceiling only 10%
@@ -119,7 +119,7 @@ GATE_CEILING_FRACTION = 0.10
 #: measurement compared to a median-era baseline would read systematically
 #: low and wave regressions through.
 #:
-#: LOCKED (JMT 2026-08-19): the trace floor is the RATIFIED gated statistic,
+#: LOCKED (decided 2026-08-19): the trace floor is the RATIFIED gated statistic,
 #: superseding the D14/D15 native-vs-trace ratio wording. Changing this token
 #: changes what the gate means and forces a re-baseline, so it takes an
 #: explicit ruling -- not a lane's judgement call.
@@ -139,7 +139,7 @@ ESCALATION_NATIVE_SAMPLES = 200
 
 #: Quiet-box measurement precondition: above this 1-minute load average as a
 #: fraction of cores, a floor measurement is NO measurement (measured
-#: 2026-08-19: sustained load 9-16 on the 32-core devbox inflated trace
+#: 2026-08-19: sustained load 9-16 on the 32-core Linux worker inflated trace
 #: floors 10-90%, and CPU-time floors inflated identically — the contention
 #: is memory-bandwidth/cache, not descheduling, so no statistic recovers the
 #: quiet floor). The gate SKIPS with the load in the reason instead of

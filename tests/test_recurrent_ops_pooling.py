@@ -97,7 +97,7 @@ def test_recurrent_ops_values_and_order_are_correct(loop_trace) -> None:
 def test_recurrent_ops_reads_are_alias_safe(loop_trace) -> None:
     """Reads share ONE immutable group view; mutation is impossible (M7).
 
-    The live group views (JMT-FORK-1, decided 2026-08-12) supersede the
+    The live group views (FORK-1, decided 2026-08-12) supersede the
     fresh-copy-per-read barrier: sharing an immutable tuple across members
     and readers is alias-safe by construction.
     """

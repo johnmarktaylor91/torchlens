@@ -1,6 +1,6 @@
 """C02 safety tranche: bounded reprs, honest units, coherent index bases.
 
-Lane C02 (megasprint 2026-08-27), M(lovely) item 1 -- the measured bug sites:
+Lane C02 (2026-08-27), M(lovely) item 1 -- the measured bug sites:
 the Recording auto-repr that OOMed an 8 GiB box at four saved sites (bug 1),
 the doubled duration unit (bug 2), auto-reprs on run products (bug 9),
 Bundle's quoted-'None' baseline (bug 17), the OpAccessor basis incoherence

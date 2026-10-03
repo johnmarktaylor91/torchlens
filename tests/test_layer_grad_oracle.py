@@ -493,7 +493,7 @@ def test_compare_counts_no_tensor_output() -> None:
 def test_no_tensor_output_cannot_launder_a_stock_observed_call() -> None:
     """A stock-observed gradient contradicts a no-tensor-output exclusion.
 
-    Sol probe regression: a candidate call with an empty ``output_ops`` list
+    Review probe regression: a candidate call with an empty ``output_ops`` list
     used to be classified out of the denominator even when stock autograd
     captured a real gradient for that exact call, so a missed module output
     passed as long as one other module was covered.

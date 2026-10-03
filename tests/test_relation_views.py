@@ -299,7 +299,7 @@ class TestFinishedTraceSurface:
         assert isinstance(layer.modules, tuple)
 
     def test_finished_assignment_normalizes_container_subclasses(self) -> None:
-        # Sol review finding 5: an exact-type check let mutable list/set
+        # Review finding 5: an exact-type check let mutable list/set
         # SUBCLASSES bypass view normalization on finished ops.
         class MutableList(list):
             pass
@@ -328,7 +328,7 @@ class TestFinishedTraceSurface:
         assert op.modules is None
 
     def test_layer_direct_assignment_normalizes_to_views(self) -> None:
-        # Sol review finding 5: Layer shadow setters stored raw mutable
+        # Review finding 5: Layer shadow setters stored raw mutable
         # containers, so `layer.modules = [...]` re-exposed a mutable list
         # and `layer.equivalent_ops = {...}` a mutable set on finished
         # traces.

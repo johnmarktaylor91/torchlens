@@ -4,7 +4,7 @@ Covers the amended lane brief's bind-side surface (foldA D12 / surgery memo
 3.3 items 4, 7, 8, 9 and the bind-side half of 13): the serial non-reentrant
 capture-free callable, transparency, real HF ``generate`` (KV cache on/off),
 ``.last_report``, read-only surface, atomic install/removal on success and
-exception, JMT-FOLD-A3 zero-fire fail-closed settlement, the two-edit misfire
+exception, FOLD-A3 zero-fire fail-closed settlement, the two-edit misfire
 disclosure naming the unfired rule, the OP2 model-door funnel (BOTH arms
 behind one switch), the closed engine-set ``execution_effect`` vocabulary,
 and the bind-side turnkey steer wrapper.
@@ -210,7 +210,7 @@ def test_bind_pass_qualified_boundary_target() -> None:
 
 
 # ---------------------------------------------------------------------------
-# zero-fire settlement (JMT-FOLD-A3) + the two-edit misfire disclosure
+# zero-fire settlement (FOLD-A3) + the two-edit misfire disclosure
 # ---------------------------------------------------------------------------
 
 

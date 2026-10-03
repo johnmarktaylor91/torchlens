@@ -1,6 +1,6 @@
 """L4 until= battery: truncation term, positive-claim cap, prefix projection.
 
-Pinned per the tri-lab-converged L4 design memo (sec 2-3) and S2 ratification
+Pinned per the design-review-converged L4 design memo (sec 2-3) and S2 ratification
 sec 2: truncation is a run-result term, never a capture outcome; a truncated
 run never settles a positive claim; the prefix projection never loosens; the
 two post-return feedback values are explicitly neutralized on a live-until

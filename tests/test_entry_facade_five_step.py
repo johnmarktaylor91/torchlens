@@ -1,4 +1,4 @@
-"""Five-step facade order: the testable spec, pinned (megasprint A10).
+"""Five-step facade order: the testable spec, pinned (workstream A10).
 
 Architecture memo 5.4 / neuro memo D15: (1) underscore -> plain
 ``AttributeError`` immediately; (2) redirect table -> typed teaching

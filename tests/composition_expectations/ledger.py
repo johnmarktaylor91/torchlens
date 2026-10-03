@@ -179,7 +179,7 @@ def row_violations(row: CompositionRow) -> list[str]:
 
 #: Named first-wave cells from the panel's own live findings (memo section 4
 #: tail). Fix lanes re-verify before acting; every row is transitional until
-#: its lane lands the fix + evidence. Deadlines are megasprint phase gates.
+#: its lane lands the fix + evidence. Deadlines are phase gates.
 LEDGER: tuple[CompositionRow, ...] = (
     CompositionRow(
         row_id="CELL-FLAGSHIP-RERUN-NOOP",

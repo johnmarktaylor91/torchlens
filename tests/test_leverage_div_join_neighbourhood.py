@@ -3,7 +3,7 @@
 The identity contract is about a RELATION, so the primary assertion is the
 JOIN'S REFUSAL on the touched cohorts — plus graph-neighbourhood (parent /
 child site-key signature) agreement on every corroborated key, IN ADDITION TO
-shape and payload where retained (Opus NEW-13's wording).
+shape and payload where retained (review NEW-13's wording).
 
 The three POSITIVE CONTROLS THAT MUST FAIL are retained as tests asserting
 each plausible artifact-at-a-time oracle WRONGLY PASSES on a measured broken

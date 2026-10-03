@@ -1,4 +1,4 @@
-"""Packaging + crash-class-docs gates (megasprint lane A12).
+"""Packaging + crash-class-docs gates (workstream A12).
 
 Four defect families this lane closed, each pinned here so it cannot silently
 reopen:

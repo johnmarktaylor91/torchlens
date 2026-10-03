@@ -168,7 +168,7 @@ def test_mlx_validation_branch_merge_healthy_passes() -> None:
 
 
 def test_mlx_end_to_end_bare_streaming_flip_refuses_typed() -> None:
-    """Sol probe, live: a gated flag flipped True in place on the registered MLX
+    """Review probe, live: a gated flag flipped True in place on the registered MLX
     spec must refuse typed at trace() — never capture while silently ignoring
     the option. (Interventions are genuinely lifted on MLX now, so the probe
     uses streaming, which remains gated.)"""
@@ -212,7 +212,7 @@ class _SplitMergeNet(nn.Module):
 def test_mlx_split_container_outputs_wire_into_graph() -> None:
     """Container outputs (mx.split) materialize ops and parent the consumers.
 
-    Sol probe: at d3861eea the wrapped call's list output was dropped at emit,
+    Review probe: at d3861eea the wrapped call's list output was dropped at emit,
     so the trace held only input+add with no split parents while validation
     still passed over the missing wiring.
     """
@@ -230,7 +230,7 @@ def test_mlx_split_container_outputs_wire_into_graph() -> None:
 def test_mlx_validation_fails_stripped_leaf_label_provenance() -> None:
     """Stripping a capture's recorded parent labels fails even coherently.
 
-    Sol probe: setting a captured parent label to None AND removing the
+    Review probe: setting a captured parent label to None AND removing the
     declared parent passed at d3861eea with validate_metadata=False because
     replay silently reused the emit-time argument array. The emit-time
     inventory now fingerprints per-leaf labels, so the strip fails coverage.

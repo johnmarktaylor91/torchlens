@@ -1,8 +1,8 @@
 corpus: genuine_release_artifacts.tar.gz
 sha256: 3429a84fbd406d374afde5b50f6a8be0867ada77b728d6e88309713c6eadcdb3
 size_bytes: 4804520
-harvested: 2026-08-26 (ecosystem tri-lab round 3, Opus lane; imported verbatim
-  2026-08-26 by megasprint lane P05 from the sprint scratch directory --
+harvested: 2026-08-26 (ecosystem design-review round 3, review lane; imported verbatim
+  2026-08-26 by workstream P05 from the sprint scratch directory --
   build item ONE of ecosystem MEMO section 6 G1; digest re-verified at import)
 policy: harvested bytes, never regenerated from tags; no in-place regeneration;
   deletion requires a ledger retirement row (MEMO section 3.7)

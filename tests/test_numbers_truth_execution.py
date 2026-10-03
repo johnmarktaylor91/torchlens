@@ -1,6 +1,6 @@
 """Safe one-call execution (A4) and lazy-module entry (A9).
 
-Lane A07 (megasprint 2026-08-27). Spec: trilabs/summary/MEMO.md build items 5-6.
+Lane A07 (2026-08-27). Spec: the summary design memo build items 5-6.
 """
 
 from __future__ import annotations

@@ -260,7 +260,7 @@ def test_mlx_grad_options_with_intervene_refuses_typed() -> None:
 
 
 def test_mlx_interventions_flag_false_refuses_the_surface() -> None:
-    """Sol probe, reverse direction: flipping interventions=False in place
+    """Review probe, reverse direction: flipping interventions=False in place
     refuses trace(intervene=) typed — the table stays load-bearing on MLX."""
 
     from torchlens.backends import get_backend_spec

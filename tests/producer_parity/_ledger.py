@@ -5,7 +5,7 @@ Sources (design-of-record section 7):
 1. Static AST scan — every ``<expr>.<field>`` and ``getattr(<expr>, "<field>"
    [, default])`` site over ``torchlens/`` where ``<field>`` is an OpEvent
    field name. Over-approximates by name (conservative); records
-   ``has_default`` so getattr default-reliers are explicit (Opus v4 note N10
+   ``has_default`` so getattr default-reliers are explicit (review v4 note N10
    lineage: the strict protocol must raise an AttributeError subclass for
    these sites to keep today's semantics).
 2. Runtime read instrumentation — ``OpEvent.__getattribute__`` recording over

@@ -43,7 +43,7 @@ def test_contiguous_cpu_tensor_no_ops() -> None:
 
 
 def test_cpu_strided_view_yields_contiguous_copy() -> None:
-    """(b) Sol's counterexample: a CPU noncontiguous view must come back CONTIGUOUS.
+    """(b) The review's counterexample: a CPU noncontiguous view must come back CONTIGUOUS.
 
     The disproved one-liner returns the ALIASED noncontiguous view here (0 bytes
     allocated); the shipped helper must materialize a standard-contiguous copy

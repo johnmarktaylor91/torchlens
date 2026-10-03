@@ -1,6 +1,6 @@
 """torch.compile rung-2: ``force_eager`` stance capture (torch >= 2.6).
 
-The tri-lab compile verdict (2026-08-12) verified that the public
+The design-review compile verdict (2026-08-12) verified that the public
 ``torch.compiler.set_stance("force_eager")`` API makes every compiled callable
 run its ORIGINAL Python for the duration of a capture:
 
@@ -12,7 +12,7 @@ run its ORIGINAL Python for the duration of a capture:
   user's compile caches are untouched);
 * interior interventions work inside formerly-opaque regions.
 
-One honest qualification (Sol): the stance invalidates nothing, but TorchLens's
+One honest qualification (review): the stance invalidates nothing, but TorchLens's
 own wrapper install/uninstall can cost ONE bounded recompile on the next
 compiled call after capture. The coexistence contract is "one bounded
 recompile", not "zero cost".

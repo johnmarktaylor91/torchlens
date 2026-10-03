@@ -622,7 +622,7 @@ recorded: 2026-08-27T08:37:17.939005+00:00
 ---
 generator: producer_parity/test_ledger.py (static half)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
-reason: megasprint A10 entry/facade lane: new torchlens/utils/facade.py + utils/lazy_state.py modules and recipes/_robustness/_runnable_state edits moved producer/consumer scan sites
+reason: workstream A10 entry/facade lane: new torchlens/utils/facade.py + utils/lazy_state.py modules and recipes/_robustness/_runnable_state edits moved producer/consumer scan sites
 env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 6685e4c3f591736ad5d49e0936afc94ac7a69e76 (dirty)
@@ -630,7 +630,7 @@ recorded: 2026-08-26T20:12:47.883073+00:00
 ---
 generator: producer_parity/test_ledger.py (full closure)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
-reason: megasprint A10 entry/facade lane: new torchlens/utils/facade.py + utils/lazy_state.py modules and recipes/_robustness/_runnable_state edits moved producer/consumer scan sites
+reason: workstream A10 entry/facade lane: new torchlens/utils/facade.py + utils/lazy_state.py modules and recipes/_robustness/_runnable_state edits moved producer/consumer scan sites
 env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 6685e4c3f591736ad5d49e0936afc94ac7a69e76 (dirty)
@@ -1446,7 +1446,7 @@ source: c0a66143fea0f20f8ef3b11e4a9f032f4bda9a82 (dirty)
 recorded: 2026-08-29T09:31:27.112026+00:00
 generator: producer_parity/test_ledger.py (full closure)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
-reason: F21 reconcile merge of sprint/megasprint-2026-08-27 (tip 3b59303d): union of F21 inventory/features read sites and sprint-side stochastic/onebackward sites; regenerated from the merged tree
+reason: F21 reconcile merge of the 2026-08-27 feature branch (tip 3b59303d): union of F21 inventory/features read sites and sprint-side stochastic/onebackward sites; regenerated from the merged tree
 env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 7886221207a838863dda28978b7bfd854e1b6b1b (dirty)
@@ -1454,7 +1454,7 @@ recorded: 2026-08-29T08:51:07.101353+00:00
 ---
 generator: producer_parity/test_ledger.py (static half)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
-reason: F21 reconcile merge of sprint/megasprint-2026-08-27 (tip 3b59303d): union of F21 inventory/features read sites and sprint-side stochastic/onebackward sites; regenerated from the merged tree
+reason: F21 reconcile merge of the 2026-08-27 feature branch (tip 3b59303d): union of F21 inventory/features read sites and sprint-side stochastic/onebackward sites; regenerated from the merged tree
 env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 7886221207a838863dda28978b7bfd854e1b6b1b (dirty)
@@ -1522,7 +1522,7 @@ recorded: 2026-08-29T07:04:30.940533+00:00
 ---
 generator: producer_parity/test_ledger.py (full closure)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
-reason: F21 reconcile merge of sprint/megasprint-2026-08-27 (tip 3b59303d): union of F21 inventory/features read sites and sprint-side stochastic/onebackward sites; regenerated from the merged tree
+reason: F21 reconcile merge of the 2026-08-27 feature branch (tip 3b59303d): union of F21 inventory/features read sites and sprint-side stochastic/onebackward sites; regenerated from the merged tree
 env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 7886221207a838863dda28978b7bfd854e1b6b1b (dirty)
@@ -1530,7 +1530,7 @@ recorded: 2026-08-29T08:51:07.101353+00:00
 ---
 generator: producer_parity/test_ledger.py (static half)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
-reason: F21 reconcile merge of sprint/megasprint-2026-08-27 (tip 3b59303d): union of F21 inventory/features read sites and sprint-side stochastic/onebackward sites; regenerated from the merged tree
+reason: F21 reconcile merge of the 2026-08-27 feature branch (tip 3b59303d): union of F21 inventory/features read sites and sprint-side stochastic/onebackward sites; regenerated from the merged tree
 env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 7886221207a838863dda28978b7bfd854e1b6b1b (dirty)
