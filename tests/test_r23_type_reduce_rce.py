@@ -130,6 +130,7 @@ def test_lazyimportref_type_reduce_rce_denied_through_tl_load(tmp_path: Path) ->
     assert not marker.exists(), "os.system marker written -> RCE via type-reduce"
 
 
+@pytest.mark.smoke
 def test_lazyimportref_type_denied_at_unpickler() -> None:
     """The LazyImportRef TYPE is denied at find_class (the reduce callable is unresolvable)."""
 
@@ -158,6 +159,7 @@ def test_legit_data_types_and_snapshot_still_admit() -> None:
         assert isinstance(resolved, type), f"{module}:{name} should admit as a type"
 
 
+@pytest.mark.smoke
 def test_r21_and_import_sink_gadgets_still_denied() -> None:
     """The r21 private import gadget and other torchlens callables stay denied."""
 

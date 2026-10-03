@@ -423,6 +423,7 @@ class _Presenter:
         """No-op release guard: join_ops() calls it (f96c67cc); the stub never releases."""
 
 
+@pytest.mark.smoke
 def test_declared_seam_refuses_typed_when_absent_or_wrong_type() -> None:
     """The raw->final seam is fail-closed: absence and wrong type both refuse."""
 

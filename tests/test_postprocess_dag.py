@@ -436,6 +436,7 @@ def test_rank_golden() -> None:
     assert dict(LEGACY_STEP_RANK) == RANK_GOLDEN
 
 
+@pytest.mark.smoke
 def test_derived_order_reproduces_registry() -> None:
     """R2: rank-keyed Kahn reproduces the hand order exactly (day-1 identity)."""
 
@@ -479,6 +480,7 @@ def test_probes_golden() -> None:
     assert derived == PROBES_GOLDEN
 
 
+@pytest.mark.smoke
 def test_read_findings_pinned_by_name() -> None:
     """Category-(c) findings are exactly the pinned set; a NEW one fails.
 
@@ -657,6 +659,7 @@ def test_guard2_ledger_holds_on_default_capture(
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_registry_swap_refused_by_r1_and_r2() -> None:
     """Permuting the registry alone refuses at R1 AND R2, by name."""
 
@@ -880,6 +883,7 @@ def test_classifier_non_vacuity_synthetic_finding(monkeypatch: pytest.MonkeyPatc
     assert ("10", "_facets_cache") in findings
 
 
+@pytest.mark.smoke
 def test_token_read_before_write_check_fires(monkeypatch: pytest.MonkeyPatch) -> None:
     """7.1-5: an r:token with no earlier writer and no baseline is refused."""
 

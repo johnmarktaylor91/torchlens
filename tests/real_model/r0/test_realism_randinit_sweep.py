@@ -248,6 +248,7 @@ def test_deep_sweep_clip(impl, r0_capture):
     _deep_sweep("clip", impl, r0_capture)
 
 
+@pytest.mark.smoke_cells("test_deep_sweep_whisper[sdpa]")
 @BOTH_IMPLS
 def test_deep_sweep_whisper(impl, r0_capture):
     _deep_sweep("whisper", impl, r0_capture)

@@ -165,6 +165,7 @@ def _output_slot(shape: tuple[int, ...], dtype: str = "torch.float32") -> Tensor
 # --------------------------------------------------------------------------- #
 
 
+@pytest.mark.smoke
 def test_literal_int_over_int64_refused_at_parse() -> None:
     """A literal int past the signed-64-bit ceiling is refused, typed."""
 

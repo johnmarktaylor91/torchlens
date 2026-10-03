@@ -156,6 +156,7 @@ def test_lineage_derivation_never_silently_drops_a_kind() -> None:
         ledger.lineage_vectors()
 
 
+@pytest.mark.smoke
 def test_ledger_epoch_disagreement_refuses_at_evidence_extraction() -> None:
     """A ledger whose events disagree with the record epoch refuses typed.
 
@@ -230,6 +231,7 @@ def _descriptor(**overrides: Any) -> dict[str, Any]:
     return payload
 
 
+@pytest.mark.smoke
 def test_deeply_nested_merged_manifest_refuses_typed(tmp_path: Path) -> None:
     """A depth-5000 root manifest is a typed schema refusal, never a RecursionError."""
 
@@ -241,6 +243,7 @@ def test_deeply_nested_merged_manifest_refuses_typed(tmp_path: Path) -> None:
     assert caught.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
 
 
+@pytest.mark.smoke
 def test_deeply_nested_merged_descriptor_refuses_typed(tmp_path: Path) -> None:
     """An over-nested descriptor refuses typed AFTER its checksum verifies."""
 
@@ -264,6 +267,7 @@ def test_deeply_nested_merged_descriptor_refuses_typed(tmp_path: Path) -> None:
     assert caught.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
 
 
+@pytest.mark.smoke
 def test_descriptor_checksum_tamper_is_a_typed_tamper_not_a_gap(tmp_path: Path) -> None:
     """Rewritten descriptor bytes refuse as TAMPER; tamper is never a presence gap."""
 
@@ -274,6 +278,10 @@ def test_descriptor_checksum_tamper_is_a_typed_tamper_not_a_gap(tmp_path: Path) 
     assert caught.value.fields["code"] == MergedErrorCode.MERGED_DESCRIPTOR_TAMPER.value
 
 
+@pytest.mark.smoke_cells(
+    "test_member_path_escape_refuses_typed[parent-traversal]",
+    "test_member_path_escape_refuses_typed[self-referential]",
+)
 @pytest.mark.parametrize(
     "member_path",
     [
@@ -294,6 +302,10 @@ def test_member_path_escape_refuses_typed(tmp_path: Path, member_path: str) -> N
     assert caught.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
 
 
+@pytest.mark.smoke_cells(
+    "test_merged_manifest_vocabulary_violations_refuse_typed[members-table-not-a-mapping]",
+    "test_merged_manifest_vocabulary_violations_refuse_typed[wrong-bundle-format]",
+)
 @pytest.mark.parametrize(
     "manifest_override",
     [
@@ -327,6 +339,10 @@ def test_missing_merged_members_refuse_typed(tmp_path: Path) -> None:
     assert caught.value.fields["code"] == MergedErrorCode.MERGED_DESCRIPTOR_TAMPER.value
 
 
+@pytest.mark.smoke_cells(
+    "test_malformed_member_entry_refuses_typed[empty-object]",
+    "test_malformed_member_entry_refuses_typed[not-a-mapping]",
+)
 @pytest.mark.parametrize(
     "entry",
     [
@@ -376,6 +392,7 @@ def test_malformed_member_entry_refuses_typed(tmp_path: Path, entry: Any) -> Non
     assert caught.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
 
 
+@pytest.mark.smoke
 def test_duplicate_member_rank_refuses_typed(tmp_path: Path) -> None:
     """Two member entries claiming the same rank refuse at the schema pass."""
 

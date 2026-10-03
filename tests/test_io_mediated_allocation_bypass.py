@@ -240,6 +240,9 @@ def test_numpy_reconstruct_helpers_resolve_for_the_guard() -> None:
     assert allowlisted == {"numpy.core.multiarray", "numpy._core.multiarray"}
 
 
+@pytest.mark.smoke_cells(
+    "test_reconstruct_mediated_ndarray_allocation_refused[numpy.core.multiarray]"
+)
 @pytest.mark.parametrize("module", ["numpy._core.multiarray", "numpy.core.multiarray"])
 def test_reconstruct_mediated_ndarray_allocation_refused(module: str) -> None:
     """A tiny ``_reconstruct`` REDUCE no longer allocates an attacker-sized array."""
@@ -574,6 +577,7 @@ def test_nn_module_construction_refused(module: str, name: str, args: tuple[int,
         _RenameAwareUnpickler(io.BytesIO(payload)).load()
 
 
+@pytest.mark.smoke
 def test_nn_module_rule_is_argument_bearing_only() -> None:
     """A ZERO-ARGUMENT module construction stays allowed -- real artifacts do exactly that.
 
@@ -614,6 +618,7 @@ def test_zero_argument_module_newobj_round_trips() -> None:
 # --------------------------------------------------------------------------- #
 
 
+@pytest.mark.smoke_cells("test_integer_sized_buffer_allocation_refused[bytes]")
 @pytest.mark.parametrize("name", ["bytes", "bytearray"])
 def test_integer_sized_buffer_allocation_refused(name: str) -> None:
     """``bytes(N)`` / ``bytearray(N)`` allocate N zero bytes from ~30 pickle bytes."""

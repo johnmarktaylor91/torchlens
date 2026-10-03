@@ -129,6 +129,7 @@ def test_gated_field_does_not_persist_by_default(planted_field: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_switch_is_test_only(monkeypatch: pytest.MonkeyPatch) -> None:
     assert not prerelease_fields_active()
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
@@ -192,6 +193,7 @@ def test_unmarked_artifact_loads_clean_with_no_marker(planted_field: str, tmp_pa
         tl.load(str(plain_path))
 
 
+@pytest.mark.smoke
 def test_malformed_marker_refuses_even_under_switch() -> None:
     tampered = {PRERELEASE_STATE_KEY: {"marker": "wrong-marker"}}
     with activate_prerelease_fields(), pytest.raises(PreReleaseArtifactError, match="malformed"):

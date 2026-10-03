@@ -77,6 +77,7 @@ def test_signature_abs_path_relativized_with_source_kept() -> None:
     assert "https://example.com/x" in scrubbed
 
 
+@pytest.mark.smoke
 def test_signature_nested_default_bracket_is_not_split() -> None:
     sig = "(self, opts={'a': 1, 'b': 2}, xs=(1, 2, 3))"
     stubbed = _scrub_signature_string(sig, include_source=False)

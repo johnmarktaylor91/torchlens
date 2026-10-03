@@ -270,6 +270,7 @@ def test_reserved_sidecar_family_ids_registered() -> None:
     } == RESERVED_SIDECAR_FAMILY_IDS
 
 
+@pytest.mark.smoke
 def test_torchlens_sidecar_namespace_refuses_foreign_provider() -> None:
     """Squat prevention: only the TorchLens provider registers torchlens.*."""
 

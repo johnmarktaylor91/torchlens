@@ -151,6 +151,7 @@ def test_r79_weightless_empty_name_lane_unchanged(tmp_path: Path) -> None:
     tl.load(path)
 
 
+@pytest.mark.smoke_cells("test_r79_empty_name_buffer_pokes_refuse_at_save[non_persistent]")
 @pytest.mark.parametrize(
     "model_cls",
     [EmptyNamePersistentBuffer, EmptyNameNonPersistentBuffer],

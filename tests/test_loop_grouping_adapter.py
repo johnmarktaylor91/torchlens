@@ -750,6 +750,7 @@ def _reference_reaches(workspace: Any, src_label: str, dst_label: str) -> bool:
     return False
 
 
+@pytest.mark.smoke
 def test_adaptive_reachability_matches_reference_on_random_dags() -> None:
     """Sparse, dense, and repeated queries all match ground-truth reachability.
 
@@ -782,6 +783,7 @@ def test_adaptive_reachability_matches_reference_on_random_dags() -> None:
         assert len(cache._descendant_bits) == len(labels)
 
 
+@pytest.mark.smoke
 def test_batch_dp_masks_equal_per_source_bfs_masks() -> None:
     """The reverse-topological batch DP builds bit-identical descendant masks."""
     for seed in (0, 1, 2):
@@ -827,6 +829,7 @@ def test_tied_insertion_order_falls_back_to_per_source_bfs() -> None:
     assert cache.reaches_from_earlier("tied_parent", "grandchild")
 
 
+@pytest.mark.smoke
 def test_non_monotone_workspace_keeps_bounded_pair_lane() -> None:
     """A raw-order-violating edge disables masks entirely, answers stay exact."""
     labels = ["late_parent", "early_child", "tail"]

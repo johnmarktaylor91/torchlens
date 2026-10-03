@@ -242,7 +242,6 @@ def test_standalone_import_probe_is_immune_to_a_prior_capture() -> None:
     assert not failures, f"the probe is still capture-polluted: {failures}"
 
 
-@pytest.mark.smoke
 @pytest.mark.heavy
 def test_known_cycle_members_import_standalone() -> None:
     """The fixed members of the circular-import class import cold, individually."""

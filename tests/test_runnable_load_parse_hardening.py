@@ -140,6 +140,7 @@ def test_parse_rng_profile_refuses_absent_or_coerced_fields() -> None:
     assert profile.capture_seed is None
 
 
+@pytest.mark.smoke
 def test_validated_dtype_literal_returns_canonical_spelling() -> None:
     """A bare dtype spelling canonicalizes so the consumer compare binds (F-R10-B6)."""
 
@@ -176,6 +177,7 @@ def test_encode_literal_exact_type_discipline() -> None:
         _encode_literal(MyList([1]))
 
 
+@pytest.mark.smoke
 def test_encode_literal_bounds_nesting_below_every_decode_ceiling() -> None:
     """Deep nesting refuses typed at SAVE, never a RecursionError or an unloadable bundle (F-R10-B5)."""
 

@@ -141,6 +141,7 @@ def test_gather_slice_disagreement_is_mismatched() -> None:
     assert derivation.stored_value_status is MergeValueStatus.DIVERGENT
 
 
+@pytest.mark.smoke
 def test_gather_without_a_root_demotes_to_not_present() -> None:
     """No rank holding the full destination list means the pairing cannot attest."""
 

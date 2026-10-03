@@ -133,6 +133,7 @@ def test_unreadable_projected_allocation_refuses_instead_of_charging_zero() -> N
         _new_allocation_bytes(_UnreadableTensor(), frozenset())
 
 
+@pytest.mark.smoke
 def test_provenance_digest_failures_record_unavailable_sentinels(monkeypatch) -> None:
     """Could-not-compute must stay distinguishable from does-not-apply."""
 

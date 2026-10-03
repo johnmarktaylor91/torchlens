@@ -49,6 +49,7 @@ def _stub_trace() -> Any:
     return SimpleNamespace(layer_list=ops, module_calls=())
 
 
+@pytest.mark.smoke
 def test_zero_match_save_predicate_warns() -> None:
     """A predicate matching no op must surface a warning, not silence."""
 
@@ -71,6 +72,7 @@ def test_matching_save_predicate_does_not_warn() -> None:
     assert trace.num_saved_ops == 1
 
 
+@pytest.mark.smoke
 def test_none_predicate_does_not_warn() -> None:
     """The full-save default (no predicate) is untouched."""
 

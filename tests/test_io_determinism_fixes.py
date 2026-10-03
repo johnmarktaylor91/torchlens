@@ -372,6 +372,7 @@ def test_content_hash_is_address_and_insertion_order_independent() -> None:
     assert tl.hash.content({left_a: 1, left_b: 2}) == tl.hash.content({right_b: 2, right_a: 1})
 
 
+@pytest.mark.smoke
 def test_loop_signature_sorts_sets_by_emitted_tokens() -> None:
     """Set signature order is total even when distinct elements share repr."""
 
@@ -430,6 +431,7 @@ def test_resave_preserves_model_fingerprint_with_buffers(tmp_path: Path) -> None
     assert second_manifest["model_fingerprint"] == first_manifest["model_fingerprint"]
 
 
+@pytest.mark.smoke
 def test_provenance_set_values_are_canonically_ordered() -> None:
     """Set-like provenance values normalize independently of hash iteration order."""
 
@@ -454,6 +456,7 @@ def test_current_manifest_refuses_unparseable_torchlens_version(tmp_path: Path) 
         tl.load(path)
 
 
+@pytest.mark.smoke
 def test_bounded_json_ceiling_counts_utf8_bytes() -> None:
     """Multibyte JSON text cannot exceed a byte ceiling via character counting."""
 
