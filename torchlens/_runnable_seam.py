@@ -88,6 +88,7 @@ class RunnableTraceState:
     callables_by_call_id: dict[str, Any] | None = None
     host_rng_consumed: bool | None = None
     capture_ambient: Mapping[str, Any] | None = None
+    capture_fp32_unrepresentable: tuple[str, ...] = ()
     state_alias_topology: Any = None
     capture_state_signatures: Mapping[str, Any] | None = None
     persistent_buffer_universe: Mapping[str, Any] | None = None

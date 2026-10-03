@@ -64,9 +64,13 @@ __all__ = [
     "HAS_CURRENT_GRAPH_TASK_ID",
     "HAS_DYNAMO_EXPLAIN",
     "apply_ambient_execution_context",
+    "fp32_precision_unrepresentable_controls",
     "read_fill_uninitialized_memory",
+    "read_fp32_precision_policy",
+    "read_legacy_fp32_controls",
     "snapshot_ambient_execution_context",
     "write_fill_uninitialized_memory",
+    "write_fp32_precision_policy",
     "HAS_DEVICE_CONTEXT_DISPATCH",
     "HAS_DEVICE_CONSTRUCTORS",
     "HAS_DEVICE_MESH",
@@ -122,6 +126,7 @@ __all__ = [
     "HAS_ATTENTION_CAUSAL_BIAS",
     "HAS_EXPANDED_WEIGHTS_CONV_PICKER",
     "HAS_DETERMINISTIC_FILL_FLAG",
+    "HAS_PER_BACKEND_FP32_PRECISION",
     "HAS_AMP_GRADSCALER",
     "HAS_NN_ATTENTION_MODULE",
     "HAS_RMSNORM_MODULE",
@@ -1605,6 +1610,24 @@ def _probe_deterministic_fill_flag() -> bool:
         return False
 
 
+def _probe_per_backend_fp32_precision() -> bool:
+    """Return whether the per-backend ``fp32_precision`` API exists.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``torch.backends.fp32_precision`` is a readable string
+        (torch >= 2.9). Absent on older torch, which is a healthy install, not
+        a degradation: the legacy TF32 / matmul-precision controls are then the
+        complete fp32 precision policy and always read cleanly.
+    """
+
+    try:
+        return isinstance(getattr(torch.backends, "fp32_precision", None), str)
+    except (AttributeError, RuntimeError):
+        return False
+
+
 def _probe_amp_gradscaler() -> bool:
     """Return whether the device-agnostic ``torch.amp.GradScaler`` exists.
 
@@ -1853,6 +1876,7 @@ HAS_GRADIENT_EDGE: bool = False
 _GRADIENT_EDGE_PROBED: bool = False
 HAS_NODE_PREHOOK: bool = _probe_node_prehook()
 HAS_DETERMINISTIC_FILL_FLAG: bool = _probe_deterministic_fill_flag()
+HAS_PER_BACKEND_FP32_PRECISION: bool = _probe_per_backend_fp32_precision()
 HAS_AMP_GRADSCALER: bool = _probe_amp_gradscaler()
 HAS_NN_ATTENTION_MODULE: bool = _probe_nn_attention_module()
 HAS_RMSNORM_MODULE: bool = _probe_rmsnorm_module()
@@ -2050,6 +2074,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_GRADIENT_EDGE",
     "HAS_NODE_PREHOOK",
     "HAS_DETERMINISTIC_FILL_FLAG",
+    "HAS_PER_BACKEND_FP32_PRECISION",
     "HAS_AMP_GRADSCALER",
     "HAS_NN_ATTENTION_MODULE",
     "HAS_RMSNORM_MODULE",
@@ -2256,6 +2281,10 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         # calls sdpa_kernel itself; the tuple-dim reduction falls back to
         # sequential single-axis reduction).
         "HAS_DETERMINISTIC_FILL_FLAG",
+        # The per-backend ``fp32_precision`` API (torch >= 2.9) postdates the
+        # floor: on older torch the legacy TF32/matmul-precision controls are
+        # the whole fp32 policy, so there is nothing to record or shim.
+        "HAS_PER_BACKEND_FP32_PRECISION",
         "HAS_AMP_GRADSCALER",
         "HAS_NN_ATTENTION_MODULE",
         "HAS_RMSNORM_MODULE",
@@ -4655,6 +4684,165 @@ def tensor_version_or_none(tensor: Any) -> int | None:
     return int(version) if isinstance(version, int) else None
 
 
+# --- Per-backend fp32 precision policy (torch >= 2.9) ---------------------------
+#
+# torch 2.9 added per-backend ``fp32_precision`` knobs (generic, cuda.matmul,
+# cudnn{,.conv,.rnn}, mkldnn{,.matmul,.conv,.rnn}). The legacy controls the v2
+# ambient record carries (``cuda.matmul.allow_tf32``, ``cudnn.allow_tf32``,
+# ``get_float32_matmul_precision()``) are coarse views of that policy, and their
+# getters RAISE ``RuntimeError`` when the per-backend state has no legacy
+# equivalent (mixed conv/RNN cuDNN TF32, cuda/mkldnn matmul set through the new
+# API, the generic knob). Measured on torch 2.9.1 and 2.13.0: the legacy setters
+# write only cuda.matmul, cudnn.conv, cudnn.rnn and mkldnn.matmul; the generic,
+# cudnn, mkldnn, mkldnn.conv and mkldnn.rnn knobs stay ``"none"`` under any
+# legacy-only history. So the legacy record represents the policy exactly when
+# every legacy getter reads cleanly AND those five knobs are ``"none"``.
+
+_FP32_PRECISION_KNOBS: tuple[str, ...] = (
+    "",
+    "cuda.matmul",
+    "cudnn",
+    "cudnn.conv",
+    "cudnn.rnn",
+    "mkldnn",
+    "mkldnn.matmul",
+    "mkldnn.conv",
+    "mkldnn.rnn",
+)
+"""Per-backend knob paths under ``torch.backends``, parents before children."""
+
+_FP32_KNOBS_LEGACY_NEVER_WRITES: tuple[str, ...] = (
+    "",
+    "cudnn",
+    "mkldnn",
+    "mkldnn.conv",
+    "mkldnn.rnn",
+)
+"""Knobs no legacy setter writes; ``"none"`` on every legacy-representable policy."""
+
+
+def _fp32_precision_holder(path: str) -> Any:
+    """Return the ``torch.backends`` object owning one knob, or ``None`` if absent."""
+
+    holder: Any = torch.backends
+    for part in (segment for segment in path.split(".") if segment):
+        holder = getattr(holder, part, None)
+        if holder is None:
+            return None
+    return holder
+
+
+def read_fp32_precision_policy() -> dict[str, str] | None:
+    """Return the exact per-backend fp32 precision policy, or ``None`` if absent.
+
+    Returns
+    -------
+    dict[str, str] | None
+        Knob path (``""`` is the generic knob) to its current value, or
+        ``None`` when ``HAS_PER_BACKEND_FP32_PRECISION`` is ``False``.
+    """
+
+    if not HAS_PER_BACKEND_FP32_PRECISION:
+        return None
+    policy: dict[str, str] = {}
+    for path in _FP32_PRECISION_KNOBS:
+        value = getattr(_fp32_precision_holder(path), "fp32_precision", None)
+        if isinstance(value, str):
+            policy[path] = value
+    return policy
+
+
+def write_fp32_precision_policy(policy: dict[str, str] | None) -> None:
+    """Restore one exact per-backend policy from :func:`read_fp32_precision_policy`.
+
+    Parameters
+    ----------
+    policy:
+        Recorded policy; ``None`` (API absent when it was read) is a no-op.
+
+    Raises
+    ------
+    RuntimeError
+        If a written knob reads back different from ``policy`` (a torch
+        whose knob propagation this ordering cannot reproduce); the caller's
+        transaction turns this into its typed refusal instead of continuing
+        with a blended policy.
+    """
+
+    if policy is None or not HAS_PER_BACKEND_FP32_PRECISION:
+        return
+    # Parents first: setting a parent fills its "none" children, so the
+    # explicit child writes that follow land last and win.
+    for path in _FP32_PRECISION_KNOBS:
+        if path in policy:
+            holder = _fp32_precision_holder(path)
+            if holder is not None:
+                holder.fp32_precision = policy[path]
+    live = read_fp32_precision_policy() or {}
+    restored = {path: live.get(path) for path in policy}
+    if restored != policy:
+        raise RuntimeError(
+            f"Per-backend fp32 precision policy did not restore: wanted {policy!r}, "
+            f"read back {restored!r}."
+        )
+
+
+def _read_legacy_fp32_control(read: Callable[[], Any]) -> tuple[Any, bool]:
+    """Read one legacy TF32/matmul-precision control.
+
+    Returns
+    -------
+    tuple[Any, bool]
+        ``(value, False)`` on a clean read; ``(None, True)`` when the getter
+        raises because the per-backend policy has no legacy equivalent. Without
+        the per-backend API a raise is unexpected and propagates.
+    """
+
+    try:
+        return read(), False
+    except RuntimeError:
+        if not HAS_PER_BACKEND_FP32_PRECISION:
+            raise
+        return None, True
+
+
+_LEGACY_FP32_CONTROLS: tuple[tuple[str, Callable[[], Any]], ...] = (
+    ("float32_matmul_precision", lambda: str(torch.get_float32_matmul_precision())),
+    ("cuda_matmul_allow_tf32", lambda: bool(torch.backends.cuda.matmul.allow_tf32)),
+    ("cudnn_allow_tf32", lambda: bool(torch.backends.cudnn.allow_tf32)),
+)
+"""Ambient-record fields that are legacy views of the fp32 precision policy."""
+
+
+def read_legacy_fp32_controls() -> dict[str, Any]:
+    """Return the legacy fp32 controls, ``None`` where the getter cannot answer."""
+
+    return {name: _read_legacy_fp32_control(read)[0] for name, read in _LEGACY_FP32_CONTROLS}
+
+
+def fp32_precision_unrepresentable_controls() -> tuple[str, ...]:
+    """Name what the v2 ambient record cannot represent of the current fp32 policy.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Empty when the legacy record fields describe the live policy exactly.
+        Otherwise the legacy field names whose getter could not answer, then
+        ``fp32_precision[<knob>]=<value>`` for each knob no legacy setter
+        writes that is not ``"none"``. Always empty without the per-backend API.
+    """
+
+    if not HAS_PER_BACKEND_FP32_PRECISION:
+        return ()
+    reasons = [name for name, read in _LEGACY_FP32_CONTROLS if _read_legacy_fp32_control(read)[1]]
+    policy = read_fp32_precision_policy() or {}
+    for path in _FP32_KNOBS_LEGACY_NEVER_WRITES:
+        value = policy.get(path)
+        if value is not None and value != "none":
+            reasons.append(f"fp32_precision[{path or 'generic'}]={value}")
+    return tuple(reasons)
+
+
 def snapshot_ambient_execution_context() -> dict[str, Any]:
     """Snapshot the capture-scoped ambient backend execution context (decision E).
 
@@ -4663,19 +4851,26 @@ def snapshot_ambient_execution_context() -> dict[str, Any]:
     dict[str, Any]
         Plain JSON-safe mapping of every decision-E ambient control. Controls the
         runtime does not expose are ``None``; exposed controls are recorded
-        affirmatively (explicit ``False``), never omitted.
+        affirmatively (explicit ``False``), never omitted. The three legacy fp32
+        views are also ``None`` when a per-backend ``fp32_precision`` policy
+        makes their getter raise; callers that persist the snapshot must check
+        :func:`fp32_precision_unrepresentable_controls` (never infer absence).
     """
 
+    legacy_fp32 = read_legacy_fp32_controls()
     snapshot: dict[str, Any] = {
         "default_dtype": str(torch.get_default_dtype()),
         "default_device": str(getattr(torch, "get_default_device", lambda: "cpu")()),
-        "float32_matmul_precision": str(torch.get_float32_matmul_precision()),
+        # Legacy fp32 views read through ``read_legacy_fp32_controls``: a
+        # per-backend policy with no legacy equivalent records ``None`` here
+        # and is disclosed by ``fp32_precision_unrepresentable_controls``.
+        "float32_matmul_precision": legacy_fp32["float32_matmul_precision"],
         "deterministic_algorithms": bool(torch.are_deterministic_algorithms_enabled()),
         "deterministic_algorithms_warn_only": bool(
             torch.is_deterministic_algorithms_warn_only_enabled()
         ),
-        "cuda_matmul_allow_tf32": bool(torch.backends.cuda.matmul.allow_tf32),
-        "cudnn_allow_tf32": bool(torch.backends.cudnn.allow_tf32),
+        "cuda_matmul_allow_tf32": legacy_fp32["cuda_matmul_allow_tf32"],
+        "cudnn_allow_tf32": legacy_fp32["cudnn_allow_tf32"],
         "cudnn_deterministic": bool(torch.backends.cudnn.deterministic),
         "cudnn_benchmark": bool(torch.backends.cudnn.benchmark),
         "cudnn_enabled": bool(torch.backends.cudnn.enabled),
@@ -4740,6 +4935,18 @@ def apply_ambient_execution_context(values: dict[str, Any]) -> None:
     # control (setting ``allow_tf32=True`` coerces precision to "high"). Apply
     # the coarse Boolean FIRST so the finer-grained recorded precision value
     # wins; the pair is snapshotted together, so the final state is coherent.
+    if HAS_PER_BACKEND_FP32_PRECISION:
+        # A legacy-representable policy has these knobs at "none" (no legacy
+        # setter writes them), so reset any caller value before applying the
+        # legacy views; an exact caller policy is restored afterwards with
+        # ``write_fp32_precision_policy``.
+        write_fp32_precision_policy(
+            {
+                path: "none"
+                for path in _FP32_KNOBS_LEGACY_NEVER_WRITES
+                if path in (read_fp32_precision_policy() or {})
+            }
+        )
     cuda_tf32 = values.get("cuda_matmul_allow_tf32")
     if cuda_tf32 is not None:
         torch.backends.cuda.matmul.allow_tf32 = bool(cuda_tf32)

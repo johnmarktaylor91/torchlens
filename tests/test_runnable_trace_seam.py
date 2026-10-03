@@ -128,6 +128,7 @@ def test_runnable_trace_surface_and_state_are_declared() -> None:
         "callables_by_call_id",
         "host_rng_consumed",
         "capture_ambient",
+        "capture_fp32_unrepresentable",
         "state_alias_topology",
         "capture_state_signatures",
         "persistent_buffer_universe",

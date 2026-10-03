@@ -682,6 +682,22 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
     # degenerate totality means every legal empty shape initializes without
     # sampling, so no advertised descriptor can reach a raw math error.
     ambient_context = _ambient_execution_context(trace, calls, registry_entries, slot_drafts)
+    unrepresentable_fp32 = tuple(trace._runnable.capture_fp32_unrepresentable)
+    if ambient_context is not None and unrepresentable_fp32:
+        diagnostics.append(
+            _diagnostic(
+                RunnableErrorCode.EXECUTION_CONTEXT_UNAVAILABLE,
+                "Capture ran under a per-backend torch.backends fp32_precision "
+                "policy that the v2 ambient execution-context record cannot "
+                f"represent ({', '.join(unrepresentable_fp32)}); replay could run "
+                "under a different TF32/bf16 policy. Re-capture with the policy "
+                "set through the legacy controls (torch.backends.cuda.matmul."
+                "allow_tf32, torch.backends.cudnn.allow_tf32, "
+                "torch.set_float32_matmul_precision) to save runnable.",
+                detection_stage="producer_execution_context",
+                details=(("unrepresentable_controls", ",".join(unrepresentable_fp32)),),
+            )
+        )
     if ambient_context is None:
         diagnostics.append(
             _diagnostic(

@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from ..utils._torch_compat import read_fp32_precision_policy, read_legacy_fp32_controls
 from ._common import _compute_ops, _op_label, _safe_out, _source_line
 from ._first_bad import FirstBadThing
 
@@ -135,9 +136,16 @@ class DeterminismReport:
         )
 
 
+def _legacy_fp32_witness(value: Any) -> str:
+    """Render one legacy fp32 control; ``None`` means no legacy equivalent."""
+
+    return "<per-backend fp32_precision policy>" if value is None else str(value)
+
+
 def _environment_witnesses() -> tuple[tuple[str, str], ...]:
     """Collect the named environment witness lines (read, never mutated)."""
 
+    legacy_fp32 = read_legacy_fp32_controls()
     witnesses: list[tuple[str, str]] = [
         (
             "torch.are_deterministic_algorithms_enabled",
@@ -145,11 +153,17 @@ def _environment_witnesses() -> tuple[tuple[str, str], ...]:
         ),
         ("torch.backends.cudnn.deterministic", str(torch.backends.cudnn.deterministic)),
         ("torch.backends.cudnn.benchmark", str(torch.backends.cudnn.benchmark)),
-        ("torch.backends.cudnn.allow_tf32", str(torch.backends.cudnn.allow_tf32)),
+        # Legacy TF32 views raise under a per-backend fp32_precision policy
+        # (torch >= 2.9); read them safely and witness the exact policy too.
+        (
+            "torch.backends.cudnn.allow_tf32",
+            _legacy_fp32_witness(legacy_fp32["cudnn_allow_tf32"]),
+        ),
         (
             "torch.backends.cuda.matmul.allow_tf32",
-            str(torch.backends.cuda.matmul.allow_tf32),
+            _legacy_fp32_witness(legacy_fp32["cuda_matmul_allow_tf32"]),
         ),
+        ("torch.backends.fp32_precision_policy", str(read_fp32_precision_policy())),
         ("CUBLAS_WORKSPACE_CONFIG", os.environ.get("CUBLAS_WORKSPACE_CONFIG", "<unset>")),
         ("torch.get_num_threads", str(torch.get_num_threads())),
         ("torch.get_num_interop_threads", str(torch.get_num_interop_threads())),

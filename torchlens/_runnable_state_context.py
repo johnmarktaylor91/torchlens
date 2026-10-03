@@ -311,7 +311,9 @@ def _ambient_execution_context_restored(ambient: Any) -> Any:
 
     from .utils._torch_compat import (
         apply_ambient_execution_context,
+        read_fp32_precision_policy,
         snapshot_ambient_execution_context,
+        write_fp32_precision_policy,
     )
 
     recorded = {
@@ -333,6 +335,17 @@ def _ambient_execution_context_restored(ambient: Any) -> Any:
         "fill_uninitialized_memory": ambient.fill_uninitialized_memory,
     }
     saved = snapshot_ambient_execution_context()
+    # The legacy fp32 views in ``saved`` cannot express a per-backend
+    # ``fp32_precision`` policy (torch >= 2.9), so the caller's exact policy is
+    # kept separately and written back after every ``saved`` re-apply.
+    saved_fp32_policy = read_fp32_precision_policy()
+
+    def _restore_caller_ambient() -> None:
+        """Re-apply the caller's ambient context, exact fp32 policy included."""
+
+        apply_ambient_execution_context(saved)
+        write_fp32_precision_policy(saved_fp32_policy)
+
     # r37 R4 (corr2-3/corr2-2): the recorded DEFAULT DEVICE is entered as a SCOPED
     # ``with torch.device(recorded)`` mode nested above the caller's existing mode
     # stack -- never via ``torch.set_default_device`` (which mutates process-global
@@ -356,7 +369,7 @@ def _ambient_execution_context_restored(ambient: Any) -> Any:
         apply_ambient_execution_context(recorded)
     except RuntimeError as exc:
         try:
-            apply_ambient_execution_context(saved)
+            _restore_caller_ambient()
         except RuntimeError:  # pragma: no cover - saved values came from this runtime
             pass
         raise _context_unavailable_error("ambient_context", str(exc)) from exc
@@ -388,7 +401,7 @@ def _ambient_execution_context_restored(ambient: Any) -> Any:
         # neither signal is swallowed.
         restore_error: BaseException | None = None
         try:
-            apply_ambient_execution_context(saved)
+            _restore_caller_ambient()
         except BaseException as error:  # noqa: BLE001 - re-raised below, never swallowed
             restore_error = error
         if depth_before is not None and sys.exc_info()[0] is None:

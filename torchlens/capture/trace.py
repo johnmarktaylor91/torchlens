@@ -1886,9 +1886,19 @@ def run_and_log_inputs_through_model(
                 # forward is about to run under (defaults, matmul precision,
                 # determinism, TF32/cuDNN flags, SDP toggles) so the sparse runnable
                 # descriptor can restore it explicitly at replay.
-                from ..utils._torch_compat import snapshot_ambient_execution_context
+                from ..utils._torch_compat import (
+                    fp32_precision_unrepresentable_controls,
+                    snapshot_ambient_execution_context,
+                )
 
                 self._runnable.capture_ambient = snapshot_ambient_execution_context()
+                # A per-backend fp32_precision policy (torch >= 2.9) the legacy
+                # record fields cannot express: capture proceeds, and the
+                # runnable descriptor refuses typed instead of persisting a
+                # record that would replay under a different policy.
+                self._runnable.capture_fp32_unrepresentable = (
+                    fp32_precision_unrepresentable_controls()
+                )
 
             if self.capture_mode == "predicate":
                 with _structure_only_forward_boundary(self):
