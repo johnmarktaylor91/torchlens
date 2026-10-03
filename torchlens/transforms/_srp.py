@@ -33,7 +33,6 @@ from __future__ import annotations
 
 import hashlib
 import math
-import warnings
 import weakref
 from collections import OrderedDict
 from collections.abc import Mapping
@@ -76,9 +75,6 @@ _SHARES: tuple[str, ...] = ("by_extent", "by_site")
 #: Dense materialization ceiling (bytes) below which the planner picks the
 #: plain dense path; above it, sparse_csr (CPU/CUDA) or dense_chunked.
 _DENSE_PATH_BYTES = 64 * 1024 * 1024
-
-#: Column-chunk byte target for the dense_chunked path.
-_CHUNK_BYTES = 32 * 1024 * 1024
 
 #: Matrix cache bounds (entries and total bytes) — bounded, LRU-evicted.
 _CACHE_MAX_ENTRIES = 8
@@ -683,8 +679,55 @@ def _coo_triplets(entry: dict[str, Any]) -> tuple[torch.Tensor, torch.Tensor, to
     return entry["col_ids"], entry["positions"], entry["signs"]
 
 
+def _column_slots(entry: dict[str, Any]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]:
+    """Lay the matrix out as per-column nonzero slots for the row-local fold.
+
+    Parameters
+    ----------
+    entry:
+        Cached matrix entry.
+
+    Returns
+    -------
+    tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]
+        ``(positions, signs, valid)``, each ``(m_max, k)``: slot ``j`` of
+        column ``c`` holds that column's ``j``-th nonzero in canonical order.
+        ``valid`` is ``None`` when every column has exactly ``m_max`` nonzeros
+        (``very_sparse_fixed``); otherwise it masks the padding slots of the
+        shorter ``iid_bernoulli`` columns.
+    """
+
+    if entry["construction"] == "very_sparse_fixed":
+        return entry["positions"].T.contiguous(), entry["signs"].T.contiguous(), None
+    k = int(entry["n_components"])
+    col_ids, positions, signs = _coo_triplets(entry)
+    order = torch.argsort(col_ids, stable=True)
+    col_ids, positions, signs = col_ids[order], positions[order], signs[order]
+    counts = torch.bincount(col_ids, minlength=k)
+    m_max = int(counts.max().item()) if col_ids.numel() else 0
+    starts = torch.cumsum(counts, 0) - counts
+    slot = torch.arange(col_ids.numel(), dtype=torch.int64) - starts[col_ids]
+    slot_positions = torch.zeros((m_max, k), dtype=torch.int64)
+    slot_signs = torch.zeros((m_max, k), dtype=signs.dtype)
+    valid = torch.zeros((m_max, k), dtype=torch.bool)
+    slot_positions[slot, col_ids] = positions
+    slot_signs[slot, col_ids] = signs
+    valid[slot, col_ids] = True
+    return slot_positions, slot_signs, valid
+
+
 def _project_rows(rows: torch.Tensor, entry: dict[str, Any], path: str) -> torch.Tensor:
     """Project a (n, D) row matrix through the cached matrix along ``path``.
+
+    Every path accumulates through ONE row-local fold: output element
+    ``(i, c)`` is the left-to-right sum, in canonical slot order, of
+    ``rows[i, p] * w`` over column ``c``'s nonzeros, built only from
+    elementwise multiplies and adds (each exactly rounded per element). A
+    row's bytes therefore depend on that row alone, never on which other rows
+    share its batch (T-C10). A BLAS / sparse matmul cannot promise this: its
+    kernel and blocking change with the row count (a single-row call takes a
+    different kernel than a batch), which moved projected rows by an ulp
+    between batch splits.
 
     Parameters
     ----------
@@ -693,7 +736,8 @@ def _project_rows(rows: torch.Tensor, entry: dict[str, Any], path: str) -> torch
     entry:
         Cached matrix entry.
     path:
-        Chosen multiply path.
+        Chosen multiply path (the planner's recorded fact; the arithmetic is
+        the same fold on every path, so all paths are bit-identical).
 
     Returns
     -------
@@ -701,49 +745,24 @@ def _project_rows(rows: torch.Tensor, entry: dict[str, Any], path: str) -> torch
         (n, k) projected rows.
     """
 
+    if path not in ("dense", "sparse_csr", "dense_chunked"):
+        raise ValueError(f"unknown srp multiply path {path!r}")
     device = rows.device
     dtype = rows.dtype
-    extent = int(entry["extent"])
     k = int(entry["n_components"])
     scale = float(entry["scale"])
-    col_ids, positions, signs = _coo_triplets(entry)
-    if path == "dense":
-        weights = torch.zeros((extent, k), dtype=dtype, device=device)
-        weights[positions.to(device), col_ids.to(device)] = (
-            signs.to(device=device, dtype=dtype) * scale
-        )
-        return rows @ weights
-    if path == "sparse_csr":
-        with warnings.catch_warnings():
-            # torch warns once that CSR support is beta; the PLANNER chose
-            # this path, so the ambient torch notice is not the user's to
-            # field — parity with dense is gate-tested instead.
-            warnings.simplefilter("ignore", UserWarning)
-            matrix = torch.sparse_coo_tensor(
-                torch.stack([col_ids, positions]).to(device),
-                (signs.to(dtype) * scale).to(device),
-                size=(k, extent),
-                device=device,
-                # In-range by construction (positions come from mod-D draws
-                # and column ids from arange); the explicit opt-out silences
-                # torch's implicit-disable warning without paying the check.
-                check_invariants=False,
-            ).to_sparse_csr()
-            return torch.sparse.mm(matrix, rows.T).T
-    # dense_chunked: O(chunk * k) matrix memory, accumulation over D-chunks.
-    chunk = max(1, _CHUNK_BYTES // max(1, k * 4))
+    positions, signs, valid = _column_slots(entry)
+    positions = positions.to(device)
+    weights = signs.to(device=device, dtype=dtype) * scale
+    if valid is not None:
+        valid = valid.to(device)
     out = torch.zeros((rows.shape[0], k), dtype=dtype, device=device)
-    device_cols = col_ids.to(device)
-    device_pos = positions.to(device)
-    device_vals = signs.to(device=device, dtype=dtype) * scale
-    for lo in range(0, extent, chunk):
-        hi = min(lo + chunk, extent)
-        in_chunk = (device_pos >= lo) & (device_pos < hi)
-        if not bool(in_chunk.any().item()):
-            continue
-        block = torch.zeros((hi - lo, k), dtype=dtype, device=device)
-        block[device_pos[in_chunk] - lo, device_cols[in_chunk]] = device_vals[in_chunk]
-        out += rows[:, lo:hi] @ block
+    for j in range(positions.shape[0]):
+        term = rows.index_select(1, positions[j]) * weights[j]
+        if valid is not None:
+            # Padding slots contribute an exact zero (never 0 * inf = nan).
+            term = torch.where(valid[j], term, torch.zeros((), dtype=dtype, device=device))
+        out.add_(term)
     return out
 
 

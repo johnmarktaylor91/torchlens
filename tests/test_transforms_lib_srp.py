@@ -128,11 +128,11 @@ def test_o1a_construction_identities() -> None:
 
 
 def test_o1a_sparse_path_matches_dense_matmul() -> None:
-    """Sparse and chunked paths reproduce the materialized dense matmul.
+    """Every path reproduces the materialized dense matmul.
 
-    dense_chunked is BIT-IDENTICAL in generation and exact here; the sparse
-    kernel's accumulation order differs, so its parity is tolerance-based
-    with the realized kernel recorded (memo section 6, verification).
+    All paths share the row-local fold, so they are BIT-IDENTICAL to each
+    other; parity with an explicit dense ``x @ W`` is tolerance-based because
+    the BLAS kernel's accumulation order differs from the fold's.
     """
 
     spec = srp(32, seed=5)
@@ -141,8 +141,14 @@ def test_o1a_sparse_path_matches_dense_matmul() -> None:
     dense = _project_rows(x, entry, "dense")
     chunked = _project_rows(x, entry, "dense_chunked")
     sparse = _project_rows(x, entry, "sparse_csr")
-    assert torch.allclose(dense, chunked, atol=0.0, rtol=0.0) or torch.equal(dense, chunked)
-    assert torch.allclose(dense, sparse, atol=1e-5, rtol=1e-5)
+    assert torch.equal(dense, chunked)
+    assert torch.equal(dense, sparse)
+    k, m = entry["positions"].shape
+    weights = torch.zeros(500, k)
+    weights[entry["positions"].reshape(-1), torch.arange(k).repeat_interleave(m)] = (
+        entry["signs"].reshape(-1).to(torch.float32) * entry["scale"]
+    )
+    assert torch.allclose(dense, x @ weights, atol=1e-5, rtol=1e-5)
 
 
 # --- O13: block-independence, bit-identical ------------------------------------
@@ -301,6 +307,27 @@ def test_batch_composition_independence_of_srp_rows() -> None:
     whole = spec.apply(x, None)
     parts = torch.cat([spec.apply(x[:2], None), spec.apply(x[2:], None)])
     assert torch.equal(whole, parts)
+
+
+@pytest.mark.parametrize("construction", ["very_sparse_fixed", "iid_bernoulli"])
+@pytest.mark.parametrize("path", ["dense", "sparse_csr", "dense_chunked"])
+def test_every_path_is_row_local_under_every_batch_split(construction: str, path: str) -> None:
+    """T-C10 per path: a row's bytes never depend on the rows batched with it.
+
+    Single-row calls are the sharpest probe: BLAS takes a different kernel for
+    one row than for a batch, which is what moved rows by an ulp before the
+    projection became a row-local fold.
+    """
+
+    spec = srp(16, seed=3, construction=construction)
+    x = torch.randn(7, 300, generator=torch.Generator().manual_seed(4))
+    x[3, 0] = float("inf")  # padding slots point at position 0: never 0 * inf = nan
+    entry = _matrix_entry(spec, 300, None)
+    whole = _project_rows(x, entry, path)
+    for size in range(1, 8):
+        for lo in range(0, 7, size):
+            assert torch.equal(_project_rows(x[lo : lo + size], entry, path), whole[lo : lo + size])
+    assert not torch.isnan(whole).any()
 
 
 # --- digest + verification --------------------------------------------------------
