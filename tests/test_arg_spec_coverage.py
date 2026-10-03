@@ -160,8 +160,6 @@ _KNOWN_UNSUPPORTED_ARG_SPEC_REASONS = {
     "apply": "demoted fragment: no operator schema available",
     "arraywrap": "Python/operator protocol helper with nonstandard callable metadata",
     "asarray": "C-level tensor factory with non-introspectable signature (wrapped for capture coverage)",
-    "emptypermuted": "C-level tensor factory with non-introspectable signature (wrapped for capture coverage)",
-    "emptystrided": "C-level tensor factory with non-introspectable signature (wrapped for capture coverage)",
     "frombuffer": "C-level tensor factory with non-introspectable signature (wrapped for capture coverage)",
     "assertasync": "metadata/control helper with no validated tensor-input schema",
     "assertscalar": "metadata/control helper with no validated tensor-input schema",
