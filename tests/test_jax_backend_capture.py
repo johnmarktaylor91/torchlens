@@ -1268,6 +1268,8 @@ def test_jax_region_summary_pandas_and_draw_work(tmp_path: Path) -> None:
     assert "jax_region" in dot
 
 
+# Measured 8.0 s wall / 8.6 s CPU on the GitHub jax preview leg (2026-10-03).
+@pytest.mark.heavy
 def test_jax_trace_accepts_s0j_extended_corpus_subset() -> None:
     """Representative S0.J corpus cases should capture through public JAX tracing."""
 
