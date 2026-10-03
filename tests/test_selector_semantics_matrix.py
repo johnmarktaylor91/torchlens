@@ -699,8 +699,8 @@ def _matrix() -> dict[str, Any]:
 def warm_scan_caches() -> None:
     """Pre-pay the one-time matrix build at collection time (uncharged).
 
-    The conftest warm seam (``pytest_collection_modifyitems``) calls this for
-    every collected module that exposes it. The 278-cell characterization
+    The conftest warm seam (``pytest_collection_finish``) calls this for
+    every module with a selected test that exposes it. The 278-cell characterization
     matrix is ONE lru-cached build (~5-8s of genuine capture CPU); computed
     lazily it lands in whichever cell pytest-randomly happens to run first
     and sits ON the smoke duration-budget boundary (T45: two sessions tripped
