@@ -295,7 +295,12 @@ def test_run_memory_reports_phase_local_peaks() -> None:
         assert metrics["uss_peak_delta_mb_memory_pass"] >= metrics["uss_delta_mb_memory_pass"]
 
 
+# ``serial``: the phase-local peak is the process RSS high-water mark. Under
+# xdist the other workers' memory pressure makes the kernel reclaim this
+# worker's cold pages during the measured call, so RSS can fall by more than
+# the 128 MiB transient adds and the high-water mark never rises.
 @pytest.mark.heavy
+@pytest.mark.serial
 def test_run_memory_detects_transient_inside_measured_call() -> None:
     """An allocate-touch-free transient INSIDE ``fn()`` must register.
 

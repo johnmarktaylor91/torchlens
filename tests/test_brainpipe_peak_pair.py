@@ -75,6 +75,11 @@ def test_peak_pair_is_session_time_only() -> None:
     assert loaded.forward_peak_memory_pair is None
 
 
+# ``serial``, not ``smoke``: the resident delta is the process RSS high-water
+# mark, and under xdist the other workers' memory pressure makes the kernel
+# reclaim this worker's cold pages mid-capture, so RSS can fall by more than
+# the capture adds and the honest per-capture delta reads 0.
+@pytest.mark.serial
 @pytest.mark.skipif(sys.platform != "linux", reason="VmHWM reset is procfs-only")
 def test_multi_capture_resident_peak_is_non_degenerate() -> None:
     """Sweep-scale instrument oracle: capture N's resident peak is real.
@@ -98,15 +103,25 @@ def test_multi_capture_resident_peak_is_non_degenerate() -> None:
 
     from torchlens.capture.peak_memory import psutil_available
 
-    # Escalating widths: each capture retains strictly more than anything
-    # the process allocated before, so the LAST capture's resident growth
-    # cannot be served from cached allocator blocks (a warm allocator
-    # legitimately reads 0 growth for a repeat-sized capture, which is
-    # honest -- the defect under guard is the process-lifetime BASIS).
+    # Escalating widths, then one capture whose every activation is a fresh
+    # mapping. A warm allocator legitimately reads 0 growth when a capture
+    # fits in heap the process already holds resident (honest -- the defect
+    # under guard is the process-lifetime BASIS), and in a shared test
+    # process earlier tests leave far more freed heap than these Linear
+    # captures need. glibc serves every request above its dynamic mmap
+    # threshold ceiling (32 MiB on 64-bit) from a new mapping, so the last
+    # capture's 48 MiB activations must grow resident memory whatever ran
+    # before it in this process.
+    captures: list[tuple[nn.Module, torch.Tensor]] = [
+        (
+            nn.Sequential(nn.Linear(width, width), nn.ReLU(), nn.Linear(width, width)),
+            torch.randn(64, width),
+        )
+        for width in (128, 512, 1536)
+    ]
+    captures.append((nn.Sequential(nn.ReLU(), nn.Sigmoid()), torch.randn(64, 196_608)))
     readings = []
-    for width in (128, 512, 1536):
-        model = nn.Sequential(nn.Linear(width, width), nn.ReLU(), nn.Linear(width, width))
-        x = torch.randn(64, width)
+    for model, x in captures:
         log = tl.trace(model, x, capture=tl.options.CaptureOptions(inference_only=True))
         pair = log.forward_peak_memory_pair
         assert pair is not None
