@@ -109,8 +109,10 @@ def _available_host_bytes() -> int | None:
     -------
     int | None
         Available bytes. Prefers ``MemAvailable`` from ``/proc/meminfo`` because
-        it accounts for reclaimable cache, and falls back to the POSIX
-        available-pages count.
+        it accounts for reclaimable cache, then the POSIX available-pages count,
+        then ``psutil`` when installed. macOS has neither procfs nor
+        ``SC_AVPHYS_PAGES``, so without the ``psutil`` fallback every default
+        ``save_budget="auto"`` capture there warned that CPU budgeting was off.
     """
 
     try:
@@ -127,7 +129,15 @@ def _available_host_bytes() -> int | None:
             return int(pages) * int(page_size)
     except Exception:
         pass
-    return None
+    try:
+        import psutil
+    except ImportError:
+        return None
+    try:
+        available = int(psutil.virtual_memory().available)
+    except Exception:
+        return None
+    return available if available > 0 else None
 
 
 def available_device_bytes(device: torch.device) -> int | None:
