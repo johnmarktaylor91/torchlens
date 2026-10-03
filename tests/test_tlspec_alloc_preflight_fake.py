@@ -456,11 +456,11 @@ def test_genuinely_huge_view_model_runs_verified(tmp_path: Path) -> None:
     VERIFIED -- the alloc preflight charges 0 new bytes for it (r51 over-catch avoided)."""
 
     x = torch.randn(1, 4)
-    # Retain no activations: the runnable save is tensor-value-free, and the default
+    # Retain only the scalar sums: the runnable save is tensor-value-free, and the default
     # exhaustive capture would materialize a contiguous copy of the 4e8-element view
     # (~1.6 GB), which trips the host-dependent save budget on a busy CI runner.
     # The subject here is the RUN-time alloc preflight, not capture retention.
-    bundle = _build(tmp_path, "huge_view.tlspec", _HugeView(), x, save=tl.func("relu"))
+    bundle = _build(tmp_path, "huge_view.tlspec", _HugeView(), x, save=tl.func("sum"))
     result = tl.load(str(bundle)).run(inputs=x.clone())
     assert result.report.path_faithfulness.value == "verified"
 
