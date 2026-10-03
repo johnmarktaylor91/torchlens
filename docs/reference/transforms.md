@@ -118,8 +118,11 @@ extraction manifest embeds.
 
 GPU/MPS: no on-device number is published anywhere in this page — the
 machine-gated suite (`tests/test_transforms_lib_gpu_gate.py`, the C-XFORM
-cluster row) must run green first. On CPU, `dense` / `sparse_csr` /
-`dense_chunked` multiply paths are parity-gated, and byte reduction on the
+cluster row) must run green first. On CPU, the `dense` / `sparse_csr` /
+`dense_chunked` multiply paths all run one row-local fold (elementwise
+multiplies and adds in canonical slot order), so they are bit-identical and a
+projected row never depends on which rows share its batch (T-C10); byte
+reduction on the
 measured chains was 92-184x — while taking ZERO off the retained forward
 peak (that win belongs to emission-time streaming; every built-in declares
 `stream_safe` and aliasing facts for it, and nobody may cite this library
