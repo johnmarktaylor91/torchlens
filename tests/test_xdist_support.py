@@ -99,3 +99,15 @@ def test_non_xdist_sessions_are_untouched(request: pytest.FixtureRequest) -> Non
     plugin._import_xdist_duration_ledger(session)
     assert session._tl_duration_budget_offenders == []
     assert not hasattr(session, "_tl_smoke_family_stats")
+
+
+def test_session_header_reports_the_measured_slowdown_factor(
+    request: pytest.FixtureRequest,
+) -> None:
+    plugin = _conftest_plugin(request)
+    measured = plugin._smoke_budget_load_factor()
+    run_config = SimpleNamespace(option=SimpleNamespace(collectonly=False))
+    (line,) = plugin.pytest_report_header(run_config)
+    assert f"slowdown factor {measured:.2f}x" in line
+    collect_config = SimpleNamespace(option=SimpleNamespace(collectonly=True))
+    assert plugin.pytest_report_header(collect_config) == []

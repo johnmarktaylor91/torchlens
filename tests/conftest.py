@@ -187,6 +187,29 @@ def pytest_configure(config: pytest.Config) -> None:
     _state._function_call_models.clear()
 
 
+def pytest_report_header(config: pytest.Config) -> list[str]:
+    """Print the measured duration-budget slowdown factor in the session header.
+
+    Parameters
+    ----------
+    config:
+        Active pytest configuration.
+
+    Returns
+    -------
+    list[str]
+        One header line; empty for collect-only runs, which never measure.
+    """
+
+    if config.option.collectonly:
+        return []
+    factor = _smoke_budget_load_factor()
+    return [
+        f"torchlens duration budgets: slowdown factor {factor:.2f}x (clamped "
+        f"1-{SLOWDOWN_FACTOR_CAP:.0f}x; probe reference {SLOWDOWN_PROBE_REFERENCE_SECONDS * 1000:.1f} ms)"
+    ]
+
+
 def pytest_unconfigure(config: pytest.Config) -> None:
     """Restore the caller's test-output environment after pytest exits.
 
