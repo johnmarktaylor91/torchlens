@@ -111,3 +111,19 @@ def test_session_header_reports_the_measured_slowdown_factor(
     assert f"slowdown factor {measured:.2f}x" in line
     collect_config = SimpleNamespace(option=SimpleNamespace(collectonly=True))
     assert plugin.pytest_report_header(collect_config) == []
+
+
+def test_terminal_summary_reports_session_and_worker_factors(
+    request: pytest.FixtureRequest,
+) -> None:
+    plugin = _conftest_plugin(request)
+    plugin._smoke_budget_load_factor()
+    lines: list[str] = []
+    reporter = SimpleNamespace(write_line=lines.append)
+    config = SimpleNamespace(
+        option=SimpleNamespace(collectonly=False),
+        _tl_xdist_duration_ledger={"load_factor": 2.5},
+    )
+    plugin.pytest_terminal_summary(reporter, 0, config)
+    (line,) = lines
+    assert "slowdown factor" in line and "2.50x largest xdist worker" in line

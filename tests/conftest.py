@@ -210,6 +210,32 @@ def pytest_report_header(config: pytest.Config) -> list[str]:
     ]
 
 
+def pytest_terminal_summary(terminalreporter: Any, exitstatus: int, config: pytest.Config) -> None:
+    """Print the measured slowdown factors at the end of every run (``-q`` included).
+
+    Parameters
+    ----------
+    terminalreporter:
+        pytest's terminal reporter.
+    exitstatus:
+        Final pytest exit status, unused.
+    config:
+        Active pytest configuration.
+    """
+
+    del exitstatus
+    if config.option.collectonly or _SESSION_LOAD_FACTOR is None:
+        return
+    line = (
+        f"torchlens duration budgets: slowdown factor {_SESSION_LOAD_FACTOR:.2f}x at session "
+        f"start, {_SESSION_MAX_LOAD_FACTOR:.2f}x largest this process"
+    )
+    merged = getattr(config, "_tl_xdist_duration_ledger", None)
+    if merged is not None:
+        line += f", {merged['load_factor']:.2f}x largest xdist worker"
+    terminalreporter.write_line(line)
+
+
 def pytest_unconfigure(config: pytest.Config) -> None:
     """Restore the caller's test-output environment after pytest exits.
 
