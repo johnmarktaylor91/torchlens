@@ -23,6 +23,24 @@ from pathlib import Path
 __all__ = ["fsync_file", "fsync_dir", "fsync_tree"]
 
 
+def _fsync_open_flags(os_name: str) -> int:
+    """Return the ``os.open`` flags for a descriptor that ``os.fsync`` accepts.
+
+    Parameters
+    ----------
+    os_name:
+        ``os.name`` of the running platform.
+
+    Returns
+    -------
+    int
+        ``O_RDWR`` on Windows, whose ``FlushFileBuffers`` rejects a read-only
+        handle with ``EBADF``; ``O_RDONLY`` elsewhere.
+    """
+
+    return os.O_RDWR if os_name == "nt" else os.O_RDONLY
+
+
 def fsync_file(path: Path) -> None:
     """Flush one regular file's data to stable storage.
 
@@ -32,7 +50,7 @@ def fsync_file(path: Path) -> None:
         File whose contents must be durable. Failures propagate as ``OSError``.
     """
 
-    fd = os.open(path, os.O_RDONLY)
+    fd = os.open(path, _fsync_open_flags(os.name))
     try:
         os.fsync(fd)
     finally:
