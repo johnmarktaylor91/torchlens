@@ -384,6 +384,7 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "heavy: marks mid-cost tests excluded from the fast per-step gate (select/deselect with '-m heavy' / '-m \"not heavy\"')",
     "smoke: marks tests as smoke tests for quick critical-path validation (select with '-m smoke')",
+    "smoke_cells: smoke_cells(*names) applies the smoke mark to exactly the named items (item.name, e.g. 'test_x[a]') of the marked function, class or module",
     "serial: marks load-sensitive tests that should run away from parallel worker load",
     "rare: marks tests that are always excluded unless explicitly requested (select with '-m rare')",
     "optional: marks tests that require optional dependencies",

@@ -17,6 +17,11 @@ Roles
 - ``capability``: the test requires an optional dependency/runtime and skips
   honestly without it.
 - ``suite``: names a dedicated gate family selected as a unit.
+- ``tier_selector``: names WHICH items of a function, class or module get a
+  tier. ``smoke_cells("test_x[a]", ...)`` applies ``smoke`` to exactly the
+  named items at collection (``tests/conftest.py::pytest_itemcollected``), so
+  a parametrized family keeps one or two representative smoke cells. The
+  applied ``smoke`` is an ordinary tier mark: every tier rule applies to it.
 - ``selection``: ORTHOGONAL selectors, never cost tiers (compo memo,
   build row 0.1). A selection marker composes with ANY tier, with
   ``scheduling``/``capability`` markers, and with other selection markers;
@@ -34,13 +39,14 @@ The two selection markers this sprint adds:
 
 from __future__ import annotations
 
-MARKER_ROLES = ("tier", "scheduling", "capability", "suite", "selection")
+MARKER_ROLES = ("tier", "tier_selector", "scheduling", "capability", "suite", "selection")
 
 #: Every declared marker -> its one role. Lockstep-gated against pyproject.
 MARKER_ALGEBRA: dict[str, str] = {
     "smoke": "tier",
     "heavy": "tier",
     "slow": "tier",
+    "smoke_cells": "tier_selector",
     "serial": "scheduling",
     "rare": "scheduling",
     "optional": "capability",

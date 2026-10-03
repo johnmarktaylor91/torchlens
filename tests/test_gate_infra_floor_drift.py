@@ -17,6 +17,7 @@ inline comment has always claimed.
 
 from __future__ import annotations
 
+import functools
 import re
 import subprocess
 import sys
@@ -45,6 +46,7 @@ def _workflow_floor() -> int:
     return int(matches[0])
 
 
+@functools.lru_cache(maxsize=1)
 def _live_smoke_selection_count() -> int:
     """Count tests the smoke leg's own selection expression selects today."""
     cmd = [
@@ -83,4 +85,16 @@ def test_smoke_executed_floor_tracks_selection() -> None:
         f"smoke selection ({selected} tests). The floor's contract is ~50% of the tier "
         f"(band 45-55%). Re-true the literal in .github/workflows/tests.yml to "
         f"~{selected // 2} (and update its inline comment); do NOT widen this band."
+    )
+
+
+def test_smoke_selection_stays_under_size_ceiling() -> None:
+    """The live whole-tree smoke selection stays at or under the tier's ceiling."""
+    from tests.conftest import SMOKE_TIER_SIZE_CEILING
+
+    selected = _live_smoke_selection_count()
+    assert selected <= SMOKE_TIER_SIZE_CEILING, (
+        f"the live smoke selection is {selected} tests, above the ceiling of "
+        f"{SMOKE_TIER_SIZE_CEILING} in tests/conftest.py; demote tests rather than "
+        "raising the ceiling without a measured sub-5-minute smoke wall time."
     )
