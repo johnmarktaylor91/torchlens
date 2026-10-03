@@ -75,6 +75,13 @@ compute cost, not wall time), and a test that mostly sleeps is uncatchable by de
 (min(wall, cpu) charging). Subprocess-per-cell parametrized families whose AGGREGATE compute
 is heavy-class belong in `heavy` even when each cell is under 5s (the lazy-module
 import-pattern families are the precedent).
+The load scale is MEASURED, not read from loadavg: a fixed CPU-bound probe's thread CPU time
+against its reference-host time (`SLOWDOWN_PROBE_REFERENCE_SECONDS`), measured at session start
+and once more for any test about to be flagged, clamped 1x-4x. It sees slower cores (a slow
+runner, a busy hyperthread sibling) and ignores run-queue length, so it is correct under
+core-pinned job runners and on CI runners. Test processes run torch with ONE intra-op thread
+(`OMP_NUM_THREADS`/`MKL_NUM_THREADS`/`OPENBLAS_NUM_THREADS` and `torch.set_num_threads(1)`);
+set `TORCHLENS_TEST_THREADS=N` to override. Tests in `tests/test_duration_tripwire_calibration.py`.
 
 ## Fixtures
 `tests/conftest.py` owns deterministic seeding and common inputs such as image tensors,

@@ -112,6 +112,7 @@ def pytest_configure(config: pytest.Config) -> None:
     config._tl_prior_collapse_strict = os.environ.get("TORCHLENS_COLLAPSE_STRICT")
     os.environ.setdefault("TORCHLENS_COLLAPSE_STRICT", "1")
     config._tl_warn_once_sentinel_specs = _WARN_ONCE_SENTINELS
+    _pin_test_threads(config)
     # Pay PyTorch's one-time RNG and deterministic-mode initialization during
     # session setup, not against whichever smoke test happens to run first.
     torch.random.get_rng_state()
@@ -177,6 +178,9 @@ def pytest_configure(config: pytest.Config) -> None:
                 f"tests/conftest.py: warmup capture failed ({warmup_exc!r}); "
                 "continuing unwarmed, the first real test pays the one-time cost",
             )
+    if not config.option.collectonly:
+        # Measure the session slowdown factor now, outside every charged window.
+        _smoke_budget_load_factor()
     _state._collect_usage_stats = False
     _state._function_call_counts.clear()
     _state._function_call_models.clear()
@@ -196,6 +200,7 @@ def pytest_unconfigure(config: pytest.Config) -> None:
         os.environ.pop("TORCHLENS_TEST_OUTPUTS_DIR", None)
     else:
         os.environ["TORCHLENS_TEST_OUTPUTS_DIR"] = prior
+    _restore_test_threads(config)
     prior_strict = getattr(config, "_tl_prior_collapse_strict", None)
     if prior_strict is None:
         os.environ.pop("TORCHLENS_COLLAPSE_STRICT", None)
@@ -243,34 +248,155 @@ DURATION_BUDGET_GRACE_SECONDS = 2.0
 SMOKE_FAMILY_PER_CELL_SECONDS = 0.1
 
 
-#: Session-frozen load factor (r7 R41, fixwave-7): the factor was recomputed
-#: PER ITEM from instantaneous loadavg, so the same test passed or failed on
-#: momentary run-queue pressure and could raise its own budget by finishing
-#: during a load spike. One reading at first use now holds for the whole
-#: session — deterministic within a run, still load-aware across runs.
+#: Load-robust slowdown factor (2026-10-03). The budgets are COMPUTE
+#: budgets in reference-host seconds; what legitimately inflates a test's
+#: charged min(wall, cpu) is a slower CPU per thread -- a slower runner,
+#: hyperthread-sibling or memory-bandwidth contention -- not run-queue length
+#: (single-threaded CPU time ignores the queue). The former factor,
+#: ``os.getloadavg() / os.cpu_count()``, measured neither: under a job
+#: runner's taskset pinning it divided host load by every host core, and on a GitHub
+#: runner it read ~1.0 on hardware ~2x slower than the box the budgets were
+#: set on. The factor is now MEASURED: the CPU time of a fixed pure-Python
+#: probe against its time on the reference host, clamped to the same 1x-4x
+#: band. Budgets are unchanged; only the load measurement moved.
+#:
+#: Reference: best-of-5 probe CPU time on a 2.8 GHz Xeon server core,
+#: CPython 3.12.13 (20.7 ms, 2026-10-03). A 3.5 GHz desktop core (16.1 ms)
+#: and an Apple-silicon core (8.7 ms) read 1.0; CPython 3.10 on the
+#: reference core reads 1.35 (27.9 ms).
+SLOWDOWN_PROBE_REFERENCE_SECONDS = 0.0207
+SLOWDOWN_PROBE_ITERATIONS = 200_000
+SLOWDOWN_PROBE_REPEATS = 5
+SLOWDOWN_FACTOR_CAP = 4.0
+
+#: Session-start slowdown factor, measured once and frozen (r7 R41: a factor
+#: recomputed per item let momentary wobble flip verdicts mid-session).
 _SESSION_LOAD_FACTOR: float | None = None
+#: Largest factor measured this session (session start or an offender
+#: re-measure); family budgets and the xdist ledger use it.
+_SESSION_MAX_LOAD_FACTOR = 1.0
+
+
+def _slowdown_probe_body(iterations: int) -> int:
+    """Run the fixed interpreter-bound calibration workload."""
+
+    accumulator = 0
+    table: dict[int, int] = {}
+    for index in range(iterations):
+        accumulator += (index * 7) % 13
+        table[index & 255] = accumulator
+    return accumulator
+
+
+def _slowdown_probe_seconds() -> float:
+    """Return the best-of-N thread CPU seconds of one calibration probe.
+
+    Thread CPU time ignores time spent waiting for a core, so run-queue
+    pressure (already absorbed by ``min(wall, cpu)``) does not move it, while
+    a slower core -- a slower runner, a busy hyperthread sibling -- does. The
+    minimum over repeats drops one-off interrupts.
+    """
+
+    best = float("inf")
+    for _ in range(SLOWDOWN_PROBE_REPEATS):
+        started = time.thread_time()
+        _slowdown_probe_body(SLOWDOWN_PROBE_ITERATIONS)
+        best = min(best, time.thread_time() - started)
+    return best
+
+
+def _slowdown_factor_from_probe(probe_seconds: float) -> float:
+    """Map one probe measurement onto the clamped 1x-4x budget factor."""
+
+    ratio = probe_seconds / SLOWDOWN_PROBE_REFERENCE_SECONDS
+    return min(max(ratio, 1.0), SLOWDOWN_FACTOR_CAP)
+
+
+def _measure_slowdown_factor() -> float:
+    """Measure the current slowdown factor and fold it into the session max."""
+
+    global _SESSION_MAX_LOAD_FACTOR
+    factor = _slowdown_factor_from_probe(_slowdown_probe_seconds())
+    _SESSION_MAX_LOAD_FACTOR = max(_SESSION_MAX_LOAD_FACTOR, factor)
+    return factor
 
 
 def _smoke_budget_load_factor() -> float:
-    """Scale the wall-clock budget by CPU oversubscription, frozen per session.
-
-    Wall-clock durations inflate roughly with run-queue pressure; a fixed
-    budget false-trips whenever an orchestrator runs sibling lanes on the same
-    box (measured 2026-08-13: the same four tests read 2.9-14.2s quiet but
-    15.6-34.9s at loadavg ~5x nproc). Capped so a pathological load reading
-    can never disarm the lint entirely, and frozen at its first reading so
-    per-item load wobble cannot flip verdicts mid-session.
-    """
+    """Return the session-start slowdown factor, measured once and frozen."""
 
     global _SESSION_LOAD_FACTOR
-    if _SESSION_LOAD_FACTOR is not None:
-        return _SESSION_LOAD_FACTOR
-    try:
-        load_per_cpu = os.getloadavg()[0] / max(os.cpu_count() or 1, 1)
-    except OSError:  # pragma: no cover - getloadavg unsupported on the platform.
-        load_per_cpu = 1.0
-    _SESSION_LOAD_FACTOR = min(max(load_per_cpu, 1.0), 4.0)
+    if _SESSION_LOAD_FACTOR is None:
+        _SESSION_LOAD_FACTOR = _measure_slowdown_factor()
     return _SESSION_LOAD_FACTOR
+
+
+def _item_budget_factor(base_budget: float, charged: float) -> float:
+    """Return the factor that judges one item, re-measuring only a suspect.
+
+    A test over its budget at the session factor gets one fresh probe right
+    after it ran (outside its charged window); it is judged at the larger of
+    the two. A genuinely over-budget test on a quiet host re-measures ~1.0
+    and still fails; a test slowed by contention that arrived mid-session is
+    judged at the slowdown it actually ran under.
+    """
+
+    factor = _smoke_budget_load_factor()
+    if charged > base_budget * factor + DURATION_BUDGET_GRACE_SECONDS:
+        factor = max(factor, _measure_slowdown_factor())
+    return factor
+
+
+#: Torch intra-op threads per test process. One thread is the measured fix
+#: for load-induced duration failures: with 2+ OpenMP threads a contended
+#: test's wall AND CPU inflate 3-5x (worker threads spin while waiting),
+#: which no charged measure absorbs; at one thread the same tests stay within
+#: 10-20% (load experiment, 2026-10-02). Override with
+#: TORCHLENS_TEST_THREADS=N for a test that needs real parallelism.
+TEST_THREADS_ENV = "TORCHLENS_TEST_THREADS"
+_THREAD_ENV_VARS = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS")
+
+
+def _test_thread_count() -> int:
+    """Return the requested per-process torch thread count (default 1)."""
+
+    raw = os.environ.get(TEST_THREADS_ENV, "1")
+    try:
+        threads = int(raw)
+    except ValueError as exc:
+        raise pytest.UsageError(
+            f"{TEST_THREADS_ENV} must be a positive integer, got {raw!r}"
+        ) from exc
+    if threads < 1:
+        raise pytest.UsageError(f"{TEST_THREADS_ENV} must be a positive integer, got {raw!r}")
+    return threads
+
+
+def _pin_test_threads(config: pytest.Config) -> None:
+    """Set torch and the BLAS/OpenMP environment to the test thread count.
+
+    The environment covers subprocess-spawning tests; the prior values are
+    restored at unconfigure.
+    """
+
+    threads = _test_thread_count()
+    config._tl_prior_thread_env = {name: os.environ.get(name) for name in _THREAD_ENV_VARS}
+    config._tl_prior_torch_threads = torch.get_num_threads()
+    for name in _THREAD_ENV_VARS:
+        os.environ[name] = str(threads)
+    torch.set_num_threads(threads)
+
+
+def _restore_test_threads(config: pytest.Config) -> None:
+    """Undo ``_pin_test_threads``."""
+
+    for name, prior in getattr(config, "_tl_prior_thread_env", {}).items():
+        if prior is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = prior
+    prior_threads = getattr(config, "_tl_prior_torch_threads", None)
+    if prior_threads is not None:
+        torch.set_num_threads(prior_threads)
 
 
 def _duration_budget_tier(item: pytest.Item) -> tuple[str, float] | None:
@@ -366,7 +492,6 @@ def pytest_runtest_protocol(item: pytest.Item, nextitem: pytest.Item | None) -> 
     cpu_seconds = _process_cpu_seconds() - cpu_before
     wall_seconds = sum(getattr(item, "_tl_phase_durations", {}).values())
     charged = min(wall_seconds, cpu_seconds)
-    load_factor = _smoke_budget_load_factor()
     tier_budget = _duration_budget_tier(item)
     if tier_budget is not None and tier_budget[0] in {"smoke", "unmarked"}:
         # Aggregate family budgets cover every 5s-bounded tier (smoke AND
@@ -383,7 +508,7 @@ def pytest_runtest_protocol(item: pytest.Item, nextitem: pytest.Item | None) -> 
         family_count += 1
         family_stats[family_key] = (family_total, family_count)
         family_budget = (
-            load_factor
+            max(_smoke_budget_load_factor(), _SESSION_MAX_LOAD_FACTOR)
             * max(
                 2.0 * SMOKE_DURATION_BUDGET_SECONDS,
                 SMOKE_FAMILY_PER_CELL_SECONDS * family_count,
@@ -398,7 +523,7 @@ def pytest_runtest_protocol(item: pytest.Item, nextitem: pytest.Item | None) -> 
     if tier_budget is None:
         return result
     tier, base_budget = tier_budget
-    budget = base_budget * load_factor + DURATION_BUDGET_GRACE_SECONDS
+    budget = base_budget * _item_budget_factor(base_budget, charged) + DURATION_BUDGET_GRACE_SECONDS
     if charged > budget:
         offenders = getattr(item.session, "_tl_duration_budget_offenders", None)
         if offenders is None:
@@ -686,7 +811,7 @@ def _export_worker_duration_ledger(session: pytest.Session) -> None:
             key: list(value)
             for key, value in getattr(session, "_tl_smoke_family_stats", {}).items()
         },
-        "load_factor": _SESSION_LOAD_FACTOR or 1.0,
+        "load_factor": max(_SESSION_LOAD_FACTOR or 1.0, _SESSION_MAX_LOAD_FACTOR),
     }
 
 
