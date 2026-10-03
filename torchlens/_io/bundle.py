@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import glob
+import io
 import json
 import os
 import pickle
@@ -825,21 +826,25 @@ def save(
             scrubbed_state=scrubbed_state,
         )
         _restrict_mode(tmp_path / "manifest.json", 0o600)
-        # Write/read symmetry (AUD-CODE 2.20): the canonical bytes are dry-run
+        # B3R4-R21-2: canonical container bytes (set/frozenset members
+        # sorted), so persisted metadata does not vary with PYTHONHASHSEED.
+        # Dumped ONCE through the ``dump_canonical_metadata`` seam (interrupt /
+        # poisoned-write tests hook it): the canonical pickler is pure Python,
+        # so a second dump for the preflight doubled the dominant save cost.
+        metadata_buffer = io.BytesIO()
+        dump_canonical_metadata(scrubbed_state, metadata_buffer)
+        metadata_bytes = metadata_buffer.getvalue()
+        # Write/read symmetry (AUD-CODE 2.20): exactly these bytes are dry-run
         # through the loader's restricted unpickler FIRST; an unportable value
-        # refuses typed, naming its key path, and nothing is written. The real
-        # write below stays on the ``dump_canonical_metadata`` seam (interrupt /
-        # poisoned-write tests hook it); canonical dumps are deterministic, so
-        # the validated and written bytes are identical.
+        # refuses typed, naming its key path, and nothing is written.
         preflight_metadata_portability(
             scrubbed_state,
             unpickler_factory=_RenameAwareUnpickler,
             bundle_path=bundle_path,
+            data=metadata_bytes,
         )
         with (tmp_path / "metadata.pkl").open("wb") as handle:
-            # B3R4-R21-2: canonical container bytes (set/frozenset members
-            # sorted), so persisted metadata does not vary with PYTHONHASHSEED.
-            dump_canonical_metadata(scrubbed_state, handle)
+            handle.write(metadata_bytes)
         _restrict_mode(tmp_path / "metadata.pkl", 0o600)
 
         # Durability before publish: fsync every written blob/sidecar and the

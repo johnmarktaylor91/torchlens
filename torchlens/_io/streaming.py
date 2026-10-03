@@ -10,6 +10,7 @@ bundle.
 
 from __future__ import annotations
 
+import io
 import os
 import pickle
 import platform
@@ -546,18 +547,22 @@ class BundleStreamWriter:
             from ._portability_preflight import preflight_metadata_portability
             from .bundle import _RenameAwareUnpickler
 
-            # Write/read symmetry (AUD-CODE 2.20): dry-run the canonical bytes
-            # through the loader's restricted unpickler before writing; the
-            # real write keeps the ``dump_canonical_metadata`` seam.
+            # B3R4-R21-2: canonical container bytes (set/frozenset members
+            # sorted); persisted metadata must not vary with PYTHONHASHSEED.
+            # Dumped once through the ``dump_canonical_metadata`` seam.
+            metadata_buffer = io.BytesIO()
+            dump_canonical_metadata(scrubbed_state, metadata_buffer)
+            metadata_bytes = metadata_buffer.getvalue()
+            # Write/read symmetry (AUD-CODE 2.20): dry-run exactly these bytes
+            # through the loader's restricted unpickler before writing.
             preflight_metadata_portability(
                 scrubbed_state,
                 unpickler_factory=_RenameAwareUnpickler,
                 bundle_path=self.tmp_path,
+                data=metadata_bytes,
             )
             with (self.tmp_path / "metadata.pkl").open("wb") as handle:
-                # B3R4-R21-2: canonical container bytes (set/frozenset members
-                # sorted); persisted metadata must not vary with PYTHONHASHSEED.
-                dump_canonical_metadata(scrubbed_state, handle)
+                handle.write(metadata_bytes)
             _restrict_mode(self.tmp_path / "metadata.pkl", 0o600)
         except TorchLensIOError:
             raise

@@ -156,6 +156,7 @@ def preflight_metadata_portability(
     *,
     unpickler_factory: UnpicklerFactory,
     bundle_path: Any,
+    data: bytes | None = None,
 ) -> bytes:
     """Return the ``metadata.pkl`` bytes for ``scrubbed_state`` iff the loader reads them.
 
@@ -169,6 +170,11 @@ def preflight_metadata_portability(
         ``tl.load(path)``.
     bundle_path:
         Destination named in the refusal.
+    data:
+        The canonical bytes of ``scrubbed_state`` when the caller already
+        produced them (the writers dump once through their own
+        ``dump_canonical_metadata`` seam and write exactly the bytes checked
+        here); ``None`` dumps them here.
 
     Raises
     ------
@@ -178,7 +184,8 @@ def preflight_metadata_portability(
         located key path and ``reason`` carries the loader's own message.
     """
 
-    data = canonical_metadata_bytes(scrubbed_state)
+    if data is None:
+        data = canonical_metadata_bytes(scrubbed_state)
     failure = _dry_run_failure(data, unpickler_factory)
     if failure is None:
         return data
