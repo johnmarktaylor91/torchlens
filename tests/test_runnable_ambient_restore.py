@@ -58,7 +58,7 @@ def test_loaded_runnable_run_leaves_globals_unchanged(tmp_path: Path) -> None:
     torch.manual_seed(0)
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
     x = torch.randn(2, 4)
-    trace = tl.trace(model, x)
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     path = tmp_path / "ambient.tlspec"
     tl.save(trace, path, level="runnable", include_weights=True)
     loaded = tl.load(path)

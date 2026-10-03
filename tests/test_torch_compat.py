@@ -400,6 +400,7 @@ def test_torch_capability_snapshot_contract() -> None:
         # absence is a healthy old install with a real fallback or nothing to
         # shim). Build-dependent, so mirror the live post-snapshot capability.
         "HAS_DETERMINISTIC_FILL_FLAG": tc.HAS_DETERMINISTIC_FILL_FLAG,
+        "HAS_FP32_PRECISION_CONTROLS": tc.HAS_FP32_PRECISION_CONTROLS,
         "HAS_AMP_GRADSCALER": tc.HAS_AMP_GRADSCALER,
         "HAS_NN_ATTENTION_MODULE": tc.HAS_NN_ATTENTION_MODULE,
         "HAS_RMSNORM_MODULE": tc.HAS_RMSNORM_MODULE,
