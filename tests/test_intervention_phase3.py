@@ -470,7 +470,9 @@ def test_splice_module_input_splices_module_scope_once_end_to_end() -> None:
     assert torch.equal(log[log.output_layers[0]].out, 100 * x)
 
 
-@pytest.mark.timeout(5)
+# Hang guard only (pytest-timeout kills without load scaling); the duration tripwire
+# owns the 5 s speed budget. 5 s tripped under 4 xdist workers on GitHub (2026-10-03).
+@pytest.mark.timeout(20)
 def test_module_scoped_splice_records_replacement_parent_and_fire_record(tmp_path: Path) -> None:
     """A module-boundary input splice records the value consumed downstream."""
 
