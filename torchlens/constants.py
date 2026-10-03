@@ -1389,9 +1389,13 @@ def _get_torchvision_funcs() -> list[tuple[str, str]]:
 # wrapper, and -- absent this entry -- neither ``unwrap_torch`` nor the next
 # ``wrap_torch`` ever knew that namespace existed to restore or re-wrap it,
 # permanently poisoning dynamo's identity-keyed rule map for the rest of the
-# process (round-2 CI triage, 2026-10-01).
+# process (round-2 CI triage, 2026-10-01). The same module binds
+# ``reshape_from_tensor_shape = torch._reshape_from_tensor`` (torch >= 2.7); it
+# must be tracked with its sibling, or the per-site post-wrap audit finds that
+# public site still holding the wrapped original.
 _TORCH_SUBMODULE_ALIAS_TARGETS: tuple[tuple[str, str], ...] = (
     ("torch.onnx.operators", "shape_as_tensor"),
+    ("torch.onnx.operators", "reshape_from_tensor_shape"),
 )
 
 
