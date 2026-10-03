@@ -1,5 +1,6 @@
 import fnmatch
 import gc
+import inspect
 import os
 import random
 import re
@@ -18,6 +19,7 @@ import pytest
 import torch
 
 from torchlens import _state
+from torchlens.data_classes._trace_viz import TraceVisualizationMixin
 
 # Output directories are assigned under pytest's private basetemp in
 # ``pytest_configure`` before test modules import these constants.
@@ -1379,6 +1381,83 @@ def _reset_rng_state() -> Iterator[None]:
         if cuda_states is not None:
             torch.cuda.set_rng_state_all(cuda_states)
         torch.use_deterministic_algorithms(deterministic, warn_only=deterministic_warn_only)
+
+
+#: ``(owner, method_name, default_basename)`` for every ``Trace`` draw
+#: entrypoint whose ``vis_outpath``-equivalent parameter defaults to a bare
+#: relative basename. Graphviz resolves a relative ``vis_outpath`` against
+#: the process cwd, not any per-trace scratch directory, so every entry here
+#: is a repo-root collision risk for a test that omits the argument.
+_DRAW_DEFAULT_OUTPATH_TARGETS: tuple[tuple[type, str, str], ...] = (
+    (TraceVisualizationMixin, "draw", "modelgraph"),
+    (TraceVisualizationMixin, "draw_backward", "backward_modelgraph"),
+    (TraceVisualizationMixin, "draw_combined", "combined_modelgraph"),
+    (TraceVisualizationMixin, "render_dagua_graph", "graph.gv"),
+)
+
+
+def _defaults_with_replacement(func: Any, param_name: str, value: object) -> tuple[object, ...]:
+    """Return ``func.__defaults__`` with one positional parameter's default replaced.
+
+    Parameters
+    ----------
+    func:
+        Plain function whose trailing positional parameters carry defaults.
+    param_name:
+        Name of the positional-or-keyword parameter to replace.
+    value:
+        Replacement default value.
+
+    Returns
+    -------
+    tuple[object, ...]
+        New ``__defaults__`` tuple, aligned the same way Python aligns it:
+        against the trailing positional parameters.
+    """
+
+    positional = [
+        p
+        for p in inspect.signature(func).parameters.values()
+        if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
+    ]
+    defaults = list(func.__defaults__ or ())
+    first_defaulted = len(positional) - len(defaults)
+    target_index = [p.name for p in positional].index(param_name) - first_defaulted
+    defaults[target_index] = value
+    return tuple(defaults)
+
+
+@pytest.fixture(autouse=True)
+def _draw_default_outpath_in_tmp_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Redirect every ``vis_outpath``-defaulting draw entrypoint into ``tmp_path``.
+
+    ``Trace.draw`` / ``draw_backward`` / ``draw_combined`` /
+    ``render_dagua_graph`` default their output-path argument to a bare
+    relative basename (``"modelgraph"``, ``"backward_modelgraph"``,
+    ``"combined_modelgraph"``, ``"graph.gv"``). Graphviz resolves that
+    relative path against the process's current working directory, which
+    under xdist is the repo root shared by every worker: two tests that both
+    omit the argument (about 21 files call ``draw(vis_save_only=True)`` with
+    no ``vis_outpath=``) raced to write and read the same file ("dot: can't
+    open .../modelgraph", nightly fast tier, 2026-10-03).
+
+    A blanket ``monkeypatch.chdir`` would fix the same race but would also
+    change how every OTHER relative path in a test resolves (fixture
+    corpora, cache dirs), which is unproven safe suite-wide; patching only
+    the draw-family defaults is the narrower fix with the same effect.
+    Explicit ``vis_outpath=``/``container_path=`` callers are untouched --
+    this only changes what a test gets when it supplies nothing.
+    ``tests/test_draw_default_outpath_repo_root_guard.py`` is the regression
+    test for this fixture.
+    """
+
+    for owner, method_name, basename in _DRAW_DEFAULT_OUTPATH_TARGETS:
+        func = getattr(owner, method_name)
+        monkeypatch.setattr(
+            func,
+            "__defaults__",
+            _defaults_with_replacement(func, "vis_outpath", str(tmp_path / basename)),
+        )
 
 
 @pytest.fixture

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import example_models
 import graphviz
 import pytest
@@ -14,17 +12,11 @@ import torchlens as tl
 from torchlens.validation import check_metadata_invariants
 from torchlens.validation.invariants import MetadataInvariantError
 
-
-@pytest.fixture(autouse=True)
-def _render_in_private_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Keep ``draw()``'s default ``modelgraph`` output out of the shared cwd.
-
-    Under xdist several workers render the default ``modelgraph`` file in the
-    repo root at once, and one worker's Graphviz run can lose the DOT file
-    another worker just replaced (nightly fast tier, 2026-10-03).
-    """
-
-    monkeypatch.chdir(tmp_path)
+# Note: draw()'s default `modelgraph` output used to race across xdist
+# workers writing into the shared repo-root cwd (nightly fast tier,
+# 2026-10-03). The fix is now the suite-wide `_draw_default_outpath_in_tmp_path`
+# autouse fixture in conftest.py, which redirects the default for every test
+# -- this file no longer needs its own chdir fixture.
 
 
 class WithOrphanIsland(nn.Module):
