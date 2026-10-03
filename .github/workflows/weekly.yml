@@ -105,8 +105,12 @@ jobs:
           python scripts/check_ci_executed_tests.py "${{ runner.temp }}/labelgeom.junit.xml" 4
 
       - name: Run slow tests
+        # `not rare`: a command-line -m replaces pyproject's `-m 'not rare'`, so a
+        # bare `-m slow` also ran every rare+slow test (the 20k-50k node graphs)
+        # here and again in the rare step; the runner was shut down inside
+        # tests/test_large_graphs.py on three consecutive runs (2026-10-03).
         run: |
-          pytest tests/ -m slow --tb=short \
+          pytest tests/ -m "slow and not rare" --tb=short \
             --junitxml="${{ runner.temp }}/weekly-slow.junit.xml"
 
       - name: Run rare tests
