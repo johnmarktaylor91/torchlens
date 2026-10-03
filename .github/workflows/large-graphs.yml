@@ -1,0 +1,74 @@
+name: Large graphs
+
+# The 100k+ node RandomGraphModel and rank-layout tests take hours or exhaust
+# memory on an ordinary runner, so tests/test_large_graphs.py skips them unless
+# TORCHLENS_RUN_LARGE_GRAPHS=1. This workflow is the only place that opts in:
+# on manual dispatch and once a month, under a hard job timeout, so a hang ends
+# as a timed-out (red) run instead of stalling the weekly tier. A push to the
+# ci/large-graphs branch proves the job before it reaches the default branch
+# (workflow_dispatch only works for workflows already on the default branch).
+on:
+  push:
+    branches: ["ci/large-graphs"]
+  schedule:
+    - cron: "37 6 3 * *"
+  workflow_dispatch:
+
+# Default-deny token scope: this workflow only reads the repo.
+permissions:
+  contents: read
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: false
+
+jobs:
+  large-graphs:
+    name: 100k+ node graphs (opt-in)
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    env:
+      TORCHLENS_RUN_LARGE_GRAPHS: "1"
+      OMP_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Install graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+
+      - name: Install torch and TorchLens
+        run: |
+          # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          uv pip install --system \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,test,tabular]" \
+            "torch==2.13.0+cpu"
+          uv pip check
+
+      - name: Run the large-graph ladder
+        # Serial on purpose: each case already needs most of the runner's
+        # memory, so parallel workers would only trade a slow pass for an OOM.
+        run: |
+          pytest tests/test_large_graphs.py -m rare -p no:randomly --tb=short \
+            --junitxml="${{ runner.temp }}/large-graphs.junit.xml"
+
+      - name: Fail on an under-executed large-graph ladder
+        # Eight opt-in cases (100k/250k/1M capture, 100k/250k validation,
+        # 100k/250k/1M rank layout) plus the ungated rare ladder below them;
+        # the floor catches the opt-in silently not taking effect.
+        run: python scripts/check_ci_executed_tests.py "${{ runner.temp }}/large-graphs.junit.xml" 8

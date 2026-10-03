@@ -41,6 +41,20 @@ VIS_OUTPUT_DIR = os.path.join(
 )
 
 
+# Graphs of 100k+ nodes take hours or exhaust memory on ordinary machines and
+# CI runners, so they run only on explicit opt-in. The dispatched
+# ``large-graphs.yml`` workflow sets the variable, with its own job timeout.
+LARGE_GRAPH_OPT_IN_ENV = "TORCHLENS_RUN_LARGE_GRAPHS"
+requires_large_graph_opt_in = pytest.mark.skipif(
+    os.environ.get(LARGE_GRAPH_OPT_IN_ENV) != "1",
+    reason=(
+        "100k+ node graphs run only on explicit opt-in: "
+        f"{LARGE_GRAPH_OPT_IN_ENV}=1 pytest tests/test_large_graphs.py -m rare "
+        "(CI: the dispatched large-graphs workflow)"
+    ),
+)
+
+
 @pytest.fixture(autouse=True)
 def _ensure_output_dir() -> Iterator[None]:
     """Create the visualization output directory for tests that render files."""
@@ -178,6 +192,7 @@ class TestRandomGraphModel:
         count = _count_nodes(model, torch.randn(2, 64))
         assert 45000 < count < 55000, f"Expected ~50000 nodes, got {count}"
 
+    @requires_large_graph_opt_in
     @pytest.mark.slow
     @pytest.mark.rare
     def test_100k_nodes(self) -> None:
@@ -187,6 +202,7 @@ class TestRandomGraphModel:
         count = _count_nodes(model, torch.randn(2, 64))
         assert 90000 < count < 110000, f"Expected ~100000 nodes, got {count}"
 
+    @requires_large_graph_opt_in
     @pytest.mark.slow
     @pytest.mark.rare
     def test_250k_nodes(self) -> None:
@@ -196,6 +212,7 @@ class TestRandomGraphModel:
         count = _count_nodes(model, torch.randn(2, 64))
         assert 225000 < count < 275000, f"Expected ~250000 nodes, got {count}"
 
+    @requires_large_graph_opt_in
     @pytest.mark.slow
     @pytest.mark.rare
     def test_1m_nodes(self) -> None:
@@ -279,6 +296,7 @@ class TestRandomGraphModel:
         with _tolerate_op_count_disclosure():
             assert validate_forward_pass(model, torch.randn(2, 64))
 
+    @requires_large_graph_opt_in
     @pytest.mark.slow
     @pytest.mark.rare
     def test_validation_100k(self) -> None:
@@ -289,10 +307,11 @@ class TestRandomGraphModel:
             assert validate_forward_pass(model, torch.randn(2, 64))
 
     @pytest.mark.skipif(
-        os.environ.get("TORCHLENS_RUN_250K") != "1",
+        os.environ.get(LARGE_GRAPH_OPT_IN_ENV) != "1"
+        and os.environ.get("TORCHLENS_RUN_250K") != "1",
         reason="250k-node validation OOMs / hangs for hours on most machines. "
-        "Opt in explicitly with: TORCHLENS_RUN_250K=1 pytest tests/test_large_graphs.py::"
-        "TestRandomGraphModel::test_validation_250k -m rare",
+        f"Opt in explicitly with: {LARGE_GRAPH_OPT_IN_ENV}=1 (or the legacy TORCHLENS_RUN_250K=1) "
+        "pytest tests/test_large_graphs.py::TestRandomGraphModel::test_validation_250k -m rare",
     )
     @pytest.mark.slow
     @pytest.mark.rare
@@ -383,7 +402,17 @@ class TestRankLayoutScale:
 
     @pytest.mark.slow
     @pytest.mark.rare
-    @pytest.mark.parametrize("num_nodes", [10000, 20000, 50000, 100000, 250000, 1000000])
+    @pytest.mark.parametrize(
+        "num_nodes",
+        [
+            10000,
+            20000,
+            50000,
+            pytest.param(100000, marks=requires_large_graph_opt_in),
+            pytest.param(250000, marks=requires_large_graph_opt_in),
+            pytest.param(1000000, marks=requires_large_graph_opt_in),
+        ],
+    )
     def test_rank_layout_scale_rare(self, num_nodes: int) -> None:
         """Rank layout scale ladder for expensive manual runs."""
 
