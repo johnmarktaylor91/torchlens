@@ -839,7 +839,6 @@ def test_r71_verdict_monotonicity_changed_input(tmp_path: Path) -> None:
 # ======================================================================================
 
 
-@pytest.mark.smoke
 def test_r71_floor_source_scan_tripwire() -> None:
     """No verdict/readiness read of the raw persisted witness_completeness outside
     the single derivation function + the parse-time equality/re-assert belts."""

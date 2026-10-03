@@ -66,7 +66,6 @@ def _multi_pass_groups(trace: tl.Trace) -> dict[str, list]:
     return groups
 
 
-@pytest.mark.smoke
 def test_recurrent_ops_share_one_canonical_list_per_group(loop_trace) -> None:
     """Every member of a recurrence group backs onto ONE raw list object."""
 
@@ -78,7 +77,6 @@ def test_recurrent_ops_share_one_canonical_list_per_group(loop_trace) -> None:
         assert len(raw_ids) == 1, "recurrence group must share one canonical list"
 
 
-@pytest.mark.smoke
 def test_recurrent_ops_values_and_order_are_correct(loop_trace) -> None:
     """Pooling never changes the observed value: ordered member labels."""
 
@@ -93,7 +91,6 @@ def test_recurrent_ops_values_and_order_are_correct(loop_trace) -> None:
         assert value[op.pass_index - 1] == op.label
 
 
-@pytest.mark.smoke
 def test_recurrent_ops_reads_are_alias_safe(loop_trace) -> None:
     """Reads share ONE immutable group view; mutation is impossible (M7).
 
@@ -116,7 +113,6 @@ def test_recurrent_ops_reads_are_alias_safe(loop_trace) -> None:
     assert second.recurrent_ops == expected
 
 
-@pytest.mark.smoke
 def test_assignment_apply_pools_lists_without_pooling_member_keys() -> None:
     """Shared assignment tuples yield one list while keys remain member-specific."""
 
@@ -145,7 +141,6 @@ def test_assignment_apply_pools_lists_without_pooling_member_keys() -> None:
     assert nodes["second"].equivalence_class == "member_key_2"
 
 
-@pytest.mark.smoke
 def test_layer_equivalent_ops_shares_canonical_set(loop_trace) -> None:
     """Layers back onto the ops' canonical equivalence container (M8 mirror).
 
@@ -164,7 +159,6 @@ def test_layer_equivalent_ops_shares_canonical_set(loop_trace) -> None:
         )
 
 
-@pytest.mark.smoke
 def test_layer_equivalent_ops_reads_are_alias_safe(loop_trace) -> None:
     """Layer reads share the group's ONE immutable view (M7 live views)."""
 
@@ -180,7 +174,6 @@ def test_layer_equivalent_ops_reads_are_alias_safe(loop_trace) -> None:
     assert layer.ops[0].equivalent_ops == expected
 
 
-@pytest.mark.smoke
 def test_pooled_fields_survive_pickle_round_trip(loop_trace) -> None:
     """Pickle round-trips preserve values for both pooled fields."""
 

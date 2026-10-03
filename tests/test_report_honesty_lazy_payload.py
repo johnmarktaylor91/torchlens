@@ -26,8 +26,6 @@ import torchlens as tl
 from torchlens._io.payload_reader import declared_payload_bytes, read_op_payload
 from torchlens.errors import PayloadUnavailableError
 
-pytestmark = pytest.mark.smoke
-
 
 def _saved_labels(trace: tl.Trace) -> list[str]:
     return [
@@ -119,6 +117,7 @@ def test_declared_payload_bytes_is_exact_and_torch_free(
     assert declared == retained
 
 
+@pytest.mark.smoke
 def test_scoped_reader_refuses_payloadless_rows() -> None:
     """The scoped reader refuses typed where there is nothing to read."""
 

@@ -31,7 +31,6 @@ def loop(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return save_loop_artifact(tmp_path_factory.mktemp("w051_loop"))
 
 
-@pytest.mark.smoke
 def test_closure_handoff_agrees_with_the_tool_on_multipass(loop: Path) -> None:
     """followed_by/preceded_by handoffs reproduce the served rows on a recurrent trace."""
 
@@ -64,7 +63,6 @@ class _ScalarTail(nn.Module):
         return y, y.sum()
 
 
-@pytest.mark.smoke
 def test_reduction_out_of_range_is_a_row_status_never_a_batch_failure(tmp_path: Path) -> None:
     """One rank-0 payload among rank-2 sites: its row says so; the batch succeeds."""
 
@@ -126,7 +124,6 @@ def test_to_agent_json_tags_nonfinite_logged_values() -> None:
     }
 
 
-@pytest.mark.smoke
 def test_unmatched_labels_are_disclosed(clean: Path) -> None:
     """A label that names no site is a warning, never a silent empty ok."""
 

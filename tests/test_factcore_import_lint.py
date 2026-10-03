@@ -105,7 +105,6 @@ def test_only_licensed_modules_read_raw_compute_fields() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_licensed_compute_ledger_stays_true() -> None:
     """A licensed module that stops reading the fields leaves the ledger."""
 
@@ -123,7 +122,6 @@ def test_licensed_compute_ledger_stays_true() -> None:
         assert hits, f"ledger row {relative} is stale (no raw compute reads remain)"
 
 
-@pytest.mark.smoke
 def test_no_builder_reads_nonfinite_ops() -> None:
     """sumfam D5: builders branch on nonfinite_verdict, never the tuple.
 

@@ -230,7 +230,6 @@ class _HugeView(nn.Module):
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_tensor_split_count_bomb_refused_typed_and_bounded(tmp_path: Path) -> None:
     """A ``tensor_split`` count literal tamper (2 -> 3e5) refuses typed at
     ``op_output_count_preflight`` -- NOT ``PathDivergenceError`` -- fast (<< r58's 32.7s),
@@ -248,7 +247,6 @@ def test_tensor_split_count_bomb_refused_typed_and_bounded(tmp_path: Path) -> No
     assert elapsed < 10.0, f"count refusal took {elapsed:.2f}s -- should abort at ceiling+1"
 
 
-@pytest.mark.smoke
 def test_count_mode_aborts_during_fanout_not_post_return() -> None:
     """The count-bounded mode raises DURING dispatch fanout (not a post-return tree count),
     so a huge N aborts at ~ceiling fakes -- the projection cannot self-DoS."""
@@ -268,7 +266,6 @@ def test_count_mode_aborts_during_fanout_not_post_return() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_aggregate_accountant_refuses_realized_over_ceiling() -> None:
     """The bind-time accountant refuses typed when aggregate realized leaves exceed the
     ceiling -- the projection-skipped backstop (e.g. a fanout with no numeric literal)."""
@@ -282,7 +279,6 @@ def test_aggregate_accountant_refuses_realized_over_ceiling() -> None:
     assert caught.value.fields.get("detection_stage") == "op_output_count_preflight"
 
 
-@pytest.mark.smoke
 def test_ceiling_constants_load_bearing_math() -> None:
     """FLOOR carries low-arity decompositions; MARGIN carries high-arity headroom."""
 
@@ -303,7 +299,6 @@ def test_ceiling_constants_load_bearing_math() -> None:
 
 
 @pytest.mark.parametrize("sentinel,replacement", [(64, 10**11)])
-@pytest.mark.smoke
 def test_expand_view_tamper_refused_at_clone_guard(
     tmp_path: Path, sentinel: int, replacement: int
 ) -> None:
@@ -321,7 +316,6 @@ def test_expand_view_tamper_refused_at_clone_guard(
     assert int(caught.value.fields["required_bytes"]) > int(caught.value.fields["available_bytes"])
 
 
-@pytest.mark.smoke
 def test_guarded_clone_refuses_over_budget_before_allocation() -> None:
     """``guarded_clone`` refuses typed BEFORE the materializing clone for an over-budget
     logical view, and clones an in-budget honest tensor normally."""
@@ -343,7 +337,6 @@ def test_guarded_clone_refuses_over_budget_before_allocation() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_retention_floor_refuses_cumulative_over_budget(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -375,7 +368,6 @@ def test_retention_floor_refuses_cumulative_over_budget(
     assert int(caught.value.fields["required_bytes"]) == floor
 
 
-@pytest.mark.smoke
 def test_retention_floor_premise_every_op_label_retains_a_clone(tmp_path: Path) -> None:
     """Pin the gate-4 floor premise (P-A1): the descriptor charges one retained clone per
     taken-path op-output slot + one per model-output slot. If fork materialization ever
@@ -402,8 +394,8 @@ def test_retention_floor_premise_every_op_label_retains_a_clone(tmp_path: Path) 
     [
         pytest.param("chunk128", _Chunk, torch.randn(128, 4), marks=pytest.mark.slow),
         pytest.param("unbind256", _Unbind, torch.randn(256, 4), marks=pytest.mark.slow),
-        pytest.param("interpolate", _Interpolate, torch.randn(1, 1, 8), marks=pytest.mark.smoke),
-        pytest.param("tensor_split", _TensorSplit, torch.randn(8), marks=pytest.mark.smoke),
+        pytest.param("interpolate", _Interpolate, torch.randn(1, 1, 8)),
+        pytest.param("tensor_split", _TensorSplit, torch.randn(8)),
     ],
     ids=lambda v: v if isinstance(v, str) else "",
 )
@@ -418,7 +410,6 @@ def test_legit_many_output_and_decomposing_ops_run_verified(
     assert result.report.path_faithfulness.value == "verified"
 
 
-@pytest.mark.smoke
 def test_genuinely_huge_view_model_runs_verified(tmp_path: Path) -> None:
     """A real huge honest view (4e7-element ``expand``) whose materialized clone is within
     budget replays VERIFIED -- the clone guard does not over-refuse an in-budget view."""
@@ -428,7 +419,6 @@ def test_genuinely_huge_view_model_runs_verified(tmp_path: Path) -> None:
     assert tl.load(str(bundle)).run(inputs=x.clone()).report.path_faithfulness.value == "verified"
 
 
-@pytest.mark.smoke
 def test_data_dependent_op_fails_open_and_runs(tmp_path: Path) -> None:
     """A legit ``nonzero`` (fake impl raises ``DynamicOutputShapeException``) still FAILS
     OPEN through the count-instrumented subclass and runs verified."""
@@ -453,7 +443,6 @@ def test_deep_model_within_budget_not_retention_refused(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_projection_allocator_death_fails_closed_typed() -> None:
     """A projection that raises an allocation-classed error (the C++ prelude dying of
     ``std::bad_alloc`` at int-limit N) fails CLOSED at ``op_allocation_preflight`` -- failing
@@ -471,7 +460,6 @@ def test_projection_allocator_death_fails_closed_typed() -> None:
         assert caught.value.fields.get("detection_stage") == "op_allocation_preflight"
 
 
-@pytest.mark.smoke
 def test_projection_non_allocation_error_fails_open() -> None:
     """A NON-allocation projection failure (a plain RuntimeError, or a data-dependent op)
     keeps failing open -- a legitimate op is never over-refused (r51 anti-pattern)."""
@@ -489,7 +477,6 @@ def test_projection_non_allocation_error_fails_open() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_no_raw_clone_on_op_output_bind_or_reconstruct_paths() -> None:
     """Every op-output snapshot clone in ``_bind_call_outputs`` / ``_reconstruct_output`` /
     ``_populate_source_slots`` routes through ``guarded_clone`` -- no raw ``detach().clone()``
@@ -505,7 +492,6 @@ def test_no_raw_clone_on_op_output_bind_or_reconstruct_paths() -> None:
         assert "guarded_clone(" in src
 
 
-@pytest.mark.smoke
 def test_count_sentinel_precedes_generic_fail_open() -> None:
     """The count sentinel (and the allocation-classed carve-out) are handled BEFORE the
     generic fail-open in ``_preflight_call_allocation`` -- ordering is load-bearing."""

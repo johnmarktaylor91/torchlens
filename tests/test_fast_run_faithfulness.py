@@ -22,8 +22,6 @@ import torchlens as tl
 from torchlens.options import CaptureOptions
 from torchlens.runnable import PathFaithfulness
 
-pytestmark = pytest.mark.smoke
-
 
 class HostScalarEscapeModel(nn.Module):
     """Bakes a tensor->host escaped scalar into a downstream literal."""
@@ -198,6 +196,7 @@ def test_fast_live_module_refusal_fires_before_activation_wipe() -> None:
     assert captured.layer_dict_all_keys["buffer_1:1"].out is not None
 
 
+@pytest.mark.smoke
 def test_fast_live_divergence_poisons_half_refreshed_trace() -> None:
     """A diverged fast-live run marks the mixed-activation user Trace poisoned."""
 
@@ -258,6 +257,7 @@ def test_fast_live_inherited_divergence_never_unregisters_user_trace() -> None:
     assert any(log is captured for log in _state.list_logs())
 
 
+@pytest.mark.smoke
 def test_remove_fast_live_hooks_survives_raising_remove() -> None:
     """One raising handle.remove() must not strand the remaining hooks."""
 
@@ -360,6 +360,7 @@ def test_fast_live_admission_guard_failure_refuses_not_fail_open(monkeypatch) ->
         captured.run(inputs=torch.ones(2, 3), fast=True)
 
 
+@pytest.mark.smoke
 def test_fast_live_input_refresh_arity_guarded_and_poisons(monkeypatch) -> None:
     """The input-payload refresh zip guards arity like the output branch (R22-2 layer 2).
 

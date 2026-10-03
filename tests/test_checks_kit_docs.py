@@ -14,8 +14,6 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = pytest.mark.smoke
-
 DOC_PATH = Path(__file__).resolve().parents[1] / "docs" / "reference" / "checks_kit.md"
 
 _FENCE_RE = re.compile(r"```python\n(?P<code>.*?)\n```", re.DOTALL)
@@ -46,6 +44,7 @@ def test_page_has_the_committed_recipe_set() -> None:
         assert required in text, f"checks-kit page lost its {required!r} recipe"
 
 
+@pytest.mark.smoke
 def test_every_fence_executes_in_one_namespace() -> None:
     """Execute the page's fences top to bottom; a drifted recipe fails here.
 

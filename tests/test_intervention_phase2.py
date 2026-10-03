@@ -88,7 +88,6 @@ def phase2_log() -> tl.Trace:
     return tl.trace(model, torch.randn(2, 3))
 
 
-@pytest.mark.smoke
 def test_selector_factories_are_immutable_hashable_and_repr_friendly() -> None:
     """Selector constructors return stable immutable value objects."""
 
@@ -105,7 +104,6 @@ def test_selector_factories_are_immutable_hashable_and_repr_friendly() -> None:
     assert repr(tl.without_op()) == "tl.without_op()"
 
 
-@pytest.mark.smoke
 def test_resolve_sites_supports_all_phase2_match_types(phase2_log: tl.Trace) -> None:
     """Selectors resolve labels, functions, modules, containment, and predicates."""
 
@@ -130,7 +128,6 @@ def test_resolve_sites_supports_all_phase2_match_types(phase2_log: tl.Trace) -> 
     ).labels() == ("add_1_4",)
 
 
-@pytest.mark.smoke
 def test_site_table_custom_methods_and_getitem_singleton(phase2_log: tl.Trace) -> None:
     """SiteTable exposes sequence, filtering, first, labels, and DataFrame helpers."""
 
@@ -149,7 +146,6 @@ def test_site_table_custom_methods_and_getitem_singleton(phase2_log: tl.Trace) -
     assert phase2_log["linear"].layer_label == "linear_1_1"
 
 
-@pytest.mark.smoke
 def test_resolution_errors_strict_mode_and_warnings(phase2_log: tl.Trace) -> None:
     """Resolver fails closed for strict strings, empty matches, and excess fanout."""
 
@@ -172,7 +168,6 @@ def test_resolution_errors_strict_mode_and_warnings(phase2_log: tl.Trace) -> Non
     assert any(issubclass(item.category, MultiMatchWarning) for item in caught)
 
 
-@pytest.mark.smoke
 def test_selector_composition_intersection_and_union(phase2_log: tl.Trace) -> None:
     """Only ``&`` and ``|`` composition are supported in Phase 2."""
 
@@ -185,7 +180,6 @@ def test_selector_composition_intersection_and_union(phase2_log: tl.Trace) -> No
     assert union_sites.labels() == ("linear_1_1", "relu_1_2")
 
 
-@pytest.mark.smoke
 def test_target_specs_and_empty_site_table_behave_clearly(phase2_log: tl.Trace) -> None:
     """Selectors convert to target specs and empty tables reject ``first``."""
 

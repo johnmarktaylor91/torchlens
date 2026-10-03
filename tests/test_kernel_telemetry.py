@@ -56,7 +56,6 @@ class _CudaTelemetryModel(nn.Module):
         return torch.relu(value @ value)
 
 
-@pytest.mark.smoke
 def test_documented_unstable_kernel_surface_matches_glossary_index() -> None:
     """Every telemetry spelling has the exact no-shim unstable marker."""
 
@@ -160,7 +159,6 @@ def _synthetic_matrix() -> tuple[list[NormalizedEvent], dict[str, int]]:
     return events, {marker_a: 11, marker_b: 22}
 
 
-@pytest.mark.smoke
 def test_synthetic_kineto_join_covers_required_async_and_many_to_many_shapes() -> None:
     """Runtime correlation, not names or timestamps, owns device attribution."""
 
@@ -201,7 +199,6 @@ def test_marker_begin_end_and_capture_exception_shape_close_cleanly() -> None:
     assert payload._launches[0].attribution_status == "attributed"
 
 
-@pytest.mark.smoke
 def test_unavailable_session_is_typed_and_never_fabricates_a_launch() -> None:
     """Unavailable CUDA produces one fact-free disclosure, never a zero claim."""
 
@@ -222,7 +219,6 @@ def test_unavailable_session_is_typed_and_never_fabricates_a_launch() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_scoped_marker_instrumentation_restores_exact_core_functions() -> None:
     """The adapter restores both monkeypatched seams after a capture exception."""
 
@@ -271,7 +267,6 @@ def test_cpu_host_records_unavailable_views_and_drop_gated_annotation(tmp_path: 
     assert loaded.ops[0].gpu_kernels[0].attribution_status == "unavailable"
 
 
-@pytest.mark.smoke
 def test_kernel_rows_persist_and_registrations_are_retired() -> None:
     """tlspec v8: telemetry rows declare KEEP directly; registrations retired."""
 

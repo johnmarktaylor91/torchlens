@@ -83,7 +83,6 @@ def _recurrent_trace():
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_is_multipass_layer_only_true_for_aggregate_recurrent_layer():
     log = _recurrent_trace()
     layer = log["linear_1_1"]
@@ -96,7 +95,6 @@ def test_is_multipass_layer_only_true_for_aggregate_recurrent_layer():
     assert is_multipass_layer(single["linear_1_1"]) is False
 
 
-@pytest.mark.smoke
 def test_get_multipass_attr_semantics():
     log = _recurrent_trace()
     layer = log["linear_1_1"]
@@ -112,7 +110,6 @@ def test_get_multipass_attr_semantics():
     assert get_multipass_attr(layer, "out", None, multipass=None) is None
 
 
-@pytest.mark.smoke
 def test_get_multipass_attr_honesty_guard():
     """The helper must NEVER swallow the multi-pass ambiguity into the default.
 
@@ -134,7 +131,6 @@ def test_get_multipass_attr_honesty_guard():
     assert issubclass(MultiPassAmbiguityError, ValueError)
 
 
-@pytest.mark.smoke
 def test_get_multipass_attr_propagates_unrelated_value_error():
     class Weird:
         @property
@@ -166,7 +162,6 @@ def test_h1_module_key_for_forward_op_no_multipass_leak():
     assert key is None or isinstance(key, str)
 
 
-@pytest.mark.smoke
 def test_h7_forward_correspondence_node_name_scoped_to_multipass():
     from torchlens.visualization._render_leaf import _forward_correspondence_node_name
 
@@ -189,7 +184,6 @@ def test_h7_forward_correspondence_node_name_scoped_to_multipass():
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_h3_rolled_node_label_time_no_crash(tmp_path):
     log = _recurrent_trace()
     graph = log.draw(
@@ -202,7 +196,6 @@ def test_h3_rolled_node_label_time_no_crash(tmp_path):
     assert "linear_1_1" in graph.source  # rendered without leaking the tripwire
 
 
-@pytest.mark.smoke
 def test_f5_unrolled_pass_field_shows_real_pass_numbers(tmp_path):
     import re
 
@@ -219,7 +212,6 @@ def test_f5_unrolled_pass_field_shows_real_pass_numbers(tmp_path):
     assert {"1", "2", "3"} <= present
 
 
-@pytest.mark.smoke
 def test_f2_unrolled_titles_are_resolvable(tmp_path):
     import re
 
@@ -245,7 +237,6 @@ def test_f2_unrolled_titles_are_resolvable(tmp_path):
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_h4_layer_show_recurrent_raises_select_pass():
     log = tl.trace(RecurrentLinear(), torch.randn(2, 8), save=lambda op: True)
     with pytest.raises(ValueError) as excinfo:
@@ -262,7 +253,6 @@ def test_h4_layer_show_recurrent_raises_select_pass():
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "overlay", ["magnitude", "time", "bytes", "flops", "nan", "grad_norm", "intervention"]
 )
@@ -278,7 +268,6 @@ def test_h6_rolled_overlays_do_not_crash(tmp_path, overlay):
     assert graph.source  # rendered without leaking the multi-pass tripwire
 
 
-@pytest.mark.smoke
 def test_h6_rolled_per_pass_overlays_are_na():
     from torchlens.visualization.overlays import builtin_overlay_value, format_overlay_value
 
@@ -290,7 +279,6 @@ def test_h6_rolled_per_pass_overlays_are_na():
         assert format_overlay_value(overlay.replace("_", "-"), value).endswith("n/a")
 
 
-@pytest.mark.smoke
 def test_f15_nan_overlay_reports_na_when_nothing_inspected():
     from torchlens.visualization.overlays import builtin_overlay_value
 

@@ -24,8 +24,6 @@ import torchlens as tl
 from torchlens._input_coerce import _coerce_input_args
 from torchlens.utils.arg_handling import copy_arg_tree, rebuild_tuple_like
 
-pytestmark = pytest.mark.smoke
-
 
 class _MalformedFields(tuple):
     """Tuple subclass with a NON-namedtuple ``_fields`` and iterable ctor."""
@@ -86,6 +84,7 @@ def test_coerce_input_args_handles_malformed_fields_subclass():
     assert isinstance(coerced[0], torch.Tensor)
 
 
+@pytest.mark.smoke
 def test_property_fields_subclass_refuses_typed_end_to_end():
     """Plain tl.trace REFUSES a property-``_fields`` tuple subclass input, typed.
 

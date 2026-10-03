@@ -97,7 +97,6 @@ def _test_extra_deps(pyproject_text: str) -> list[str]:
     return deps
 
 
-@pytest.mark.smoke
 def test_pytest_randomly_declared_in_test_extra() -> None:
     """The [test] extra must declare pytest-randomly (R76 regression pin)."""
 
@@ -114,7 +113,6 @@ def test_pytest_randomly_declared_in_test_extra() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_randomly_plugin_registration_matches_invocation(request: pytest.FixtureRequest) -> None:
     """When installed, the plugin must be live unless explicitly disabled."""
 
@@ -211,7 +209,6 @@ def test_no_randomly_flag_actually_disables_shuffling(tmp_path: Path) -> None:
     )
 
 
-@pytest.mark.smoke
 def test_content_registries_are_restored_between_tests(
     request: pytest.FixtureRequest,
 ) -> None:

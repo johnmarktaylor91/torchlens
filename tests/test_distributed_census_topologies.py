@@ -125,7 +125,6 @@ def single_rank_mesh(single_rank_world):
 # ===========================================================================
 
 
-@pytest.mark.smoke
 class TestRowGreenGate:
     def _result(self, **overrides) -> CensusResult:
         base: dict[str, object] = {
@@ -188,7 +187,6 @@ class TestRowGreenGate:
         }
 
 
-@pytest.mark.smoke
 class TestCensusReportGenerator:
     def test_report_refuses_unknown_row(self, tmp_path):
         rogue = CensusResult(outputs_bit_identical=True, row_id="Z9")

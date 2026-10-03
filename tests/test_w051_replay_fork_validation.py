@@ -26,8 +26,6 @@ import torchlens as tl
 from torchlens.intervention.replay import REPLAY_CAPTURE_DIGESTS_KEY
 from torchlens.validation._edge_boundary import _check_edge_intervention_boundary
 
-pytestmark = pytest.mark.smoke
-
 
 class _Two(nn.Module):
     """Two branches joined by an add: the add has two distinct parents."""
@@ -113,6 +111,7 @@ def test_non_identity_edge_fork_validates_and_reaches_boundary(two) -> None:
     assert reached, "boundary check must be reached in a PASSING validation of a real edit"
 
 
+@pytest.mark.smoke
 def test_param_fork_validates_against_hand_truth(two) -> None:
     model, x, trace = two
     fork = trace.fork()
@@ -152,6 +151,7 @@ def test_swapped_parent_positions_on_recomputed_child_fails(two) -> None:
     assert _last_failure(fork) == ("argument_logging", child.label)
 
 
+@pytest.mark.smoke
 def test_recomputed_parent_without_digest_is_unverified_never_validated(two) -> None:
     model, x, trace = two
     _a, b = _parts(model, x)
@@ -168,6 +168,7 @@ def test_recomputed_parent_without_digest_is_unverified_never_validated(two) -> 
     assert "replay_recomputed_parent_unattested" in dict(status.unverified_reason_counts or {})
 
 
+@pytest.mark.smoke
 def test_stamp_digest_mismatch_fails_the_boundary_and_the_validation(two) -> None:
     model, x, trace = two
     _a, b = _parts(model, x)

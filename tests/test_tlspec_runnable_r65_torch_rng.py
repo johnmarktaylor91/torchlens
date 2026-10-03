@@ -163,7 +163,6 @@ def _torch_rng_state_guard():
 # ======================================================================================
 
 
-@pytest.mark.smoke
 def test_torch_rng_surface_enumeration_complete() -> None:
     """Every discovered torch RNG endpoint has an explicit frozen disposition.
 
@@ -217,7 +216,6 @@ def test_torch_rng_surface_enumeration_complete() -> None:
         assert row.disposition in TORCH_RNG_DISPOSITIONS, row
 
 
-@pytest.mark.smoke
 def test_mtia_and_xpu_random_surfaces_classified() -> None:
     """r66 hon1-F6 named pin: the mtia / xpu.random module specs actually resolve.
 
@@ -267,7 +265,6 @@ def test_accelerator_random_surface_classified() -> None:
         )
 
 
-@pytest.mark.smoke
 def test_mtia_mutation_spelling_marks_fail_closed() -> None:
     """The mtia mutation patch marks at entry even when the deviceless call raises."""
 
@@ -283,7 +280,6 @@ def test_mtia_mutation_spelling_marks_fail_closed() -> None:
     assert "torch.mtia.set_rng_state" in result.channels
 
 
-@pytest.mark.smoke
 def test_default_generator_resolver_covers_every_device_spec_module() -> None:
     """The dynamic-membership resolver spans exactly the device-spec base modules.
 
@@ -300,7 +296,6 @@ def test_default_generator_resolver_covers_every_device_spec_module() -> None:
     assert device_bases == set(_DEFAULT_GENERATOR_HOLDER_MODULES)
 
 
-@pytest.mark.smoke
 def test_torch_rng_monitored_rows_match_registry() -> None:
     """The registry's torch module-patch rows derive 1:1 from the disposition table."""
 
@@ -323,7 +318,6 @@ def test_torch_rng_monitored_rows_match_registry() -> None:
     assert len(receiver_rows) == 1, "all-receiver Generator receiver_profile row missing"
 
 
-@pytest.mark.smoke
 def test_get_rng_state_family_has_no_registry_row() -> None:
     """The Z-a NO-ROW ruling is structural: get_rng_state must never grow a row.
 
@@ -341,7 +335,6 @@ def test_get_rng_state_family_has_no_registry_row() -> None:
             assert row.disposition == "structurally_covered", row
 
 
-@pytest.mark.smoke
 def test_torch_rng_monitor_installs_and_restores_every_patch() -> None:
     """Every monitored row's patch installs in-window and restores identity-exact."""
 
@@ -365,7 +358,6 @@ def test_torch_rng_monitor_installs_and_restores_every_patch() -> None:
         )
 
 
-@pytest.mark.smoke
 def test_generator_method_table_return_closure() -> None:
     """r67 C1 immunizer: one row per public Generator name, closed under its return.
 
@@ -434,7 +426,6 @@ def test_generator_method_table_return_closure() -> None:
             assert not callable(getattr(generator_type, row.method, None)), row
 
 
-@pytest.mark.smoke
 def test_generator_method_table_live_return_families() -> None:
     """Each row's declared return family matches the LIVE return on a scratch engine.
 
@@ -509,7 +500,6 @@ def test_unknown_generator_method_flags_uncertainty() -> None:
 # ======================================================================================
 
 
-@pytest.mark.smoke
 def test_monitor_dispositions_route_to_the_right_result_set(_torch_rng_state_guard) -> None:
     """Mutation/entropy land in ceiling ``channels``; initial_seed in ``replayable_reads``."""
 
@@ -528,7 +518,6 @@ def test_monitor_dispositions_route_to_the_right_result_set(_torch_rng_state_gua
     assert "torch.seed" in result3.channels
 
 
-@pytest.mark.smoke
 def test_monitor_held_ref_spellings_are_witnessed(_torch_rng_state_guard) -> None:
     """Pre-window ``from torch import manual_seed`` aliases cannot bypass the patch."""
 
@@ -542,7 +531,6 @@ def test_monitor_held_ref_spellings_are_witnessed(_torch_rng_state_guard) -> Non
     assert "torch.initial_seed" in result2.replayable_reads
 
 
-@pytest.mark.smoke
 def test_monitor_default_generator_receiver_classified(_torch_rng_state_guard) -> None:
     """Direct default-generator method calls classify like the delegating module APIs."""
 
@@ -572,7 +560,6 @@ def test_monitor_default_generator_receiver_classified(_torch_rng_state_guard) -
 # ======================================================================================
 
 
-@pytest.mark.smoke
 def test_private_generator_seed_is_ceiled_every_receiver_spelling() -> None:
     """r66 free-F1: ``Generator().seed()`` draws OS entropy -- witnessed on EVERY
     receiver class (temporary, pre-window held, subclass)."""
@@ -596,7 +583,6 @@ def test_private_generator_seed_is_ceiled_every_receiver_spelling() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_private_generator_initial_seed_is_ceiled_not_replayable() -> None:
     """Non-default ``initial_seed()`` is instance history: ceiling, never replayable."""
 
@@ -608,7 +594,6 @@ def test_private_generator_initial_seed_is_ceiled_not_replayable() -> None:
     assert not result.replayable_reads
 
 
-@pytest.mark.smoke
 @pytest.mark.skipif(
     not HAS_GENERATOR_CLONE_STATE,
     reason="torch.Generator.clone_state is absent on this supported torch runtime",
@@ -633,7 +618,6 @@ def test_clone_state_return_closure_ceils_the_second_read() -> None:
     assert not result2.replayable_reads
 
 
-@pytest.mark.smoke
 def test_get_offset_marks_fail_closed_at_entry() -> None:
     """r66 hon1-F5: ``get_offset`` ceilings on every receiver; the classifier marks at
     c_call entry, so even the CPU capability raise never under-marks."""
@@ -660,7 +644,6 @@ def test_cuda_default_get_offset_is_ceiled(_torch_rng_state_guard) -> None:
     assert not result.replayable_reads
 
 
-@pytest.mark.smoke
 def test_device_default_populated_mid_window_selects_default_column(monkeypatch) -> None:
     """Dynamic membership: a device default that appears MID-WINDOW (lazy device
     init) still classifies with the default-receiver column on a routing-cache miss."""
@@ -676,7 +659,6 @@ def test_device_default_populated_mid_window_selects_default_column(monkeypatch)
     assert not result.channels
 
 
-@pytest.mark.smoke
 def test_monitor_get_only_reads_mark_nothing(_torch_rng_state_guard) -> None:
     """The get_rng_state family and Generator state reads are zero-collateral."""
 
@@ -698,7 +680,6 @@ def test_monitor_fork_rng_ceilings_transitively(_torch_rng_state_guard) -> None:
     assert "torch.set_rng_state" in result.channels
 
 
-@pytest.mark.smoke
 def test_monitor_suppresses_torchlens_owned_seeding(_torch_rng_state_guard) -> None:
     """TL-owned seed/snapshot/restore never reads as model host nondeterminism."""
 

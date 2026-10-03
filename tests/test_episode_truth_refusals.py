@@ -17,8 +17,6 @@ from torchlens.errors.episode import EpisodeDeclarationError, EpisodeLedgerError
 from torchlens.options import EpisodeSpec
 from torchlens.partial import PartialTrace, from_failed_capture
 
-pytestmark = pytest.mark.smoke
-
 V = 16
 N_STEPS = 3
 

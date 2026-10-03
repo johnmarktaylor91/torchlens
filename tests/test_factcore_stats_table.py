@@ -7,8 +7,6 @@ from torch import nn
 import torchlens as tl
 from torchlens.report import STATS_ROW_STATES, StatsTable
 
-pytestmark = pytest.mark.smoke
-
 
 def _model() -> nn.Module:
     return nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()

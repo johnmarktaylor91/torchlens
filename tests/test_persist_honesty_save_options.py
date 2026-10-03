@@ -18,8 +18,6 @@ from torch import nn
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 
-pytestmark = pytest.mark.smoke
-
 
 @pytest.fixture(scope="module")
 def trace():

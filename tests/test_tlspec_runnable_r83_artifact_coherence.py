@@ -180,7 +180,6 @@ def test_self_contradictory_callable_registry_is_refused(tmp_path: Path, frm: st
     assert type(excinfo.value).__name__ != "AssertionError"
 
 
-@pytest.mark.smoke
 def test_tampered_registry_leaves_a_typed_diagnostic(tmp_path: Path) -> None:
     """The refusal must carry the typed diagnostic, not just fail opaquely.
 
@@ -205,7 +204,6 @@ def test_tampered_registry_leaves_a_typed_diagnostic(tmp_path: Path) -> None:
     )
 
 
-@pytest.mark.smoke
 def test_unresolvable_key_keeps_the_resolver_reattach_path(tmp_path: Path) -> None:
     """An UNRESOLVABLE key must keep the resolver's richer aggregate-report path.
 
@@ -244,7 +242,6 @@ def test_unresolvable_key_keeps_the_resolver_reattach_path(tmp_path: Path) -> No
     assert captured.value.fields["readiness"] is loaded.readiness
 
 
-@pytest.mark.smoke
 def test_untampered_artifact_still_runs_verified(tmp_path: Path) -> None:
     """ZERO COLLATERAL: the anchor runs on every load and must pass honest ones.
 
@@ -280,7 +277,6 @@ class _MixedDispatch(nn.Module):
         return y.reshape(-1).contiguous()
 
 
-@pytest.mark.smoke
 def test_dunder_and_inplace_spellings_do_not_false_refuse(tmp_path: Path) -> None:
     """``__neg__``/``neg`` and ``__pow__``/``pow`` must normalize, not refuse.
 
@@ -303,7 +299,6 @@ def test_dunder_and_inplace_spellings_do_not_false_refuse(tmp_path: Path) -> Non
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_cache_true_repeat_capture_saves_runnable(tmp_path: Path) -> None:
     """Pre-fix the SECOND capture raised the field-catalog tripwire outright.
 
@@ -315,7 +310,6 @@ def test_cache_true_repeat_capture_saves_runnable(tmp_path: Path) -> None:
         _save(tmp_path / f"cached_{index}.tlspec", cache=True)
 
 
-@pytest.mark.smoke
 def test_cached_repeat_capture_still_replays_verified(tmp_path: Path) -> None:
     """The saved cached artifact must also load and replay faithfully."""
 
@@ -326,7 +320,6 @@ def test_cached_repeat_capture_still_replays_verified(tmp_path: Path) -> None:
     assert not result.report.poisoned
 
 
-@pytest.mark.smoke
 def test_pending_live_fire_records_is_registered() -> None:
     """The field must be in the catalog, so the tripwire stays armed for others."""
 

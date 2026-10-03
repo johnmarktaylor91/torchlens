@@ -76,7 +76,6 @@ def _x() -> torch.Tensor:
     return torch.randn(4, 4)
 
 
-@pytest.mark.smoke
 def test_r75_inline_model_gc_before_descriptor_preflights() -> None:
     """The r74 F2 repro direction: no model ref + gc.collect -> preflight passes."""
 
@@ -88,7 +87,6 @@ def test_r75_inline_model_gc_before_descriptor_preflights() -> None:
     ]
 
 
-@pytest.mark.smoke
 def test_r75_inline_model_gc_full_save_load_run(tmp_path: Path) -> None:
     """End-to-end: dead model + gc -> save embeds the FULL state universe and runs VERIFIED.
 
@@ -116,7 +114,6 @@ def test_r75_inline_model_gc_full_save_load_run(tmp_path: Path) -> None:
     assert result.report.state_source is StateSource.EMBEDDED_CAPTURE_STATE
 
 
-@pytest.mark.smoke
 def test_r75_model_alive_matching_unchanged(tmp_path: Path) -> None:
     """Zero collateral: holding the model across the same gc still saves and verifies."""
 
@@ -131,7 +128,6 @@ def test_r75_model_alive_matching_unchanged(tmp_path: Path) -> None:
     assert model is not None  # the strong hold is the point of the fixture
 
 
-@pytest.mark.smoke
 def test_r75_retrace_does_not_confuse_first_capture(tmp_path: Path) -> None:
     """Barcode identity is PER-CAPTURE: re-tracing re-stamps, the snapshot still matches.
 
@@ -152,7 +148,6 @@ def test_r75_retrace_does_not_confuse_first_capture(tmp_path: Path) -> None:
     assert second is not None
 
 
-@pytest.mark.smoke
 def test_r75_unmatched_tensor_constant_still_refuses_typed() -> None:
     """Tripwire intact: a genuinely-unmatched foreign tensor literal still refuses typed."""
 

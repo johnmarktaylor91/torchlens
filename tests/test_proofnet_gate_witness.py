@@ -90,7 +90,6 @@ def _declared_gate_ids(root: Path) -> dict[str, str]:
     return found
 
 
-@pytest.mark.smoke
 def test_every_declared_gate_has_a_manifest_row_with_a_leg() -> None:
     """Census -> manifest closure; executing_leg is REQUIRED, never blank."""
 
@@ -108,7 +107,6 @@ def test_every_declared_gate_has_a_manifest_row_with_a_leg() -> None:
         assert row["owner"].strip() and row["cadence"].strip(), gate_id
 
 
-@pytest.mark.smoke
 def test_gate_census_is_red_capable(tmp_path: Path) -> None:
     """A planted GATE-ID declaration outside the manifest is caught."""
 
@@ -206,7 +204,6 @@ def test_no_unledgered_except_skips_anywhere_in_tests() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_gallery_tier_bans_except_skips_outright() -> None:
     """No ledger can license an except-skip in the acceptance gallery."""
 
@@ -214,7 +211,6 @@ def test_gallery_tier_bans_except_skips_outright() -> None:
     assert not offenders, f"except-skips in the gallery tier (banned): {offenders}"
 
 
-@pytest.mark.smoke
 def test_except_skip_scanner_is_red_capable(tmp_path: Path) -> None:
     """A planted except-skip is caught; a conditional decoy is not."""
 
@@ -234,7 +230,6 @@ def test_except_skip_scanner_is_red_capable(tmp_path: Path) -> None:
     assert len(sites) == 1 and sites[0].endswith(":6")
 
 
-@pytest.mark.smoke
 def test_executes_nowhere_tier_only_burns_down() -> None:
     """The unavailable-ok tier IS executes-nowhere: capped, monotone down."""
 
@@ -257,7 +252,6 @@ def test_executes_nowhere_tier_only_burns_down() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_junit_witness_property_lands_in_junitxml(tmp_path: Path) -> None:
     """Witness mechanics step 2: a guarded branch can emit its gate id as a
     junit property that survives into the report the union job reads."""

@@ -117,14 +117,12 @@ def _assert_payloads_identical(log_eager, log_defer):
             assert ac.numpy().tobytes() == bc.numpy().tobytes(), k
 
 
-@pytest.mark.smoke
 def test_deferred_payloads_byte_identical_no_grad():
     _, log_eager = _zoo_trace(defer=False)
     _, log_defer = _zoo_trace(defer=True)
     _assert_payloads_identical(log_eager, log_defer)
 
 
-@pytest.mark.smoke
 def test_deferred_payloads_byte_identical_grad_mode():
     # Grad-enabled captures defer only no-autograd payloads; the public
     # surface (values AND grad_fn presence) must be unchanged either way.
@@ -133,7 +131,6 @@ def test_deferred_payloads_byte_identical_grad_mode():
     _assert_payloads_identical(log_eager, log_defer)
 
 
-@pytest.mark.smoke
 def test_post_hoc_inplace_edit_isolation():
     _, log = _zoo_trace(defer=True)
     labels = _tensor_payload_labels(log)
@@ -146,7 +143,6 @@ def test_post_hoc_inplace_edit_isolation():
         assert torch.equal(snapshot[k], log[k].out), k
 
 
-@pytest.mark.smoke
 def test_retained_live_activation_mutation_does_not_corrupt_saved():
     model, log = _zoo_trace(defer=True)
     labels = _tensor_payload_labels(log)
@@ -158,7 +154,6 @@ def test_retained_live_activation_mutation_does_not_corrupt_saved():
         assert torch.equal(saved[k], log[k].out), k
 
 
-@pytest.mark.smoke
 def test_validation_tripwire_green_on_deferred_capture():
     with _payload_clone_mode(True):
         torch.manual_seed(7)
@@ -168,7 +163,6 @@ def test_validation_tripwire_green_on_deferred_capture():
         assert tl.validate(model, x, scope="forward", random_seed=99) is True
 
 
-@pytest.mark.smoke
 def test_version_belt_refuses_unintercepted_mutation():
     x = torch.randn(4)
     _tu.arm_deferred_payload_window(frozenset())
@@ -206,7 +200,6 @@ def _grad_zoo_payloads(defer: bool, grad_defer: bool):
     return log, _tensor_payload_labels(log)
 
 
-@pytest.mark.smoke
 def test_grad_connected_deferral_is_off_by_default():
     # Residual H3 (autograd's saved-tensor machinery is a second holder that
     # interception cannot rebind) keeps this opt-in; pin the shipped default so
@@ -235,14 +228,12 @@ def test_grad_connected_deferral_actually_defers():
         assert out._is_view() is False, k
 
 
-@pytest.mark.smoke
 def test_grad_connected_payloads_byte_identical_to_eager_clones():
     _, log_eager = _zoo_trace(defer=False, grad=True)
     _, log_defer = _zoo_trace(defer=True, grad=True, grad_defer=True)
     _assert_payloads_identical(log_eager, log_defer)
 
 
-@pytest.mark.smoke
 def test_grad_connected_payload_gradients_match_eager_clones():
     """Backward through every saved payload must match the eager clone exactly.
 
@@ -279,7 +270,6 @@ def test_grad_connected_payload_gradients_match_eager_clones():
                 assert torch.equal(ge, gd), k
 
 
-@pytest.mark.smoke
 def test_grad_connected_alias_materialization_preserves_backward():
     """H2 regression: ``set_`` has no derivative and would poison the graph.
 
@@ -301,7 +291,6 @@ def test_grad_connected_alias_materialization_preserves_backward():
     assert torch.equal(grad, expected)
 
 
-@pytest.mark.smoke
 def test_grad_connected_alias_survives_source_mutation_without_rebasing():
     """H1 regression: an autograd view would re-route the gradient.
 
@@ -323,7 +312,6 @@ def test_grad_connected_alias_survives_source_mutation_without_rebasing():
     assert torch.equal(grad, torch.full_like(x, 2.0))  # identity through mul, not relu
 
 
-@pytest.mark.smoke
 def test_grad_connected_alias_keeps_sharing_the_source_version_counter():
     """Residual H3 stays LOUD rather than silently wrong.
 
@@ -342,7 +330,6 @@ def test_grad_connected_alias_keeps_sharing_the_source_version_counter():
     assert int(alias._version) != version
 
 
-@pytest.mark.smoke
 def test_kill_switch_restores_eager_clones():
     import gc
 
@@ -405,7 +392,6 @@ def _positional_inplace_trace(defer: bool, seed: int = 3):
     return log
 
 
-@pytest.mark.smoke
 def test_positional_inplace_index_located_at_decoration_time():
     import torch.nn.functional as F
 
@@ -417,13 +403,11 @@ def test_positional_inplace_index_located_at_decoration_time():
     assert _wrappers._positional_inplace_index(torch.add) is None
 
 
-@pytest.mark.smoke
 def test_positional_inplace_capture_does_not_trip_belt():
     log = _positional_inplace_trace(defer=True)
     assert isinstance(log[log.layer_labels[-1]].out, torch.Tensor)
 
 
-@pytest.mark.smoke
 def test_positional_inplace_payloads_byte_identical_to_eager():
     log_eager = _positional_inplace_trace(defer=False)
     log_defer = _positional_inplace_trace(defer=True)

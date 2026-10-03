@@ -18,8 +18,6 @@ import torchlens as tl
 from torchlens.attribution import onebackward as ob
 from torchlens.utils._torch_compat import get_gradient_edge_support
 
-pytestmark = pytest.mark.smoke
-
 _requires_gradient_edge = pytest.mark.skipif(
     not get_gradient_edge_support(),
     reason="one-backward reads require torch.autograd.graph.GradientEdge (2.4+)",
@@ -53,6 +51,7 @@ class TestGradInputUseMap:
             elif use.status == "unsupported":
                 assert use.addresses == ()
 
+    @pytest.mark.smoke
     @_requires_gradient_edge
     def test_no_positional_zipping_census(self) -> None:
         """Multi-input nodes stay unmated -- the census that kills zipping.
@@ -87,6 +86,7 @@ class TestPassOriginStamps:
         origins = ob.backward_pass_origins(trace)
         assert origins[1].target_ids == ("t0",)
 
+    @pytest.mark.smoke
     def test_unstamped_recorded_passes_default_to_user(self) -> None:
         torch.manual_seed(0)
         model = nn.Sequential(nn.Linear(4, 8), nn.GELU(), nn.Linear(8, 3))

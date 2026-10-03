@@ -176,7 +176,6 @@ def test_source_mode_never_mutates_annotations() -> None:
     assert before == after
 
 
-@pytest.mark.smoke
 def test_matrix_mode_requires_declared_measure() -> None:
     """D8: a bare matrix has forgotten its metric; declaration is REQUIRED."""
 
@@ -185,7 +184,6 @@ def test_matrix_mode_requires_declared_measure() -> None:
     assert excinfo.value.fields["code"] == "neuro_rdms_measure_required"
 
 
-@pytest.mark.smoke
 def test_matrix_mode_happy_path_and_positional_disclosure() -> None:
     """Matrix mode converts, declares, and discloses positional identity."""
 
@@ -200,7 +198,6 @@ def test_matrix_mode_happy_path_and_positional_disclosure() -> None:
     assert np.allclose(result.dissimilarities[0], expected)
 
 
-@pytest.mark.smoke
 def test_matrix_mode_user_pattern_descriptors_validated() -> None:
     """Supplied pattern descriptors are length-checked and win over index."""
 
@@ -220,7 +217,6 @@ def test_matrix_mode_user_pattern_descriptors_validated() -> None:
     assert excinfo.value.fields["code"] == "neuro_obs_descriptor_invalid"
 
 
-@pytest.mark.smoke
 def test_matrix_mode_validation_refusals() -> None:
     """Square/symmetry/diagonal/finite/shape-agreement all refuse typed."""
 
@@ -243,7 +239,6 @@ def test_matrix_mode_validation_refusals() -> None:
     assert zeros.n_rdm == 1
 
 
-@pytest.mark.smoke
 def test_mode_conflicts_reject_mixed_arguments() -> None:
     """D8: the modes reject mixed arguments in both directions."""
 
@@ -296,7 +291,6 @@ def test_source_mode_inconsistent_row_counts_refuse() -> None:
     assert excinfo.value.fields["row_counts"] == [4, 6]
 
 
-@pytest.mark.smoke
 def test_chunked_seam_refuses_typed() -> None:
     """The reserved chunked= execution seam refuses at launch (eager)."""
 

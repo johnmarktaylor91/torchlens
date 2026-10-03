@@ -178,7 +178,6 @@ class TELNet(nn.Module):
         return self.layer(x)
 
 
-@pytest.mark.smoke
 def test_eval_dropout_include_activations_attests_byte_exact(tmp_path: Path) -> None:
     """F2: an eval-mode dropout replays byte-exact and attests (not not_applicable)."""
 
@@ -196,7 +195,6 @@ def test_eval_dropout_include_activations_attests_byte_exact(tmp_path: Path) -> 
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
 
 
-@pytest.mark.smoke
 def test_zero_p_dropout_include_activations_attests_byte_exact(tmp_path: Path) -> None:
     """F2: a ``p == 0`` dropout is RNG-inert and attests byte-exact."""
 
@@ -232,7 +230,6 @@ def test_training_dropout_stays_not_applicable(tmp_path: Path) -> None:
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
-@pytest.mark.smoke
 def test_eval_mha_include_activations_is_honest_no_raise(tmp_path: Path) -> None:
     """F1 (updated r37): a plain eval MHA + include_activations now honestly ATTESTS.
 
@@ -295,7 +292,6 @@ def test_eval_transformer_encoder_layer_attests_byte_exact(tmp_path: Path) -> No
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
 
 
-@pytest.mark.smoke
 def test_plain_cnn_include_activations_still_attests(tmp_path: Path) -> None:
     """No regression: a plain eval CNN + include_activations still attests byte-exact."""
 

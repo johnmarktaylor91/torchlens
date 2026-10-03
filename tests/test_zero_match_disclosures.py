@@ -21,8 +21,6 @@ from torch import nn
 
 import torchlens as tl
 
-pytestmark = pytest.mark.smoke
-
 
 def _model() -> nn.Module:
     """Tiny two-op model."""
@@ -60,6 +58,7 @@ def test_value_dependent_halt_callable_is_not_judged() -> None:
     )
 
 
+@pytest.mark.smoke
 def test_tf_zero_fire_site_warns_in_reachability_audit() -> None:
     """A planned tf site with zero fires warns at the post-forward audit.
 

@@ -86,7 +86,6 @@ def _save_runnable(model: nn.Module, capture_inputs: list, path: Path) -> Path:
     return path
 
 
-@pytest.mark.smoke
 def test_changed_bool_input_diverges_and_is_not_attested(tmp_path: Path) -> None:
     """A changed bool input must raise under the default rollback policy."""
 
@@ -111,7 +110,6 @@ def test_changed_bool_input_diverges_and_is_not_attested(tmp_path: Path) -> None
     assert torch.equal(fresh, left - right)
 
 
-@pytest.mark.smoke
 def test_unchanged_bool_input_still_verifies_and_attests(tmp_path: Path) -> None:
     """An identical bool input must verify, attest, and return the right output."""
 
@@ -249,7 +247,6 @@ def _save_dictish(model: nn.Module, capture_input, path: Path) -> Path:
     return path
 
 
-@pytest.mark.smoke
 def test_h1_extra_dict_key_diverges_identical_verifies(tmp_path: Path) -> None:
     """An extra dict key must diverge; the identical dict input still VERIFIES."""
 
@@ -317,7 +314,6 @@ class _KwOnlyModel(nn.Module):
         return (x * scale).relu()
 
 
-@pytest.mark.smoke
 def test_extra_positional_arg_diverges_never_verified(tmp_path: Path) -> None:
     """r42 corr1_1: an EXTRA top-level positional arg is INPUT_ARITY_EXTRA, never VERIFIED."""
 
@@ -338,7 +334,6 @@ def test_extra_positional_arg_diverges_never_verified(tmp_path: Path) -> None:
     assert ok.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
-@pytest.mark.smoke
 def test_extra_keyword_arg_diverges_never_verified(tmp_path: Path) -> None:
     """r42 corr1_1: an EXTRA top-level keyword not present at capture is INPUT_ARITY_EXTRA."""
 
@@ -411,7 +406,6 @@ class _DataclassOpaqueModel(nn.Module):
         return pair.x * 2.0
 
 
-@pytest.mark.smoke
 def test_tensor_only_dataclass_input_verifies_and_attests(tmp_path: Path) -> None:
     """r42 corr1_2: a tensor-only dataclass input is fully witnessable -> VERIFIED (+ATTESTED)."""
 
@@ -435,7 +429,6 @@ def test_dataclass_changed_bool_field_diverges(tmp_path: Path) -> None:
     assert ok.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
-@pytest.mark.smoke
 def test_dataclass_opaque_field_never_verified(tmp_path: Path) -> None:
     """r42 corr1_2 (no-weakening guard): a dataclass with a genuinely-opaque field is never
     blessed. The tensor-only descent does NOT mask a genuinely-unwitnessable field -- the run

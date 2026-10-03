@@ -24,8 +24,6 @@ from torchlens.observability import (
 from torchlens.observability._op_tier import OpTierCollector, split_heads
 from torchlens.observability._quantiles import WatchRenderError
 
-pytestmark = pytest.mark.smoke
-
 
 def _model() -> torch.nn.Module:
     torch.manual_seed(0)
@@ -44,6 +42,7 @@ def _run_steps(collector: OpTierCollector, model: torch.nn.Module, n: int = 3) -
 
 
 class TestOpTierLifecycle:
+    @pytest.mark.smoke
     def test_discover_prices_plan_and_catalogs_op_sites(self) -> None:
         model = _model()
         collector = OpTierCollector(model)
@@ -115,6 +114,7 @@ class TestOpTierObservations:
         labels = {site.display_label for site in collector.site_catalog.values()}
         assert labels and all("relu" in label for label in labels)
 
+    @pytest.mark.smoke
     def test_exact_totals_per_site(self) -> None:
         model = _model()
         collector = OpTierCollector(model, save=tl.func("relu"))
@@ -129,6 +129,7 @@ class TestOpTierObservations:
 
 
 class TestFacetTier:
+    @pytest.mark.smoke
     def test_per_head_facets_have_stable_identity(self) -> None:
         torch.manual_seed(1)
         model = torch.nn.Sequential(torch.nn.Linear(8, 16), torch.nn.ReLU())
@@ -160,6 +161,7 @@ class TestFacetTier:
             spine = series[0].observation.spine
             assert spine is not None and spine.count_total == 2 * 4  # one head slice
 
+    @pytest.mark.smoke
     def test_missplit_head_axis_refuses(self) -> None:
         splitter = split_heads(4, dim=1)
         with pytest.raises(WatchRenderError) as excinfo:

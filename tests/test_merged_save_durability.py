@@ -20,8 +20,6 @@ from torchlens.merged._artifact import load_merged, save_merged
 from torchlens.merged._enums import MergedErrorCode
 from torchlens.merged._errors import MergedArtifactError
 
-pytestmark = pytest.mark.smoke
-
 
 def _merged():
     return tl.merge_ranks([_rank_trace(0), _rank_trace(1)])

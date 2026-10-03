@@ -37,8 +37,6 @@ from torchlens._io.field_registry import (
 )
 from torchlens._io.writer_contract import writer_contract, writer_contract_digest
 
-pytestmark = [pytest.mark.smoke]
-
 GOLDEN_PATH = (
     Path(__file__).parent.parent
     / "torchlens"
@@ -118,6 +116,7 @@ def test_removed_persisted_fields_require_aliases() -> None:
     )
 
 
+@pytest.mark.smoke
 def test_digest_tracks_persisted_field_name_sets() -> None:
     """The same-stamp drift catcher: field-name sets are digest inputs."""
 

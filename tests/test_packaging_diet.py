@@ -624,7 +624,6 @@ def _all_workflow_text() -> str:
     return "".join(path.read_text() for path in sorted(_WORKFLOWS_DIR.glob("*.yml")))
 
 
-@pytest.mark.smoke
 def test_newest_admitted_torch_literal_lockstep() -> None:
     """quality.yml's inline torch pins equal tests.yml's newest matrix row.
 
@@ -650,7 +649,6 @@ def test_newest_admitted_torch_literal_lockstep() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_pydot_inline_pins_match_the_test_extra_authority() -> None:
     """Every inline workflow pydot pin equals the [test] extra's pin.
 
@@ -672,7 +670,6 @@ def test_pydot_inline_pins_match_the_test_extra_authority() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_pip_audit_inline_pin_matches_the_dev_extra_authority() -> None:
     """quality.yml's inline pip-audit pin equals the dev extra's exact pin."""
 
@@ -689,7 +686,6 @@ def test_pip_audit_inline_pin_matches_the_dev_extra_authority() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_graphviz_inline_pins_match_the_committed_env_markers() -> None:
     """Every inline graphviz pin equals the committed ENV-graphviz markers.
 

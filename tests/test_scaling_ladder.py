@@ -20,8 +20,6 @@ from torch import nn
 import torchlens as tl
 from torchlens.errors._base import TorchLensWarning
 
-pytestmark = pytest.mark.smoke
-
 
 class _Chain(nn.Module):
     def __init__(self, steps: int = 30) -> None:

@@ -15,8 +15,6 @@ from torch import Tensor, nn
 import torchlens.attribution as attribution
 from torchlens.attribution import AttributionError
 
-pytestmark = pytest.mark.smoke
-
 
 class _DictOut(nn.Module):
     """Model returning a mapping (no bare logits tensor)."""
@@ -172,6 +170,7 @@ def test_text_input_invalid_provoked() -> None:
     assert excinfo.value.fields["code"] == "text_input_invalid"
 
 
+@pytest.mark.smoke
 def test_text_model_unsupported_provoked() -> None:
     """A model whose output carries no logits tensor refuses typed."""
 

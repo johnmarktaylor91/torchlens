@@ -12,7 +12,7 @@ paddle = pytest.importorskip("paddle")
 import torchlens as tl  # noqa: E402
 from torchlens.backends.paddle import GradOptions, PaddleBackend  # noqa: E402
 
-pytestmark = [pytest.mark.backend_paddle, pytest.mark.smoke]
+pytestmark = pytest.mark.backend_paddle
 
 
 def _weights() -> tuple[Any, Any]:

@@ -91,7 +91,6 @@ def _assert_refuses(tmp_path, tamper, code: str, reason: str | None = None) -> N
         assert fields.get("reason") == reason, fields
 
 
-@pytest.mark.smoke
 def test_malformed_grammar_refuses(tmp_path) -> None:
     """A provenance record missing a grammar field refuses record_schema."""
 
@@ -103,7 +102,6 @@ def test_malformed_grammar_refuses(tmp_path) -> None:
     _assert_refuses(tmp_path, tamper, "artifact_injection_provenance_invalid", "record_schema")
 
 
-@pytest.mark.smoke
 def test_negative_ordinal_refuses(tmp_path) -> None:
     """A negative firing index refuses record_ordinals."""
 
@@ -115,7 +113,6 @@ def test_negative_ordinal_refuses(tmp_path) -> None:
     _assert_refuses(tmp_path, tamper, "artifact_injection_provenance_invalid", "record_ordinals")
 
 
-@pytest.mark.smoke
 def test_host_site_key_must_exist_in_the_artifact(tmp_path) -> None:
     """A provenance anchor naming no retained model op refuses host_missing."""
 
@@ -128,7 +125,6 @@ def test_host_site_key_must_exist_in_the_artifact(tmp_path) -> None:
     _assert_refuses(tmp_path, tamper, "artifact_injection_codec_invalid", "host_missing")
 
 
-@pytest.mark.smoke
 def test_duplicate_durable_keys_refuse(tmp_path) -> None:
     """Two rows sharing one durable identity key refuse record_duplicate."""
 
@@ -141,7 +137,6 @@ def test_duplicate_durable_keys_refuse(tmp_path) -> None:
     _assert_refuses(tmp_path, tamper, "artifact_injection_codec_invalid", "record_duplicate")
 
 
-@pytest.mark.smoke
 def test_carve_out_theft_refuses(tmp_path) -> None:
     """An injected row wearing the intervention_replacement identity refuses.
 
@@ -159,7 +154,6 @@ def test_carve_out_theft_refuses(tmp_path) -> None:
     _assert_refuses(tmp_path, tamper, "artifact_injection_codec_invalid", "record_func")
 
 
-@pytest.mark.smoke
 def test_replaced_stamp_on_injected_row_refuses(tmp_path) -> None:
     """An injected row claiming intervention_replaced refuses record_func."""
 
@@ -171,7 +165,6 @@ def test_replaced_stamp_on_injected_row_refuses(tmp_path) -> None:
     _assert_refuses(tmp_path, tamper, "artifact_injection_codec_invalid", "record_func")
 
 
-@pytest.mark.smoke
 def test_graph_entangled_injected_row_refuses(tmp_path) -> None:
     """An injected row claiming model dataflow parents refuses."""
 
@@ -184,7 +177,6 @@ def test_graph_entangled_injected_row_refuses(tmp_path) -> None:
     _assert_refuses(tmp_path, tamper, "artifact_injection_codec_invalid", "record_graph_entangled")
 
 
-@pytest.mark.smoke
 def test_model_op_referencing_injected_row_refuses(tmp_path) -> None:
     """A model op wired to an injected label refuses record_referenced.
 
@@ -203,7 +195,6 @@ def test_model_op_referencing_injected_row_refuses(tmp_path) -> None:
     _assert_refuses(tmp_path, tamper, "artifact_injection_codec_invalid", "record_referenced")
 
 
-@pytest.mark.smoke
 def test_missing_codec_envelope_refuses(tmp_path) -> None:
     """The identity slot only ships with its codec envelope (fail-closed)."""
 
@@ -215,7 +206,6 @@ def test_missing_codec_envelope_refuses(tmp_path) -> None:
     _assert_refuses(tmp_path, tamper, "artifact_injection_codec_invalid", "codec_missing")
 
 
-@pytest.mark.smoke
 def test_envelope_key_set_is_closed(tmp_path) -> None:
     """An extra envelope key refuses codec_schema."""
 
@@ -228,7 +218,6 @@ def test_envelope_key_set_is_closed(tmp_path) -> None:
     _assert_refuses(tmp_path, tamper, "artifact_injection_codec_invalid", "codec_schema")
 
 
-@pytest.mark.smoke
 def test_unknown_envelope_version_refuses(tmp_path) -> None:
     """A future envelope version refuses codec_version (never normalizes)."""
 
@@ -240,7 +229,6 @@ def test_unknown_envelope_version_refuses(tmp_path) -> None:
     _assert_refuses(tmp_path, tamper, "artifact_injection_codec_invalid", "codec_version")
 
 
-@pytest.mark.smoke
 def test_label_must_extend_host_label(tmp_path) -> None:
     """An injected label detached from its host label refuses codec_label."""
 
@@ -252,7 +240,6 @@ def test_label_must_extend_host_label(tmp_path) -> None:
     _assert_refuses(tmp_path, tamper, "artifact_injection_codec_invalid", "codec_label")
 
 
-@pytest.mark.smoke
 def test_malformed_callable_key_refuses(tmp_path) -> None:
     """A callable reference outside the closed registry-key shape refuses."""
 
@@ -265,7 +252,6 @@ def test_malformed_callable_key_refuses(tmp_path) -> None:
     _assert_refuses(tmp_path, tamper, "artifact_injection_codec_invalid", "codec_callable")
 
 
-@pytest.mark.smoke
 def test_malformed_encoded_arg_refuses(tmp_path) -> None:
     """An encoded replay arg outside the closed grammar refuses codec_args."""
 
@@ -282,7 +268,6 @@ def test_malformed_encoded_arg_refuses(tmp_path) -> None:
     _assert_refuses(tmp_path, tamper, "artifact_injection_codec_invalid", "codec_args")
 
 
-@pytest.mark.smoke
 def test_model_op_wearing_the_slot_cannot_hide(tmp_path) -> None:
     """Stamping the slot onto a connected model op refuses, never hides it."""
 
@@ -304,7 +289,6 @@ def test_model_op_wearing_the_slot_cannot_hide(tmp_path) -> None:
     }
 
 
-@pytest.mark.smoke
 def test_internal_codec_guards_are_typed(tmp_path) -> None:
     """The two defensive codec guards raise their declared codes.
 
@@ -333,7 +317,6 @@ def test_internal_codec_guards_are_typed(tmp_path) -> None:
     assert excinfo.value.fields["code"] == "injection_persist_arg_unencodable"
 
 
-@pytest.mark.smoke
 def test_stream_finalize_door_refuses_on_records() -> None:
     """The streamed-writer door refuses a trace carrying injected records.
 

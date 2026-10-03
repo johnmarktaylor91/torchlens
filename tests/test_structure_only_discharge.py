@@ -23,8 +23,6 @@ from torchlens.capture.structure_only import (
 )
 from torchlens.options import CaptureOptions
 
-smoke = pytest.mark.smoke
-
 
 class TwoLayer(nn.Module):
     def __init__(self, width: int = 4) -> None:
@@ -77,7 +75,6 @@ def _structure(model: nn.Module, x: torch.Tensor):
     return tl.trace(model, x, capture=CaptureOptions(structure_only=True))
 
 
-@smoke
 def test_corroborate_on_identical_geometry() -> None:
     model = TwoLayer()
     structure = _structure(model, torch.randn(2, 4))
@@ -92,7 +89,6 @@ def test_corroborate_on_identical_geometry() -> None:
     assert registered_discharge(structure) is discharge
 
 
-@smoke
 def test_positional_join_covers_repeated_ops_and_recurrent_passes() -> None:
     model = RepeatedIdenticalOps()
     structure = _structure(model, torch.randn(2, 4))
@@ -104,7 +100,6 @@ def test_positional_join_covers_repeated_ops_and_recurrent_passes() -> None:
     assert len({c.site for c in discharge.claims}) == len(structure.layer_list)
 
 
-@smoke
 def test_refute_on_planted_shape_divergence() -> None:
     """The doctored-config row (weightsfree memo sec 6): same class, same
     input, drifted width — the graph digests agree but the shape hypotheses
@@ -119,7 +114,6 @@ def test_refute_on_planted_shape_divergence() -> None:
     assert claim_status_for(structure) is StructureClaimStatus.REFUTED
 
 
-@smoke
 def test_graph_mismatch_refutes_at_structure_without_row_comparison() -> None:
     structure = _structure(Branchy(extra=False), torch.randn(2, 4))
     other = tl.trace(Branchy(extra=True), torch.randn(2, 4))
@@ -132,7 +126,6 @@ def test_graph_mismatch_refutes_at_structure_without_row_comparison() -> None:
     assert "structural alignment" in discharge.first_contradiction
 
 
-@smoke
 def test_cross_class_discharge_refuses_incomparable() -> None:
     """D10: refuse is not refute — a cross-class pair is a user error, not a
     refuted hypothesis; the registry stays untouched."""
@@ -147,7 +140,6 @@ def test_cross_class_discharge_refuses_incomparable() -> None:
     assert claim_status_for(structure) is StructureClaimStatus.HYPOTHESIS
 
 
-@smoke
 def test_input_geometry_mismatch_refuses_incomparable() -> None:
     """D10: differing input plans refuse typed (a batch-size mismatch is a
     comparability error, never evidence against the hypotheses)."""
@@ -161,7 +153,6 @@ def test_input_geometry_mismatch_refuses_incomparable() -> None:
     assert registered_discharge(structure) is None
 
 
-@smoke
 def test_precondition_refusals_are_typed() -> None:
     ordinary = tl.trace(TwoLayer(), torch.randn(2, 4))
     structure = _structure(TwoLayer(), torch.randn(2, 4))
@@ -175,7 +166,6 @@ def test_precondition_refusals_are_typed() -> None:
     assert excinfo.value.fields["code"] == "structure_only_discharge_precondition"
 
 
-@smoke
 def test_never_promote_g4_and_refuted_flips_accessors_g5() -> None:
     model = TwoLayer()
     structure = _structure(model, torch.randn(2, 4))
@@ -199,7 +189,6 @@ def test_never_promote_g4_and_refuted_flips_accessors_g5() -> None:
     assert require_structure_only_capability(structure, "graph_structure") is not None
 
 
-@smoke
 def test_discharge_never_mutates_either_trace() -> None:
     model = TwoLayer()
     structure = _structure(model, torch.randn(2, 4))

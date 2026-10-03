@@ -28,7 +28,7 @@ import torch
 import torchlens as tl
 from tests.real_model.r0.families import _token_ids, build_gpt2
 
-pytestmark = [pytest.mark.smoke, pytest.mark.real_model]
+pytestmark = pytest.mark.real_model
 
 IMPLS = ("eager", "sdpa")
 

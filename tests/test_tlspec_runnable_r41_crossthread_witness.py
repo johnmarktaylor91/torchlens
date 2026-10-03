@@ -477,7 +477,6 @@ def _check_held_ref_registry_channel_marks(target: str) -> None:
     assert recipe.channels & marked, f"held reference to {target!r} left marks {sorted(marked)!r}"
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("target", _HELD_REF_TARGETS[0::2])
 def test_held_ref_registry_channel_marks_even(target: str) -> None:
     """Alternating half A of the held-ref registry sweep (see the shared body)."""
@@ -485,7 +484,6 @@ def test_held_ref_registry_channel_marks_even(target: str) -> None:
     _check_held_ref_registry_channel_marks(target)
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("target", _HELD_REF_TARGETS[1::2])
 def test_held_ref_registry_channel_marks_odd(target: str) -> None:
     """Alternating half B of the held-ref registry sweep (see the shared body)."""
@@ -500,7 +498,6 @@ def test_held_ref_registry_channel_marks_odd(target: str) -> None:
 _FIXED_T = 1_000_000.0
 
 
-@pytest.mark.smoke
 def test_held_implicit_now_explicit_time_stays_pure() -> None:
     """Held ``localtime(t)`` / ``gmtime(t)`` / ``strftime(fmt, t)`` are pure transforms."""
 
@@ -514,7 +511,6 @@ def test_held_implicit_now_explicit_time_stays_pure() -> None:
     assert "time.strftime" not in result.channels
 
 
-@pytest.mark.smoke
 def test_held_implicit_now_no_arg_marks() -> None:
     """Held ``localtime()`` / ``strftime(fmt)`` read the current clock and mark."""
 
@@ -526,7 +522,6 @@ def test_held_implicit_now_no_arg_marks() -> None:
     assert "time.strftime" in result2.channels
 
 
-@pytest.mark.smoke
 def test_held_implicit_now_star_call_marks_fail_closed() -> None:
     """An undecodable star-call site marks fail-closed even with an explicit time."""
 
@@ -536,7 +531,6 @@ def test_held_implicit_now_star_call_marks_fail_closed() -> None:
     assert "time.localtime" in result.channels
 
 
-@pytest.mark.smoke
 def test_call_site_explicit_time_unit_pins() -> None:
     """Pin the interpreter's CALL decode: 0-arg, value-resolved, None, star-call.
 
@@ -570,7 +564,6 @@ def test_call_site_explicit_time_unit_pins() -> None:
     assert captured == [False, True, True, False, False, False]
 
 
-@pytest.mark.smoke
 def test_held_ref_torchlens_frame_exempt() -> None:
     """A call of the held original FROM a torchlens-owned frame never marks.
 
@@ -719,7 +712,6 @@ class _AttrHolder:
         return [self]
 
 
-@pytest.mark.smoke
 def test_sweep_cap_exhaustion_flags_uncertain(monkeypatch: Any) -> None:
     """Cap invariant: ANY cap exhaustion flags ``inventory_budget_exhausted``, never silent."""
 
@@ -731,7 +723,6 @@ def test_sweep_cap_exhaustion_flags_uncertain(monkeypatch: Any) -> None:
     assert "inventory_budget_exhausted" in result.uncertain_detail
 
 
-@pytest.mark.smoke
 def test_sweep_realistic_model_never_hits_cap() -> None:
     """A 400-block deterministic model sweeps completely: no channels, no uncertainty."""
 
@@ -779,7 +770,6 @@ def test_large_model_held_generator_end_to_end_unverifiable(
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "wrap",
     [
@@ -801,7 +791,6 @@ def test_container_nested_generator_witnessed(wrap: Any, preexisting_worker: Any
     assert result.uncertain is False
 
 
-@pytest.mark.smoke
 def test_container_held_generator_no_draw_stays_clean() -> None:
     """Over-trigger pin: container-held generators with NO draw record nothing."""
 
@@ -816,7 +805,6 @@ def test_container_held_generator_no_draw_stays_clean() -> None:
     assert result.uncertain is False
 
 
-@pytest.mark.smoke
 def test_bare_bit_generator_digest_witnessed(preexisting_worker: Any) -> None:
     """A bare model-held BitGenerator drawn through a wrapping Generator is witnessed."""
 
@@ -1636,7 +1624,6 @@ def _sweep_generator_count(model: nn.Module) -> int:
         return len(monitor._sweep_model_generators())
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("placement", ["list", "dict", "nested", "holder"])
 @pytest.mark.parametrize("rng_kind", ["generator", "randomstate", "bitgen"])
 def test_unregistered_submodule_generator_is_swept(placement: str, rng_kind: str) -> None:
@@ -1650,7 +1637,6 @@ def test_unregistered_submodule_generator_is_swept(placement: str, rng_kind: str
     assert _sweep_generator_count(model) >= 1
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("gen_style", ["attr", "list", "dict", "nested", "holder"])
 def test_unregistered_submodule_generator_holder_styles_swept(gen_style: str) -> None:
     """REACHABILITY (r51 hon1_1): the generator behind an unregistered (list-held) submodule is
@@ -1660,7 +1646,6 @@ def test_unregistered_submodule_generator_holder_styles_swept(gen_style: str) ->
     assert _sweep_generator_count(model) >= 1
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("rng_kind", ["generator", "randomstate", "bitgen"])
 def test_registered_submodule_generator_still_swept(rng_kind: str) -> None:
     """Control (premark is coverage-NEUTRAL): a generator on a REGISTERED submodule stays caught
@@ -1671,7 +1656,6 @@ def test_registered_submodule_generator_still_swept(rng_kind: str) -> None:
     assert _sweep_generator_count(model) >= 1
 
 
-@pytest.mark.smoke
 def test_unregistered_submodule_no_generator_no_over_trigger() -> None:
     """Over-trigger pin: an unregistered submodule with NO generator adds no channel (count 0) --
     descending nn.Modules must not manufacture a false generator sighting."""
@@ -1916,7 +1900,6 @@ _R53_INERT_SHAPES: tuple[str, ...] = (
 )
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("shape", _R53_INERT_SHAPES)
 def test_r53_inert_reach_generator_swept(shape: str) -> None:
     """REACHABILITY: the sweep snapshots the EXACT generator through the inert edge alone
@@ -1951,7 +1934,7 @@ def test_r53_inert_reach_generator_drawn_is_witnessed(
     assert _R53_FIRED == []
 
 
-@pytest.mark.smoke
+@pytest.mark.smoke_cells("test_r53_inert_reach_undrawn_stays_clean[weakmethod]")
 @pytest.mark.parametrize("shape", _R53_INERT_SHAPES)
 def test_r53_inert_reach_undrawn_stays_clean(shape: str) -> None:
     """Over-trigger pin: every holder shape PRESENT but UNDRAWN records no channel and no
@@ -1966,7 +1949,6 @@ def test_r53_inert_reach_undrawn_stays_clean(shape: str) -> None:
     assert _R53_FIRED == []
 
 
-@pytest.mark.smoke
 def test_r53_user_class_surfaces_never_flag_uncertain() -> None:
     """Boundedness / no-over-trigger pin: a user-class-heavy model (methods, properties,
     bound-method attrs, defaults across 100 blocks) sweeps completely -- per-class dedup

@@ -16,7 +16,7 @@ import pytest
 
 from tests.composition_expectations import _censuses
 
-pytestmark = [pytest.mark.smoke, pytest.mark.compo]
+pytestmark = pytest.mark.compo
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 

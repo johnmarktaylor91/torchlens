@@ -64,7 +64,6 @@ def _descriptor_ambient(path: Path) -> dict[str, Any]:
     return dict(manifest["run"]["ambient_context"])
 
 
-@pytest.mark.smoke
 def test_grad_on_capture_records_ambient_and_replays_recorded_arm(tmp_path: Path) -> None:
     """Grad-ON capture: recorded ``grad_enabled=True``; replay under a caller's
     ``no_grad()`` still takes the RECORDED arm (the hon_1 false-VERIFIED class).
@@ -95,7 +94,6 @@ def test_grad_on_capture_records_ambient_and_replays_recorded_arm(tmp_path: Path
     assert torch.is_grad_enabled()  # caller ambient restored on exit
 
 
-@pytest.mark.smoke
 def test_no_grad_capture_records_false_and_matches_no_grad_oracle(tmp_path: Path) -> None:
     """A ``no_grad()`` capture records ``grad_enabled=False`` and VERIFIED means
     faithfulness against the no_grad oracle -- under ANY caller ambient."""
@@ -135,7 +133,6 @@ def test_inference_mode_capture_records_and_replays(tmp_path: Path) -> None:
     assert not torch.is_inference_mode_enabled()  # caller ambient restored
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("field", ("grad_enabled", "inference_mode", "fill_uninitialized_memory"))
 def test_missing_ambient_mode_field_is_typed_analysis_only(field: str, tmp_path: Path) -> None:
     """A v2 descriptor missing an ambient mode field (a pre-r53 dev-window

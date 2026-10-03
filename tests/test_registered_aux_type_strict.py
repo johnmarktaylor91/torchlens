@@ -19,8 +19,6 @@ import torch
 from torchlens._input_walk import snapshot_input_boundary
 from torchlens.ir.container import _CONTAINER_REGISTRY, register_container
 
-pytestmark = pytest.mark.smoke
-
 
 class _Box:
     """Minimal registered container holding one tensor plus aux."""
@@ -67,6 +65,7 @@ def _refusal_reasons(value: object) -> list[str]:
     return [refusal["reason"] for refusal in snapshot_input_boundary(value)["refusals"]]
 
 
+@pytest.mark.smoke
 def test_exact_type_aux_stays_admitted(_registry: Any) -> None:
     """Plain list/tuple aux trees keep zero refusals and their exact kind."""
 
@@ -93,6 +92,7 @@ def test_list_subclass_aux_refuses_typed(_registry: Any) -> None:
     assert "registered_aux_unsafe" in reasons
 
 
+@pytest.mark.smoke
 def test_nested_subclass_aux_refuses_typed(_registry: Any) -> None:
     """The exact-type rule applies at every nesting level of the aux tree."""
 

@@ -16,8 +16,6 @@ import pytest
 
 from torchlens.utils.rng import host_nondeterminism_monitor
 
-pytestmark = pytest.mark.smoke
-
 
 def _fresh_monitor() -> host_nondeterminism_monitor:
     """Build an unentered monitor whose teardown surfaces are all inert."""
@@ -62,6 +60,7 @@ def test_keyboard_interrupt_before_the_queue_still_drains_it():
     assert "teardown_interrupted" in monitor.result.uncertain_detail
 
 
+@pytest.mark.smoke
 def test_second_teardown_after_interrupt_is_a_safe_no_op():
     """The idempotence latch keeps holding after an interrupted unwind."""
 

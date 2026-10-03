@@ -27,8 +27,6 @@ from torchlens.capture.structure_only import (
 )
 from torchlens.options import CaptureOptions
 
-smoke = pytest.mark.smoke
-
 TORCHLENS_DIR = Path(tl.__file__).resolve().parent
 REPO_ROOT = TORCHLENS_DIR.parent
 
@@ -51,7 +49,6 @@ def _structure_trace():
 # ---------------------------------------------------------------------------
 
 
-@smoke
 def test_nobody_reads_the_capability_table_but_the_chokepoint() -> None:
     for path in TORCHLENS_DIR.rglob("*.py"):
         if path.name == "structure_only.py" and path.parent.name == "capture":
@@ -65,7 +62,6 @@ def test_nobody_reads_the_capability_table_but_the_chokepoint() -> None:
 # ---------------------------------------------------------------------------
 
 
-@smoke
 def test_gated_entries_consult_the_structure_only_chokepoint() -> None:
     """Source lockstep mirroring test_capture_outcome_matrix's inventory: a
     refactor that drops a structure-only gate call from a value-bearing
@@ -107,7 +103,6 @@ def test_gated_entries_consult_the_structure_only_chokepoint() -> None:
 # ---------------------------------------------------------------------------
 
 
-@smoke
 def test_doc_table_locksteps_with_the_in_code_authority() -> None:
     doc = (REPO_ROOT / "docs" / "reference" / "structure_only_capabilities.md").read_text(
         encoding="utf-8"
@@ -126,7 +121,6 @@ def test_doc_table_locksteps_with_the_in_code_authority() -> None:
     assert "never promises for a wave it hasn't shipped" in doc
 
 
-@smoke
 def test_row_grammar_is_closed_and_red_capable() -> None:
     from torchlens.capture.structure_only import CapabilityRow, _validate_row_grammar
 
@@ -160,14 +154,12 @@ def test_row_grammar_is_closed_and_red_capable() -> None:
 # ---------------------------------------------------------------------------
 
 
-@smoke
 def test_chokepoint_is_a_noop_on_ordinary_traces() -> None:
     log = tl.trace(TwoLayer(), torch.randn(2, 4))
     assert require_structure_only_capability(log, "save_analysis_artifact") is None
     assert require_structure_only_capability(log, "live_replay") is None
 
 
-@smoke
 def test_save_persists_the_marker_plainly(tmp_path) -> None:
     """tlspec v8: analysis-level saves persist the structure_only marker.
 
@@ -186,7 +178,6 @@ def test_save_persists_the_marker_plainly(tmp_path) -> None:
     assert excinfo.value.fields["code"] == "structure_only_replay_unsupported"
 
 
-@smoke
 def test_runnable_save_row_refuses_typed() -> None:
     log = _structure_trace()
     with pytest.raises(StructureOnlyCapabilityError) as excinfo:
@@ -194,7 +185,6 @@ def test_runnable_save_row_refuses_typed() -> None:
     assert excinfo.value.fields["code"] == "structure_only_runnable_unsupported"
 
 
-@smoke
 def test_live_replay_refuses_typed() -> None:
     log = _structure_trace()
     with pytest.raises(StructureOnlyCapabilityError) as excinfo:
@@ -202,7 +192,6 @@ def test_live_replay_refuses_typed() -> None:
     assert excinfo.value.fields["code"] == "structure_only_replay_unsupported"
 
 
-@smoke
 def test_validation_entry_refuses_typed() -> None:
     log = _structure_trace()
     with pytest.raises(StructureOnlyCapabilityError) as excinfo:
@@ -210,7 +199,6 @@ def test_validation_entry_refuses_typed() -> None:
     assert excinfo.value.fields["code"] == "structure_only_validation_unsupported"
 
 
-@smoke
 def test_backward_refuses_typed() -> None:
     log = _structure_trace()
     with pytest.raises(StructureOnlyCapabilityError) as excinfo:
@@ -218,7 +206,6 @@ def test_backward_refuses_typed() -> None:
     assert excinfo.value.fields["code"] == "structure_only_backward_unsupported"
 
 
-@smoke
 def test_episode_composition_row_refuses_typed() -> None:
     log = _structure_trace()
     with pytest.raises(StructureOnlyCapabilityError) as excinfo:
@@ -231,7 +218,6 @@ def test_episode_composition_row_refuses_typed() -> None:
 # ---------------------------------------------------------------------------
 
 
-@smoke
 def test_registrar_switch_round_trips_the_marker_and_load_fails_closed(tmp_path) -> None:
     log = _structure_trace()
     artifact = tmp_path / "structure.tlspec"

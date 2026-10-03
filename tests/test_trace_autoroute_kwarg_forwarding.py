@@ -30,9 +30,6 @@ from torch import nn
 import torchlens as tl
 from torchlens import autoroute
 
-pytestmark = pytest.mark.smoke
-
-
 #: trace() parameters legitimately absent from the autoroute bundle. Every
 #: entry names the guard that makes the omission safe; widening this set
 #: requires the same style of proof.
@@ -110,6 +107,7 @@ class _Identity(nn.Module):
         return x + 1
 
 
+@pytest.mark.smoke
 def test_detectors_receive_the_once_dropped_kwargs() -> None:
     """A registered detector sees structure_only/episode/grouping in kwargs."""
 

@@ -90,7 +90,6 @@ def _resolve(ref: str) -> Callable[..., Any]:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("ref", _ALL_R39_REFS)
 def test_r39_misses_fail_purity_gate(ref: str) -> None:
     """The purity gate refuses every callable-invoke / realloc / mutator miss."""
@@ -103,7 +102,6 @@ def test_r39_misses_fail_purity_gate(ref: str) -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("ref", _ALL_R39_REFS)
 def test_r39_misses_denied_at_resolver_even_under_trust(ref: str) -> None:
     """Fixed-root refs for the r39 misses never resolve, even with trust satisfied."""
@@ -155,7 +153,6 @@ _STRUCTURAL_RESIZE_NAMES = [
 ]
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("name", _STRUCTURAL_INVOKER_NAMES)
 def test_r39_structural_invoker_pattern_denies_future_siblings(name: str) -> None:
     """The (map|apply)\\d*_ / register structural guard denies future siblings by name."""
@@ -164,7 +161,6 @@ def test_r39_structural_invoker_pattern_denies_future_siblings(name: str) -> Non
     assert _is_side_effecting_callable_name(_named(name))
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("name", _STRUCTURAL_RESIZE_NAMES)
 def test_r39_structural_resize_pattern_denies_future_siblings(name: str) -> None:
     """The ``resize`` substring guard denies future reallocators by name."""
@@ -187,7 +183,6 @@ _PATTERN_LOOKALIKE_PURE_NAMES = [
 ]
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("name", _PATTERN_LOOKALIKE_PURE_NAMES)
 def test_r39_structural_guards_do_not_over_deny_lookalikes(name: str) -> None:
     """Anchored patterns exclude pure ops that merely resemble a denied shape."""
@@ -196,7 +191,6 @@ def test_r39_structural_guards_do_not_over_deny_lookalikes(name: str) -> None:
     assert not _is_side_effecting_callable_name(_named(name))
 
 
-@pytest.mark.smoke
 def test_r39_pure_forward_surface_not_over_denied() -> None:
     """The r39 additions do not over-deny the legitimate pure forward surface."""
 
@@ -226,7 +220,6 @@ def test_r39_pure_forward_surface_not_over_denied() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "namespace,qualname",
     [

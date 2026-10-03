@@ -35,14 +35,12 @@ SHAPES = [
 ]
 
 
-@pytest.mark.smoke
 def test_budget_constants_are_the_autovisualizer_numbers() -> None:
     """Provenance pin: our budgets are ArrayAutovisualizer's, NOT render_array's."""
 
     assert (CELL_BUDGET_DEFAULT, PER_AXIS_BUDGET_DEFAULT, EDGE_ITEMS_DEFAULT) == (4_000, 128, 5)
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("shape", SHAPES)
 @pytest.mark.parametrize("bonus", [10.0, 3.0])
 def test_port_matches_upstream_arithmetic(shape: tuple[int, ...], bonus: float) -> None:
@@ -83,7 +81,6 @@ def test_bf16_widens_like_upstream() -> None:
     assert np.array_equal(theirs_mask, ours_mask)
 
 
-@pytest.mark.smoke
 def test_mask_band_is_false_never_a_data_zero() -> None:
     """The truncation band is mask=False; visible cells carry real values."""
 
@@ -98,7 +95,6 @@ def test_mask_band_is_false_never_a_data_zero() -> None:
     assert (values[mask] != 0).all()
 
 
-@pytest.mark.smoke
 def test_untruncated_shapes_pass_through_whole() -> None:
     """Small shapes return every cell with an all-True mask."""
 
@@ -109,7 +105,6 @@ def test_untruncated_shapes_pass_through_whole() -> None:
     assert values.shape == (4, 5) and mask.all()
 
 
-@pytest.mark.smoke
 def test_transfer_bound_on_gpt2_shaped_logits() -> None:
     """The visible-cell fraction stays under 2 percent at the pinned scale."""
 

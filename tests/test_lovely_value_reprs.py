@@ -13,8 +13,6 @@ from torch import nn
 
 import torchlens as tl
 
-pytestmark = pytest.mark.smoke
-
 
 class _Mixed(nn.Module):
     """Small mixed model: params, module nesting, elementwise tail."""
@@ -89,6 +87,7 @@ def test_repr_is_one_bounded_line(mixed_trace) -> None:
         assert len(line) <= 120, (type(record).__name__, len(line), line)
 
 
+@pytest.mark.smoke
 def test_card_first_line_is_repr_and_bounded(mixed_trace) -> None:
     """D15: str is a <=8-line card whose first line IS the repr."""
 
@@ -111,6 +110,7 @@ def test_op_card_exits_and_content(mixed_trace) -> None:
     assert "graph" in card
 
 
+@pytest.mark.smoke
 def test_multipass_layer_never_pools(recurrent_trace) -> None:
     """D32: a k-pass Layer shows per-pass cores or a count, never pooled."""
 
@@ -160,6 +160,7 @@ def test_module_card_single_output_core(mixed_trace) -> None:
     assert "mean=" in card
 
 
+@pytest.mark.smoke
 def test_repr_never_raises_on_detached_records(mixed_trace) -> None:
     """Voice rule 10 + R52: detached records degrade, never raise."""
 

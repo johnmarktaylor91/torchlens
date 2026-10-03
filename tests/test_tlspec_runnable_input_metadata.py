@@ -102,7 +102,6 @@ def _layout_twin(x: torch.Tensor) -> torch.Tensor:
     return twin
 
 
-@pytest.mark.smoke
 def test_h2_is_contiguous_layout_twin_diverges_and_is_not_attested(tmp_path: Path) -> None:
     """A byte-identical layout twin must diverge, never false VERIFIED+ATTESTED."""
 
@@ -123,7 +122,6 @@ def test_h2_is_contiguous_layout_twin_diverges_and_is_not_attested(tmp_path: Pat
     assert torch.equal(fresh, x - 100)
 
 
-@pytest.mark.smoke
 def test_h2_is_contiguous_original_input_still_verifies_and_attests(tmp_path: Path) -> None:
     """The original contiguous input must keep VERIFIED + ATTESTED (no over-trigger)."""
 
@@ -155,7 +153,6 @@ def test_h2_stride_read_diverges_on_layout_change(tmp_path: Path) -> None:
     assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
-@pytest.mark.smoke
 def test_h2_requires_grad_flip_diverges_and_is_not_attested(tmp_path: Path) -> None:
     """A runtime ``requires_grad`` flip on a grad-branching model must diverge."""
 
@@ -177,7 +174,6 @@ def test_h2_requires_grad_flip_diverges_and_is_not_attested(tmp_path: Path) -> N
     torch.testing.assert_close(fresh.detach(), x * 2)
 
 
-@pytest.mark.smoke
 @pytest.mark.filterwarnings(
     # A08 random-role-init disclosure (runnable_random_init_run): this test
     # exercises a weight-free runnable run DELIBERATELY; the warning is the

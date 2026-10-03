@@ -10,8 +10,6 @@ import torch
 
 import torchlens  # noqa: F401 -- full package init before submodule imports
 
-pytestmark = pytest.mark.smoke
-
 
 def test_cpu_async_pending_events_drain_and_clear() -> None:
     """The cpu_async fence registry drains fully and tolerates odd devices (R36-1)."""
@@ -285,6 +283,7 @@ def test_forward_peak_bracket_never_resets_cuda_peak_counter() -> None:
     )
 
 
+@pytest.mark.smoke
 def test_mps_style_no_arg_synchronize_does_not_typeerror() -> None:
     """A backend synchronize that takes no device argument drains cleanly (R36).
 
@@ -313,6 +312,7 @@ def test_mps_style_no_arg_synchronize_does_not_typeerror() -> None:
     assert calls["noarg"] == 1
 
 
+@pytest.mark.smoke
 def test_cpu_async_pending_events_are_bounded() -> None:
     """The fence-event registry is hard-bounded, never unbounded cross-capture (R36).
 

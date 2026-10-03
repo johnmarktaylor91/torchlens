@@ -38,8 +38,6 @@ from torchlens._input_walk import (
 )
 from torchlens.merged._artifact import canonical_json_bytes
 
-pytestmark = pytest.mark.smoke
-
 #: Deterministic default; a nightly fuzz leg may inject fresh seeds.
 _SEED = int(os.environ.get("TORCHLENS_FUZZ_SEED", "20260815"))
 
@@ -215,6 +213,7 @@ def _random_key(rng: random.Random, depth: int = 2):
     return _random_scalar_key(rng)
 
 
+@pytest.mark.smoke
 def test_key_codec_round_trips_generated_adversarial_keys() -> None:
     """decode(encode(k)) == k bit-exactly for 400 generated adversarial keys."""
 
@@ -312,6 +311,7 @@ def test_canonical_json_bytes_is_key_order_invariant() -> None:
     assert canonical_json_bytes({"a": 1}) != canonical_json_bytes({"a": 2})
 
 
+@pytest.mark.smoke
 def test_canonical_json_bytes_refuses_the_known_bad_classes() -> None:
     """Known-bad payload classes refuse loudly, never mint ambiguous bytes.
 

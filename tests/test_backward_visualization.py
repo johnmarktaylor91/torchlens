@@ -105,7 +105,6 @@ def _log_two_backward_passes(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     return trace
 
 
-@pytest.mark.smoke
 def test_draw_backward_renders(tmp_path: Path) -> None:
     """draw_backward returns DOT source and writes a non-empty output file."""
     trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
@@ -122,7 +121,6 @@ def test_draw_backward_renders(tmp_path: Path) -> None:
     assert (tmp_path / "backward_graph.svg").stat().st_size > 0
 
 
-@pytest.mark.smoke
 def test_backward_graph_includes_grad_fn_nodes(tmp_path: Path) -> None:
     """Backward DOT contains expected grad_fn_handle labels."""
     trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
@@ -138,7 +136,6 @@ def test_backward_graph_includes_grad_fn_nodes(tmp_path: Path) -> None:
     assert GRADIENT_ARROW_COLOR in dot
 
 
-@pytest.mark.smoke
 def test_backward_graph_intervening_visual_distinction(tmp_path: Path) -> None:
     """Intervening grad_fns use the documented ``[i]`` label prefix."""
     trace = _log_backward_model(_ViewModel(), torch.randn(2, 6, requires_grad=True))
@@ -152,7 +149,6 @@ def test_backward_graph_intervening_visual_distinction(tmp_path: Path) -> None:
     assert "[i] " in dot
 
 
-@pytest.mark.smoke
 def test_backward_graph_custom_grad_fn_distinction(tmp_path: Path) -> None:
     """Custom autograd grad_fns use the documented ``[custom]`` suffix."""
     trace = _log_backward_model(_CustomModel(), torch.randn(2, 3, requires_grad=True))
@@ -167,7 +163,6 @@ def test_backward_graph_custom_grad_fn_distinction(tmp_path: Path) -> None:
     assert "[custom]" in dot
 
 
-@pytest.mark.smoke
 def test_backward_graph_cross_references_forward_layers(tmp_path: Path) -> None:
     """Backward node labels include corresponding forward layer labels."""
     trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
@@ -236,7 +231,6 @@ def test_backward_graph_marks_order_and_accumulation_edges(tmp_path: Path) -> No
     assert "style=dotted" in dot
 
 
-@pytest.mark.smoke
 def test_draw_backward_top_level_function(tmp_path: Path) -> None:
     """The top-level ``tl.visualization.draw_backward`` helper renders a Trace."""
     trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
@@ -251,7 +245,6 @@ def test_draw_backward_top_level_function(tmp_path: Path) -> None:
     assert "addmm_back" in dot
 
 
-@pytest.mark.smoke
 def test_draw_backward_errors_without_log_backward() -> None:
     """draw_backward errors clearly before explicit backward capture."""
     trace = tl.trace(
@@ -264,7 +257,6 @@ def test_draw_backward_errors_without_log_backward() -> None:
         trace.draw_backward(vis_save_only=True)
 
 
-@pytest.mark.smoke
 def test_forward_graph_unchanged(tmp_path: Path) -> None:
     """Top-level forward graph output remains stable around backward rendering."""
     model = _LinearReluModel()

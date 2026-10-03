@@ -17,8 +17,6 @@ from torchlens.fastlog.options import RecordingOptions
 from torchlens.options import EchoOptions
 from torchlens.snoop import EchoConfigError, normalize_echo
 
-pytestmark = pytest.mark.smoke
-
 
 class OneOp(nn.Module):
     """Single-op module for refusal tests."""

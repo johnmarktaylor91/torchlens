@@ -13,8 +13,6 @@ pd = pytest.importorskip("pandas")
 import torchlens as tl  # noqa: E402
 from torchlens.report import build_profile  # noqa: E402
 
-pytestmark = pytest.mark.smoke
-
 
 class _TwoBlockModel(nn.Module):
     """Two named blocks so module/call level profiles have structure."""

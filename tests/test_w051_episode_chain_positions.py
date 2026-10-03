@@ -40,8 +40,6 @@ from torchlens.errors import TorchLensWarning
 from torchlens.errors.episode import EpisodeDeclarationError
 from torchlens.options import EpisodeSpec
 
-pytestmark = pytest.mark.smoke
-
 V = 16
 PROMPT = torch.tensor([[1, 2, 3, 4]])
 
@@ -124,6 +122,7 @@ def test_declared_crossing_derives_at_measured_chain_positions() -> None:
     assert envelope["break_step"] == 1
 
 
+@pytest.mark.smoke
 def test_undeclared_injection_refuses_and_teaches_crossings() -> None:
     """Measured alone, the surplus is ambiguous with multi-token decoding."""
 
@@ -193,6 +192,7 @@ def test_tail_rederivation_without_disclosure_reads_the_tail() -> None:
     assert rederived_evidence_matches(log, {"header": legacy, "rows": rows}) is True
 
 
+@pytest.mark.smoke
 def test_forged_positions_do_not_rederive() -> None:
     """Rewritten positions read a different column: the anchor reports a mismatch."""
 

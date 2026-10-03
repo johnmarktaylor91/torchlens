@@ -18,8 +18,6 @@ from torchlens.intervention.edge_semantics import (
     distribution_relation,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 class _EdgeZoo(nn.Module):
     """One forward exercising view/copy/multiset-changing/binary edges."""
@@ -104,6 +102,7 @@ def test_classifier_is_slot0_only() -> None:
     assert classify_view_or_copy("reshape", (0,)) == "unknown"  # may copy
 
 
+@pytest.mark.smoke
 def test_stats_table_marks_budget_sort_fold(zoo_trace) -> None:
     """Item 9: marks from D28 only; budget typed; sorts disclosed."""
 
@@ -140,6 +139,7 @@ def test_marks_never_fold_by_default(zoo_trace) -> None:
     assert table.fold_note is None
 
 
+@pytest.mark.smoke
 def test_to_pandas_carries_relation_columns(zoo_trace) -> None:
     """The tabular exit preserves the mark and its proof provenance."""
 

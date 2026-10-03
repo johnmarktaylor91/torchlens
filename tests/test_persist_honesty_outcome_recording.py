@@ -36,8 +36,6 @@ from torchlens.capture.outcome import (
 from torchlens.errors import RunCapabilityUnavailableError
 from torchlens.options import CaptureOptions
 
-pytestmark = pytest.mark.smoke
-
 
 class _Boom(nn.Module):
     def __init__(self) -> None:
@@ -111,6 +109,7 @@ def aborted_bundle(tmp_path):
     return rec.bundle_path
 
 
+@pytest.mark.smoke
 def test_recover_carries_abort_failure_evidence(aborted_bundle):
     recovered = tl.fastlog.recover(aborted_bundle)
     assert recovered.recovered is True
@@ -121,6 +120,7 @@ def test_recover_carries_abort_failure_evidence(aborted_bundle):
     assert any("aborted mid-write" in w for w in recovered.recovery_warnings)
 
 
+@pytest.mark.smoke
 def test_recover_still_salvages_clean_crash_debris_as_unknown(tmp_path):
     """Corruption salvage unchanged: index debris WITHOUT abort evidence stays
     a non-failed recovered recording with a conservative UNKNOWN outcome."""

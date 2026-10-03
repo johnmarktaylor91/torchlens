@@ -65,7 +65,6 @@ def test_v8_to_v9_field_name_diff_is_exactly_the_pinned_additions() -> None:
         )
 
 
-@pytest.mark.smoke
 def test_contract_versions_and_digests_are_ledger_distinct() -> None:
     old = json.loads(V8_CONTRACT.read_text(encoding="utf-8"))
     new = json.loads(V9_CONTRACT.read_text(encoding="utf-8"))

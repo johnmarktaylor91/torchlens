@@ -21,8 +21,6 @@ from torchlens.capture._episode_ledger import EpisodeLedger, episode_ledger_for
 from torchlens.errors import EpisodeJoinError, TorchLensWarning
 from torchlens.options import EpisodeSpec
 
-pytestmark = pytest.mark.smoke
-
 
 class TinyLM(nn.Module):
     def __init__(self, vocab: int = 16, width: int = 8):

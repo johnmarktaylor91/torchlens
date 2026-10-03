@@ -197,7 +197,6 @@ def _trace_with_adapter_find_calls(model: torch.nn.Module, x: torch.Tensor) -> t
     return traced, find_calls
 
 
-@pytest.mark.smoke
 def test_pairwise_sweep_early_exit_keeps_chained_grouping_subquadratic() -> None:
     """Chained tied loop groups identically while the pair sweep stays subquadratic.
 
@@ -231,7 +230,6 @@ class _BareChain(torch.nn.Module):
         return x
 
 
-@pytest.mark.smoke
 def test_bare_chain_sweep_is_linear_in_group_size() -> None:
     """A param-free chain must not pay the C(N,2) pairwise triangle.
 
@@ -254,7 +252,6 @@ def test_bare_chain_sweep_is_linear_in_group_size() -> None:
     assert find_calls < 12_000
 
 
-@pytest.mark.smoke
 def test_pairwise_sweep_early_exit_preserves_multi_root_group_membership() -> None:
     """Multi-root candidate groups keep exact historical membership.
 
@@ -442,7 +439,6 @@ def _unfiltered_pf_partition_class_oracle(
     ]
 
 
-@pytest.mark.smoke
 def test_entry_sweep_prefilter_matches_unfiltered_oracle(monkeypatch: Any) -> None:
     """Prefiltered entry sweep is partition-identical to the unfiltered oracle.
 
@@ -470,7 +466,6 @@ def test_entry_sweep_prefilter_matches_unfiltered_oracle(monkeypatch: Any) -> No
     assert compared_calls["count"] > 0
 
 
-@pytest.mark.smoke
 def test_entry_sweep_prefilter_empties_degenerate_pair_triangle(monkeypatch: Any) -> None:
     """The degenerate long-loop regime issues ZERO entry-admission pair calls.
 
@@ -755,7 +750,6 @@ def _reference_reaches(workspace: Any, src_label: str, dst_label: str) -> bool:
     return False
 
 
-@pytest.mark.smoke
 def test_adaptive_reachability_matches_reference_on_random_dags() -> None:
     """Sparse, dense, and repeated queries all match ground-truth reachability.
 
@@ -788,7 +782,6 @@ def test_adaptive_reachability_matches_reference_on_random_dags() -> None:
         assert len(cache._descendant_bits) == len(labels)
 
 
-@pytest.mark.smoke
 def test_batch_dp_masks_equal_per_source_bfs_masks() -> None:
     """The reverse-topological batch DP builds bit-identical descendant masks."""
     for seed in (0, 1, 2):
@@ -834,7 +827,6 @@ def test_tied_insertion_order_falls_back_to_per_source_bfs() -> None:
     assert cache.reaches_from_earlier("tied_parent", "grandchild")
 
 
-@pytest.mark.smoke
 def test_non_monotone_workspace_keeps_bounded_pair_lane() -> None:
     """A raw-order-violating edge disables masks entirely, answers stay exact."""
     labels = ["late_parent", "early_child", "tail"]
@@ -851,7 +843,6 @@ def test_non_monotone_workspace_keeps_bounded_pair_lane() -> None:
     assert not cache._batch_attempted
 
 
-@pytest.mark.smoke
 def test_assignments_pool_one_recurrent_labels_tuple_per_group() -> None:
     """Assignments equal the historical per-node scan and pool one tuple per group."""
     torch.manual_seed(0)

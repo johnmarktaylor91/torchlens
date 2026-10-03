@@ -26,9 +26,6 @@ from torch import nn
 
 import torchlens as tl
 
-pytestmark = pytest.mark.smoke
-
-
 _Point = collections.namedtuple("_Point", ["x", "y"])
 
 

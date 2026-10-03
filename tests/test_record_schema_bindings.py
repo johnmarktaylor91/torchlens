@@ -53,7 +53,10 @@ _SCHEMA = {
 }
 
 
-@pytest.mark.smoke
+@pytest.mark.smoke_cells(
+    "test_field_order_view_equals_literal[buffer]",
+    "test_field_order_view_equals_literal[func_call_location]",
+)
 @pytest.mark.parametrize("schema_key", sorted(_SCHEMA))
 def test_field_order_view_equals_literal(schema_key: str) -> None:
     """Generated FIELD_ORDER view == the hand-written literal, exactly."""
@@ -62,7 +65,6 @@ def test_field_order_view_equals_literal(schema_key: str) -> None:
     assert field_order_from_policy(cls.FIELD_POLICY) == list(literal)
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("schema_key", sorted(_SCHEMA))
 def test_every_declared_field_has_exactly_one_binding(schema_key: str) -> None:
     """Binding keys == FIELD_POLICY keys: no orphans, no gaps, all 11 classes."""
@@ -74,7 +76,6 @@ def test_every_declared_field_has_exactly_one_binding(schema_key: str) -> None:
         assert policy.storage is bindings[name], name
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("schema_key", sorted(_SCHEMA))
 def test_binding_axes_are_coherent(schema_key: str) -> None:
     """Storage kinds respect the declared axes' invariants."""
@@ -102,7 +103,6 @@ def test_binding_axes_are_coherent(schema_key: str) -> None:
             )
 
 
-@pytest.mark.smoke
 def test_primitive_bindings_match_the_promoted_candidate_kinds() -> None:
     """The tlspec v8 bump installed the S3 candidate kinds for real.
 

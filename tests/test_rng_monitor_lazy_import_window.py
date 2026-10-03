@@ -80,7 +80,6 @@ def test_first_selective_runnable_capture_is_not_poisoned_by_lazy_dynamo_import(
     assert "OK" in completed.stdout
 
 
-@pytest.mark.smoke
 def test_monitor_entry_warms_lazy_torch_imports() -> None:
     """Entering the monitor latches the compat warm flag before any patch."""
 

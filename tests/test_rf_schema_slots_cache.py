@@ -17,8 +17,6 @@ import pytest
 
 from torchlens.receptive_field import _engine
 
-pytestmark = pytest.mark.smoke
-
 
 def _snapshot():
     return dict(_engine._SCHEMA_OPERAND_SLOTS_CACHE), dict(_engine._SCHEMA_OPERAND_MISS_NAMES)
@@ -76,6 +74,7 @@ def test_miss_cache_is_bounded_fifo(monkeypatch: pytest.MonkeyPatch) -> None:
         _restore(snapshot)
 
 
+@pytest.mark.smoke
 def test_namespace_attribute_names_fail_closed_not_raw() -> None:
     """Names resolving to non-packet namespace attributes return, never raise.
 
@@ -93,6 +92,7 @@ def test_namespace_attribute_names_fail_closed_not_raw() -> None:
         _restore(snapshot)
 
 
+@pytest.mark.smoke
 def test_positive_cache_still_serves_real_operators() -> None:
     """Real aten packets keep resolving and memoizing (no false negatives)."""
 

@@ -22,8 +22,6 @@ from torchlens._source_links import terminal_file_line_link
 from torchlens.options import EchoOptions
 from torchlens.snoop import NarrationEvent, NarrationStats, render_line, render_stats_segment
 
-pytestmark = pytest.mark.smoke
-
 _ESCAPE_BYTES = re.compile("[\x1b\x9d\x07]")
 
 
@@ -60,6 +58,7 @@ def test_transcripts_are_byte_stable_across_seeded_runs() -> None:
     assert _run_transcript(7) == _run_transcript(7)
 
 
+@pytest.mark.smoke
 def test_non_tty_transcript_is_escape_clean() -> None:
     """Zero ANSI/OSC-8 bytes on a non-tty sink (the escape-leak regression)."""
 
@@ -67,6 +66,7 @@ def test_non_tty_transcript_is_escape_clean() -> None:
     assert not _ESCAPE_BYTES.search(transcript)
 
 
+@pytest.mark.smoke
 def test_terminal_file_line_link_gates_on_tty() -> None:
     """The shipped OSC-8 defect: escapes only when links are enabled."""
 
@@ -92,6 +92,7 @@ def test_sampled_stats_segment_never_claims_finiteness() -> None:
         assert forbidden not in segment
 
 
+@pytest.mark.smoke
 def test_exact_stats_segment_prints_census_or_clearance() -> None:
     """Exact rungs print nonzero census tokens, or the exact clearance."""
 
@@ -116,6 +117,7 @@ def test_missing_facts_are_omitted_never_zeroed() -> None:
         assert forbidden not in line
 
 
+@pytest.mark.smoke
 def test_max_lines_suppression_is_announced_and_counted() -> None:
     """One suppression marker, exact counts, footer discloses the total."""
 
@@ -133,6 +135,7 @@ def test_max_lines_suppression_is_announced_and_counted() -> None:
     assert "suppressed" in footer
 
 
+@pytest.mark.smoke
 def test_zero_match_scoped_capture_warns_once_with_code() -> None:
     """A complete scoped run with zero matches warns echo_zero_match."""
 
@@ -163,6 +166,7 @@ def test_matched_scoped_capture_does_not_warn() -> None:
     assert "echo_zero_match" not in codes
 
 
+@pytest.mark.smoke
 def test_file_sink_flushes_per_line(tmp_path) -> None:
     """File sinks flush per line: bytes are on disk before the run ends."""
 

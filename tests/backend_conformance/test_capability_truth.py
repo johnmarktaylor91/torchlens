@@ -52,7 +52,7 @@ from torchlens.backends._options import (
 )
 from torchlens.data_classes._backend_capability_guards import raise_if_no_backward_capture
 
-pytestmark = [pytest.mark.backend_parity, pytest.mark.smoke]
+pytestmark = pytest.mark.backend_parity
 
 _TORCHLENS_ROOT = Path(tl.__file__).resolve().parent
 
@@ -188,6 +188,7 @@ def _spec_with_flag(name: str, flag: str, *, implementation: bool) -> Any:
     )
 
 
+@pytest.mark.smoke_cells("test_extra_kwarg_gates_are_fail_closed_biconditional[mlx]")
 @pytest.mark.parametrize("name", _PREVIEW_NAMES)
 def test_extra_kwarg_gates_are_fail_closed_biconditional(name: str) -> None:
     """intervene/storage/streaming: False rejects; a True flip refuses typed
@@ -222,6 +223,7 @@ def test_extra_kwarg_gates_are_fail_closed_biconditional(name: str) -> None:
             reject_extra_trace_kwargs({option: sentinel}, policy, spec=implemented)
 
 
+@pytest.mark.smoke_cells("test_option_policy_gates_are_fail_closed_biconditional[jax]")
 @pytest.mark.parametrize("name", _PREVIEW_NAMES)
 def test_option_policy_gates_are_fail_closed_biconditional(name: str) -> None:
     """save_grads/backward_ready/save_rng_states refuse in every flag state:
@@ -299,6 +301,7 @@ def test_record_bare_fastlog_flip_never_runs_torch_recorder() -> None:
         tl.release_model(model)
 
 
+@pytest.mark.smoke
 def test_record_foreign_fastlog_implementation_refuses() -> None:
     """A registered non-torch fastlog binding still refuses: record() only runs
     the torch Recorder and must not silently substitute it."""
@@ -316,6 +319,7 @@ def test_record_foreign_fastlog_implementation_refuses() -> None:
         tl.release_model(model)
 
 
+@pytest.mark.smoke
 def test_torch_capability_bindings_resolve() -> None:
     """Torch's declared True flags all resolve to real implementing surfaces."""
 
@@ -325,6 +329,7 @@ def test_torch_capability_bindings_resolve() -> None:
         assert require_capability_implementation(spec, flag) is not None
 
 
+@pytest.mark.smoke
 def test_runnable_producer_gate_reads_save_levels() -> None:
     """The runnable producer refusal keys on 'runnable' in save_levels."""
 
@@ -387,6 +392,7 @@ def test_backward_accessor_guard_without_derived_surface_has_no_redirect(
         raise_if_no_backward_capture(_StubTrace("tf"), plural_subject="backward_passes")
 
 
+@pytest.mark.smoke
 def test_backward_accessor_guard_torch_passes_unknown_refuses() -> None:
     """torch passes; an unregistered backend refuses typed instead of
     restoring the silently-empty accessor behavior the guard removed."""
@@ -455,6 +461,7 @@ def test_torch_flag_false_refuses_the_surface(flag: str, trace_kwargs: dict) -> 
         tl.release_model(model)
 
 
+@pytest.mark.smoke
 def test_torch_flag_false_refuses_capture_options_spelling() -> None:
     """The capture=CaptureOptions(...) spelling is gated by the same table."""
 

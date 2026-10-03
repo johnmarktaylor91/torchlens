@@ -22,7 +22,6 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-import pytest
 import torch
 import torch.nn as nn
 
@@ -31,8 +30,6 @@ from torchlens._runnable_execution import (
     _nondeterministic_value_sources,
     _uninit_taint_reaches,
 )
-
-pytestmark = pytest.mark.smoke
 
 _CAPTURE = {"capture": tl.options.CaptureOptions(intervention_ready=True)}
 

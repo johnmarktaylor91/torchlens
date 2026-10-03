@@ -28,8 +28,6 @@ from torch import nn
 import torchlens as tl
 from torchlens.data_classes.trace import Trace
 
-pytestmark = pytest.mark.smoke
-
 # Facade plumbing that legitimately owns no declared field (mirrors the
 # lockstep gate's allowance; kept local so this file stays self-contained).
 _FACADE_PLUMBING_ATTRS = frozenset({"_core", "_row", "_store", "_facets"})
@@ -131,6 +129,7 @@ def test_interrupted_capture_propagates_and_next_capture_is_clean() -> None:
     trace.cleanup()
 
 
+@pytest.mark.smoke
 def test_partial_diagnostics_survive_the_scrub() -> None:
     """Recovery stays intact: raw layers, nonfinite summary, DOT render."""
 

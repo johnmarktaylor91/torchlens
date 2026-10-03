@@ -144,7 +144,6 @@ class BufferLaunderBranch(nn.Module):
         return y - 10.0
 
 
-@pytest.mark.smoke
 def test_r77_fresh_parameter_launder_ceils_on_layout_twin(tmp_path: Path) -> None:
     """RED-now-fixed: the r76 Parameter-launder twin must ceiling, never false-VERIFY.
 
@@ -162,7 +161,6 @@ def test_r77_fresh_parameter_launder_ceils_on_layout_twin(tmp_path: Path) -> Non
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
-@pytest.mark.smoke
 def test_r77_fresh_parameter_launder_fails_closed_on_same_layout(tmp_path: Path) -> None:
     """Honest-ceiling posture pin: the launder model fails CLOSED even on the original input.
 
@@ -180,7 +178,6 @@ def test_r77_fresh_parameter_launder_fails_closed_on_same_layout(tmp_path: Path)
     assert result.report.poisoned
 
 
-@pytest.mark.smoke
 def test_r77_registered_param_wrap_stays_verified(tmp_path: Path) -> None:
     """Zero collateral: a REGISTERED/PREPPED param keeps its empty marker.
 
@@ -202,7 +199,6 @@ def test_r77_registered_param_wrap_stays_verified(tmp_path: Path) -> None:
     assert not twin.report.poisoned
 
 
-@pytest.mark.smoke
 def test_r77_prepped_param_mixed_chain_keeps_precise_witness(tmp_path: Path) -> None:
     """Zero collateral: a prepped param mixed into an input-rooted chain stays PRECISE.
 
@@ -223,7 +219,6 @@ def test_r77_prepped_param_mixed_chain_keeps_precise_witness(tmp_path: Path) -> 
     assert twin.report.poisoned
 
 
-@pytest.mark.smoke
 def test_r77_on_path_fresh_parameter_warns_and_refuses_at_save(tmp_path: Path) -> None:
     """Save-door posture: ON-PATH fresh-Parameter consumption now WARNS and still refuses.
 
@@ -241,7 +236,6 @@ def test_r77_on_path_fresh_parameter_warns_and_refuses_at_save(tmp_path: Path) -
         trace.save(tmp_path / "onpath.tlspec", level="runnable", include_weights=True)
 
 
-@pytest.mark.smoke
 def test_r77_buffer_control_stays_honest(tmp_path: Path) -> None:
     """Control: ``nn.Buffer`` (never exempted) keeps its honest behavior.
 

@@ -79,6 +79,7 @@ def test_trace_predicate_disk_only_rejects_keep_grad(tmp_path: Path) -> None:
         )
 
 
+@pytest.mark.smoke
 def test_trace_backward_ready_rejects_disk_only_storage(tmp_path: Path) -> None:
     """``backward_ready=True`` rejects disk-only predicate storage."""
 

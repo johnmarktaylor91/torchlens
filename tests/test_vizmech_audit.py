@@ -27,8 +27,6 @@ from torchlens.visualization._geometry_audit import (
     run_layout_json,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 class _FanStack(nn.Module):
     """N-way ``torch.stack`` fan-in: the argument-label known-bad."""

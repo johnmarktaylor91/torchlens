@@ -18,7 +18,6 @@ Leverage B4/B5 + surgery Build 0a/0b, one substrate:
 
 from __future__ import annotations
 
-import pytest
 import torch
 from torch import nn
 
@@ -63,7 +62,6 @@ def _capture_pair() -> tuple[tl.Trace, tl.Trace]:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_guarded_join_refuses_the_inserted_cohort() -> None:
     base, inserted = _capture_pair()
     rows = join_site_profiles(site_profile(base), site_profile(inserted))
@@ -92,7 +90,6 @@ def test_guarded_join_refuses_the_inserted_cohort() -> None:
     assert rows[fc1_key].joined
 
 
-@pytest.mark.smoke
 def test_parent_site_key_signature_change_is_visible() -> None:
     """The output-side consumer's parent SIGNATURE changes across the
     insertion (parent/child site-key agreement, review NEW-13's wording) --
@@ -114,7 +111,6 @@ def test_parent_site_key_signature_change_is_visible() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_manifest_carries_site_keys_and_compat_prints_site_diff(tmp_path) -> None:
     import os
 
@@ -157,7 +153,6 @@ def test_manifest_carries_site_keys_and_compat_prints_site_diff(tmp_path) -> Non
     assert drifted.diff.new_site_keys or drifted.diff.missing_site_keys
 
 
-@pytest.mark.smoke
 def test_spec_derived_disclosure_on_predicate_door_saves(tmp_path) -> None:
     """Leverage B7: a spec staged by the capture-time predicate door persists
     resolved labels only; the reload discloses spec_derived=True. Spec-door
@@ -192,7 +187,6 @@ def test_spec_derived_disclosure_on_predicate_door_saves(tmp_path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_align_to_survives_label_renumbering_via_corroborated_join() -> None:
     """A structurally-intact site whose LABEL renumbered still aligns: the
     label leaves the join key, and the corroborated guarded-join verdict

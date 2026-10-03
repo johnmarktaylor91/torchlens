@@ -92,7 +92,6 @@ def _warm_torchlens_wrapping() -> None:
     tl.trace(_CpuFactoryModel(), torch.randn(2, 4))
 
 
-@pytest.mark.smoke
 def test_meta_device_context_untraced_baseline() -> None:
     """Sanity: without TorchLens, the context produces meta tensors."""
     model = _MetaFactoryConsumerModel()
@@ -100,7 +99,6 @@ def test_meta_device_context_untraced_baseline() -> None:
     assert model.seen_devices == ["meta", "meta"]
 
 
-@pytest.mark.smoke
 def test_meta_device_context_factory_under_active_logging() -> None:
     """Factory + consumption inside ``torch.device('meta')`` works under trace.
 
@@ -172,7 +170,6 @@ def test_meta_factory_as_model_output_full_save() -> None:
     assert factory_layer.shape == (3, 4)
 
 
-@pytest.mark.smoke
 def test_cpu_default_unaffected_under_active_logging() -> None:
     """Without a device context, factory functions stay on CPU under trace."""
     model = _CpuFactoryModel()

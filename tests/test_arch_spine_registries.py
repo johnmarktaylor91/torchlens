@@ -24,8 +24,6 @@ from torchlens.visualization.renderer_registry import (
 )
 from torchlens.visualization.renderers.base import UnsupportedRendererCapabilityError
 
-pytestmark = pytest.mark.smoke
-
 
 @pytest.fixture(scope="module")
 def traced():

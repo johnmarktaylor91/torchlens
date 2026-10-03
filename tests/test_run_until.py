@@ -26,8 +26,6 @@ from torchlens.runnable import (
     TensorSlotRole,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 class _Chain(nn.Module):
     """Bare-tensor-output chain (the adversarial shape for the fork proof)."""
@@ -139,6 +137,7 @@ def test_live_truncation_leaves_source_outcome_complete():
     assert result.trace.outcome.status is full.trace.outcome.status
 
 
+@pytest.mark.smoke
 def test_live_truncation_leaves_no_halted_trace_registered():
     """No HALTED trace minted by a truncated live run is enumerable; the result IS.
 
@@ -282,6 +281,7 @@ def test_prefix_projection_never_loosens():
     assert result.report.truncated is True
 
 
+@pytest.mark.smoke
 def test_until_x_eval_bn_prefix_projection():
     """D18 composition: eval-BN sinks inside the prefix compare at full strength."""
 
@@ -390,6 +390,7 @@ def test_until_junk_form_refuses_typed():
     assert exc_info.value.fields["code"] == "run_until_form_invalid"
 
 
+@pytest.mark.smoke
 def test_until_substring_token_refuses_typed():
     """A substring token resolvable by ``trace[...]`` still refuses as an until= site.
 
@@ -421,6 +422,7 @@ def test_run_save_retention_reselects():
     assert result.trace["output_1"].out is not None
 
 
+@pytest.mark.smoke
 def test_run_save_outside_until_window_refuses_typed():
     """2.5 row: a save= target outside the executed closure refuses typed."""
 

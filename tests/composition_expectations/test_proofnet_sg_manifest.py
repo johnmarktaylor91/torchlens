@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = [pytest.mark.smoke, pytest.mark.compo]
+pytestmark = pytest.mark.compo
 
 
 #: Memo D12 fixture-economics license (test_galleries.py lint):

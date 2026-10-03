@@ -19,8 +19,6 @@ from torch import nn
 
 from torchlens._extraction import classify_callable
 
-pytestmark = pytest.mark.smoke
-
 _SCALE = 2.5
 
 
@@ -39,6 +37,7 @@ def _digest(fn) -> str:
 # --- legitimate transforms classify COMPLETE (false-refusal guard) -----------------
 
 
+@pytest.mark.smoke
 def test_legitimate_transforms_classify_complete() -> None:
     """The modal transform shapes all measure with nothing opaque."""
 
@@ -64,6 +63,7 @@ def test_legitimate_transforms_classify_complete() -> None:
         assert record["digest"].startswith("blake2b:")
 
 
+@pytest.mark.smoke
 def test_nn_module_and_bound_method_values_measure() -> None:
     """nn.Module callables fold forward + the D6 state digest."""
 
@@ -191,6 +191,7 @@ def test_set_closure_demotes_named() -> None:
     assert any("set_unordered" in ref for ref in record["opaque_references"])
 
 
+@pytest.mark.smoke
 def test_self_referential_container_demotes_never_recurses() -> None:
     """A cyclic closure container demotes with a named cycle, never crashes."""
 
@@ -237,6 +238,7 @@ def test_non_allowlisted_module_demotes_named() -> None:
     assert any("module(wave)" in ref for ref in record["opaque_references"])
 
 
+@pytest.mark.smoke
 def test_opaque_instance_demotes_named() -> None:
     """An arbitrary object global demotes with its type named."""
 

@@ -20,8 +20,6 @@ from torch import nn
 import torchlens as tl
 from torchlens.bridge import _utils as bridge_utils
 
-pytestmark = pytest.mark.smoke
-
 
 class _ConvNet(nn.Module):
     """Small conv model with addressable modules."""
@@ -47,6 +45,7 @@ def conv_log():
     return log
 
 
+@pytest.mark.smoke
 def test_bridge_namespace_lazily_imports_and_rejects_unknown_names() -> None:
     """torchlens.bridge exposes adapters lazily and refuses unknown attributes."""
 
@@ -59,6 +58,7 @@ def test_bridge_namespace_lazily_imports_and_rejects_unknown_names() -> None:
         _ = bridge.does_not_exist
 
 
+@pytest.mark.smoke
 def test_bridge_utils_error_contracts(conv_log) -> None:
     """source_model/out_at/first_input_tensor fail with actionable errors."""
 
@@ -77,6 +77,7 @@ def test_bridge_utils_error_contracts(conv_log) -> None:
     assert not any(layer.is_input for layer in layers)
 
 
+@pytest.mark.smoke
 def test_gradcam_layer_resolves_self_addresses_and_site_fallback(conv_log) -> None:
     """layer() honors 'self', module addresses, resolved sites, and refusals."""
 
@@ -92,6 +93,7 @@ def test_gradcam_layer_resolves_self_addresses_and_site_fallback(conv_log) -> No
         gradcam.layer(conv_log, conv_log["input_1"])
 
 
+@pytest.mark.smoke
 def test_gradcam_cam_runs_context_manager_runner_with_resolved_inputs(
     conv_log, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -140,6 +142,7 @@ def test_gradcam_missing_dependency_names_extra(conv_log, monkeypatch: pytest.Mo
         gradcam.cam(conv_log, "conv")
 
 
+@pytest.mark.smoke
 def test_sae_lens_bridge_dispatches_encode_decode_and_refuses_junk(
     conv_log, monkeypatch: pytest.MonkeyPatch
 ) -> None:

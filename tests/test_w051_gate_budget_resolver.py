@@ -21,8 +21,6 @@ import torchlens as tl
 from torchlens.data_classes.trace import Trace
 from torchlens.visualization import lenses
 
-pytestmark = pytest.mark.smoke
-
 
 @pytest.fixture
 def tiny_log() -> Any:

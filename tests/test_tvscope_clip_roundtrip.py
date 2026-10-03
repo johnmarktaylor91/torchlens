@@ -21,7 +21,7 @@ import torchlens as tl  # noqa: E402
 import torchlens.inventory as inv  # noqa: E402
 from tests.real_model.r0.families import FAMILY_BY_NAME  # noqa: E402
 
-pytestmark = [pytest.mark.smoke, pytest.mark.real_model]
+pytestmark = pytest.mark.real_model
 
 _PROJECTED_SITE = "vision_model.post_layernorm"
 

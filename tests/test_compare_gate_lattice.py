@@ -23,8 +23,6 @@ import torchlens as tl
 from torchlens.intervention.errors import BundleRelationshipError
 from torchlens.intervention.types import Relationship
 
-pytestmark = pytest.mark.smoke
-
 _OPTS = tl.options.CaptureOptions(intervention_ready=True)
 
 

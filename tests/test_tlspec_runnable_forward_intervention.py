@@ -55,7 +55,6 @@ def _capture(model: nn.Module, value: torch.Tensor, **kwargs: object) -> tl.Trac
     )
 
 
-@pytest.mark.smoke
 def test_forward_override_intervention_refuses_runnable_save(tmp_path: Path) -> None:
     """A zero-ablated capture refuses runnable save with a named diagnostic.
 
@@ -110,7 +109,6 @@ def test_forward_override_with_activations_also_refuses(tmp_path: Path) -> None:
     assert not path.exists()
 
 
-@pytest.mark.smoke
 def test_plain_capture_still_verifies(tmp_path: Path) -> None:
     """A non-intervened capture is unchanged: VERIFIED (+ ATTESTED with activations)."""
 

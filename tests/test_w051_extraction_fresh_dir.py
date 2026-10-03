@@ -26,7 +26,6 @@ def _model() -> nn.Module:
     return nn.Sequential(nn.Linear(3, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
 
 
-@pytest.mark.smoke
 def test_fresh_run_sweeps_higher_index_stale_shards(tmp_path: Path) -> None:
     """p11_stale: 4 shards, then a fresh 2-shard run -> exactly 2 shard files remain."""
 
@@ -60,7 +59,6 @@ def test_fresh_run_sweeps_higher_index_stale_shards(tmp_path: Path) -> None:
     assert reader.verify_all()["crc_checked"] == 2
 
 
-@pytest.mark.smoke
 def test_fresh_run_sweeps_the_other_native_format_too(tmp_path: Path) -> None:
     model = _model()
     extract_dataset(

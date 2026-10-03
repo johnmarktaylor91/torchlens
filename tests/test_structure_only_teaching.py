@@ -28,8 +28,6 @@ from torchlens.capture.structure_only import (
 from torchlens.options import CaptureOptions
 from torchlens.utils._torch_compat import get_meta_item_guard_support
 
-smoke = pytest.mark.smoke
-
 STRUCTURE = CaptureOptions(structure_only=True)
 
 
@@ -123,7 +121,6 @@ _CONSUMER_CASES = [
 
 
 @pytest.mark.parametrize(("model_cls", "expected_kind"), _CONSUMER_CASES)
-@smoke
 def test_value_branch_refuses_with_consumer_kind_and_user_line(
     model_cls: type, expected_kind: str
 ) -> None:
@@ -148,7 +145,6 @@ def test_value_branch_refuses_with_consumer_kind_and_user_line(
     } or offense["escape_method"].startswith("torch.")
 
 
-@smoke
 def test_device_neutral_real_tensor_refusal_carries_substrate_real() -> None:
     """sol r2 B1: a REAL tensor driving a value branch refuses identically —
     a value-selected graph must never launder as structure-only."""
@@ -172,14 +168,13 @@ class MetaContextBranch(nn.Module):
         return h
 
 
-@smoke
+@pytest.mark.smoke
 def test_meta_tensor_refusal_carries_substrate_meta() -> None:
     with pytest.raises(ValueDependentBranchError) as excinfo:
         _structure_trace(MetaContextBranch(), torch.randn(2, 4))
     assert excinfo.value.fields["offenses"][0]["substrate"] == "meta"
 
 
-@smoke
 def test_float_truthiness_gate_is_lifted_in_mode_only() -> None:
     """The dtype-is-bool gate stays a documented false negative on the
     DEFAULT path (its own pinning test governs); in-mode the escalated belt
@@ -193,7 +188,6 @@ def test_float_truthiness_gate_is_lifted_in_mode_only() -> None:
     assert log.structure_only is False
 
 
-@smoke
 def test_internal_frame_reads_do_not_trip_the_belt() -> None:
     """PROVENANCE carve: torchlens internals touch real-tensor storage during
     an E-1 capture (aliasing/dedup/hashing) with the belt armed — a
@@ -235,7 +229,7 @@ _HELPER_LINE = next(
 )
 
 
-@smoke
+@pytest.mark.smoke
 def test_missing_meta_kernel_refuses_typed_at_the_helper_line() -> None:
     """sol r2 M2: the traceback walk takes the INNERMOST external frame — the
     helper's failing line, never the outer forward callsite."""
@@ -255,7 +249,7 @@ class UserRaisesNIE(nn.Module):
         raise NotImplementedError("user's own refusal")
 
 
-@smoke
+@pytest.mark.smoke
 def test_user_raised_notimplementederror_propagates_unchanged() -> None:
     """C-HONESTY: user exceptions stay user exceptions — annotated (3.11+)
     or warned (3.10), never wrapped."""
@@ -278,7 +272,6 @@ class UnenumeratedMetaDeath(nn.Module):
         return torch.tensor(m.tolist()), x
 
 
-@smoke
 def test_backstop_types_meta_deaths_the_belt_enumerates_or_not() -> None:
     """An unenumerated meta-mechanism death is typed via the backstop; the
     enumerated tolist spelling is caught by Layer 1 first (belt precedence).
@@ -310,7 +303,7 @@ def _neutralize_layer2(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-@smoke
+@pytest.mark.smoke
 @pytest.mark.skipif(
     not get_meta_item_guard_support(),
     reason="torch 2.1-2.2 have no Tensor.item()-cannot-be-called-on-meta-tensors guard: "
@@ -327,7 +320,6 @@ def test_layer2_backstop_catches_when_layer1_is_dead(
     assert excinfo.value.fields["consumer_kind"] == "unclassified_escape"
 
 
-@smoke
 def test_layer1_belt_catches_when_layer2_is_dead(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -337,7 +329,6 @@ def test_layer1_belt_catches_when_layer2_is_dead(
     assert excinfo.value.fields["consumer_kind"] == "if_test"
 
 
-@smoke
 def test_both_layers_dead_returns_the_bare_torch_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -356,7 +347,6 @@ def test_both_layers_dead_returns_the_bare_torch_error(
 # ---------------------------------------------------------------------------
 
 
-@smoke
 def test_escape_surface_is_the_union_of_all_five_constituents() -> None:
     from torchlens.backends.torch.completeness_witness import (
         HOST_VALUE_ESCAPE_METHODS,
@@ -382,7 +372,6 @@ def test_escape_surface_is_the_union_of_all_five_constituents() -> None:
     )
 
 
-@smoke
 def test_install_census_every_surface_member_is_escalated_in_mode() -> None:
     import inspect as inspect_module
 
@@ -416,7 +405,7 @@ def test_install_census_every_surface_member_is_escalated_in_mode() -> None:
         assert getattr(torch, name, None) is original, f"torch.{name}"
 
 
-@smoke
+@pytest.mark.smoke
 def test_teaching_refusals_fire_identically_under_predicate_composition() -> None:
     """Memo 2.5 combination row: composing the mode with a (value-free)
     predicate surface must not soften the belts."""

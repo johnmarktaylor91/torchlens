@@ -15,10 +15,6 @@ import ast
 import re
 from pathlib import Path
 
-import pytest
-
-pytestmark = [pytest.mark.smoke]
-
 GALLERY_DIR = Path(__file__).resolve().parent
 REPO_ROOT = GALLERY_DIR.parents[1]
 MANIFEST = GALLERY_DIR / "rg_passed_ids.txt"

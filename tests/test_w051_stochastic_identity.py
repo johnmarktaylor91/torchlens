@@ -50,7 +50,6 @@ def _fixture() -> tuple[tl.Trace, list[tl.Trace]]:
     return subject, donors
 
 
-@pytest.mark.smoke
 def test_address_identity_ignores_object_identity() -> None:
     """Two populations over EQUAL captures share one identity; the object address never enters."""
 

@@ -19,8 +19,6 @@ from torch import nn
 import torchlens as tl
 from torchlens.export._model_explorer._diff import _sync_navigation
 
-pytestmark = pytest.mark.smoke
-
 
 class _Net(nn.Module):
     """Small perturbable chain."""
@@ -60,6 +58,7 @@ def diff_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
         reference_log.cleanup()
 
 
+@pytest.mark.smoke
 def test_diff_writes_both_targets_and_manifest(diff_dir: Path) -> None:
     """The product carries paired collections, per-pane data, and config."""
 

@@ -20,8 +20,6 @@ from torchlens.validation import invariants as _invariants
 from torchlens.validation.diagnostics import CHECK_METADATA_INVARIANT, last_validation_failure
 from torchlens.validation.invariants import MetadataInvariantError
 
-pytestmark = pytest.mark.smoke
-
 
 class _Tiny(nn.Module):
     def __init__(self) -> None:

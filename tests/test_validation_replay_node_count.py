@@ -10,15 +10,12 @@ replays (b1-fable round-2 F1).
 
 from __future__ import annotations
 
-import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
 from torchlens.validation import core as validation_core
 from torchlens.validation.core import ValidationDecisionRecorder
-
-pytestmark = pytest.mark.smoke
 
 
 def _recorder_with_no_interior_replays() -> ValidationDecisionRecorder:

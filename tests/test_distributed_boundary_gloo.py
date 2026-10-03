@@ -330,7 +330,7 @@ class TestBoundaryNode:
 
 
 class TestWitnessPolicy:
-    pytestmark = [pytest.mark.smoke, requires_vetted_snapshot]
+    pytestmark = requires_vetted_snapshot
 
     def test_digest_witness_records_byte_exact_digests(self, gloo_world):
         from torchlens.backends.torch.collectives import _digest_tensor
@@ -406,7 +406,7 @@ class TestWitnessPolicy:
 
 
 class TestReplayRefusals:
-    pytestmark = [pytest.mark.smoke, requires_vetted_snapshot]
+    pytestmark = requires_vetted_snapshot
     """A collective-crossing rank core refuses runnable save + forward replay.
 
     Design v5 3.4: re-issuing a collective outside its communicator hangs or

@@ -16,9 +16,8 @@ from torch import nn
 
 import torchlens as tl
 
-pytestmark = pytest.mark.smoke
 
-
+@pytest.mark.smoke
 def test_mean_and_norm_handle_empty_updates_and_report_nan_when_unfed() -> None:
     """Empty batches are ignored and unfed accumulators report NaN."""
 
@@ -34,6 +33,7 @@ def test_mean_and_norm_handle_empty_updates_and_report_nan_when_unfed() -> None:
     assert math.isnan(norm.result())
 
 
+@pytest.mark.smoke
 def test_quantile_reservoir_stays_bounded_and_estimates_within_range() -> None:
     """A tiny reservoir keeps streaming and estimates stay inside the data range."""
 
@@ -71,6 +71,7 @@ def test_covariance_accepts_one_dimensional_rows_and_degenerate_counts() -> None
     assert torch.allclose(streamed.result(), torch.cov(stacked.T))
 
 
+@pytest.mark.smoke
 def test_cross_covariance_edge_semantics() -> None:
     """Scalar inputs refuse, 1-d rows unsqueeze, and feature widths are pinned."""
 
@@ -89,6 +90,7 @@ def test_cross_covariance_edge_semantics() -> None:
         cross.update(torch.ones(1, 2), torch.ones(1, 7))
 
 
+@pytest.mark.smoke
 def test_streaming_cka_zero_variance_is_nan_and_one_shot_rejects_mismatched_rows() -> None:
     """Zero-variance representations report NaN; row mismatch raises."""
 
@@ -110,6 +112,7 @@ def test_pca_without_updates_returns_empty_shapes() -> None:
     assert result["explained_variance"].shape == (0,)
 
 
+@pytest.mark.smoke
 def test_aggregator_disambiguates_duplicate_stat_keys() -> None:
     """Two unnamed stats of one class get index-suffixed result keys."""
 
@@ -128,6 +131,7 @@ def test_aggregate_rejects_unknown_target() -> None:
         tl.aggregate(nn.Linear(2, 1), [torch.ones(1, 2)], {"output": tl.stats.Mean()}, target="w")
 
 
+@pytest.mark.smoke
 def test_aggregate_unmatched_selector_raises_key_error() -> None:
     """A selector that matches no saved out fails with a clear KeyError."""
 
@@ -192,6 +196,7 @@ class _BranchingModel(nn.Module):
         return y + z
 
 
+@pytest.mark.smoke
 def test_aggregate_fast_path_falls_back_exactly_on_fingerprint_drift() -> None:
     """A branch change after plan compilation re-traces the batch exactly."""
 
@@ -212,6 +217,7 @@ def test_aggregate_fast_path_falls_back_exactly_on_fingerprint_drift() -> None:
     assert result["output"] == pytest.approx(float(expected_output.mean().item()))
 
 
+@pytest.mark.smoke
 def test_aggregate_grad_accepts_list_batches_and_unmatched_grad_selector_raises() -> None:
     """List-shaped (input, target) batches split for the loss; bad grad selectors refuse."""
 

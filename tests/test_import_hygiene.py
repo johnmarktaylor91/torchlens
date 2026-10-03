@@ -413,7 +413,6 @@ assert collisions == {
 """
 
 
-@pytest.mark.smoke
 def test_bare_import_pulls_no_heavy_third_party_dependency(
     import_facts: dict[str, object],
 ) -> None:
@@ -434,7 +433,6 @@ def test_bare_import_pulls_no_heavy_third_party_dependency(
     )
 
 
-@pytest.mark.smoke
 def test_eager_module_set_is_exactly_the_declared_allowlist(
     import_facts: dict[str, object],
 ) -> None:
@@ -451,7 +449,6 @@ def test_eager_module_set_is_exactly_the_declared_allowlist(
     assert not removed, f"these modules are no longer eager (good -- delete their rows): {removed}"
 
 
-@pytest.mark.smoke
 def test_bare_import_adds_few_foreign_modules(import_facts: dict[str, object]) -> None:
     """A bare import adds few non-torchlens modules beyond torch (R31-1b).
 
@@ -466,7 +463,6 @@ def test_bare_import_adds_few_foreign_modules(import_facts: dict[str, object]) -
     )
 
 
-@pytest.mark.smoke
 def test_bare_import_stays_within_its_duration_budget(
     import_facts: dict[str, object],
 ) -> None:
@@ -491,7 +487,6 @@ def test_bare_import_stays_within_its_duration_budget(
     )
 
 
-@pytest.mark.smoke
 def test_bare_import_stays_within_its_rss_budget(
     import_facts: dict[str, object],
 ) -> None:
@@ -514,7 +509,6 @@ def test_bare_import_stays_within_its_rss_budget(
     )
 
 
-@pytest.mark.smoke
 def test_bare_import_leaves_torch_namespaces_untouched(
     import_facts: dict[str, object],
 ) -> None:
@@ -542,7 +536,6 @@ def test_bare_import_leaves_torch_namespaces_untouched(
     )
 
 
-@pytest.mark.smoke
 def test_torchlens_top_level_surface_has_no_stray_public_names(
     import_facts: dict[str, object],
 ) -> None:
@@ -564,7 +557,6 @@ def test_torchlens_top_level_surface_has_no_stray_public_names(
     assert not healed, f"these legacy names are gone (good) -- delete their ledger rows: {healed}"
 
 
-@pytest.mark.smoke
 def test_every_lazy_facade_target_is_actually_deferred(
     import_facts: dict[str, object],
 ) -> None:
@@ -589,7 +581,6 @@ def test_every_lazy_facade_target_is_actually_deferred(
     assert not healed, f"now properly deferred (delete their rows): {healed}"
 
 
-@pytest.mark.smoke
 def test_bare_import_is_warning_clean() -> None:
     """A bare import emits no warnings at all (R31-1e).
 
@@ -647,7 +638,6 @@ def test_lazified_module_direct_import_patterns(module_name: str, member_name: s
     )
 
 
-@pytest.mark.smoke
 def test_bare_import_defers_lazified_feature_modules() -> None:
     """Bare imports must not eagerly initialize the deferred feature islands."""
 
@@ -660,7 +650,6 @@ def test_bare_import_defers_lazified_feature_modules() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_bare_import_leaves_torch_functions_undecorated() -> None:
     """Bare TorchLens import must not eagerly wrap torch operators."""
 
@@ -689,7 +678,6 @@ def test_first_trace_lazily_wraps_torch_functions() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_import_torchlens_does_not_import_torchvision_when_installed() -> None:
     """Bare TorchLens import should not import torchvision even when installed."""
 
@@ -702,7 +690,6 @@ def test_import_torchlens_does_not_import_torchvision_when_installed() -> None:
     _run_import_script_capturing("import torchlens, sys; assert 'torchvision' not in sys.modules")
 
 
-@pytest.mark.smoke
 def test_import_torchlens_does_not_import_heavy_torch_submodules() -> None:
     """Bare TorchLens import should not force deferred torch internals."""
 

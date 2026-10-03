@@ -163,28 +163,27 @@ def branchy_trace():
         trace.cleanup()
 
 
+@pytest.mark.smoke_cells("test_parity_reused_block[auto-unrolled]")
 @pytest.mark.parametrize("vis_mode", ["unrolled", "rolled"])
 @pytest.mark.parametrize("mode", ["auto", "max"])
-@pytest.mark.smoke
 def test_parity_reused_block(reused_trace: tl.Trace, vis_mode: str, mode: str) -> None:
     assert_three_way_parity(reused_trace, vis_mode, mode)
 
 
+@pytest.mark.smoke_cells("test_parity_separate_blocks[auto-rolled]")
 @pytest.mark.parametrize("vis_mode", ["unrolled", "rolled"])
 @pytest.mark.parametrize("mode", ["auto", "max"])
-@pytest.mark.smoke
 def test_parity_separate_blocks(separate_trace: tl.Trace, vis_mode: str, mode: str) -> None:
     assert_three_way_parity(separate_trace, vis_mode, mode)
 
 
+@pytest.mark.smoke_cells("test_parity_branchy_cat[auto-rolled]")
 @pytest.mark.parametrize("vis_mode", ["unrolled", "rolled"])
 @pytest.mark.parametrize("mode", ["auto", "max"])
-@pytest.mark.smoke
 def test_parity_branchy_cat(branchy_trace: tl.Trace, vis_mode: str, mode: str) -> None:
     assert_three_way_parity(branchy_trace, vis_mode, mode)
 
 
-@pytest.mark.smoke
 def test_box_pricing_counts_per_call_units(reused_trace: tl.Trace) -> None:
     # M2a witness: selecting the reused block as a box renders one box PER
     # CALL on the unrolled view. The plan realized for an explicit selection
@@ -200,7 +199,6 @@ def test_box_pricing_counts_per_call_units(reused_trace: tl.Trace) -> None:
     assert len(box_calls) >= 3
 
 
-@pytest.mark.smoke
 def test_floor_fallback_is_disclosed_typed() -> None:
     # F9 (memo D4): a floor-fallback result carries the typed disclosure
     # fields; the frontier planner stamps the default.
@@ -224,7 +222,6 @@ class _RootFanModel(torch.nn.Module):
         return tuple(x + float(index) for index in range(70))
 
 
-@pytest.mark.smoke
 def test_near_uncollapsed_auto_plan_is_disclosed(tmp_path) -> None:
     # The measured silent-contract-violation shape (memo D4): a boundary
     # fan-out flood makes collapse="auto" return essentially the ENTIRE
@@ -245,7 +242,6 @@ def test_near_uncollapsed_auto_plan_is_disclosed(tmp_path) -> None:
         )
 
 
-@pytest.mark.smoke
 def test_floor_fallback_result_is_typed_and_visible(tmp_path, monkeypatch) -> None:
     # F9 unit wiring: when the DP frontier empties, the result must carry
     # planner="floor_fallback" + the K_CAP diagnosis, the draw must warn,

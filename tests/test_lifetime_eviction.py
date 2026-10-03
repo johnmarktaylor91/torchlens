@@ -19,13 +19,10 @@ from __future__ import annotations
 import gc
 import weakref
 
-import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
-
-pytestmark = pytest.mark.smoke
 
 
 class _StackNet(nn.Module):

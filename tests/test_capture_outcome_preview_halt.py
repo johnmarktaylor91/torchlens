@@ -29,8 +29,6 @@ from fixtures.capture_outcome_models import ThreeStageModel, halt_on_relu
 import torchlens as tl
 from torchlens.capture.outcome import CaptureStatus, outcome_for, stamp_backend_finalized
 
-pytestmark = pytest.mark.smoke
-
 TORCHLENS_DIR = pathlib.Path(tl.__file__).resolve().parent
 
 

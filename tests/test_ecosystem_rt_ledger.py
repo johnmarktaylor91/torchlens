@@ -94,7 +94,6 @@ def test_historical_bridge_reader_rows_carry_evidence() -> None:
         assert "migrate v1 does not support" in remedy
 
 
-@pytest.mark.smoke
 def test_v216_refusal_names_verified_reader_not_false_range(corpus_dir: Path) -> None:
     """The genuine v2.16 bundle refuses with the 2.17.0 remedy (defect 5 fixed)."""
 
@@ -111,7 +110,6 @@ def test_v216_refusal_names_verified_reader_not_false_range(corpus_dir: Path) ->
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_lawful_released_artifacts_load(corpus_dir: Path) -> None:
     """Defect 4 fixed: genuine v2.31.0/v2.32.4 artifacts load under main."""
 
@@ -120,7 +118,6 @@ def test_lawful_released_artifacts_load(corpus_dir: Path) -> None:
         assert isinstance(loaded, tl.Trace), name
 
 
-@pytest.mark.smoke
 def test_governed_windows() -> None:
     """The governed (writer, stamp) relation matches the measured history."""
 
@@ -134,7 +131,6 @@ def test_governed_windows() -> None:
     assert governed_stamps_for_writer("2.33.0") == frozenset({6})
 
 
-@pytest.mark.smoke
 def test_forged_pair_refuses_typed(corpus_dir: Path, tmp_path: Path) -> None:
     """An ungoverned pair refuses with the stable ledger code."""
 
@@ -181,7 +177,6 @@ def test_compat_window_report_shape() -> None:
     assert "2.31.0" in markdown
 
 
-@pytest.mark.smoke
 def test_promised_until_renders_pending_fork_honestly() -> None:
     """No date is invented while FORK F1 is unadjudicated / rows unretired."""
 
@@ -195,7 +190,6 @@ def test_promised_until_renders_pending_fork_honestly() -> None:
             assert rendered.startswith("not-promised")
 
 
-@pytest.mark.smoke
 def test_dev_build_identity_row_is_generated_not_curated() -> None:
     """The current-runtime row stamps dev-build identity at call time."""
 
@@ -206,7 +200,6 @@ def test_dev_build_identity_row_is_generated_not_curated() -> None:
     assert row.writer_contract_digest is not None
 
 
-@pytest.mark.smoke
 def test_genuine_v216_detection(corpus_dir: Path) -> None:
     """detect_tlspec_format classifies the GENUINE v2.16 spellings (G7)."""
 

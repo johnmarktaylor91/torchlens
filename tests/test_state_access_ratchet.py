@@ -119,7 +119,6 @@ def test_state_raw_access_count_never_grows() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_declared_policy_and_accessor_exist() -> None:
     """The exemption declaration and the sanctioned accessor stay in lockstep."""
 
@@ -132,7 +131,6 @@ def test_declared_policy_and_accessor_exist() -> None:
     assert enabled is False
 
 
-@pytest.mark.smoke
 def test_active_capture_snapshot_tracks_live_session() -> None:
     """The accessor reflects an active capture and resets after it."""
 

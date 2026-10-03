@@ -22,8 +22,6 @@ from torchlens.runnable import (
 )
 from torchlens.utils._torch_compat import HAS_NAMED_TENSOR_API
 
-pytestmark = pytest.mark.smoke
-
 
 class _AddOneModel(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:

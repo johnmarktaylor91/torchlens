@@ -22,8 +22,6 @@ pd = pytest.importorskip("pandas")
 
 import torchlens as tl  # noqa: E402
 
-pytestmark = pytest.mark.smoke
-
 
 def _small_trace() -> Any:
     """Return a deterministic two-layer trace."""
@@ -207,6 +205,7 @@ def _stub_xarray(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
     return captured
 
 
+@pytest.mark.smoke
 def test_xarray_flattens_scalar_vector_and_matrix_outs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -242,6 +241,7 @@ def test_xarray_flattens_scalar_vector_and_matrix_outs(
     assert array_2.coords["presentation"] == [0, 1]
 
 
+@pytest.mark.smoke
 def test_xarray_rejects_mismatched_presentation_counts_and_empty_logs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

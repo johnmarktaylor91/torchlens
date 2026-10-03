@@ -31,8 +31,6 @@ from torchlens.report import (
     position_scaling_class,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 class NestedModel(nn.Module):
     """Two-deep module nesting: the naive-module-sum trap (T-ROOT)."""
@@ -127,6 +125,7 @@ def test_honesty_vocabulary_and_qualifiers(nested_trace) -> None:
     assert boundary["time"] == "not_applicable"
 
 
+@pytest.mark.smoke
 def test_honesty_as_summary_and_inline_evidence(nested_trace) -> None:
     """honesty(as_summary=True) is the disclosure line; to_pandas(evidence=True)
     interleaves per-cell evidence columns (D9's inline form, on the export door)."""
@@ -141,6 +140,7 @@ def test_honesty_as_summary_and_inline_evidence(nested_trace) -> None:
     assert columns.index("time_evidence") == columns.index("time") + 1
 
 
+@pytest.mark.smoke
 def test_honesty_aggregation_preserves_weakest_evidence(sdpa_trace) -> None:
     """D2: a rollup row holding an estimated member never upgrades to exact."""
 
@@ -205,6 +205,7 @@ def test_module_self_family_sums_to_partition_total_not_naive(nested_trace) -> N
     assert naive_sum > partition_total  # nested modules double-count inclusively
 
 
+@pytest.mark.smoke
 def test_profile_totals_row_and_instrumented_label(nested_trace) -> None:
     """sumfam item 12: the explicit totals row and the instrumented label."""
 
@@ -217,6 +218,7 @@ def test_profile_totals_row_and_instrumented_label(nested_trace) -> None:
     assert frame.attrs["time_basis"] == "instrumented"
 
 
+@pytest.mark.smoke
 def test_call_children_sum_to_parent(nested_trace) -> None:
     """sumfam item 12 children-sum CI: per additive column, the members'
     self mass plus remainder equals the whole (conservation)."""
@@ -263,6 +265,7 @@ def test_cost_tree_parent_child_conservation(nested_trace) -> None:
         assert (row.subtree_flops or 0) == own + child_sum, row.row_id
 
 
+@pytest.mark.smoke
 def test_cost_tree_top_k_emits_remainder_and_receipt(nested_trace) -> None:
     """D8/D6: hidden mass lands in a deterministic REMAINDER row and the
     display receipt; the denominator never shrinks."""
@@ -276,6 +279,7 @@ def test_cost_tree_top_k_emits_remainder_and_receipt(nested_trace) -> None:
     assert additive_sum == view.partition_total
 
 
+@pytest.mark.smoke
 def test_cost_tree_depth_cutoff_conserves(nested_trace) -> None:
     """D8: conservation is exact under depth cutoff."""
 
@@ -313,6 +317,7 @@ def test_backward_unknown_when_enabled_but_unobserved(nested_trace) -> None:
     assert status.state in BACKWARD_STATES
 
 
+@pytest.mark.smoke
 def test_backward_estimate_is_named_door_and_hypothetical(nograd_trace) -> None:
     """T-GRAD: the counterfactual requires its named door, is labeled
     hypothetical, and discloses the freeze pattern + grad-disabled caveat."""
@@ -364,6 +369,7 @@ def test_flops_report_6nd_absent_without_main_input(nested_trace) -> None:
     assert "6ND" not in str(report)
 
 
+@pytest.mark.smoke
 def test_flops_report_6nd_present_with_explicit_d(nested_trace) -> None:
     """D11: an explicit D renders the comparator with N from the dedup
     parameter identity and D counting pads."""
@@ -375,6 +381,7 @@ def test_flops_report_6nd_present_with_explicit_d(nested_trace) -> None:
     assert "pads counted" in str(report)
 
 
+@pytest.mark.smoke
 def test_flops_report_model_door_restores_state() -> None:
     """D10: the model door runs ONE capture under the summary execution
     contract -- training flags and RNG restored bit-identically."""
@@ -401,6 +408,7 @@ def test_flops_report_trace_door_refuses_inputs(nested_trace) -> None:
 # Position scaling + padding waste (costreport item 10, D12)
 
 
+@pytest.mark.smoke
 def test_position_scaling_closed_forms() -> None:
     """The class-split estimator matches the closed forms per class."""
 
@@ -467,6 +475,7 @@ def test_unknown_ops_disclosed_as_events_never_percent(nested_trace) -> None:
 # Every new code ships provoked (error-code coverage gate)
 
 
+@pytest.mark.smoke
 def test_view_argument_codes_are_provoked(nested_trace) -> None:
     """Provoke cost_tree_top_k_invalid, cost_tree_depth_invalid,
     padding_waste_length_invalid, padding_waste_lengths_invalid,

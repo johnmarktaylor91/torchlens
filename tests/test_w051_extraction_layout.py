@@ -28,8 +28,6 @@ from torchlens.dataset_extraction import (
     load_extraction,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 class _Tok(nn.Module):
     def __init__(self) -> None:

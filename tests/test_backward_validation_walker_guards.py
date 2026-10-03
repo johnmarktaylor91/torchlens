@@ -18,8 +18,6 @@ from torchlens._errors import InvalidArgumentError
 from torchlens._input_walk import INPUT_TREE_MAX_DEPTH
 from torchlens.validation.backward import _clone_inputs_with_grad, _sum_tensors
 
-pytestmark = pytest.mark.smoke
-
 
 def _deep_list(depth: int, leaf: object) -> object:
     """Build one ``depth``-level nested list around ``leaf``."""
@@ -86,6 +84,7 @@ class TestCloneInputsWithGrad:
 class TestSumTensors:
     """DAG/cycle/depth behavior of the default backward-validation loss."""
 
+    @pytest.mark.smoke
     def test_shared_subtree_sum_is_occurrence_weighted(self):
         """The memoized sum equals the historical occurrence-weighted value."""
 

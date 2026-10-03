@@ -17,8 +17,6 @@ import pytest
 import torchlens as tl
 from torchlens._errors import FacadeTeachingError
 
-pytestmark = pytest.mark.smoke
-
 #: The removed shims the audit named explicitly (AUD-CODE 3.14).
 #: The two paper-era 1.x names the audit also listed (the pre-2.0 capture verb
 #: and the pre-2.0 log class) are pinned in tests/test_w051_capt3_paper_era_redirects.py,

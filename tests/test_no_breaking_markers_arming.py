@@ -25,8 +25,6 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = pytest.mark.smoke
-
 _SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "check_no_breaking_markers.py"
 
 _ZEROS = "0" * 40

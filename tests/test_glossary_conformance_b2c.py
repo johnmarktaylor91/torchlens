@@ -3,7 +3,6 @@
 import re
 from pathlib import Path
 
-import pytest
 import torch
 from torch import nn
 
@@ -35,7 +34,6 @@ def _make_trace(capture: CaptureOptions | None = None) -> tl.Trace:
     return tl.trace(model, x, capture=capture)
 
 
-@pytest.mark.smoke
 def test_trace_parent_and_root_trace_resolve_fork_lineage() -> None:
     """Trace parent/root properties resolve the legacy parent_run weakrefs."""
 
@@ -51,7 +49,6 @@ def test_trace_parent_and_root_trace_resolve_fork_lineage() -> None:
     assert grandchild.root_trace is root
 
 
-@pytest.mark.smoke
 def test_trace_source_introspection_fields_are_captured() -> None:
     """Trace exposes source model docstrings and signatures."""
 
@@ -64,7 +61,6 @@ def test_trace_source_introspection_fields_are_captured() -> None:
     assert trace.forward_docstring == _B2cModel.forward.__doc__
 
 
-@pytest.mark.smoke
 def test_grad_fn_calls_accessor_and_call_savedness() -> None:
     """GradFn.calls replaces ops and GradFnCall.is_saved mirrors saved grad payloads."""
 
@@ -80,7 +76,6 @@ def test_grad_fn_calls_accessor_and_call_savedness() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_module_boundary_fields_are_populated_from_calls() -> None:
     """Module aggregate input/output fields are derived from ModuleCall boundaries."""
 
@@ -95,7 +90,6 @@ def test_module_boundary_fields_are_populated_from_calls() -> None:
     assert module.output_structure == call.output_structure
 
 
-@pytest.mark.smoke
 def test_trace_layers_to_save_public_view() -> None:
     """Trace.layers_to_save exposes saved Op labels instead of raw indexes."""
 
@@ -109,7 +103,6 @@ def test_trace_layers_to_save_public_view() -> None:
     assert all(label in selected_trace.op_labels for label in selected_trace.layers_to_save)
 
 
-@pytest.mark.smoke
 def test_receptive_field_docs_conform_to_public_surface() -> None:
     """Keep documented RF names in lockstep and reject stale shorthand names."""
 

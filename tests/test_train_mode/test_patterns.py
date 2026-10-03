@@ -123,7 +123,6 @@ def test_train_mode_preserves_user_requires_grad(
     trace.cleanup()
 
 
-@pytest.mark.smoke
 def test_aux_loss_slow(two_layer_mlp: TwoLayerMlp) -> None:
     """Pattern A: slow capture supports an auxiliary loss on an intermediate out."""
 
@@ -143,7 +142,6 @@ def test_aux_loss_slow(two_layer_mlp: TwoLayerMlp) -> None:
     trace.cleanup()
 
 
-@pytest.mark.smoke
 def test_aux_loss_replay(two_layer_mlp: TwoLayerMlp) -> None:
     """Pattern A: replay capture supports an auxiliary loss on an intermediate out."""
 
@@ -167,7 +165,6 @@ def test_aux_loss_replay(two_layer_mlp: TwoLayerMlp) -> None:
     trace.cleanup()
 
 
-@pytest.mark.smoke
 def test_aux_loss_fastlog(two_layer_mlp: TwoLayerMlp) -> None:
     """Pattern A: fastlog backward_ready supports an auxiliary out loss."""
 

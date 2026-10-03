@@ -133,7 +133,6 @@ def _write_manifest(path: Path, manifest: dict[str, Any]) -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_archived_activation_digest_is_verified_against_the_loaded_tensor(
     tmp_path: Path,
 ) -> None:
@@ -181,7 +180,6 @@ def test_archived_activation_digest_is_verified_against_the_loaded_tensor(
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_validator_rejects_present_weights_with_missing_entries(tmp_path: Path) -> None:
     """``weights.present=true`` with the weight entries deleted is no longer certified.
 
@@ -211,7 +209,6 @@ def test_validator_rejects_present_weights_with_missing_entries(tmp_path: Path) 
         _validate_runnable_payload_entries(stripped)
 
 
-@pytest.mark.smoke
 def test_validator_rejects_relabelled_weight_entries(tmp_path: Path) -> None:
     """Weight LABELS are cross-checked against the descriptor's declared state names."""
 
@@ -230,7 +227,6 @@ def test_validator_rejects_relabelled_weight_entries(tmp_path: Path) -> None:
         _validate_runnable_payload_entries(relabelled)
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("include_weights", [False, True])
 @pytest.mark.parametrize(
     "factory", [NoStateModel, ParamsOnlyModel, StateModel], ids=["no-state", "params", "mixed"]
@@ -264,7 +260,6 @@ def test_weight_invariant_holds_on_every_honest_shape(
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_selective_activation_save_discloses_unattestable_archive(tmp_path: Path) -> None:
     """A ``save=`` archive without the model input warns at save and NAMES the reason at run.
 
@@ -306,7 +301,6 @@ def test_selective_activation_save_discloses_unattestable_archive(tmp_path: Path
     assert all(check.passed for check in result.report.contract_checks)
 
 
-@pytest.mark.smoke
 def test_full_capture_activation_save_stays_attested_and_silent(tmp_path: Path) -> None:
     """The disclosure is NARROW: a full capture still records inputs and attests."""
 
@@ -334,7 +328,6 @@ def test_full_capture_activation_save_stays_attested_and_silent(tmp_path: Path) 
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_torch_codec_numpy_transport_fails_closed() -> None:
     """``TorchPayloadCodec.to_numpy`` / ``from_numpy`` refuse rather than trap on bfloat16.
 
@@ -354,7 +347,6 @@ def test_torch_codec_numpy_transport_fails_closed() -> None:
         codec.from_numpy(np.zeros(2, dtype=np.float32), None, map_location=None)
 
 
-@pytest.mark.smoke
 def test_bfloat16_payload_round_trips_through_the_real_routing(tmp_path: Path) -> None:
     """The REAL torch routing still handles a bfloat16 payload end-to-end."""
 
@@ -377,7 +369,6 @@ def test_bfloat16_payload_round_trips_through_the_real_routing(tmp_path: Path) -
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_older_version_refuses_at_rehydration_floor(tmp_path: Path) -> None:
     """A sub-floor tlspec_version refuses typed instead of warning.
 
@@ -399,7 +390,6 @@ def test_older_version_refuses_at_rehydration_floor(tmp_path: Path) -> None:
         Manifest.from_dict(manifest_dict)
 
 
-@pytest.mark.smoke
 def test_from_dict_really_requires_every_non_provenance_field(tmp_path: Path) -> None:
     """Pin the behavior the corrected warning now describes: a missing field RAISES."""
 

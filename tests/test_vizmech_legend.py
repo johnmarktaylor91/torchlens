@@ -19,7 +19,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 import torch
 from torch import nn
 
@@ -31,8 +30,6 @@ from torchlens.visualization._legend import (
     theme_role_sections,
 )
 from torchlens.visualization.themes import THEME_PRESETS
-
-pytestmark = pytest.mark.smoke
 
 
 def _draw_dot(tmp_path: Path, name: str, **kwargs: object) -> str:

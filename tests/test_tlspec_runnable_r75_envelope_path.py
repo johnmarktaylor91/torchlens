@@ -93,7 +93,6 @@ def _assert_context_field_invalid_analysis_only(path: Path, run_inputs: Any) -> 
         loaded.run(inputs=run_inputs)
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "encoded_value",
     [
@@ -113,7 +112,6 @@ def test_r75_malformed_metadata_envelope_path_refuses_typed(
     _assert_context_field_invalid_analysis_only(path, x.clone())
 
 
-@pytest.mark.smoke
 def test_r75_malformed_literal_fact_path_refuses_typed(tmp_path: Path) -> None:
     """The sibling literal-fact path lane refuses through the same typed disposition."""
 
@@ -123,7 +121,6 @@ def test_r75_malformed_literal_fact_path_refuses_typed(tmp_path: Path) -> None:
     _assert_context_field_invalid_analysis_only(path, (x.clone(), 3))
 
 
-@pytest.mark.smoke
 def test_r75_malformed_structure_fact_position_refuses_typed(tmp_path: Path) -> None:
     """A non-sequence structure-fact position refuses typed too (same unguarded class)."""
 
@@ -133,7 +130,6 @@ def test_r75_malformed_structure_fact_position_refuses_typed(tmp_path: Path) -> 
     _assert_context_field_invalid_analysis_only(path, x.clone())
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "factory",
     [

@@ -25,8 +25,6 @@ from torchlens.merged import (
 from torchlens.merged._errors import MergedFinding
 from torchlens.merged._evidence import RankEvidence
 
-pytestmark = pytest.mark.smoke
-
 WORLD = membership_digest_for_ranks([0, 1])
 
 
@@ -164,6 +162,7 @@ def test_gather_without_a_root_demotes_to_not_present() -> None:
     assert derivation.joins[0].consistency is BoundaryConsistency.NOT_PRESENT
 
 
+@pytest.mark.smoke
 def test_scatter_root_slices_attest_against_member_destinations() -> None:
     """Each member's received slice must equal the root's contribution slice."""
 
@@ -210,6 +209,7 @@ def _all_to_all_entry(rank: int, contribution: list[str], destination: list[str]
     )
 
 
+@pytest.mark.smoke
 def test_all_to_all_full_matrix_attests_and_detects_one_wrong_cell() -> None:
     """dest_j[i] == contrib_i[j] over the full rank matrix; one bad cell demotes."""
 
@@ -230,6 +230,7 @@ def test_all_to_all_full_matrix_attests_and_detects_one_wrong_cell() -> None:
     assert bad.joins[0].consistency is BoundaryConsistency.MISMATCHED
 
 
+@pytest.mark.smoke
 def test_merged_finding_payload_round_trip_preserves_key_and_ranks() -> None:
     """MergedFinding serializes to canonical payload and rebuilds identically."""
 

@@ -17,8 +17,6 @@ from typing import Any
 import pytest
 import torch
 
-pytestmark = [pytest.mark.smoke]
-
 DATA_DIR = Path(__file__).resolve().parent / "data"
 
 

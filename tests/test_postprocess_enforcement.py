@@ -437,7 +437,6 @@ def test_matrix_union_reports(monkeypatch: pytest.MonkeyPatch) -> None:
             sink.clear()
 
 
-@pytest.mark.smoke
 def test_audit_env_knob_refusals_are_typed(monkeypatch: pytest.MonkeyPatch) -> None:
     """The audit env-knob refusals carry stable codes, not bare RuntimeError.
 

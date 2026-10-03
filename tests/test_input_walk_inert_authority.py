@@ -45,8 +45,6 @@ from torchlens._input_walk import (
 )
 from torchlens._runnable_witness_contracts import _container_field_names
 
-pytestmark = pytest.mark.smoke
-
 _OneField = collections.namedtuple("_OneField", "x")
 _ZeroField = collections.namedtuple("_ZeroField", "")
 

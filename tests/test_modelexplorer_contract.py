@@ -26,8 +26,6 @@ from torch import nn
 
 import torchlens as tl
 
-pytestmark = pytest.mark.smoke
-
 ASSETS_DIR = Path(__file__).parent / "test_modelexplorer_assets"
 
 requires_node = pytest.mark.skipif(
@@ -169,6 +167,7 @@ def test_worker_silently_drops_duplicate_ids() -> None:
     assert stats["opNodes"] == 2, "vendor now keeps duplicate ids: contract change"
 
 
+@pytest.mark.smoke
 def test_semantic_validator_catches_planted_defects() -> None:
     """Every validator tripwire fires on a deliberately broken payload."""
 

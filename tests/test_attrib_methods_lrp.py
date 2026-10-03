@@ -225,7 +225,6 @@ class _ConcatFire(nn.Module):
         return self.head(torch.relu(merged)).mean(dim=(2, 3))
 
 
-@pytest.mark.smoke
 def test_lrp0_self_oracle_bias_free_relu() -> None:
     """LRP-0 (epsilon=0) on a bias-free ReLU net == input x gradient, exact."""
 
@@ -255,7 +254,6 @@ def test_epsilon_absorption_is_disclosed_not_hidden() -> None:
         assert {"input_relevance_sum", "output_relevance_sum", "dtype", "device"} <= set(row)
 
 
-@pytest.mark.smoke
 def test_uncovered_op_refuses_by_exact_label() -> None:
     """A parameterized non-Linear/Conv site refuses naming its exact label."""
 
@@ -271,7 +269,6 @@ def test_uncovered_op_refuses_by_exact_label() -> None:
     assert "Generic identity is forbidden" in message
 
 
-@pytest.mark.smoke
 def test_concat_splits_relevance_by_slice() -> None:
     """The concat rule is the honest slice split: branch sums add up."""
 
@@ -290,7 +287,6 @@ def test_concat_splits_relevance_by_slice() -> None:
     assert relevance.shape == x.shape
 
 
-@pytest.mark.smoke
 def test_sitestash_pairing_proven_on_reused_module() -> None:
     """D30: stash/fetch pairing is correct when ONE module fires twice."""
 
@@ -310,7 +306,6 @@ def test_sitestash_pairing_proven_on_reused_module() -> None:
     assert "shared" in str(excinfo.value)
 
 
-@pytest.mark.smoke
 def test_sitestash_leftovers_disclosed() -> None:
     """Un-fetched stashes are reported, never silently dropped."""
 

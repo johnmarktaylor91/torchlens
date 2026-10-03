@@ -99,7 +99,6 @@ def _drop_foreign_modules() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("appliance_module", ["torchlens.neuro", "torchlens.notebook"])
 def test_safe_unpickler_defers_appliance_module_without_importing(appliance_module: str) -> None:
     """A GLOBAL naming an appliance module is load-tolerated without ever importing it.
@@ -127,7 +126,6 @@ def test_safe_unpickler_defers_appliance_module_without_importing(appliance_modu
         resolved()
 
 
-@pytest.mark.smoke
 def test_end_to_end_load_does_not_import_appliance_deps(tmp_path: Path) -> None:
     """A tampered bundle naming ``torchlens.neuro`` never imports rsatoolbox at ``tl.load()``.
 
@@ -206,7 +204,6 @@ def test_is_torchlens_appliance_module_classification() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("appliance_module", ["torchlens.neuro", "torchlens.notebook"])
 def test_resolver_denies_appliance_module_by_name(appliance_module: str) -> None:
     """A custom key naming an appliance module is denied by default, no import."""

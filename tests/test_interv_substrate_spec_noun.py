@@ -43,7 +43,6 @@ def _ready_trace(model: nn.Module) -> tl.Trace:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_when_returns_immutable_public_spec() -> None:
     spec = tl.when(tl.func("relu"), tl.scale(0.0))
     assert isinstance(spec, InterventionSpec)
@@ -53,7 +52,6 @@ def test_when_returns_immutable_public_spec() -> None:
         spec.rules = ()  # type: ignore[misc]
 
 
-@pytest.mark.smoke
 def test_rule_ids_distinguish_action_arguments() -> None:
     """noise(std=0.1) vs noise(std=0.9) carry DIFFERENT rule identities.
 
@@ -67,7 +65,6 @@ def test_rule_ids_distinguish_action_arguments() -> None:
     assert low.spec_digest != high.spec_digest
 
 
-@pytest.mark.smoke
 def test_merge_preserves_rule_ids_and_refuses_duplicates() -> None:
     a = tl.when(tl.func("relu"), tl.scale(0.0))
     b = tl.when(tl.func("linear"), tl.noise(std=0.1))
@@ -81,7 +78,6 @@ def test_merge_preserves_rule_ids_and_refuses_duplicates() -> None:
     assert excinfo.value.fields["code"] == "spec_rules_duplicate"
 
 
-@pytest.mark.smoke
 def test_single_rule_compat_surface() -> None:
     """Single-clause specs keep the historical .selector/.decision reads."""
 
@@ -94,21 +90,18 @@ def test_single_rule_compat_surface() -> None:
     assert multi.decision is None
 
 
-@pytest.mark.smoke
 def test_where_term_must_be_callable() -> None:
     with pytest.raises(ArgumentTypeError) as excinfo:
         tl.when("relu_1_2", tl.scale(0.0))  # type: ignore[arg-type]
     assert excinfo.value.fields["code"] == "intervention_where_invalid"
 
 
-@pytest.mark.smoke
 def test_spec_clauses_must_be_intervention_rules() -> None:
     with pytest.raises(ArgumentTypeError) as excinfo:
         InterventionSpec(rules=("not a rule",))  # type: ignore[arg-type]
     assert excinfo.value.fields["code"] == "intervention_rule_type_invalid"
 
 
-@pytest.mark.smoke
 def test_merge_operands_must_be_specs() -> None:
     spec = tl.when(tl.func("relu"), tl.scale(0.0))
     with pytest.raises(ArgumentTypeError) as excinfo:
@@ -116,7 +109,6 @@ def test_merge_operands_must_be_specs() -> None:
     assert excinfo.value.fields["code"] == "intervention_spec_type_invalid"
 
 
-@pytest.mark.smoke
 def test_address_law_classification() -> None:
     assert classify_where(tl.func("relu")) == "structural"
     assert classify_where(tl.in_module("fc1")) == "structural"
@@ -131,7 +123,6 @@ def test_address_law_classification() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_capture_door_accepts_spec_unchanged() -> None:
     model = _TinyModel()
     spec = tl.when(tl.func("relu"), tl.scale(0.0))
@@ -139,7 +130,6 @@ def test_capture_door_accepts_spec_unchanged() -> None:
     assert torch.count_nonzero(log["relu_1_2"].out) == 0
 
 
-@pytest.mark.smoke
 def test_do_door_accepts_spec_unchanged() -> None:
     model = _TinyModel()
     log = _ready_trace(model)
@@ -148,7 +138,6 @@ def test_do_door_accepts_spec_unchanged() -> None:
     assert torch.count_nonzero(fork["relu_1_2"].out) == 0
 
 
-@pytest.mark.smoke
 def test_attach_hooks_door_accepts_spec_unchanged() -> None:
     model = _TinyModel()
     log = _ready_trace(model)
@@ -157,7 +146,6 @@ def test_attach_hooks_door_accepts_spec_unchanged() -> None:
     assert len(handle.handle_ids) == 1
 
 
-@pytest.mark.smoke
 def test_spec_door_refuses_extra_arguments() -> None:
     model = _TinyModel()
     log = _ready_trace(model)
@@ -170,7 +158,6 @@ def test_spec_door_refuses_extra_arguments() -> None:
     assert excinfo.value.fields["code"] == "spec_door_extra_arguments"
 
 
-@pytest.mark.smoke
 def test_replay_door_refuses_value_dependent_rule_by_name() -> None:
     """No lane silently drops a rule: runtime-only predicates refuse typed."""
 
@@ -190,7 +177,6 @@ def test_replay_door_refuses_value_dependent_rule_by_name() -> None:
     assert staged is None or not staged.hook_specs
 
 
-@pytest.mark.smoke
 def test_multi_clause_spec_applies_every_rule() -> None:
     model = _TinyModel()
     spec = tl.when(tl.in_module("fc1"), tl.scale(0.0)).merge(tl.when(tl.func("relu"), tl.add(1.0)))
@@ -199,7 +185,6 @@ def test_multi_clause_spec_applies_every_rule() -> None:
     assert torch.allclose(log["relu_1_2"].out, torch.ones(2, 4))
 
 
-@pytest.mark.smoke
 def test_overlapping_rules_refuse_at_fire_time() -> None:
     model = _TinyModel()
     spec = tl.when(tl.func("relu"), tl.scale(0.0)).merge(tl.when(tl.func("relu"), tl.scale(0.5)))
@@ -208,7 +193,6 @@ def test_overlapping_rules_refuse_at_fire_time() -> None:
     assert excinfo.value.fields["code"] == "spec_rules_overlap"
 
 
-@pytest.mark.smoke
 def test_sweep_door_accepts_specs_unchanged() -> None:
     from torchlens.intervention.sweep import sweep
 
@@ -224,7 +208,6 @@ def test_sweep_door_accepts_specs_unchanged() -> None:
     assert len(bundle) == 2
 
 
-@pytest.mark.smoke
 def test_sweep_spec_values_conflicts_refuse_typed() -> None:
     from torchlens.intervention.sweep import sweep
 
@@ -238,7 +221,6 @@ def test_sweep_spec_values_conflicts_refuse_typed() -> None:
     assert excinfo.value.fields["code"] == "sweep_spec_at_conflict"
 
 
-@pytest.mark.smoke
 def test_sweep_values_ride_typed_helper_specs() -> None:
     """Ledger item 1: swept values are typed replace helpers, not closures."""
 
@@ -250,7 +232,6 @@ def test_sweep_values_ride_typed_helper_specs() -> None:
     assert member_values == [0.0, 1.5]
 
 
-@pytest.mark.smoke
 def test_backward_rules_of_multi_clause_spec_not_dropped() -> None:
     """A multi-clause spec's backward rule builds its sticky backward hook."""
 

@@ -18,8 +18,6 @@ from torch import nn
 from torchlens._errors import InvalidArgumentError
 from torchlens.dataset_extraction import extract_dataset
 
-pytestmark = pytest.mark.smoke
-
 
 class _OneInput(nn.Module):
     def __init__(self) -> None:

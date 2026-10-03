@@ -23,8 +23,6 @@ from torchlens.report._summary_ladder import (
     resolve_view,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 class _FiveOpToy(nn.Module):
     """Two coalescing leaves, one orphan functional op, one getitem."""
@@ -222,6 +220,7 @@ def test_elision_is_deterministic() -> None:
     assert first.disclosure == second.disclosure
 
 
+@pytest.mark.smoke
 def test_first_and_last_rows_survive_elision() -> None:
     """Input-adjacent and output-adjacent rows are protected (memo 3.4)."""
 
@@ -232,6 +231,7 @@ def test_first_and_last_rows_survive_elision() -> None:
     assert view.rows[-1].kind != "elision"
 
 
+@pytest.mark.smoke
 def test_explicit_depth_and_budget_are_honored() -> None:
     """depth= pins the tree rung; max_rows= re-budgets the ladder."""
 

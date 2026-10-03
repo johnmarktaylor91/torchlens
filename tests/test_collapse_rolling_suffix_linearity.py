@@ -39,8 +39,6 @@ from torchlens.visualization import _render_leaf
 
 os.environ.setdefault("MPLBACKEND", "Agg")
 
-pytestmark = pytest.mark.smoke
-
 
 class TwoDistinctLoops(nn.Module):
     """One reused block driven by two disjoint call runs -- a real split partition."""
@@ -209,6 +207,7 @@ def test_unrolled_collapsed_nodes_share_one_rolled_layer_sweep(
     assert counts["reachability"] <= rolled_layers
 
 
+@pytest.mark.smoke_cells("test_rolled_view_also_shares_one_rolled_layer_sweep[auto]")
 @pytest.mark.parametrize("collapse", ["auto", "max"])
 def test_rolled_view_also_shares_one_rolled_layer_sweep(
     monkeypatch: pytest.MonkeyPatch,
@@ -283,6 +282,7 @@ def test_memo_does_not_outlive_one_draw() -> None:
     assert _render_leaf._PER_DRAW_COLLAPSE_CACHE.get() is None
 
 
+@pytest.mark.smoke_cells("test_union_find_components_match_historical_reachability[20]")
 @pytest.mark.parametrize("steps", [5, 20, 80])
 def test_union_find_components_match_historical_reachability(steps: int) -> None:
     """The linear interior union-find preserves the historical pass partition."""

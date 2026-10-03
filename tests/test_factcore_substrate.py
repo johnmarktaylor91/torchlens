@@ -19,8 +19,6 @@ from torchlens.report import (
     health_facts,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 class _Loop(nn.Module):
     """Three-pass recurrent layer (multi-pass join rows)."""

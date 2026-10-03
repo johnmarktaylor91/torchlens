@@ -28,8 +28,6 @@ from torchlens.runnable import (
     WitnessCompleteness,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 def _capture(model: nn.Module, x: Any) -> Any:
     """Capture an intervention-ready trace."""

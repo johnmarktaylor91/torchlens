@@ -24,13 +24,10 @@ if _HAS_GRADIENT_EDGE:
 else:  # torch < 2.4: GradientEdge absent or non-functional (see get_gradient_edge_support).
     GradientEdge = None  # type: ignore[assignment,misc]
 
-pytestmark = [
-    pytest.mark.smoke,
-    pytest.mark.skipif(
-        not (_HAS_GRADIENT_EDGE and HAS_NODE_PREHOOK),
-        reason="GradientEdge / Node.register_prehook postdate the torch 2.1 floor",
-    ),
-]
+pytestmark = pytest.mark.skipif(
+    not (_HAS_GRADIENT_EDGE and HAS_NODE_PREHOOK),
+    reason="GradientEdge / Node.register_prehook postdate the torch 2.1 floor",
+)
 
 
 def _one_node_graph() -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:

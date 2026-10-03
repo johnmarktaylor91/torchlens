@@ -36,9 +36,6 @@ from torchlens.validation.core import (
     _check_whether_func_on_saved_parents_yields_saved_tensor,
 )
 
-pytestmark = pytest.mark.smoke
-
-
 # ---------------------------------------------------------------------------
 # Helpers (kept local rather than imported from a sibling test module).
 # ---------------------------------------------------------------------------
@@ -304,6 +301,7 @@ class _ScatterIndexModel(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_embedding_index_immunizer_needs_the_removed_structural_blanket(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -327,6 +325,7 @@ def test_embedding_index_immunizer_needs_the_removed_structural_blanket(
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_gather_index_immunizer_needs_the_removed_structural_blanket(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -373,6 +372,7 @@ def test_masked_fill_mask_immunizer_needs_the_removed_structural_blanket(
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_index_domain_proof_must_stay_a_proof_not_a_blanket(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -405,6 +405,7 @@ def test_index_domain_proof_must_stay_a_proof_not_a_blanket(
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_structural_template_decision_must_exclude_runtime_fill_values(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -121,7 +121,6 @@ def _save_runnable(model: nn.Module, capture_input: torch.Tensor, path: Path) ->
     return path
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("model_cls", "reference_fn"),
     (
@@ -160,7 +159,6 @@ def test_slice_index_literal_save_load_run_verified_on_original_input(
     assert torch.allclose(result.output, reference_fn(capture_input))
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("model_cls", "reference_fn"),
     (
@@ -361,7 +359,6 @@ def test_r71b_semantic_slice_component_refuses_typed_at_save(name: str, tmp_path
     assert "semantic_scalar_type" in diagnostics
 
 
-@pytest.mark.smoke
 def test_r71b_secA_pin_plain_capture_semantic_runtime_diverges(tmp_path: Path) -> None:
     """The named secA-F1 pin: a captured forward branching on a slice-component TYPE
     replayed with a same-VALUE plain-int input VERIFIES on the plain twin and DIVERGES
@@ -419,7 +416,6 @@ def test_r71b_greens_ordinary_slices_stay_verified(tmp_path: Path) -> None:
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
-@pytest.mark.smoke
 def test_r71b_composite_component_policy_covers_every_edge() -> None:
     """Meta-test: the composite policy table keys == every composite NonTensorLiteral
     node kind; a new composite without a declared component policy REDs here."""

@@ -10,8 +10,6 @@ from torchlens._runnable_state import PreparedRunnableState, _apply_state_metada
 from torchlens.errors import StateBindingError
 from torchlens.runnable import StateSource
 
-pytestmark = pytest.mark.smoke
-
 
 class _Binding:
     """State-binding stand-in carrying the recorded metadata facts."""
@@ -43,6 +41,7 @@ class _Descriptor:
         self.tensor_slots = slots
 
 
+@pytest.mark.smoke
 def test_state_metadata_staging_rolls_back_flipped_bits_on_refusal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -285,6 +284,7 @@ def test_restore_failure_marks_and_raises() -> None:
     assert latch is not None and latch["state_dict_name"] == "buf"
 
 
+@pytest.mark.smoke
 def test_restore_failure_source_refuses_next_live_run() -> None:
     """L4 5.4: the state-compromised latch refuses the live and fast doors typed."""
 

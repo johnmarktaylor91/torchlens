@@ -29,8 +29,6 @@ from torchlens.capture._episode_ledger import (
 from torchlens.errors import EpisodeDeclarationError, EpisodeLedgerError, TorchLensWarning
 from torchlens.options import EpisodeSpec
 
-pytestmark = pytest.mark.smoke
-
 
 class TinyLM(nn.Module):
     """Minimal stepped model: embedding -> mean -> head logits."""
@@ -327,6 +325,7 @@ def test_rng_discipline_only_managed():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_halted_episode_ledger_discloses_truncation():
     model = TinyLM()
     runner = GreedyRunner(model, 5)
@@ -461,6 +460,7 @@ def test_episode_key_rides_plain_v8_artifacts(tmp_path):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_member_outcome_row_mapping_is_total_and_non_upgrading():
     assert row_status_for_member_outcome("COMPLETE", None) == "complete"
     assert row_status_for_member_outcome("HALTED", None) == "interrupted"
@@ -485,6 +485,7 @@ def test_recording_status_row_mapping_fail_closed():
         row_status_for_recording_status("blessed")
 
 
+@pytest.mark.smoke
 def test_fold_arms_first_match_and_fail_closed():
     # Arm 2: all declared members COMPLETE.
     result = derive_episode_status([("COMPLETE", None)] * 3, n_declared=3, ledger=None)

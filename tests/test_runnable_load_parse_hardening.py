@@ -18,8 +18,6 @@ from torchlens._io.runnable_load import (
 from torchlens.options import CaptureOptions
 from torchlens.runnable import ReadinessStatus
 
-pytestmark = pytest.mark.smoke
-
 
 class TinyModel(nn.Module):
     """One-linear model for runnable-artifact tamper fixtures."""
@@ -115,6 +113,7 @@ def test_reserved_name_prefix_alias_group_refuses(
     assert loaded.readiness.status is ReadinessStatus.UNAVAILABLE
 
 
+@pytest.mark.smoke
 def test_parse_rng_profile_refuses_absent_or_coerced_fields() -> None:
     """The REQUIRED host-RNG profile is never defaulted or coerced (F-R10-B4)."""
 

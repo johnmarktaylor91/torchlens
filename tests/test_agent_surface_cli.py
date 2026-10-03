@@ -21,8 +21,6 @@ from tests.test_agent_surface_helpers import (
 )
 from torchlens.agent import cli
 
-pytestmark = pytest.mark.smoke
-
 
 @pytest.fixture()
 def clean(tmp_path: Path) -> Path:
@@ -79,6 +77,7 @@ def test_info_emits_the_manifest_envelope(clean: Path) -> None:
     assert envelope["data"]["declared_payload_count"] == 3
 
 
+@pytest.mark.smoke
 def test_missing_artifact_exits_3(tmp_path: Path) -> None:
     """Artifact unreadable -> exit 3, canonical error JSON on stderr."""
 

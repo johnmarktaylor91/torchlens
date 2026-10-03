@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = [pytest.mark.smoke, pytest.mark.real_model]
+pytestmark = pytest.mark.real_model
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "check_ci_executed_tests.py"

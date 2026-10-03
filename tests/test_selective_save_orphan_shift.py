@@ -57,7 +57,6 @@ def _saved_labels(trace: tl.Trace) -> list[str]:
     return [op.layer_label for op in trace.layer_list if op.has_saved_activation]
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("selector", [2, "relu_1_2"], ids=["int_ordinal", "exact_label"])
 def test_layers_to_save_final_selectors_survive_orphan_shift(selector) -> None:
     """Int ordinals and exact final labels save the REQUESTED op, orphans or not."""
@@ -74,7 +73,6 @@ def test_layers_to_save_final_selectors_survive_orphan_shift(selector) -> None:
     torch.testing.assert_close(trace["relu_1_2"].out, torch.relu(x + 1.0))
 
 
-@pytest.mark.smoke
 def test_layers_to_save_type_indexed_label_survives_same_type_orphan() -> None:
     """A type-indexed label (``relu_1``) resolves against FINAL type numbering."""
 
@@ -89,7 +87,6 @@ def test_layers_to_save_type_indexed_label_survives_same_type_orphan() -> None:
     torch.testing.assert_close(trace["relu_1_2"].out, torch.relu(x + 1.0))
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("selector", [2, "relu_1_2"], ids=["int_ordinal", "exact_label"])
 def test_layers_to_save_final_selectors_clean_model_unchanged(selector) -> None:
     """The orphan-free path keeps saving exactly the requested op."""
@@ -105,7 +102,6 @@ def test_layers_to_save_final_selectors_clean_model_unchanged(selector) -> None:
     torch.testing.assert_close(trace["relu_1_2"].out, torch.relu(x + 1.0))
 
 
-@pytest.mark.smoke
 def test_layers_to_save_substring_stays_exact_under_orphans() -> None:
     """The legacy substring contract keeps matching the surviving relu."""
 
@@ -119,7 +115,6 @@ def test_layers_to_save_substring_stays_exact_under_orphans() -> None:
     torch.testing.assert_close(trace["relu_1_2"].out, torch.relu(x + 1.0))
 
 
-@pytest.mark.smoke
 def test_layers_to_save_mixed_live_and_final_selectors() -> None:
     """A mixed list resolves each component in its correct index space."""
 
@@ -136,7 +131,6 @@ def test_layers_to_save_mixed_live_and_final_selectors() -> None:
     torch.testing.assert_close(trace["add_1_1"].out, x + 1.0)
 
 
-@pytest.mark.smoke
 def test_layers_to_save_positive_int_survives_negative_tail_window() -> None:
     """A mixed ``[ordinal, -1]`` selection keeps the early ordinal's payload.
 
@@ -156,7 +150,6 @@ def test_layers_to_save_positive_int_survives_negative_tail_window() -> None:
     torch.testing.assert_close(trace["add_1_1"].out, x + 1.0)
 
 
-@pytest.mark.smoke
 def test_save_grads_final_selector_survives_negative_tail_window() -> None:
     """A mixed ``[label, -1]`` grad selection keeps the early op's reference."""
 
@@ -185,7 +178,6 @@ def test_layers_to_save_unmatched_final_label_raises() -> None:
         )
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("model_cls", [CleanModel, OrphanBranchModel], ids=["clean", "orphan"])
 def test_integer_save_grads_survives_orphan_shift(model_cls) -> None:
     """Integer ``save_grads`` ordinals hook the REQUESTED op's gradient."""
@@ -205,7 +197,6 @@ def test_integer_save_grads_survives_orphan_shift(model_cls) -> None:
     torch.testing.assert_close(trace["relu_1_2"].grad, torch.full((4,), 2.0))
 
 
-@pytest.mark.smoke
 def test_string_save_grads_still_works_under_orphans() -> None:
     """The already-correct string grad-selector path stays intact."""
 

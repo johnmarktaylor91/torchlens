@@ -25,8 +25,6 @@ from torchlens.visualization.collapse_patterns import (
 )
 from torchlens.visualization.collapse_plan import RenderContext
 
-pytestmark = pytest.mark.smoke
-
 
 class _Cbr(nn.Module):
     """conv2d > batch_norm > relu block."""
@@ -100,6 +98,7 @@ def test_parse_expands_repetition_and_inlines_names() -> None:
     ]
 
 
+@pytest.mark.smoke
 def test_parse_refusals_are_typed() -> None:
     """Syntax refusals carry stable codes and remedies."""
 
@@ -137,6 +136,7 @@ def test_matches_fold_and_disclose(cbr_trace) -> None:
         assert "more" not in descriptor.label
 
 
+@pytest.mark.smoke
 def test_residual_interior_edge_refuses_and_is_counted() -> None:
     """A skip reading the interior refuses THAT instance, counted."""
 
@@ -152,6 +152,7 @@ def test_residual_interior_edge_refuses_and_is_counted() -> None:
     assert "pattern_fold_refusals" in codes
 
 
+@pytest.mark.smoke
 def test_unknown_token_near_miss_and_no_match_warn(cbr_trace) -> None:
     """Unknown atoms suggest near misses; no-match patterns warn once."""
 
@@ -165,6 +166,7 @@ def test_unknown_token_near_miss_and_no_match_warn(cbr_trace) -> None:
     assert {"pattern_token_unknown", "pattern_no_match"} <= codes
 
 
+@pytest.mark.smoke
 def test_draw_pattern_only_view_and_combination_refusal(cbr_trace, tmp_path) -> None:
     """The pattern-only view renders chips; auto+patterns refuses typed."""
 
@@ -197,6 +199,7 @@ def test_patterns_default_off(cbr_trace) -> None:
     assert "PATTERN" not in dot
 
 
+@pytest.mark.smoke
 def test_idiomatic_preset_parses_and_matches(cbr_trace) -> None:
     """The curated preset is available (off by default) and matches CBR."""
 
@@ -233,6 +236,7 @@ def test_reserved_text_grammar_lint(cbr_trace) -> None:
         assert "more" not in line
 
 
+@pytest.mark.smoke
 def test_rank_layout_refuses_pattern_chips(cbr_trace) -> None:
     """Chips fail closed on the rank backend (pre-existing __segment__ gap)."""
 

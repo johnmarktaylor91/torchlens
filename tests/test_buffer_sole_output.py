@@ -219,7 +219,6 @@ class ForeignTensorOnlyOutputModel(nn.Module):
         return self.foreign_tensor
 
 
-@pytest.mark.smoke
 def test_buffer_sole_output_traces_with_output_layer() -> None:
     """A buffer-only return must produce ``output_1`` bound to the buffer value."""
 

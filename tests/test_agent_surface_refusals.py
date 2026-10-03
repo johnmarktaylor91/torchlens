@@ -15,8 +15,6 @@ import torchlens as tl
 from tests.test_agent_surface_helpers import save_clean_artifact
 from torchlens.agent import _artifacts, call_tool
 
-pytestmark = pytest.mark.smoke
-
 
 @pytest.fixture()
 def clean(tmp_path: Path) -> Path:

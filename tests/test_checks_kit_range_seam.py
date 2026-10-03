@@ -16,8 +16,6 @@ import torch.nn as nn
 import torchlens as tl
 import torchlens.checks as tc
 
-pytestmark = pytest.mark.smoke
-
 
 class _BnNet(nn.Module):
     """BatchNorm model: the historical seam-pollution witness (13/13/13)."""

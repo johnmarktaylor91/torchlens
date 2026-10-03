@@ -33,8 +33,6 @@ from torchlens.distributed._ledger import (
 from torchlens.merged import MergedErrorCode
 from torchlens.merged._errors import MergeConflictError
 
-pytestmark = pytest.mark.smoke
-
 
 class _TwoLayer(nn.Module):
     """Two-submodule model so module-call records have real children."""

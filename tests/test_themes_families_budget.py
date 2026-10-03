@@ -39,7 +39,6 @@ def mlp_log() -> Any:
     log.cleanup()
 
 
-@pytest.mark.smoke
 def test_family_table_is_closed_and_binds_per_view() -> None:
     """The four view x member cells resolve exactly per N16."""
 
@@ -54,7 +53,6 @@ def test_family_table_is_closed_and_binds_per_view() -> None:
     assert lenses.resolve_source_family("flops", "unrolled").member == "flops_forward"
 
 
-@pytest.mark.smoke
 def test_unknown_family_and_view_refuse_typed() -> None:
     """Closed-vocabulary refusals carry stable codes."""
 
@@ -66,7 +64,6 @@ def test_unknown_family_and_view_refuse_typed() -> None:
     assert excinfo.value.fields["code"] == "lens_view_invalid"
 
 
-@pytest.mark.smoke
 def test_speed_resolves_per_pass_member_on_unrolled(mlp_log: Any) -> None:
     """Unrolled speed binds func_duration with the rank transform."""
 
@@ -88,7 +85,6 @@ def test_speed_resolves_summed_member_on_rolled(mlp_log: Any) -> None:
     assert any("total across passes" in line for line in resolution.disclosure)
 
 
-@pytest.mark.smoke
 def test_zero_coverage_refuses_typed(mlp_log: Any, monkeypatch: Any) -> None:
     """ROW GATE: zero resolved coverage refuses; never a populated legend
     over an unencoded graph."""
@@ -134,7 +130,6 @@ def test_one_view_zero_coverage_names_the_zero_coverage_code(
     assert "re-capture" in str(excinfo.value)
 
 
-@pytest.mark.smoke
 def test_explicit_color_by_wins_over_family(mlp_log: Any) -> None:
     """Defaults-not-overrides: the user's channel beats the family binding."""
 
@@ -142,7 +137,6 @@ def test_explicit_color_by_wins_over_family(mlp_log: Any) -> None:
     assert resolution.draw_kwargs["color_by"] == "activation_memory"
 
 
-@pytest.mark.smoke
 def test_source_coverage_counts_op_population(mlp_log: Any) -> None:
     """Coverage counts the op population, encoded and total."""
 
@@ -157,7 +151,6 @@ def test_source_coverage_counts_op_population(mlp_log: Any) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_small_trace_renders_in_full(mlp_log: Any) -> None:
     """Below the band ceiling collapse='none' wins and is disclosed by name."""
 
@@ -250,7 +243,6 @@ def test_above_ceiling_fallback_warns_coded(mlp_log: Any, monkeypatch: Any) -> N
     assert any("estimate" in line for line in budget.disclosure)
 
 
-@pytest.mark.smoke
 def test_band_constants_are_the_memo_band() -> None:
     """Two-sided band: floor 100 / target 160 / ceiling 220; coverage 0.80."""
 
@@ -258,7 +250,6 @@ def test_band_constants_are_the_memo_band() -> None:
     assert lenses.COVERAGE_FLOOR == 0.80
 
 
-@pytest.mark.smoke
 def test_legend_dependence_gate_mechanism(mlp_log: Any, monkeypatch: Any) -> None:
     """A gate-ruled legend-DEPENDENT lens refuses explicit suppression."""
 

@@ -21,8 +21,6 @@ from torchlens.observability import (
     WatchSettings,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 def _bn_relu_model() -> nn.Sequential:
     torch.manual_seed(11)

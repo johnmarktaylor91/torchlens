@@ -12,11 +12,8 @@ from __future__ import annotations
 
 import re
 
-import pytest
 import torch
 from torch.utils.flop_counter import FlopCounterMode
-
-pytestmark = [pytest.mark.smoke]
 
 
 def _true_macs(trace) -> int:

@@ -13,10 +13,6 @@ import hashlib
 import tarfile
 from pathlib import Path
 
-import pytest
-
-pytestmark = [pytest.mark.smoke]
-
 GOLDENS_DIR = Path(__file__).parent / "release_goldens"
 CORPUS_PATH = GOLDENS_DIR / "genuine_release_artifacts.tar.gz"
 

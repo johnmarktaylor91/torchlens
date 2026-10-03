@@ -38,7 +38,6 @@ def artifact(tmp_path: Path) -> Path:
     return save_clean_artifact(tmp_path)
 
 
-@pytest.mark.smoke
 def test_canonical_serializer_is_strict_and_sorted() -> None:
     """Sorted keys, compact separators, ASCII, and NO bare non-finites."""
 
@@ -50,7 +49,6 @@ def test_canonical_serializer_is_strict_and_sorted() -> None:
     assert parsed["a"]["z"][1] == {"nonfinite": "nan"}
 
 
-@pytest.mark.smoke
 def test_json_safe_tags_every_nonfinite_direction() -> None:
     """nan/inf/-inf become tagged records; tuples become lists."""
 
@@ -89,7 +87,6 @@ def test_every_envelope_carries_the_contract_keys(artifact: Path) -> None:
         canonical_dumps(envelope)  # strict-serializable as-is
 
 
-@pytest.mark.smoke
 def test_no_absolute_path_in_machine_payloads(artifact: Path) -> None:
     """basename is a courtesy; no absolute/cwd-derived path appears outside the echo."""
 
@@ -115,7 +112,6 @@ def test_error_envelope_exposes_typed_fields() -> None:
     assert call_tool_envelope("torchlens_nope")["error"]["code"] == "agent_tool_unknown"
 
 
-@pytest.mark.smoke
 def test_arguments_validate_against_the_declared_schema(artifact: Path) -> None:
     """Unknown keys, wrong types, and closed-vocabulary misses refuse typed."""
 
@@ -130,7 +126,6 @@ def test_arguments_validate_against_the_declared_schema(artifact: Path) -> None:
         assert exc.value.fields["code"] == "agent_argument_invalid"
 
 
-@pytest.mark.smoke
 def test_limits_lower_never_raise(artifact: Path) -> None:
     """Requests lower ceilings; zero and above-ceiling refuse (no 0-as-infinity)."""
 
@@ -140,7 +135,6 @@ def test_limits_lower_never_raise(artifact: Path) -> None:
         assert exc.value.fields["code"] in ("agent_limit_invalid", "agent_argument_invalid")
 
 
-@pytest.mark.smoke
 def test_token_backstop_drops_rows_with_disclosure(artifact: Path) -> None:
     """A tight max_tokens truncates rows AFTER the row cap, disclosed."""
 
@@ -151,7 +145,6 @@ def test_token_backstop_drops_rows_with_disclosure(artifact: Path) -> None:
     assert _budgets.estimate_tokens(canonical_dumps(envelope)) <= 900
 
 
-@pytest.mark.smoke
 def test_budget_floor_is_never_a_plausible_fragment(artifact: Path) -> None:
     """When the floor alone exceeds the budget, the result SAYS so."""
 
@@ -160,7 +153,6 @@ def test_budget_floor_is_never_a_plausible_fragment(artifact: Path) -> None:
     assert envelope["data"] == {"budget_floor_exceeded": True}
 
 
-@pytest.mark.smoke
 def test_continuation_refuses_on_request_drift(artifact: Path) -> None:
     """A continuation minted under one query refuses under another."""
 
@@ -179,7 +171,6 @@ def test_continuation_refuses_on_request_drift(artifact: Path) -> None:
     assert exc.value.fields["code"] == "agent_continuation_drift"
 
 
-@pytest.mark.smoke
 def test_paged_rows_reassemble_byte_exactly(artifact: Path) -> None:
     """Concatenated pages equal the unpaged ordered result."""
 
@@ -198,7 +189,6 @@ def test_paged_rows_reassemble_byte_exactly(artifact: Path) -> None:
     assert canonical_dumps(rows) == canonical_dumps(unpaged["data"]["rows"])
 
 
-@pytest.mark.smoke
 def test_registry_annotations_and_verbs_are_complete() -> None:
     """Nine tools, all read-only + idempotent, CLI verbs unique where present."""
 

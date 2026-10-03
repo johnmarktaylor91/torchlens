@@ -577,7 +577,6 @@ _HOT_STATE_SUBSET_PREFIXES = (
 )
 
 
-@pytest.mark.smoke
 def test_hot_state_subset_census_runs_in_the_commit_gate() -> None:
     """Commit-gate sentinel over the hot capture/wrapper state surface.
 

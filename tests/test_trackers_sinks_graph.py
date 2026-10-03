@@ -18,8 +18,6 @@ import torch
 import torchlens as tl
 import torchlens.trackers as trk
 
-pytestmark = pytest.mark.smoke
-
 
 class _DictInputNet(torch.nn.Module):
     """The stock-add_graph killer: a forward taking a dict (issue #28206)."""
@@ -58,6 +56,7 @@ def conv_trace():
 class TestGraphIR:
     """The dep-free layer: names, edges, truthful fields, join oracle."""
 
+    @pytest.mark.smoke
     def test_nodes_and_edges_from_executed_dag(self, conv_trace) -> None:  # noqa: ANN001
         trace, _ = conv_trace
         ir = trk.build_graph_ir(trace)
@@ -92,6 +91,7 @@ class TestGraphIR:
             assert ir.timing_evidence == trk.TIMING_EVIDENCE
             assert any("host bracket" in d for d in ir.disclosures)
 
+    @pytest.mark.smoke
     def test_join_oracle_catches_corruption(self, conv_trace) -> None:  # noqa: ANN001
         """Corrupt one stats name -> the oracle names the unmatched node."""
 
@@ -103,6 +103,7 @@ class TestGraphIR:
             corrupted = ("definitely_not_a_node/x",) + stats[1:]
             assert ir.join_oracle(corrupted) == ("definitely_not_a_node/x",)
 
+    @pytest.mark.smoke
     def test_ir_serializes_to_jsonl(self, conv_trace, tmp_path) -> None:  # noqa: ANN001
         """The graph capability on the JSONL sink round-trips the IR."""
 
@@ -147,6 +148,7 @@ class TestTensorBoardIngestPin:
         unmatched = ir.join_oracle(tuple(sorted(stats_names)))
         assert unmatched == (), f"unbound stats rows: {unmatched}"
 
+    @pytest.mark.smoke
     @pytest.mark.skipif(
         importlib.util.find_spec("tensorboard") is not None,
         reason="tensorboard installed; the refusal leg is for bare envs",

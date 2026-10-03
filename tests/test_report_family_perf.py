@@ -30,8 +30,6 @@ from torchlens.report import (
     time_clean_step,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 @pytest.fixture(scope="module")
 def small_trace():
@@ -69,6 +67,7 @@ def test_zero_row_catalog_refuses_correctly() -> None:
     assert excinfo.value.fields["code"] == "device_peaks_unknown_device"
 
 
+@pytest.mark.smoke
 def test_peak_rows_require_citation_and_date() -> None:
     """D18: per-row provenance is mandatory (the staleness-lint class)."""
 
@@ -139,6 +138,7 @@ def test_mfu_unknown_mode_refuses_typed() -> None:
     assert excinfo.value.fields["code"] == "mfu_mode_peak_missing"
 
 
+@pytest.mark.smoke
 def test_mfu_above_one_warns_coded() -> None:
     """D16: MFU > 1.0 warns with the coded S-18 warning."""
 
@@ -161,6 +161,7 @@ def test_kernel_union_quantity_has_its_own_name_and_gate() -> None:
     assert excinfo.value.fields["code"] == "kernel_utilization_requires_device_join"
 
 
+@pytest.mark.smoke
 def test_time_clean_step_discloses_method_and_reruns() -> None:
     """D16: the opt-in helper states plainly that it re-runs the forward."""
 
@@ -197,6 +198,7 @@ def test_roofline_rows_are_hypotheses_and_aggregate_is_sum_over_sum(small_trace)
     assert result.aggregate_intensity == pytest.approx(total_flops / total_bytes)
 
 
+@pytest.mark.smoke
 def test_roofline_cache_resident_ops_excluded_from_headline(small_trace) -> None:
     """D21: sub-cache ops carry the hint and never enter headline counts."""
 
@@ -214,6 +216,7 @@ def test_roofline_without_ridge_renders_no_bounds(small_trace) -> None:
     assert result.ridge_intensity is None
 
 
+@pytest.mark.smoke
 def test_machine_balance_requires_named_basis() -> None:
     """D18: the ceiling's basis is REQUIRED and disclosed; a measured peak
     is never called MFU."""
@@ -237,6 +240,7 @@ def test_machine_balance_requires_named_basis() -> None:
 # Instrumented rate (D19/D20)
 
 
+@pytest.mark.smoke
 def test_instrumented_rate_is_boxed_and_labeled(small_trace) -> None:
     """D20: 'instrumented' in the header; the banned words never appear."""
 
@@ -292,6 +296,7 @@ def test_name_matched_bridge_is_relabeled() -> None:
 # The cost measurer (D27)
 
 
+@pytest.mark.smoke
 def test_cost_report_measures_and_discloses() -> None:
     """D27: absolute ms first, ratio derived, N forwards disclosed."""
 
@@ -318,6 +323,7 @@ def test_cost_report_refuses_unknown_tier() -> None:
 # Every new code ships provoked (error-code coverage gate)
 
 
+@pytest.mark.smoke
 def test_remaining_new_codes_are_provoked(small_trace) -> None:
     """Provoke every F09 code not already provoked above, by code literal:
     clean_step_repeats_invalid, device_peaks_row_invalid,

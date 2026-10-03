@@ -127,7 +127,6 @@ class _ImageScale(nn.Module):
         return value * 2.0
 
 
-@pytest.mark.smoke
 def test_documented_unstable_attribution_surface_matches_glossary_index() -> None:
     """Every stage-4b spelling carries the exact no-shim glossary marker."""
 
@@ -147,7 +146,6 @@ def _output_sum(trace: Any) -> Tensor:
     return trace.output_ops[0].out.sum()
 
 
-@pytest.mark.smoke
 def test_occlusion_routes_named_baselines_through_selection_do() -> None:
     """Zeros, mean, and blur are explicit and produce disclosed scored deltas."""
 
@@ -178,7 +176,6 @@ def test_occlusion_routes_named_baselines_through_selection_do() -> None:
         trace.cleanup()
 
 
-@pytest.mark.smoke
 def test_occlusion_rejects_an_implicit_or_invalid_baseline() -> None:
     """The baseline vocabulary is closed instead of silently choosing a fill."""
 
@@ -244,7 +241,6 @@ def test_attribution_kit_lane_is_detachable_from_stage4a_and_capture_core() -> N
     assert not stage4a_offenders
 
 
-@pytest.mark.smoke
 def test_attribution_detachability_scanner_is_red_capable(tmp_path: Path) -> None:
     """The detachability scanner detects a planted direct import."""
 

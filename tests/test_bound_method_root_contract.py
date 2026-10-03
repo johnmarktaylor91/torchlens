@@ -23,8 +23,6 @@ from torchlens.backends.torch.bound_root import TLBoundMethodRoot
 from torchlens.errors import InvalidArgumentError
 from torchlens.intervention.errors import ModelMismatchError
 
-pytestmark = pytest.mark.smoke
-
 
 class _ToyLM(nn.Module):
     """Tiny LM-shaped fixture with a generate-like bound method."""
@@ -231,6 +229,7 @@ def test_validate_accepts_bound_method_roots() -> None:
     assert tl.validate(model.forward, torch.randn(2, 4), scope="forward") is True
 
 
+@pytest.mark.smoke
 def test_validate_refuses_other_callables_typed() -> None:
     with pytest.raises(InvalidArgumentError) as excinfo:
         tl.validate(torch.relu, torch.randn(2, 4), scope="forward")
@@ -267,6 +266,7 @@ class _ShapedReturns(nn.Module):
         return {"a": self.lin(x)}
 
 
+@pytest.mark.smoke_cells("test_return_shapes_capture_instead_of_refusing[emit_none-0]")
 @pytest.mark.parametrize(
     ("method_name", "expected_outputs"),
     [("emit_none", 0), ("emit_tuple", 2), ("emit_dict", 1)],

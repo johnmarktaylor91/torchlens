@@ -8,7 +8,6 @@ plan object's clause selections; ``per_firing`` plans are never suffixed.
 
 from __future__ import annotations
 
-import pytest
 import torch
 from torch import nn
 
@@ -44,7 +43,6 @@ def _draws(fork: tl.Trace) -> dict[str, list[int]]:
     }
 
 
-@pytest.mark.smoke
 def test_per_firing_batch_equals_sequential_in_any_order() -> None:
     """The most common spelling: two equal-content per_firing plans at two sites."""
 
@@ -75,7 +73,6 @@ def test_per_firing_batch_equals_sequential_in_any_order() -> None:
     assert torch.equal(batch["relu_2_4"].out, reversed_batch["relu_2_4"].out)
 
 
-@pytest.mark.smoke
 def test_per_group_disambiguation_is_order_independent() -> None:
     """Distinct equal-content per_group objects never share, in either clause order."""
 
@@ -104,7 +101,6 @@ def test_per_group_disambiguation_is_order_independent() -> None:
     assert torch.equal(forward["relu_2_4"].out, backward["relu_2_4"].out)
 
 
-@pytest.mark.smoke
 def test_normalizer_keys_on_selection_content_not_position() -> None:
     """Pure-function check on the normalizer: same clauses, any order, same groups."""
 

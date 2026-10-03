@@ -15,8 +15,6 @@ import pytest
 import torchlens as tl
 from torchlens._errors import FacadeTeachingError
 
-pytestmark = pytest.mark.smoke
-
 _PAPER_ERA_ROWS = {
     "log_forward_pass": "torchlens.trace",
     "ModelHistory": "torchlens.Trace",

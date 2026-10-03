@@ -85,7 +85,6 @@ def _assert_fork_equivalent(restored: tl.Trace, fork: tl.Trace) -> None:
     assert torch.equal(restored_saved, saved)
 
 
-@pytest.mark.smoke
 def test_fork_detached_records_carry_no_internal_cell_encodings(
     parent_trace: tl.Trace,
 ) -> None:
@@ -110,7 +109,6 @@ def test_fork_detached_records_carry_no_internal_cell_encodings(
     assert not leaked, f"raw PooledCell leaked into detached fork records: {leaked}"
 
 
-@pytest.mark.smoke
 def test_fork_pickle_round_trip(parent_trace: tl.Trace) -> None:
     """A COW fork must survive plain ``pickle`` dumps/loads."""
 
@@ -119,7 +117,6 @@ def test_fork_pickle_round_trip(parent_trace: tl.Trace) -> None:
     _assert_fork_equivalent(restored, fork)
 
 
-@pytest.mark.smoke
 def test_fork_save_load_round_trip(parent_trace: tl.Trace, tmp_path) -> None:
     """``tl.save(fork)`` must produce an artifact ``tl.load`` accepts.
 
@@ -134,7 +131,6 @@ def test_fork_save_load_round_trip(parent_trace: tl.Trace, tmp_path) -> None:
     _assert_fork_equivalent(restored, fork)
 
 
-@pytest.mark.smoke
 def test_fork_deepcopy(parent_trace: tl.Trace) -> None:
     """``copy.deepcopy`` of a fork must succeed and preserve structure."""
 
@@ -143,7 +139,6 @@ def test_fork_deepcopy(parent_trace: tl.Trace) -> None:
     assert len(duplicate.layer_list) == len(fork.layer_list)
 
 
-@pytest.mark.smoke
 def test_fork_of_fork_pickle_round_trip(parent_trace: tl.Trace) -> None:
     """A fork chain (fork of a fork) must also pickle round-trip."""
 

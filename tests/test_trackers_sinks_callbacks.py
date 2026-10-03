@@ -8,8 +8,6 @@ import torch
 import torchlens as tl
 import torchlens.trackers as trk
 
-pytestmark = pytest.mark.smoke
-
 
 class TestDerivedCadence:
     """Memo 3.8: callbacks derive cadence from the framework's own signals."""
@@ -69,6 +67,7 @@ class TestHFTrainerCallback:
 class TestLightningCallback:
     """Driven through the Lightning callback protocol."""
 
+    @pytest.mark.smoke
     def test_attach_and_close(self) -> None:
         pytest.importorskip("lightning")
         model = torch.nn.Linear(4, 4)

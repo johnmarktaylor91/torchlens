@@ -216,7 +216,6 @@ def _toy_fixtures() -> dict[str, Any]:
     }
 
 
-@pytest.mark.smoke
 def test_packet_generator_builds_manifest_and_appearances(tmp_path: Path) -> None:
     """The mini packet carries every promised manifest field per artifact."""
 

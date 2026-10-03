@@ -288,7 +288,6 @@ class _DerivedAttrModelOutputModel(nn.Module):
         return _DerivedAttrModelOutput(self.lin(x))
 
 
-@pytest.mark.smoke
 def test_derived_attr_dataclass_run_is_unverifiable(tmp_path: Path) -> None:
     """A dataclass with computed non-field state runs UNVERIFIABLE, never VERIFIED."""
 
@@ -305,7 +304,6 @@ def test_derived_attr_dataclass_run_is_unverifiable(tmp_path: Path) -> None:
     assert not hasattr(result.output, "extra_note")
 
 
-@pytest.mark.smoke
 def test_derived_attr_model_output_run_is_unverifiable(tmp_path: Path) -> None:
     """A ModelOutput with a computed non-mapping attribute runs UNVERIFIABLE."""
 
@@ -348,7 +346,6 @@ class _PureModelOutputModel(nn.Module):
         return _PureModelOutput(logits=self.lin(x))
 
 
-@pytest.mark.smoke
 def test_pure_dataclass_run_is_verified_and_faithful(tmp_path: Path) -> None:
     """A pure user dataclass output is VERIFIED and reconstructs to an equal instance."""
 
@@ -366,7 +363,6 @@ def test_pure_dataclass_run_is_verified_and_faithful(tmp_path: Path) -> None:
     assert torch.equal(result.output.logits, expected.logits)
 
 
-@pytest.mark.smoke
 def test_custom_init_model_output_run_is_unverifiable_but_reconstructs(tmp_path: Path) -> None:
     """r27-B2: a custom-``__init__`` ModelOutput is honest fail-closed UNVERIFIABLE.
 

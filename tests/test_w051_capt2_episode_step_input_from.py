@@ -20,8 +20,6 @@ from torch import nn
 import torchlens as tl
 from torchlens._episode_spec import EpisodeSpec
 
-pytestmark = pytest.mark.smoke
-
 
 def test_step_input_from_field_defaults_to_none_and_accepts_str_or_int() -> None:
     names = [f.name for f in dataclasses.fields(EpisodeSpec)]

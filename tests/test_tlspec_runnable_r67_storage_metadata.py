@@ -71,7 +71,6 @@ def _assert_refuses(trace: tl.Trace, path: Path, *needles: str) -> None:
 # ======================================================================================
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("class_name", ["UntypedStorage", "TypedStorage"])
 def test_r67_storage_disposition_table_covers_public_surface(class_name: str) -> None:
     """Every public (non-underscore) ``dir()`` member of each storage class has a row.
@@ -100,7 +99,6 @@ def test_r67_storage_disposition_table_covers_public_surface(class_name: str) ->
         assert why, member
 
 
-@pytest.mark.smoke
 def test_r67_acquisition_bridges_cover_typed_storage_spelling() -> None:
     """``_typed_storage`` joined the origin+watch bridge set (r66b R3 spelling)."""
 
@@ -150,7 +148,6 @@ _NBYTES_READERS = {
 }
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("spelling", sorted(_ACQUIRE_ONLY))
 def test_r67_discarded_handle_on_larger_base_state_saves_and_verifies(
     spelling: str, tmp_path: Path
@@ -245,7 +242,6 @@ def test_r67_placement_read_shared_state_refuses_every_spelling(
     _assert_refuses(trace, tmp_path / "shared.tlspec", "is_shared")
 
 
-@pytest.mark.smoke
 def test_r67_is_pinned_observed_value_is_the_authority() -> None:
     """The recorded fact is the accessor's ACTUAL return -- no accelerator-init inference.
 
@@ -340,7 +336,6 @@ def test_r67_input_storage_nbytes_read_diverges_on_changed_base(
     assert "storage_nbytes" in str(excinfo.value)
 
 
-@pytest.mark.smoke
 def test_r67_discarded_input_handle_records_no_geometry_fact(tmp_path: Path) -> None:
     """Acquisition-only on an INPUT records no fact: a changed-base twin stays runnable.
 
@@ -365,7 +360,6 @@ def test_r67_discarded_input_handle_records_no_geometry_fact(tmp_path: Path) -> 
 # ======================================================================================
 
 
-@pytest.mark.smoke
 def test_r67_grad_is_none_is_the_actual_read() -> None:
     """The signature stamps the REAL ``.grad`` read -- free-F5's structural shortcut is gone.
 
@@ -403,7 +397,6 @@ def test_r67_grad_is_none_is_the_actual_read() -> None:
         assert _state_metadata_signature(value)["grad_is_none"] == real, value
 
 
-@pytest.mark.smoke
 def test_r67_nonleaf_grad_signature_matches_real_read() -> None:
     """A non-leaf tensor with an ASSIGNED grad stamps grad_is_none=False (real read)."""
 
@@ -439,7 +432,6 @@ def test_r67_unattributable_storage_access_fails_closed(tmp_path: Path) -> None:
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
 
 
-@pytest.mark.smoke
 def test_r67_storage_wrappers_restore_identity_exactly() -> None:
     """After a capture, every wrapped storage member restores to the exact original."""
 
@@ -583,7 +575,6 @@ def test_r67_hostile_subclass_admission_refuses(surface: str, tmp_path: Path) ->
 # ======================================================================================
 
 
-@pytest.mark.smoke
 def test_r67_observed_read_property_no_fact_without_access() -> None:
     """The ledger claims exactly the observations that occurred -- no more, no less."""
 

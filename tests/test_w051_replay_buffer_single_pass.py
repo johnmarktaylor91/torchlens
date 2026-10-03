@@ -19,8 +19,6 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens.intervention.errors import BufferThreadGapWarning
 
-pytestmark = pytest.mark.smoke
-
 
 class _Buf(nn.Module):
     """Write a buffer once from an activation, then read it where x is untouched."""
@@ -74,6 +72,7 @@ def test_single_pass_buffer_write_threads_zero_ablation(buffered) -> None:
     assert torch.equal(trace[written.label].out, captured_buffer)
 
 
+@pytest.mark.smoke
 def test_single_pass_buffer_write_threads_scaled_value(buffered) -> None:
     model, x, trace = buffered
     written = _written_buffer_op(trace)

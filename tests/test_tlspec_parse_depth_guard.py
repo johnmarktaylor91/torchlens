@@ -22,9 +22,6 @@ import torchlens as tl
 from torchlens._io import _json
 from torchlens._io.runnable_load import _MAX_LITERAL_NESTING_DEPTH, _parse_literal
 
-pytestmark = pytest.mark.smoke
-
-
 # --------------------------------------------------------------------------- #
 # (a) bounded JSON reader                                                      #
 # --------------------------------------------------------------------------- #

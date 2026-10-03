@@ -153,7 +153,6 @@ def _np_float64_subclass_specimen():
     return _WeirdNp(2.0)
 
 
-@pytest.mark.smoke
 def test_r69_classifier_lattice_is_closed_and_exact() -> None:
     """Every specimen lands in its agreed lattice class; stock set is programmatic."""
 
@@ -251,7 +250,6 @@ class _FloatBranch(nn.Module):
         return x + 100.0
 
 
-@pytest.mark.smoke
 def test_r69_admitted_capture_semantic_runtime_replacement_diverges(tmp_path: Path) -> None:
     """Both admitted lanes (plain + stock numpy) diverge on same-value semantic swaps."""
 
@@ -275,7 +273,6 @@ def test_r69_admitted_capture_semantic_runtime_replacement_diverges(tmp_path: Pa
             tl.load(path).run(inputs=[x, swap])
 
 
-@pytest.mark.smoke
 def test_r69_green_pins_stock_numpy_value_transparency(tmp_path: Path) -> None:
     """RATIFIED pins: np<->builtin same-value verifies; changed value diverges."""
 
@@ -318,7 +315,6 @@ class _WrapperSteer(nn.Module):
         return x + 100.0
 
 
-@pytest.mark.smoke
 def test_r69_expected_residual_plain_vs_stock_wrapper_type_steering(tmp_path: Path) -> None:
     """EXPECTED-RESIDUAL pin (contract section 11): wrapper-identity steering.
 
@@ -433,7 +429,6 @@ def test_r69_refused_key_refuses_typed_at_save(name: str, tmp_path: Path) -> Non
     _assert_semantic_refusal(excinfo, "opaque_mapping_key")
 
 
-@pytest.mark.smoke
 def test_r69_duplicate_same_bit_nan_keys_refuse_ambiguous(tmp_path: Path) -> None:
     """Two distinct same-bit NaN key objects -> one token -> ambiguous, refuse typed."""
 
@@ -457,7 +452,6 @@ def test_r69_runtime_duplicate_token_matches_fail_closed() -> None:
         _value_at_path(mapping, (token,))
 
 
-@pytest.mark.smoke
 def test_r69_mutated_keys_diverge(tmp_path: Path) -> None:
     """Signed-zero, bool/int/float, tuple-member, and semantic key swaps diverge."""
 
@@ -497,7 +491,6 @@ def test_r69_nan_key_nested_and_bit_distinct_payloads() -> None:
     assert encode_mapping_key((quiet, 1)) != encode_mapping_key((payload_nan, 1))
 
 
-@pytest.mark.smoke
 def test_r71d_reserved_marker_keys_round_trip_without_false_divergence(tmp_path: Path) -> None:
     """free repro3c: a dict input keyed by a reserved sentinel (or a tuple containing
     one) saves/loads/runs VERIFIED on the UNCHANGED input; a changed value under such
@@ -541,7 +534,6 @@ def test_r71d_reserved_marker_keys_round_trip_without_false_divergence(tmp_path:
         tl.load(path).run(inputs=[x, {"flag": {"present": 1}}])
 
 
-@pytest.mark.smoke
 def test_r71d_reserved_registry_meta_test() -> None:
     """Every sentinel interpreted before mapping lookup is in the reserved registry
     AND is never round-tripped raw by the key codec."""
@@ -611,7 +603,6 @@ def test_r69_key_codec_is_injective_and_round_trips() -> None:
 # ======================================================================================
 
 
-@pytest.mark.smoke
 def test_r69_classifier_choke_points_source_scan() -> None:
     """Snapshot, literal encode, literal compare, and key codec share the classifier."""
 
@@ -645,7 +636,6 @@ def test_r69_classifier_choke_points_source_scan() -> None:
     assert "encode_mapping_key" in bind_source
 
 
-@pytest.mark.smoke
 def test_r69_snapshot_key_tokens_paths_and_lookup_share_the_authority() -> None:
     """Snapshot ordered-key facts and leaf paths speak encode_mapping_key tokens."""
 
@@ -679,7 +669,6 @@ class _BufferNumpyWriteback(nn.Module):
         return self.b * x
 
 
-@pytest.mark.smoke
 def test_r69_multi_slot_escape_witnesses_stay_runnable(tmp_path: Path) -> None:
     """A state name owning MULTIPLE escape-witnessed slots must not over-refuse.
 

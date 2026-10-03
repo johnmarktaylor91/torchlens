@@ -166,7 +166,6 @@ def test_attach_hooks_handle_removes_only_its_own_specs() -> None:
     assert remaining.handle in second.handle_ids
 
 
-@pytest.mark.smoke
 def test_intervention_spec_cached_property_invalidates_after_mutators() -> None:
     """Frozen intervention-spec snapshots refresh after each public mutator."""
 
@@ -272,7 +271,6 @@ def test_detach_hooks_no_site_is_noop_unless_strict() -> None:
         log.detach_hooks(strict=True)
 
 
-@pytest.mark.smoke
 def test_rerun_advances_out_recipe_revision_after_set() -> None:
     """Successful rerun advances the out recipe revision."""
 

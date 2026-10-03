@@ -85,14 +85,12 @@ class _Grow(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_site_key_single_on_uniform_layer() -> None:
     log = tl.trace(_Tied(), torch.randn(2, 8))
     assert log["linear_1_1"].site_key == "s1|lin|linear||1"
     assert log["relu_1_2"].site_key == "s1|act|relu||1"
 
 
-@pytest.mark.smoke
 def test_site_key_refuses_typed_on_spanning_layer() -> None:
     # I-S3': a silent single-key read on a site-spanning layer is the
     # failure this tripwire exists to catch.
@@ -106,7 +104,6 @@ def test_site_key_refuses_typed_on_spanning_layer() -> None:
     assert ".ops[k].site_key" in str(excinfo.value)
 
 
-@pytest.mark.smoke
 def test_site_key_refuses_typed_when_keys_absent() -> None:
     # Legacy-artifact shape: no op carries a key -> typed refusal, never a
     # None read (consumer-matrix row).
@@ -124,7 +121,6 @@ def test_site_key_refuses_typed_when_keys_absent() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_site_peers_finds_reused_site_cohort() -> None:
     log = tl.trace(_Shrink(), torch.randn(2, 16))
     relu_labels = [label for label in log.layer_labels if "relu" in label]
@@ -137,13 +133,11 @@ def test_site_peers_finds_reused_site_cohort() -> None:
         assert peer_labels == set(relu_labels) - {label}
 
 
-@pytest.mark.smoke
 def test_site_peers_empty_when_site_unshared() -> None:
     log = tl.trace(_Tied(), torch.randn(2, 8))
     assert log["linear_1_1"].site_peers == ()
 
 
-@pytest.mark.smoke
 def test_site_peers_refuses_typed_without_keys() -> None:
     # Never a None-key peer-of-everything collapse.
     log = tl.trace(_Shrink(), torch.randn(2, 16))
@@ -183,14 +177,12 @@ class _StubLayer:
         )
 
 
-@pytest.mark.smoke
 def test_shape_summary_none_for_single_pass_and_uniform() -> None:
     log = tl.trace(_Tied(), torch.randn(2, 8))
     assert log["linear_1_1"].shape_summary is None  # uniform multi-pass
     assert log["input_1"].shape_summary is None  # single-pass
 
 
-@pytest.mark.smoke
 def test_shape_summary_single_axis_monotone_on_real_capture() -> None:
     log = tl.trace(_Grow(), torch.randn(2, 4, 8))
     multi_pass = [log[label] for label in log.layer_labels if log[label].num_passes > 1]
@@ -220,7 +212,6 @@ def test_shape_summary_format_matrix() -> None:
         assert summary is not None and set(summary) <= SHAPE_SUMMARY_CHARACTER_CLASS
 
 
-@pytest.mark.smoke
 def test_shape_summary_may_contain_arrow_never_markup() -> None:
     # The S5 handoff fact: the ratified format CONTAINS ">" ("64->512"), so
     # render-side escaping is mandatory and assert-absence is impossible.

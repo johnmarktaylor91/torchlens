@@ -48,9 +48,6 @@ from torchlens.transforms import (
     with_context,
 )
 
-pytestmark = pytest.mark.smoke
-
-
 # --- canonical JSON: the one byte form -------------------------------------
 
 
@@ -105,6 +102,9 @@ def test_spec_version_mismatch_refuses_never_substitutes() -> None:
 # --- kernels: plan predicts apply (T-C6 self-consistency) --------------------
 
 
+@pytest.mark.smoke_cells(
+    "test_kernel_plan_predicts_apply[spec5-shape5]", "test_kernel_plan_predicts_apply[spec6-shape6]"
+)
 @pytest.mark.parametrize(
     ("spec", "shape"),
     [
@@ -130,6 +130,7 @@ def test_kernel_plan_predicts_apply(spec: TransformSpec, shape: tuple[int, ...])
     assert str(result.dtype) == planned.output.dtype
 
 
+@pytest.mark.smoke
 def test_kernel_param_validation_refuses_typed() -> None:
     """Bad kernel params refuse with transform_params_invalid at build time."""
 
@@ -213,6 +214,7 @@ def test_mapping_refuses_at_the_single_chain_door() -> None:
     assert excinfo.value.fields["code"] == "transform_coercion_invalid"
 
 
+@pytest.mark.smoke
 def test_mapping_resolution_per_output_key_with_default() -> None:
     """Decision 13: per-site Mapping resolves per label BEFORE coercion."""
 
@@ -246,6 +248,7 @@ def test_builtin_names_are_closed_and_non_replaceable() -> None:
     assert excinfo.value.fields["code"] == "transform_builtin_shadowed"
 
 
+@pytest.mark.smoke
 def test_custom_registration_and_rehydration_round_trip() -> None:
     """A registered custom rebuilds from its record without importing code."""
 
@@ -327,6 +330,7 @@ def test_wants_context_is_false_for_keyword_only_ctx_partials() -> None:
     assert wants_context(partial) is False
 
 
+@pytest.mark.smoke
 def test_with_context_declares_and_receives_ctx() -> None:
     """The one legal door to ctx: explicit declaration."""
 
@@ -412,6 +416,7 @@ def test_pipeline_record_shape_and_verifiability() -> None:
     assert pipeline_record(None) is None
 
 
+@pytest.mark.smoke
 def test_opaque_rehydration_refuses_application_typed() -> None:
     """Identification is a disclosure, not code: no import, no execution."""
 
@@ -426,6 +431,7 @@ def test_opaque_rehydration_refuses_application_typed() -> None:
     assert excinfo.value.fields["code"] == "transform_opaque_unresolvable"
 
 
+@pytest.mark.smoke
 def test_malformed_pipeline_records_refuse_typed() -> None:
     """Wrong schema, missing steps, and unknown kinds all refuse typed."""
 
@@ -440,6 +446,7 @@ def test_malformed_pipeline_records_refuse_typed() -> None:
         assert excinfo.value.fields["code"] == "transform_pipeline_record_invalid"
 
 
+@pytest.mark.smoke
 def test_plan_stops_predicting_after_an_opaque_step() -> None:
     """Post-opaque spec steps are unplanned: a guessed plan is worse than none."""
 

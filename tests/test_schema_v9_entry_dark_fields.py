@@ -26,8 +26,6 @@ from torch import nn
 import torchlens as tl
 from torchlens._io import TorchLensIOError
 
-pytestmark = [pytest.mark.smoke]
-
 _DIGEST = hashlib.sha256(b"schema-v9-entry-dark").hexdigest()
 
 

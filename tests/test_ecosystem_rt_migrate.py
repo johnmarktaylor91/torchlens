@@ -25,8 +25,6 @@ from torchlens._io.compat_ledger import MIGRATION_WITNESS_FILENAME, read_migrati
 from torchlens.ecosystem import migrate
 from torchlens.ecosystem.migrate import _ABSENT_FAMILIES_BY_TARGET
 
-pytestmark = pytest.mark.smoke
-
 GOLDENS_DIR = Path(__file__).parent / "release_goldens"
 CORPUS_PATH = GOLDENS_DIR / "genuine_release_artifacts.tar.gz"
 
@@ -105,6 +103,7 @@ def test_migration_is_idempotent(corpus_dir: Path, tmp_path: Path) -> None:
     assert second.witness_path is not None
 
 
+@pytest.mark.smoke
 def test_v216_source_refuses_with_verified_reader(corpus_dir: Path, tmp_path: Path) -> None:
     """Pre-floor migration is out of v1; the remedy names the verified reader."""
 
@@ -166,6 +165,7 @@ def test_failure_injection_leaves_source_intact(
     assert not path.with_name(path.name + ".tl-migrate-staging").exists()
 
 
+@pytest.mark.smoke
 def test_publish_failure_restores_source(
     corpus_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -189,6 +189,7 @@ def test_publish_failure_restores_source(
     assert manifest["tlspec_version"] == 6  # restored
 
 
+@pytest.mark.smoke
 def test_tampered_witness_refuses_at_load(corpus_dir: Path, tmp_path: Path) -> None:
     """A witness beside a mismatching manifest is a typed refusal, not a gap."""
 
@@ -204,6 +205,7 @@ def test_tampered_witness_refuses_at_load(corpus_dir: Path, tmp_path: Path) -> N
     assert excinfo.value.fields["code"] == "artifact_producer_pair_ungoverned"
 
 
+@pytest.mark.smoke
 def test_broken_witness_refuses_typed(corpus_dir: Path, tmp_path: Path) -> None:
     """A structurally broken witness refuses migration_witness_invalid."""
 

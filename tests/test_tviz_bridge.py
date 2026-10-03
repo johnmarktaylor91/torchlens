@@ -17,8 +17,6 @@ import torch
 
 import torchlens.tviz as tviz
 
-pytestmark = pytest.mark.smoke
-
 
 def _views(n_layers: int = 2) -> list[tviz.AttentionView]:
     """Deterministic self-attention views over one shared token axis."""
@@ -74,6 +72,7 @@ def test_oversized_payload_refuses_typed() -> None:
     assert error.fields["payload_bytes"] > error.fields["limit_bytes"]
 
 
+@pytest.mark.smoke
 @pytest.mark.skipif(
     importlib.util.find_spec("circuitsvis") is not None,
     reason="the refusal row needs circuitsvis absent",
@@ -94,6 +93,7 @@ def test_native_path_unaffected_by_bridge_state(tmp_path: Path) -> None:
     assert "<image" not in artifact.paths[0].read_text()
 
 
+@pytest.mark.smoke
 def test_bertviz_tuple_layout() -> None:
     """One [1, heads, dst, src] tensor per layer (the HF tuple layout)."""
 

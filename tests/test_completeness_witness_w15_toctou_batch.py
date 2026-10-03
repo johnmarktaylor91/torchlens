@@ -17,7 +17,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 import torch
 from torch import nn
 
@@ -113,7 +112,6 @@ class SubclassParamMutateRestore(nn.Module):
         return out
 
 
-@pytest.mark.smoke
 def test_param_storage_rebind_mutate_consume_restore_is_unverifiable(tmp_path: Path) -> None:
     """A mid-forward ``p.data`` storage rebind consumed by a traced op must fail closed."""
 
@@ -124,7 +122,6 @@ def test_param_storage_rebind_mutate_consume_restore_is_unverifiable(tmp_path: P
     assert result.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
 
 
-@pytest.mark.smoke
 def test_subclass_param_transient_mutation_is_unverifiable(tmp_path: Path) -> None:
     """A transient mutation of a subclass-typed param must still fail closed (verbatim path)."""
 

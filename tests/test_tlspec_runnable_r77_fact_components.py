@@ -111,7 +111,6 @@ def _assert_context_field_invalid_analysis_only(path: Path, run_inputs: Any) -> 
         loaded.run(inputs=run_inputs)
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "encoded_value",
     [_NESTED_LIST_COMPONENT, _MAPPING_COMPONENT, _SLICE_COMPONENT],
@@ -132,7 +131,6 @@ def test_r77_unhashable_metadata_path_component_refuses_typed(
     _assert_context_field_invalid_analysis_only(path, x.clone())
 
 
-@pytest.mark.smoke
 def test_r77_unhashable_metadata_position_component_refuses_typed(tmp_path: Path) -> None:
     """An unhashable metadata-fact POSITION component refuses typed (was ``in set`` crash)."""
 
@@ -142,7 +140,6 @@ def test_r77_unhashable_metadata_position_component_refuses_typed(tmp_path: Path
     _assert_context_field_invalid_analysis_only(path, x.clone())
 
 
-@pytest.mark.smoke
 def test_r77_unhashable_literal_path_component_refuses_typed(tmp_path: Path) -> None:
     """The sibling literal-fact path lane refuses an unhashable component typed."""
 
@@ -152,7 +149,6 @@ def test_r77_unhashable_literal_path_component_refuses_typed(tmp_path: Path) -> 
     _assert_context_field_invalid_analysis_only(path, (x.clone(), 3))
 
 
-@pytest.mark.smoke
 def test_r77_unhashable_literal_position_component_refuses_typed(tmp_path: Path) -> None:
     """The literal-fact POSITION coercion refuses an unhashable component typed."""
 
@@ -162,7 +158,6 @@ def test_r77_unhashable_literal_position_component_refuses_typed(tmp_path: Path)
     _assert_context_field_invalid_analysis_only(path, (x.clone(), 3))
 
 
-@pytest.mark.smoke
 def test_r77_unhashable_structure_position_component_refuses_typed(tmp_path: Path) -> None:
     """A structure-fact POSITION with an unhashable component refuses typed.
 
@@ -176,7 +171,6 @@ def test_r77_unhashable_structure_position_component_refuses_typed(tmp_path: Pat
     _assert_context_field_invalid_analysis_only(path, x.clone())
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "factory",
     [

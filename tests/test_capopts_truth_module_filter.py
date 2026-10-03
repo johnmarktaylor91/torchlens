@@ -12,15 +12,12 @@ from __future__ import annotations
 
 import warnings
 
-import pytest
 import torch
 import torch.nn as nn
 
 import torchlens as tl
 from torchlens.errors import TorchLensWarning
 from torchlens.options import CaptureOptions
-
-pytestmark = [pytest.mark.smoke]
 
 
 class ThreeStep(nn.Module):

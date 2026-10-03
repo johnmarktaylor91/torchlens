@@ -24,13 +24,10 @@ if HAS_AMP_GRADSCALER:
 else:  # torch 2.1-2.2: the device-agnostic GradScaler postdates the floor.
     GradScaler = None  # type: ignore[assignment,misc]
 
-pytestmark = [
-    pytest.mark.smoke,
-    pytest.mark.skipif(
-        not HAS_AMP_GRADSCALER,
-        reason="torch.amp.GradScaler (device-agnostic) postdates the torch 2.1 floor",
-    ),
-]
+pytestmark = pytest.mark.skipif(
+    not HAS_AMP_GRADSCALER,
+    reason="torch.amp.GradScaler (device-agnostic) postdates the torch 2.1 floor",
+)
 
 
 def _loop(

@@ -41,8 +41,6 @@ import torchlens as tl
 from torchlens.errors import TorchLensError
 from torchlens.intervention.errors import ControlFlowDivergenceWarning
 
-pytestmark = pytest.mark.smoke
-
 ATOL = 1e-6
 RTOL = 1e-5
 

@@ -64,8 +64,6 @@ from torchlens._runnable_state import RunResourceCeiling, _byte_guarded_clone
 from torchlens.errors import RunCapabilityUnavailableError
 from torchlens.runnable import StateSource
 
-pytestmark = pytest.mark.smoke
-
 _CAPTURE = {"capture": tl.options.CaptureOptions(intervention_ready=True)}
 
 

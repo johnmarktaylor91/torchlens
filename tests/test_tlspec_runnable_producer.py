@@ -233,7 +233,6 @@ def _read_sparse_metadata(path: Path) -> dict[str, Any]:
     return value
 
 
-@pytest.mark.smoke
 def test_runnable_save_emits_frozen_sparse_descriptor_and_value_free_recipe(
     tmp_path: Path,
 ) -> None:
@@ -318,7 +317,6 @@ def test_runnable_save_emits_frozen_sparse_descriptor_and_value_free_recipe(
     )
 
 
-@pytest.mark.smoke
 def test_runnable_sparse_core_contains_no_tensor_payload_family(tmp_path: Path) -> None:
     """Assert descriptor, manifest body, and scrubbed Trace contain no tensor values."""
 
@@ -517,7 +515,6 @@ def test_runnable_preflight_keeps_typed_rejection_for_opaque_tensor_container_me
     }
 
 
-@pytest.mark.smoke
 def test_runnable_control_flow_emits_bool_loop_and_arm_entry_witnesses(
     tmp_path: Path,
 ) -> None:

@@ -159,7 +159,6 @@ def test_pt_shard_reader_mmaps_a_path_object(tmp_path: Path) -> None:
     assert any("relu" in key for key in payload), payload
 
 
-@pytest.mark.smoke
 def test_stimulus_ids_in_memory_refuses_typed() -> None:
     """In-memory mode refuses stimulus_ids= with a teaching typed error (D2)."""
 
@@ -213,7 +212,6 @@ def test_left_padded_batch_derives_position_ids_and_matches_reference() -> None:
     assert not torch.allclose(uncorrected, reference)
 
 
-@pytest.mark.smoke
 def test_left_padded_batch_without_position_ids_refuses_typed() -> None:
     """A model whose forward has no position_ids parameter refuses typed (D5.2)."""
 
@@ -230,7 +228,6 @@ def test_left_padded_batch_without_position_ids_refuses_typed() -> None:
     assert "relative position" in message
 
 
-@pytest.mark.smoke
 def test_right_aligned_batches_are_untouched() -> None:
     """Right-padded masks trigger neither derivation nor a disclosure warning."""
 
@@ -257,7 +254,6 @@ def test_right_aligned_batches_are_untouched() -> None:
     assert torch.equal(next(iter(out.values())), default_positions)
 
 
-@pytest.mark.smoke
 def test_caller_supplied_position_ids_are_trusted() -> None:
     """A batch already carrying position_ids is passed through unchanged."""
 
@@ -279,7 +275,6 @@ def test_caller_supplied_position_ids_are_trusted() -> None:
     assert torch.equal(next(iter(out.values())), reference)
 
 
-@pytest.mark.smoke
 def test_inference_guard_restores_mixed_train_eval_flags_and_buffers() -> None:
     """Forwards run in eval/no_grad; exact per-submodule flags restore (D3)."""
 
@@ -310,7 +305,6 @@ def test_inference_guard_restores_flags_on_refusal_mid_run() -> None:
     assert model.emb.training is True
 
 
-@pytest.mark.smoke
 def test_completed_resume_is_a_true_noop(tmp_path: Path) -> None:
     """A completed compatible resume touches neither model mode nor device (D3)."""
 

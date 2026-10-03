@@ -23,8 +23,6 @@ from torch import nn
 import torchlens as tl
 from torchlens.receptive_field._types import ReceptiveFieldStatus
 
-pytestmark = pytest.mark.smoke
-
 
 @pytest.fixture(autouse=True)
 def built_in_rule_pack() -> Iterator[None]:

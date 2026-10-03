@@ -16,8 +16,6 @@ import pytest
 
 from torchlens.data_classes._layer_accessors import LayerAccessor, OpAccessor
 
-pytestmark = pytest.mark.smoke
-
 
 def _op(label: str) -> SimpleNamespace:
     return SimpleNamespace(

@@ -19,8 +19,6 @@ from torchlens.observability import (
     validate_step_order,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 def _observed(step: int = 1, *, stream: str = "activation", **kwargs) -> ObservationRecord:
     spine = Spine()

@@ -40,7 +40,6 @@ class _Tiny(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_nested_active_logging_raises_runtime_error() -> None:
     """Entering ``active_logging`` while one is already active must raise.
 
@@ -57,7 +56,6 @@ def test_nested_active_logging_raises_runtime_error() -> None:
                 pass
 
 
-@pytest.mark.smoke
 def test_nested_trace_via_forward_hook_raises() -> None:
     """A user forward hook that calls trace must fail loudly.
 

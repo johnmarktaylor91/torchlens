@@ -89,7 +89,6 @@ def _last_token_metric(log: Any) -> torch.Tensor:
     return log[log.output_layers[0]].out[0, -1, 0]
 
 
-@pytest.mark.smoke
 def test_logit_lens_default_route_settles_typed_or_validated(gpt2_log: Any) -> None:
     """The flagship 5.x failure: the default route may refuse TYPED, never lie.
 
@@ -110,7 +109,6 @@ def test_logit_lens_default_route_settles_typed_or_validated(gpt2_log: Any) -> N
         assert result.entries and result.entries[-1].logits.shape[-1] == 512
 
 
-@pytest.mark.smoke
 def test_logit_lens_user_lens_route_projects_real_numbers(gpt2: Any, gpt2_log: Any) -> None:
     """The lens= socket works on real GPT-2 TODAY, with verifiable numbers.
 
@@ -132,7 +130,6 @@ def test_logit_lens_user_lens_route_projects_real_numbers(gpt2: Any, gpt2_log: A
     assert torch.allclose(last[..., -kept:, :], final, atol=1e-4, rtol=1e-4)
 
 
-@pytest.mark.smoke
 def test_logit_lens_predictions_stream_on_real_model(gpt2: Any, gpt2_log: Any) -> None:
     """FIX-L on a real model: streamed rows, native-output honesty, no vocab retention."""
 
@@ -247,7 +244,6 @@ def test_activation_patch_surfaces_settle_typed_or_effective(
     assert disclosed or moved, "flat baseline-equal patch table published with no disclosure"
 
 
-@pytest.mark.smoke
 def test_attribution_patch_heads_refuses_typed_on_sdpa(
     gpt2: Any, gpt2_inputs: tuple[torch.Tensor, torch.Tensor]
 ) -> None:

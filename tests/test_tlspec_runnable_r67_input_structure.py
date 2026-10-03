@@ -93,7 +93,6 @@ class _TwoArg(nn.Module):
         return torch.relu(x) + 1.0
 
 
-@pytest.mark.smoke
 def test_r67_zero_field_dataclass_argument_cannot_vanish(tmp_path: Path) -> None:
     """A zero-field dataclass arg is witnessed by node record + empty-kind row.
 
@@ -151,7 +150,6 @@ class _NTModel(nn.Module):
         return nt.x * 2.0
 
 
-@pytest.mark.smoke
 def test_r67_dataclass_class_identity_is_witnessed(tmp_path: Path) -> None:
     x = torch.randn(3)
     path = _save(_trace(_CfgModel(), _CfgA(True, x)), tmp_path / "cfg.tlspec")
@@ -198,7 +196,6 @@ class _FloatKeyModel(nn.Module):
         return torch.relu(d[2.5]) + 1.0
 
 
-@pytest.mark.smoke
 def test_r67_grammar_key_tensor_descendant_binds_and_verifies(tmp_path: Path) -> None:
     """A tensor under a float key is a FIRST-CLASS bound leaf -- witnessed and rebound.
 
@@ -219,7 +216,6 @@ def test_r67_grammar_key_tensor_descendant_binds_and_verifies(tmp_path: Path) ->
     _assert_diverges(path, {1: x.clone()})
 
 
-@pytest.mark.smoke
 def test_r67_key_codec_round_trip_and_type_strictness() -> None:
     for key in (True, False, 0, 1, -3, "k", 2.5, 1.0, None, ("a", 1), (True, (2.5, None))):
         component = encode_mapping_key(key)
@@ -296,7 +292,6 @@ class _RegModel(nn.Module):
         return box.t * 3.0
 
 
-@pytest.mark.smoke
 def test_r67_registered_container_round_trips_verified(tmp_path: Path) -> None:
     """corr1-3: a registered input saves AND runs -- the advertise-then-fail lane is gone."""
 
@@ -340,7 +335,6 @@ class _AttrModel(nn.Module):
         return torch.tanh(box.x) - 1.0
 
 
-@pytest.mark.smoke
 def test_r67_dataclass_instance_state_refuses_at_save(tmp_path: Path) -> None:
     x = torch.randn(2, 3)
     box = _Box(x.clone())
@@ -376,7 +370,6 @@ def _structure_witnesses_of(path: Path):
     ]
 
 
-@pytest.mark.smoke
 def test_r67_structure_facts_are_required_and_parse_validated(tmp_path: Path) -> None:
     x = torch.randn(3)
     path = _save(_trace(_CfgModel(), _CfgA(True, x)), tmp_path / "pv.tlspec")
@@ -479,7 +472,6 @@ def test_r67_structure_facts_are_required_and_parse_validated(tmp_path: Path) ->
 # ======================================================================================
 
 
-@pytest.mark.smoke
 def test_r67_snapshot_kind_matrix_is_closed() -> None:
     """One specimen per closed kind; every node carries kind + exact type + schema."""
 
@@ -625,7 +617,6 @@ def test_r69_instance_state_names_enumerates_dict_and_all_mro_slots() -> None:
     assert {"mode", "extra_dict_attr"} <= set(instance_state_names(mixed))
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "extra_value",
     [None, False, 0, {}, (), "", object()],
@@ -649,7 +640,6 @@ def test_r69_presence_matrix_every_falsey_extra_refuses(extra_value, tmp_path: P
     ), extra_value
 
 
-@pytest.mark.smoke
 def test_r69_slotted_dataclass_hidden_state_refuses_at_save(tmp_path: Path) -> None:
     """hon1-F2: __slots__ control state on a dataclass subclass refuses typed at save."""
 
@@ -715,7 +705,6 @@ def test_r69_clean_declared_schema_lanes_stay_admitted(tmp_path: Path) -> None:
     assert snapshot["refusals"] == []
 
 
-@pytest.mark.smoke
 def test_r67_consumer_source_scan() -> None:
     """Capture recorder and runtime check both derive from the ONE snapshot spine."""
 
@@ -771,7 +760,6 @@ def _dict_property_shadowed_dataclass():
     return _EvilCfg
 
 
-@pytest.mark.smoke
 def test_r71c_property_shadowed_dict_refuses_without_running_hook(tmp_path: Path) -> None:
     """hon1-F1: a property-shadowed __dict__ hides hidden state -> the enumerator no
     longer trusts it, save refuses ``instance_state_uninspectable``, and the hostile
@@ -802,7 +790,6 @@ def test_r71c_property_shadowed_dict_refuses_without_running_hook(tmp_path: Path
     assert calls["n"] == 0
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "factory_name",
     ["descriptor_shadow", "dict_subclass", "custom_getattribute", "custom_getattr"],
@@ -913,7 +900,6 @@ def test_r71c_registered_container_shadowed_dict_refuses(tmp_path: Path) -> None
     assert any(r["reason"] == "instance_state_uninspectable" for r in snapshot["refusals"])
 
 
-@pytest.mark.smoke
 def test_r71c_runtime_uninspectable_twin_never_verifies(tmp_path: Path) -> None:
     """Symmetric runtime proof: an admitted plain capture vs an uninspectable
     same-schema runtime twin diverges/refuses, never VERIFIED (the hon1-F1 E2E)."""
@@ -1010,7 +996,6 @@ def test_r71c_greens_ordinary_declared_schemas(tmp_path: Path) -> None:
         ), type(value).__name__
 
 
-@pytest.mark.smoke
 def test_r71c_no_live_dict_getattr_in_normative_module() -> None:
     """Source-scan tripwire: the normative input-boundary module never reads a live
     instance ``__dict__`` via ``getattr`` (only the inert raw-MRO helper)."""
@@ -1128,7 +1113,6 @@ def test_r69_site_position_member_codec_round_trips() -> None:
         decode_input_site_position("arg:notanint")
 
 
-@pytest.mark.smoke
 def test_r69_inventory_is_authored_for_every_registry_family(tmp_path: Path) -> None:
     """Every artifact persists one row per registered family, empty sets explicit."""
 
@@ -1298,7 +1282,6 @@ def test_r69_forged_inventory_mutations_refuse(tmp_path: Path) -> None:
     _heal_capture_state(source, [x.clone(), 1])
 
 
-@pytest.mark.smoke
 def test_r69_secA_f1_structure_strip_no_longer_restores_weak_semantics(
     tmp_path: Path,
 ) -> None:
@@ -1347,7 +1330,6 @@ def test_r69_unregistered_family_fact_refuses(tmp_path: Path) -> None:
     _heal_capture_state(source, [x.clone(), 1])
 
 
-@pytest.mark.smoke
 def test_r69_positive_family_matrix_round_trips(tmp_path: Path) -> None:
     """Positive cases: tensor-only, scalar-only, tensor-free empty root, mixed
     args/kwargs, no state reads, read-gated state reads -- all save+load+run."""
@@ -1383,7 +1365,6 @@ def test_r69_positive_family_matrix_round_trips(tmp_path: Path) -> None:
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
-@pytest.mark.smoke
 def test_r69_emission_meta_test_every_prefix_is_registered(tmp_path: Path) -> None:
     """A future replay-critical family cannot ship without a registry row.
 

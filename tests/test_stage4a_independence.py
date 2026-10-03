@@ -26,8 +26,6 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = pytest.mark.smoke
-
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
 #: The stage-4a territory (memo 2.4): selection resolution + cross-run

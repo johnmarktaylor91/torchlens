@@ -34,7 +34,6 @@ def _traced(tmp_path):
     return tl.trace(_TinyModel(), torch.randn(1, 4))
 
 
-@pytest.mark.smoke
 def test_negative_verification_verdict_survives_save_load(tmp_path) -> None:
     """capture_verified=False + reason must round-trip through .tlspec."""
 
@@ -52,7 +51,6 @@ def test_negative_verification_verdict_survives_save_load(tmp_path) -> None:
     assert loaded.capture_verification_reason == "escape_rescue_unrecovered"
 
 
-@pytest.mark.smoke
 def test_positive_verification_claim_never_persists(tmp_path) -> None:
     """A True verdict (or any non-False value) loads as None: verdicts can
     only degrade across persistence, so a tampered artifact cannot forge a
@@ -70,7 +68,6 @@ def test_positive_verification_claim_never_persists(tmp_path) -> None:
     assert loaded.capture_verification_reason is None
 
 
-@pytest.mark.smoke
 def test_deepcopy_keeps_the_full_live_verdict(tmp_path) -> None:
     """A same-session deepcopy is not a persistence boundary: both verdict
     directions survive it."""
@@ -89,7 +86,6 @@ def test_deepcopy_keeps_the_full_live_verdict(tmp_path) -> None:
     assert clone.capture_verification_reason == "mode_rescue_rerun"
 
 
-@pytest.mark.smoke
 def test_deferred_storage_key_never_touches_fake_tensor_storage() -> None:
     """grind-r5 b6 R16 (sol): the deferred-alias key helper must classify a
     FakeTensor ineligible WITHOUT reading its data pointer (torch emits an

@@ -42,7 +42,6 @@ def _output_loss(trace: tl.Trace) -> torch.Tensor:
     return trace[trace.output_layers[0]].out.sum()
 
 
-@pytest.mark.smoke
 def test_activation_transform_keeps_raw_tensor_and_transformed_metadata() -> None:
     """Activation transform stores raw and transformed tensors separately."""
 

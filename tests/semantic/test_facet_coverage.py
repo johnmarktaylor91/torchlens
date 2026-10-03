@@ -9,8 +9,6 @@ from torch import nn
 import torchlens as tl
 from torchlens.semantic import facet_coverage
 
-pytestmark = pytest.mark.smoke
-
 
 class Block(nn.Module):
     """Tiny transformer block with attention and MLP children."""
@@ -132,6 +130,7 @@ def test_facet_coverage_reports_typed_absences() -> None:
     assert ("resid_pre", "structurally_absent") in report.missing_counts()
 
 
+@pytest.mark.smoke
 def test_facet_coverage_discloses_multi_call_modules() -> None:
     """A reused module's typed facets refusal becomes a disclosed row, not a crash."""
 

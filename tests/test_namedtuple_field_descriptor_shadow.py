@@ -25,8 +25,6 @@ from torchlens._input_walk import (
     undeclared_instance_state,
 )
 
-pytestmark = pytest.mark.smoke
-
 _Base = collections.namedtuple("_Base", ["x", "flag"])
 
 
@@ -67,6 +65,7 @@ def _refusal_reasons(value: object) -> list[str]:
     return [refusal["reason"] for refusal in snapshot_input_boundary(value)["refusals"]]
 
 
+@pytest.mark.smoke
 def test_property_shadowed_field_refuses_uninspectable():
     """The decoy container refuses instead of witnessing the decoy."""
 
@@ -102,6 +101,7 @@ def test_stock_namedtuples_stay_admitted():
     assert _refusal_reasons(_TypedTuple(torch.ones(2), 3)) == []
 
 
+@pytest.mark.smoke
 def test_extra_nonfield_property_stays_admitted():
     """A convenience property OUTSIDE the declared schema is not a shadow."""
 

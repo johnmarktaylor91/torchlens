@@ -13,8 +13,6 @@ from __future__ import annotations
 
 import pytest
 
-pytestmark = [pytest.mark.smoke]
-
 #: The versions the fidelity table was measured at. A different installed
 #: version does not silently pass: the pin asserts and names the drift.
 MEASURED_WANDB = "0.28.2"

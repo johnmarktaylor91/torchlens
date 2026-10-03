@@ -36,8 +36,6 @@ from pathlib import Path
 import pytest
 from _source_corpus import module_ast as _corpus_ast, module_source as _corpus_source
 
-pytestmark = pytest.mark.smoke
-
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _PACKAGE_ROOT = _REPO_ROOT / "torchlens"
 

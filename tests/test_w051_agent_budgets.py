@@ -47,7 +47,6 @@ def _page_all(tool: str, args: dict, row_key: str) -> list[dict]:
     raise AssertionError("paging did not terminate")
 
 
-@pytest.mark.smoke
 def test_token_backstop_reminted_next_reaches_every_row(clean: Path) -> None:
     """Rows the token backstop drops are reachable: next starts at the first dropped row."""
 

@@ -23,8 +23,6 @@ import torchlens as tl
 from torchlens._save_budget import SaveBudgetExceededError
 from torchlens.options import CaptureOptions
 
-pytestmark = [pytest.mark.smoke]
-
 
 class SmallNet(nn.Module):
     """fc -> relu."""

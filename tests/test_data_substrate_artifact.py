@@ -30,8 +30,6 @@ from torchlens._data_substrate import (
     stimulus_ids_digest,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 def _commit(writer: ArtifactWriter, index: int, payload: bytes = b"payload") -> dict[str, Any]:
     """Commit one byte-shard through the protocol.
@@ -113,6 +111,7 @@ def test_read_trusted_rows_refuses_missing_or_resized_member_typed(tmp_path: Pat
     assert excinfo.value.fields["code"] == "extraction_ledger_prefix_broken"
 
 
+@pytest.mark.smoke
 def test_repair_ledger_tail_truncates_torn_and_completes_missing_newline(tmp_path: Path) -> None:
     """Tail repair: torn line truncated; parseable line missing \\n completed."""
 
@@ -263,6 +262,7 @@ def _v1_artifact(tmp_path: Path, status: str) -> dict[str, Any]:
     return manifest
 
 
+@pytest.mark.smoke
 def test_migrate_completed_v1_builds_ledger_sidecar_and_v2_manifest(tmp_path: Path) -> None:
     """Completed v1 migrates without a forward: ledger, sidecar, honest fields."""
 

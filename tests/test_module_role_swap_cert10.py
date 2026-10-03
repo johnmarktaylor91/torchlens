@@ -13,7 +13,6 @@ and the root call's ops exactly mirror ``trace.layer_labels`` (no pass-qualified
 root ops, so ``validation._check_function_root_module_invariants`` stays armed).
 """
 
-import pytest
 import torch
 import torch.nn as nn
 
@@ -58,7 +57,6 @@ def _assert_root_call_mirrors_layers(log: "tl.Trace") -> None:
     )
 
 
-@pytest.mark.smoke
 def test_trace_submodule_as_root_after_container() -> None:
     """(a) outer -> inner-as-root -> outer again all trace correctly."""
     outer = _Outer()
@@ -94,7 +92,6 @@ def test_trace_submodule_as_root_after_container() -> None:
     _assert_root_call_mirrors_layers(log_outer_again)
 
 
-@pytest.mark.smoke
 def test_trace_submodule_as_root_before_container() -> None:
     """(b) reverse order: inner-as-root first, then the container."""
     outer = _Outer()

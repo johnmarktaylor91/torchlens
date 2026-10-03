@@ -114,7 +114,6 @@ def _payload(rows: list[dict[str, object]]) -> dict[str, object]:
     )
 
 
-@pytest.mark.smoke
 def test_runner_fastlog_zero_operation_executes_on_current_api() -> None:
     """The fastlog_zero cell runs against the current ``save=`` predicate API."""
 
@@ -142,7 +141,6 @@ def test_runner_fastlog_selectivity_operations_execute_on_current_api() -> None:
     assert state["fastlog_selected_func_names"]
 
 
-@pytest.mark.smoke
 def test_runner_fastlog_halt_operation_executes_on_current_api() -> None:
     """Halt-fraction cells derive their halt index through the ``save=`` API."""
 
@@ -156,7 +154,6 @@ def test_runner_fastlog_halt_operation_executes_on_current_api() -> None:
     assert state["fastlog_halt_raw_index"] >= 1
 
 
-@pytest.mark.smoke
 def test_select_fastlog_names_returns_nonempty_selection() -> None:
     """Name selection sees real op events from the predicate dry run."""
 
@@ -168,7 +165,6 @@ def test_select_fastlog_names_returns_nonempty_selection() -> None:
     assert all(isinstance(name, str) and name for name in names)
 
 
-@pytest.mark.smoke
 def test_gate_fails_when_baseline_row_disappears_from_current() -> None:
     """A TorchLens baseline row absent from the current run blocks the gate."""
 
@@ -188,7 +184,6 @@ def test_gate_fails_when_baseline_row_disappears_from_current() -> None:
     ]
 
 
-@pytest.mark.smoke
 def test_gate_reports_non_torchlens_disappearance_without_blocking() -> None:
     """A vanished peer row is disclosed but does not block the gate."""
 
@@ -208,7 +203,6 @@ def test_gate_reports_non_torchlens_disappearance_without_blocking() -> None:
     ]
 
 
-@pytest.mark.smoke
 def test_gate_current_only_rows_stay_blocking_under_new_field_name() -> None:
     """Current rows with no baseline entry still block, under an honest name."""
 
@@ -229,7 +223,6 @@ def test_gate_current_only_rows_stay_blocking_under_new_field_name() -> None:
     assert "missing_baseline_rows" not in comparison
 
 
-@pytest.mark.smoke
 def test_gate_tolerance_ignores_current_run_iqr() -> None:
     """A noisy current run cannot widen its own regression tolerance."""
 
@@ -242,7 +235,6 @@ def test_gate_tolerance_ignores_current_run_iqr() -> None:
     assert comparison["checks"][0]["tolerance_ms"] == 10.0
 
 
-@pytest.mark.smoke
 def test_gate_tolerance_parameters_are_configurable() -> None:
     """The relative tolerance and floor are explicit knobs, not constants."""
 
@@ -257,7 +249,6 @@ def test_gate_tolerance_parameters_are_configurable() -> None:
     assert "0.02" in strict["tolerance_policy"]
 
 
-@pytest.mark.smoke
 def test_gate_fails_when_no_matched_rows_are_comparable() -> None:
     """Matched rows with no usable timing metrics cannot silently pass."""
 
@@ -276,7 +267,6 @@ def test_gate_fails_when_no_matched_rows_are_comparable() -> None:
     ]
 
 
-@pytest.mark.smoke
 def test_run_timing_records_cpu_time_alongside_wall_time() -> None:
     """Timing passes record process-time statistics next to wall-clock stats."""
 
@@ -289,7 +279,6 @@ def test_run_timing_records_cpu_time_alongside_wall_time() -> None:
     assert len(stats["cpu_samples_ms"]) == 5
 
 
-@pytest.mark.smoke
 def test_run_memory_reports_phase_local_peaks() -> None:
     """Memory passes report phase-local peak deltas, not only end-state deltas."""
 

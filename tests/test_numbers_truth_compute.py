@@ -28,7 +28,6 @@ def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     return tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=None))
 
 
-@pytest.mark.smoke
 def test_biased_linear_true_macs_not_flops_over_two() -> None:
     """A5 pin: Linear(8,16,bias) batch 2 has 256 MACs, never 272."""
 
@@ -46,7 +45,6 @@ def test_biased_linear_true_macs_not_flops_over_two() -> None:
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_relu_has_zero_macs_non_mac() -> None:
     """A5 pin: a ReLU has ZERO MACs (the true answer), never 'half its FLOPs'."""
 
@@ -121,7 +119,6 @@ def test_fma1_refuses_typed_on_underivable_split() -> None:
         _CUSTOM_OP_RULES.pop("mul", None)
 
 
-@pytest.mark.smoke
 def test_fma_outside_the_closed_vocabulary_refuses_typed() -> None:
     """The aggregation door refuses fma values outside {1, 2} typed."""
 
@@ -150,7 +147,6 @@ def test_flop_count_conventions() -> None:
     assert flop_count(model, x, count_fma_as_two=False) == 288
 
 
-@pytest.mark.smoke
 def test_macs_format_in_mac_units_never_flops() -> None:
     """listA 13: a MACs value renders in MAC units, never the FLOPs formatter."""
 
@@ -169,7 +165,6 @@ def test_macs_format_in_mac_units_never_flops() -> None:
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_backward_macs_are_none_never_half_flops() -> None:
     """costreport 3: backward MACs are not derivable; flops//2 is dead everywhere."""
 
@@ -187,7 +182,6 @@ def test_backward_macs_are_none_never_half_flops() -> None:
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_coverage_gate_every_specialty_name_classified() -> None:
     """Coverage gate: every cost-table name has exactly one classification."""
 
@@ -203,7 +197,6 @@ def test_coverage_gate_every_specialty_name_classified() -> None:
     assert overlap == set(), f"names in more than one cost tier: {sorted(overlap)}"
 
 
-@pytest.mark.smoke
 def test_record_collapse_matches_stored_flops_everywhere() -> None:
     """Invariant: 2*fma + other == flops_forward for every derivable record."""
 

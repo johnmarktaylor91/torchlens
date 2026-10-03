@@ -33,8 +33,6 @@ from torchlens.visualization.collapse_plan import (
 )
 from torchlens.visualization.render_execution import surface_layout_stderr
 
-pytestmark = pytest.mark.smoke
-
 
 class _TwoBlockModel(torch.nn.Module):
     """Small two-block model for real-trace disclosure provocations."""

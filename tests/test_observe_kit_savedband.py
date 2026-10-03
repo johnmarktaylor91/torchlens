@@ -12,13 +12,10 @@ replacement oracles here compute truth a DIFFERENT way: torch's own
 
 from __future__ import annotations
 
-import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
-
-pytestmark = pytest.mark.smoke
 
 
 class _MLP(nn.Module):

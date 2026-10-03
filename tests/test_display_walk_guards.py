@@ -15,8 +15,6 @@ from torch import nn
 import torchlens as tl
 from torchlens.data_classes._summary import DISPLAY_MAX_DEPTH, format_call_arg
 
-pytestmark = pytest.mark.smoke
-
 
 def test_format_call_arg_renders_cycle_marker() -> None:
     """A self-referential captured argument renders a bounded cycle marker."""
@@ -47,6 +45,7 @@ def test_format_call_arg_shared_substructure_not_marked_cyclic() -> None:
     assert format_call_arg([shared, shared]) == "[[1, 2], [1, 2]]"
 
 
+@pytest.mark.smoke
 def test_format_call_arg_ordinary_values_unchanged() -> None:
     """The compact format for ordinary args is unchanged."""
 
@@ -54,6 +53,7 @@ def test_format_call_arg_ordinary_values_unchanged() -> None:
     assert format_call_arg(torch.ones(2, 3)).startswith("Tensor(shape=(2, 3)")
 
 
+@pytest.mark.smoke
 def test_module_hierarchy_display_still_renders() -> None:
     """The module-hierarchy display path stays intact on a real trace."""
 

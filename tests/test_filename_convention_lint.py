@@ -24,10 +24,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
-
-pytestmark = pytest.mark.smoke
-
 _TESTS_ROOT = Path(__file__).resolve().parent
 
 #: Filename stems carrying a sprint-round token (r7 R80 census, 2026-08-16).

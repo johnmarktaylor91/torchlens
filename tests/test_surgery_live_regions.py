@@ -121,7 +121,6 @@ def _region_fact_rows(trace) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_region_derivation_boundary_and_instances(chain_fork) -> None:
     """A chain sub-region derives its typed boundary and one instance."""
 
@@ -141,7 +140,6 @@ def test_region_derivation_boundary_and_instances(chain_fork) -> None:
     assert "interior not replayed" in repr(target)
 
 
-@pytest.mark.smoke
 def test_region_not_convex_refuses_with_path(chain_fork) -> None:
     """Members whose connecting path exits and re-enters refuse convexity."""
 
@@ -153,7 +151,6 @@ def test_region_not_convex_refuses_with_path(chain_fork) -> None:
     assert "->" in str(excinfo.value)  # the offending path is printed
 
 
-@pytest.mark.smoke
 def test_region_exit_list_checked_never_trusted(chain_fork) -> None:
     """User exit lists are validated: unknown entries and leaks refuse."""
 
@@ -168,7 +165,6 @@ def test_region_exit_list_checked_never_trusted(chain_fork) -> None:
     assert len(complete.boundary.exits) == 1
 
 
-@pytest.mark.smoke
 def test_region_exit_leak_named(chain_fork) -> None:
     """A declared exit list missing a derived exit refuses, naming the leak."""
 
@@ -187,7 +183,6 @@ def test_region_exit_leak_named(chain_fork) -> None:
     assert "linear_3_5:1" in str(excinfo.value)  # the leaked edge is named
 
 
-@pytest.mark.smoke
 def test_region_construction_refusals(chain_fork) -> None:
     """Non-slice targets and empty slices refuse typed."""
 
@@ -207,7 +202,6 @@ def test_region_construction_refusals(chain_fork) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_region_do_substitutes_exits_interior_not_replayed(chain_fork) -> None:
     """The region edit lands at the exit; downstream recomputes; facts ride."""
 
@@ -233,7 +227,6 @@ def test_region_do_substitutes_exits_interior_not_replayed(chain_fork) -> None:
     assert torch.allclose(fork["relu_1_2"].out, torch.relu(model.fc1(x)), atol=1e-6)
 
 
-@pytest.mark.smoke
 def test_region_do_validation_tripwire_unchanged(chain_fork) -> None:
     """Validation gives the corroborated boundary verdict, never a skip."""
 
@@ -247,7 +240,6 @@ def test_region_do_validation_tripwire_unchanged(chain_fork) -> None:
     assert not verdict.failed
 
 
-@pytest.mark.smoke
 def test_region_do_round_trips(chain_fork, tmp_path) -> None:
     """A region-intervened fork saves and loads with its fact row intact."""
 
@@ -260,7 +252,6 @@ def test_region_do_round_trips(chain_fork, tmp_path) -> None:
     assert fact["execution_effect"] == "exits_substituted_interior_not_replayed"
 
 
-@pytest.mark.smoke
 def test_region_splice_module_lowering(chain_fork) -> None:
     """splice_module(input='in') maps region ENTRY values to exit values."""
 
@@ -281,7 +272,6 @@ def test_region_splice_module_lowering(chain_fork) -> None:
     assert fact["edit"] == "splice_module"
 
 
-@pytest.mark.smoke
 def test_region_multi_exit_atomic_once_per_instance() -> None:
     """Multi-exit instances take ONE evaluation; helpers refuse typed."""
 
@@ -321,7 +311,6 @@ def test_region_multi_exit_atomic_once_per_instance() -> None:
     assert torch.allclose(fork2["cat_1_7"].out, expected, atol=1e-6)
 
 
-@pytest.mark.smoke
 def test_region_stochastic_once_per_pass() -> None:
     """A stochastic region edit draws once per instance, reused at each exit."""
 
@@ -351,7 +340,6 @@ def test_region_stochastic_once_per_pass() -> None:
     assert torch.allclose(left, right, atol=1e-6)
 
 
-@pytest.mark.smoke
 def test_region_container_consumed_exit_extends() -> None:
     """Exit values consumed inside cat's LIST argument splice at nested paths."""
 
@@ -380,7 +368,6 @@ def test_region_container_consumed_exit_extends() -> None:
     assert torch.allclose(fork["cat_1_7"].out, torch.full((3, 4), 0.5), atol=1e-6)
 
 
-@pytest.mark.smoke
 def test_region_shared_block_pass_instances() -> None:
     """A region over both passes of a shared block partitions per traversal."""
 
@@ -400,7 +387,6 @@ def test_region_shared_block_pass_instances() -> None:
     assert fact["instances"][0]["exit_ops"] == ["linear_1_1:1"]
 
 
-@pytest.mark.smoke
 def test_region_disconnected_members_evaluate_per_instance() -> None:
     """Disconnected member groups form separate instances, one draw each."""
 
@@ -430,7 +416,6 @@ def test_region_disconnected_members_evaluate_per_instance() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_region_effect_closure_refuses_train_mode_bn() -> None:
     """A value-changing buffer write inside the region refuses by evidence."""
 
@@ -450,7 +435,6 @@ def test_region_effect_closure_refuses_train_mode_bn() -> None:
     assert "buffer_writes" in str(excinfo.value)  # the channel is named
 
 
-@pytest.mark.smoke
 def test_region_effect_closure_allows_eval_mode_bn() -> None:
     """Value-unchanged buffer sinks (eval BN) are disclosed non-exits (D18)."""
 
@@ -467,7 +451,6 @@ def test_region_effect_closure_allows_eval_mode_bn() -> None:
     assert torch.allclose(fork["linear_2_3"].out, model.head(torch.zeros(3, 4)), atol=1e-6)
 
 
-@pytest.mark.smoke
 def test_region_engine_and_trace_refusals(chain_fork) -> None:
     """Off-replay engines and foreign traces refuse typed."""
 
@@ -544,7 +527,6 @@ def test_region_resnet50_block_module_aligned() -> None:
     assert fact["effect_closure"]["certified_channels"]
 
 
-@pytest.mark.smoke
 def test_region_exit_address_underivable_refuses(chain_fork) -> None:
     """An exit edge with no derivable occurrence address refuses at do()."""
 
@@ -568,7 +550,6 @@ def test_region_exit_address_underivable_refuses(chain_fork) -> None:
     assert "tanh_1_4:1" in str(excinfo.value)  # the crossing is named
 
 
-@pytest.mark.smoke
 def test_region_exit_container_unsupported_refuses() -> None:
     """The nested splice refuses container kinds it cannot rebuild."""
 
@@ -579,7 +560,6 @@ def test_region_exit_container_unsupported_refuses() -> None:
     assert excinfo.value.fields["code"] == "region_exit_container_unsupported"
 
 
-@pytest.mark.smoke
 def test_region_splice_arity_mismatch_refuses() -> None:
     """splice_module returning too few values for a multi-exit region refuses."""
 

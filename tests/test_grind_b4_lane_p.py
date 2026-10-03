@@ -31,8 +31,6 @@ from torchlens.utils.display import cleanup_trace_visualizer_dir, ensure_trace_v
 from torchlens.visualization import auto_collapse
 from torchlens.visualization.auto_collapse import analyze_collapse
 
-pytestmark = pytest.mark.smoke
-
 
 class _NonPersistentBufferModel(nn.Module):
     """Tiny model whose output depends on non-persistent state."""

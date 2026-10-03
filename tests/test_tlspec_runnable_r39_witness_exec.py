@@ -1476,7 +1476,6 @@ def _draw_from_b4_module_namespace() -> float:
     return float(_B4_MODULE_RNG_NAMESPACE.rng.random())
 
 
-@pytest.mark.smoke
 @pytest.mark.skipif(
     not rng_utils._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
     reason="NumPy build emits c_call for RNG draw methods",
@@ -1513,7 +1512,6 @@ def test_module_held_generator_preexisting_thread_draw_witnessed() -> None:
     assert "frame_reachable_generator" in result.channels
 
 
-@pytest.mark.smoke
 @pytest.mark.skipif(
     not rng_utils._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
     reason="NumPy build emits c_call for RNG draw methods",
@@ -1534,7 +1532,6 @@ def test_module_held_generator_rebound_between_windows_still_witnessed() -> None
         assert "frame_reachable_generator" in result.channels
 
 
-@pytest.mark.smoke
 @pytest.mark.skipif(
     not rng_utils._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
     reason="NumPy build emits c_call for RNG draw methods",
@@ -1549,7 +1546,6 @@ def test_deep_inventory_cap_exhaustion_flags_uncertain(monkeypatch: Any) -> None
     assert "deep_inventory_budget_exhausted" in result.uncertain_detail
 
 
-@pytest.mark.smoke
 def test_deep_inventory_undrawn_generators_no_over_trigger() -> None:
     """Referenced-but-undrawn generators never mark and never flag uncertainty."""
 
@@ -1563,7 +1559,6 @@ def test_deep_inventory_undrawn_generators_no_over_trigger() -> None:
     assert result.uncertain is False
 
 
-@pytest.mark.smoke
 def test_module_namespace_walk_eligibility_rules() -> None:
     """Eligibility gate: internal/stdlib roots skipped, user and shadow modules walked."""
 
@@ -1623,7 +1618,6 @@ print("PROBE_OK")
 """
 
 
-@pytest.mark.smoke
 @pytest.mark.skipif(
     not rng_utils._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
     reason="NumPy build emits c_call for RNG draw methods",
@@ -1816,7 +1810,6 @@ def _reference_r38_opaque_queue() -> None:
     _ = _R38_OPAQUE_QUEUE
 
 
-@pytest.mark.smoke
 @pytest.mark.skipif(
     not rng_utils._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
     reason="NumPy build emits c_call for RNG draw methods",
@@ -1851,7 +1844,6 @@ def test_threading_local_generator_preexisting_thread_draw_witnessed() -> None:
     assert "frame_reachable_generator" in result.channels
 
 
-@pytest.mark.smoke
 @pytest.mark.skipif(
     not rng_utils._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
     reason="NumPy build emits c_call for RNG draw methods",
@@ -1873,7 +1865,6 @@ def test_frame_reachable_opaque_queue_fails_closed() -> None:
     assert "inventory_opaque_container" in result.uncertain_detail
 
 
-@pytest.mark.smoke
 @pytest.mark.skipif(
     not rng_utils._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
     reason="NumPy build emits c_call for RNG draw methods",
@@ -1889,7 +1880,6 @@ def test_frame_reachable_empty_opaque_queue_no_over_ceiling() -> None:
     assert "frame_reachable_generator" not in result.channels
 
 
-@pytest.mark.smoke
 def test_r38_undrawn_holder_generators_no_over_trigger() -> None:
     """Referenced-but-undrawn r38 holder generators never mark or flag uncertainty."""
 

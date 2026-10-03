@@ -19,8 +19,6 @@ from torchlens._io.scrub import (
     _type_is_load_reconstructible,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 class _OffAllowlistTorchlensType(tuple):
     """A torchlens-namespace tuple subclass that is NOT on the allowlist."""

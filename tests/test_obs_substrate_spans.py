@@ -118,7 +118,6 @@ class TestOneProfilerDoor:
         )
 
 
-@pytest.mark.smoke
 class TestSpanRegistry:
     """Entry registration, finally-pop, leak closure, coordinates."""
 
@@ -183,7 +182,6 @@ class TestSpanRegistry:
         assert excinfo.value.fields["code"] == "region_metadata_invalid"
 
 
-@pytest.mark.smoke
 class TestRegion:
     """tl.region semantics: ids, nesting, inertness, consumers (W1.2)."""
 
@@ -222,7 +220,6 @@ class TestRegion:
         assert span.end_ns is not None
 
 
-@pytest.mark.smoke
 class TestSessionEngine:
     """Owned/borrowed lifecycles, nested refusal, restore-on-error (W1.3)."""
 

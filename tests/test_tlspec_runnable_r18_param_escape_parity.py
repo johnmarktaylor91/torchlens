@@ -93,7 +93,6 @@ class InitAcquiredBufferAliasWrite(nn.Module):
         return x * self.b
 
 
-@pytest.mark.smoke
 def test_invisible_param_write_default_sparse_is_unverifiable(tmp_path: Path) -> None:
     model = InitAcquiredParamAliasWrite()
     capture_x = torch.tensor([2.0, 4.0])
@@ -106,7 +105,6 @@ def test_invisible_param_write_default_sparse_is_unverifiable(tmp_path: Path) ->
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
 
 
-@pytest.mark.smoke
 def test_invisible_param_write_include_activations_is_unverifiable(tmp_path: Path) -> None:
     model = InitAcquiredParamAliasWrite()
     capture_x = torch.tensor([2.0, 4.0])
@@ -162,7 +160,6 @@ class ReadOnlyBufferEscape(nn.Module):
         return x * self.b
 
 
-@pytest.mark.smoke
 def test_readonly_param_escape_stays_verified(tmp_path: Path) -> None:
     capture_x = torch.tensor([2.0, 4.0])
     path = _save(
@@ -174,7 +171,6 @@ def test_readonly_param_escape_stays_verified(tmp_path: Path) -> None:
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
-@pytest.mark.smoke
 def test_readonly_buffer_escape_stays_verified(tmp_path: Path) -> None:
     capture_x = torch.tensor([2.0, 4.0])
     path = _save(
@@ -186,7 +182,6 @@ def test_readonly_buffer_escape_stays_verified(tmp_path: Path) -> None:
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
-@pytest.mark.smoke
 def test_readonly_param_and_buffer_parity(tmp_path: Path) -> None:
     """The parity claim head-on: identical read-only escapes on a param and a buffer agree."""
     capture_x = torch.tensor([2.0, 4.0])
@@ -223,7 +218,6 @@ class TinyConv(nn.Module):
         return torch.relu(self.c(x))
 
 
-@pytest.mark.smoke
 def test_plain_mlp_stays_verified(tmp_path: Path) -> None:
     torch.manual_seed(0)
     capture_x = torch.randn(3, 4)
@@ -234,7 +228,6 @@ def test_plain_mlp_stays_verified(tmp_path: Path) -> None:
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
-@pytest.mark.smoke
 def test_plain_conv_stays_verified(tmp_path: Path) -> None:
     torch.manual_seed(0)
     capture_x = torch.randn(2, 3, 8, 8)
@@ -259,7 +252,6 @@ class ReadOnlyParamScalarStat(nn.Module):
         return x * self.w * self.s
 
 
-@pytest.mark.smoke
 def test_readonly_param_scalar_stat_stays_verified(tmp_path: Path) -> None:
     capture_x = torch.tensor([2.0, 4.0])
     path = _save(

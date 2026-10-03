@@ -27,7 +27,6 @@ netron_package = pytest.importorskip(
     "netron", reason="vendor-execution tier runs the exact installed pin"
 )
 
-pytestmark = pytest.mark.smoke
 
 _HARNESS = Path(__file__).with_name("test_netron_export_harness.mjs")
 

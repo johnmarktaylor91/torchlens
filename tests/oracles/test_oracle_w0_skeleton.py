@@ -17,8 +17,6 @@ import pytest
 from ._invocation_templates import SEED_TEMPLATES, _fixture_model
 from ._registry import PURITY_CONTRACTS, PURITY_MECHANISMS
 
-pytestmark = pytest.mark.smoke
-
 
 def test_template_ids_and_doors_are_unique() -> None:
     """Template ids and doors collide never; the set is countable data."""
@@ -37,6 +35,10 @@ def test_every_template_declares_a_positive_control() -> None:
         assert callable(template.invoke), template.template_id
 
 
+@pytest.mark.smoke_cells(
+    "test_positive_control_passes_on_the_live_tree[torchlens.aggregate]",
+    "test_positive_control_passes_on_the_live_tree[torchlens.extract]",
+)
 @pytest.mark.parametrize("template", SEED_TEMPLATES, ids=lambda t: t.door)
 def test_positive_control_passes_on_the_live_tree(template) -> None:
     """Every seed template's measurement channel is ALIVE.

@@ -20,8 +20,6 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens.options import CaptureOptions
 
-pytestmark = [pytest.mark.smoke]
-
 SCALE = 65536.0  # torch.amp.GradScaler default init_scale = 2**16
 
 

@@ -18,8 +18,6 @@ import torchlens as tl
 from torchlens._io import runnable_load
 from torchlens.options import CaptureOptions
 
-pytestmark = pytest.mark.smoke
-
 
 class _SlotModel(nn.Module):
     def __init__(self) -> None:

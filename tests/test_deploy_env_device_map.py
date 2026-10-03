@@ -16,7 +16,6 @@ import torchlens as tl
 from torchlens.compat import report
 
 
-@pytest.mark.smoke
 def test_device_map_row_absent_reads_pass_ok() -> None:
     """No hf_device_map: undetected pass/ok."""
 
@@ -24,7 +23,6 @@ def test_device_map_row_absent_reads_pass_ok() -> None:
     assert (row.detected, row.status, row.severity) == (False, "pass", "ok")
 
 
-@pytest.mark.smoke
 def test_device_map_row_single_execution_device_reads_pass_info() -> None:
     """A pure-CPU map (and cpu/disk offload maps) is the supported envelope."""
 
@@ -39,7 +37,6 @@ def test_device_map_row_single_execution_device_reads_pass_info() -> None:
     assert (offload_row.detected, offload_row.status) == (True, "pass")
 
 
-@pytest.mark.smoke
 def test_device_map_row_multi_device_stays_known_broken() -> None:
     """Two real execution devices: cross-device capture is not yet verified."""
 

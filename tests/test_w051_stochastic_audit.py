@@ -28,7 +28,6 @@ def _trace() -> tl.Trace:
     )
 
 
-@pytest.mark.smoke
 def test_eligible_count_is_the_eligible_class_size() -> None:
     """Unconditioned: eligible == population; the distinct-donor tally has its own key."""
 

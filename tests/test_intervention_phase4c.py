@@ -256,7 +256,6 @@ def _identity_hook(out: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor:
     return out
 
 
-@pytest.mark.smoke
 def test_live_label_error_for_finalized_style_label() -> None:
     """Finalized postprocess labels fail loudly in live capture."""
 
@@ -271,7 +270,6 @@ def test_live_label_error_for_finalized_style_label() -> None:
         )
 
 
-@pytest.mark.smoke
 def test_module_selector_matches_capture_time_module_context() -> None:
     """Module selectors can match live capture-time module context."""
 
@@ -471,7 +469,6 @@ def test_input_at_live_hook_target_rejects_with_honest_error() -> None:
         )
 
 
-@pytest.mark.smoke
 def test_raw_label_where_and_in_module_selectors_work_at_capture_time() -> None:
     """Raw labels, predicates, and module containment selectors resolve live."""
 
@@ -514,7 +511,6 @@ def test_raw_label_where_and_in_module_selectors_work_at_capture_time() -> None:
     assert any(layer.interventions for layer in in_module_log.layer_list)
 
 
-@pytest.mark.smoke
 def test_no_hooks_preserves_pristine_run_state() -> None:
     """Intervention-ready capture without hooks stays pristine."""
 
@@ -527,7 +523,6 @@ def test_no_hooks_preserves_pristine_run_state() -> None:
     assert log.state is TraceState.PRISTINE
 
 
-@pytest.mark.smoke
 def test_live_replacement_metadata_matches_saved_out() -> None:
     """Hook replacement refreshes tensor metadata and saved-out flags."""
 

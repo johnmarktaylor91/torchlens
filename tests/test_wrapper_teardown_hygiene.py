@@ -28,7 +28,6 @@ def _ensure_wrapped() -> None:
     wrap_torch()
 
 
-@pytest.mark.smoke
 def test_uninstall_autograd_wrappers_preserves_foreign_patches() -> None:
     """A third-party patch layered over the torchlens autograd wrappers must
     survive teardown (identity-checked restore + burial disclosure), never be
@@ -71,7 +70,6 @@ def test_uninstall_autograd_wrappers_preserves_foreign_patches() -> None:
         tl_backward.install_autograd_wrappers()
 
 
-@pytest.mark.smoke
 def test_uninstall_autograd_wrappers_restores_own_patches_cleanly() -> None:
     """The identity-checked teardown still restores pristine originals when
     nothing foreign intervened, and reinstall works afterwards."""
@@ -89,7 +87,6 @@ def test_uninstall_autograd_wrappers_restores_own_patches_cleanly() -> None:
         tl_backward.install_autograd_wrappers()
 
 
-@pytest.mark.smoke
 def test_autograd_entry_wrappers_carry_provenance() -> None:
     """The wrapped autograd entries must be introspectable and picklable by
     reference for the whole wrapped epoch, like every namespace wrapper."""
@@ -118,7 +115,6 @@ class _FxReluModel(nn.Module):
         return torch.nn.functional.relu(self.lin(x))
 
 
-@pytest.mark.smoke
 def test_fx_symbolic_trace_records_originals_not_wrappers() -> None:
     """grind-r5 b8 R56: symbolic_trace during the wrapped epoch must not bake
     live torchlens wrappers into call_function node targets."""
@@ -150,7 +146,6 @@ def test_fx_symbolic_trace_records_originals_not_wrappers() -> None:
     assert graph_module(torch.randn(2, 4)).shape == (2, 4)
 
 
-@pytest.mark.smoke
 def test_escape_detector_setprofile_teardown_is_identity_guarded() -> None:
     """_uninstall_setprofile must not clobber a foreign profiler that took the
     slot after the detector installed (the codebase's profile-slot standard)."""
@@ -170,7 +165,6 @@ def test_escape_detector_setprofile_teardown_is_identity_guarded() -> None:
         sys.setprofile(prior)
 
 
-@pytest.mark.smoke
 def test_monitoring_tool_id_probe_skips_reserved_ids() -> None:
     """The sys.monitoring tool-id probe must never claim the reserved
     DEBUGGER/COVERAGE/PROFILER/OPTIMIZER slots (0/1/2/5)."""

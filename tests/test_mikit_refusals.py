@@ -16,8 +16,6 @@ import torch
 import torchlens.mechinterp as mi
 from torchlens.mechinterp._errors import MechInterpError
 
-pytestmark = pytest.mark.smoke
-
 
 def _code(excinfo: pytest.ExceptionInfo) -> str:
     """Return the refusal code from a caught MechInterpError."""
@@ -59,6 +57,7 @@ def test_stack_shape_mixed_refuses():
     assert _code(excinfo) == "mi_stack_shape_mixed"
 
 
+@pytest.mark.smoke
 def test_pandas_unavailable_refuses(monkeypatch):
     """mi_pandas_unavailable: to_pandas without pandas refuses typed."""
 
@@ -76,6 +75,7 @@ def test_pandas_unavailable_refuses(monkeypatch):
     assert _code(excinfo) == "mi_pandas_unavailable"
 
 
+@pytest.mark.smoke
 def test_analysis_unknown_refuses_before_trace_use():
     """mi_analysis_unknown: an unknown analysis refuses before any trace read."""
 
@@ -84,6 +84,7 @@ def test_analysis_unknown_refuses_before_trace_use():
     assert _code(excinfo) == "mi_analysis_unknown"
 
 
+@pytest.mark.smoke
 def test_head_score_kind_invalid_refuses_before_trace_use():
     """mi_head_score_kind_invalid: unknown kind and measure both land here."""
 
@@ -95,6 +96,7 @@ def test_head_score_kind_invalid_refuses_before_trace_use():
     assert _code(excinfo) == "mi_head_score_kind_invalid"
 
 
+@pytest.mark.smoke
 def test_norm_scale_mode_invalid_refuses_before_trace_use():
     """mi_norm_scale_mode_invalid: unknown apply_norm_scale mode."""
 
@@ -103,6 +105,7 @@ def test_norm_scale_mode_invalid_refuses_before_trace_use():
     assert _code(excinfo) == "mi_norm_scale_mode_invalid"
 
 
+@pytest.mark.smoke
 def test_translation_generation_unknown_refuses():
     """mi_translation_generation_unknown: unknown TLens generation."""
 
@@ -111,6 +114,7 @@ def test_translation_generation_unknown_refuses():
     assert _code(excinfo) == "mi_translation_generation_unknown"
 
 
+@pytest.mark.smoke
 def test_tokenizer_required_refuses():
     """mi_tokenizer_required: a text prompt with no tokenizer."""
 
@@ -132,6 +136,7 @@ def test_token_ids_unavailable_refuses():
     assert _code(excinfo) == "mi_token_ids_unavailable"
 
 
+@pytest.mark.smoke
 def test_orientation_unknown_refuses():
     """mi_orientation_unknown: unknown class + square weight never guesses."""
 
@@ -144,6 +149,7 @@ def test_orientation_unknown_refuses():
     assert _code(excinfo) == "mi_orientation_unknown"
 
 
+@pytest.mark.smoke
 def test_projection_unresolvable_refuses():
     """mi_projection_unresolvable: no candidate weight in the subtree."""
 
@@ -161,6 +167,7 @@ def test_projection_unresolvable_refuses():
     assert _code(excinfo) == "mi_projection_unresolvable"
 
 
+@pytest.mark.smoke
 def test_norm_reconstruction_refusals():
     """norm_eps_unavailable / norm_geometry_mismatch / norm_convention_unmatched."""
 
@@ -194,6 +201,7 @@ def test_norm_reconstruction_refusals():
     assert record.validation_receipt["result"] == "validated"
 
 
+@pytest.mark.smoke
 def test_component_stack_records_smoke():
     """Pure-logic record protocol: order, tuple unpacking, top(), refusals."""
 

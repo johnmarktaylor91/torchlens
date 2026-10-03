@@ -546,7 +546,6 @@ def test_ir_imports_without_torch_module() -> None:
     assert module.TensorRef is TensorRef
 
 
-@pytest.mark.smoke
 def test_capture_events_concat_follows_declared_merge_law() -> None:
     """journal.concat enforces the declared per-lane merge policies."""
     from dataclasses import fields as dataclass_fields
@@ -677,7 +676,6 @@ def _merge_pre_hook_event(address: str) -> PreHookProvenanceEvent:
     )
 
 
-@pytest.mark.smoke
 def test_concat_merges_intervention_events_lane() -> None:
     """A populated intervention-edit lane merges under append_restamp."""
 
@@ -697,7 +695,6 @@ def test_concat_merges_intervention_events_lane() -> None:
     assert target.intervention_events[0].seq <= target.event_seq
 
 
-@pytest.mark.smoke
 def test_lane_appenders_cover_every_merging_policy() -> None:
     """Every non-run_local lane policy has a registered single-writer appender.
 
@@ -714,7 +711,6 @@ def test_lane_appenders_cover_every_merging_policy() -> None:
         assert callable(getattr(CaptureEvents(), appender_name))
 
 
-@pytest.mark.smoke
 def test_concat_fails_closed_on_declared_unwired_lane(monkeypatch: pytest.MonkeyPatch) -> None:
     """concat refuses (never silently skips) a merging lane with no appender."""
 
@@ -729,7 +725,6 @@ def test_concat_fails_closed_on_declared_unwired_lane(monkeypatch: pytest.Monkey
         target.concat(CaptureEvents())
 
 
-@pytest.mark.smoke
 def test_concat_preserves_source_chronology_across_lanes() -> None:
     """Merged events keep the source stream's cross-lane chronological order."""
 
@@ -770,7 +765,6 @@ def test_concat_preserves_source_chronology_across_lanes() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_concat_clones_events_and_never_mutates_the_source_stream() -> None:
     """Merging restamps clones; the sealed source stream's seqs stay intact."""
 
@@ -796,7 +790,6 @@ def test_concat_clones_events_and_never_mutates_the_source_stream() -> None:
     assert len(all_target_seqs) == len(set(all_target_seqs))
 
 
-@pytest.mark.smoke
 def test_concat_rejects_invalid_source_sequencing() -> None:
     """FAIL-AFTER-WHERE-PASSED-BEFORE: an invalid source seq domain refuses to merge.
 

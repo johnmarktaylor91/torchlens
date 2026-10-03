@@ -31,8 +31,6 @@ from semantic_release.enums import LevelBump  # noqa: E402
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _PARSER_PATH = _PROJECT_ROOT / "scripts" / "no_major_parser.py"
 
-pytestmark = pytest.mark.smoke
-
 
 def _load_parser_class():
     """Load NoMajorAngularParser exactly the way PSR's file-path spec does."""

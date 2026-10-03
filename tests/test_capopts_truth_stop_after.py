@@ -21,8 +21,6 @@ import torchlens as tl
 from torchlens.errors import TorchLensWarning
 from torchlens.options import CaptureOptions
 
-pytestmark = [pytest.mark.smoke]
-
 
 class ThreeStep(nn.Module):
     """fc1 -> relu -> fc2, one op per module plus the activation."""
@@ -99,6 +97,7 @@ def test_stop_after_selector_never_fired_refuses_typed() -> None:
     assert excinfo.value.fields["code"] == "stop_after_never_fired"
 
 
+@pytest.mark.smoke
 def test_stop_after_callable_never_fired_warns_with_ledger() -> None:
     """An exploratory callable that never fires warns coded and ledgers."""
 
@@ -185,6 +184,7 @@ def test_stop_after_ambient_never_fired_warns_never_refuses() -> None:
     assert "stop_after_never_fired_callable" in codes
 
 
+@pytest.mark.smoke
 def test_stop_after_explicit_wins_over_ambient() -> None:
     """CaptureOptions.stop_after beats the ambient context-manager site."""
 
@@ -193,6 +193,7 @@ def test_stop_after_explicit_wins_over_ambient() -> None:
     assert log.halted is True
 
 
+@pytest.mark.smoke
 def test_stop_after_cache_key_distinct_from_halt(tmp_path) -> None:
     """A completed halt= capture must not satisfy a stop_after= request."""
 

@@ -32,8 +32,6 @@ from torchlens.transforms import (
 from torchlens.transforms._helpers import _condensed_corr_rdm, _condensed_l2_rdm, spearman
 from torchlens.transforms._projection import _BASIS_STORE, _reset_projection_store
 
-pytestmark = pytest.mark.smoke
-
 
 @pytest.fixture(autouse=True)
 def _fresh_store() -> None:
@@ -60,6 +58,7 @@ def _fit(
 # --- srp_dims_for -------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_srp_dims_for_matches_the_dense_jl_formula() -> None:
     """k = ceil(4 ln n / (eps^2/2 - eps^3/3)); the sklearn-practice value."""
 
@@ -98,6 +97,7 @@ def test_spearman_matches_hand_computed_ranks_with_ties() -> None:
     assert spearman(b, -b) == pytest.approx(-1.0)
 
 
+@pytest.mark.smoke
 def test_probe_reports_scoped_rows_and_is_deterministic() -> None:
     """The probe report carries T-C12 scope fields; same seed, same numbers."""
 
@@ -118,6 +118,7 @@ def test_probe_reports_scoped_rows_and_is_deterministic() -> None:
     assert first.canonical_json().startswith('{"algorithm_version"')
 
 
+@pytest.mark.smoke
 def test_probe_refusals_are_typed() -> None:
     """Too-few rows, non-float input, empty widths, constant rows refuse."""
 
@@ -137,6 +138,7 @@ def test_probe_refusals_are_typed() -> None:
 # --- P6: the tl.stats fitted upgrade ---------------------------------------------
 
 
+@pytest.mark.smoke
 def test_pca_result_carries_the_fitted_payload_facts() -> None:
     """result() gains mean/n_samples/n_features/digest; legacy keys intact."""
 
@@ -181,6 +183,7 @@ def test_pca_fitted_refuses_before_data() -> None:
     assert excinfo.value.fields["code"] == "pca_fitted_unavailable"
 
 
+@pytest.mark.smoke
 def test_fitted_sidecar_round_trips_and_digest_checks(tmp_path: Path) -> None:
     """save/load round trip; tampered arrays refuse pca_fitted_digest_mismatch."""
 
@@ -200,6 +203,7 @@ def test_fitted_sidecar_round_trips_and_digest_checks(tmp_path: Path) -> None:
     assert excinfo.value.fields["code"] == "pca_fitted_digest_mismatch"
 
 
+@pytest.mark.smoke
 def test_fitted_sidecar_malformed_refusals(tmp_path: Path) -> None:
     """Non-safetensors and wrong-schema files refuse pca_fitted_record_invalid."""
 
@@ -223,6 +227,7 @@ def test_fitted_sidecar_malformed_refusals(tmp_path: Path) -> None:
 # --- B8: project + pca_apply -------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_pca_apply_matches_the_fp64_reference() -> None:
     """(x - mean) @ components.T in fp64, through the chain door."""
 
@@ -239,6 +244,7 @@ def test_pca_apply_matches_the_fp64_reference() -> None:
     assert params["source"] == fitted.digest
 
 
+@pytest.mark.smoke
 def test_o11_centering_scoped_euclidean_intact_corr_moved() -> None:
     """O11: uncentered apply leaves L2 RDMs exact; corr-RDMs move."""
 
@@ -275,6 +281,7 @@ def test_project_extent_checks_are_exact() -> None:
     assert excinfo.value.fields["code"] == "transform_plan_invalid"
 
 
+@pytest.mark.smoke
 def test_project_params_and_payload_validation() -> None:
     """Factory refusals: bad basis/center; mutated fitted payloads refuse."""
 
@@ -324,6 +331,7 @@ def test_rehydrated_project_refuses_until_restaged() -> None:
     assert torch.allclose(out.double(), reference, atol=1e-5)
 
 
+@pytest.mark.smoke
 def test_basis_store_is_digest_addressed_and_bounded() -> None:
     """Equal arrays share one staged entry; the store stays bounded."""
 
@@ -337,6 +345,7 @@ def test_basis_store_is_digest_addressed_and_bounded() -> None:
     assert len(_BASIS_STORE) <= 16
 
 
+@pytest.mark.smoke
 def test_pca_consumes_srp_reduced_features_composition_row() -> None:
     """Composition row 10.4: tl.stats.PCA consuming transformed features."""
 

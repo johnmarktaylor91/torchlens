@@ -114,7 +114,6 @@ def test_payload_arena_identity_contract() -> None:
     assert arena.value(handle) is tensor  # original alias undisturbed
 
 
-@pytest.mark.smoke
 def test_overlay_and_transaction_rollback() -> None:
     """Overlay reads shadow the base; rollback restores atomically."""
 
@@ -146,7 +145,6 @@ def test_core_write_routing_and_freeze() -> None:
     assert table.get(row, "func_name") == "relu"  # base untouched
 
 
-@pytest.mark.smoke
 def test_core_fork_isolation_prototype() -> None:
     """COW fork: shared frozen base, isolated overlays both directions."""
 
@@ -182,7 +180,6 @@ def test_facade_identity_cache_prototype() -> None:
     assert fork_facade is not first  # fork has its own facade cache
 
 
-@pytest.mark.smoke
 def test_core_collectable_after_drop() -> None:
     """A dropped core (with facades and payloads) is garbage-collected."""
 
@@ -197,7 +194,6 @@ def test_core_collectable_after_drop() -> None:
     assert ref() is None
 
 
-@pytest.mark.smoke
 def test_partial_core_prototype() -> None:
     """A never-frozen core stays readable (partial-capture escape path)."""
 
@@ -209,7 +205,6 @@ def test_partial_core_prototype() -> None:
     assert not core.table("op").frozen
 
 
-@pytest.mark.smoke
 def test_op_store_view_cow_isolation() -> None:
     """M11 store view: bidirectional write isolation + container copy-on-read."""
 
@@ -309,7 +304,6 @@ def test_core_transaction_rolls_back_stores_and_epochs() -> None:
     assert core.backward_epochs == []
 
 
-@pytest.mark.smoke
 def test_facade_cache_weak_valued_with_strong_fallback() -> None:
     """The facade cache never pins unreferenced weak-able facades (M11 flip)."""
 
@@ -340,7 +334,6 @@ def test_facade_cache_weak_valued_with_strong_fallback() -> None:
     assert strong_core.facade("op", strong_row) == {"row": strong_row}
 
 
-@pytest.mark.smoke
 def test_record_dict_shadow_never_streams() -> None:
     """A ``__dict__`` shadow of a declared record field never reaches state.
 
@@ -373,7 +366,6 @@ def test_record_dict_shadow_never_streams() -> None:
     assert restored.user_note == "keep_me"
 
 
-@pytest.mark.smoke
 def test_op_store_view_parent_mutation_never_leaks_after_isolation() -> None:
     """Eager fork isolation closes the parent->child first-read window.
 
@@ -431,7 +423,6 @@ def test_op_store_view_parent_mutation_never_leaks_after_isolation() -> None:
     assert big_view.cell_get(5, 1) == {"i": 5}
 
 
-@pytest.mark.smoke
 def test_fork_parent_inplace_mutation_invisible_to_child() -> None:
     """End-to-end: sol finding 4's exact repro on a real captured fork."""
 
@@ -453,7 +444,6 @@ def test_fork_parent_inplace_mutation_invisible_to_child() -> None:
     assert "late" not in child_op.annotations
 
 
-@pytest.mark.smoke
 def test_pickle_load_rehydrates_into_the_store() -> None:
     """A pickle round-trip rejoins the single-truth core (sol finding 9).
 
@@ -677,7 +667,6 @@ def test_fork_sweep_plan_survives_inplace_empty_to_nonempty_mutation() -> None:
     assert later.cell_get(5, 1) == {"present_before_second_fork": 1}
 
 
-@pytest.mark.smoke
 def test_fork_snapshots_annotation_filled_inplace_between_forks() -> None:
     """End-to-end: sol closure round 3's exact public two-fork repro.
 
@@ -707,7 +696,6 @@ def test_fork_snapshots_annotation_filled_inplace_between_forks() -> None:
     assert "child_only" not in op.annotations
 
 
-@pytest.mark.smoke
 def test_sparse_isolation_fork_of_fork() -> None:
     """A fork-of-fork snapshots the parent view's container writes."""
 
@@ -727,7 +715,6 @@ def test_sparse_isolation_fork_of_fork() -> None:
     assert child_view.cell_get(row, 0) == {"base": 0, "parent_write": 1}
 
 
-@pytest.mark.smoke
 def test_fork_shares_one_equivalent_ops_view_per_class() -> None:
     """Fork layers of one equivalence class share ONE normalized view.
 
@@ -766,7 +753,6 @@ def test_fork_shares_one_equivalent_ops_view_per_class() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_rehydrate_mixed_ownership_aborts_with_zero_mutations() -> None:
     """An unadoptable op set aborts rehydration BEFORE any op is re-bound.
 
@@ -870,7 +856,6 @@ def test_rehydrate_rollback_after_relation_freeze_is_atomic() -> None:
     assert clone.ops["linear_1_1"].parents == ("input_1",)
 
 
-@pytest.mark.smoke
 def test_loaded_partial_capture_stays_staging() -> None:
     """A loaded partial/failed capture is never rehydrated or frozen.
 
@@ -923,7 +908,6 @@ def test_loaded_partial_capture_stays_staging() -> None:
         assert type(cell).__name__ != "GroupRef"
 
 
-@pytest.mark.smoke
 def test_tlspec_load_adopts_every_record_kind() -> None:
     """A ``.tlspec`` load leaves NO reachable facade outside the store (F9).
 

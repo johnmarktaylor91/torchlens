@@ -391,7 +391,7 @@ class _FloatScalarOutput(nn.Module):
         return float(self.lin(x).sum().detach())
 
 
-@pytest.mark.smoke
+@pytest.mark.smoke_cells("test_r26_host_escaped_scalar_output_refuses_at_save[_IntScalarOutput-x0]")
 @pytest.mark.parametrize(
     ("model_factory", "x"),
     [
@@ -422,7 +422,6 @@ def test_r26_host_escaped_scalar_output_refuses_at_save(
     assert "missing_output_container_contract" in str(excinfo.value.fields.get("diagnostics"))
 
 
-@pytest.mark.smoke
 @pytest.mark.filterwarnings(
     # A08 random-role-init disclosure (runnable_random_init_run): this test
     # exercises a weight-free runnable run DELIBERATELY; the warning is the
@@ -500,7 +499,6 @@ class _H4FloatScalarModel(nn.Module):
         return float(self.lin(x).sum().detach())
 
 
-@pytest.mark.smoke
 def test_h4_host_escaped_scalar_output_refuses_at_save(tmp_path: Path) -> None:
     """A dropped (host-escaped) output can never reach attestation: since r37 the
     zero-tensor-slot artifact is refused at SAVE (missing_output_container_contract),
@@ -515,7 +513,6 @@ def test_h4_host_escaped_scalar_output_refuses_at_save(tmp_path: Path) -> None:
     assert "missing_output_container_contract" in str(excinfo.value.fields.get("diagnostics"))
 
 
-@pytest.mark.smoke
 def test_h4_lossy_container_output_not_attested(tmp_path: Path) -> None:
     """A lossy __post_init__ dataclass output must not be ATTESTED (path UNVERIFIABLE)."""
 
@@ -581,7 +578,10 @@ _R35_LOSSY_OUTPUT_BUILDERS = {
 }
 
 
-@pytest.mark.smoke
+@pytest.mark.smoke_cells(
+    "test_r35_lossy_output_refuses_runnable_save_uniformly[one_tensor_set_with_flag]",
+    "test_r35_lossy_output_refuses_runnable_save_uniformly[set_subclass]",
+)
 @pytest.mark.filterwarnings("ignore:TorchLens intervention-ready output traversal:UserWarning")
 @pytest.mark.parametrize("kind", sorted(_R35_LOSSY_OUTPUT_BUILDERS))
 def test_r35_lossy_output_refuses_runnable_save_uniformly(tmp_path: Path, kind: str) -> None:
@@ -617,7 +617,6 @@ _R35_LOSSLESS_OUTPUT_BUILDERS = {
 }
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("kind", sorted(_R35_LOSSLESS_OUTPUT_BUILDERS))
 def test_r35_lossless_outputs_still_save_and_run_verified(tmp_path: Path, kind: str) -> None:
     """Positive controls: proved-lossless outputs save, run, and match kinds."""

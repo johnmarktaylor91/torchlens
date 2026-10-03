@@ -9,8 +9,6 @@ import torchlens as tl
 from ._models import SmallCNN, _cnn_input
 from ._oracle_adapter import op_event_from_record
 
-pytestmark = pytest.mark.smoke
-
 
 def test_adapter_is_identity_on_op_events(monkeypatch: pytest.MonkeyPatch) -> None:
     """Compat ``OpEvent`` inputs pass through the adapter unchanged.

@@ -64,7 +64,6 @@ def _write(log: object, path: Path, *, share_safe: bool = False, **kwargs: objec
     return path.read_text(encoding="utf-8")
 
 
-@pytest.mark.smoke
 def test_report_anatomy(dirty_log, tmp_path: Path) -> None:
     """Banner, honesty, summary, graph, ops, arrays, manifest -- in one file."""
 
@@ -95,7 +94,6 @@ def test_no_network_regression(dirty_log, tmp_path: Path) -> None:
     assert "url(http" not in text and "@import" not in text
 
 
-@pytest.mark.smoke
 def test_js_disabled_readability(dirty_log, tmp_path: Path) -> None:
     """Strip every script: the sections and data all remain readable."""
 
@@ -127,7 +125,6 @@ def test_frontier_default_embeds_only_the_frontier(dirty_log, tmp_path: Path) ->
     assert "truediv" in text  # the injection site is in the frontier
 
 
-@pytest.mark.smoke
 def test_clean_capture_embeds_zero_array_bytes(clean_log, tmp_path: Path) -> None:
     """Healthy captures embed no values by default; graph depth disclosed."""
 
@@ -180,7 +177,6 @@ def test_invalid_arrays_refuses_typed(dirty_log, tmp_path: Path) -> None:
     assert excinfo.value.fields["code"] == "report_arrays_invalid"
 
 
-@pytest.mark.smoke
 def test_deterministic_regeneration_and_scrub(dirty_log, tmp_path: Path) -> None:
     """deterministic=True regenerates byte-exactly; home paths never leak."""
 

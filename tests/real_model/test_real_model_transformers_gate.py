@@ -18,8 +18,6 @@ from types import SimpleNamespace
 
 import pytest
 
-pytestmark = pytest.mark.smoke
-
 r0_conftest = importlib.import_module("tests.real_model.r0.conftest")
 
 
@@ -52,6 +50,7 @@ def _run_gate(
     r0_conftest.pytest_collection_modifyitems(config=SimpleNamespace(), items=items)  # type: ignore[arg-type]
 
 
+@pytest.mark.smoke
 def test_real_model_marked_item_outside_r0_dir_is_skipped_when_transformers_absent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -62,6 +61,7 @@ def test_real_model_marked_item_outside_r0_dir_is_skipped_when_transformers_abse
     assert sibling_item.markers, "real_model-marked item outside r0/ must be skip-marked"
 
 
+@pytest.mark.smoke
 def test_unmarked_item_outside_r0_dir_is_left_alone(monkeypatch: pytest.MonkeyPatch) -> None:
     """An item with neither the r0 path nor the real_model marker is never touched."""
 
@@ -70,6 +70,7 @@ def test_unmarked_item_outside_r0_dir_is_left_alone(monkeypatch: pytest.MonkeyPa
     assert not unrelated_item.markers
 
 
+@pytest.mark.smoke
 def test_item_under_r0_dir_is_still_skipped_by_path(monkeypatch: pytest.MonkeyPatch) -> None:
     """The original path-based match keeps working for items directly under r0/."""
 
@@ -78,6 +79,7 @@ def test_item_under_r0_dir_is_still_skipped_by_path(monkeypatch: pytest.MonkeyPa
     assert r0_dir_item.markers
 
 
+@pytest.mark.smoke
 def test_nothing_is_skipped_when_transformers_and_torchvision_are_present(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -88,6 +90,7 @@ def test_nothing_is_skipped_when_transformers_and_torchvision_are_present(
     assert not item.markers
 
 
+@pytest.mark.smoke
 def test_require_r0_env_fails_closed_instead_of_skipping(monkeypatch: pytest.MonkeyPatch) -> None:
     """TORCHLENS_REQUIRE_R0=1 on a broken install raises, never silently skips."""
 

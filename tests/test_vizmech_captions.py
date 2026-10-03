@@ -17,15 +17,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
 from torchlens.visualization._render_utils import cluster_caption_attrs
 from torchlens.visualization.render_ir import _region_caption_plan
-
-pytestmark = pytest.mark.smoke
 
 
 class _TailHeavy(nn.Module):

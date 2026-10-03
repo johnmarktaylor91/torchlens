@@ -22,8 +22,6 @@ from torch import nn
 import torchlens as tl
 import torchlens.user_funcs as user_funcs
 
-pytestmark = pytest.mark.smoke
-
 
 class _CacheModel(nn.Module):
     def __init__(self) -> None:
@@ -128,6 +126,7 @@ def test_crash_at_the_single_commit_preserves_the_old_generation(tmp_path, monke
     assert after.capture_cache_hit is True
 
 
+@pytest.mark.smoke
 def test_committed_entry_is_self_authenticating(tmp_path) -> None:
     """The committed record needs no sidecar: no ``.hmac`` file exists at all."""
 
@@ -143,6 +142,7 @@ def test_committed_entry_is_self_authenticating(tmp_path) -> None:
     assert second.capture_cache_hit is True
 
 
+@pytest.mark.smoke
 def test_hard_crash_temp_debris_is_swept_age_gated(tmp_path) -> None:
     """Orphaned mkstemp staging files are swept once stale (r3 T-CACHES).
 

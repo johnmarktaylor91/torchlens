@@ -56,7 +56,6 @@ def test_docs_taught_facade_names_resolve_cold() -> None:
         _resolves_cold(spelling)
 
 
-@pytest.mark.smoke
 def test_step5_did_you_mean_stays_a_plain_attributeerror() -> None:
     """Step 5 keeps the PLAIN type; the message teaches close matches."""
 
@@ -90,7 +89,6 @@ def test_hf_entry_recovery_is_typed_and_teaching() -> None:
     # inferred rung, so the historical trace_inputs_missing site is gone.
 
 
-@pytest.mark.smoke
 def test_hf_remedy_spelling_actually_works() -> None:
     """The remedy the refusal teaches runs: input_kwargs routes keyword forwards."""
 
@@ -162,7 +160,6 @@ def test_api_map_rows_resolve_where_declared() -> None:
     assert not unresolved, f"api_map advertises spellings that raise: {unresolved}"
 
 
-@pytest.mark.smoke
 def test_next_operations_and_dump_next_steps_name_live_spellings(tmp_path: Path) -> None:
     """Overview next_operations reference served tools; dump guide steps resolve."""
 

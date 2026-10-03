@@ -53,7 +53,6 @@ def speed_render(tmp_path_factory: Any) -> Any:
     log.cleanup()
 
 
-@pytest.mark.smoke
 @pytest.mark.skipif(not DOT_AVAILABLE, reason="graphviz dot binary unavailable")
 def test_stage0_runs_green_on_a_clean_artifact(speed_render: Any) -> None:
     """The full audit passes on a small clean render (headlabel baseline
@@ -82,7 +81,6 @@ def test_stage0_runs_green_on_a_clean_artifact(speed_render: Any) -> None:
     assert report.manifest["versions"]["torch"]
 
 
-@pytest.mark.smoke
 def test_label_spelling_audit_counts_forbidden_families() -> None:
     """A new xlabel is a failure; headlabels are gated by the R0 baseline."""
 
@@ -115,7 +113,6 @@ def test_disclosure_checks_catch_a_stripped_caption(speed_render: Any) -> None:
     assert "coverage_line" in report.failed_checks()
 
 
-@pytest.mark.smoke
 def test_fill_spread_gates_apply_only_with_a_channel(speed_render: Any) -> None:
     """A channel-free artifact carries no encoded-fill findings."""
 
@@ -134,7 +131,6 @@ def test_fill_spread_gates_apply_only_with_a_channel(speed_render: Any) -> None:
     assert "distinct_fills" not in {finding.check for finding in report.findings}
 
 
-@pytest.mark.smoke
 def test_compaction_non_identity_is_checkable(speed_render: Any) -> None:
     """The render-pair check: an active compaction may not be byte-identical
     to compaction-off (composition row 3's audit half)."""

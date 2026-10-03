@@ -18,13 +18,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 import torch
 from torch.overrides import get_overridable_functions
 
 from torchlens.constants import get_orig_torch_funcs
-
-pytestmark = pytest.mark.smoke
 
 _BASELINE_PATH = Path(__file__).parent / "data" / "torchnative" / "overrides_drift_baseline.json"
 

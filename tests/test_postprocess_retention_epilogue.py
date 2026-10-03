@@ -64,7 +64,6 @@ def _clean_file_cache():
     ast_branches._file_cache.clear()
 
 
-@pytest.mark.smoke
 def test_successful_postprocess_releases_the_hot_tier() -> None:
     """The historical success-path behavior is unchanged."""
 
@@ -76,7 +75,6 @@ def test_successful_postprocess_releases_the_hot_tier() -> None:
     assert _hot_tier_files() == []
 
 
-@pytest.mark.smoke
 def test_failed_postprocess_still_releases_the_hot_tier(monkeypatch) -> None:
     """The defect: a raising pipeline used to keep whole ASTs pinned.
 
@@ -101,7 +99,6 @@ def test_failed_postprocess_still_releases_the_hot_tier(monkeypatch) -> None:
     assert _hot_tier_files() == []
 
 
-@pytest.mark.smoke
 def test_repeated_postprocess_failures_do_not_accumulate_hot_tiers(monkeypatch) -> None:
     """The accumulation-to-the-cache-bound half of the finding."""
 
@@ -121,7 +118,6 @@ def test_repeated_postprocess_failures_do_not_accumulate_hot_tiers(monkeypatch) 
     assert _hot_tier_files() == []
 
 
-@pytest.mark.smoke
 def test_the_release_is_reached_through_a_finally_not_a_tail_statement() -> None:
     """Source lockstep on the totality itself.
 
@@ -141,7 +137,6 @@ def test_the_release_is_reached_through_a_finally_not_a_tail_statement() -> None
     assert "release_parsed_asts()" not in body_source
 
 
-@pytest.mark.smoke
 def test_released_hot_tier_still_answers_lazy_source_queries() -> None:
     """Releasing is safe: the cold tier keeps post-capture queries working.
 
@@ -179,7 +174,6 @@ def _audit_registry_sizes() -> tuple[int, ...]:
     )
 
 
-@pytest.mark.smoke
 def test_a_raise_while_arming_the_audit_window_is_unwound(monkeypatch) -> None:
     """B1-23b: `_open_step_write_audit` ran BEFORE the try.
 
@@ -215,7 +209,6 @@ def test_a_raise_while_arming_the_audit_window_is_unwound(monkeypatch) -> None:
     )
 
 
-@pytest.mark.smoke
 def test_the_window_open_sits_inside_the_try(monkeypatch) -> None:
     """Source lockstep on the unwind structure itself."""
 

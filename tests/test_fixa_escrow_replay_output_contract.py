@@ -174,7 +174,6 @@ def test_distilgpt2_structured_arms_and_bare_wrapper_positive_control():
     )
 
 
-@pytest.mark.smoke
 def test_one_component_container_do_lands():
     """One-component-logits arm: a ``{"logits": t}`` return crashed pre-fix."""
 
@@ -189,7 +188,6 @@ def test_one_component_container_do_lands():
     _assert_boundary_slots_consistent(fork, trace)
 
 
-@pytest.mark.smoke
 @pytest.mark.real_model
 def test_multi_leaf_container_slots_stay_exact():
     """R0 container-output fixture: integer-shaped paths are the SILENT arm.

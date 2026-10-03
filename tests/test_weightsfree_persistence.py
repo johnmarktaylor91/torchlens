@@ -15,8 +15,6 @@ from torch import nn
 import torchlens as tl
 from torchlens.options import CaptureOptions
 
-pytestmark = pytest.mark.smoke
-
 
 class BufferedToy(nn.Module):
     def __init__(self) -> None:

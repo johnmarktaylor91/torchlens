@@ -437,7 +437,6 @@ def test_torch_export_exported_program_raises_at_entry() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_reject_opaque_wrappers_clean_model_is_noop() -> None:
     """A bare nn.Module must pass through ``_reject_opaque_wrappers`` silently."""
     model = _Tiny()

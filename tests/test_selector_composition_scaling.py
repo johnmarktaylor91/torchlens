@@ -20,8 +20,6 @@ import torchlens as tl
 from torchlens.intervention.selectors import CompositeSelector
 from torchlens.ir.selector_eval import flatten_and_conjuncts, walk_selector
 
-pytestmark = pytest.mark.smoke
-
 
 def test_chained_or_composition_stays_flat() -> None:
     """reduce(or_, ...) over many selectors builds one flat composite."""

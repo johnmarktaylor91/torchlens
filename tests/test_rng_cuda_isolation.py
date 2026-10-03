@@ -188,7 +188,6 @@ def test_cpu_capture_tolerates_failing_cuda_rng_read() -> None:
 # ======================================================================================
 
 
-@pytest.mark.smoke
 def test_snapshot_skips_cuda_until_initialized(monkeypatch: pytest.MonkeyPatch) -> None:
     """An available-but-never-initialized CUDA runtime is never read."""
 
@@ -210,7 +209,6 @@ def test_snapshot_skips_cuda_until_initialized(monkeypatch: pytest.MonkeyPatch) 
     tl_rng.set_rng_from_saved_states(states)
 
 
-@pytest.mark.smoke
 def test_initialized_cuda_snapshot_shape_is_unchanged(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -272,7 +270,6 @@ def test_failing_cuda_rng_read_warns_latches_and_skips_restore(
     tl_rng.set_rng_from_saved_states({"torch": torch.random.get_rng_state(), "torch_cuda_all": []})
 
 
-@pytest.mark.smoke
 def test_transient_cuda_rng_failure_rearms_at_next_capture_entry(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -314,7 +311,6 @@ def test_transient_cuda_rng_failure_rearms_at_next_capture_entry(
     assert attempts == ["read", "read"]
 
 
-@pytest.mark.smoke
 def test_cuda_availability_probe_failure_degrades_to_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -334,7 +330,6 @@ def test_cuda_availability_probe_failure_degrades_to_unavailable(
     assert tensor_utils._is_cuda_available() is False
 
 
-@pytest.mark.smoke
 def test_cuda_initialized_probe_is_not_cached(monkeypatch: pytest.MonkeyPatch) -> None:
     """``_is_cuda_initialized`` tracks torch's flag instead of caching it."""
 
@@ -344,7 +339,6 @@ def test_cuda_initialized_probe_is_not_cached(monkeypatch: pytest.MonkeyPatch) -
     assert tensor_utils._is_cuda_initialized() is True
 
 
-@pytest.mark.smoke
 def test_seeding_degrades_when_accelerator_seed_leg_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

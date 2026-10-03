@@ -23,8 +23,6 @@ from torchlens._runnable_execution import _container_kind, _container_leaf_paths
 from torchlens.ir.container import _CONTAINER_REGISTRY, register_container
 from torchlens.ir.container_registry import _build_container_spec
 
-pytestmark = pytest.mark.smoke
-
 
 @dataclasses.dataclass
 class _HybridDataclass:

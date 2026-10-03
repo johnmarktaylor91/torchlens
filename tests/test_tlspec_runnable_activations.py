@@ -226,7 +226,6 @@ def _seeded_rng_inputs(operation: str) -> torch.Tensor:
     return torch.full((8,), 0.5)
 
 
-@pytest.mark.smoke
 def test_include_activations_persists_exact_save_selected_family_and_digests(
     tmp_path: Path,
 ) -> None:
@@ -309,7 +308,6 @@ def test_archived_activations_are_inspectable_but_never_execution_inputs(
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
-@pytest.mark.smoke
 def test_original_input_real_state_attests_for_embedded_and_user_state(
     tmp_path: Path,
 ) -> None:
@@ -446,6 +444,7 @@ def test_inplace_internal_activation_attestation_uses_production_snapshot(
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
 
 
+@pytest.mark.smoke
 def test_corrupt_archived_digest_fails_tripwire_and_rolls_back(tmp_path: Path) -> None:
     """Fail on the first declared byte-digest mismatch without mutating the source Trace.
 

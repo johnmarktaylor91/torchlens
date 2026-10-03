@@ -23,8 +23,6 @@ from torchlens.semantic.logit_lens import (
     LogitLensPredictions,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 def _scores() -> tviz.TokenScores:
     """A two-row strip with signed scores and an N/A cell."""
@@ -43,6 +41,7 @@ def _scores() -> tviz.TokenScores:
 class TestZeroDependencyEmitters:
     """Bare-install duty: escaped, self-contained, no network, no <image>."""
 
+    @pytest.mark.smoke
     def test_html_is_escaped_and_carries_footers(self) -> None:
         """Tokens are escaped; footer disclosures always render."""
 
@@ -57,6 +56,7 @@ class TestZeroDependencyEmitters:
         assert "disclosure line" in html
         assert 'title="n/a"' in html
 
+    @pytest.mark.smoke
     def test_svg_has_no_image_and_no_network(self) -> None:
         """The SVG emitter is self-contained vector output."""
 
@@ -122,6 +122,7 @@ def _predictions() -> LogitLensPredictions:
 class TestPredictionPictures:
     """Ribbon / trajectory / table with load-bearing provenance wording."""
 
+    @pytest.mark.smoke
     def test_trajectory_carries_per_row_provenance(self) -> None:
         """Projected rows never claim native output."""
 
@@ -141,6 +142,7 @@ class TestPredictionPictures:
             tviz.prediction_trajectory(_predictions(), target_token_id=999)
         assert excinfo.value.fields["code"] == "tv_record_invalid"
 
+    @pytest.mark.smoke
     def test_ribbon_marks_native_rows(self, tmp_path: Path) -> None:
         """The ribbon renders with the lens-validation disclosure."""
 
@@ -159,6 +161,7 @@ class TestPredictionPictures:
             tviz.render_answer_trajectory(trajectory, tmp_path / "answer.png")
         assert excinfo.value.fields["code"] == "tv_record_invalid"
 
+    @pytest.mark.smoke
     def test_table_serves_only_the_native_row(self, tmp_path: Path) -> None:
         """PROJECTION-AS-PREDICTION: the table refuses without a native row."""
 
@@ -177,6 +180,7 @@ class TestPredictionPictures:
             tviz.prediction_table(projected_only)
         assert excinfo.value.fields["code"] == "tv_record_invalid"
 
+    @pytest.mark.smoke
     def test_table_pagination_whole_positions(self, tmp_path: Path) -> None:
         """Table pages keep whole positions and list every page."""
 
@@ -213,6 +217,7 @@ class TestMetricOracles:
         for value, expected in zip(entropy.values, oracle.tolist(), strict=True):
             assert value == pytest.approx(expected, abs=1e-4)
 
+    @pytest.mark.smoke
     def test_one_source_fingerprint_is_the_alignment_proof(self) -> None:
         """Both strips carry the SAME logits fingerprint."""
 
@@ -250,6 +255,7 @@ class TestMetricOracles:
         assert loss.values[2] is None and loss.values[3] is None
         assert entropy.values[2] is None and entropy.values[3] is None
 
+    @pytest.mark.smoke
     def test_metric_strip_renders(self, tmp_path: Path) -> None:
         """The metric strip rides the token-strip renderer with conventions."""
 

@@ -37,7 +37,6 @@ from torchlens.viz.node_plots import (
 # ---------------------------------------------------------------------------
 # H10 — caption terminates the FONT tag; draw() after set() must not crash
 # ---------------------------------------------------------------------------
-@pytest.mark.smoke
 def test_h10_direct_writes_caption_renders(tmp_path):
     trace = tl.trace(nn.Linear(4, 2), torch.randn(1, 4))
     trace._has_direct_writes = True

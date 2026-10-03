@@ -27,8 +27,6 @@ from torchlens.io import (
     unregister_sidecar_family,
 )
 
-pytestmark = pytest.mark.smoke
-
 FAMILY = SidecarFamily(
     family_id="testorg.saliency",
     schema_id="testorg_saliency_v1",
@@ -146,6 +144,7 @@ class TestAttachAndRead:
         finally:
             traced.annotations[SIDECAR_ANNOTATIONS_KEY].pop(FAMILY.family_id, None)
 
+    @pytest.mark.smoke
     def test_newer_envelope_version_refuses_typed(self, registered_family, traced) -> None:
         attach_sidecar(traced, FAMILY.family_id, {"v": 1})
         envelope = traced.annotations[SIDECAR_ANNOTATIONS_KEY][FAMILY.family_id]

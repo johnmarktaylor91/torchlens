@@ -133,7 +133,6 @@ class _PlainVsRegisteredSameShape(nn.Module):
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_inplace_buffer_read_and_write_nodes_agree_on_backend_address() -> None:
     """Both nodes of an in-place-mutated registered buffer report its address.
 
@@ -159,7 +158,6 @@ def test_inplace_buffer_read_and_write_nodes_agree_on_backend_address() -> None:
         )
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("train", [False, True], ids=["eval", "train"])
 def test_batchnorm_running_stat_read_and_write_pairs_agree(train: bool) -> None:
     """Every BatchNorm running-stat node -- read AND write -- keeps its address.
@@ -194,7 +192,6 @@ def test_batchnorm_running_stat_read_and_write_pairs_agree(train: bool) -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_plain_attribute_colliding_on_registered_shape_keeps_no_backend_address() -> None:
     """The r84 C2 guard: registered-ness, not the name/shape, gates the address.
 

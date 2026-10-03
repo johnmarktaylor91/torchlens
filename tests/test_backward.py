@@ -259,7 +259,6 @@ def test_detached_log_backward_does_not_poison_later_capture() -> None:
     assert tl.trace(model, torch.ones(1, 2)).output_layers
 
 
-@pytest.mark.smoke
 def test_log_backward_captures_per_layer_grads() -> None:
     """log_backward captures saved per-layer grads."""
     _model, _x, trace = _logged_model()
@@ -269,7 +268,6 @@ def test_log_backward_captures_per_layer_grads() -> None:
     assert all(trace[label].grad is not None for label in trace.saved_grad_ops.keys())
 
 
-@pytest.mark.smoke
 def test_recording_backward_context_manager() -> None:
     """recording_backward accumulates multiple backward calls."""
     _model, _x, trace = _logged_model()
@@ -352,7 +350,6 @@ def _backward_projection_snapshot(trace: tl.Trace) -> dict:
     }
 
 
-@pytest.mark.smoke
 def test_backward_reprojection_folds_incrementally() -> None:
     """Repeated passes over an unchanged graph fold O(tail), not full rebuilds."""
     from torchlens.backends.torch import backward as backward_mod
@@ -384,7 +381,6 @@ def test_backward_reprojection_folds_incrementally() -> None:
     assert _backward_projection_snapshot(trace) == incremental_snapshot
 
 
-@pytest.mark.smoke
 def test_backward_events_share_one_monotonic_seq_domain() -> None:
     """Every backward event kind carries one writer-stamped monotonic seq."""
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
@@ -412,7 +408,6 @@ def _invariant_check(trace: tl.Trace) -> None:
     _check_backward_event_flow_invariants(trace, "backward_graph_invariants")
 
 
-@pytest.mark.smoke
 def test_backward_seq_invariants_fire_on_planted_mutations() -> None:
     """Each rewritten exact-seq assertion still fails on a planted misorder."""
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
@@ -469,7 +464,6 @@ def test_backward_seq_invariants_fire_on_planted_mutations() -> None:
     _invariant_check(trace)
 
 
-@pytest.mark.smoke
 def test_backward_capture_refuses_missing_event_stream() -> None:
     """A trace that lost its event stream gets a typed refusal, not a silent buffer."""
     from torchlens._errors import BackwardStreamUnavailableError
@@ -485,7 +479,6 @@ def test_backward_capture_refuses_missing_event_stream() -> None:
         trace.log_backward(loss)
 
 
-@pytest.mark.smoke
 def test_param_gradients_enter_the_backward_event_stream() -> None:
     """Every recorded AccumulateGrad increment has a ParamGradObserved event."""
     from torchlens.ir.events import ParamGradObserved
@@ -800,7 +793,6 @@ def test_separate_unmanaged_engine_calls_get_separate_implicit_passes() -> None:
     assert [event.pass_index for event in starts] == [1, 2]
 
 
-@pytest.mark.smoke
 def test_replay_fork_does_not_inherit_gradient_state() -> None:
     """A replay fork starts with no captured gradient state; the source keeps its own."""
     model = _TinyBackwardModel()
@@ -837,7 +829,6 @@ def test_replay_fork_does_not_inherit_gradient_state() -> None:
     assert any(param_log._grad_records for param_log in trace.param_logs.values())
 
 
-@pytest.mark.smoke
 def test_replay_fork_cannot_resurrect_has_grad_from_derived_payload() -> None:
     """A seeded ``_derived_grad_payload`` never survives onto a replay fork.
 
@@ -874,7 +865,6 @@ def test_replay_fork_cannot_resurrect_has_grad_from_derived_payload() -> None:
     assert param_log._derived_grad_payload is not None
 
 
-@pytest.mark.smoke
 def test_backward_reprojection_guard_survives_count_preserving_mutation() -> None:
     """A count-preserving event mutation still triggers reprojection."""
     from dataclasses import replace as dataclass_replace
@@ -897,7 +887,6 @@ def test_backward_reprojection_guard_survives_count_preserving_mutation() -> Non
     assert trace.backward_pass_logs[1].status == "error"
 
 
-@pytest.mark.smoke
 def test_recording_backward_delegates_foreign_graphs() -> None:
     """A backward on an unrelated graph inside the context never enters the trace."""
     _model, _x, trace = _logged_model()
@@ -918,7 +907,6 @@ def test_recording_backward_delegates_foreign_graphs() -> None:
     assert trace_labels == control_labels
 
 
-@pytest.mark.smoke
 def test_recording_backward_foreign_only_block_stays_empty() -> None:
     """A foreign-only block records no passes and warns once, not silently."""
     _model, _x, trace = _logged_model()
@@ -940,7 +928,6 @@ def test_recording_backward_foreign_only_block_stays_empty() -> None:
     assert len(trace.grad_fn_logs) == 0
 
 
-@pytest.mark.smoke
 def test_recording_backward_exit_preserves_interleaved_patch() -> None:
     """__exit__ never clobbers a Tensor.backward patch installed inside the block."""
     _model, _x, trace = _logged_model()
@@ -959,7 +946,6 @@ def test_recording_backward_exit_preserves_interleaved_patch() -> None:
         torch.Tensor.backward = context._original_backward  # type: ignore[assignment, method-assign]
 
 
-@pytest.mark.smoke
 def test_backward_graph_walk_includes_intervening_grad_fns() -> None:
     """The backward DAG includes grad_fns without forward Layer matches."""
     _model, _x, trace = _logged_model()
@@ -985,7 +971,6 @@ def test_has_op_storage_field() -> None:
     assert grad_fn_handle.has_op is True
 
 
-@pytest.mark.smoke
 def test_grad_fn_log_back_pointer() -> None:
     """Forward LayerLogs link to corresponding GradFnLogs by identity."""
     _model, _x, trace = _logged_model()
@@ -997,7 +982,6 @@ def test_grad_fn_log_back_pointer() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_grad_fn_naming_and_indexing() -> None:
     """GradFn labels and accessor indexing mirror layer lookup patterns."""
     _model, _x, trace = _logged_model()
@@ -1013,7 +997,6 @@ def test_grad_fn_naming_and_indexing() -> None:
     assert list(trace.grad_fns)
 
 
-@pytest.mark.smoke
 def test_save_grads_true_captures_all_grads() -> None:
     """save_grads=True captures all gradients independent of layers_to_save."""
     model = _TinyBackwardModel()
@@ -1025,7 +1008,6 @@ def test_save_grads_true_captures_all_grads() -> None:
     assert any("linear" in label for label in trace.saved_grad_ops.keys())
 
 
-@pytest.mark.smoke
 def test_grads_to_save_independent_override() -> None:
     """save_grads selectors are independent from layers_to_save."""
     _model, _x, trace = _logged_model(layers_to_save="all", save_grads=["relu"])
@@ -1034,14 +1016,12 @@ def test_grads_to_save_independent_override() -> None:
     assert all("relu" in label for label in trace.saved_grad_ops.keys())
 
 
-@pytest.mark.smoke
 def test_auto_train_mode_when_backward_opted_in() -> None:
     """Explicit save_grads selectors auto-enable backward_ready."""
     _model, _x, trace = _logged_model()
     assert trace.backward_ready is True
 
 
-@pytest.mark.smoke
 def test_auto_train_mode_conflict_with_explicit_false() -> None:
     """Explicit backward_ready=False conflicts with backward capture."""
     model = _TinyBackwardModel()
@@ -1050,7 +1030,6 @@ def test_auto_train_mode_conflict_with_explicit_false() -> None:
         tl.trace(model, x, capture=CaptureOptions(save_grads="all", backward_ready=False))
 
 
-@pytest.mark.smoke
 def test_grad_transform_applied() -> None:
     """grad_transform writes transformed grads separately."""
     model = _TinyBackwardModel()
@@ -1071,7 +1050,6 @@ def test_grad_transform_applied() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_flat_transform_kwargs_populate_transformed_payloads() -> None:
     """Flat activation_transform and grad_transform kwargs are applied."""
 
@@ -1094,7 +1072,6 @@ def test_flat_transform_kwargs_populate_transformed_payloads() -> None:
     assert relu_op.transformed_grad.dtype == torch.float16
 
 
-@pytest.mark.smoke
 def test_module_log_grad_aggregation() -> None:
     """Module exposes aggregated grads for contained layers."""
     _model, _x, trace = _logged_model()
@@ -1102,7 +1079,6 @@ def test_module_log_grad_aggregation() -> None:
     assert trace.modules["fc2"].grad is not None
 
 
-@pytest.mark.smoke
 def test_input_layer_grad_access() -> None:
     """Input layers expose saved grads after backward."""
     _model, _x, trace = _logged_model()
@@ -1110,7 +1086,6 @@ def test_input_layer_grad_access() -> None:
     assert trace[trace.input_layers[0]].grad is not None
 
 
-@pytest.mark.smoke
 def test_param_layer_grad_access() -> None:
     """Param grad metadata still works through the existing hook path."""
     model, _x, trace = _logged_model()
@@ -1119,7 +1094,6 @@ def test_param_layer_grad_access() -> None:
     assert any(parameter.grad is not None for parameter in model.parameters())
 
 
-@pytest.mark.smoke
 def test_custom_autograd_function_captured_with_is_custom_flag() -> None:
     """Custom autograd.Function grad_fns are captured and flagged."""
     model = _CustomModel()
@@ -1129,7 +1103,6 @@ def test_custom_autograd_function_captured_with_is_custom_flag() -> None:
     assert any(grad_fn_handle.is_custom for grad_fn_handle in trace.grad_fn_logs.values())
 
 
-@pytest.mark.smoke
 def test_implicit_hook_firing_preserved() -> None:
     """Calling backward outside log_backward still populates Layer grads."""
     model = _TinyBackwardModel()
@@ -1139,7 +1112,6 @@ def test_implicit_hook_firing_preserved() -> None:
     assert trace.saved_grad_ops
 
 
-@pytest.mark.smoke
 @pytest.mark.filterwarnings("ignore:`layers_to_save` is deprecated:DeprecationWarning")
 @pytest.mark.filterwarnings("ignore:`random_seed` is deprecated:DeprecationWarning")
 @pytest.mark.filterwarnings("ignore:`save_grads` is deprecated:DeprecationWarning")
@@ -1336,7 +1308,6 @@ def test_accumulategrad_labels_deterministic_across_captures() -> None:
     assert labels1 == labels2
 
 
-@pytest.mark.smoke
 def test_validate_backward_pass_perturb_kwarg_removed() -> None:
     """The inert saved-grad perturbation kwarg is deleted outright."""
     model = _TinyBackwardModel()
@@ -1345,7 +1316,6 @@ def test_validate_backward_pass_perturb_kwarg_removed() -> None:
         tl_validation.validate_backward_pass(model, x, perturb_saved_grads=True)
 
 
-@pytest.mark.smoke
 def test_peak_memory_tracking_populated() -> None:
     """Trace stores flat backward peak-memory tracking metadata."""
     _model, _x, trace = _logged_model()
@@ -1355,7 +1325,6 @@ def test_peak_memory_tracking_populated() -> None:
     assert trace.backward_memory_backend in {"cpu", "cuda", "mps"}
 
 
-@pytest.mark.smoke
 def test_higher_order_grads_basic_support() -> None:
     """create_graph=True backward calls run through capture."""
     _model, _x, trace = _logged_model()
@@ -1369,7 +1338,6 @@ def test_higher_order_grads_basic_support() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_param_grad_records_rebuild_from_event_spine() -> None:
     """A forced scratch rebuild reconstructs Param._grad_records from events."""
     from torchlens.backends.torch import backward as backward_mod
@@ -1414,7 +1382,6 @@ def test_param_grad_records_rebuild_from_event_spine() -> None:
             assert record.grad is payload, "rebuild must reuse the event-held payload"
 
 
-@pytest.mark.smoke
 def test_param_grad_incremental_fold_matches_scratch_rebuild() -> None:
     """The param-inclusive snapshot proves fold == scratch across passes."""
     from torchlens.backends.torch import backward as backward_mod
@@ -1442,7 +1409,6 @@ def test_param_grad_incremental_fold_matches_scratch_rebuild() -> None:
     assert _backward_projection_snapshot(trace) == incremental_snapshot
 
 
-@pytest.mark.smoke
 def test_param_grad_reconciliation_counts_multiplicity() -> None:
     """Duplicating one projected param record now fails reconciliation."""
     from torchlens.validation.invariants import MetadataInvariantError
@@ -1462,7 +1428,6 @@ def test_param_grad_reconciliation_counts_multiplicity() -> None:
     _invariant_check(trace)
 
 
-@pytest.mark.smoke
 def test_op_grad_reconciliation_counts_multiplicity() -> None:
     """Duplicating one projected op record now fails reconciliation."""
     from torchlens.validation.invariants import MetadataInvariantError
@@ -1480,7 +1445,6 @@ def test_op_grad_reconciliation_counts_multiplicity() -> None:
     _invariant_check(trace)
 
 
-@pytest.mark.smoke
 def test_grad_fn_discovered_source_is_frozen_by_the_writer() -> None:
     """In-place mutation of GradFnDiscovered.source raises instead of biting."""
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
@@ -1495,7 +1459,6 @@ def test_grad_fn_discovered_source_is_frozen_by_the_writer() -> None:
     assert dict(discovered.source) is not discovered.source  # copies still work
 
 
-@pytest.mark.smoke
 def test_higher_order_discovery_bracketing_is_armed() -> None:
     """A created_in_pass discovery moved past its pass end fails the invariant."""
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
@@ -1549,7 +1512,6 @@ def test_higher_order_discovery_bracketing_is_armed() -> None:
     _invariant_check(trace)
 
 
-@pytest.mark.smoke
 def test_pass_brackets_reject_partial_interleaving() -> None:
     """Two pass brackets that partially overlap fail the invariant."""
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
@@ -1588,7 +1550,6 @@ def test_pass_brackets_reject_partial_interleaving() -> None:
     _invariant_check(trace)
 
 
-@pytest.mark.smoke
 def test_restored_trace_supports_backward_capture() -> None:
     """A pickled-and-restored trace records a fresh backward correctly."""
     import pickle
@@ -1614,7 +1575,6 @@ def test_restored_trace_supports_backward_capture() -> None:
     _invariant_check(restored)
 
 
-@pytest.mark.smoke
 def test_double_restore_replaces_stale_stream() -> None:
     """__setstate__ replaces a reused object's stream based on incoming state."""
     import pickle
@@ -1674,7 +1634,6 @@ def _assert_pass_record_calls_owned(trace, pass_record) -> None:
         assert call.backward_pass_index == pass_record.pass_index
 
 
-@pytest.mark.smoke
 def test_restored_trace_with_prior_backward_extends_pass_numbering() -> None:
     """A post-restore backward numbers itself after the preserved pass.
 
@@ -1758,7 +1717,6 @@ def test_restored_trace_with_prior_backward_extends_pass_numbering() -> None:
     _invariant_check(restored_again)
 
 
-@pytest.mark.smoke
 def test_fork_after_backward_gets_detached_event_stream() -> None:
     """``Trace.fork()`` never shares the parent's backward event stream.
 
@@ -1817,7 +1775,6 @@ def test_fork_after_backward_gets_detached_event_stream() -> None:
     _invariant_check(fork)
 
 
-@pytest.mark.smoke
 def test_grad_fn_discovered_source_snapshot_defeats_caller_proxy() -> None:
     """The writer re-snapshots an already-proxied source's backing dict.
 
@@ -1852,7 +1809,6 @@ def test_grad_fn_discovered_source_snapshot_defeats_caller_proxy() -> None:
     assert event.source["class_source_file"] == "/original/source.py"
 
 
-@pytest.mark.smoke
 def test_fork_deep_copy_debug_mode_rethrows(monkeypatch: pytest.MonkeyPatch) -> None:
     """TORCHLENS_DEBUG_FORK_COPY=1 surfaces silently-degraded fork copies.
 
@@ -1889,7 +1845,6 @@ def test_fork_deep_copy_debug_mode_rethrows(monkeypatch: pytest.MonkeyPatch) -> 
     assert isinstance(fork.__dict__.get("_tl_test_poison"), _PoisonDeepCopy)
 
 
-@pytest.mark.smoke
 def test_cleanup_disarms_backward_triggers() -> None:
     """A user backward after cleanup() must not raise from lingering hooks."""
     model = _TinyBackwardModel()
@@ -1910,7 +1865,6 @@ def test_cleanup_disarms_backward_triggers() -> None:
     assert x.grad is not None
 
 
-@pytest.mark.smoke
 def test_journal_seq_spans_forward_and_backward_lanes() -> None:
     """Every retained lane is writer-stamped from ONE run-monotonic counter."""
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
@@ -1940,7 +1894,6 @@ def test_journal_seq_spans_forward_and_backward_lanes() -> None:
     assert all(event.seq > max_op_seq for event in stream.backward_events)
 
 
-@pytest.mark.smoke
 def test_journal_seq_invariant_fires_on_planted_mutations() -> None:
     """The journal-wide seq invariant is independently armed per failure mode."""
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
@@ -2008,7 +1961,6 @@ def test_journal_seq_invariant_fires_on_planted_mutations() -> None:
     check()
 
 
-@pytest.mark.smoke
 def test_journal_seq_invariant_fires_on_event_deletion() -> None:
     """FINDING B1-08: DELETING an event used to pass every journal check.
 
@@ -2067,7 +2019,6 @@ def test_journal_seq_invariant_fires_on_event_deletion() -> None:
     check()
 
 
-@pytest.mark.smoke
 def test_amendment_lane_deletion_is_visible_to_the_journal_invariant() -> None:
     """The amendment lane rides its own counter and is checked the same way.
 
@@ -2144,7 +2095,6 @@ def test_amendment_lane_deletion_is_visible_to_the_journal_invariant() -> None:
     assert isinstance(stream, CaptureEvents)
 
 
-@pytest.mark.smoke
 def test_aliased_label_registrations_emit_one_grad_event_per_pass() -> None:
     """One logical op output emits exactly ONE OpGradObserved per pass.
 
@@ -2194,7 +2144,6 @@ def test_aliased_label_registrations_emit_one_grad_event_per_pass() -> None:
     check_metadata_invariants(trace)
 
 
-@pytest.mark.smoke
 def test_failed_backward_walk_keeps_start_and_gains_failed_end() -> None:
     """A failed graph walk is evidence: Start stays, a failed End closes it."""
     from torchlens.backends.torch import backward as backward_mod
@@ -2231,7 +2180,6 @@ def test_failed_backward_walk_keeps_start_and_gains_failed_end() -> None:
     check_metadata_invariants(trace)
 
 
-@pytest.mark.smoke
 def test_hook_registration_failure_records_typed_coverage_gap() -> None:
     """A registration skip is a typed BackwardCoverageGap, and validation fails closed."""
     from torchlens.backends.torch import backward as backward_mod
@@ -2259,7 +2207,6 @@ def test_hook_registration_failure_records_typed_coverage_gap() -> None:
     check_metadata_invariants(trace)
 
 
-@pytest.mark.smoke
 def test_validate_backward_fails_closed_on_coverage_gaps() -> None:
     """validate_backward_pass returns False when any unexplained gap exists."""
     from torchlens.backends.torch import backward as backward_mod

@@ -14,8 +14,6 @@ from torchlens.observability import HistorySchemaError
 from torchlens.trackers._errors import WatchConfigError, WatchRuntimeError
 from torchlens.utils._torch_compat import HAS_AMP_GRADSCALER
 
-pytestmark = pytest.mark.smoke
-
 _requires_gradscaler = pytest.mark.skipif(
     not HAS_AMP_GRADSCALER,
     reason="torch.amp.GradScaler (device-agnostic) postdates the torch 2.1 floor",
@@ -228,6 +226,7 @@ class TestLoudFailures:
             trk.watch(model, to=trk.MemorySink(), signals=("activation_grads",))
         assert info.value.fields["code"] == "watch_tier_unavailable"
 
+    @pytest.mark.smoke
     def test_budget_exceeded_is_a_preflight_fact(self) -> None:
         model, opt = _mlp()
         with pytest.raises(WatchConfigError) as info:
@@ -324,6 +323,7 @@ class TestLoudFailures:
             _train_steps(session2, model2, opt2, [0])
             raise ValueError("user failure")
 
+    @pytest.mark.smoke
     def test_foreign_watcher_refuses_with_remedy(self) -> None:
         """G7: a wandb-owned hook on the model refuses; namespace= remedies."""
 

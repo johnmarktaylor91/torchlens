@@ -78,7 +78,6 @@ def _assert_tensor_tree_clean(value: Any) -> None:
         assert not hasattr(tensor, "_tl")
 
 
-@pytest.mark.smoke
 def test_successful_capture_cleans_session_tensor_and_param_metadata() -> None:
     """Successful captures should clean session metadata while keeping module metadata."""
     model = _LifecycleModel()
@@ -126,7 +125,6 @@ def test_successful_capture_cleans_deeply_nested_saved_args() -> None:
         _assert_tensor_tree_clean(op.saved_args)
 
 
-@pytest.mark.smoke
 def test_failed_capture_cleans_partial_outputs_buffers_and_params() -> None:
     """Failed captures should clean partial output metadata and restore model state."""
     model = _FailingLifecycleModel()
@@ -181,7 +179,6 @@ def test_tag_untagged_buffers_promotes_prior_label_mid_session() -> None:
     assert sum(1 for entry in trace._session_buffer_inventory if entry is module.buf) == 1
 
 
-@pytest.mark.smoke
 def test_intervention_replacement_copies_tensor_meta_subclass() -> None:
     """Intervention replacement metadata copying should preserve TensorMeta."""
     source = torch.ones(2)

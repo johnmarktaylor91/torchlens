@@ -22,8 +22,6 @@ from torchlens.bundle._compare_gate import _MODEL_AXIS_RANK
 from torchlens.intervention.errors import BundleRelationshipError
 from torchlens.intervention.types import Relationship
 
-pytestmark = pytest.mark.smoke
-
 _OPTS = tl.options.CaptureOptions(intervention_ready=True)
 
 

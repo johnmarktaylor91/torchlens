@@ -26,7 +26,7 @@ from tests.real_model.registry import (
     resolved_config_fingerprint,
 )
 
-pytestmark = [pytest.mark.smoke, pytest.mark.real_model]
+pytestmark = pytest.mark.real_model
 
 # Files licensed to call pretrained-artifact loaders, and only with a
 # registry-pinned revision= (the acquisition rule, memo 4.3).

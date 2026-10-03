@@ -63,7 +63,6 @@ def _capture(model: nn.Module, value: torch.Tensor) -> tl.Trace:
     )
 
 
-@pytest.mark.smoke
 def test_parameterized_conditional_saves_and_verifies(tmp_path: Path) -> None:
     """A param'd if/else model saves runnable and replays VERIFIED on its input."""
 

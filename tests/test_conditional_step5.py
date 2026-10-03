@@ -358,7 +358,6 @@ def _assert_evaluation_entry_edges_are_upstream(trace: Trace) -> None:
             assert _has_upstream_path(trace, source_label, target_label)
 
 
-@pytest.mark.smoke
 def test_simple_if_else_model_step5_pipeline() -> None:
     """Simple ``if``/``else`` logs events plus THEN and ELSE arm attribution."""
 
@@ -417,7 +416,9 @@ def test_returned_predicate_remains_a_conditional_consumer() -> None:
     assert predicate.label in trace.internally_terminated_bool_ops
 
 
-@pytest.mark.smoke
+@pytest.mark.smoke_cells(
+    "test_conditional_evaluation_entry_edges_are_distinct_upstream_layers[model3-input_tensor3]"
+)
 @pytest.mark.parametrize(
     ("model", "input_tensor"),
     [
@@ -440,7 +441,6 @@ def test_conditional_evaluation_entry_edges_are_distinct_upstream_layers(
     _assert_evaluation_entry_edges_are_upstream(trace)
 
 
-@pytest.mark.smoke
 def test_elif_ladder_model_step5_pipeline() -> None:
     """Elif ladder materializes one event with all four arm ranges."""
 

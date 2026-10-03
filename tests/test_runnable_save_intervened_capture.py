@@ -43,7 +43,6 @@ class ReluModel(nn.Module):
         return self.fc2(torch.relu(self.fc1(value)))
 
 
-@pytest.mark.smoke
 def test_runnable_save_refuses_intervention_replaced_capture(tmp_path: Path) -> None:
     """An intervention-replaced capture must refuse level='runnable' save typed."""
 
@@ -64,7 +63,6 @@ def test_runnable_save_refuses_intervention_replaced_capture(tmp_path: Path) -> 
     assert "relu" in diagnostics
 
 
-@pytest.mark.smoke
 def test_runnable_save_allows_zero_match_intervention(tmp_path: Path) -> None:
     """A selector that fired on ZERO sites leaves the plain capture runnable."""
 

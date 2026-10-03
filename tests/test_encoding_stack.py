@@ -386,6 +386,7 @@ def test_plain_draw_never_stacks(lockstep_log: tl.Trace, tmp_path: Path) -> None
     assert "stacked by" not in dot
 
 
+@pytest.mark.smoke
 def test_sibling_ordering_noops_while_stacking(lockstep_log: tl.Trace, tmp_path: Path) -> None:
     """Two independent rank-constraint systems must not fight (fence pin)."""
 

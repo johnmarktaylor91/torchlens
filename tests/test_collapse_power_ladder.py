@@ -23,8 +23,6 @@ from torchlens.visualization.collapse_ladder import (
 )
 from torchlens.visualization.collapse_plan import RenderContext
 
-pytestmark = pytest.mark.smoke
-
 
 class _Block(nn.Module):
     """Linear+ReLU block."""
@@ -74,6 +72,7 @@ def stack_trace():  # noqa: ANN201 - generator fixture
         trace.cleanup()
 
 
+@pytest.mark.smoke
 def test_schedule_t_is_strictly_increasing_and_geometric(stack_trace) -> None:
     """t strictly increases and interior stops follow the geometric map."""
 

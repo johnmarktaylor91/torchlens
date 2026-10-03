@@ -34,8 +34,6 @@ from torchlens.validation.diagnostics import (
     record_validation_failure,
 )
 
-pytestmark = pytest.mark.smoke
-
 _SIDE_CHANNEL_ATTRS = (TRACE_FAILURE_ATTR, TRACE_DIAGNOSTICS_ATTR)
 
 
@@ -140,6 +138,7 @@ def test_side_channel_survives_plain_pickle_like_fast_run_session() -> None:
     assert TRACE_FAILURE_ATTR in restored.__dict__
 
 
+@pytest.mark.smoke
 def test_validate_fail_emits_one_summarizing_warning() -> None:
     """R67: a validate() FAIL points at the structured diagnosis.
 

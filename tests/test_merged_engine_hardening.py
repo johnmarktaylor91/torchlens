@@ -28,8 +28,6 @@ from torchlens.merged import (
 from torchlens.merged._errors import MergeInputError
 from torchlens.merged._evidence import extract_rank_evidence
 
-pytestmark = pytest.mark.smoke
-
 
 def _hex64(char: str) -> str:
     """A syntactically valid lowercase SHA-256 hex digest for fixtures."""
@@ -88,6 +86,7 @@ class TestOpLabelBackReferenceForgery:
             "honest-barrier",
         )
 
+    @pytest.mark.smoke
     def test_fabricated_label_refuses_typed_at_join_ops_access(self):
         """The access-time half of the residual: resolution is fail-closed."""
 
@@ -435,6 +434,7 @@ class TestC10dGroupSeqLatch:
             )
         assert excinfo.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
 
+    @pytest.mark.smoke
     def test_all_null_rewrite_is_the_documented_reauthoring_residual(self):
         # Nulling EVERY value on EVERY core is byte-identical to an honest
         # capability-absent capture (the probe returns null with no
@@ -504,6 +504,7 @@ class TestUniformRoleShapeRewrite:
             roles=[role("contribution", 0), role("destination", 0), role("destination", 1)],
         )
 
+    @pytest.mark.smoke
     def test_asymmetric_shape_rewrite_conflicts(self):
         d = derive_merge(
             {
@@ -654,6 +655,7 @@ class TestMemberOutcomeGate:
         assert excinfo.value.fields["reason"] == "member_outcome_not_mergeable"
         assert excinfo.value.fields["source"] == str(fake)
 
+    @pytest.mark.smoke
     def test_path_supplied_halted_member_is_disclosed(self, monkeypatch, tmp_path):
         import torchlens._io.bundle as bundle_module
         from torchlens.capture.outcome import CaptureStatus

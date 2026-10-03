@@ -26,8 +26,6 @@ import torchlens as tl
 import torchlens.backends.torch.ops as torch_ops
 from torchlens.validation import _output_walk
 
-pytestmark = pytest.mark.smoke
-
 
 class _TupleOut(nn.Module):
     """Model returning a 2-tuple, the shape of sol's original plant."""

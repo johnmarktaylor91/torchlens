@@ -18,8 +18,6 @@ import torch.nn as nn
 
 import torchlens as tl
 
-pytestmark = pytest.mark.smoke
-
 ATOL = 1e-6
 
 

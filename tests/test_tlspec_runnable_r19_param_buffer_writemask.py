@@ -165,7 +165,6 @@ _INPLACE_PARAM_MODULES = [
 ]
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("model_cls", _INPLACE_PARAM_MODULES)
 @pytest.mark.parametrize("include_activations", [False, True])
 def test_inplace_param_write_is_unverifiable(
@@ -230,7 +229,6 @@ class PlainBatchNormRunningStat(nn.Module):
         return self.bn(x)
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("include_activations", [False, True])
 def test_buffer_host_write_masked_by_journal_is_unverifiable(
     include_activations: bool, tmp_path: Path
@@ -253,7 +251,6 @@ def test_buffer_host_write_masked_by_journal_is_unverifiable(
     assert result.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
 
 
-@pytest.mark.smoke
 def test_pure_journaled_buffer_add_stays_verified_and_correct(tmp_path: Path) -> None:
     model = PureJournaledBufferAdd()
     state = {k: v.detach().clone() for k, v in model.state_dict().items()}
@@ -267,7 +264,6 @@ def test_pure_journaled_buffer_add_stays_verified_and_correct(tmp_path: Path) ->
     torch.testing.assert_close(result.output, expected)
 
 
-@pytest.mark.smoke
 def test_plain_batchnorm_running_stat_stays_verified_and_correct(tmp_path: Path) -> None:
     model = PlainBatchNormRunningStat()
     model.train()
@@ -357,7 +353,6 @@ _READONLY_PARAM_MODULES = [
 # derived read-only escape; torch's "converting to scalar" UserWarning is expected noise, not a
 # torchlens signal, so it must not escalate under filterwarnings=error.
 @pytest.mark.filterwarnings("ignore:Converting a tensor with requires_grad")
-@pytest.mark.smoke
 @pytest.mark.parametrize("model_cls", _READONLY_PARAM_MODULES)
 def test_readonly_param_stat_stays_verified(model_cls, tmp_path: Path) -> None:
     model = model_cls()
@@ -384,7 +379,6 @@ class PlainCNN(nn.Module):
         return self.relu(self.conv(x))
 
 
-@pytest.mark.smoke
 def test_plain_cnn_stays_verified(tmp_path: Path) -> None:
     model = PlainCNN()
     capture_x = torch.randn(1, 3, 8, 8)

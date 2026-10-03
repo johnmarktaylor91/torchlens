@@ -51,7 +51,6 @@ class _ManyEscapes(nn.Module):
         return inputs + first + second + third
 
 
-@pytest.mark.smoke
 def test_item_escape_warns_with_count_location_and_remediation() -> None:
     """An item-derived downstream literal produces the dedicated warning."""
     with pytest.warns(ScalarEscapeWarning) as warning_records:
@@ -70,14 +69,12 @@ def test_item_escape_warns_with_count_location_and_remediation() -> None:
     assert "the dependence is not captured" in message
 
 
-@pytest.mark.smoke
 def test_bool_control_flow_escape_warns() -> None:
     """A Tensor.__bool__ control-flow conversion is observed."""
     with pytest.warns(ScalarEscapeWarning, match="1 tensor-to-Python"):
         tl.trace(_BoolBranch(), torch.ones(2))
 
 
-@pytest.mark.smoke
 def test_clean_model_and_torchlens_internal_reads_do_not_warn() -> None:
     """Tensor-only user code and internal scalar bookkeeping remain quiet."""
     with warnings.catch_warnings(record=True) as warning_records:
@@ -87,7 +84,6 @@ def test_clean_model_and_torchlens_internal_reads_do_not_warn() -> None:
     assert not [record for record in warning_records if record.category is ScalarEscapeWarning]
 
 
-@pytest.mark.smoke
 def test_many_escapes_emit_one_aggregate_warning() -> None:
     """One Trace emits at most one warning carrying the aggregate count."""
     with pytest.warns(ScalarEscapeWarning) as warning_records:
@@ -101,7 +97,6 @@ def test_many_escapes_emit_one_aggregate_warning() -> None:
     assert "3 tensor-to-Python scalar escape(s)" in str(scalar_warnings[0].message)
 
 
-@pytest.mark.smoke
 def test_warning_class_is_filterable() -> None:
     """Users can silence scalar escape diagnostics by their dedicated category."""
     with warnings.catch_warnings(record=True) as warning_records:
@@ -114,7 +109,6 @@ def test_warning_class_is_filterable() -> None:
     assert not [w for w in warning_records if issubclass(w.category, ScalarEscapeWarning)]
 
 
-@pytest.mark.smoke
 def test_runnable_capture_uses_existing_witness_without_plain_warning() -> None:
     """Runnable eligibility retains its existing witness path and verdict behavior."""
     with warnings.catch_warnings(record=True) as warning_records:
@@ -139,7 +133,6 @@ class _EscapeThenBoom(nn.Module):
         raise ValueError(f"boom after escape {scalar}")
 
 
-@pytest.mark.smoke
 def test_escape_advisory_never_replaces_inflight_capture_exception() -> None:
     """b3-sol rollup of R07-1: the aggregate advisory used to fire from an
     unconditional ``finally``, so a warnings-as-error filter raised it during
@@ -152,7 +145,6 @@ def test_escape_advisory_never_replaces_inflight_capture_exception() -> None:
             tl.trace(_EscapeThenBoom(), torch.ones(2))
 
 
-@pytest.mark.smoke
 def test_escape_advisory_still_raises_on_success_path_under_error_filter() -> None:
     """With no in-flight exception, an as-error filter legitimately surfaces
     the advisory as the raised error -- nothing is being masked."""

@@ -12,8 +12,6 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import pytest
-
 sys.path.insert(0, str(Path(__file__).parent.parent / "tools"))
 from forward_load_gate import (  # noqa: E402
     CRASHED,
@@ -24,8 +22,6 @@ from forward_load_gate import (  # noqa: E402
     classify,
     expectations_for,
 )
-
-pytestmark = [pytest.mark.smoke]
 
 
 def test_untyped_crash_is_always_red() -> None:

@@ -22,8 +22,6 @@ from torchlens.errors import TorchLensWarning
 from torchlens.options import CaptureOptions
 from torchlens.runnable import StateSource
 
-pytestmark = pytest.mark.smoke
-
 
 @pytest.fixture()
 def runnable_bundle(tmp_path):

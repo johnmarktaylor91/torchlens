@@ -8,7 +8,6 @@ exactly ONE accounting row. Alias (input/output) rows display but own nothing
 
 from __future__ import annotations
 
-import pytest
 import torch
 from torch import nn
 
@@ -85,7 +84,6 @@ def _fixture_traces() -> list[tuple[str, tl.Trace]]:
     return fixtures
 
 
-@pytest.mark.smoke
 def test_compute_partition_totals_are_owned_exactly_once() -> None:
     """total_flops_forward == sum over REAL op rows; alias rows own None."""
 
@@ -105,7 +103,6 @@ def test_compute_partition_totals_are_owned_exactly_once() -> None:
             log.cleanup()
 
 
-@pytest.mark.smoke
 def test_tracked_bytes_partition_input_inclusive_alias_exclusive() -> None:
     """Tracked bytes = external input bytes + real op bytes; output rows own 0."""
 
@@ -117,7 +114,6 @@ def test_tracked_bytes_partition_input_inclusive_alias_exclusive() -> None:
             log.cleanup()
 
 
-@pytest.mark.smoke
 def test_param_partition_each_identity_owned_once() -> None:
     """Every parameter identity appears exactly once in param_logs; totals match torch."""
 
@@ -132,7 +128,6 @@ def test_param_partition_each_identity_owned_once() -> None:
             log.cleanup()
 
 
-@pytest.mark.smoke
 def test_module_param_rollups_match_torch_subtree_counts() -> None:
     """Each module row's param count equals torch's own subtree unique count."""
 
@@ -150,7 +145,6 @@ def test_module_param_rollups_match_torch_subtree_counts() -> None:
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_multipass_layer_owns_all_its_pass_events() -> None:
     """A 3-pass layer's aggregate owns exactly its three pass events' compute."""
 
@@ -169,7 +163,6 @@ def test_multipass_layer_owns_all_its_pass_events() -> None:
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_boundary_rows_render_dash_in_every_additive_cell() -> None:
     """The costreport D7 CI plant: a numeric additive cell on a boundary row fails."""
 

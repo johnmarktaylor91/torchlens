@@ -109,7 +109,6 @@ def test_offload_shims_are_removed_after_capture() -> None:
     assert len(second.ops) == len(first.ops)
 
 
-@pytest.mark.smoke
 def test_bare_meta_model_still_refuses_fail_closed() -> None:
     """A meta param with NO offload hook keeps the typed entry refusal."""
 
@@ -154,7 +153,6 @@ def test_offload_backed_paths_require_weights_map_membership() -> None:
     assert "1.weight" not in backed  # no hook on that module
 
 
-@pytest.mark.smoke
 def test_offload_backed_paths_accept_full_name_inventories() -> None:
     """accelerate's PrefixedDataset serves FULL state-dict names from keys()."""
 
@@ -163,7 +161,6 @@ def test_offload_backed_paths_accept_full_name_inventories() -> None:
     assert offload_backed_state_paths(model) == frozenset({"0.weight", "0.bias"})
 
 
-@pytest.mark.smoke
 def test_offload_backed_paths_exclude_buffers_unless_declared() -> None:
     """offload=True alone never marks buffers; offload_buffers=True does."""
 

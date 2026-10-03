@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-import pytest
 import torch
 from example_models import TinyReluAdd as _ReluModel
 
@@ -84,7 +83,6 @@ def _remove_unified_marker(path: Path) -> None:
     _write_json(path / "manifest.json", manifest)
 
 
-@pytest.mark.smoke
 def test_intervention_writer_adds_unified_marker_without_removing_legacy_fields(
     tmp_path: Path,
 ) -> None:
@@ -101,7 +99,6 @@ def test_intervention_writer_adds_unified_marker_without_removing_legacy_fields(
     assert tl.io.detect_tlspec_format(path) == "v2.0_unified"
 
 
-@pytest.mark.smoke
 def test_new_loader_reads_transitional_intervention_spec(tmp_path: Path) -> None:
     """The polymorphic loader should read transitional intervention specs."""
 
@@ -115,7 +112,6 @@ def test_new_loader_reads_transitional_intervention_spec(tmp_path: Path) -> None
     assert loaded.metadata["save_level"] == "portable"
 
 
-@pytest.mark.smoke
 def test_legacy_intervention_reader_ignores_transitional_kind(tmp_path: Path) -> None:
     """The direct 2.16.0 intervention reader should ignore ``manifest.kind``."""
 
@@ -129,7 +125,6 @@ def test_legacy_intervention_reader_ignores_transitional_kind(tmp_path: Path) ->
     assert loaded.metadata["save_level"] == "executable_with_callables"
 
 
-@pytest.mark.smoke
 def test_new_loader_reads_intervention_with_unified_manifest_marker(tmp_path: Path) -> None:
     """The Phase 11.0 loader should dispatch unified intervention manifests by kind."""
 

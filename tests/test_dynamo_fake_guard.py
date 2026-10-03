@@ -147,7 +147,6 @@ def test_exact_torch_functional_tensor_is_classified_and_refused() -> None:
     assert "created inside forward" in compat_row.details
 
 
-@pytest.mark.smoke
 def test_fake_tensor_input_refuses_with_a_typed_explanatory_error() -> None:
     """A FakeTensor input must be refused up front, not crash mid-forward."""
 

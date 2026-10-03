@@ -166,7 +166,6 @@ def _save_all_levels(tmp_path: Path) -> dict[str, Path]:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_pytorch_file_reader_type_denied_no_file_opened(tmp_path: Path) -> None:
     """``PyTorchFileReader(victim_path)`` is denied without opening the file."""
 
@@ -179,7 +178,6 @@ def test_pytorch_file_reader_type_denied_no_file_opened(tmp_path: Path) -> None:
         SafeBundleUnpickler(io.BytesIO(payload)).load()
 
 
-@pytest.mark.smoke
 def test_pytorch_file_writer_type_denied_no_file_created(tmp_path: Path) -> None:
     """``PyTorchFileWriter(path)`` is denied and CREATES no file (proof of no ctor)."""
 
@@ -190,7 +188,6 @@ def test_pytorch_file_writer_type_denied_no_file_created(tmp_path: Path) -> None
     assert not sentinel.exists(), "PyTorchFileWriter was constructed and created a file"
 
 
-@pytest.mark.smoke
 def test_package_importer_type_denied(tmp_path: Path) -> None:
     """``PackageImporter(dir)`` (directory traversal read) is denied."""
 
@@ -204,7 +201,6 @@ def test_package_importer_type_denied(tmp_path: Path) -> None:
             SafeBundleUnpickler(io.BytesIO(payload)).load()
 
 
-@pytest.mark.smoke
 def test_file_check_type_denied() -> None:
     """``torch._C.FileCheck`` is denied (structural name-token guard)."""
 
@@ -213,7 +209,6 @@ def test_file_check_type_denied() -> None:
         SafeBundleUnpickler(io.BytesIO(payload)).load()
 
 
-@pytest.mark.smoke
 def test_prior_os_system_denial_intact() -> None:
     """Control: ``os.system`` stays blocked (foreign-module denylist unchanged)."""
 
@@ -227,7 +222,6 @@ def test_prior_os_system_denial_intact() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_torch_type_denied_helper_classifies_io_types() -> None:
     """``_torch_type_denied`` denies the I/O / serialization / packaging types."""
 
@@ -241,7 +235,6 @@ def test_torch_type_denied_helper_classifies_io_types() -> None:
         assert _torch_type_denied(module, name, obj), f"{module}.{name} should be denied"
 
 
-@pytest.mark.smoke
 def test_torch_type_denied_helper_admits_data_types() -> None:
     """Legit torch DATA types are NOT denied (still admitted through unpickle).
 
@@ -267,7 +260,6 @@ def test_torch_type_denied_helper_admits_data_types() -> None:
         assert isinstance(resolved, type)
 
 
-@pytest.mark.smoke
 def test_torch_storage_constructors_denied_at_find_class() -> None:
     """r49 secA_1: torch storage classes are denied at ``find_class`` (alloc DoS)."""
 
@@ -286,7 +278,6 @@ def test_torch_storage_constructors_denied_at_find_class() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_all_save_levels_still_load(tmp_path: Path) -> None:
     """Every legitimately-saved bundle at every level loads under the I/O-type guard."""
 
@@ -295,7 +286,6 @@ def test_all_save_levels_still_load(tmp_path: Path) -> None:
         assert loaded is not None, name
 
 
-@pytest.mark.smoke
 @pytest.mark.filterwarnings(
     # A08 random-role-init disclosure (runnable_random_init_run): this test
     # exercises a weight-free runnable run DELIBERATELY; the warning is the
@@ -313,7 +303,6 @@ def test_runnable_levels_still_run(tmp_path: Path) -> None:
         assert tuple(result.output.shape) == (2, 4), name
 
 
-@pytest.mark.smoke
 def test_real_cnn_and_attention_models_load(tmp_path: Path) -> None:
     """A real CNN and attention model saved portably still load under the guard."""
 

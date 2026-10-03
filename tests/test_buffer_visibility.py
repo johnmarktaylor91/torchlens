@@ -297,7 +297,6 @@ def _child_ops_for_buffer(log: Trace, address: str) -> list[str]:
     raise AssertionError(f"Buffer {address!r} was not found in the log.")
 
 
-@pytest.mark.smoke
 def test_never_hides_all_and_marks_parents(tmp_path: Path) -> None:
     """Mode ``never`` hides all buffers and marks ops with hidden buffer sources."""
 
@@ -312,7 +311,6 @@ def test_never_hides_all_and_marks_parents(tmp_path: Path) -> None:
     assert 'tooltip="Hidden buffers:' in _node_line(dot_source, "batchnorm_1_1")
 
 
-@pytest.mark.smoke
 def test_meaningful_hides_noise_only(tmp_path: Path) -> None:
     """Mode ``meaningful`` hides noisy buffers but keeps architectural buffers."""
 
@@ -333,7 +331,6 @@ def test_meaningful_hides_noise_only(tmp_path: Path) -> None:
         assert "peripheries=2" not in _node_line(dot_source, child_name)
 
 
-@pytest.mark.smoke
 def test_always_shows_all_no_marker(tmp_path: Path) -> None:
     """Mode ``always`` shows all buffers and omits hidden-buffer markers."""
 
@@ -350,7 +347,6 @@ def test_always_shows_all_no_marker(tmp_path: Path) -> None:
     assert "Hidden buffers:" not in dot_source
 
 
-@pytest.mark.smoke
 def test_visible_buffer_uses_cylinder_shape(tmp_path: Path) -> None:
     """Visible buffers render as white cylinders instead of gray boxes."""
 
@@ -368,7 +364,6 @@ def test_visible_buffer_uses_cylinder_shape(tmp_path: Path) -> None:
     assert "#888888" not in causal_mask_lines[0]
 
 
-@pytest.mark.smoke
 def test_legacy_true_refuses_typed(tmp_path: Path) -> None:
     """The removed legacy ``True`` buffer-visibility value refuses typed."""
 
@@ -382,7 +377,6 @@ def test_legacy_true_refuses_typed(tmp_path: Path) -> None:
     assert exc_info.value.fields["code"] == "buffer_visibility_invalid"
 
 
-@pytest.mark.smoke
 def test_legacy_false_refuses_typed(tmp_path: Path) -> None:
     """The removed legacy ``False`` buffer-visibility value refuses typed."""
 
@@ -396,7 +390,6 @@ def test_legacy_false_refuses_typed(tmp_path: Path) -> None:
     assert exc_info.value.fields["code"] == "buffer_visibility_invalid"
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("training", "expected"),
     [(False, "1 op + 4 buffers"), (True, "2 ops + 6 buffers")],
@@ -420,7 +413,6 @@ def test_collapsed_batchnorm_labels_ops_and_buffers(
     assert "layers total" not in dot_source
 
 
-@pytest.mark.smoke
 def test_collapsed_pure_op_module_omits_buffer_clause(tmp_path: Path) -> None:
     """Collapsed modules without buffers render only their operation count."""
 

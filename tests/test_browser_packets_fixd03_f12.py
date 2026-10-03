@@ -27,8 +27,6 @@ from torchlens.visualization.lenses import audit
 from torchlens.visualization.lenses.audit import stage0
 from torchlens.visualization.lenses.audit.answer_key import AnswerKey, KeyQuestion
 
-pytestmark = pytest.mark.smoke  # measured <0.5s per test (W051-GATE, AUD-CODE 0.1)
-
 DOT_AVAILABLE = shutil.which("dot") is not None
 
 
@@ -167,6 +165,7 @@ def test_label_box_with_no_visible_text_has_no_box() -> None:
     assert stage0._label_boxes(layout) == []
 
 
+@pytest.mark.smoke
 @pytest.mark.skipif(not DOT_AVAILABLE, reason="graphviz dot binary unavailable")
 def test_html_table_edge_label_does_not_trip_geometry() -> None:
     """The shipped In/Out multiplicity family passes the geometry gate."""

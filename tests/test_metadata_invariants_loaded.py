@@ -22,8 +22,6 @@ import torchlens as tl
 from torchlens.errors import MetadataInvariantError
 from torchlens.validation.invariants import check_metadata_invariants
 
-pytestmark = pytest.mark.smoke
-
 
 def _loaded_round_trip(tmp_path: Path) -> tl.Trace:
     model = nn.Sequential(nn.Linear(4, 3), nn.ReLU())

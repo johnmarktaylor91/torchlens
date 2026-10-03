@@ -15,8 +15,6 @@ from torch import nn
 import torchlens  # noqa: F401 -- full package init before backend submodule imports
 import torchlens.backends.torch.ops  # noqa: F401 -- ops.py must initialize before _ops_capture_records
 
-pytestmark = pytest.mark.smoke
-
 
 def _fields_dict_for(params: list[nn.Parameter]) -> dict:
     from torchlens.backends.torch.tensor_tracking import _process_parent_param_ops

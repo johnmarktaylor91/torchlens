@@ -28,8 +28,6 @@ from torchlens.conformance import (
 from torchlens.conformance._adapters import resolve_adapter
 from torchlens.errors import ConfigurationError
 
-pytestmark = pytest.mark.smoke
-
 
 def _build_tiny() -> tuple[Any, Any]:
     """Zero-arg factory for the cheap hermetic roster model."""
@@ -111,6 +109,7 @@ def test_plant_table_covers_the_closed_set() -> None:
     assert set(_PLANT_INTENDED_CELL) == set(FAKE_PLANTS)
 
 
+@pytest.mark.smoke_cells("test_every_plant_turns_its_intended_cell_red[capability_undispatched]")
 @pytest.mark.parametrize("plant", FAKE_PLANTS)
 def test_every_plant_turns_its_intended_cell_red(plant: str, tmp_path: Path) -> None:
     """Each planted defect fails the exact cell it targets, nothing vacuous."""
@@ -175,6 +174,7 @@ def test_executed_floor_zero_green_never_reads_green() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_c0_claim_never_says_conformant() -> None:
     """C0 earns 'provider API compatible' and NEVER 'conformant'."""
 

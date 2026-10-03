@@ -18,7 +18,6 @@ import torch.nn as nn
 from torchlens.debug import GradFnWalkError, sketch_grad_fn, walk_grad_fn
 
 
-@pytest.mark.smoke
 def test_walk_names_leaves_and_orients_edges_forward() -> None:
     """Leaves resolve names from params=, edges run producer -> consumer."""
 
@@ -37,7 +36,6 @@ def test_walk_names_leaves_and_orients_edges_forward() -> None:
     assert not sketch.truncated
 
 
-@pytest.mark.smoke
 def test_walk_real_loss_tensor_from_real_architecture() -> None:
     """A real cross-entropy loss from a real GPT-2 class walks completely."""
 
@@ -59,7 +57,6 @@ def test_walk_real_loss_tensor_from_real_architecture() -> None:
     assert op_count > 50 and leaf_count >= 20
 
 
-@pytest.mark.smoke
 def test_walk_double_backprop_gradient_graph() -> None:
     """A create_graph=True gradient's graph (grad-of-grad) walks too."""
 
@@ -125,7 +122,6 @@ def test_sketch_renders_bounded_file(tmp_path) -> None:
     assert "only sketch of grad_fn graph" in svg
 
 
-@pytest.mark.smoke
 def test_model_and_params_compose_with_params_winning() -> None:
     """model= names leaves; explicit params= wins on collisions."""
 

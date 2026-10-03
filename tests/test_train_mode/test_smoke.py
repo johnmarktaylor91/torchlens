@@ -11,7 +11,6 @@ from torchlens.options import CaptureOptions
 from .conftest import TwoLayerMlp
 
 
-@pytest.mark.smoke
 def test_trace_train_mode_basic(two_layer_mlp: TwoLayerMlp) -> None:
     """trace backward_ready keeps saved outs differentiable."""
 
@@ -54,7 +53,6 @@ def test_save_new_outs_train_mode_basic(two_layer_mlp: TwoLayerMlp) -> None:
     trace.cleanup()
 
 
-@pytest.mark.smoke
 def test_fastlog_record_train_mode_basic(two_layer_mlp: TwoLayerMlp) -> None:
     """fastlog record backward_ready keeps recorded payloads differentiable."""
 

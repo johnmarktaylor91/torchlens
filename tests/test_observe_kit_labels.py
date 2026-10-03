@@ -22,8 +22,6 @@ import torchlens as tl
 from torchlens.capture._nonfinite_prefix import resolve_raw_label
 from torchlens.errors import CaptureError
 
-pytestmark = pytest.mark.smoke
-
 TORCHLENS_DIR = Path(tl.__file__).resolve().parent
 
 
@@ -169,6 +167,7 @@ def test_multipass_offender_gets_pass_qualified_canonical_label() -> None:
     )
 
 
+@pytest.mark.smoke
 def test_failed_finalization_yields_none_plus_status_never_raw(monkeypatch) -> None:
     """When the prefix postprocess cannot run, labels are None + status."""
 

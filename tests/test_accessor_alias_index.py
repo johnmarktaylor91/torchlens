@@ -220,7 +220,6 @@ def _reference_grad_fn_call_match(accessor: TraceGradFnCallAccessor, key: str) -
     return None
 
 
-@pytest.mark.smoke
 def test_op_alias_index_matches_scan_for_every_key() -> None:
     """Indexed Op resolution equals the scan for every alias, miss, and ambiguity."""
 
@@ -259,7 +258,6 @@ def test_op_alias_index_matches_scan_for_every_key() -> None:
     assert probed["ambiguous"] > 0
 
 
-@pytest.mark.smoke
 def test_module_call_and_grad_fn_call_indexes_match_scan() -> None:
     """Indexed ModuleCall/GradFnCall resolution equals the scanning form."""
 
@@ -310,7 +308,6 @@ def test_module_call_and_grad_fn_call_indexes_match_scan() -> None:
         trace.cleanup()
 
 
-@pytest.mark.smoke
 def test_edge_counters_match_unmemoized_reference() -> None:
     """Memoized edge counting equals the direct per-edge accessor resolution."""
 
@@ -345,7 +342,6 @@ def test_edge_counters_match_unmemoized_reference() -> None:
             trace.cleanup()
 
 
-@pytest.mark.smoke
 def test_alias_index_build_failure_falls_back_to_scan(monkeypatch: pytest.MonkeyPatch) -> None:
     """An unreadable alias on a later Op degrades to the scan, not to an error.
 

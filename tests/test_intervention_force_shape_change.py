@@ -73,7 +73,7 @@ _FLAG_HELPERS: dict[str, Callable[[], HelperSpec]] = {
 }
 
 
-@pytest.mark.smoke
+@pytest.mark.smoke_cells("test_helper_flag_reaches_entry_metadata[grad_scale]")
 @pytest.mark.parametrize("helper_name", sorted(_FLAG_HELPERS))
 def test_helper_flag_reaches_entry_metadata(helper_name: str) -> None:
     """helper(force_shape_change=True) must stamp True on every plan entry."""
@@ -88,7 +88,6 @@ def test_helper_flag_reaches_entry_metadata(helper_name: str) -> None:
         )
 
 
-@pytest.mark.smoke
 def test_helper_flag_default_false_metadata() -> None:
     """Default helpers stamp False; the safety guard stays armed by default."""
 
@@ -98,7 +97,6 @@ def test_helper_flag_default_false_metadata() -> None:
         assert entry.metadata.get("force_shape_change") is False
 
 
-@pytest.mark.smoke
 def test_intervene_shape_change_applies() -> None:
     """intervene= with force_shape_change=True applies a (1,4)->(1,8) replacement."""
 
@@ -117,7 +115,6 @@ def test_intervene_shape_change_applies() -> None:
     assert relu.intervention_replaced is True
 
 
-@pytest.mark.smoke
 def test_hooks_kwarg_shape_change_applies() -> None:
     """hooks= with force_shape_change=True applies the shape-changed replacement."""
 
@@ -134,7 +131,6 @@ def test_hooks_kwarg_shape_change_applies() -> None:
     assert tuple(_relu_layer(log).out.shape) == (1, 8)
 
 
-@pytest.mark.smoke
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_replay_hooks_shape_change_applies() -> None:
     """Trace.push(replay=ReplayOptions(hooks=...)) with force_shape_change=True applies the replacement."""
@@ -154,7 +150,6 @@ def test_replay_hooks_shape_change_applies() -> None:
     assert float(_output_out(replayed)) == pytest.approx(8.0)
 
 
-@pytest.mark.smoke
 def test_push_replay_options_shape_change_applies() -> None:
     """The canonical push(replay=ReplayOptions(hooks=...)) spelling honors the flag."""
 
@@ -189,7 +184,6 @@ def test_splice_module_dtype_change_applies() -> None:
     assert _output_out(log).dtype == torch.float64
 
 
-@pytest.mark.smoke
 def test_default_false_still_raises_on_shape_change_intervene() -> None:
     """Without the flag, an unexpected shape change still raises HookValueError."""
 
@@ -203,7 +197,6 @@ def test_default_false_still_raises_on_shape_change_intervene() -> None:
         )
 
 
-@pytest.mark.smoke
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_default_false_still_raises_on_shape_change_replay() -> None:
     """Replay without the flag still rejects an unexpected shape change."""

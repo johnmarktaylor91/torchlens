@@ -34,7 +34,6 @@ DATA_DIR = Path(__file__).resolve().parent / "data"
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_cache_key_coverage_is_closed() -> None:
     """Every option/entry parameter is keyed, dont-cared, or gap-rowed.
 
@@ -55,7 +54,6 @@ def test_cache_key_coverage_is_closed() -> None:
     assert not stale, f"cache-key gap rows now covered: {stale} -- delete them (monotone-down)"
 
 
-@pytest.mark.smoke
 def test_cache_key_dont_care_rows_are_not_also_keyed() -> None:
     """A dont-care row for a field the key actually covers is stale."""
 
@@ -64,7 +62,6 @@ def test_cache_key_dont_care_rows_are_not_also_keyed() -> None:
     assert not stale, f"dont-care rows shadow real key coverage: {stale}"
 
 
-@pytest.mark.smoke
 def test_plant_new_option_field_blocks() -> None:
     """PLANT: an option name in no bucket registers as a new delta."""
 
@@ -76,7 +73,6 @@ def test_plant_new_option_field_blocks() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_option_universe_publishes_its_denominator() -> None:
     """D8: the lint's own universe publishes with counts."""
 
@@ -95,7 +91,6 @@ def test_option_universe_publishes_its_denominator() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_default_truth_claims_reconcile_or_are_gap_rowed() -> None:
     """Every parsed docstring default claim agrees or holds a gap row."""
 
@@ -112,7 +107,6 @@ def test_default_truth_claims_reconcile_or_are_gap_rowed() -> None:
     assert not stale, f"default-truth gap rows now reconcile: {stale} -- delete them"
 
 
-@pytest.mark.smoke
 def test_plant_default_truth_catches_a_contradiction() -> None:
     """PLANT: the claim parser sees through agreement to a planted lie.
 
@@ -132,7 +126,6 @@ def test_plant_default_truth_catches_a_contradiction() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_no_unasserted_before_snapshots_in_the_harness() -> None:
     """The oracle harness's own files carry no dead before-channels."""
 
@@ -144,7 +137,6 @@ def test_no_unasserted_before_snapshots_in_the_harness() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_plant_unasserted_before_is_found(tmp_path: Path) -> None:
     """PLANT: an unread ``*_before`` snapshot registers."""
 
@@ -163,7 +155,6 @@ def test_plant_unasserted_before_is_found(tmp_path: Path) -> None:
     assert findings == ("planted_module.py::probe::picklable_before",), findings
 
 
-@pytest.mark.smoke
 def test_plant_read_before_is_not_flagged(tmp_path: Path) -> None:
     """PLANT (specificity): a READ before-value is not a finding."""
 
@@ -187,7 +178,6 @@ def test_plant_read_before_is_not_flagged(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_surface_denominator_agrees_across_roots() -> None:
     """The declared-surface denominator agrees from independent roots.
 
@@ -208,7 +198,6 @@ def test_surface_denominator_agrees_across_roots() -> None:
     assert len(set(roots.values())) == 1, f"denominator roots disagree: {roots}"
 
 
-@pytest.mark.smoke
 def test_plant_denominator_drift_goes_red(tmp_path: Path) -> None:
     """PLANT: a doctored ``__all__`` diverges from the other roots."""
 
@@ -257,7 +246,6 @@ def test_numeral_census_baseline_mechanics() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_plant_numeral_is_found_and_stale_row_blocks(tmp_path: Path) -> None:
     """PLANT: the census sees a planted numeral; a stale row registers."""
 
@@ -273,7 +261,6 @@ def test_plant_numeral_is_found_and_stale_row_blocks(tmp_path: Path) -> None:
     assert sorted(baseline - live), "a stale planted baseline row was not detected"
 
 
-@pytest.mark.smoke
 def test_numeral_floor_excludes_single_digits(tmp_path: Path) -> None:
     """The counted set excludes sub-floor numerals (disclosed, not silent)."""
 

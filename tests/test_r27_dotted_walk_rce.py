@@ -102,7 +102,6 @@ def _reduce_global_pickle(module: str, name: str, str_args: list[str]) -> bytes:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("unpickler_cls", _UNPICKLERS)
 def test_torch_dotted_walk_to_nontorch_type_denied_no_spawn(
     unpickler_cls: type[pickle.Unpickler],
@@ -128,7 +127,6 @@ def test_torch_dotted_walk_to_nontorch_type_denied_no_spawn(
     assert not sentinel.exists()
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("unpickler_cls", _UNPICKLERS)
 def test_reported_collect_env_popen_vector_inert(
     unpickler_cls: type[pickle.Unpickler], tmp_path: Path
@@ -152,7 +150,6 @@ def test_reported_collect_env_popen_vector_inert(
     assert not sentinel.exists()
 
 
-@pytest.mark.smoke
 def test_legit_torch_types_still_admit() -> None:
     """Genuine torch data types (real torch module) still resolve (no regression)."""
 
@@ -161,7 +158,6 @@ def test_legit_torch_types_still_admit() -> None:
     assert unpickler.find_class("torch.nn.modules.linear", "Identity") is torch.nn.Identity
 
 
-@pytest.mark.smoke
 def test_preview_backend_dotted_walk_escape_denied() -> None:
     """The preview-backend branch also requires the resolved type to be preview-owned.
 
@@ -190,7 +186,6 @@ def test_preview_backend_dotted_walk_escape_denied() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "import_path",
     ["torch:os.system", "torch:serialization.load", "torch:serialization.save"],
@@ -210,7 +205,6 @@ def test_resolver_dotted_walk_to_denied_module_denied_under_trust(import_path: s
         _resolve_import_ref(import_path, allowed_custom_callable_modules={"torch"})
 
 
-@pytest.mark.smoke
 def test_resolver_from_file_via_dotted_torch_denied_by_purity() -> None:
     """A dotted torch qualname reaching ``from_file`` is refused by the purity gate.
 
@@ -222,7 +216,6 @@ def test_resolver_from_file_via_dotted_torch_denied_by_purity() -> None:
         _resolve_import_ref("torch:_C._VariableFunctions.from_file", trust_custom_callables=True)
 
 
-@pytest.mark.smoke
 def test_resolver_legit_foreign_trusted_callable_still_resolves(tmp_path: Path) -> None:
     """A genuinely foreign (non-torch) trusted callable is NOT purity-gated (no regression)."""
 
@@ -261,7 +254,6 @@ def _trusted_os_module(tmp_path: Path) -> str:
         sys.modules.pop(mod_name, None)
 
 
-@pytest.mark.smoke
 def test_unpickler_trusted_dotted_walk_to_os_denied(_trusted_os_module: str) -> None:
     """Under trust, a dotted name walking off a trusted module to ``os.system`` is denied."""
 
@@ -275,7 +267,6 @@ def test_unpickler_trusted_dotted_walk_to_os_denied(_trusted_os_module: str) -> 
         ).load()
 
 
-@pytest.mark.smoke
 def test_unpickler_legit_trusted_callable_still_resolves(_trusted_os_module: str) -> None:
     """A genuine (single-name) callable in the trusted module still resolves (no regression)."""
 
@@ -297,7 +288,6 @@ def _embedded_tensor_bytes() -> bytes:
     return buf.getvalue()
 
 
-@pytest.mark.smoke
 def test_embedded_load_refused_on_cve_vulnerable_torch(monkeypatch: pytest.MonkeyPatch) -> None:
     """When the CVE-2025-32434 fix is absent, the embedded load fails closed."""
 
@@ -308,7 +298,6 @@ def test_embedded_load_refused_on_cve_vulnerable_torch(monkeypatch: pytest.Monke
         _safe_load_from_bytes(_embedded_tensor_bytes())
 
 
-@pytest.mark.smoke
 def test_embedded_load_roundtrips_on_fixed_torch() -> None:
     """On a CVE-fixed torch (>= 2.6), a benign embedded tensor still round-trips."""
 

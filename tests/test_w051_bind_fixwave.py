@@ -162,7 +162,6 @@ def _model_rows(state):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_inplace_injected_ops_attest_on_honest_capture() -> None:
     """mul_/relu_ inside a hook: the pre-call snapshot replays to the recorded out."""
 
@@ -264,7 +263,6 @@ def _logged_chain():
     return tl.trace(model, x, intervene=spec, capture=_LOGGED), spec
 
 
-@pytest.mark.smoke
 def test_reanchored_rows_refuse_at_load(tmp_path) -> None:
     """Moving rows onto another op's site key + label + pass refuses typed."""
 
@@ -287,7 +285,6 @@ def test_reanchored_rows_refuse_at_load(tmp_path) -> None:
     assert excinfo.value.fields["reason"] in {"host_pass_mismatch", "rule_unrecorded"}
 
 
-@pytest.mark.smoke
 def test_site_key_label_disagreement_refuses_at_load(tmp_path) -> None:
     """A host site key that names a DIFFERENT op than host_label refuses."""
 
@@ -304,7 +301,6 @@ def test_site_key_label_disagreement_refuses_at_load(tmp_path) -> None:
     assert excinfo.value.fields["reason"] == "host_label_mismatch"
 
 
-@pytest.mark.smoke
 def test_forged_host_pass_refuses_at_load(tmp_path) -> None:
     """host_pass must be the host op's own pass index."""
 
@@ -320,7 +316,6 @@ def test_forged_host_pass_refuses_at_load(tmp_path) -> None:
     assert excinfo.value.fields["reason"] == "host_pass_mismatch"
 
 
-@pytest.mark.smoke
 def test_unrecorded_rule_id_refuses_at_load(tmp_path) -> None:
     """spec_rule_id must be a rule the artifact's intervention record ran."""
 
@@ -336,7 +331,6 @@ def test_unrecorded_rule_id_refuses_at_load(tmp_path) -> None:
     assert excinfo.value.fields["reason"] == "rule_unrecorded"
 
 
-@pytest.mark.smoke
 def test_honest_artifact_still_loads_and_attests(tmp_path) -> None:
     """The anchor checks never refuse an honest round trip."""
 
@@ -356,7 +350,6 @@ def test_honest_artifact_still_loads_and_attests(tmp_path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_bind_site_keys_match_capture_for_submodule_ops() -> None:
     """Every bind fire's live site key is a key the capture minted for that op type."""
 
@@ -389,7 +382,6 @@ def test_bind_in_module_pass_qualifier_still_resolves_after_root_skip() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_bind_identity_hook_reads_replaced_false() -> None:
     """An identity hook fired but replaced nothing."""
 
@@ -408,7 +400,6 @@ def test_bind_identity_hook_reads_replaced_false() -> None:
     assert scaled.last_report.fires[0]["replaced"] is True
 
 
-@pytest.mark.smoke
 def test_bind_module_boundary_identity_hook_reads_replaced_false() -> None:
     """Boundary fires derive replaced by identity too."""
 
@@ -419,7 +410,6 @@ def test_bind_module_boundary_identity_hook_reads_replaced_false() -> None:
     assert bound.last_report.fires[0]["replaced"] is False
 
 
-@pytest.mark.smoke
 def test_bind_inplace_target_disclosed() -> None:
     """relu_ / F.relu(inplace=True) targets carry in_place_op=True on the fire."""
 
@@ -452,7 +442,6 @@ def chain_fork():
     return model, x, log
 
 
-@pytest.mark.smoke
 def test_region_edit_shape_change_refuses_typed(chain_fork) -> None:
     """out[:1] on a region exit is a downstream lie, refused like node-level do."""
 
@@ -464,7 +453,6 @@ def test_region_edit_shape_change_refuses_typed(chain_fork) -> None:
     assert excinfo.value.fields["code"] == "intervention_replacement_invalid"
 
 
-@pytest.mark.smoke
 def test_region_edit_dtype_change_refuses_typed(chain_fork) -> None:
     """.double() on a region exit refuses typed instead of a raw downstream RuntimeError."""
 
@@ -505,7 +493,6 @@ def test_bind_alias_address_refuses_teaching_canonical_name() -> None:
     assert "EVERY call site" in str(excinfo.value)
 
 
-@pytest.mark.smoke
 def test_bind_canonical_address_discloses_aliases_and_fires_every_call_site() -> None:
     """The report discloses the alias map; the shared module fires at both sites."""
 
@@ -556,7 +543,6 @@ def test_module_boundary_injected_ops_anchor_and_round_trip(tmp_path) -> None:
     assert attest_injected_ops(loaded).passed
 
 
-@pytest.mark.smoke
 def test_module_boundary_reused_block_anchors_each_call(tmp_path) -> None:
     """A twice-called block anchors each firing to its own module-exit op."""
 
@@ -569,7 +555,6 @@ def test_module_boundary_reused_block_anchors_each_call(tmp_path) -> None:
     tl.save(logged, str(tmp_path / "blk.tlspec"))
 
 
-@pytest.mark.smoke
 def test_module_boundary_rule_id_from_stamped_plan_entry(monkeypatch) -> None:
     """The live hook door anchors a plan entry's stamped ``rule_id`` (in-fence half).
 

@@ -29,7 +29,6 @@ from torchlens.autoroute import _builtin_output
 from torchlens.autoroute._builtin_output import semantic_output_cache_key
 
 
-@pytest.mark.smoke
 def test_object_dtype_ndarray_fragment_never_matches() -> None:
     """Object-dtype buffers serialize raw pointers: content-blind AND
     address-churning, so the fragment must be an always-miss token."""
@@ -66,7 +65,6 @@ class _RaisingConfigModel(nn.Module):
         return self.lin(x)
 
 
-@pytest.mark.smoke
 def test_raising_config_getter_never_collides_in_cache_key() -> None:
     """A raising config getter mints a never-matching key component instead
     of silently dropping the config axis (false cache HIT vector)."""
@@ -80,7 +78,6 @@ def test_raising_config_getter_never_collides_in_cache_key() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_readable_config_cache_key_is_stable() -> None:
     """The never-match token fires only on raising getters."""
 
@@ -115,7 +112,6 @@ def test_failed_decode_leaves_a_durable_annotation(monkeypatch) -> None:
     )
 
 
-@pytest.mark.smoke
 def test_unreadable_projected_allocation_refuses_instead_of_charging_zero() -> None:
     """grind-r5 b7 R22 (sol HIGH): a tensor whose size reads raise must raise
     the typed sentinel, never contribute an empty charge."""
@@ -137,7 +133,6 @@ def test_unreadable_projected_allocation_refuses_instead_of_charging_zero() -> N
         _new_allocation_bytes(_UnreadableTensor(), frozenset())
 
 
-@pytest.mark.smoke
 def test_provenance_digest_failures_record_unavailable_sentinels(monkeypatch) -> None:
     """Could-not-compute must stay distinguishable from does-not-apply."""
 

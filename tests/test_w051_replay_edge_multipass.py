@@ -24,8 +24,6 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens.intervention.edge_substitution import _consumed_value, tensor_content_digest
 
-pytestmark = pytest.mark.smoke
-
 _N_PASSES = 3
 
 

@@ -24,8 +24,6 @@ from torchlens.runnable import (
     RunnableErrorCode,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 class _TinyModel(nn.Module):
     def __init__(self) -> None:
@@ -68,6 +66,7 @@ def test_v2_descriptor_round_trips_with_required_context(tmp_path: Path) -> None
     assert result.report.path_faithfulness.value == "verified"
 
 
+@pytest.mark.smoke
 def test_legacy_v1_capability_loads_analysis_only(tmp_path: Path) -> None:
     """A legacy v1 descriptor loads for analysis and refuses run() typed."""
 
@@ -140,6 +139,7 @@ def test_unenterable_recorded_device_refuses_execution_context_unavailable(
     assert captured.value.fields["context_field"] == "default_device"
 
 
+@pytest.mark.smoke
 def test_v2_descriptor_missing_call_context_is_rejected(tmp_path: Path) -> None:
     """A v2 descriptor with an absent per-call context is refused, not defaulted."""
 

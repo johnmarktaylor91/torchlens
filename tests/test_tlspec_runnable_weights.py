@@ -282,7 +282,6 @@ def test_include_weights_writes_full_state_dict_as_separate_blob_family(
     tl.validation.validate_tlspec(weighted_path)
 
 
-@pytest.mark.smoke
 def test_embedded_weights_run_matches_live_and_reports_capture_state(tmp_path: Path) -> None:
     """Run self-contained real weights exactly without staging user state."""
 

@@ -29,8 +29,6 @@ from torchlens.visualization._geometry_audit import (
     run_layout_json,
 )
 
-pytestmark = pytest.mark.smoke
-
 _AXES: dict[str, tuple] = {
     "theme": ("torchlens", "paper", "dark", "colorblind", "high_contrast"),
     "direction": ("bottomup", "topdown", "leftright"),
@@ -113,6 +111,7 @@ def _context(combo: dict[str, object]) -> str:
     )
 
 
+@pytest.mark.smoke_cells("test_axis_combo_renders_clean[dark-leftright-d1000-png-dot]")
 @pytest.mark.parametrize(
     "combo",
     _COVER,

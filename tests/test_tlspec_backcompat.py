@@ -251,7 +251,6 @@ def _assert_intervention_matches(
     assert compat.targets_resolve_identically is True
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("fixture_name", "expected_format", "expected_type", "seed"),
     [

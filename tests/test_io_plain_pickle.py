@@ -117,7 +117,6 @@ def test_plain_pickle_dump_and_load_still_work(tmp_path: Path) -> None:
     assert isinstance(_first_saved_layer(restored).out, torch.Tensor)
 
 
-@pytest.mark.smoke
 def test_conditional_body_cache_survives_pickle_and_tlspec_round_trips(tmp_path: Path) -> None:
     """The property-backed conditional cache must not clobber its backing field."""
 

@@ -57,7 +57,6 @@ def intervened_trace() -> Iterator[tl.Trace]:
         trace.cleanup()
 
 
-@pytest.mark.smoke
 def test_builtin_helper_spec_pickle_rebuilds_factory() -> None:
     """A builtin ``HelperSpec`` pickles; the restored factory works."""
 
@@ -71,7 +70,6 @@ def test_builtin_helper_spec_pickle_rebuilds_factory() -> None:
     assert torch.equal(out, torch.zeros(3))
 
 
-@pytest.mark.smoke
 def test_builtin_helper_spec_pickle_preserves_args() -> None:
     """Constructor arguments survive the rebuild (identity source)."""
 
@@ -83,7 +81,6 @@ def test_builtin_helper_spec_pickle_preserves_args() -> None:
     assert torch.allclose(out, torch.full((3,), 0.5))
 
 
-@pytest.mark.smoke
 def test_helper_spec_deepcopy_keeps_factory_identity() -> None:
     """``copy.deepcopy`` keeps its pre-pickle-hook factory-sharing semantics."""
 
@@ -92,7 +89,6 @@ def test_helper_spec_deepcopy_keeps_factory_identity() -> None:
     assert duplicate.factory is spec.factory
 
 
-@pytest.mark.smoke
 def test_intervened_trace_pickles_like_it_saves(intervened_trace: tl.Trace, tmp_path) -> None:
     """The RED-capable parity case: pickle succeeds where tl.save succeeds."""
 
@@ -116,7 +112,6 @@ def test_intervened_fork_pickles(intervened_trace: tl.Trace) -> None:
     assert len(restored.layer_list) == len(fork.layer_list)
 
 
-@pytest.mark.smoke
 def test_pickled_trace_matches_loaded_predicate_carrier_form(
     intervened_trace: tl.Trace,
 ) -> None:
@@ -147,7 +142,6 @@ def test_add_and_replace_with_pickle_round_trip() -> None:
     assert callable(replaced.factory)
 
 
-@pytest.mark.smoke
 def test_every_minted_builtin_helper_name_is_rebuildable() -> None:
     """Registry-completeness gate: every helper name the public constructors
     mint with builtin portability must resolve through the ONE rebuild

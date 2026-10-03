@@ -30,7 +30,6 @@ def _grad_transform(value: torch.Tensor) -> torch.Tensor:
 
 
 # --------------------------------------------------------------------------- F2
-@pytest.mark.smoke
 def test_cache_with_activation_transform_roundtrips(tmp_path):
     """cache=True + activation_transform must not raise and must cache-hit.
 
@@ -88,7 +87,6 @@ def test_cache_with_grad_transform_roundtrips(tmp_path):
 
 
 # --------------------------------------------------------------------------- F3
-@pytest.mark.smoke
 def test_cache_key_distinguishes_intervention_ready(tmp_path):
     """A capability change must MISS the cache -- never silently return a stale trace.
 
@@ -120,7 +118,6 @@ def test_cache_key_distinguishes_intervention_ready(tmp_path):
     assert second.intervention_ready is True
 
 
-@pytest.mark.smoke
 def test_cache_key_distinguishes_save_raw_input(tmp_path):
     """Sibling payload-policy option: save_raw_input must also key the cache."""
     model = _tiny_model()
@@ -142,7 +139,6 @@ def test_cache_key_distinguishes_save_raw_input(tmp_path):
     assert second.capture_cache_hit is False
 
 
-@pytest.mark.smoke
 def test_cache_hit_preserved_for_identical_capability(tmp_path):
     """Fix must not break caching: identical options still cache-hit."""
     model = _tiny_model()
@@ -167,7 +163,6 @@ def test_cache_hit_preserved_for_identical_capability(tmp_path):
 
 
 # ------------------------------------------------------------------------- DOC1
-@pytest.mark.smoke
 def test_trace_docstring_has_no_self_referential_aliases():
     """trace() docstring must not brand a live canonical kwarg its own 'alias'.
 
@@ -202,7 +197,6 @@ def test_trace_docstring_has_no_self_referential_aliases():
 
 
 # -------------------------------------------------------------------- SOL-A5-002
-@pytest.mark.smoke
 def test_pre_forward_failure_resets_capture_runtime_context(monkeypatch):
     """A pre-forward setup failure must not leak capture-global runtime state.
 

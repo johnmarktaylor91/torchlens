@@ -46,8 +46,6 @@ from torchlens._io.manifest import Manifest
 from torchlens._io.paths import resolve_bundle_blob_path
 from torchlens.errors import TorchLensIOError
 
-pytestmark = pytest.mark.smoke
-
 
 def _tiny() -> nn.Module:
     return nn.Sequential(nn.Linear(4, 4), nn.ReLU())

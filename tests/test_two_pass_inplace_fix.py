@@ -23,7 +23,6 @@ def _assert_layer_present(trace: tl.Trace, layer_label: str) -> None:
     assert layer_label in [layer.layer_label for layer in trace.layer_list]
 
 
-@pytest.mark.smoke
 def test_two_pass_succeeds_with_inplace_relu_module() -> None:
     """Two-pass logging should handle modules with in-place ReLU.
 

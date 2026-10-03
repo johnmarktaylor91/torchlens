@@ -60,7 +60,6 @@ PRIMARY_LEAF = {
 }
 
 
-@pytest.mark.smoke
 def test_eager_sdpa_facet_diff_is_exactly_the_pinned_table():
     """The FACET DIFF between attention implementations, never mere both-run.
 
@@ -92,7 +91,6 @@ def test_eager_sdpa_facet_diff_is_exactly_the_pinned_table():
         )
 
 
-@pytest.mark.smoke
 def test_t5_refuses_sdpa_upstream():
     for family in SDPA_UNSUPPORTED_FAMILIES:
         spec = FAMILY_BY_NAME[family]
@@ -101,7 +99,6 @@ def test_t5_refuses_sdpa_upstream():
             spec.build("sdpa")
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("family", sorted(PRIMARY_LEAF))
 def test_kwargs_identity_traced_equals_direct(family, r0_capture):
     """Traced output == model(**kwargs) EXACTLY (memo D7 class 3).
@@ -127,7 +124,6 @@ def test_kwargs_identity_traced_equals_direct(family, r0_capture):
     )
 
 
-@pytest.mark.smoke
 def test_kwargs_identity_discriminates_a_dropped_mask(r0_capture):
     """The discriminating row: a real attention_mask CHANGES the values.
 
@@ -158,7 +154,6 @@ def test_kwargs_identity_discriminates_a_dropped_mask(r0_capture):
     assert matches, "traced masked logits != direct masked logits: the mask kwarg was mangled"
 
 
-@pytest.mark.smoke
 def test_trace_signature_never_absorbs_forward_kwarg_names():
     """Static intersection check (memo D7 class 3).
 
@@ -264,7 +259,6 @@ def test_pass_qualification_pin_on_distilgpt2_two_pass_adds():
     )
 
 
-@pytest.mark.smoke
 def test_container_output_do_lands_through_model_output_container(r0_capture):
     """FLIPPED enumerated red (A05, FIX-A): the edit lands through the container.
 
@@ -306,7 +300,6 @@ def test_container_output_do_lands_through_model_output_container(r0_capture):
     assert moved, "the edit never reached the model-output container"
 
 
-@pytest.mark.smoke
 def test_kwargs_only_plain_module_enumerated_red():
     import torchlens as tl
 
@@ -337,7 +330,6 @@ def test_kwargs_only_plain_module_enumerated_red():
     )
 
 
-@pytest.mark.smoke
 def test_config_fingerprint_use_cache_row():
     """The silent-config-flag class (memo D7 #4): use_cache moves the graph.
 
@@ -380,7 +372,6 @@ def test_config_fingerprint_use_cache_row():
     )
 
 
-@pytest.mark.smoke
 def test_config_fingerprint_gradient_checkpointing_row():
     """gradient_checkpointing_enable changes execution WITHOUT touching
     config.use_cache serialization -- exactly the laundering the fingerprint

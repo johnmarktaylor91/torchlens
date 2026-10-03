@@ -30,8 +30,6 @@ from torchlens.receptive_field._types import (
     ReceptiveFieldValidationStatus,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 @pytest.fixture(autouse=True)
 def built_in_rule_pack() -> Iterator[None]:
@@ -63,6 +61,9 @@ def _check_at(model: nn.Module, inputs: torch.Tensor, name: str, unit: tuple[int
 # Interior units only: clipping at the input extent legitimately leaves the
 # claimed (unclipped) endpoints unreachable. Max pooling is deliberately
 # absent: its gradient support is argmax-sparse, so nonzero slack is honest.
+@pytest.mark.smoke_cells(
+    "test_exact_builtin_rules_are_tight_under_saturation[model4-input_shape4-avg_pool1d-unit4]"
+)
 @pytest.mark.parametrize(
     ("model", "input_shape", "name", "unit"),
     [
@@ -125,6 +126,7 @@ def test_oversized_exact_claim_is_caught_by_the_slack_oracle() -> None:
     assert result.slack_per_axis[-2:] == (4, 4)
 
 
+@pytest.mark.smoke
 def test_undersized_claim_still_fails_containment() -> None:
     """Keep the containment tripwire armed alongside the tightness oracle."""
 
@@ -139,6 +141,7 @@ def test_undersized_claim_still_fails_containment() -> None:
     assert result.status is ReceptiveFieldValidationStatus.FAIL
 
 
+@pytest.mark.smoke
 def test_upper_bound_claims_are_outside_the_tightness_contract() -> None:
     """Keep honest UPPER_BOUND envelopes (adaptive pool) exempt from slack demands.
 

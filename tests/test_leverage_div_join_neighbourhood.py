@@ -29,9 +29,6 @@ from torchlens.postprocess._site_join import (
 _SAVE_ALL = {"capture": tl.options.CaptureOptions(layers_to_save="all")}
 
 
-_SMOKE = pytest.mark.smoke
-
-
 def _capture_pair():
     baseline_model, variant_model, x = make_insertion_pair()
     baseline = tl.trace(baseline_model, x, **_SAVE_ALL)
@@ -73,7 +70,6 @@ def _neighbourhood_signature(trace, keys, label):
     return parents, children
 
 
-@_SMOKE
 def test_guarded_join_refuses_insertion_cohort():
     """PRIMARY: the touched cohort refuses; untouched conv cohorts corroborate."""
 
@@ -89,7 +85,6 @@ def test_guarded_join_refuses_insertion_cohort():
     assert all(("input" in key) or ("output" in key) for key in positional)
 
 
-@_SMOKE
 def test_clean_recapture_joins_without_refusals():
     """A clean recapture of the same model corroborates every real-op key."""
 
@@ -100,7 +95,6 @@ def test_clean_recapture_joins_without_refusals():
     assert rows and all(row.joined for row in rows.values())
 
 
-@_SMOKE
 def test_neighbourhood_agreement_on_corroborated_keys():
     """Corroborated keys agree on parent/child site-key signatures across runs."""
 
@@ -129,7 +123,6 @@ def test_neighbourhood_agreement_on_corroborated_keys():
     assert checked >= 2, "no corroborated keys were actually checked"
 
 
-@_SMOKE
 def test_positive_control_naive_ordinal_join_pairs_everything():
     """MUST-FAIL CONTROL #1: the naive (key, ordinal) join reports success.
 
@@ -160,7 +153,6 @@ def test_positive_control_naive_ordinal_join_pairs_everything():
     assert mismatched, "the naive join found no wrong pair; the fixture regressed"
 
 
-@_SMOKE
 def test_positive_control_set_membership_blind():
     """MUST-FAIL CONTROL #2: key-set membership reports every key preserved."""
 
@@ -170,7 +162,6 @@ def test_positive_control_set_membership_blind():
     assert baseline_keys <= variant_keys  # "preserved", says the blind oracle
 
 
-@_SMOKE
 def test_positive_control_payload_equality_blind():
     """MUST-FAIL CONTROL #3: value equality ALONE passes on the broken join.
 

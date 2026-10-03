@@ -10,8 +10,6 @@ import torch
 import torchlens.trackers as trk
 from torchlens.trackers._errors import SinkDeliveryError, SinkProtocolError, TrackersError
 
-pytestmark = pytest.mark.smoke
-
 
 class _DuckWriter:
     """A dependency-free object with the SummaryWriter surface."""
@@ -103,6 +101,7 @@ class TestJSONLSink:
 class TestTensorBoardSinkDuckPath:
     """The reference sink over an EXISTING writer object (dep-free)."""
 
+    @pytest.mark.smoke
     def test_emits_through_writer_at_caller_step(self) -> None:
         writer = _DuckWriter()
         sink = trk.TensorBoardSink(writer)
@@ -126,6 +125,7 @@ class TestTensorBoardSinkDuckPath:
         # The sink never closes a writer it did not open.
         assert writer.closed == 0
 
+    @pytest.mark.smoke
     def test_relay_detected_refuses_histograms(self, monkeypatch) -> None:  # noqa: ANN001
         """G6: non-uniform log2 edges over a detected relay refuse typed."""
 
@@ -226,6 +226,7 @@ class TestBoundedTransferOracle:
         per_step_bytes = sum(len(json.dumps(r)) for r in payload_rows if r.get("step") == 0)
         return (len(payload_rows), per_step_bytes)
 
+    @pytest.mark.smoke
     def test_numel_independence(self, tmp_path) -> None:  # noqa: ANN001
         """4096x more elements -> the SAME emission row count and geometry."""
 

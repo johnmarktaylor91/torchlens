@@ -27,8 +27,6 @@ import torchlens as tl
 from torchlens._io import TorchLensIOError
 from torchlens.utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
 
-pytestmark = pytest.mark.smoke
-
 CORPUS = Path(__file__).parent / "release_goldens" / "genuine_release_artifacts.tar.gz"
 
 

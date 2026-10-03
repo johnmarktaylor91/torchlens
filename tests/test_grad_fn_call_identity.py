@@ -21,8 +21,6 @@ import torchlens as tl
 from torchlens.data_classes._trace_accessors import TraceGradFnCallAccessor
 from torchlens.data_classes.grad_fn_call import GradFnCall
 
-pytestmark = pytest.mark.smoke
-
 
 class _TraceStandIn:
     """Weakref-able Trace stand-in exposing a real GradFnCall accessor."""
@@ -48,6 +46,7 @@ def _twin_calls() -> tuple[GradFnCall, GradFnCall]:
     return left, right
 
 
+@pytest.mark.smoke
 def test_eq_on_tensor_payloads_never_raises():
     """Value comparison of like-labeled calls is typed and safe."""
 
@@ -68,6 +67,7 @@ def test_grad_fn_call_is_hashable_and_eq_consistent():
     assert len({left, same}) == 1
 
 
+@pytest.mark.smoke
 def test_ordinal_index_survives_like_labeled_tensor_payload_twins():
     """The position scan never runs elementwise tensor equality.
 

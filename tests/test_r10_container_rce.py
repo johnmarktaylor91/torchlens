@@ -152,7 +152,6 @@ def _tamper_output_container_type(
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("type_module", "type_qualname"),
     [("subprocess", "Popen"), ("os", "system")],

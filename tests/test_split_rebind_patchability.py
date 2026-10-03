@@ -30,8 +30,6 @@ import torchlens as tl
 import torchlens.validation._invariants_equivalence as _equivalence_child
 import torchlens.validation.invariants as _invariants_hub
 
-pytestmark = pytest.mark.smoke
-
 #: (hub module, child modules) families produced by the r3 god-file split.
 _SPLIT_FAMILIES: tuple[tuple[types.ModuleType, tuple[str, ...]], ...] = (
     (

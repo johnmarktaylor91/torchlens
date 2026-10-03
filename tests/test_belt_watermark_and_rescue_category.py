@@ -27,7 +27,6 @@ from torchlens.backends.torch.belt import sweep_stale_belt_references
 from torchlens.backends.torch.wrappers import wrap_torch
 
 
-@pytest.mark.smoke
 def test_same_length_sys_modules_mutation_is_still_swept() -> None:
     """A del+insert mutation keeping len(sys.modules) constant must not skip
     the belt sweep."""
@@ -69,7 +68,6 @@ class _StubEscapeTrace:
         self.layer_labels = ["relu_1_1"]
 
 
-@pytest.mark.smoke
 def test_rescue_ineligible_disclosure_uses_the_torchlens_category() -> None:
     """The action-demanding ineligibility advisory must be routable."""
 

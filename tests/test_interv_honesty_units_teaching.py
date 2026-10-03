@@ -12,8 +12,6 @@ from torch import nn
 import torchlens as tl
 from torchlens.selection import SelectionError
 
-pytestmark = pytest.mark.smoke
-
 
 class _ConvNet(nn.Module):
     def __init__(self) -> None:

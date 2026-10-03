@@ -113,10 +113,15 @@ def _save_only_mul(ctx: RecordContext) -> bool:
     return ctx.func_name in {"__mul__", "mul"}
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "entrypoint",
-    ["trace_when", "capture_options_hooks", "record"],
+    [
+        "trace_when",
+        # 7.6-19.2s at one torch thread in every measured run (2026-10-02):
+        # over the 5s unmarked budget, so this one cell is heavy.
+        pytest.param("capture_options_hooks", marks=pytest.mark.heavy),
+        "record",
+    ],
     ids=["trace_when", "capture_options_hooks", "record"],
 )
 def test_live_intervention_retention_contract(entrypoint: str) -> None:

@@ -117,7 +117,6 @@ def test_storage_unsafe_ops_denied_by_policy() -> None:
         assert is_pure_forward_callable(func) is False, func
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "key",
     [
@@ -308,7 +307,6 @@ class _InplaceNet(nn.Module):
         return value
 
 
-@pytest.mark.smoke
 def test_inplace_model_runnable_still_verified(tmp_path: Path) -> None:
     """A real model built from in-place ops round-trips runnable and VERIFIES."""
 

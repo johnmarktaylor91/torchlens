@@ -38,8 +38,6 @@ from torchlens.merged._evidence import (
     extract_rank_evidence,
 )
 
-pytestmark = pytest.mark.smoke
-
 WORLD = membership_digest_for_ranks([0, 1])
 
 

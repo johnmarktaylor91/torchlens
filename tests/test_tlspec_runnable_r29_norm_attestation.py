@@ -23,7 +23,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 import torch
 from torch import nn
 
@@ -46,7 +45,6 @@ def _save(model: nn.Module, x: torch.Tensor, path: Path) -> Path:
     return path
 
 
-@pytest.mark.smoke
 def test_r29_instance_norm_tracking_does_not_falsely_diverge(tmp_path: Path) -> None:
     """InstanceNorm with running stats must VERIFY, not raise a false mutation divergence."""
 
@@ -66,7 +64,6 @@ def test_r29_instance_norm_tracking_does_not_falsely_diverge(tmp_path: Path) -> 
         torch.testing.assert_close(result.output, fresh(x.clone()), atol=1e-6, rtol=1e-6)
 
 
-@pytest.mark.smoke
 def test_r29_batchnorm_eval_read_only_stats_are_attested(tmp_path: Path) -> None:
     """BatchNorm eval (read-only running stats) must ATTEST, not falsely NOT_APPLICABLE."""
 
@@ -80,7 +77,6 @@ def test_r29_batchnorm_eval_read_only_stats_are_attested(tmp_path: Path) -> None
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
 
 
-@pytest.mark.smoke
 def test_r29_instance_norm_eval_read_only_stats_are_attested(tmp_path: Path) -> None:
     """InstanceNorm eval with read-only running stats must ATTEST."""
 
@@ -94,7 +90,6 @@ def test_r29_instance_norm_eval_read_only_stats_are_attested(tmp_path: Path) -> 
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
 
 
-@pytest.mark.smoke
 def test_r29_batchnorm_train_journaled_stats_stay_conservative(tmp_path: Path) -> None:
     """BatchNorm train (journaled running stats) stays NOT_APPLICABLE, never a false ATTESTED."""
 

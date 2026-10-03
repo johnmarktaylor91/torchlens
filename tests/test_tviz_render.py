@@ -17,8 +17,6 @@ import torch
 
 import torchlens.tviz as tviz
 
-pytestmark = [pytest.mark.smoke]
-
 
 @pytest.fixture()
 def view() -> tviz.AttentionView:
@@ -55,6 +53,7 @@ def receipt() -> tviz.CausalReceipt:
     )
 
 
+@pytest.mark.smoke
 def test_matplotlib_gate_refuses_with_install_command(
     view: tviz.AttentionView, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -165,6 +164,7 @@ def test_receipt_grid_prints_joint_line(receipt: tviz.CausalReceipt, tmp_path: P
     assert "<image" not in artifact.paths[0].read_text()
 
 
+@pytest.mark.smoke
 def test_receipt_grid_refuses_without_joint(tmp_path: Path) -> None:
     """No joint measurement, no grid figure (D13 is mandatory)."""
 
@@ -198,6 +198,7 @@ def test_annotated_attention_keeps_pattern_channel(
     assert "fires: 3" in lines
 
 
+@pytest.mark.smoke
 def test_unknown_format_refuses(view: tviz.AttentionView, tmp_path: Path) -> None:
     """The save-format roster is closed; PDF is the paper format."""
 
@@ -217,6 +218,7 @@ def test_pdf_text_extracts_tokens_in_order(view: tviz.AttentionView, tmp_path: P
     assert all(position >= 0 for position in positions), f"tokens missing from PDF text: {text!r}"
 
 
+@pytest.mark.smoke
 def test_neuron_card_renders_closed_terms(tmp_path: Path) -> None:
     """The family-gated card renders only from a closed decomposition."""
 

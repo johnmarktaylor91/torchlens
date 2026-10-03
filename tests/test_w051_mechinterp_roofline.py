@@ -20,8 +20,6 @@ from torchlens.constants import OP_LOG_FIELD_ORDER
 from torchlens.report import _cost_perf
 from torchlens.report._cost_perf import ROOFLINE_TRAFFIC_FIELDS, roofline
 
-pytestmark = pytest.mark.smoke
-
 
 def test_roofline_traffic_fields_are_in_the_op_vocabulary() -> None:
     """Every field the traffic model reads is a real Op record field."""

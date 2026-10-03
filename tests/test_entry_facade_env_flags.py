@@ -22,8 +22,6 @@ from torchlens._errors import InvalidArgumentError
 from torchlens.errors import CaptureContextError
 from torchlens.utils.env_flags import ENV_FLAG_REGISTRY, closed_bool_env
 
-pytestmark = pytest.mark.smoke
-
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _PACKAGE_ROOT = _REPO_ROOT / "torchlens"
 

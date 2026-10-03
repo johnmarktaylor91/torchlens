@@ -23,7 +23,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 import torch
 from torch import nn
 
@@ -112,7 +111,6 @@ def _assert_verified_attested(report) -> None:
     assert not report.poisoned
 
 
-@pytest.mark.smoke
 def test_item_scale_changed_input_is_unverifiable_not_attested(tmp_path: Path) -> None:
     path = _save_runnable(DDScale(), torch.tensor([2.0, 2.0]), tmp_path / "dd.tlspec")
 
@@ -124,7 +122,6 @@ def test_item_scale_changed_input_is_unverifiable_not_attested(tmp_path: Path) -
     assert torch.allclose(result.output, torch.tensor([20.0, 20.0]))
 
 
-@pytest.mark.smoke
 def test_item_scale_original_input_still_verified_attested(tmp_path: Path) -> None:
     path = _save_runnable(DDScale(), torch.tensor([2.0, 2.0]), tmp_path / "dd.tlspec")
 
@@ -134,7 +131,6 @@ def test_item_scale_original_input_still_verified_attested(tmp_path: Path) -> No
     assert torch.allclose(result.output, torch.tensor([4.0, 4.0]))
 
 
-@pytest.mark.smoke
 def test_temperature_scaling_changed_input_is_unverifiable(tmp_path: Path) -> None:
     path = _save_runnable(TempScale(), torch.tensor([1.0, 2.0, 3.0, 4.0]), tmp_path / "t.tlspec")
 
@@ -152,7 +148,6 @@ def test_temperature_scaling_original_input_verified_attested(tmp_path: Path) ->
     _assert_verified_attested(result.report)
 
 
-@pytest.mark.smoke
 def test_argmax_index_changed_input_is_unverifiable(tmp_path: Path) -> None:
     path = _save_runnable(ArgmaxSelect(), torch.tensor([1.0, 5.0, 2.0]), tmp_path / "a.tlspec")
 
@@ -170,7 +165,6 @@ def test_argmax_index_original_input_verified_attested(tmp_path: Path) -> None:
     _assert_verified_attested(result.report)
 
 
-@pytest.mark.smoke
 def test_scalar_free_model_changed_input_unchanged(tmp_path: Path) -> None:
     path = _save_runnable(ScalarFree(), torch.tensor([1.0, -2.0]), tmp_path / "sf.tlspec")
 

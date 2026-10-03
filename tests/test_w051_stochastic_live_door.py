@@ -43,7 +43,6 @@ def _coordinates(trace: tl.Trace) -> list[tuple[tuple, list[int]]]:
     ]
 
 
-@pytest.mark.smoke
 def test_live_door_matches_replay_door() -> None:
     """Same plan, same seed: capture-time intervene= and fork.do() draw identically."""
 
@@ -82,7 +81,6 @@ def test_live_door_matches_replay_door() -> None:
     }, "the stamped live key IS the key postprocess mints"
 
 
-@pytest.mark.smoke
 def test_live_coordinate_is_stable_under_unrelated_upstream_op() -> None:
     """Adding a tanh before the blocks moves every raw ordinal; the site keys do not."""
 

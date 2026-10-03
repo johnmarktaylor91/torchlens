@@ -37,13 +37,10 @@ else:  # torch 2.1-2.2: torch.nn.attention postdates the floor.
     SDPBackend = None  # type: ignore[assignment,misc]
     sdpa_kernel = None  # type: ignore[assignment,misc]
 
-pytestmark = [
-    pytest.mark.smoke,
-    pytest.mark.skipif(
-        not HAS_NN_ATTENTION_MODULE,
-        reason="torch.nn.attention (SDPBackend/sdpa_kernel) postdates the torch 2.1 floor",
-    ),
-]
+pytestmark = pytest.mark.skipif(
+    not HAS_NN_ATTENTION_MODULE,
+    reason="torch.nn.attention (SDPBackend/sdpa_kernel) postdates the torch 2.1 floor",
+)
 
 
 class TinyAttention(nn.Module):
@@ -146,6 +143,7 @@ def test_witness_divergence_refuses_typed() -> None:
     assert excinfo.value.fields["remedy"]
 
 
+@pytest.mark.smoke
 def test_native_never_fills_torchlens_unknowns() -> None:
     """Unknown TorchLens cells stay unknown; native values never leak in."""
 

@@ -32,8 +32,6 @@ from torchlens.errors import EpisodeDeclarationError
 from torchlens.options import EpisodeSpec
 from torchlens.runnable import StateSource
 
-pytestmark = pytest.mark.smoke
-
 # ---------------------------------------------------------------------------
 # Axes (S2 sec 5 + amendment B.5). ``mixed_exact_ledger`` is the wildcard
 # row's own tier value ("mixed exact+ledger within one episode").
@@ -215,6 +213,7 @@ def test_plain_structure_only_truncation_cell_refuses_typed() -> None:
     assert excinfo.value.fields["code"] == "structure_only_replay_unsupported"
 
 
+@pytest.mark.smoke
 def test_mixed_tier_episode_folds_to_minimum() -> None:
     """The wildcard row's tier rule: episode tier = MINIMUM of member tiers."""
 

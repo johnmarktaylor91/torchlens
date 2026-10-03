@@ -773,7 +773,6 @@ class SliceAssignModel(nn.Module):
         return value
 
 
-@pytest.mark.smoke
 def test_loaded_sparse_setitem_runs_and_verifies_on_original_input(
     tmp_path: Path,
 ) -> None:
@@ -830,7 +829,6 @@ class DeadRngDrawModel(nn.Module):
         return x * 2.0
 
 
-@pytest.mark.smoke
 def test_torch_rng_driven_branch_is_unverifiable_never_attested(tmp_path: Path) -> None:
     """A pruned torch-RNG control predicate must never report VERIFIED + ATTESTED.
 
@@ -870,7 +868,6 @@ def test_torch_rng_driven_branch_is_unverifiable_never_attested(tmp_path: Path) 
     assert changed.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
-@pytest.mark.smoke
 def test_dead_torch_rng_draw_stays_verified_and_attested(tmp_path: Path) -> None:
     """A genuinely-dead torch-RNG draw must not over-trigger the honesty downgrade.
 
@@ -1071,7 +1068,6 @@ def _logging_probe(func: Any, observed: list[bool]) -> Any:
     return probe
 
 
-@pytest.mark.smoke
 def test_live_run_returns_unified_result_and_matches_save_new_outs_exactly(
     runnable_execution_artifact: tuple[Path, RunnableExecutionModel, tl.Trace],
 ) -> None:

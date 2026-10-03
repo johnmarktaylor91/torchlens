@@ -171,7 +171,6 @@ def _scan_text(text: str) -> list[tuple[str, int, str]]:
     return violations
 
 
-@pytest.mark.smoke
 def test_no_banned_execution_verbs() -> None:
     """R1: no shipped doc/audit/caption text claims execution was removed."""
 
@@ -210,7 +209,6 @@ def test_no_banned_execution_verbs() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_banned_execution_verb_scanner_is_red_capable(tmp_path: Path) -> None:
     """R1 scanner actually detects a planted violation per group shape."""
 
@@ -230,7 +228,6 @@ def test_banned_execution_verb_scanner_is_red_capable(tmp_path: Path) -> None:
     assert not _scan_text(clean), "substitution vocabulary must not false-positive"
 
 
-@pytest.mark.smoke
 def test_three_axes_stay_apart() -> None:
     """R2: settlement, relation grade, and protocol scope never trade members."""
 
@@ -253,7 +250,6 @@ def test_three_axes_stay_apart() -> None:
     assert not _RELATION_CLAIM_GRADE_VALUES & _PROTOCOL_SCOPE_VALUES
 
 
-@pytest.mark.smoke
 def test_merged_trace_vocabulary_stays_domain_specific() -> None:
     """R2: MergedTrace's frozen enums are pinned, never re-graded."""
 
@@ -292,7 +288,6 @@ def test_merged_trace_vocabulary_stays_domain_specific() -> None:
     assert not merged_values >= _RELATION_CLAIM_GRADE_VALUES
 
 
-@pytest.mark.smoke
 def test_execution_effect_vocabulary_closed_when_shipped() -> None:
     """R3: the execution-effect disclosure ships whole or not at all."""
 

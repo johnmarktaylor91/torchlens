@@ -8,8 +8,6 @@ from torchlens.errors._base import TorchLensWarning
 from torchlens.observability import EventStream, ObserverEvent, ObserverEventError
 from torchlens.observability._chassis import SUBSCRIBER_FAILURE_LIMIT
 
-pytestmark = pytest.mark.smoke
-
 
 class TestEventSchema:
     """The load-bearing event contract: kinds, reasons, gradient stamps."""

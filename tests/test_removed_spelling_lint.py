@@ -412,7 +412,6 @@ def test_no_removed_spelling_creeps_back() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_lint_is_red_capable(tmp_path: Path) -> None:
     """The scanner actually detects a planted resurrection per group shape."""
 

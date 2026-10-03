@@ -22,8 +22,6 @@ import torchlens as tl
 from torchlens.agent import _artifacts, _budgets, list_tools, tool_specs
 from torchlens.bridge import mcp
 
-pytestmark = pytest.mark.smoke
-
 
 @pytest.fixture()
 def artifact(tmp_path: Path) -> Path:

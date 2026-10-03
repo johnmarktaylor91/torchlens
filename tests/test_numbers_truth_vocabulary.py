@@ -47,7 +47,6 @@ def three_pass_log() -> Generator[tl.Trace, None, None]:
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_trace_str_spells_passes_never_ops(three_pass_log: tl.Trace) -> None:
     """print(trace) renders multi-pass rows as "(pass k/N)", never "(k/N ops)"."""
 
@@ -57,7 +56,6 @@ def test_trace_str_spells_passes_never_ops(three_pass_log: tl.Trace) -> None:
     assert " ops)" not in text
 
 
-@pytest.mark.smoke
 def test_layer_str_spells_passes_never_ops(three_pass_log: tl.Trace) -> None:
     """Layer str renders aggregate multiplicity as "(x3 passes)", never "(3 ops)"."""
 
@@ -67,7 +65,6 @@ def test_layer_str_spells_passes_never_ops(three_pass_log: tl.Trace) -> None:
     assert "(3 ops)" not in text
 
 
-@pytest.mark.smoke
 def test_summary_rolled_row_spells_passes(three_pass_log: tl.Trace) -> None:
     """Rolled summary rows spell multiplicity in passes and keep one op count."""
 
@@ -77,7 +74,6 @@ def test_summary_rolled_row_spells_passes(three_pass_log: tl.Trace) -> None:
     assert three_pass_log.num_ops == 3
 
 
-@pytest.mark.smoke
 def test_op_str_keeps_pass_vocabulary(three_pass_log: tl.Trace) -> None:
     """Per-pass Op str already spells "(pass k/N)"; pin it so it stays."""
 
@@ -87,7 +83,6 @@ def test_op_str_keeps_pass_vocabulary(three_pass_log: tl.Trace) -> None:
     assert " ops)" not in text.split("\n")[0]
 
 
-@pytest.mark.smoke
 def test_headings_follow_row_kind(three_pass_log: tl.Trace) -> None:
     """Module tables head "Module (type)"; op tables head "Op" (never "Layer")."""
 

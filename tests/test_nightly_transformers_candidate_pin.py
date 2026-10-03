@@ -40,8 +40,6 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = [pytest.mark.smoke]
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 NIGHTLY = REPO_ROOT / ".github" / "workflows" / "nightly.yml"
 CANDIDATE_CONSTRAINTS = (
@@ -75,6 +73,10 @@ def _job_block(workflow_text: str, job_id: str) -> str:
     return match.group(1)
 
 
+@pytest.mark.smoke_cells(
+    "test_broad_selection_nightly_jobs_pin_transformers_to_the_candidate_leg[fast-tier]",
+    "test_broad_selection_nightly_jobs_pin_transformers_to_the_candidate_leg[shuffle-stress]",
+)
 @pytest.mark.parametrize("job_id", JOBS_RUNNING_R0_BROAD_SELECTION)
 def test_broad_selection_nightly_jobs_pin_transformers_to_the_candidate_leg(job_id: str) -> None:
     text = NIGHTLY.read_text()

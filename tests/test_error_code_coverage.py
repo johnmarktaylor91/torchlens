@@ -524,7 +524,6 @@ def _test_referenced_codes(universe: set[str]) -> set[str]:
     return referenced & universe
 
 
-@pytest.mark.smoke
 def test_universe_is_nonempty() -> None:
     """Anti-vacuity: the scanners find real vocabularies."""
 
@@ -535,7 +534,6 @@ def test_universe_is_nonempty() -> None:
     assert any(origin == "error_refusal_contract" for origin in universe.values())
 
 
-@pytest.mark.smoke
 def test_every_enum_member_is_reachable_in_source() -> None:
     """No frozen enum member is declaration-only (dead vocabulary)."""
 
@@ -561,7 +559,6 @@ def test_every_enum_member_is_reachable_in_source() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_every_code_is_provoked_or_consciously_ledgered() -> None:
     """The shrink-only provocation ratchet over the full vocabulary."""
 
@@ -590,7 +587,6 @@ def test_every_code_is_provoked_or_consciously_ledgered() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_provocation_scanner_is_red_capable() -> None:
     """A code absent from every test is actually reported (gate can fail)."""
 
@@ -599,7 +595,6 @@ def test_provocation_scanner_is_red_capable() -> None:
     assert referenced == set()
 
 
-@pytest.mark.smoke
 def test_prose_names_and_inert_tables_never_count_as_provocation() -> None:
     """Non-executed mention channels never count (r3+r4 b6 R25 lineage).
 

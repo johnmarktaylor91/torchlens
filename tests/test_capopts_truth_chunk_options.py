@@ -24,8 +24,6 @@ import torchlens.user_funcs as user_funcs
 from torchlens._save_budget import SaveBudgetExceededError
 from torchlens.options import CaptureOptions
 
-pytestmark = [pytest.mark.smoke]
-
 
 class SmallNet(nn.Module):
     """fc -> relu."""
@@ -82,6 +80,7 @@ def test_chunk_path_rebuild_covers_every_capture_option_field() -> None:
     assert not unknown, f"chunked rebuild names non-fields: {sorted(unknown)}"
 
 
+@pytest.mark.smoke
 def test_chunked_capture_honors_save_budget() -> None:
     """A 1-byte budget must trip on the chunked path exactly as unchunked."""
 
@@ -92,6 +91,7 @@ def test_chunked_capture_honors_save_budget() -> None:
         tl.trace(SmallNet(), x, chunk_size=4, capture=CaptureOptions(save_budget=1))
 
 
+@pytest.mark.smoke
 def test_chunked_capture_carries_peak_memory_knob() -> None:
     """measure_python_peak_memory survives the chunked rebuild."""
 

@@ -312,7 +312,6 @@ def test_catalog_severity_policy_examples(name: str, expected: str) -> None:
     assert _catalog_class(name).severity == expected
 
 
-@pytest.mark.smoke
 def test_axis_a_public_verbs_success_paths() -> None:
     """Public set, attach_hooks, do, replay, rerun, fork, and append smoke paths work."""
 
@@ -417,7 +416,6 @@ def test_axis_b_replay_and_rerun_match_for_graph_stable_hook() -> None:
     assert torch.equal(replay_output, rerun_output)
 
 
-@pytest.mark.smoke
 def test_axis_i_list_logs_snapshot_survives_concurrent_log_creation() -> None:
     """``tl.io.list_logs()`` returns valid snapshots while logs are created concurrently."""
 

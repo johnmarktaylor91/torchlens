@@ -24,8 +24,6 @@ from torch import nn
 
 import torchlens as tl
 
-pytestmark = pytest.mark.smoke
-
 
 def _backward_trace() -> tl.Trace:
     """Tiny first-order backward capture."""
@@ -114,6 +112,7 @@ def test_accum_edges_carry_target_identity(tmp_path: Path) -> None:
     )
 
 
+@pytest.mark.smoke
 def test_single_call_titles_drop_pass_suffix(tmp_path: Path) -> None:
     """Unrolled backward with one call per grad_fn: no stray ':1' titles."""
 

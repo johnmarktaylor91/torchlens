@@ -17,8 +17,6 @@ from torch import nn
 import torchlens as tl
 from torchlens.visualization import lenses
 
-pytestmark = pytest.mark.smoke  # measured <0.5s per test (W051-GATE, AUD-CODE 0.1)
-
 
 @pytest.fixture(scope="module")
 def plain_log() -> Any:
@@ -69,6 +67,7 @@ def test_detail_ceiling_refusal_names_both_remedies(plain_log: Any, monkeypatch:
         assert "collapse=" in message
 
 
+@pytest.mark.smoke
 def test_sequence_stack_license_degrade_is_coded_and_rendered() -> None:
     """An unlicensed stack_by='auto' degrades with the coded warning AND a
     rendered notice; the lens still resolves (SECONDARY, never refusal)."""
@@ -106,6 +105,7 @@ def test_sequence_stack_license_degrade_is_coded_and_rendered() -> None:
         log.cleanup()
 
 
+@pytest.mark.smoke
 def test_refusals_never_leave_partial_state(plain_log: Any) -> None:
     """A refused resolve leaves the trace drawable (no half-applied state)."""
 

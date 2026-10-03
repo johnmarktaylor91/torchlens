@@ -17,7 +17,6 @@ import copy
 import pickle
 import pickletools
 
-import pytest
 import torch
 from torch import nn
 
@@ -49,7 +48,6 @@ def _tiny_trace() -> tl.Trace:
     return tl.trace(model, torch.randn(2, 3))
 
 
-@pytest.mark.smoke
 def test_plain_pickle_carries_no_recipe_function_globals() -> None:
     """The live snapshot is dropped at the pickle boundary; no recipe module is named."""
 
@@ -68,7 +66,6 @@ def test_plain_pickle_carries_no_recipe_function_globals() -> None:
         assert set(loaded[label].facets) == set(trace[label].facets)
 
 
-@pytest.mark.smoke
 def test_deepcopy_follows_the_same_pickle_boundary() -> None:
     """``copy.deepcopy`` routes through the pickle semantics and drops the snapshot too."""
 

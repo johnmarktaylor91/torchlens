@@ -111,7 +111,6 @@ class _EnumKeyBranch(nn.Module):
         return x * 10.0
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("model_cls", "key"),
     [
@@ -165,7 +164,6 @@ def test_opaque_enum_key_subtree_is_unverifiable_not_skipped(tmp_path: Path) -> 
     assert "opaque_mapping_key" in diagnostics
 
 
-@pytest.mark.smoke
 def test_single_tensor_plus_exotic_key_dict_identical_no_crash(tmp_path: Path) -> None:
     """The arity shortcut must not misfire for single-tensor + exotic-key-dict inputs."""
 
@@ -206,7 +204,6 @@ class _NestedStructSeq(nn.Module):
         return _WrappedResult(stats, shifted)
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("kind", ["dict", "list", "namedtuple"])
 def test_nested_structseq_runs_verified(tmp_path: Path, kind: str) -> None:
     """A structseq nested in a dict/list/namedtuple runs VERIFIED with output == live."""
@@ -243,7 +240,6 @@ class _MixedInputs(nn.Module):
         return x * 10
 
 
-@pytest.mark.smoke
 def test_mixed_positional_keyword_inputs_bind_and_diverge(tmp_path: Path) -> None:
     """A combined ``{'args': [...], 'kwargs': {...}}`` binds; a changed kwarg diverges."""
 
@@ -261,7 +257,6 @@ def test_mixed_positional_keyword_inputs_bind_and_diverge(tmp_path: Path) -> Non
         tl.load(path).run(inputs={"args": [x], "kwargs": {"add": False}})
 
 
-@pytest.mark.smoke
 def test_live_mixed_positional_keyword_inputs_bind_and_diverge() -> None:
     """Live ``run`` accepts the same mixed-input spelling as loaded runnable traces."""
 
@@ -296,7 +291,6 @@ class _BoolOutputKey(nn.Module):
         return {True: x + 1}
 
 
-@pytest.mark.smoke
 def test_bool_output_dict_key_stays_runnable(tmp_path: Path) -> None:
     """A ``{True: ...}`` output must not advertise runnable then lose it on load."""
 
@@ -321,7 +315,6 @@ class _Scale(nn.Module):
         return v * s
 
 
-@pytest.mark.smoke
 def test_numpy_float64_literal_identical_verifies_changed_diverges(tmp_path: Path) -> None:
     """A ``numpy.float64`` op literal must save, load, and verify normally."""
 
@@ -366,7 +359,6 @@ class _IntegerControlBranch(nn.Module):
         return value * 10
 
 
-@pytest.mark.smoke
 def test_numpy_scalar_control_input_diverges_like_python_int(tmp_path: Path) -> None:
     """Changed NumPy integer controls must diverge rather than become unverifiable."""
 
@@ -408,7 +400,6 @@ class _NestedStrBranch(nn.Module):
         return x + 100.0
 
 
-@pytest.mark.smoke
 def test_r69_nested_string_input_saves_loads_and_verifies(tmp_path: Path) -> None:
     """hon1-F5: a non-top-level str leaf is fully witnessed and must SAVE.
 
@@ -447,7 +438,6 @@ class _OutParameterAdd(nn.Module):
         return output
 
 
-@pytest.mark.smoke
 def test_out_parameter_operation_runs_verified_on_original_input(tmp_path: Path) -> None:
     """``out=`` mutation checks must alias the output slot, not the first input."""
 

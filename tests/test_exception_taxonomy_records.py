@@ -21,8 +21,6 @@ import torchlens as tl
 from torchlens import errors
 from torchlens._errors import PayloadUnavailableError, RecordBindingError
 
-pytestmark = pytest.mark.smoke
-
 
 @pytest.fixture(scope="module")
 def small_trace() -> Iterator[Any]:
@@ -113,6 +111,10 @@ RECORD_DOOR_CASES: tuple[tuple[str, type[BaseException], Callable[[Any], object]
 )
 
 
+@pytest.mark.smoke_cells(
+    "test_record_refusals_carry_codes_and_remedies[annotation_not_json_serializable]",
+    "test_record_refusals_carry_codes_and_remedies[intervention_direction_invalid]",
+)
 @pytest.mark.parametrize(
     ("expected_code", "builtin", "trigger"),
     RECORD_DOOR_CASES,
@@ -224,6 +226,7 @@ def test_trace_predicate_type_doors_carry_codes_and_remedies(
     _assert_contract(exc_info.value, expected_code, builtin)
 
 
+@pytest.mark.smoke
 def test_intervention_doors_carry_codes_and_remedies() -> None:
     """Converted intervention-family doors expose codes and remedies."""
 
@@ -244,6 +247,7 @@ def test_intervention_doors_carry_codes_and_remedies() -> None:
     _assert_contract(exc_info.value, "spec_format_version_unsupported", ValueError)
 
 
+@pytest.mark.smoke
 def test_visualization_doors_carry_codes_and_remedies(small_trace: Any) -> None:
     """Converted visualization option doors expose codes and remedies."""
 
@@ -267,6 +271,7 @@ def test_visualization_doors_carry_codes_and_remedies(small_trace: Any) -> None:
     _assert_contract(exc_info.value, "collapse_mode_invalid", ValueError)
 
 
+@pytest.mark.smoke
 def test_trace_stack_shape_mismatch_is_typed(small_trace: Any) -> None:
     """Stacking differently-shaped saved outs refuses with the stack code."""
 

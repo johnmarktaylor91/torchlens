@@ -87,7 +87,6 @@ def _cluster_bboxes(dot_source: str) -> dict[str, str]:
     return bboxes
 
 
-@pytest.mark.smoke
 def test_rank_pass_clusters_get_distinct_bboxes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -112,7 +111,6 @@ def test_rank_pass_clusters_get_distinct_bboxes(
         )
 
 
-@pytest.mark.smoke
 def test_rank_dot_source_is_deterministic_in_process(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

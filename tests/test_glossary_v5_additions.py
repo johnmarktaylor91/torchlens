@@ -3,7 +3,6 @@
 from io import StringIO
 from typing import Any
 
-import pytest
 import torch
 import torch.nn as nn
 
@@ -42,7 +41,6 @@ def _make_trace() -> Any:
     )
 
 
-@pytest.mark.smoke
 def test_trace_call_tree_and_num_modules() -> None:
     """Trace exposes module count and call-tree navigation."""
 
@@ -64,7 +62,6 @@ def test_trace_call_tree_and_num_modules() -> None:
     assert "├" not in stream.getvalue() and "└" not in stream.getvalue()
 
 
-@pytest.mark.smoke
 def test_op_input_side_properties() -> None:
     """Op input-side properties resolve parent Ops and saved activations."""
 
@@ -81,7 +78,6 @@ def test_op_input_side_properties() -> None:
     assert op.input_activations[0] is not None
 
 
-@pytest.mark.smoke
 def test_module_recursive_params_memory_and_call_tree() -> None:
     """Module exposes address-recursive params, memory, and call-tree navigation."""
 
@@ -116,7 +112,6 @@ def test_module_recursive_params_memory_and_call_tree() -> None:
     assert isinstance(block.total_internal_activation_memory, tl.Bytes)
 
 
-@pytest.mark.smoke
 def test_module_call_memory_templates_and_call_tree() -> None:
     """ModuleCall exposes templates, memory quadrants, params, and call-tree navigation."""
 

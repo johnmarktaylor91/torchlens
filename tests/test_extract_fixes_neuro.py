@@ -80,7 +80,6 @@ def test_default_rdm_sweep_skips_buffer_sites_with_one_disclosure() -> None:
         assert matrix.shape[0] == 6, f"{key}: RDM axis is not the stimulus count"
 
 
-@pytest.mark.smoke
 def test_explicit_buffer_site_selection_refuses_actionably() -> None:
     """An explicit request for a buffer site refuses with teaching (D5)."""
 
@@ -125,7 +124,6 @@ def test_forced_late_failure_leaves_zero_annotations() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_zero_norm_error_names_site_and_stimulus_rows() -> None:
     """Zero-norm metric errors name the failing site and stimulus rows."""
 
@@ -144,7 +142,6 @@ def test_zero_norm_error_names_site_and_stimulus_rows() -> None:
             raise
 
 
-@pytest.mark.smoke
 def test_shared_helper_errors_name_the_calling_verb() -> None:
     """rdm/scree diagnostics name their own verb, never mds_evolution."""
 
@@ -163,7 +160,6 @@ def test_shared_helper_errors_name_the_calling_verb() -> None:
     assert "mds_evolution" not in str(scree_excinfo.value)
 
 
-@pytest.mark.smoke
 def test_shape_mismatch_site_refuses_on_explicit_selection() -> None:
     """A site whose leading axis is not the stimulus count refuses, teaching."""
 

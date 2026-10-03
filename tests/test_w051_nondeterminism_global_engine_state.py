@@ -28,8 +28,6 @@ import torchlens as tl
 from torchlens.utils import _rng_channels
 from torchlens.utils.rng import HOST_NONDETERMINISM_REGISTRY, host_nondeterminism_monitor
 
-pytestmark = pytest.mark.smoke
-
 
 class _LinearNoBias(nn.Module):
     def __init__(self) -> None:

@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-import pytest
 import torch
 from torch import nn
 
@@ -232,7 +231,6 @@ def _fresh_journaled_output(
         return fresh(x.clone())
 
 
-@pytest.mark.smoke
 def test_param_mutate_consume_restore_is_unverifiable(tmp_path: Path) -> None:
     """A transient parameter mutation consumed by a traced op must fail closed."""
 
@@ -245,7 +243,6 @@ def test_param_mutate_consume_restore_is_unverifiable(tmp_path: Path) -> None:
     assert result.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
 
 
-@pytest.mark.smoke
 def test_buffer_host_mutate_consume_restore_is_unverifiable(tmp_path: Path) -> None:
     """A transient host-side buffer mutation consumed by a traced op must fail closed."""
 
@@ -263,7 +260,6 @@ def test_buffer_host_mutate_consume_restore_is_unverifiable(tmp_path: Path) -> N
     assert result.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
 
 
-@pytest.mark.smoke
 def test_plain_batchnorm_running_stat_stays_verified(tmp_path: Path) -> None:
     """Pure journaled BatchNorm running-stat writes stay verified and value-correct."""
 
@@ -281,7 +277,6 @@ def test_plain_batchnorm_running_stat_stays_verified(tmp_path: Path) -> None:
     torch.testing.assert_close(result.output, expected)
 
 
-@pytest.mark.smoke
 def test_pure_journaled_buffer_add_sub_include_activations_does_not_raise(
     tmp_path: Path,
 ) -> None:

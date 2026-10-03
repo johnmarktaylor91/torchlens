@@ -239,7 +239,6 @@ def _find_edge_line(dot_source: str, parent_label: str, child_label: str) -> str
     raise AssertionError(f"Could not find edge line for {parent_label!r} -> {child_label!r}")
 
 
-@pytest.mark.smoke
 def test_simple_if_else_graphviz_labels_then_and_else_edges() -> None:
     """Simple ``if``/``else`` rendering shows THEN and ELSE labels on the right edges."""
     positive_dot, positive_log = _render_dot_source(SimpleIfElseModel(), torch.ones(2, 2))
@@ -265,7 +264,6 @@ def test_simple_if_else_graphviz_labels_then_and_else_edges() -> None:
         negative_log.cleanup()
 
 
-@pytest.mark.smoke
 def test_elif_ladder_graphviz_labels_elif_and_else_edges() -> None:
     """Elif ladder rendering shows ``ELIF 1``, ``ELIF 2``, and ``ELSE`` labels."""
     expected_cases = [

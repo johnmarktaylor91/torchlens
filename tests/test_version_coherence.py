@@ -14,8 +14,6 @@ import pytest
 
 import torchlens
 
-pytestmark = pytest.mark.smoke
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 

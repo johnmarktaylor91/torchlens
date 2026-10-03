@@ -109,7 +109,6 @@ def _assert_verified(model: nn.Module, x: torch.Tensor, path: Path) -> tl.Trace:
 # ======================================================================================
 
 
-@pytest.mark.smoke
 def test_r65_mirror_keys_equal_input_constant_union_and_fact_vocabulary() -> None:
     """The ONE mirror covers EXACTLY the input net's accessor union -- by construction.
 
@@ -142,7 +141,6 @@ def test_r65_mirror_keys_equal_input_constant_union_and_fact_vocabulary() -> Non
 # ======================================================================================
 
 
-@pytest.mark.smoke
 def test_r65_every_mirror_row_chains_into_enforcement() -> None:
     """read_kind rows -> required-dim rows -> signature dims; fact rows -> closed io vocab."""
 
@@ -185,7 +183,6 @@ def test_r65_every_mirror_row_chains_into_enforcement() -> None:
         assert dim in physical_dims, kind
 
 
-@pytest.mark.smoke
 def test_r65_named_residual_set_is_exactly_the_autograd_family() -> None:
     """The direct-only (alias-read residual) set is NAMED and justified, not incidental.
 
@@ -232,7 +229,6 @@ def test_r65_named_residual_set_is_exactly_the_autograd_family() -> None:
 # ======================================================================================
 
 
-@pytest.mark.smoke
 def test_r65_staged_state_satisfies_full_signature(tmp_path: Path) -> None:
     """Staged clones (user-bound AND prepared) exhibit ZERO full-signature violations.
 
@@ -445,7 +441,6 @@ _REFUSE_CASES = (
 )
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "reader, builder, dim", _REFUSE_CASES, ids=[case[0] for case in _REFUSE_CASES]
 )
@@ -489,7 +484,6 @@ def test_r65_canonical_state_read_stays_verified(reader: str, tmp_path: Path) ->
     )
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "builder", [lambda: torch.arange(3.0), _versioned_buffer], ids=["version_zero", "versioned"]
 )
@@ -577,7 +571,6 @@ class _NumpyFlagsRead(nn.Module):
         return x - self.b.sum() if not arr.flags["C_CONTIGUOUS"] else x + self.b.sum()
 
 
-@pytest.mark.smoke
 def test_r65_numpy_view_export_on_noncanonical_state_refuses(tmp_path: Path) -> None:
     """``numpy()`` off a transposed captured buffer refuses: the ndarray pins the layout."""
 
@@ -640,7 +633,6 @@ class _FrozenRequiresGradRead(nn.Module):
         return self.lin(x)
 
 
-@pytest.mark.smoke
 def test_r65_requires_grad_read_is_declared_fact_never_refusal(tmp_path: Path) -> None:
     """A ``requires_grad`` state read records a fact, saves, runs VERIFIED -- no ceiling.
 
@@ -801,7 +793,6 @@ def _fact_witness(site_label: str, fact: object) -> ControlWitness:
     )
 
 
-@pytest.mark.smoke
 def test_r65_parse_validation_enforces_closed_fact_vocabulary() -> None:
     """Malformed persisted facts refuse at PARSE (``context_field_invalid``-class)."""
 
@@ -946,7 +937,6 @@ def _probe_source_states(device: str) -> dict[str, dict[str, torch.Tensor]]:
     return variants
 
 
-@pytest.mark.smoke
 def test_r67_oracle_policy_table_is_closed_and_total() -> None:
     """Every state-metadata row carries exactly one policy from the closed 4-class vocabulary.
 
@@ -976,7 +966,6 @@ def test_r67_oracle_policy_table_is_closed_and_total() -> None:
     assert STATE_METADATA_ORACLE_POLICY["is_coalesced"] == ORACLE_POLICY_STRUCTURALLY_COVERED
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("device", ["cpu", "cuda", "mps", "xpu"])
 def test_r67_oracle1_post_copy_parity_matrix(device: str) -> None:
     """EVERY read-gated canonical dim equals what oracle-1's default copy actually produces.
@@ -1035,7 +1024,6 @@ def test_r67_oracle1_post_copy_parity_matrix(device: str) -> None:
             assert dim in observed_dims, kind
 
 
-@pytest.mark.smoke
 def test_r67_version_is_constructor_history_dependent_post_copy() -> None:
     """Oracle-1 default copy leaves DIFFERENT ``_version`` values per construction history.
 
@@ -1057,7 +1045,6 @@ def test_r67_version_is_constructor_history_dependent_post_copy() -> None:
     assert STATE_METADATA_ORACLE_POLICY["_version"] == ORACLE_POLICY_REFUSE_ON_ANY_READ
 
 
-@pytest.mark.smoke
 def test_r67_meta_destination_has_no_oracle_copy() -> None:
     """Meta-device destinations never receive oracle-1's default copy bytes.
 

@@ -32,7 +32,6 @@ class _MultiOutputModel(torch.nn.Module):
         return values + indices.to(values.dtype)
 
 
-@pytest.mark.smoke
 def test_intervention_ready_sets_relationship_evidence() -> None:
     """``intervention_ready=True`` marks the log and seeds relationship evidence."""
 
@@ -51,7 +50,6 @@ def test_intervention_ready_sets_relationship_evidence() -> None:
     assert log.save_arg_values is False
 
 
-@pytest.mark.smoke
 def test_intervention_ready_allows_default_and_empty_layer_selections() -> None:
     """Only non-empty list selections conflict with intervention readiness."""
 
@@ -67,7 +65,6 @@ def test_intervention_ready_allows_default_and_empty_layer_selections() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_func_call_id_is_assigned_and_shared_for_multi_output_calls() -> None:
     """All outputs of one decorated torch call share one pre-call ``func_call_id``."""
 
@@ -85,7 +82,6 @@ def test_func_call_id_is_assigned_and_shared_for_multi_output_calls() -> None:
     assert len({layer.func_call_id for layer in max_layers}) == 1
 
 
-@pytest.mark.smoke
 def test_active_logging_rejects_nested_entry_while_paused() -> None:
     """``pause_logging`` keeps ``_active_trace`` set for nested-capture rejection."""
 

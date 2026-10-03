@@ -21,8 +21,6 @@ from torchlens.intervention.errors import SelectorCapabilityError, SiteResolutio
 from torchlens.ir.selector_eval import normalize_selector_like
 from torchlens.options import EpisodeSpec
 
-pytestmark = pytest.mark.smoke
-
 
 class Step(nn.Module):
     """One stepped block with a nested submodule (nesting must stamp too)."""
@@ -84,6 +82,7 @@ def test_at_step_normalizes_sorted_unique():
     assert selector.selector_value == (1, 3)
 
 
+@pytest.mark.smoke
 def test_at_step_spec_round_trip():
     """TargetSpec round-trip reconstructs the same ordered steps."""
 
@@ -200,6 +199,7 @@ def test_post_hoc_unstamped_episode_artifact_refuses_typed():
     assert excinfo.value.fields["code"] == "episode_step_unstamped"
 
 
+@pytest.mark.smoke
 def test_stamps_survive_save_load(tmp_path):
     """Op.episode_step persists (tlspec v9 slot) and serves post-hoc queries."""
 

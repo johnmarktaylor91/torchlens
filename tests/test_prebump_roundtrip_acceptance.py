@@ -195,7 +195,6 @@ _OWNER_CLASSES: dict[str, str] = {
 }
 
 
-@pytest.mark.smoke
 def test_every_family_activated_and_registrar_retired() -> None:
     """Per-family activation confirmation: every formerly gated row persists.
 
@@ -455,7 +454,6 @@ def _telemetry_trace() -> tl.Trace:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_l1_grouping_family_roundtrip(tmp_path) -> None:
     trace = _tiny_trace()
     loaded = _plain_roundtrip(trace, tmp_path, "grouping")
@@ -465,7 +463,6 @@ def test_l1_grouping_family_roundtrip(tmp_path) -> None:
     assert gen2.grouping_policy == loaded.grouping_policy
 
 
-@pytest.mark.smoke
 def test_l1_site_key_family_roundtrip(tmp_path) -> None:
     trace = _tiny_trace()
     live_keys = [op.site_key for op in trace.ops]
@@ -565,7 +562,6 @@ def test_l7a_structure_only_family_roundtrip(tmp_path) -> None:
     assert gen2.structure_only is True
 
 
-@pytest.mark.smoke
 def test_l8_distributed_scope_family_roundtrip(tmp_path) -> None:
     from torchlens.distributed import _lifecycle as lifecycle
     from torchlens.distributed._dtensor import RANK_LOCAL_SHARD
@@ -669,7 +665,6 @@ def _tampered_refuses(
     return refusal
 
 
-@pytest.mark.smoke
 def test_tamper_site_key_refuses_typed(tmp_path) -> None:
     """A parse-valid ``site_key_v1`` that disagrees with op facts refuses."""
 
@@ -686,7 +681,6 @@ def test_tamper_site_key_refuses_typed(tmp_path) -> None:
     assert refusal.fields["code"] == "artifact_site_key_invalid"
 
 
-@pytest.mark.smoke
 def test_tamper_distributed_scope_refuses_typed(tmp_path) -> None:
     """A planted shard-scope vocabulary forgery refuses at load."""
 
@@ -772,7 +766,6 @@ def test_tamper_kernel_telemetry_refuses_typed(tmp_path) -> None:
     assert refusal.fields["code"] == "artifact_kernel_telemetry_invalid"
 
 
-@pytest.mark.smoke
 def test_tamper_grouping_policy_validated_degrades_typed(tmp_path) -> None:
     """VALIDATED-NOW representative: the grouping stamp tamper degrades typed
     (fail-closed settlement), re-proven here so the ledger's validated class
@@ -802,7 +795,6 @@ def test_tamper_grouping_policy_validated_degrades_typed(tmp_path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_combination_plain_structure_only_truncation_refuses() -> None:
     """Cell (plain, structure_only=True, truncation present) = TYPED REFUSE.
 
@@ -831,7 +823,6 @@ def test_combination_episode_structure_only_refuses() -> None:
     assert excinfo.value.fields["code"] == "structure_only_episode_unsupported"
 
 
-@pytest.mark.smoke
 def test_combination_plain_truncation_legal_run_result_term_only() -> None:
     """Cell (plain, structure_only=False, truncation present) = LEGAL.
 
@@ -863,7 +854,6 @@ def test_combination_episode_core_legal() -> None:
     assert all(row["status"] == "complete" for row in rows)
 
 
-@pytest.mark.smoke
 def test_combination_plain_structure_only_absent_legal() -> None:
     """Cell (plain, structure_only=True, truncation absent) = LEGAL (L7a core)."""
 
@@ -877,7 +867,6 @@ def test_combination_plain_structure_only_absent_legal() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_tamper_structure_only_with_payload_refuses_typed(tmp_path) -> None:
     """M-C2: a marked trace carrying a retained value payload refuses.
 
@@ -920,7 +909,6 @@ def test_tamper_structure_only_with_payload_refuses_typed(tmp_path) -> None:
     assert refusal.fields["reason"] == "value_payload_present"
 
 
-@pytest.mark.smoke
 def test_tamper_structure_only_verified_claim_refuses_typed(tmp_path) -> None:
     """M-C3: a marked trace claiming capture_verified=True refuses loudly."""
 
@@ -936,7 +924,6 @@ def test_tamper_structure_only_verified_claim_refuses_typed(tmp_path) -> None:
     assert refusal.fields["reason"] == "verification_claim"
 
 
-@pytest.mark.smoke
 def test_tamper_structure_only_nonbool_marker_refuses_typed(tmp_path) -> None:
     """A non-bool marker value refuses (closed type, never truthiness)."""
 
@@ -959,7 +946,6 @@ def test_tamper_structure_only_nonbool_marker_refuses_typed(tmp_path) -> None:
 _V7_FIXTURE = Path(__file__).parent / "fixtures" / "tlspec_v7" / "tiny_v7.tlspec"
 
 
-@pytest.mark.smoke
 def test_real_v7_artifact_still_loads_at_recorded_schema() -> None:
     """The checked-in pre-bump v7 byte snapshot loads correctly after the bump.
 
@@ -981,7 +967,6 @@ def test_real_v7_artifact_still_loads_at_recorded_schema() -> None:
     assert loaded.structure_only in (None, False)
 
 
-@pytest.mark.smoke
 def test_v9_artifact_is_distinguishable_from_v7(tmp_path) -> None:
     """A fresh save stamps tlspec_version 9; the v7 fixture stays 7."""
 
@@ -995,7 +980,6 @@ def test_v9_artifact_is_distinguishable_from_v7(tmp_path) -> None:
     assert [op.site_key for op in loaded.ops] == [op.site_key for op in trace.ops]
 
 
-@pytest.mark.smoke
 def test_newer_than_runtime_version_refuses_typed() -> None:
     """A claimed tlspec_version=10 state refuses as newer-than-runtime."""
 

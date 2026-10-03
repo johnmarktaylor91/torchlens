@@ -42,7 +42,6 @@ class _BNStack(nn.Module):
         return self.bn2(self.conv2(self.bn1(self.conv1(x))))
 
 
-@pytest.mark.smoke
 def test_one_call_summary_never_mutates_the_model() -> None:
     """State dict bit-identical across tl.summary on a TRAIN-mode BN model (A4)."""
 
@@ -71,7 +70,6 @@ def test_one_call_summary_never_mutates_resnet18() -> None:
     assert model.training
 
 
-@pytest.mark.smoke
 def test_one_call_summary_restores_rng_state() -> None:
     """RNG streams are bit-identical with and without an interleaved summary (A4)."""
 
@@ -88,7 +86,6 @@ def test_one_call_summary_restores_rng_state() -> None:
     assert torch.equal(resumed, expected)
 
 
-@pytest.mark.smoke
 def test_one_call_summary_explicit_train_mode_updates_buffers() -> None:
     """execution_mode='train' is the explicit opt-in that mutates BN stats (A4)."""
 
@@ -100,7 +97,6 @@ def test_one_call_summary_explicit_train_mode_updates_buffers() -> None:
     assert "train mode (explicit" in text
 
 
-@pytest.mark.smoke
 def test_one_call_summary_discloses_execution() -> None:
     """The default summary discloses eval + no_grad + restoration (A4)."""
 
@@ -110,7 +106,6 @@ def test_one_call_summary_discloses_execution() -> None:
     assert "restored" in text
 
 
-@pytest.mark.smoke
 def test_one_call_summary_mode_refusals_teach() -> None:
     """Unknown execution/grad modes refuse typed with the valid choices (A4)."""
 
@@ -140,7 +135,6 @@ class _LazyUnused(nn.Module):
         return self.used(x)
 
 
-@pytest.mark.smoke
 def test_lazy_linear_traces_and_finalizes_inventory() -> None:
     """nn.LazyLinear materializes during the ONE captured forward (A9)."""
 
@@ -156,7 +150,6 @@ def test_lazy_linear_traces_and_finalizes_inventory() -> None:
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_lazy_linear_summary_one_call() -> None:
     """tl.summary works on a lazy model with no priming forward (A9)."""
 
@@ -165,7 +158,6 @@ def test_lazy_linear_summary_one_call() -> None:
     assert "Linear" in text
 
 
-@pytest.mark.smoke
 def test_lazy_linear_graph_stays_clean() -> None:
     """Lazy init machinery never pollutes the executed-op graph (A9)."""
 
@@ -182,7 +174,6 @@ def test_lazy_linear_graph_stays_clean() -> None:
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_never_materialized_lazy_param_tolerated() -> None:
     """A declared-but-never-run lazy param stays zero-geometry, no crash (A9)."""
 

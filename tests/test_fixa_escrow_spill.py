@@ -104,7 +104,6 @@ class _TwoConv(torch.nn.Module):
         return self.conv2(torch.relu(self.conv1(x)))
 
 
-@pytest.mark.smoke
 def test_spilled_real_capture_payload_materializes_bit_exact(force_spill):
     """Every escrowed real-capture payload survives the forced spill bit-exactly."""
 
@@ -118,7 +117,6 @@ def test_spilled_real_capture_payload_materializes_bit_exact(force_spill):
     )
 
 
-@pytest.mark.smoke
 def test_spill_artifact_carries_no_torchlens_sidecar():
     """The spill file holds ONLY the payload: weights_only load, no ``_tl``.
 
@@ -153,7 +151,6 @@ def test_spill_artifact_carries_no_torchlens_sidecar():
     session.release()
 
 
-@pytest.mark.smoke
 @pytest.mark.real_model
 def test_config_built_clip_visual_projection_bit_equal_through_forced_spill(force_spill):
     """tvscope B13 shape at R0 scale: the projected image embedding survives escrow.

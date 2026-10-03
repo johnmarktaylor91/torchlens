@@ -15,8 +15,6 @@ import torch
 
 import torchlens as tl
 
-pytestmark = pytest.mark.smoke
-
 
 class _TiedReprKey:
     """Hashable key whose repr intentionally collides with peer keys."""
@@ -361,6 +359,7 @@ def test_intervention_overwrite_rename_failure_restores_previous_artifact(
     assert (path / "spec.json").read_bytes() == original_spec
 
 
+@pytest.mark.smoke
 def test_content_hash_is_address_and_insertion_order_independent() -> None:
     """Object fallback and tied mapping keys never ingest address or source order."""
 
@@ -519,6 +518,7 @@ def test_codec_metadata_preserves_explicit_none_values() -> None:
     }
 
 
+@pytest.mark.smoke
 def test_codec_metadata_round_trip_preserves_tuples() -> None:
     """Tagged codec metadata distinguishes tuples from JSON lists."""
 

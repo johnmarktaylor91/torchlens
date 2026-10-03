@@ -18,8 +18,6 @@ import torch.nn as nn
 
 import torchlens.checks as tc
 
-pytestmark = pytest.mark.smoke
-
 
 class _TiedNet(nn.Module):
     """Two names bound to one Linear (tied-weight fixture)."""
@@ -41,6 +39,7 @@ def _model() -> nn.Module:
     return nn.Sequential(nn.Linear(4, 8), nn.ReLU(), nn.BatchNorm1d(8), nn.Linear(8, 2))
 
 
+@pytest.mark.smoke
 def test_audit_params_clean_model_rows_and_export() -> None:
     """A fresh model audits with rows, coverage, and a versioned export."""
 
@@ -110,6 +109,7 @@ def test_audit_params_tied_dedup_keeps_aliases() -> None:
     assert row.aliases == ("b.weight",)
 
 
+@pytest.mark.smoke
 def test_audit_params_mapping_door_and_skip_reasons() -> None:
     """state_dict mapping enters the same door; meta/sparse skip with reason."""
 
@@ -131,6 +131,7 @@ def test_audit_params_mapping_door_and_skip_reasons() -> None:
     assert audit.coverage["audited_tensors"] == 1
 
 
+@pytest.mark.smoke
 def test_audit_params_refusals_are_typed() -> None:
     """Unknown names, malformed bounds, junk fractions refuse typed."""
 

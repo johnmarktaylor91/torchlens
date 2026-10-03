@@ -93,7 +93,6 @@ def _arg_path_values(edge_uses: tuple[EdgeUseRecord, ...]) -> list[tuple[int, ..
     return values
 
 
-@pytest.mark.smoke
 def test_edge_uses_reports_repeated_and_single_parent_uses() -> None:
     """Repeated same-parent tensor uses remain visible through ``edge_uses``."""
 
@@ -118,7 +117,6 @@ def test_edge_uses_reports_repeated_and_single_parent_uses() -> None:
     assert _arg_path_values(relu_op.edge_uses) == [(0,)]
 
 
-@pytest.mark.smoke
 def test_edge_uses_is_tuple_and_empty_without_recorded_edges() -> None:
     """The public accessor is immutable and empty for ops with no recorded edges."""
 
@@ -131,7 +129,6 @@ def test_edge_uses_is_tuple_and_empty_without_recorded_edges() -> None:
         input_op.edge_uses.append(EdgeUseRecord("", "", "positional", (), None, None, 0))
 
 
-@pytest.mark.smoke
 def test_edge_uses_survives_tlspec_roundtrip(tmp_path: Path) -> None:
     """Saved ``_edge_uses`` records remain reachable via ``edge_uses`` after load."""
 

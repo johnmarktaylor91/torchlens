@@ -13,13 +13,10 @@ Updating one requires arguing from the MODEL, not from observed output.
 
 from __future__ import annotations
 
-import pytest
 import torch
 import torch.nn as nn
 
 import torchlens as tl
-
-pytestmark = pytest.mark.smoke
 
 
 def test_linear_trace_facts_hold_from_first_principles():

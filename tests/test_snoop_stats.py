@@ -22,8 +22,6 @@ from torchlens.options import EchoOptions
 from torchlens.snoop import EchoStatsError
 from torchlens.snoop._stats import exact_stats, reuse_stats, sampled_stats
 
-pytestmark = pytest.mark.smoke
-
 
 def test_sampled_blindness_regression_t_a() -> None:
     """T-A: one planted NaN; sampled makes NO claim; exact detects it."""
@@ -91,6 +89,7 @@ def test_exact_budget_refusal_fails_the_capture_typed() -> None:
         stats_module.EXACT_NUMEL_BUDGET = original
 
 
+@pytest.mark.smoke
 def test_reuse_rung_prints_only_paid_for_facts() -> None:
     """Reuse never scans: no armed feature means no stats segment at all."""
 

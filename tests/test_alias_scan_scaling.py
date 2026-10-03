@@ -19,8 +19,6 @@ from torchlens.utils.arg_handling import (
     _record_unpreserved_tensor_aliases,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 def _reference_scan(
     tensor_records: list[tuple[str, torch.Tensor, bool]],
@@ -79,6 +77,7 @@ def _torture_records() -> list[tuple[str, torch.Tensor, bool]]:
     ]
 
 
+@pytest.mark.smoke_cells("test_alias_scan_matches_exhaustive_reference[True]")
 @pytest.mark.parametrize("require_distinct", [False, True])
 def test_alias_scan_matches_exhaustive_reference(require_distinct: bool) -> None:
     """The swept scan reproduces the exhaustive scan's diagnostics byte for byte."""
@@ -105,6 +104,7 @@ def test_disjoint_leaves_produce_zero_candidate_pairs() -> None:
     assert gaps == []
 
 
+@pytest.mark.smoke
 def test_candidate_pairs_cover_identity_overlap_and_unknown() -> None:
     """Identity, interval-overlap, and unprovable-footprint pairs all survive."""
 

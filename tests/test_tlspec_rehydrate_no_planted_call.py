@@ -39,8 +39,6 @@ from torchlens._io.state_keys import (
 from torchlens.data_classes.trace import Trace
 from torchlens.options import CaptureOptions
 
-pytestmark = pytest.mark.smoke
-
 
 class _M(nn.Module):
     def __init__(self) -> None:

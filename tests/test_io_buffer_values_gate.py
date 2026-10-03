@@ -27,8 +27,6 @@ from torch import nn
 import torchlens as tl
 from torchlens.errors._base import TorchLensWarning
 
-pytestmark = pytest.mark.smoke
-
 _CANARY_A = 13571.0
 _CANARY_B = 24680.0
 

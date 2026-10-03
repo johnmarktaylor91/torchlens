@@ -14,8 +14,6 @@ from torch import nn
 import torchlens as tl
 from torchlens.options import CaptureOptions
 
-pytestmark = pytest.mark.smoke
-
 
 class Toy(nn.Module):
     def __init__(self, width: int = 4) -> None:
@@ -35,6 +33,7 @@ def _meta_trace():
     )
 
 
+@pytest.mark.smoke
 def test_plan_check_pass() -> None:
     trace = _meta_trace()
     plan = [
@@ -71,6 +70,7 @@ def test_plan_check_value_callable_refuses_typed() -> None:
     assert excinfo.value.fields["code"] == "plan_check_unsupported"
 
 
+@pytest.mark.smoke
 def test_plan_check_refuted_source_refuses() -> None:
     from torchlens.capture.structure_only import StructureOnlyCapabilityError
 

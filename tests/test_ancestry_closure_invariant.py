@@ -34,8 +34,6 @@ from torchlens.errors import MetadataInvariantError
 from torchlens.validation._invariants_entry import check_metadata_invariants
 from torchlens.validation._invariants_equivalence import _check_graph_ordering
 
-pytestmark = pytest.mark.smoke
-
 
 class _TwoInputBatchNorm(nn.Module):
     """Two inputs, two outputs, and live BatchNorm buffers."""

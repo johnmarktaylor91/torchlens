@@ -23,8 +23,6 @@ from torch import nn
 import torchlens as tl
 from torchlens.utils._torch_compat import TorchCapabilityWarning
 
-pytestmark = pytest.mark.smoke
-
 
 class _Holder:
     """Plain model-owned helper object carrying a module reference."""

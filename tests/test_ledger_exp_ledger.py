@@ -29,8 +29,6 @@ from torchlens.experiment import (
 )
 from torchlens.experiment._ledger import EvidenceRef, read_ledger_artifact
 
-pytestmark = pytest.mark.smoke
-
 
 def _armed(tmp_path: Path, **kwargs):
     return ledger(tmp_path / "run.tlledger", question="does head 5 matter?", **kwargs)
@@ -53,6 +51,7 @@ def test_arm_opens_entry_and_contextvar_scopes(tmp_path: Path) -> None:
     assert active_ledger() is None
 
 
+@pytest.mark.smoke
 def test_draft_without_hypothesis_and_verdict_basis_honesty(tmp_path: Path) -> None:
     led = ledger(tmp_path / "run.tlledger")
     try:
@@ -78,6 +77,7 @@ def test_draft_without_hypothesis_and_verdict_basis_honesty(tmp_path: Path) -> N
         led.close()
 
 
+@pytest.mark.smoke
 def test_close_without_verdict_refuses_typed(tmp_path: Path) -> None:
     led = ledger(tmp_path / "run.tlledger")
     try:
@@ -100,6 +100,7 @@ def test_verdict_vocabulary_closed(tmp_path: Path) -> None:
         led.close()
 
 
+@pytest.mark.smoke
 def test_kill_minus_nine_invariant_and_torn_tail_disclosure(tmp_path: Path) -> None:
     path = tmp_path / "run.tlledger"
     led = ledger(path, hypothesis="h", metric="m")
@@ -146,6 +147,7 @@ def test_interior_tamper_refuses_at_the_break(tmp_path: Path) -> None:
     assert excinfo.value.fields["code"] == "ledger_artifact_invalid"
 
 
+@pytest.mark.smoke
 def test_quarantine_on_sink_death_returns_material_result(tmp_path: Path) -> None:
     import contextlib
 
@@ -188,6 +190,7 @@ def test_on_record_error_raise_opt_in(tmp_path: Path) -> None:
             led.close()
 
 
+@pytest.mark.smoke
 def test_single_writer_lock_refuses_second_writer(tmp_path: Path) -> None:
     path = tmp_path / "run.tlledger"
     led = ledger(path, hypothesis="h")
@@ -331,6 +334,7 @@ def test_emission_one_step_per_operation(tmp_path: Path) -> None:
         led.close()
 
 
+@pytest.mark.smoke
 def test_mcp_server_serves_the_three_ledger_tools(tmp_path: Path) -> None:
     """Item 11: the stdio server's pure tool layer wraps the same functions."""
 

@@ -21,8 +21,6 @@ from torch import nn
 import torchlens as tl
 from torchlens.utils._torch_compat import get_cpu_float8_deterministic_fill_support
 
-pytestmark = pytest.mark.smoke
-
 
 class _CacheModel(nn.Module):
     """Tiny deterministic model whose forward the tests mutate."""

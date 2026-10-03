@@ -100,7 +100,6 @@ def test_duration_flops_and_macs_formatting_and_numeric_behavior() -> None:
     assert macs / 2 == tl.Macs(1_700_000)
 
 
-@pytest.mark.smoke
 def test_memory_fields_are_bytes_and_format_directly() -> None:
     """Trace, Op, Layer, Buffer, Module, ModuleCall, and Param memory are Bytes."""
 
@@ -133,7 +132,6 @@ def test_memory_fields_are_bytes_and_format_directly() -> None:
     assert op.activation_memory + 1 > op.activation_memory
 
 
-@pytest.mark.smoke
 def test_duration_flops_and_macs_fields_are_quantity_types() -> None:
     """Runtime duration, FLOP, and MAC fields use quantity wrappers."""
 
@@ -187,7 +185,6 @@ def test_duration_flops_and_macs_fields_are_quantity_types() -> None:
     assert all(isinstance(field, tl.Macs) for field in macs_fields if field is not None)
 
 
-@pytest.mark.smoke
 def test_memory_str_and_bare_memory_fields_are_not_public() -> None:
     """Memory string companions and bare memory record fields are absent."""
 
@@ -239,7 +236,6 @@ def test_memory_str_and_bare_memory_fields_are_not_public() -> None:
         assert all(field != "memory_str" for field in field_order)
 
 
-@pytest.mark.smoke
 def test_no_str_suffixed_quantity_fields_remain_public() -> None:
     """Field orders and records no longer expose quantity string companions."""
 
@@ -284,7 +280,6 @@ def test_no_str_suffixed_quantity_fields_remain_public() -> None:
             assert not hasattr(record, field)
 
 
-@pytest.mark.smoke
 def test_forward_peak_memory_ignores_pre_existing_external_tracemalloc_peak() -> None:
     """``forward_peak_memory`` stays scoped to the traced pass under external tracemalloc.
 

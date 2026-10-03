@@ -30,8 +30,6 @@ import torchlens as tl
 from torchlens.capture.trace import _SEMANTIC_OUTPUT_TRANSIENT_FIELDS
 from torchlens.data_classes.field_policy import FieldPolicy
 
-pytestmark = pytest.mark.smoke
-
 
 class _Tokenizer:
     """Stand-in for an attached HF tokenizer: a live, picklable user object."""
@@ -139,6 +137,7 @@ def test_failed_capture_drops_the_semantic_output_scratch() -> None:
     assert _leaked(partial) == []
 
 
+@pytest.mark.smoke
 def test_halt_does_not_break_decoding_on_the_completed_path() -> None:
     """The drop never runs before the sole consumer.
 

@@ -296,7 +296,6 @@ def test_field_order_state_coverage_on_live_records() -> None:
         )
 
 
-@pytest.mark.smoke
 def test_every_record_class_owns_its_explicit_state_protocol() -> None:
     """Core record classes never take the generic introspection fallback.
 

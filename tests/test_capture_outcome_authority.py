@@ -29,9 +29,6 @@ from torchlens.capture.outcome import (
     resolve_loaded_outcome,
 )
 
-pytestmark = pytest.mark.smoke
-
-
 # ---------------------------------------------------------------------------
 # Vocabulary + record
 # ---------------------------------------------------------------------------

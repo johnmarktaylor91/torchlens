@@ -148,7 +148,6 @@ def _mult_labels(log) -> list[str]:
     return [layer.label for layer in log.layer_list if layer.label.startswith("mul")]
 
 
-@pytest.mark.smoke
 def test_giant_equivalence_class_is_exact(wide_capture) -> None:
     """All 300 streams land in ONE equivalence class with no member missing."""
 
@@ -161,7 +160,6 @@ def test_giant_equivalence_class_is_exact(wide_capture) -> None:
     assert all(label in members for label in mults)
 
 
-@pytest.mark.smoke
 def test_giant_equivalence_view_is_one_shared_object(wide_capture) -> None:
     """Every member reads THE one cached immutable view — O(1), identity-stable."""
 
@@ -172,7 +170,6 @@ def test_giant_equivalence_view_is_one_shared_object(wide_capture) -> None:
     assert log[mults[0]].equivalent_ops is log[mults[-1]].equivalent_ops
 
 
-@pytest.mark.smoke
 def test_giant_cohort_groups_silently_below_real_ceiling(wide_capture) -> None:
     """At 300 members (~45k pairs) the UNPATCHED sweep finishes with no disclosure.
 
@@ -196,7 +193,6 @@ def test_giant_cohort_groups_silently_below_real_ceiling(wide_capture) -> None:
     assert len(log[mults[-1]].recurrent_ops) == 1
 
 
-@pytest.mark.smoke
 def test_deep_recurrence_rolls_to_one_layer_per_site(deep_capture) -> None:
     """300 calls of one cell group into single layers with exactly 300 passes."""
 
@@ -207,7 +203,6 @@ def test_deep_recurrence_rolls_to_one_layer_per_site(deep_capture) -> None:
         assert layer.num_passes == N_PASSES, label
 
 
-@pytest.mark.smoke
 def test_deep_recurrence_pass_addressing_at_the_extremes(deep_capture) -> None:
     """Pass-qualified addressing stays exact at pass 1 and pass 300."""
 
@@ -220,7 +215,6 @@ def test_deep_recurrence_pass_addressing_at_the_extremes(deep_capture) -> None:
     assert last.num_passes == N_PASSES
 
 
-@pytest.mark.smoke
 def test_deep_recurrence_group_view_shared_across_all_passes(deep_capture) -> None:
     """All 300 passes read the ONE cached recurrent_ops view (O(1) live view)."""
 
@@ -230,7 +224,6 @@ def test_deep_recurrence_group_view_shared_across_all_passes(deep_capture) -> No
     assert len(log["linear_1_1:1"].recurrent_ops) == N_PASSES
 
 
-@pytest.mark.smoke
 def test_deep_recurrence_site_key_stable_across_passes(deep_capture) -> None:
     """Every pass carries the same structural site key; the Layer serves it."""
 
@@ -339,7 +332,6 @@ def _minimal_recursion_limit(fn: Callable[[], None], lo: int, hi: int) -> int:
     return lo
 
 
-@pytest.mark.smoke
 def test_depth_overflow_fails_clean_and_restores() -> None:
     """Nesting past the recursion limit fails typed and leaves torch capturable.
 
@@ -397,7 +389,6 @@ def test_depth_overflow_fails_clean_and_restores() -> None:
     ]
 
 
-@pytest.mark.smoke
 def test_wide_fanout_and_fanin_relations_exact() -> None:
     """300-way fan-out children and 300-parent fan-in stay exact and ordered."""
 

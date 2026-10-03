@@ -25,8 +25,6 @@ from torchlens.capture.outcome import (
     CaptureStatus,
 )
 
-pytestmark = pytest.mark.smoke
-
 TORCHLENS_DIR = pathlib.Path(tl.__file__).resolve().parent
 
 

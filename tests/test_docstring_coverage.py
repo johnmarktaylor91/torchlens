@@ -19,7 +19,6 @@ import ast
 import functools
 import pathlib
 
-import pytest
 from _source_corpus import module_ast, package_files
 
 PACKAGE_ROOT = pathlib.Path(__file__).resolve().parents[1] / "torchlens"
@@ -174,7 +173,6 @@ def _scan() -> dict[tuple[str, str], list[int]]:
     return result
 
 
-@pytest.mark.smoke
 def test_every_function_and_class_has_a_docstring() -> None:
     """No undocumented def outside the ``DEFERRED`` ledger (D3 exemption policy)."""
 
@@ -191,7 +189,6 @@ def test_every_function_and_class_has_a_docstring() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_deferred_ledger_has_no_stale_entries() -> None:
     """Every ``DEFERRED`` entry still names a real undocumented def.
 
@@ -210,7 +207,6 @@ def test_deferred_ledger_has_no_stale_entries() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_exemption_policy_is_structural() -> None:
     """The two exemptions match body/name SHAPE, so they cannot be gamed by naming."""
 
@@ -245,7 +241,6 @@ def test_exemption_policy_is_structural() -> None:
     assert not _is_trivial_property(methods["helper"]), "a plain method is not a property"
 
 
-@pytest.mark.smoke
 def test_walker_descends_except_and_match_arms(tmp_path: pathlib.Path) -> None:
     """Defs hidden in except handlers and match cases are visible (b9-sol R69-1).
 

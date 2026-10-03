@@ -12,13 +12,11 @@ barcode RNG, the replay drew different barcodes and metadata invariants failed.
 import random
 
 import numpy as np
-import pytest
 
 from torchlens.utils.hashing import make_random_barcode, seed_barcode_rng
 from torchlens.utils.rng import set_random_seed
 
 
-@pytest.mark.smoke
 def test_set_random_seed_makes_barcodes_reproducible() -> None:
     """A fixed seed yields the same barcode sequence (fork-replay determinism)."""
     set_random_seed(1234)
@@ -32,7 +30,6 @@ def test_set_random_seed_makes_barcodes_reproducible() -> None:
     assert third != first  # a different seed gives a different sequence
 
 
-@pytest.mark.smoke
 def test_seed_barcode_rng_direct_is_reproducible() -> None:
     """The private seeding helper alone reproduces a sequence without touching seeds."""
     seed_barcode_rng(7)
@@ -42,7 +39,6 @@ def test_seed_barcode_rng_direct_is_reproducible() -> None:
     assert a == b
 
 
-@pytest.mark.smoke
 def test_barcode_draws_do_not_advance_global_host_rng() -> None:
     """Drawing barcodes must not perturb global ``random`` / NumPy (host-RNG honesty).
 

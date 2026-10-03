@@ -28,8 +28,6 @@ import torchlens as tl
 from torchlens.report import flops_report
 from torchlens.utils._torch_compat import get_mha_fastpath_switch_support
 
-pytestmark = pytest.mark.smoke
-
 
 class _Inner(nn.Module):
     def __init__(self) -> None:

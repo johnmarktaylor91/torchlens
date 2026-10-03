@@ -51,7 +51,6 @@ def _export(log: Any, path: Path, **kwargs: Any) -> dict[str, Any]:
     return json.loads(artifact.read_text(encoding="utf-8"))
 
 
-@pytest.mark.smoke
 def test_passes_merge_with_feedback_disclosed(tmp_path: Path) -> None:
     """Six op passes roll into two nodes; the feedback edge is disclosed."""
 
@@ -70,7 +69,6 @@ def test_passes_merge_with_feedback_disclosed(tmp_path: Path) -> None:
     assert "linear_1_1" in typed, "shape-stable rolled values stay typed"
 
 
-@pytest.mark.smoke
 def test_variance_gates_the_type() -> None:
     """Cross-pass shape/dtype drift strips the type and discloses variants.
 

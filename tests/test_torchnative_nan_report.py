@@ -18,8 +18,6 @@ import torchlens as tl
 from torchlens.debug import nan_report
 from torchlens.utils._torch_compat import get_cpu_half_kernels_support
 
-pytestmark = pytest.mark.smoke
-
 
 class DivideByZero(nn.Module):
     """Injects a divide-by-zero mid-stack (the origin-op fixture)."""
@@ -35,6 +33,7 @@ class DivideByZero(nn.Module):
         return self.tail(poisoned - poisoned)  # nan propagates
 
 
+@pytest.mark.smoke
 def test_posthoc_report_names_origin_free() -> None:
     """Post-hoc: origin op + source line off the existing capture."""
 
@@ -66,6 +65,7 @@ def test_clean_report_is_scoped_to_checked_values() -> None:
     log.cleanup()
 
 
+@pytest.mark.smoke
 def test_live_tripwire_form() -> None:
     """The live form runs ONE memory-light tripwire forward and discloses it."""
 

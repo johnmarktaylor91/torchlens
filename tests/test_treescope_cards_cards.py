@@ -70,7 +70,6 @@ def test_layer_card_pass_rows_are_the_shape(recurrent_log) -> None:
     assert "card unavailable" not in html
 
 
-@pytest.mark.smoke
 def test_single_pass_layer_degenerates_to_op_card(recurrent_log) -> None:
     """ONE code path: a single-pass layer renders the Op card."""
 
@@ -161,7 +160,6 @@ def test_render_side_effect_free(recurrent_log) -> None:
     assert before == after
 
 
-@pytest.mark.smoke
 def test_hostile_labels_escape_at_the_leaf() -> None:
     """Escape-once law: text is DATA; markup never survives the leaf."""
 
@@ -176,7 +174,6 @@ def test_hostile_labels_escape_at_the_leaf() -> None:
 # Copy-root ladder (memo section 4 + F-G repair)
 
 
-@pytest.mark.smoke
 def test_copy_root_ladder_rungs() -> None:
     """Explicit wins; treescope path second; no root -> disabled with reason."""
 
@@ -190,7 +187,6 @@ def test_copy_root_ladder_rungs() -> None:
     assert disabled.reason and "key" in disabled.reason
 
 
-@pytest.mark.smoke
 def test_namespace_scan_excludes_history_names() -> None:
     """F-G repair: the identity scan never picks `_`/history slots."""
 
@@ -209,7 +205,6 @@ def test_namespace_scan_excludes_history_names() -> None:
             shell.user_ns.pop(name, None)
 
 
-@pytest.mark.smoke
 def test_copy_expression_composition() -> None:
     """Key expressions compose ROOT[key]; keyless roots copy the literal."""
 
@@ -221,7 +216,6 @@ def test_copy_expression_composition() -> None:
 # Motifs, bounds, grid, axis labels, SDPA hint
 
 
-@pytest.mark.smoke
 def test_six_state_classification_and_bounds() -> None:
     """NaN/Inf/masked/out-of-range/finite classify; all-positive discloses."""
 
@@ -264,7 +258,6 @@ def test_grid_facet_gaps_outer_2x_inner() -> None:
     assert "border-top:2px" in render.html  # inner boundary (level 1)
 
 
-@pytest.mark.smoke
 def test_axis_labels_positional_fallback_disclosed() -> None:
     """No proven roles -> positional badges, provenance says so."""
 

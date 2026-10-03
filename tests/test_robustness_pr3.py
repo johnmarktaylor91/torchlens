@@ -146,7 +146,6 @@ class _BatchEncodingAcceptingModel(nn.Module):
         return self.lin(batch["input_ids"])
 
 
-@pytest.mark.smoke
 def test_huggingface_batch_encoding_like_input_logs() -> None:
     """A UserDict-based input (BatchEncoding shape) must be loggable."""
     model = _BatchEncodingAcceptingModel()
@@ -208,7 +207,6 @@ def test_dataclass_output_does_not_crash() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_standard_model_still_logs_cleanly() -> None:
     """Nothing in PR 3 should regress the golden path."""
     model = _Tiny()

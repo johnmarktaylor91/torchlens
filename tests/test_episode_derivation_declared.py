@@ -33,8 +33,6 @@ from torchlens.errors import TorchLensWarning
 from torchlens.errors.episode import EpisodeDeclarationError
 from torchlens.options import EpisodeSpec
 
-pytestmark = pytest.mark.smoke
-
 V = 16
 N_STEPS = 3
 

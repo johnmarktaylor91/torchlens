@@ -14,12 +14,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 import torchlens
 from torchlens._surface import render_surface_tsv, surface_rows
-
-pytestmark = pytest.mark.smoke
 
 TABLE = Path(__file__).with_name("test_arch_spine_surface_table.tsv")
 

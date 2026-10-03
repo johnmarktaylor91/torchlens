@@ -31,8 +31,6 @@ from torchlens.capture._episode_coupling import (
 from torchlens.errors.episode import EpisodeCaptureError
 from torchlens.options import EpisodeSpec
 
-pytestmark = pytest.mark.smoke
-
 
 class Step(nn.Module):
     def __init__(self, width: int = 4):

@@ -488,7 +488,6 @@ def _ledger_entry(rel: str) -> tuple[str, tuple[str, str]] | None:
     return None
 
 
-@pytest.mark.smoke
 def test_every_golden_file_is_governed_or_ledgered() -> None:
     """No golden family remains silently outside governance (b10 R78 round-3)."""
 
@@ -500,7 +499,6 @@ def test_every_golden_file_is_governed_or_ledgered() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_ledger_has_no_dead_entries() -> None:
     """Every ledger pattern matches at least one committed file."""
 
@@ -533,7 +531,6 @@ _ENV_GOVERNED_REQUIRED_MARKERS: dict[str, tuple[str, ...]] = {
 }
 
 
-@pytest.mark.smoke
 def test_env_governed_ledger_dirs_carry_env_markers() -> None:
     """Every env-governed dir carries ALL of its declared marker files."""
 
@@ -588,7 +585,6 @@ def _declared_emitter_packages(source: str) -> tuple[str, ...]:
     return tuple(part.strip().strip("'\"") for part in match.group(1).split(",") if part.strip())
 
 
-@pytest.mark.smoke
 def test_emitter_packages_match_declared_env_markers() -> None:
     """Family emitter tuples and the marker table agree, both directions."""
 
@@ -702,7 +698,6 @@ def _wrap_guard_census_violations(
     return violations
 
 
-@pytest.mark.smoke
 def test_golden_generators_carry_wrap_state_guard() -> None:
     """Every golden generator family is censused; in-process ones call the guard."""
 
@@ -720,7 +715,6 @@ def test_golden_generators_carry_wrap_state_guard() -> None:
     assert not violations, "\n".join(violations)
 
 
-@pytest.mark.smoke
 def test_wrap_guard_census_is_red_capable() -> None:
     """The census check fails on an in-process generator lacking the guard."""
 
@@ -769,7 +763,6 @@ other = os.environ.get("TORCHLENS_CACHE_DIR")
 """
 
 
-@pytest.mark.smoke
 def test_flag_scanner_catches_pre_fix_selector_matrix_pattern() -> None:
     """The exact pre-fix truthy-armed pattern is a violation (red-capable)."""
 
@@ -778,7 +771,6 @@ def test_flag_scanner_catches_pre_fix_selector_matrix_pattern() -> None:
     assert "TORCHLENS_UPDATE_SELECTOR_MATRIX" in violations[0]
 
 
-@pytest.mark.smoke
 def test_flag_scanner_catches_presence_and_bare_if_reads() -> None:
     """Presence tests and bare truthy `if` reads are violations."""
 
@@ -788,7 +780,6 @@ def test_flag_scanner_catches_presence_and_bare_if_reads() -> None:
     assert len(bare) == 1 and "TORCHLENS_REGEN_EXPORT_GOLDENS" in bare[0]
 
 
-@pytest.mark.smoke
 def test_flag_scanner_accepts_guarded_reads() -> None:
     """== "1" comparisons, flag_armed, and non-flag reads are clean."""
 
@@ -822,7 +813,6 @@ def _assert_golden(path, projection):
 """
 
 
-@pytest.mark.smoke
 def test_autogreen_scanner_catches_pre_fix_backend_parity_pattern() -> None:
     """The historical write-then-compare-to-self regen path is caught."""
 
@@ -831,7 +821,6 @@ def test_autogreen_scanner_catches_pre_fix_backend_parity_pattern() -> None:
     assert "TORCHLENS_UPDATE_BACKEND_PARITY" in violations[0]
 
 
-@pytest.mark.smoke
 def test_autogreen_scanner_accepts_write_then_skip_and_return_true() -> None:
     """pytest.skip and the caller-skips `return True` patterns are clean."""
 
@@ -849,7 +838,6 @@ def assert_artifact_current(path, payload):
 """
 
 
-@pytest.mark.smoke
 def test_scanners_catch_pre_fix_producer_ledger_refresh_pattern() -> None:
     """The b10 R78 round-4 producer-ledger shape now trips BOTH scanners.
 
@@ -869,7 +857,6 @@ def test_scanners_catch_pre_fix_producer_ledger_refresh_pattern() -> None:
     assert any(token in _PLANTED_PRODUCER_LEDGER_REFRESH for token in _FLAG_TOKENS)
 
 
-@pytest.mark.smoke
 def test_flag_registry_roles_cover_both_governance_layers() -> None:
     """The single registry feeds both layers with the intended memberships.
 
@@ -915,7 +902,6 @@ def test_a():
 """
 
 
-@pytest.mark.smoke
 def test_xfail_scanner_catches_reasonless_markers() -> None:
     """Reasonless and bare xfail markers are violations (red-capable)."""
 
@@ -1030,7 +1016,6 @@ def _scan_repo(scanner, tokens: tuple[str, ...]) -> list[str]:
     return violations
 
 
-@pytest.mark.smoke
 def test_no_unguarded_golden_flag_reads_in_tests() -> None:
     """Every golden mutation flag in tests/ arms on the exact value "1"."""
 
@@ -1038,7 +1023,6 @@ def test_no_unguarded_golden_flag_reads_in_tests() -> None:
     assert not violations, "\n".join(violations)
 
 
-@pytest.mark.smoke
 def test_no_autogreen_update_branches_in_tests() -> None:
     """Every golden update branch in tests/ is write-then-skip, never green."""
 
@@ -1046,7 +1030,6 @@ def test_no_autogreen_update_branches_in_tests() -> None:
     assert not violations, "\n".join(violations)
 
 
-@pytest.mark.smoke
 def test_no_reasonless_xfails_in_tests() -> None:
     """Every xfail marker in tests/ names the gap it pins via reason=."""
 
@@ -1054,7 +1037,6 @@ def test_no_reasonless_xfails_in_tests() -> None:
     assert not violations, "\n".join(violations)
 
 
-@pytest.mark.smoke
 def test_no_unflagged_baseline_writes_in_tests() -> None:
     """No missing-golden branch may silently self-baseline (flag-independent).
 
@@ -1096,7 +1078,6 @@ def test_snapshot(path, actual):
 """
 
 
-@pytest.mark.smoke
 def test_unflagged_baseline_scanner_is_red_capable() -> None:
     """The exact pre-fix tests/snapshots shape is caught; the governed shape passes."""
 
@@ -1105,7 +1086,6 @@ def test_unflagged_baseline_scanner_is_red_capable() -> None:
     assert find_unflagged_baseline_writes(_GOVERNED_BASELINE) == []
 
 
-@pytest.mark.smoke
 def test_repo_scan_prefilter_is_sound() -> None:
     """The substring prefilter can never hide a violation.
 
@@ -1133,7 +1113,6 @@ def test_repo_scan_prefilter_is_sound() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_backend_parity_update_run_never_reports_green(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1163,7 +1142,6 @@ def test_backend_parity_update_run_never_reports_green(
     assert parity._assert_projection_matches_golden("probe", {"a": 1}) is False
 
 
-@pytest.mark.smoke
 def test_backend_parity_update_flag_arms_on_exact_one_only(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1182,7 +1160,6 @@ def test_backend_parity_update_flag_arms_on_exact_one_only(
     assert '"a": 1' in (tmp_path / "probe.json").read_text(), "disarmed flag must not rewrite"
 
 
-@pytest.mark.smoke
 def test_session_warmup_carveout_matches_every_golden_flag_prefix() -> None:
     """r7 R77 (fable b2 MED): the warmup skip must honor ALL golden prefixes.
 
@@ -1205,7 +1182,6 @@ def test_session_warmup_carveout_matches_every_golden_flag_prefix() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_provenance_source_disclosure_ignores_the_familys_own_output() -> None:
     """r7 R78-1 (opus b10 MED): the dirty disclosure must be about the SOURCE.
 
@@ -1236,7 +1212,6 @@ def test_provenance_source_disclosure_ignores_the_familys_own_output() -> None:
     assert _foreign_porcelain_lines(sibling, own) == [" M tests/golden/family_b/case.dot"]
 
 
-@pytest.mark.smoke
 def test_emitter_census_discovers_every_emitter_declaration() -> None:
     """r7 R78-2 (opus b10 MED): the emitter census is DERIVED-complete, both ways.
 

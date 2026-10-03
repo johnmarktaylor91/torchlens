@@ -361,7 +361,6 @@ def test_private_torch_touches_match_the_ledger_exactly() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_gate_scanner_detects_planted_offenders() -> None:
     """Planted positives: the scanner sees attribute, import, and getattr forms."""
 
@@ -380,7 +379,6 @@ def test_gate_scanner_detects_planted_offenders() -> None:
     assert "getattr(torch, '_VF')" in touches
 
 
-@pytest.mark.smoke
 def test_gate_scanner_detects_aliased_and_string_literal_offenders() -> None:
     """grind-r6 b4 R26 (sol MED): the scanner blind spots, planted.
 
@@ -411,7 +409,6 @@ def test_gate_scanner_detects_aliased_and_string_literal_offenders() -> None:
     assert "__import__('torch._dynamo')" in touches
 
 
-@pytest.mark.smoke
 def test_gate_scanner_detects_planted_bypass_spellings() -> None:
     """r7 R26: the spellings that historically passed the gate clean.
 
@@ -451,7 +448,6 @@ def test_gate_scanner_detects_planted_bypass_spellings() -> None:
     assert "import tensorflow.python.eager.context" in touches
 
 
-@pytest.mark.smoke
 def test_gate_scanner_ignores_public_alias_use() -> None:
     """Aliased PUBLIC use stays clean: no false positives from the alias rooter."""
 

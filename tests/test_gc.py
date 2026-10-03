@@ -61,7 +61,6 @@ class _TwoLayerNet(nn.Module):
 
 
 class TestTraceGC:
-    @pytest.mark.smoke
     def test_trace_gc_without_cleanup(self):
         """del trace; gc.collect() should release the Trace."""
         model = _SimpleLinear()
@@ -71,7 +70,6 @@ class TestTraceGC:
         gc.collect()
         assert ref() is None
 
-    @pytest.mark.smoke
     def test_trace_gc_with_cleanup(self):
         """cleanup() + del + gc.collect() should release the Trace."""
         model = _SimpleLinear()
@@ -82,7 +80,6 @@ class TestTraceGC:
         gc.collect()
         assert ref() is None
 
-    @pytest.mark.smoke
     def test_model_params_not_pinned_after_cleanup(self):
         """After cleanup + del trace, model params should be GC-able."""
         model = _SimpleLinear()
@@ -94,7 +91,6 @@ class TestTraceGC:
         gc.collect()
         assert param_ref() is None
 
-    @pytest.mark.smoke
     def test_fast_live_hooks_finalize_when_trace_is_deleted(self):
         """Deleting a fast Trace removes its hooks and leaves parameters collectible."""
 
@@ -114,7 +110,6 @@ class TestTraceGC:
         gc.collect()
         assert param_ref() is None
 
-    @pytest.mark.smoke
     def test_model_gc_after_release_param_refs(self):
         """release_param_refs() then del model -> model GC'd while log alive."""
         model = _TwoLayerNet()
@@ -184,7 +179,6 @@ class TestTraceGC:
         assert tl_growth < 256 * 1024, f"Memory grew by {tl_growth} bytes across 5 save_new_outs"
         trace.cleanup()
 
-    @pytest.mark.smoke
     def test_cleanup_breaks_param_ref(self):
         """After cleanup, all Param._param_ref should be None."""
         model = _TwoLayerNet()
@@ -194,7 +188,6 @@ class TestTraceGC:
         for pl in param_logs:
             assert pl._param_ref is None
 
-    @pytest.mark.smoke
     def test_release_param_refs_preserves_grad_metadata(self):
         """backward(), release_param_refs(), verify grad info is cached."""
         model = _TwoLayerNet()
@@ -220,7 +213,6 @@ class TestTraceGC:
         assert has_any_grad, "Expected at least one param to have grad metadata cached"
         trace.cleanup()
 
-    @pytest.mark.smoke
     def test_transient_data_cleared(self):
         """Verify module build scratch is removed after postprocess."""
         model = _TwoLayerNet()
@@ -234,7 +226,6 @@ class TestTraceGC:
         assert not hasattr(trace, "_module_forward_args")
         trace.cleanup()
 
-    @pytest.mark.smoke
     def test_raw_layer_dict_cleared_after_cleanup(self):
         """Verify raw layer scratch is absent after postprocess and cleanup."""
         model = _TwoLayerNet()
@@ -247,7 +238,6 @@ class TestTraceGC:
         trace.cleanup()
         assert not hasattr(trace, "_raw_layer_dict")
 
-    @pytest.mark.smoke
     def test_module_calls_accessor_is_cached_on_the_instance(self):
         """The flattened ModuleCall accessor memo lives on the Trace, not a global.
 
@@ -284,7 +274,6 @@ class TestTraceGC:
             gc.collect()
         assert [ref() for ref in refs] == [None, None, None]
 
-    @pytest.mark.smoke
     def test_held_module_call_still_keeps_its_trace_alive(self):
         """The intentional ModuleCall -> Trace ownership edge survives the fix."""
 
@@ -302,7 +291,6 @@ class TestTraceGC:
         gc.collect()
         assert ref() is None
 
-    @pytest.mark.smoke
     def test_trace_reclamation_is_cyclic_gc_not_prompt_refcount(self):
         """Traces are reclaimed by the CYCLIC collector, and that is the contract.
 
@@ -344,7 +332,6 @@ class TestTraceGC:
         assert trace_ref() is None, "Trace survived a cyclic collection"
         assert activation_ref() is None, "saved activation survived a cyclic collection"
 
-    @pytest.mark.smoke
     def test_last_captures_model_class_is_not_pinned_after_the_epilogue(self):
         """A dynamically created module class dies with its last capture.
 
@@ -381,7 +368,6 @@ class TestTraceGC:
             "epilogue (class-metadata cache not released)"
         )
 
-    @pytest.mark.smoke
     def test_failed_capture_registry_does_not_pin_a_dead_exception(self):
         """The partial-recovery fallback table holds its exception weakly.
 
@@ -444,7 +430,6 @@ class TestTraceGC:
             "the registry pinned the dead exception's traceback frame locals"
         )
 
-    @pytest.mark.smoke
     def test_type_keyed_caches_do_not_pin_model_classes(self):
         """Per-type caches keyed on a model class must not outlive that class.
 
@@ -482,7 +467,6 @@ class TestTraceGC:
             "a type-keyed cache still pins the model class after it was dropped"
         )
 
-    @pytest.mark.smoke
     def test_backward_trigger_registry_evicts_with_its_trace(self):
         """Dropping a backward-armed trace clears its grad-fn registry keys.
 
@@ -542,7 +526,6 @@ class TestTraceGC:
         finally:
             partial_module._FAILED_CAPTURE_REGISTRY.pop(id(exception), None)
 
-    @pytest.mark.smoke
     def test_nonweakrefable_entry_never_pins_the_exception_graph(self):
         """A dropped locked+non-weakrefable exception must not pin its capture (R37).
 
@@ -615,7 +598,6 @@ class TestTraceGC:
             "something besides the registry entry retained the partial trace"
         )
 
-    @pytest.mark.smoke
     def test_live_run_after_model_collection_refuses_typed_and_names_the_weak_ref(self):
         """A collected source model refuses run() typed AND discloses why (R37).
 
@@ -642,7 +624,6 @@ class TestTraceGC:
             trace.run(inputs=torch.randn(1, 5), fast=True)
         assert "weakly" in str(fast_excinfo.value)
 
-    @pytest.mark.smoke
     def test_cleanup_drops_the_receptive_field_solution_cache(self):
         """cleanup() must evict the rf solution cache, its only eviction path (R33).
 
@@ -658,7 +639,6 @@ class TestTraceGC:
             "cleanup() left the receptive-field solution cache pinned"
         )
 
-    @pytest.mark.smoke
     def test_transient_write_after_finish_does_not_recreate_build_state(self) -> None:
         """Finished traces reject writes after the build-state owner is dropped."""
 
@@ -683,7 +663,6 @@ class TestLifetimeCoverageGaps:
     activations all had no lifetime assertion at all.
     """
 
-    @pytest.mark.smoke
     def test_pickled_round_trip_trace_is_collectible(self):
         """A trace rebuilt by pickle owns no extra roots."""
 
@@ -703,7 +682,6 @@ class TestLifetimeCoverageGaps:
         assert restored_ref() is None
         trace.cleanup()
 
-    @pytest.mark.smoke
     def test_forked_trace_and_its_parent_are_both_collectible(self):
         """A fork does not keep its parent alive, nor the parent the fork."""
 
@@ -725,7 +703,6 @@ class TestLifetimeCoverageGaps:
         gc.collect()
         assert parent_ref() is None, "the parent was pinned after its fork died"
 
-    @pytest.mark.smoke
     def test_run_result_fork_is_collectible(self):
         """The fork returned by a non-fast live ``trace.run()`` is reclaimable.
 
@@ -752,7 +729,6 @@ class TestLifetimeCoverageGaps:
         gc.collect()
         assert source_ref() is None
 
-    @pytest.mark.smoke
     def test_failed_capture_partial_is_collectible_with_its_exception(self):
         """A failed capture's partial trace dies with the exception holding it.
 
@@ -808,7 +784,6 @@ class TestLifetimeCoverageGaps:
 
         assert [ref() for ref in refs] == [None, None, None]
 
-    @pytest.mark.smoke
     def test_loaded_archived_activations_die_with_their_trace(self, tmp_path):
         """A loaded runnable trace's archived activations are not process state."""
 
@@ -837,7 +812,6 @@ class TestLifetimeCoverageGaps:
         )
 
 
-@pytest.mark.smoke
 def test_delattr_capture_events_releases_the_working_projection():
     """``del trace._capture_events`` clears a held stream's working lanes.
 
@@ -904,7 +878,6 @@ def test_cleaned_trace_refuses_typed_and_settles_unknown():
     assert tl.report.explain(trace)
 
 
-@pytest.mark.smoke
 def test_failed_capture_registry_never_pins_a_nonweakrefable_exception_graph():
     """The registry fallback stores an identity stub, never the exception.
 
@@ -950,7 +923,6 @@ def test_failed_capture_registry_never_pins_a_nonweakrefable_exception_graph():
     assert model_ref() is None, "the failed-capture registry pinned the exception graph"
 
 
-@pytest.mark.smoke
 def test_static_attr_memo_releases_a_self_referencing_class():
     """A class-valued cached answer must not pin its own weak memo key (R37).
 
@@ -972,7 +944,6 @@ def test_static_attr_memo_releases_a_self_referencing_class():
     assert all(key is not None for key in _STATIC_ATTR_MEMO)
 
 
-@pytest.mark.smoke
 def test_merged_trace_release_drops_member_traces():
     """MergedTrace.release() unpins the rank traces it held strongly (b2:B20).
 

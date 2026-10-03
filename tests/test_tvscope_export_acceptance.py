@@ -21,8 +21,6 @@ from torch import nn
 import torchlens as tl
 from torchlens import features
 
-pytestmark = [pytest.mark.smoke]
-
 
 class _SmallCNN(nn.Module):
     """Small CNN for cheap real captures."""
@@ -173,6 +171,7 @@ class TestSiteMatrixRoutes:
 class TestAdapters:
     """Stub-tested adapter wiring (optional libraries absent by design)."""
 
+    @pytest.mark.smoke
     def test_rsatoolbox_per_site_descriptors(self, artifact, monkeypatch) -> None:
         """The Dataset carries site, shaping, ids, and the verdict."""
 
@@ -207,6 +206,7 @@ class TestAdapters:
         ]
         assert file_side.descriptors["input_preprocessing_verdict"] == "unknown"
 
+    @pytest.mark.smoke
     def test_xarray_data_array_routes_identical(self, artifact, monkeypatch) -> None:
         """DataArray wiring: dims, coords, attrs, route equality."""
 

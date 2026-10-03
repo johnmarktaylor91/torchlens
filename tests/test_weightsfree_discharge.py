@@ -22,8 +22,6 @@ from torchlens.capture.structure_only import (
 )
 from torchlens.options import CaptureOptions
 
-pytestmark = pytest.mark.smoke
-
 
 class Toy(nn.Module):
     def __init__(self, width: int = 4) -> None:
@@ -108,6 +106,7 @@ def test_report_is_one_screen_and_names_verdict() -> None:
     assert len(text.splitlines()) <= 12  # one screen
 
 
+@pytest.mark.smoke
 def test_rpt_names_count_delta_structurally() -> None:
     """W1-RPT: a record-count divergence is named structurally, never as a
     bare digest difference (3 phantom records once produced 300 apparent

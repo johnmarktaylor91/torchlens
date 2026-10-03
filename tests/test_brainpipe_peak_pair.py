@@ -28,7 +28,6 @@ def _model() -> nn.Module:
     return nn.Sequential(nn.Linear(64, 64), nn.ReLU(), nn.Linear(64, 8))
 
 
-@pytest.mark.smoke
 def test_peak_pair_shape_and_backend_label() -> None:
     """The pair carries live/resident/backend/resident_basis, backend named."""
 
@@ -48,7 +47,6 @@ def test_peak_pair_shape_and_backend_label() -> None:
         assert pair["live"] is None
 
 
-@pytest.mark.smoke
 def test_peak_pair_live_populates_under_the_tracemalloc_opt_in() -> None:
     """measure_python_peak_memory=True buys a positive live peak on CPU."""
 
@@ -62,7 +60,6 @@ def test_peak_pair_live_populates_under_the_tracemalloc_opt_in() -> None:
     assert pair["live"] is not None and pair["live"] > 0
 
 
-@pytest.mark.smoke
 def test_peak_pair_is_session_time_only() -> None:
     """The pair never survives save/load: loaded artifacts never re-measure."""
 
@@ -78,7 +75,6 @@ def test_peak_pair_is_session_time_only() -> None:
     assert loaded.forward_peak_memory_pair is None
 
 
-@pytest.mark.smoke
 @pytest.mark.skipif(sys.platform != "linux", reason="VmHWM reset is procfs-only")
 def test_multi_capture_resident_peak_is_non_degenerate() -> None:
     """Sweep-scale instrument oracle: capture N's resident peak is real.

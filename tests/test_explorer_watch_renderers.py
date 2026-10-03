@@ -38,8 +38,6 @@ from torchlens.observability import (
     render_waterfall,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 def _observed(
     step: int,
@@ -170,6 +168,7 @@ class TestDerivedQuantiles:
         values = [derived_quantile(sketch, q).value for q in (0.1, 0.3, 0.5, 0.7, 0.9)]
         assert values == sorted(values)
 
+    @pytest.mark.smoke
     def test_zero_heavy_population_median_is_zero(self) -> None:
         histogram = Histogram()
         histogram.update(torch.zeros(100))
@@ -198,6 +197,7 @@ class TestDerivedQuantiles:
 
 
 class TestHistogramPayload:
+    @pytest.mark.smoke
     def test_bucket_counts_cover_finite_population(self) -> None:
         torch.manual_seed(4)
         data = torch.randn(3000)
@@ -229,6 +229,7 @@ class TestHistogramPayload:
             histogram_payload(obs)
         assert excinfo.value.fields["code"] == "watch_sketch_missing"
 
+    @pytest.mark.smoke
     def test_observation_row_none_payload_for_gaps(self) -> None:
         gap = ObservationRecord(
             global_step=1,
@@ -243,6 +244,7 @@ class TestHistogramPayload:
 
 
 class TestHistoryView:
+    @pytest.mark.smoke
     def test_series_and_refusals(self) -> None:
         view = _synthetic_view()
         series = view.series("m:a")
@@ -294,6 +296,7 @@ class TestHistoryView:
         assert isinstance(frame, pandas.DataFrame)
         assert len(frame) == 10
 
+    @pytest.mark.smoke
     def test_to_pandas_without_pandas_refuses_typed(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Absent pandas refuses ``watch_tabular_extra_missing`` with the remedy."""
 
@@ -322,6 +325,7 @@ class TestRenderers:
         assert "nonfinite event" in svg_1  # the injected NaN
         _parse_svg(svg_1)
 
+    @pytest.mark.smoke
     def test_waterfall_deterministic_with_raster_and_caption(self) -> None:
         view = _synthetic_view()
         svg_1 = render_waterfall(view, "m:a")
@@ -331,6 +335,7 @@ class TestRenderers:
         assert "nonfinite" in svg_1
         _parse_svg(svg_1)
 
+    @pytest.mark.smoke
     def test_contact_sheet_footer_ranking_pagination(self) -> None:
         view = _synthetic_view()
         sheet = render_contact_sheet(view)
@@ -348,6 +353,7 @@ class TestRenderers:
         assert excinfo.value.fields["code"] == "watch_page_out_of_range"
         _parse_svg(sheet)
 
+    @pytest.mark.smoke
     def test_detail_sheet_discloses(self) -> None:
         view = _synthetic_view()
         detail = render_detail(view, "m:b")
@@ -356,6 +362,7 @@ class TestRenderers:
         assert "activation" in detail
         _parse_svg(detail)
 
+    @pytest.mark.smoke
     def test_real_collector_views_render(self, collector_view: HistoryView) -> None:
         ranked = rank_sites(collector_view)
         assert ranked, "collector produced rankable sites"
@@ -393,6 +400,7 @@ class TestCairosvgRoundTrip:
 
 
 class TestGraphJoin:
+    @pytest.mark.smoke
     def test_color_by_watch_callable(self) -> None:
         from types import SimpleNamespace
 

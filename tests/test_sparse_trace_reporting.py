@@ -74,7 +74,6 @@ def _plain_model() -> nn.Module:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_str_works_on_a_predicate_sparse_capture() -> None:
     """``print(trace)`` used to raise ValueError on any selective-save capture."""
 

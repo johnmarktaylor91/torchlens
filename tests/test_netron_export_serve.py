@@ -27,8 +27,6 @@ netron_package = pytest.importorskip(
     "netron", reason="serve round-trip runs the real pinned netron server"
 )
 
-pytestmark = pytest.mark.smoke
-
 
 def _serve_roundtrip(log: Any, tmp_path: Path, **kwargs: Any) -> tuple[bytes, bytes]:
     """Export with open=True against a patched browser, fetch the bytes back."""

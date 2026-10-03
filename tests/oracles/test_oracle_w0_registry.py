@@ -26,8 +26,6 @@ from ._known_gaps import KnownGap, load_known_gaps, partition_monotone
 from ._registry import ExposureBinding, Registry, load_registry, validate
 from ._waivers import Waiver, load_waivers, validate_waiver
 
-pytestmark = pytest.mark.smoke
-
 DATA_DIR = Path(__file__).resolve().parent / "data"
 
 _REGEN_HINT = "regenerate consciously: python tests/oracles/_regen.py"
@@ -74,6 +72,9 @@ def test_every_census_root_is_described_and_baselined() -> None:
         )
 
 
+@pytest.mark.smoke_cells(
+    "test_machine_census_matches_baseline[census_signature_params-signature_params.tsv]"
+)
 @pytest.mark.parametrize(
     ("census", "baseline"),
     [

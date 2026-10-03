@@ -31,8 +31,6 @@ json_format = pytest.importorskip("google.protobuf.json_format")
 
 import torchlens as tl  # noqa: E402
 
-pytestmark = pytest.mark.smoke
-
 
 class _Inner(nn.Module):
     """Two-op child module (linear + relu)."""

@@ -35,8 +35,6 @@ from torchlens._io.prerelease import (
 from torchlens._io.scrub import scrub_for_save
 from torchlens.data_classes.trace import Trace
 
-pytestmark = pytest.mark.smoke
-
 #: Existing declared-DROP scalar Trace field used as the planted gated field.
 #: Any declared-DROP field works; this one is a plain session-time int.
 _PLANT_FIELD = "_tl_save_selector_fire_count"
@@ -77,6 +75,7 @@ def _tiny_trace() -> Trace:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_registration_requires_declared_drop_policy() -> None:
     keep_field = next(
         name for name, policy in Trace.PORTABLE_STATE_SPEC.items() if policy is FieldPolicy.KEEP
@@ -93,6 +92,7 @@ def test_registration_requires_declared_drop_policy() -> None:
     assert registered_prerelease_fields() == _STANDING_REGISTRATIONS
 
 
+@pytest.mark.smoke
 def test_registry_inventory_and_unregister(planted_field: str) -> None:
     inventory = registered_prerelease_fields()
     assert planted_field in inventory["Trace"]

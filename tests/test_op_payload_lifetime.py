@@ -66,7 +66,6 @@ def _capture() -> tl.Trace:
     return tl.trace(_Net(), torch.randn(4, 16), save=tl.func("relu"))
 
 
-@pytest.mark.smoke
 def test_retained_op_does_not_pin_all_payloads() -> None:
     """The RED-capable core case: one live Op must not pin every payload."""
 
@@ -128,7 +127,6 @@ def test_fork_chain_owners_all_counted() -> None:
     assert all(ref() is None for ref in refs.values())
 
 
-@pytest.mark.smoke
 def test_loaded_trace_fork_death_does_not_evict_parent_payloads(tmp_path) -> None:
     """R37-1: a loaded trace's core must register as a payload owner.
 

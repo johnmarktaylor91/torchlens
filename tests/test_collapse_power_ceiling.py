@@ -18,8 +18,6 @@ from torchlens.errors._base import TorchLensWarning
 from torchlens.visualization import collapse_estimator, collapse_optimizer
 from torchlens.visualization.collapse_plan import RenderContext, count
 
-pytestmark = pytest.mark.smoke
-
 
 class _Block(nn.Module):
     """Linear+ReLU block for admission toys."""

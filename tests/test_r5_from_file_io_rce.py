@@ -78,7 +78,6 @@ def _from_file_reduce_stream(target: str, *, shared: bool, size: int) -> bytes:
     return proto + op
 
 
-@pytest.mark.smoke
 def test_from_file_unpickle_vector_creation_denied(tmp_path: Path) -> None:
     """VECTOR 1a: the unpickler refuses from_file and creates no file (shared=True)."""
 
@@ -90,7 +89,6 @@ def test_from_file_unpickle_vector_creation_denied(tmp_path: Path) -> None:
     assert not target.exists(), "from_file created a file during unpickle"
 
 
-@pytest.mark.smoke
 def test_from_file_unpickle_vector_read_denied(tmp_path: Path) -> None:
     """VECTOR 1b: the unpickler refuses from_file and reads no file (shared=False)."""
 
@@ -118,7 +116,6 @@ def test_safe_getattr_denies_from_file() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "key",
     [
@@ -244,7 +241,6 @@ def _relu_registry_index(run: dict) -> int:
     raise AssertionError("expected a relu op in the tiny model")
 
 
-@pytest.mark.smoke
 def test_runnable_load_blocks_from_file_creation(tmp_path: Path) -> None:
     """Repointing a run op to torch.from_file must not create an attacker file."""
 
@@ -330,7 +326,6 @@ class _TinyCNN(nn.Module):
         return self.fc(value)
 
 
-@pytest.mark.smoke
 def test_all_five_save_levels_still_load(tmp_path: Path) -> None:
     """Every legitimately-saved bundle at every level loads under the tightened gate."""
 
@@ -381,7 +376,6 @@ def test_all_five_save_levels_still_load(tmp_path: Path) -> None:
         assert tl.load(bundle_path) is not None, name
 
 
-@pytest.mark.smoke
 def test_genuine_cnn_runnable_still_verified(tmp_path: Path) -> None:
     """A real CNN round-trips through the runnable path and VERIFIES after the fix."""
 

@@ -18,8 +18,6 @@ from torch import Tensor, nn
 import torchlens.attribution as attribution
 from torchlens.attribution import AttributionError
 
-pytestmark = pytest.mark.smoke
-
 
 class _TwoLeafModel(nn.Module):
     """Model with two float inputs and one integer mask input."""
@@ -71,6 +69,7 @@ def _simple_inputs() -> tuple[Tensor, Tensor, Tensor]:
     return a, b, mask
 
 
+@pytest.mark.smoke
 def test_binder_route_refusals() -> None:
     """D1: exactly one route; method_kwargs only with method=; sugar needs model+target."""
 
@@ -119,6 +118,7 @@ def test_noise_tunnel_zero_noise_is_degenerate_exact() -> None:
     assert tunneled.extra["completed_logical_calls"] == 3
 
 
+@pytest.mark.smoke
 def test_noise_tunnel_seeded_determinism_and_aggregations() -> None:
     """Seeded runs reproduce; aggregations match manual math on one stored bank."""
 
@@ -155,6 +155,7 @@ def test_noise_tunnel_seeded_determinism_and_aggregations() -> None:
         assert result.extra["noise_bank_used"] is True
 
 
+@pytest.mark.smoke
 def test_noise_tunnel_repeated_reference_and_integer_mask() -> None:
     """One tensor in two slots gets ONE noised object; the long mask is untouched."""
 
@@ -196,6 +197,7 @@ def test_noise_tunnel_composition_refusals() -> None:
     assert tr.value.fields["code"] == "noise_tunnel_composition_unsupported"
 
 
+@pytest.mark.smoke
 def test_noise_tunnel_child_failure_names_zero_based_sample() -> None:
     """D4: a child failure names its zero-based sample and returns nothing."""
 
@@ -251,6 +253,7 @@ def test_noise_tunnel_invariance_refusal() -> None:
     assert excinfo.value.fields["code"] == "sample_invariance_violated"
 
 
+@pytest.mark.smoke
 def test_noise_tunnel_gradient_shap_substreams_disclosed() -> None:
     """D6: NT(gradient_shap) derives per-sample child seeds and discloses counts."""
 
@@ -312,6 +315,7 @@ def test_smoothgrad_is_the_thin_alias_with_absolute_before_mean() -> None:
     assert legacy.extra == {"n_samples": 25, "noise_level": 0.1, "seed": 123}
 
 
+@pytest.mark.smoke
 def test_gradient_shap_stored_draw_oracle_pins_the_estimator() -> None:
     """D10: with stored draws the estimator equals the hand-rolled convention.
 
@@ -385,6 +389,7 @@ class _SmoothTanh(nn.Module):
         return self.head(torch.tanh(self.hidden(x)))
 
 
+@pytest.mark.smoke
 def test_gradient_shap_pool_refusals() -> None:
     """D10: missing pool, misaligned pool, inconsistent pool sizes refuse."""
 
@@ -410,6 +415,7 @@ def test_gradient_shap_pool_refusals() -> None:
     assert bad_bank.value.fields["code"] == "gradient_shap_draw_bank_invalid"
 
 
+@pytest.mark.smoke
 def test_closed_callable_route_matches_sugar_route_disclosure() -> None:
     """D3: primitive-route users can achieve sugar-route provenance richness."""
 

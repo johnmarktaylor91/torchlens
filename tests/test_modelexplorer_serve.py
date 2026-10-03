@@ -22,8 +22,6 @@ from torch import nn
 
 import torchlens as tl
 
-pytestmark = pytest.mark.smoke
-
 
 @pytest.fixture()
 def tiny_log() -> Any:
@@ -77,6 +75,7 @@ def test_serve_exports_then_calls_public_visualize(
     assert calls == [{"model_paths": [str(destination)], "reuse_server": True}]
 
 
+@pytest.mark.smoke
 def test_serve_accepts_an_existing_export_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

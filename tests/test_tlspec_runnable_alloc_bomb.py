@@ -44,8 +44,6 @@ from torchlens.runnable import (
     TensorSlotRole,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 class _Tiny(nn.Module):
     def __init__(self) -> None:

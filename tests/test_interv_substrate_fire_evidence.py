@@ -56,7 +56,6 @@ def _event_rows(trace: tl.Trace) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_do_replay_attempt_leaves_audit_evidence() -> None:
     model = _TinyModel()
     fork = _ready_trace(model).fork()
@@ -71,7 +70,6 @@ def test_do_replay_attempt_leaves_audit_evidence() -> None:
     assert any(key.startswith("s1|") for key in events[-1]["site_keys"])
 
 
-@pytest.mark.smoke
 def test_do_set_only_attempt_leaves_audit_evidence() -> None:
     model = _TinyModel()
     fork = _ready_trace(model).fork()
@@ -86,7 +84,6 @@ def test_do_set_only_attempt_leaves_audit_evidence() -> None:
     assert events[-1].get("staged_only") is True
 
 
-@pytest.mark.smoke
 def test_capture_door_attempt_leaves_audit_evidence() -> None:
     model = _TinyModel()
     log = tl.trace(model, torch.randn(2, 4), intervene=tl.when(tl.func("relu"), tl.scale(0.0)))
@@ -97,7 +94,6 @@ def test_capture_door_attempt_leaves_audit_evidence() -> None:
     assert events[-1]["fire_count"] >= 1
 
 
-@pytest.mark.smoke
 def test_failed_do_attempt_leaves_error_evidence() -> None:
     """A refused attempt is still an attempt: the envelope records the error."""
 
@@ -118,7 +114,6 @@ def test_failed_do_attempt_leaves_error_evidence() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_zero_match_capture_records_no_fire() -> None:
     model = _TinyModel()
     with warnings.catch_warnings():
@@ -133,7 +128,6 @@ def test_zero_match_capture_records_no_fire() -> None:
     assert log.intervention_audit, "canonical audit empty after a no-fire attempt"
 
 
-@pytest.mark.smoke
 def test_two_edit_misfire_names_the_unfired_rule() -> None:
     """The two-edit misfire test: one rule fires, the other's silence is named.
 
@@ -156,7 +150,6 @@ def test_two_edit_misfire_names_the_unfired_rule() -> None:
     assert firing.rules[0].rule_id not in row["zero_fire_rule_ids"]
 
 
-@pytest.mark.smoke
 def test_replay_door_zero_site_rule_refuses_with_error_evidence() -> None:
     """On the recorded-graph door a zero-site rule REFUSES typed (never a
     silent no-op), and the refused attempt still leaves error evidence."""
@@ -179,7 +172,6 @@ def test_replay_door_zero_site_rule_refuses_with_error_evidence() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_noise_std_distinguishes_audit_rows() -> None:
     model = _TinyModel()
     log = _ready_trace(model)
@@ -200,7 +192,6 @@ def test_noise_std_distinguishes_audit_rows() -> None:
     assert "0.9" in high_event["rules"][0]["action"]
 
 
-@pytest.mark.smoke
 def test_sweep_members_carry_distinguishable_values() -> None:
     """Swept members' envelopes differ by the typed swept value (no closures)."""
 
@@ -222,7 +213,6 @@ def test_sweep_members_carry_distinguishable_values() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_event_chain_is_lineage_ordered() -> None:
     model = _TinyModel()
     fork = _ready_trace(model).fork()
@@ -237,7 +227,6 @@ def test_event_chain_is_lineage_ordered() -> None:
     assert rows[1]["parent_event_id"] == rows[0]["event_id"]
 
 
-@pytest.mark.smoke
 def test_fire_records_carry_uniform_timestamps() -> None:
     """The ONE builder stamps every FireRecord (replay lane included)."""
 
@@ -253,7 +242,6 @@ def test_fire_records_carry_uniform_timestamps() -> None:
     assert all(record.timestamp is not None for record in records)
 
 
-@pytest.mark.smoke
 def test_envelope_rows_survive_save_load() -> None:
     import os
     import tempfile

@@ -50,7 +50,6 @@ def _handshake_reader(start: threading.Event, done: threading.Event) -> None:
     done.set()
 
 
-@pytest.mark.smoke
 def test_preexisting_thread_pure_reads_disclose_never_ceiling() -> None:
     """A thread started BEFORE the window reads clocks/entropy strictly inside it:
     zero ceiling channels, zero uncertainty, the reads disclosed by name.
@@ -82,7 +81,6 @@ def test_preexisting_thread_pure_reads_disclose_never_ceiling() -> None:
     assert {"time.time", "time.monotonic", "os.urandom"} <= result.foreign_thread_reads
 
 
-@pytest.mark.smoke
 def test_in_window_started_thread_reads_still_ceiling() -> None:
     """A thread STARTED inside the window is part of the capture's thread universe:
     its clock reads keep ceiling (the tripwire is not weakened)."""
@@ -97,7 +95,6 @@ def test_in_window_started_thread_reads_still_ceiling() -> None:
     assert "time.time" in result.channels
 
 
-@pytest.mark.smoke
 def test_owner_thread_reads_still_ceiling() -> None:
     """Owner-thread (non-TorchLens frame) clock reads keep ceiling unchanged."""
 

@@ -151,7 +151,6 @@ def test_audit_save_load_and_compat(tmp_path: Path) -> None:
     assert compat.targets_resolve_identically is True
 
 
-@pytest.mark.smoke
 def test_live_forward_records_persist_in_saved_intervention_spec(tmp_path: Path) -> None:
     """Live forward hook records survive intervention spec save/load."""
 
@@ -176,7 +175,6 @@ def test_live_forward_records_persist_in_saved_intervention_spec(tmp_path: Path)
     assert any(record.replaced is True for record in spec.records)
 
 
-@pytest.mark.smoke
 def test_predicate_intervention_spec_round_trip_preserves_targets_and_hooks(
     tmp_path: Path,
 ) -> None:
@@ -646,7 +644,6 @@ def test_function_resolution_failure_raises() -> None:
         resolve_function_registry_key(key)
 
 
-@pytest.mark.smoke
 def test_custom_function_key_is_refused_without_import(monkeypatch: pytest.MonkeyPatch) -> None:
     """Default resolution refuses bundle custom keys before importing modules."""
 
@@ -679,7 +676,6 @@ def test_custom_function_key_is_refused_without_import(monkeypatch: pytest.Monke
         resolve_function_registry_key(key)
 
 
-@pytest.mark.smoke
 def test_loaded_spec_tolerates_custom_key_without_import(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -725,7 +721,6 @@ def test_loaded_spec_tolerates_custom_key_without_import(
     assert load_intervention_spec(path, allowed_custom_callable_modules={"operator"})
 
 
-@pytest.mark.smoke
 def test_loaded_custom_key_is_denied_at_execution_until_trusted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -802,7 +797,6 @@ def test_custom_function_key_trust_gate_and_allowlist() -> None:
         )
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("namespace", "qualname"),
     [
@@ -832,7 +826,6 @@ def test_internal_torch_builtin_key_preserves_replay_identity() -> None:
     assert resolve_function_registry_key(key) is builtin
 
 
-@pytest.mark.smoke
 def test_red_team_custom_module_side_effect_is_not_imported(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -874,7 +867,6 @@ _R2_TORCHLENS_PATH_TO_FOREIGN_CALLABLE = [
 ]
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(("import_path", "qualname"), _R2_TORCHLENS_PATH_TO_FOREIGN_CALLABLE)
 def test_r2_torchlens_prefixed_foreign_callable_denied_by_default(
     import_path: str, qualname: str
@@ -892,7 +884,6 @@ def test_r2_torchlens_prefixed_foreign_callable_denied_by_default(
         resolve_function_registry_key(key)
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(("import_path", "qualname"), _R2_TORCHLENS_PATH_TO_FOREIGN_CALLABLE)
 def test_r2_torchlens_prefixed_foreign_callable_denied_under_strict_allowlist(
     import_path: str, qualname: str
@@ -912,7 +903,6 @@ def test_r2_torchlens_prefixed_foreign_callable_denied_under_strict_allowlist(
         resolve_function_registry_key(key, allowed_custom_callable_modules={"operator"})
 
 
-@pytest.mark.smoke
 def test_r2_os_system_not_reachable_and_not_executed(monkeypatch: pytest.MonkeyPatch) -> None:
     """The concrete os.system RCE key resolves to nothing and never executes."""
 
@@ -934,7 +924,6 @@ def test_r2_os_system_not_reachable_and_not_executed(monkeypatch: pytest.MonkeyP
     assert calls == []
 
 
-@pytest.mark.smoke
 def test_r2_genuine_torchlens_custom_callable_still_resolves() -> None:
     """A real torchlens-owned custom callable stays auto-trusted after the fix."""
 
@@ -950,7 +939,6 @@ def test_r2_genuine_torchlens_custom_callable_still_resolves() -> None:
     assert str(getattr(resolved, "__module__", "")).startswith("torchlens")
 
 
-@pytest.mark.smoke
 def test_r2_load_tolerates_torchlens_prefixed_foreign_key_no_foreign_import(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1011,7 +999,6 @@ def test_r2_load_tolerates_torchlens_prefixed_foreign_key_no_foreign_import(
     assert calls == []
 
 
-@pytest.mark.smoke
 def test_target_manifest_mismatch_returns_fail(tmp_path: Path) -> None:
     """Selectors resolving to nothing on a new log produce FAIL compatibility."""
 

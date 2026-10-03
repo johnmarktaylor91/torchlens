@@ -22,8 +22,6 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = pytest.mark.smoke
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Lockstep mirror of .pre-commit-config.yaml no-internal-notes `files:` regex.

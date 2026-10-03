@@ -27,8 +27,6 @@ from torchlens.dataset_extraction import (
 )
 from torchlens.utils._torch_compat import get_cpu_float8_deterministic_fill_support
 
-pytestmark = pytest.mark.smoke
-
 
 class _TokenModel(nn.Module):
     """Toy token model taking the HF-shaped kwargs envelope."""

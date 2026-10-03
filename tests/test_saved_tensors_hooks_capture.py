@@ -75,7 +75,6 @@ def _assert_clean_offload_graph(trace: tl.Trace) -> None:
             assert op.parents, f"{label} is parentless"
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "pack_name",
     ["cpu_same_object", "clone_new_object", "identity_no_op"],
@@ -106,7 +105,6 @@ def test_pack_hook_op_does_not_delete_producer(pack_name: str) -> None:
         assert tl.validate(model, x, scope="forward") is True
 
 
-@pytest.mark.smoke
 def test_save_on_cpu_subclass_is_covered() -> None:
     """``save_on_cpu`` routes through the patched base-class ``__init__``."""
     torch.manual_seed(0)
@@ -173,7 +171,6 @@ class PrebuiltCtxModel(nn.Module):
         return y * 2.0
 
 
-@pytest.mark.smoke
 def test_prebuilt_hook_context_is_scoped_at_use_time() -> None:
     """PIN (round-35 R1): a context built BEFORE the first capture is covered.
 

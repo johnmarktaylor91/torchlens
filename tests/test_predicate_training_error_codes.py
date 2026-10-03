@@ -126,6 +126,7 @@ def test_inference_only_with_backward_ready_carries_inference_only_conflict() ->
     assert exc_info.value.fields["remedy"]
 
 
+@pytest.mark.smoke
 def test_backward_ready_with_detach_carries_backward_ready_conflict() -> None:
     """backward_ready=True plus explicit detaching stamps the conflict code."""
 

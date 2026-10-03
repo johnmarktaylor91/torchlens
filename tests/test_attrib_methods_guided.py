@@ -17,8 +17,6 @@ from torch import Tensor, nn
 import torchlens.attribution as attribution
 from torchlens.attribution import AttributionError
 
-pytestmark = pytest.mark.smoke
-
 
 class _MixedReluNet(nn.Module):
     """Every exact-ReLU spelling: module, functional, method, in-place.
@@ -136,6 +134,7 @@ def test_guided_rule_matches_hand_rolled_math() -> None:
     assert result.extra["site_census"]["rewritten_firings"] == 1
 
 
+@pytest.mark.smoke
 def test_deconvolution_drops_the_forward_mask() -> None:
     """Deconv passes positive upstream gradient even where the input was negative."""
 
@@ -200,6 +199,7 @@ def test_functional_inplace_toy_module_vs_all_sites_differ() -> None:
     )
 
 
+@pytest.mark.smoke
 def test_zero_match_refusal_names_observed_activations() -> None:
     """A GELU-only model refuses typed, naming what it saw (teaching refusal)."""
 
@@ -306,6 +306,7 @@ def test_no_guided_rule_spelling_exists_on_path_methods() -> None:
         assert "guided" not in parameters
 
 
+@pytest.mark.smoke
 def test_reused_relu_module_counts_every_firing() -> None:
     """A reused nn.ReLU module contributes one rewritten firing per call."""
 

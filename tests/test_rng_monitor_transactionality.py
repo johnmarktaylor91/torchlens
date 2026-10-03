@@ -35,9 +35,6 @@ from torchlens.utils import rng as rng_module
 from torchlens.utils._torch_compat import autocast_is_enabled
 from torchlens.utils.rng import AutocastRestore, host_nondeterminism_monitor
 
-pytestmark = pytest.mark.smoke
-
-
 # Surfaces the monitor patches that are NOT also decorated by ``wrap_torch`` (the torch
 # RNG capture wrappers legitimately outlive a capture until ``unwrap_torch()``).
 _WATCHED_SURFACES: tuple[tuple[object, str], ...] = (
@@ -171,6 +168,7 @@ def test_second_exit_does_not_clobber_a_later_hook():
     sys.setprofile(None)
 
 
+@pytest.mark.smoke
 def test_non_lifo_overlap_preserves_both_the_hook_and_the_originals():
     """Out-of-order unwind must not destroy the live hook or strand a wrapper."""
 

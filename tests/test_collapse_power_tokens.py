@@ -10,7 +10,6 @@ FORK-5 flag until the legibility protocol ratifies it.
 from __future__ import annotations
 
 import graphviz
-import pytest
 
 from torchlens.visualization.collapse_plan import SegmentDescriptor
 from torchlens.visualization.themes import (
@@ -19,8 +18,6 @@ from torchlens.visualization.themes import (
     CollapseTokens,
     collapse_tokens,
 )
-
-pytestmark = pytest.mark.smoke
 
 
 def test_tokens_table_wording_is_panel_fixed() -> None:

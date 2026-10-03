@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 
-@pytest.mark.smoke
 def test_view_rendered_file_skips_open_in_headless_context(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -41,7 +40,6 @@ def test_view_rendered_file_skips_open_in_headless_context(
     )
 
 
-@pytest.mark.smoke
 def test_view_rendered_file_silent_in_notebook(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -75,7 +73,6 @@ def test_view_rendered_file_silent_in_notebook(
     assert captured.err == ""
 
 
-@pytest.mark.smoke
 def test_missing_graphviz_binary_refuses_typed(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -97,7 +94,6 @@ def test_missing_graphviz_binary_refuses_typed(
         log.draw(vis_save_only=True, vis_outpath=str(tmp_path / "modelgraph"))
 
 
-@pytest.mark.smoke
 def test_vis_mode_refuses_typed_on_forward_draw(tmp_path: Path) -> None:
     """The flagship draw option validates typed like its backward sibling (R65)."""
 

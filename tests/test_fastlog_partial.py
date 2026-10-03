@@ -123,7 +123,6 @@ def _assert_subsequent_record_works() -> None:
     assert len(recording) > 0
 
 
-@pytest.mark.smoke
 def test_successful_recording_failure_fields_default_complete() -> None:
     """Successful recordings expose default failure metadata."""
 
@@ -347,7 +346,6 @@ def test_model_error_wins_over_module_exit_predicate_error() -> None:
     assert "module exit predicate boom" in recording.predicate_failures[0].traceback
 
 
-@pytest.mark.smoke
 def test_root_module_exit_halt_failure_deduplicates_partial_event_stream() -> None:
     """Root module-exit halt failures do not duplicate partial event indexes."""
 

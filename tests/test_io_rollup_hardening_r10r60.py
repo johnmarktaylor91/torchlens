@@ -16,9 +16,8 @@ from torchlens._io.runnable_load import (
     _parse_input_binding,
 )
 
-pytestmark = pytest.mark.smoke
 
-
+@pytest.mark.smoke
 def test_input_binding_io_role_closed_vocabulary() -> None:
     good = {
         "io_role": "model_input",
@@ -35,6 +34,7 @@ def test_input_binding_io_role_closed_vocabulary() -> None:
     assert "io_role" in str(excinfo.value)
 
 
+@pytest.mark.smoke
 def test_negative_logical_shape_is_rejected() -> None:
     assert _logical_shape_from_metadata({"logical_shape": [2, 3]}) == (2, 3)
     assert _logical_shape_from_metadata({"logical_shape": [-1, 3]}) is None

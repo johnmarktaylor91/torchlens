@@ -25,8 +25,6 @@ from torchlens.bundle._relations import (
     MemberRelationTable,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 class _Tiny(torch.nn.Module):
     def __init__(self) -> None:

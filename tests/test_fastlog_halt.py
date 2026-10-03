@@ -68,7 +68,6 @@ def _as_recording(
     return result
 
 
-@pytest.mark.smoke
 def test_halt_basic_halts_recording() -> None:
     """A predicate halt preserves records captured before the halt point."""
 

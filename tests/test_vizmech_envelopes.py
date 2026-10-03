@@ -23,8 +23,6 @@ from torchlens.visualization._geometry_audit import (
     run_layout_json,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 def _envelope_of(dot: str, engine: str = "dot"):
     """Parse + measure one DOT source through the named engine."""
@@ -95,6 +93,7 @@ def test_legend_ratio_bounded_in_table_form(tmp_path: Path) -> None:
     assert 0.0 < envelope.legend_ratio < 1.0, envelope
 
 
+@pytest.mark.smoke
 def test_legend_ratio_flags_the_historical_strip_form() -> None:
     """The six-free-node strip form (the 2.86x defect) reads as out of bound.
 

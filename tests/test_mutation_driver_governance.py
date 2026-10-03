@@ -59,7 +59,6 @@ def _load_driver_module():
     return module
 
 
-@pytest.mark.smoke
 def test_arm_derivation_addresses_every_invariant_raise() -> None:
     """One arm mutant per ``raise MetadataInvariantError`` in every contract.
 
@@ -113,7 +112,6 @@ def test_arm_derivation_addresses_every_invariant_raise() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_arm_operator_disarms_exactly_one_arm(tmp_path: Path) -> None:
     """``neuter_raise_arm`` silences the targeted arm and ONLY that arm.
 
@@ -184,7 +182,6 @@ def test_deselect_ledger_entries_are_still_red() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_every_direct_check_entry_point_is_enrolled() -> None:
     """Check-shaped functions in the direct-target scope are all mutant targets.
 
@@ -220,7 +217,6 @@ def test_every_direct_check_entry_point_is_enrolled() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_while_exit_arms_take_the_break_operator(tmp_path: Path) -> None:
     """A raise inside a ``while`` body is disarmed with ``break``, not ``pass``.
 
@@ -287,7 +283,6 @@ def test_real_cycle_guard_arm_is_break_disarmed() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_direct_targets_exist_and_are_neuterable() -> None:
     """Every MUTANTS/EXEMPT_MUTANTS row names a real function in a real file."""
 
@@ -309,7 +304,6 @@ def test_direct_targets_exist_and_are_neuterable() -> None:
     assert not missing, f"stale mutation-roster rows: {missing}"
 
 
-@pytest.mark.smoke
 def test_run_suite_deadline_yields_timeout_sentinel(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -332,7 +326,6 @@ def test_run_suite_deadline_yields_timeout_sentinel(
     assert result.seconds == 5.0
 
 
-@pytest.mark.smoke
 def test_core_check_roster_refuses_enrollment_drift(tmp_path: Path) -> None:
     """A core.py checker in neither ledger refuses the campaign loudly.
 
@@ -373,7 +366,6 @@ def test_core_check_roster_matches_the_real_tree() -> None:
     driver.derive_core_check_roster(_REPO_ROOT)
 
 
-@pytest.mark.smoke
 def test_empty_mutant_selection_refuses_vacuous_green() -> None:
     """r7 R79 (fable b10 MED): zero selected mutants is a refusal, not a pass.
 
@@ -398,7 +390,6 @@ def test_empty_mutant_selection_refuses_vacuous_green() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_mutation_workflow_rotation_contract() -> None:
     """r7 cluster 19: the rotation contract f9964208 claimed but never pinned.
 
@@ -488,7 +479,6 @@ def test_mutation_workflow_rotation_contract() -> None:
         )
 
 
-@pytest.mark.smoke
 def test_armed_arm_count_is_a_visible_growing_ratchet() -> None:
     """r7 R74 F2 (opus MED): 'N of 161 arms armed' is a tracked number, not a discovery.
 
@@ -524,7 +514,6 @@ def test_armed_arm_count_is_a_visible_growing_ratchet() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_operator_label_matches_the_applied_disarm_keyword(tmp_path: Path) -> None:
     """r7 R74 F3 (opus LOW): the archived record labels the operator actually applied.
 
@@ -560,7 +549,6 @@ def test_operator_label_matches_the_applied_disarm_keyword(tmp_path: Path) -> No
     assert 'operator = f"pass replacing raise arm' not in driver_source
 
 
-@pytest.mark.smoke
 def test_executor_family_derivation_reaches_every_step() -> None:
     """r7 R74 (sol b9 HIGH): the postprocess executor is enrolled, DERIVED.
 

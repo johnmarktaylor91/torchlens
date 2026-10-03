@@ -103,7 +103,6 @@ def _assert_not_blessed(report) -> None:
     )
 
 
-@pytest.mark.smoke
 def test_enum_leaf_refuses_runnable_save_typed(tmp_path: Path) -> None:
     """r69 B supersedes the save-then-UNVERIFIABLE lane for enum leaves.
 
@@ -186,7 +185,6 @@ class FiniteFloatBranch(nn.Module):
         return value - 5
 
 
-@pytest.mark.smoke
 def test_encodable_float_path_unregressed(tmp_path: Path) -> None:
     """The grammar-encodable (finite-float) path keeps exact round-3 behaviour.
 
@@ -218,7 +216,6 @@ class SignedZeroBranch(nn.Module):
         return value - 10
 
 
-@pytest.mark.smoke
 def test_signed_zero_change_diverges(tmp_path: Path) -> None:
     """A changed float sign-bit (``-0.0`` -> ``+0.0``) must DIVERGE, not false-verify.
 

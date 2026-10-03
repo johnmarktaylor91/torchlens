@@ -37,8 +37,6 @@ from torchlens.backends.paddle.backend import _paddle_values_close
 from torchlens.backends.tf.derived_grads import _tf_values_close
 from torchlens.backends.tf.validation import _payloads_close as tf_payloads_close
 
-pytestmark = pytest.mark.smoke
-
 
 class _StubPaddleTensor:
     """Minimal stand-in for a paddle tensor: shape, dtype text, ``.numpy()``."""
@@ -72,6 +70,7 @@ _NUMPY_ORACLES: tuple[tuple[str, Any], ...] = (
 class TestDtypeHonestBands:
     """All four numpy-level oracles must use per-dtype ULP-derived bands."""
 
+    @pytest.mark.smoke_cells("test_fp64_relative_corruption_fails[tf_derived_grads]")
     def test_fp64_relative_corruption_fails(self, site: str, close: Any) -> None:
         """fp64 corruption ~4.5e9 ULP must FAIL (the old blanket rtol blessed it)."""
 
@@ -85,6 +84,7 @@ class TestDtypeHonestBands:
         replay = saved * (1.0 + 4.0 * float(np.finfo(np.float64).eps))
         assert close(replay, saved)
 
+    @pytest.mark.smoke_cells("test_fp64_small_value_corruption_fails[tf_validation]")
     def test_fp64_small_value_corruption_fails(self, site: str, close: Any) -> None:
         """fp64 elements below the old 1e-6 atol floor must not be zeroable."""
 
@@ -110,6 +110,7 @@ class TestDtypeHonestBands:
         assert close(saved * np.float32(1.0 + 5e-6), saved)
         assert not close(saved * np.float32(1.0 + 1e-4), saved)
 
+    @pytest.mark.smoke_cells("test_fp16_one_ulp_rounding_passes[mlx_backend]")
     def test_fp16_one_ulp_rounding_passes(self, site: str, close: Any) -> None:
         """A one-ULP fp16 storage-rounding difference is agreement, not corruption.
 
@@ -160,6 +161,7 @@ class TestNonFloatExactness:
         assert _mlx_values_close(bools.copy(), bools)
         assert not _mlx_values_close(~bools, bools)
 
+    @pytest.mark.smoke
     def test_paddle_bf16_uint16_transport_compares_exactly(self) -> None:
         """bf16-as-uint16 transport has no numpy finfo: exact bit comparison.
 

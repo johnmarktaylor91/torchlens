@@ -19,7 +19,7 @@ import pytest
 from tests.composition_expectations import _censuses
 from tests.composition_expectations.test_diagnostic_site_contract import _ratchets
 
-pytestmark = [pytest.mark.smoke, pytest.mark.compo]
+pytestmark = pytest.mark.compo
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WARNING_CONTRACT_DOC = REPO_ROOT / "docs" / "reference" / "warning_contract.md"

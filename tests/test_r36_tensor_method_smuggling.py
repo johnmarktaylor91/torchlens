@@ -106,7 +106,6 @@ def trusted_torch_module(tmp_path: Path) -> Iterator[str]:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("method", _STORAGE_UNSAFE_METHODS)
 def test_secE_r36_resolver_denies_module_less_tensor_method_under_trust(
     trusted_torch_module: str, method: str
@@ -125,7 +124,6 @@ def test_secE_r36_resolver_denies_module_less_tensor_method_under_trust(
         resolve_import_ref(ref, trust_custom_callables=True)
 
 
-@pytest.mark.smoke
 def test_secE_r36_resolver_control_from_file_still_denied(trusted_torch_module: str) -> None:
     """CONTROL: ``torch.from_file`` (real ``__module__ == 'torch'``) stays denied.
 
@@ -140,7 +138,6 @@ def test_secE_r36_resolver_control_from_file_still_denied(trusted_torch_module: 
         )
 
 
-@pytest.mark.smoke
 def test_secE_r36_resolver_preserves_legit_resolution_under_trust(
     trusted_torch_module: str,
 ) -> None:
@@ -173,7 +170,6 @@ def test_secE_r36_resolver_preserves_legit_resolution_under_trust(
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("method", _STORAGE_UNSAFE_METHODS)
 def test_secE_r36_unpickler_denies_module_less_tensor_method_under_trust(
     trusted_torch_module: str, method: str
@@ -187,7 +183,6 @@ def test_secE_r36_unpickler_denies_module_less_tensor_method_under_trust(
         ).load()
 
 
-@pytest.mark.smoke
 def test_secE_r36_unpickler_control_from_file_still_denied(trusted_torch_module: str) -> None:
     """CONTROL: ``torch.from_file`` stays denied on the unpickler tail as well."""
 
@@ -198,7 +193,6 @@ def test_secE_r36_unpickler_control_from_file_still_denied(trusted_torch_module:
         ).load()
 
 
-@pytest.mark.smoke
 def test_secE_r36_unpickler_default_victim_never_resolves_live_method(
     trusted_torch_module: str,
 ) -> None:
@@ -209,7 +203,6 @@ def test_secE_r36_unpickler_default_victim_never_resolves_live_method(
     assert resolved is not torch.Tensor.resize_
 
 
-@pytest.mark.smoke
 def test_secE_r36_unpickler_preserves_pure_torch_under_trust(trusted_torch_module: str) -> None:
     """A PURE torch op walked off a trusted module still resolves through the unpickler."""
 
@@ -225,7 +218,6 @@ def test_secE_r36_unpickler_preserves_pure_torch_under_trust(trusted_torch_modul
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_secE_r36_purity_gate_denies_storage_unsafe_but_admits_elementwise() -> None:
     """``is_pure_forward_callable`` denies the module-less storage-unsafe family only."""
 
@@ -259,7 +251,6 @@ def torch_capture_wrapped() -> Iterator[None]:
     yield
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("method", _STORAGE_UNSAFE_METHODS)
 def test_secE_r36_resolver_denies_wrapped_tensor_method(
     torch_capture_wrapped: None, trusted_torch_module: str, method: str
@@ -273,7 +264,6 @@ def test_secE_r36_resolver_denies_wrapped_tensor_method(
         )
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("method", _STORAGE_UNSAFE_METHODS)
 def test_secE_r36_unpickler_denies_wrapped_tensor_method(
     torch_capture_wrapped: None, trusted_torch_module: str, method: str
@@ -287,7 +277,6 @@ def test_secE_r36_unpickler_denies_wrapped_tensor_method(
         ).load()
 
 
-@pytest.mark.smoke
 def test_secE_r36_wrapped_pure_ops_still_resolve(
     torch_capture_wrapped: None, trusted_torch_module: str
 ) -> None:

@@ -28,7 +28,6 @@ def clean(tmp_path: Path) -> Path:
     return save_clean_artifact(tmp_path)
 
 
-@pytest.mark.smoke
 def test_every_schema_file_ships_and_parses() -> None:
     """Index == files on disk; every document is Draft 2020-12 with an $id."""
 
@@ -39,7 +38,6 @@ def test_every_schema_file_ships_and_parses() -> None:
         assert document["title"]
 
 
-@pytest.mark.smoke
 def test_registry_output_schemas_are_all_served() -> None:
     """Every registry output schema id has a shipped document; none dangle."""
 
@@ -53,7 +51,6 @@ def test_registry_output_schemas_are_all_served() -> None:
     assert set(SCHEMA_FILES) == served
 
 
-@pytest.mark.smoke
 def test_unknown_schema_id_refuses_typed() -> None:
     """The schema tool refusal names the served index."""
 
@@ -88,7 +85,6 @@ def test_live_results_validate_against_their_schemas(clean: Path, tmp_path: Path
         jsonschema.Draft202012Validator(document).validate(envelope)
 
 
-@pytest.mark.smoke
 def test_error_envelope_validates(clean: Path) -> None:
     """The error envelope validates against its shipped schema."""
 

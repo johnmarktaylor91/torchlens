@@ -31,8 +31,6 @@ from torchlens.dataset_extraction import (
     shuffled_batches,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 def _artifact(tmp_path: Path, *, n: int = 10, ids: bool = True, batch_size: int = 3) -> Path:
     """Write a small deterministic two-key artifact and return its dir."""
@@ -87,6 +85,7 @@ def test_reader_iter_batches_serves_ledger_order(tmp_path: Path) -> None:
     assert excinfo.value.fields["code"] == "extraction_reader_key_unknown"
 
 
+@pytest.mark.smoke
 def test_reader_duplicate_aware_id_lookup(tmp_path: Path) -> None:
     """row_for refuses ambiguity naming rows_for; unknown ids refuse typed."""
 
@@ -167,6 +166,7 @@ def test_reader_not_monitoring_refuses_refresh(tmp_path: Path) -> None:
 # --- graded verification (D7 read side) ----------------------------------------------
 
 
+@pytest.mark.smoke
 def test_first_access_verification_catches_flipped_byte(tmp_path: Path) -> None:
     """T-INTEGRITY class A read side: a flipped shard byte fails the CRC."""
 
@@ -201,6 +201,7 @@ def test_verify_all_checks_value_reductions(tmp_path: Path) -> None:
 # --- views layer -----------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_shuffled_batches_cover_every_row_once(tmp_path: Path) -> None:
     """The SAE access pattern: shard-order + within-shard shuffle, full cover."""
 
@@ -225,6 +226,7 @@ def test_shuffled_batches_batch_size_refuses(tmp_path: Path) -> None:
     assert excinfo.value.fields["code"] == "extraction_reader_batch_size_invalid"
 
 
+@pytest.mark.smoke
 def test_feature_matrix_refuses_trimmed_keys(tmp_path: Path) -> None:
     """A ragged key has no rectangular matrix; to_padded is the densifier."""
 
@@ -387,6 +389,7 @@ def test_export_space_preflight_refuses_with_exact_bytes(
     del shutil_module
 
 
+@pytest.mark.smoke
 def test_export_bf16_widen_refusal_and_disclosure(tmp_path: Path) -> None:
     """bf16 members widen to fp32 WITH disclosure, or refuse on request."""
 
@@ -449,6 +452,7 @@ def test_export_hdf5_dependency_refusal_or_roundtrip(tmp_path: Path) -> None:
         assert handle["relu"].shape[0] == 10
 
 
+@pytest.mark.smoke
 def test_export_ragged_triplet_in_npy(tmp_path: Path) -> None:
     """Ragged members export as the values/offsets/shapes triplet (D4/D15)."""
 

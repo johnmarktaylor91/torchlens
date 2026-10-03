@@ -17,8 +17,6 @@ from torch import nn
 
 from torchlens._capture_state_helpers import _restore_simple_plain_attrs_on_copy
 
-pytestmark = pytest.mark.smoke
-
 
 class _TwoBlocks(nn.Module):
     """Parent with two named child blocks carrying plain attributes."""

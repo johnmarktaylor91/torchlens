@@ -40,8 +40,6 @@ from torchlens.errors import MetadataInvariantError
 from torchlens.validation import check_metadata_invariants
 from torchlens.validation.diagnostics import TRACE_FAILURE_ATTR
 
-pytestmark = pytest.mark.smoke
-
 
 class _TwoStage(nn.Module):
     """Two-stage model whose mid-edge is the drop target."""
@@ -298,6 +296,7 @@ def test_symmetric_edge_drop_is_caught_on_a_live_trace():
         log.cleanup()
 
 
+@pytest.mark.smoke
 def test_symmetric_edge_drop_is_caught_by_value_rooted_replay():
     """The replay pipeline also goes red on the same plant, from saved VALUES.
 

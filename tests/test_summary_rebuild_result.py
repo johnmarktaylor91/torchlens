@@ -19,8 +19,6 @@ from torch import nn
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 
-pytestmark = pytest.mark.smoke
-
 
 class _Toy(nn.Module):
     """Two-Linear toy with an orphan add."""

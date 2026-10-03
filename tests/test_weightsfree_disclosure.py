@@ -20,8 +20,6 @@ from torchlens._capture_honesty import (
 )
 from torchlens.options import CaptureOptions
 
-pytestmark = pytest.mark.smoke
-
 
 class Toy(nn.Module):
     def __init__(self, width: int = 4) -> None:
@@ -46,6 +44,7 @@ def _meta_capture():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_envelope_stamped_and_load_valid() -> None:
     """The settlement writer's envelope passes the C07 fail-closed validator."""
 
@@ -167,6 +166,7 @@ _CHANNELS = {
 _MARKER_TOKENS = ("structure-only", "structure_only", "hypothes")
 
 
+@pytest.mark.smoke_cells("test_every_channel_carries_the_structure_marker[slice_summary]")
 @pytest.mark.parametrize("channel", sorted(_CHANNELS))
 def test_every_channel_carries_the_structure_marker(channel: str, tmp_path) -> None:
     """No shipped text-bearing channel may launder the hypothesis banner."""

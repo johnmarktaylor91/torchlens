@@ -23,8 +23,6 @@ import torchlens as tl
 from torchlens.options import CaptureOptions
 from torchlens.utils._torch_compat import autocast_is_enabled
 
-pytestmark = pytest.mark.smoke
-
 
 class _IntrospectingAutocastModel(nn.Module):
     """A forward that inspects torch.autocast the way user code does."""
@@ -71,6 +69,7 @@ def test_autocast_stays_a_class_inside_the_admitted_forward() -> None:
         trace.cleanup()
 
 
+@pytest.mark.smoke
 def test_shim_class_delegates_non_null_calls_to_the_shipped_class() -> None:
     from torchlens.capture._weightsfree_admission import _null_on_meta_autocast_class
 
@@ -96,6 +95,7 @@ class _Other(_Passthrough):
     pass
 
 
+@pytest.mark.smoke
 def test_device_context_absorption_restores_the_exact_interleaving() -> None:
     from torch.overrides import _get_current_function_mode_stack as stack
 

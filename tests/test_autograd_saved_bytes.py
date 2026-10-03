@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 import torch
 from torch import nn
 
@@ -87,7 +86,6 @@ def _sum_layer_autograd_bytes(trace: Trace) -> int | None:
     return sum(values)
 
 
-@pytest.mark.smoke
 def test_autograd_memory_basic_shape_model() -> None:
     """Linear and ReLU ops should report autograd saved tensor memory."""
     trace = _log_sequential(requires_grad=True)

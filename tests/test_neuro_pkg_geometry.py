@@ -40,7 +40,6 @@ def _thingsvision_gaussian_rdm(features: np.ndarray) -> np.ndarray:
     return 1.0 - np.exp(-squared / (2.0 * squared.mean()))
 
 
-@pytest.mark.smoke
 def test_gaussian_metric_matches_thingsvision_reference() -> None:
     """Item 12: reference equivalence against the credited convention."""
 
@@ -87,7 +86,6 @@ def test_rank_transform_percentile_and_ties() -> None:
     assert np.allclose(np.diagonal(percentiles), 0.0)
 
 
-@pytest.mark.smoke
 def test_rank_transform_refusals() -> None:
     """Display-only validation: bad tokens and invalid matrices refuse."""
 

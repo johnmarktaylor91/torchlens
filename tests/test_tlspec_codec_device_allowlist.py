@@ -48,9 +48,6 @@ from torchlens._io._artifact_strings import (
     _tinygrad_runtime_device_bases,
 )
 
-pytestmark = pytest.mark.smoke
-
-
 # --------------------------------------------------------------------------- #
 # (a) the static accelerator allowlist is GONE (r56 corr_1 class close)        #
 # --------------------------------------------------------------------------- #
@@ -265,6 +262,7 @@ def test_unknown_grammar_valid_bases_fail_closed(token: str) -> None:
     assert _resolve_portable_device("tinygrad", token, None) is None
 
 
+@pytest.mark.smoke
 def test_tinygrad_absent_fails_closed_without_crash(monkeypatch: pytest.MonkeyPatch) -> None:
     """With tinygrad unimportable the vocabulary is empty: refuse-to-default, no crash."""
 
