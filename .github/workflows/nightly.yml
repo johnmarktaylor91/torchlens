@@ -350,14 +350,22 @@ jobs:
 
       - name: Install canonical CPU test environment
         run: |
+          # torch 2.13.0 is the canonical stack (the newest-admitted tests.yml
+          # row). On torch 2.8.0 the merged-trace live-capture tests skip (no
+          # census-vetted distributed snapshot exists for 2.8), and with them
+          # every test that saves/loads a merged artifact: measured 2026-10-02,
+          # torchlens/merged reached 66.3% against its 80% floor on 2.8 even
+          # though ALL merged-related tests together cap at 80.0% statements
+          # there, versus 83.5% on 2.13. The floor is never lowered; the
+          # coverage job measures on the stack where the package's tests run.
           # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
           uv pip install --system \
             --index-url https://download.pytorch.org/whl/cpu \
             --extra-index-url https://pypi.org/simple \
             --index-strategy unsafe-best-match \
             -e ".[dev,test,tabular]" \
-            "torch==2.8.0+cpu" \
-            "torchvision==0.23.0+cpu" \
+            "torch==2.13.0+cpu" \
+            "torchvision==0.28.0+cpu" \
             "transformers==5.14.1"
           uv pip check
 
