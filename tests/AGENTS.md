@@ -51,7 +51,7 @@ Run memory-heavy real-world tests sequentially. Optional dependency tests should
 | `heavy` | Mid-cost (5-20s) tests, excluded from smoke and the mid backstop. |
 | `slow` | Long-running (>20s) real-world tests. |
 | `serial` | Load-sensitive tests that should run away from parallel worker load. NOT a budget exemption: serial items resolve their heavy/smoke/unmarked duration budget normally. |
-| (none) | Unmarked tests — a large plurality (8,218/20,079, 41%, measured 2026-09-02) — run only in the backstops, never the commit gate, but are budgeted at the same <5s tier as smoke. |
+| (none) | Unmarked tests — a large majority (16,890/20,445, 83%, measured 2026-10-02) — run only in the backstops, never the commit gate, but are budgeted at the same <5s tier as smoke. |
 | `rare` | Always excluded by default unless explicitly selected. |
 | `optional` | Requires an optional dependency or runtime. |
 | `requires_assertions` | Needs Python `assert`; skipped under `python -O`. |
