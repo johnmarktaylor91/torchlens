@@ -451,3 +451,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: baad948e186c57ddc930c346b71e77bc32d51f0d (dirty)
 recorded: 2026-10-01T10:47:20.929493+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: surface-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the enforcing Tests row on GitHub runners with identical inputs and code (activation sha256 drift, plain_cnn and tiny_transformer); base a8d043cf1 reproduces the old goldens on the recording-class host, so only tensor float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ec79963b8419b5b0c88b716df35b12a905a6aa6f (clean)
+recorded: 2026-10-03T05:57:43.386197+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: surface-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the enforcing Tests row on GitHub runners with identical inputs and code (activation sha256 drift, plain_cnn and tiny_transformer); base a8d043cf1 reproduces the old goldens on the recording-class host, so only tensor float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ec79963b8419b5b0c88b716df35b12a905a6aa6f (clean)
+recorded: 2026-10-03T05:57:43.415539+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: surface-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the enforcing Tests row on GitHub runners with identical inputs and code (activation sha256 drift, plain_cnn and tiny_transformer); base a8d043cf1 reproduces the old goldens on the recording-class host, so only tensor float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ec79963b8419b5b0c88b716df35b12a905a6aa6f (clean)
+recorded: 2026-10-03T05:57:43.447072+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: surface-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the enforcing Tests row on GitHub runners with identical inputs and code (activation sha256 drift, plain_cnn and tiny_transformer); base a8d043cf1 reproduces the old goldens on the recording-class host, so only tensor float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ec79963b8419b5b0c88b716df35b12a905a6aa6f (clean)
+recorded: 2026-10-03T05:57:43.486650+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: surface-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the enforcing Tests row on GitHub runners with identical inputs and code (activation sha256 drift, plain_cnn and tiny_transformer); base a8d043cf1 reproduces the old goldens on the recording-class host, so only tensor float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ec79963b8419b5b0c88b716df35b12a905a6aa6f (clean)
+recorded: 2026-10-03T05:57:43.523863+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: surface-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the enforcing Tests row on GitHub runners with identical inputs and code (activation sha256 drift, plain_cnn and tiny_transformer); base a8d043cf1 reproduces the old goldens on the recording-class host, so only tensor float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ec79963b8419b5b0c88b716df35b12a905a6aa6f (clean)
+recorded: 2026-10-03T05:57:43.579255+00:00
