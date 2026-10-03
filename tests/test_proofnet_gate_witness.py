@@ -151,7 +151,7 @@ EXCEPT_SKIP_LEDGER: frozenset[str] = frozenset(
     {
         "test_checkpoint_live_ref_real_models.py:97",
         "test_compare_gate_qwen.py:79",
-        "test_distributed_census_topologies.py:100",
+        "test_distributed_census_topologies.py:109",
         "test_distributed_honesty.py:740",
         "test_distributed_honesty.py:756",
         "test_distributed_tierb_identity.py:76",
