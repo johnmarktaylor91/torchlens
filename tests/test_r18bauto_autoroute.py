@@ -6,7 +6,7 @@ the guard and crashed deep in the capture pipeline with an opaque torch error in
 clean ``UnsupportedTensorVariantError`` up front.
 
 Item 1 (A3-05 double-construction reuse) is a deferred patch request routed to the bridge/hf.py
-owner; it is documented in .research/prelaunch-triage/R18BAUTO_REPORT.md and not tested here because
+owner; it is documented in the private R18BAUTO triage report and not tested here because
 its fix lives in an off-lease file.
 """
 

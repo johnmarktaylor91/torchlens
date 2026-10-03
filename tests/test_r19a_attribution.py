@@ -5,7 +5,7 @@ Covers:
 - W2A3-06: attribution computes correctly under an ambient ``torch.no_grad()``.
 
 Owner-reserved wrong-math findings (W2A3-01/02/03/13/17) are NOT fixed here; their
-evidence lives in ``.research/prelaunch-triage/R19A_REPORT.md``.
+evidence lives in the private R19A triage report.
 """
 
 from __future__ import annotations

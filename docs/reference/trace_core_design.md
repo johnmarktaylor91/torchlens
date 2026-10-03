@@ -166,12 +166,12 @@ Freeze is PER-PLANE, not one switch:
 - Direct writes and interventions land in the sparse versioned **overlay**.
 - Derived caches stay disposable.
 
-Sol's minority position (retain the mutable object graph through postprocess, PACK after
+The review's minority position (retain the mutable object graph through postprocess, PACK after
 step 20) is not the plan; its gating conditions are adopted verbatim as the M5 seam's
 own acceptance evidence: "phase read/write contracts cover every Step 0-20 access; a
 row-protocol prototype passes the complete surface/alias/artifact oracle for Op, partial
 capture, streamed payload eviction, refresh, and repeated backward; peak memory improves
-materially; and no second mutable representation survives." Sol's PACK-boundary facts
+materially; and no second mutable representation survives." The review's PACK-boundary facts
 stand and are honored: step 17 is a logical transition, not the final physical mutation
 point; error/partial paths must produce facade-backed results immediately before public
 exposure; partial cores carry `topology_complete=False` and never pretend full
@@ -225,7 +225,7 @@ private; computed collapse metadata stays out of serialization.
   never stored in extras.
 - **Facade identity cache — strong-then-weak.** The observable contract is
   `trace["x"] is trace["x"]` while any reference is live; mutations live in the core, so
-  identity is a UX nicety, not a correctness carrier. Sol's lifetime point is honored by
+  identity is a UX nicety, not a correctness carrier. The review's lifetime point is honored by
   sequencing: the first production cutover (M5) lands a STRONG per-core cache
   (byte-identical lifetime behavior — an Op stays alive while its Trace lives, exactly as
   today), then the cache flips to weak-valued within the sprint once the M0 lifetime

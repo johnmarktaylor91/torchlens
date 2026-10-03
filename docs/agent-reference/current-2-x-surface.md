@@ -528,7 +528,7 @@
   every capture; joined to the rerun identity gate FAIL-CLOSED — the F41 bullet above),
   `Op.episode_step` (F-EPISODE writes), `Op.tl_authored_root` (F41 writes it on
   bound-method captures, live). The Bundle-side ledger rows
-  join (foldB s4.4 item 12) SPLIT OFF per the Sol proviso: the C07 ledger shape stays
+  join (foldB s4.4 item 12) SPLIT OFF per the review proviso: the C07 ledger shape stays
   unresolved pre-F03 and must not hold the amendment past V9-FREEZE.
 - SITE KEYS + GROUPING SURFACE (L1 wave 0; every spelling DOCUMENTED-UNSTABLE
   pending naming-session/S2 ratification): every retained op carries
