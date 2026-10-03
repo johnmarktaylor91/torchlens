@@ -502,6 +502,19 @@ ceilinged: library code reads the flag constantly, and recording plus restoring 
 a fresh-instance replay take the same branch, so a read witness would be a mass over-trigger for
 zero honesty gain.
 
+**Per-backend fp32 precision (torch >= 2.9, `HAS_FP32_PRECISION_CONTROLS`).** The three
+legacy fields `float32_matmul_precision`, `cuda_matmul_allow_tf32` and `cudnn_allow_tf32` are
+coarse views of torch's per-backend `torch.backends.*.fp32_precision` policy. They represent
+that policy exactly only when every legacy getter reads cleanly and the knobs no legacy setter
+writes (generic, `cudnn`, `mkldnn`, `mkldnn.conv`, `mkldnn.rnn`) are `"none"`. A capture under
+any other policy (mixed cuDNN conv/RNN TF32, cuda or oneDNN matmul set through the new API, the
+generic knob, oneDNN conv/RNN TF32) still succeeds and stays fully usable for analysis, but the
+producer refuses the runnable descriptor with `execution_context_unavailable` (detection stage
+`producer_execution_context`, detail `unrepresentable_controls`): persisting the legacy fields
+would replay under a different TF32/bf16 policy. Replay applies a recorded context by first
+resetting those five knobs to `"none"`, and restores the caller's exact per-backend policy on
+every exit.
+
 `attestation_ineligible_context` is the POSITIVE capture-time marking for a nondeterministic
 execution context: `cudnn.benchmark=true`, or a documented CUDA-nondeterministic op (the
 transpose-conv atomicAdd family and the documented index/scatter accumulation set) running on a

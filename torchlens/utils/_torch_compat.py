@@ -65,6 +65,8 @@ __all__ = [
     "HAS_DYNAMO_EXPLAIN",
     "apply_ambient_execution_context",
     "restore_fp32_precision_controls",
+    "read_legacy_fp32_controls",
+    "AMBIENT_FP32_UNREPRESENTABLE_KEY",
     "snapshot_fp32_precision_controls",
     "read_fill_uninitialized_memory",
     "snapshot_ambient_execution_context",
@@ -4593,6 +4595,61 @@ def restore_fp32_precision_controls(snapshot: dict[str, str]) -> None:
             owner.fp32_precision = snapshot[path]
 
 
+#: Controls no legacy setter writes ('none' under any legacy-only history,
+#: measured on torch 2.9.1 and 2.13.0): another value has no v2 record field.
+_FP32_PRECISION_LEGACY_UNWRITTEN: tuple[str, ...] = (
+    "",
+    "cudnn",
+    "mkldnn",
+    "mkldnn.conv",
+    "mkldnn.rnn",
+)
+
+#: Ambient-record fields that are legacy views of the ``fp32_precision`` controls.
+_LEGACY_FP32_GETTERS: tuple[tuple[str, Callable[[], Any]], ...] = (
+    ("float32_matmul_precision", lambda: str(torch.get_float32_matmul_precision())),
+    ("cuda_matmul_allow_tf32", lambda: bool(torch.backends.cuda.matmul.allow_tf32)),
+    ("cudnn_allow_tf32", lambda: bool(torch.backends.cudnn.allow_tf32)),
+)
+
+#: Session-only ambient-snapshot key (never a record field); the producer refuses on it.
+AMBIENT_FP32_UNREPRESENTABLE_KEY = "_fp32_precision_unrepresentable"
+
+
+def read_legacy_fp32_controls() -> tuple[dict[str, Any], tuple[str, ...]]:
+    """Read the legacy fp32 views and name what the v2 ambient record cannot hold.
+
+    Returns
+    -------
+    tuple[dict[str, Any], tuple[str, ...]]
+        The legacy values (``None`` where the getter raised) and the
+        unrepresentable parts of the live policy: each legacy field whose getter
+        raised, then ``fp32_precision[<path>]=<value>`` for each control no legacy
+        setter writes that is not ``'none'``. On torch >= 2.9 the legacy getters
+        raise ``RuntimeError`` when the ``fp32_precision`` controls have no legacy
+        equivalent (mixed cuDNN conv/RNN TF32, matmul or generic set via the new
+        API); without those controls a raise is unexpected and propagates.
+    """
+
+    values: dict[str, Any] = {}
+    unrepresentable: list[str] = []
+    for name, read in _LEGACY_FP32_GETTERS:
+        try:
+            values[name] = read()
+        except RuntimeError:
+            if not HAS_FP32_PRECISION_CONTROLS:
+                raise
+            values[name] = None
+            unrepresentable.append(name)
+    controls = snapshot_fp32_precision_controls()
+    unrepresentable.extend(
+        f"fp32_precision[{path or 'generic'}]={controls[path]}"
+        for path in _FP32_PRECISION_LEGACY_UNWRITTEN
+        if controls.get(path, "none") != "none"
+    )
+    return values, tuple(unrepresentable)
+
+
 def tensor_any_over_dims(tensor: torch.Tensor, dims: tuple[int, ...]) -> torch.Tensor:
     """Reduce a boolean tensor with ``any`` over multiple axes at once.
 
@@ -4743,19 +4800,21 @@ def snapshot_ambient_execution_context() -> dict[str, Any]:
     dict[str, Any]
         Plain JSON-safe mapping of every decision-E ambient control. Controls the
         runtime does not expose are ``None``; exposed controls are recorded
-        affirmatively (explicit ``False``), never omitted.
+        affirmatively (explicit ``False``), never omitted. Legacy fp32 views with
+        no legacy equivalent are ``None`` (see :func:`read_legacy_fp32_controls`).
     """
 
+    legacy_fp32, _ = read_legacy_fp32_controls()
     snapshot: dict[str, Any] = {
         "default_dtype": str(torch.get_default_dtype()),
         "default_device": str(getattr(torch, "get_default_device", lambda: "cpu")()),
-        "float32_matmul_precision": str(torch.get_float32_matmul_precision()),
+        "float32_matmul_precision": legacy_fp32["float32_matmul_precision"],
         "deterministic_algorithms": bool(torch.are_deterministic_algorithms_enabled()),
         "deterministic_algorithms_warn_only": bool(
             torch.is_deterministic_algorithms_warn_only_enabled()
         ),
-        "cuda_matmul_allow_tf32": bool(torch.backends.cuda.matmul.allow_tf32),
-        "cudnn_allow_tf32": bool(torch.backends.cudnn.allow_tf32),
+        "cuda_matmul_allow_tf32": legacy_fp32["cuda_matmul_allow_tf32"],
+        "cudnn_allow_tf32": legacy_fp32["cudnn_allow_tf32"],
         "cudnn_deterministic": bool(torch.backends.cudnn.deterministic),
         "cudnn_benchmark": bool(torch.backends.cudnn.benchmark),
         "cudnn_enabled": bool(torch.backends.cudnn.enabled),
@@ -4820,6 +4879,12 @@ def apply_ambient_execution_context(values: dict[str, Any]) -> None:
     # control (setting ``allow_tf32=True`` coerces precision to "high"). Apply
     # the coarse Boolean FIRST so the finer-grained recorded precision value
     # wins; the pair is snapshotted together, so the final state is coherent.
+    if HAS_FP32_PRECISION_CONTROLS:
+        # A legacy-representable capture had these controls at 'none' (no legacy
+        # setter writes them): reset any caller value before the legacy views.
+        controls = snapshot_fp32_precision_controls()
+        unwritten = [path for path in _FP32_PRECISION_LEGACY_UNWRITTEN if path in controls]
+        restore_fp32_precision_controls({**controls, **dict.fromkeys(unwritten, "none")})
     cuda_tf32 = values.get("cuda_matmul_allow_tf32")
     if cuda_tf32 is not None:
         torch.backends.cuda.matmul.allow_tf32 = bool(cuda_tf32)

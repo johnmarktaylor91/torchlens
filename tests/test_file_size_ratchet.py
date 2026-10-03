@@ -381,7 +381,13 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # probe plus the fp32_precision snapshot/restore pair that stops runnable
     # replay leaking torch's matmul precision fields; measured 4930. Debloat
     # target unchanged: 3450.
-    "torchlens/utils/_torch_compat.py": 4950,
+    # 4950 -> 5000 (2026-10-03 fix/ff-tf32): read_legacy_fp32_controls (the
+    # safe legacy TF32 readers that stop intervention_ready capture and
+    # check_determinism crashing under torch >= 2.9 per-backend fp32_precision
+    # policies) plus the replay reset of the controls no legacy setter writes;
+    # extends FE's fp32_precision pair, no second flag or snapshot path;
+    # measured ~4995. Debloat target unchanged: 3450.
+    "torchlens/utils/_torch_compat.py": 5000,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
     # 3300 -> 3320 (F24 observe): the device-memory bracket at the one
