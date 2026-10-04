@@ -104,6 +104,15 @@ through an imported alias: `tests/test_marker_lint.py::test_smoke_prefilter_neve
 fails any non-prefiltered session in which a smoke item sits in a file the pre-filter would
 skip. `TORCHLENS_SMOKE_PREFILTER=0` turns the pre-filter off.
 
+A plain `pytest tests/ -m smoke` answers like CI only in CI's environment. CI installs the
+`dev`, `tabular` and `viz` extras on every row (without pandas, every smoke test that reaches a
+tabular surface fails), and the env-fingerprinted golden families enforce only on the
+environment their goldens were recorded under, failing closed on any other non-CI interpreter
+by design. `python scripts/smoke_ci_parity.py [-n N]` builds a venv pinned to the enforcing
+smoke row (once, in `.venv-ci-smoke/`) and runs the workflow's smoke-step commands there;
+`tests/test_ci_packaging_gates.py` keeps its pins in lockstep with `tests.yml`, and a smoke run
+off that environment ends with a `torchlens CI parity:` line naming the differences.
+
 ## Fixtures
 `tests/conftest.py` owns deterministic seeding and common inputs such as image tensors,
 small inputs, vector/2D/complex inputs, and output directories.

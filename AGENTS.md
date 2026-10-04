@@ -122,6 +122,7 @@ ruff check . --fix
 mypy torchlens/
 pytest tests/<files for the code you touched> -x --tb=short     # per-step gate: targeted suites (seconds-minutes)
 pytest tests/ -m smoke -x --tb=short                            # commit-level gate (~3 min; measured 2026-10-02)
+python scripts/smoke_ci_parity.py -n 4                          # the same gate in CI's enforcing environment (see tests/AGENTS.md)
 pytest tests/ -m "not rare and not slow and not heavy" -x --tb=short  # mid backstop (heavy = 5-20s tests)
 pytest tests/ -m "not rare and not slow" -x --tb=short  # phase-boundary backstop; public API/boundaries
 ```
