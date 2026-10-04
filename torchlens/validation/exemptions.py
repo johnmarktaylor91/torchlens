@@ -2975,8 +2975,7 @@ def _layer_norm_singleton_shape_decision(
     single-channel representation (``normalized_shape=(1,)``); fixing
     ``csatv2``'s diagnosed softmax-singleton-dim failure unmasked this
     downstream op in the same trivial-dimension branch, confirmed by direct
-    introspection of the real model: ``layernorm_49_904``'s
-    input shape was ``(1, 49, 1)``.
+    introspection of the real model (its input shape there was ``(1, 49, 1)``).
 
     Parameters
     ----------
@@ -3005,14 +3004,23 @@ def _layer_norm_singleton_shape_decision(
     if len(args) <= 1:
         return PosthocPerturbDecision(False, "not_layer_norm_singleton_shape")
     normalized_shape = args[1]
-    dims = normalized_shape if isinstance(normalized_shape, (list, tuple)) else (normalized_shape,)
+    dims = (
+        tuple(normalized_shape)
+        if isinstance(normalized_shape, (list, tuple, torch.Size))
+        else (normalized_shape,)
+    )
     try:
-        element_count = 1
-        for dim_size in dims:
-            element_count *= int(dim_size)
+        dim_sizes = tuple(int(dim_size) for dim_size in dims)
     except (TypeError, ValueError):
         return PosthocPerturbDecision(False, "not_layer_norm_singleton_shape")
-    if element_count != 1:
+    if not dim_sizes or any(dim_size != 1 for dim_size in dim_sizes):
+        return PosthocPerturbDecision(False, "not_layer_norm_singleton_shape")
+    # The saved input must agree: its trailing dims ARE the normalized span.
+    saved_input = args[0]
+    if isinstance(saved_input, torch.Tensor) and (
+        saved_input.dim() < len(dim_sizes)
+        or tuple(saved_input.shape[-len(dim_sizes) :]) != dim_sizes
+    ):
         return PosthocPerturbDecision(False, "not_layer_norm_singleton_shape")
     return PosthocPerturbDecision(
         True,
