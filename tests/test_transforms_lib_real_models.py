@@ -58,6 +58,11 @@ def _hf_model(name: str):
         model = transformers.AutoModel.from_pretrained(name)
     except (OSError, ValueError) as exc:  # cache miss, offline -> honest skip
         pytest.skip(f"{name} not in the offline HF cache: {type(exc).__name__}")
+    # A cache holding only the model files (another test downloaded weights, not
+    # the tokenizer) loads offline without error but encodes every string to zero
+    # ids; that is the same cache miss, so skip instead of feeding empty input.
+    if not tokenizer("hi")["input_ids"]:
+        pytest.skip(f"{name} tokenizer files not in the offline HF cache (empty encoding)")
     model.eval()
     return model, tokenizer
 
