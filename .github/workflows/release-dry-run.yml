@@ -1,0 +1,118 @@
+name: Release Dry Run
+
+# Exercises the actual release tool (not just its unit-tested backstop) on
+# every change that could break it before the next real release does: the
+# hash-locked dependency set, release.yml itself, the semantic-release
+# config in pyproject.toml, or the custom no-major-bump parser. This is the
+# gap that let a python-semantic-release / GitPython incompatibility reach
+# main undetected (fix/fi-release, release-requirements.txt): the parser's
+# own tests mock the library, so a config-load crash in the real tool never
+# surfaced until the Release workflow ran for real.
+on:
+  workflow_call:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/release-requirements.txt"
+      - ".github/workflows/release.yml"
+      - ".github/workflows/release-dry-run.yml"
+      - "pyproject.toml"
+      - "scripts/no_major_parser.py"
+  # Work branches named ci/** run the full workflow on push (and any branch
+  # on manual dispatch) so GitHub's own runners test a branch before main.
+  push:
+    branches: ["ci/**"]
+    paths:
+      - ".github/workflows/release-requirements.txt"
+      - ".github/workflows/release.yml"
+      - ".github/workflows/release-dry-run.yml"
+      - "pyproject.toml"
+      - "scripts/no_major_parser.py"
+  workflow_dispatch:
+
+# Default-deny token scope (grind r3, R61/b2:D1): this job only reads the
+# repo and makes no push, tag, or release -- GH_TOKEN below is a placeholder
+# string, never a real credential.
+permissions:
+  contents: read
+
+concurrency:
+  group: "${{ github.head_ref || github.ref }}-release-dry-run"
+  cancel-in-progress: true
+
+jobs:
+  noop-version:
+    name: semantic-release --noop version (no token, no push)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Full history + tags: semantic-release computes the next version
+          # from the commits since the latest tag.
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      # [tool.semantic_release] branch = "main": on any other ref (a PR
+      # branch, a ci/** push, nightly's checkout) the tool silently prints
+      # "isn't in any release groups; no release will be made" and skips
+      # version computation entirely -- still catching a config-load crash,
+      # but not a major-bump regression, which is half of this job's
+      # purpose. Renaming the local branch is a transient CI-checkout-only
+      # operation (persist-credentials is false; nothing is pushed) that
+      # makes the tool evaluate this commit exactly as the real release job
+      # would once it lands on main.
+      - name: Evaluate this commit as if it were on main
+        run: git checkout -B main
+
+      - name: Install the hash-locked release stack
+        run: |
+          pip install --require-hashes --only-binary :all: \
+            -r .github/workflows/release-requirements.txt
+
+      - name: Dry-run the version computation and reject a major bump
+        # --noop performs no push, no tag, and no GitHub API call that needs
+        # a real credential (verified: python-semantic-release's noop path
+        # short-circuits Github.create_release before any network call);
+        # GH_TOKEN only satisfies the config loader's non-empty string
+        # check.
+        #
+        # The tool exits nonzero both on a real crash (the config-load break
+        # this job exists to catch) AND on the benign "nothing to release"
+        # cases -- no commits warrant one, or (observed running this dry run
+        # against a branch forked before the last real release) the computed
+        # version is already tagged. Both benign cases print "No release
+        # will be made"; anything else nonzero is treated as a crash. The
+        # computed version itself is printed on its own line regardless of
+        # which path is taken, so the major-bump check still runs even when
+        # the benign "already released" case trips a nonzero exit.
+        env:
+          GH_TOKEN: noop-placeholder-token
+        run: |
+          set +e
+          semantic-release -v --noop version 2>&1 | tee /tmp/release-dry-run.log
+          rc="${PIPESTATUS[0]}"
+          set -e
+          if [ "$rc" -ne 0 ] && ! grep -q "No release will be made" /tmp/release-dry-run.log; then
+            echo "semantic-release exited $rc with no recognized 'no release' skip message -- treating as a crash"
+            exit 1
+          fi
+
+          computed="$(grep -oE '^[0-9]+\.[0-9]+\.[0-9]+$' /tmp/release-dry-run.log | tail -1)"
+          if [ -z "$computed" ]; then
+            echo "no pending release computed; nothing to validate"
+            exit 0
+          fi
+
+          current="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")"
+          current_major="${current%%.*}"
+          computed_major="${computed%%.*}"
+          echo "current version: $current ; computed next version: $computed"
+          if [ "$computed_major" != "$current_major" ]; then
+            echo "computed next version $computed is a MAJOR bump over $current -- refusing"
+            exit 1
+          fi
