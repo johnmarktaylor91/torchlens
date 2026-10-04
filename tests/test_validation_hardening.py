@@ -40,7 +40,10 @@ import torchlens as tl
 from torchlens.options import CaptureOptions
 from torchlens.validation import validate_forward_pass
 from torchlens.validation.core import validate_saved_outs
-from torchlens.validation.exemptions import _multiplicative_zero_annihilator_decision
+from torchlens.validation.exemptions import (
+    _addcmul_zero_annihilator_decision,
+    _multiplicative_zero_annihilator_decision,
+)
 from torchlens.validation.invariants import (
     MetadataInvariantError,
     check_metadata_invariants,
@@ -693,6 +696,98 @@ def test_addcmul_zero_gain_validates() -> None:
             return torch.addcmul(x, self.gain, branch)
 
     assert _quiet_validate(_ZeroGainAddcmul(), torch.randn(3, 4)) is True
+
+
+def test_addcmul_zero_annihilator_refuses_unproved_cases() -> None:
+    """Armed-proof: the addcmul annihilator fires only on a provably zero factor.
+
+    A non-zero sibling multiplied operand, a non-zero ``value=``, and a
+    perturbed additive ``input`` (args[0], never multiplied) must all stay
+    strict, so an addcmul whose perturbed parent genuinely fails to reach the
+    output still fails validation.
+    """
+
+    class _FakeAddcmulOp:
+        func_name = "addcmul"
+
+        def __init__(self, saved_kwargs: dict | None = None) -> None:
+            self.saved_kwargs = saved_kwargs or {}
+            self.parent_arg_positions = {
+                "args": {0: "input_label", 1: "gain_label", 2: "branch_label"},
+                "kwargs": {},
+            }
+
+    base = torch.randn(3, 4)
+    branch = torch.randn(3, 4)
+    zero_gain = torch.zeros(4)
+    nonzero_gain = torch.full((4,), 1e-6)
+
+    layer = _FakeAddcmulOp()
+    # Zero sibling factor: the branch cannot reach the output.
+    assert (
+        _addcmul_zero_annihilator_decision(
+            layer, ["branch_label"], (base, zero_gain, branch)
+        ).exempt
+        is True
+    )
+    # A tiny but non-zero sibling factor carries the branch: never exempt.
+    assert (
+        _addcmul_zero_annihilator_decision(
+            layer, ["branch_label"], (base, nonzero_gain, branch)
+        ).exempt
+        is False
+    )
+    # The additive input is never multiplied: never exempt, even with a zero factor.
+    assert (
+        _addcmul_zero_annihilator_decision(layer, ["input_label"], (base, zero_gain, branch)).exempt
+        is False
+    )
+    # value=0 annihilates both factors; any non-zero value does not.
+    assert (
+        _addcmul_zero_annihilator_decision(
+            _FakeAddcmulOp({"value": 0}), ["branch_label"], (base, nonzero_gain, branch)
+        ).exempt
+        is True
+    )
+    assert (
+        _addcmul_zero_annihilator_decision(
+            _FakeAddcmulOp({"value": 0.5}), ["branch_label"], (base, nonzero_gain, branch)
+        ).exempt
+        is False
+    )
+    # Two perturbed parents at once are outside the single-parent proof.
+    assert (
+        _addcmul_zero_annihilator_decision(
+            layer, ["gain_label", "branch_label"], (base, zero_gain, branch)
+        ).exempt
+        is False
+    )
+
+
+def test_nan_multiplication_proof_still_covers_plain_mul() -> None:
+    """The addcmul branch must not displace the plain-mul NaN locality proof.
+
+    ``x * nan_operand`` is all-NaN for every finite ``x``; the proof that
+    already covered plain ``mul`` must still be reached from the value-proof
+    dispatcher after the addcmul branch was added beside it.
+    """
+
+    from torchlens.validation.exemptions import _posthoc_value_proof_decision
+
+    class _FakeMulOp:
+        func_name = "mul"
+        saved_kwargs: dict = {}
+
+        def __init__(self) -> None:
+            self.parent_arg_positions = {"args": {0: "x_label"}, "kwargs": {}}
+            self.out = torch.full((3,), float("nan"))
+
+    nan_operand = torch.full((3,), float("nan"))
+    decision = _posthoc_value_proof_decision(
+        _FakeMulOp(), ["x_label"], (torch.randn(3), nan_operand)
+    )
+    assert decision.exempt is True
+    assert decision.reason == "locally_constant_by_construction"
 
 
 def test_w35_nonzero_literal_never_exempted() -> None:
