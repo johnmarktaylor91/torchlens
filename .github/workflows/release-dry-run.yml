@@ -57,6 +57,18 @@ jobs:
         with:
           python-version: "3.11"
 
+      # [tool.semantic_release] branch = "main": on any other ref (a PR
+      # branch, a ci/** push, nightly's checkout) the tool silently prints
+      # "isn't in any release groups; no release will be made" and skips
+      # version computation entirely -- still catching a config-load crash,
+      # but not a major-bump regression, which is half of this job's
+      # purpose. Renaming the local branch is a transient CI-checkout-only
+      # operation (persist-credentials is false; nothing is pushed) that
+      # makes the tool evaluate this commit exactly as the real release job
+      # would once it lands on main.
+      - name: Evaluate this commit as if it were on main
+        run: git checkout -B main
+
       - name: Install the hash-locked release stack
         run: |
           pip install --require-hashes --only-binary :all: \
