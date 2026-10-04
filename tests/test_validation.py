@@ -4169,6 +4169,60 @@ def test_op_reduction_depth_reads_keyword_passed_operands() -> None:
     )
     assert _op_reduction_depth(scatter_layer) == 1024
 
+    sdpa_layer = _make_deep_numeric_layer(
+        "scaled_dot_product_attention",
+        [torch.zeros(2, 4, 196, 64)],
+        torch.zeros(2, 4, 196, 64),
+        saved_kwargs={"key": torch.zeros(2, 4, 196, 64), "value": torch.zeros(2, 4, 196, 64)},
+    )
+    assert _op_reduction_depth(sdpa_layer) == 196
+
+
+def test_op_reduction_depth_scaled_dot_product_attention_uses_key_seq_len() -> None:
+    """Fused sdpa's real per-output accumulation depth is the key/value
+    sequence length, not 1.
+
+    TorchLens captures ``scaled_dot_product_attention`` as one atomic op
+    (never decomposed into matmul(Q,K) -> softmax -> matmul(.,V)), so before
+    this fix it fell through to the elementwise default (depth 1) and was
+    permanently ineligible for band C no matter how many keys it attends
+    over. The fused op's final stage, ``attn_weights @ value``, sums over the
+    key/value sequence length for every output element -- the same role the
+    contracted dimension plays for the matmul family above -- so depth is
+    read from the key operand's sequence-length dim (``[..., seq_len_kv,
+    head_dim]`` layout: ``key.shape[-2]``).
+    """
+
+    query = torch.zeros(2, 4, 196, 64)
+    key = torch.zeros(2, 4, 196, 64)
+    value = torch.zeros(2, 4, 196, 64)
+    sdpa_layer = _make_deep_numeric_layer(
+        "scaled_dot_product_attention", [query, key, value], torch.zeros(2, 4, 196, 64)
+    )
+    assert _op_reduction_depth(sdpa_layer) == 196
+    assert _op_reduction_depth(sdpa_layer) >= DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
+
+    # A short key/value sequence length stays below the depth-64 floor -- this
+    # fix only corrects the classification, it never touches the floor itself.
+    short_layer = _make_deep_numeric_layer(
+        "scaled_dot_product_attention",
+        [torch.zeros(2, 4, 49, 64), torch.zeros(2, 4, 49, 64), torch.zeros(2, 4, 49, 64)],
+        torch.zeros(2, 4, 49, 64),
+    )
+    assert _op_reduction_depth(short_layer) == 49
+    assert _op_reduction_depth(short_layer) < DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
+
+
+def test_op_reduction_depth_sdpa_undeterminable_is_zero_fail_toward_strict() -> None:
+    """A missing/unreadable key operand withholds band C, like every other category."""
+
+    assert (
+        _op_reduction_depth(
+            _make_deep_numeric_layer("scaled_dot_product_attention", [], torch.zeros(2, 4, 196, 64))
+        )
+        == 0
+    )
+
 
 def test_op_reduction_depth_undeterminable_is_zero_fail_toward_strict() -> None:
     """When depth cannot be determined the predicate returns 0 (ineligible)."""
