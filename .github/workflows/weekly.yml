@@ -129,6 +129,9 @@ jobs:
         # memory, it does not mask them (a failing unit still fails this
         # step).
         run: |
+          # Resource trace: when the host shuts the runner down mid-step, the last
+          # lines show memory and disk headroom just before it happened.
+          ( while true; do echo "[resources $(date -u +%H:%M:%S)] mem: $(free -m | awk '/^Mem:/{print $3 " used / " $7 " available MB"}') disk: $(df -h / | awk 'NR==2{print $4 " free"}')"; sleep 60; done ) &
           python scripts/run_pytest_per_file_sharded.py tests/ \
             --marker "slow and not rare" \
             --junit-dir "${{ runner.temp }}/weekly-slow-per-file" \
