@@ -870,6 +870,34 @@ def test_check_norm_zero_weight_annihilates_never_exempts_weight_or_bias() -> No
     assert _check_norm_zero_weight_annihilates(nonzero_layer, ["running_mean_label"]) is False
 
 
+def test_check_norm_zero_weight_reads_the_real_captured_weight_slot() -> None:
+    """The zero-weight proof must read a REAL captured op's weight, not running_mean.
+
+    A fresh BatchNorm has ``running_mean == 0`` and ``weight == 1``. If the
+    captured ``batch_norm`` op's saved args followed ``F.batch_norm``'s Python
+    order ``(input, running_mean, running_var, weight, ...)``, args[1] would be
+    the all-zero running_mean and the proof would wrongly exempt input
+    perturbation for every fresh eval-mode BatchNorm. Pin the layout against an
+    actual capture: non-zero weight never exempts; an exactly-zero weight does.
+    """
+
+    for zero_weight in (False, True):
+        bn = nn.BatchNorm2d(4)
+        if zero_weight:
+            with torch.no_grad():
+                bn.weight.zero_()
+        bn.eval()
+        trace, _ = _capture(bn, torch.randn(2, 4, 8, 8))
+        op = next(op for op in trace.layer_list if op.func_name == "batch_norm")
+        assert torch.equal(op.saved_args[1], bn.weight.detach())
+        assert torch.equal(op.saved_args[3], bn.running_mean)
+        positions = op.parent_arg_positions["args"]
+        for position in (0, 3, 4):
+            if position in positions:
+                decision = _check_norm_zero_weight_annihilates(op, [positions[position]])
+                assert decision is zero_weight
+
+
 def test_w35_nonzero_literal_never_exempted() -> None:
     """Armed-proof: the annihilator proof requires an exactly-zero co-arg.
 
