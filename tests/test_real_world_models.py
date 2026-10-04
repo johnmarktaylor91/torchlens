@@ -1617,7 +1617,6 @@ def test_blip_base():
 
 
 @pytest.mark.slow
-@pytest.mark.big_memory  # alone exhausts the 16 GB GitHub runner, killing it mid-test (2026-10-03 Weekly)
 def test_vit_mae():
     transformers = pytest.importorskip("transformers")
     model = transformers.ViTMAEModel.from_pretrained("facebook/vit-mae-base")

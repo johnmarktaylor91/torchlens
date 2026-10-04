@@ -157,7 +157,7 @@ jobs:
         # tiers (grind r3, R82): a marker drift or importorskip cascade that
         # hollows them out must go red, not green. Floors are roughly half
         # the current selections (295 slow / 16 rare, counted 2026-08-15;
-        # unchanged by the 8-test big_memory exclusion above -- the floor
+        # unchanged by the 7-test big_memory exclusion above -- the floor
         # already has ~140 tests of headroom).
         run: |
           python scripts/check_ci_executed_tests.py "${{ runner.temp }}/weekly-slow.junit.xml" 145
