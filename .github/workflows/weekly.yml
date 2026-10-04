@@ -166,10 +166,14 @@ jobs:
         # hollows them out must go red, not green. Floors are roughly half
         # the current selections (295 slow / 16 rare, counted 2026-08-15;
         # unchanged by the 14-test big_memory exclusion above -- the floor
-        # already has ~140 tests of headroom).
+        # already has ~140 tests of headroom). The rare floor is 7, the count
+        # that executes on this runner (2026-10-04): 9 executed before
+        # test_validation_50k moved to big_memory and the same-box
+        # test_small_capture_overhead_within_gate was deselected above; every
+        # other selected rare test skips here (opt-in sizes, CUDA, DDP).
         run: |
           python scripts/check_ci_executed_tests.py "${{ runner.temp }}/weekly-slow.junit.xml" 145
-          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/weekly-rare.junit.xml" 8
+          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/weekly-rare.junit.xml" 7
 
   mutation-margin:
     # The mutation driver's zero-survivor criterion is R74's grind-level
