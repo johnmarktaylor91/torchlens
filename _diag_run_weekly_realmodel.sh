@@ -21,17 +21,24 @@ torch==2.7.1+cpu
 torchvision==0.22.1+cpu
 EOF
 
-python3 -m pip install --upgrade pip
-python3 -m pip install -c /tmp/torch-2.7-constraints.txt \
+# The system python3 here is 3.8 (pyproject requires >=3.10 and modern
+# setuptools refuses to build on it); use uv to get an isolated 3.11 venv
+# instead of relying on whatever interpreters happen to be on PATH.
+uv venv --python 3.11 /tmp/tl-weekly-venv
+export VIRTUAL_ENV=/tmp/tl-weekly-venv
+export PATH="/tmp/tl-weekly-venv/bin:$PATH"
+
+uv pip install -c /tmp/torch-2.7-constraints.txt \
   --index-url https://download.pytorch.org/whl/cpu \
   --extra-index-url https://pypi.org/simple \
+  --index-strategy unsafe-best-match \
   -e ".[dev,test,tabular]" \
   "torch==2.7.1+cpu" \
   "torchvision==0.22.1+cpu"
 
-python3 -c "import torch, torchvision; print(torch.__version__, torchvision.__version__)"
+python -c "import torch, torchvision; print(torch.__version__, torchvision.__version__)"
 
-python3 _diag_collect_real_model_failures.py \
+python _diag_collect_real_model_failures.py \
   --repo "$(pwd)" \
   --target tests/test_real_world_models.py \
   --marker "slow and not rare" \
