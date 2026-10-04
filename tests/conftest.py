@@ -952,6 +952,10 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
 
     _reject_process_unstable_nodeids(items)
 
+    from known_failures import apply_xfail_marks
+
+    apply_xfail_marks(items)
+
     if not __debug__:
         skip_no_assertions = pytest.mark.skip(
             reason="requires assertions; the postprocess audit cannot run under python -O"
