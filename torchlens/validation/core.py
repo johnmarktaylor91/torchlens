@@ -416,6 +416,9 @@ DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH = 64
 _CONV_FUNC_PREFIX = "conv"  # conv1d/2d/3d + conv_transpose1d/2d/3d
 _CONV_TRANSPOSE_FUNC_PREFIX = "conv_transpose"  # conv_transpose1d/2d/3d
 _MATMUL_LINEAR_FUNCS = frozenset({"addmm", "baddbmm", "bmm", "linear", "matmul", "mm"})
+# Fused attention: captured as one atomic op (see _op_reduction_depth's sdpa
+# branch for why its depth is the key/value sequence length, not 1).
+_SDPA_FUNC_NAME = "scaled_dot_product_attention"
 # Scatter/segment/index aggregations that are band-C-eligible ONLY when they are
 # ADDITIVE/mean accumulators -- i.e. they sum many FP32 source elements into one
 # destination slot, so summation-order round-off genuinely accrues. Plain
@@ -2941,6 +2944,18 @@ def _op_reduction_depth(layer: Op) -> int:
       sources per destination) stays well below threshold.
     - ``sum`` / ``mean`` / ``prod`` / ``norm`` / ``var`` / ``std`` and other
       dimension reductions: the numel of the reduced dimension(s).
+    - ``scaled_dot_product_attention``: TorchLens captures fused attention as
+      ONE atomic op, never decomposed into its constituent
+      matmul(Q,K) -> softmax -> matmul(.,V), so it is a reduction, not
+      elementwise. Depth is the key/value sequence length (``key.shape[-2]``
+      for ``[..., seq_len_kv, head_dim]``-layout operands): the fused op's
+      final stage, ``attn_weights @ value``, sums over that many terms for
+      every output element -- the same contracted-dimension role the matmul
+      family above uses for its depth, and the stage whose round-off reaches
+      the returned tensor most directly (the first stage's head_dim-deep
+      QK^T dot product is renormalized by softmax before it gets here, so its
+      own, usually-smaller, head_dim depth does not drive the final error the
+      same way).
     - elementwise / copy / view / structural ops: 1.
 
     Returns
@@ -3042,6 +3057,18 @@ def _op_reduction_depth(layer: Op) -> int:
             dim = _operand(1, "dim")
         # sum/mean/prod with no dim reduce over all elements; var/std/norm too.
         return _reduced_numel_over_dims(tensor, dim, default_all=True)
+
+    # scaled_dot_product_attention: fused and atomic (never decomposed into
+    # matmul/softmax/matmul), so it is NOT elementwise depth-1 -- its real
+    # per-output accumulation depth is the key/value sequence length, read
+    # from the key operand's second-to-last dim ([..., seq_len_kv, head_dim]).
+    # An unreadable key returns 0 (fail-toward-strict), same as every other
+    # category above.
+    if func_name == _SDPA_FUNC_NAME:
+        key = _operand(1, "key")
+        if isinstance(key, torch.Tensor) and key.dim() >= 2:
+            return int(key.shape[-2])
+        return 0
 
     # Everything else (elementwise, view, structural, copy) has depth 1: a single
     # value flows through per output element, so no FP32 reorder drift accrues.
