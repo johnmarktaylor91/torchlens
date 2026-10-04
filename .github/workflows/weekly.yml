@@ -124,16 +124,24 @@ jobs:
         # and two in one process reached 11.2 GB, so even a 20-test batch
         # got the 16 GB runner shut down (2026-10-03).
         # Every unit's junit report is merged into one file so the
-        # executed-test floor check below is unchanged. Known
-        # real-world-model failures are a round-2 item -- this only bounds
-        # memory, it does not mask them (a failing unit still fails this
-        # step).
+        # executed-test floor check below is unchanged (adjusted for the
+        # big_memory exclusion). Known real-world-model validation failures
+        # are tracked in tests/known_failures.py as strict xfail -- this step
+        # still runs and fails them honestly; it is not a skip.
+        #
+        # `and not big_memory`: a handful of real-model tests are excluded
+        # here even though they are NOT capture bugs -- their peak RSS (alone,
+        # or stacked with whatever else the host's allocator hadn't freed yet)
+        # is simply bigger than this runner's 16 GB, independent of
+        # per-file/per-test batching (FJ-weekly-green). They run instead on a
+        # large-memory fleet machine on their own schedule; see
+        # docs: big_memory marker in pyproject.toml / marker_algebra.py.
         run: |
           # Resource trace: when the host shuts the runner down mid-step, the last
           # lines show memory and disk headroom just before it happened.
           ( while true; do echo "[resources $(date -u +%H:%M:%S)] mem: $(free -m | awk '/^Mem:/{print $3 " used / " $7 " available MB"}') disk: $(df -h / | awk 'NR==2{print $4 " free"}')"; sleep 60; done ) &
           python scripts/run_pytest_per_file_sharded.py tests/ \
-            --marker "slow and not rare" \
+            --marker "slow and not rare and not big_memory" \
             --junit-dir "${{ runner.temp }}/weekly-slow-per-file" \
             --combined-junit "${{ runner.temp }}/weekly-slow.junit.xml" \
             --max-batch-size 20 \
@@ -148,7 +156,9 @@ jobs:
         # Executed-floor attestation for the ONLY leg that ever runs these
         # tiers (grind r3, R82): a marker drift or importorskip cascade that
         # hollows them out must go red, not green. Floors are roughly half
-        # the current selections (295 slow / 16 rare, counted 2026-08-15).
+        # the current selections (295 slow / 16 rare, counted 2026-08-15;
+        # unchanged by the 7-test big_memory exclusion above -- the floor
+        # already has ~140 tests of headroom).
         run: |
           python scripts/check_ci_executed_tests.py "${{ runner.temp }}/weekly-slow.junit.xml" 145
           python scripts/check_ci_executed_tests.py "${{ runner.temp }}/weekly-rare.junit.xml" 8
