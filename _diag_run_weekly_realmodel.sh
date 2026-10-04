@@ -6,8 +6,9 @@
 # ledger (FJ-weekly-green). Deleted before this branch is pushed.
 set -ex
 
-sudo apt-get update -y
-sudo apt-get install -y graphviz libcairo2
+if ! command -v dot >/dev/null 2>&1; then
+  echo "graphviz 'dot' not found and no passwordless sudo on this worker; continuing without it (only affects render-path tests, not validate_forward_pass failures)"
+fi
 
 cat > /tmp/torch-2.7-constraints.txt <<'EOF'
 torch==2.7.1+cpu
