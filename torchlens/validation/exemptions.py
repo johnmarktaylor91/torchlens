@@ -1467,6 +1467,8 @@ def _check_norm_zero_weight_annihilates(layer: Op, layers_to_perturb: list[str])
     perturbed_positions = _perturbed_parent_arg_positions(layer, layers_to_perturb)
     if not perturbed_positions or not perturbed_positions.issubset({0, 3, 4}):
         return False
+    if not _saved_output_all_finite(layer):
+        return False
     weight = _batch_norm_weight_operand(layer)
     return isinstance(weight, torch.Tensor) and weight.numel() > 0 and bool(torch.all(weight == 0))
 
@@ -2760,11 +2762,11 @@ def _addcmul_zero_annihilator_decision(
     else:
         return PosthocPerturbDecision(False, "not_addcmul_zero_annihilator")
 
+    if not _saved_output_all_finite(layer):
+        return PosthocPerturbDecision(False, "not_addcmul_zero_annihilator")
     saved_kwargs = getattr(layer, "saved_kwargs", None) or {}
     value: Any = saved_kwargs.get("value", 1)
-    if "value" not in saved_kwargs and len(args) > 3:
-        value = args[3]
-    if isinstance(value, Number) and value == 0:
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and value == 0:
         return PosthocPerturbDecision(
             True,
             "addcmul_zero_annihilator",
@@ -2815,7 +2817,7 @@ def _multiplicative_zero_annihilator_decision(
         other_position = 0
     else:
         return PosthocPerturbDecision(False, "not_multiplicative_zero_annihilator")
-    if len(args) <= other_position:
+    if len(args) <= other_position or not _saved_output_all_finite(layer):
         return PosthocPerturbDecision(False, "not_multiplicative_zero_annihilator")
     if _is_all_zero_value(args[other_position]):
         return PosthocPerturbDecision(
@@ -2879,7 +2881,7 @@ def _sdpa_zero_query_decision(
     if arg_positions.get(1) != perturbed_label:
         return PosthocPerturbDecision(False, "not_sdpa_zero_query")
     query = args[0] if len(args) > 0 else None
-    if not _is_all_zero_value(query):
+    if not _is_all_zero_value(query) or not _saved_output_all_finite(layer):
         return PosthocPerturbDecision(False, "not_sdpa_zero_query")
     return PosthocPerturbDecision(
         True,
@@ -2944,7 +2946,9 @@ def _softmax_singleton_dim_decision(
         return PosthocPerturbDecision(False, "not_softmax_singleton_dim")
     if dim < -out.ndim or dim >= out.ndim:
         return PosthocPerturbDecision(False, "not_softmax_singleton_dim")
-    if out.shape[dim] == 1:
+    # A finite logit gives exactly 1; a non-finite one gives NaN, where a
+    # correctly wired edge WOULD change under a finite perturbation.
+    if out.shape[dim] == 1 and bool(torch.all(out == 1).item()):
         return PosthocPerturbDecision(
             True,
             "softmax_singleton_reduction_dim",
@@ -3021,6 +3025,8 @@ def _layer_norm_singleton_shape_decision(
         saved_input.dim() < len(dim_sizes)
         or tuple(saved_input.shape[-len(dim_sizes) :]) != dim_sizes
     ):
+        return PosthocPerturbDecision(False, "not_layer_norm_singleton_shape")
+    if not _saved_output_all_finite(layer):
         return PosthocPerturbDecision(False, "not_layer_norm_singleton_shape")
     return PosthocPerturbDecision(
         True,
@@ -3171,7 +3177,7 @@ def _linear_zero_weight_input_decision(
         other_position = 0
     else:
         return PosthocPerturbDecision(False, "not_linear_zero_weight_input")
-    if len(args) <= other_position:
+    if len(args) <= other_position or not _saved_output_all_finite(layer):
         return PosthocPerturbDecision(False, "not_linear_zero_weight_input")
     if _is_all_zero_value(args[other_position]):
         return PosthocPerturbDecision(
@@ -3210,6 +3216,8 @@ def _conv_zero_weight_input_decision(
     arg_positions = layer.parent_arg_positions.get("args", {})
     perturbed_label = layers_to_perturb[0]
     if arg_positions.get(0) != perturbed_label:
+        return PosthocPerturbDecision(False, "not_conv_zero_weight_input")
+    if not _saved_output_all_finite(layer):
         return PosthocPerturbDecision(False, "not_conv_zero_weight_input")
     if _is_all_zero_value(args[1]):
         return PosthocPerturbDecision(
@@ -3276,6 +3284,34 @@ def _locally_constant_nonfinite_addition_decision(
             ),
         )
     return PosthocPerturbDecision(False, "not_locally_constant_nonfinite_addition")
+
+
+def _saved_output_all_finite(layer: Op) -> bool:
+    """Return whether the op's saved output is a non-empty, all-finite tensor.
+
+    Annihilator and degenerate-shape proofs claim the output is constant in the
+    perturbed parent. That identity holds only for finite operands (``0 * inf``
+    and ``inf - inf`` are NaN): a non-finite saved operand makes the ORIGINAL
+    output non-finite, so a correctly wired edge WOULD change the output under a
+    finite perturbation, and an unchanged output is evidence of a capture bug,
+    never something to exempt. A finite saved output proves every operand that
+    reached it through the annihilated term was finite on this capture.
+
+    Parameters
+    ----------
+    layer:
+        Op whose saved output is inspected.
+
+    Returns
+    -------
+    bool
+        True when ``layer.out`` is a non-empty tensor with no NaN or Inf.
+    """
+
+    out = getattr(layer, "out", None)
+    if not isinstance(out, torch.Tensor) or out.numel() == 0:
+        return False
+    return bool(torch.isfinite(out).all().item())
 
 
 def _is_all_zero_value(value: Any) -> bool:

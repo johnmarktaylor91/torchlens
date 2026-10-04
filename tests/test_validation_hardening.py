@@ -710,6 +710,7 @@ def test_addcmul_zero_annihilator_refuses_unproved_cases() -> None:
 
     class _FakeAddcmulOp:
         func_name = "addcmul"
+        out = torch.zeros(2)  # a finite saved output
 
         def __init__(self, saved_kwargs: dict | None = None) -> None:
             self.saved_kwargs = saved_kwargs or {}
@@ -839,6 +840,8 @@ def test_check_norm_zero_weight_annihilates_never_exempts_weight_or_bias() -> No
     """
 
     class _FakeBatchNormOp:
+        out = torch.zeros(2)  # a finite saved output
+
         def __init__(self, weight) -> None:
             self.saved_args = [None, weight, None, None, None, False]
             self.parent_arg_positions = {
@@ -947,6 +950,8 @@ def test_sdpa_zero_query_decision_scoped_correctly() -> None:
     from torchlens.validation.exemptions import _sdpa_zero_query_decision
 
     class _FakeSdpaOp:
+        out = torch.zeros(2)  # a finite saved output
+
         def __init__(self, query) -> None:
             self.saved_args = (query, None, None)
             self.parent_arg_positions = {
@@ -988,6 +993,8 @@ def test_linear_zero_input_annihilates_weight_perturbation() -> None:
     from torchlens.validation.exemptions import _linear_zero_weight_input_decision
 
     class _FakeLinearOp:
+        out = torch.zeros(2)  # a finite saved output
+
         def __init__(self, input_value, weight_value) -> None:
             self.saved_args = (input_value, weight_value)
             self.parent_arg_positions = {
@@ -1048,7 +1055,7 @@ def test_softmax_singleton_dim_decision_scoped_correctly() -> None:
             self.saved_args = (None,)
             self.saved_kwargs = {"dim": dim}
             self.parent_arg_positions = {"args": {0: "logits_label"}, "kwargs": {}}
-            self.out = torch.zeros(out_shape)
+            self.out = torch.ones(out_shape)  # softmax over a size-1 dim of finite logits
 
     singleton = _FakeSoftmaxOp((2, 3, 1), dim=-1)
     assert (
@@ -1130,6 +1137,8 @@ def test_layer_norm_singleton_shape_decision_scoped_correctly() -> None:
     from torchlens.validation.exemptions import _layer_norm_singleton_shape_decision
 
     class _FakeLayerNormOp:
+        out = torch.zeros(2)  # a finite saved output
+
         def __init__(self, normalized_shape) -> None:
             self.saved_args = (None, normalized_shape, None, None)
             self.parent_arg_positions = {"args": {0: "input_label"}, "kwargs": {}}
@@ -1186,6 +1195,111 @@ def test_layer_norm_singleton_shape_decision_scoped_correctly() -> None:
     )
 
 
+def test_annihilator_and_singleton_proofs_refuse_a_non_finite_saved_output() -> None:
+    """Armed-proof: every constant-output proof requires a finite saved output.
+
+    ``0 * inf`` and ``inf - inf`` are NaN, so a non-finite saved operand makes the
+    ORIGINAL output non-finite; a correctly wired edge would then CHANGE under a
+    finite perturbation, and an unchanged output is a capture bug to surface,
+    never to exempt. Each proof below would fire on its zero/singleton premise
+    alone; a NaN or Inf in the saved output must keep it strict.
+    """
+
+    from types import SimpleNamespace
+
+    from torchlens.validation.exemptions import (
+        _conv_zero_weight_input_decision,
+        _layer_norm_singleton_shape_decision,
+        _linear_zero_weight_input_decision,
+        _sdpa_zero_query_decision,
+        _softmax_singleton_dim_decision,
+    )
+
+    def fake(out: torch.Tensor, positions: dict, **extra) -> SimpleNamespace:
+        return SimpleNamespace(
+            out=out,
+            parent_arg_positions={"args": positions, "kwargs": {}},
+            saved_kwargs=extra.pop("saved_kwargs", {}),
+            **extra,
+        )
+
+    for bad in (float("nan"), float("inf")):
+        out = torch.tensor([0.0, bad])
+        assert (
+            _multiplicative_zero_annihilator_decision(
+                fake(out, {0: "p"}), ["p"], (torch.tensor([1.0, bad]), 0.0)
+            ).exempt
+            is False
+        )
+        assert (
+            _addcmul_zero_annihilator_decision(
+                fake(out, {0: "i", 1: "g", 2: "b"}),
+                ["b"],
+                (torch.zeros(2), torch.zeros(2), torch.tensor([1.0, bad])),
+            ).exempt
+            is False
+        )
+        assert (
+            _linear_zero_weight_input_decision(
+                fake(out, {0: "x", 1: "w"}), ["w"], (torch.zeros(1, 2), torch.ones(2, 2))
+            ).exempt
+            is False
+        )
+        assert (
+            _linear_zero_weight_input_decision(
+                fake(out, {0: "x", 1: "w"}), ["x"], (torch.ones(1, 2), torch.zeros(2, 2))
+            ).exempt
+            is False
+        )
+        assert (
+            _conv_zero_weight_input_decision(
+                fake(out, {0: "x", 1: "w"}),
+                ["x"],
+                (torch.ones(1, 1, 3), torch.zeros(1, 1, 1)),
+            ).exempt
+            is False
+        )
+        assert (
+            _sdpa_zero_query_decision(
+                fake(out, {0: "q", 1: "k", 2: "v"}), ["k"], (torch.zeros(1, 1, 2), None, None)
+            ).exempt
+            is False
+        )
+        assert (
+            _softmax_singleton_dim_decision(
+                fake(torch.tensor([[1.0], [bad]]), {0: "x"}, saved_kwargs={"dim": -1}),
+                ["x"],
+                (None,),
+            ).exempt
+            is False
+        )
+        assert (
+            _layer_norm_singleton_shape_decision(
+                fake(out, {0: "x"}), ["x"], (torch.ones(2, 1), (1,), None, None)
+            ).exempt
+            is False
+        )
+        bn = fake(
+            out,
+            {0: "x", 3: "rm", 4: "rv"},
+            saved_args=[None, torch.zeros(2), None, None, None, False],
+        )
+        assert _check_norm_zero_weight_annihilates(bn, ["x"]) is False
+
+    # The same premises with a finite saved output still prove the identity.
+    finite = torch.zeros(2)
+    assert (
+        _multiplicative_zero_annihilator_decision(
+            fake(finite, {0: "p"}), ["p"], (torch.ones(2), 0.0)
+        ).exempt
+        is True
+    )
+    bn_ok = fake(
+        finite, {0: "x", 3: "rm", 4: "rv"}, saved_args=[None, torch.zeros(2), None, None, None]
+    )
+    assert _check_norm_zero_weight_annihilates(bn_ok, ["x"]) is True
+
+
 def test_w35_nonzero_literal_never_exempted() -> None:
     """Armed-proof: the annihilator proof requires an exactly-zero co-arg.
 
@@ -1196,6 +1310,7 @@ def test_w35_nonzero_literal_never_exempted() -> None:
 
     class _FakeOp:
         saved_args = None
+        out = torch.zeros(3)  # a finite saved output
 
         def __init__(self, func_name: str, args_map: dict) -> None:
             self.func_name = func_name
