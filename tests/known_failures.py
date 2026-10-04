@@ -1,4 +1,4 @@
-"""Ledger of tracked Weekly slow-tier real-model validation failures.
+"""Ledger of tracked Weekly slow-tier failures (mostly real-model validation).
 
 JMT's ruling (round 2, lane-L8-ci-fix / lane-L17-integrate, 2026-10-02/03): the
 Weekly slow tier must not stay red as a durable state. A failure here is
@@ -156,11 +156,6 @@ KNOWN_FAILURES: tuple[KnownFailure, ...] = (
         tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
     ),
     KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_mobilevit_xxs",
-        reason="assert False: validate_forward_pass(...) returned False",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
         nodeid="tests/test_real_world_models.py::test_opticflow_raftlarge",
         reason="validate_forward_pass fail-closed: deepcopy cannot snapshot non-registered plain attribute(s) (CorrBlock[0].corr_pyramid), so model-state restoration cannot be proven",
         tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
@@ -196,33 +191,8 @@ KNOWN_FAILURES: tuple[KnownFailure, ...] = (
         tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
     ),
     KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_timm_beit_base_patch16_224",
-        reason="assert False: validate_forward_pass(...) returned False",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_timm_convnextv2_atto",
-        reason="assert False: validate_forward_pass(...) returned False",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_timm_darknet21",
-        reason="assert False: validate_forward_pass(...) returned False",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_timm_ecaresnet101d",
-        reason="assert False: validate_forward_pass(...) returned False",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
         nodeid="tests/test_real_world_models.py::test_timm_efficientformer",
         reason="validate_forward_pass fail-closed: deepcopy cannot snapshot non-registered plain attribute(s) (Attention[0].attention_bias_cache), so model-state restoration cannot be proven",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_timm_gluon_resnext101_32x4d",
-        reason="assert False: validate_forward_pass(...) returned False",
         tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
     ),
     KnownFailure(
@@ -231,34 +201,27 @@ KNOWN_FAILURES: tuple[KnownFailure, ...] = (
         tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
     ),
     KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_timm_nfnet_l0",
-        reason="assert False: validate_forward_pass(...) returned False",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_timm_res2net50",
-        reason="assert False: validate_forward_pass(...) returned False",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_timm_resnest14d",
-        reason="assert False: validate_forward_pass(...) returned False",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_timm_seresnet152",
-        reason="assert False: validate_forward_pass(...) returned False",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_timm_tresnet",
-        reason="assert False: validate_forward_pass(...) returned False",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
         nodeid="tests/test_real_world_models.py::test_timm_xcit_tiny_24_p8_224",
         reason="assert False: validate_forward_pass(...) returned False",
         tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/bench/test_capture_bench.py::test_capture_bench_matrix",
+        reason=(
+            "UserWarning promoted to error: tensor arguments with no graph/source "
+            "provenance, adopted at module entry blocks.layers.N.dropout of the "
+            "nn.TransformerEncoder GPT-block workload (also on torch 2.14.1)"
+        ),
+        tracking="Weekly 37176706721 triage (2026-10-04)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_weightsfree_order.py::test_realpre_cell_refuses_typed_never_refutes",
+        reason=(
+            "structure-only capture subprocess exits 1: first import of torch._dynamo "
+            "runs under the installed wrappers and hits a circular import (torch 2.7.1 "
+            "only; passes on torch 2.14.1)"
+        ),
+        tracking="Weekly 37176706721 triage (2026-10-04)",
     ),
 )
 

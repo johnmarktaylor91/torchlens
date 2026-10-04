@@ -130,6 +130,9 @@ def test_vgg16(default_input1):
 
 
 @pytest.mark.slow
+# SaveBudgetExceededError on the 16 GB GitHub runner (3.51 GB retained against a 3.49 GB auto
+# budget; Weekly 37176706721, 2026-10-04); passes alone on a 125 GB worker.
+@pytest.mark.big_memory
 def test_vit(default_input1):
     model = torchvision.models.vit_l_16()
     assert validate_forward_pass(model, default_input1)
@@ -282,6 +285,9 @@ def test_resnet50(default_input1):
 
 
 @pytest.mark.slow
+# SaveBudgetExceededError on the 16 GB GitHub runner (4.43 GB retained against a 4.41 GB auto
+# budget; Weekly 37176706721, 2026-10-04); passes alone on a 125 GB worker.
+@pytest.mark.big_memory
 def test_convnext_large(default_input1):
     model = torchvision.models.convnext_large()
     assert validate_forward_pass(model, default_input1)
@@ -453,6 +459,9 @@ def test_resnext(default_input1):
 
 
 @pytest.mark.slow
+# SaveBudgetExceededError on the 16 GB GitHub runner (5.41 GB retained against a 5.40 GB auto
+# budget; Weekly 37176706721, 2026-10-04); passes alone on a 125 GB worker.
+@pytest.mark.big_memory
 def test_regnet(default_input1):
     model = torchvision.models.regnet_x_32gf()
     assert validate_forward_pass(model, default_input1)
@@ -911,6 +920,9 @@ def test_timm_adv_inception_v3(default_input1):
 
 
 @pytest.mark.slow
+# SaveBudgetExceededError on the 16 GB GitHub runner (5.25 GB retained against a 5.25 GB auto
+# budget; Weekly 37176706721, 2026-10-04); passes alone on a 125 GB worker.
+@pytest.mark.big_memory
 def test_timm_cait_s24_224(default_input1):
     timm = pytest.importorskip("timm")
     model = timm.models.cait_s24_224()
@@ -2237,6 +2249,9 @@ def test_video_mvit_v2_s():
 
 
 @pytest.mark.slow
+# SaveBudgetExceededError on the 16 GB GitHub runner (4.28 GB retained against a 4.26 GB auto
+# budget; Weekly 37176706721, 2026-10-04); passes alone on a 125 GB worker.
+@pytest.mark.big_memory
 def test_video_r3d_18():
     model = torchvision.models.video.r3d_18()
     model_input = torch.randn(16, 3, 16, 112, 112)
