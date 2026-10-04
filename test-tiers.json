@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "project": "torchlens",
+  "command": [
+    "uv",
+    "run",
+    "--python",
+    "3.11",
+    "--with-requirements",
+    "requirements-test-tiers.txt",
+    "--with-editable",
+    ".[dev,test,tabular]",
+    "python",
+    "-m",
+    "pytest"
+  ],
+  "inner": {
+    "seconds": 300,
+    "cpus": 1,
+    "args": [
+      "-o",
+      "addopts=",
+      "-x",
+      "--tb=short"
+    ],
+    "map": {
+      "torchlens/visualization/themes.py": [
+        "tests/test_themes.py"
+      ],
+      "torchlens/visualization/theme_registry.py": [
+        "tests/test_themes.py"
+      ]
+    }
+  },
+  "pre_merge": {
+    "seconds": 12000,
+    "shards": 8,
+    "cpus": 1,
+    "args": [
+      "tests/",
+      "-o",
+      "addopts=",
+      "-m",
+      "not rare and not slow",
+      "--splits",
+      "{shards}",
+      "--group",
+      "{shard}",
+      "--splitting-algorithm",
+      "least_duration",
+      "--randomly-seed=20261003",
+      "--tb=short"
+    ]
+  },
+  "ci": {
+    "provider": "github-actions",
+    "workflows": [
+      "tests.yml",
+      "lint.yml",
+      "quality.yml",
+      "nightly.yml",
+      "weekly.yml",
+      "latest-canary.yml",
+      "mutation.yml",
+      "large-graphs.yml",
+      "release-dry-run.yml",
+      "release.yml"
+    ],
+    "scope": "Full supported-version matrix (10 smoke rows: torch 2.1 to 2.13, py3.10 to 3.13), lint, typing, packaging, nightly fast/mid/heavy/serial tiers and previews, weekly slow/rare and mutation margins, latest-torch canary, the opt-in 100k+ node graph suite, and the release dry run. Reuse an unchanged passing result; never rerun locally instead.",
+    "budget_minutes_per_job": {
+      "tests.yml": 45,
+      "lint.yml": 20,
+      "quality.yml": 20,
+      "latest-canary.yml": 45,
+      "release-dry-run.yml": 15,
+      "nightly.yml": 120,
+      "weekly.yml": 350,
+      "mutation.yml": 350,
+      "large-graphs.yml": 340
+    },
+    "status": "Integrated 2026-10-03: every workflow runs on push to ci/** and on workflow_dispatch (release.yml on main only), and every job carries timeout-minutes within the budgets above (nightly jobs 30 to 120, weekly extended-tests 330)."
+  },
+  "notes": [
+    "Inner loop: test-tier inner --changed PATH or --test tests/file.py::test_name. The map is deliberately partial; unmapped changes require reviewed targets and never fall back to the whole suite.",
+    "Commit gate: pytest tests/ -m smoke -n 4 with OMP_NUM_THREADS=1 (pytest-xdist ships in the dev extra). Smoke is ~1,476 coverage-chosen tests, about 1.5 to 2 minutes on 4 cores; tests/test_marker_lint.py caps it at 1,500, so a new smoke test needs a matching demotion.",
+    "Markers: smoke < 5 s each, heavy 5 to 20 s, slow > 20 s, serial runs without xdist (CI runs it in a separate step), rare is excluded by default, big_memory marks slow tests that exceed a 16 GB GitHub runner. The duration tripwire is load-calibrated by a measured slowdown probe (clamped 1x to 4x) and prints its factors in the terminal summary.",
+    "Pre_merge is the phase-boundary tier: 8 single-process shards over 'not rare and not slow' with one seed and one revision. The tier measured ~21-26 minutes at -n 4 on a 4-core worker (~90 core-minutes), so ~12 minutes of tests per shard plus uv setup and collection, inside the 25-minute slice. Each shard is one process, so serial tests run safely. Timeout or a refused shard is incomplete validation, never a pass.",
+    "Weekly GitHub slow tier runs one pytest process per file (scripts/run_pytest_per_file_sharded.py), batching large files and running tests/test_real_world_models.py one test per process; big_memory tests are excluded there.",
+    "big_memory tests run in the project-registry scheduled suite weekly-big-memory (Sat 06:30 UTC on a large-memory fleet worker, 24 GiB, 2 h timeout), declared in ~/desk/provision/project-registry.json, not here.",
+    "tests/known_failures.py holds the strict-xfail ledger of known real-model failures (round 2); a fixed model turns its strict xfail red, so the ledger only shrinks.",
+    "Linux workers need uv, Python 3.11 and Graphviz. Oracle goldens exist per environment; off-canonical environments fail locally and skip only when CI is set."
+  ]
+}
