@@ -236,6 +236,46 @@ def pytest_terminal_summary(terminalreporter: Any, exitstatus: int, config: pyte
     if merged is not None:
         line += f", {merged['load_factor']:.2f}x largest xdist worker"
     terminalreporter.write_line(line)
+    if not os.environ.get("CI") and smoke_prefilter_active(config):
+        gaps = _ci_smoke_parity_gaps()
+        if gaps:
+            terminalreporter.write_line(
+                "torchlens CI parity: this smoke run differs from CI's enforcing smoke row ("
+                + "; ".join(gaps)
+                + "), so its answer can differ from CI's; "
+                "`python scripts/smoke_ci_parity.py` runs the gate in that row's environment",
+                yellow=True,
+            )
+
+
+def _ci_smoke_parity_gaps() -> list[str]:
+    """Return how this interpreter differs from CI's enforcing smoke row.
+
+    CI installs the ``tabular`` and ``viz`` extras on every row, and its
+    enforcing row runs the environment the env-fingerprinted goldens were
+    recorded under; off that environment, outside CI, those golden families
+    fail closed by design (``tests/_oracle_env.py``).
+
+    Returns
+    -------
+    list[str]
+        One phrase per difference; empty when the environment matches.
+    """
+
+    import importlib.util
+
+    from _oracle_env import env_fingerprint
+
+    gaps = [
+        f"{module} not installed (`{extra}` extra)"
+        for module, extra in (("pandas", "tabular"), ("matplotlib", "viz"))
+        if importlib.util.find_spec(module) is None
+    ]
+    marker = Path(__file__).parent / "godobject_oracle" / "goldens" / "ENV"
+    canonical = marker.read_text().strip()
+    if env_fingerprint() != canonical:
+        gaps.append(f"environment {env_fingerprint()}, goldens recorded on {canonical}")
+    return gaps
 
 
 def pytest_unconfigure(config: pytest.Config) -> None:

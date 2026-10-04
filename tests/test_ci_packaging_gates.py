@@ -10,6 +10,7 @@ live in the workflows themselves.
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 
 import pytest
@@ -60,6 +61,46 @@ def test_exactly_one_smoke_row_enforces_the_byte_oracle_goldens() -> None:
             f"committed {goldens_dir} ENV marker ({marker}); rebaseline the "
             "goldens deliberately or fix the matrix row — do not let them drift"
         )
+
+
+def test_local_ci_smoke_script_matches_the_enforcing_row() -> None:
+    """``scripts/smoke_ci_parity.py`` pins the same environment as the enforcing row.
+
+    The local commit gate only answers like CI when it runs CI's enforcing
+    environment: same python, torch, torchvision, transformers and numpy, the
+    same extras and byte-emitter pins, and the same smoke-step env and floor.
+    Bumping the workflow without the script (or the reverse) goes red here.
+    """
+
+    spec = importlib.util.spec_from_file_location(
+        "smoke_ci_parity", _PROJECT_ROOT / "scripts" / "smoke_ci_parity.py"
+    )
+    assert spec is not None and spec.loader is not None
+    script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(script)
+
+    job = _smoke_job()
+    row = next(
+        row for row in job["strategy"]["matrix"]["include"] if row.get("oracle_enforce") == "1"
+    )
+    assert (
+        str(row["python"]),
+        str(row["torch"]),
+        str(row["torchvision"]),
+    ) == (script.PYTHON, script.TORCH, script.TORCHVISION)
+    assert str(row["transformers"]) == script.TRANSFORMERS
+    assert str(row["numpy"]) == script.NUMPY_SPEC
+
+    install_step = next(step for step in job["steps"] if "uv pip install" in step.get("run", ""))
+    for token in (f'"{script.EXTRAS}"', *(f'"{pin}"' for pin in script.EXTRA_PINS)):
+        assert token in install_step["run"], f"CI install no longer carries {token}"
+
+    run_step = next(step for step in job["steps"] if step.get("name", "").startswith("Run smoke"))
+    assert run_step["env"]["OMP_NUM_THREADS"] == script.SMOKE_ENV["OMP_NUM_THREADS"]
+    assert script.SMOKE_ENV["TORCHLENS_ORACLE_ENFORCE"] == "1"
+    assert "-m smoke -n 4" in run_step["run"]
+    floor_step = next(step for step in job["steps"] if "check_ci_executed_tests.py" in step["run"])
+    assert f"{script.EXECUTED_FLOOR} {script.SKIP_FRACTION}" in floor_step["run"]
 
 
 def test_every_smoke_row_runs_the_executed_floor_attestation() -> None:

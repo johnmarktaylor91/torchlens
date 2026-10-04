@@ -227,3 +227,6 @@ service-account*.json
 *_token.txt
 config.env
 # --- end secrets block ---
+
+# Pinned venv built by scripts/smoke_ci_parity.py
+.venv-ci-smoke/
