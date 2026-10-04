@@ -1396,3 +1396,11 @@ jobs:
             echo "vendor drift detected (see summary): open an intentional contract-profile update, never move a release gate"
             exit 1
           fi
+
+  release-dry-run:
+    # release-dry-run.yml is PR-path-filtered on the files that can break it
+    # (the hash lock, release.yml, pyproject.toml's semantic_release config,
+    # the custom parser); this nightly leg re-runs the same dry run
+    # unconditionally so a break that reached main without going through
+    # that PR check (an admin merge, a direct push) is still caught daily.
+    uses: ./.github/workflows/release-dry-run.yml

@@ -1,0 +1,97 @@
+name: Release Dry Run
+
+# Exercises the actual release tool (not just its unit-tested backstop) on
+# every change that could break it before the next real release does: the
+# hash-locked dependency set, release.yml itself, the semantic-release
+# config in pyproject.toml, or the custom no-major-bump parser. This is the
+# gap that let a python-semantic-release / GitPython incompatibility reach
+# main undetected (fix/fi-release, release-requirements.txt): the parser's
+# own tests mock the library, so a config-load crash in the real tool never
+# surfaced until the Release workflow ran for real.
+on:
+  workflow_call:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/release-requirements.txt"
+      - ".github/workflows/release.yml"
+      - ".github/workflows/release-dry-run.yml"
+      - "pyproject.toml"
+      - "scripts/no_major_parser.py"
+  # Work branches named ci/** run the full workflow on push (and any branch
+  # on manual dispatch) so GitHub's own runners test a branch before main.
+  push:
+    branches: ["ci/**"]
+    paths:
+      - ".github/workflows/release-requirements.txt"
+      - ".github/workflows/release.yml"
+      - ".github/workflows/release-dry-run.yml"
+      - "pyproject.toml"
+      - "scripts/no_major_parser.py"
+  workflow_dispatch:
+
+# Default-deny token scope (grind r3, R61/b2:D1): this job only reads the
+# repo and makes no push, tag, or release -- GH_TOKEN below is a placeholder
+# string, never a real credential.
+permissions:
+  contents: read
+
+concurrency:
+  group: "${{ github.head_ref || github.ref }}-release-dry-run"
+  cancel-in-progress: true
+
+jobs:
+  noop-version:
+    name: semantic-release --noop version (no token, no push)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Full history + tags: semantic-release computes the next version
+          # from the commits since the latest tag.
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Install the hash-locked release stack
+        run: |
+          pip install --require-hashes --only-binary :all: \
+            -r .github/workflows/release-requirements.txt
+
+      - name: Dry-run the version computation and reject a major bump
+        # --noop performs no push, no tag, and no GitHub API call that needs
+        # a real credential (verified: python-semantic-release's noop path
+        # short-circuits Github.create_release before any network call);
+        # GH_TOKEN only satisfies the config loader's non-empty string
+        # check. This step fails the way the real release job would: a
+        # nonzero exit here (a crash in config load, commit parsing, or
+        # version computation) fails the job outright via pipefail, and a
+        # successfully computed MAJOR bump fails it explicitly -- TorchLens
+        # stays on the 2.x family per the locked release policy, and
+        # major_on_zero plus scripts/no_major_parser.py should already
+        # prevent one from ever reaching this point.
+        env:
+          GH_TOKEN: noop-placeholder-token
+        run: |
+          set -o pipefail
+          semantic-release -v --noop version 2>&1 | tee /tmp/release-dry-run.log
+
+          computed="$(grep -oE 'next version is: [0-9]+\.[0-9]+\.[0-9]+' /tmp/release-dry-run.log \
+            | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | tail -1)"
+          if [ -z "$computed" ]; then
+            echo "no pending release computed; nothing to validate"
+            exit 0
+          fi
+
+          current="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")"
+          current_major="${current%%.*}"
+          computed_major="${computed%%.*}"
+          echo "current version: $current ; computed next version: $computed"
+          if [ "$computed_major" != "$current_major" ]; then
+            echo "computed next version $computed is a MAJOR bump over $current -- refusing"
+            exit 1
+          fi
