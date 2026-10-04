@@ -222,6 +222,19 @@ def test_segment_legality_rejects_skipped_sibling() -> None:
         trace.cleanup()
 
 
+@pytest.mark.smoke
+def test_segment_legality_rejects_parent_op_connector() -> None:
+    """Siblings joined only through a parent-owned op are not a legal segment."""
+
+    trace = _trace(ParentOpConnectors(), torch.randn(2, 8))
+    try:
+        graph = analyze_collapse(trace).child_flow_graphs["self"]
+        assert not _segment_is_legal(("b0", "b1"), graph)
+        assert not _segment_is_legal(("b0", "b1", "b2", "b3"), graph)
+    finally:
+        trace.cleanup()
+
+
 @pytest.mark.heavy
 def test_densenet121_max_segments_respect_block_transition_order(tmp_path: object) -> None:
     """DenseNet-121 max never groups denseblocks across their transitions."""

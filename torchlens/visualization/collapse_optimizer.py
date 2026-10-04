@@ -33,7 +33,7 @@ from .._errors import InvalidArgumentError
 from ..errors._base import TorchLensWarning
 from ..utils.display import user_stacklevel
 from ._collapse_disclosures import _warn_budget_fallback
-from ._collapse_runs import longest_uniform_legal_run
+from ._collapse_runs import FlowAdjacency, _flow_adjacency, longest_uniform_legal_run
 from ._collapse_signatures import fingerprints_for
 from ._segment_descriptors import (
     _child_segment_covered_ops,
@@ -1671,11 +1671,50 @@ def _segment_is_legal(
     addresses: tuple[str, ...],
     graph: ChildCondensedFlowGraph | None,
 ) -> bool:
-    """Return whether ``addresses`` satisfy chain-interval segment legality."""
+    """Return whether ``addresses`` may render as one segment box.
+
+    A segment box asserts adjacency (collapse reference, "Segment boxes"): its
+    members are consecutive siblings in flow order, each joined directly to
+    the next. The run-fold chain-interval contract alone also admits one-hop
+    connectors between members -- a skipped sibling, a parent-owned op, or an
+    external round trip -- and a segment absorbs none of them, so the rendered
+    box would draw edges out to the connector and back in: a cycle the network
+    does not have, around siblings that never ran back to back.
+    """
 
     if len(addresses) < 2 or graph is None:
         return False
-    return _run_fold_is_chain_interval(addresses, graph)
+    adjacency = _flow_adjacency(graph)
+    if _segment_adjacent_prefix_length(addresses, adjacency) < len(addresses):
+        return False
+    return _run_fold_is_chain_interval(addresses, adjacency)
+
+
+def _segment_adjacent_prefix_length(
+    members: Sequence[str],
+    adjacency: FlowAdjacency,
+) -> int:
+    """Return the longest prefix of ``members`` forming a direct sibling chain.
+
+    The prefix is flow-consecutive and every member feeds the next through a
+    direct condensed edge. Both properties hold for every shorter prefix, so
+    the result is an exact ceiling on segment-legal prefix lengths.
+    """
+
+    if not members:
+        return 0
+    first = adjacency.flow_index.get(members[0])
+    if first is None:
+        return 0
+    length = 1
+    for offset in range(1, len(members)):
+        left, right = members[offset - 1], members[offset]
+        if adjacency.flow_index.get(right) != first + offset:
+            break
+        if (left, right) not in adjacency.edge_set:
+            break
+        length += 1
+    return length
 
 
 def _longest_legal_segment_prefix(
@@ -1738,11 +1777,15 @@ def _longest_legal_segment_prefix(
         # component against a graph that can never pass.
         return None
     signals = analysis.signals
+    # Adjacency ceiling: a prefix that stops being a direct sibling chain stays
+    # broken for every longer prefix, so ``_segment_is_legal`` fails all of
+    # them; capping here keeps a non-adjacent component (DenseNet's
+    # denseblocks around their transitions) from probing every end.
+    limit = _segment_adjacent_prefix_length(members, _flow_adjacency(graph))
     # Landmark ceiling: ``any(...)`` over a prefix short-circuits at the first
     # landmark member, and every longer prefix still contains it, so the first
     # landmark index is the exclusive bound on candidate lengths.
-    limit = len(members)
-    for index, address in enumerate(members):
+    for index, address in enumerate(members[:limit]):
         if signals[address].landmark_edges >= 2:
             limit = index
             break

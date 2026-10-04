@@ -68,6 +68,10 @@ same-class siblings; the stem and head remain at full detail.*
 ## Segment boxes
 
 `collapse="max"` can replace a legal consecutive sibling interval with a dashed segment box.
+Legal means the members ran back to back in execution order and each feeds the next directly:
+a box never groups same-kind siblings that alternate with other siblings, and never hides a
+parent-owned op between its members, so the collapsed graph shows no edge or cycle the traced
+network lacks.
 
 ![Maximum collapse on ResNet-50](../images/collapse/segments.svg)
 
