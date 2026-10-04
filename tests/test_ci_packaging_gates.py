@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 import yaml
@@ -63,6 +64,18 @@ def test_exactly_one_smoke_row_enforces_the_byte_oracle_goldens() -> None:
         )
 
 
+def _load_smoke_ci_parity_script() -> ModuleType:
+    """Import ``scripts/smoke_ci_parity.py`` by path (``scripts/`` is no package)."""
+
+    spec = importlib.util.spec_from_file_location(
+        "smoke_ci_parity", _PROJECT_ROOT / "scripts" / "smoke_ci_parity.py"
+    )
+    assert spec is not None and spec.loader is not None
+    script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(script)
+    return script
+
+
 def test_local_ci_smoke_script_matches_the_enforcing_row() -> None:
     """``scripts/smoke_ci_parity.py`` pins the same environment as the enforcing row.
 
@@ -72,12 +85,7 @@ def test_local_ci_smoke_script_matches_the_enforcing_row() -> None:
     Bumping the workflow without the script (or the reverse) goes red here.
     """
 
-    spec = importlib.util.spec_from_file_location(
-        "smoke_ci_parity", _PROJECT_ROOT / "scripts" / "smoke_ci_parity.py"
-    )
-    assert spec is not None and spec.loader is not None
-    script = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(script)
+    script = _load_smoke_ci_parity_script()
 
     job = _smoke_job()
     row = next(
@@ -103,6 +111,36 @@ def test_local_ci_smoke_script_matches_the_enforcing_row() -> None:
         step for step in job["steps"] if "check_ci_executed_tests.py" in step.get("run", "")
     )
     assert f"{script.EXECUTED_FLOOR} {script.SKIP_FRACTION}" in floor_step["run"]
+
+
+def test_agent_docs_name_the_ci_parity_script_as_the_commit_gate() -> None:
+    """The documented commit-level gate is the CI-parity script, at its pins.
+
+    A plain ``pytest tests/ -m smoke`` fails the byte goldens closed off the
+    pinned environment, so docs naming it as the commit gate would send agents
+    to a gate that disagrees with CI. Every "commit-level gate" command line
+    in ``AGENTS.md`` and ``tests/AGENTS.md`` must run the script, the Quality
+    Gates block must run it, and each doc's pinned-environment note must
+    state the script's python and torch.
+    """
+
+    script = _load_smoke_ci_parity_script()
+    pinned = f"python {script.PYTHON}, torch {script.TORCH.split('+', 1)[0]}"
+    for doc in ("AGENTS.md", "tests/AGENTS.md"):
+        text = (_PROJECT_ROOT / doc).read_text()
+        gate_lines = [line for line in text.splitlines() if "# commit-level gate" in line]
+        assert gate_lines, f"{doc} no longer names a commit-level gate command"
+        for line in gate_lines:
+            assert line.startswith("python scripts/smoke_ci_parity.py"), (
+                f"{doc} names a commit-level gate other than the CI-parity script: {line!r}"
+            )
+        assert f"Byte goldens enforce only in the pinned environment ({pinned})" in text, (
+            f"{doc} lost or drifted its pinned-environment note (expected {pinned})"
+        )
+    agents = (_PROJECT_ROOT / "AGENTS.md").read_text()
+    quality_gates = agents.split("## Quality Gates", 1)[1].split("```", 2)[1]
+    assert "python scripts/smoke_ci_parity.py" in quality_gates
+    assert "pytest tests/ -m smoke" not in quality_gates
 
 
 def test_every_smoke_row_runs_the_executed_floor_attestation() -> None:

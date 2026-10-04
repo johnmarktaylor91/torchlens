@@ -32,7 +32,8 @@ pytest config excludes `rare` tests via `addopts = -m 'not rare'`.
 ```bash
 pytest tests/test_toy_models.py            # single file — targeted suites ARE the per-step gate
 pytest tests/test_toy_models.py::test_name # single test
-pytest tests/ -m smoke                     # commit-level gate (~1.4k coverage-chosen tests, ~3 min)
+python scripts/smoke_ci_parity.py -n 4     # commit-level gate: smoke in CI's pinned enforcing environment
+pytest tests/ -m smoke -n 4                # quick smoke in your own venv (~1.4k tests; not the gate)
 pytest tests/ -m "not rare and not slow and not heavy" -x --tb=short  # mid backstop
 pytest tests/ -m "not rare and not slow"   # phase-boundary backstop (keeps rare excluded)
 pytest tests/                              # default suite excluding rare
@@ -104,14 +105,16 @@ through an imported alias: `tests/test_marker_lint.py::test_smoke_prefilter_neve
 fails any non-prefiltered session in which a smoke item sits in a file the pre-filter would
 skip. `TORCHLENS_SMOKE_PREFILTER=0` turns the pre-filter off.
 
-A plain `pytest tests/ -m smoke` answers like CI only in CI's environment. CI installs the
-`dev`, `tabular` and `viz` extras on every row (without pandas, every smoke test that reaches a
-tabular surface fails), and the env-fingerprinted golden families enforce only on the
-environment their goldens were recorded under, failing closed on any other non-CI interpreter
-by design. `python scripts/smoke_ci_parity.py [-n N]` builds a venv pinned to the enforcing
-smoke row (once, in `.venv-ci-smoke/`) and runs the workflow's smoke-step commands there;
-`tests/test_ci_packaging_gates.py` keeps its pins in lockstep with `tests.yml`, and a smoke run
-off that environment ends with a `torchlens CI parity:` line naming the differences.
+Byte goldens enforce only in the pinned environment (python 3.10, torch 2.13.0), so the
+commit-level gate is `python scripts/smoke_ci_parity.py [-n N]`, not a plain
+`pytest tests/ -m smoke`. The env-fingerprinted golden families enforce only on the environment
+their goldens were recorded under and fail closed on any other non-CI interpreter by design,
+so a smoke run in your own venv reports those few golden tests as failures. The script builds a
+venv pinned to CI's enforcing smoke row (once, in `.venv-ci-smoke/`) and runs the workflow's
+smoke-step commands there; `tests/test_ci_packaging_gates.py` keeps its pins in lockstep with
+`tests.yml` and these docs. A smoke run off that environment ends with a `torchlens CI parity:`
+line naming the differences. The `test` extra includes `tabular`, because CI installs it on
+every row and the tabular surfaces are smoke-tier paths.
 
 ## Fixtures
 `tests/conftest.py` owns deterministic seeding and common inputs such as image tensors,

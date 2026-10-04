@@ -18,7 +18,7 @@ The referenced sections below are part of these instructions and retain their ob
 
 ```bash
 pip install torchlens
-pip install -e ".[test]"  # local development with test extras
+pip install -e ".[dev,test]"  # local development: tooling plus test extras (test includes tabular)
 ```
 
 Graphviz rendering needs Graphviz (`apt install graphviz` on Debian/Ubuntu). Optional
@@ -121,11 +121,14 @@ specs, adversarial reviews, STATE/SUMMARY files, and the working task tracker ar
 ruff check . --fix
 mypy torchlens/
 pytest tests/<files for the code you touched> -x --tb=short     # per-step gate: targeted suites (seconds-minutes)
-pytest tests/ -m smoke -x --tb=short                            # commit-level gate (~3 min; measured 2026-10-02)
-python scripts/smoke_ci_parity.py -n 4                          # the same gate in CI's enforcing environment (see tests/AGENTS.md)
+python scripts/smoke_ci_parity.py -n 4                          # commit-level gate: smoke in CI's pinned enforcing environment
+OMP_NUM_THREADS=1 pytest tests/ -m smoke -n 4 -x --tb=short     # quick smoke in your own venv (not the gate)
 pytest tests/ -m "not rare and not slow and not heavy" -x --tb=short  # mid backstop (heavy = 5-20s tests)
 pytest tests/ -m "not rare and not slow" -x --tb=short  # phase-boundary backstop; public API/boundaries
 ```
+
+Byte goldens enforce only in the pinned environment (python 3.10, torch 2.13.0) and fail closed
+outside it and outside CI, so only the script's answer equals CI's (`tests/AGENTS.md`, "The smoke tier").
 
 Tiers by cost: `smoke` selects ~1.4k tests (1,421/20,445 collect-only, measured 2026-10-02),
 a coverage-chosen subset of the former ~9.9k-test tier (see `tests/AGENTS.md`, "The smoke
@@ -171,8 +174,11 @@ Every task must pass before completion unless the task explicitly narrows verifi
 ruff format .
 ruff check . --fix
 mypy torchlens/
-pytest tests/ -m smoke -x --tb=short
+python scripts/smoke_ci_parity.py -n 4
 ```
+
+Byte goldens enforce only in the pinned environment (python 3.10, torch 2.13.0); the script runs
+smoke there, so its answer is CI's.
 
 (CI lint runs `ruff format --check` plus `ruff check` over `torchlens tests scripts tools
 benchmarks examples notebooks`; run `ruff format` locally or the format-check leg fails.)
