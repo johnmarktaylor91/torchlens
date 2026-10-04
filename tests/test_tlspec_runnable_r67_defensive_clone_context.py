@@ -129,6 +129,9 @@ def test_r67_defensive_materialization_source_scan() -> None:
 # ======================================================================================
 
 
+# Heavy, not unmarked: the inference_mode cell took 11.3 s CPU on a GitHub fast-tier worker
+# (2026-10-03, ~7 s at reference speed); each cell is a full save/load/run matrix.
+@pytest.mark.heavy
 @pytest.mark.parametrize("caller", sorted(_CALLER_CONTEXTS))
 @pytest.mark.filterwarnings(
     # A08 random-role-init disclosure (runnable_random_init_run): this test
