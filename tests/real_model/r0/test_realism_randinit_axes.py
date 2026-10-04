@@ -91,12 +91,39 @@ def test_eager_sdpa_facet_diff_is_exactly_the_pinned_table():
         )
 
 
-def test_t5_refuses_sdpa_upstream():
+def test_sdpa_unsupported_families_still_refuse():
+    """Any family still enumerated as SDPA-unsupported must still refuse.
+
+    SDPA_UNSUPPORTED_FAMILIES is currently empty: T5 was the one member
+    (transformers 5.14.1 raised ValueError at construction under sdpa), and
+    5.18.0 added SDPA support to T5 upstream -- see
+    test_t5_sdpa_now_builds_upstream below. This loop stays so a future
+    addition to the tuple is pinned the same way.
+    """
+
     for family in SDPA_UNSUPPORTED_FAMILIES:
         spec = FAMILY_BY_NAME[family]
         assert spec.impls == ("eager",)
         with pytest.raises(ValueError, match="scaled_dot_product_attention"):
             spec.build("sdpa")
+
+
+def test_t5_sdpa_now_builds_upstream():
+    """T5 stopped refusing sdpa between transformers 5.14.1 and 5.18.0.
+
+    5.14.1 raised ValueError at construction (pinned by the former
+    test_t5_refuses_sdpa_upstream). 5.18.0 gave T5Attention a unified
+    attention-interface (ALL_ATTENTION_FUNCTIONS) and set
+    `_supports_sdpa = True` on the model class, confirmed directly against
+    the installed package source (FK-transformers re-record, 2026-10-04).
+    T5 stays eager-only in FamilySpec.impls: this only pins that
+    construction no longer refuses, not a measured sdpa facet floor.
+    """
+
+    spec = FAMILY_BY_NAME["t5"]
+    assert spec.impls == ("eager",)
+    model = spec.build("sdpa")
+    assert model.config._attn_implementation == "sdpa"
 
 
 @pytest.mark.parametrize("family", sorted(PRIMARY_LEAF))

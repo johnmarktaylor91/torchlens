@@ -1,8 +1,22 @@
 """Committed R0 expectations: floors, diffs, manifests (build rows A4/A5).
 
 ``expectations_r0.json`` is the REVIEWED measured golden (generated against
-transformers 5.14.1 / torch 2.13.0 on 2026-08-26 by tracing the committed
-``families.py`` builders; regenerate deliberately, never with ``--fix``):
+transformers 5.18.0 / torch 2.13.0 on 2026-10-04 by tracing the committed
+``families.py`` builders; regenerate deliberately, never with ``--fix``).
+The fingerprint and n_ops fields were re-recorded from a prior
+transformers 5.14.1 golden (FK-transformers re-record, 2026-10-04): every
+family's fingerprint moved because ``config.to_dict()`` embeds
+``transformers_version``, which changes on every release regardless of
+behavior. Four rows also carry a genuine op-count change confirmed against
+the installed 5.14.1 vs 5.18.0 package sources, not just the trace: llama
+(both impls, 186->183 / 150->147) lost 3 redundant ``.float()`` casts in
+``LlamaRotaryEmbedding.forward`` (upstream now folds the dtype cast into a
+single ``.to(dtype=..., device=...)`` and stopped re-casting
+already-float32 operands); t5 (eager, 326->324) and mamba (eager, 255->279)
+moved under the same upstream attention-interface / kernel-dispatch
+refactor that added T5's SDPA support (see ``SDPA_UNSUPPORTED_FAMILIES``
+below). No row's recipe classification, facet floors, or false-claims
+manifest changed.
 
 - ``recipes``: the EXACT per-family recipe classification map (a recipe
   appearing on fewer modules is a regression; on more, a conscious update).
@@ -63,8 +77,15 @@ EAGER_SDPA_FACET_DIFF: dict[str, dict[str, dict[str, tuple[str, ...]]]] = {
 }
 
 # Families whose upstream class REFUSES sdpa outright (pinned upstream
-# behavior, not a TorchLens gap): T5 raises ValueError at construction.
-SDPA_UNSUPPORTED_FAMILIES = ("t5",)
+# behavior, not a TorchLens gap). T5 raised ValueError at construction
+# through transformers 5.14.1; 5.18.0 added a unified attention-interface
+# (ALL_ATTENTION_FUNCTIONS) to T5Attention and set `_supports_sdpa = True`,
+# so T5 now builds under sdpa instead of refusing (FK-transformers
+# re-record, 2026-10-04; see test_t5_sdpa_now_builds_upstream). T5 stays
+# eager-only in FamilySpec.impls -- adding its sdpa facet floors to the deep
+# sweep is a conscious coverage expansion for a future lane, not a
+# re-record.
+SDPA_UNSUPPORTED_FAMILIES = ()
 
 # Facet -> expected shape, resolved against FamilySpec.dims at assert time.
 # ("b" = batch, "s" = sequence, "h" = hidden, "n" = QUERY heads, "g" = KV

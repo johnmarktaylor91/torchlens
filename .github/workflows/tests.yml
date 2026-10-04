@@ -64,21 +64,21 @@ jobs:
             python: "3.13"
             torch: "2.6.0+cpu"
             torchvision: "0.21.0+cpu"
-            transformers: "5.14.1"
+            transformers: "5.18.0"
             numpy: numpy
             scope: smoke
           - track: canonical
             python: "3.10"
             torch: "2.8.0+cpu"
             torchvision: "0.23.0+cpu"
-            transformers: "5.14.1"
+            transformers: "5.18.0"
             numpy: numpy
             scope: smoke
           - track: canonical
             python: "3.11"
             torch: "2.8.0+cpu"
             torchvision: "0.23.0+cpu"
-            transformers: "5.14.1"
+            transformers: "5.18.0"
             numpy: numpy
             scope: smoke
             # ONE gating row runs with pytest-randomly installed (grind r4,
@@ -94,7 +94,7 @@ jobs:
             python: "3.10"
             torch: "2.13.0+cpu"
             torchvision: "0.28.0+cpu"
-            transformers: "5.14.1"
+            transformers: "5.18.0"
             numpy: numpy
             scope: smoke
             # This row's environment matches the byte-oracle goldens' committed
@@ -116,14 +116,14 @@ jobs:
             python: "3.11"
             torch: "2.13.0+cpu"
             torchvision: "0.28.0+cpu"
-            transformers: "5.14.1"
+            transformers: "5.18.0"
             numpy: numpy
             scope: smoke
           - track: newest-admitted
             python: "3.12"
             torch: "2.13.0+cpu"
             torchvision: "0.28.0+cpu"
-            transformers: "5.14.1"
+            transformers: "5.18.0"
             numpy: numpy
             scope: smoke
             # Python >= 3.12 is advertised support AND selects the
@@ -134,7 +134,7 @@ jobs:
             python: "3.13"
             torch: "2.13.0+cpu"
             torchvision: "0.28.0+cpu"
-            transformers: "5.14.1"
+            transformers: "5.18.0"
             numpy: numpy
             scope: smoke
             # Python 3.13 was the last classifier-advertised interpreter with
