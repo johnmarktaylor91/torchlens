@@ -289,6 +289,9 @@ class TestRandomGraphModel:
 
     @pytest.mark.slow
     @pytest.mark.rare
+    # Peak RSS passed 15 GB within 13 minutes on a worker (still climbing), so the
+    # 16 GB GitHub runner is shut down mid-test (Weekly 37192153842, 2026-10-04).
+    @pytest.mark.big_memory
     def test_validation_50k(self) -> None:
         """Validation succeeds for a 50k-node random model."""
 
