@@ -3,7 +3,10 @@
 # junit matches this manifest EXACTLY -- a NEW red fails the leg loudly; a
 # STALE red (a row that now passes) also fails until deleted. Metadata may
 # widen to >=4.45,<6 only in the PR that empties this file.
-# Measured live on transformers 5.18.0 (this venue), 2026-10-04.
+# Measured live on transformers 5.18.0 (this venue), 2026-10-04 (re-measured
+# from 5.14.1 by FK-transformers: the full offline R1 + RG gallery re-ran
+# clean under 5.18.0 -- same 3 rows, same failure signatures, same
+# exact-passed-ID floor, zero new or stale reds).
 row_id	scenario	failure_signature	owner	issue
 RED-RG05-RESID	RG05 numeric residual-stream single-hook parity arm	SiteAmbiguityError: bare label 'add_*' ambiguous (2-pass residual adds on the 5.x graph shape) inside activation_patch_residual_stream	A03	helper must stage pass-qualified residual sites on 5.x captures; the gallery pin test_rg05_* holds the typed settlement meanwhile
 RED-RG05-MLP	RG05 numeric mlp/attention-output parity arms	PatchApplicationError: every fire refused replaced=False (facet lands on in-place dropout op)	A03	scatter hook must target the pre-dropout site or copy-safe storage
