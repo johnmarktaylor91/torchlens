@@ -1747,6 +1747,77 @@ def test_unsnapshotable_attr_early_refusal_is_not_a_bare_false() -> None:
     assert "cannot prove model-state restoration" in observer_read_failure.summary()
 
 
+def test_process_level_failure_never_leaks_into_a_later_validation_run() -> None:
+    """``get_validation_failure(None)`` reports only the CURRENT run's refusal.
+
+    The precondition side channel is process-level, so each validation run must
+    clear it first: a failure recorded by an earlier run (here a retrace-mismatch
+    downgrade) must not be reported for a later run that passed, nor shadow the
+    later run's own precondition refusal.
+    """
+
+    class ToggleBranch(nn.Module):
+        """Model that changes control flow after one forward pass."""
+
+        def __init__(self) -> None:
+            """Initialize branch state."""
+
+            super().__init__()
+            self.use_mul = False
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run a different branch after the first pass."""
+
+            out = x * 2 if self.use_mul else x + 1
+            self.use_mul = True
+            return out
+
+    class LockBackedToggle(nn.Module):
+        """Stateful model with one unsnapshotable but unused lock."""
+
+        def __init__(self) -> None:
+            """Initialize the lock and branch counter."""
+
+            super().__init__()
+            self.lock = threading.Lock()
+            self.step = 0
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Change graph shape after the first execution."""
+
+            output = x + 1 if self.step == 0 else x * 2
+            self.step += 1
+            return output
+
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        assert (
+            user_public_impls._validate_forward_pass_torch(ToggleBranch(), torch.randn(2, 3))
+            is False
+        )
+        first = get_validation_failure(None)
+        assert first is not None and first.check == "retrace_mismatch"
+
+        assert (
+            user_public_impls._validate_forward_pass_torch(nn.Linear(3, 2), torch.randn(2, 3))
+            is True
+        )
+        assert get_validation_failure(None) is None
+
+        assert (
+            user_public_impls._validate_forward_pass_torch(ToggleBranch(), torch.randn(2, 3))
+            is False
+        )
+        assert (
+            user_public_impls._validate_forward_pass_torch(LockBackedToggle(), torch.randn(3))
+            is False
+        )
+        refusal = get_validation_failure(None)
+        assert refusal is not None
+        assert refusal.check == "precondition_refusal"
+        assert "cannot prove model-state restoration" in refusal.summary()
+
+
 def test_uncopyable_opaque_branch_state_fails_closed() -> None:
     """Opaque state cannot hide a branch-changing fallback validation."""
 
