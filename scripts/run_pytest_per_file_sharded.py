@@ -158,12 +158,11 @@ def plan_run_units(markexpr: str, file_path: str, max_batch_size: int) -> list[_
     batch_count = -(-len(node_ids) // max_batch_size)  # ceil division
     for batch_index in range(batch_count):
         batch = node_ids[batch_index * max_batch_size : (batch_index + 1) * max_batch_size]
-        units.append(
-            _RunUnit(
-                label=f"{file_path} (batch {batch_index + 1}/{batch_count}, {len(batch)} tests)",
-                args=tuple(batch),
-            )
-        )
+        label = f"{file_path} (batch {batch_index + 1}/{batch_count}, {len(batch)} tests)"
+        if len(batch) == 1:
+            # Name the test outright: a runner killed mid-unit then shows what was running.
+            label = f"{batch[0]} (batch {batch_index + 1}/{batch_count})"
+        units.append(_RunUnit(label=label, args=tuple(batch)))
     return units
 
 
