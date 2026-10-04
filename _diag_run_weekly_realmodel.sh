@@ -10,6 +10,12 @@ if ! command -v dot >/dev/null 2>&1; then
   echo "graphviz 'dot' not found and no passwordless sudo on this worker; continuing without it (only affects render-path tests, not validate_forward_pass failures)"
 fi
 
+# This worker's ambient pip config injects an unreachable extra index
+# (pypi.ngc.nvidia.com) that causes intermittent DNS failures; pin to only
+# the two indices this install actually needs.
+export PIP_CONFIG_FILE=/dev/null
+unset PIP_EXTRA_INDEX_URL PIP_INDEX_URL PIP_INDEX
+
 cat > /tmp/torch-2.7-constraints.txt <<'EOF'
 torch==2.7.1+cpu
 torchvision==0.22.1+cpu
