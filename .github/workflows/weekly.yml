@@ -149,8 +149,15 @@ jobs:
             --file-batch-size tests/test_real_world_models.py=1
 
       - name: Run rare tests
+        # The small-capture perf gate compares millisecond trace floors against
+        # a baseline recorded on one box (32 cores, torch 2.7.1); its context
+        # guard fails on any other box by design ("baseline nproc=32 but this
+        # box has 4"), so on this 4-core runner it can only ever be red. It runs
+        # on the baseline box instead; the fast-tier floor (an absolute ratio)
+        # stays here. big_memory tests run on the large-memory fleet machine.
         run: |
-          pytest tests/ -m rare --tb=short \
+          pytest tests/ -m "rare and not big_memory" --tb=short \
+            --deselect tests/test_perf_capture_ab.py::test_small_capture_overhead_within_gate \
             --junitxml="${{ runner.temp }}/weekly-rare.junit.xml"
 
       - name: Fail on an under-executed slow or rare tier
@@ -158,11 +165,15 @@ jobs:
         # tiers (grind r3, R82): a marker drift or importorskip cascade that
         # hollows them out must go red, not green. Floors are roughly half
         # the current selections (295 slow / 16 rare, counted 2026-08-15;
-        # unchanged by the 13-test big_memory exclusion above -- the floor
-        # already has ~140 tests of headroom).
+        # unchanged by the 14-test big_memory exclusion above -- the floor
+        # already has ~140 tests of headroom). The rare floor is 7, the count
+        # that executes on this runner (2026-10-04): 9 executed before
+        # test_validation_50k moved to big_memory and the same-box
+        # test_small_capture_overhead_within_gate was deselected above; every
+        # other selected rare test skips here (opt-in sizes, CUDA, DDP).
         run: |
           python scripts/check_ci_executed_tests.py "${{ runner.temp }}/weekly-slow.junit.xml" 145
-          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/weekly-rare.junit.xml" 8
+          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/weekly-rare.junit.xml" 7
 
   mutation-margin:
     # The mutation driver's zero-survivor criterion is R74's grind-level
