@@ -11,6 +11,7 @@ live in the workflows themselves.
 from __future__ import annotations
 
 import importlib.util
+import re
 from pathlib import Path
 from types import ModuleType
 
@@ -120,8 +121,9 @@ def test_agent_docs_name_the_ci_parity_script_as_the_commit_gate() -> None:
     pinned environment, so docs naming it as the commit gate would send agents
     to a gate that disagrees with CI. Every "commit-level gate" command line
     in ``AGENTS.md`` and ``tests/AGENTS.md`` must run the script, the Quality
-    Gates block must run it, and each doc's pinned-environment note must
-    state the script's python and torch.
+    Gates block must run it, each doc's pinned-environment note must state
+    the script's python and torch, and every documented editable install
+    must carry the extras CI installs plus ``test``.
     """
 
     script = _load_smoke_ci_parity_script()
@@ -138,6 +140,14 @@ def test_agent_docs_name_the_ci_parity_script_as_the_commit_gate() -> None:
             f"{doc} lost or drifted its pinned-environment note (expected {pinned})"
         )
     agents = (_PROJECT_ROOT / "AGENTS.md").read_text()
+    installs = re.findall(r'pip install -e "\.\[([^\]]*)\]"', agents)
+    assert installs, "AGENTS.md no longer documents the editable dev install"
+    ci_extras = set(script.EXTRAS.strip(".[]").split(",")) | {"test"}
+    for extras in installs:
+        assert ci_extras <= set(extras.split(",")), (
+            f"AGENTS.md documents `.[{extras}]`, missing CI extras "
+            f"{sorted(ci_extras - set(extras.split(',')))}: its smoke run would differ from CI's"
+        )
     quality_gates = agents.split("## Quality Gates", 1)[1].split("```", 2)[1]
     assert "python scripts/smoke_ci_parity.py" in quality_gates
     assert "pytest tests/ -m smoke" not in quality_gates
