@@ -2931,10 +2931,13 @@ def _softmax_singleton_dim_decision(
         return PosthocPerturbDecision(False, "not_softmax_singleton_dim")
     saved_kwargs = getattr(layer, "saved_kwargs", None) or {}
     dim = saved_kwargs.get("dim")
-    if dim is None and len(args) > 1 and isinstance(args[1], int):
+    if dim is None and len(args) > 1:
         dim = args[1]
-    if dim is None:
-        dim = -1
+    # Only an explicit integer dim proves which axis is reduced: F.softmax's
+    # implicit-dim rule (dim=None) picks dim 0 or 1 by rank, not the last dim,
+    # so a missing dim stays strict rather than guessing.
+    if isinstance(dim, bool) or not isinstance(dim, int):
+        return PosthocPerturbDecision(False, "not_softmax_singleton_dim")
     if dim < -out.ndim or dim >= out.ndim:
         return PosthocPerturbDecision(False, "not_softmax_singleton_dim")
     if out.shape[dim] == 1:
