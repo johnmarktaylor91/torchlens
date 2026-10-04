@@ -15,6 +15,7 @@ from __future__ import annotations
 import contextlib
 import os
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 import torch
@@ -109,14 +110,22 @@ def _cached_or_fetched_tokenizer(transformers, name: str):
         pass
     import huggingface_hub
 
+    offline_reason = (
+        f"{name} tokenizer files are not in the HF cache and this machine is offline "
+        "(the hub is unreachable); the cached weights alone cannot tokenize"
+    )
     try:
         with _hub_online():
-            huggingface_hub.snapshot_download(name, allow_patterns=_TOKENIZER_FILE_PATTERNS)
+            snapshot = huggingface_hub.snapshot_download(
+                name, allow_patterns=_TOKENIZER_FILE_PATTERNS
+            )
     except Exception as exc:  # noqa: BLE001 - any fetch failure means no network here
-        pytest.skip(
-            f"{name} tokenizer files are not in the HF cache and this machine is offline "
-            f"({type(exc).__name__}); the weights alone cannot tokenize"
-        )
+        pytest.skip(f"{offline_reason}: {type(exc).__name__}")
+    # An unreachable hub does not always raise: snapshot_download can fall back to
+    # the partial local snapshot, so check that tokenizer files actually arrived.
+    snapshot_dir = Path(snapshot)
+    if not any(any(snapshot_dir.glob(pattern)) for pattern in _TOKENIZER_FILE_PATTERNS):
+        pytest.skip(offline_reason)
     tokenizer = transformers.AutoTokenizer.from_pretrained(name)
     assert _encodes(tokenizer), f"{name} tokenizer still encodes to zero ids after the fetch"
     return tokenizer
