@@ -314,6 +314,31 @@ class UniqueWideFanModel(torch.nn.Module):
         return self.out(self.head(self.stem(x)))
 
 
+class StemmedUniqueWideFanModel(torch.nn.Module):
+    """Unique wide fan behind a two-conv stem that max mode may legally segment.
+
+    ``UniqueWideFanModel``'s root siblings ``stem``, ``head``, ``out`` offer no
+    legal segment that keeps the fan visible (``stem`` and ``out`` are not
+    adjacent), so a max plan that both shows the fan and carries a segment
+    needs a directly joined sibling pair outside the head. ``out`` is a
+    different class so the stem pair is a role component of its own.
+    """
+
+    def __init__(self, width: int = 4) -> None:
+        """Initialize the stemmed unique fan model."""
+
+        super().__init__()
+        self.stem = torch.nn.Conv2d(width, width, 1)
+        self.stem2 = torch.nn.Conv2d(width, width, 1)
+        self.head = UniqueWideFanHead(width)
+        self.out = torch.nn.BatchNorm2d(width)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the model."""
+
+        return self.out(self.head(self.stem2(self.stem(x))))
+
+
 class RepeatedWideFanModel(torch.nn.Module):
     """Model with repeated wide fans that should have low uniqueness."""
 
@@ -1429,7 +1454,7 @@ def test_max_dp_segments_legal_prefix_and_keeps_fanout_tail_visible() -> None:
 def test_max_salience_floor_fires_on_synthetic_unique_wide_fan() -> None:
     """Max mode keeps a parallel-fan hint for a unique wide head."""
 
-    trace = _trace(UniqueWideFanModel(), torch.randn(1, 4, 8, 8))
+    trace = _trace(StemmedUniqueWideFanModel(), torch.randn(1, 4, 8, 8))
     try:
         context = RenderContext()
         state = _optimizer_state_for_floor(trace, context)
@@ -1451,7 +1476,7 @@ def test_max_salience_floor_fold_representative_uses_single_instance_stats(
 ) -> None:
     """Max-mode parallel fold representatives display single-instance stats."""
 
-    trace = _trace(UniqueWideFanModel(), torch.randn(1, 4, 8, 8))
+    trace = _trace(StemmedUniqueWideFanModel(), torch.randn(1, 4, 8, 8))
     try:
         result = select_collapse_plan(trace, RenderContext(), mode="max")
         source = str(

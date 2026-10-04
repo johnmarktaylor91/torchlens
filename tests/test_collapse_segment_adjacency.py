@@ -16,6 +16,7 @@ import pytest
 import torch
 
 import torchlens as tl
+from tests.test_collapse_optimizer import UniqueWideFanModel
 from torchlens.visualization.auto_collapse import analyze_collapse
 from torchlens.visualization.collapse_optimizer import _segment_is_legal, select_collapse_plan
 from torchlens.visualization.collapse_plan import ChildSegment, RenderContext
@@ -185,17 +186,22 @@ def _max_dot_source(trace: tl.Trace, tmp_path: object) -> str:
 
 @pytest.mark.smoke
 @pytest.mark.parametrize(
-    "factory",
-    [AlternatingSiblings, ParentOpConnectors],
-    ids=["alternating", "parent_op_connectors"],
+    ("factory", "shape"),
+    [
+        (AlternatingSiblings, (2, 8)),
+        (ParentOpConnectors, (2, 8)),
+        (UniqueWideFanModel, (1, 4, 8, 8)),
+    ],
+    ids=["alternating", "parent_op_connectors", "siblings_around_a_fan"],
 )
 def test_max_segments_group_only_adjacent_siblings(
     factory: Callable[[], torch.nn.Module],
+    shape: tuple[int, ...],
     tmp_path: object,
 ) -> None:
     """Max-mode segment boxes cover consecutive, directly joined siblings only."""
 
-    trace = _trace(factory(), torch.randn(2, 8))
+    trace = _trace(factory(), torch.randn(*shape))
     try:
         for mode in ("max", 1.0, 0.75, "auto"):
             _assert_segments_flow_adjacent(trace, mode)
