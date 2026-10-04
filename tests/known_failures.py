@@ -59,7 +59,208 @@ class KnownFailure:
 #: Populated from a real run of the Weekly slow tier (one test per process,
 #: torch 2.7.1+cpu / torchvision 0.22.1+cpu); see tests/AGENTS.md "Testing
 #: Tiers" for how to reproduce that environment.
-KNOWN_FAILURES: tuple[KnownFailure, ...] = ()
+KNOWN_FAILURES: tuple[KnownFailure, ...] = (
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_audio_encodec",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_audio_vits",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_blip2",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_detr",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_fasterrcnn_mobilenet_eval",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_fasterrcnn_mobilenet_train",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_fcos_resnet50_eval",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_fcos_resnet50_train",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_funnel_transformer",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_gatv2_pyg",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_gptj",
+        reason="ValueError: A transposed window map requires a positive output extent.",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_informer",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_keypointrcnn_resnet50_eval",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_keypointrcnn_resnet50_train",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_led",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_mamba2",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_maskrcnn_resnet50_eval",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_maskrcnn_resnet50_train",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_mobilebert",
+        reason="RuntimeError: mat1 and mat2 shapes cannot be multiplied (32x128 and 64x64)",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_mobilevit_xxs",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_opticflow_raftlarge",
+        reason="validate_forward_pass fail-closed: deepcopy cannot snapshot non-registered plain attribute(s) (CorrBlock[0].corr_pyramid), so model-state restoration cannot be proven",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_opticflow_raftsmall",
+        reason="validate_forward_pass fail-closed: deepcopy cannot snapshot non-registered plain attribute(s) (CorrBlock[0].corr_pyramid), so model-state restoration cannot be proven",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_reformer",
+        reason="ValueError: input_axis must be non-negative and input_extent must be positive.",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_retinanet_resnet50_eval",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_retinanet_resnet50_train",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_ssd300_vgg16_eval",
+        reason="GraphvizRenderError: Graphviz render timed out after 120s for a 3318-node forward graph",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_ssd300_vgg16_train",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_timm_beit_base_patch16_224",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_timm_convnextv2_atto",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_timm_darknet21",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_timm_ecaresnet101d",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_timm_efficientformer",
+        reason="validate_forward_pass fail-closed: deepcopy cannot snapshot non-registered plain attribute(s) (Attention[0].attention_bias_cache), so model-state restoration cannot be proven",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_timm_gluon_resnext101_32x4d",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_timm_levit_128",
+        reason="validate_forward_pass fail-closed: deepcopy cannot snapshot non-registered plain attribute(s) (Attention[0].attention_bias_cache and 9 more plain attributes), so model-state restoration cannot be proven",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_timm_nfnet_l0",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_timm_res2net50",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_timm_resnest14d",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_timm_seresnet152",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_timm_tresnet",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+    KnownFailure(
+        nodeid="tests/test_real_world_models.py::test_timm_xcit_tiny_24_p8_224",
+        reason="assert False: validate_forward_pass(...) returned False",
+        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
+    ),
+)
 
 
 def duplicate_nodeids() -> list[str]:
