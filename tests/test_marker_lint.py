@@ -136,7 +136,12 @@ def test_no_smoke_test_carries_a_heavier_tier_marker(request: pytest.FixtureRequ
         pytest.param({"heavy", "slow"}, {"slow"}, [], id="heavy-family-slow-cell-ok"),
         pytest.param({"smoke"}, set(), [], id="smoke-alone-ok"),
         pytest.param({"heavy", "serial"}, set(), [], id="heavy-serial-ok"),
-        pytest.param({"smoke", "big_memory"}, set(), ["smoke + big_memory"], id="smoke-big-memory"),
+        pytest.param(
+            {"smoke", "big_memory"},
+            set(),
+            ["smoke + big_memory", "big_memory without slow"],
+            id="smoke-big-memory",
+        ),
         pytest.param({"big_memory"}, set(), ["big_memory without slow"], id="big-memory-alone"),
         pytest.param({"big_memory", "slow"}, set(), [], id="big-memory-slow-ok"),
     ],
