@@ -12,6 +12,10 @@ version-leg venue (one environment cannot host two transformers).
 
 from __future__ import annotations
 
+import contextlib
+import os
+from collections.abc import Iterator
+
 import pytest
 import torch
 
@@ -43,26 +47,90 @@ pytestmark = [pytest.mark.slow, pytest.mark.real_model]
 
 @pytest.fixture(autouse=True)
 def _offline(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Real-checkpoint rows run offline: the cache serves or the test skips."""
+    """Real-checkpoint rows run offline: the cache serves the weights or the test
+    skips; only missing tokenizer files are fetched (see ``_hf_model``)."""
 
     monkeypatch.setenv("HF_HUB_OFFLINE", "1")
     monkeypatch.setenv("TRANSFORMERS_OFFLINE", "1")
 
 
+#: Tokenizer files another test may have left out when it cached only weights.
+_TOKENIZER_FILE_PATTERNS = [
+    "tokenizer*",
+    "vocab*",
+    "merges*",
+    "special_tokens_map.json",
+    "added_tokens.json",
+    "*.model",
+]
+
+
+@contextlib.contextmanager
+def _hub_online() -> Iterator[None]:
+    """Lift the module's offline mode for one deliberate tokenizer fetch."""
+
+    import huggingface_hub.constants as hub_constants
+
+    saved_env = {
+        key: os.environ.pop(key, None) for key in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")
+    }
+    saved_flag = hub_constants.HF_HUB_OFFLINE
+    hub_constants.HF_HUB_OFFLINE = False
+    try:
+        yield
+    finally:
+        hub_constants.HF_HUB_OFFLINE = saved_flag
+        for key, value in saved_env.items():
+            if value is not None:
+                os.environ[key] = value
+
+
+def _encodes(tokenizer) -> bool:
+    """Return whether ``tokenizer`` turns text into a non-empty id sequence."""
+
+    return bool(tokenizer("hi")["input_ids"])
+
+
+def _cached_or_fetched_tokenizer(transformers, name: str):
+    """Load ``name``'s tokenizer, fetching only its tokenizer files when missing.
+
+    Another test can cache a checkpoint's weights without its tokenizer
+    (``from_pretrained`` of the model alone). Offline, transformers then builds
+    a tokenizer that encodes every string to zero ids instead of raising, so
+    the missing files are fetched once and the tokenizer reloaded. Only a
+    machine that is offline AND lacks the tokenizer files skips.
+    """
+
+    try:
+        tokenizer = transformers.AutoTokenizer.from_pretrained(name)
+        if _encodes(tokenizer):
+            return tokenizer
+    except (OSError, ValueError):
+        pass
+    import huggingface_hub
+
+    try:
+        with _hub_online():
+            huggingface_hub.snapshot_download(name, allow_patterns=_TOKENIZER_FILE_PATTERNS)
+    except Exception as exc:  # noqa: BLE001 - any fetch failure means no network here
+        pytest.skip(
+            f"{name} tokenizer files are not in the HF cache and this machine is offline "
+            f"({type(exc).__name__}); the weights alone cannot tokenize"
+        )
+    tokenizer = transformers.AutoTokenizer.from_pretrained(name)
+    assert _encodes(tokenizer), f"{name} tokenizer still encodes to zero ids after the fetch"
+    return tokenizer
+
+
 def _hf_model(name: str):
-    """Load a cached HF model + tokenizer or skip typed (never download)."""
+    """Load a cached HF model + tokenizer or skip typed (weights never download)."""
 
     transformers = pytest.importorskip("transformers")
     try:
-        tokenizer = transformers.AutoTokenizer.from_pretrained(name)
         model = transformers.AutoModel.from_pretrained(name)
     except (OSError, ValueError) as exc:  # cache miss, offline -> honest skip
         pytest.skip(f"{name} not in the offline HF cache: {type(exc).__name__}")
-    # A cache holding only the model files (another test downloaded weights, not
-    # the tokenizer) loads offline without error but encodes every string to zero
-    # ids; that is the same cache miss, so skip instead of feeding empty input.
-    if not tokenizer("hi")["input_ids"]:
-        pytest.skip(f"{name} tokenizer files not in the offline HF cache (empty encoding)")
+    tokenizer = _cached_or_fetched_tokenizer(transformers, name)
     model.eval()
     return model, tokenizer
 
