@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Diagnostic-only, not part of the repo history: reproduce the Weekly slow-tier
+# environment (torch 2.7.1+cpu / torchvision 0.22.1+cpu, graphviz, dev+test+tabular
+# extras) and run tests/test_real_world_models.py's slow tier, one test per
+# process, to get the exact current failing node ids for the known-failures
+# ledger (FJ-weekly-green). Deleted before this branch is pushed.
+set -ex
+
+sudo apt-get update -y
+sudo apt-get install -y graphviz libcairo2
+
+cat > /tmp/torch-2.7-constraints.txt <<'EOF'
+torch==2.7.1+cpu
+torchvision==0.22.1+cpu
+EOF
+
+python3 -m pip install --upgrade pip
+python3 -m pip install -c /tmp/torch-2.7-constraints.txt \
+  --index-url https://download.pytorch.org/whl/cpu \
+  --extra-index-url https://pypi.org/simple \
+  -e ".[dev,test,tabular]" \
+  "torch==2.7.1+cpu" \
+  "torchvision==0.22.1+cpu"
+
+python3 -c "import torch, torchvision; print(torch.__version__, torchvision.__version__)"
+
+python3 _diag_collect_real_model_failures.py \
+  --repo "$(pwd)" \
+  --target tests/test_real_world_models.py \
+  --marker "slow and not rare" \
+  --workers 3 \
+  --out realmodel_results.json
