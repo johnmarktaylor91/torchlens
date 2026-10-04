@@ -4298,6 +4298,45 @@ def test_deep_numeric_replay_false_positive_shallow_linear_depth16() -> None:
     assert _deep_numeric_replay_matches_saved(layer, recomputed) is False
 
 
+def test_deep_numeric_replay_sdpa_band_c_still_rejects_wrong_replay() -> None:
+    """LOAD-BEARING: sdpa's corrected depth must not mask a genuinely wrong replay.
+
+    Band C becomes reachable for fused attention once its depth is the key/value
+    sequence length, but only as round-off allowance: a deep (196-key) sdpa whose
+    replay is wrong by far more than sqrt(depth)-scaled round-off -- one element
+    off by 5%, or a whole query row replaced by another row (the shape of a
+    swapped or stale operand) -- must still fail, and a shallow (49-key) sdpa gets
+    no band C at all.
+    """
+
+    query = torch.zeros(1, 2, 196, 32)
+    key = torch.zeros(1, 2, 196, 32)
+    value = torch.zeros(1, 2, 196, 32)
+    saved_out = torch.empty(1, 2, 196, 32).uniform_(-1.0, 1.0)
+    layer = _make_deep_numeric_layer("scaled_dot_product_attention", [query, key, value], saved_out)
+    assert _op_reduction_depth(layer) >= DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
+
+    one_element = saved_out.clone()
+    one_element[0, 0, 0, 0] *= 1.05
+    one_element[0, 0, 0, 0] += 0.05
+    assert _deep_numeric_replay_matches_saved(layer, one_element) is False
+
+    swapped_row = saved_out.clone()
+    swapped_row[0, 0, 0] = saved_out[0, 0, 1]
+    assert _deep_numeric_replay_matches_saved(layer, swapped_row) is False
+
+    short_out = torch.empty(1, 2, 49, 32).uniform_(-1.0, 1.0)
+    short_layer = _make_deep_numeric_layer(
+        "scaled_dot_product_attention",
+        [torch.zeros(1, 2, 49, 32), torch.zeros(1, 2, 49, 32), torch.zeros(1, 2, 49, 32)],
+        short_out,
+    )
+    shallow_drift = short_out.clone()
+    shallow_drift[0, 0, 0, 0] += 5.0e-5
+    assert _op_reduction_depth(short_layer) < DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
+    assert _deep_numeric_replay_matches_saved(short_layer, shallow_drift) is False
+
+
 def test_deep_numeric_replay_gross_error_on_deep_scatter_still_fails() -> None:
     """LOAD-BEARING: a deep ELIGIBLE scatter (depth 1024) + gross +10 still fails.
 
