@@ -156,11 +156,6 @@ KNOWN_FAILURES: tuple[KnownFailure, ...] = (
         tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
     ),
     KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_mobilevit_xxs",
-        reason="assert False: validate_forward_pass(...) returned False",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
         nodeid="tests/test_real_world_models.py::test_opticflow_raftlarge",
         reason="validate_forward_pass fail-closed: deepcopy cannot snapshot non-registered plain attribute(s) (CorrBlock[0].corr_pyramid), so model-state restoration cannot be proven",
         tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
@@ -196,63 +191,13 @@ KNOWN_FAILURES: tuple[KnownFailure, ...] = (
         tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
     ),
     KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_timm_beit_base_patch16_224",
-        reason="assert False: validate_forward_pass(...) returned False",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_timm_convnextv2_atto",
-        reason="assert False: validate_forward_pass(...) returned False",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_timm_darknet21",
-        reason="assert False: validate_forward_pass(...) returned False",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_timm_ecaresnet101d",
-        reason="assert False: validate_forward_pass(...) returned False",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
         nodeid="tests/test_real_world_models.py::test_timm_efficientformer",
         reason="validate_forward_pass fail-closed: deepcopy cannot snapshot non-registered plain attribute(s) (Attention[0].attention_bias_cache), so model-state restoration cannot be proven",
         tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
     ),
     KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_timm_gluon_resnext101_32x4d",
-        reason="assert False: validate_forward_pass(...) returned False",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
         nodeid="tests/test_real_world_models.py::test_timm_levit_128",
         reason="validate_forward_pass fail-closed: deepcopy cannot snapshot non-registered plain attribute(s) (Attention[0].attention_bias_cache and 9 more plain attributes), so model-state restoration cannot be proven",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_timm_nfnet_l0",
-        reason="assert False: validate_forward_pass(...) returned False",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_timm_res2net50",
-        reason="assert False: validate_forward_pass(...) returned False",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_timm_resnest14d",
-        reason="assert False: validate_forward_pass(...) returned False",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_timm_seresnet152",
-        reason="assert False: validate_forward_pass(...) returned False",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_timm_tresnet",
-        reason="assert False: validate_forward_pass(...) returned False",
         tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
     ),
     KnownFailure(
