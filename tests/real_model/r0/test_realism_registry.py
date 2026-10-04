@@ -162,6 +162,25 @@ def test_resolved_config_fingerprint_is_canonical():
         resolved_config_fingerprint()
 
 
+def test_resolved_config_fingerprint_ignores_transformers_version_alone():
+    """A release-stamp-only change must NOT drift the fingerprint (FK-transformers,
+    2026-10-04): transformers_version is build provenance, not resolved
+    config that changes the captured graph."""
+
+    base = {"hidden_size": 128, "num_hidden_layers": 4, "transformers_version": "5.14.1"}
+    bumped = {**base, "transformers_version": "5.18.0"}
+    assert resolved_config_fingerprint(config=base) == resolved_config_fingerprint(config=bumped)
+
+
+def test_resolved_config_fingerprint_still_moves_on_a_real_config_change():
+    """The exclusion is narrow: changing an actual resolved-config field
+    (not just the version stamp) must still drift the fingerprint."""
+
+    base = {"hidden_size": 128, "num_hidden_layers": 4, "transformers_version": "5.14.1"}
+    changed = {**base, "num_hidden_layers": 6}
+    assert resolved_config_fingerprint(config=base) != resolved_config_fingerprint(config=changed)
+
+
 def test_consumes_never_constructs_ast_lint():
     """No test under tests/real_model/ constructs an artifact ad hoc.
 

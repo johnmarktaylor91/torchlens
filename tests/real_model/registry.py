@@ -200,6 +200,20 @@ class Registry:
         return int(total * CACHE_CAP_HEADROOM)
 
 
+#: Fields popped from a resolved config before fingerprinting: pure
+#: provenance stamps that HF's own ``to_dict()`` embeds in every config but
+#: that never change what gets captured. ``transformers_version`` is the
+#: one member today (FK-transformers, 2026-10-04): a side-by-side dump of
+#: every R0 family under transformers 5.14.1 vs 5.18.0 showed it as the
+#: ONLY config diff for 20 of 24 families, with n_ops, recipe
+#: classification, and the false-claims manifest byte-identical -- the
+#: fingerprint drifted on a release bump that changed nothing the sweep
+#: measures. This is a closed, by-name list: a field is added here only
+#: after the same kind of evidence (changing it alone never changes graph
+#: shape), never speculatively or by category.
+_FINGERPRINT_PROVENANCE_ONLY_FIELDS = frozenset({"transformers_version"})
+
+
 def resolved_config_fingerprint(model: Any = None, config: Any = None) -> str:
     """Fingerprint the RESOLVED model configuration (memo D7 class 4).
 
@@ -209,6 +223,15 @@ def resolved_config_fingerprint(model: Any = None, config: Any = None) -> str:
     the checkpoint name alone. The fingerprint folds in the runtime state
     that changes graph shape without touching ``config`` serialization:
     the attention implementation, gradient checkpointing, and train mode.
+
+    The fingerprint describes the resolved MODEL, not the exact package
+    release that built it: fields in ``_FINGERPRINT_PROVENANCE_ONLY_FIELDS``
+    are popped before hashing because they carry build provenance (which
+    transformers release stamped this config) rather than anything that
+    changes the captured graph. The version itself is never lost -- it is
+    recorded separately in the expectations' provenance docstring, not
+    folded into the golden key a routine point release would otherwise
+    invalidate.
 
     Parameters
     ----------
@@ -231,6 +254,8 @@ def resolved_config_fingerprint(model: Any = None, config: Any = None) -> str:
         if config is None:
             raise RegistryError(f"{type(model).__name__} carries no .config")
     config_dict = dict(config.to_dict()) if hasattr(config, "to_dict") else dict(config)
+    for provenance_field in _FINGERPRINT_PROVENANCE_ONLY_FIELDS:
+        config_dict.pop(provenance_field, None)
     resolved: dict[str, Any] = {"config": config_dict}
     if model is not None:
         resolved["class"] = type(model).__name__
