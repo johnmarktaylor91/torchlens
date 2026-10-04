@@ -898,6 +898,156 @@ def test_check_norm_zero_weight_reads_the_real_captured_weight_slot() -> None:
                 assert decision is zero_weight
 
 
+def test_sdpa_zero_query_key_insensitivity_validates() -> None:
+    """A zero-initialized class token must not fail sdpa's key-perturbation check.
+
+    Found on compact CaiT-style models (``cait_m36_384``/``cait_m48_448``) whose
+    ``ClassAttentionBlock`` initializes its class token to
+    ``nn.Parameter(torch.zeros(1, 1, dim))`` and feeds
+    ``self.norm(torch.cat([cls, patches]))[:, :1]`` as ``nn.MultiheadAttention``'s
+    query. ``nn.LayerNorm``'s default affine (weight=1, bias=0) maps an exactly-zero
+    row to an exactly-zero row, and ``nn.MultiheadAttention._reset_parameters``
+    zero-initializes ``in_proj_bias``/``out_proj.bias`` -- so the FIRST class-attention
+    block's query is EXACTLY zero at random init, for any image. With ``Q=0``,
+    ``softmax(Q @ K^T) = softmax(0) =`` uniform regardless of ``K``, so the key operand
+    provably cannot influence ``scaled_dot_product_attention``'s output: not a capture
+    bug (parent attribution was directly checked by comparing each saved arg's
+    ``data_ptr()``/value against its recorded parent op's output and found correct),
+    but the same zero-annihilator shape already proved for ``mul``/``addcmul``/
+    ``batch_norm``, on sdpa's query operand instead. Reproduced end-to-end on the real
+    model: the failing sdpa op's saved query had ``abs_max=0`` exactly, and 5
+    independent re-draws of the key operand across its observed value range
+    reproduced the saved sdpa output bit-for-bit every time.
+    """
+
+    class _ZeroQueryClassAttention(nn.Module):
+        def __init__(self, dim: int = 16, heads: int = 2) -> None:
+            super().__init__()
+            self.cls = nn.Parameter(torch.zeros(1, 1, dim))
+            self.norm = nn.LayerNorm(dim)
+            self.attn = nn.MultiheadAttention(dim, heads, batch_first=True)
+
+        def forward(self, context: torch.Tensor) -> torch.Tensor:
+            cls = self.cls.expand(context.shape[0], -1, -1)
+            source = self.norm(torch.cat([cls, context], dim=1))
+            out, _weights = self.attn(source[:, :1], source, source, need_weights=False)
+            return out
+
+    model = _ZeroQueryClassAttention()
+    assert _quiet_validate(model, torch.randn(2, 20, 16)) is True
+
+
+def test_sdpa_zero_query_decision_scoped_correctly() -> None:
+    """Armed-proof: only exempts the KEY parent when query is provably all-zero.
+
+    Never exempts perturbing query or value themselves (both genuinely influence
+    the output), and never exempts anything when query is nonzero.
+    """
+
+    from torchlens.validation.exemptions import _sdpa_zero_query_decision
+
+    class _FakeSdpaOp:
+        def __init__(self, query) -> None:
+            self.saved_args = (query, None, None)
+            self.parent_arg_positions = {
+                "args": {0: "query_label", 1: "key_label", 2: "value_label"},
+                "kwargs": {},
+            }
+
+    zero_query = torch.zeros(1, 2, 1, 8)
+    nonzero_query = torch.randn(1, 2, 1, 8)
+
+    layer = _FakeSdpaOp(zero_query)
+    assert _sdpa_zero_query_decision(layer, ["key_label"], layer.saved_args).exempt is True
+    assert _sdpa_zero_query_decision(layer, ["query_label"], layer.saved_args).exempt is False
+    assert _sdpa_zero_query_decision(layer, ["value_label"], layer.saved_args).exempt is False
+
+    nonzero_layer = _FakeSdpaOp(nonzero_query)
+    assert (
+        _sdpa_zero_query_decision(nonzero_layer, ["key_label"], nonzero_layer.saved_args).exempt
+        is False
+    )
+
+
+def test_softmax_singleton_reduction_dim_validates() -> None:
+    """A softmax reduced over a size-1 dim must not fail its perturbation check.
+
+    Found on timm's ``csatv2``/``csatv2_21m``: every ``softmax`` op reduces over a
+    dimension of size 1 (a trivial single-key channel-attention shape), confirmed
+    end-to-end on ``timm.create_model('csatv2', pretrained=False)``: all 14 softmax
+    ops in the model reduce over a size-1 dimension. ``softmax`` of a single element is IDENTICALLY 1 by the
+    definition of the function (``exp(x) / exp(x) == 1`` for any finite ``x``),
+    regardless of that element's value -- a shape-based identity, not a magnitude
+    heuristic, and true regardless of training state (unlike the zero-annihilator
+    exemptions, it does not depend on a weight staying exactly zero).
+    """
+
+    class _SingletonSoftmax(nn.Module):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            logits = x.sum(dim=-1, keepdim=True)
+            return torch.softmax(logits, dim=-1)
+
+    assert _quiet_validate(_SingletonSoftmax(), torch.randn(2, 5, 4)) is True
+
+
+def test_softmax_singleton_dim_decision_scoped_correctly() -> None:
+    """Armed-proof: only exempts when the reduced dim's size is exactly 1."""
+
+    from torchlens.validation.exemptions import _softmax_singleton_dim_decision
+
+    class _FakeSoftmaxOp:
+        def __init__(self, out_shape, dim) -> None:
+            self.saved_args = (None,)
+            self.saved_kwargs = {"dim": dim}
+            self.parent_arg_positions = {"args": {0: "logits_label"}, "kwargs": {}}
+            self.out = torch.zeros(out_shape)
+
+    singleton = _FakeSoftmaxOp((2, 3, 1), dim=-1)
+    assert (
+        _softmax_singleton_dim_decision(singleton, ["logits_label"], singleton.saved_args).exempt
+        is True
+    )
+
+    wide = _FakeSoftmaxOp((2, 3, 5), dim=-1)
+    assert _softmax_singleton_dim_decision(wide, ["logits_label"], wide.saved_args).exempt is False
+
+    # Perturbing something other than the (sole) logits parent is never this proof's
+    # business.
+    assert (
+        _softmax_singleton_dim_decision(
+            singleton, ["some_other_label"], singleton.saved_args
+        ).exempt
+        is False
+    )
+
+    # No explicit integer dim: F.softmax's implicit-dim rule (dim 0 for 0/1/3-D
+    # input, else dim 1) is NOT the last dim, so a size-1 LAST dim proves nothing.
+    # A (4, 3, 1) input would reduce over dim 0 (size 4); never exempt.
+    implicit = _FakeSoftmaxOp((4, 3, 1), dim=None)
+    assert (
+        _softmax_singleton_dim_decision(implicit, ["logits_label"], implicit.saved_args).exempt
+        is False
+    )
+    implicit.saved_kwargs = {}
+    assert (
+        _softmax_singleton_dim_decision(implicit, ["logits_label"], implicit.saved_args).exempt
+        is False
+    )
+    # A positional integer dim is read the same as the keyword spelling.
+    positional = _FakeSoftmaxOp((4, 3, 1), dim=None)
+    positional.saved_kwargs = {}
+    positional.saved_args = (None, 0)
+    assert (
+        _softmax_singleton_dim_decision(positional, ["logits_label"], positional.saved_args).exempt
+        is False
+    )
+    positional.saved_args = (None, 2)
+    assert (
+        _softmax_singleton_dim_decision(positional, ["logits_label"], positional.saved_args).exempt
+        is True
+    )
+
+
 def test_w35_nonzero_literal_never_exempted() -> None:
     """Armed-proof: the annihilator proof requires an exactly-zero co-arg.
 
