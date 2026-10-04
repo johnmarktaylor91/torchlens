@@ -18,7 +18,7 @@ The referenced sections below are part of these instructions and retain their ob
 
 ```bash
 pip install torchlens
-pip install -e ".[dev,test]"  # local development: tooling plus test extras (test includes tabular)
+pip install -e ".[dev,test,tabular,viz]"  # local development: the extras CI installs
 ```
 
 Graphviz rendering needs Graphviz (`apt install graphviz` on Debian/Ubuntu). Optional
@@ -200,10 +200,9 @@ Required reading for this area: [Known Gotchas](docs/agent-reference/known-gotch
 ## Build & Test
 
 ```bash
-pip install -e ".[dev]"
-pip install -e ".[test]"
+pip install -e ".[dev,test,tabular,viz]"
 pip install build && python -m build
-pytest tests/ -m smoke
+python scripts/smoke_ci_parity.py -n 4  # commit-level gate
 pytest tests/ -m "not rare and not slow"
 pytest tests/
 ruff format && ruff check --fix
