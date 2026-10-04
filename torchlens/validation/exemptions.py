@@ -1426,8 +1426,53 @@ def _check_masked_fill_exempt(self: "Trace", layer: Op, layers_to_perturb: list[
     return False
 
 
+def _batch_norm_weight_operand(layer: Op) -> Any:
+    """Return the saved ``weight`` (gamma) operand of a batch_norm/instance_norm op.
+
+    Positional layout matches torch's real ATen call signature:
+    ``(input, weight, bias, running_mean, running_var, training, momentum,
+    eps, cudnn_enabled)`` -- NOT ``F.batch_norm``'s Python-level
+    ``(input, running_mean, running_var, weight, bias, ...)`` ordering, which
+    is why ``_check_norm_running_stat_exempt`` reads running_mean/running_var
+    from positions 3/4, not 1/2.
+    """
+
+    args = layer.saved_args
+    if args is None or len(args) <= 1:
+        return None
+    return args[1]
+
+
+def _check_norm_zero_weight_annihilates(layer: Op, layers_to_perturb: list[str]) -> bool:
+    """Exempt input/running_mean/running_var when ``weight`` is provably all-zero.
+
+    ``batch_norm``'s output is
+    ``((input - running_mean) / sqrt(running_var + eps)) * weight + bias``
+    (the training-mode form substitutes batch statistics for the running
+    buffers, but keeps the same ``* weight + bias`` outer shape): an exactly
+    zero ``weight`` annihilates the WHOLE normalized term in either mode,
+    leaving the output identically equal to ``bias`` regardless of input,
+    running_mean, or running_var. This is the same zero-annihilator proof
+    armed for ``mul``/``multiply``/``addcmul``, applied to batch_norm's own
+    ``weight`` operand. timm's "zero_init_last" convention zero-initializes
+    the LAST BatchNorm's weight in every residual block of many ResNet-family
+    architectures, so an untrained instance hits this at validation time.
+
+    Narrow by construction: only positions {0, 3, 4} (input, running_mean,
+    running_var) are ever exempted here. Perturbing ``weight`` or ``bias``
+    themselves (positions 1/2) is NEVER exempted by this check -- weight
+    moving off zero, or bias directly, both genuinely change the output.
+    """
+
+    perturbed_positions = _perturbed_parent_arg_positions(layer, layers_to_perturb)
+    if not perturbed_positions or not perturbed_positions.issubset({0, 3, 4}):
+        return False
+    weight = _batch_norm_weight_operand(layer)
+    return isinstance(weight, torch.Tensor) and weight.numel() > 0 and bool(torch.all(weight == 0))
+
+
 def _check_norm_running_stat_exempt(self: "Trace", layer: Op, layers_to_perturb: list[str]) -> bool:
-    """Exempt normalization running-stat update parents in training mode.
+    """Exempt training-mode running-stat parents and zero-weight-annihilated parents.
 
     Parameters
     ----------
@@ -1441,13 +1486,19 @@ def _check_norm_running_stat_exempt(self: "Trace", layer: Op, layers_to_perturb:
     Returns
     -------
     bool
-        True when the perturbed parent is ``running_mean`` or ``running_var``
-        for a training-mode BatchNorm/InstanceNorm call. Those buffers are
-        update targets in training mode; batch/input statistics determine the
-        output value.
+        True when EITHER: (a) the perturbed parent is ``running_mean`` or
+        ``running_var`` (args 3/4) for a training-mode BatchNorm/InstanceNorm
+        call -- those buffers are update targets in training mode; batch/input
+        statistics determine the output value; or (b) every perturbed parent
+        is input/running_mean/running_var (args 0/3/4) and the op's saved
+        ``weight`` operand is provably all-zero -- see
+        ``_check_norm_zero_weight_annihilates``.
     """
 
     del self
+    if _check_norm_zero_weight_annihilates(layer, layers_to_perturb):
+        return True
+
     args = layer.saved_args
     if args is None or len(args) <= 5 or args[5] is not True:
         return False

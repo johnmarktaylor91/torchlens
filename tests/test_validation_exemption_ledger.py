@@ -1577,13 +1577,22 @@ CUSTOM_CHECK_LEDGER: tuple[CustomCheckExemption, ...] = (
         contract=_C2,
         proof_kind="value_irrelevance_proved",
         justification=(
-            "in TRAINING mode (proved from saved arg 5 being exactly True) "
+            "EITHER (a) in TRAINING mode (proved from saved arg 5 being exactly True) "
             "running_mean/running_var at args 3-4 are update TARGETS: the normalized "
-            "output is computed from batch statistics, not from the running buffers"
+            "output is computed from batch statistics, not from the running buffers; "
+            "OR (b) the perturbed parent(s) are a subset of {input, running_mean, "
+            "running_var} (args 0/3/4) and the saved weight operand (arg 1, the real "
+            "ATen position) is proved all-zero: weight=0 annihilates the whole "
+            "normalized term (output = ((input-running_mean)/sqrt(running_var+eps))*"
+            "weight+bias), in ANY mode -- timm's zero_init_last convention zero-inits "
+            "exactly this operand for the last BatchNorm in many ResNet-family blocks"
         ),
         refuses=(
-            "eval-mode calls, where the running stats DO determine the output and stay "
-            "strictly tested, and every parent outside args 3-4"
+            "eval-mode running_mean/running_var perturbation when weight is nonzero, "
+            "where the running stats DO determine the output and stay strictly tested; "
+            "perturbing weight or bias themselves, even when weight is zero (weight "
+            "moving off zero, or bias directly, both genuinely change the output); "
+            "and every parent outside args 0/3/4"
         ),
     ),
     CustomCheckExemption(
@@ -1592,12 +1601,14 @@ CUSTOM_CHECK_LEDGER: tuple[CustomCheckExemption, ...] = (
         contract=_C2,
         proof_kind="value_irrelevance_proved",
         justification=(
-            "same training-mode running-stat update-target proof as batch_norm, bound "
-            "to the same predicate so the two cannot drift apart"
+            "same running-stat update-target and zero-weight annihilator proofs as "
+            "batch_norm, bound to the same predicate so the two cannot drift apart"
         ),
         refuses=(
-            "eval-mode calls, where the running stats DO determine the output and stay "
-            "strictly tested, and every parent outside args 3-4"
+            "eval-mode running_mean/running_var perturbation when weight is nonzero, "
+            "where the running stats DO determine the output and stay strictly tested; "
+            "perturbing weight or bias themselves, even when weight is zero; and every "
+            "parent outside args 0/3/4"
         ),
     ),
 )
