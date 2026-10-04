@@ -99,7 +99,9 @@ def test_local_ci_smoke_script_matches_the_enforcing_row() -> None:
     assert run_step["env"]["OMP_NUM_THREADS"] == script.SMOKE_ENV["OMP_NUM_THREADS"]
     assert script.SMOKE_ENV["TORCHLENS_ORACLE_ENFORCE"] == "1"
     assert "-m smoke -n 4" in run_step["run"]
-    floor_step = next(step for step in job["steps"] if "check_ci_executed_tests.py" in step["run"])
+    floor_step = next(
+        step for step in job["steps"] if "check_ci_executed_tests.py" in step.get("run", "")
+    )
     assert f"{script.EXECUTED_FLOOR} {script.SKIP_FRACTION}" in floor_step["run"]
 
 
