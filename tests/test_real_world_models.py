@@ -2217,6 +2217,9 @@ def test_video_mc3_18():
 
 
 @pytest.mark.slow
+# >16 GB on the GitHub runner: 8.9 GB used 12 s in, then the host shut the runner down
+# (Weekly 37171326544 resource trace, 2026-10-04).
+@pytest.mark.big_memory
 def test_video_mvit_v2_s():
     model = torchvision.models.video.mvit_v2_s()
     model_input = torch.randn(16, 3, 448, 896)
