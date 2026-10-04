@@ -42,6 +42,7 @@ from torchlens.validation import validate_forward_pass
 from torchlens.validation.core import validate_saved_outs
 from torchlens.validation.exemptions import (
     _addcmul_zero_annihilator_decision,
+    _check_norm_zero_weight_annihilates,
     _multiplicative_zero_annihilator_decision,
 )
 from torchlens.validation.invariants import (
@@ -788,6 +789,85 @@ def test_nan_multiplication_proof_still_covers_plain_mul() -> None:
     )
     assert decision.exempt is True
     assert decision.reason == "locally_constant_by_construction"
+
+
+def test_batch_norm_zero_init_last_weight_validates() -> None:
+    """Eval-mode batch_norm whose ``weight`` (gamma) is exactly zero must validate.
+
+    ``batch_norm``'s output is
+    ``((input - running_mean) / sqrt(running_var + eps)) * weight + bias``:
+    an exactly-zero ``weight`` annihilates the whole normalized term, leaving
+    output == bias regardless of input, running_mean, or running_var -- the
+    same zero-annihilator shape already proved for mul/addcmul. timm's
+    "zero_init_last" convention zero-initializes exactly the LAST BatchNorm's
+    weight in every residual block of many ResNet-family architectures, so an
+    untrained (``pretrained=False``) instance hits this at validation time.
+
+    Reproduced on real timm models: ``botnet26t_256`` failed perturbing the
+    ``running_mean`` buffer of ``stages.3.1.conv3_1x1.bn`` (weight all zero),
+    and ``cs3darknet_focus_l`` failed the same way on
+    ``stages.0.blocks.0.conv2.bn``. In both, the perturbed parents attributed
+    to the op were input/running_mean/running_var (args 0/3/4).
+    """
+
+    bn = nn.BatchNorm2d(4)
+    with torch.no_grad():
+        bn.weight.zero_()
+    bn.eval()
+    assert _quiet_validate(bn, torch.randn(2, 4, 8, 8)) is True
+
+
+def test_batch_norm_zero_init_last_weight_validates_training_mode() -> None:
+    """The zero-weight annihilation holds in training mode too.
+
+    The normalized term vanishes regardless of mode (only the SEPARATE
+    running_mean/running_var training-mode carve-out above is itself
+    mode-gated; this one is not, since weight=0 nullifies the term in both
+    the batch-statistics (training) and running-buffer (eval) forms alike).
+    """
+
+    bn = nn.BatchNorm2d(4, momentum=None)
+    with torch.no_grad():
+        bn.weight.zero_()
+    bn.train()
+    assert _quiet_validate(bn, torch.randn(2, 4, 8, 8)) is True
+
+
+def test_check_norm_zero_weight_annihilates_never_exempts_weight_or_bias() -> None:
+    """Armed-proof: the zero-weight carve-out never exempts perturbing
+    weight or bias themselves, and never fires when weight is nonzero.
+    """
+
+    class _FakeBatchNormOp:
+        def __init__(self, weight) -> None:
+            self.saved_args = [None, weight, None, None, None, False]
+            self.parent_arg_positions = {
+                "args": {
+                    0: "input_label",
+                    1: "weight_label",
+                    2: "bias_label",
+                    3: "running_mean_label",
+                    4: "running_var_label",
+                },
+                "kwargs": {},
+            }
+
+    zero_weight = torch.zeros(4)
+    nonzero_weight = torch.ones(4)
+
+    # Zero weight: input/running_mean/running_var are exempt.
+    layer = _FakeBatchNormOp(zero_weight)
+    assert _check_norm_zero_weight_annihilates(layer, ["input_label"]) is True
+    assert _check_norm_zero_weight_annihilates(layer, ["running_mean_label"]) is True
+    assert _check_norm_zero_weight_annihilates(layer, ["running_var_label"]) is True
+    # ... but never weight or bias themselves.
+    assert _check_norm_zero_weight_annihilates(layer, ["weight_label"]) is False
+    assert _check_norm_zero_weight_annihilates(layer, ["bias_label"]) is False
+
+    # Nonzero weight: nothing is exempt through this check.
+    nonzero_layer = _FakeBatchNormOp(nonzero_weight)
+    assert _check_norm_zero_weight_annihilates(nonzero_layer, ["input_label"]) is False
+    assert _check_norm_zero_weight_annihilates(nonzero_layer, ["running_mean_label"]) is False
 
 
 def test_w35_nonzero_literal_never_exempted() -> None:
