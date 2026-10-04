@@ -6265,9 +6265,9 @@
           "0.25": "CollapsePlan(total=7, raw_op=7)",
           "0.75": "CollapsePlan(total=7, raw_op=7)",
           "auto": "CollapsePlan(total=7, raw_op=7)",
-          "max": "CollapsePlan(total=6, raw_op=5, child_segment=1)"
+          "max": "CollapsePlan(total=4, raw_op=3, op_segment=1)"
         },
-        "schedule": "CollapseSchedule(steps=(CollapseScheduleStep(t=0.0, target_count=7, visible_count=7, collapsed_addresses=frozenset(), plan=CollapsePlan(total=7, raw_op=7), events=()), CollapseScheduleStep(t=1.0, target_count=6, visible_count=6, collapsed_addresses=frozenset({'head.0', 'head.2'}), plan=CollapsePlan(total=6, raw_op=5, child_segment=1), events=(CollapseEvent(kind='box', addresses=('head.0',), replacement='module box @head.0', legality='box', score=0.002857, fold=None), CollapseEvent(kind='box', addresses=('head.2',), replacement='module box @head.2', legality='box', score=0.002857, fold=None), CollapseEvent(kind='segment', addresses=('head.0', 'head.2'), replacement='head.{0, 2} -- 2 blocks, 2 ops, 30 params', legality='segment', score=inf, fold=None)))))",
+        "schedule": "CollapseSchedule(steps=(CollapseScheduleStep(t=0.0, target_count=7, visible_count=7, collapsed_addresses=frozenset(), plan=CollapsePlan(total=7, raw_op=7), events=()), CollapseScheduleStep(t=1.0, target_count=4, visible_count=4, collapsed_addresses=frozenset({'linear_1_1:1', 'linear_2_3:1', 'relu_1_2:1', 'relu_2_4:1'}), plan=CollapsePlan(total=4, raw_op=3, op_segment=1), events=(CollapseEvent(kind='segment', addresses=('linear_1_1:1', 'relu_1_2:1', 'linear_2_3:1', 'relu_2_4:1'), replacement='linear_1_1 ... relu_2_4 -- 4 ops -- spans @encoder:1, @head:1', legality='segment', score=inf, fold=None),))))",
         "structural": {
           "edges": [
             {
@@ -8937,13 +8937,13 @@
     "schema_version": 1
   },
   "sha256_chunks": [
-    "1e6e91e9",
-    "eb6dd75b",
-    "8c752cf1",
-    "bfb606d0",
-    "d7b2f6d4",
-    "6a5cd0d0",
-    "47064abf",
-    "60fa369c"
+    "c7b37c7a",
+    "4f22b382",
+    "2669af68",
+    "51c162fb",
+    "d4b540dd",
+    "9c955e2c",
+    "41e21596",
+    "a4da8a6b"
   ]
 }

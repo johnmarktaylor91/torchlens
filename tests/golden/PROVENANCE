@@ -42,3 +42,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 88d59b16cdbda283f83de8238629fd8d059d12a3 (dirty)
 recorded: 2026-09-01T08:04:20.085723+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: max segments group only consecutive, directly joined siblings: OracleNested max no longer segments head.0 and head.2 around head.1
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9a74eae371381f0b7ceb01dcfaff72b76f95efa1 (clean; run from a scratch commit that only added helper scripts)
+recorded: 2026-10-04T09:34:34.095863+00:00
