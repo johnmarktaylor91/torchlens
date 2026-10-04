@@ -13,7 +13,9 @@ Roles
   ``heavy`` 5-20s, ``slow`` > 20s; unmarked resolves to the smoke budget).
   Tiers are mutually exclusive on one resolved item (marker-lint policy).
 - ``scheduling``: run-placement channels (``serial``: away from parallel
-  load; ``rare``: excluded unless explicitly requested, budget-exempt).
+  load; ``rare``: excluded unless explicitly requested, budget-exempt;
+  ``big_memory``: excluded from the GitHub Actions Weekly job, run instead on
+  a large-memory fleet machine).
 - ``capability``: the test requires an optional dependency/runtime and skips
   honestly without it.
 - ``suite``: names a dedicated gate family selected as a unit.
@@ -35,6 +37,15 @@ The two selection markers this sprint adds:
   ``-m compo`` sweeps and the pair-coverage auditor).
 - ``real_model``: the test exercises a real-architecture or real-checkpoint
   fixture (the R0 gates select ``tests/real_model/r0`` by path).
+
+``big_memory`` (FJ-weekly-green, runner-size failures): a ``scheduling``
+marker, never a tier. It names a ``slow``-tier real-model test whose peak RSS
+on the GitHub Actions 16 GB runner is big enough (alone, or in combination
+with whichever other test the host happened to schedule into the same
+process) to get the runner killed or the test's own ``SaveBudgetExceededError``
+tripped purely from the runner's memory ceiling, not from a capture bug.
+``tests/test_marker_lint.py`` additionally requires every ``big_memory`` item
+to also carry ``slow`` (the only tier the Weekly job excludes it from).
 """
 
 from __future__ import annotations
@@ -49,6 +60,7 @@ MARKER_ALGEBRA: dict[str, str] = {
     "smoke_cells": "tier_selector",
     "serial": "scheduling",
     "rare": "scheduling",
+    "big_memory": "scheduling",
     "optional": "capability",
     "requires_assertions": "capability",
     "backend_parity": "suite",

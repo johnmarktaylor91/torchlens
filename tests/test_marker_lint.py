@@ -41,8 +41,11 @@ from _source_corpus import package_ast, package_files, package_source
 #: (and `-m smoke` overrides the default `-m 'not rare'`, so smoke+rare items
 #: DO run in the commit gate). ``serial`` is no longer budget-exempt (b2 R41
 #: round 5) but stays smoke-incompatible: its load-sensitivity claim
-#: contradicts running inside the parallel commit gate.
-_SMOKE_INCOMPATIBLE_MARKERS = ("heavy", "slow", "serial", "rare")
+#: contradicts running inside the parallel commit gate. ``big_memory``
+#: (FJ-weekly-green) names a slow-tier real-model test excluded from the
+#: GitHub Weekly runner for memory, not duration -- a smoke test is never
+#: memory-heavy enough to need that exclusion.
+_SMOKE_INCOMPATIBLE_MARKERS = ("heavy", "slow", "serial", "rare", "big_memory")
 
 
 def _tier_combo_violations(
@@ -60,6 +63,11 @@ def _tier_combo_violations(
       refinement of a heavy family (``pytest.param(..., marks=slow)``), the
       sanctioned shape for "this one cell measures beyond heavy's ceiling"
       (R41-3). Budget enforcement already resolves the combo as slow-wins.
+    - ``big_memory`` without ``slow`` is a scheduling contradiction: the
+      Weekly GitHub job only ever excludes ``big_memory`` FROM its
+      ``slow and not rare`` selection, so a ``big_memory`` test that is not
+      ``slow`` would never be excluded from anywhere and would still risk
+      exhausting the GitHub runner in whichever tier it actually runs in.
 
     Parameters
     ----------
@@ -88,6 +96,8 @@ def _tier_combo_violations(
         and "heavy" not in callspec_marker_names
     ):
         violations.append(f"{nodeid} [heavy + slow, not a per-cell refinement]")
+    if "big_memory" in marker_names and "slow" not in marker_names:
+        violations.append(f"{nodeid} [big_memory without slow]")
     return violations
 
 
@@ -126,6 +136,9 @@ def test_no_smoke_test_carries_a_heavier_tier_marker(request: pytest.FixtureRequ
         pytest.param({"heavy", "slow"}, {"slow"}, [], id="heavy-family-slow-cell-ok"),
         pytest.param({"smoke"}, set(), [], id="smoke-alone-ok"),
         pytest.param({"heavy", "serial"}, set(), [], id="heavy-serial-ok"),
+        pytest.param({"smoke", "big_memory"}, set(), ["smoke + big_memory"], id="smoke-big-memory"),
+        pytest.param({"big_memory"}, set(), ["big_memory without slow"], id="big-memory-alone"),
+        pytest.param({"big_memory", "slow"}, set(), [], id="big-memory-slow-ok"),
     ],
 )
 def test_tier_combo_policy_is_red_capable(

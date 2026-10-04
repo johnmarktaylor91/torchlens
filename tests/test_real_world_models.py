@@ -467,6 +467,7 @@ def test_regnet(default_input1):
 
 
 @pytest.mark.slow
+@pytest.mark.big_memory  # SaveBudgetExceededError on the 16 GB GitHub runner (round 2, lane-L8-ci-fix)
 def test_swin_v2b(default_input1):
     model = torchvision.models.swin_v2_b()
     assert validate_forward_pass(model, default_input1)
@@ -481,6 +482,7 @@ def test_swin_v2b(default_input1):
 
 
 @pytest.mark.slow
+@pytest.mark.big_memory  # SaveBudgetExceededError on the 16 GB GitHub runner (round 2, lane-L8-ci-fix)
 def test_maxvit(default_input1):
     model = torchvision.models.maxvit_t()
     assert validate_forward_pass(model, default_input1)
@@ -924,6 +926,7 @@ def test_timm_cait_s24_224(default_input1):
 
 
 @pytest.mark.slow
+@pytest.mark.big_memory  # SaveBudgetExceededError on the 16 GB GitHub runner (round 2, lane-L8-ci-fix)
 def test_timm_coat_mini(default_input1):
     timm = pytest.importorskip("timm")
     model = timm.models.coat_mini()
@@ -939,6 +942,7 @@ def test_timm_coat_mini(default_input1):
 
 
 @pytest.mark.slow
+@pytest.mark.big_memory  # SaveBudgetExceededError on the 16 GB GitHub runner (round 2, lane-L8-ci-fix)
 def test_timm_convit_base(default_input1):
     timm = pytest.importorskip("timm")
     model = timm.create_model("convit_base", pretrained=True)
@@ -1613,6 +1617,7 @@ def test_blip_base():
 
 
 @pytest.mark.slow
+@pytest.mark.big_memory  # alone exhausts the 16 GB GitHub runner, killing it mid-test (2026-10-03 Weekly)
 def test_vit_mae():
     transformers = pytest.importorskip("transformers")
     model = transformers.ViTMAEModel.from_pretrained("facebook/vit-mae-base")
@@ -2021,6 +2026,7 @@ def test_fcos_resnet50_train(default_input1, default_input2):
 
 
 @pytest.mark.slow
+@pytest.mark.big_memory  # SaveBudgetExceededError on the 16 GB GitHub runner (round 2, lane-L8-ci-fix)
 def test_fcos_resnet50_eval(default_input1, default_input2):
     model = torchvision.models.detection.fcos_resnet50_fpn()
     input_tensors = [default_input1[0], default_input2[0]]
@@ -2130,6 +2136,7 @@ def test_ssd300_vgg16_train(default_input1, default_input2):
 
 
 @pytest.mark.slow
+@pytest.mark.big_memory  # Graphviz render timeout (120 s) on the 16 GB GitHub runner (round 2, lane-L8-ci-fix)
 def test_ssd300_vgg16_eval(default_input1, default_input2):
     model = torchvision.models.detection.ssd300_vgg16()
     input_tensors = [default_input1[0], default_input2[0]]
@@ -3982,6 +3989,7 @@ def test_keypointrcnn_resnet50_train():
 
 
 @pytest.mark.slow
+@pytest.mark.big_memory  # SaveBudgetExceededError on the 16 GB GitHub runner (round 2, lane-L8-ci-fix)
 def test_keypointrcnn_resnet50_eval():
     """Keypoint R-CNN: eval mode."""
     torch.manual_seed(0)

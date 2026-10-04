@@ -402,6 +402,7 @@ markers = [
     # by tests/test_marker_lint.py -- a new marker lands in both places or goes red.
     "compo: composition-expectation ledger row (orthogonal selection marker, never a cost tier)",
     "real_model: exercises a real-architecture or real-checkpoint fixture (orthogonal selection marker; the R0 gates select tests/real_model/r0 by path)",
+    "big_memory: a slow-tier real-model test whose peak RSS risks exhausting the 16 GB GitHub Actions runner (scheduling marker; excluded from the Weekly GitHub job, run instead on a large-memory fleet machine)",
 ]
 addopts = "-m 'not rare'"
 xfail_strict = true
