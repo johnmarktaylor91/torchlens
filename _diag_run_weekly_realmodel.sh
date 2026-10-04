@@ -42,5 +42,5 @@ python _diag_collect_real_model_failures.py \
   --repo "$(pwd)" \
   --target tests/test_real_world_models.py \
   --marker "slow and not rare" \
-  --workers 3 \
+  --workers 2 \
   --out realmodel_results.json
