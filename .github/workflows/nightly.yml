@@ -22,6 +22,7 @@ jobs:
   perf-gate:
     name: Same-run performance regression gate
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     # Scheduled/manual only: two smoke-suite runs cost several minutes and must
     # not extend the PR-blocking path. Comparing adjacent commits on the same
     # runner avoids treating developer-machine absolute baselines as portable.
@@ -122,6 +123,7 @@ jobs:
   fast-tier:
     name: Full fast tier
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -337,6 +339,7 @@ jobs:
   coverage:
     name: Coverage floor (smoke tier)
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     # First measured coverage gate (grind r3, SF-19: four consecutive review
     # passes found NO coverage job anywhere). The smoke tier under
     # branch-coverage instrumentation measured 64% total on 2026-08-15; the
@@ -420,6 +423,7 @@ jobs:
   capture-byte-oracle:
     name: Capture-characterization byte oracle (torch 2.13.0, py 3.10)
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     # The capture-characterization goldens embed raw float-byte digests, so
     # they are enforceable only on their recording environment (py3.10 +
     # torch 2.13.0; the version gate strips the build tag, mirroring
@@ -470,6 +474,7 @@ jobs:
   preview-backends:
     name: Preview backend tests (${{ matrix.backend }})
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     # One framework per job: the frameworks carry conflicting pins and native
     # runtimes that segfault when co-imported in one process (test collection
     # imports every framework-marked module), so a combined env cannot be
@@ -575,6 +580,7 @@ jobs:
   metadata-gates:
     name: Extras resolvability and dependency floors
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -700,6 +706,7 @@ jobs:
   wheel:
     name: Wheel package smoke
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -857,6 +864,7 @@ jobs:
     # docs/reference/limitations.md.
     name: platform canary (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:

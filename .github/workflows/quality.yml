@@ -23,6 +23,7 @@ jobs:
   type-check:
     name: Type check (mypy)
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -55,6 +56,7 @@ jobs:
   packaging:
     name: Packaging manifest tripwires
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     # PR-BLOCKING copy of the wheel-diet + sdist-governance gates (grind r3,
     # R82): they previously ran only in the nightly wheel job, so a revert of
     # the MANIFEST.in / exclude-package-data wiring merged green and shipped
@@ -95,6 +97,7 @@ jobs:
   dep-audit:
     name: Dependency audit
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -158,6 +161,7 @@ jobs:
     # no-suppression policy, extras tree.
     name: Dependency audit (extras)
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

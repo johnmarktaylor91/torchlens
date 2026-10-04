@@ -30,6 +30,7 @@ jobs:
     # are already handled by the concurrency group above.
     name: ${{ matrix.track }} (torch ${{ matrix.torch }}, py ${{ matrix.python }})
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:

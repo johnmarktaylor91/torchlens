@@ -22,6 +22,7 @@ concurrency:
 jobs:
   ruff:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -67,6 +68,7 @@ jobs:
   # This is the same hook set contributors run locally -- one verdict.
   pre-commit:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -134,6 +136,7 @@ jobs:
     # range for breaking markers so a --no-verify push or a hookless clone
     # cannot land one with only the parser standing.
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -174,6 +177,7 @@ jobs:
   # Version + checksum pinned to the official GitHub release.
   actionlint:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
