@@ -1096,6 +1096,96 @@ def test_softmax_singleton_dim_decision_scoped_correctly() -> None:
     )
 
 
+def test_layer_norm_singleton_normalized_shape_validates() -> None:
+    """A layer_norm over a size-1 normalized_shape must not fail its perturbation check.
+
+    Fixing csatv2's softmax-singleton-dim class unmasked a DIFFERENT op in the same
+    trivial single-channel attention branch --
+    ``layer_norm(input, normalized_shape=(1,), ...)``, confirmed on the real
+    ``timm.create_model('csatv2', pretrained=False)`` model, whose input there had
+    shape ``(1, 49, 1)``. ``layer_norm``
+    mean-centers and rescales over exactly the trailing ``normalized_shape`` dims;
+    when that span has exactly one element, the mean IS that element, so the
+    centered value is IDENTICALLY zero before the affine transform -- the same
+    shape-based identity already proved for softmax's singleton reduction dim,
+    applied to layer_norm's normalized_shape instead. The output (``bias``, or 0
+    with no affine) is a constant independent of the input's actual value,
+    regardless of what weight/bias happen to be.
+    """
+
+    class _SingletonLayerNorm(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.norm = nn.LayerNorm(1)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.norm(x.mean(dim=-1, keepdim=True))
+
+    assert _quiet_validate(_SingletonLayerNorm(), torch.randn(2, 5, 4)) is True
+
+
+def test_layer_norm_singleton_shape_decision_scoped_correctly() -> None:
+    """Armed-proof: only exempts when normalized_shape's element count is exactly 1."""
+
+    from torchlens.validation.exemptions import _layer_norm_singleton_shape_decision
+
+    class _FakeLayerNormOp:
+        def __init__(self, normalized_shape) -> None:
+            self.saved_args = (None, normalized_shape, None, None)
+            self.parent_arg_positions = {"args": {0: "input_label"}, "kwargs": {}}
+
+    singleton = _FakeLayerNormOp((1,))
+    assert (
+        _layer_norm_singleton_shape_decision(
+            singleton, ["input_label"], singleton.saved_args
+        ).exempt
+        is True
+    )
+
+    wide = _FakeLayerNormOp((4,))
+    assert (
+        _layer_norm_singleton_shape_decision(wide, ["input_label"], wide.saved_args).exempt is False
+    )
+
+    # Every normalized dim must be size 1: (1, 3) spans 3 elements per group.
+    multi = _FakeLayerNormOp((1, 3))
+    assert (
+        _layer_norm_singleton_shape_decision(multi, ["input_label"], multi.saved_args).exempt
+        is False
+    )
+    # An empty normalized_shape is not a proof of a one-element group.
+    empty = _FakeLayerNormOp(())
+    assert (
+        _layer_norm_singleton_shape_decision(empty, ["input_label"], empty.saved_args).exempt
+        is False
+    )
+    # The saved input's trailing dims must agree with the saved normalized_shape:
+    # a (2, 5, 4) input normalized as (1,) is a contradiction, never a proof.
+    mismatched = _FakeLayerNormOp((1,))
+    mismatched.saved_args = (torch.randn(2, 5, 4), (1,), None, None)
+    assert (
+        _layer_norm_singleton_shape_decision(
+            mismatched, ["input_label"], mismatched.saved_args
+        ).exempt
+        is False
+    )
+    matched = _FakeLayerNormOp((1,))
+    matched.saved_args = (torch.randn(2, 5, 1), (1,), None, None)
+    assert (
+        _layer_norm_singleton_shape_decision(matched, ["input_label"], matched.saved_args).exempt
+        is True
+    )
+
+    # Perturbing something other than the (sole) input parent is never this proof's
+    # business.
+    assert (
+        _layer_norm_singleton_shape_decision(
+            singleton, ["some_other_label"], singleton.saved_args
+        ).exempt
+        is False
+    )
+
+
 def test_w35_nonzero_literal_never_exempted() -> None:
     """Armed-proof: the annihilator proof requires an exactly-zero co-arg.
 
