@@ -79,21 +79,30 @@ jobs:
         # a real credential (verified: python-semantic-release's noop path
         # short-circuits Github.create_release before any network call);
         # GH_TOKEN only satisfies the config loader's non-empty string
-        # check. This step fails the way the real release job would: a
-        # nonzero exit here (a crash in config load, commit parsing, or
-        # version computation) fails the job outright via pipefail, and a
-        # successfully computed MAJOR bump fails it explicitly -- TorchLens
-        # stays on the 2.x family per the locked release policy, and
-        # major_on_zero plus scripts/no_major_parser.py should already
-        # prevent one from ever reaching this point.
+        # check.
+        #
+        # The tool exits nonzero both on a real crash (the config-load break
+        # this job exists to catch) AND on the benign "nothing to release"
+        # cases -- no commits warrant one, or (observed running this dry run
+        # against a branch forked before the last real release) the computed
+        # version is already tagged. Both benign cases print "No release
+        # will be made"; anything else nonzero is treated as a crash. The
+        # computed version itself is printed on its own line regardless of
+        # which path is taken, so the major-bump check still runs even when
+        # the benign "already released" case trips a nonzero exit.
         env:
           GH_TOKEN: noop-placeholder-token
         run: |
-          set -o pipefail
+          set +e
           semantic-release -v --noop version 2>&1 | tee /tmp/release-dry-run.log
+          rc="${PIPESTATUS[0]}"
+          set -e
+          if [ "$rc" -ne 0 ] && ! grep -q "No release will be made" /tmp/release-dry-run.log; then
+            echo "semantic-release exited $rc with no recognized 'no release' skip message -- treating as a crash"
+            exit 1
+          fi
 
-          computed="$(grep -oE 'next version is: [0-9]+\.[0-9]+\.[0-9]+' /tmp/release-dry-run.log \
-            | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | tail -1)"
+          computed="$(grep -oE '^[0-9]+\.[0-9]+\.[0-9]+$' /tmp/release-dry-run.log | tail -1)"
           if [ -z "$computed" ]; then
             echo "no pending release computed; nothing to validate"
             exit 0
