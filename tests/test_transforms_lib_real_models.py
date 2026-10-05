@@ -1,8 +1,9 @@
 """Real-model transform rows (memo 10.2; lane F19). Offline, cache-gated.
 
 The realism rule discharged on the transforms library itself: real
-checkpoints, real tokenizers, real ragged shapes — every row skips typed
-where its cached artifact is absent and NEVER downloads. Rows owned
+checkpoints, real tokenizers, real ragged shapes — NEVER downloads. Vision rows skip typed where
+their cached checkpoint is absent; tokenizer rows run only in the R1 offline venue
+(GATE-ID R1_OFFLINE_VENUE), where a missing artifact fails loudly. Rows owned
 elsewhere are not faked here: the Qwen kill/resume harvest and the
 cross-process opaque-resume refusal are extraction-engine territory (F18)
 — this suite pins the library-side identity and disclosure contracts the
@@ -12,10 +13,7 @@ version-leg venue (one environment cannot host two transformers).
 
 from __future__ import annotations
 
-import contextlib
 import os
-from collections.abc import Iterator
-from pathlib import Path
 
 import pytest
 import torch
@@ -48,100 +46,74 @@ pytestmark = [pytest.mark.slow, pytest.mark.real_model]
 
 @pytest.fixture(autouse=True)
 def _offline(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Real-checkpoint rows run offline: the cache serves the weights or the test
-    skips; only missing tokenizer files are fetched (see ``_hf_model``)."""
+    """Every row runs offline: nothing in this module fetches (the R1 preflight does)."""
 
     monkeypatch.setenv("HF_HUB_OFFLINE", "1")
     monkeypatch.setenv("TRANSFORMERS_OFFLINE", "1")
 
 
-#: Tokenizer files another test may have left out when it cached only weights.
-_TOKENIZER_FILE_PATTERNS = [
-    "tokenizer*",
-    "vocab*",
-    "merges*",
-    "special_tokens_map.json",
-    "added_tokens.json",
-    "*.model",
-]
+def _in_offline_venue() -> bool:
+    """The R1 venue signature: both offline flags set by the preflighted environment.
 
-
-@contextlib.contextmanager
-def _hub_online() -> Iterator[None]:
-    """Lift the module's offline mode for one deliberate tokenizer fetch."""
-
-    import huggingface_hub.constants as hub_constants
-
-    saved_env = {
-        key: os.environ.pop(key, None) for key in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")
-    }
-    saved_flag = hub_constants.HF_HUB_OFFLINE
-    hub_constants.HF_HUB_OFFLINE = False
-    try:
-        yield
-    finally:
-        hub_constants.HF_HUB_OFFLINE = saved_flag
-        for key, value in saved_env.items():
-            if value is not None:
-                os.environ[key] = value
-
-
-def _encodes(tokenizer) -> bool:
-    """Return whether ``tokenizer`` turns text into a non-empty id sequence."""
-
-    return bool(tokenizer("hi")["input_ids"])
-
-
-def _cached_or_fetched_tokenizer(transformers, name: str):
-    """Load ``name``'s tokenizer, fetching only its tokenizer files when missing.
-
-    Another test can cache a checkpoint's weights without its tokenizer
-    (``from_pretrained`` of the model alone). Offline, transformers then builds
-    a tokenizer that encodes every string to zero ids instead of raising, so
-    the missing files are fetched once and the tokenizer reloaded. Only a
-    machine that is offline AND lacks the tokenizer files skips.
+    Read at import, before the autouse ``_offline`` fixture sets the same flags
+    for every test, so it sees the caller's environment, not this module's.
     """
 
-    try:
-        tokenizer = transformers.AutoTokenizer.from_pretrained(name)
-        if _encodes(tokenizer):
-            return tokenizer
-    except (OSError, ValueError):
-        pass
-    import huggingface_hub
+    return os.environ.get("HF_HUB_OFFLINE") == "1" and os.environ.get("TRANSFORMERS_OFFLINE") == "1"
 
-    offline_reason = (
-        f"{name} tokenizer files are not in the HF cache and this machine is offline "
-        "(the hub is unreachable); the cached weights alone cannot tokenize"
+
+#: GATE-ID R1_OFFLINE_VENUE (``tests/real_model/r1/conftest.py``): rows that need a
+#: real tokenizer run only in the preflighted venue, where
+#: ``scripts/preflight_fetch_artifacts.py`` is the only fetch. Out of venue they skip
+#: at collection with the gate id; in venue a missing artifact fails loudly.
+requires_offline_venue = pytest.mark.skipif(
+    not _in_offline_venue(),
+    reason=(
+        "GATE R1_OFFLINE_VENUE: not in the offline preflighted venue; run "
+        "scripts/preflight_fetch_artifacts.py fetch, export its print-env, then "
+        "rerun. In venue these rows can NEVER skip."
+    ),
+)
+
+#: Registry rows for checkpoints the preflight manifest pins (model id + revision).
+_REGISTRY_ROWS = {"distilgpt2": "r1-distilgpt2"}
+
+
+def _hf_pin(name: str) -> tuple[str, str | None]:
+    """Return ``(model_id, revision)``: the registry pin when one exists, else ``name``."""
+
+    artifact_id = _REGISTRY_ROWS.get(name)
+    if artifact_id is None:
+        return name, None
+    from tests.real_model.registry import load_registry
+
+    row = load_registry().checkpoint_evidence(artifact_id)
+    return row.model_id, row.revision
+
+
+def _hf_tokenizer(name: str):
+    """Load ``name``'s tokenizer from the preflighted cache; never fetch, never skip."""
+
+    transformers = pytest.importorskip("transformers")
+    model_id, revision = _hf_pin(name)
+    tokenizer = transformers.AutoTokenizer.from_pretrained(model_id, revision=revision)
+    # Offline, transformers can build a tokenizer from weights alone that encodes
+    # every string to zero ids instead of raising; in venue that is a cache defect.
+    assert tokenizer("hi")["input_ids"], (
+        f"GATE R1_OFFLINE_VENUE: {model_id} tokenizer encodes to zero ids; its tokenizer"
+        " files are missing from the preflighted cache (re-run the preflight fetch)"
     )
-    try:
-        with _hub_online():
-            snapshot = huggingface_hub.snapshot_download(
-                name, allow_patterns=_TOKENIZER_FILE_PATTERNS
-            )
-    except Exception as exc:  # noqa: BLE001 - any fetch failure means no network here
-        pytest.skip(f"{offline_reason}: {type(exc).__name__}")
-    # An unreachable hub does not always raise: snapshot_download can fall back to
-    # the partial local snapshot, so check that tokenizer files actually arrived.
-    snapshot_dir = Path(snapshot)
-    if not any(any(snapshot_dir.glob(pattern)) for pattern in _TOKENIZER_FILE_PATTERNS):
-        pytest.skip(offline_reason)
-    tokenizer = transformers.AutoTokenizer.from_pretrained(name)
-    assert _encodes(tokenizer), f"{name} tokenizer still encodes to zero ids after the fetch"
     return tokenizer
 
 
 def _hf_model(name: str):
-    """Load a cached HF model + tokenizer or skip typed (weights never download)."""
+    """Load a real HF model + tokenizer in the R1 venue; a missing artifact raises."""
 
     transformers = pytest.importorskip("transformers")
-    try:
-        model = transformers.AutoModel.from_pretrained(name)
-    except (OSError, ValueError) as exc:  # cache miss, offline -> honest skip
-        pytest.skip(f"{name} not in the offline HF cache: {type(exc).__name__}")
-    tokenizer = _cached_or_fetched_tokenizer(transformers, name)
+    model_id, revision = _hf_pin(name)
+    model = transformers.AutoModel.from_pretrained(model_id, revision=revision)
     model.eval()
-    return model, tokenizer
+    return model, _hf_tokenizer(name)
 
 
 SENTENCES = [
@@ -224,6 +196,7 @@ def test_resnet50_heterogeneous_extraction_end_to_end(tmp_path) -> None:
 # --- 10.2 row 3: ragged real-tokenizer laundering + partition invariance -------
 
 
+@requires_offline_venue
 def test_bert_ragged_flatten_srp_refuses_and_pooled_partitions_agree() -> None:
     """The D-5 launch gate on real ragged shapes: drift REFUSES before any
     shard; pooled (mask-aware) rows are partition-invariant (T-C10)."""
@@ -262,6 +235,7 @@ def test_bert_ragged_flatten_srp_refuses_and_pooled_partitions_agree() -> None:
 # --- 10.2 row 4: LM pooling references, left AND right padding ------------------
 
 
+@requires_offline_venue
 def test_gpt2_family_pooling_matches_unpadded_references() -> None:
     """Masked mean/first/last equal per-sentence unpadded references under
     BOTH padding sides (left padding passes explicit position_ids so valid
@@ -337,6 +311,7 @@ def test_vit_axis_contract_resolves_or_refuses() -> None:
     assert torch.equal(cls_out, hidden[:, 0])
 
 
+@requires_offline_venue
 def test_distilbert_cls_succeeds_and_gpt2_cls_refuses() -> None:
     """The memo's discriminative CLS pair, from REAL tokenizer facts."""
 
@@ -351,7 +326,7 @@ def test_distilbert_cls_succeeds_and_gpt2_cls_refuses() -> None:
     ctx = TransformContext(roles=BTD, mask=batch["attention_mask"], special_tokens=facts)
     cls_out = cls_token().apply(hidden, ctx)
     assert torch.equal(cls_out, hidden[:, 0])  # right padding: first valid == 0
-    gpt2_tokenizer = pytest.importorskip("transformers").AutoTokenizer.from_pretrained("distilgpt2")
+    gpt2_tokenizer = _hf_tokenizer("distilgpt2")
     gpt2_facts = SpecialTokenFacts(
         has_cls=gpt2_tokenizer.cls_token_id is not None, source="tokenizer:distilgpt2"
     )
