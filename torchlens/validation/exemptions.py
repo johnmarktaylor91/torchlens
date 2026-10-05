@@ -37,15 +37,29 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from ..data_classes.op import Op
-from ..utils.tensor_utils import tensor_all_nan
+from ._destination_coverage import (
+    _get_scatter_destination_dim_index,
+    _index_positions_cover_destination_exactly,
+    _index_put_destination_is_fully_overwritten,
+    _scatter_index_fully_overwrites_dim,
+    _setitem_index_targets_are_unique,
+)
 from ._index_domain import (
     _INDEX_DOMAIN_ARG_SPECS,
-    _INDEX_DOMAIN_INT_DTYPES,
     _index_domain_size,
     _parent_is_index_domain_arg,
-    _saved_index_domain_arg_value,
+    _saved_integer_index_tensor,
 )
 from ._integer_mod_proof import integer_mod_by_unit_is_identically_zero
+from ._value_predicates import (
+    _extrema_operand_dominates,
+    _is_all_inf_value,
+    _is_all_nan_value,
+    _is_all_zero_value,
+    _saved_output_all_finite,
+    _tensor_constant_along_dim,
+    _tensor_or_number_is_constant,
+)
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
@@ -247,10 +261,8 @@ def _check_index_domain_degenerate(self: "Trace", layer: Op, layers_to_perturb: 
         return False
     if not _parent_is_index_domain_arg(layer, layers_to_perturb[0]):
         return False
-    saved_index = _saved_index_domain_arg_value(layer)
-    if not isinstance(saved_index, torch.Tensor):
-        return False
-    if saved_index.dtype not in _INDEX_DOMAIN_INT_DTYPES:
+    saved_index = _saved_integer_index_tensor(layer)
+    if saved_index is None:
         return False
     domain_size = _index_domain_size(layer)
     if domain_size is None:
@@ -336,6 +348,25 @@ def uninitialized_by_design_applies(op: Any) -> bool:
         return False
     if getattr(op, "func_name", None) != "new":
         return True
+    return _new_call_is_size_only_overload(op)
+
+
+def _new_call_is_size_only_overload(op: Any) -> bool:
+    """Return whether a saved ``Tensor.new`` call is the size-only overload.
+
+    Parameters
+    ----------
+    op:
+        Operation record whose ``func_name`` is ``new``.
+
+    Returns
+    -------
+    bool
+        True when the call has at most the self tensor as parent, no keyword
+        arguments, and every non-tensor positional argument is a plain ``int``
+        or a ``torch.Size``.
+    """
+
     parents = getattr(op, "parents", ()) or ()
     if len(parents) > 1:
         # A second tensor parent is the value-bearing new(tensor) overload.
@@ -561,105 +592,6 @@ def _setitem_destination_coverage_is_total(
     return True
 
 
-def _setitem_index_targets_are_unique(index: Any) -> bool:
-    """Return whether a ``__setitem__`` index cannot duplicate write targets.
-
-    Parameters
-    ----------
-    index:
-        Index argument supplied to ``Tensor.__setitem__``.
-
-    Returns
-    -------
-    bool
-        True for basic indexing and for verified unique tensor/list advanced
-        indices. Duplicate advanced indices can make ``selected.numel()`` equal
-        the destination size while leaving some destination elements live.
-    """
-
-    components = index if isinstance(index, tuple) else (index,)
-    for component in components:
-        if isinstance(component, list):
-            try:
-                component = torch.as_tensor(component)
-            except (TypeError, ValueError):
-                return False
-        if isinstance(component, torch.Tensor):
-            if component.dtype == torch.bool:
-                continue
-            if not _tensor_is_integer_index(component):
-                return False
-            flattened = component.reshape(-1)
-            if int(flattened.numel()) != int(torch.unique(flattened).numel()):
-                return False
-            continue
-        if component is None or component is Ellipsis or isinstance(component, (slice, int)):
-            continue
-        return False
-    return True
-
-
-def _index_positions_cover_destination_exactly(
-    destination: torch.Tensor,
-    index: Any,
-) -> bool:
-    """Return whether ``destination[index]`` addresses every element exactly once.
-
-    Value-based uniqueness (``torch.unique`` on raw index values) is blind to
-    negative-index aliasing: ``0`` and ``-2`` are distinct VALUES that address
-    the SAME position on a length-2 dim, so a "fully overwritten" proof counted
-    a full overwrite while an element survived with its prior value. Indexing
-    an identity-POSITION tensor with the saved index makes torch's own indexing
-    semantics normalize negatives, slices, ellipsis, and boolean masks exactly;
-    requiring the selected positions to be unique and to number the whole
-    destination is the exact single-coverage proof.
-
-    Parameters
-    ----------
-    destination:
-        Destination tensor of the write.
-    index:
-        Saved index argument (``__setitem__`` index or ``index_put`` indices
-        tuple).
-
-    Returns
-    -------
-    bool
-        True only when the index selects each destination position exactly
-        once and selects all of them. Any indexing failure returns False so
-        callers fail closed.
-    """
-
-    try:
-        positions = torch.arange(destination.numel(), device=destination.device).reshape(
-            destination.shape
-        )
-        covered = positions[index]
-    except (IndexError, TypeError, RuntimeError):
-        return False
-    flattened = covered.reshape(-1)
-    if int(flattened.numel()) != int(destination.numel()):
-        return False
-    return int(torch.unique(flattened).numel()) == int(destination.numel())
-
-
-def _tensor_is_integer_index(tensor: torch.Tensor) -> bool:
-    """Return whether ``tensor`` has an integer dtype accepted for indexing.
-
-    Parameters
-    ----------
-    tensor:
-        Tensor index component.
-
-    Returns
-    -------
-    bool
-        True when the tensor dtype is an integer indexing dtype.
-    """
-
-    return not tensor.dtype.is_floating_point and not tensor.dtype.is_complex
-
-
 def _check_index_put_exempt(self: "Trace", layer: Op, layers_to_perturb: list[str]) -> bool:
     """Exempt ``index_put``/``index_put_`` when the destination is fully overwritten.
 
@@ -728,105 +660,6 @@ def _perturbed_parent_arg_positions(layer: Op, layers_to_perturb: list[str]) -> 
         for position, parent_label in arg_positions.items()
         if parent_label == layers_to_perturb[0]
     }
-
-
-def _index_put_destination_is_fully_overwritten(
-    perturbed_tensor: torch.Tensor | None,
-    layer: Op,
-) -> bool:
-    """Return whether an ``index_put`` call overwrites the perturbed destination.
-
-    Parameters
-    ----------
-    perturbed_tensor:
-        Tensor selected for perturbation.
-    layer:
-        Captured ``index_put``/``index_put_`` op.
-
-    Returns
-    -------
-    bool
-        True only when the perturbed tensor is the destination (``args[0]``), the
-        call is non-accumulating, and the indexed positions cover the ENTIRE
-        destination and are exactly written by the broadcast ``values`` (so the
-        destination's prior value is wholly irrelevant). Returns False for any
-        perturbed VALUE/INDEX parent, for the accumulating case, and for a
-        partial overwrite (where un-indexed destination elements still flow
-        through).
-    """
-
-    args = layer.saved_args
-    if not isinstance(perturbed_tensor, torch.Tensor):
-        return False
-    if args is None or len(args) < 3:
-        return False
-    destination, indices, values = args[0], args[1], args[2]
-    if not isinstance(destination, torch.Tensor) or not isinstance(values, torch.Tensor):
-        return False
-    # Narrow: the perturbed parent must be the DESTINATION, never the values/index.
-    if not torch.equal(perturbed_tensor, destination):
-        return False
-    # accumulate=True adds the value to the prior destination, so the prior value
-    # is NOT irrelevant -- never exempt that case. accumulate may arrive as a
-    # positional arg (index 3) or as a keyword.
-    accumulate = False
-    if len(args) > 3:
-        accumulate = bool(args[3])
-    elif "accumulate" in (layer.saved_kwargs or {}):
-        accumulate = bool(layer.saved_kwargs["accumulate"])
-    if accumulate:
-        return False
-    # index_put indices are an advanced-indexing tuple/list of LongTensors.
-    if isinstance(indices, list):
-        index = tuple(indices)
-    elif isinstance(indices, tuple):
-        index = indices
-    else:
-        index = (indices,)
-    try:
-        selected = destination[index]
-    except (IndexError, TypeError, RuntimeError):
-        return False
-    # The written slice must broadcast the replacement exactly (every selected
-    # element is overwritten, none left at its prior value).
-    try:
-        broadcast_shape = torch.broadcast_shapes(tuple(selected.shape), tuple(values.shape))
-    except RuntimeError:
-        return False
-    if tuple(broadcast_shape) != tuple(selected.shape):
-        return False
-    # The exemption is only sound when the WHOLE destination is overwritten: any
-    # un-indexed element keeps its prior value and so still influences the output
-    # (the partial-overwrite false-exemption guard). Require the indexed region to
-    # cover every destination element, with no duplicate indices inflating the
-    # count -- duplicates would match the numel without covering everything.
-    if not _index_put_indices_are_unique(index):
-        return False
-    if int(selected.numel()) != int(destination.numel()):
-        return False
-    return _index_positions_cover_destination_exactly(destination, index)
-
-
-def _index_put_indices_are_unique(index: tuple[Any, ...]) -> bool:
-    """Return whether advanced ``index_put`` indices address distinct positions.
-
-    Duplicate indices would let ``selected.numel()`` reach ``destination.numel()``
-    without actually covering every destination element, so the full-overwrite
-    coverage check would be fooled. This conservatively requires each integer
-    index tensor to hold unique values; a non-integer (e.g. boolean mask) or any
-    structure it cannot verify returns False so the exemption is withheld.
-    """
-
-    for component in index:
-        if not isinstance(component, torch.Tensor):
-            return False
-        if component.dtype == torch.bool:
-            # A bool mask selects each True position once -> inherently unique.
-            continue
-        flattened = component.reshape(-1)
-        if int(flattened.numel()) != int(torch.unique(flattened).numel()):
-            return False
-    return True
 
 
 def _perturbed_parent_occupies_arg_slot(
@@ -906,79 +739,6 @@ def _check_interpolate_exempt(self: "Trace", layer: Op, layers_to_perturb: list[
         kwargs.get("scale_factor") is not None
         and kwarg_positions.get("scale_factor") == layers_to_perturb[0]
     )
-
-
-def _get_scatter_destination_dim_index(
-    layer: Op,
-) -> tuple[torch.Tensor, int, torch.Tensor] | None:
-    """Return scatter destination, dim, and index tensors when they are replayable.
-
-    Parameters
-    ----------
-    layer:
-        Scatter operation being validated.
-
-    Returns
-    -------
-    tuple[torch.Tensor, int, torch.Tensor] | None
-        Destination tensor, scatter dimension, and index tensor, or ``None``
-        when the call shape is unsupported or uses reduce semantics.
-    """
-
-    args = layer.saved_args
-    kwargs = layer.saved_kwargs
-    if len(args) < 1 or not isinstance(args[0], torch.Tensor):
-        return None
-    if kwargs.get("reduce") is not None:
-        return None
-    if len(args) > 4 and args[4] is not None:
-        return None
-
-    dest = args[0]
-    dim = kwargs.get("dim", args[1] if len(args) > 1 else None)
-    index = kwargs.get("index", args[2] if len(args) > 2 else None)
-    if not isinstance(dim, int) or not isinstance(index, torch.Tensor):
-        return None
-    if dim < 0:
-        dim = dest.ndim + dim
-    if dim < 0 or dim >= dest.ndim:
-        return None
-    return dest, dim, index
-
-
-def _scatter_index_fully_overwrites_dim(dest: torch.Tensor, dim: int, index: torch.Tensor) -> bool:
-    """Return whether scatter index covers every destination slot along ``dim``.
-
-    Parameters
-    ----------
-    dest:
-        Scatter destination tensor.
-    dim:
-        Normalized scatter dimension.
-    index:
-        Scatter index tensor.
-
-    Returns
-    -------
-    bool
-        True when every slice orthogonal to ``dim`` contains each valid
-        destination index, making the destination's prior values irrelevant.
-    """
-
-    if index.ndim != dest.ndim or index.shape[dim] < dest.shape[dim]:
-        return False
-    if any(index.shape[axis] < dest.shape[axis] for axis in range(dest.ndim) if axis != dim):
-        return False
-    n_positions = dest.shape[dim]
-    if n_positions == 0:
-        return False
-    moved = index.detach().cpu().movedim(dim, -1).reshape(-1, index.shape[dim])
-    required = set(range(n_positions))
-    for row in moved:
-        row_values = {int(value) for value in row.tolist() if 0 <= int(value) < n_positions}
-        if not required.issubset(row_values):
-            return False
-    return True
 
 
 def _check_scatter_exempt(self: "Trace", layer: Op, layers_to_perturb: list[str]) -> bool:
@@ -1593,14 +1353,7 @@ def _binary_extrema_nonperturbed_arg_dominates(
         perturbed, other = args[1], args[0]
     else:
         return False
-    try:
-        if func_name in ("max", "maximum"):
-            return bool(torch.all(other >= perturbed).item())
-        if func_name in ("min", "minimum"):
-            return bool(torch.all(other <= perturbed).item())
-    except RuntimeError:
-        return False
-    return False
+    return _extrema_operand_dominates(func_name, other, perturbed)
 
 
 # ---------------------------------------------------------------------------
@@ -2482,51 +2235,6 @@ def _integer_mod_unit_divisor_decision(
     )
 
 
-def _tensor_or_number_is_constant(value: Any) -> bool:
-    """Return whether ``value`` is a scalar or a tensor with one constant value.
-
-    Parameters
-    ----------
-    value:
-        Saved scatter source argument (tensor or Python scalar).
-
-    Returns
-    -------
-    bool
-        True when every element provably equals one constant.
-    """
-
-    if isinstance(value, Number):
-        return True
-    if not isinstance(value, torch.Tensor) or value.numel() == 0:
-        return False
-    first = value.reshape(-1)[0]
-    return bool(torch.eq(value, first).all().item())
-
-
-def _tensor_constant_along_dim(tensor: torch.Tensor, dim: int) -> bool:
-    """Return whether ``tensor`` holds identical values at every index of ``dim``.
-
-    Parameters
-    ----------
-    tensor:
-        Source tensor being indexed.
-    dim:
-        Normalized dimension the index selects along.
-
-    Returns
-    -------
-    bool
-        True when swapping any two positions along ``dim`` provably leaves the
-        tensor unchanged.
-    """
-
-    if tensor.numel() == 0 or tensor.shape[dim] == 0:
-        return False
-    reference = tensor.select(dim, 0).unsqueeze(dim)
-    return bool(torch.eq(tensor, reference).all().item())
-
-
 def _index_domain_value_irrelevance_decision(
     layer: Op,
     layers_to_perturb: list[str],
@@ -3242,103 +2950,3 @@ def _locally_constant_nonfinite_addition_decision(
             ),
         )
     return PosthocPerturbDecision(False, "not_locally_constant_nonfinite_addition")
-
-
-def _saved_output_all_finite(layer: Op) -> bool:
-    """Return whether the op's saved output is a non-empty, all-finite tensor.
-
-    Annihilator and degenerate-shape proofs claim the output is constant in the
-    perturbed parent. That identity holds only for finite operands (``0 * inf``
-    and ``inf - inf`` are NaN): a non-finite saved operand makes the ORIGINAL
-    output non-finite, so a correctly wired edge WOULD change the output under a
-    finite perturbation, and an unchanged output is evidence of a capture bug,
-    never something to exempt. A finite saved output proves every operand that
-    reached it through the annihilated term was finite on this capture.
-
-    Parameters
-    ----------
-    layer:
-        Op whose saved output is inspected.
-
-    Returns
-    -------
-    bool
-        True when ``layer.out`` is a non-empty tensor with no NaN or Inf.
-    """
-
-    out = getattr(layer, "out", None)
-    if not isinstance(out, torch.Tensor) or out.numel() == 0:
-        return False
-    return bool(torch.isfinite(out).all().item())
-
-
-def _is_all_zero_value(value: Any) -> bool:
-    """Return whether ``value`` is provably an all-zero tensor/scalar.
-
-    Parameters
-    ----------
-    value:
-        Candidate scalar or tensor value.
-
-    Returns
-    -------
-    bool
-        True when ``value`` can be inspected and every element is zero.
-    """
-
-    if not isinstance(value, torch.Tensor):
-        try:
-            value = torch.tensor(value)
-        except (TypeError, ValueError, RuntimeError):
-            return False
-    if value.numel() == 0:
-        return False
-    return bool(torch.all(torch.eq(value, 0)).item())
-
-
-def _is_all_inf_value(value: Any) -> bool:
-    """Return whether ``value`` is provably an all-infinite tensor/scalar.
-
-    Parameters
-    ----------
-    value:
-        Candidate scalar or tensor value.
-
-    Returns
-    -------
-    bool
-        True when ``value`` can be inspected and every element is infinite.
-    """
-
-    if not isinstance(value, torch.Tensor):
-        try:
-            value = torch.tensor(value)
-        except (TypeError, ValueError, RuntimeError):
-            return False
-    if value.numel() == 0:
-        return False
-    return bool(torch.all(torch.isinf(value)).item())
-
-
-def _is_all_nan_value(value: Any) -> bool:
-    """Return whether ``value`` is provably an all-NaN tensor/scalar.
-
-    Parameters
-    ----------
-    value:
-        Candidate scalar or tensor value.
-
-    Returns
-    -------
-    bool
-        True when ``value`` can be inspected and every element is NaN.
-    """
-
-    if not isinstance(value, torch.Tensor):
-        try:
-            value = torch.tensor(value)
-        except (TypeError, ValueError, RuntimeError):
-            return False
-    if value.numel() == 0:
-        return False
-    return tensor_all_nan(value)

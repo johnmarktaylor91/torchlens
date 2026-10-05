@@ -2715,6 +2715,21 @@ def _reduced_numel_over_dims(tensor: torch.Tensor, dim: Any, default_all: bool) 
     return depth
 
 
+def _conv_transpose_reduction_depth(weight: Any, groups: Any) -> int:
+    """Return ``in_channels/groups * prod(kernel)`` for a transposed-conv weight, else 0."""
+
+    if isinstance(weight, torch.Tensor) and weight.dim() >= 2 and weight.shape[0] > 0:
+        kernel_numel = 1
+        for kdim in weight.shape[2:]:
+            kernel_numel *= int(kdim)
+        if groups is None:
+            groups = 1
+        if not isinstance(groups, int) or groups <= 0 or int(weight.shape[0]) % groups != 0:
+            return 0
+        return (int(weight.shape[0]) // groups) * kernel_numel
+    return 0
+
+
 def _op_reduction_depth(layer: Op) -> int:
     """Return the per-output FP32 accumulation depth for a replay op.
 
@@ -2797,18 +2812,7 @@ def _op_reduction_depth(layer: Op) -> int:
     # grouped transpose (ConvTranspose2d(128,128,1,groups=128) is depth 1, not 128);
     # an unreadable / non-dividing groups returns 0 (fail-toward-strict).
     if func_name.startswith(_CONV_TRANSPOSE_FUNC_PREFIX):
-        weight = _operand(1, "weight")
-        if isinstance(weight, torch.Tensor) and weight.dim() >= 2 and weight.shape[0] > 0:
-            kernel_numel = 1
-            for kdim in weight.shape[2:]:
-                kernel_numel *= int(kdim)
-            groups = _operand(6, "groups")
-            if groups is None:
-                groups = 1
-            if not isinstance(groups, int) or groups <= 0 or int(weight.shape[0]) % groups != 0:
-                return 0
-            return (int(weight.shape[0]) // groups) * kernel_numel
-        return 0
+        return _conv_transpose_reduction_depth(_operand(1, "weight"), _operand(6, "groups"))
 
     # forward conv*: weight is [out_channels, in_channels/groups, *kernel], so depth
     # = in_channels/groups * prod(kernel) = weight.numel() // weight.shape[0].

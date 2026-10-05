@@ -267,3 +267,26 @@ def index_domain_single_entry_values(
     first = int(torch.nonzero(in_domain)[0, 0])
     flat[first] = (flat[first] + 1).remainder(domain_size)
     return flat.reshape(parent_values.shape)
+
+
+def _saved_integer_index_tensor(layer: Op) -> torch.Tensor | None:
+    """Return the saved index-domain argument when it is an integer tensor.
+
+    Parameters
+    ----------
+    layer:
+        Captured index-consuming op.
+
+    Returns
+    -------
+    torch.Tensor | None
+        The saved index tensor, or ``None`` when it is missing, not a tensor, or
+        not one of the integer index dtypes.
+    """
+
+    saved_index = _saved_index_domain_arg_value(layer)
+    if not isinstance(saved_index, torch.Tensor):
+        return None
+    if saved_index.dtype not in _INDEX_DOMAIN_INT_DTYPES:
+        return None
+    return saved_index

@@ -141,7 +141,10 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # 4600 -> 4350 (2026-08-27 C05 fix cycle): the segment descriptor/label
     # family split to _segment_descriptors.py under R43; re-keyed down to the
     # next 50-line step above the post-split measurement (4326).
-    "torchlens/visualization/collapse_optimizer.py": 4250,
+    # 4250 -> 4100 (2026-10-05 rung-1 splitsrc): the frontier records and
+    # merge algebra split to _collapse_frontier.py; re-keyed to the next
+    # 50-line step above the post-split measurement (4082).
+    "torchlens/visualization/collapse_optimizer.py": 4100,
     # 4400 -> 4403 (2026-08-27 C01 item 5): the _selective_save relocation
     # re-sorted one import into a 4-line parenthesized block (+3 mechanical
     # lines, zero behavior); the god file itself did not grow.
