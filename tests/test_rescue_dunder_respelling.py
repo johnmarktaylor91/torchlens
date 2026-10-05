@@ -136,6 +136,8 @@ def test_no_admitted_dunder_respells_past_the_table() -> None:
 
     mismatches = [m for d in _TENSOR_DUNDERS if (m := _respelling_mismatch(d)) is not None]
     assert mismatches == []
+    completing = [d for d in _NEVER_COMPLETES if hasattr(torch.Tensor, d) and _mode_spellings(d)]
+    assert completing == [], "a never-completing dunder now completes; guard it"
 
 
 def test_respelling_rows_keep_operation_identity() -> None:
