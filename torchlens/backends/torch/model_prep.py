@@ -2186,7 +2186,11 @@ def _record_module_exit_metadata(
             # ``_tl_live_fire_results`` leak in a plain capture stays unledgered.
             untraceable_output_boundaries.append((t, boundary_label))
             tensor_label = get_tensor_label(t)
-            if not fire_results:
+            # A module returning its own Parameter (a learned query, prompt or
+            # scale) is a known model-owned source, not an escape; the entry
+            # twin never sees Parameters (``get_arg_tensors_for_resolution``
+            # drops them) and buffers sit in the pre-forward ownership snapshot.
+            if not fire_results and not isinstance(t, nn.Parameter):
                 _record_module_boundary_adoption(trace, t, tensor_label, "exit", address)
         if tensor_label is None:
             continue

@@ -17,6 +17,7 @@ from __future__ import annotations
 import functools
 import sys
 import types
+import warnings
 from collections import namedtuple
 from collections.abc import Callable, Iterator
 
@@ -266,6 +267,50 @@ def test_model_owned_tensor_returned_by_a_module_is_not_an_escape() -> None:
     trace = tl.trace(Outer(), torch.randn(2, 4))
 
     assert trace.rescue_rerun is None
+
+
+class _ReturnsOwnTensor(nn.Module):
+    """Return a tensor the module owns (a learned query or a registered buffer)."""
+
+    def __init__(self, kind: str) -> None:
+        super().__init__()
+        if kind == "parameter":
+            self.w = nn.Parameter(torch.randn(2, 3))
+        else:
+            self.register_buffer("w", torch.randn(2, 3))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return the owned tensor itself, untouched by any op."""
+
+        return self.w
+
+
+@pytest.mark.parametrize("kind", ["parameter", "buffer"])
+def test_module_returning_its_own_parameter_or_buffer_is_not_an_escape(kind: str) -> None:
+    """Negative: a returned Parameter or buffer is a known source, never a stale-ref gap.
+
+    No provenance warning (the repo's filter would make it an error), no rescue
+    re-run, and the capture stays verified.
+    """
+
+    class Outer(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.fc1 = nn.Linear(4, 3)
+            self.own = _ReturnsOwnTensor(kind)
+            self.fc2 = nn.Linear(3, 3)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.fc2(self.fc1(x) + self.own(x))
+
+    wrap_torch()
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        trace = tl.trace(Outer(), torch.randn(2, 4))
+
+    assert trace.rescue_rerun is None
+    assert trace.capture_verified is True
+    assert trace.capture_verification_reason is None
 
 
 def test_opaque_module_return_is_disclosed_unrecovered_and_still_validates() -> None:
