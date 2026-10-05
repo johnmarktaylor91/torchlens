@@ -125,6 +125,14 @@ STRUCTURAL_ARG_POSITIONS: dict[str, set[int]] = {
     "fill_": {0},  # destination values are overwritten; the fill VALUE (arg 1) stays tested
     "expand_as": {1},  # shape template only; arg 0 values flow into the output
     "expandas": {1},  # canonicalized spelling
+    # ``Tensor.reshape_as(other)`` is ``self.reshape(other.sizes())`` and
+    # ``Tensor.view_as(other)`` is ``self.view(other.size())``: arg 1 is read
+    # for its SHAPE only, never its elements. Arg 0 supplies every output
+    # value and stays perturbation-tested.
+    "reshape_as": {1},
+    "reshapeas": {1},  # canonicalized spelling
+    "view_as": {1},
+    "viewas": {1},  # canonicalized spelling
     # F2 tightening: the legacy OOB-justified index/target/mask blankets
     # (``cross_entropy`` target, ``embedding`` indices, ``gather``/
     # ``index_select``/``scatter*`` index tensors, ``masked_fill`` masks) were
@@ -170,6 +178,10 @@ STRUCTURAL_ARG_KWARG_ALIASES: dict[str, dict[int, set[str]]] = {
     "_pack_padded_sequence": {1: {"lengths"}},
     "_pad_packed_sequence": {1: {"lengths"}},
     "type_as": {1: {"tensor", "other"}},
+    "reshape_as": {1: {"other"}},
+    "reshapeas": {1: {"other"}},
+    "view_as": {1: {"other"}},
+    "viewas": {1: {"other"}},
     "nms": {0: {"boxes"}},
     "deform_conv2d": {1: {"offset"}},
     "roi_align": {1: {"boxes", "rois"}},
@@ -266,6 +278,29 @@ def _parent_is_index_domain_arg(layer: Op, parent_label: str) -> bool:
         return True
     kwarg_map = parent_arg_positions.get("kwargs", {}) or {}
     return any(kwarg_map.get(name) == parent_label for name in index_kwargs)
+
+
+def layer_has_index_domain_parent(layer: Op) -> bool:
+    """Return whether any recorded parent occupies the layer's index-domain slot.
+
+    Parameters
+    ----------
+    layer:
+        Child op being validated.
+
+    Returns
+    -------
+    bool
+        True when a parent label sits at the op's index argument position or
+        one of its kwarg spellings (``_parent_is_index_domain_arg``).
+    """
+
+    parent_arg_positions = getattr(layer, "parent_arg_positions", {}) or {}
+    labels = set((parent_arg_positions.get("args", {}) or {}).values())
+    labels |= set((parent_arg_positions.get("kwargs", {}) or {}).values())
+    return any(
+        isinstance(label, str) and _parent_is_index_domain_arg(layer, label) for label in labels
+    )
 
 
 def _index_domain_size(layer: Op) -> int | None:
@@ -381,6 +416,51 @@ def index_domain_rotation_values(
         return None
     rotated = (parent_values + 1).remainder(domain_size)
     return torch.where(in_domain, rotated, parent_values)
+
+
+def index_domain_single_entry_values(
+    layer: Op,
+    parent_label: str,
+    parent_values: torch.Tensor,
+) -> torch.Tensor | None:
+    """Return the index tensor with only its FIRST in-domain entry rotated.
+
+    The full rotation in ``index_domain_rotation_values`` is a permutation of
+    the index domain, so any output that depends only on the HISTOGRAM of the
+    indices (``scatter_add_`` of ones, ``bincount``-style edge counts) is
+    unchanged when that histogram is uniform, for example two relations with
+    32 edges each. Moving a single in-domain entry ``v`` to ``(v + 1) % n``
+    changes the histogram whenever ``n >= 2`` while staying in-domain, so the
+    replay remains executable. This is an extra PROBE for the retry ladder: a
+    changed output proves the edge is real; a spurious index edge stays
+    unchanged under it as under every other probe and still fails.
+
+    Parameters
+    ----------
+    layer:
+        Child op being replayed.
+    parent_label:
+        Parent label selected for perturbation.
+    parent_values:
+        Saved parent tensor values.
+
+    Returns
+    -------
+    torch.Tensor or None
+        The single-entry perturbation, or ``None`` when the parent is not an
+        integer index arg of an index-domain op or has no in-domain entry.
+    """
+
+    if index_domain_rotation_values(layer, parent_label, parent_values) is None:
+        return None
+    domain_size = _index_domain_size(layer)
+    if domain_size is None:
+        return None
+    flat = parent_values.reshape(-1).clone()
+    in_domain = (flat >= 0) & (flat < domain_size)
+    first = int(torch.nonzero(in_domain)[0, 0])
+    flat[first] = (flat[first] + 1).remainder(domain_size)
+    return flat.reshape(parent_values.shape)
 
 
 def _check_index_domain_degenerate(self: "Trace", layer: Op, layers_to_perturb: list[str]) -> bool:
@@ -2083,6 +2163,30 @@ def _posthoc_discrete_output_decision(
     return PosthocPerturbDecision(False, "not_discrete_output")
 
 
+# In-place RNG fills that overwrite EVERY element of their destination (arg 0)
+# with fresh draws. By their definitions -- ``normal_(mean, std)``,
+# ``uniform_(from, to)``, ``cauchy_(median, sigma)``, ``log_normal_(mean,
+# std)``, ``geometric_(p)``, ``random_([from,] to)`` -- each element of the
+# result is a draw parameterized only by Python scalars (and the generator),
+# so the destination contributes shape/dtype/device and nothing of its
+# values. None of these signatures takes a tensor operand besides the
+# destination; ``bernoulli_`` does (its ``p``), which is why the decision
+# below exempts ONLY a parent at the destination slot and lets any other
+# parent fall through to the failure path. ``exponential_`` sits in
+# ``SKIP_PERTURBATION_ENTIRELY`` already.
+_RNG_FILL_DESTINATION_OPS: frozenset[str] = frozenset(
+    {
+        "bernoulli_",
+        "normal_",
+        "uniform_",
+        "cauchy_",
+        "log_normal_",
+        "geometric_",
+        "random_",
+    }
+)
+
+
 def _perturbed_parents_only_occupy_template_slot(
     layer: Op,
     layers_to_perturb: list[str],
@@ -2209,8 +2313,9 @@ def _posthoc_structural_output_decision(
         return PosthocPerturbDecision(True, "structural_output_template")
     if layer.func_name == "bernoulli" and "p" in layer.saved_kwargs:
         return PosthocPerturbDecision(True, "rng_probability_template")
-    if layer.func_name == "bernoulli_" and _perturbed_parents_only_occupy_template_slot(
-        layer, layers_to_perturb
+    if (
+        layer.func_name in _RNG_FILL_DESTINATION_OPS
+        and _perturbed_parents_only_occupy_template_slot(layer, layers_to_perturb)
     ):
         # bernoulli_ overwrites EVERY destination element with fresh draws --
         # Bernoulli(0.5) for the bare form (self's values are IGNORED;
@@ -2220,10 +2325,12 @@ def _posthoc_structural_output_decision(
         # probability edge (out-of-place bernoulli slot 0, or bernoulli_'s
         # slot 1 / p=) is NOT exempted here: it is a genuine value dependency
         # validated by the complement-probability perturbation (deephunt L17).
+        # The rest of _RNG_FILL_DESTINATION_OPS follows the same proof: see the
+        # table's comment.
         return PosthocPerturbDecision(
             True,
             "rng_probability_template",
-            "bernoulli_ overwrites every destination element with fresh draws; "
+            f"{layer.func_name} overwrites every destination element with fresh draws; "
             "only the destination's shape/dtype/device flow into the output",
         )
     if _unique_disabled_auxiliary_output(layer):
@@ -2505,6 +2612,9 @@ def _posthoc_value_proof_decision(
                 "non-perturbed extrema operand dominates every output element",
             )
     if layer.func_name in ("remainder", "fmod", "__mod__") and len(args) > 1:
+        decision = _integer_mod_unit_divisor_decision(layer, layers_to_perturb, args)
+        if decision.exempt:
+            return decision
         dividend, divisor = args[:2]
         if isinstance(dividend, torch.Tensor) and isinstance(divisor, torch.Tensor):
             arg_positions = layer.parent_arg_positions.get("args", {})
@@ -2522,6 +2632,74 @@ def _posthoc_value_proof_decision(
             "non-floating max output is a discrete value result",
         )
     return PosthocPerturbDecision(False, "not_value_proved")
+
+
+def _integer_mod_unit_divisor_decision(
+    layer: Op,
+    layers_to_perturb: list[str],
+    args: tuple[Any, ...],
+) -> PosthocPerturbDecision:
+    """Exempt the dividend of an integer ``% 1`` / ``% -1``, which is always zero.
+
+    For integers, ``remainder(a, d)`` and ``fmod(a, d)`` equal ``a - d * q``
+    with ``q`` an integer quotient; when ``|d| == 1`` the quotient is ``a``
+    itself (``a / +-1`` is exact), so the result is 0 for EVERY integer ``a``.
+    A float divisor of +-1.0 gives the same: an integer-valued float has no
+    fractional part, so its remainder by 1.0 is +-0.0. The dividend's values
+    therefore cannot reach the output. This is what ``torch.distributions``
+    integer-support checks compute (``value % 1 == 0``) on sampled indices.
+
+    The proof is taken from the saved call only: the dividend must be an
+    integer or bool tensor, the divisor a Python int/float or a tensor whose
+    every element is exactly +1 or -1, the saved output must be all zeros,
+    and the perturbed parent must occupy the dividend slot alone (a parent
+    that is also the divisor, or a divisor parent, is not covered). A float
+    dividend, any other divisor value, or a divisor perturbation falls
+    through to the failure path.
+
+    Parameters
+    ----------
+    layer:
+        Captured ``remainder``/``fmod``/``__mod__`` op.
+    layers_to_perturb:
+        Parent labels currently being perturbed.
+    args:
+        Saved positional arguments.
+
+    Returns
+    -------
+    PosthocPerturbDecision
+        Exempt with ``integer_mod_unit_divisor`` only when the proof holds.
+    """
+
+    not_proved = PosthocPerturbDecision(False, "not_value_proved")
+    dividend, divisor = args[:2]
+    if not isinstance(dividend, torch.Tensor):
+        return not_proved
+    if dividend.dtype.is_floating_point or dividend.dtype.is_complex:
+        return not_proved
+    if isinstance(divisor, torch.Tensor):
+        if divisor.numel() == 0 or divisor.dtype.is_complex:
+            return not_proved
+        if not bool(((divisor == 1) | (divisor == -1)).all()):
+            return not_proved
+    elif (
+        isinstance(divisor, bool) or not isinstance(divisor, (int, float)) or divisor not in (1, -1)
+    ):
+        return not_proved
+    out = getattr(layer, "out", None)
+    if not isinstance(out, torch.Tensor) or bool(torch.count_nonzero(out)):
+        return not_proved
+    if not _perturbed_parents_only_occupy_template_slot(
+        layer, layers_to_perturb, template_arg_roots=(0,), template_kwarg_names=("input", "self")
+    ):
+        return not_proved
+    return PosthocPerturbDecision(
+        True,
+        "integer_mod_unit_divisor",
+        "an integer dividend modulo +-1 is identically zero, so the dividend's "
+        "values cannot reach the output",
+    )
 
 
 def _tensor_or_number_is_constant(value: Any) -> bool:
