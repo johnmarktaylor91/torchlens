@@ -14,7 +14,7 @@
           "nodes": "5",
           "poisoned": "False",
           "privacy_profile": "local",
-          "produced_by": "torchlens 2.34.1",
+          "produced_by": "torchlens <torchlens-version>",
           "rescue_rerun": "False",
           "structure_only": "False",
           "view": "execution"

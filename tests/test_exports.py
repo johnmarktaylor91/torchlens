@@ -180,6 +180,33 @@ def _assert_or_regenerate_export_golden(name: str, payload: dict[str, Any]) -> b
 _RUN_VARYING_ATTRS = frozenset({"observed_duration_us", "observed_duration_inclusive_us"})
 
 
+#: Marker that replaces the live package version in export goldens.
+_VERSION_MARKER = "<torchlens-version>"
+
+
+def _normalize_producer_version(normalized: dict[str, Any]) -> None:
+    """Check the stamped producer version is the live one, then mask it.
+
+    Every release bumps ``tl.__version__``; a golden that froze it went red
+    on the next release with no export change. The stamp is still checked
+    exactly, against the running package, before the marker replaces it.
+
+    Parameters
+    ----------
+    normalized:
+        Detached export payload, edited in place.
+    """
+
+    if "producerVersion" in normalized:
+        assert normalized["producerVersion"] == tl.__version__
+        normalized["producerVersion"] = _VERSION_MARKER
+    for graph in normalized.get("graphs", []):
+        for row in (graph.get("groupNodeAttributes") or {}).values():
+            if "produced_by" in row:
+                assert row["produced_by"] == f"torchlens {tl.__version__}"
+                row["produced_by"] = f"torchlens {_VERSION_MARKER}"
+
+
 def _normalize_export_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """Normalize process-global identifiers and per-run measurements.
 
@@ -200,6 +227,7 @@ def _normalize_export_payload(payload: dict[str, Any]) -> dict[str, Any]:
         normalized["graphs"][0]["id"] = "<trace-id>"
         if "label" in normalized:
             normalized["label"] = "<trace-id>"
+        _normalize_producer_version(normalized)
         # Measured wall-clock rows are real per-run values, not structural
         # contract: strip them so the golden stays environment-independent
         # (the same doctrine that keeps floats out of these fixtures).
@@ -212,6 +240,7 @@ def _normalize_export_payload(payload: dict[str, Any]) -> dict[str, Any]:
                 row.pop("time", None)
         return normalized
     normalized["graph"]["name"] = "<trace-id>"
+    _normalize_producer_version(normalized)
     node_lists = [normalized["graph"].get("node", [])]
     node_lists.extend(fn.get("node", []) for fn in normalized.get("functions", []))
     for nodes in node_lists:
