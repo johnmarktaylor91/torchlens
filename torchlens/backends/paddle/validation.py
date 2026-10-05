@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -43,6 +43,8 @@ class RebuiltPaddleInputs:
         Distinct replay parent payloads keyed by raw producer label.
     leaf_paths_by_parent
         Template tensor leaf paths keyed by raw producer label.
+    param_values
+        Replay copies of module parameters keyed by template leaf path.
     """
 
     ok: bool
@@ -51,6 +53,7 @@ class RebuiltPaddleInputs:
     reason: str | None
     parent_values: dict[str, Any]
     leaf_paths_by_parent: dict[str, tuple[tuple[Any, ...], ...]]
+    param_values: dict[tuple[Any, ...], Any] = field(default_factory=dict)
 
 
 def _is_factory_or_source_capture(capture: Any) -> bool:
@@ -110,6 +113,7 @@ def _rebuild_inputs(capture: Any, ops_by_label: Mapping[str, Any]) -> RebuiltPad
     parent_values: dict[str, Any] = {}
     leaf_paths_by_parent: dict[str, list[tuple[Any, ...]]] = {}
     param_inputs: Mapping[tuple[Any, ...], Any] = getattr(capture, "param_inputs", None) or {}
+    param_values: dict[tuple[Any, ...], Any] = {}
 
     def _rebuild(value: Any, path: tuple[Any, ...]) -> Any:
         """Rebuild one nested template value."""
@@ -118,7 +122,8 @@ def _rebuild_inputs(capture: Any, ops_by_label: Mapping[str, Any]) -> RebuiltPad
             label = value.get("label")
             if label is None:
                 if path in param_inputs:
-                    return _parameter_replay_copy(param_inputs[path])
+                    param_values[path] = _parameter_replay_copy(param_inputs[path])
+                    return param_values[path]
                 if _is_factory_or_source_capture(capture):
                     return None
                 raise ValueError(f"unlabeled tensor input leaf at {path!r}")
@@ -155,6 +160,7 @@ def _rebuild_inputs(capture: Any, ops_by_label: Mapping[str, Any]) -> RebuiltPad
         None,
         parent_values,
         {label: tuple(paths) for label, paths in leaf_paths_by_parent.items()},
+        param_values,
     )
 
 
@@ -533,6 +539,8 @@ def _replace_template_paths(
             label = value.get("label")
             if isinstance(label, str) and label in parent_values:
                 return parent_values[label]
+            if label is None and path in rebuilt.param_values:
+                return rebuilt.param_values[path]
             raise ValueError(f"cannot rebuild tensor leaf at {path!r}")
         if isinstance(value, tuple):
             return tuple(_rebuild(item, (*path, index)) for index, item in enumerate(value))
