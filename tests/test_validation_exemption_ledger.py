@@ -371,8 +371,9 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         refuses=(
             "a float dividend, a divisor other than +-1 (compared after widening, so a "
             "uint8 255 is not -1), -1 when any operand or the result is unsigned (it "
-            "wraps to the dtype max), a floating result that cannot hold the dividend "
-            "dtype's range (float16), a nonzero saved output, and any perturbed parent "
+            "wraps to the dtype max), a floating result or computation dtype (the "
+            "operands' promoted dtype, checked apart from any out= buffer) that cannot "
+            "hold the dividend dtype's range (float16), a nonzero saved output, and any perturbed parent "
             "at the divisor slot"
         ),
     ),

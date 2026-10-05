@@ -2810,6 +2810,10 @@ def _integer_mod_unit_divisor_decision(
     divisor_values = _mod_divisor_values_as_torch_sees_them(divisor)
     if divisor_values is None:
         return not_proved
+    # Torch computes in the operands' promoted dtype, then casts into ``out=``;
+    # the proof must hold in both (float16 math written to a float32 buffer is
+    # still float16 math).
+    compute_dtype = torch.result_type(dividend, divisor)
     # An unsigned operand or result wraps -1 to the dtype's max (uint8: 255),
     # so ``x % -1`` there is ``x % 255``; only +1 keeps the proof.
     unsigned_involved = any(
@@ -2817,6 +2821,7 @@ def _integer_mod_unit_divisor_decision(
         for dtype in (
             dividend.dtype,
             out.dtype,
+            compute_dtype,
             divisor.dtype if isinstance(divisor, torch.Tensor) else torch.int64,
         )
     )
@@ -2825,8 +2830,9 @@ def _integer_mod_unit_divisor_decision(
         return not_proved
     # A floating result must hold every value of the dividend's dtype; float16
     # turns integers above 65504 into inf and the remainder into nan.
-    if out.dtype.is_floating_point and not _float_dtype_holds_integer_range(
-        out.dtype, dividend.dtype
+    if any(
+        dtype.is_floating_point and not _float_dtype_holds_integer_range(dtype, dividend.dtype)
+        for dtype in (out.dtype, compute_dtype)
     ):
         return not_proved
     if not _perturbed_parents_only_occupy_template_slot(

@@ -211,16 +211,28 @@ class _ZeroMaskMod(nn.Module):
             return mask % -1
         if self.kind == "int64_mod_uint8_255":
             return mask.long() % torch.tensor([255], dtype=torch.uint8)
+        if self.kind == "int64_mod_float16_one_out_float32":
+            buf = torch.empty(mask.shape, dtype=torch.float32)
+            return torch.remainder(mask.long(), torch.ones(1, dtype=torch.float16), out=buf)
         return mask.long() % torch.ones(1, dtype=torch.float16)
 
 
-@pytest.mark.parametrize("kind", ["uint8_mod_neg1", "int64_mod_uint8_255", "int64_mod_float16_one"])
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "uint8_mod_neg1",
+        "int64_mod_uint8_255",
+        "int64_mod_float16_one",
+        "int64_mod_float16_one_out_float32",
+    ],
+)
 def test_integer_mod_outside_unit_proof_still_fails_when_frozen(kind: str) -> None:
-    """Wrapped -1 (uint8: ``% 255``) and float16 results (nan) stay tested.
+    """Wrapped -1 (uint8: ``% 255``) and float16 math (nan) stay tested.
 
     ``uint8 % -1`` computes ``% 255``, a uint8 ``255`` divisor compares equal to
-    ``-1`` in its own dtype, and a float16 result turns integers above 65504
-    into nan, so in each case the dividend's values reach the output.
+    ``-1`` in its own dtype, and float16 math turns integers above 65504 into
+    nan even when the result is cast into a float32 ``out=`` buffer, so in each
+    case the dividend's values reach the output.
     """
 
     torch.manual_seed(0)
@@ -264,6 +276,8 @@ def test_integer_mod_unit_divisor_refuses_wrapped_and_narrow_float_operands() ->
     )
     float_one = (dividend, torch.ones(1, dtype=torch.float32))
     assert _integer_mod_unit_divisor_decision(float_layer, ["dividend"], float_one).exempt
+    # float16 computation cast into a float32 out= buffer is still float16 math.
+    assert not _integer_mod_unit_divisor_decision(float_layer, ["dividend"], half_one).exempt
 
 
 # ---------------------------------------------------------------------------
