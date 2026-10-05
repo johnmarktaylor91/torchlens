@@ -318,6 +318,19 @@ def weightsfree_forward_scope(trace: Any) -> Iterator[None]:
     ``nullcontext`` (W1-AC), and absorbs any caller-active ``DeviceContext``
     for the duration of the forward (D19). Everything restores on
     ``BaseException``.
+
+    Before the slot arms, torch's lazy ``torch._dynamo`` import is forced
+    (logging paused, no device context active). Meta kernels for ops such as
+    ``aten.addmm`` are Python decompositions wrapped in
+    ``torch._compile._disable_dynamo``, which imports ``torch._dynamo`` on
+    first call. Left to fire inside the forward, that import's module bodies
+    (``populate_builtin_to_tensor_fn_map``: ``torch.ones(1)`` then unary ops)
+    got the slot's meta device, so their ops re-entered a meta decomposition
+    and reached ``_disable_dynamo`` again on the half-initialised module
+    (``AttributeError: partially initialized module 'torch._dynamo'``, torch
+    2.7). The slot owns the USER forward's factories, never torch's own
+    imports, and an admitted meta forward imports ``torch._dynamo`` anyway,
+    so the warm moves an import that was coming rather than adding one.
     """
 
     record = _PENDING.record
@@ -327,16 +340,15 @@ def weightsfree_forward_scope(trace: Any) -> Iterator[None]:
     import torch as _torch
 
     from ..backends.torch._weightsfree_ctx import factory_device_scope
+    from ..utils._torch_compat import warm_lazy_torch_imports
 
     register_admission(trace, record)
     _META_ACTIVE.add(trace)
     try:
-        with (
-            factory_device_scope(_torch.device("meta")),
-            _null_autocast_scope(),
-            _absorbed_ambient_device_context(),
-        ):
-            yield
+        with _absorbed_ambient_device_context():
+            warm_lazy_torch_imports()
+            with factory_device_scope(_torch.device("meta")), _null_autocast_scope():
+                yield
     finally:
         _META_ACTIVE.discard(trace)
 

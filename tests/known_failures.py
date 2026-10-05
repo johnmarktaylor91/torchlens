@@ -214,15 +214,6 @@ KNOWN_FAILURES: tuple[KnownFailure, ...] = (
         ),
         tracking="Weekly 37176706721 triage (2026-10-04)",
     ),
-    KnownFailure(
-        nodeid="tests/test_weightsfree_order.py::test_realpre_cell_refuses_typed_never_refutes",
-        reason=(
-            "structure-only capture subprocess exits 1: first import of torch._dynamo "
-            "runs under the installed wrappers and hits a circular import (torch 2.7.1 "
-            "only; passes on torch 2.14.1)"
-        ),
-        tracking="Weekly 37176706721 triage (2026-10-04)",
-    ),
 )
 
 
