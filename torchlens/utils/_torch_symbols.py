@@ -26,10 +26,15 @@ on any bare ``getattr(torch, <non-literal>)`` OR ``hasattr(torch, <non-literal>)
 ``torchlens/**/*.py`` so a future site cannot reintroduce the lazy-import / deprecated-replacement
 side effect. Class roots (``torch.Tensor`` / ``torch._C`` / ``torch.backends``) and literal-name
 ``getattr(torch, "...")`` module-layout constants carry no lazy hazard and stay out of scope.
+
+:func:`shadowed_torch_submodule` is the dotted-path companion: it recovers an imported torch
+submodule that a same-named package attribute hides from attribute resolution.
 """
 
 from __future__ import annotations
 
+import sys
+import types
 from typing import Any
 
 import torch
@@ -55,3 +60,35 @@ def torch_attr(name: str) -> Any | None:
     if "." in name or not name.isidentifier():
         return None
     return torch.__dict__.get(name)
+
+
+def shadowed_torch_submodule(namespace_name: str, resolved: Any) -> types.ModuleType | None:
+    """Return the imported submodule that a same-named package attribute shadows.
+
+    A package attribute can shadow an imported submodule of the same name:
+    ``torch.nn.utils.weight_norm`` resolves by attribute to the function, while a
+    roster row naming that dotted path means the module that holds the
+    ``_weight_norm`` alias.
+
+    Parameters
+    ----------
+    namespace_name:
+        Dotted torch namespace, as written in the wrapper roster.
+    resolved:
+        What attribute resolution of ``namespace_name`` returned (``None`` if absent).
+
+    Returns
+    -------
+    types.ModuleType | None
+        ``sys.modules[namespace_name]`` when attribute resolution found a non-module
+        object and that submodule is imported; otherwise ``None``.
+    """
+
+    submodule = sys.modules.get(namespace_name)
+    if (
+        resolved is not None
+        and not isinstance(resolved, types.ModuleType)
+        and isinstance(submodule, types.ModuleType)
+    ):
+        return submodule
+    return None

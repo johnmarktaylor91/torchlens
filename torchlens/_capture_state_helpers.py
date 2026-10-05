@@ -1208,14 +1208,13 @@ class _ModuleTreePlainAttrSnapshot:
 
         return tuple(self._unsupported_attr_paths)
 
-    def restore_changed_attrs(self) -> None:
-        """Restore attributes whose values changed since the snapshot.
+    def _remove_added_attrs(self) -> None:
+        """Delete plain attributes that did not exist when the snapshot was taken.
 
         Raises
         ------
         RuntimeError
-            If any attribute cannot be compared, assigned, deleted, or verified
-            after restoration.
+            If an added attribute cannot be deleted.
         """
 
         for module, original_names, module_path in self._module_attr_names.values():
@@ -1228,6 +1227,18 @@ class _ModuleTreePlainAttrSnapshot:
                         "TorchLens validation deepcopy fallback could not remove "
                         f"new plain attribute '{module_path}.{name}' before the logged run."
                     ) from exc
+
+    def restore_changed_attrs(self) -> None:
+        """Restore attributes whose values changed since the snapshot.
+
+        Raises
+        ------
+        RuntimeError
+            If any attribute cannot be compared, assigned, deleted, or verified
+            after restoration.
+        """
+
+        self._remove_added_attrs()
         for module, name, attr_path, snapshot in self._entries:
             try:
                 current_snapshot = _snapshot_module_plain_attr_value(module, name, attr_path)

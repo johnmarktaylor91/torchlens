@@ -53,7 +53,7 @@ import torch
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning
-from ._torch_symbols import torch_attr
+from ._torch_symbols import shadowed_torch_submodule, torch_attr
 
 __all__ = [
     "AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED",
@@ -2524,15 +2524,8 @@ def get_optional_torch_namespace(namespace_name: str) -> Any | None:
     if not namespace_name.startswith(prefix):
         raise ValueError(f"expected a torch namespace, got {namespace_name!r}")
     namespace = _nested_getattr_or_none(torch, namespace_name.removeprefix(prefix).split("."))
-    submodule = sys.modules.get(namespace_name)
-    if (
-        namespace is not None
-        and not isinstance(namespace, types.ModuleType)
-        and isinstance(submodule, types.ModuleType)
-    ):
-        # A package attribute can shadow an imported submodule of the same
-        # name: ``torch.nn.utils.weight_norm`` is the function, while the
-        # roster row means the module that holds the ``_weight_norm`` alias.
+    submodule = shadowed_torch_submodule(namespace_name, namespace)
+    if submodule is not None:  # e.g. the torch.nn.utils.weight_norm module
         return submodule
     if namespace is None and namespace_name == "torch.func":
         mark_torch_capability_missing(

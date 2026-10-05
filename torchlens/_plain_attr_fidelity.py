@@ -102,6 +102,39 @@ def _compare_instance_attrs(
     if callable(source) and not isinstance(source, (list, tuple, dict)):
         return
     child_seen = seen | {id(source)}
+    _compare_container_items(source, copied, attr_path, depth=depth, seen=child_seen)
+    _compare_namespace(source, copied, attr_path, depth=depth, seen=child_seen)
+
+
+def _compare_container_items(
+    source: Any,
+    copied: Any,
+    attr_path: str,
+    *,
+    depth: int,
+    seen: frozenset[int],
+) -> None:
+    """Recurse into the items of a list, tuple or dict value and its copy.
+
+    Parameters
+    ----------
+    source:
+        Plain attribute value (or nested item) on the source module.
+    copied:
+        The corresponding value on the copied module.
+    attr_path:
+        Human-readable attribute path for the error message.
+    depth:
+        Depth of ``source``; its items are compared at ``depth + 1``.
+    seen:
+        Ids of source values on the recursion path, including ``source``.
+
+    Raises
+    ------
+    ValueError
+        If a copied item lacks instance-attribute names its source item has.
+    """
+
     if isinstance(source, (list, tuple)) and isinstance(copied, (list, tuple)):
         if len(source) == len(copied) and len(source) <= _FIDELITY_MAX_CONTAINER_ITEMS:
             for index, (source_item, copied_item) in enumerate(zip(source, copied, strict=True)):
@@ -110,7 +143,7 @@ def _compare_instance_attrs(
                     copied_item,
                     f"{attr_path}[{index}]",
                     depth=depth + 1,
-                    seen=child_seen,
+                    seen=seen,
                 )
     elif isinstance(source, dict) and isinstance(copied, dict):
         if len(source) <= _FIDELITY_MAX_CONTAINER_ITEMS:
@@ -121,9 +154,8 @@ def _compare_instance_attrs(
                         copied[key],
                         f"{attr_path}[{key!r}]",
                         depth=depth + 1,
-                        seen=child_seen,
+                        seen=seen,
                     )
-    _compare_namespace(source, copied, attr_path, depth=depth, seen=child_seen)
 
 
 def _compare_namespace(
