@@ -35,7 +35,9 @@ def _host_copy(param: Any, trace: Any | None) -> np.ndarray:
     the original and is never recorded (or denied) as a user op.
     """
 
-    depth = int(getattr(trace, "_paddle_capture_depth", 0)) if trace is not None else 0
+    # ``_paddle_capture_depth`` is a declared session field the capture sets
+    # before the forward; read it directly so a rename fails loudly.
+    depth = int(trace._paddle_capture_depth) if trace is not None else 0
     if trace is not None:
         trace._paddle_capture_depth = depth + 1
     try:
