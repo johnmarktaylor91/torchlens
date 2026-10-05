@@ -1240,7 +1240,14 @@ class _ModuleTreePlainAttrSnapshot:
                 continue
             restore_value = _plain_attr_restore_value(snapshot)
             try:
-                setattr(module, name, restore_value)
+                if isinstance(restore_value, nn.Parameter) and name not in module._parameters:
+                    # A plain attribute aliasing a registered Parameter (identity
+                    # snapshot): ``nn.Module.__setattr__`` would REGISTER it as a new
+                    # parameter, changing the module's state_dict, so write the
+                    # instance namespace it came from.
+                    module.__dict__[name] = restore_value
+                else:
+                    setattr(module, name, restore_value)
             except Exception as exc:
                 raise RuntimeError(
                     "TorchLens validation deepcopy fallback could not restore plain "

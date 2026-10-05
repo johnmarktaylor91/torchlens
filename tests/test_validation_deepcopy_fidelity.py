@@ -225,6 +225,7 @@ def test_registered_tensor_alias_attribute_is_identity_tracked() -> None:
     linear.__dict__["weight_alias"] = linear.weight.detach().clone()
     snapshot.restore_changed_attrs()
     assert linear.__dict__["weight_alias"] is linear.weight
+    assert set(linear._parameters) == {"weight", "bias"}  # restore registered nothing new
 
 
 def test_non_alias_large_tensor_state_is_still_refused() -> None:
