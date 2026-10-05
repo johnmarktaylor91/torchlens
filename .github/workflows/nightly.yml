@@ -4,10 +4,6 @@ on:
   schedule:
     - cron: "17 4 * * *"
   workflow_dispatch:
-  # Work branches named ci/** run the full workflow on push (and any branch
-  # on manual dispatch) so GitHub's own runners test a branch before main.
-  push:
-    branches: ["ci/**"]
 
 # Default-deny token scope (grind r3, R61/b2:D1): every job in this
 # workflow only reads the repo, so the GITHUB_TOKEN gets exactly that.

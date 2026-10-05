@@ -41,6 +41,7 @@ __all__ = (
     "_effective_mode",
     "_barcode_text",
     "_finalize_census",
+    "_is_value_free_capture",
     "_reports_include_non_input_boundary",
     "_finalize_input_semantics_without_census",
     "capture_completeness_witness",
@@ -292,6 +293,11 @@ def _finalize_census(state: _WitnessState) -> None:
     elif getattr(trace, "_raw_transform_escape_detected", False):
         trace.capture_verified = False
         trace.capture_verification_reason = "transform_call_route_unverified"
+    elif _is_value_free_capture(trace):
+        # A clean census proves dispatch ownership, not values: a value-free
+        # capture stays unverified (completeness_witness_verified keeps the fact).
+        trace.capture_verified = None
+        trace.capture_verification_reason = None
     else:
         trace.capture_verified = True
         detector_verified = getattr(trace, "escape_detector_verified", None)
@@ -300,6 +306,29 @@ def _finalize_census(state: _WitnessState) -> None:
             if detector_verified is True
             else "dispatch_witness_verified"
         )
+
+
+def _is_value_free_capture(trace: Any) -> bool:
+    """Return whether ``trace`` records structure without tensor values.
+
+    Parameters
+    ----------
+    trace:
+        Trace or Recording runtime trace being finalized.
+
+    Returns
+    -------
+    bool
+        ``True`` for a structure-only capture or an admitted meta capture. The
+        admission check is belt-and-braces: an admitted capture that lost its
+        marker still fails the settlement invariant's lost-marker check.
+    """
+
+    if bool(getattr(trace, "structure_only", False)):
+        return True
+    from ...capture._weightsfree_admission import admission_record_for
+
+    return admission_record_for(trace) is not None
 
 
 def _reports_include_non_input_boundary(reports: Any) -> bool:
