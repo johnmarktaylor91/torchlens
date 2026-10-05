@@ -73,17 +73,21 @@ def _perturbed_parent_is_only_the_input(layer: Any, layers_to_perturb: list[str]
         keeps the check strict.
     """
 
-    if len(layers_to_perturb) != 1:
+    # Reuse exemptions' parent-position readers (deferred: exemptions imports
+    # this module) so the proof adds no new ``parent_arg_positions`` read site.
+    # The first requires exactly one perturbed label at positional slot 0 and
+    # nowhere else among the args; the second (no keyword spellings allowed)
+    # rejects any keyword occurrence.
+    from .exemptions import (
+        _perturbed_parent_arg_positions,
+        _perturbed_parents_only_occupy_template_slot,
+    )
+
+    if _perturbed_parent_arg_positions(layer, layers_to_perturb) != {0}:
         return False
-    perturbed_label = layers_to_perturb[0]
-    positions = getattr(layer, "parent_arg_positions", None) or {}
-    arg_slots = {
-        key for key, label in (positions.get("args") or {}).items() if label == perturbed_label
-    }
-    kwarg_slots = [
-        name for name, label in (positions.get("kwargs") or {}).items() if label == perturbed_label
-    ]
-    return arg_slots == {0} and not kwarg_slots
+    return _perturbed_parents_only_occupy_template_slot(
+        layer, layers_to_perturb, template_arg_roots=(0,), template_kwarg_names=()
+    )
 
 
 def norm_input_annihilated_by_zero_weight(
