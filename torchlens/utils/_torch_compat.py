@@ -3734,6 +3734,15 @@ def warm_lazy_torch_imports() -> None:
     capture records nothing" pin. The monitor calls this BEFORE arming any
     patch so the cascade runs outside every window.
 
+    ``torch.backends.opt_einsum`` is warmed for the same reason: torch's own
+    ``torch.functional.einsum`` imports it inside the function body, so the
+    first ``torch.einsum`` of a process imported it in-window. The import
+    machinery's frames (``sys.meta_path`` finders such as pytest's assertion
+    rewriter) then became roots of the monitor's frame-reachable inventory,
+    and a large object graph behind a finder exhausted the deep-inventory
+    budget (``deep_inventory_budget_exhausted``), ceilinging that capture to
+    UNVERIFIABLE depending on what else the process had loaded.
+
     Failure is benign and intentionally unlatched: a partially-executed failed
     import is evicted from ``sys.modules``, so a later in-window retry re-runs
     the cascade and its draws are then honestly MARKED (the pre-warm's absence
@@ -3767,7 +3776,7 @@ def warm_lazy_torch_imports() -> None:
 
     warmed = True
     with pause_logging():
-        for module_name in ("torch._compile", "torch._dynamo"):
+        for module_name in ("torch._compile", "torch._dynamo", "torch.backends.opt_einsum"):
             try:
                 importlib.import_module(module_name)
             except Exception:
