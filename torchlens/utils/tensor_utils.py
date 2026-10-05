@@ -1040,9 +1040,15 @@ def _safe_get_memory_format(t: torch.Tensor) -> torch.memory_format:
 #   H2 Materialization must not go through ``Tensor.set_``. ``set_`` has no
 #      derivative, so rebinding a graph-connected alias poisons the graph:
 #      backward then dies with "derivative for set_ is not implemented".
-#      :func:`_rebind_alias_to_fresh_clone` uses ``.data =`` for
-#      graph-connected aliases, which swaps storage without touching autograd
-#      metadata (``grad_fn`` and the version counter both survive).
+#      ``set_`` also BUMPS the version counter every alias shares with its
+#      live source, so a read-only source argument of a mutating call looked
+#      modified in place: a custom autograd Function's view output then
+#      raised "a view created inside a custom Function ... modified inplace"
+#      at its next use, and any ``save_for_backward`` holder of the source
+#      would fail autograd's version guard. :func:`_rebind_alias_to_fresh_clone`
+#      therefore uses ``.data =`` for every alias, which swaps storage
+#      without touching autograd metadata (``grad_fn`` and the version
+#      counter both survive, unbumped).
 #   H3 RESIDUAL, and the reason grad-connected deferral stays opt-in:
 #      autograd's saved-tensor machinery is a SECOND holder of the alias that
 #      interception cannot reach. If the user builds a differentiable graph on
@@ -1265,35 +1271,26 @@ def _rebind_alias_to_fresh_clone(alias: torch.Tensor) -> None:
     fresh clone, which carries exactly the metadata the historical eager
     clone would have had (same clone call on identical layout/bytes).
 
-    IMPORTANT ordering contract: ``set_`` bumps the autograd version counter,
-    which detached aliases of one source SHARE — so within a pending group
-    every :func:`_belt_check_pending_alias` must run BEFORE the first rebind,
-    or a sibling's legitimate materialization reads as a belt violation.
-
-    Graph-connected aliases (hazard H2 in the module notes) cannot use ``set_``
-    at all: it has no derivative, so rebinding through it replaces the
-    payload's ``grad_fn`` with a node that raises "derivative for set_ is not
-    implemented" the moment anyone backwards through the saved activation.
-    Those rebind through ``.data =``, which swaps storage without entering
-    autograd — ``grad_fn``, ``requires_grad`` and the version counter all
-    survive untouched, so the payload keeps the eager clone's gradient path.
+    The rebind goes through ``.data =`` for every alias (hazard H2 in the
+    module notes), never ``Tensor.set_``: ``set_`` has no derivative, so a
+    graph-connected payload would raise "derivative for set_ is not
+    implemented" on backward, and it bumps the version counter that every
+    alias SHARES with its live source. Materialization runs for every tensor
+    argument of a mutating call, read-only sources included, so that bump
+    made an unmodified live tensor look modified in place (a custom autograd
+    Function's view output then refused its next use). ``.data =`` swaps
+    storage without entering autograd: ``grad_fn``, ``requires_grad`` and the
+    version counter all survive untouched.
     """
     fmt = _safe_get_memory_format(alias)
-    if alias.requires_grad or alias.grad_fn is not None:
-        with torch.no_grad():
-            # The throwaway clone contributes nothing but storage; taking it
-            # under no_grad keeps a dead CloneBackward node out of the graph.
-            try:
-                fresh = alias.clone(memory_format=fmt)
-            except (TypeError, RuntimeError):
-                fresh = alias.clone()
-        alias.data = fresh
-        return
-    try:
-        fresh = alias.clone(memory_format=fmt)
-    except (TypeError, RuntimeError):
-        fresh = alias.clone()
-    alias.set_(fresh.untyped_storage(), 0, fresh.size(), fresh.stride())
+    with torch.no_grad():
+        # The throwaway clone contributes nothing but storage; taking it
+        # under no_grad keeps a dead CloneBackward node out of the graph.
+        try:
+            fresh = alias.clone(memory_format=fmt)
+        except (TypeError, RuntimeError):
+            fresh = alias.clone()
+    alias.data = fresh
 
 
 def materialize_deferred_for_call(tensors: Iterable[Any]) -> None:
@@ -1333,8 +1330,8 @@ def materialize_deferred_for_call(tensors: Iterable[Any]) -> None:
                 if not entries:
                     continue
                 group = [(e, e.ref()) for e in entries]
-                # All belt checks BEFORE the first rebind: group members share
-                # one version counter, and ``set_`` bumps it.
+                # All belt checks BEFORE the first rebind, so the belt reads
+                # every group member's version before any storage moves.
                 for entry, alias in group:
                     if alias is not None:
                         _belt_check_pending_alias(entry, alias)

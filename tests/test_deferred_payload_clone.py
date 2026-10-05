@@ -17,6 +17,7 @@ before any wrapped call writes its storage. These tests pin the contract:
 """
 
 import contextlib
+import warnings
 
 import pytest
 import torch
@@ -328,6 +329,119 @@ def test_grad_connected_alias_keeps_sharing_the_source_version_counter():
     version = int(alias._version)
     torch.ops.aten.relu_(src)
     assert int(alias._version) != version
+
+
+def test_detached_alias_rebind_leaves_the_shared_version_counter_alone():
+    """Materializing a detached alias must not bump its live source's version.
+
+    Every pending alias shares its source's autograd version counter, and the
+    wrapper materializes the aliases of EVERY tensor argument of a mutating
+    call, read-only sources included. A ``set_`` rebind bumped that shared
+    counter, so an unmodified source looked modified in place.
+    """
+    src = torch.randn(4, 4)
+    _tu.arm_deferred_payload_window(frozenset())
+    try:
+        alias = _tu.safe_copy(src, detach_tensor=True, save_mode="copy")
+    finally:
+        _tu.disarm_deferred_payload_window()
+    assert alias.data_ptr() == src.data_ptr()  # deferred: still a zero-copy alias
+    before = src._version
+    _tu.materialize_deferred_for_call([src])
+    assert alias.data_ptr() != src.data_ptr()  # exclusive storage now
+    assert torch.equal(alias, src)
+    assert src._version == before
+
+
+class _CustomViewFn(torch.autograd.Function):
+    """A custom Function whose output is a view of its input."""
+
+    @staticmethod
+    def forward(ctx, x):
+        return x.view(-1)
+
+    @staticmethod
+    def backward(ctx, grad):
+        return grad
+
+
+class _CustomViewIntoSetitem(nn.Module):
+    """A custom-Function view used as the SOURCE of in-place writes."""
+
+    def __init__(self, use_tensor_resize: bool):
+        super().__init__()
+        self.lin = nn.Linear(4, 6)
+        self.use_tensor_resize = use_tensor_resize
+        self.register_buffer("idx", torch.arange(3))
+
+    def forward(self, x):
+        h = torch.tanh(self.lin(x))
+        if self.use_tensor_resize:
+            # Deprecated ``Tensor.resize`` is ``autograd._functions.Resize``, a
+            # custom Function returning a view (Sylvester normalizing flows).
+            v = h.resize(x.shape[0], 3, 2)
+        else:
+            v = _CustomViewFn.apply(h).view(x.shape[0], 3, 2)
+        out = torch.zeros(x.shape[0], 3, 3, 2)
+        out[:, self.idx, self.idx, :] = v
+        return out + v.sum()
+
+
+@pytest.mark.parametrize("use_tensor_resize", [False, True])
+def test_custom_function_view_as_inplace_source_captures(use_tensor_resize):
+    """A deferred alias rebind must not poison a custom-Function view.
+
+    Ops inside a custom Function's forward run without grad, so their outputs
+    get deferred detached aliases. When such an output escapes as the
+    Function's view and later feeds an in-place write, materialization used to
+    bump the shared version counter and autograd refused the view ("created
+    inside a custom Function ... modified inplace") although eager runs it.
+    """
+    with _payload_clone_mode(True), warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="non-inplace resize is deprecated")
+        torch.manual_seed(0)
+        model = _CustomViewIntoSetitem(use_tensor_resize)
+        x = torch.randn(2, 4)
+        expected = model(x)
+        log = tl.trace(model, x)
+        assert torch.equal(log[log.layer_labels[-1]].out.detach(), expected.detach())
+        assert tl.validate(model, x, scope="forward", random_seed=0) is True
+
+
+class _CustomViewModifiedInplace(nn.Module):
+    """A custom-Function view that IS modified in place (autograd must refuse)."""
+
+    def __init__(self, use_tensor_resize: bool):
+        super().__init__()
+        self.lin = nn.Linear(4, 6)
+        self.use_tensor_resize = use_tensor_resize
+
+    def forward(self, x):
+        h = torch.tanh(self.lin(x))
+        if self.use_tensor_resize:
+            v = h.resize(x.shape[0], 3, 2)
+        else:
+            v = _CustomViewFn.apply(h)
+        v.add_(1.0)
+        return v
+
+
+@pytest.mark.parametrize("use_tensor_resize", [False, True])
+def test_custom_function_view_genuinely_modified_inplace_still_raises(use_tensor_resize):
+    """The unbumped rebind must not hide autograd's guard on a REAL in-place write.
+
+    Negative control for the case above: when the custom-Function view itself is
+    written in place, eager refuses, and the capture must refuse the same way.
+    """
+    with _payload_clone_mode(True), warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="non-inplace resize is deprecated")
+        torch.manual_seed(0)
+        model = _CustomViewModifiedInplace(use_tensor_resize)
+        x = torch.randn(2, 4)
+        with pytest.raises(RuntimeError, match="modified inplace"):
+            model(x)
+        with pytest.raises(RuntimeError, match="modified inplace"):
+            tl.trace(model, x)
 
 
 def test_kill_switch_restores_eager_clones():
