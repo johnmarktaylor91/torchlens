@@ -299,3 +299,52 @@ def test_paddle_function_root_trace_has_buffers_and_graph_shape_hash() -> None:
     assert isinstance(first.graph_shape_hash, str)
     assert first.graph_shape_hash == second.graph_shape_hash
     assert different.graph_shape_hash != first.graph_shape_hash
+
+
+class _ConvBnRelu(paddle.nn.Layer):
+    """ResNet stem shape: conv, BatchNorm2D (eval), relu."""
+
+    def __init__(self) -> None:
+        """Build the stem."""
+
+        super().__init__()
+        self.conv = paddle.nn.Conv2D(2, 3, 3, padding=1)
+        self.bn = paddle.nn.BatchNorm2D(3)
+
+    def forward(self, x: Any) -> Any:
+        """Run conv, batch norm, relu."""
+
+        return paddle.nn.functional.relu(self.bn(self.conv(x)))
+
+
+_ORIGINAL_RELU = paddle.nn.functional.relu
+
+
+def _stale_alias_relu(x: Any) -> Any:
+    """Call relu through a reference bound before any wrap (a user stale alias)."""
+
+    return _ORIGINAL_RELU(x * 2.0)
+
+
+def test_paddle_validation_batchnorm_layer_import_alias_is_captured() -> None:
+    """``nn.BatchNorm2D`` calls its module's import-time ``batch_norm`` alias; it is captured."""
+
+    paddle.seed(0)
+    model = _ConvBnRelu()
+    model.eval()
+    x = paddle.arange(32, dtype="float32").reshape([1, 2, 4, 4]) / 16.0
+    trace = tl.trace(model, x, backend="paddle")
+
+    assert "functional.batch_norm" in [op.layer_type for op in trace.layer_list]
+    assert PaddleBackend().validate_trace(trace) is True
+    from paddle.nn.layer import norm as paddle_norm
+
+    assert paddle_norm.batch_norm is paddle.nn.functional.batch_norm
+
+
+def test_paddle_validation_user_stale_alias_still_fails_closed() -> None:
+    """A user's own pre-wrap alias is not patched: the gap still fails validation."""
+
+    trace = tl.trace(_stale_alias_relu, paddle.ones([2, 2], dtype="float32"), backend="paddle")
+
+    assert PaddleBackend().validate_trace(trace) is False

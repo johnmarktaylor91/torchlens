@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools
 import inspect
+import sys
 from collections.abc import Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -222,6 +223,7 @@ class _PaddleWrapperRegistry:
         """Initialize an empty wrapper registry."""
 
         self._originals: dict[tuple[object, str], object] = {}
+        self._wrapper_by_original: dict[int, tuple[object, object]] = {}
         self._wrapped = False
         self._inventory = PaddleInventory((), ())
 
@@ -254,6 +256,7 @@ class _PaddleWrapperRegistry:
                         denied.add(op_name)
                     else:
                         wrapped.add(op_name)
+            self._wrap_layer_module_aliases()
         except BaseException:
             self.unwrap()
             raise
@@ -282,8 +285,34 @@ class _PaddleWrapperRegistry:
             self._wrapped = bool(self._originals)
             raise first_failure
         self._originals.clear()
+        self._wrapper_by_original.clear()
         self._wrapped = False
         self._inventory = PaddleInventory((), ())
+
+    def _wrap_layer_module_aliases(self) -> None:
+        """Point Paddle's own Layer modules' import-time aliases at the wrappers.
+
+        ``paddle/nn/layer/norm.py`` runs ``from ..functional import
+        batch_norm, layer_norm, ...`` at import, so ``nn.BatchNorm2D`` calls
+        a module-global bound to the ORIGINAL function and the
+        ``paddle.nn.functional`` wrapper never sees it: every BatchNorm output
+        was an untracked tensor and validation failed its consumer. Each
+        ``paddle.nn.layer.*`` global that IS (by identity) a wrapped original
+        now resolves to that original's wrapper; ``unwrap`` restores it.
+        """
+
+        for module_name, module in tuple(sys.modules.items()):
+            if module is None or not module_name.startswith("paddle.nn.layer."):
+                continue
+            namespace = getattr(module, "__dict__", None)
+            if not isinstance(namespace, dict):
+                continue
+            for name, value in tuple(namespace.items()):
+                entry = self._wrapper_by_original.get(id(value))
+                if entry is None or entry[0] is not value or (module, name) in self._originals:
+                    continue
+                self._originals[(module, name)] = value
+                setattr(module, name, entry[1])
 
     def is_wrapped(self) -> bool:
         """Return whether this registry currently has installed wrappers."""
@@ -372,6 +401,7 @@ class _PaddleWrapperRegistry:
             return emit(trace, op_name, original, args, kwargs, output, module_stack=module_stack)
 
         setattr(owner, name, wrapper)
+        self._wrapper_by_original.setdefault(id(original), (original, wrapper))
         return True
 
 
