@@ -89,13 +89,17 @@ def _dunder_call(stem: str) -> Callable[[], Any]:
     """Return a thunk invoking ``Tensor.__<stem>__`` with fitting operands."""
 
     name = f"__{stem}__"
+    args: tuple[Any, ...]
     if stem in _BOOL_BINARY:
-        return lambda: getattr(torch.tensor([True, False]), name)(True)
-    if stem in _INT_BINARY:
-        return lambda: getattr(torch.tensor([1, 2]), name)(1)
-    if stem in _UNARY:
-        return lambda: getattr(torch.tensor([1.5, -2.5]), name)()
-    return lambda: getattr(torch.tensor([1.5, 2.5]), name)(2.0)
+        receiver, args = torch.tensor([True, False]), (True,)
+    elif stem in _INT_BINARY:
+        receiver, args = torch.tensor([1, 2]), (1,)
+    elif stem in _UNARY:
+        receiver, args = torch.tensor([1.5, -2.5]), ()
+    else:
+        receiver, args = torch.tensor([1.5, 2.5]), (2.0,)
+    bound = getattr(receiver, name)
+    return lambda: bound(*args)
 
 
 @pytest.mark.parametrize("stem", _FLOAT_BINARY + _BOOL_BINARY + _INT_BINARY + _UNARY)
@@ -107,9 +111,9 @@ def test_canonical_name_matches_what_torch_hands_a_mode(stem: str) -> None:
     dunder's own canonical name.
     """
 
-    call = _dunder_call(stem)
     if not hasattr(torch.Tensor, f"__{stem}__"):
         pytest.skip(f"torch has no Tensor.__{stem}__")
+    call = _dunder_call(stem)
     with _RecordingMode() as mode:
         call()
     seen = [name for name in mode.names if name not in {"untyped_storage", "__get__"}]
