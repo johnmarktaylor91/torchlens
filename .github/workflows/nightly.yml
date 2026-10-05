@@ -1011,7 +1011,8 @@ jobs:
     #   hf_4_current   transformers 4.57.6 / timm 1.0.28  (weekly-refreshed)
     #   hf_5_candidate transformers 5.18.0 / timm 1.0.28  (the 5.x candidate)
     # Each runs the R0 real-model gate + the version-policy lockstep; the
-    # candidate leg additionally runs the offline R1 + RG workflow gallery
+    # candidate leg additionally runs the offline R1 + RG workflow gallery (and
+    # the transforms-library tokenizer rows, floor transforms_lib_passed_ids.txt)
     # against the EXACT passed-ID floor (tests/workflow_gallery/rg_passed_ids.txt)
     # -- the enumerated-red manifest rows (rg_enumerated_red_hf5.tsv) carry no
     # test ids, so "reds match the manifest exactly" is enforced as: every
@@ -1123,10 +1124,12 @@ jobs:
         if: matrix.leg == 'hf_5_candidate'
         run: |
           eval "$(python scripts/preflight_fetch_artifacts.py print-env --cache-dir .artifact-cache | sed 's/^/export /')"
-          pytest tests/real_model/r1 tests/workflow_gallery -p no:randomly --tb=short -q \
-            --junitxml="${{ runner.temp }}/rg.junit.xml"
+          pytest tests/real_model/r1 tests/workflow_gallery tests/test_transforms_lib_real_models.py \
+            -p no:randomly --tb=short -q --junitxml="${{ runner.temp }}/rg.junit.xml"
           python scripts/check_ci_executed_tests.py "${{ runner.temp }}/rg.junit.xml" 0 \
             --passed-ids tests/workflow_gallery/rg_passed_ids.txt
+          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/rg.junit.xml" 0 \
+            --passed-ids tests/real_model/r1/transforms_lib_passed_ids.txt
           pytest tests/workflow_gallery/test_proofnet_rg_manifest.py -p no:randomly --tb=short -q
 
   lit-real:

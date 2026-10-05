@@ -1,0 +1,10 @@
+# Exact-passed-ID floor for the tokenizer rows of the transforms-library suite
+# (tests/test_transforms_lib_real_models.py, GATE-ID R1_OFFLINE_VENUE). The
+# nightly hf_5_candidate R1 step must PASS exactly these nodes; absence, skip,
+# xfail, rename, or deselection of any row is red. Kept apart from the RG
+# gallery floor (rg_passed_ids.txt), whose manifest test closes it over the
+# gallery source only. The suite's own closure test keeps this file equal to
+# its @requires_offline_venue rows.
+tests/test_transforms_lib_real_models.py::test_bert_ragged_flatten_srp_refuses_and_pooled_partitions_agree
+tests/test_transforms_lib_real_models.py::test_gpt2_family_pooling_matches_unpadded_references
+tests/test_transforms_lib_real_models.py::test_distilbert_cls_succeeds_and_gpt2_cls_refuses

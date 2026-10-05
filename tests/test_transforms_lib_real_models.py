@@ -13,6 +13,9 @@ version-leg venue (one environment cannot host two transformers).
 
 from __future__ import annotations
 
+import ast
+from pathlib import Path
+
 import pytest
 import torch
 from support.r1_venue import IN_OFFLINE_VENUE
@@ -65,7 +68,10 @@ requires_offline_venue = pytest.mark.skipif(
 )
 
 #: Registry rows for checkpoints the preflight manifest pins (model id + revision).
-_REGISTRY_ROWS = {"distilgpt2": "r1-distilgpt2"}
+_REGISTRY_ROWS = {
+    "distilgpt2": "r1-distilgpt2",
+    "distilbert-base-uncased": "r1-distilbert-base-uncased",
+}
 
 
 def _hf_pin(name: str) -> tuple[str, str | None]:
@@ -393,3 +399,25 @@ def test_opaque_chain_discloses_identification_only(tmp_path) -> None:
     assert record["resume_verifiable"] is False
     assert record["steps"][0]["kind"] == "opaque"
     assert record["steps"][0]["identity"] == "identification_only"
+
+
+#: The nightly R1 step's exact-passed-ID floor for this module's venue rows.
+_VENUE_FLOOR = Path(__file__).parent / "real_model" / "r1" / "transforms_lib_passed_ids.txt"
+
+
+def test_venue_floor_lists_exactly_the_venue_rows() -> None:
+    """Closure both ways: every venue-gated row is on the nightly floor and vice versa."""
+
+    tree = ast.parse(Path(__file__).read_text())
+    gated = {
+        f"tests/{Path(__file__).name}::{node.name}"
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and any(
+            isinstance(dec, ast.Name) and dec.id == "requires_offline_venue"
+            for dec in node.decorator_list
+        )
+    }
+    lines = _VENUE_FLOOR.read_text().splitlines()
+    floor = {line.strip() for line in lines if line.strip() and not line.startswith("#")}
+    assert gated == floor, f"floor-only={sorted(floor - gated)} source-only={sorted(gated - floor)}"
