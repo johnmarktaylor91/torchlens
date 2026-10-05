@@ -431,6 +431,9 @@ def test_lazy_materialize_does_not_leak_file_descriptors(tmp_path: Path) -> None
     ref = _first_saved_layer(lazy_log).out_ref
     assert ref is not None
 
+    # Collect first: garbage left by earlier tests may still hold a file that
+    # the loop's own gc.collect() would close, shrinking the count (15 == 16).
+    gc.collect()
     before = len(list(fd_dir.iterdir()))
     for _ in range(20):
         tensor = ref.materialize()
