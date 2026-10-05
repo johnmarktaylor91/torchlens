@@ -162,8 +162,8 @@ def _compare_namespace(
         return
     if not isinstance(source_attrs, dict) or not _uses_default_copy_protocol(type(source)):
         return
-    copied_names = set(copied_attrs) if isinstance(copied_attrs, dict) else set()
-    missing = sorted(str(name) for name in set(source_attrs) - copied_names)
+    copied_namespace: dict[str, Any] = copied_attrs if isinstance(copied_attrs, dict) else {}
+    missing = sorted(str(name) for name in set(source_attrs) - set(copied_namespace))
     if missing:
         raise ValueError(
             f"Validation deepcopy dropped instance attributes {missing[:8]!r} of plain "
@@ -175,7 +175,7 @@ def _compare_namespace(
     for name, source_item in source_attrs.items():
         _compare_instance_attrs(
             source_item,
-            copied_attrs[name],
+            copied_namespace[name],
             f"{attr_path}.{name}",
             depth=depth + 1,
             seen=seen,
@@ -200,10 +200,9 @@ def _uses_default_copy_protocol(value_type: type) -> bool:
 
     if getattr(value_type, "__deepcopy__", None) is not None:
         return False
-    if value_type.__reduce_ex__ is not object.__reduce_ex__:
-        return False
-    if value_type.__reduce__ is not object.__reduce__:
-        return False
+    for protocol_name in ("__reduce_ex__", "__reduce__"):
+        if getattr(value_type, protocol_name, None) is not getattr(object, protocol_name):
+            return False
     if getattr(value_type, "__getstate__", None) is not _OBJECT_GETSTATE:
         return False
     return getattr(value_type, "__setstate__", None) is None
