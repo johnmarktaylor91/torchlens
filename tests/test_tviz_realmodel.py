@@ -187,7 +187,12 @@ def test_t5_rectangular_cross_attention(tmp_path) -> None:
     """R5: rectangular cross-attention with separate query/key axes."""
 
     tokenizer = transformers.AutoTokenizer.from_pretrained("t5-small")
-    model = transformers.T5ForConditionalGeneration.from_pretrained("t5-small").eval()
+    # Eager pins the materialized softmax pattern: transformers 5.x routes T5
+    # through the attention interface and defaults to sdpa, which exposes no
+    # pattern facet (the same pin the GPT-2/BERT/DistilBERT rows carry).
+    model = transformers.T5ForConditionalGeneration.from_pretrained(
+        "t5-small", attn_implementation="eager"
+    ).eval()
     encoder_ids = tokenizer(
         "translate English to German: The house is wonderful.", return_tensors="pt"
     ).input_ids

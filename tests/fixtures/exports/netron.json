@@ -327,5 +327,5 @@
     }
   ],
   "producerName": "torchlens",
-  "producerVersion": "2.34.1"
+  "producerVersion": "<torchlens-version>"
 }

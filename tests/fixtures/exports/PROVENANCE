@@ -109,3 +109,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 2b60a6a0456c43d1312b64bdbaa3418c624bfe64 (dirty)
 recorded: 2026-08-28T00:57:25.739847+00:00
+---
+generator: tests/test_exports.py (model_explorer.json)
+flag: hand edit (no regeneration)
+reason: mask the producer version stamp as <torchlens-version>; the test now checks it equals tl.__version__ before masking, so a release bump no longer stales the golden (2.35.0 release left it at 2.34.1)
+env: n/a
+torch: n/a
+source: 20c222a3c
+recorded: 2026-10-05T08:30:57+00:00
+---
+generator: tests/test_exports.py (netron.json)
+flag: hand edit (no regeneration)
+reason: mask the producer version stamp as <torchlens-version>; the test now checks it equals tl.__version__ before masking, so a release bump no longer stales the golden (2.35.0 release left it at 2.34.1)
+env: n/a
+torch: n/a
+source: 20c222a3c
+recorded: 2026-10-05T08:30:57+00:00

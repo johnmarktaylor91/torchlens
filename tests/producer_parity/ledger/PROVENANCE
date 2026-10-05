@@ -2119,3 +2119,10 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: e9ebdab06 (static_scan rows hand-applied)
 recorded: 2026-10-05T08:30:00+00:00
+generator: producer_parity/test_ledger.py (full closure)
+flag: hand edit, verified by the compare-only test
+reason: the 2026-10-04 validation exemption proofs (8a39ff655 addcmul, 27b653696 batch_norm, 173bd4838 sdpa/softmax, 8ecae6347 layer_norm) read parent_arg_positions in torchlens/validation/exemptions.py at 4 new sites (7 -> 11); an existing producer-backed field, no producer/consumer field semantics changed
+env: n/a
+torch: n/a
+source: 20c222a3c
+recorded: 2026-10-05T08:31:18+00:00
