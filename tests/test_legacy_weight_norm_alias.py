@@ -12,6 +12,7 @@ passed with the op missing.
 
 from __future__ import annotations
 
+import sys
 import warnings
 
 import pytest
@@ -74,8 +75,9 @@ def test_trace_records_weight_norm_without_rescue(model_cls: type[nn.Module], ex
 def test_weight_norm_module_alias_is_wrapped_while_installed():
     """After a capture the module global is the same wrapper as ``torch._weight_norm``."""
 
-    from torch.nn.utils import weight_norm as weight_norm_module
-
+    # ``from torch.nn.utils import weight_norm`` yields the function that shadows
+    # the submodule; the alias lives on the submodule itself.
+    weight_norm_module = sys.modules["torch.nn.utils.weight_norm"]
     tl.trace(_DirectChild(), torch.randn(1, 4, 8))
     assert weight_norm_module._weight_norm is torch._weight_norm
     assert weight_norm_module.norm_except_dim is torch.norm_except_dim
