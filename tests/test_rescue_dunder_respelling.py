@@ -49,7 +49,18 @@ def _receivers() -> list[torch.Tensor]:
 
 
 #: Operand sets tried in order; ``None`` stands for a fresh copy of the receiver.
-_ARGSETS: tuple[tuple[Any, ...], ...] = ((), (2.0,), (True,), (1,), (0,), (0, 1), (None,))
+#: The trailing single-tuple set is a tuple index (``t[0, 1]``): on torch 2.1 a
+#: basic int or slice index never reaches a mode, so ``__getitem__`` needs it there.
+_ARGSETS: tuple[tuple[Any, ...], ...] = (
+    (),
+    (2.0,),
+    (True,),
+    (1,),
+    (0,),
+    (0, 1),
+    (None,),
+    ((0, 1),),
+)
 
 
 class _RecordingMode(TorchFunctionMode):
