@@ -226,7 +226,8 @@ def test_stale_ref_rescue_with_operators_returns_the_rescued_trace(
         def forward(self, v: torch.Tensor) -> torch.Tensor:
             return body(raw_cos(v))
 
-    trace = tl.trace(Model(), torch.tensor([0.25, 0.5, 0.75]))
+    with pytest.warns(UserWarning, match="no graph/source provenance"):
+        trace = tl.trace(Model(), torch.tensor([0.25, 0.5, 0.75]))
 
     info = trace.rescue_rerun
     assert info is not None and info["recovered"] is True, info
