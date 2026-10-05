@@ -1091,7 +1091,10 @@ jobs:
         # per-band expectations the tests.yml R0_TRANSFORMERS_RUNTIME note
         # promises land (the packaging-request ledger, D05 -> P04/F36 row);
         # the README support table states exactly this scope. Never widen the
-        # deselection without re-truing that table.
+        # deselection without re-truing that table. The T5 sdpa construction
+        # pin is keyed to 5.18.0+, where upstream T5 gained sdpa support;
+        # 4.45.2 and 4.57.6 still refuse sdpa at construction (ValueError),
+        # so the pin is 5.x-band by definition (re-trued 2026-10-05).
         if: matrix.leg != 'hf_5_candidate'
         env:
           TORCHLENS_REQUIRE_R0: "1"
@@ -1101,7 +1104,8 @@ jobs:
             --deselect tests/real_model/r0/test_realism_randinit_sweep.py \
             --deselect tests/real_model/r0/test_realism_randinit_axes.py::test_config_fingerprint_use_cache_row \
             --deselect "tests/real_model/r0/test_realism_randinit_axes.py::test_kwargs_identity_traced_equals_direct[distilbert]" \
-            --deselect tests/real_model/r0/test_realism_registry.py::test_vendored_gpt2_tokenizer_loads_offline
+            --deselect tests/real_model/r0/test_realism_registry.py::test_vendored_gpt2_tokenizer_loads_offline \
+            --deselect tests/real_model/r0/test_realism_randinit_axes.py::test_t5_sdpa_now_builds_upstream
           python scripts/check_ci_executed_tests.py "${{ runner.temp }}/r0.junit.xml" 0 --min-passed 71
 
       - name: Restore the pinned artifact cache (candidate leg only)
