@@ -32,6 +32,17 @@ _EINSUM_ID = (
     "test_runnable_internal_einsum_identity_save_load_and_run_verified[3]"
 )
 
+_HEAVY_FINDER_MODULE = """
+class HeavyFinder:
+    \"\"\"A meta-path finder holding an object graph larger than the walk budget.\"\"\"
+
+    def __init__(self):
+        self.payload = [object() for _ in range(1_100_000)]
+
+    def find_spec(self, fullname, path=None, target=None):
+        return None
+"""
+
 _FIRST_EINSUM_BEHIND_A_HEAVY_FINDER = """
 import sys
 
@@ -47,15 +58,8 @@ assert "torch.backends.opt_einsum" not in sys.modules, (
 )
 
 
-class HeavyFinder:
-    \"\"\"A meta-path finder holding an object graph larger than the walk budget.\"\"\"
-
-    def __init__(self):
-        self.payload = [object() for _ in range(1_100_000)]
-
-    def find_spec(self, fullname, path=None, target=None):
-        return None
-
+sys.path.insert(0, sys.argv[1])
+from heavy_finder import HeavyFinder  # a finder in a real source file, like pytest's rewriter
 
 sys.meta_path.insert(0, HeavyFinder())
 
@@ -87,11 +91,20 @@ def _child_environment() -> dict[str, str]:
     return environment
 
 
-def test_first_einsum_behind_a_heavy_meta_path_finder_keeps_the_rng_window_certain() -> None:
+@pytest.mark.heavy
+def test_first_einsum_behind_a_heavy_meta_path_finder_keeps_the_rng_window_certain(
+    tmp_path: Path,
+) -> None:
     """A process's first einsum does not walk import-machinery frames in-window."""
 
+    (tmp_path / "heavy_finder.py").write_text(textwrap.dedent(_HEAVY_FINDER_MODULE))
     completed = subprocess.run(
-        [sys.executable, "-c", textwrap.dedent(_FIRST_EINSUM_BEHIND_A_HEAVY_FINDER)],
+        [
+            sys.executable,
+            "-c",
+            textwrap.dedent(_FIRST_EINSUM_BEHIND_A_HEAVY_FINDER),
+            str(tmp_path),
+        ],
         check=False,
         capture_output=True,
         text=True,
