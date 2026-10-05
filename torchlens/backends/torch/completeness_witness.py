@@ -1400,6 +1400,9 @@ class _CompletenessDispatchMode(_TorchLensDispatchMode):
         if event is not None:
             if _dispatch_result_holds_tensor(result):
                 event.outcome = "returned_tensor"
+                owner = event.owner
+                if owner is not None and owner.boundary_credit_is_output_scoped:
+                    event.credit_refs = _dispatch_credit_refs(owner, func, args, result)
                 if not event.mutates and _operator_base_name(func) == "aten.as_strided":
                     # Owner-independent: an ``__dlpack__``-wrapper-owned interval is
                     # not a modeled call, so the audited row must still apply.
@@ -1936,6 +1939,10 @@ record_uncaptured_owner_callsite = _rebind_function(
 )
 _dispatch_result_holds_tensor = _rebind_function(
     _completeness_dispatch._dispatch_result_holds_tensor, globals()
+)
+_dispatch_credit_refs = _rebind_function(_completeness_dispatch._dispatch_credit_refs, globals())
+_event_builds_boundary_output = _rebind_function(
+    _completeness_dispatch._event_builds_boundary_output, globals()
 )
 _event_is_capture_accounted = _rebind_function(
     _completeness_dispatch._event_is_capture_accounted, globals()
