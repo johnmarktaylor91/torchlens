@@ -228,6 +228,9 @@ EXEMPT_MUTANTS: dict[str, tuple[str, str]] = {
 #: Bounded arming suite: the files whose job is to kill the mutants above.
 SUITE = [
     "tests/test_validation.py",
+    # The perturbation / deep-clone unit tests split out of test_validation.py
+    # at its size ceiling; they stay in the arming suite they were scored in.
+    "tests/test_validation_perturbation_units.py",
     # Step-18 (streamed-bundle finalization) killers: the executor family's
     # first sample campaign proved _should_run_step_18 forced-False survived
     # every file below (r7 R74; no suite file streamed to disk). Removing

@@ -148,7 +148,7 @@ def test_breakdown_lists_inclusive_mass_that_sums_to_forward() -> None:
     assert report.forward_flops == 2376
     numbers = _breakdown_numbers(report)
     assert sum(numbers) == report.forward_flops
-    by_label = {line.split(":")[0]: n for line, n in zip(report.breakdown, numbers)}
+    by_label = {line.split(":")[0]: n for line, n in zip(report.breakdown, numbers, strict=True)}
     # The Sequential's own ops are zero; its INCLUSIVE mass is the two blocks.
     assert by_label["enc"] == 2240
     assert by_label["head"] == 136
