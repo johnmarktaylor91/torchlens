@@ -14,6 +14,11 @@ from torchlens.backends.paddle import (  # noqa: E402
     PaddleBackend,
     wrappers as paddle_wrappers,
 )
+from torchlens.backends.paddle._param_writes import (  # noqa: E402
+    PARAMETER_WRITE_MARKER,
+    ParameterWriteGuard,
+)
+from torchlens.backends.paddle.validation import _coverage_oracle  # noqa: E402
 from torchlens.validation.invariants import check_metadata_invariants  # noqa: E402
 from torchlens.validation.status import ValidationReplayStatus  # noqa: E402
 
@@ -186,3 +191,249 @@ def test_paddle_validation_same_object_static_snapshot_guard_fires(
 
     with pytest.raises(AssertionError):
         assert {"tensor.astype", "tensor.reshape"} <= set(inventory.wrapped)
+
+
+class _LinearRelu(paddle.nn.Layer):
+    """Layer whose ops read its own registered parameters."""
+
+    def __init__(self) -> None:
+        """Build one linear layer with deterministic weights."""
+
+        super().__init__()
+        self.linear = paddle.nn.Linear(4, 3)
+        self.linear.weight.set_value(paddle.arange(12, dtype="float32").reshape([4, 3]) / 10.0)
+        self.linear.bias.set_value(paddle.to_tensor([0.1, -0.2, 0.3], dtype="float32"))
+
+    def forward(self, x: Any) -> Any:
+        """Run linear then relu."""
+
+        return paddle.nn.functional.relu(self.linear(x))
+
+
+class _ClosureTensorLayer(paddle.nn.Layer):
+    """Layer that reads an UNREGISTERED tensor (not a parameter, not an input)."""
+
+    def __init__(self) -> None:
+        """Hold a plain tensor attribute outside the parameter registry."""
+
+        super().__init__()
+        self.linear = paddle.nn.Linear(4, 3)
+        self.__dict__["hidden"] = paddle.ones([3], dtype="float32")
+
+    def forward(self, x: Any) -> Any:
+        """Add the unregistered tensor through an explicit functional op."""
+
+        return paddle.add(self.linear(x), self.__dict__["hidden"])
+
+
+def _layer_input() -> Any:
+    """Return a deterministic Layer input."""
+
+    return paddle.arange(8, dtype="float32").reshape([2, 4]) / 8.0 - 0.25
+
+
+def test_paddle_validation_layer_parameters_are_known_sources() -> None:
+    """Ops reading a Layer's own parameters pass the coverage oracle and replay."""
+
+    trace = tl.trace(_LinearRelu(), _layer_input(), backend="paddle")
+
+    assert trace.module_identity_mode == "object_module"
+    assert PaddleBackend().validate_trace(trace) is True
+    assert trace.validation_replay_status.replayed_node_count == 2
+    linear = next(c for c in trace._paddle_op_captures if c.op_name == "functional.linear")
+    assert sorted(leaf.param_address for leaf in linear.tensor_inputs if leaf.label is None) == [
+        "linear.bias",
+        "linear.weight",
+    ]
+    assert linear.capture_gap_markers == ()
+    assert tl.validate(_LinearRelu(), _layer_input(), scope="forward", backend="paddle") is True
+
+
+def test_paddle_validation_unregistered_tensor_leaf_still_fails() -> None:
+    """An unlabeled tensor that is NOT a registered parameter stays a coverage gap."""
+
+    trace = tl.trace(_ClosureTensorLayer(), _layer_input(), backend="paddle")
+
+    add = next(c for c in trace._paddle_op_captures if c.op_name.endswith("add"))
+    assert any("unlabeled tensor input" in marker for marker in add.capture_gap_markers)
+    assert PaddleBackend().validate_trace(trace) is False
+
+
+def test_paddle_validation_parameter_replay_uses_the_parameter_value() -> None:
+    """A parameter changed after capture makes replay disagree: it fails, never passes."""
+
+    model = _LinearRelu()
+    trace = tl.trace(model, _layer_input(), backend="paddle")
+    model.linear.bias.set_value(paddle.to_tensor([5.0, 5.0, 5.0], dtype="float32"))
+
+    # Coverage still holds; the failure is the replay disagreeing on the read.
+    assert _coverage_oracle(trace) is True
+    assert PaddleBackend().validate_trace(trace) is False
+
+
+def test_paddle_validation_parameter_replay_leaves_the_model_unchanged() -> None:
+    """Validation replays on copies; the user's parameters are untouched."""
+
+    model = _LinearRelu()
+    before = model.linear.weight.numpy().copy()
+    trace = tl.trace(model, _layer_input(), backend="paddle")
+
+    assert PaddleBackend().validate_trace(trace) is True
+    assert (model.linear.weight.numpy() == before).all()
+
+
+def test_paddle_validation_layer_corrupted_output_still_fails() -> None:
+    """Corrupting the parameter-reading op's saved output still fails replay."""
+
+    trace = tl.trace(_LinearRelu(), _layer_input(), backend="paddle")
+    linear = next(op for op in trace.layer_list if op.layer_type == "functional.linear")
+    linear.out = linear.out + 1.0
+
+    assert _coverage_oracle(trace) is True
+    assert PaddleBackend().validate_trace(trace) is False
+
+
+def test_paddle_function_root_trace_has_buffers_and_graph_shape_hash() -> None:
+    """A function-root preview trace carries ``buffers`` and a graph hash."""
+
+    first = tl.trace(_functional_mlp, _inputs(), backend="paddle")
+    second = tl.trace(_functional_mlp, _inputs(), backend="paddle")
+    different = tl.trace(
+        lambda x: paddle.nn.functional.relu(x + 1.0), _layer_input(), backend="paddle"
+    )
+
+    assert first.module_identity_mode == "function_root"
+    assert first.buffers is not None and len(first.buffers) == 0
+    assert isinstance(first.graph_shape_hash, str)
+    assert first.graph_shape_hash == second.graph_shape_hash
+    assert different.graph_shape_hash != first.graph_shape_hash
+
+
+class _BnRelu(paddle.nn.Layer):
+    """BatchNorm2D (eval) then relu."""
+
+    def __init__(self) -> None:
+        """Build the block."""
+
+        super().__init__()
+        self.bn = paddle.nn.BatchNorm2D(2)
+
+    def forward(self, x: Any) -> Any:
+        """Run batch norm, relu."""
+
+        return paddle.nn.functional.relu(self.bn(x))
+
+
+_ORIGINAL_RELU = paddle.nn.functional.relu
+
+
+def _stale_alias_relu(x: Any) -> Any:
+    """Call relu through a reference bound before any wrap (a user stale alias)."""
+
+    return _ORIGINAL_RELU(x * 2.0) + 1.0
+
+
+def test_paddle_validation_batchnorm_layer_import_alias_is_captured() -> None:
+    """``nn.BatchNorm2D`` calls its module's import-time ``batch_norm`` alias; it is captured."""
+
+    paddle.seed(0)
+    model = _BnRelu()
+    model.eval()
+    x = paddle.arange(32, dtype="float32").reshape([1, 2, 4, 4]) / 16.0
+    trace = tl.trace(model, x, backend="paddle")
+
+    assert "functional.batch_norm" in [op.layer_type for op in trace.layer_list]
+    assert PaddleBackend().validate_trace(trace) is True
+    from paddle.nn.layer import norm as paddle_norm
+
+    assert paddle_norm.batch_norm is paddle.nn.functional.batch_norm
+
+
+def test_paddle_validation_user_stale_alias_still_fails_closed() -> None:
+    """A user's own pre-wrap alias is not patched: the gap still fails validation."""
+
+    trace = tl.trace(_stale_alias_relu, paddle.ones([2, 2], dtype="float32"), backend="paddle")
+
+    assert PaddleBackend().validate_trace(trace) is False
+
+
+class _BnAddRunningMean(paddle.nn.Layer):
+    """BatchNorm1D, then a functional read of its running mean parameter."""
+
+    def __init__(self) -> None:
+        """Build the block."""
+
+        super().__init__()
+        self.bn = paddle.nn.BatchNorm1D(3)
+
+    def forward(self, x: Any) -> Any:
+        """Run batch norm, then add the (possibly just written) running mean."""
+
+        return paddle.add(self.bn(x), self.bn._mean)
+
+
+def _bn_input() -> Any:
+    """Return a batch whose mean is far from the zero initial running mean."""
+
+    return paddle.arange(12, dtype="float32").reshape([4, 3]) / 4.0 + 1.0
+
+
+def test_paddle_validation_running_mean_read_after_train_write_fails() -> None:
+    """A parameter written in place by the forward is not credited when read later."""
+
+    model = _BnAddRunningMean()
+    model.train()
+    before = model.bn._mean.numpy().copy()
+    trace = tl.trace(model, _bn_input(), backend="paddle")
+
+    assert not (model.bn._mean.numpy() == before).all()
+    add = next(c for c in trace._paddle_op_captures if c.op_name.endswith("add"))
+    assert any(marker.startswith(PARAMETER_WRITE_MARKER) for marker in add.capture_gap_markers)
+    assert all(leaf.param_address is None for leaf in add.tensor_inputs)
+    assert PaddleBackend().validate_trace(trace) is False
+
+
+def test_paddle_validation_train_batchnorm_write_without_reader_fails() -> None:
+    """A hidden running-stat write with no later reader still fails validation."""
+
+    paddle.seed(0)
+    model = _BnRelu()
+    model.train()
+    x = paddle.arange(32, dtype="float32").reshape([1, 2, 4, 4]) / 16.0
+    trace = tl.trace(model, x, backend="paddle")
+
+    written = [
+        marker
+        for marker in trace._paddle_capture_gap_markers
+        if marker.startswith(f"{PARAMETER_WRITE_MARKER}: ")
+    ]
+    assert sorted(written) == [
+        f"{PARAMETER_WRITE_MARKER}: bn._mean",
+        f"{PARAMETER_WRITE_MARKER}: bn._variance",
+    ]
+    assert _coverage_oracle(trace) is False
+    assert PaddleBackend().validate_trace(trace) is False
+
+
+def test_paddle_validation_running_mean_read_in_eval_passes() -> None:
+    """In eval mode nothing writes the running mean; reading it stays a credited source."""
+
+    model = _BnAddRunningMean()
+    model.eval()
+    trace = tl.trace(model, _bn_input(), backend="paddle")
+
+    assert not [m for m in trace._paddle_capture_gap_markers if PARAMETER_WRITE_MARKER in m]
+    assert PaddleBackend().validate_trace(trace) is True
+
+
+def test_paddle_parameter_write_guard_never_credits_an_unfingerprinted_tensor() -> None:
+    """The guard only vouches for parameters it fingerprinted before the forward."""
+
+    model = _LinearRelu()
+    guard = ParameterWriteGuard.capture(model, {id(model.linear.weight): "linear.weight"})
+
+    assert guard.was_written(model.linear.weight, None) is False
+    assert guard.was_written(model.linear.bias, None) is True
+    model.linear.weight.set_value(model.linear.weight * 2.0)
+    assert guard.was_written(model.linear.weight, None) is True
+    assert guard.written_addresses(None) == ("linear.weight",)

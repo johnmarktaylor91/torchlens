@@ -42,14 +42,17 @@ _PURE_REPLAY_ALLOWLIST = frozenset(
         "Cast",
         "ConcatV2",
         "Conv2D",
+        "DepthwiseConv2dNative",
         "Einsum",
         "MatMul",
         "MaxPool",
         "Mean",
         "Mul",
         "Neg",
+        "Pad",
         "RealDiv",
         "Relu",
+        "Relu6",
         "Reshape",
         "Rsqrt",
         "Softmax",
@@ -625,14 +628,17 @@ def _replay_raw_op(capture: TFOpCapture, inputs: Sequence[Any]) -> Any:
         "Cast": _replay_cast,
         "ConcatV2": _replay_concat_v2,
         "Conv2D": _replay_conv2d,
+        "DepthwiseConv2dNative": _replay_depthwise_conv2d,
         "Einsum": _replay_einsum,
         "MatMul": _replay_matmul,
         "MaxPool": _replay_pool,
         "Mean": _replay_mean,
         "Mul": lambda item, args: _raw(item).Mul(x=args[0], y=args[1]),
         "Neg": lambda item, args: _raw(item).Neg(x=args[0]),
+        "Pad": lambda item, args: _raw(item).Pad(input=args[0], paddings=args[1]),
         "RealDiv": lambda item, args: _raw(item).RealDiv(x=args[0], y=args[1]),
         "Relu": lambda item, args: _raw(item).Relu(features=args[0]),
+        "Relu6": lambda item, args: _raw(item).Relu6(features=args[0]),
         "Reshape": lambda item, args: _raw(item).Reshape(tensor=args[0], shape=args[1]),
         "Rsqrt": lambda item, args: _raw(item).Rsqrt(x=args[0]),
         "Softmax": lambda item, args: _raw(item).Softmax(logits=args[0]),
@@ -786,6 +792,34 @@ def _replay_conv2d(capture: TFOpCapture, inputs: Sequence[Any]) -> Any:
         data_format=_attr_str(capture.attrs.get("data_format", "NHWC")),
         dilations=list(capture.attrs.get("dilations", [1, 1, 1, 1])),
         use_cudnn_on_gpu=bool(capture.attrs.get("use_cudnn_on_gpu", True)),
+    )
+
+
+def _replay_depthwise_conv2d(capture: TFOpCapture, inputs: Sequence[Any]) -> Any:
+    """Replay ``DepthwiseConv2dNative``.
+
+    Parameters
+    ----------
+    capture
+        Callback capture.
+    inputs
+        Rebuilt inputs.
+
+    Returns
+    -------
+    Any
+        Replayed output.
+    """
+
+    # ``tf.nn.depthwise_conv2d`` records unset attrs as ``None``.
+    return _raw(capture).DepthwiseConv2dNative(
+        input=inputs[0],
+        filter=inputs[1],
+        strides=list(capture.attrs["strides"]),
+        padding=_attr_str(capture.attrs["padding"]),
+        explicit_paddings=list(capture.attrs.get("explicit_paddings") or []),
+        data_format=_attr_str(capture.attrs.get("data_format") or "NHWC"),
+        dilations=list(capture.attrs.get("dilations") or [1, 1, 1, 1]),
     )
 
 

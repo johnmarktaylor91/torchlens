@@ -6,7 +6,7 @@ import random
 import time
 from collections import defaultdict
 from collections.abc import Callable, Iterator, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any, cast
 
 from ... import _state
@@ -66,6 +66,7 @@ from .._options import (
     reject_unsupported_trace_options,
     resolve_optional_capture_field as _resolve_optional_capture_field,
 )
+from ._param_writes import PARAMETER_WRITE_MARKER, ParameterWriteGuard
 from .interventions import PaddleInterventionCapture, PaddleInterventionRuntime
 from .model_prep import (
     PaddleModuleTree,
@@ -214,10 +215,15 @@ class TensorLeafCapture:
         Container path to the tensor leaf.
     label
         Side-table label at capture time, if any.
+    param_address
+        Primary address of the captured module tree's registered parameter
+        this leaf IS (by object identity), when it has no label. A parameter
+        is a source leaf, not an untraced intermediate.
     """
 
     path: tuple[Any, ...]
     label: str | None
+    param_address: str | None = None
 
 
 @dataclass(frozen=True)
@@ -250,6 +256,9 @@ class PaddleOpCapture:
         Sidecar facts for a genuinely intervened call, or ``None`` for plain
         captures. The validation oracle only honors it when trace-level
         evidence corroborates the fire.
+    param_inputs
+        Live parameter objects keyed by input leaf path, for leaves whose
+        ``param_address`` is set; replay reads copies of them.
     """
 
     func: object
@@ -263,6 +272,7 @@ class PaddleOpCapture:
     alias_annotations: tuple[dict[str, Any], ...] = ()
     capture_gap_markers: tuple[str, ...] = ()
     intervention: PaddleInterventionCapture | None = None
+    param_inputs: dict[tuple[Any, ...], Any] = field(default_factory=dict)
 
 
 class PaddleBackend:
@@ -278,6 +288,8 @@ class PaddleBackend:
         self._ensure_dynamic_runtime(paddle)
         self.paddle = paddle
         self.tensor_store = PaddleTensorLabelStore()
+        self._param_address_by_id: dict[int, str] = {}
+        self._param_write_guard = ParameterWriteGuard()
 
     def capture_trace(
         self,
@@ -510,6 +522,14 @@ class PaddleBackend:
         kwargs = {} if input_kwargs is None else dict(input_kwargs)
         prepared_model = prepare_model_once(model)
         prepare_model_session(trace, prepared_model, module_tree if use_object_module else None)
+        # Identity map of the captured tree's registered parameters, read by
+        # ``_build_op_capture`` to tell a parameter leaf from an untraced one.
+        self._param_address_by_id = (
+            dict(module_tree.param_address_by_id)
+            if use_object_module and module_tree is not None
+            else {}
+        )
+        self._param_write_guard = ParameterWriteGuard.capture(model, self._param_address_by_id)
         # R07: the try owns the wrap call itself -- a raise anywhere between
         # wrapper install and the forward (source labeling) used to strand the
         # process-global Paddle wrappers because the unwrap-owning finally had
@@ -528,6 +548,10 @@ class PaddleBackend:
                 halt_signal = exc
                 output = exc.frontier_output
             trace.forward_duration = Duration(time.time() - trace.capture_start_time)
+            trace._paddle_capture_gap_markers.extend(
+                f"{PARAMETER_WRITE_MARKER}: {address}"
+                for address in self._param_write_guard.written_addresses(trace)
+            )
             if halt_signal is not None:
                 trace.halted = True
                 trace.halt_reason = halt_signal.reason
@@ -574,6 +598,8 @@ class PaddleBackend:
                 delattr(trace, "_paddle_intervention_runtime")
             freeze_trace_relation_views(trace)
         finally:
+            self._param_address_by_id = {}
+            self._param_write_guard = ParameterWriteGuard()
             # Independently-owned resources: a raising hook cleanup must not
             # leave the process-global Paddle wrappers installed.
             try:
@@ -1562,15 +1588,27 @@ class PaddleBackend:
 
         tensor_inputs: list[TensorLeafCapture] = []
         capture_gap_markers: list[str] = []
-        for path, tensor in self._iter_tensors_with_paths(args, root=("args",)):
+        param_inputs: dict[tuple[Any, ...], Any] = {}
+        param_address_by_id = self._param_address_by_id
+        leaves = (
+            *self._iter_tensors_with_paths(args, root=("args",)),
+            *self._iter_tensors_with_paths(kwargs, root=("kwargs",)),
+        )
+        for path, tensor in leaves:
             label = self.tensor_store.get_label(tensor)
-            tensor_inputs.append(TensorLeafCapture(path=path, label=label))
-            if label is None:
-                capture_gap_markers.append(f"unlabeled tensor input at {path!r}")
-        for path, tensor in self._iter_tensors_with_paths(kwargs, root=("kwargs",)):
-            label = self.tensor_store.get_label(tensor)
-            tensor_inputs.append(TensorLeafCapture(path=path, label=label))
-            if label is None:
+            # An unlabeled leaf that IS a registered parameter of the captured
+            # module tree is a known source, not a capture gap; any other
+            # unlabeled leaf stays a gap and fails the coverage oracle.
+            param_address = param_address_by_id.get(id(tensor)) if label is None else None
+            if param_address is not None and self._param_write_guard.was_written(tensor, trace):
+                capture_gap_markers.append(f"{PARAMETER_WRITE_MARKER} at {path!r}: {param_address}")
+                param_address = None
+            tensor_inputs.append(
+                TensorLeafCapture(path=path, label=label, param_address=param_address)
+            )
+            if param_address is not None:
+                param_inputs[path] = tensor
+            elif label is None:
                 capture_gap_markers.append(f"unlabeled tensor input at {path!r}")
         input_by_id = {
             id(tensor): leaf for leaf, tensor in self._iter_input_leaf_records(args, kwargs)
@@ -1610,6 +1648,7 @@ class PaddleBackend:
                 producer_labels=producer_labels,
                 alias_annotations=tuple(alias_annotations),
                 capture_gap_markers=tuple(capture_gap_markers),
+                param_inputs=param_inputs,
             ),
             alias_indices,
         )

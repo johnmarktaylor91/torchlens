@@ -8,6 +8,7 @@ from collections import defaultdict
 from collections.abc import Callable
 from typing import Any, Literal, TypeAlias, cast
 
+from .._io.accessor_rebuild import rebuild_buffer_accessor
 from ..capture._nonfinite_prefix import strip_raw_label_suffix
 from ..data_classes._compaction import compact_op_metadata
 from ..data_classes._site_key import SiteKeyMinter
@@ -21,6 +22,7 @@ from ..postprocess._recurrence import compute_preview_recurrence_assignments, re
 from ..postprocess.finalization import _build_module_logs, _build_root_module_log
 from ..postprocess.loop_grouping_adapter import RecurrenceAssignment
 from ..quantities import Bytes
+from ..utils.hashing import compute_graph_shape_hash, populate_normalized_layer_addresses
 from .registry import BackendName
 
 OpHook: TypeAlias = Callable[[Any, Trace, set[str]], None]
@@ -189,6 +191,25 @@ def finalize_single_pass_trace(
         trace._tracing_finished = True
         _set_per_op_tracing_finished(trace)
     compact_op_metadata(trace)
+    stamp_preview_graph_shape_hash(trace)
+
+
+def stamp_preview_graph_shape_hash(trace: Trace) -> None:
+    """Compute ``trace.graph_shape_hash`` for a finalized preview trace.
+
+    Torch traces get the hash in postprocess Step 16.5; preview backends
+    finalize through this module and used to leave it ``None``. The hash
+    is backend-neutral: it reads only the finalized ``layer_list`` (op order,
+    function names, parent-edge order, container paths, module addresses).
+
+    Parameters
+    ----------
+    trace:
+        Finalized preview trace.
+    """
+
+    populate_normalized_layer_addresses(trace)
+    trace.graph_shape_hash = compute_graph_shape_hash(trace)
 
 
 def _set_per_op_tracing_finished(trace: Trace) -> None:
@@ -246,6 +267,9 @@ def attach_function_root_module(trace: Trace) -> None:
     }
     root = _build_root_module_log(trace, {}, mbd)
     trace._module_logs = ModuleAccessor({"self": root})
+    # The object-module path gets ``trace.buffers`` from
+    # ``rebuild_trace_accessors``; a function root must not leave it ``None``.
+    rebuild_buffer_accessor(trace)
 
 
 def attach_object_module_logs(

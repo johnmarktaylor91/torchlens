@@ -7,6 +7,7 @@ import inspect
 from collections.abc import Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
+from types import ModuleType
 from typing import Any
 
 from ... import _state
@@ -222,6 +223,7 @@ class _PaddleWrapperRegistry:
         """Initialize an empty wrapper registry."""
 
         self._originals: dict[tuple[object, str], object] = {}
+        self._wrapper_by_original: dict[int, tuple[object, object]] = {}
         self._wrapped = False
         self._inventory = PaddleInventory((), ())
 
@@ -254,6 +256,7 @@ class _PaddleWrapperRegistry:
                         denied.add(op_name)
                     else:
                         wrapped.add(op_name)
+            self._wrap_layer_module_aliases(paddle)
         except BaseException:
             self.unwrap()
             raise
@@ -282,8 +285,45 @@ class _PaddleWrapperRegistry:
             self._wrapped = bool(self._originals)
             raise first_failure
         self._originals.clear()
+        self._wrapper_by_original.clear()
         self._wrapped = False
         self._inventory = PaddleInventory((), ())
+
+    def _wrap_layer_module_aliases(self, paddle: object) -> None:
+        """Point Paddle's own Layer modules' import-time aliases at the wrappers.
+
+        ``paddle/nn/layer/norm.py`` runs ``from ..functional import
+        batch_norm, layer_norm, ...`` at import, so ``nn.BatchNorm2D`` calls
+        a module-global bound to the ORIGINAL function and the
+        ``paddle.nn.functional`` wrapper never sees it: every BatchNorm output
+        was an untracked tensor and validation failed its consumer. Each
+        ``paddle.nn.layer.*`` global that IS (by identity) a wrapped original
+        now resolves to that original's wrapper; ``unwrap`` restores it.
+
+        Parameters
+        ----------
+        paddle
+            Imported Paddle module (its ``nn.layer`` package lists the Layer
+            implementation submodules).
+        """
+
+        layer_package = getattr(getattr(paddle, "nn", None), "layer", None)
+        submodules = (
+            [
+                value
+                for value in vars(layer_package).values()
+                if isinstance(value, ModuleType) and value.__name__.startswith("paddle.nn.layer.")
+            ]
+            if layer_package is not None
+            else []
+        )
+        for module in submodules:
+            for name, value in tuple(vars(module).items()):
+                entry = self._wrapper_by_original.get(id(value))
+                if entry is None or entry[0] is not value or (module, name) in self._originals:
+                    continue
+                self._originals[(module, name)] = value
+                setattr(module, name, entry[1])
 
     def is_wrapped(self) -> bool:
         """Return whether this registry currently has installed wrappers."""
@@ -372,6 +412,7 @@ class _PaddleWrapperRegistry:
             return emit(trace, op_name, original, args, kwargs, output, module_stack=module_stack)
 
         setattr(owner, name, wrapper)
+        self._wrapper_by_original.setdefault(id(original), (original, wrapper))
         return True
 
 

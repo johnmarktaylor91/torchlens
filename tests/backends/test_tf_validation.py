@@ -116,7 +116,24 @@ def _failures(trace: Any) -> tuple[str, ...]:
         Failure reason strings.
     """
 
-    return tuple(getattr(trace, "_tf_validation_result").failures)
+    return tuple(_result(trace).failures)
+
+
+def _result(trace: Any) -> Any:
+    """Return the detailed TensorFlow validation result of a validated trace.
+
+    Parameters
+    ----------
+    trace
+        TensorFlow trace already validated.
+
+    Returns
+    -------
+    Any
+        The ``TFValidationResult`` the backend attached.
+    """
+
+    return getattr(trace, "_tf_validation_result", None)
 
 
 def test_tf_validation_fails_when_interior_callback_record_is_dropped() -> None:
@@ -282,3 +299,113 @@ def test_tf_num_layers_with_params_populated_in_object_module_mode() -> None:
     assert trace.module_identity_mode == "object_module"
     assert trace.num_layers_with_params > 0
     assert check_metadata_invariants(trace) is True
+
+
+def test_tf_public_validate_forward_scope_does_not_raise() -> None:
+    """``tl.validate(scope="forward", backend="tf")`` validates instead of refusing.
+
+    ``validate_metadata`` is a validation switch: forwarding it into the TF
+    capture made every public forward-scope call raise
+    ``BackendUnsupportedError``.
+    """
+
+    def chain(x: Any) -> Any:
+        """Return a small replayable op chain."""
+
+        return tf.nn.relu(x * tf.constant([2.0, -1.0]) + tf.constant([1.0, 1.0]))
+
+    x = tf.constant([1.0, 3.0])
+    assert tl.validate(chain, x, scope="forward", backend="tf") is True
+    assert tl.validate(chain, x, scope="forward", backend="tf", validate_metadata=False) is True
+
+
+def test_tf_public_validate_forward_scope_still_fails_closed() -> None:
+    """The public entry still returns False for an unclassified op type."""
+
+    def cumulative(x: Any) -> Any:
+        """Use an op type the TF classifier does not know."""
+
+        return tf.math.cumsum(x) + tf.constant([1.0, 1.0])
+
+    with pytest.warns(Warning, match="tl.validate FAILED"):
+        assert (
+            tl.validate(cumulative, tf.constant([1.0, 3.0]), scope="forward", backend="tf") is False
+        )
+
+
+def _depthwise_relu6(x: Any, kernel: Any) -> Any:
+    """Run pad, depthwise convolution, ``relu6`` (the MobileNet block shape).
+
+    Parameters
+    ----------
+    x
+        NHWC input.
+    kernel
+        Depthwise kernel.
+
+    Returns
+    -------
+    Any
+        Block output.
+    """
+
+    padded = tf.pad(x, [[0, 0], [1, 1], [1, 1], [0, 0]])
+    y = tf.nn.depthwise_conv2d(padded, kernel, strides=[1, 1, 1, 1], padding="VALID")
+    return tf.nn.relu6(y * 4.0)
+
+
+def _depthwise_inputs() -> tuple[Any, Any]:
+    """Return deterministic depthwise-block inputs."""
+
+    x = tf.reshape(tf.range(32, dtype=tf.float32) / 8.0 - 1.5, (1, 4, 4, 2))
+    kernel = tf.reshape(tf.range(18, dtype=tf.float32) / 9.0 - 0.5, (3, 3, 2, 1))
+    return x, kernel
+
+
+def test_tf_validation_replays_depthwise_conv_and_relu6() -> None:
+    """MobileNet's pad, depthwise conv and ``relu6`` replay instead of failing or skipping."""
+
+    trace = tl.trace(_depthwise_relu6, _depthwise_inputs(), backend="tf")
+
+    assert _validate(trace) is True
+    replayed = _result(trace).replayed_histogram
+    assert replayed["DepthwiseConv2dNative"] == 1
+    assert replayed["Relu6"] == 1
+    assert replayed["Pad"] == 1
+
+
+def test_tf_validation_depthwise_and_relu6_corruption_fails() -> None:
+    """A corrupted pad, depthwise or ``relu6`` payload fails replay, never passes."""
+
+    for op_type in ("Pad", "DepthwiseConv2dNative", "Relu6"):
+        trace = tl.trace(_depthwise_relu6, _depthwise_inputs(), backend="tf")
+        target = next(op for op in trace.layer_list if op.func_name == op_type)
+        target.out = target.out + 0.5
+
+        assert _validate(trace) is False
+        assert any(op_type in failure for failure in _failures(trace))
+
+
+def test_tf_function_root_trace_has_buffers_and_graph_shape_hash() -> None:
+    """A function-root preview trace carries ``buffers`` and a graph hash."""
+
+    def chain(x: Any) -> Any:
+        """Return a small op chain."""
+
+        return tf.nn.relu(x + tf.constant([1.0, 2.0]))
+
+    def other(x: Any) -> Any:
+        """Return a different op chain."""
+
+        return tf.math.tanh(x + tf.constant([1.0, 2.0]))
+
+    x = tf.constant([1.0, 3.0])
+    first = tl.trace(chain, x, backend="tf")
+    second = tl.trace(chain, x, backend="tf")
+    different = tl.trace(other, x, backend="tf")
+
+    assert first.module_identity_mode == "function_root"
+    assert first.buffers is not None and len(first.buffers) == 0
+    assert isinstance(first.graph_shape_hash, str)
+    assert first.graph_shape_hash == second.graph_shape_hash
+    assert different.graph_shape_hash != first.graph_shape_hash

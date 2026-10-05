@@ -22,6 +22,7 @@ from ...backends._finalize import (
     normalize_op_module_calls,
     numel_from_shape as _numel,
     session_callable_identity as _callable_identity,
+    stamp_preview_graph_shape_hash,
     value_nbytes as _nbytes,
 )
 from ...capture._nonfinite_prefix import strip_raw_label_suffix
@@ -2206,6 +2207,7 @@ class JAXBackend:
             self._attach_pytree_module_logs(trace, module_tree)
         trace._tracing_finished = True
         compact_op_metadata(trace)
+        stamp_preview_graph_shape_hash(trace)
         # The depth flood deliberately resolves ops through its own explicit
         # label index, NOT Trace.__getitem__ (finished-mode lookup returns
         # Layer objects, not the ops the flood must mutate); running it after
