@@ -246,11 +246,19 @@ def validate_tf_trace_detailed(trace: Any) -> TFValidationResult:
     replayed_count = 0
     pure_unverified_count = 0
     effect_region_count = 0
+    reads_replayable = _resource_reads_replayable(classes)
     for label, op in ops_by_label.items():
         if label != getattr(op, "_label_raw", None):
             continue
         op_class = classes[label]
         op_type = str(getattr(op, "func_name", ""))
+        if op_class == "pure-resource-read" and reads_replayable:
+            if _replay_resource_read(op=op, capture=captures_by_label.get(label)):
+                replayed_count += 1
+                replayed_histogram[op_type] += 1
+            else:
+                failures.append(f"resource_read_replay_failed:{label}:{op_type}")
+            continue
         if op_class != "value":
             if op_class in {"pure-resource-read", "effect-denied", "control-region"}:
                 effect_region_count += 1
@@ -551,6 +559,65 @@ def _replay_and_perturb_op(
             ops_by_label=ops_by_label,
             saved_output=saved,
         )
+    except Exception:
+        return False
+
+
+def _resource_reads_replayable(classes: Mapping[str, TFOpClass]) -> bool:
+    """Return whether this trace's variable reads can be re-read and checked.
+
+    A ``ReadVariableOp`` is checked by re-reading its variable and comparing
+    the value with the saved read. That proves the saved read only when
+    nothing in the trace can have written a variable after it was read: the
+    trace holds no effect op (variable writes) and no control region (whose
+    body may write), and every op classified (unknown ops already fail
+    closed). Any such op keeps every read an unverified effect region.
+
+    Parameters
+    ----------
+    classes
+        Validation class of every raw op label.
+
+    Returns
+    -------
+    bool
+        True when no op class can write a variable during the forward.
+    """
+
+    return not any(op_class in {"effect-denied", "control-region"} for op_class in classes.values())
+
+
+def _replay_resource_read(*, op: Any, capture: TFOpCapture | None) -> bool:
+    """Re-read one ``ReadVariableOp``'s variable and compare with the saved read.
+
+    A variable changed since the forward makes the re-read disagree, so a
+    stale value can only fail validation, never pass it.
+
+    Parameters
+    ----------
+    op
+        Materialized ``ReadVariableOp``.
+    capture
+        Its callback capture; ``None`` fails.
+
+    Returns
+    -------
+    bool
+        True when the re-read value equals the saved read payload.
+    """
+
+    if capture is None or len(capture.inputs) != 1:
+        return False
+    handle = capture.inputs[0]
+    if handle.source_kind != "resource" or handle.producer_label_raw is not None:
+        return False
+    try:
+        tf = _import_tensorflow()
+        with _state.pause_logging():
+            reread = tf.raw_ops.ReadVariableOp(
+                resource=handle.tensor, dtype=tf.as_dtype(capture.attrs["dtype"])
+            )
+        return _payloads_close(reread, _saved_payload(op))
     except Exception:
         return False
 
