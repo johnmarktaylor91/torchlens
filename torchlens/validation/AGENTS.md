@@ -18,6 +18,9 @@ metadata invariants, intervention readiness, and unified `.tlspec` manifest sche
 | `_invariants_*.py` | Per-domain invariant implementations, 13 modules (entry, topology, connectivity, conditionals aggregate + conditional base + conditional modules, buffers, modules/params, payloads, equivalence, backward graph/flow/domain); `_invariants_conditionals.py` is the largest conditional module and rebinds through `invariants.py` |
 | `_pristine.py` | Pristine-oracle helpers (fixwave-5 R75-1): the untouched-baseline capture the replay oracle compares against |
 | `exemptions.py` | Replay/perturbation exemption registries and dynamic checks |
+| `_index_domain.py` | Index-domain slot/domain facts and in-domain index perturbations (rotation, single-entry move) for the gather/scatter/embedding/cross_entropy family |
+| `_integer_mod_proof.py` | Saved-call proof that an integer `% +-1` is identically zero (used by the `integer_mod_unit_divisor` posthoc decision) |
+| `_completeness_backstop.py` | `completeness_backstop_counts`: dispatcher-witness census vs captured ops, including the module-forward-owned drop rule |
 | `status.py` | Replay-validation status objects |
 | `diagnostics.py` | Structured replay-failure diagnostics (add-only relative to pass/fail) |
 | `_layer_grad_report.py`, `_stock_layer_grads.py`, `_output_walk.py` | Layer-grad oracle report, stock-autograd grad collection, output-tree walking |
