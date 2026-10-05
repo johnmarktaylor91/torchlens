@@ -13,6 +13,7 @@ passed with the op missing.
 from __future__ import annotations
 
 import sys
+import types
 import warnings
 
 import pytest
@@ -92,3 +93,40 @@ def test_validation_passes_with_weight_norm_captured(model_cls: type[nn.Module])
         model_cls(), [torch.randn(1, 4, 8)], {}, random_seed=0, validate_metadata=True
     )
     assert passed, tl.validation.last_validation_failure()
+
+
+def test_unwrap_restores_the_weight_norm_module_alias():
+    """``unwrap_torch`` puts the original builtins back on the submodule too."""
+
+    from torchlens.backends.torch import wrappers
+
+    weight_norm_module = sys.modules["torch.nn.utils.weight_norm"]
+    tl.trace(_DirectChild(), torch.randn(1, 4, 8))
+    try:
+        wrappers.unwrap_torch()
+        for name in ("_weight_norm", "norm_except_dim"):
+            restored = getattr(weight_norm_module, name)
+            assert isinstance(restored, types.BuiltinFunctionType), (name, restored)
+            assert restored is getattr(torch, name)
+    finally:
+        wrappers.wrap_torch()
+    assert weight_norm_module._weight_norm is torch._weight_norm
+
+
+def test_shadowed_namespace_resolution_is_narrow():
+    """Only a non-module walk result with an imported same-named submodule is redirected."""
+
+    from torchlens.utils._torch_compat import get_optional_torch_namespace
+
+    # The shadowed case: the package attribute is the function, the roster means the module.
+    assert callable(torch.nn.utils.weight_norm)
+    assert (
+        get_optional_torch_namespace("torch.nn.utils.weight_norm")
+        is sys.modules["torch.nn.utils.weight_norm"]
+    )
+    # A non-module namespace with no same-named submodule keeps the attribute walk.
+    assert "torch.Tensor" not in sys.modules
+    assert get_optional_torch_namespace("torch.Tensor") is torch.Tensor
+    # Ordinary modules and missing names are unchanged.
+    assert get_optional_torch_namespace("torch.nn.functional") is torch.nn.functional
+    assert get_optional_torch_namespace("torch.no_such_namespace_xyz") is None
