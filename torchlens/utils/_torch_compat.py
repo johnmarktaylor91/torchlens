@@ -3732,16 +3732,8 @@ def warm_lazy_torch_imports() -> None:
     selective runnable-capable capture of the process to UNVERIFIABLE -- a
     silent, order-dependent breach of the contract's "a plain deterministic
     capture records nothing" pin. The monitor calls this BEFORE arming any
-    patch so the cascade runs outside every window.
-
-    ``torch.backends.opt_einsum`` is warmed for the same reason: torch's own
-    ``torch.functional.einsum`` imports it inside the function body, so the
-    first ``torch.einsum`` of a process imported it in-window. The import
-    machinery's frames (``sys.meta_path`` finders such as pytest's assertion
-    rewriter) then became roots of the monitor's frame-reachable inventory,
-    and a large object graph behind a finder exhausted the deep-inventory
-    budget (``deep_inventory_budget_exhausted``), ceilinging that capture to
-    UNVERIFIABLE depending on what else the process had loaded.
+    patch so the cascade runs outside every window. ``torch.backends.opt_einsum``
+    (imported inside ``torch.einsum``) is warmed for the reason in ``rng.py``.
 
     Failure is benign and intentionally unlatched: a partially-executed failed
     import is evicted from ``sys.modules``, so a later in-window retry re-runs
