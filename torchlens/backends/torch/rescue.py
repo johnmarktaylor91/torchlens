@@ -245,7 +245,8 @@ def _escape_signal(trace: Trace) -> str | None:
 #: ``__rmatmul__``, ``__rfloordiv__``, ``__rlshift__``, ``__iand__``, ...)
 #: reach the mode under their own name and need no row. In-place rows map to
 #: the in-place method (``__iadd__`` -> ``add_``), never to the out-of-place op,
-#: so mutation stays as distinguishable as the comparison below makes it.
+#: and ``_canonical_op_name`` keeps that trailing underscore, so a rescue that
+#: logs ``z += 1`` as out-of-place ``add`` reads as losing ``add_``.
 #: Non-commutative reflected dunders keep their own op: ``__rsub__`` is not
 #: ``sub``. ``capture/arg_positions._COMMUTATIVE_REFLECTED_DUNDERS`` cannot be
 #: reused: it labels ``__rand__`` as ``and``, but the mode spelling is
@@ -284,12 +285,17 @@ def _canonical_op_name(name: str) -> str:
     -------
     str
         The name with any ``TorchFunctionMode`` respelling undone (see
-        ``_MODE_RESPELLED_DUNDERS``) and underscores stripped. Idempotent on
-        the mode spellings, so both sides land on one name whether or not the
-        running torch respells a given dunder.
+        ``_MODE_RESPELLED_DUNDERS``), the dunder wrapper dropped and leading
+        underscores stripped. A trailing underscore survives, so the in-place
+        ``add_`` (and ``__iadd__``) never merges with the out-of-place
+        ``add``. Idempotent on the mode spellings, so both sides land on one
+        name whether or not the running torch respells a given dunder.
     """
 
-    return _MODE_RESPELLED_DUNDERS.get(name, name).strip("_")
+    spelled = _MODE_RESPELLED_DUNDERS.get(name, name)
+    if len(spelled) > 4 and spelled.startswith("__") and spelled.endswith("__"):
+        spelled = spelled[2:-2]
+    return spelled.lstrip("_")
 
 
 def _op_name_counts(trace: Trace) -> Counter[str]:

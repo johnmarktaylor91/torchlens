@@ -12,6 +12,7 @@ to end through ``tl.trace``, and keep the oracle red for a genuine loss.
 
 from __future__ import annotations
 
+import itertools
 import types
 from collections.abc import Callable, Iterator
 from typing import Any
@@ -29,42 +30,26 @@ from torchlens.backends.torch.rescue import (
     capture_with_rescue,
 )
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
+from torchlens.utils._callable_safety import _ALLOWED_FORWARD_DUNDERS
 
-_FLOAT_BINARY = [
-    "add",
-    "sub",
-    "mul",
-    "truediv",
-    "div",
-    "floordiv",
-    "mod",
-    "pow",
-    "radd",
-    "rsub",
-    "rmul",
-    "rtruediv",
-    "rdiv",
-    "rfloordiv",
-    "rmod",
-    "rpow",
-    "iadd",
-    "isub",
-    "imul",
-    "itruediv",
-    "idiv",
-    "ifloordiv",
-    "imod",
-    "ipow",
-    "eq",
-    "ne",
-    "lt",
-    "le",
-    "gt",
-    "ge",
-]
-_BOOL_BINARY = ["and", "or", "xor", "rand", "ror", "rxor", "iand", "ior", "ixor"]
-_INT_BINARY = ["lshift", "rshift", "rlshift", "rrshift", "ilshift", "irshift"]
-_UNARY = ["neg", "abs", "pos"]
+_MODE_BOOKKEEPING = frozenset({"untyped_storage", "__get__"})
+
+
+def _receivers() -> list[torch.Tensor]:
+    """Fresh receivers, built outside any mode: matrices, then 0-d scalars."""
+
+    return [
+        torch.tensor([[1.5, 2.5], [0.5, 3.0]]),
+        torch.tensor([[True, False], [False, True]]),
+        torch.tensor([[1, 2], [3, 4]]),
+        torch.tensor(2.5),
+        torch.tensor(3),
+        torch.tensor(True),
+    ]
+
+
+#: Operand sets tried in order; ``None`` stands for a fresh copy of the receiver.
+_ARGSETS: tuple[tuple[Any, ...], ...] = ((), (2.0,), (True,), (1,), (0,), (0, 1), (None,))
 
 
 class _RecordingMode(TorchFunctionMode):
@@ -85,40 +70,66 @@ class _RecordingMode(TorchFunctionMode):
         return func(*args, **(kwargs or {}))
 
 
-def _dunder_call(stem: str) -> Callable[[], Any]:
-    """Return a thunk invoking ``Tensor.__<stem>__`` with fitting operands."""
+def _mode_spellings(dunder: str) -> list[str] | None:
+    """Return what torch hands a mode for ``Tensor.<dunder>``, or None if no operand fits.
 
-    name = f"__{stem}__"
-    args: tuple[Any, ...]
-    if stem in _BOOL_BINARY:
-        receiver, args = torch.tensor([True, False]), (True,)
-    elif stem in _INT_BINARY:
-        receiver, args = torch.tensor([1, 2]), (1,)
-    elif stem in _UNARY:
-        receiver, args = torch.tensor([1.5, -2.5]), ()
-    else:
-        receiver, args = torch.tensor([1.5, 2.5]), (2.0,)
-    bound = getattr(receiver, name)
-    return lambda: bound(*args)
+    Tries receiver and operand combinations in a fixed order; operands are
+    built outside the recording mode so only the dunder itself is recorded.
+    """
+
+    for index, args in itertools.product(range(len(_receivers())), _ARGSETS):
+        receiver, operand = _receivers()[index], _receivers()[index]
+        call_args = tuple(operand if arg is None else arg for arg in args)
+        bound = getattr(receiver, dunder)
+        mode = _RecordingMode()
+        try:
+            with mode:
+                bound(*call_args)
+        except Exception:  # noqa: BLE001 - an operand misfit; try the next set
+            continue
+        seen = [name for name in mode.names if name not in _MODE_BOOKKEEPING]
+        if seen:
+            return seen
+    return None
 
 
-@pytest.mark.parametrize("stem", _FLOAT_BINARY + _BOOL_BINARY + _INT_BINARY + _UNARY)
-def test_canonical_name_matches_what_torch_hands_a_mode(stem: str) -> None:
-    """Every operator dunder canonicalizes to what the rescue's mode logs.
+def _respelling_mismatch(dunder: str) -> str | None:
+    """Describe how ``dunder``'s mode spelling misses its canonical name, else None."""
+
+    seen = _mode_spellings(dunder)
+    if seen is None:
+        return f"{dunder}: no operand set reached the mode"
+    if {_canonical_op_name(name) for name in seen} != {_canonical_op_name(dunder)}:
+        return f"{dunder}: mode saw {seen}"
+    return None
+
+
+#: Every admitted operator dunder the running torch defines on ``Tensor``.
+_TENSOR_DUNDERS = sorted(d for d in _ALLOWED_FORWARD_DUNDERS if hasattr(torch.Tensor, d))
+
+
+@pytest.mark.parametrize("dunder", _TENSOR_DUNDERS)
+def test_canonical_name_matches_what_torch_hands_a_mode(dunder: str) -> None:
+    """Every admitted operator dunder canonicalizes to what the rescue's mode logs.
 
     Derived from torch, not asserted from the table: whatever the running
     torch passes to a ``TorchFunctionMode`` for the dunder must land on the
     dunder's own canonical name.
     """
 
-    if not hasattr(torch.Tensor, f"__{stem}__"):
-        pytest.skip(f"torch has no Tensor.__{stem}__")
-    call = _dunder_call(stem)
-    with _RecordingMode() as mode:
-        call()
-    seen = [name for name in mode.names if name not in {"untyped_storage", "__get__"}]
-    assert seen, f"__{stem}__ never reached the mode"
-    assert {_canonical_op_name(name) for name in seen} == {_canonical_op_name(f"__{stem}__")}
+    assert _respelling_mismatch(dunder) is None
+
+
+@pytest.mark.smoke
+def test_no_admitted_dunder_respells_past_the_table() -> None:
+    """Smoke guard: one loop over every admitted dunder on the running torch.
+
+    CI's old-torch rows run smoke only, so this re-derives the whole
+    respelling table there; a torch that respells a dunder a new way fails it.
+    """
+
+    mismatches = [m for d in _TENSOR_DUNDERS if (m := _respelling_mismatch(d)) is not None]
+    assert mismatches == []
 
 
 def test_respelling_rows_keep_operation_identity() -> None:
@@ -126,6 +137,7 @@ def test_respelling_rows_keep_operation_identity() -> None:
 
     assert _canonical_op_name("__rsub__") == "rsub" != _canonical_op_name("sub")
     assert _canonical_op_name("__rpow__") == "rpow" != _canonical_op_name("pow")
+    assert _canonical_op_name("__iadd__") == "add_" != _canonical_op_name("add")
     for dunder, spelling in _MODE_RESPELLED_DUNDERS.items():
         names_inplace_method = spelling.endswith("_") and not spelling.startswith("__")
         assert dunder.startswith("__i") == names_inplace_method, dunder
@@ -163,7 +175,9 @@ def test_respelled_dunders_do_not_refuse_a_recovery() -> None:
     [
         (["__radd__", "__truediv__", "relu", "tanh"], ["add", "div", "relu", "relu"], ("tanh",)),
         (["__rsub__", "relu"], ["sub", "relu", "relu"], ("rsub",)),
+        (["__iadd__", "relu"], ["add", "relu", "relu"], ("add_",)),
     ],
+    ids=["tanh_missing", "rsub_as_sub", "iadd_as_out_of_place_add"],
 )
 def test_genuine_loss_still_refuses_the_rescue(
     primary_ops: list[str], rescued_ops: list[str], lost: tuple[str, ...]
