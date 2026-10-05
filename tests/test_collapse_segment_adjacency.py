@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
+from itertools import pairwise
 
 import pytest
 import torch
@@ -134,7 +135,7 @@ def _assert_segments_flow_adjacent(trace: tl.Trace, mode: str | float) -> list[C
             f"execution order {graph.flow_children}"
         )
         edges = set(graph.edges)
-        for left, right in zip(segment.members, segment.members[1:]):
+        for left, right in pairwise(segment.members):
             assert (left, right) in edges, (
                 f"{mode!r} segment {segment.members} joins {left} -> {right} through a "
                 "connector the segment does not absorb"
