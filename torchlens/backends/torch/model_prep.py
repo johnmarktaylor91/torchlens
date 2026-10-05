@@ -1332,32 +1332,8 @@ def _record_module_entry_metadata(
                 trace, t, module, parent_labels=[], kind="internal_source"
             )
             label = get_tensor_label(t)
-            # R16: adoption must not LAUNDER an escape. Outside a disclosed
-            # transform/dynamo region (whose interiors legitimately produce
-            # untagged tensors), an untagged non-buffer tensor entering a
-            # module is the module-consumed twin of the wrapped-function
-            # unattributed-args case: a stale pre-wrap reference whose output
-            # is first consumed by a module used to vanish silently (no
-            # warning, no rescue, consumption-order-dependent disclosure).
-            # Record the adoption so postprocess raises the same provenance
-            # warning and escape signal the function path raises.
-            # A tensor in the PRE-FORWARD ownership snapshot is a model-owned
-            # known source (a nested cache or forward-global whose stale
-            # labels the previous session legitimately cleared) -- adopting it
-            # is not an escape. Only tensors first appearing MID-forward keep
-            # the disclosure.
-            owned_at_entry = trace._module_capture_ws.module_build_data.get(
-                "model_owned_tensor_ids_at_entry"
-            )
-            if (
-                label is not None
-                and not getattr(trace, "_raw_transform_escape_detected", False)
-                and not getattr(trace, "_raw_dynamo_region_detected", False)
-                and id(t) not in (owned_at_entry or ())
-            ):
-                trace.__dict__.setdefault("_module_boundary_adoptions", []).append(
-                    (str(label), "entry", str(module_address))
-                )
+            # R16: adoption must not LAUNDER an escape (see the helper).
+            _record_module_boundary_adoption(trace, t, label, "entry", module_address)
         if label is None:
             continue  # Skip untracked tensors (e.g. external constants) (#117)
         input_tensor_labels.add(label)
@@ -2067,36 +2043,35 @@ def _make_user_forward_hook_wrapper(
     return wrapped_hook
 
 
-def _record_module_exit_adoption(
-    trace: "Trace", t: torch.Tensor, label: str | None, module_address: str
+def _record_module_boundary_adoption(
+    trace: "Trace", t: torch.Tensor, label: str | None, boundary: str, module_address: str
 ) -> None:
-    """Record an untagged module RETURN adopted as an internal source.
+    """Record an untagged tensor adopted as an internal source at a module boundary.
 
-    The exit twin of the R16 module-entry adoption record: a stale pre-wrap
-    torch reference whose output is RETURNED by a module (transformers'
-    ``GELUActivation`` holds ``F.gelu`` and returns ``self.act(x)``) left no
-    unattributed argument anywhere -- the boundary op tagged it before any
-    consumer saw it -- so the escape was laundered into a clean
-    ``internalsource`` node with no warning and no rescue. The same
-    exclusions as the entry record apply: disclosed transform/dynamo regions
-    legitimately return untagged tensors, and a tensor in the pre-forward
-    ownership snapshot is a model-owned known source, not an escape.
+    R16: adoption must not LAUNDER an escape. A stale pre-wrap torch reference
+    leaves an untagged output; when a module CONSUMES it (``entry``) or RETURNS
+    it (``exit``; transformers' ``GELUActivation`` holds ``F.gelu`` and returns
+    ``self.act(x)``), no wrapped op ever sees an unattributed argument, so the
+    op vanished with no warning and no rescue. The record makes postprocess
+    raise the same provenance warning and escape signal the function path
+    raises. Disclosed transform/dynamo regions legitimately produce untagged
+    tensors, and a tensor in the PRE-FORWARD ownership snapshot is a
+    model-owned known source (a nested cache or forward-global whose stale
+    labels the previous session cleared); neither is an escape.
     """
 
-    if label is None:
-        return
-    if getattr(trace, "_raw_transform_escape_detected", False) or getattr(
-        trace, "_raw_dynamo_region_detected", False
-    ):
-        return
     owned_at_entry = trace._module_capture_ws.module_build_data.get(
         "model_owned_tensor_ids_at_entry"
     )
-    if id(t) in (owned_at_entry or ()):
-        return
-    trace.__dict__.setdefault("_module_boundary_adoptions", []).append(
-        (str(label), "exit", str(module_address))
-    )
+    if (
+        label is not None
+        and not getattr(trace, "_raw_transform_escape_detected", False)
+        and not getattr(trace, "_raw_dynamo_region_detected", False)
+        and id(t) not in (owned_at_entry or ())
+    ):
+        trace.__dict__.setdefault("_module_boundary_adoptions", []).append(
+            (str(label), boundary, str(module_address))
+        )
 
 
 def _record_module_exit_metadata(
@@ -2212,7 +2187,7 @@ def _record_module_exit_metadata(
             untraceable_output_boundaries.append((t, boundary_label))
             tensor_label = get_tensor_label(t)
             if not fire_results:
-                _record_module_exit_adoption(trace, t, tensor_label, address)
+                _record_module_boundary_adoption(trace, t, tensor_label, "exit", address)
         if tensor_label is None:
             continue
         if fire_results:
