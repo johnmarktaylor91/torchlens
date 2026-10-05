@@ -323,7 +323,7 @@ _ORIGINAL_RELU = paddle.nn.functional.relu
 def _stale_alias_relu(x: Any) -> Any:
     """Call relu through a reference bound before any wrap (a user stale alias)."""
 
-    return _ORIGINAL_RELU(x * 2.0)
+    return _ORIGINAL_RELU(x * 2.0) + 1.0
 
 
 def test_paddle_validation_batchnorm_layer_import_alias_is_captured() -> None:
