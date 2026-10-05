@@ -113,7 +113,8 @@ def test_attrdict_model_validates_through_live_model_fallback() -> None:
             )
             is True
         )
-    with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
+    # The ground-truth fallback warns once per model class; the replay one every time.
+    with pytest.warns(RuntimeWarning, match="model could not be copied"):
         assert validate_forward_pass(AttrDictConfigModel(), torch.randn(2, 8)) is True
 
 
