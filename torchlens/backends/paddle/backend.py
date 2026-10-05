@@ -66,6 +66,7 @@ from .._options import (
     reject_unsupported_trace_options,
     resolve_optional_capture_field as _resolve_optional_capture_field,
 )
+from ._param_writes import PARAMETER_WRITE_MARKER, ParameterWriteGuard
 from .interventions import PaddleInterventionCapture, PaddleInterventionRuntime
 from .model_prep import (
     PaddleModuleTree,
@@ -288,6 +289,7 @@ class PaddleBackend:
         self.paddle = paddle
         self.tensor_store = PaddleTensorLabelStore()
         self._param_address_by_id: dict[int, str] = {}
+        self._param_write_guard = ParameterWriteGuard()
 
     def capture_trace(
         self,
@@ -527,6 +529,7 @@ class PaddleBackend:
             if use_object_module and module_tree is not None
             else {}
         )
+        self._param_write_guard = ParameterWriteGuard.capture(model, self._param_address_by_id)
         # R07: the try owns the wrap call itself -- a raise anywhere between
         # wrapper install and the forward (source labeling) used to strand the
         # process-global Paddle wrappers because the unwrap-owning finally had
@@ -545,6 +548,10 @@ class PaddleBackend:
                 halt_signal = exc
                 output = exc.frontier_output
             trace.forward_duration = Duration(time.time() - trace.capture_start_time)
+            trace._paddle_capture_gap_markers.extend(
+                f"{PARAMETER_WRITE_MARKER}: {address}"
+                for address in self._param_write_guard.written_addresses(trace)
+            )
             if halt_signal is not None:
                 trace.halted = True
                 trace.halt_reason = halt_signal.reason
@@ -592,6 +599,7 @@ class PaddleBackend:
             freeze_trace_relation_views(trace)
         finally:
             self._param_address_by_id = {}
+            self._param_write_guard = ParameterWriteGuard()
             # Independently-owned resources: a raising hook cleanup must not
             # leave the process-global Paddle wrappers installed.
             try:
@@ -1592,6 +1600,9 @@ class PaddleBackend:
             # module tree is a known source, not a capture gap; any other
             # unlabeled leaf stays a gap and fails the coverage oracle.
             param_address = param_address_by_id.get(id(tensor)) if label is None else None
+            if param_address is not None and self._param_write_guard.was_written(tensor, trace):
+                capture_gap_markers.append(f"{PARAMETER_WRITE_MARKER} at {path!r}: {param_address}")
+                param_address = None
             tensor_inputs.append(
                 TensorLeafCapture(path=path, label=label, param_address=param_address)
             )

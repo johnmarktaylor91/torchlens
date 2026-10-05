@@ -14,6 +14,11 @@ from torchlens.backends.paddle import (  # noqa: E402
     PaddleBackend,
     wrappers as paddle_wrappers,
 )
+from torchlens.backends.paddle._param_writes import (  # noqa: E402
+    PARAMETER_WRITE_MARKER,
+    ParameterWriteGuard,
+)
+from torchlens.backends.paddle.validation import _coverage_oracle  # noqa: E402
 from torchlens.validation.invariants import check_metadata_invariants  # noqa: E402
 from torchlens.validation.status import ValidationReplayStatus  # noqa: E402
 
@@ -261,6 +266,8 @@ def test_paddle_validation_parameter_replay_uses_the_parameter_value() -> None:
     trace = tl.trace(model, _layer_input(), backend="paddle")
     model.linear.bias.set_value(paddle.to_tensor([5.0, 5.0, 5.0], dtype="float32"))
 
+    # Coverage still holds; the failure is the replay disagreeing on the read.
+    assert _coverage_oracle(trace) is True
     assert PaddleBackend().validate_trace(trace) is False
 
 
@@ -282,6 +289,7 @@ def test_paddle_validation_layer_corrupted_output_still_fails() -> None:
     linear = next(op for op in trace.layer_list if op.layer_type == "functional.linear")
     linear.out = linear.out + 1.0
 
+    assert _coverage_oracle(trace) is True
     assert PaddleBackend().validate_trace(trace) is False
 
 
@@ -347,3 +355,85 @@ def test_paddle_validation_user_stale_alias_still_fails_closed() -> None:
     trace = tl.trace(_stale_alias_relu, paddle.ones([2, 2], dtype="float32"), backend="paddle")
 
     assert PaddleBackend().validate_trace(trace) is False
+
+
+class _BnAddRunningMean(paddle.nn.Layer):
+    """BatchNorm1D, then a functional read of its running mean parameter."""
+
+    def __init__(self) -> None:
+        """Build the block."""
+
+        super().__init__()
+        self.bn = paddle.nn.BatchNorm1D(3)
+
+    def forward(self, x: Any) -> Any:
+        """Run batch norm, then add the (possibly just written) running mean."""
+
+        return paddle.add(self.bn(x), self.bn._mean)
+
+
+def _bn_input() -> Any:
+    """Return a batch whose mean is far from the zero initial running mean."""
+
+    return paddle.arange(12, dtype="float32").reshape([4, 3]) / 4.0 + 1.0
+
+
+def test_paddle_validation_running_mean_read_after_train_write_fails() -> None:
+    """A parameter written in place by the forward is not credited when read later."""
+
+    model = _BnAddRunningMean()
+    model.train()
+    before = model.bn._mean.numpy().copy()
+    trace = tl.trace(model, _bn_input(), backend="paddle")
+
+    assert not (model.bn._mean.numpy() == before).all()
+    add = next(c for c in trace._paddle_op_captures if c.op_name.endswith("add"))
+    assert any(marker.startswith(PARAMETER_WRITE_MARKER) for marker in add.capture_gap_markers)
+    assert all(leaf.param_address is None for leaf in add.tensor_inputs)
+    assert PaddleBackend().validate_trace(trace) is False
+
+
+def test_paddle_validation_train_batchnorm_write_without_reader_fails() -> None:
+    """A hidden running-stat write with no later reader still fails validation."""
+
+    paddle.seed(0)
+    model = _BnRelu()
+    model.train()
+    x = paddle.arange(32, dtype="float32").reshape([1, 2, 4, 4]) / 16.0
+    trace = tl.trace(model, x, backend="paddle")
+
+    written = [
+        marker
+        for marker in trace._paddle_capture_gap_markers
+        if marker.startswith(f"{PARAMETER_WRITE_MARKER}: ")
+    ]
+    assert sorted(written) == [
+        f"{PARAMETER_WRITE_MARKER}: bn._mean",
+        f"{PARAMETER_WRITE_MARKER}: bn._variance",
+    ]
+    assert _coverage_oracle(trace) is False
+    assert PaddleBackend().validate_trace(trace) is False
+
+
+def test_paddle_validation_running_mean_read_in_eval_passes() -> None:
+    """In eval mode nothing writes the running mean; reading it stays a credited source."""
+
+    model = _BnAddRunningMean()
+    model.eval()
+    trace = tl.trace(model, _bn_input(), backend="paddle")
+
+    assert not [m for m in trace._paddle_capture_gap_markers if PARAMETER_WRITE_MARKER in m]
+    assert PaddleBackend().validate_trace(trace) is True
+
+
+def test_paddle_parameter_write_guard_never_credits_an_unfingerprinted_tensor() -> None:
+    """The guard only vouches for parameters it fingerprinted before the forward."""
+
+    model = _LinearRelu()
+    guard = ParameterWriteGuard.capture(model, {id(model.linear.weight): "linear.weight"})
+
+    assert guard.was_written(model.linear.weight, None) is False
+    assert guard.was_written(model.linear.bias, None) is True
+    model.linear.weight.set_value(model.linear.weight * 2.0)
+    assert guard.was_written(model.linear.weight, None) is True
+    assert guard.written_addresses(None) == ("linear.weight",)

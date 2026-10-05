@@ -10,6 +10,7 @@ import numpy as np
 
 from ... import _state
 from .._validation_shared import float_replay_tolerances, ops_by_label as _ops_by_label
+from ._param_writes import PARAMETER_WRITE_MARKER
 
 _FACTORY_OR_SOURCE_OPS = {
     "arange",
@@ -389,6 +390,13 @@ def _coverage_oracle(trace: Any) -> bool:
         True when capture records conserve tensor inputs and graph parents.
     """
 
+    # A parameter the forward wrote in place outside any wrapped op is an
+    # untraced effect even when nothing reads it afterwards: fail closed.
+    if any(
+        str(marker).startswith(PARAMETER_WRITE_MARKER)
+        for marker in getattr(trace, "_paddle_capture_gap_markers", ())
+    ):
+        return False
     captures = tuple(getattr(trace, "_paddle_op_captures", ()))
     ops_by_label = _ops_by_label(trace)
     for capture in captures:
