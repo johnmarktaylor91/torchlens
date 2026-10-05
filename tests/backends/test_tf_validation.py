@@ -116,7 +116,24 @@ def _failures(trace: Any) -> tuple[str, ...]:
         Failure reason strings.
     """
 
-    return tuple(getattr(trace, "_tf_validation_result").failures)
+    return tuple(_result(trace).failures)
+
+
+def _result(trace: Any) -> Any:
+    """Return the detailed TensorFlow validation result of a validated trace.
+
+    Parameters
+    ----------
+    trace
+        TensorFlow trace already validated.
+
+    Returns
+    -------
+    Any
+        The ``TFValidationResult`` the backend attached.
+    """
+
+    return getattr(trace, "_tf_validation_result", None)
 
 
 def test_tf_validation_fails_when_interior_callback_record_is_dropped() -> None:
@@ -351,7 +368,7 @@ def test_tf_validation_replays_depthwise_conv_and_relu6() -> None:
     trace = tl.trace(_depthwise_relu6, _depthwise_inputs(), backend="tf")
 
     assert _validate(trace) is True
-    replayed = getattr(trace, "_tf_validation_result").replayed_histogram
+    replayed = _result(trace).replayed_histogram
     assert replayed["DepthwiseConv2dNative"] == 1
     assert replayed["Relu6"] == 1
     assert replayed["Pad"] == 1

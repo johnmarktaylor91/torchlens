@@ -115,25 +115,34 @@ def _rebuild_inputs(capture: Any, ops_by_label: Mapping[str, Any]) -> RebuiltPad
     param_inputs: Mapping[tuple[Any, ...], Any] = getattr(capture, "param_inputs", None) or {}
     param_values: dict[tuple[Any, ...], Any] = {}
 
+    def _rebuild_unlabeled(path: tuple[Any, ...]) -> Any:
+        """Rebuild one unlabeled tensor leaf: a module parameter or a factory hole."""
+
+        if path in param_inputs:
+            param_values[path] = _parameter_replay_copy(param_inputs[path])
+            return param_values[path]
+        if _is_factory_or_source_capture(capture):
+            return None
+        raise ValueError(f"unlabeled tensor input leaf at {path!r}")
+
+    def _rebuild_leaf(value: dict[str, Any], path: tuple[Any, ...]) -> Any:
+        """Rebuild one tensor leaf marker from its parent payload."""
+
+        label = value.get("label")
+        if label is None:
+            return _rebuild_unlabeled(path)
+        if not isinstance(label, str) or label not in ops_by_label:
+            raise ValueError(f"dangling tensor input label {label!r} at {path!r}")
+        parent_value = _saved_payload(ops_by_label[label])
+        parent_values.setdefault(label, parent_value)
+        leaf_paths_by_parent.setdefault(label, []).append(path)
+        return parent_value
+
     def _rebuild(value: Any, path: tuple[Any, ...]) -> Any:
         """Rebuild one nested template value."""
 
         if _is_tensor_marker(value):
-            label = value.get("label")
-            if label is None:
-                if path in param_inputs:
-                    param_values[path] = _parameter_replay_copy(param_inputs[path])
-                    return param_values[path]
-                if _is_factory_or_source_capture(capture):
-                    return None
-                raise ValueError(f"unlabeled tensor input leaf at {path!r}")
-            if not isinstance(label, str) or label not in ops_by_label:
-                raise ValueError(f"dangling tensor input label {label!r} at {path!r}")
-            parent_op = ops_by_label[label]
-            parent_value = _saved_payload(parent_op)
-            parent_values.setdefault(label, parent_value)
-            leaf_paths_by_parent.setdefault(label, []).append(path)
-            return parent_value
+            return _rebuild_leaf(value, path)
         if isinstance(value, tuple):
             return tuple(_rebuild(item, (*path, index)) for index, item in enumerate(value))
         if isinstance(value, list):
@@ -530,18 +539,23 @@ def _replace_template_paths(
 
     parent_values = rebuilt.parent_values
 
+    def _rebuild_leaf(value: dict[str, Any], path: tuple[Any, ...]) -> Any:
+        """Rebuild one tensor leaf from a parent payload or a parameter copy."""
+
+        label = value.get("label")
+        if isinstance(label, str) and label in parent_values:
+            return parent_values[label]
+        if label is None and path in rebuilt.param_values:
+            return rebuilt.param_values[path]
+        raise ValueError(f"cannot rebuild tensor leaf at {path!r}")
+
     def _rebuild(value: Any, path: tuple[Any, ...]) -> Any:
         """Rebuild one value with replacements."""
 
         if path in replacements:
             return replacements[path]
         if _is_tensor_marker(value):
-            label = value.get("label")
-            if isinstance(label, str) and label in parent_values:
-                return parent_values[label]
-            if label is None and path in rebuilt.param_values:
-                return rebuilt.param_values[path]
-            raise ValueError(f"cannot rebuild tensor leaf at {path!r}")
+            return _rebuild_leaf(value, path)
         if isinstance(value, tuple):
             return tuple(_rebuild(item, (*path, index)) for index, item in enumerate(value))
         if isinstance(value, list):

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import functools
 import inspect
-import sys
 from collections.abc import Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
+from types import ModuleType
 from typing import Any
 
 from ... import _state
@@ -256,7 +256,7 @@ class _PaddleWrapperRegistry:
                         denied.add(op_name)
                     else:
                         wrapped.add(op_name)
-            self._wrap_layer_module_aliases()
+            self._wrap_layer_module_aliases(paddle)
         except BaseException:
             self.unwrap()
             raise
@@ -289,7 +289,7 @@ class _PaddleWrapperRegistry:
         self._wrapped = False
         self._inventory = PaddleInventory((), ())
 
-    def _wrap_layer_module_aliases(self) -> None:
+    def _wrap_layer_module_aliases(self, paddle: object) -> None:
         """Point Paddle's own Layer modules' import-time aliases at the wrappers.
 
         ``paddle/nn/layer/norm.py`` runs ``from ..functional import
@@ -299,15 +299,26 @@ class _PaddleWrapperRegistry:
         was an untracked tensor and validation failed its consumer. Each
         ``paddle.nn.layer.*`` global that IS (by identity) a wrapped original
         now resolves to that original's wrapper; ``unwrap`` restores it.
+
+        Parameters
+        ----------
+        paddle
+            Imported Paddle module (its ``nn.layer`` package lists the Layer
+            implementation submodules).
         """
 
-        for module_name, module in tuple(sys.modules.items()):
-            if module is None or not module_name.startswith("paddle.nn.layer."):
-                continue
-            namespace = getattr(module, "__dict__", None)
-            if not isinstance(namespace, dict):
-                continue
-            for name, value in tuple(namespace.items()):
+        layer_package = getattr(getattr(paddle, "nn", None), "layer", None)
+        submodules = (
+            [
+                value
+                for value in vars(layer_package).values()
+                if isinstance(value, ModuleType) and value.__name__.startswith("paddle.nn.layer.")
+            ]
+            if layer_package is not None
+            else []
+        )
+        for module in submodules:
+            for name, value in tuple(vars(module).items()):
                 entry = self._wrapper_by_original.get(id(value))
                 if entry is None or entry[0] is not value or (module, name) in self._originals:
                     continue
