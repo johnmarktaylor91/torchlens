@@ -10,7 +10,7 @@ default) is not represented by the boundary, so validation must fail on it.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import Any
 
 import pytest
@@ -21,8 +21,25 @@ import torchlens as tl
 from torchlens import _state
 from torchlens.backends.torch import rescue
 from torchlens.backends.torch.escape_detection import ExpectedOriginalToken
-from torchlens.backends.torch.wrappers import wrap_torch
+from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.user_funcs import _validate_forward_pass_torch
+
+
+@pytest.fixture
+def _isolated_witness_mode() -> Iterator[None]:
+    """Restore the process-level diagnostic modes a census test arms.
+
+    ``wrap_torch(completeness_witness=True)`` is process-wide: left armed, it
+    makes every later capture on the worker settle through the witness, so a
+    later meta capture trips the weights-free settlement invariant.
+    """
+
+    saved_escape = _state._escape_detector_mode
+    saved_witness = _state._completeness_witness_mode
+    unwrap_torch()
+    yield
+    unwrap_torch()
+    wrap_torch(escape_detector=saved_escape, completeness_witness=saved_witness)
 
 
 def _raw(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -161,6 +178,7 @@ def test_stale_op_in_nested_boundary_module_fails_completeness() -> None:
 
 
 @pytest.mark.filterwarnings(_NO_PROVENANCE)
+@pytest.mark.usefixtures("_isolated_witness_mode")
 def test_census_names_only_the_stale_relu_in_iql_shape(monkeypatch: pytest.MonkeyPatch) -> None:
     """The primary capture's census names the dropped relu, never the boundary's tanh."""
 
@@ -249,6 +267,7 @@ def test_alias_edges_do_not_credit_stale_ops(body: Any, grad: bool) -> None:
 
 
 @pytest.mark.filterwarnings(_NO_PROVENANCE)
+@pytest.mark.usefixtures("_isolated_witness_mode")
 def test_freed_stale_intermediates_are_each_named(monkeypatch: pytest.MonkeyPatch) -> None:
     """All 40 freed stale relus are census rows: an ``id()``-reuse mis-credit drops one."""
 

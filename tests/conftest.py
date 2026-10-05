@@ -1375,6 +1375,33 @@ def _restore_distributed_arming() -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
+def _restore_wrapper_diagnostic_modes() -> Iterator[None]:
+    """Restore the escape-detector and completeness-witness modes after every test.
+
+    ``wrap_torch(escape_detector=..., completeness_witness=...)`` sets
+    process-wide flags that outlive the test. A census test that armed the
+    witness and never restored it made every later capture on the same xdist
+    worker settle through the witness: plain captures reported
+    ``completeness_witness_mode == "shadow"`` and meta captures settled
+    ``capture_verified=True``, tripping the weights-free settlement invariant
+    in unrelated tests depending on test order. Restoring the pre-test modes
+    keeps a session that deliberately armed diagnostics armed.
+    """
+
+    saved_escape = _state._escape_detector_mode
+    saved_witness = _state._completeness_witness_mode
+    try:
+        yield
+    finally:
+        wrappers = sys.modules.get("torchlens.backends.torch.wrappers")
+        if wrappers is not None:
+            if _state._escape_detector_mode != saved_escape:
+                wrappers._configure_escape_detector(saved_escape)
+            if _state._completeness_witness_mode != saved_witness:
+                wrappers._configure_completeness_witness(saved_witness)
+
+
+@pytest.fixture(autouse=True)
 def _restore_lazy_capability_probes() -> Iterator[None]:
     """Restore lazy ``HAS_*`` capability latches to their pre-test state.
 
