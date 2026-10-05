@@ -833,8 +833,12 @@ def _snapshot_plain_attr_value(
         ),
     ):
         return value
-    if value is None or isinstance(value, (bool, int, float, complex, str, bytes, np.generic)):
-        return value  # NumPy scalars (``np.prod`` of a list) are immutable values too
+    if value is None or isinstance(value, (bool, int, float, complex, str, bytes)):
+        return value
+    if isinstance(value, np.generic) and not isinstance(value, np.void):
+        # NumPy scalars (``np.prod`` of a list) are immutable values. A structured
+        # ``np.void`` read from an array is a writable view into it, so it is not.
+        return value
     if _is_identity_stable_plain_attr(value):
         return _PlainAttrIdentitySnapshot(value=value, value_type_name=type(value).__name__)
     if isinstance(value, torch.Tensor):

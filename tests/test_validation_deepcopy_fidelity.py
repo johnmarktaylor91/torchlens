@@ -216,8 +216,15 @@ def test_registered_tensor_alias_attribute_is_identity_tracked() -> None:
     """A plain attribute aliasing a registered parameter is tracked by identity."""
 
     linear = nn.Linear(128, 128)
-    linear.weight_alias = linear.weight
-    assert _ModuleTreePlainAttrSnapshot(linear).is_complete
+    # ``linear.weight_alias = linear.weight`` would REGISTER a second parameter;
+    # writing the instance namespace keeps it a plain attribute.
+    linear.__dict__["weight_alias"] = linear.weight
+    assert "weight_alias" not in linear._parameters
+    snapshot = _ModuleTreePlainAttrSnapshot(linear)
+    assert snapshot.is_complete, snapshot.unsupported_attr_paths
+    linear.__dict__["weight_alias"] = linear.weight.detach().clone()
+    snapshot.restore_changed_attrs()
+    assert linear.__dict__["weight_alias"] is linear.weight
 
 
 def test_non_alias_large_tensor_state_is_still_refused() -> None:
@@ -233,3 +240,21 @@ def test_non_alias_large_tensor_state_is_still_refused() -> None:
         "Linear[0].copied_weight",
         "Linear[0].mixed",
     }
+
+
+def test_structured_numpy_void_attribute_is_still_refused() -> None:
+    """A structured ``np.void`` is a writable view into its array, not an immutable scalar.
+
+    Snapshotting it by reference would let an in-place field write during the
+    forward pass go unseen, so the fallback must keep refusing it.
+    """
+
+    records = np.zeros(2, dtype=[("hop", "i8")])
+    record = records[0]
+    record["hop"] = 5
+    assert records[0]["hop"] == 5  # the scalar writes through to its array
+    module = nn.Module()
+    module.record = record
+    module.hop_length = np.prod([2, 2])
+    snapshot = _ModuleTreePlainAttrSnapshot(module)
+    assert set(snapshot.unsupported_attr_paths) == {"Module[0].record"}
