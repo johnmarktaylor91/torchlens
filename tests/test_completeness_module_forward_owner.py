@@ -116,6 +116,8 @@ def _validate(model: nn.Module) -> bool:
 
 
 @pytest.mark.usefixtures("_restore_alias")
+# The un-captured weight reaches conv1d with no recorded parent; that disclosure is expected.
+@pytest.mark.filterwarnings("ignore:TorchLens found tensor arguments with no graph:UserWarning")
 def test_stale_alias_under_module_forward_fails_completeness() -> None:
     """A dropped ``_weight_norm`` inside a ``Sequential`` fails ``bfs_completeness``."""
 
