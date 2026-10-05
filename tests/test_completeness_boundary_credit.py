@@ -20,6 +20,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import _state
 from torchlens.backends.torch import rescue
+from torchlens.backends.torch.escape_detection import ExpectedOriginalToken
 from torchlens.backends.torch.wrappers import wrap_torch
 from torchlens.user_funcs import _validate_forward_pass_torch
 
@@ -245,6 +246,49 @@ def test_alias_edges_do_not_credit_stale_ops(body: Any, grad: bool) -> None:
     """
 
     _assert_completeness_failure(_Parent(_BodyChild(body)), grad=grad)
+
+
+@pytest.mark.filterwarnings(_NO_PROVENANCE)
+def test_freed_stale_intermediates_are_each_named(monkeypatch: pytest.MonkeyPatch) -> None:
+    """All 40 freed stale relus are census rows: an ``id()``-reuse mis-credit drops one."""
+
+    # Keep the primary capture: the rescue re-run would replace its diagnostics.
+    monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)
+    wrap_torch(completeness_witness=True)
+    torch.manual_seed(0)
+    model = _Parent(_BodyChild(_freed_stale_intermediates)).eval()
+    trace = tl.trace(model, torch.randn(3, 4))
+    operators = [row["operator"] for row in trace.completeness_diagnostics]
+    assert operators.count("aten.relu.default") == 40, operators
+
+
+@pytest.mark.parametrize(
+    ("wrapper_name", "scoped"),
+    [
+        ("module_forward:exhaustive", True),
+        ("module_forward:predicate", True),
+        ("module_forward_hook:user", False),
+        ("torch.relu", False),
+    ],
+)
+def test_output_scoped_credit_is_derived_from_the_wrapper_name(
+    wrapper_name: str, scoped: bool
+) -> None:
+    """The flag follows ``wrapper_name`` at every construction site; it cannot be passed."""
+
+    token = ExpectedOriginalToken(
+        raw_id=0, original=len, wrapper_name=wrapper_name, wrapper_frame_id=0, owner_thread_id=0
+    )
+    assert token.boundary_credit_is_output_scoped is scoped
+    with pytest.raises(TypeError):
+        ExpectedOriginalToken(  # type: ignore[call-arg]
+            raw_id=0,
+            original=len,
+            wrapper_name=wrapper_name,
+            wrapper_frame_id=0,
+            owner_thread_id=0,
+            boundary_credit_is_output_scoped=not scoped,
+        )
 
 
 @pytest.mark.filterwarnings(_NO_PROVENANCE)
