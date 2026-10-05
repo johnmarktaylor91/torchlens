@@ -18,10 +18,16 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+import numpy as np
 import torch
 from torch import nn
 
 from . import _state
+from ._plain_attr_fidelity import (
+    assert_copy_kept_instance_attrs,
+    is_registered_tensor_alias,
+    restore_simple_plain_attrs_on_copy,
+)
 from ._trace_selector_helpers import _stable_cache_fragment
 from .data_classes.trace import Trace
 from .utils._torch_compat import (
@@ -763,6 +769,14 @@ def _snapshot_module_plain_attr_value(module: nn.Module, name: str, attr_path: s
     managed_snapshot = _managed_plain_tensor_attr_snapshot(module, name, value)
     if managed_snapshot is not None:
         return managed_snapshot
+    if is_registered_tensor_alias(module, value):
+        # The state_dict restore owns these values; the plain state is the aliasing.
+        if isinstance(value, torch.Tensor):
+            return _PlainAttrIdentitySnapshot(value=value, value_type_name=type(value).__name__)
+        return type(value)(
+            None if item is None else _PlainAttrIdentitySnapshot(item, type(item).__name__)
+            for item in value
+        )
     return _snapshot_plain_attr_value(value, attr_path)
 
 
@@ -820,6 +834,10 @@ def _snapshot_plain_attr_value(
     ):
         return value
     if value is None or isinstance(value, (bool, int, float, complex, str, bytes)):
+        return value
+    if isinstance(value, np.generic) and not isinstance(value, np.void):
+        # NumPy scalars (``np.prod`` of a list) are immutable values. A structured
+        # ``np.void`` read from an array is a writable view into it, so it is not.
         return value
     if _is_identity_stable_plain_attr(value):
         return _PlainAttrIdentitySnapshot(value=value, value_type_name=type(value).__name__)
@@ -1056,6 +1074,10 @@ def _plain_attr_values_equal(left: Any, right: Any, attr_path: str) -> bool:
                 "TorchLens validation deepcopy fallback cannot compare plain "
                 f"attribute '{attr_path}' by value."
             ) from exc
+    if isinstance(left, np.generic) or isinstance(right, np.generic):
+        if not isinstance(left, np.generic) or not isinstance(right, np.generic):
+            return False
+        return left.dtype == right.dtype and bool(left == right)
     try:
         result = left == right
     except Exception as exc:
@@ -1091,6 +1113,10 @@ def _plain_attr_restore_value(snapshot: Any) -> Any:
         return getattr(snapshot.module, snapshot.name)
     if isinstance(snapshot, _PlainAttrE3nnTupleSnapshot):
         return copy.deepcopy(snapshot.value)
+    if type(snapshot) in (list, tuple, set, frozenset):  # nested identity snapshots restore too
+        return type(snapshot)(_plain_attr_restore_value(item) for item in snapshot)
+    if type(snapshot) is dict:
+        return {key: _plain_attr_restore_value(item) for key, item in snapshot.items()}
     return _snapshot_plain_attr_value(snapshot, "<snapshot>")
 
 
@@ -1205,7 +1231,7 @@ class _ModuleTreePlainAttrSnapshot:
         for module, name, attr_path, snapshot in self._entries:
             try:
                 current_snapshot = _snapshot_module_plain_attr_value(module, name, attr_path)
-            except AttributeError:
+            except (AttributeError, RuntimeError):  # deleted, or now unsnapshottable: changed
                 current_snapshot = None
                 changed = True
             else:
@@ -1214,13 +1240,20 @@ class _ModuleTreePlainAttrSnapshot:
                 continue
             restore_value = _plain_attr_restore_value(snapshot)
             try:
-                setattr(module, name, restore_value)
+                if isinstance(restore_value, nn.Parameter) and name not in module._parameters:
+                    # A plain attribute aliasing a registered Parameter (identity
+                    # snapshot): ``nn.Module.__setattr__`` would REGISTER it as a new
+                    # parameter, changing the module's state_dict, so write the
+                    # instance namespace it came from.
+                    module.__dict__[name] = restore_value
+                else:
+                    setattr(module, name, restore_value)
             except Exception as exc:
                 raise RuntimeError(
                     "TorchLens validation deepcopy fallback could not restore plain "
                     f"attribute '{attr_path}' before the logged run."
                 ) from exc
-            restored_snapshot = _snapshot_plain_attr_value(getattr(module, name), attr_path)
+            restored_snapshot = _snapshot_module_plain_attr_value(module, name, attr_path)
             if not _plain_attr_values_equal(restored_snapshot, snapshot, attr_path):
                 raise RuntimeError(
                     "TorchLens validation deepcopy fallback restored plain "
@@ -1248,6 +1281,7 @@ def _model_for_ground_truth_validation(
 
     try:
         copied_model = copy.deepcopy(model)
+        assert_copy_kept_instance_attrs(model, copied_model)
         _strip_copied_forward_decorations(copied_model)
         return copied_model, None
     except Exception:
@@ -1297,48 +1331,6 @@ def _strip_copied_forward_decorations(model: nn.Module) -> None:
             module.__dict__.pop("forward", None)
 
 
-def _restore_simple_plain_attrs_on_copy(source: nn.Module, copied: nn.Module) -> None:
-    """Align simple plain attributes on a validation copy with its source.
-
-    Parameters
-    ----------
-    source:
-        Original module tree.
-    copied:
-        Deep-copied module tree that should represent ``source`` at validation
-        entry.
-    """
-
-    simple_types = (type(None), bool, int, float, complex, str, bytes)
-    # The two trees are zipped POSITIONALLY, so a deepcopy that adds or drops a
-    # submodule (a __deepcopy__ hook, lazy child materialization) used to
-    # silently shift every later pair and align attributes onto the WRONG
-    # modules (T11.10). Arity is checked BEFORE the loop (a lazy strict zip
-    # would fire only at exhaustion, after shifted pairs already mutated the
-    # copy); on mismatch the caller's existing fallback validates against the
-    # live model with a disclosure.
-    source_modules = list(source.modules())
-    copied_modules = list(copied.modules())
-    if len(source_modules) != len(copied_modules):
-        raise ValueError(
-            "Validation deepcopy changed the module tree arity: source has "
-            f"{len(source_modules)} modules but the copy has {len(copied_modules)}; "
-            "positional attribute restoration would misalign."
-        )
-    for source_module, copied_module in zip(source_modules, copied_modules, strict=True):
-        source_names = _module_plain_attr_names(source_module)
-        copied_names = _module_plain_attr_names(copied_module)
-        for name in sorted(source_names & copied_names):
-            source_value = getattr(source_module, name)
-            copied_value = getattr(copied_module, name)
-            if not isinstance(source_value, simple_types):
-                continue
-            if not isinstance(copied_value, simple_types):
-                continue
-            if source_value != copied_value:
-                setattr(copied_module, name, source_value)
-
-
 def _model_for_validation_replay(
     model: nn.Module,
 ) -> tuple[nn.Module, _ModuleTreePlainAttrSnapshot | None, bool]:
@@ -1358,8 +1350,9 @@ def _model_for_validation_replay(
 
     try:
         copied_model = copy.deepcopy(model)
+        assert_copy_kept_instance_attrs(model, copied_model)
         _strip_copied_forward_decorations(copied_model)
-        _restore_simple_plain_attrs_on_copy(model, copied_model)
+        restore_simple_plain_attrs_on_copy(model, copied_model)
         return copied_model, None, True
     except Exception:
         warnings.warn(
