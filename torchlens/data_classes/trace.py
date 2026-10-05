@@ -1196,6 +1196,7 @@ class Trace(
         "_tf_unresolved_producers": FieldPolicy.DROP,
         "_tf_init_op_labels": FieldPolicy.DROP,
         "_tf_op_captures": FieldPolicy.DROP,
+        "_tf_seen_op_types": FieldPolicy.DROP,
         "_tf_validation_result": FieldPolicy.DROP,
         "_tl_save_selector_fire_count": FieldPolicy.DROP,
         "_tl_intervene_selector_fire_count": FieldPolicy.DROP,

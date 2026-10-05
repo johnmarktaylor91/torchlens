@@ -253,6 +253,7 @@ STORAGE_BINDINGS: dict[str, dict[str, StorageBinding]] = {
         "_tf_unresolved_producers": StorageBinding(StorageKind.RUNTIME),
         "_tf_init_op_labels": StorageBinding(StorageKind.RUNTIME),
         "_tf_op_captures": StorageBinding(StorageKind.RUNTIME),
+        "_tf_seen_op_types": StorageBinding(StorageKind.RUNTIME),
         "_tf_validation_result": StorageBinding(StorageKind.RUNTIME),
         "_tl_save_selector_fire_count": StorageBinding(StorageKind.RUNTIME),
         "_tl_intervene_selector_fire_count": StorageBinding(StorageKind.RUNTIME),

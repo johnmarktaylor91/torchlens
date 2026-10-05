@@ -329,6 +329,7 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "_tf_unresolved_producers": "session",
     "_tf_init_op_labels": "session",
     "_tf_op_captures": "session",
+    "_tf_seen_op_types": "session",
     "_tf_validation_result": "session",
     "_tl_save_selector_fire_count": "session",
     "_tl_intervene_selector_fire_count": "session",
