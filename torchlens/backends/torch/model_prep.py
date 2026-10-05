@@ -1355,8 +1355,8 @@ def _record_module_entry_metadata(
                 and not getattr(trace, "_raw_dynamo_region_detected", False)
                 and id(t) not in (owned_at_entry or ())
             ):
-                trace.__dict__.setdefault("_module_entry_adoptions", []).append(
-                    (str(label), str(module_address))
+                trace.__dict__.setdefault("_module_boundary_adoptions", []).append(
+                    (str(label), "entry", str(module_address))
                 )
         if label is None:
             continue  # Skip untracked tensors (e.g. external constants) (#117)
@@ -2067,6 +2067,38 @@ def _make_user_forward_hook_wrapper(
     return wrapped_hook
 
 
+def _record_module_exit_adoption(
+    trace: "Trace", t: torch.Tensor, label: str | None, module_address: str
+) -> None:
+    """Record an untagged module RETURN adopted as an internal source.
+
+    The exit twin of the R16 module-entry adoption record: a stale pre-wrap
+    torch reference whose output is RETURNED by a module (transformers'
+    ``GELUActivation`` holds ``F.gelu`` and returns ``self.act(x)``) left no
+    unattributed argument anywhere -- the boundary op tagged it before any
+    consumer saw it -- so the escape was laundered into a clean
+    ``internalsource`` node with no warning and no rescue. The same
+    exclusions as the entry record apply: disclosed transform/dynamo regions
+    legitimately return untagged tensors, and a tensor in the pre-forward
+    ownership snapshot is a model-owned known source, not an escape.
+    """
+
+    if label is None:
+        return
+    if getattr(trace, "_raw_transform_escape_detected", False) or getattr(
+        trace, "_raw_dynamo_region_detected", False
+    ):
+        return
+    owned_at_entry = trace._module_capture_ws.module_build_data.get(
+        "model_owned_tensor_ids_at_entry"
+    )
+    if id(t) in (owned_at_entry or ()):
+        return
+    trace.__dict__.setdefault("_module_boundary_adoptions", []).append(
+        (str(label), "exit", str(module_address))
+    )
+
+
 def _record_module_exit_metadata(
     trace: "Trace",
     module: nn.Module,
@@ -2179,6 +2211,8 @@ def _record_module_exit_metadata(
             # ``_tl_live_fire_results`` leak in a plain capture stays unledgered.
             untraceable_output_boundaries.append((t, boundary_label))
             tensor_label = get_tensor_label(t)
+            if not fire_results:
+                _record_module_exit_adoption(trace, t, tensor_label, address)
         if tensor_label is None:
             continue
         if fire_results:
