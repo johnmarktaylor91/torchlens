@@ -120,8 +120,11 @@ def test_terminal_summary_reports_session_and_worker_factors(
     plugin._smoke_budget_load_factor()
     lines: list[str] = []
     reporter = SimpleNamespace(write_line=lines.append)
+    # getoption: the summary hook asks for -m outside CI (smoke-parity hint);
+    # this fake session carries no -m, so it answers each option's default.
     config = SimpleNamespace(
         option=SimpleNamespace(collectonly=False),
+        getoption=lambda name, default=None: default,
         _tl_xdist_duration_ledger={"load_factor": 2.5},
     )
     plugin.pytest_terminal_summary(reporter, 0, config)
