@@ -68,7 +68,8 @@ _GUIDE: dict[str, Any] = {
             "the listed replaced_ops (and everything downstream) are "
             "COUNTERFACTUAL edits, not the model's own forward. "
             "capture_verified=null means the completeness witness was not "
-            "armed (default capture) -- no verdict, not a clean bill."
+            "armed (default capture) or the capture is structure_only (never "
+            "verified) -- no verdict, not a clean bill."
         ),
         "truncation": (
             "Non-null when max_ops dropped op rows; counts disclose exactly what was omitted."

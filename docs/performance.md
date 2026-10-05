@@ -153,6 +153,10 @@ print(trace.completeness_witness_unaccounted_count)
 unwrap_torch()
 ```
 
+A value-free capture (`structure_only=True`, on meta or real tensors) is never verified: under the
+witness it still reads `capture_verified=None`, and `completeness_witness_verified` records the
+census result.
+
 The witness attaches each aten dispatch to the live wrapper token, `func_call_id`, and leaf barcode;
 it does not correlate by clock time. A captured Python call may own several ordered aten operations,
 recorded in `trace.completeness_decompositions`. Dispatches with no owner, or owned by a wrapper whose

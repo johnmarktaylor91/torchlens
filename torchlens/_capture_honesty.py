@@ -349,7 +349,8 @@ def _verification_verdict_lines(facts: dict[str, Any]) -> list[str]:
     """Return the preamble's verification-verdict lines (header + ceiling/not-recorded).
 
     The ``capture_verified`` flag is tri-state: ``False`` names the ceiling reason,
-    ``True`` reads ``true``, and ``None`` reads ``not_recorded`` with the arming hint.
+    ``True`` reads ``true``, and ``None`` reads ``not_recorded`` with the arming hint
+    (or, on a structure-only capture, the note that value-free captures are never verified).
     """
 
     verified = facts["capture_verified"]
@@ -369,6 +370,11 @@ def _verification_verdict_lines(facts: dict[str, Any]) -> list[str]:
     if verified is False:
         reason = facts["capture_verification_reason"] or "unrecorded reason"
         lines.append(f"verification ceiling: {reason}")
+    elif verified is None and facts["structure_only"]:
+        lines.append(
+            "capture verification not recorded: a structure-only (value-free) capture is "
+            "never verified, even with the completeness witness armed"
+        )
     elif verified is None:
         lines.append(
             "capture verification not recorded: the completeness witness is not armed on "

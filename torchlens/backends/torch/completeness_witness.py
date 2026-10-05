@@ -2055,6 +2055,7 @@ _check_writeback_watch = _rebind_function(_completeness_finalize._check_writebac
 _effective_mode = _rebind_function(_completeness_finalize._effective_mode, globals())
 _barcode_text = _rebind_function(_completeness_finalize._barcode_text, globals())
 _finalize_census = _rebind_function(_completeness_finalize._finalize_census, globals())
+_is_value_free_capture = _rebind_function(_completeness_finalize._is_value_free_capture, globals())
 _reports_include_non_input_boundary = _rebind_function(
     _completeness_finalize._reports_include_non_input_boundary, globals()
 )
