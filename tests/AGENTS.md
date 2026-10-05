@@ -13,7 +13,7 @@ pytest config excludes `rare` tests via `addopts = -m 'not rare'`.
 | Decoration and wrappers | `test_decoration.py`, `test_arg_positions.py`, `test_two_pass_inplace_fix.py` |
 | Postprocess conditionals | `test_conditional_*.py`, `test_ast_branches.py`, `test_field_lifecycle_matrix.py` |
 | Visualization | `test_large_graphs.py`, `test_node_spec_api.py`, `test_node_modes.py`, `test_themes.py`, `test_overlays.py`, `test_bundle_diff_renderer.py` |
-| Validation/backward | `test_validation.py`, `test_validate_consolidated.py`, `test_backward.py`, `test_backward_streaming.py` |
+| Validation/backward | `test_validation.py` (siblings `test_validation_perturbation_units.py`, `test_validation_bool_exemption.py`), `test_validate_consolidated.py`, `test_backward.py`, `test_backward_streaming.py` |
 | Portable I/O | `test_io_*.py`, `test_tlspec_*.py`, `fixtures/tlspec_v2_16/` |
 | Intervention | `test_intervention_phase*.py`, `test_sites.py`, `test_selector_unification_phase4.py`, `test_bundle_*.py` |
 | Fastlog | `test_fastlog/` |
