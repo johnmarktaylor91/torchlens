@@ -965,11 +965,13 @@ def call_tool(name: str, arguments: dict[str, Any] | None = None) -> dict[str, A
         spec.default_limits.get("max_tokens", _budgets.ROW_TOOL_MAX_TOKENS),
         name="max_tokens",
     )
-    envelope = _fit_token_budget(envelope, max_tokens, row_key=_ROW_KEYS.get(name))
+    # Stamp the limits block BEFORE fitting so the budget counts it: stamping it
+    # after the fit let a page land a few tokens over max_tokens.
     limits = dict(envelope.get("limits") or {})
     limits.setdefault("max_tokens", max_tokens)
     limits.setdefault("token_estimator", _budgets.TOKEN_ESTIMATOR)
-    envelope["limits"] = limits
+    envelope = {**envelope, "limits": limits}
+    envelope = _fit_token_budget(envelope, max_tokens, row_key=_ROW_KEYS.get(name))
     return json_safe(envelope)
 
 
