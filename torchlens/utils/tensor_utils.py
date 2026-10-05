@@ -951,37 +951,18 @@ def _pause_dispatch_modes_for_subclass_clone(x: Any) -> Iterator[None]:
         yield
 
 
-def _safe_get_memory_format(t: torch.Tensor) -> torch.memory_format:
-    """Best-effort memory format probe — returns ``preserve_format`` on any error.
-
-    ``is_contiguous(memory_format=...)`` is the recommended query; it is
-    undefined for some exotic layouts (sparse, meta), so we wrap in a
-    try/except and fall back to ``preserve_format`` (clone's default).
-
-    Standard (torch.contiguous_format) is checked FIRST and wins on ties.
-    For tensors with a size-1 dimension (most commonly ``C=1``, e.g. a mono
-    spectrogram or single-channel image), ``is_contiguous(memory_format=
-    torch.channels_last)`` is degenerately also ``True`` even though the
-    tensor is genuinely NCHW-contiguous — the collapsed size-1 axis makes
-    both stride orderings equally valid descriptions of the same bytes.
-    Checking ``channels_last`` first (the prior behavior) would then force
-    ``.clone(memory_format=torch.channels_last)`` on an already-standard
-    tensor, physically rewriting its strides to the channels-last layout.
-    That silently corrupts any downstream ``.view()`` call the traced model
-    makes under the (correct, for its real input) assumption of standard
-    contiguity — a real capture bug, not a model bug. See
-    ``torchlens/utils/tensor_utils.py`` history / BC-ResNet capture repro.
-    """
-    try:
-        if t.is_contiguous(memory_format=torch.contiguous_format):
-            return torch.contiguous_format
-        if t.is_contiguous(memory_format=torch.channels_last):
-            return torch.channels_last
-        if t.is_contiguous(memory_format=torch.channels_last_3d):
-            return torch.channels_last_3d
-    except (RuntimeError, TypeError, AttributeError):
-        pass
-    return torch.preserve_format
+# Memory format for every payload copy. ``preserve_format`` gives a
+# non-overlapping-and-dense source its EXACT strides (``empty_strided``),
+# size-1 dims included, and any other source torch's own suggested layout. A
+# named format is never more faithful: ``contiguous_format``/``channels_last``
+# re-stride size-1 dims, and ATen's layout heuristic (``suggest_memory_format``)
+# reads those strides, so a re-strided copy can select a different kernel on
+# replay. xcit's LPI conv input ``(1, C, H, W)`` with batch stride ``C`` is NCHW
+# to ATen (the conv's output is contiguous) yet ``is_contiguous(channels_last)``
+# holds; a channels_last copy replayed on the channels-last kernel and missed
+# the saved output by 4.8e-7. An NCHW ``C=1`` tensor (the BC-ResNet case) keeps
+# its standard strides exactly.
+_PAYLOAD_MEMORY_FORMAT = torch.preserve_format
 
 
 # ---------------------------------------------------------------------------
@@ -1282,12 +1263,11 @@ def _rebind_alias_to_fresh_clone(alias: torch.Tensor) -> None:
     storage without entering autograd: ``grad_fn``, ``requires_grad`` and the
     version counter all survive untouched.
     """
-    fmt = _safe_get_memory_format(alias)
     with torch.no_grad():
         # The throwaway clone contributes nothing but storage; taking it
         # under no_grad keeps a dead CloneBackward node out of the graph.
         try:
-            fresh = alias.clone(memory_format=fmt)
+            fresh = alias.clone(memory_format=_PAYLOAD_MEMORY_FORMAT)
         except (TypeError, RuntimeError):
             fresh = alias.clone()
     alias.data = fresh
@@ -1685,7 +1665,7 @@ def _copy_tensor_payload(
                 cpu_payload = torch.empty_like(
                     payload,
                     device="cpu",
-                    memory_format=_safe_get_memory_format(payload),
+                    memory_format=_PAYLOAD_MEMORY_FORMAT,
                     pin_memory=True,
                 )
                 cpu_payload.copy_(payload, non_blocking=True)
@@ -1698,7 +1678,6 @@ def _copy_tensor_payload(
             _record_cpu_async_copy_event(payload.device)
         return result
 
-    mem_fmt = _safe_get_memory_format(x)
     if target_device is not None:
         # Single-transport clone: ``.to(device, copy=True)`` materializes the
         # retained payload directly on the retention device (one allocation,
@@ -1706,7 +1685,7 @@ def _copy_tensor_payload(
         # move is differentiable when not detached).
         source = x.detach() if detach_tensor else x
         try:
-            return source.to(device=target_device, memory_format=mem_fmt, copy=True)
+            return source.to(device=target_device, memory_format=_PAYLOAD_MEMORY_FORMAT, copy=True)
         except (TypeError, RuntimeError):
             try:
                 return source.to(device=target_device, copy=True)
@@ -1717,11 +1696,11 @@ def _copy_tensor_payload(
     if not detach_tensor:
         with _pause_dispatch_modes_for_subclass_clone(x):
             try:
-                return x.clone(memory_format=mem_fmt)
+                return x.clone(memory_format=_PAYLOAD_MEMORY_FORMAT)
             except (TypeError, RuntimeError):
                 return x.clone()
     try:
-        return x.detach().clone(memory_format=mem_fmt)
+        return x.detach().clone(memory_format=_PAYLOAD_MEMORY_FORMAT)
     except (TypeError, RuntimeError):
         try:
             return x.detach().clone()

@@ -51,6 +51,7 @@ from ._index_domain import (
     _saved_integer_index_tensor,
 )
 from ._integer_mod_proof import integer_mod_by_unit_is_identically_zero
+from ._norm_zero_weight_proof import norm_input_annihilated_by_zero_weight
 from ._value_predicates import (
     _extrema_operand_dominates,
     _is_all_inf_value,
@@ -2149,6 +2150,12 @@ def _posthoc_value_proof_decision(
         decision = _layer_norm_singleton_shape_decision(layer, layers_to_perturb, args)
         if decision.exempt:
             return decision
+    if norm_input_annihilated_by_zero_weight(layer, layers_to_perturb, args):
+        return PosthocPerturbDecision(
+            True,
+            "multiplicative_zero_annihilator",
+            "normalization's affine weight is all zero, so its input cannot reach the output",
+        )
     if layer.func_name == "linear" and len(args) > 1:
         decision = _linear_zero_weight_input_decision(layer, layers_to_perturb, args)
         if decision.exempt:
