@@ -4635,17 +4635,17 @@ class host_nondeterminism_monitor:
         # os.urandom channels and permanently ceilinged a pure deterministic
         # model's first runnable artifact to UNVERIFIABLE. A failed warm is
         # benign: the in-window retry's draws are then honestly marked.
-        # The same goes for the other imports a first capture triggers (torch's
-        # ``torch.backends.opt_einsum`` inside ``torch.einsum``, warmed by it, and
-        # TorchLens's observability session reader on the first wrapped op): an
-        # in-window import runs the ``sys.meta_path`` finders' frames, which the
-        # frame-reachable inventory walks as roots, so a large graph behind a
-        # finder (pytest's assertion rewriter) exhausted the deep-inventory budget.
+        # A different hazard, same fix, for the other imports a first capture
+        # triggers (torch's ``torch.backends.opt_einsum`` inside ``torch.einsum``,
+        # warmed by it, and TorchLens's observability session reader on the first
+        # wrapped op): an in-window import runs the ``sys.meta_path`` finders'
+        # frames, which the frame-reachable inventory walks as roots, so a large
+        # graph behind a finder (pytest's assertion rewriter) exhausted the budget.
         try:
+            warm_lazy_torch_imports()  # first, so a failed import below cannot skip it
             from .._state import pause_logging
             from ..backends.torch._op_markers import resolve_active_session_fn
 
-            warm_lazy_torch_imports()
             with pause_logging():
                 resolve_active_session_fn()
         except Exception:

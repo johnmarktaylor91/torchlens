@@ -3733,7 +3733,8 @@ def warm_lazy_torch_imports() -> None:
     silent, order-dependent breach of the contract's "a plain deterministic
     capture records nothing" pin. The monitor calls this BEFORE arming any
     patch so the cascade runs outside every window. ``torch.backends.opt_einsum``
-    (imported inside ``torch.einsum``) is warmed for the reason in ``rng.py``.
+    (imported inside ``torch.einsum``) is warmed too: an in-window import's
+    ``sys.meta_path`` finder frames become deep-inventory roots (see ``rng.py``).
 
     Failure is benign and intentionally unlatched: a partially-executed failed
     import is evicted from ``sys.modules``, so a later in-window retry re-runs
