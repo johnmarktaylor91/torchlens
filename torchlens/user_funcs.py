@@ -4226,12 +4226,15 @@ def log_model_metadata(
 
 
 def _public_impls_module() -> Any:
-    """Return private public-command implementations with refreshed globals."""
+    """Return private public-command implementations.
+
+    The implementations call ``trace`` and ``_run_model_and_save_specified_outs``
+    through this module at call time; nothing is copied into theirs, so a patch
+    of either name here is seen while it is in place and gone once it is undone.
+    """
 
     from . import _user_public_impls
 
-    _user_public_impls.trace = trace
-    _user_public_impls._run_model_and_save_specified_outs = _run_model_and_save_specified_outs
     _sync_public_impl_wrapper_metadata(_user_public_impls)
     return _user_public_impls
 

@@ -160,10 +160,6 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         ("torchlens/_state.py", "_decorated_identity"),
         ("torchlens/_state.py", "_is_decorated"),
         ("torchlens/_state.py", "_wrap_epoch"),
-        # Refreshed-globals seam: user_funcs rebinds the SAME function objects
-        # into the private public-impl module on every access (idempotent).
-        ("torchlens/_user_public_impls.py", "_run_model_and_save_specified_outs"),
-        ("torchlens/_user_public_impls.py", "trace"),
         ("torchlens/_state.py", "_decorated_func_mapper"),
         ("torchlens/_state.py", "_decorated_to_orig"),
         ("torchlens/_state.py", "_orig_to_decorated"),

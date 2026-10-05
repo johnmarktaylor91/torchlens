@@ -59,9 +59,6 @@ if TYPE_CHECKING:
 
     from .data_classes.module import Module
 
-trace = _user_funcs.trace
-_run_model_and_save_specified_outs = _user_funcs._run_model_and_save_specified_outs
-
 
 def release_model(model: nn.Module) -> None:
     """Release a traced PyTorch model from persistent TorchLens preparation.
@@ -127,7 +124,7 @@ def log_model_metadata(
         Trace with full metadata but no saved outs.
     """
     model = unwrap_compiled_model(model)
-    model_trace = trace(
+    model_trace = _user_funcs.trace(
         model,
         input_args,
         input_kwargs,
@@ -256,7 +253,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
         elif execution_mode == "train":
             model.train()
         with grad_context:
-            trace = _run_model_and_save_specified_outs(
+            trace = _user_funcs._run_model_and_save_specified_outs(
                 model=model,
                 input_args=input_args,
                 input_kwargs=input_kwargs,
@@ -638,7 +635,7 @@ def show_model_graph(
     if visualization_options.view not in ["none", "rolled", "unrolled"]:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
-    trace = _run_model_and_save_specified_outs(
+    trace = _user_funcs._run_model_and_save_specified_outs(
         model=model,
         input_args=input_args,
         input_kwargs=input_kwargs,
@@ -1069,7 +1066,7 @@ def _warn_if_validation_trace_not_reproducible(
         prior_witness_mode = _state._completeness_witness_mode
         _state._completeness_witness_mode = "shadow"
         try:
-            second_trace = _run_model_and_save_specified_outs(
+            second_trace = _user_funcs._run_model_and_save_specified_outs(
                 model=model,
                 input_args=input_args,
                 input_kwargs=input_kwargs,
@@ -1592,7 +1589,7 @@ def _validate_forward_pass_torch(
         prior_witness_mode = _state._completeness_witness_mode
         _state._completeness_witness_mode = "shadow"
         try:
-            trace = _run_model_and_save_specified_outs(
+            trace = _user_funcs._run_model_and_save_specified_outs(
                 model=validation_model,
                 input_args=validation_input_args,
                 input_kwargs=validation_input_kwargs,
