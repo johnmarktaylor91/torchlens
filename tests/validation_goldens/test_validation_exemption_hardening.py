@@ -12,6 +12,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.validation import backward as backward_validation, core
+from torchlens.validation._destination_coverage import _scatter_index_fully_overwrites_dim
 from torchlens.validation.diagnostics import get_validation_failure
 from torchlens.validation.exemptions import (
     SKIP_VALIDATION_ENTIRELY,
@@ -23,7 +24,6 @@ from torchlens.validation.exemptions import (
     _check_setitem_exempt,
     _check_zipped_sibling_exempt,
     _posthoc_overwrite_decision,
-    _scatter_index_fully_overwrites_dim,
     perturbed_layer_at_structural_position,
 )
 from torchlens.validation.invariants import (
@@ -1018,7 +1018,9 @@ def test_index_put_overwrite_proof_rejects_negative_index_aliasing() -> None:
     (deephunt finding H2).
     """
 
-    from torchlens.validation.exemptions import _index_put_destination_is_fully_overwritten
+    from torchlens.validation._destination_coverage import (
+        _index_put_destination_is_fully_overwritten,
+    )
 
     dest = torch.tensor([10.0, 20.0])
     aliasing_layer = _fake_layer(
