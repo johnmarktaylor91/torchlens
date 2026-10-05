@@ -186,3 +186,116 @@ def test_paddle_validation_same_object_static_snapshot_guard_fires(
 
     with pytest.raises(AssertionError):
         assert {"tensor.astype", "tensor.reshape"} <= set(inventory.wrapped)
+
+
+class _LinearRelu(paddle.nn.Layer):
+    """Layer whose ops read its own registered parameters."""
+
+    def __init__(self) -> None:
+        """Build one linear layer with deterministic weights."""
+
+        super().__init__()
+        self.linear = paddle.nn.Linear(4, 3)
+        self.linear.weight.set_value(paddle.arange(12, dtype="float32").reshape([4, 3]) / 10.0)
+        self.linear.bias.set_value(paddle.to_tensor([0.1, -0.2, 0.3], dtype="float32"))
+
+    def forward(self, x: Any) -> Any:
+        """Run linear then relu."""
+
+        return paddle.nn.functional.relu(self.linear(x))
+
+
+class _ClosureTensorLayer(paddle.nn.Layer):
+    """Layer that reads an UNREGISTERED tensor (not a parameter, not an input)."""
+
+    def __init__(self) -> None:
+        """Hold a plain tensor attribute outside the parameter registry."""
+
+        super().__init__()
+        self.linear = paddle.nn.Linear(4, 3)
+        self.__dict__["hidden"] = paddle.ones([3], dtype="float32")
+
+    def forward(self, x: Any) -> Any:
+        """Add the unregistered tensor through an explicit functional op."""
+
+        return paddle.add(self.linear(x), self.__dict__["hidden"])
+
+
+def _layer_input() -> Any:
+    """Return a deterministic Layer input."""
+
+    return paddle.arange(8, dtype="float32").reshape([2, 4]) / 8.0 - 0.25
+
+
+def test_paddle_validation_layer_parameters_are_known_sources() -> None:
+    """Ops reading a Layer's own parameters pass the coverage oracle and replay."""
+
+    trace = tl.trace(_LinearRelu(), _layer_input(), backend="paddle")
+
+    assert trace.module_identity_mode == "object_module"
+    assert PaddleBackend().validate_trace(trace) is True
+    assert trace.validation_replay_status.replayed_node_count == 2
+    linear = next(c for c in trace._paddle_op_captures if c.op_name == "functional.linear")
+    assert sorted(leaf.param_address for leaf in linear.tensor_inputs if leaf.label is None) == [
+        "linear.bias",
+        "linear.weight",
+    ]
+    assert linear.capture_gap_markers == ()
+    assert tl.validate(_LinearRelu(), _layer_input(), scope="forward", backend="paddle") is True
+
+
+def test_paddle_validation_unregistered_tensor_leaf_still_fails() -> None:
+    """An unlabeled tensor that is NOT a registered parameter stays a coverage gap."""
+
+    trace = tl.trace(_ClosureTensorLayer(), _layer_input(), backend="paddle")
+
+    add = next(c for c in trace._paddle_op_captures if c.op_name.endswith("add"))
+    assert any("unlabeled tensor input" in marker for marker in add.capture_gap_markers)
+    assert PaddleBackend().validate_trace(trace) is False
+
+
+def test_paddle_validation_parameter_replay_uses_the_parameter_value() -> None:
+    """A parameter changed after capture makes replay disagree: it fails, never passes."""
+
+    model = _LinearRelu()
+    trace = tl.trace(model, _layer_input(), backend="paddle")
+    model.linear.bias.set_value(paddle.to_tensor([5.0, 5.0, 5.0], dtype="float32"))
+
+    assert PaddleBackend().validate_trace(trace) is False
+
+
+def test_paddle_validation_parameter_replay_leaves_the_model_unchanged() -> None:
+    """Validation replays on copies; the user's parameters are untouched."""
+
+    model = _LinearRelu()
+    before = model.linear.weight.numpy().copy()
+    trace = tl.trace(model, _layer_input(), backend="paddle")
+
+    assert PaddleBackend().validate_trace(trace) is True
+    assert (model.linear.weight.numpy() == before).all()
+
+
+def test_paddle_validation_layer_corrupted_output_still_fails() -> None:
+    """Corrupting the parameter-reading op's saved output still fails replay."""
+
+    trace = tl.trace(_LinearRelu(), _layer_input(), backend="paddle")
+    linear = next(op for op in trace.layer_list if op.layer_type == "functional.linear")
+    linear.out = linear.out + 1.0
+
+    assert PaddleBackend().validate_trace(trace) is False
+
+
+def test_paddle_function_root_trace_has_buffers_and_graph_shape_hash() -> None:
+    """A function-root preview trace carries ``buffers`` and a graph hash."""
+
+    first = tl.trace(_functional_mlp, _inputs(), backend="paddle")
+    second = tl.trace(_functional_mlp, _inputs(), backend="paddle")
+    different = tl.trace(
+        lambda x: paddle.nn.functional.relu(x + 1.0), _layer_input(), backend="paddle"
+    )
+
+    assert first.module_identity_mode == "function_root"
+    assert first.buffers is not None and len(first.buffers) == 0
+    assert isinstance(first.graph_shape_hash, str)
+    assert first.graph_shape_hash == second.graph_shape_hash
+    assert different.graph_shape_hash != first.graph_shape_hash
