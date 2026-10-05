@@ -332,7 +332,8 @@ jobs:
         # verdicts with assertions stripped.
         run: |
           python -O -c "assert True or False; print('assertions stripped:', not __debug__)"
-          python -O -m pytest tests/test_validation.py tests/validation_goldens/ \
+          python -O -m pytest tests/test_validation.py \
+            tests/test_validation_perturbation_units.py tests/validation_goldens/ \
             -q --tb=short -p no:randomly
 
   netron-latest-drift:
