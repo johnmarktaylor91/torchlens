@@ -376,6 +376,23 @@ def _parent_perturbations_change_output(
     return not attempted and _is_factory_or_source_capture(capture)
 
 
+def _capture_gap_markers(trace: Any) -> tuple[str, ...]:
+    """Read the capture's DECLARED gap-marker seam, fail-closed.
+
+    ``Trace._paddle_capture_gap_markers`` is a declared session field
+    (``data_classes/_trace_components.py``) that every live Paddle capture
+    initializes before the forward. A direct read breaks loudly on a rename;
+    a trace without it reports a parameter-write marker, so the oracle can
+    never credit parameter reads it has no write evidence for.
+    """
+
+    try:
+        markers = trace._paddle_capture_gap_markers
+    except AttributeError:
+        return (f"{PARAMETER_WRITE_MARKER}: capture gap markers unavailable",)
+    return tuple(str(marker) for marker in markers)
+
+
 def _coverage_oracle(trace: Any) -> bool:
     """Fail closed on Paddle coverage gaps before replay validation.
 
@@ -392,10 +409,7 @@ def _coverage_oracle(trace: Any) -> bool:
 
     # A parameter the forward wrote in place outside any wrapped op is an
     # untraced effect even when nothing reads it afterwards: fail closed.
-    if any(
-        str(marker).startswith(PARAMETER_WRITE_MARKER)
-        for marker in getattr(trace, "_paddle_capture_gap_markers", ())
-    ):
+    if any(marker.startswith(PARAMETER_WRITE_MARKER) for marker in _capture_gap_markers(trace)):
         return False
     captures = tuple(getattr(trace, "_paddle_op_captures", ()))
     ops_by_label = _ops_by_label(trace)

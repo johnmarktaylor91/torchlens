@@ -962,6 +962,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/backends/mlx/tensor_store.py", "__all__"),
         ("torchlens/backends/mlx/wrappers.py", "__all__"),
         ("torchlens/backends/paddle/__init__.py", "__all__"),
+        ("torchlens/backends/paddle/_param_writes.py", "__all__"),
         ("torchlens/backends/paddle/backend.py", "__all__"),
         ("torchlens/backends/paddle/capabilities.py", "__all__"),
         ("torchlens/backends/paddle/interventions.py", "__all__"),

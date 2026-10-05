@@ -8,7 +8,6 @@ from collections import defaultdict
 from collections.abc import Callable
 from typing import Any, Literal, TypeAlias, cast
 
-from .._io.accessor_rebuild import rebuild_buffer_accessor
 from ..capture._nonfinite_prefix import strip_raw_label_suffix
 from ..data_classes._compaction import compact_op_metadata
 from ..data_classes._site_key import SiteKeyMinter
@@ -269,6 +268,9 @@ def attach_function_root_module(trace: Trace) -> None:
     trace._module_logs = ModuleAccessor({"self": root})
     # The object-module path gets ``trace.buffers`` from
     # ``rebuild_trace_accessors``; a function root must not leave it ``None``.
+    # Deferred: ``_io`` sits above ``backends`` in the layer map.
+    from .._io.accessor_rebuild import rebuild_buffer_accessor
+
     rebuild_buffer_accessor(trace)
 
 
