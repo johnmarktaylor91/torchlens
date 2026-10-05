@@ -233,13 +233,74 @@ def _escape_signal(trace: Trace) -> str | None:
     return None
 
 
+#: Tensor operator dunders that ``TorchFunctionMode`` presence RESPELLS.
+#:
+#: These dunders are C-level aliases of a named ``TensorBase`` method, so with
+#: a mode active (the rescue re-run) torch dispatches them as that method and
+#: the rescued trace logs it, while the mode-free primary logs the dunder:
+#: ``1 + x`` is ``__radd__`` in the primary and ``add`` in the rescue. Keys are
+#: the primary spelling; values are the spelling torch hands a mode (probed on
+#: torch 2.13; ``tests/test_rescue_dunder_respelling.py`` re-derives every row
+#: from torch itself). Python-level dunders (``__rsub__``, ``__rpow__``,
+#: ``__rmatmul__``, ``__rfloordiv__``, ``__rlshift__``, ``__iand__``, ...)
+#: reach the mode under their own name and need no row. In-place rows map to
+#: the in-place method (``__iadd__`` -> ``add_``), never to the out-of-place op,
+#: so mutation stays as distinguishable as the comparison below makes it.
+#: Non-commutative reflected dunders keep their own op: ``__rsub__`` is not
+#: ``sub``. ``capture/arg_positions._COMMUTATIVE_REFLECTED_DUNDERS`` cannot be
+#: reused: it labels ``__rand__`` as ``and``, but the mode spelling is
+#: ``bitwise_and``.
+_MODE_RESPELLED_DUNDERS = {
+    "__radd__": "add",
+    "__rmul__": "mul",
+    "__truediv__": "div",
+    "__div__": "div",
+    "__rtruediv__": "__rdiv__",
+    "__mod__": "remainder",
+    "__pos__": "positive",
+    "__rand__": "bitwise_and",
+    "__ror__": "bitwise_or",
+    "__rxor__": "bitwise_xor",
+    "__iadd__": "add_",
+    "__isub__": "sub_",
+    "__imul__": "mul_",
+    "__itruediv__": "div_",
+    "__idiv__": "div_",
+    "__ifloordiv__": "floor_divide_",
+    "__imod__": "remainder_",
+    "__ipow__": "pow_",
+}
+
+
+def _canonical_op_name(name: str) -> str:
+    """Return the mode-independent spelling of a logged op func name.
+
+    Parameters
+    ----------
+    name:
+        A logged ``func_name`` from either the primary or the rescued trace.
+
+    Returns
+    -------
+    str
+        The name with any ``TorchFunctionMode`` respelling undone (see
+        ``_MODE_RESPELLED_DUNDERS``) and underscores stripped. Idempotent on
+        the mode spellings, so both sides land on one name whether or not the
+        running torch respells a given dunder.
+    """
+
+    return _MODE_RESPELLED_DUNDERS.get(name, name).strip("_")
+
+
 def _op_name_counts(trace: Trace) -> Counter[str]:
     """Multiset of canonicalized op func names for recovery comparison.
 
     Mode presence respells tensor dunders through the override protocol
-    (``__add__`` -> ``add``, the pinned stage-0 delta), so spellings are
-    canonicalized by stripping underscores before diffing — otherwise every
-    operator-using model would read as a false "recovery".
+    (``__add__`` -> ``add``, the pinned stage-0 delta; ``__radd__`` -> ``add``,
+    ``__truediv__`` -> ``div``), so spellings are canonicalized through
+    ``_canonical_op_name`` before diffing — otherwise every operator-using
+    model would read as a false "recovery", and every reflected or in-place
+    operator as a false "loss" that refused a correct rescue.
 
     Bookkeeping SOURCE nodes (``func_name == "none"``: minted
     ``internalsource`` adoptions, other functionless placeholders) are
@@ -251,7 +312,7 @@ def _op_name_counts(trace: Trace) -> Counter[str]:
     """
 
     return Counter(
-        name.strip("_")
+        _canonical_op_name(name)
         for op in getattr(trace, "ops", ())
         if (name := getattr(op, "func_name", None)) and name != "none"
     )
