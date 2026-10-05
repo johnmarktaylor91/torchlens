@@ -478,8 +478,11 @@ class TFBackend:
             Boolean pass/fail status or an explicit unverified replay status.
         """
 
+        # ``validate_metadata`` is a validation switch, never a capture kwarg:
+        # forwarding it made ``capture_trace`` reject every ``tl.validate`` call.
+        validate_metadata = bool(kwargs.pop("validate_metadata", True))
         trace = self.capture_trace(*args, **kwargs)
-        return self.validate_trace(trace)
+        return self.validate_trace(trace, validate_metadata=validate_metadata)
 
     def validate_trace(self, *args: Any, **kwargs: Any) -> Any:
         """Validate a TensorFlow trace with the non-vacuous replay tripwire.
