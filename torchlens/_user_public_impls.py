@@ -52,11 +52,6 @@ from .utils.display import warn_parallel
 from .utils.hashing import compute_graph_shape_hash
 from .utils.introspection import get_vars_of_type_from_obj
 from .utils.rng import set_random_seed
-from .visualization._bundle_graph import (
-    _add_bundle_backward_graph,
-    _add_bundle_forward_edges,
-    _add_bundle_forward_nodes,
-)
 from .visualization.code_panel import CodePanelOption
 
 if TYPE_CHECKING:
@@ -871,6 +866,11 @@ def show_bundle_graph(
 
     import graphviz
 
+    from .visualization._bundle_graph import (
+        _add_bundle_backward_graph,
+        _add_bundle_forward_edges,
+        _add_bundle_forward_nodes,
+    )
     from .visualization._render_utils import (
         direction_to_rankdir,
         render_dot_to_file,
