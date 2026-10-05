@@ -25,6 +25,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._errors import TorchLensCaptureGapWarning
 from torchlens.backends.torch._tl import is_decorated_function
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 
@@ -153,7 +154,7 @@ _HOLDERS: dict[str, Callable[[types.SimpleNamespace], nn.Module]] = {
     "functools_partial": lambda env: _CallFn(functools.partial(env.gelu, approximate="none")),
     "nested_container": lambda env: _NestedContainer(env.gelu),
     "namedtuple": lambda env: _NamedTupleHolder(env.gelu),
-    "default_argument": _default_arg_module,
+    "default_argument": lambda env: _default_arg_module(env.gelu),
     "module_global": _module_global_module,
 }
 
@@ -191,7 +192,11 @@ def test_rescue_never_rewrites_the_held_reference(raw: types.SimpleNamespace) ->
 def test_iql_output_activation_returned_by_the_root_is_rescued(
     raw: types.SimpleNamespace,
 ) -> None:
-    """IQL shape: a stale tanh produces the ROOT module's output (root module exit)."""
+    """IQL shape: a stale tanh produces the ROOT module's output.
+
+    Control row: the root's untagged output already fails output attribution,
+    which triggers the rescue without the module-exit record.
+    """
 
     class IqlLike(nn.Module):
         def __init__(self, out_act: Callable[..., torch.Tensor]) -> None:
@@ -204,7 +209,7 @@ def test_iql_output_activation_returned_by_the_root_is_rescued(
 
     model = IqlLike(raw.tanh)
     wrap_torch()
-    with pytest.warns(UserWarning, match=r"adopted at module exit"):
+    with pytest.warns(TorchLensCaptureGapWarning, match="output_attribution_failed"):
         trace = tl.trace(model, torch.randn(2, 4))
 
     assert "tanh" in [op.func_name for op in trace.ops]
@@ -261,3 +266,29 @@ def test_model_owned_tensor_returned_by_a_module_is_not_an_escape() -> None:
     trace = tl.trace(Outer(), torch.randn(2, 4))
 
     assert trace.rescue_rerun is None
+
+
+def test_opaque_module_return_is_disclosed_unrecovered_and_still_validates() -> None:
+    """Negative: a genuinely opaque producer (direct aten call) is not a stale ref.
+
+    The module-exit record discloses it (provenance warning; the rescue finds
+    nothing to recover and settles ``escape_rescue_unrecovered``), and the
+    validation contract for an opaque single-dispatch module output is
+    unchanged: the boundary credits the dispatch that built it.
+    """
+
+    class Opaque(nn.Module):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return torch.ops.aten.tanh.default(x)
+
+    wrap_torch()
+    model = _Holder(Opaque())
+    x = torch.randn(2, 4)
+    with pytest.warns(UserWarning, match=r"adopted at module exit act"):
+        trace = tl.trace(model, x)
+
+    assert "tanh" not in [op.func_name for op in trace.ops]
+    assert trace.capture_verified is False
+    assert trace.capture_verification_reason == "escape_rescue_unrecovered"
+    with pytest.warns(UserWarning, match=_PROVENANCE):
+        assert tl.validate(model, x, scope="forward")
