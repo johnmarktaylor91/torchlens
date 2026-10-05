@@ -106,8 +106,8 @@ def _dispatch_credit_refs(
 
     Those are the tensor results (one level deep) and, for a pure alias operator
     (``aten.detach`` / ``aten.alias``), its operand. Recorded only for owners whose
-    boundary credit is output-scoped, so other dispatches pay one attribute test and
-    allocate nothing.
+    boundary credit is output-scoped; the dispatch hot path tests that field before
+    calling, so other dispatches pay one attribute read and allocate nothing.
     """
 
     if owner is None or not owner.boundary_credit_is_output_scoped:
@@ -164,8 +164,13 @@ def _event_is_capture_accounted(event: _DispatchEvent) -> bool:
     for a mutating dispatch. Mutations always remain visible because a functionless
     boundary cannot attest their side effects on existing graph values. For a
     module-forward token (output-scoped credit) only a dispatch that returned one of the
-    exact boundary tensor objects (or purely aliased one) is accounted; every other dispatch in the module body,
-    such as a stale raw op whose value flowed elsewhere, stays visible. A raw
+    exact boundary tensor objects, or purely aliased one, is accounted; every other
+    dispatch in the module body, such as a stale raw op whose value flowed elsewhere,
+    stays visible. The credit therefore covers one aten dispatch per boundary tensor (and
+    its pure aliases): a multi-dispatch opaque producer, such as a direct
+    ``torch.ops.aten.linear.default`` call on a 3-d input (a CompositeImplicit op that
+    decomposes into ``view``, ``t``, ``addmm``) or a C++ extension whose ``at::`` calls
+    pass through the dispatcher, leaves its inner dispatches flagged. A raw
     replacement-hook token keeps whole-interval credit for its non-mutating dispatches.
 
     Parameters

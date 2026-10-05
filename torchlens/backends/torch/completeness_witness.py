@@ -1400,7 +1400,9 @@ class _CompletenessDispatchMode(_TorchLensDispatchMode):
         if event is not None:
             if _dispatch_result_holds_tensor(result):
                 event.outcome = "returned_tensor"
-                event.credit_refs = _dispatch_credit_refs(event.owner, func, args, result)
+                owner = event.owner
+                if owner is not None and owner.boundary_credit_is_output_scoped:
+                    event.credit_refs = _dispatch_credit_refs(owner, func, args, result)
                 if not event.mutates and _operator_base_name(func) == "aten.as_strided":
                     # Owner-independent: an ``__dlpack__``-wrapper-owned interval is
                     # not a modeled call, so the audited row must still apply.

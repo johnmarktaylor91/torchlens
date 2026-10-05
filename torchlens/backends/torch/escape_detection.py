@@ -176,6 +176,10 @@ class DetectorTables:
     excluded_raw_ids: frozenset[int]
 
 
+_OUTPUT_SCOPED_CREDIT_PREFIX = "module_forward:"
+"""Wrapper-name prefix whose boundary credit is scoped to the boundary tensors."""
+
+
 @dataclass
 class ExpectedOriginalToken:
     """One-shot authorization for one wrapper-to-original call edge."""
@@ -193,18 +197,15 @@ class ExpectedOriginalToken:
     capture_accounted: bool | None = None
     capture_accounted_outputs: dict[int, tuple[torch.Tensor, str]] = field(default_factory=dict)
     capture_callsite: tuple[str, int, str] | None = None
+    boundary_credit_is_output_scoped: bool = False
+    """Whether boundary-backed credit covers only the dispatches that built boundary tensors.
 
-    @property
-    def boundary_credit_is_output_scoped(self) -> bool:
-        """Whether boundary-backed credit covers only the dispatches that built boundary tensors.
-
-        A module-forward token owns every dispatch in the module body that no inner wrapper
-        owns, so an untraced module output must not credit unrelated raw ops in that body.
-        A raw replacement-hook token keeps whole-interval credit: a genuine user
-        replacement's construction is opaque by design.
-        """
-
-        return self.wrapper_name.startswith("module_forward:")
+    Set at token creation (true for a ``module_forward:`` wrapper), so the per-dispatch
+    hot path reads one attribute. A module-forward token owns every dispatch in the
+    module body that no inner wrapper owns, so an untraced module output must not credit
+    unrelated raw ops in that body. A raw replacement-hook token keeps whole-interval
+    credit: a genuine user replacement's construction is opaque by design.
+    """
 
 
 @dataclass
@@ -400,6 +401,7 @@ def expected_original_call(
             func_call_id=func_call_id,
             call_barcode=call_barcode,
             census_scope=census_scope,
+            boundary_credit_is_output_scoped=wrapper_name.startswith(_OUTPUT_SCOPED_CREDIT_PREFIX),
         )
     )
 

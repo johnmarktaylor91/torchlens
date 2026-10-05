@@ -112,15 +112,17 @@ class _Parent(nn.Module):
         return out * 2.0
 
 
-def _validate(model: nn.Module) -> bool:
+def _validate(model: nn.Module, *, grad: bool = True) -> bool:
+    for param in model.parameters():
+        param.requires_grad_(grad)
     torch.manual_seed(0)
     return _validate_forward_pass_torch(
         model.eval(), [torch.randn(3, 4)], {}, random_seed=0, validate_metadata=True
     )
 
 
-def _assert_completeness_failure(model: nn.Module) -> None:
-    assert not _validate(model)
+def _assert_completeness_failure(model: nn.Module, *, grad: bool = True) -> None:
+    assert not _validate(model, grad=grad)
     failure = tl.validation.last_validation_failure()
     assert failure is not None
     assert "bfs_completeness" in failure.summary()
@@ -170,3 +172,89 @@ def test_census_names_only_the_stale_relu_in_iql_shape(monkeypatch: pytest.Monke
     assert "aten.relu.default" in operators
     assert "aten.tanh.default" not in operators
     assert trace.capture_verified is False
+
+
+_ATEN = torch.ops.aten
+
+
+class _BodyChild(nn.Module):
+    """Run ``body(self, x)``: one linear layer, a stale relu, and the case's own forward."""
+
+    def __init__(self, body: Callable[[_BodyChild, torch.Tensor], torch.Tensor]) -> None:
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+        self.stale_relu = _raw(torch.relu)
+        self.body = body
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Delegate to the case body."""
+
+        return self.body(self, x)
+
+
+def _direct_aten_view_output(m: _BodyChild, x: torch.Tensor) -> torch.Tensor:
+    return _ATEN.t.default(m.fc(x))
+
+
+def _direct_aten_split_output(m: _BodyChild, x: torch.Tensor) -> torch.Tensor:
+    return _ATEN.split.Tensor(m.fc(x), 2, 1)[0]
+
+
+def _stale_op_builds_view_base(m: _BodyChild, x: torch.Tensor) -> torch.Tensor:
+    return _ATEN.t.default(m.stale_relu(m.fc(x)))
+
+
+def _stale_op_reads_detached_output(m: _BodyChild, x: torch.Tensor) -> torch.Tensor:
+    out = _ATEN.tanh.default(m.fc(x))
+    m.side = m.stale_relu(_ATEN.detach.default(out))
+    return out
+
+
+def _freed_stale_intermediates(m: _BodyChild, x: torch.Tensor) -> torch.Tensor:
+    hidden = m.fc(x)
+    for _ in range(40):
+        tmp = m.stale_relu(hidden)
+        del tmp
+    return _ATEN.tanh.default(hidden)
+
+
+def _composite_aten_output(m: _BodyChild, x: torch.Tensor) -> torch.Tensor:
+    return _ATEN.linear.default(x.view(1, 3, 4), m.fc.weight, m.fc.bias)
+
+
+@pytest.mark.parametrize("grad", [True, False], ids=["grad", "no_grad"])
+@pytest.mark.parametrize("body", [_direct_aten_view_output, _direct_aten_split_output])
+def test_direct_aten_view_or_split_output_validates(body: Any, grad: bool) -> None:
+    """A direct-aten view or multi-output op whose result is the module output is credited."""
+
+    model = _Parent(_BodyChild(body))
+    assert _validate(model, grad=grad), tl.validation.last_validation_failure()
+
+
+@pytest.mark.filterwarnings(_NO_PROVENANCE)
+@pytest.mark.parametrize("grad", [True, False], ids=["grad", "no_grad"])
+@pytest.mark.parametrize(
+    "body",
+    [_stale_op_builds_view_base, _stale_op_reads_detached_output, _freed_stale_intermediates],
+)
+def test_alias_edges_do_not_credit_stale_ops(body: Any, grad: bool) -> None:
+    """Only the boundary object and its pure aliases are credited, never their neighbours.
+
+    The base of a boundary view, a consumer of a detached boundary, and freed stale
+    intermediates whose addresses a later boundary tensor may reuse all stay flagged.
+    """
+
+    _assert_completeness_failure(_Parent(_BodyChild(body)), grad=grad)
+
+
+@pytest.mark.filterwarnings(_NO_PROVENANCE)
+@pytest.mark.parametrize("grad", [True, False], ids=["grad", "no_grad"])
+def test_multi_dispatch_opaque_output_fails_completeness(grad: bool) -> None:
+    """One raw op means one aten dispatch: a composite op's inner dispatches stay flagged.
+
+    ``aten.linear`` on a 3-d input decomposes above the Python dispatch key into
+    several dispatches (``view``, ``t``, ``addmm``, ...); only the last returns the
+    boundary tensor, so the others are census diagnostics and validation fails.
+    """
+
+    _assert_completeness_failure(_Parent(_BodyChild(_composite_aten_output)), grad=grad)
