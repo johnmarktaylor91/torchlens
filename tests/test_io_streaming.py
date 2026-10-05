@@ -101,7 +101,12 @@ def _tmp_dirs_for(bundle_path: Path) -> list[Path]:
 def test_streaming_writes_blobs_before_postprocess(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Streaming save should create blob files before postprocess step 1 starts."""
+    """Synchronous streaming save creates blob files before postprocess step 1 starts.
+
+    ``async_writes=False`` pins the synchronous path this ordering holds for:
+    ``trace`` defaults to the async writer, whose blobs may still be pending
+    when postprocess begins (they land by the finalize drain barrier).
+    """
 
     bundle_path = tmp_path / "stream_bundle.tl"
     observed: dict[str, object] = {}
@@ -128,7 +133,7 @@ def test_streaming_writes_blobs_before_postprocess(
         model,
         inputs,
         capture=tl.options.CaptureOptions(layers_to_save="all"),
-        streaming=tl.options.StreamingOptions(bundle_path=bundle_path),
+        streaming=tl.options.StreamingOptions(bundle_path=bundle_path, async_writes=False),
     )
 
     assert observed["final_exists"] is False
