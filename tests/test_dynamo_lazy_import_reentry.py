@@ -67,6 +67,7 @@ assert out.shape == (2, 4)
 }
 
 
+@pytest.mark.heavy
 @pytest.mark.parametrize("case", sorted(_CASES))
 def test_fresh_process_meta_capture_survives_lazy_dynamo_import(case: str) -> None:
     """A fresh process whose first ``torch._dynamo`` import fires inside wrapped torch."""

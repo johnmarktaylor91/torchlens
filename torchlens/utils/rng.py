@@ -4639,6 +4639,18 @@ class host_nondeterminism_monitor:
             warm_lazy_torch_imports()
         except Exception:
             pass
+        # The same holds for TorchLens's own lazy import on the first wrapped op
+        # (the observability session reader): resolved in-window, its import ran
+        # the sys.meta_path finders' frames, which the frame-reachable inventory
+        # walks as roots, so a large graph behind a finder exhausted the budget.
+        try:
+            from .._state import pause_logging
+            from ..backends.torch._op_markers import resolve_active_session_fn
+
+            with pause_logging():
+                resolve_active_session_fn()
+        except Exception:
+            pass
         try:
             for step_name, step in self._install_steps():
                 try:

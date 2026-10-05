@@ -105,6 +105,35 @@ def _no_active_session() -> Any:
 _active_session_fn: Callable[[], Any] | None = None
 
 
+def resolve_active_session_fn() -> Callable[[], Any]:
+    """Return the observability session reader, importing it on first use.
+
+    The import is lazy so ``torchlens.backends.torch`` does not load the
+    observability substrate at import time. The host-nondeterminism monitor
+    calls this before it arms: left to the first wrapped op, the import runs
+    inside the monitor window, and the import machinery's ``sys.meta_path``
+    finder frames become roots of its frame-reachable inventory.
+
+    Returns
+    -------
+    Callable[[], Any]
+        ``active_session`` from ``torchlens.observability._session``, or a
+        reader that always returns ``None`` on a torn install.
+    """
+
+    global _active_session_fn
+    session_fn: Callable[[], Any] | None = _active_session_fn
+    if session_fn is None:
+        try:
+            from ...observability._session import active_session
+        except ImportError:  # pragma: no cover - torn install without the substrate
+            session_fn = _no_active_session
+        else:
+            session_fn = active_session
+        _active_session_fn = session_fn
+    return session_fn
+
+
 def _push_op_markers(trace: Any, func_name: str, func_call_id: int) -> tuple[bool, Any]:
     """Open the per-call visual/join markers at the op clock's open (W0.3).
 
@@ -132,17 +161,7 @@ def _push_op_markers(trace: Any, func_name: str, func_call_id: int) -> tuple[boo
         :func:`_pop_op_markers`.
     """
 
-    global _active_session_fn
-    session_fn: Callable[[], Any] | None = _active_session_fn
-    if session_fn is None:
-        try:
-            from ...observability._session import active_session
-        except ImportError:  # pragma: no cover - torn install without the substrate
-            session_fn = _no_active_session
-        else:
-            session_fn = active_session
-        _active_session_fn = session_fn
-    session = session_fn()
+    session = resolve_active_session_fn()()
     wants_nvtx = bool(getattr(trace, "emit_nvtx", False))
     if session is None and not wants_nvtx:
         return (False, None)
@@ -175,4 +194,4 @@ def _pop_op_markers(tokens: tuple[bool, Any]) -> None:
     _nvtx_range_pop(nvtx_pushed)
 
 
-__all__ = ["_pop_op_markers", "_push_op_markers"]
+__all__ = ["_pop_op_markers", "_push_op_markers", "resolve_active_session_fn"]
