@@ -2111,3 +2111,11 @@ env: py3.11-torch2.13.0
 torch: 2.13.0+cpu
 source: ce8f2479b2b780ba52bc95453b4ea24ebaa0049f (clean)
 recorded: 2026-10-03T05:57:26.931312+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: rung-1 settle: deepcopy fidelity moved module.modules() reads from torchlens/_capture_state_helpers.py (5 -> 3) to the new torchlens/_plain_attr_fidelity.py (4); the weightnorm shadowed-submodule probe adds one sys.modules read in torchlens/utils/_torch_symbols.py (1; _torch_compat.py stays 15); R43 splits moved reads verbatim: completeness backstop func_call_id core.py (1 plain + 4 getattr -> 0 + 3) to validation/_completeness_backstop.py (1 + 1), index-domain parent_arg_positions getattr exemptions.py (10 with class-3 -> 8) to validation/_index_domain.py (2). Applied row by row from a refresh run (job torchlens-rung1c-ratchets-4); the exemptions.py plain parent_arg_positions row (ledger 7, live 11) is inherited drift on origin/main 20c222a3c and deliberately NOT refreshed here
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e9ebdab06 (static_scan rows hand-applied)
+recorded: 2026-10-05T08:30:00+00:00

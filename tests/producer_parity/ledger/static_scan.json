@@ -20,7 +20,7 @@
   "field": "modules",
   "file": "torchlens/_capture_state_helpers.py",
   "has_default": false,
-  "sites": 5,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -317,6 +317,14 @@
   "file": "torchlens/_io/tlspec.py",
   "has_default": false,
   "sites": 5,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_plain_attr_fidelity.py",
+  "has_default": false,
+  "sites": 4,
   "via_getattr": false
  },
  {
@@ -8161,6 +8169,14 @@
  },
  {
   "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/utils/_torch_symbols.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "function",
   "file": "torchlens/utils/hashing.py",
   "has_default": false,
@@ -8274,10 +8290,34 @@
  {
   "ambiguous": false,
   "field": "func_call_id",
+  "file": "torchlens/validation/_completeness_backstop.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "func_call_id",
+  "file": "torchlens/validation/_completeness_backstop.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "func_call_id",
   "file": "torchlens/validation/_edge_boundary.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/validation/_index_domain.py",
+  "has_default": true,
+  "sites": 2,
+  "via_getattr": true
  },
  {
   "ambiguous": false,
@@ -8755,16 +8795,8 @@
   "ambiguous": false,
   "field": "func_call_id",
   "file": "torchlens/validation/core.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": false,
-  "field": "func_call_id",
-  "file": "torchlens/validation/core.py",
   "has_default": true,
-  "sites": 4,
+  "sites": 3,
   "via_getattr": true
  },
  {
@@ -8828,7 +8860,7 @@
   "field": "parent_arg_positions",
   "file": "torchlens/validation/exemptions.py",
   "has_default": true,
-  "sites": 9,
+  "sites": 8,
   "via_getattr": true
  },
  {
