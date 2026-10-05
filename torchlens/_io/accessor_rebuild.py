@@ -75,6 +75,22 @@ def rebuild_trace_accessors(
             if kind_store is not None and not kind_store.frozen and _core.ops.frozen:
                 kind_store.freeze()
 
+    rebuild_buffer_accessor(trace)
+
+
+def rebuild_buffer_accessor(trace: Trace) -> None:
+    """Rebuild the user-facing buffer accessor on a ``Trace`` from its buffer ops.
+
+    Split out of ``rebuild_trace_accessors`` so preview function-root traces,
+    which build their single ``self`` module directly, still get a (possibly
+    empty) ``trace.buffers`` accessor instead of ``None``.
+
+    Parameters
+    ----------
+    trace:
+        Model log receiving the rebuilt buffer accessor.
+    """
+
     buffer_versions: dict[str, list[Op]] = {}
     for entry in trace.layer_list:
         for grad_record in getattr(entry, "_grad_records", ()):

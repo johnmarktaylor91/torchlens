@@ -109,6 +109,7 @@ def _rebuild_inputs(capture: Any, ops_by_label: Mapping[str, Any]) -> RebuiltPad
 
     parent_values: dict[str, Any] = {}
     leaf_paths_by_parent: dict[str, list[tuple[Any, ...]]] = {}
+    param_inputs: Mapping[tuple[Any, ...], Any] = getattr(capture, "param_inputs", None) or {}
 
     def _rebuild(value: Any, path: tuple[Any, ...]) -> Any:
         """Rebuild one nested template value."""
@@ -116,6 +117,8 @@ def _rebuild_inputs(capture: Any, ops_by_label: Mapping[str, Any]) -> RebuiltPad
         if _is_tensor_marker(value):
             label = value.get("label")
             if label is None:
+                if path in param_inputs:
+                    return _parameter_replay_copy(param_inputs[path])
                 if _is_factory_or_source_capture(capture):
                     return None
                 raise ValueError(f"unlabeled tensor input leaf at {path!r}")
@@ -153,6 +156,31 @@ def _rebuild_inputs(capture: Any, ops_by_label: Mapping[str, Any]) -> RebuiltPad
         parent_values,
         {label: tuple(paths) for label, paths in leaf_paths_by_parent.items()},
     )
+
+
+def _parameter_replay_copy(param: Any) -> Any:
+    """Return a detached copy of a live parameter for replay.
+
+    Replay reads the parameter's CURRENT value. A parameter changed since the
+    forward makes the replay disagree with the saved output, so a stale value
+    can only fail validation, never pass it; the copy keeps a replayed op
+    that writes its inputs from mutating the user's model.
+
+    Parameters
+    ----------
+    param
+        Live Paddle parameter recorded by the capture.
+
+    Returns
+    -------
+    Any
+        Detached Paddle tensor with the same value, dtype and place.
+    """
+
+    import paddle
+
+    with paddle.no_grad():
+        return paddle.assign(param.detach())
 
 
 def _payloads_close(a: Any, b: Any) -> bool:
@@ -356,7 +384,7 @@ def _coverage_oracle(trace: Any) -> bool:
         is_factory = _is_factory_or_source_capture(capture)
         if not is_factory:
             for leaf in getattr(capture, "tensor_inputs", ()):
-                if getattr(leaf, "label", None) is None:
+                if getattr(leaf, "label", None) is None and not _is_known_param_leaf(capture, leaf):
                     return False
             if tuple(getattr(capture, "capture_gap_markers", ())) != ():
                 return False
@@ -384,6 +412,28 @@ def _coverage_oracle(trace: Any) -> bool:
             if not label.startswith("input.") and label not in graph_parents:
                 return False
     return True
+
+
+def _is_known_param_leaf(capture: Any, leaf: Any) -> bool:
+    """Return whether an unlabeled input leaf is a recorded module parameter.
+
+    Parameters
+    ----------
+    capture
+        Paddle operation capture record.
+    leaf
+        One of the capture's ``tensor_inputs``.
+
+    Returns
+    -------
+    bool
+        True only when the leaf carries a parameter address AND the capture
+        holds the parameter object for replay at that path.
+    """
+
+    path = tuple(getattr(leaf, "path", ()))
+    param_inputs = getattr(capture, "param_inputs", None) or {}
+    return getattr(leaf, "param_address", None) is not None and path in param_inputs
 
 
 def _is_tensor_marker(value: Any) -> bool:
