@@ -250,7 +250,8 @@ def _escape_signal(trace: Trace) -> str | None:
 #: Non-commutative reflected dunders keep their own op: ``__rsub__`` is not
 #: ``sub``. ``capture/arg_positions._COMMUTATIVE_REFLECTED_DUNDERS`` cannot be
 #: reused: it labels ``__rand__`` as ``and``, but the mode spelling is
-#: ``bitwise_and``.
+#: ``bitwise_and``. ``__long__`` and ``__nonzero__`` are Python 2 aliases that
+#: torch binds to ``__int__`` and ``__bool__``.
 _MODE_RESPELLED_DUNDERS = {
     "__radd__": "add",
     "__rmul__": "mul",
@@ -270,6 +271,8 @@ _MODE_RESPELLED_DUNDERS = {
     "__ifloordiv__": "floor_divide_",
     "__imod__": "remainder_",
     "__ipow__": "pow_",
+    "__long__": "__int__",
+    "__nonzero__": "__bool__",
 }
 
 

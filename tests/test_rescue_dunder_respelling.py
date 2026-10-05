@@ -104,8 +104,14 @@ def _respelling_mismatch(dunder: str) -> str | None:
     return None
 
 
+#: Admitted dunders no tensor call completes, so none ever reaches a trace:
+#: tensors reject item deletion for every operand.
+_NEVER_COMPLETES = frozenset({"__delitem__"})
+
 #: Every admitted operator dunder the running torch defines on ``Tensor``.
-_TENSOR_DUNDERS = sorted(d for d in _ALLOWED_FORWARD_DUNDERS if hasattr(torch.Tensor, d))
+_TENSOR_DUNDERS = sorted(
+    d for d in _ALLOWED_FORWARD_DUNDERS - _NEVER_COMPLETES if hasattr(torch.Tensor, d)
+)
 
 
 @pytest.mark.parametrize("dunder", _TENSOR_DUNDERS)
