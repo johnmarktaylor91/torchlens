@@ -317,7 +317,7 @@ def test_tf_public_validate_forward_scope_still_fails_closed() -> None:
 
 
 def _depthwise_relu6(x: Any, kernel: Any) -> Any:
-    """Run a depthwise convolution into ``relu6`` (the MobileNet block shape).
+    """Run pad, depthwise convolution, ``relu6`` (the MobileNet block shape).
 
     Parameters
     ----------
@@ -332,7 +332,8 @@ def _depthwise_relu6(x: Any, kernel: Any) -> Any:
         Block output.
     """
 
-    y = tf.nn.depthwise_conv2d(x, kernel, strides=[1, 1, 1, 1], padding="SAME")
+    padded = tf.pad(x, [[0, 0], [1, 1], [1, 1], [0, 0]])
+    y = tf.nn.depthwise_conv2d(padded, kernel, strides=[1, 1, 1, 1], padding="VALID")
     return tf.nn.relu6(y * 4.0)
 
 
@@ -345,7 +346,7 @@ def _depthwise_inputs() -> tuple[Any, Any]:
 
 
 def test_tf_validation_replays_depthwise_conv_and_relu6() -> None:
-    """MobileNet's depthwise conv and ``relu6`` replay instead of failing closed."""
+    """MobileNet's pad, depthwise conv and ``relu6`` replay instead of failing or skipping."""
 
     trace = tl.trace(_depthwise_relu6, _depthwise_inputs(), backend="tf")
 
@@ -353,12 +354,13 @@ def test_tf_validation_replays_depthwise_conv_and_relu6() -> None:
     replayed = getattr(trace, "_tf_validation_result").replayed_histogram
     assert replayed["DepthwiseConv2dNative"] == 1
     assert replayed["Relu6"] == 1
+    assert replayed["Pad"] == 1
 
 
 def test_tf_validation_depthwise_and_relu6_corruption_fails() -> None:
-    """A corrupted depthwise or ``relu6`` payload fails replay, never passes."""
+    """A corrupted pad, depthwise or ``relu6`` payload fails replay, never passes."""
 
-    for op_type in ("DepthwiseConv2dNative", "Relu6"):
+    for op_type in ("Pad", "DepthwiseConv2dNative", "Relu6"):
         trace = tl.trace(_depthwise_relu6, _depthwise_inputs(), backend="tf")
         target = next(op for op in trace.layer_list if op.func_name == op_type)
         target.out = target.out + 0.5
