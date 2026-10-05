@@ -12,9 +12,13 @@ never output equality alone.
 
 from __future__ import annotations
 
+import contextlib
+from collections.abc import Iterator
+
 import pytest
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 import torchlens as tl
 from torchlens.errors.episode import EpisodeCaptureError, EpisodeDeclarationError, EpisodeJoinError
@@ -115,6 +119,27 @@ def _fire_counts(log: tl.Trace) -> list:
     return [row["fire_count"] for row in log.annotations["episode"]["rows"]]
 
 
+@contextlib.contextmanager
+def _plain_layer_norm_zeroed() -> Iterator[None]:
+    """Plain torch: every ``F.layer_norm`` returns zeros (no TorchLens involved)."""
+
+    original = F.layer_norm
+    F.layer_norm = lambda *args, **kwargs: torch.zeros_like(original(*args, **kwargs))
+    try:
+        yield
+    finally:
+        F.layer_norm = original
+
+
+def _plain_greedy_tokens(perturbed: bool) -> list[int]:
+    """The N_STEPS greedy tokens of plain-torch generation on the fixed weights."""
+
+    runner = _Generate(build_distilgpt2("eager"), N_STEPS)
+    context = _plain_layer_norm_zeroed() if perturbed else contextlib.nullcontext()
+    with torch.no_grad(), context:
+        return runner(_prompt())[0, -N_STEPS:].tolist()
+
+
 def _baseline_and_coupled():
     runner = _Generate(build_distilgpt2("eager"), N_STEPS)
     baseline = tl.trace(
@@ -124,15 +149,28 @@ def _baseline_and_coupled():
         capture=tl.options.CaptureOptions(random_seed=CAPTURE_SEED),
     )
     runner2 = _Generate(build_distilgpt2("eager"), N_STEPS)
-    # zero_ablate (not a monotone rescale) so the greedy argmax provably
-    # moves on this seed: base [[196]x3] -> ablated [[333]x3], probed.
-    coupled = _coupled_trace(runner2, tl.when(tl.func("softmax"), tl.zero_ablate()))
+    # Zeroing every layer_norm zeroes ln_f, so the bias-free lm_head emits all-zero
+    # logits and greedy argmax picks token 0 at every step, whatever the weights.
+    coupled = _coupled_trace(runner2, tl.when(tl.func("layer_norm"), tl.zero_ablate()))
     return baseline, coupled
+
+
+def _step_tokens(log: tl.Trace) -> list[int]:
+    """The token each episode step emitted (step_output is the appended id)."""
+
+    rows = log.annotations["episode"]["rows"]
+    return [int(torch.as_tensor(row["step_output"]).reshape(-1)[-1]) for row in rows]
 
 
 def test_distilgpt2_coupled_evidence_bar():
     """Coupled distilgpt2: bound binding, perturbed fidelity, exact counts."""
 
+    # The premise, checked in plain torch first: the perturbation moves greedy argmax
+    # for these fixed weights. If it ever stops, this fails here, before TorchLens.
+    plain_base, plain_perturbed = _plain_greedy_tokens(False), _plain_greedy_tokens(True)
+    assert plain_perturbed != plain_base, (
+        f"premise broken: zeroing layer_norm leaves greedy tokens {plain_base} unchanged"
+    )
     baseline, coupled = _baseline_and_coupled()
     attestation = coupled.episode_coupling
     assert attestation.coupled is True and attestation.bound is True
@@ -144,9 +182,8 @@ def test_distilgpt2_coupled_evidence_bar():
     # differ from the baseline's uncoupled header.
     assert _header(baseline)["intervention_digest"] is None
     assert _header(coupled)["intervention_digest"] is not None
-    baseline_tokens = [row["step_output"] for row in baseline.annotations["episode"]["rows"]]
-    coupled_tokens = [row["step_output"] for row in coupled.annotations["episode"]["rows"]]
-    assert coupled_tokens != baseline_tokens  # halving attention logits moves argmax
+    assert _step_tokens(baseline) == plain_base
+    assert _step_tokens(coupled) == plain_perturbed
 
 
 def test_distilgpt2_identical_coupled_reruns_mint_identical_digests():
