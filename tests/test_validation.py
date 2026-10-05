@@ -8249,6 +8249,13 @@ def test_genuine_raw_hook_untraceable_replacement_validates_depth_zero() -> None
     _assert_validation_capture_is_clean(model, x)
 
 
+# An untraceable (raw-ATen) module RETURN is a capture gap TorchLens cannot see
+# into; the module-exit adoption record discloses it with the provenance
+# warning (and the rescue settles ``escape_rescue_unrecovered``), exactly as the
+# module-entry record discloses one a module consumes.
+_OPAQUE_EXIT_DISCLOSURE = r"adopted at module exit"
+
+
 def test_plain_trace_noop_hook_untraceable_exit_is_internal_source_nested_depth() -> None:
     """TRIPWIRE at nesting depth >= 2: a plain-capture gap under a no-op
     observer hook, on a module nested 2+ address levels deep, must stay
@@ -8285,7 +8292,10 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source_nested_depth(
     model = _RawAtenGeluNet().eval()
     model.mid.inner.register_forward_hook(_noop_observer_hook)  # nested 2 levels deep
     x = torch.randn(3, 8)
-    log = trace_fn(model, [x], {})
+    # The opaque return is a real capture gap: it is disclosed (module-exit
+    # adoption record) while the boundary still logs it as an internal source.
+    with pytest.warns(UserWarning, match=_OPAQUE_EXIT_DISCLOSURE):
+        log = trace_fn(model, [x], {})
     try:
         assert _functionless_replacement_ops(log) == []
         assert [op for op in log.ops if getattr(op, "intervention_replaced", False)] == []
@@ -8311,7 +8321,8 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source() -> None:
 
     model = _RawAtenReluNet().eval()
     x = torch.randn(3, 4)
-    log = trace_fn(model, [x], {})
+    with pytest.warns(UserWarning, match=_OPAQUE_EXIT_DISCLOSURE):
+        log = trace_fn(model, [x], {})
     try:
         # No genuine intervention happened -> zero functionless placeholders and
         # zero intervention_replaced ops during plain capture.

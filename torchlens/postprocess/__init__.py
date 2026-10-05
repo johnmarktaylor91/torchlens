@@ -497,9 +497,14 @@ def _warn_unattributed_tensor_args(self: "Trace") -> None:
     # unattributed-args case; without this fold, a stale-ref escape whose
     # output was first consumed by a MODULE was laundered into a clean
     # ``internalsource`` node -- no warning, no rescue,
-    # consumption-order-dependent disclosure.
-    for label, module_address in self.__dict__.pop("_module_entry_adoptions", None) or ():
-        offenders.append(f"{label} (adopted at module entry {module_address})")
+    # consumption-order-dependent disclosure. Module-EXIT adoptions are the
+    # module-returned twin (a stale ref whose output a module returns, e.g.
+    # transformers' ``GELUActivation``): the boundary op tagged it before any
+    # consumer could flag it.
+    for label, boundary, module_address in (
+        self.__dict__.pop("_module_boundary_adoptions", None) or ()
+    ):
+        offenders.append(f"{label} (adopted at module {boundary} {module_address})")
     if not offenders:
         return
     # Session-time escape signal: the capture entry reads this flag to decide

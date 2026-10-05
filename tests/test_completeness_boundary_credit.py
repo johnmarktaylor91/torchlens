@@ -129,21 +129,25 @@ def _assert_completeness_failure(model: nn.Module, *, grad: bool = True) -> None
     assert "bfs_completeness" in failure.summary()
 
 
+# The stale op's output reaches the next traced op with no recorded parent; that
+# provenance disclosure is expected alongside the completeness failure. An opaque
+# module RETURN is disclosed the same way (module-exit adoption record) while the
+# boundary still credits the dispatch that built it.
+_NO_PROVENANCE = "ignore:TorchLens found tensor arguments with no graph:UserWarning"
+
+
+@pytest.mark.filterwarnings(_NO_PROVENANCE)
 def test_single_opaque_output_op_still_validates() -> None:
     """The boundary still credits the one direct-aten op that built the module output."""
 
     assert _validate(_Parent(_OpaqueOutputChild())), tl.validation.last_validation_failure()
 
 
+@pytest.mark.filterwarnings(_NO_PROVENANCE)
 def test_tuple_of_opaque_outputs_still_validates() -> None:
     """Every tensor of a tuple result that is a boundary output is credited."""
 
     assert _validate(_Parent(_OpaqueTupleChild())), tl.validation.last_validation_failure()
-
-
-# The stale op's output reaches the next traced op with no recorded parent; that
-# provenance disclosure is expected alongside the completeness failure.
-_NO_PROVENANCE = "ignore:TorchLens found tensor arguments with no graph:UserWarning"
 
 
 @pytest.mark.filterwarnings(_NO_PROVENANCE)
@@ -223,6 +227,7 @@ def _composite_aten_output(m: _BodyChild, x: torch.Tensor) -> torch.Tensor:
     return _ATEN.linear.default(x.view(1, 3, 4), m.fc.weight, m.fc.bias)
 
 
+@pytest.mark.filterwarnings(_NO_PROVENANCE)
 @pytest.mark.parametrize("grad", [True, False], ids=["grad", "no_grad"])
 @pytest.mark.parametrize("body", [_direct_aten_view_output, _direct_aten_split_output])
 def test_direct_aten_view_or_split_output_validates(body: Any, grad: bool) -> None:

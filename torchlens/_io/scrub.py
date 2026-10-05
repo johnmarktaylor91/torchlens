@@ -1336,7 +1336,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
 
     return field_name in {
         "_had_unattributed_tensor_args",
-        "_module_entry_adoptions",
+        "_module_boundary_adoptions",
         "_last_sibling_ordering_decision",
         # Sibling render diagnostic (same _render_dot write site as the row
         # above); left unenrolled, ONE draw() poisoned every later tl.save.
