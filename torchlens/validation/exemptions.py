@@ -1711,6 +1711,48 @@ CUSTOM_EXEMPTION_CHECKS: dict[str, Callable[["Trace", Op, list[str]], bool]] = {
 # ---------------------------------------------------------------------------
 
 
+def _perturbed_label_occupies_non_structural_slot(
+    perturbed_label: str,
+    recorded_args: dict[Any, Any],
+    recorded_kwargs: dict[str, Any],
+    exempt_positions: set[int],
+    alias_by_position: dict[int, set[str]],
+) -> bool:
+    """Return whether ``perturbed_label`` fills any slot outside the structural ones.
+
+    Parameters
+    ----------
+    perturbed_label:
+        Parent label being perturbed.
+    recorded_args:
+        ``parent_arg_positions["args"]`` (int or nested tuple keys).
+    recorded_kwargs:
+        ``parent_arg_positions["kwargs"]``.
+    exempt_positions:
+        Structural positional roots.
+    alias_by_position:
+        Keyword spellings of each structural position.
+
+    Returns
+    -------
+    bool
+        True when the label also occupies a positional root outside
+        ``exempt_positions`` or a keyword that is not a structural alias.
+    """
+
+    structural_kwargs = {
+        alias for pos in exempt_positions for alias in alias_by_position.get(pos, set())
+    }
+    for key, label in recorded_args.items():
+        root = key[0] if isinstance(key, tuple) and key else key
+        if label == perturbed_label and root not in exempt_positions:
+            return True
+    return any(
+        label == perturbed_label and name not in structural_kwargs
+        for name, label in recorded_kwargs.items()
+    )
+
+
 def perturbed_layer_at_structural_position(
     self: "Trace",
     layer: Op,
@@ -1733,6 +1775,14 @@ def perturbed_layer_at_structural_position(
         STRUCTURAL_ARG_KWARG_ALIASES.get(func_name, {}) if isinstance(func_name, str) else {}
     )
     recorded_args = parent_arg_positions.get("args", {}) or {}
+    recorded_kwargs = parent_arg_positions.get("kwargs", {}) or {}
+    if _perturbed_label_occupies_non_structural_slot(
+        perturbed_label, recorded_args, recorded_kwargs, exempt_positions, alias_by_position
+    ):
+        # The same parent ALSO feeds a value-bearing slot (``x.view_as(x)``,
+        # ``x.expand_as(x)``): that role is a genuine value dependency, so the
+        # edge stays perturbation-tested.
+        return False
     for pos in exempt_positions:
         if recorded_args.get(pos) == perturbed_label:
             return True
@@ -1745,7 +1795,7 @@ def perturbed_layer_at_structural_position(
                 return True
         aliases = alias_by_position.get(pos, set())
         for alias in aliases:
-            if parent_arg_positions.get("kwargs", {}).get(alias) == perturbed_label:
+            if recorded_kwargs.get(alias) == perturbed_label:
                 return True
     return False
 
@@ -2167,12 +2217,13 @@ def _posthoc_discrete_output_decision(
 # with fresh draws. By their definitions -- ``normal_(mean, std)``,
 # ``uniform_(from, to)``, ``cauchy_(median, sigma)``, ``log_normal_(mean,
 # std)``, ``geometric_(p)``, ``random_([from,] to)`` -- each element of the
-# result is a draw parameterized only by Python scalars (and the generator),
-# so the destination contributes shape/dtype/device and nothing of its
-# values. None of these signatures takes a tensor operand besides the
-# destination; ``bernoulli_`` does (its ``p``), which is why the decision
-# below exempts ONLY a parent at the destination slot and lets any other
-# parent fall through to the failure path. ``exponential_`` sits in
+# result is a draw parameterized only by its scalar parameters (and the
+# generator), so the destination contributes shape/dtype/device and nothing
+# of its values. Those scalar parameters may arrive as 0-d tensors (torch's
+# parser accepts ``normal_(torch.tensor(0.0), 1.0)``), and ``bernoulli_``
+# takes a tensor ``p``; such a parent is not at the destination slot, so the
+# decision below exempts ONLY a parent at the destination slot and lets any
+# other parent fall through to the failure path. ``exponential_`` sits in
 # ``SKIP_PERTURBATION_ENTIRELY`` already.
 _RNG_FILL_DESTINATION_OPS: frozenset[str] = frozenset(
     {
@@ -2634,6 +2685,76 @@ def _posthoc_value_proof_decision(
     return PosthocPerturbDecision(False, "not_value_proved")
 
 
+def _is_unsigned_integer_dtype(dtype: torch.dtype) -> bool:
+    """Return whether ``dtype`` is an unsigned integer dtype (bool excluded).
+
+    Parameters
+    ----------
+    dtype:
+        Torch dtype to classify.
+
+    Returns
+    -------
+    bool
+        True for ``uint8``/``uint16``/``uint32``/``uint64``.
+    """
+
+    return (
+        dtype != torch.bool
+        and not dtype.is_floating_point
+        and not dtype.is_complex
+        and not dtype.is_signed
+    )
+
+
+def _float_dtype_holds_integer_range(float_dtype: torch.dtype, int_dtype: torch.dtype) -> bool:
+    """Return whether every value of ``int_dtype`` is finite in ``float_dtype``.
+
+    Parameters
+    ----------
+    float_dtype:
+        Floating result dtype.
+    int_dtype:
+        Integer or bool dividend dtype.
+
+    Returns
+    -------
+    bool
+        True when ``finfo(float_dtype).max >= iinfo(int_dtype).max``.
+    """
+
+    int_max = 1 if int_dtype == torch.bool else torch.iinfo(int_dtype).max
+    return float(torch.finfo(float_dtype).max) >= float(int_max)
+
+
+def _mod_divisor_values_as_torch_sees_them(divisor: Any) -> torch.Tensor | None:
+    """Return the divisor's values widened so no wraparound hides them.
+
+    A uint8 ``255`` compares equal to ``-1`` in its own dtype; widening to
+    int64 (integer/bool) or float64 (floating) compares the true values.
+
+    Parameters
+    ----------
+    divisor:
+        Saved divisor argument (tensor or Python number).
+
+    Returns
+    -------
+    torch.Tensor | None
+        Widened divisor values, or None when the divisor is not a non-empty
+        real tensor or a Python int/float.
+    """
+
+    if isinstance(divisor, torch.Tensor):
+        if divisor.numel() == 0 or divisor.dtype.is_complex:
+            return None
+        wide = torch.float64 if divisor.dtype.is_floating_point else torch.int64
+        return divisor.detach().to(device="cpu", dtype=wide)
+    if isinstance(divisor, bool) or not isinstance(divisor, (int, float)):
+        return None
+    return torch.tensor(float(divisor), dtype=torch.float64)
+
+
 def _integer_mod_unit_divisor_decision(
     layer: Op,
     layers_to_perturb: list[str],
@@ -2651,7 +2772,12 @@ def _integer_mod_unit_divisor_decision(
 
     The proof is taken from the saved call only: the dividend must be an
     integer or bool tensor, the divisor a Python int/float or a tensor whose
-    every element is exactly +1 or -1, the saved output must be all zeros,
+    every element (widened to int64/float64, so a uint8 255 is not -1) is
+    exactly +1 or -1, or exactly +1 when any operand or the result is
+    unsigned (there -1 wraps to the dtype's max), a floating result dtype
+    must hold the dividend dtype's whole range (float16 does not: large
+    integers become inf and the remainder nan), the saved output must be
+    all zeros,
     and the perturbed parent must occupy the dividend slot alone (a parent
     that is also the divisor, or a divisor parent, is not covered). A float
     dividend, any other divisor value, or a divisor perturbation falls
@@ -2678,17 +2804,30 @@ def _integer_mod_unit_divisor_decision(
         return not_proved
     if dividend.dtype.is_floating_point or dividend.dtype.is_complex:
         return not_proved
-    if isinstance(divisor, torch.Tensor):
-        if divisor.numel() == 0 or divisor.dtype.is_complex:
-            return not_proved
-        if not bool(((divisor == 1) | (divisor == -1)).all()):
-            return not_proved
-    elif (
-        isinstance(divisor, bool) or not isinstance(divisor, (int, float)) or divisor not in (1, -1)
-    ):
-        return not_proved
     out = getattr(layer, "out", None)
     if not isinstance(out, torch.Tensor) or bool(torch.count_nonzero(out)):
+        return not_proved
+    divisor_values = _mod_divisor_values_as_torch_sees_them(divisor)
+    if divisor_values is None:
+        return not_proved
+    # An unsigned operand or result wraps -1 to the dtype's max (uint8: 255),
+    # so ``x % -1`` there is ``x % 255``; only +1 keeps the proof.
+    unsigned_involved = any(
+        _is_unsigned_integer_dtype(dtype)
+        for dtype in (
+            dividend.dtype,
+            out.dtype,
+            divisor.dtype if isinstance(divisor, torch.Tensor) else torch.int64,
+        )
+    )
+    allowed = (divisor_values == 1) if unsigned_involved else (divisor_values.abs() == 1)
+    if not bool(allowed.all()):
+        return not_proved
+    # A floating result must hold every value of the dividend's dtype; float16
+    # turns integers above 65504 into inf and the remainder into nan.
+    if out.dtype.is_floating_point and not _float_dtype_holds_integer_range(
+        out.dtype, dividend.dtype
+    ):
         return not_proved
     if not _perturbed_parents_only_occupy_template_slot(
         layer, layers_to_perturb, template_arg_roots=(0,), template_kwarg_names=("input", "self")

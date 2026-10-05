@@ -4204,14 +4204,35 @@ def _perturbation_retry_strategies(layer: Op) -> list[str]:
         run while the edge still looks non-influential.
     """
 
-    strategies = ["step_up", "step_down", "unit_step_up", "unit_step_down"]
+    strategies = _value_retry_strategies(layer)
     if layer_has_index_domain_parent(layer):
         # The default probe rotates EVERY index by one domain position, a
         # permutation that leaves histogram-only outputs (per-relation edge
-        # counts on balanced relations) unchanged, and the uniform steps above
+        # counts on balanced relations) unchanged, and the uniform steps
         # leave the domain and raise. The single-entry move changes the
-        # histogram in-domain (``index_domain_single_entry_values``).
+        # histogram in-domain (``index_domain_single_entry_values``). It runs
+        # LAST: for a non-index parent it yields no perturbation, which ends
+        # the retry loop, so placing it earlier would cut off the bool-output
+        # and magnitude rungs for that parent.
         strategies.append(_INDEX_SINGLE_ENTRY_STRATEGY)
+    return strategies
+
+
+def _value_retry_strategies(layer: Op) -> list[str]:
+    """Return the value-step retry strategies, before any index-only rung.
+
+    Parameters
+    ----------
+    layer:
+        Child op being validated; gates the bool and magnitude rungs.
+
+    Returns
+    -------
+    list of str
+        Minimal steps, unit steps, then the bool or discretizing ladders.
+    """
+
+    strategies = ["step_up", "step_down", "unit_step_up", "unit_step_down"]
     if getattr(layer, "dtype", None) == torch.bool:
         # R08: a bool-output child is a THRESHOLD op — small steps routinely
         # fail to cross it, which the blanket ``discrete_bool_output``

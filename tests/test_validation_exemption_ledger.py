@@ -369,8 +369,11 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         contract="C2 perturbation sensitivity",
         proof="torchlens.validation.exemptions:_integer_mod_unit_divisor_decision",
         refuses=(
-            "a float dividend, a divisor other than +-1, a nonzero saved output, and "
-            "any perturbed parent at the divisor slot"
+            "a float dividend, a divisor other than +-1 (compared after widening, so a "
+            "uint8 255 is not -1), -1 when any operand or the result is unsigned (it "
+            "wraps to the dtype max), a floating result that cannot hold the dividend "
+            "dtype's range (float16), a nonzero saved output, and any perturbed parent "
+            "at the divisor slot"
         ),
     ),
     Exemption(
@@ -1064,7 +1067,10 @@ STRUCTURAL_POSITION_LEDGER: tuple[StructuralPositionExemption, ...] = (
         justification=(
             "Tensor.reshape_as(other) is self.reshape(other.sizes()): arg 1 is consumed for its SHAPE only, never its elements"
         ),
-        refuses="arg 0, whose values are the output values in a new shape",
+        refuses=(
+            "arg 0, whose values are the output values in a new shape, including "
+            "when the same parent also fills arg 1 (x.view_as(x))"
+        ),
     ),
     StructuralPositionExemption(
         func_name="reshapeas",
@@ -1074,7 +1080,10 @@ STRUCTURAL_POSITION_LEDGER: tuple[StructuralPositionExemption, ...] = (
         justification=(
             "canonicalized TorchLens spelling of reshape_as; the arg-1 tensor is a shape template whose values are never read"
         ),
-        refuses="arg 0, whose values are the output values in a new shape",
+        refuses=(
+            "arg 0, whose values are the output values in a new shape, including "
+            "when the same parent also fills arg 1 (x.view_as(x))"
+        ),
     ),
     StructuralPositionExemption(
         func_name="view_as",
@@ -1084,7 +1093,10 @@ STRUCTURAL_POSITION_LEDGER: tuple[StructuralPositionExemption, ...] = (
         justification=(
             "Tensor.view_as(other) is self.view(other.size()): arg 1 is consumed for its SHAPE only, never its elements"
         ),
-        refuses="arg 0, whose values are the output values in a new shape",
+        refuses=(
+            "arg 0, whose values are the output values in a new shape, including "
+            "when the same parent also fills arg 1 (x.view_as(x))"
+        ),
     ),
     StructuralPositionExemption(
         func_name="viewas",
@@ -1094,7 +1106,10 @@ STRUCTURAL_POSITION_LEDGER: tuple[StructuralPositionExemption, ...] = (
         justification=(
             "canonicalized TorchLens spelling of view_as; the arg-1 tensor is a shape template whose values are never read"
         ),
-        refuses="arg 0, whose values are the output values in a new shape",
+        refuses=(
+            "arg 0, whose values are the output values in a new shape, including "
+            "when the same parent also fills arg 1 (x.view_as(x))"
+        ),
     ),
     StructuralPositionExemption(
         func_name="type_as",

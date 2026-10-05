@@ -198,6 +198,74 @@ def test_integer_mod_unit_divisor_refuses_a_divisor_parent() -> None:
     assert not _integer_mod_unit_divisor_decision(layer, ["dividend"], floats).exempt
 
 
+class _ZeroMaskMod(nn.Module):
+    """An all-zero integer mask taken modulo a divisor outside the +-1 proof."""
+
+    def __init__(self, kind: str) -> None:
+        super().__init__()
+        self.kind = kind
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        mask = (x > 100).to(torch.uint8)
+        if self.kind == "uint8_mod_neg1":
+            return mask % -1
+        if self.kind == "int64_mod_uint8_255":
+            return mask.long() % torch.tensor([255], dtype=torch.uint8)
+        return mask.long() % torch.ones(1, dtype=torch.float16)
+
+
+@pytest.mark.parametrize("kind", ["uint8_mod_neg1", "int64_mod_uint8_255", "int64_mod_float16_one"])
+def test_integer_mod_outside_unit_proof_still_fails_when_frozen(kind: str) -> None:
+    """Wrapped -1 (uint8: ``% 255``) and float16 results (nan) stay tested.
+
+    ``uint8 % -1`` computes ``% 255``, a uint8 ``255`` divisor compares equal to
+    ``-1`` in its own dtype, and a float16 result turns integers above 65504
+    into nan, so in each case the dividend's values reach the output.
+    """
+
+    torch.manual_seed(0)
+    trace = _capture(_ZeroMaskMod(kind), torch.randn(5))
+    op = next(op for op in trace.layer_list if op.func_name in ("__mod__", "remainder"))
+    _assert_frozen_edge_fails(trace, op, 0)
+
+
+def test_integer_mod_unit_divisor_refuses_wrapped_and_narrow_float_operands() -> None:
+    """Decision-level refusals for unsigned -1, a uint8 255 divisor and float16."""
+
+    layer = SimpleNamespace(
+        func_name="remainder",
+        out=torch.zeros(3, dtype=torch.uint8),
+        parent_arg_positions={"args": {0: "dividend"}, "kwargs": {}},
+    )
+    uint8_dividend = torch.zeros(3, dtype=torch.uint8)
+    assert _integer_mod_unit_divisor_decision(layer, ["dividend"], (uint8_dividend, 1)).exempt
+    assert not _integer_mod_unit_divisor_decision(layer, ["dividend"], (uint8_dividend, -1)).exempt
+    int_layer = SimpleNamespace(
+        func_name="remainder",
+        out=torch.zeros(3, dtype=torch.long),
+        parent_arg_positions={"args": {0: "dividend"}, "kwargs": {}},
+    )
+    dividend = torch.zeros(3, dtype=torch.long)
+    wrapped = (dividend, torch.tensor([255], dtype=torch.uint8))
+    assert not _integer_mod_unit_divisor_decision(int_layer, ["dividend"], wrapped).exempt
+    uint8_one = (dividend, torch.tensor([1], dtype=torch.uint8))
+    assert _integer_mod_unit_divisor_decision(int_layer, ["dividend"], uint8_one).exempt
+    half_layer = SimpleNamespace(
+        func_name="remainder",
+        out=torch.zeros(3, dtype=torch.float16),
+        parent_arg_positions={"args": {0: "dividend"}, "kwargs": {}},
+    )
+    half_one = (dividend, torch.ones(1, dtype=torch.float16))
+    assert not _integer_mod_unit_divisor_decision(half_layer, ["dividend"], half_one).exempt
+    float_layer = SimpleNamespace(
+        func_name="remainder",
+        out=torch.zeros(3, dtype=torch.float32),
+        parent_arg_positions={"args": {0: "dividend"}, "kwargs": {}},
+    )
+    float_one = (dividend, torch.ones(1, dtype=torch.float32))
+    assert _integer_mod_unit_divisor_decision(float_layer, ["dividend"], float_one).exempt
+
+
 # ---------------------------------------------------------------------------
 # Neural Map: reshape_as / view_as
 # ---------------------------------------------------------------------------
@@ -231,6 +299,37 @@ def test_shape_template_as_values_still_fail_when_frozen(method: str) -> None:
     torch.manual_seed(0)
     trace = _capture(_ShapeAs(method), torch.randn(6))
     _assert_frozen_edge_fails(trace, _op_with_func_name(trace, method), 0)
+
+
+class _SameParentShapeAs(nn.Module):
+    """``h.<method>(h)``: one parent fills the value slot and the shape slot."""
+
+    def __init__(self, method: str) -> None:
+        super().__init__()
+        self.lin = nn.Linear(6, 6)
+        self.method = method
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        h = self.lin(x)
+        return getattr(h, self.method)(h)
+
+
+@pytest.mark.parametrize("method", ["reshape_as", "view_as", "expand_as", "type_as"])
+def test_same_parent_in_value_and_shape_slot_still_fails_when_frozen(method: str) -> None:
+    """``x.view_as(x)`` (the gradient-reversal idiom) keeps its value edge tested."""
+
+    torch.manual_seed(0)
+    trace = _capture(_SameParentShapeAs(method), torch.randn(6))
+    op = next(op for op in trace.layer_list if op.func_name in (method, method.replace("_", "")))
+    _assert_frozen_edge_fails(trace, op, 0)
+
+
+@pytest.mark.parametrize("method", ["reshape_as", "view_as", "expand_as", "type_as"])
+def test_same_parent_in_value_and_shape_slot_validates(method: str) -> None:
+    """Unfrozen, the same-parent spelling validates by perturbation."""
+
+    torch.manual_seed(0)
+    assert _quiet_validate(_SameParentShapeAs(method), torch.randn(6))
 
 
 # ---------------------------------------------------------------------------
@@ -382,3 +481,18 @@ def test_single_entry_probe_moves_one_in_domain_index() -> None:
     assert probed.tolist() == [-1, 0, 0, 1, 2]
     assert index_domain_single_entry_values(layer, "not_index", index) is None
     assert index_domain_single_entry_values(layer, "index", torch.tensor([-1, 5])) is None
+
+
+def test_bool_output_ladder_runs_before_the_index_single_entry_rung() -> None:
+    """The index-only rung comes last, so a bool gather keeps its bool rungs."""
+
+    class BoolGather(nn.Module):
+        def forward(self, x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
+            return torch.gather(x > 0, 0, index)
+
+    trace = _capture(BoolGather(), [torch.randn(5), torch.tensor([0, 2, 4, 1])])
+    op = _op_with_func_name(trace, "gather")
+    strategies = _perturbation_retry_strategies(op)
+    assert strategies[-1] == "index_single_entry"
+    assert strategies.index("negate_values") < strategies.index("index_single_entry")
+    assert _quiet_validate(BoolGather(), [torch.randn(5), torch.tensor([0, 2, 4, 1])])
