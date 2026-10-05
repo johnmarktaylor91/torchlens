@@ -364,6 +364,20 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         refuses="the DIVIDEND operand, keyed off parent_arg_positions not tensor equality",
     ),
     Exemption(
+        code="integer_mod_unit_divisor",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation.exemptions:_integer_mod_unit_divisor_decision",
+        refuses=(
+            "a float dividend, a divisor other than +-1 (compared after widening, so a "
+            "uint8 255 is not -1), -1 when any operand or the result is unsigned (it "
+            "wraps to the dtype max), a floating result or computation dtype (the "
+            "operands' promoted dtype, checked apart from any out= buffer) that cannot "
+            "hold the dividend dtype's range (float16), a nonzero saved output, and any perturbed parent "
+            "at the divisor slot"
+        ),
+    ),
+    Exemption(
         code="sdpa_zero_query_uniform_attention",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
@@ -1047,6 +1061,58 @@ STRUCTURAL_POSITION_LEDGER: tuple[StructuralPositionExemption, ...] = (
         refuses="arg 0, whose values are broadcast into the output unchanged",
     ),
     StructuralPositionExemption(
+        func_name="reshape_as",
+        positions=frozenset({1}),
+        contract=_C2,
+        proof_kind="value_irrelevance_proved",
+        justification=(
+            "Tensor.reshape_as(other) is self.reshape(other.sizes()): arg 1 is consumed for its SHAPE only, never its elements"
+        ),
+        refuses=(
+            "arg 0, whose values are the output values in a new shape, including "
+            "when the same parent also fills arg 1 (x.view_as(x))"
+        ),
+    ),
+    StructuralPositionExemption(
+        func_name="reshapeas",
+        positions=frozenset({1}),
+        contract=_C2,
+        proof_kind="value_irrelevance_proved",
+        justification=(
+            "canonicalized TorchLens spelling of reshape_as; the arg-1 tensor is a shape template whose values are never read"
+        ),
+        refuses=(
+            "arg 0, whose values are the output values in a new shape, including "
+            "when the same parent also fills arg 1 (x.view_as(x))"
+        ),
+    ),
+    StructuralPositionExemption(
+        func_name="view_as",
+        positions=frozenset({1}),
+        contract=_C2,
+        proof_kind="value_irrelevance_proved",
+        justification=(
+            "Tensor.view_as(other) is self.view(other.size()): arg 1 is consumed for its SHAPE only, never its elements"
+        ),
+        refuses=(
+            "arg 0, whose values are the output values in a new shape, including "
+            "when the same parent also fills arg 1 (x.view_as(x))"
+        ),
+    ),
+    StructuralPositionExemption(
+        func_name="viewas",
+        positions=frozenset({1}),
+        contract=_C2,
+        proof_kind="value_irrelevance_proved",
+        justification=(
+            "canonicalized TorchLens spelling of view_as; the arg-1 tensor is a shape template whose values are never read"
+        ),
+        refuses=(
+            "arg 0, whose values are the output values in a new shape, including "
+            "when the same parent also fills arg 1 (x.view_as(x))"
+        ),
+    ),
+    StructuralPositionExemption(
         func_name="type_as",
         positions=frozenset({1}),
         contract=_C2,
@@ -1651,6 +1717,10 @@ STRUCTURAL_KWARG_ALIAS_LEDGER: dict[str, dict[int, frozenset[str]]] = {
     "_pack_padded_sequence": {1: frozenset({"lengths"})},
     "_pad_packed_sequence": {1: frozenset({"lengths"})},
     "type_as": {1: frozenset({"tensor", "other"})},
+    "reshape_as": {1: frozenset({"other"})},
+    "reshapeas": {1: frozenset({"other"})},
+    "view_as": {1: frozenset({"other"})},
+    "viewas": {1: frozenset({"other"})},
     # torchvision coordinate args (b1p2 D2 narrowing): keyword spellings of
     # the SAME audited positions above, nothing wider.
     "nms": {0: frozenset({"boxes"})},

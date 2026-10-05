@@ -63,6 +63,8 @@ from .exemptions import (
     SKIP_VALIDATION_ENTIRELY,
     STRUCTURAL_ARG_POSITIONS,
     index_domain_rotation_values,
+    index_domain_single_entry_values,
+    layer_has_index_domain_parent,
     perturbed_layer_at_structural_position,
     posthoc_perturb_check,
     uninitialized_by_design_applies,
@@ -3996,6 +3998,13 @@ def _prepare_input_args_for_validating_layer(
                         parent_layer_arg,
                         parent_values,
                     )
+                elif perturb_strategy == _INDEX_SINGLE_ENTRY_STRATEGY:
+                    single_entry = index_domain_single_entry_values(
+                        layer_to_validate_parents_for, parent_layer_arg, parent_values
+                    )
+                    if single_entry is None:
+                        return None, "no_index_single_entry_perturbation"
+                    parent_layer_func_values = single_entry
                 else:
                     parent_layer_func_values = _directional_step_perturb(
                         parent_values, perturb_strategy
@@ -4204,6 +4213,9 @@ def _op_is_value_discretizing(layer: Op) -> bool:
     )
 
 
+_INDEX_SINGLE_ENTRY_STRATEGY = "index_single_entry"
+
+
 def _perturbation_retry_strategies(layer: Op) -> list[str]:
     """Return the ordered deterministic retry strategies for perturbation.
 
@@ -4224,6 +4236,34 @@ def _perturbation_retry_strategies(layer: Op) -> list[str]:
         ``ulp_swamped_perturbation`` exemption. The retry loop returns on the
         first strategy that changes the child output, so later rungs only
         run while the edge still looks non-influential.
+    """
+
+    strategies = _value_retry_strategies(layer)
+    if layer_has_index_domain_parent(layer):
+        # The default probe rotates EVERY index by one domain position, a
+        # permutation that leaves histogram-only outputs (per-relation edge
+        # counts on balanced relations) unchanged, and the uniform steps
+        # leave the domain and raise. The single-entry move changes the
+        # histogram in-domain (``index_domain_single_entry_values``). It runs
+        # LAST: for a non-index parent it yields no perturbation, which ends
+        # the retry loop, so placing it earlier would cut off the bool-output
+        # and magnitude rungs for that parent.
+        strategies.append(_INDEX_SINGLE_ENTRY_STRATEGY)
+    return strategies
+
+
+def _value_retry_strategies(layer: Op) -> list[str]:
+    """Return the value-step retry strategies, before any index-only rung.
+
+    Parameters
+    ----------
+    layer:
+        Child op being validated; gates the bool and magnitude rungs.
+
+    Returns
+    -------
+    list of str
+        Minimal steps, unit steps, then the bool or discretizing ladders.
     """
 
     strategies = ["step_up", "step_down", "unit_step_up", "unit_step_down"]
