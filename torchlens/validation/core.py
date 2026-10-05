@@ -564,6 +564,35 @@ def _ground_truth_tolerances(dtype: torch.dtype) -> tuple[float, float]:
         return derive_float_tolerances(torch.float64, headroom)
 
 
+_MODULE_FORWARD_OWNER_PREFIX = "module_forward:"
+
+
+def _is_unowned_gap_diagnostic(entry: dict[str, Any]) -> bool:
+    """Return whether a witness diagnostic is an aten dispatch no torch wrapper owned.
+
+    ``unowned_dispatch`` has no owner token at all. An ``owner_not_captured`` entry whose
+    owner is a module-forward token (``module_forward:exhaustive`` / ``:predicate``) is the
+    same event one nesting level down: the module wrapper only brackets
+    ``orig_forward``, so the innermost token being the module's means no torch-function
+    wrapper intervened between module code and the dispatcher -- a stale pre-wrap torch
+    reference (for example a module-global ``from torch import f`` alias) inside a wrapped
+    submodule. Whether a drop counts must not depend on whether the call sits in a nested
+    submodule or the top-level forward. Benign pure-read ``owner_not_captured`` entries
+    (``torch.equal`` / ``torch.allclose`` deciding a branch) are owned by their own
+    ``torch_func:*`` wrapper and stay excluded.
+    """
+
+    reason = entry.get("reason")
+    if reason == "unowned_dispatch":
+        return True
+    owner_wrapper = entry.get("owner_wrapper")
+    return (
+        reason == "owner_not_captured"
+        and isinstance(owner_wrapper, str)
+        and owner_wrapper.startswith(_MODULE_FORWARD_OWNER_PREFIX)
+    )
+
+
 def completeness_backstop_counts(trace: "Trace") -> tuple[int, int]:
     """Return ``(dispatch_census, captured_census)`` for the completeness backstop.
 
@@ -603,7 +632,11 @@ def completeness_backstop_counts(trace: "Trace") -> tuple[int, int]:
       captured owner -- a silent capture drop. Each one is added to the dispatch
       census so it fails ``CHECK_COMPLETENESS``. This is exactly the tripwire the
       backstop exists to arm, and NOTHING in the carve-outs relaxes it.
-    * An ``owner_not_captured`` aten dispatch is a WRAPPED op whose owner emitted
+    * An ``owner_not_captured`` aten dispatch whose owner is a MODULE-FORWARD token
+      (no torch-function wrapper between module code and the dispatcher) is the
+      unowned case one nesting level down and is counted exactly like it
+      (``_is_unowned_gap_diagnostic``).
+    * Any other ``owner_not_captured`` aten dispatch is a WRAPPED op whose owner emitted
       no captured op. On correct models this is benign PURE-READ control flow
       (``torch.equal`` / ``torch.allclose`` deciding a branch), so it is NOT
       counted -- masking that would false-fail correct models. But an
@@ -685,8 +718,7 @@ def completeness_backstop_counts(trace: "Trace") -> tuple[int, int]:
     unowned_gap_dispatch_count = sum(
         1
         for entry in diagnostics
-        if entry.get("reason") == "unowned_dispatch"
-        and entry.get("in_replacement_hook") is not True
+        if _is_unowned_gap_diagnostic(entry) and entry.get("in_replacement_hook") is not True
     )
     # An owner_not_captured dispatch that MUTATES an argument is a value-affecting
     # capture drop, distinct from benign pure-read equal/allclose control flow
@@ -699,6 +731,8 @@ def completeness_backstop_counts(trace: "Trace") -> tuple[int, int]:
         if entry.get("reason") == "owner_not_captured"
         and entry.get("mutates") is True
         and entry.get("in_replacement_hook") is not True
+        # A module-forward-owned entry was already counted as an unowned gap above.
+        and not _is_unowned_gap_diagnostic(entry)
     )
     dispatch_census_count = (
         len(accounted_owner_fcids)

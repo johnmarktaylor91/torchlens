@@ -2259,11 +2259,13 @@ def _backstop_diag(
     in_replacement_hook: bool = False,
     mutates: bool = False,
     state_view_accessor: bool = False,
+    owner_wrapper: str | None = None,
 ) -> dict:
     """Build a minimal unaccounted-dispatch witness diagnostic record."""
 
     return {
         "reason": reason,
+        "owner_wrapper": owner_wrapper,
         "in_replacement_hook": in_replacement_hook,
         "mutates": mutates,
         "state_view_accessor": state_view_accessor,
@@ -2431,6 +2433,66 @@ def test_completeness_backstop_unowned_dispatch_fails_the_gate() -> None:
         )
     )
     assert dispatch == captured
+
+
+@pytest.mark.parametrize("module_token", ["module_forward:exhaustive", "module_forward:predicate"])
+def test_completeness_backstop_counts_module_forward_owned_drop(module_token: str) -> None:
+    """A dispatch owned only by a module-forward token is a drop, like an unowned one.
+
+    Inside a wrapped submodule the innermost token is the module's, so a stale pre-wrap
+    torch reference there records ``owner_not_captured`` instead of ``unowned_dispatch``.
+    Nesting must not change the verdict; ``torch_func:*``-owned pure reads stay benign.
+    """
+
+    ops = [_backstop_op(1), _backstop_op(2)]
+    decs = [_backstop_dec(1), _backstop_dec(2)]
+
+    dispatch, captured = completeness_backstop_counts(
+        _backstop_trace(
+            ops, decs, [_backstop_diag(reason="owner_not_captured", owner_wrapper=module_token)]
+        )
+    )
+    assert (dispatch, captured) == (3, 2)
+
+    # Mutating and module-forward-owned: counted once, not twice.
+    dispatch, captured = completeness_backstop_counts(
+        _backstop_trace(
+            ops,
+            decs,
+            [_backstop_diag(reason="owner_not_captured", owner_wrapper=module_token, mutates=True)],
+        )
+    )
+    assert (dispatch, captured) == (3, 2)
+
+    # Inside a genuine replacement hook it is construction, as for unowned dispatches.
+    dispatch, captured = completeness_backstop_counts(
+        _backstop_trace(
+            ops,
+            decs,
+            [
+                _backstop_diag(
+                    reason="owner_not_captured",
+                    owner_wrapper=module_token,
+                    in_replacement_hook=True,
+                )
+            ],
+        )
+    )
+    assert dispatch == captured
+
+    # A torch-function-owned pure read (equal/allclose control flow) stays benign,
+    # and so does a user forward-hook token (not a module-forward token).
+    for benign_owner in (
+        "torch_func:equal:logged",
+        "torch_func:allclose:logged",
+        "module_forward_hook:user",
+    ):
+        dispatch, captured = completeness_backstop_counts(
+            _backstop_trace(
+                ops, decs, [_backstop_diag(reason="owner_not_captured", owner_wrapper=benign_owner)]
+            )
+        )
+        assert dispatch == captured, benign_owner
 
 
 def test_completeness_backstop_intervention_carveout_is_per_op_scoped() -> None:
