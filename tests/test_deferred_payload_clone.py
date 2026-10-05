@@ -405,6 +405,7 @@ def test_custom_function_view_as_inplace_source_captures(use_tensor_resize):
         expected = model(x)
         log = tl.trace(model, x)
         assert torch.equal(log[log.layer_labels[-1]].out.detach(), expected.detach())
+        assert tl.validate(model, x, scope="forward", random_seed=0) is True
 
 
 class _CustomViewModifiedInplace(nn.Module):
@@ -441,7 +442,6 @@ def test_custom_function_view_genuinely_modified_inplace_still_raises(use_tensor
             model(x)
         with pytest.raises(RuntimeError, match="modified inplace"):
             tl.trace(model, x)
-        assert tl.validate(model, x, scope="forward", random_seed=0) is True
 
 
 def test_kill_switch_restores_eager_clones():
