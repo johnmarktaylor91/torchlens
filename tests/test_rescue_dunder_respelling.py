@@ -70,6 +70,18 @@ class _RecordingMode(TorchFunctionMode):
         return func(*args, **(kwargs or {}))
 
 
+def _recorded_names(bound: Any, call_args: tuple[Any, ...]) -> list[str]:
+    """Return the names a mode records for one call, or [] if the operands misfit."""
+
+    mode = _RecordingMode()
+    try:
+        with mode:
+            bound(*call_args)
+    except Exception:  # noqa: BLE001 - an operand misfit; the caller tries the next set
+        return []
+    return [name for name in mode.names if name not in _MODE_BOOKKEEPING]
+
+
 def _mode_spellings(dunder: str) -> list[str] | None:
     """Return what torch hands a mode for ``Tensor.<dunder>``, or None if no operand fits.
 
@@ -80,14 +92,7 @@ def _mode_spellings(dunder: str) -> list[str] | None:
     for index, args in itertools.product(range(len(_receivers())), _ARGSETS):
         receiver, operand = _receivers()[index], _receivers()[index]
         call_args = tuple(operand if arg is None else arg for arg in args)
-        bound = getattr(receiver, dunder)
-        mode = _RecordingMode()
-        try:
-            with mode:
-                bound(*call_args)
-        except Exception:  # noqa: BLE001 - an operand misfit; try the next set
-            continue
-        seen = [name for name in mode.names if name not in _MODE_BOOKKEEPING]
+        seen = _recorded_names(getattr(receiver, dunder), call_args)
         if seen:
             return seen
     return None
