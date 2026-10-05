@@ -105,9 +105,6 @@ _EFFECT_DENIED_OPS = frozenset(
         "StatefulPartitionedCall",
     }
 )
-_NON_WRITING_OP_TYPES = (
-    _VALUE_OPS | _STRUCTURAL_VALUE_OPS | _ANNOTATION_OPS | _PURE_RESOURCE_READ_OPS | _SOURCE_OPS
-)
 _CONTROL_REGION_OPS = frozenset(
     {"If", "StatelessIf", "While", "StatelessWhile", "Case", "Switch", "Merge"}
     | {"StatefulPartitionedCall"}
@@ -250,9 +247,7 @@ def validate_tf_trace_detailed(trace: Any) -> TFValidationResult:
     replayed_count = 0
     pure_unverified_count = 0
     effect_region_count = 0
-    reads_replayable = _resource_reads_replayable(
-        classes, getattr(trace, "_tf_seen_op_types", None)
-    )
+    reads_replayable = _resource_reads_replayable(classes)
     for label, op in ops_by_label.items():
         if label != getattr(op, "_label_raw", None):
             continue
@@ -569,38 +564,27 @@ def _replay_and_perturb_op(
         return False
 
 
-def _resource_reads_replayable(
-    classes: Mapping[str, TFOpClass],
-    seen_op_types: frozenset[str] | None,
-) -> bool:
+def _resource_reads_replayable(classes: Mapping[str, TFOpClass]) -> bool:
     """Return whether this trace's variable reads can be re-read and checked.
 
     A ``ReadVariableOp`` is checked by re-reading its variable and comparing
-    the value with the saved read. A re-read that matches can never pass a
-    wrong read, but a variable WRITTEN after its read during the forward
-    (Keras BatchNorm moving statistics in training mode) would make a correct
-    read fail. So reads are re-read only when nothing in the forward can
-    write a variable: every op type the callback saw, including zero-output
-    ops that leave no op record, is a known non-writing type, and no op is an
-    effect op or a control region. Otherwise (or when the seen op types are
-    unknown, as for static-graph captures) every read stays an unverified
-    effect region.
+    the value with the saved read. That proves the saved read only when
+    nothing in the trace can have written a variable after it was read: the
+    trace holds no effect op (variable writes) and no control region (whose
+    body may write), and every op classified (unknown ops already fail
+    closed). Any such op keeps every read an unverified effect region.
 
     Parameters
     ----------
     classes
         Validation class of every raw op label.
-    seen_op_types
-        Every op type the eager callback observed, or ``None`` when unknown.
 
     Returns
     -------
     bool
-        True when no op in the forward can write a variable.
+        True when no op class can write a variable during the forward.
     """
 
-    if seen_op_types is None or not seen_op_types <= _NON_WRITING_OP_TYPES:
-        return False
     return not any(op_class in {"effect-denied", "control-region"} for op_class in classes.values())
 
 

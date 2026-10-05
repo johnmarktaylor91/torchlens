@@ -432,9 +432,6 @@ class TFBackend:
         trace._tf_unresolved_producers = result.unresolved_producers
         trace._tf_init_op_labels = result.init_op_labels
         trace._tf_op_captures = result.op_captures
-        # Every op type the callback saw, INCLUDING zero-output ops (variable
-        # writes such as ``AssignAddVariableOp`` emit no op record).
-        trace._tf_seen_op_types = frozenset(result.op_type_counts)
         _mark_outputs(trace, result.output, session.producer_by_ref)
         _reject_collapsed_graph_capture(result.op_type_counts)
         materialize_from_events(trace, trace.capture_events)
