@@ -287,6 +287,7 @@ class PaddleBackend:
         self._ensure_dynamic_runtime(paddle)
         self.paddle = paddle
         self.tensor_store = PaddleTensorLabelStore()
+        self._param_address_by_id: dict[int, str] = {}
 
     def capture_trace(
         self,
@@ -521,7 +522,7 @@ class PaddleBackend:
         prepare_model_session(trace, prepared_model, module_tree if use_object_module else None)
         # Identity map of the captured tree's registered parameters, read by
         # ``_build_op_capture`` to tell a parameter leaf from an untraced one.
-        trace._paddle_param_address_by_id = (
+        self._param_address_by_id = (
             dict(module_tree.param_address_by_id)
             if use_object_module and module_tree is not None
             else {}
@@ -586,12 +587,11 @@ class PaddleBackend:
                 )
             if hasattr(trace, "_paddle_module_stack"):
                 delattr(trace, "_paddle_module_stack")
-            if hasattr(trace, "_paddle_param_address_by_id"):
-                delattr(trace, "_paddle_param_address_by_id")
             if hasattr(trace, "_paddle_intervention_runtime"):
                 delattr(trace, "_paddle_intervention_runtime")
             freeze_trace_relation_views(trace)
         finally:
+            self._param_address_by_id = {}
             # Independently-owned resources: a raising hook cleanup must not
             # leave the process-global Paddle wrappers installed.
             try:
@@ -1581,7 +1581,7 @@ class PaddleBackend:
         tensor_inputs: list[TensorLeafCapture] = []
         capture_gap_markers: list[str] = []
         param_inputs: dict[tuple[Any, ...], Any] = {}
-        param_address_by_id = getattr(trace, "_paddle_param_address_by_id", None) or {}
+        param_address_by_id = self._param_address_by_id
         leaves = (
             *self._iter_tensors_with_paths(args, root=("args",)),
             *self._iter_tensors_with_paths(kwargs, root=("kwargs",)),

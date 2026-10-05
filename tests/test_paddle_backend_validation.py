@@ -301,20 +301,19 @@ def test_paddle_function_root_trace_has_buffers_and_graph_shape_hash() -> None:
     assert different.graph_shape_hash != first.graph_shape_hash
 
 
-class _ConvBnRelu(paddle.nn.Layer):
-    """ResNet stem shape: conv, BatchNorm2D (eval), relu."""
+class _BnRelu(paddle.nn.Layer):
+    """BatchNorm2D (eval) then relu."""
 
     def __init__(self) -> None:
-        """Build the stem."""
+        """Build the block."""
 
         super().__init__()
-        self.conv = paddle.nn.Conv2D(2, 3, 3, padding=1)
-        self.bn = paddle.nn.BatchNorm2D(3)
+        self.bn = paddle.nn.BatchNorm2D(2)
 
     def forward(self, x: Any) -> Any:
-        """Run conv, batch norm, relu."""
+        """Run batch norm, relu."""
 
-        return paddle.nn.functional.relu(self.bn(self.conv(x)))
+        return paddle.nn.functional.relu(self.bn(x))
 
 
 _ORIGINAL_RELU = paddle.nn.functional.relu
@@ -330,7 +329,7 @@ def test_paddle_validation_batchnorm_layer_import_alias_is_captured() -> None:
     """``nn.BatchNorm2D`` calls its module's import-time ``batch_norm`` alias; it is captured."""
 
     paddle.seed(0)
-    model = _ConvBnRelu()
+    model = _BnRelu()
     model.eval()
     x = paddle.arange(32, dtype="float32").reshape([1, 2, 4, 4]) / 16.0
     trace = tl.trace(model, x, backend="paddle")
