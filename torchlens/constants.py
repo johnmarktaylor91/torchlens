@@ -1393,9 +1393,19 @@ def _get_torchvision_funcs() -> list[tuple[str, str]]:
 # also aliases ``reshape_from_tensor_shape = torch._reshape_from_tensor``; once
 # the module is in the roster, the public-site audit sees that alias holding
 # the unwrapped original unless it is tracked here too.
+#
+# ``torch.nn.utils.weight_norm`` binds ``from torch import _weight_norm,
+# norm_except_dim`` at ``import torch`` time, before any wrapping. The legacy
+# ``WeightNorm`` forward pre-hook calls that module global on every forward, so
+# without these rows the capture never sees ``_weight_norm``: the plain capture
+# needs the mode rescue re-run to record it, and the validation capture (no
+# rescue) misses it outright. ``torch.nn.utils.parametrizations.weight_norm``
+# looks ``torch._weight_norm`` up at call time and needs no row.
 _TORCH_SUBMODULE_ALIAS_TARGETS: tuple[tuple[str, str], ...] = (
     ("torch.onnx.operators", "shape_as_tensor"),
     ("torch.onnx.operators", "reshape_from_tensor_shape"),
+    ("torch.nn.utils.weight_norm", "_weight_norm"),
+    ("torch.nn.utils.weight_norm", "norm_except_dim"),
 )
 
 
