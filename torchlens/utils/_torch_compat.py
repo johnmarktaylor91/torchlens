@@ -2524,6 +2524,16 @@ def get_optional_torch_namespace(namespace_name: str) -> Any | None:
     if not namespace_name.startswith(prefix):
         raise ValueError(f"expected a torch namespace, got {namespace_name!r}")
     namespace = _nested_getattr_or_none(torch, namespace_name.removeprefix(prefix).split("."))
+    submodule = sys.modules.get(namespace_name)
+    if (
+        namespace is not None
+        and not isinstance(namespace, types.ModuleType)
+        and isinstance(submodule, types.ModuleType)
+    ):
+        # A package attribute can shadow an imported submodule of the same
+        # name: ``torch.nn.utils.weight_norm`` is the function, while the
+        # roster row means the module that holds the ``_weight_norm`` alias.
+        return submodule
     if namespace is None and namespace_name == "torch.func":
         mark_torch_capability_missing(
             "HAS_TORCH_FUNC",
