@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import weakref
 from collections.abc import Iterator, Mapping
 from typing import TYPE_CHECKING, Any
 
@@ -45,6 +46,8 @@ if TYPE_CHECKING:
 __all__ = (
     "record_uncaptured_owner_callsite",
     "_dispatch_result_holds_tensor",
+    "_dispatch_output_refs",
+    "_event_builds_boundary_output",
     "_event_is_capture_accounted",
     "runnable_ledger_facts",
     "_tensor_abs_byte_span",
@@ -95,14 +98,58 @@ def _dispatch_result_holds_tensor(result: Any) -> bool:
     return False
 
 
+def _dispatch_output_refs(
+    owner: ExpectedOriginalToken | None, result: Any
+) -> tuple[weakref.ref[torch.Tensor], ...]:
+    """Return weak references to an owned dispatch's tensor results (one level deep).
+
+    Recorded only for owners whose boundary credit is output-scoped, so ordinary
+    torch-function-owned dispatches pay one attribute test and allocate nothing.
+    """
+
+    if owner is None or not owner.boundary_credit_is_output_scoped:
+        return ()
+    if isinstance(result, torch.Tensor):
+        return (weakref.ref(result),)
+    if isinstance(result, (list, tuple)):
+        return tuple(weakref.ref(item) for item in result if isinstance(item, torch.Tensor))
+    return ()
+
+
+def _event_builds_boundary_output(
+    event: _DispatchEvent, boundary_outputs: Mapping[int, tuple[torch.Tensor, str]]
+) -> bool:
+    """Return whether the event returned one of the exact boundary tensor objects.
+
+    Identity is object identity through a weak reference: ``id`` alone is unsound because
+    a freed intermediate's address can be reused by a later boundary tensor, and storage
+    geometry would equate a view or detach with its base. A view or detach that returned
+    the boundary object built it and is credited; the op that produced its base, and any
+    alias taken of the boundary tensor, did not build a boundary object and are not.
+    """
+
+    for ref in event.output_refs:
+        tensor = ref()
+        if tensor is None:
+            continue
+        entry = boundary_outputs.get(id(tensor))
+        if entry is not None and entry[0] is tensor:
+            return True
+    return False
+
+
 def _event_is_capture_accounted(event: _DispatchEvent) -> bool:
     """Return whether the event is represented by its owner's captured artifact.
 
     Ordinary wrapped operations account for their complete aten decomposition. A token
     credited by synthesized boundary Ops is narrower: it accounts for the non-mutating
-    opaque output construction represented by those exact boundary tensors and raw labels,
-    but never for a mutating dispatch. Mutations always remain visible because a
-    functionless boundary cannot attest their side effects on existing graph values.
+    opaque output construction represented by those exact boundary tensors, but never
+    for a mutating dispatch. Mutations always remain visible because a functionless
+    boundary cannot attest their side effects on existing graph values. For a
+    module-forward token (output-scoped credit) only a dispatch that returned one of the
+    exact boundary tensor objects is accounted; every other dispatch in the module body,
+    such as a stale raw op whose value flowed elsewhere, stays visible. A raw
+    replacement-hook token keeps whole-interval credit for its non-mutating dispatches.
 
     Parameters
     ----------
@@ -121,7 +168,11 @@ def _event_is_capture_accounted(event: _DispatchEvent) -> bool:
     boundary_outputs = owner.capture_accounted_outputs
     if not boundary_outputs:
         return True
-    return not event.mutates
+    if event.mutates:
+        return False
+    if not owner.boundary_credit_is_output_scoped:
+        return True
+    return _event_builds_boundary_output(event, boundary_outputs)
 
 
 def runnable_ledger_facts(trace: Any) -> tuple[Mapping[str, Any], ...]:

@@ -194,6 +194,18 @@ class ExpectedOriginalToken:
     capture_accounted_outputs: dict[int, tuple[torch.Tensor, str]] = field(default_factory=dict)
     capture_callsite: tuple[str, int, str] | None = None
 
+    @property
+    def boundary_credit_is_output_scoped(self) -> bool:
+        """Whether boundary-backed credit covers only the dispatches that built boundary tensors.
+
+        A module-forward token owns every dispatch in the module body that no inner wrapper
+        owns, so an untraced module output must not credit unrelated raw ops in that body.
+        A raw replacement-hook token keeps whole-interval credit: a genuine user
+        replacement's construction is opaque by design.
+        """
+
+        return self.wrapper_name.startswith("module_forward:")
+
 
 @dataclass
 class _GuardState:
