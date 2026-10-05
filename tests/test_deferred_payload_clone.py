@@ -405,6 +405,42 @@ def test_custom_function_view_as_inplace_source_captures(use_tensor_resize):
         expected = model(x)
         log = tl.trace(model, x)
         assert torch.equal(log[log.layer_labels[-1]].out.detach(), expected.detach())
+
+
+class _CustomViewModifiedInplace(nn.Module):
+    """A custom-Function view that IS modified in place (autograd must refuse)."""
+
+    def __init__(self, use_tensor_resize: bool):
+        super().__init__()
+        self.lin = nn.Linear(4, 6)
+        self.use_tensor_resize = use_tensor_resize
+
+    def forward(self, x):
+        h = torch.tanh(self.lin(x))
+        if self.use_tensor_resize:
+            v = h.resize(x.shape[0], 3, 2)
+        else:
+            v = _CustomViewFn.apply(h)
+        v.add_(1.0)
+        return v
+
+
+@pytest.mark.parametrize("use_tensor_resize", [False, True])
+def test_custom_function_view_genuinely_modified_inplace_still_raises(use_tensor_resize):
+    """The unbumped rebind must not hide autograd's guard on a REAL in-place write.
+
+    Negative control for the case above: when the custom-Function view itself is
+    written in place, eager refuses, and the capture must refuse the same way.
+    """
+    with _payload_clone_mode(True), warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="non-inplace resize is deprecated")
+        torch.manual_seed(0)
+        model = _CustomViewModifiedInplace(use_tensor_resize)
+        x = torch.randn(2, 4)
+        with pytest.raises(RuntimeError, match="modified inplace"):
+            model(x)
+        with pytest.raises(RuntimeError, match="modified inplace"):
+            tl.trace(model, x)
         assert tl.validate(model, x, scope="forward", random_seed=0) is True
 
 
