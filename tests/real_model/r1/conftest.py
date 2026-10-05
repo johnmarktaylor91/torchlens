@@ -22,16 +22,13 @@ import os
 from typing import Any
 
 import pytest
+from support.r1_venue import IN_OFFLINE_VENUE
 
 from tests.real_model.registry import Registry
 
 
-def _in_offline_venue() -> bool:
-    return os.environ.get("HF_HUB_OFFLINE") == "1" and os.environ.get("TRANSFORMERS_OFFLINE") == "1"
-
-
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    if _in_offline_venue():
+    if IN_OFFLINE_VENUE:
         return
     marker = pytest.mark.skip(
         reason="GATE R1_OFFLINE_VENUE: not in the offline preflighted venue; run"

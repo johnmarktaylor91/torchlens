@@ -18,6 +18,9 @@ import numpy as np
 import pytest
 import torch
 
+# Snapshot the R1 offline-venue signature before any test module can set the flags.
+from support import r1_venue  # noqa: F401
+
 from torchlens import _state
 from torchlens.data_classes._trace_viz import TraceVisualizationMixin
 

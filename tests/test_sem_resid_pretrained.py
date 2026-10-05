@@ -10,24 +10,20 @@ anchors on the actual 12-layer, 768-dim checkpoint.
 
 from __future__ import annotations
 
-import os
 import warnings
 
 import pytest
 import torch
+from support.r1_venue import IN_OFFLINE_VENUE
 
 import torchlens as tl
 from tests.real_model.registry import load_registry
 
 pytestmark = [pytest.mark.heavy, pytest.mark.real_model]
 
-_IN_VENUE = (
-    os.environ.get("HF_HUB_OFFLINE") == "1" and os.environ.get("TRANSFORMERS_OFFLINE") == "1"
-)
-
 
 @pytest.mark.skipif(
-    not _IN_VENUE,
+    not IN_OFFLINE_VENUE,
     reason=(
         "GATE R1_OFFLINE_VENUE: not in the offline preflighted venue; run "
         "scripts/preflight_fetch_artifacts.py fetch, export its print-env, then rerun."

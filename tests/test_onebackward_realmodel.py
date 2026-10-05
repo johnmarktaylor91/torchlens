@@ -15,6 +15,7 @@ import os
 
 import pytest
 import torch
+from support.r1_venue import IN_OFFLINE_VENUE
 
 import torchlens as tl
 from torchlens.attribution import onebackward as ob
@@ -25,14 +26,8 @@ transformers = pytest.importorskip("transformers")
 torchvision = pytest.importorskip("torchvision")
 
 
-def _in_offline_venue() -> bool:
-    """The r1 venue signature: both offline flags set."""
-
-    return os.environ.get("HF_HUB_OFFLINE") == "1" and os.environ.get("TRANSFORMERS_OFFLINE") == "1"
-
-
 requires_offline_venue = pytest.mark.skipif(
-    not _in_offline_venue(),
+    not IN_OFFLINE_VENUE,
     reason=(
         "GATE R1_OFFLINE_VENUE: not in the offline preflighted venue; export "
         "HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 with a warmed cache. In "

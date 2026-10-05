@@ -13,10 +13,9 @@ version-leg venue (one environment cannot host two transformers).
 
 from __future__ import annotations
 
-import os
-
 import pytest
 import torch
+from support.r1_venue import IN_OFFLINE_VENUE
 
 import torchlens as tl
 from tests.transforms_corpus.loader import (
@@ -52,22 +51,12 @@ def _offline(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TRANSFORMERS_OFFLINE", "1")
 
 
-def _in_offline_venue() -> bool:
-    """The R1 venue signature: both offline flags set by the preflighted environment.
-
-    Read at import, before the autouse ``_offline`` fixture sets the same flags
-    for every test, so it sees the caller's environment, not this module's.
-    """
-
-    return os.environ.get("HF_HUB_OFFLINE") == "1" and os.environ.get("TRANSFORMERS_OFFLINE") == "1"
-
-
 #: GATE-ID R1_OFFLINE_VENUE (``tests/real_model/r1/conftest.py``): rows that need a
 #: real tokenizer run only in the preflighted venue, where
 #: ``scripts/preflight_fetch_artifacts.py`` is the only fetch. Out of venue they skip
 #: at collection with the gate id; in venue a missing artifact fails loudly.
 requires_offline_venue = pytest.mark.skipif(
-    not _in_offline_venue(),
+    not IN_OFFLINE_VENUE,
     reason=(
         "GATE R1_OFFLINE_VENUE: not in the offline preflighted venue; run "
         "scripts/preflight_fetch_artifacts.py fetch, export its print-env, then "
