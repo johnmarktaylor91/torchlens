@@ -1227,7 +1227,7 @@ class _ModuleTreePlainAttrSnapshot:
         for module, name, attr_path, snapshot in self._entries:
             try:
                 current_snapshot = _snapshot_module_plain_attr_value(module, name, attr_path)
-            except AttributeError:
+            except (AttributeError, RuntimeError):  # deleted, or now unsnapshottable: changed
                 current_snapshot = None
                 changed = True
             else:
