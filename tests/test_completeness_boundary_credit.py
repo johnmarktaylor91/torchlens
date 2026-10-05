@@ -13,11 +13,13 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
 from torchlens import _state
+from torchlens.backends.torch import rescue
 from torchlens.backends.torch.wrappers import wrap_torch
 from torchlens.user_funcs import _validate_forward_pass_torch
 
@@ -136,25 +138,35 @@ def test_tuple_of_opaque_outputs_still_validates() -> None:
     assert _validate(_Parent(_OpaqueTupleChild())), tl.validation.last_validation_failure()
 
 
+# The stale op's output reaches the next traced op with no recorded parent; that
+# provenance disclosure is expected alongside the completeness failure.
+_NO_PROVENANCE = "ignore:TorchLens found tensor arguments with no graph:UserWarning"
+
+
+@pytest.mark.filterwarnings(_NO_PROVENANCE)
 def test_stale_hidden_activation_under_stale_output_fails_completeness() -> None:
     """IQL shape: the stale relu is not hidden by the stale tanh's boundary."""
 
     _assert_completeness_failure(_Parent(_StaleHiddenChild()))
 
 
+@pytest.mark.filterwarnings(_NO_PROVENANCE)
 def test_stale_op_in_nested_boundary_module_fails_completeness() -> None:
     """A stale op inside a depth-two module with a synthesized output boundary fails."""
 
     _assert_completeness_failure(_Parent(_Middle()))
 
 
-def test_census_names_only_the_stale_relu_in_iql_shape() -> None:
-    """The witness diagnostics name the dropped relu, never the boundary-building tanh."""
+@pytest.mark.filterwarnings(_NO_PROVENANCE)
+def test_census_names_only_the_stale_relu_in_iql_shape(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The primary capture's census names the dropped relu, never the boundary's tanh."""
 
+    # Keep the primary capture: the rescue re-run would replace its diagnostics.
+    monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)
     wrap_torch(completeness_witness=True)
     torch.manual_seed(0)
     trace = tl.trace(_Parent(_StaleHiddenChild()).eval(), torch.randn(3, 4))
-    operators = {row["operator"] for row in trace.completeness_diagnostics}
+    operators = [row["operator"] for row in trace.completeness_diagnostics]
     assert "aten.relu.default" in operators
     assert "aten.tanh.default" not in operators
     assert trace.capture_verified is False
