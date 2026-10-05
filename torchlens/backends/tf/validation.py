@@ -892,14 +892,15 @@ def _replay_depthwise_conv2d(capture: TFOpCapture, inputs: Sequence[Any]) -> Any
         Replayed output.
     """
 
+    # ``tf.nn.depthwise_conv2d`` records unset attrs as ``None``.
     return _raw(capture).DepthwiseConv2dNative(
         input=inputs[0],
         filter=inputs[1],
         strides=list(capture.attrs["strides"]),
         padding=_attr_str(capture.attrs["padding"]),
-        explicit_paddings=list(capture.attrs.get("explicit_paddings", [])),
-        data_format=_attr_str(capture.attrs.get("data_format", "NHWC")),
-        dilations=list(capture.attrs.get("dilations", [1, 1, 1, 1])),
+        explicit_paddings=list(capture.attrs.get("explicit_paddings") or []),
+        data_format=_attr_str(capture.attrs.get("data_format") or "NHWC"),
+        dilations=list(capture.attrs.get("dilations") or [1, 1, 1, 1]),
     )
 
 
