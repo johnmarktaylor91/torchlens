@@ -32,6 +32,7 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens.options import CaptureOptions
 from torchlens.validation import validate_forward_pass
+from torchlens.validation._index_domain import index_domain_rotation_values
 from torchlens.validation.core import (
     _check_whether_func_on_saved_parents_yields_saved_tensor,
 )
@@ -42,7 +43,6 @@ from torchlens.validation.exemptions import (
     _check_index_domain_degenerate,
     _check_masked_fill_exempt,
     _posthoc_structural_output_decision,
-    index_domain_rotation_values,
     posthoc_perturb_check,
 )
 

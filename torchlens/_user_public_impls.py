@@ -1809,7 +1809,7 @@ def _validate_forward_pass_torch(
             )
         finally:
             _state._completeness_witness_mode = prior_witness_mode
-        from .validation.core import completeness_backstop_counts
+        from .validation._completeness_backstop import completeness_backstop_counts
 
         (
             trace._validation_dispatch_op_count,

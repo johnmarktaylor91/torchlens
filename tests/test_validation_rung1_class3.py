@@ -31,6 +31,7 @@ from torch.distributions import Categorical
 import torchlens as tl
 from torchlens.options import CaptureOptions
 from torchlens.validation import validate_forward_pass
+from torchlens.validation._index_domain import index_domain_single_entry_values
 from torchlens.validation.core import (
     _check_whether_func_on_saved_parents_yields_saved_tensor,
     _perturbation_retry_strategies,
@@ -38,7 +39,6 @@ from torchlens.validation.core import (
 from torchlens.validation.exemptions import (
     _integer_mod_unit_divisor_decision,
     _posthoc_structural_output_decision,
-    index_domain_single_entry_values,
 )
 
 

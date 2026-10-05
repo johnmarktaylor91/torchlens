@@ -214,8 +214,9 @@ def _finalize_census(state: _WitnessState) -> None:
                 # registered buffer -- the intrinsic, legitimately-uncaptured dispatch of the
                 # ``self.b.data.copy_(x)`` buffer-write idiom. The completeness backstop credits
                 # these apples-to-apples against the dispatch census (see
-                # ``validation.core.completeness_backstop_counts``); a genuine untraced op is
-                # never flagged here (unowned + non-mutating + pure-view + buffer only).
+                # ``validation._completeness_backstop.completeness_backstop_counts``); a
+                # genuine untraced op is never flagged here (unowned + non-mutating +
+                # pure-view + buffer only).
                 "state_view_accessor": event.state_view_accessor,
             }
         )
