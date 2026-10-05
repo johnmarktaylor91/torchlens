@@ -37,6 +37,7 @@ if TYPE_CHECKING:
         _is_expected_opaque_dispatch,
         _nonowner_escape_observe,
         _observe_state_metadata_read,
+        _operator_base_name,
         _record_escape_source_tensor,
         _register_storage_origin,
         _WitnessState,
@@ -46,7 +47,7 @@ if TYPE_CHECKING:
 __all__ = (
     "record_uncaptured_owner_callsite",
     "_dispatch_result_holds_tensor",
-    "_dispatch_output_refs",
+    "_dispatch_credit_refs",
     "_event_builds_boundary_output",
     "_event_is_capture_accounted",
     "runnable_ledger_facts",
@@ -98,37 +99,53 @@ def _dispatch_result_holds_tensor(result: Any) -> bool:
     return False
 
 
-def _dispatch_output_refs(
-    owner: ExpectedOriginalToken | None, result: Any
+def _dispatch_credit_refs(
+    owner: ExpectedOriginalToken | None, func: Any, args: tuple[Any, ...], result: Any
 ) -> tuple[weakref.ref[torch.Tensor], ...]:
-    """Return weak references to an owned dispatch's tensor results (one level deep).
+    """Return weak references to the tensors that can tie this dispatch to a boundary.
 
-    Recorded only for owners whose boundary credit is output-scoped, so ordinary
-    torch-function-owned dispatches pay one attribute test and allocate nothing.
+    Those are the tensor results (one level deep) and, for a pure alias operator
+    (``aten.detach`` / ``aten.alias``), its operand. Recorded only for owners whose
+    boundary credit is output-scoped, so other dispatches pay one attribute test and
+    allocate nothing.
     """
 
     if owner is None or not owner.boundary_credit_is_output_scoped:
         return ()
+    refs: list[weakref.ref[torch.Tensor]] = []
     if isinstance(result, torch.Tensor):
-        return (weakref.ref(result),)
-    if isinstance(result, (list, tuple)):
-        return tuple(weakref.ref(item) for item in result if isinstance(item, torch.Tensor))
-    return ()
+        refs.append(weakref.ref(result))
+    elif isinstance(result, (list, tuple)):
+        refs.extend(weakref.ref(item) for item in result if isinstance(item, torch.Tensor))
+    if (
+        args
+        and isinstance(args[0], torch.Tensor)
+        and _operator_base_name(func) in _PURE_VIEW_DISPATCH_OPERATORS
+    ):
+        refs.append(weakref.ref(args[0]))
+    return tuple(refs)
 
 
 def _event_builds_boundary_output(
     event: _DispatchEvent, boundary_outputs: Mapping[int, tuple[torch.Tensor, str]]
 ) -> bool:
-    """Return whether the event returned one of the exact boundary tensor objects.
+    """Return whether the event built, or purely aliased, an exact boundary tensor object.
 
     Identity is object identity through a weak reference: ``id`` alone is unsound because
     a freed intermediate's address can be reused by a later boundary tensor, and storage
-    geometry would equate a view or detach with its base. A view or detach that returned
-    the boundary object built it and is credited; the op that produced its base, and any
-    alias taken of the boundary tensor, did not build a boundary object and are not.
+    geometry would equate a view or detach with its base. The rule for aliases:
+
+    * a dispatch that returned the boundary object built it and is credited, including a
+      view or detach whose result is the module output;
+    * the op that produced that view's base did not build a boundary object and is not
+      credited (it is a separate computation the boundary does not attest);
+    * a pure alias (``aten.detach`` / ``aten.alias``) taken OF a boundary tensor, such as
+      the detached copy autograd saves for an op whose backward reads its output, computes
+      no value; any use of the alias is its own dispatch and stays visible, so it is
+      credited. Other views of a boundary tensor are not.
     """
 
-    for ref in event.output_refs:
+    for ref in event.credit_refs:
         tensor = ref()
         if tensor is None:
             continue
@@ -147,7 +164,7 @@ def _event_is_capture_accounted(event: _DispatchEvent) -> bool:
     for a mutating dispatch. Mutations always remain visible because a functionless
     boundary cannot attest their side effects on existing graph values. For a
     module-forward token (output-scoped credit) only a dispatch that returned one of the
-    exact boundary tensor objects is accounted; every other dispatch in the module body,
+    exact boundary tensor objects (or purely aliased one) is accounted; every other dispatch in the module body,
     such as a stale raw op whose value flowed elsewhere, stays visible. A raw
     replacement-hook token keeps whole-interval credit for its non-mutating dispatches.
 

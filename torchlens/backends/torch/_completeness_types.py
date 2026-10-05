@@ -69,11 +69,11 @@ class _DispatchEvent:
     positively attributed and recorded by the placement metadata net -- discharged as
     witnessed (the observed-value ledger / input fact owns it); an UNATTRIBUTED receiver
     keeps the incomplete fact (fail closed)."""
-    output_refs: tuple[weakref.ref[torch.Tensor], ...] = ()
-    """Weak references to the tensors this dispatch returned, recorded only when the owner's
-    boundary credit is output-scoped (module-forward tokens). Weak, so the census never
-    extends an intermediate's lifetime; the token holds its boundary tensors strongly, so a
-    dead reference can never name one of them."""
+    credit_refs: tuple[weakref.ref[torch.Tensor], ...] = ()
+    """Weak references to the tensor results (and a pure alias op's operand), recorded only
+    when the owner's boundary credit is output-scoped (module-forward tokens). Weak, so the
+    census never extends an intermediate's lifetime; the token holds its boundary tensors
+    strongly, so a dead reference can never name one of them."""
 
 
 @dataclass
