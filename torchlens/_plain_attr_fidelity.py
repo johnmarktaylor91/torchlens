@@ -145,17 +145,20 @@ def _compare_container_items(
                     depth=depth + 1,
                     seen=seen,
                 )
-    elif isinstance(source, dict) and isinstance(copied, dict):
-        if len(source) <= _FIDELITY_MAX_CONTAINER_ITEMS:
-            for key, source_item in source.items():
-                if key in copied:
-                    _compare_instance_attrs(
-                        source_item,
-                        copied[key],
-                        f"{attr_path}[{key!r}]",
-                        depth=depth + 1,
-                        seen=seen,
-                    )
+    elif (
+        isinstance(source, dict)
+        and isinstance(copied, dict)
+        and len(source) <= _FIDELITY_MAX_CONTAINER_ITEMS
+    ):
+        for key, source_item in source.items():
+            if key in copied:
+                _compare_instance_attrs(
+                    source_item,
+                    copied[key],
+                    f"{attr_path}[{key!r}]",
+                    depth=depth + 1,
+                    seen=seen,
+                )
 
 
 def _compare_namespace(
