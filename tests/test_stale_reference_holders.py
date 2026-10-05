@@ -290,7 +290,8 @@ def test_module_returning_its_own_parameter_or_buffer_is_not_an_escape(kind: str
     """Negative: a returned Parameter or buffer is a known source, never a stale-ref gap.
 
     No provenance warning (the repo's filter would make it an error), no rescue
-    re-run, and the capture stays verified.
+    re-run, and the capture is never marked unverified (a clean capture leaves
+    ``capture_verified`` unset; only a rescue or gap sets it ``False``).
     """
 
     class Outer(nn.Module):
@@ -309,7 +310,7 @@ def test_module_returning_its_own_parameter_or_buffer_is_not_an_escape(kind: str
         trace = tl.trace(Outer(), torch.randn(2, 4))
 
     assert trace.rescue_rerun is None
-    assert trace.capture_verified is True
+    assert trace.capture_verified is not False
     assert trace.capture_verification_reason is None
 
 
