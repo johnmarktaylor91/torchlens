@@ -88,7 +88,6 @@ def _eager_output_and_state(model: nn.Module, x: torch.Tensor) -> tuple[torch.Te
     return out, {k: v.detach().clone() for k, v in eager.state_dict().items()}
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("op", ["clamp_", "copy_", "mul_", "add_"])
 def test_parameter_inplace_op_is_captured_and_consumed(op: str) -> None:
     torch.manual_seed(0)
@@ -116,7 +115,6 @@ def test_parameter_inplace_op_is_captured_and_consumed(op: str) -> None:
     assert tl.validate(copy.deepcopy(model), x, scope="forward") is True
 
 
-@pytest.mark.smoke
 def test_parameter_mutated_twice_chains_both_ops() -> None:
     torch.manual_seed(0)
     model = _ParamMutator("twice")
@@ -157,7 +155,6 @@ def test_parameter_read_before_and_after_mutation() -> None:
     assert tl.validate(copy.deepcopy(model), x, scope="forward") is True
 
 
-@pytest.mark.smoke
 def test_validate_restores_mutated_parameter_like_a_buffer() -> None:
     """``tl.validate`` leaves model state as it found it (the buffer contract)."""
 
@@ -167,7 +164,6 @@ def test_validate_restores_mutated_parameter_like_a_buffer() -> None:
     assert torch.equal(model.temp.detach(), before)
 
 
-@pytest.mark.smoke
 def test_mutation_label_does_not_leak_onto_the_parameter() -> None:
     model = _ParamMutator("clamp_")
     tl.trace(model, torch.randn(3, 4))
@@ -178,7 +174,6 @@ def test_mutation_label_does_not_leak_onto_the_parameter() -> None:
     assert [p.address for p in clamp.params] == ["temp"]
 
 
-@pytest.mark.smoke
 def test_plain_capture_graph_unchanged_without_mutation() -> None:
     trace = tl.trace(_NoMutation(), torch.randn(3, 4))
     assert [layer.type for layer in trace.layers] == ["input", "linear", "truediv", "output"]
