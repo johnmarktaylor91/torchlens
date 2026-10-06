@@ -5635,15 +5635,10 @@ def _make_mid_forward_backward_log() -> Trace:
 
     model = _MidForwardGradModel()
     x = torch.randn(2, 5, requires_grad=True)
-    # The in-forward torch.autograd.grad is a recorded boundary op, so its
-    # gradients carry provenance and no source-provenance warning fires.
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        log = trace_fn(
-            model, x, capture=tl.options.CaptureOptions(save_grads="all", random_seed=42)
-        )
-    assert not [w for w in caught if "no graph/source provenance" in str(w.message)]
-    return log
+    capture = tl.options.CaptureOptions(save_grads="all", random_seed=42)
+    with warnings.catch_warnings():  # the recorded autogradgrad op leaves no source-less arg
+        warnings.filterwarnings("error", message=".*no graph/source provenance")
+        return trace_fn(model, x, capture=capture)
 
 
 def test_clean_log_ops_all_invariants():
