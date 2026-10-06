@@ -13,6 +13,7 @@ source (address ``<attr>[<key>]...``, the key a dot-free rendering of ``repr(key
 from __future__ import annotations
 
 import copy
+import warnings
 from typing import Any
 
 import pytest
@@ -317,6 +318,146 @@ def test_held_scan_depth_and_object_bounds_are_disclosed() -> None:
     cut = []
     assert [name for name, _ in iter_module_held_plain_tensors(vocab_only, cut)] == ["table['t']"]
     assert cut == []
+
+
+def _tensor_free_holders() -> dict[str, Any]:
+    """The review's tensor-free holder shapes (round-3 review jobs ``rv3-mt-c1``/``-c2``)."""
+
+    return {
+        "config": {"a": {"b": {"c": {"d": [1, 2, 3], "e": {"f": "x"}}}}},
+        "merges": [(str(i), str(i + 1)) for i in range(5000)],
+        "rows": [[float(i), float(i) / 2] for i in range(4900)],
+        "box": {"merges": [(str(i), str(i + 1)) for i in range(5000)]},
+    }
+
+
+def test_held_scan_never_cuts_tensor_free_containers() -> None:
+    from torchlens.backends.torch.buffer_writes import iter_module_held_plain_tensors
+
+    for attr, value in _tensor_free_holders().items():
+        module = nn.Module()
+        setattr(module, attr, value)
+        module.table = {"t": torch.zeros(1)}
+        cut: list[str] = []
+        names = [name for name, _ in iter_module_held_plain_tensors(module, cut)]
+        assert names == ["table['t']"], attr
+        assert cut == [], attr
+
+
+def test_held_scan_cuts_only_where_a_tensor_lies_past_the_bound() -> None:
+    from torchlens.backends.torch.buffer_writes import (
+        _HELD_SCAN_MAX_OBJECTS,
+        iter_module_held_plain_tensors,
+    )
+
+    # Two containers at the depth bound: only the one holding a tensor (however deep,
+    # behind scalars) is cut; the scalar-only sibling is not.
+    module = nn.Module()
+    module.deep = {
+        "a": {"b": {"c": {"plain": [1, 2], "held": {"e": {"f": ["s", torch.zeros(1)]}}}}}
+    }
+    cut: list[str] = []
+    assert list(iter_module_held_plain_tensors(module, cut)) == []
+    assert cut == ["deep['a']['b']['c']['held'] (depth bound 4)"]
+
+    # Tensor-free containers do not count toward the object bound: every tensor
+    # interleaved with 5000 string pairs is yielded.
+    mixed = nn.Module()
+    mixed.merges = [(str(i), str(i + 1)) for i in range(5000)]
+    mixed.merges[4999] = (torch.zeros(1),)
+    mixed.cache = {"merges": mixed.merges, "t": torch.zeros(1)}
+    cut = []
+    names = [name for name, _ in iter_module_held_plain_tensors(mixed, cut)]
+    assert names == ["merges.4999[0]", "cache['t']"]
+    assert cut == []
+
+    # Tensors past the object bound are still cut, also when each sits in a tuple.
+    many = nn.Module()
+    many.pairs = {"p": [(torch.zeros(1),) for _ in range(_HELD_SCAN_MAX_OBJECTS + 2)]}
+    cut = []
+    names = [name for name, _ in iter_module_held_plain_tensors(many, cut)]
+    assert len(names) == _HELD_SCAN_MAX_OBJECTS
+    assert cut == [
+        f"pairs['p'][{_HELD_SCAN_MAX_OBJECTS}][0] (object bound {_HELD_SCAN_MAX_OBJECTS})"
+    ]
+
+
+class _CountingList(list):
+    """A list that counts how many items the scan pulled from it."""
+
+    pulled = 0
+
+    def __iter__(self) -> Any:
+        for item in super().__iter__():
+            self.pulled += 1
+            yield item
+
+
+def test_held_scan_cost_on_a_200k_scalar_container_is_capped() -> None:
+    from torchlens.backends.torch.buffer_writes import (
+        _HELD_SCAN_MAX_VISITS,
+        iter_module_held_plain_tensors,
+    )
+
+    assert _HELD_SCAN_MAX_VISITS == 1 << 16
+    scalars = _CountingList(range(200_000))
+    module = nn.Module()
+    module.table = {"rows": scalars}
+    cut: list[str] = []
+    assert list(iter_module_held_plain_tensors(module, cut)) == []
+    # The rows dict entry plus at most the visit cap of scalar items, then a silent end.
+    assert scalars.pulled <= _HELD_SCAN_MAX_VISITS
+    assert cut == []
+
+
+class _TensorFreeHolders(nn.Module):
+    """Tensor-free holders (deep config dict, merge and coordinate tables) plus a read."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        for attr, value in _tensor_free_holders().items():
+            setattr(self, attr, value)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.relu(x)
+
+
+class _TooWide(nn.Module):
+    """More held tensors than the object bound, none read: disclosed, graph unchanged."""
+
+    def __init__(self, count: int) -> None:
+        super().__init__()
+        self.cache = {index: torch.zeros(1) for index in range(count)}
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.relu(x)
+
+
+def _held_scan_warnings(model: nn.Module, x: torch.Tensor) -> tuple[Any, list[str]]:
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        trace = tl.trace(model, x)
+    return trace, [str(w.message) for w in record if "stopped scanning" in str(w.message)]
+
+
+def test_tensor_free_holders_capture_without_a_scan_warning() -> None:
+    x = torch.randn(5)
+    for _ in range(2):  # the false positive repeated on every capture
+        trace, fired = _held_scan_warnings(_TensorFreeHolders(), x)
+        assert fired == []
+        assert [op.type for op in trace.layer_list] == ["input", "relu", "output"]
+
+
+def test_object_bound_cut_is_disclosed_at_capture() -> None:
+    from torchlens.backends.torch.buffer_writes import _HELD_SCAN_MAX_OBJECTS
+
+    trace, fired = _held_scan_warnings(_TooWide(_HELD_SCAN_MAX_OBJECTS + 1), torch.randn(5))
+    assert len(fired) == 1
+    assert f"cache[{_HELD_SCAN_MAX_OBJECTS}] (object bound {_HELD_SCAN_MAX_OBJECTS})" in fired[0]
+    assert [op.type for op in trace.layer_list] == ["input", "relu", "output"]
+    # Exactly at the bound nothing lies past the cut, so nothing is disclosed.
+    _, fired = _held_scan_warnings(_TooWide(_HELD_SCAN_MAX_OBJECTS), torch.randn(5))
+    assert fired == []
 
 
 class _CollidingKeys(nn.Module):
