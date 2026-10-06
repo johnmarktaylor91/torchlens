@@ -200,15 +200,6 @@ KNOWN_FAILURES: tuple[KnownFailure, ...] = (
         reason="validate_forward_pass fail-closed: deepcopy cannot snapshot non-registered plain attribute(s) (Attention[0].attention_bias_cache and 9 more plain attributes), so model-state restoration cannot be proven",
         tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
     ),
-    KnownFailure(
-        nodeid="tests/bench/test_capture_bench.py::test_capture_bench_matrix",
-        reason=(
-            "UserWarning promoted to error: tensor arguments with no graph/source "
-            "provenance, adopted at module entry blocks.layers.N.dropout of the "
-            "nn.TransformerEncoder GPT-block workload (also on torch 2.14.1)"
-        ),
-        tracking="Weekly 37176706721 triage (2026-10-04)",
-    ),
 )
 
 
