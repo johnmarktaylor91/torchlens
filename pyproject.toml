@@ -184,14 +184,16 @@ shap = ["shap~=0.46"]
 inseq = ["inseq~=0.6"]
 steering = ["steering-vectors~=0.1"]
 repeng = ["repeng~=0.4"]
-# D05 extras audit (2026-09-02): dialz 0.2 imports IPython.display at import time
-# (dialz/visualize.py) without declaring ipython, so `torchlens[dialz]` installed
+# D05 extras audit (2026-09-02): dialz 0.2 and 1.x import IPython.display at import
+# time (dialz/visualize.py) without declaring ipython, so `torchlens[dialz]` installed
 # but could not `import dialz` in a clean venv -- the ipython rider closes that.
+# The pin spans 0.2 through 1.x: the bridge is verified bit-identical against
+# SteeringVector.train on dialz 0.2.0 and 1.1.4 (tests/test_bridge_real_dialz.py).
 # Its gguf<0.14 pin resolves sentencepiece 0.2.0, which ships no cp313 wheels and
 # fails its sdist build, so the extra is marked out on 3.13 (installable, empty;
 # the fix-by-exclusion idiom the tinygrad extra already uses). The same two
 # members appear in all-stretch below.
-dialz = ["dialz~=0.2; python_version < '3.13'", "ipython>=8.0; python_version < '3.13'"]
+dialz = ["dialz>=0.2,<2; python_version < '3.13'", "ipython>=8.0; python_version < '3.13'"]
 nnsight = ["nnsight~=0.4"]
 # lit-nlp is bounded to the 1.3 line (LIT-panel memo item 1): `~=1.3` admitted
 # every future 1.x, and lit-nlp 1.3 requires shap<0.46 against the shap~=0.46
@@ -227,7 +229,7 @@ all-stretch = [
     "steering-vectors~=0.1",
     "repeng~=0.4",
     # dialz: ipython rider + 3.13 exclusion, see the dialz extra above.
-    "dialz~=0.2; python_version < '3.13'",
+    "dialz>=0.2,<2; python_version < '3.13'",
     "ipython>=8.0; python_version < '3.13'",
     "depyf~=0.18",
     "torchextractor>=0.3,<2",

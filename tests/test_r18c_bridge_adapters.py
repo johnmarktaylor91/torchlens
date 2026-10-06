@@ -1,9 +1,9 @@
 """Regression tests for r18c bridge/compat adapter hardening.
 
 Covers depyf arity handling (A3-04), tensor_layers explicit-site validation
-(A3-14), the extractor/ILG .model unwrap gate (A3-15), dialz analyzer-class
-instantiation (A3-16), the lovely non-mutating fallback (A3-17), the repeng /
-steering fail-loud default guard (A3-21), the profiler blank-label guard
+(A3-14), the extractor/ILG .model unwrap gate (A3-15), dialz
+default-method detection, the lovely non-mutating fallback (A3-17), the repeng /
+steering contrastive-row contract, the profiler blank-label guard
 (A3-01 partial), null traceEvents handling (LOW-9), the execution_trace schema
 docstring (A3-18), and the push_to_hub artifact-format tag (LOW-4 / LOW-S1).
 
@@ -194,43 +194,39 @@ def test_from_ilg_keeps_plain_wrapper(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# A3-16 dialz: analyzer classes are instantiated before use
+# dialz: the installed default method name is read from read_representations
 # --------------------------------------------------------------------------- #
-def test_dialz_instantiates_analyzer_class(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A dialz Analyzer class is instantiated; self is not the outs list."""
+@pytest.mark.parametrize("default", ["pca", "pca_diff"])
+def test_dialz_default_method_follows_installed_release(
+    monkeypatch: pytest.MonkeyPatch, default: str
+) -> None:
+    """dialz 1.x defaults to ``pca`` and 0.2 to ``pca_diff``; both are honoured."""
 
     from torchlens.bridge import dialz
 
-    class Analyzer:
-        def analyze(self, outs: list[Any], labels: list[str] | None = None) -> dict[str, Any]:
-            return {
-                "self_is_analyzer": isinstance(self, Analyzer),
-                "outs_is_list": isinstance(outs, list),
-                "n": len(outs),
-                "labels": labels,
-            }
+    def read_representations(model: Any, tokenizer: Any, inputs: Any, method: str = default):
+        raise AssertionError("never called")
 
-    monkeypatch.setitem(sys.modules, "dialz", _module("dialz", Analyzer=Analyzer))
-    log = _FakeLog([_FakeLayer("a"), _FakeLayer("b")])
-    payload = dialz.analyze(log)
-    result = payload["result"]
-    assert result["self_is_analyzer"] is True
-    assert result["outs_is_list"] is True
-    assert result["n"] == 2
-    assert result["labels"] == ["a", "b"]
+    fake = _module(
+        "dialz", vector=_module("dialz.vector", read_representations=read_representations)
+    )
+    assert dialz._default_method(fake) == default
+    assert dialz._default_method(_module("dialz")) == "pca"
 
 
-def test_dialz_module_level_function_untouched(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A module-level analyze function is still called directly."""
+def test_dialz_unknown_method_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An unknown method names the accepted ones instead of guessing."""
 
+    pytest.importorskip("sklearn")
     from torchlens.bridge import dialz
 
-    def analyze(outs: list[Any], *, labels: list[str]) -> dict[str, Any]:
-        return {"count": len(outs)}
-
-    monkeypatch.setitem(sys.modules, "dialz", _module("dialz", analyze=analyze))
-    payload = dialz.analyze(_FakeLog([_FakeLayer("a")]))
-    assert payload["result"]["count"] == 1
+    monkeypatch.setitem(sys.modules, "dialz", _module("dialz", SteeringVector=dict))
+    pos = _FakeLayer("p", out=torch.randn(3, 4))
+    neg = _FakeLayer("n", out=torch.randn(3, 4))
+    with pytest.raises(ValueError, match="mean_diff"):
+        dialz.vector(
+            _FakeLog([]), pos, neg, layer=0, read_token_index=None, model_type="m", method="x"
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -273,78 +269,119 @@ def test_lovely_forwards_kwargs(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# A3-21 repeng / steering: fail loud when the default cannot take saved outs
+# repeng / steering: contrastive rows are read, sliced and checked before training
 # --------------------------------------------------------------------------- #
-def test_repeng_default_factory_fails_loud(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The real-shaped ControlVector.train default is refused with a clear error."""
+def test_steering_default_trainer_is_mean_aggregator_on_sliced_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The default trainer is the package's mean aggregator over one token per prompt."""
 
+    from torchlens.bridge import steering_vectors
+
+    seen: dict[str, Any] = {}
+
+    def mean_aggregator() -> Any:
+        def _mean(pos: torch.Tensor, neg: torch.Tensor) -> torch.Tensor:
+            seen["shapes"] = (tuple(pos.shape), tuple(neg.shape))
+            return (pos - neg).mean(dim=0)
+
+        return _mean
+
+    monkeypatch.setitem(
+        sys.modules,
+        "steering_vectors",
+        _module("steering_vectors", mean_aggregator=mean_aggregator),
+    )
+    pos = torch.randn(4, 5, 3)
+    neg = torch.randn(4, 5, 3)
+    payload = steering_vectors.vector(
+        _FakeLog([]), _FakeLayer("p", out=pos), _FakeLayer("n", out=neg)
+    )
+    assert seen["shapes"] == ((4, 3), (4, 3))
+    assert torch.equal(payload["vector"], (pos[:, -1] - neg[:, -1]).mean(dim=0))
+
+
+def test_steering_per_prompt_read_indices(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A sequence of read indices picks one token per prompt (padded batches)."""
+
+    from torchlens.bridge import steering_vectors
+
+    monkeypatch.setitem(sys.modules, "steering_vectors", _module("steering_vectors"))
+    pos = torch.arange(24.0).reshape(2, 4, 3)
+    neg = torch.zeros(2, 4, 3)
+    payload = steering_vectors.vector(
+        _FakeLog([]),
+        _FakeLayer("p", out=pos),
+        _FakeLayer("n", out=neg),
+        read_token_index=[1, 3],
+        trainer=lambda p, n: p - n,
+    )
+    assert torch.equal(payload["vector"], torch.stack([pos[0, 1], pos[1, 3]]))
+    with pytest.raises(ValueError, match="lists 1 positions"):
+        steering_vectors.vector(
+            _FakeLog([]),
+            _FakeLayer("p", out=pos),
+            _FakeLayer("n", out=neg),
+            read_token_index=[1],
+            trainer=lambda p, n: p,
+        )
+
+
+def test_steering_mismatched_rows_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Positive and negative rows must line up one to one."""
+
+    from torchlens.bridge import steering_vectors
+
+    monkeypatch.setitem(sys.modules, "steering_vectors", _module("steering_vectors"))
+    with pytest.raises(ValueError, match="must match"):
+        steering_vectors.vector(
+            _FakeLog([]),
+            _FakeLayer("p", out=torch.zeros(3, 2, 4)),
+            _FakeLayer("n", out=torch.zeros(2, 2, 4)),
+            trainer=lambda p, n: p,
+        )
+    with pytest.raises(ValueError, match=r"\[n_prompts, n_tokens, hidden\]"):
+        steering_vectors.vector(
+            _FakeLog([]),
+            _FakeLayer("p", out=torch.zeros(3, 4)),
+            _FakeLayer("n", out=torch.zeros(3, 4)),
+            trainer=lambda p, n: p,
+        )
+
+
+def test_repeng_pca_center_matches_repeng_in_place_centering(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """repeng centres h in place for pca_center, so the sign check sees centred rows."""
+
+    pytest.importorskip("sklearn")
     from torchlens.bridge import repeng
 
-    class ControlVector:
-        @classmethod
-        def train(cls, model: Any, tokenizer: Any, dataset: Any, **kw: Any) -> str:
-            return "trained"
-
-    monkeypatch.setitem(sys.modules, "repeng", _module("repeng", ControlVector=ControlVector))
-    log = _FakeLog([])
-    with pytest.raises(RuntimeError, match="explicit vector_factory"):
-        repeng.control_vector(log, _FakeLayer("p"), _FakeLayer("n"))
-
-
-def test_repeng_explicit_factory_bypasses_guard(monkeypatch: pytest.MonkeyPatch) -> None:
-    """An explicit factory is called directly, never gated by the default guard."""
-
-    from torchlens.bridge import repeng
-
-    class ControlVector:
-        @classmethod
-        def train(cls, model: Any, tokenizer: Any, dataset: Any, **kw: Any) -> str:
-            return "trained"
-
-    monkeypatch.setitem(sys.modules, "repeng", _module("repeng", ControlVector=ControlVector))
+    monkeypatch.setitem(sys.modules, "repeng", _module("repeng", ControlVector=dict))
+    torch.manual_seed(5)
+    pos = torch.randn(6, 4) + 2.0
+    neg = torch.randn(6, 4)
     payload = repeng.control_vector(
         _FakeLog([]),
-        _FakeLayer("p"),
-        _FakeLayer("n"),
-        vector_factory=lambda positive, negative, **kw: "explicit",
+        _FakeLayer("p", out=pos),
+        _FakeLayer("n", out=neg),
+        layer=0,
+        read_token_index=None,
+        model_type="m",
+        method="pca_center",
     )
-    assert payload["control_vector"] == "explicit"
-
-
-def test_steering_default_trainer_fails_loud(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The real-shaped train_steering_vector default is refused with a clear error."""
-
-    from torchlens.bridge import steering_vectors
-
-    def train_steering_vector(model: Any, tokenizer: Any, training_samples: Any, **kw: Any) -> str:
-        return "trained"
-
-    monkeypatch.setitem(
-        sys.modules,
-        "steering_vectors",
-        _module("steering_vectors", train_steering_vector=train_steering_vector),
-    )
-    with pytest.raises(RuntimeError, match="explicit trainer"):
-        steering_vectors.vector(_FakeLog([]), _FakeLayer("p"), _FakeLayer("n"))
-
-
-def test_steering_compatible_default_still_runs(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A default trainer that accepts (positive, negative) is used as-is."""
-
-    from torchlens.bridge import steering_vectors
-
-    def train_steering_vector(positive: Any, negative: Any, *, normalize: bool = False) -> dict:
-        return {"normalize": normalize}
-
-    monkeypatch.setitem(
-        sys.modules,
-        "steering_vectors",
-        _module("steering_vectors", train_steering_vector=train_steering_vector),
-    )
-    payload = steering_vectors.vector(
-        _FakeLog([]), _FakeLayer("p"), _FakeLayer("n"), normalize=True
-    )
-    assert payload["vector"] == {"normalize": True}
+    direction = payload["control_vector"]["directions"][0]
+    assert direction.shape == (4,)
+    with pytest.raises(ValueError, match="Unknown method"):
+        repeng.control_vector(
+            _FakeLog([]),
+            _FakeLayer("p", out=pos),
+            _FakeLayer("n", out=neg),
+            layer=0,
+            read_token_index=None,
+            model_type="m",
+            method="mean_diff",
+        )
 
 
 # --------------------------------------------------------------------------- #
