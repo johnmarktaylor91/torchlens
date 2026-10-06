@@ -37,20 +37,30 @@ if TYPE_CHECKING:
 
 _IMPLICIT_BACKWARD_TASK_IDS: weakref.WeakKeyDictionary[Any, int] = weakref.WeakKeyDictionary()
 # Removable handles of gradient hooks that sit on model state (a mutated prepared
-# Parameter's autograd history), keyed weakly by the owning trace; cleanup()
-# removes them (``remove_owned_state_grad_hooks``) and they die with the trace.
+# Parameter's autograd history), keyed weakly by the owning trace. A key marks the
+# trace STATE-ENTANGLED: later forwards on the model chain onto that history, so
+# every later backward reaches this trace's hooks. cleanup() removes the handles
+# but keeps the key (its remaining op hooks stay gated); keys die with the trace.
 _OWNED_STATE_GRAD_HOOK_HANDLES: weakref.WeakKeyDictionary[Any, list[Any]] = (
     weakref.WeakKeyDictionary()
 )
 
 
-def _owning_backward_is_running(*candidates: Any) -> bool:
-    """Return whether one of ``candidates`` is differentiating its own graph now.
+def _is_state_entangled(trace: Any) -> bool:
+    """Return whether ``trace`` registered a gradient hook on model state."""
 
-    True inside the trace's managed backward bracket (``log_backward`` and the
-    other TorchLens triggers), or inside the engine task of an implicit pass the
-    trace's own op hooks already opened (a plain ``.backward()`` on its outputs:
-    the hooks on downstream ops fire before any hook deeper in the graph).
+    return bool(_OWNED_STATE_GRAD_HOOK_HANDLES) and (
+        trace is not None and trace in _OWNED_STATE_GRAD_HOOK_HANDLES
+    )
+
+
+def _owning_backward_is_running(*candidates: Any) -> bool:
+    """Return whether one of ``candidates`` holds its managed backward bracket now.
+
+    A state-entangled trace records only its own managed passes (``log_backward``,
+    ``trace.backward()``, or a plain ``.backward()`` whose roots match the trace):
+    any other backward that reaches its hooks came in through the model's
+    autograd history and is not this trace's.
 
     Parameters
     ----------
@@ -60,19 +70,13 @@ def _owning_backward_is_running(*candidates: Any) -> bool:
     Returns
     -------
     bool
-        Whether a candidate's own backward is running.
+        Whether a candidate's managed backward is running.
     """
 
-    for candidate in candidates:
-        if candidate is None:
-            continue
-        if getattr(candidate, "_tl_active_backward_bracket", False):
-            return True
-        if getattr(candidate, "_implicit_backward_pass_open", False):
-            task_id = _current_backward_graph_task_id()
-            if task_id is not None and _IMPLICIT_BACKWARD_TASK_IDS.get(candidate) == task_id:
-                return True
-    return False
+    return any(
+        candidate is not None and getattr(candidate, "_tl_active_backward_bracket", False)
+        for candidate in candidates
+    )
 
 
 def remove_owned_state_grad_hooks(trace: Any) -> None:
@@ -84,8 +88,12 @@ def remove_owned_state_grad_hooks(trace: Any) -> None:
         Trace being cleaned up.
     """
 
-    for handle in _OWNED_STATE_GRAD_HOOK_HANDLES.pop(trace, ()):
+    handles = _OWNED_STATE_GRAD_HOOK_HANDLES.get(trace)
+    if handles is None:
+        return
+    for handle in handles:
         handle.remove()
+    handles.clear()
 
 
 def _is_fork_relative(trace: "Trace", other: "Trace") -> bool:
@@ -159,11 +167,13 @@ def _add_tensor_backward_hook(
             holds it.
         owning_backward_only: The hook sits on MODEL STATE (a mutated
             prepared Parameter's autograd history), which later forwards on
-            the same model chain onto, so every later backward reaches it.
-            Record only while the owning trace's own backward runs
-            (``_owning_backward_is_running``) and keep the handle so
-            ``cleanup()`` removes the hook. Plain hooks die with their pass's
-            tensors and keep the historical implicit-pass recording.
+            the same model chain onto, so every later backward reaches it and
+            the op hooks upstream of it. The trace becomes state-entangled:
+            its hooks record only inside its own managed backward
+            (``_owning_backward_is_running``), the node is a root-matching
+            boundary rather than a trigger (``_register_state_boundary_grad_fn``),
+            and ``cleanup()`` removes this hook. Plain traces keep the
+            historical implicit-pass recording.
     """
     # r65: TorchLens's OWN hook-bookkeeping ``grad_fn``/``requires_grad`` reads, hoisted
     # under the explicit internal-read marker so the r65 state-metadata property observer
@@ -173,7 +183,11 @@ def _add_tensor_backward_hook(
     with internal_scalar_read():
         _grad_fn = t.grad_fn
         _requires_grad = bool(t.requires_grad)
-    if _grad_fn is not None:
+    if _grad_fn is not None and owning_backward_only:
+        from .backward import _register_state_boundary_grad_fn
+
+        _register_state_boundary_grad_fn(trace, _grad_fn)
+    elif _grad_fn is not None:
         from .backward import _register_forward_grad_fn
 
         _register_forward_grad_fn(trace, _grad_fn, tensor_label)
@@ -241,7 +255,9 @@ def _add_tensor_backward_hook(
             and _is_fork_relative(active_trace, managed_trace)
         ):
             active_trace = managed_trace
-        if owning_backward_only and not _owning_backward_is_running(trace_ref(), active_trace):
+        if (owning_backward_only or _is_state_entangled(trace_ref())) and not (
+            _owning_backward_is_running(trace_ref(), active_trace)
+        ):
             return
         if active_trace is not None:
             # One-owner-per-label must hold on the FINAL emission target, not

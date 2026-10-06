@@ -676,7 +676,9 @@ def test_mutation_gradient_hook_records_only_its_own_traces_backward() -> None:
     The hook sits on the capture pass's ``grad_fn`` of the mutated Parameter, which
     every later forward on the same model chains onto. A second capture's backward
     and 20 eager training steps (both traces alive) must leave trace 1 with its one
-    pass: ``op.grad`` still works and ``backward_events`` does not grow.
+    pass: ``op.grad`` still works and ``backward_events`` does not grow. Root
+    matching must not open trace 1's managed bracket through that history either,
+    or every op upstream of the Parameter (the operand's ``sum``) would record too.
     """
 
     torch.manual_seed(0)
@@ -687,6 +689,8 @@ def test_mutation_gradient_hook_records_only_its_own_traces_backward() -> None:
     _backward_through_own_output(trace1)
     op1 = _ops_by_type(trace1, "add")[0]
     grad1 = op1.grad.clone()
+    operand1 = _ops_by_type(trace1, "sum")[0]
+    assert len(operand1.grads) == 1
     events_after_own_backward = len(trace1.backward_events)
 
     trace2 = tl.trace(model, x, capture=capture)
@@ -694,6 +698,8 @@ def test_mutation_gradient_hook_records_only_its_own_traces_backward() -> None:
     op2 = _ops_by_type(trace2, "add")[0]
     assert op2.grad is not None
     assert len(op2.grads) == 1
+    assert len(trace1.backward_events) == events_after_own_backward
+    trace2_events = len(trace2.backward_events)
 
     optimizer = torch.optim.SGD(
         [p for p in model.parameters() if p.requires_grad and p.is_leaf], lr=0.01
@@ -707,8 +713,10 @@ def test_mutation_gradient_hook_records_only_its_own_traces_backward() -> None:
     assert [str(w.message) for w in caught] == []
     assert len(op1.grads) == 1
     assert torch.equal(op1.grad, grad1)
+    assert len(operand1.grads) == 1
     assert len(trace1.backward_events) == events_after_own_backward
     assert len(op2.grads) == 1
+    assert len(trace2.backward_events) == trace2_events
 
 
 def test_mutation_gradient_hook_records_a_plain_backward_of_its_own_output() -> None:
