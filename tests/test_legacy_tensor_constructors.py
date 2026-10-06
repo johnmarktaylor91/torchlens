@@ -491,7 +491,7 @@ def test_unwrap_restores_c_constructor_on_user_variable_subclasses() -> None:
     """A user ``Variable`` subclass leaves the ``slot_tp_new`` trampoline again on unwrap."""
 
     from torchlens.backends.torch.wrappers import unwrap_torch
-    from torchlens.utils._type_new_slot import _type_view, has_python_new_trampoline
+    from torchlens.utils._type_new_slot import _type_view
 
     unwrap_torch()
     try:
@@ -510,7 +510,8 @@ def test_unwrap_restores_c_constructor_on_user_variable_subclasses() -> None:
         own_slot = _type_view(OwnNewVar).tp_new
         assert _type_view(SubVar).tp_new == c_tp_new
         tl.trace(Plain(), torch.randn(2, 4))
-        assert has_python_new_trampoline(SubVar) and has_python_new_trampoline(SubSubVar)
+        assert _type_view(SubVar).tp_new != c_tp_new  # inherited the Python override
+        assert _type_view(SubSubVar).tp_new == _type_view(SubVar).tp_new
         unwrap_torch()
         assert _type_view(SubVar).tp_new == c_tp_new
         assert _type_view(SubSubVar).tp_new == c_tp_new
