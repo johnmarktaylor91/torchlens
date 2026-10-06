@@ -23,6 +23,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.validation import last_validation_failure
+from torchlens.validation._source_provenance import source_provenance_gaps
 
 _GLOBAL_TABLE = torch.randn(4)
 _HAS_CUSTOM_OP = hasattr(torch.library, "custom_op")
@@ -268,10 +269,17 @@ def test_unrecordable_mutating_operator_fails_validation(op_name: str) -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         trace = tl.trace(model, torch.randn(3, 4))
-    assert _unrecorded_mutation_rows(trace)
+    rows = _unrecorded_mutation_rows(trace)
+    expected = "_foreach_mul_" if op_name == "foreach" else op_name
+    assert [row for row in rows if expected in str(row["message"])], rows
+    gap_reasons = {gap[0] for gap in source_provenance_gaps(trace)}
+    assert "unrecorded_operator_mutation" in gap_reasons, gap_reasons
     assert not _validate(model, torch.randn(3, 4))
     failure = last_validation_failure()
     assert failure is not None
+    if op_name == "write_into":  # the foreach packet fails bfs_completeness first
+        assert failure.check == "source_provenance", failure
+        assert "unrecorded_operator_mutation" in failure.extra["reasons"], failure
 
 
 @pytest.mark.smoke
@@ -289,3 +297,104 @@ def test_unreadable_schema_none_return_fails_closed(monkeypatch: pytest.MonkeyPa
     assert failure is not None
     assert failure.check == "source_provenance", failure
     assert "unrecorded_operator_mutation" in failure.extra["reasons"], failure
+
+
+# --- Re-review fixes: a write that no return aliases --------------------------------
+
+if _HAS_CUSTOM_OP:
+
+    @torch.library.custom_op("tltest_r13::mut_ret", mutates_args=("x",))
+    def _mut_ret(x: torch.Tensor) -> torch.Tensor:
+        _VF_MUL_(x, 2.0)  # state update, then a fresh output (KV-cache, running stats)
+        return torch._C._VariableFunctions.add(x, 0.0)
+
+    @torch.library.custom_op("tltest_r13::unknown_ret", mutates_args="unknown")
+    def _unknown_ret(x: torch.Tensor) -> torch.Tensor:
+        _VF_MUL_(x, 2.0)
+        return torch._C._VariableFunctions.add(x, 1.0)
+
+    @torch.library.custom_op("tltest_r13::buf_ret", mutates_args=("buf",))
+    def _buf_ret(x: torch.Tensor, buf: torch.Tensor) -> torch.Tensor:
+        torch._C.TensorBase.add_(buf, 1.0)
+        return torch._C._VariableFunctions.mul(x, 2.0)
+
+    _R13_LIB = torch.library.Library("tltest_r13", "FRAGMENT")
+    _R13_LIB.define("inplace(Tensor(a!) x) -> Tensor(a!)")
+
+    def _r13_inplace(x: torch.Tensor) -> torch.Tensor:
+        _VF_MUL_(x, 2.0)
+        return x
+
+    _R13_LIB.impl("inplace", _r13_inplace, "CPU")
+
+
+class _UnreturnedWriteModel(nn.Module):
+    def __init__(self, op_name: str) -> None:
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+        self.op_name = op_name
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = self.fc(x).clone()
+        if self.op_name == "mut_ret":
+            return y + _mut_ret(y)
+        if self.op_name == "unknown_ret":
+            return y + _unknown_ret(y)
+        buf = self.fc(x).clone()
+        return _buf_ret(y, buf) + buf
+
+
+class _AliasedWriteModel(nn.Module):
+    def __init__(self, op_name: str) -> None:
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+        self.op_name = op_name
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = self.fc(x).clone()
+        if self.op_name == "add_":
+            torch.ops.aten.add_.Tensor(y, 1.0)
+            return y + 1
+        if self.op_name == "inplace":
+            torch.ops.tltest_r13.inplace(y)
+            return y + 1
+        out = torch.empty(3, 4)
+        torch.ops.aten.tanh.out(y.detach(), out=out)
+        return out + y
+
+
+@pytest.mark.smoke
+@pytest.mark.skipif(not _HAS_CUSTOM_OP, reason="torch.library.custom_op needs torch>=2.4")
+@pytest.mark.parametrize("op_name", ["mut_ret", "unknown_ret", "buf_ret"])
+def test_write_no_return_aliases_fails_validation(op_name: str) -> None:
+    """A write beside a fresh return used to validate True with a pre-mutation graph."""
+
+    model = _UnreturnedWriteModel(op_name)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(model, torch.randn(3, 4))
+    rows = _unrecorded_mutation_rows(trace)
+    assert [row for row in rows if op_name in str(row["message"])], rows
+    assert not _validate(model, torch.randn(3, 4))
+    failure = last_validation_failure()
+    assert failure is not None
+    assert failure.check == "source_provenance", failure
+    assert "unrecorded_operator_mutation" in failure.extra["reasons"], failure
+
+
+@pytest.mark.smoke
+@pytest.mark.skipif(not _HAS_CUSTOM_OP, reason="torch.library.custom_op needs torch>=2.4")
+@pytest.mark.parametrize("op_name", ["add_", "out", "inplace"])
+def test_write_a_return_aliases_is_still_recorded(op_name: str) -> None:
+    """In-place and ``out=`` operators return the tensor they write: recorded, valid."""
+
+    model = _AliasedWriteModel(op_name)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(model, torch.randn(3, 4))
+    assert not _unrecorded_mutation_rows(trace)
+    func_name = "tanh" if op_name == "out" else op_name
+    writer = next(op for op in trace.ops if op.func_name == func_name)
+    add = next(op for op in trace.ops if op.func_name == "__add__")
+    assert writer.label.split(":")[0] in add.parents, (writer.label, add.parents)
+    assert _validate(model, torch.randn(3, 4)), last_validation_failure()
