@@ -804,13 +804,10 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
             # Parameters (e.g. a fixed nn.Parameter(torch.arange(...), requires_grad=False)
             # lookup buffer) are legal PyTorch and never gradient-capable; forcing
             # requires_grad on them raises, so only force floating/complex dtypes.
-            # A non-leaf Parameter (left so by an earlier in-place write with a
-            # grad-requiring operand) already requires grad, and torch refuses to
-            # set the flag of a non-leaf.
             requires_grad_before = param.requires_grad
             if (
                 not param_is_lazy
-                and param.is_leaf
+                and param.is_leaf  # a non-leaf already requires grad; its flag is read-only
                 and not getattr(trace, "backward_ready", False)
                 and (torch.is_floating_point(param) or torch.is_complex(param))
             ):
