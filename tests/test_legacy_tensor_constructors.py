@@ -475,7 +475,11 @@ def test_foreign_python_new_on_variable_is_skipped_not_recursed() -> None:
         assert installed["FloatTensor"] is torch.FloatTensor
         assert legacy_ctors.skipped_legacy_constructor_classes() == {"Variable": Variable}
         assert Variable.__dict__["__new__"].__func__ is foreign_new
-        trace = tl.trace(VariableOnly(), torch.randn(2, 4))
+        with warnings.catch_warnings():
+            # The skipped Variable is uncaptured, so its output has no provenance
+            # (the disclosed gap); the call itself must still run eagerly.
+            warnings.simplefilter("ignore")
+            trace = tl.trace(VariableOnly(), torch.randn(2, 4))
         assert "Variable" not in [op.func_name for op in trace.ops]
     finally:
         unwrap_torch()
