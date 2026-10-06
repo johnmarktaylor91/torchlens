@@ -12,6 +12,7 @@ import os
 
 import pytest
 import torch
+from support.hf_cache import skip_unless_hf_checkpoint_cached
 
 import torchlens as tl
 
@@ -26,10 +27,8 @@ _TARGET = "Hello world and more"
 
 def _load(method: str):  # noqa: ANN202
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
-    try:
-        return inseq.load_model(_TINY, method)
-    except OSError as exc:  # pragma: no cover - environment-dependent
-        pytest.skip(f"checkpoint {_TINY} not cached: {exc}")
+    skip_unless_hf_checkpoint_cached(_TINY)
+    return inseq.load_model(_TINY, method)
 
 
 def test_default_method_is_an_inseq_method() -> None:

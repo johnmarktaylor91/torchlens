@@ -11,6 +11,7 @@ import os
 
 import pytest
 import torch
+from support.hf_cache import skip_unless_hf_checkpoint_cached
 
 import torchlens as tl
 
@@ -24,10 +25,8 @@ _TINY = "hf-internal-testing/tiny-random-gpt2"
 @pytest.fixture(scope="module")
 def lm():  # noqa: ANN201
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
-    try:
-        return nnsight.LanguageModel(_TINY, device_map="cpu", dispatch=True)
-    except OSError as exc:  # pragma: no cover - environment-dependent
-        pytest.skip(f"checkpoint {_TINY} not cached: {exc}")
+    skip_unless_hf_checkpoint_cached(_TINY)
+    return nnsight.LanguageModel(_TINY, device_map="cpu", dispatch=True)
 
 
 def test_real_tracer_is_refused_not_emptied(lm) -> None:  # noqa: ANN001

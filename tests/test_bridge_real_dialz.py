@@ -14,6 +14,7 @@ from typing import Any
 
 import numpy as np
 import pytest
+from support.hf_cache import skip_unless_hf_checkpoint_cached
 
 import torchlens as tl
 
@@ -32,18 +33,16 @@ def stack() -> Iterator[dict[str, Any]]:
 
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
     os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
-    try:
-        tok = transformers.AutoTokenizer.from_pretrained(_TINY)
-        steering_model = dialz.SteeringModel(_TINY, layer_ids=[1])
-    except OSError as exc:  # pragma: no cover - environment-dependent
-        pytest.skip(f"checkpoint {_TINY} not cached: {exc}")
+    skip_unless_hf_checkpoint_cached(_TINY)
+    tok = transformers.AutoTokenizer.from_pretrained(_TINY)
+    steering_model = dialz.SteeringModel(_TINY, layer_ids=[1])
     model = steering_model.model.eval()
     model.config.use_cache = False
     candidates = [(f"I love {w}", f"I hate {w}") for w in _WORDS]
     lengths = [(len(tok(p).input_ids), len(tok(n).input_ids)) for p, n in candidates]
     # One unpadded batch per side: keep the pairs at the most common equal length.
     length = Counter(a for a, b in lengths if a == b).most_common(1)[0][0]
-    pairs = [pair for pair, (a, b) in zip(candidates, lengths) if a == b == length]
+    pairs = [pair for pair, (a, b) in zip(candidates, lengths, strict=True) if a == b == length]
     assert len(pairs) >= 3
     dataset = dialz.Dataset()
     for positive, negative in pairs:
