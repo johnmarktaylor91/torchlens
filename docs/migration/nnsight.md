@@ -11,4 +11,4 @@
 | Cross-prompt patching | Capture separate logs and patch with `set` or `attach_hooks` | Equivalent for local PyTorch models. |
 | Repeated interventions from one base | `fork()` first, then mutate each branch | TorchLens emphasizes fork-first branch isolation. |
 | Save intervention for sharing | `log.save_intervention(path, level="portable")` | TorchLens has `.tlspec/` recipes. |
-| Intervene inside fused attention internals | Manual unfused attention implementation | Opaque fused kernels hide internal sites from TorchLens. |
+| Intervene inside fused attention internals | Default fused SDPA load: by-head and by-pattern patching through `torchlens.mechinterp.lowered_counterfactual` (no eager reload); eager-attention load: the softmax and score ops are ordinary intervention sites | Head-level and pattern-level edits work on fused models; other edits inside the fused kernel need an eager recapture. |

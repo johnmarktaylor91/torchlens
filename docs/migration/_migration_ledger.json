@@ -27,9 +27,9 @@
       "doc": "docs/migration/baukit.md:14; autocircuit.md:14; inseq.md:13; transformerlens.md:13",
       "kind": "undersell-falsehood",
       "receipt": "Four pages still say fused attention internals are 'not visible' while verified READ-ONLY SDPA facets ship (docs/facets.md). Correct wording must name eager-vs-fused and facet-vs-captured-op per the attention-picture-scope lint.",
-      "status": "open",
-      "verified_at": "2026-08-26 (mega/A12 checkout; all four lines live)",
-      "owner_next": "D01 (prose truth sweep); cross-ref claims lint attention-picture-scope",
+      "status": "fixed",
+      "verified_at": "2026-10-05 (wip/next-cleanup; baukit, autocircuit, inseq and captum rows now name eager vs fused and captured op vs reconstructed facet; nnsight and repe edit rows name lowered_counterfactual; transformerlens.md was already current)",
+      "owner_next": "none",
       "cross_refs": [
         "attention-picture-scope"
       ]
