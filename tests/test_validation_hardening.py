@@ -38,6 +38,7 @@ import torch.nn as nn
 from _validation_capture import _capture, _quiet_validate
 
 import torchlens as tl
+from torchlens.backends.torch import rescue
 from torchlens.options import CaptureOptions
 from torchlens.validation import validate_forward_pass
 from torchlens.validation.core import validate_saved_outs
@@ -494,7 +495,7 @@ class _RawAten(nn.Module):
         return torch.relu(h)
 
 
-def test_w34_dropped_aten_op_trace_method_now_fails() -> None:
+def test_w34_dropped_aten_op_trace_method_now_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     """FAIL-AFTER-WHERE-PASSED-BEFORE: the Trace-method entrypoint is armed.
 
     Before this hardening ``Trace.validate_forward_pass`` returned True for
@@ -508,6 +509,8 @@ def test_w34_dropped_aten_op_trace_method_now_fails() -> None:
     model = _RawAten()
     x = torch.randn(3, 4)
     ground_truth = model(x)
+    # Keep the primary capture: the rescue re-run's aten recording recovers the stand-in.
+    monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         trace = tl.trace(
