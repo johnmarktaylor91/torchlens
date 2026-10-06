@@ -193,6 +193,9 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # Patched legacy constructor classes (torch.<dtype>Tensor, Variable):
         # installed by wrap_torch, restored and emptied by unwrap_torch.
         ("torchlens/backends/torch/legacy_ctors.py", "_INSTALLED"),
+        # Classes the last install skipped over a foreign Python __new__
+        # (rebuilt on every install).
+        ("torchlens/backends/torch/legacy_ctors.py", "_SKIPPED_FOREIGN_NEW"),
         ("torchlens/backends/torch/belt.py", "_ledger"),
         ("torchlens/backends/torch/belt.py", "_member_map"),
         ("torchlens/backends/torch/belt.py", "_report"),
@@ -274,6 +277,7 @@ _WARN_ONCE_STATE = frozenset(
         ("torchlens/backends/tf/_tf_compat.py", "_warned_missing_capabilities"),
         ("torchlens/backends/torch/buffer_writes.py", "_PARAM_BYTE_WITNESS_NOT_ARMED"),
         ("torchlens/backends/torch/completeness_witness.py", "_HOST_ESCAPE_OBSERVER_FAILED"),
+        ("torchlens/backends/torch/legacy_ctors.py", "_WARNED_FOREIGN_NEW"),
         ("torchlens/backends/torch/ops.py", "_UNSUPPORTED_OUTPUT_CONTAINER_WARNED"),
         # BatchNorm train-mode running-stats disclosure fires once per process
         # (user_funcs warn-once flag, C02 lovely tranche).

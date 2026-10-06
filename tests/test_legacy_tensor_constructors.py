@@ -178,6 +178,7 @@ def test_dtype_class_data_form_captures_and_validates(class_name: str) -> None:
     assert _validate(model, x)
 
 
+@pytest.mark.smoke
 def test_sylvester_reparam_idiom_captures_validates_and_matches_modern_spelling() -> None:
     """``self.FloatTensor(size).normal_()`` + ``Variable`` validates and draws RNG as eager does.
 
@@ -316,6 +317,7 @@ def test_variable_on_non_tensor_raises_inside_capture() -> None:
     assert "Variable data has to be a tensor" in expected_message
 
 
+@pytest.mark.smoke
 def test_unwrap_restores_legacy_classes_exactly_and_rewrap_reinstalls() -> None:
     """``unwrap_torch`` restores ``__new__``, ``tp_new`` and immutability; rewrap patches again."""
 
@@ -411,3 +413,169 @@ def test_legacy_constructor_roster_rows_resolve_to_live_classes() -> None:
         )
     names = {name for _ns, name in LEGACY_TENSOR_CONSTRUCTOR_SITES}
     assert names == {*DTYPE_CLASS_NAMES, "Variable"}
+
+
+class VariableOnly(nn.Module):
+    """``Variable`` inside a forward, nothing else legacy."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return Variable(x * 2) + 1
+
+
+def _set_tp_new(cls: type, address: int) -> None:
+    """Write a saved ``tp_new`` pointer back (test cleanup of a foreign patch)."""
+
+    import ctypes
+
+    from torchlens.utils._type_new_slot import _type_view
+
+    _type_view(cls).tp_new = address
+    ctypes.pythonapi.PyType_Modified(ctypes.py_object(cls))
+
+
+def test_foreign_python_new_on_variable_is_skipped_not_recursed() -> None:
+    """A ``Variable.__new__`` installed by another tool before wrap stays eager and is disclosed.
+
+    Wrapping over it used to snapshot ``slot_tp_new`` as the "original", which
+    re-entered the TorchLens override forever (RecursionError on every call,
+    inside or outside capture). The dtype classes are still patched.
+    """
+
+    from torchlens._errors import TorchLensWarning
+    from torchlens.backends.torch import legacy_ctors
+    from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
+    from torchlens.utils._type_new_slot import _type_view
+
+    base_new = torch._C._LegacyVariableBase.__new__
+    foreign_calls: list[int] = []
+
+    def foreign_new(subtype, *args, **kwargs):
+        foreign_calls.append(1)
+        return base_new(subtype, *args, **kwargs)
+
+    unwrap_torch()
+    c_tp_new = _type_view(Variable).tp_new
+    Variable.__new__ = staticmethod(foreign_new)  # type: ignore[method-assign]
+    try:
+        getattr(legacy_ctors, "_WARNED_FOREIGN_NEW", set()).discard("Variable")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            wrap_torch()
+        t = torch.ones(2)
+        out = Variable(t)  # recursed forever before the fix
+        assert torch.equal(out, t) and out is not t and foreign_calls
+        assert any(
+            issubclass(w.category, TorchLensWarning) and "Variable uncaptured" in str(w.message)
+            for w in caught
+        ), [str(w.message) for w in caught]
+        leaf = Variable(t, requires_grad=True)
+        assert leaf.requires_grad and leaf.grad_fn is None
+        installed = legacy_ctors.installed_legacy_constructor_classes()
+        assert "Variable" not in installed
+        assert installed["FloatTensor"] is torch.FloatTensor
+        assert legacy_ctors.skipped_legacy_constructor_classes() == {"Variable": Variable}
+        assert Variable.__dict__["__new__"].__func__ is foreign_new
+        trace = tl.trace(VariableOnly(), torch.randn(2, 4))
+        assert "Variable" not in [op.func_name for op in trace.ops]
+    finally:
+        unwrap_torch()
+        del Variable.__new__
+        _set_tp_new(Variable, c_tp_new)
+        tl.trace(Plain(), torch.randn(2, 4))
+    assert legacy_ctors.installed_legacy_constructor_classes()["Variable"] is Variable
+    assert legacy_ctors.skipped_legacy_constructor_classes() == {}
+    assert _validate(VariableOnly(), torch.randn(2, 4))
+
+
+def test_unwrap_restores_c_constructor_on_user_variable_subclasses() -> None:
+    """A user ``Variable`` subclass leaves the ``slot_tp_new`` trampoline again on unwrap."""
+
+    from torchlens.backends.torch.wrappers import unwrap_torch
+    from torchlens.utils._type_new_slot import _type_view, has_python_new_trampoline
+
+    unwrap_torch()
+    try:
+
+        class SubVar(Variable):  # type: ignore[misc]
+            pass
+
+        class SubSubVar(SubVar):
+            pass
+
+        class OwnNewVar(Variable):  # type: ignore[misc]
+            def __new__(cls, *args, **kwargs):
+                return torch._C._LegacyVariableBase.__new__(cls, *args, **kwargs)
+
+        c_tp_new = _type_view(Variable).tp_new
+        own_slot = _type_view(OwnNewVar).tp_new
+        assert _type_view(SubVar).tp_new == c_tp_new
+        tl.trace(Plain(), torch.randn(2, 4))
+        assert has_python_new_trampoline(SubVar) and has_python_new_trampoline(SubSubVar)
+        unwrap_torch()
+        assert _type_view(SubVar).tp_new == c_tp_new
+        assert _type_view(SubSubVar).tp_new == c_tp_new
+        assert _type_view(OwnNewVar).tp_new == own_slot  # its own __new__ keeps its slot
+        assert torch.equal(SubSubVar(torch.ones(2)), torch.ones(2))
+        assert torch.equal(OwnNewVar(torch.ones(2)), torch.ones(2))
+    finally:
+        tl.trace(Plain(), torch.randn(2, 4))
+
+
+def _drifted_mirror(insert_before: str):
+    """Return a ``PyTypeObject`` mirror with one extra pointer field before ``insert_before``."""
+
+    import ctypes
+
+    from torchlens.utils._type_new_slot import _PyTypeObjectToNew
+
+    fields = list(_PyTypeObjectToNew._fields_)
+    index = [name for name, _ctype in fields].index(insert_before)
+    fields.insert(index, ("_drift", ctypes.c_void_p))
+    return type("_DriftedTypeObject", (ctypes.Structure,), {"_fields_": fields})
+
+
+@pytest.mark.parametrize("insert_before", ["tp_traverse", "tp_new"])
+def test_layout_probe_rejects_drift_before_tp_new(monkeypatch, insert_before: str) -> None:
+    """The probe catches a struct drift between ``tp_doc`` and ``tp_new``, or at ``tp_new`` itself."""
+
+    from torchlens.utils import _type_new_slot
+
+    roster = [torch.FloatTensor, torch.LongTensor, torch.cuda.FloatTensor, Variable]
+    assert all(_type_new_slot.probe_type_new_slot_patch(cls) for cls in roster)
+    mirror = _drifted_mirror(insert_before)
+    monkeypatch.setattr(_type_new_slot, "_type_view", lambda cls: mirror.from_address(id(cls)))
+    assert not any(_type_new_slot.probe_type_new_slot_patch(cls) for cls in roster)
+
+
+def test_failed_layout_probe_leaves_everything_unwrapped_and_flag_false(monkeypatch) -> None:
+    """A layout mismatch at install flips the flag and writes nothing (no crash, no patch)."""
+
+    import types
+
+    from torchlens.backends.torch import legacy_ctors
+    from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
+    from torchlens.utils import _torch_compat, _type_new_slot
+    from torchlens.utils._torch_compat import TorchCapabilityWarning
+
+    real_view = _type_new_slot._type_view
+    unwrap_torch()
+    c_tp_new = {cls: real_view(cls).tp_new for cls in (torch.FloatTensor, Variable)}
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(_torch_compat, "_warned_missing_capabilities", set())
+            patch.setattr(_torch_compat, "HAS_LEGACY_CONSTRUCTOR_NEW_PATCH", True)
+            mirror = _drifted_mirror("tp_new")
+            patch.setattr(_type_new_slot, "_type_view", lambda cls: mirror.from_address(id(cls)))
+            with pytest.warns(TorchCapabilityWarning, match="HAS_LEGACY_CONSTRUCTOR_NEW_PATCH"):
+                wrap_torch()
+            assert _torch_compat.HAS_LEGACY_CONSTRUCTOR_NEW_PATCH is False
+            assert legacy_ctors.installed_legacy_constructor_classes() == {}
+            assert type(torch.FloatTensor.__dict__["__new__"]) is types.BuiltinFunctionType
+            assert "__new__" not in Variable.__dict__
+            assert {cls: real_view(cls).tp_new for cls in c_tp_new} == c_tp_new
+            assert torch.FloatTensor(3).shape == (3,)
+            assert torch.equal(Variable(torch.ones(2)), torch.ones(2))
+            unwrap_torch()
+    finally:
+        tl.trace(Plain(), torch.randn(2, 4))
+    assert legacy_ctors.installed_legacy_constructor_classes()["FloatTensor"] is torch.FloatTensor

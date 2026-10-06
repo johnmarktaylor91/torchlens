@@ -89,34 +89,124 @@ def _type_view(cls: type) -> _PyTypeObjectToNew:
     return _PyTypeObjectToNew.from_address(id(cls))
 
 
+class _InheritedNewProbe:
+    """Reference class whose ``tp_new`` is inherited from ``object`` (``object_new``)."""
+
+
+class _PythonNewProbe:
+    """Reference class with a Python ``__new__``: its ``tp_new`` is ``slot_tp_new``."""
+
+    def __new__(cls) -> _PythonNewProbe:
+        """Return a plain instance (never called; only the slot pointer is read)."""
+
+        return object.__new__(cls)
+
+
+class _PythonNewProbeTwin:
+    """Second Python-``__new__`` class: shares ``slot_tp_new`` with the first."""
+
+    def __new__(cls) -> _PythonNewProbeTwin:
+        """Return a plain instance (never called; only the slot pointer is read)."""
+
+        return object.__new__(cls)
+
+
+def _layout_matches(cls: type) -> bool:
+    """Return whether the mirrored fields agree with ``cls``'s own type attributes.
+
+    Every compared field is read by ``type``'s own members straight from the
+    struct (``__basicsize__`` is ``tp_basicsize``, ``__weakrefoffset__`` is
+    ``tp_weaklistoffset``, ``__base__`` is ``tp_base``, ...), so equality pins
+    each field's offset; the last three sit between ``tp_doc`` and ``tp_new``.
+    """
+
+    view = _type_view(cls)
+    name = view.tp_name or b""
+    base = cls.__base__
+    return (
+        name.rsplit(b".", 1)[-1] == cls.__name__.encode()
+        and view.tp_basicsize == cls.__basicsize__
+        and view.tp_itemsize == cls.__itemsize__
+        and view.tp_flags == cls.__flags__
+        and view.tp_weaklistoffset == cls.__weakrefoffset__
+        and view.tp_base == (id(base) if base is not None else None)
+        and view.tp_dictoffset == cls.__dictoffset__
+        and bool(view.tp_new)
+    )
+
+
+def _tp_new_slot_verified() -> bool:
+    """Return whether the mirrored ``tp_new`` field behaves like CPython's slot.
+
+    Read-only: ``object`` and a class inheriting its constructor must share one
+    ``tp_new``, and two classes defining a Python ``__new__`` must share a
+    different one (``slot_tp_new``). A mirror whose ``tp_new`` offset drifted
+    lands on a neighbouring field (``tp_alloc``, ``tp_free``, ...) where those
+    identities do not hold.
+    """
+
+    object_new = _type_view(object).tp_new
+    trampoline = _type_view(_PythonNewProbe).tp_new
+    return (
+        bool(object_new)
+        and bool(trampoline)
+        and _type_view(_InheritedNewProbe).tp_new == object_new
+        and _type_view(_PythonNewProbeTwin).tp_new == trampoline
+        and trampoline != object_new
+    )
+
+
 def probe_type_new_slot_patch(cls: Any) -> bool:
     """Return whether ``cls``'s type-object layout matches the ctypes mirror.
+
+    Read-only; nothing is written before every check passes.
 
     Parameters
     ----------
     cls:
-        A representative class (``torch.FloatTensor``).
+        A class to patch (``torch.FloatTensor``, ``Variable``).
 
     Returns
     -------
     bool
-        True on CPython when the mirrored ``tp_name``, ``tp_basicsize`` and
-        ``tp_flags`` agree with the live class and ``tp_new`` is populated.
+        True on CPython when the mirrored ``tp_name``, ``tp_basicsize``,
+        ``tp_itemsize``, ``tp_flags``, ``tp_weaklistoffset``, ``tp_base`` and
+        ``tp_dictoffset`` agree with the live class and with the reference
+        classes, ``tp_new`` is populated, and the ``tp_new`` field itself passes
+        :func:`_tp_new_slot_verified`.
     """
 
     if sys.implementation.name != "cpython" or not isinstance(cls, type):
         return False
     try:
-        view = _type_view(cls)
-        name = view.tp_name or b""
         return (
-            name.rsplit(b".", 1)[-1] == cls.__name__.encode()
-            and view.tp_basicsize == cls.__basicsize__
-            and view.tp_flags == cls.__flags__
-            and bool(view.tp_new)
+            all(_layout_matches(ref) for ref in (cls, _InheritedNewProbe, _PythonNewProbe))
+            and _tp_new_slot_verified()
         )
     except Exception:
         return False
+
+
+def has_python_new_trampoline(cls: type) -> bool:
+    """Return whether ``cls``'s constructor slot is CPython's ``slot_tp_new``.
+
+    True when a Python-level ``__new__`` (``staticmethod`` or function) is in
+    effect for ``cls``, either its own or one set on a base and propagated:
+    the C ``tp_new`` is then no longer reachable through the slot. Only valid
+    after :func:`probe_type_new_slot_patch` passed.
+
+    Parameters
+    ----------
+    cls:
+        Class to inspect.
+
+    Returns
+    -------
+    bool
+        Whether ``tp_new`` equals the reference Python-``__new__`` trampoline.
+    """
+
+    return bool(_type_view(cls).tp_new == _type_view(_PythonNewProbe).tp_new)
 
 
 def _set_or_del_type_attr(cls: type, name: str, value: Any) -> None:
@@ -240,4 +330,24 @@ def restore_new_override(patch: TypeNewPatch) -> bool:
     # the saved pointer is written back directly.
     _type_view(cls).tp_new = patch.original_tp_new
     ctypes.pythonapi.PyType_Modified(ctypes.py_object(cls))
+    _restore_inheriting_subclasses(cls, patch.original_tp_new)
     return True
+
+
+def _restore_inheriting_subclasses(cls: type, original_tp_new: int) -> None:
+    """Put the C ``tp_new`` back on Python subclasses that inherited the override.
+
+    Installing a Python ``__new__`` propagates ``slot_tp_new`` into every
+    subclass without its own ``__new__`` (a user ``class V(Variable)``), and
+    the ``type.__setattr__`` restore leaves them on that trampoline. Each such
+    subclass (recursively) gets the saved pointer back, as at its creation; a
+    subclass defining its own ``__new__`` keeps its slot, and so do its
+    descendants.
+    """
+
+    for sub in cls.__subclasses__():
+        if "__new__" in sub.__dict__ or not has_python_new_trampoline(sub):
+            continue
+        _type_view(sub).tp_new = original_tp_new
+        ctypes.pythonapi.PyType_Modified(ctypes.py_object(sub))
+        _restore_inheriting_subclasses(sub, original_tp_new)
