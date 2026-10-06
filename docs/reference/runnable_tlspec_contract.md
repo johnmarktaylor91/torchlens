@@ -3146,3 +3146,10 @@ corpus plus test-suite corpus is the runnable release gate.
   size-form uninitialized-memory taint); until it ships, the refusal is pinned by
   `tests/test_runnable_resolver_release_keys.py`, which fails if the refusal goes silent or the key
   starts resolving.
+
+The legacy dtype constructors (`torch.FloatTensor(...)` and its siblings, `torch.cuda.*Tensor`) and
+`torch.autograd.Variable(...)` are captured as ops named after the class, but they are not runnable
+either: the dtype classes carry the same hidden `cdata=` overload and resolve `unavailable`
+(`nonforward_callable_denied`), `Variable` stays unresolved, and running a saved runnable artifact
+that uses them refuses at reattachment (`ReattachError`). Pinned by
+`tests/test_legacy_tensor_constructors.py`.
