@@ -69,6 +69,7 @@ def _view_rendered_file(filepath: str) -> None:
 if TYPE_CHECKING:
     from ..data_classes.module import Module
     from ..data_classes.trace import Trace
+    from ._mutated_params import MutatedParameterEmission
     from .auto_collapse import ModuleRepeatFold
     from .node_universe import NodeUniverse
     from .render_ir import RenderIR
@@ -108,7 +109,7 @@ class _ForwardIRWork:
     captured_edges: list[CapturedForwardEdge]
     container_regions: list[ContainerClusterSpec]
     container_overlay_edges: list[ContainerOverlayEdge]
-    mutated_parameter_nodes: tuple[str, ...] = ()
+    mutated_parameter_nodes: tuple["MutatedParameterEmission", ...] = ()
 
 
 def _strip_render_extension(vis_outpath: str) -> str:
@@ -900,6 +901,18 @@ def _emit_and_finish_forward(
                 dpi=request.dpi,
                 graph_overrides=resolved_graph_overrides,
                 execution_record=rank_execution,
+                # Mutated-Parameter sources have no IR unit; the rank engine
+                # positions them from the same emissions the dot path queued.
+                overlay_nodes=[
+                    (emission.cluster_key, emission.node_args)
+                    for emission in work.mutated_parameter_nodes
+                ],
+                overlay_edges=[
+                    edge_args
+                    for emission in work.mutated_parameter_nodes
+                    for _, edge_args in emission.edges
+                ],
+                legend_mutated_parameter=bool(work.mutated_parameter_nodes),
             )
         trace._last_render_geometry = build_render_geometry_record(
             engine=rank_execution.get("engine", "neato"),

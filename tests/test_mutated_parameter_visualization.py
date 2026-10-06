@@ -120,6 +120,110 @@ class _NeverMutated(nn.Module):
         return self.lin(x) / self.temp.clamp(0.001, 0.5)
 
 
+class _Mid(nn.Module):
+    """Middle module wrapping the MIX-HIC-style temperature module."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.leaf = _MixHicInner()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.leaf(x) * 2
+
+
+class _ThreeLevel(nn.Module):
+    """Root -> ``mid`` -> ``mid.leaf``, which owns and clamps ``temp``."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.mid = _Mid()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.mid(x) + 1
+
+
+class _Clamper(nn.Module):
+    """Clamp the Parameter it is handed; owns no Parameter of its own."""
+
+    def forward(self, x: torch.Tensor, param: nn.Parameter) -> torch.Tensor:
+        with torch.no_grad():
+            param.clamp_(0.001, 0.5)
+        return x + 0
+
+
+class _RootParamMutatedInChild(nn.Module):
+    """A root-owned Parameter mutated inside child ``mut``."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.temp = nn.Parameter(0.07 * torch.ones([]))
+        self.mut = _Clamper()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.mut(x, self.temp) / self.temp
+
+
+class _HoldsB(nn.Module):
+    """Owns ``b`` and clamps it."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.b = nn.Parameter(torch.ones([]))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            self.b.clamp_(0.0, 2.0)
+        return x * self.b
+
+
+class _DotUnderscoreCollision(nn.Module):
+    """``a.b`` and root ``a_b``: addresses equal after ``.`` -> ``_`` folding."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.a = _HoldsB()
+        self.a_b = nn.Parameter(torch.ones([]))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            self.a_b.clamp_(0.0, 3.0)
+        return self.a(x) * self.a_b
+
+
+class _Owner(nn.Module):
+    """Owns ``p`` and reads it."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.p = nn.Parameter(torch.full((3,), 2.0))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x * self.p
+
+
+class _Mutator(nn.Module):
+    """Mutates a Parameter it does not own."""
+
+    def forward(self, x: torch.Tensor, param: nn.Parameter) -> torch.Tensor:
+        with torch.no_grad():
+            param.mul_(3.0)
+        return x + 0
+
+
+class _SharedMutatedOutsideOwner(nn.Module):
+    """``owner.p`` read in ``owner``, mutated in ``mut``, read in ``owner`` again."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.owner = _Owner()
+        self.mut = _Mutator()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = self.owner(x)
+        y = self.mut(y, self.owner.p)
+        return self.owner(y)
+
+
 def _trace(model: nn.Module) -> tl.Trace:
     """Capture ``model`` on a fixed input."""
 
@@ -130,12 +234,12 @@ def _trace(model: nn.Module) -> tl.Trace:
 def _dot(trace: tl.Trace, tmp_path: Path, name: str, **kwargs: object) -> str:
     """Render ``trace`` and return the DOT source."""
 
+    kwargs.setdefault("vis_node_placement", "dot")
     return str(
         trace.draw(
             vis_save_only=True,
             vis_fileformat="svg",
             vis_outpath=str(tmp_path / name),
-            vis_node_placement="dot",
             **kwargs,
         )
     )
@@ -188,7 +292,7 @@ def test_mixhic_toy_draws_parameter_cylinder_in_owner_cluster(tmp_path: Path) ->
     finally:
         trace.cleanup()
 
-    param_node = "mutatedparam_inner_temp"
+    param_node = '"mutatedparam_inner.temp"'
     line = _node_line(dot, param_node)
     assert "shape=cylinder" in line
     assert f'fillcolor="{TRAINABLE_PARAMS_BG_COLOR}"' in line
@@ -288,9 +392,10 @@ def test_rolled_view_draws_the_parameter_node(tmp_path: Path) -> None:
     finally:
         trace.cleanup()
 
-    assert "shape=cylinder" in _node_line(dot, "mutatedparam_inner_temp")
-    assert ("mutatedparam_inner_temp", clamp_layer) in _edges(dot)
-    assert "mutatedparam_inner_temp [" in _cluster_body(dot, "cluster_inner")
+    param_node = '"mutatedparam_inner.temp"'
+    assert "shape=cylinder" in _node_line(dot, param_node)
+    assert (param_node, clamp_layer) in _edges(dot)
+    assert f"{param_node} [" in _cluster_body(dot, "cluster_inner")
 
 
 def test_only_the_receiver_parameter_gets_a_node(tmp_path: Path) -> None:
@@ -329,3 +434,140 @@ def test_never_mutated_parameters_get_no_node_and_unchanged_dot(
     assert "mutatedparam_" not in dot
     assert "shape=cylinder" not in dot
     assert dot == baseline
+
+
+def _cluster_names(dot: str) -> list[str]:
+    """Return every subgraph cluster name in the DOT source."""
+
+    return re.findall(r"subgraph (\S*cluster\S*) \{", dot)
+
+
+@pytest.mark.parametrize("focus", ["mid.leaf", "mid"])
+def test_module_focus_draws_the_parameter_node(tmp_path: Path, focus: str) -> None:
+    """A focus containing the owner draws the node inside the owner cluster."""
+
+    trace = _trace(_ThreeLevel())
+    try:
+        dot = _dot(trace, tmp_path, f"focus_{focus}", module=focus)
+        clamp = next(op for op in trace.layer_list if op.func_name == "clamp_")
+        truediv = next(op for op in trace.layer_list if op.func_name == "__truediv__")
+    finally:
+        trace.cleanup()
+
+    param_node = '"mutatedparam_mid.leaf.temp"'
+    line = _node_line(dot, param_node)
+    assert "shape=cylinder" in line
+    assert "<B>parameter temp</B>" in line
+    edges = _edges(dot)
+    clamp_name = next(head for tail, head in edges if tail == param_node)
+    assert clamp_name in {clamp.layer_label, str(clamp.label).replace(":", "pass")}
+    assert {head for tail, head in edges if tail == param_node} == {clamp_name}
+    truediv_names = {truediv.layer_label, str(truediv.label).replace(":", "pass")}
+    assert any(tail == clamp_name and head in truediv_names for tail, head in edges)
+    leaf_cluster = next(name for name in _cluster_names(dot) if "leaf" in name)
+    assert f"{param_node} [" in _cluster_body(dot, leaf_cluster)
+
+
+def test_module_focus_excluding_the_owner_draws_no_node(tmp_path: Path) -> None:
+    """A focus on the mutating child of a root-owned Parameter draws the op, not the node."""
+
+    trace = _trace(_RootParamMutatedInChild())
+    try:
+        full = _dot(trace, tmp_path, "focus_full")
+        focused = _dot(trace, tmp_path, "focus_mut", module="mut")
+    finally:
+        trace.cleanup()
+
+    assert "mutatedparam_temp [" in full
+    assert "clamp_" in focused
+    assert "mutatedparam_" not in focused
+
+
+def test_dot_and_underscore_addresses_get_distinct_nodes(tmp_path: Path) -> None:
+    """``a.b`` and ``a_b`` keep separate node declarations and separate edges."""
+
+    from torchlens.visualization._mutated_params import mutated_parameter_node_name
+
+    trace = _trace(_DotUnderscoreCollision())
+    try:
+        dot = _dot(trace, tmp_path, "collision")
+        clamps = [
+            str(op.label).replace(":", "pass")
+            for op in trace.layer_list
+            if op.func_name == "clamp_"
+        ]
+        receivers = [
+            op._param_logs[0].address for op in trace.layer_list if op.func_name == "clamp_"
+        ]
+    finally:
+        trace.cleanup()
+
+    assert mutated_parameter_node_name("a.b") != mutated_parameter_node_name("a_b")
+    dotted, flat = '"mutatedparam_a.b"', "mutatedparam_a_b"
+    assert "<B>parameter b</B>" in _node_line(dot, dotted)
+    assert "<B>parameter a_b</B>" in _node_line(dot, flat)
+    clamp_of = dict(zip(receivers, clamps))
+    edges = _edges(dot)
+    assert {head for tail, head in edges if tail == dotted} == {clamp_of["a.b"]}
+    assert {head for tail, head in edges if tail == flat} == {clamp_of["a_b"]}
+
+
+def test_node_names_are_injective_and_port_free() -> None:
+    """Distinct addresses never share a node name, and no name carries a DOT port colon."""
+
+    from torchlens.visualization._mutated_params import mutated_parameter_node_name
+
+    addresses = ["a.b", "a_b", "a%2Eb", "a:b", "a-b", 'a"b', "a b", "a.b.c", "a_b.c"]
+    names = [mutated_parameter_node_name(address) for address in addresses]
+    assert len(set(names)) == len(addresses)
+    assert all(":" not in name and '"' not in name and " " not in name for name in names)
+
+
+def test_rank_engine_draws_the_parameter_node_and_legend_row(tmp_path: Path) -> None:
+    """The rank layout engine positions the node, its edge, and the legend row."""
+
+    trace = _trace(_MixHicToy())
+    plain = _trace(_NeverMutated())
+    try:
+        dot = _dot(trace, tmp_path, "rank", vis_node_placement="rank", show_legend=True)
+        plain_dot = _dot(plain, tmp_path, "rank_plain", vis_node_placement="rank", show_legend=True)
+        clamp = _node_name(trace, "clamp_")
+    finally:
+        trace.cleanup()
+        plain.cleanup()
+
+    param_node = '"mutatedparam_inner.temp"'
+    line = _node_line(dot, param_node)
+    assert 'shape="cylinder"' in line or "shape=cylinder" in line
+    assert "parameter temp" in line
+    assert "pos=" in line  # positioned for neato -n like every rank node
+    assert (param_node, clamp) in _edges(dot)
+    assert "mutated parameter (cylinder)" in dot
+    assert "mutated parameter" not in plain_dot
+    assert "mutatedparam_" not in plain_dot
+
+
+def test_shared_parameter_mutated_outside_owner_sits_in_owner_cluster(tmp_path: Path) -> None:
+    """A Parameter mutated in another module still sits in its owner's box."""
+
+    trace = _trace(_SharedMutatedOutsideOwner())
+    try:
+        dot = _dot(trace, tmp_path, "shared")
+        mul_ = _node_name(trace, "mul_")
+        reads = [
+            str(op.label).replace(":", "pass")
+            for op in trace.layer_list
+            if op.func_name == "__mul__"
+        ]
+    finally:
+        trace.cleanup()
+
+    param_node = '"mutatedparam_owner.p"'
+    owner_clusters = [name for name in _cluster_names(dot) if "owner" in name]
+    assert owner_clusters
+    assert f"{param_node} [" in _cluster_body(dot, owner_clusters[0])
+    edges = _edges(dot)
+    assert (param_node, reads[0]) in edges
+    assert (param_node, mul_) in edges
+    assert (mul_, reads[1]) in edges
+    assert (param_node, reads[1]) not in edges
