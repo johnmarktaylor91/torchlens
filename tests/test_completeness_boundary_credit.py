@@ -343,6 +343,8 @@ def _bare(func: Callable[..., Any]) -> Callable[..., Any]:
     return _state._decorated_to_orig.get(id(func), func)
 
 
+# The direct-aten shapes' own untracked call carries the provenance disclosure.
+@pytest.mark.filterwarnings(_NO_PROVENANCE)
 @pytest.mark.parametrize("grad", [True, False], ids=["grad", "no_grad"])
 @pytest.mark.parametrize(
     ("build", "direct_aten"),
