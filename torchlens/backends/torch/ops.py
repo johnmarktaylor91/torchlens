@@ -181,6 +181,7 @@ from ._tl import (
     is_tensor_data_alias,
     mark_detached_saved_activation,
     pop_same_object_mutation,
+    promote_mutated_parameters,
     session_label_storage_intact,
     session_meta_is_anchored,
     set_same_object_mutation,

@@ -924,14 +924,49 @@ def _is_unregistered_parameter(trace: Any, value: Any) -> bool:
     return getattr(param_logs[address], "_param_ref", None) is not value
 
 
+def _label_mutated_prepared_parameter(
+    trace: Any, param: torch.nn.Parameter, out_label: str | None
+) -> None:
+    """Advance a prepared Parameter's provenance to its in-place mutation op.
+
+    A prepared Parameter normally carries no tensor label: every read of it is a
+    parameter edge to its ``Param`` source. Once an in-place op mutates it inside
+    the pass, later reads see the mutated value, so the live Parameter takes the
+    op's label and ``_extract_arg_tensors_and_params`` then binds those reads as
+    graph parents of the mutation op (reads before the mutation keep their
+    parameter edge). Plain captures never reach this, so their graphs are
+    unchanged.
+
+    No backward hook is registered: autograd refuses an in-place op on a leaf that
+    requires grad, so a Parameter mutation runs under ``no_grad`` or on a frozen
+    Parameter and no gradient flows through it. A persistent hook on model state
+    would also outlive the capture.
+
+    Parameters
+    ----------
+    trace:
+        Active capture trace.
+    param:
+        Live prepared Parameter that the op mutated in place.
+    out_label:
+        Raw label of the logged mutation op, or ``None`` when nothing was logged.
+    """
+
+    if out_label is None:
+        return
+    set_tensor_label(param, out_label)
+    _propagate_mutation_label_to_storage_aliases(trace, param, out_label)
+
+
 def _parameter_mutation_output_for_logging(
     trace: Any,
     value: Any,
     *,
     source: Any,
     was_inplace: bool,
+    is_storage_rebind: bool = False,
 ) -> Any:
-    """Convert an unregistered Parameter mutation result into a loggable Tensor.
+    """Convert a Parameter mutation result into a loggable Tensor.
 
     PyTorch constructs module Parameters from ordinary factory tensors, and the
     conversion intentionally drops TorchLens tensor labels. Initializers such as
@@ -940,9 +975,13 @@ def _parameter_mutation_output_for_logging(
     but that rule also dropped real initialization ops for modules created inside
     ``forward``.
 
-    Only unregistered Parameters are converted. Mutations of prepared model state
-    remain excluded and therefore remain visible to the completeness tripwire instead
-    of being laundered into a disconnected op.
+    A prepared model Parameter mutated in place (``with torch.no_grad():
+    self.temp.clamp_(lo, hi)``) is converted too: the op is logged with the
+    Parameter as its parameter input, and the live Parameter then carries the op's
+    label (see ``_label_mutated_prepared_parameter``) so every later read in the
+    pass consumes the op's output. A storage-rebinding ``param.data = rhs`` setter on
+    prepared state is NOT converted: it stays excluded, and therefore visible to the
+    completeness tripwire.
 
     Parameters
     ----------
@@ -954,15 +993,19 @@ def _parameter_mutation_output_for_logging(
         Live same-object return whose current-session registration is authoritative.
     was_inplace:
         Whether the wrapped callable has an in-place mutation signature.
+    is_storage_rebind:
+        Whether the call is a storage-rebinding ``.data`` setter.
 
     Returns
     -------
     Any
-        A plain Tensor snapshot for capture-local Parameter mutations; otherwise
+        A plain Tensor snapshot for in-place Parameter mutations; otherwise
         ``value`` unchanged.
     """
 
-    if not was_inplace or not _is_unregistered_parameter(trace, source):
+    if not was_inplace or not isinstance(source, torch.nn.Parameter):
+        return value
+    if is_storage_rebind and not _is_unregistered_parameter(trace, source):
         return value
     with _state.pause_logging():
         if HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE:
@@ -2138,6 +2181,7 @@ def torch_func_decorator(
                 out_orig,
                 source=args[0],
                 was_inplace=was_inplace,
+                is_storage_rebind=is_storage_rebinding_setter,
             )
             # A storage rebind is recorded as the non-mutating ``detach(rhs)`` call.
             if not is_storage_rebinding_setter:
@@ -2286,6 +2330,14 @@ def torch_func_decorator(
                     if isinstance(return_value, torch.Tensor):
                         set_tensor_label(return_value, out_label)
                         _register_inplace_live_grad_hook(trace, return_value, out_label)
+            elif (
+                propagate_to_live
+                and was_inplace
+                and not is_storage_rebinding_setter
+                and isinstance(args[0], torch.nn.Parameter)
+                and not _is_unregistered_parameter(trace, args[0])
+            ):
+                _label_mutated_prepared_parameter(trace, args[0], get_tensor_label(out_orig))
 
             # W3 F6: the module-boundary identity mint (force_distinct_return)
             # logs against a distinct safe copy so the boundary op attaches to
