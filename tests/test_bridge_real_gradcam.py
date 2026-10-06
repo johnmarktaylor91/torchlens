@@ -131,6 +131,19 @@ def test_label_of_a_module_that_runs_twice_is_refused(resnet) -> None:
     with pytest.raises(InvalidArgumentError) as info:
         tl.bridge.gradcam.layer(log, labels[0])
     assert info.value.fields["code"] == "bridge_module_site_multi_call"
+    # The remedy points at the enclosing single-call block, never at the
+    # multi-call module whose hook would mix both calls.
+    assert "'layer4.1'" in info.value.fields["remedy"]
+    assert "'layer4.1.relu'" not in info.value.fields["remedy"]
     with pytest.raises(InvalidArgumentError) as info:
-        tl.bridge.gradcam.layer(log, "layer4.1.relu:2")
+        tl.bridge.gradcam.layer(log, "layer4.1.relu:1")
     assert info.value.fields["code"] == "bridge_module_site_multi_call"
+
+
+def test_pass_label_whose_tensor_is_layer4_output_resolves_to_layer4(resnet) -> None:
+    """``layer4.1.relu:2`` returns layer4's output, so it resolves like that op's label."""
+
+    model, x, log = resnet
+    assert tl.bridge.gradcam.layer(log, "layer4.1.relu:2") is model.layer4
+    cam = tl.bridge.gradcam.cam(log, "layer4.1.relu:2", inputs=x, targets=_targets())["cam"]
+    assert np.max(np.abs(cam - _direct(model, x))) == 0.0
