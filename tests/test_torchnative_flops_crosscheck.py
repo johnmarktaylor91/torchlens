@@ -64,7 +64,10 @@ def test_cell_1_default_backend_native_zero_is_named() -> None:
     attention_overloads = [
         name for name in report.native_by_overload if "scaled_dot_product" in name
     ]
-    assert not attention_overloads, "CPU-default fused SDPA should be ABSENT from FCM's ledger"
+    # Torch releases through 2.13 lack the CPU fused-attention rule; builds
+    # carrying pytorch/pytorch#195801 (merged 2026-09-17) record it.
+    if attention_overloads:
+        assert all(report.native_by_overload[name] > 0 for name in attention_overloads)
     assert report.torchlens_total is not None
     # The registry gap is NAMED when native reads zero against our nonzero.
     if report.native_total == 0:
@@ -72,6 +75,33 @@ def test_cell_1_default_backend_native_zero_is_named() -> None:
             "_scaled_dot_product_flash_attention_for_cpu" in note for note in report.coverage_notes
         )
     assert report.witness["output_agrees"] is True
+
+
+class AttentionOnly(nn.Module):
+    """SDPA with no other counted op, so a missing FCM attention rule reads zero."""
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        return F.scaled_dot_product_attention(value, value, value)
+
+
+def test_native_zero_note_names_affected_torch_versions() -> None:
+    """The zero-total note says which torch releases lack the rule, not "issue filed".
+
+    Regression test: the note said "upstream issue filed" after PyTorch had
+    already merged the fix (2026-09-17).
+    """
+
+    report = flops_vs_dispatch(AttentionOnly().eval(), torch.randn(2, 4, 16, 8))
+    attention_overloads = [
+        name for name in report.native_by_overload if "scaled_dot_product" in name
+    ]
+    if attention_overloads:
+        pytest.skip("this torch build carries FCM's CPU fused-attention rule")
+    assert report.native_total == 0
+    (note,) = [note for note in report.coverage_notes if "counted ZERO" in note]
+    assert "through 2.13" in note
+    assert "pytorch/pytorch#195801" in note
+    assert "issue filed" not in note
 
 
 def test_cell_2_forced_math_both_registries_count() -> None:
