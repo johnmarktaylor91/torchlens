@@ -22,6 +22,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.backends.torch import rescue
 from torchlens.validation import last_validation_failure
 
 _GLOBAL_TABLE = torch.randn(5)
@@ -137,11 +138,15 @@ class _OpaqueHolder(nn.Module):
         return self.fc(self.act(x))
 
 
-def test_module_boundary_adoption_fails_forward_validation() -> None:
+def test_module_boundary_adoption_fails_forward_validation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     x = torch.randn(2, 4)
     model = _OpaqueHolder()
-    with warnings.catch_warnings():
+    with monkeypatch.context() as patch, warnings.catch_warnings():
         warnings.simplefilter("ignore")
+        # Keep the primary capture: the rescue re-run's aten recording recovers the stand-in.
+        patch.setattr(rescue, "_escape_signal", lambda trace: None)
         trace = tl.trace(copy.deepcopy(model), x)
     kinds = [row["kind"] for row in trace.annotations.get("capture_advisories", [])]
     assert kinds == ["module_boundary_adoption"]

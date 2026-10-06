@@ -25,6 +25,7 @@ import torchlens._user_public_impls as user_public_impls
 # imports may be freely re-sorted.
 import torchlens.user_funcs as user_funcs
 from torchlens import Trace, trace as trace_fn
+from torchlens.backends.torch import rescue
 from torchlens.errors import (
     MetadataInvariantError,
     TorchLensCaptureGapWarning,
@@ -2156,7 +2157,7 @@ def test_validation_direct_aten_dispatch_drop_fails_the_public_gate() -> None:
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             """Return ``-x + 1`` with the negate hidden from capture."""
 
-            return torch.ops.aten.neg.default(x) + 1
+            return torch._C._VariableFunctions.neg(x) + 1
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -2189,7 +2190,7 @@ def test_validation_same_shape_broadcast_tensors_validates() -> None:
 def _raw_scale_replacement_hook(module, inputs, output):  # type: ignore[no-untyped-def]
     """Genuine raw output-replacement hook built from untraceable aten calls."""
 
-    return torch.ops.aten.mul.Tensor(output, torch.tensor(0.5))
+    return torch._C._VariableFunctions.mul(output, torch.tensor(0.5))
 
 
 def test_validation_genuine_replacement_alone_validates() -> None:
@@ -2234,7 +2235,7 @@ def test_validation_genuine_replacement_plus_unrelated_drop_still_fails() -> Non
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             # Unrelated real capture drop (raw aten in the forward body, NOT in a hook).
-            hidden = torch.ops.aten.neg.default(self.fc1(x))
+            hidden = torch._C._VariableFunctions.neg(self.fc1(x))
             return self.relu(hidden)
 
     model = _MlpWithDrop().eval()
@@ -8104,7 +8105,7 @@ class _RawAtenReluModule(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Return an untraceable raw-ATen relu of the input."""
 
-        return torch.ops.aten.relu.default(x)
+        return torch._C._VariableFunctions.relu(x)
 
 
 class _RawAtenReluNet(nn.Module):
@@ -8144,7 +8145,7 @@ def test_genuine_raw_hook_untraceable_replacement_validates() -> None:
 
     def _untraceable_replacement_hook(module, inputs, output):  # type: ignore[no-untyped-def]
         # Bypasses TorchLens python-level wrapping -- a real opaque replacement.
-        return torch.ops.aten.mul.Tensor(output, torch.tensor(0.5))
+        return torch._C._VariableFunctions.mul(output, torch.tensor(0.5))
 
     model = _Mlp().eval()
     model.relu.register_forward_hook(_untraceable_replacement_hook)
@@ -8209,8 +8210,8 @@ def test_genuine_raw_hook_untraceable_replacement_validates_nested_depth() -> No
 
     def _substituting_hook(module, inputs, output):  # type: ignore[no-untyped-def]
         # Bypasses TorchLens's python-level wrapping -- a real opaque replacement.
-        fresh = torch.ops.aten.zeros.default([*output.shape], dtype=output.dtype)
-        return torch.ops.aten.add.Tensor(fresh, output)
+        fresh = torch._C._VariableFunctions.zeros([*output.shape], dtype=output.dtype)
+        return torch._C._VariableFunctions.add(fresh, output)
 
     model = _NestedNet().eval()
     model.block.norm.register_forward_hook(_substituting_hook)  # nested 2 levels deep
@@ -8250,8 +8251,8 @@ def test_genuine_raw_hook_untraceable_replacement_validates_depth_zero() -> None
 
     def _substituting_hook(module, inputs, output):  # type: ignore[no-untyped-def]
         # Bypasses TorchLens's python-level wrapping -- a real opaque replacement.
-        fresh = torch.ops.aten.zeros.default([*output.shape], dtype=output.dtype)
-        return torch.ops.aten.add.Tensor(fresh, output)
+        fresh = torch._C._VariableFunctions.zeros([*output.shape], dtype=output.dtype)
+        return torch._C._VariableFunctions.add(fresh, output)
 
     class _Mlp(nn.Module):
         def __init__(self) -> None:
@@ -8286,7 +8287,9 @@ def test_genuine_raw_hook_untraceable_replacement_validates_depth_zero() -> None
 _OPAQUE_EXIT_DISCLOSURE = r"adopted at module exit"
 
 
-def test_plain_trace_noop_hook_untraceable_exit_is_internal_source_nested_depth() -> None:
+def test_plain_trace_noop_hook_untraceable_exit_is_internal_source_nested_depth(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """TRIPWIRE at nesting depth >= 2: a plain-capture gap under a no-op
     observer hook, on a module nested 2+ address levels deep, must stay
     honest -- zero functionless ``intervention_replacement`` placeholders,
@@ -8294,9 +8297,12 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source_nested_depth(
     The fix must not make the tripwire pass silently on a genuine capture gap.
     """
 
+    # Keep the primary capture: the rescue re-run's aten recording recovers the stand-in.
+    monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)
+
     class _RawAtenGeluBlock(nn.Module):
         def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return torch.ops.aten.gelu.default(x)
+            return torch._C._nn.gelu(x)
 
     class _RawAtenGeluOuter(nn.Module):
         def __init__(self) -> None:
@@ -8338,7 +8344,9 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source_nested_depth(
     _assert_validation_fails_only_on_adoption(model, x)
 
 
-def test_plain_trace_noop_hook_untraceable_exit_is_internal_source() -> None:
+def test_plain_trace_noop_hook_untraceable_exit_is_internal_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """TRIPWIRE: a plain-capture gap under a NO-OP observer hook stays honest.
 
     An untraceable raw-ATen module output combined with a purely observational
@@ -8348,6 +8356,9 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source() -> None:
     ``has _forward_hooks`` proxy mislabeled exactly this case (cert round 3
     coupled hazard); reintroducing it makes this fail loudly.
     """
+
+    # Keep the primary capture: the rescue re-run's aten recording recovers the stand-in.
+    monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)
 
     model = _RawAtenReluNet().eval()
     x = torch.randn(3, 4)

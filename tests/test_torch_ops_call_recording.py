@@ -91,7 +91,10 @@ if _HAS_CUSTOM_OP:
 
     @torch.library.custom_op("tltest_r10::scaled_tanh", mutates_args=())
     def _scaled_tanh(x: torch.Tensor, scale: float) -> torch.Tensor:
-        return torch.tanh(x) * scale
+        # Unpatchable C calls only, like a kernel written in C++: a Python body built
+        # from wrapped torch functions would be captured op by op anyway.
+        vf = torch._C._VariableFunctions
+        return vf.mul(vf.tanh(x), scale)
 
 
 class _CustomOpModel(nn.Module):

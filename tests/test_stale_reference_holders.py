@@ -548,7 +548,7 @@ def test_opaque_module_return_is_disclosed_unrecovered_and_fails_validation() ->
 
     class Opaque(nn.Module):
         def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return torch.ops.aten.tanh.default(x)
+            return torch._C._VariableFunctions.tanh(x)
 
     wrap_torch()
     model = _Holder(Opaque())

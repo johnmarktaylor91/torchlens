@@ -387,7 +387,6 @@ def test_attribute_held_originals_are_rebound_and_validate(
         trace = tl.trace(model, torch.randn(3, 4))
     func_names = [op.func_name for op in trace.ops]
     assert "relu" in func_names
-    assert ("tanh" in func_names or "t" in func_names) is direct_aten
     assert model.calls == [1]
     assert provenance_warnings(caught) == []
     assert trace.rescue_rerun is None

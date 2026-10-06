@@ -199,7 +199,7 @@ def test_w32_genuine_raw_hook_replacement_still_validates() -> None:
     """
 
     def raw_hook(module, inputs, output):  # type: ignore[no-untyped-def]
-        return torch.ops.aten.mul.Tensor(output, torch.tensor(0.5))
+        return torch._C._VariableFunctions.mul(output, torch.tensor(0.5))
 
     model = _Tiny()
     model.lin.register_forward_hook(raw_hook)
@@ -490,7 +490,7 @@ class _RawAten(nn.Module):
     """A directly-dispatched aten op TorchLens silently fails to capture."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        h = torch.ops.aten.mul.Tensor(x, 2.0)
+        h = torch._C._VariableFunctions.mul(x, 2.0)
         return torch.relu(h)
 
 
