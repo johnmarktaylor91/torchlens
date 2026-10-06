@@ -413,6 +413,8 @@ class _EmitScope:
         Active module depth.
     focus_address:
         Address of the focused module, or ``None`` without a module focus.
+    cluster_keys:
+        Module-cluster keys the render drew before the Parameter nodes.
     theme:
         Active theme.
     """
@@ -425,6 +427,7 @@ class _EmitScope:
     vis_mode: str
     vis_call_depth: int
     focus_address: str | None
+    cluster_keys: frozenset[str]
     theme: VisualizationTheme | None
 
 
@@ -483,8 +486,9 @@ def _node_cluster_path(source: MutatedParameterSource, scope: _EmitScope) -> tup
     """Return the module path the Parameter's node is drawn in.
 
     The owner's cluster on the first mutation's path wins; a Parameter mutated
-    outside its owner (a shared Parameter) takes the owner's cluster from the
-    first drawn reader running inside it; otherwise the node sits at top level.
+    outside its owner (a shared Parameter) takes the owner's drawn cluster on
+    the first drawn reader's module path (the pass that read it first);
+    otherwise the node sits at top level.
 
     Parameters
     ----------
@@ -499,13 +503,25 @@ def _node_cluster_path(source: MutatedParameterSource, scope: _EmitScope) -> tup
         Module path; empty for top level.
     """
 
-    for op in (source.first_mutation, *source.readers):
-        drawn = _drawn_unit(op, scope, frozenset({"raw_op"}))
-        if drawn is None:
-            continue
+    drawn = _drawn_unit(source.first_mutation, scope, frozenset({"raw_op"}))
+    if drawn is not None:
         path = _owner_module_path(scope.entries[drawn[0]], source.param, scope.vis_mode)
         if path is not None:
             return path
+    owner = str(getattr(source.param, "module_address", "") or "")
+    for reader in source.readers:
+        drawn = _drawn_unit(reader, scope, frozenset({"raw_op"}))
+        if drawn is None:
+            continue
+        modules = [
+            str(module) for module in (getattr(scope.entries[drawn[0]], "modules", ()) or ())
+        ]
+        if scope.vis_mode == "rolled":
+            modules = [module.split(":")[0] for module in modules]
+        for depth, module in enumerate(modules):
+            # Only a cluster the render already drew (an atomic module is a box).
+            if module.split(":")[0] == owner and module in scope.cluster_keys:
+                return tuple(modules[: depth + 1])
     return ()
 
 
@@ -660,6 +676,7 @@ def add_mutated_parameter_nodes(
         vis_mode=vis_mode,
         vis_call_depth=context.request.vis_call_depth,
         focus_address=_focus_address(trace, context),
+        cluster_keys=frozenset(str(key) for key in module_clusters),
         theme=context.theme,
     )
     emissions: list[MutatedParameterEmission] = []
