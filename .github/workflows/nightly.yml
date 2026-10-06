@@ -1222,7 +1222,7 @@ jobs:
             extras: "dev,gradcam,shap,captum"
             pkgs: "torchvision"
             files: "tests/test_bridge_real_gradcam.py tests/test_bridge_real_captum.py tests/test_bridge_real_shap.py tests/test_bridge_real_profiler.py"
-            floor: "13"
+            floor: "15"
           - leg: steer
             extras: "dev,steering,dialz"
             pkgs: "transformers"
