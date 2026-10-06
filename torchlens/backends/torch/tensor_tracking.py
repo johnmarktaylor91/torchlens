@@ -46,6 +46,91 @@ _OWNED_STATE_GRAD_HOOK_HANDLES: weakref.WeakKeyDictionary[Any, list[Any]] = (
 )
 
 
+# Model-state grad-fn nodes (a mutated prepared Parameter's capture-pass history),
+# keyed by id to the owning trace's backward-registry slot reference (evicted with
+# that slot and by cleanup). Later forwards chain onto them, so root matching treats
+# them as boundaries (``_defer_at_state_boundary``).
+_STATE_BOUNDARY_GRAD_FNS: dict[int, weakref.ReferenceType[Any]] = {}
+
+
+def _register_state_boundary_grad_fn(trace: Any, grad_fn_handle: Any) -> None:
+    """Register a model-state grad-fn node as a root-matching boundary of ``trace``.
+
+    Parameters
+    ----------
+    trace:
+        Trace that hooked the node.
+    grad_fn_handle:
+        Capture-pass autograd node of a mutated prepared Parameter. It is pinned
+        for the trace's lifetime so its id cannot be reused by another node.
+    """
+
+    from .backward import _backward_registry_slot, _strong_grad_fn_refs
+
+    _strong_grad_fn_refs(trace).append(grad_fn_handle)
+    trace_ref, owned_ids = _backward_registry_slot(trace)
+    owned_ids.add(id(grad_fn_handle))
+    _STATE_BOUNDARY_GRAD_FNS[id(grad_fn_handle)] = trace_ref
+
+
+def _defer_at_state_boundary(
+    grad_fn_handle: Any, matched_ids: set[int], deferred: dict[int, list[Any]]
+) -> bool:
+    """Hold a root walk at a model-state node whose owner has not matched yet.
+
+    A node reached through the model's history from outside its owner's own graph
+    must not make the owner match (every later forward chains onto it). The walk
+    parks it under the owner's id and resumes past it only once the owner matches
+    through its own nodes.
+
+    Parameters
+    ----------
+    grad_fn_handle:
+        Node the walk just reached.
+    matched_ids:
+        Ids of the traces matched so far.
+    deferred:
+        Parked boundary nodes by owner id (updated in place).
+
+    Returns
+    -------
+    bool
+        Whether the walk must not descend past the node now.
+    """
+
+    trace_ref = _STATE_BOUNDARY_GRAD_FNS.get(id(grad_fn_handle))
+    owner = None if trace_ref is None else trace_ref()
+    if owner is None or id(owner) in matched_ids:
+        return False
+    deferred.setdefault(id(owner), []).append(grad_fn_handle)
+    return True
+
+
+def _resume_state_boundaries(
+    trace: Any, deferred: dict[int, list[Any]], seen: set[int]
+) -> list[Any]:
+    """Return the boundary nodes parked for ``trace`` once it matched, unseen again.
+
+    Parameters
+    ----------
+    trace:
+        Trace that just matched through its own nodes.
+    deferred:
+        Parked boundary nodes by owner id (the trace's entry is removed).
+    seen:
+        Ids the walk visited (the resumed nodes are removed so they are walked).
+
+    Returns
+    -------
+    list[Any]
+        Nodes to put back on the walk queue.
+    """
+
+    resumed = deferred.pop(id(trace), [])
+    seen.difference_update(id(node) for node in resumed)
+    return resumed
+
+
 def _is_state_entangled(trace: Any) -> bool:
     """Return whether ``trace`` registered a gradient hook on model state."""
 
@@ -184,8 +269,6 @@ def _add_tensor_backward_hook(
         _grad_fn = t.grad_fn
         _requires_grad = bool(t.requires_grad)
     if _grad_fn is not None and owning_backward_only:
-        from .backward import _register_state_boundary_grad_fn
-
         _register_state_boundary_grad_fn(trace, _grad_fn)
     elif _grad_fn is not None:
         from .backward import _register_forward_grad_fn

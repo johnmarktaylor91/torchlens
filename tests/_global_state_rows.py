@@ -680,7 +680,7 @@ _PROCESS_CACHES = frozenset(
         ("torchlens/backends/torch/backward.py", "_BACKWARD_GRAD_FN_REGISTRY"),
         # Model-state root-matching boundaries, same lifecycle as the registry
         # above: evicted by the owning trace's slot callback and by cleanup().
-        ("torchlens/backends/torch/backward.py", "_STATE_BOUNDARY_GRAD_FNS"),
+        ("torchlens/backends/torch/tensor_tracking.py", "_STATE_BOUNDARY_GRAD_FNS"),
         ("torchlens/backends/torch/completeness_witness.py", "_FRAMEWORK_FILENAME_VERDICTS"),
         ("torchlens/backends/torch/model_prep.py", "_module_class_metadata_cache"),
         ("torchlens/backends/torch/ops.py", "_CAPTURE_PRODUCER_POLICIES"),

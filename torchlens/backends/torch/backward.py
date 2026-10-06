@@ -64,20 +64,18 @@ from ._gradfn_markers import (
 from ._tl import detached_saved_activation_label, get_tensor_label
 from .escape_detection import expected_original_call
 from .tensor_tracking import (
+    _STATE_BOUNDARY_GRAD_FNS,
     _copy_grad_payload,
     _current_backward_graph_task_id,
+    _defer_at_state_boundary,
     _ensure_backward_event_stream,
     _forward_op_count_at_backward_trigger,
+    _resume_state_boundaries,
     _should_save_grad_payload,
     _trace_grad_save_mode,
 )
 
 _BACKWARD_GRAD_FN_REGISTRY: dict[int, weakref.ReferenceType[Any]] = {}
-# Model-state grad-fn nodes (a mutated prepared Parameter's capture-pass history),
-# keyed by id to the owning trace's slot reference. Later forwards chain onto them,
-# so root matching treats them as boundaries: the walk descends past one only once
-# its owner matched through its own nodes (``_traces_for_roots``).
-_STATE_BOUNDARY_GRAD_FNS: dict[int, weakref.ReferenceType[Any]] = {}
 _ORIGINAL_AUTOGRAD_BACKWARD: Callable[..., Any] | None = None
 _ORIGINAL_AUTOGRAD_GRAD: Callable[..., Any] | None = None
 # Exact installed patch objects: teardown restores a slot only when it still
@@ -361,25 +359,6 @@ def _register_forward_grad_fn(trace: Any, grad_fn_handle: Any, _raw_label: str |
     _BACKWARD_GRAD_FN_REGISTRY[grad_fn_object_id] = trace_ref
 
 
-def _register_state_boundary_grad_fn(trace: Any, grad_fn_handle: Any) -> None:
-    """Register a model-state grad-fn node as a root-matching boundary of ``trace``.
-
-    Parameters
-    ----------
-    trace:
-        Trace that hooked the node.
-    grad_fn_handle:
-        Capture-pass autograd node of a mutated prepared Parameter. It is pinned
-        for the trace's lifetime so its id cannot be reused by another node.
-    """
-
-    _strong_grad_fn_refs(trace).append(grad_fn_handle)
-    grad_fn_object_id = id(grad_fn_handle)
-    trace_ref, owned_ids = _backward_registry_slot(trace)
-    owned_ids.add(grad_fn_object_id)
-    _STATE_BOUNDARY_GRAD_FNS[grad_fn_object_id] = trace_ref
-
-
 def _purge_trace_from_backward_registry(trace: Any) -> None:
     """Remove every registry key currently owned by ``trace``.
 
@@ -401,13 +380,9 @@ def _purge_trace_from_backward_registry(trace: Any) -> None:
     ]
     for grad_fn_object_id in stale_ids:
         _BACKWARD_GRAD_FN_REGISTRY.pop(grad_fn_object_id, None)
-    stale_boundaries = [
-        grad_fn_object_id
-        for grad_fn_object_id, trace_ref in _STATE_BOUNDARY_GRAD_FNS.items()
-        if trace_ref() is trace or trace_ref() is None
-    ]
-    for grad_fn_object_id in stale_boundaries:
-        _STATE_BOUNDARY_GRAD_FNS.pop(grad_fn_object_id, None)
+    for grad_fn_object_id, ref in list(_STATE_BOUNDARY_GRAD_FNS.items()):
+        if ref() is trace or ref() is None:
+            _STATE_BOUNDARY_GRAD_FNS.pop(grad_fn_object_id, None)
     slot = _BACKWARD_TRACE_SLOTS.get(trace)
     if slot is not None:
         # Keep the owned-key set in step with the table, so a re-armed trace
@@ -581,13 +556,6 @@ def _root_tensors(value: Any) -> tuple[torch.Tensor, ...]:
     return ()
 
 
-def _state_boundary_owner(grad_fn_object_id: int) -> Any:
-    """Return the live owner of a model-state boundary node, else ``None``."""
-
-    trace_ref = _STATE_BOUNDARY_GRAD_FNS.get(grad_fn_object_id)
-    return None if trace_ref is None else trace_ref()
-
-
 def _traces_for_roots(roots: Any) -> tuple[Any, ...]:
     """Find live traces whose pinned grad-fn ids appear under ``roots``.
 
@@ -625,11 +593,7 @@ def _traces_for_roots(roots: Any) -> tuple[Any, ...]:
         if grad_fn_object_id in seen:
             continue
         seen.add(grad_fn_object_id)
-        boundary_owner = _state_boundary_owner(grad_fn_object_id)
-        if boundary_owner is not None and id(boundary_owner) not in matched_ids:
-            # Reached through the model's history from outside the owner's own
-            # graph: descend only if the owner matches through its own nodes.
-            deferred.setdefault(id(boundary_owner), []).append(grad_fn_handle)
+        if _defer_at_state_boundary(grad_fn_handle, matched_ids, deferred):
             continue
         trace_ref = _BACKWARD_GRAD_FN_REGISTRY.get(grad_fn_object_id)
         if trace_ref is not None:
@@ -643,9 +607,7 @@ def _traces_for_roots(roots: Any) -> tuple[Any, ...]:
             ):
                 matched.append(trace)
                 matched_ids.add(id(trace))
-                for boundary in deferred.pop(id(trace), ()):
-                    seen.discard(id(boundary))
-                    queue.append(boundary)
+                queue.extend(_resume_state_boundaries(trace, deferred, seen))
         queue.extend(_iter_next_grad_fns(grad_fn_handle))
     for stale_id in stale_ids:
         _BACKWARD_GRAD_FN_REGISTRY.pop(stale_id, None)
