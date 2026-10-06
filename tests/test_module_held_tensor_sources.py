@@ -405,9 +405,79 @@ def test_held_scan_cost_on_a_200k_scalar_container_is_capped() -> None:
     module.table = {"rows": scalars}
     cut: list[str] = []
     assert list(iter_module_held_plain_tensors(module, cut)) == []
-    # The rows dict entry plus at most the visit cap of scalar items, then a silent end.
+    # The rows dict entry plus at most the visit cap of scalar items; the end of the
+    # scan with items left unexamined is disclosed, naming the container it fell in.
     assert scalars.pulled <= _HELD_SCAN_MAX_VISITS
+    assert cut == ["table['rows'] (visit cap 65536 items)"]
+
+
+def test_held_scan_discloses_the_visit_cap_only_when_items_are_left() -> None:
+    from torchlens.backends.torch.buffer_writes import (
+        _HELD_SCAN_MAX_VISITS,
+        iter_module_held_plain_tensors,
+    )
+
+    # Exactly the cap examined and nothing left: silent.
+    full = nn.Module()
+    full.vocab = {str(index): index for index in range(_HELD_SCAN_MAX_VISITS)}
+    cut: list[str] = []
+    assert list(iter_module_held_plain_tensors(full, cut, "enc")) == []
     assert cut == []
+
+    # One item more: the tensor declared after the vocab is never examined, and the
+    # cut names the module and the container where the scan ended.
+    over = nn.Module()
+    over.vocab = {str(index): index for index in range(_HELD_SCAN_MAX_VISITS + 1)}
+    over.cache = {"cpu": torch.zeros(1)}
+    cut = []
+    assert list(iter_module_held_plain_tensors(over, cut, "enc")) == []
+    assert cut == ["enc.vocab (visit cap 65536 items)"]
+
+    # The cap also ends a detect-only search below the depth bound.
+    deep = nn.Module()
+    deep.d = {"a": {"b": {"c": {"big": list(range(_HELD_SCAN_MAX_VISITS + 5))}}}}
+    cut = []
+    assert list(iter_module_held_plain_tensors(deep, cut)) == []
+    assert cut == ["d['a']['b']['c']['big'] (visit cap 65536 items)"]
+
+    # The round-3 tensor-free shapes (5000-item tables) stay far below the cap.
+    for attr, value in _tensor_free_holders().items():
+        module = nn.Module()
+        setattr(module, attr, value)
+        cut = []
+        assert list(iter_module_held_plain_tensors(module, cut)) == []
+        assert cut == [], attr
+
+
+def test_depth_cut_ignores_tensors_stamped_elsewhere_in_the_module() -> None:
+    from torchlens.backends.torch.buffer_writes import iter_module_held_plain_tensors
+
+    shared = torch.zeros(1)
+    for order in ("shallow_first", "deep_first"):
+        module = nn.Module()
+        holders = {"a": {"t": shared}, "b": {"p": {"q": {"r": {"s": {"deep": shared}}}}}}
+        for attr in holders if order == "shallow_first" else reversed(list(holders)):
+            setattr(module, attr, holders[attr])
+        cut: list[str] = []
+        names = [name for name, _ in iter_module_held_plain_tensors(module, cut)]
+        assert names == ["a['t']"], order
+        assert cut == [], order
+
+    # A registered buffer referenced past the depth bound resolves through its own stamp.
+    registered = nn.Module()
+    registered.register_buffer("buf", torch.zeros(1))
+    registered.b = {"p": {"q": {"r": {"s": {"deep": registered.buf}}}}}
+    cut = []
+    assert list(iter_module_held_plain_tensors(registered, cut)) == []
+    assert cut == []
+
+    # Narrowness: the same cut that also hides an unstamped tensor is still disclosed.
+    mixed = nn.Module()
+    mixed.a = {"t": shared}
+    mixed.b = {"p": {"q": {"r": {"s": {"deep": shared, "lost": torch.zeros(1)}}}}}
+    cut = []
+    assert [name for name, _ in iter_module_held_plain_tensors(mixed, cut)] == ["a['t']"]
+    assert cut == ["b['p']['q']['r']['s'] (depth bound 4)"]
 
 
 class _TensorFreeHolders(nn.Module):
@@ -544,6 +614,88 @@ def test_depth_bound_cut_is_disclosed_at_capture() -> None:
     assert "deep['a']['b']['c']['d'] (depth bound 4)" in str(fired[0])
     assert list(trace.buffer_layers) == []
     assert [op.type for op in trace.layer_list] == ["input", "relu", "output"]
+
+
+class _VocabThenCache(nn.Module):
+    """A tensor read in forward but held after more items than the visit cap."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.vocab = {str(index): index for index in range(70_000)}
+        self.cache = {"cpu": torch.randn(5)}
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.relu(x + self.cache["cpu"])
+
+
+class _ReadPastObjectBound(nn.Module):
+    """The forward reads the first tensor past the object bound."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.cache = {index: torch.randn(5) for index in range(4097)}
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.relu(x + self.cache[4096])
+
+
+@pytest.mark.parametrize(
+    ("model_cls", "cut_note"),
+    [
+        (_VocabThenCache, "vocab (visit cap 65536 items)"),
+        (_ReadPastObjectBound, "cache[4096] (object bound 4096)"),
+    ],
+)
+def test_missed_held_tensor_is_disclosed_and_forward_validation_does_not_catch_it(
+    model_cls: type[nn.Module], cut_note: str
+) -> None:
+    """Pin the real behaviour of a read held tensor the scan missed.
+
+    The coded scan warning names the cut and the generic no-provenance warning fires;
+    the graph shows the read without the held tensor (no buffer source). Forward
+    validation returns True: a tripwire gap recorded as an open follow-up, pinned here
+    so the docs cannot drift back to claiming validation fails.
+    """
+
+    torch.manual_seed(0)
+    x = torch.randn(5)
+    model = model_cls()
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        trace = tl.trace(model, x)
+    scan = [w.message for w in record if "stopped scanning" in str(w.message)]
+    assert len(scan) == 1
+    assert getattr(scan[0], "fields", {}).get("code") == "held_tensor_scan_truncated"
+    assert cut_note in str(scan[0])
+    assert any("no graph/source provenance" in str(w.message) for w in record)
+    assert list(trace.buffer_layers) == []
+    assert [op.type for op in trace.layer_list] == ["input", "add", "relu", "output"]
+    assert torch.equal(trace[trace.output_layers[0]].out, _eager(model, x))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert tl.validate(copy.deepcopy(model), x, scope="forward") is True
+
+
+class _SharedPastDepth(nn.Module):
+    """One tensor held shallow and again past the depth bound; the deep path is read."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        shared = torch.randn(5)
+        self.b = {"p": {"q": {"r": {"s": {"deep": shared}}}}}
+        self.a = {"t": shared}
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x + self.b["p"]["q"]["r"]["s"]["deep"]
+
+
+def test_tensor_stamped_shallow_is_not_disclosed_past_the_depth_cut() -> None:
+    x = torch.randn(5)
+    model = _SharedPastDepth()
+    trace, fired = _held_scan_warnings(model, x)
+    assert fired == []
+    assert _buffer_addresses(trace) == ["a['t']"]
+    assert tl.validate(copy.deepcopy(model), x, scope="forward") is True
 
 
 class _Inner(nn.Module):
