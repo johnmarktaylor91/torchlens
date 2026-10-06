@@ -18,7 +18,7 @@ from torchlens._errors import InvalidArgumentError
 captum_attr = pytest.importorskip("captum.attr")
 torchvision = pytest.importorskip("torchvision")
 
-pytestmark = [pytest.mark.optional, pytest.mark.heavy]
+pytestmark = [pytest.mark.optional]
 
 
 def _outermost(layer: Any) -> str | None:

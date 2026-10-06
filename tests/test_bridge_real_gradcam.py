@@ -21,7 +21,7 @@ from torchlens._errors import InvalidArgumentError
 pytorch_grad_cam = pytest.importorskip("pytorch_grad_cam")
 torchvision = pytest.importorskip("torchvision")
 
-pytestmark = [pytest.mark.optional, pytest.mark.heavy]
+pytestmark = [pytest.mark.optional]
 
 
 def _address(call: Any) -> str:
