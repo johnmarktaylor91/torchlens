@@ -27,6 +27,9 @@ class _DummyLog:
         self.total_activation_memory = "0 B"
         self.validate_calls: list[dict[str, Any]] = []
         self.verbose = False
+        # Save options a real ``Trace`` records from its capture call.
+        self.output_device = "same"
+        self.save_budget: Any = "auto"
 
     def cleanup(self) -> None:
         """Record cleanup requests from wrapper helpers."""
@@ -142,6 +145,8 @@ def stubbed_runner(
 
         captured_calls.append(kwargs)
         dummy_log = _DummyLog()
+        dummy_log.output_device = kwargs.get("output_device", "same")
+        dummy_log.save_budget = kwargs.get("save_budget", "auto")
         dummy_logs.append(dummy_log)
         return dummy_log
 

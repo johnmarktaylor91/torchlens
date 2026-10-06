@@ -973,7 +973,10 @@ def validate_forward_pass(
     if save_options and spec.name != "torch":
         raise BackendUnsupportedError(
             f"Backend {spec.name!r} validation does not accept {sorted(save_options)!r}; "
-            "only the torch backend's validator capture honors these save options."
+            "only the torch backend's validator capture honors these save options.",
+            remedy="omit output_device and save_budget, or validate on the torch backend",
+            backend=spec.name,
+            options=sorted(save_options),
         )
     return spec.validate_entry(
         model,
@@ -1063,10 +1066,14 @@ def _warn_if_validation_trace_not_reproducible(
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any],
     random_seed: int,
-    output_device: OutputDeviceLiteral = "same",
-    save_budget: SaveBudgetOption = "auto",
 ) -> Literal["matched", "mismatch", "unavailable"]:
     """Warn when a validation trace changes after one fresh re-trace.
+
+    The re-trace reuses ``first_trace``'s own ``output_device`` and
+    ``save_budget``, so it runs under the same capture mode by construction
+    (and on a GPU model with ``output_device="cpu"`` does not exceed the device
+    budget the first capture avoided, which would silently skip this check as
+    ``"unavailable"``).
 
     Parameters
     ----------
@@ -1080,12 +1087,6 @@ def _warn_if_validation_trace_not_reproducible(
         Keyword inputs for the second capture.
     random_seed:
         Seed reused for the second capture to avoid RNG-only graph drift.
-    output_device, save_budget:
-        The first validation capture's save options, reused so the re-trace
-        runs under the same capture mode (and on a GPU model with
-        ``output_device="cpu"`` does not exceed the device budget the first
-        capture avoided, which would silently skip this check as
-        ``"unavailable"``).
 
     Returns
     -------
@@ -1095,6 +1096,10 @@ def _warn_if_validation_trace_not_reproducible(
         fresh re-trace check itself cannot be completed.
     """
 
+    # Read outside the guard below: a trace without its save options must fail
+    # loudly, never read as an "unavailable" re-trace.
+    retrace_output_device = cast(OutputDeviceLiteral, first_trace.output_device)
+    retrace_save_budget = first_trace.save_budget
     second_trace: Trace | None = None
     try:
         # Buffer-source identity is assigned during postprocessing only when the
@@ -1123,8 +1128,8 @@ def _warn_if_validation_trace_not_reproducible(
                 save_arg_values=False,
                 random_seed=random_seed,
                 save_rng_states=False,
-                output_device=output_device,
-                save_budget=save_budget,
+                output_device=retrace_output_device,
+                save_budget=retrace_save_budget,
             )
         finally:
             _state._completeness_witness_mode = prior_witness_mode
@@ -1685,8 +1690,6 @@ def _validate_forward_pass_torch(
                 reproducibility_input_args,
                 reproducibility_input_kwargs,
                 random_seed,
-                output_device=output_device,
-                save_budget=save_budget,
             )
         else:
             from .validation.diagnostics import ValidationDiagnostic, record_validation_diagnostic
