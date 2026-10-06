@@ -548,6 +548,7 @@ def test_rank_engine_draws_the_parameter_node_and_legend_row(tmp_path: Path) -> 
     assert 'shape="cylinder"' in line or "shape=cylinder" in line
     assert "parameter temp" in line
     assert "pos=" in line  # positioned for neato -n like every rank node
+    assert f"{param_node} [" in _cluster_body(dot, "cluster_inner_pass1")
     assert (param_node, clamp) in _edges(dot)
     assert "mutated parameter (cylinder)" in dot
     assert "mutated parameter" not in plain_dot
