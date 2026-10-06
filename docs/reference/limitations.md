@@ -33,6 +33,13 @@ forward with no warning. References held anywhere else (a module global, a custo
 a builtin subclass, a `forward` assigned on the instance) keep the provenance warning and the rescue
 forward described below.
 
+Held Python-level torch functions are rebound too, so they capture exactly like a direct call: a
+held `F.relu`, such as the default activation every `nn.TransformerEncoderLayer` and
+`nn.TransformerDecoderLayer` binds at torch import, now logs the outer `F.relu` call around the inner
+`torch.relu`, as `F.relu(x)` written in `forward` does. Graphs are unchanged, but the `func_call_id`
+values of later ops in such models shift by 2 per held call, compared with a capture in which the held
+function bypassed its wrapper.
+
 ## Capture completeness and Python call routes
 
 | When it can occur | What you see | Remedy |
