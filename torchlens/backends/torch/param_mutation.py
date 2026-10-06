@@ -5,13 +5,14 @@ its ``Param``. When forward code mutates one in place (``with torch.no_grad():
 self.temp.clamp_(lo, hi)``) the op is logged with the Parameter as its parameter
 input and later reads bind to that op. This module holds the receiver policy the
 wrapper consults: which Parameters count as receivers, how a mutation result is
-turned into a loggable tensor, and when a frozen receiver runs untracked.
+turned into a loggable tensor, how a frozen receiver runs, and how a receiver
+passed by keyword is normalized.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterator
-from contextlib import AbstractContextManager, nullcontext
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from typing import Any
 
 import torch
@@ -105,24 +106,59 @@ def _iter_operand_tensors(value: Any) -> Iterator[torch.Tensor]:
             yield from _iter_operand_tensors(item)
 
 
+@contextmanager
+def _frozen_receiver_flag(receiver: torch.nn.Parameter) -> Iterator[None]:
+    """Run one in-place call with a frozen Parameter's own ``requires_grad=False``.
+
+    Capture forced the flag to ``True`` at prep. With the user's flag back, autograd
+    accepts the in-place write of a grad-requiring operand exactly as in eager and
+    the Parameter becomes a non-leaf, which is the state eager leaves it in, so the
+    flag is not re-forced after a successful call. If the call raises, or leaves the
+    Parameter a leaf, the forced flag is put back for the rest of the capture.
+
+    Parameters
+    ----------
+    receiver:
+        Frozen prepared Parameter receiving the in-place write.
+
+    Yields
+    ------
+    None
+        Control for the wrapped call.
+    """
+
+    from .completeness_witness import internal_scalar_read
+
+    with _state.pause_logging(), internal_scalar_read():
+        receiver.requires_grad_(False)
+    try:
+        yield
+    finally:
+        with _state.pause_logging(), internal_scalar_read():
+            if receiver.is_leaf:
+                receiver.requires_grad_(True)
+
+
 def frozen_parameter_receiver_context(
     trace: Any,
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
     is_inplace_call: bool,
 ) -> AbstractContextManager[Any]:
-    """Run an in-place op on a frozen prepared Parameter untracked, as eager does.
+    """Run an in-place op on a frozen prepared Parameter as eager does.
 
     Capture forces ``requires_grad=True`` on floating prepared Parameters so their
     reads are gradient-capable. A Parameter frozen by the user
     (``requires_grad=False``) may legally be mutated in place with grad mode on
     (EMA weights, fixed tables); under the forced flag autograd would refuse the
-    same call. When no other operand requires grad, the eager call records no
-    autograd history, so executing it under ``torch.no_grad()`` is value- and
-    graph-identical to eager. Operands are scanned positionally, by keyword and
-    inside nested containers: with any grad-requiring operand eager would make
-    the Parameter a non-leaf, so the call runs unchanged and autograd refuses it
-    loudly instead of silently dropping that history.
+    same call. Operands are scanned positionally, by keyword and inside nested
+    containers:
+
+    - no operand requires grad: the eager call records no autograd history, so
+      executing it under ``torch.no_grad()`` is value- and graph-identical;
+    - some operand requires grad: eager makes the Parameter a non-leaf, so the
+      call runs tracked with the receiver's own frozen flag restored
+      (``_frozen_receiver_flag``) and the Parameter ends exactly as eager leaves it.
 
     Parameters
     ----------
@@ -138,24 +174,60 @@ def frozen_parameter_receiver_context(
     Returns
     -------
     AbstractContextManager[Any]
-        ``torch.no_grad()`` for a frozen prepared Parameter receiver, otherwise a
-        null context.
+        ``torch.no_grad()`` or the frozen-flag context for a frozen prepared
+        Parameter receiver, otherwise a null context.
     """
 
     if not is_inplace_call or not args or not torch.is_grad_enabled():
         return nullcontext()
     receiver = args[0]
-    if not isinstance(receiver, torch.nn.Parameter) or not receiver.requires_grad:
+    if not isinstance(receiver, torch.nn.Parameter):
         return nullcontext()
-    if not is_prepared_parameter_receiver(trace, receiver):
+    from .completeness_witness import internal_scalar_read
+
+    with internal_scalar_read():
+        is_forced_leaf = receiver.requires_grad and receiver.is_leaf
+    if not is_forced_leaf or not is_prepared_parameter_receiver(trace, receiver):
         return nullcontext()
     meta = get_param_meta(receiver)
     if meta is None or meta.requires_grad_before_capture is not False:
         return nullcontext()
     for operand in (*args[1:], *kwargs.values()):
         if any(tensor.requires_grad for tensor in _iter_operand_tensors(operand)):
-            return nullcontext()
+            return _frozen_receiver_flag(receiver)
     return torch.no_grad()
+
+
+def receiver_kwarg_as_positional(
+    args: tuple[Any, ...], kwargs: dict[str, Any]
+) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Move a Parameter receiver passed by keyword into the positional receiver slot.
+
+    ``torch.clamp_(input=p, min=lo)`` mutates ``p`` exactly like
+    ``torch.clamp_(p, min=lo)``, but the wrapper recognizes an in-place receiver
+    only as ``args[0]``. For an in-place call with no positional argument and a
+    Parameter ``input=`` keyword, the receiver is moved to ``args[0]`` (torch's
+    in-place functions take ``input`` as their first positional parameter), so
+    the call is captured like the positional spelling. Every other call is
+    returned unchanged.
+
+    Parameters
+    ----------
+    args:
+        Positional arguments of an in-place-named wrapped call.
+    kwargs:
+        Keyword arguments of the same call.
+
+    Returns
+    -------
+    tuple[tuple[Any, ...], dict[str, Any]]
+        The (possibly normalized) positional and keyword arguments.
+    """
+
+    if args or not isinstance(kwargs.get("input"), torch.nn.Parameter):
+        return args, kwargs
+    rest = {name: value for name, value in kwargs.items() if name != "input"}
+    return (kwargs["input"],), rest
 
 
 def parameter_mutation_output_for_logging(

@@ -92,6 +92,11 @@
 - If a `@property` raises `AttributeError`, Python falls through to `__getattr__`; use
   `ValueError` for TorchLens multi-pass access errors.
 - `copy()` on `Op` deep-copies graph metadata and shares tensor payloads/callables; see data_classes/AGENTS.md.
+- An in-place write to a prepared Parameter inside `forward` is a logged op (receiver positional
+  or `input=`); a frozen Parameter written with a grad-requiring operand runs tracked with its own
+  `requires_grad=False` and ends a non-leaf, as in eager, so `restore_param_requires_grad` and the
+  prep-time forcing skip non-leaf Parameters. An `out=` write into a Parameter is still uncaptured:
+  `tl.validate` fails it on completeness (pinned in `tests/test_parameter_inplace_mutation.py`).
 - `torchlens.__version__` and `pyproject.toml` are release-pipeline state; do not update them
   in feature/docs tasks unless release work explicitly asks for it.
 - Legacy constructors (`torch.FloatTensor(...)` and siblings, `Variable(...)`) are captured by

@@ -807,6 +807,7 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
             requires_grad_before = param.requires_grad
             if (
                 not param_is_lazy
+                and param.is_leaf  # a non-leaf already requires grad; its flag is read-only
                 and not getattr(trace, "backward_ready", False)
                 and (torch.is_floating_point(param) or torch.is_complex(param))
             ):

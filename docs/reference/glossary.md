@@ -106,6 +106,11 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   attribute, a list/tuple item, or a dict value such as a warm-filled attention-bias cache) is
   captured as a buffer too, addressed `<module>.<attr>`, `<module>.<attr>.<index>`, or
   `<module>.<attr>.<key>`.
+  parent, not as a parameter edge, so it is absent from that read's `params`.
+  The receiver may be given by keyword (`torch.clamp_(input=p, ...)`). A frozen Parameter written
+  in place with a grad-requiring operand ends the pass a non-leaf, exactly as in eager. An `out=`
+  write into a Parameter (`torch.add(a, b, out=p)`) is not captured yet; validation reports it as
+  a completeness failure.
 
 **GradFn**
 : A first-class live backward-autograd node captured during backward logging. Portable artifacts
