@@ -144,46 +144,173 @@ def register_session_buffer_stamp(trace: Trace, value: torch.Tensor, address: st
     registry[id(value)] = _SessionBufferStamp(tensor=value, address=address, storage=storage)
 
 
-def _dict_items_with_unique_names(attr_name: str, held: dict[Any, Any]) -> list[tuple[str, Any]]:
-    """Name each dict value ``<attr_name>.<key>``, keeping the first of any repeated name.
+_HELD_SCAN_MAX_DEPTH = 4
+"""Container levels below a module attribute that the held-tensor scan descends.
+
+Level 1 is an item of the attribute's own container (``attr.<i>`` / ``attr[<key>]``);
+a container found at level 4 is not entered. Mirrors ``_FIDELITY_MAX_DEPTH``.
+"""
+
+_HELD_SCAN_MAX_OBJECTS = 4096
+"""Tensors plus containers the held-tensor scan visits per module.
+
+Mirrors ``_robustness._ITER_TENSORS_MAX_NODES``. Scalar leaves (a vocabulary dict's
+strings and ints) are skipped by one type check and not counted, so the bound caps the
+costly work: stamping a tensor or entering a container.
+"""
+
+_HELD_KEY_MAX_CHARS = 40
+_HELD_KEY_ESCAPES = (("%", "%25"), (".", "%2E"), (":", "%3A"))
+
+
+def _render_held_key(key: Any) -> str:
+    """Render one dict key as a dot-free, colon-free address segment.
+
+    ``repr(key)`` reads like the Python access (``cache['cpu']``, ``cache[1]``), so a str
+    key never collides with an int that prints the same. ``%``, ``.`` and ``:`` are
+    percent-escaped because ``.`` separates the owning module from the buffer name and
+    ``:`` separates an address from a pass number. A hostile ``__repr__`` falls back to
+    the key's type name; long renderings are cut to ``_HELD_KEY_MAX_CHARS``.
 
     Parameters
     ----------
-    attr_name:
-        Name of the module attribute holding the dict.
-    held:
-        The dict attribute value.
+    key:
+        Dict key.
 
     Returns
     -------
-    list[tuple[str, Any]]
-        ``(name, value)`` pairs in dict order; non-string keys render as ``repr(key)``.
+    str
+        Escaped rendering without brackets.
     """
 
-    items: list[tuple[str, Any]] = []
-    seen: set[str] = set()
-    for key, item in held.items():
-        rendered = key if isinstance(key, str) else repr(key)
-        if rendered not in seen:
-            seen.add(rendered)
-            items.append((f"{attr_name}.{rendered}", item))
-    return items
+    try:
+        rendered = repr(key)
+    except Exception:  # noqa: BLE001 - a hostile __repr__ must not break capture setup
+        rendered = f"<{type(key).__name__}>"
+    for raw, escaped in _HELD_KEY_ESCAPES:
+        rendered = rendered.replace(raw, escaped)
+    if len(rendered) > _HELD_KEY_MAX_CHARS:
+        rendered = rendered[: _HELD_KEY_MAX_CHARS - 1] + "~"
+    return rendered
 
 
-def iter_module_held_plain_tensors(module: nn.Module) -> Iterator[tuple[str, torch.Tensor]]:
+class _HeldScan:
+    """Bounded, cycle-guarded preorder walk of one module's held containers.
+
+    Shared across the module's attributes so the object bound is per module. Names are
+    reserved in scan order; a repeat gets ``#2``, ``#3``, ... so no tensor is dropped.
+    """
+
+    def __init__(self, truncations: list[str] | None, module_address: str) -> None:
+        self.prefix = f"{module_address}." if module_address else ""
+        self.taken: set[str] = set()
+        self.visited = 0
+        self.entered: set[int] = set()
+        self.truncations = truncations
+        self.exhausted = False
+
+    def reserve(self, name: str) -> str:
+        """Return ``name``, or ``name#<n>`` with the smallest free ``n >= 2``; reserve it."""
+
+        unique = name
+        ordinal = 2
+        while unique in self.taken:
+            unique = f"{name}#{ordinal}"
+            ordinal += 1
+        self.taken.add(unique)
+        return unique
+
+    def _cut(self, note: str) -> None:
+        """Record one bound cut for the caller's disclosure."""
+
+        if self.truncations is not None:
+            self.truncations.append(self.prefix + note)
+
+    def admit(self, name: str) -> bool:
+        """Count one tensor or container against the object bound; False once exhausted."""
+
+        if self.exhausted:
+            return False
+        if self.visited >= _HELD_SCAN_MAX_OBJECTS:
+            self.exhausted = True
+            self._cut(f"{name} (object bound {_HELD_SCAN_MAX_OBJECTS})")
+            return False
+        self.visited += 1
+        return True
+
+    def walk(self, container: Any, path: str, depth: int) -> Iterator[tuple[str, torch.Tensor]]:
+        """Yield plain tensors under ``container`` (named ``path``, items at ``depth``).
+
+        Iterative with lazy item iterators, so a huge dict costs nothing past the bound
+        and the depth bound is independent of Python's recursion limit.
+        """
+
+        self.entered.add(id(container))
+        stack: list[tuple[str, int, Iterator[tuple[Any, Any]]]] = [
+            (path, depth, _held_items(container))
+        ]
+        while stack and not self.exhausted:
+            parent, level, items = stack[-1]
+            entry = next(items, None)
+            if entry is None:
+                stack.pop()
+                continue
+            (key, is_key), item = entry
+            if isinstance(item, torch.Tensor):
+                is_container = False
+            elif isinstance(item, (list, tuple, dict)) and item and id(item) not in self.entered:
+                is_container = True
+            else:
+                continue
+            segment = _render_held_key(key) if is_key else str(key)
+            name = self.reserve(f"{parent}[{segment}]")
+            if not self.admit(name):
+                return
+            if not is_container:
+                if not isinstance(item, nn.Parameter):
+                    yield name, item
+            elif level >= _HELD_SCAN_MAX_DEPTH:
+                self._cut(f"{name} (depth bound {_HELD_SCAN_MAX_DEPTH})")
+            else:
+                self.entered.add(id(item))
+                stack.append((name, level + 1, _held_items(item)))
+
+
+def _held_items(container: Any) -> Iterator[tuple[tuple[Any, bool], Any]]:
+    """Yield ``((key_or_index, is_dict_key), item)`` lazily for a list/tuple/dict."""
+
+    if isinstance(container, dict):
+        for key, item in container.items():
+            yield (key, True), item
+    else:
+        for index, item in enumerate(container):
+            yield (index, False), item
+
+
+def iter_module_held_plain_tensors(
+    module: nn.Module, truncations: list[str] | None = None, module_address: str = ""
+) -> Iterator[tuple[str, torch.Tensor]]:
     """Yield the plain tensors a module holds outside its parameter/buffer registries.
 
     A module-held plain tensor exists before the forward and is read from module
     state, so model preparation stamps it as a buffer source exactly like a
     registered buffer (its reads then root at a ``buffer`` node instead of
-    dangling). Three holder shapes are recognized, one container level deep:
+    dangling). Holder shapes and their address suffixes:
 
-    * a public tensor attribute (``name``);
-    * an item of a list/tuple attribute (``name.<index>``);
-    * a value of a dict attribute (``name.<key>``), e.g. timm's eval-mode
-      attention-bias cache ``attention_bias_cache["cpu"]`` filled by an earlier
-      forward. Non-string keys use ``repr(key)``; a key whose rendered name
-      repeats an earlier one in the same dict is skipped so addresses stay unique.
+    * a public tensor attribute: ``name``;
+    * an item of a list/tuple attribute: ``name.<index>`` (the original spelling);
+    * a dict value, e.g. timm's eval-mode attention-bias cache filled by an earlier
+      forward: ``name[<key>]`` with the key rendered by ``_render_held_key``
+      (``attention_bias_cache['cpu']``), so the address's last ``.`` still splits the
+      owning module from the buffer name;
+    * nested list/tuple/dict values below those: ``[<index>]`` / ``[<key>]`` appended
+      per level (``cache['outer']['cpu']``, ``lists['k'][0]``, ``pairs.0[1]``).
+
+    Names are never dropped: a rendering that repeats an earlier name gets ``#2``,
+    ``#3``, ... in scan order. Below the attribute's own list/tuple items the scan is
+    bounded (``_HELD_SCAN_MAX_DEPTH`` levels, ``_HELD_SCAN_MAX_OBJECTS`` tensors and
+    containers per module, cycle-guarded) and each cut is described in
+    ``truncations``; its cost is linear in the entries visited before the bound.
 
     Private (``_``) and ``tl_`` attributes and Parameters are never yielded.
     A tensor created inside ``forward`` is not module state at preparation time
@@ -193,6 +320,10 @@ def iter_module_held_plain_tensors(module: nn.Module) -> Iterator[tuple[str, tor
     ----------
     module:
         Module whose own ``__dict__`` is scanned (no recursion into submodules).
+    truncations:
+        Optional collector for one description per bound that cut the scan.
+    module_address:
+        The module's address, prefixed to each ``truncations`` description.
 
     Yields
     ------
@@ -200,21 +331,52 @@ def iter_module_held_plain_tensors(module: nn.Module) -> Iterator[tuple[str, tor
         Address suffix relative to the module, and the held tensor.
     """
 
+    scan = _HeldScan(truncations, module_address)
+    scan.taken.update(name for name in module.__dict__ if not name.startswith(("_", "tl_")))
     for attr_name, attr_val in module.__dict__.items():
         if attr_name.startswith(("_", "tl_")):
             continue
-        items: list[tuple[str, Any]]
         if isinstance(attr_val, torch.Tensor):
-            items = [(attr_name, attr_val)]
-        elif isinstance(attr_val, (list, tuple)):
-            items = [(f"{attr_name}.{index}", item) for index, item in enumerate(attr_val)]
+            if not isinstance(attr_val, nn.Parameter):
+                yield attr_name, attr_val
         elif isinstance(attr_val, dict):
-            items = _dict_items_with_unique_names(attr_name, attr_val)
-        else:
-            continue
-        for name, value in items:
-            if isinstance(value, torch.Tensor) and not isinstance(value, nn.Parameter):
-                yield name, value
+            if attr_val:
+                yield from scan.walk(attr_val, attr_name, 1)
+        elif isinstance(attr_val, (list, tuple)):
+            # Top-level items keep the original unbounded ``name.<index>`` scan; only
+            # containers below them enter the bounded walk.
+            scan.entered.add(id(attr_val))
+            for index, item in enumerate(attr_val):
+                name = scan.reserve(f"{attr_name}.{index}")
+                if isinstance(item, torch.Tensor):
+                    if not isinstance(item, nn.Parameter):
+                        yield name, item
+                elif isinstance(item, (list, tuple, dict)) and item:
+                    if id(item) not in scan.entered and scan.admit(name):
+                        yield from scan.walk(item, name, 2)
+
+
+def warn_held_scan_truncated(truncations: list[str]) -> None:
+    """Disclose, once per capture, held-tensor scans cut by their bounds.
+
+    Parameters
+    ----------
+    truncations:
+        Descriptions collected by ``iter_module_held_plain_tensors``.
+    """
+
+    if not truncations:
+        return
+    import warnings
+
+    shown = "; ".join(truncations[:5])
+    suffix = "" if len(truncations) <= 5 else f" (+{len(truncations) - 5} more)"
+    warnings.warn(
+        f"TorchLens stopped scanning module-held containers for plain tensors at "
+        f"{len(truncations)} place(s): {shown}{suffix}. A tensor past the cut that "
+        "the forward reads has no buffer source and fails graph validation.",
+        stacklevel=3,
+    )
 
 
 def session_validated_buffer_address(trace: Trace, value: torch.Tensor) -> str | None:
