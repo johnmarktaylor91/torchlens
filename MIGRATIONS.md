@@ -121,6 +121,12 @@ grammar option instead of a bare `TypeError`.
 | `level="waterfall"` | `trace.profile(level="op")`, or `trace.to_pandas()` in execution order |
 | `level="output"` | `trace.output_table()` |
 
+The old renderer also printed a partial live table when `summary()` was called
+from inside a running forward (a hook or a module's `forward`). That preview is
+gone: `trace.summary()` mid-forward now raises `CaptureContextError`
+(`trace_not_finished`). Use `repr(trace)` for the live op count, and call
+`summary()` after `trace(...)` returns.
+
 ## `tl.utils.flop_count(count_fma_as_two=)` removed (clean break, no alias)
 
 `tl.utils.flop_count()` takes the same `flop_convention=` vocabulary as
