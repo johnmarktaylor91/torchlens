@@ -18,7 +18,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import _state
 from torchlens._errors import TorchLensCaptureGapWarning
-from torchlens.backends.torch import completeness_witness as cw
+from torchlens.backends.torch import completeness_witness as cw, rescue
 from torchlens.backends.torch.completeness_witness import (
     AUDITED_COMPLETENESS_BOUNDARIES,
     MAX_AUDITED_COMPLETENESS_BOUNDARIES,
@@ -628,8 +628,9 @@ def test_input_depth_limit_fails_closed_with_unresolved_path() -> None:
     assert input_gap["input_path"].startswith("input.nested.inner.inner")
 
 
-def test_direct_aten_call_trips_non_vacuous_witness() -> None:
+def test_direct_aten_call_trips_non_vacuous_witness(monkeypatch: pytest.MonkeyPatch) -> None:
     """A direct aten call is loudly and machine-readably unaccounted."""
+    monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)  # keep primary capture
 
     wrap_torch(completeness_witness=True)
     with pytest.warns(TorchLensCaptureGapWarning, match="unaccounted aten dispatch"):
@@ -722,8 +723,11 @@ def test_direct_aten_submodule_output_is_owned_by_internal_source() -> None:
     assert any(op.func_name == "none" and op.is_internal_source for op in trace.ops)
 
 
-def test_direct_aten_child_intermediate_still_trips_witness() -> None:
+def test_direct_aten_child_intermediate_still_trips_witness(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A child raw dispatch not represented by its output boundary fails closed."""
+    monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)  # keep primary capture
 
     wrap_torch(completeness_witness=True)
     with pytest.warns(TorchLensCaptureGapWarning, match="unaccounted aten dispatch"):
@@ -742,8 +746,11 @@ def test_direct_aten_child_intermediate_still_trips_witness() -> None:
     assert report["function"] == "forward"
 
 
-def test_untraceable_child_output_does_not_mask_observable_mutation() -> None:
+def test_untraceable_child_output_does_not_mask_observable_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """ATTACK4 mutation remains unaccounted beside an owned output boundary."""
+    monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)  # keep primary capture
 
     wrap_torch(completeness_witness=True)
     with pytest.warns(TorchLensCaptureGapWarning, match="unaccounted aten dispatch"):
