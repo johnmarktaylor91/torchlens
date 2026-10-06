@@ -101,7 +101,11 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   that Parameter; every later read of the Parameter in the same pass binds to that op as a graph
   parent, not as a parameter edge, so it is absent from that read's `params`. `draw()` shows
   such a Parameter as a grey cylinder labeled `parameter <name>` in its owning module's box, with
-  an edge to each op that reads its pre-mutation value; Parameters never mutated get no node.
+  an edge to each op that reads its pre-mutation value, under both layout engines (`dot` and
+  `rank`). The node is drawn when the first in-place op on the Parameter is drawn as its own
+  node: a collapsed module box or `skip_fn` that hides that op hides the node with it, and a
+  `module=` focus draws it only when the focused module is the owner or contains it. Parameters
+  never mutated get no node. The legend row's swatch is the trainable-parameter grey.
 
 **GradFn**
 : A first-class live backward-autograd node captured during backward logging. Portable artifacts

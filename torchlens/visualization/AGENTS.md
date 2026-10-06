@@ -52,7 +52,7 @@ The `_render_dot.py` entry point is split across sibling helper modules; all are
 | `_geometry_audit.py` | Geometry audit v2 + usability envelopes: widened element classes, grid-indexed pairing, engine-attributed parsing (vizmech wave 3; test-support instrument) |
 | `_edge_multiplicity.py` | Rendered-edge multiplicity disclosure (dedupe registry, honest `xN` edge labels) and the D9 argument-position edge-label builders; at visible fan-in >= `_ARG_LABEL_MIDPOINT_FANIN` argument labels ride reserved-space midpoint labels and same-pair parallel arg edges merge into one row-listing edge (D03-R4) |
 | `_buffer_visibility.py` | Tri-state `show_buffer_layers` visibility predicates (R43 split from `_render_edges.py`) |
-| `_mutated_params.py` | Source nodes for in-place-mutated Parameters: read-only scan of the captured ops, one grey cylinder per mutated Parameter in its owner's cluster, edges to its pre-mutation readers; the legend row is gated on a drawn node |
+| `_mutated_params.py` | Source nodes for in-place-mutated Parameters: read-only scan of the captured ops, one grey cylinder per mutated Parameter in its owner's cluster, edges to its pre-mutation readers; resolves ops through focus-rewritten entries; percent-encoded node names (injective); returns engine-neutral emissions the rank engine re-emits as overlay nodes; the legend row is gated on a drawn node |
 | `_condensed_flow.py` | Child condensed-flow-graph construction for smart module collapse |
 | `_segment_descriptors.py` | Segment descriptor construction and label derivation for collapse plans |
 | `_collapse_disclosures.py` | Human-facing collapse disclosure warnings (no-silent-floor, memo D4) |

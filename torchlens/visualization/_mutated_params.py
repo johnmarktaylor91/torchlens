@@ -41,26 +41,6 @@ __all__ = [
     "mutated_parameter_node_name",
 ]
 
-#: In-place dunder operators: augmented assignment plus item assignment.
-_INPLACE_DUNDERS = frozenset(
-    {
-        "__iadd__",
-        "__isub__",
-        "__imul__",
-        "__itruediv__",
-        "__ifloordiv__",
-        "__imod__",
-        "__ipow__",
-        "__imatmul__",
-        "__iand__",
-        "__ior__",
-        "__ixor__",
-        "__ilshift__",
-        "__irshift__",
-        "__setitem__",
-    }
-)
-
 #: Unit kinds whose identifier is the emitted DOT node name of a reader.
 _DRAWABLE_READER_KINDS = frozenset({"raw_op", "module_box"})
 
@@ -98,6 +78,9 @@ class _ParamNodeStub:
 def _is_inplace_func_name(func_name: object) -> bool:
     """Return whether ``func_name`` names an in-place tensor operation.
 
+    Delegates to the capture wrapper's own receiver-mutation predicate so the
+    render cannot drift from what capture treats as a mutation.
+
     Parameters
     ----------
     func_name:
@@ -106,14 +89,15 @@ def _is_inplace_func_name(func_name: object) -> bool:
     Returns
     -------
     bool
-        True for trailing-underscore methods (``clamp_``) and in-place dunders.
+        True for trailing-underscore methods (``clamp_``), augmented-assignment
+        dunders, and item assignment.
     """
 
     if not isinstance(func_name, str) or not func_name:
         return False
-    if func_name.startswith("__"):
-        return func_name in _INPLACE_DUNDERS
-    return func_name.endswith("_")
+    from ..backends.torch.wrappers import _func_mutates_receiver
+
+    return _func_mutates_receiver(func_name)
 
 
 def _receiver_param(op: Any) -> Any | None:

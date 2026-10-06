@@ -191,14 +191,15 @@ class _DotUnderscoreCollision(nn.Module):
 
 
 class _Owner(nn.Module):
-    """Owns ``p`` and reads it."""
+    """Owns ``p`` and reads it (a submodule keeps it a cluster, not an atomic box)."""
 
     def __init__(self) -> None:
         super().__init__()
+        self.lin = nn.Linear(3, 3)
         self.p = nn.Parameter(torch.full((3,), 2.0))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x * self.p
+        return self.lin(x) * self.p
 
 
 class _Mutator(nn.Module):
@@ -442,6 +443,13 @@ def _cluster_names(dot: str) -> list[str]:
     return re.findall(r"subgraph (\S*cluster\S*) \{", dot)
 
 
+def _render_names(trace: tl.Trace, func_name: str) -> set[str]:
+    """Return the DOT names the first ``func_name`` op may render under (plain or focus)."""
+
+    op = next(op for op in trace.layer_list if op.func_name == func_name)
+    return {str(op.layer_label), str(op.label).replace(":", "pass")}
+
+
 @pytest.mark.parametrize("focus", ["mid.leaf", "mid"])
 def test_module_focus_draws_the_parameter_node(tmp_path: Path, focus: str) -> None:
     """A focus containing the owner draws the node inside the owner cluster."""
@@ -449,8 +457,8 @@ def test_module_focus_draws_the_parameter_node(tmp_path: Path, focus: str) -> No
     trace = _trace(_ThreeLevel())
     try:
         dot = _dot(trace, tmp_path, f"focus_{focus}", module=focus)
-        clamp = next(op for op in trace.layer_list if op.func_name == "clamp_")
-        truediv = next(op for op in trace.layer_list if op.func_name == "__truediv__")
+        clamp_names = _render_names(trace, "clamp_")
+        truediv_names = _render_names(trace, "__truediv__")
     finally:
         trace.cleanup()
 
@@ -460,9 +468,8 @@ def test_module_focus_draws_the_parameter_node(tmp_path: Path, focus: str) -> No
     assert "<B>parameter temp</B>" in line
     edges = _edges(dot)
     clamp_name = next(head for tail, head in edges if tail == param_node)
-    assert clamp_name in {clamp.layer_label, str(clamp.label).replace(":", "pass")}
+    assert clamp_name in clamp_names
     assert {head for tail, head in edges if tail == param_node} == {clamp_name}
-    truediv_names = {truediv.layer_label, str(truediv.label).replace(":", "pass")}
     assert any(tail == clamp_name and head in truediv_names for tail, head in edges)
     leaf_cluster = next(name for name in _cluster_names(dot) if "leaf" in name)
     assert f"{param_node} [" in _cluster_body(dot, leaf_cluster)
