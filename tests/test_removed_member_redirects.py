@@ -86,6 +86,36 @@ def test_removed_member_raises_typed_redirect(
     getattr(instance, replacement)  # the named replacement is live
 
 
+#: (public module, removed module-level name, live replacement on that module)
+REMOVED_MODULE_NAMES: list[tuple[str, str, str]] = [
+    ("torchlens.validation", "validate_saved_outs", "validate"),
+    ("torchlens.validation", "validate_trace_saved_outs", "validate"),
+    ("torchlens.io", "get_model_metadata", "log_model_metadata"),
+    ("torchlens.observers", "record_span", "span"),
+    ("torchlens.intervention", "intervening", "without_op"),
+    ("torchlens.intervention", "replay_from", "push_from"),
+]
+
+
+@pytest.mark.parametrize(("module_name", "removed", "replacement"), REMOVED_MODULE_NAMES)
+def test_removed_module_name_raises_typed_redirect(
+    module_name: str, removed: str, replacement: str
+) -> None:
+    """A public subpackage's removed name refuses typed and names a live replacement."""
+
+    import importlib
+
+    module = importlib.import_module(module_name)
+    with pytest.raises(FacadeTeachingError) as excinfo:
+        getattr(module, removed)
+    assert excinfo.value.fields["code"] == "facade_redirect"
+    assert removed in str(excinfo.value)
+    assert f"{module_name}.{replacement}" in str(excinfo.value)
+    assert getattr(module, removed, "absent") == "absent"
+    assert removed not in getattr(module, "__all__", ())
+    getattr(module, replacement)  # the named replacement is live
+
+
 @pytest.mark.parametrize("owner", ["Trace", "Bundle", "VisualizationOptions", "VisualizationTheme"])
 def test_unknown_member_still_fails_plain(owners: dict[str, Any], owner: str) -> None:
     """Only removed public names redirect; any other miss stays a plain AttributeError."""
@@ -101,6 +131,9 @@ _REPO = Path(__file__).resolve().parents[1]
 #: checkers, or mypy would accept every attribute (removed or typo) as Any.
 _GUARDED_HOOKS: list[tuple[str, str | None]] = [
     ("torchlens/intervention/helpers.py", None),
+    ("torchlens/validation/__init__.py", None),
+    ("torchlens/io/__init__.py", None),
+    ("torchlens/observers.py", None),
     ("torchlens/options.py", "VisualizationOptions"),
     ("torchlens/visualization/themes.py", "VisualizationTheme"),
 ]

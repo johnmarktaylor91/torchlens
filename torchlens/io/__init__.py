@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Collection
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .._errors import ArgumentTypeError
 from .._io import JaxPayloadLoadHint, PayloadLoadHints, TorchLensIOError, _json, rehydrate_nested
@@ -263,6 +263,27 @@ def load_intervention_spec(
             loaded_type=type(loaded).__name__,
         )
     return loaded
+
+
+#: Removed public names: each raises the typed ``facade_redirect`` error naming
+#: its replacement (clean break, no alias).
+_REDIRECTS: dict[str, str] = {
+    "get_model_metadata": ("use torchlens.io.log_model_metadata -- get_model_metadata was renamed"),
+}
+
+
+# Runtime only: under TYPE_CHECKING a module ``__getattr__`` would make every
+# name on this module type-check as Any.
+if not TYPE_CHECKING:
+
+    def __getattr__(name: str) -> Any:
+        """Raise the typed teaching error for a removed torchlens.io name."""
+
+        from ..utils.facade import resolve_facade_attr
+
+        return resolve_facade_attr(
+            owner=__name__, name=name, module_globals=globals(), redirects=_REDIRECTS
+        )
 
 
 __all__ = [

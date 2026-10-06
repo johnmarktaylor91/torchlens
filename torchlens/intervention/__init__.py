@@ -392,7 +392,11 @@ _LAZY_NAMES: dict[str, str] = {
 
 #: Removed spellings: each raises the typed ``facade_redirect`` error naming
 #: its replacement (clean break, no alias).
-_REDIRECTS: dict[str, str] = {"resample_ablate": _RESAMPLE_ABLATE_REDIRECT}
+_REDIRECTS: dict[str, str] = {
+    "resample_ablate": _RESAMPLE_ABLATE_REDIRECT,
+    "intervening": "use torchlens.intervention.without_op -- intervening was renamed",
+    "replay_from": "use torchlens.intervention.push_from -- replay_from was renamed",
+}
 
 
 def __getattr__(name: str) -> Any:
