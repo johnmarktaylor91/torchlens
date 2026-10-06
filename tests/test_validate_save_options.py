@@ -208,8 +208,11 @@ def test_non_torch_backend_refuses_non_default_save_options() -> None:
     fake_spec.name = "jax"
     model, x = _net_and_input()
     with mock.patch.object(public_impls, "resolve_backend_spec", return_value=fake_spec):
-        with pytest.raises(BackendUnsupportedError, match="save options"):
+        with pytest.raises(BackendUnsupportedError, match="save options") as info:
             public_impls.validate_forward_pass(model, x, output_device="cpu")
+        assert info.value.fields["code"] == "backend_unsupported"
+        assert info.value.fields["options"] == ["output_device"]
+        assert info.value.fields["remedy"]
         public_impls.validate_forward_pass(model, x)
     assert "output_device" not in fake_spec.validate_entry.call_args.kwargs
     fake_spec.validate_entry.assert_called_once()
