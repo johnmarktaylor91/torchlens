@@ -438,8 +438,10 @@ def test_profiler_count_mismatch_is_disclosed_not_guessed() -> None:
 
     layers = [Layer("relu_1_2", "relu", 2), Layer("relu_2_4", "relu", 4)]
     events = [{"name": "aten::relu", "ph": "X", "ts": float(t), "dur": 1.0} for t in (0, 5, 9)]
-    with pytest.warns(UserWarning, match="relu"):
+    with pytest.warns(UserWarning, match="relu") as record:
         joined = profiler.join(_FakeLog(layers), {"traceEvents": events})
+    codes = [getattr(w.message, "fields", {}).get("code") for w in record]
+    assert "profiler_join_op_types_unmatched" in codes
     assert all(row["kineto_event_count"] == 0 for row in joined["ops"])
     assert joined["mismatched_op_types"] == {"relu": {"events": 3, "layers": 2}}
     assert joined["unmatched_event_counts"] == {"aten::relu": 3}
