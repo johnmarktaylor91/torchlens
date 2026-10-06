@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import weakref
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -142,6 +142,79 @@ def register_session_buffer_stamp(trace: Trace, value: torch.Tensor, address: st
     except Exception:
         storage = None
     registry[id(value)] = _SessionBufferStamp(tensor=value, address=address, storage=storage)
+
+
+def _dict_items_with_unique_names(attr_name: str, held: dict[Any, Any]) -> list[tuple[str, Any]]:
+    """Name each dict value ``<attr_name>.<key>``, keeping the first of any repeated name.
+
+    Parameters
+    ----------
+    attr_name:
+        Name of the module attribute holding the dict.
+    held:
+        The dict attribute value.
+
+    Returns
+    -------
+    list[tuple[str, Any]]
+        ``(name, value)`` pairs in dict order; non-string keys render as ``repr(key)``.
+    """
+
+    items: list[tuple[str, Any]] = []
+    seen: set[str] = set()
+    for key, item in held.items():
+        rendered = key if isinstance(key, str) else repr(key)
+        if rendered not in seen:
+            seen.add(rendered)
+            items.append((f"{attr_name}.{rendered}", item))
+    return items
+
+
+def iter_module_held_plain_tensors(module: nn.Module) -> Iterator[tuple[str, torch.Tensor]]:
+    """Yield the plain tensors a module holds outside its parameter/buffer registries.
+
+    A module-held plain tensor exists before the forward and is read from module
+    state, so model preparation stamps it as a buffer source exactly like a
+    registered buffer (its reads then root at a ``buffer`` node instead of
+    dangling). Three holder shapes are recognized, one container level deep:
+
+    * a public tensor attribute (``name``);
+    * an item of a list/tuple attribute (``name.<index>``);
+    * a value of a dict attribute (``name.<key>``), e.g. timm's eval-mode
+      attention-bias cache ``attention_bias_cache["cpu"]`` filled by an earlier
+      forward. Non-string keys use ``repr(key)``; a key whose rendered name
+      repeats an earlier one in the same dict is skipped so addresses stay unique.
+
+    Private (``_``) and ``tl_`` attributes and Parameters are never yielded.
+    A tensor created inside ``forward`` is not module state at preparation time
+    and is never seen here.
+
+    Parameters
+    ----------
+    module:
+        Module whose own ``__dict__`` is scanned (no recursion into submodules).
+
+    Yields
+    ------
+    tuple[str, torch.Tensor]
+        Address suffix relative to the module, and the held tensor.
+    """
+
+    for attr_name, attr_val in module.__dict__.items():
+        if attr_name.startswith(("_", "tl_")):
+            continue
+        items: list[tuple[str, Any]]
+        if isinstance(attr_val, torch.Tensor):
+            items = [(attr_name, attr_val)]
+        elif isinstance(attr_val, (list, tuple)):
+            items = [(f"{attr_name}.{index}", item) for index, item in enumerate(attr_val)]
+        elif isinstance(attr_val, dict):
+            items = _dict_items_with_unique_names(attr_name, attr_val)
+        else:
+            continue
+        for name, value in items:
+            if isinstance(value, torch.Tensor) and not isinstance(value, nn.Parameter):
+                yield name, value
 
 
 def session_validated_buffer_address(trace: Trace, value: torch.Tensor) -> str | None:

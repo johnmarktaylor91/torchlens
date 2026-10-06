@@ -1087,12 +1087,13 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
     """Tag buffer tensors with ``_tl.address`` for later identification.
 
     Buffers are non-parameter tensors registered via ``register_buffer()`` or
-    stored as plain tensor attributes. They are tagged here so that when a
+    held as plain tensors in module state (attribute, list/tuple item or dict
+    value; see ``iter_module_held_plain_tensors``). They are tagged here so that when a
     buffer first appears as an argument to a wrapped torch function, the
     interceptor can call ``log_source_tensor`` with the correct address.
 
-    Uses ``named_buffers()`` for registered buffers and ``__dict__`` scan for
-    plain tensor attributes (faster than ``iter_accessible_attributes`` which
+    Uses ``named_buffers()`` for registered buffers and a ``__dict__`` scan for
+    module-held plain tensors (faster than ``iter_accessible_attributes`` which
     walks the MRO via ``dir()``). Tracks tagged tensor ids in
     ``_state._tagged_buffer_ids`` for fast cleanup.
 
@@ -1106,7 +1107,7 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
     registry (``trace._session_buffer_identity``) consulted by the buffer-rung
     storage-identity belt; the registry is reset here at session start.
     """
-    from .buffer_writes import register_session_buffer_stamp
+    from .buffer_writes import iter_module_held_plain_tensors, register_session_buffer_stamp
 
     _state._tagged_buffer_ids.clear()
     trace._session_buffer_inventory = []
@@ -1135,28 +1136,11 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
             ):
                 address = f"{module_addr}.{buf_name}" if module_addr else buf_name
                 _stamp(buf_tensor, address)
-        # Scan __dict__ for plain tensor attributes (not registered as buffers/params)
-        for attr_name, attr_val in submodule.__dict__.items():
-            if attr_name.startswith("_") or attr_name.startswith("tl_"):
-                continue
-            if (
-                isinstance(attr_val, torch.Tensor)
-                and not isinstance(attr_val, torch.nn.Parameter)
-                and get_buffer_address(attr_val) is None
-            ):
-                address = f"{module_addr}.{attr_name}" if module_addr else attr_name
-                _stamp(attr_val, address)
-            elif isinstance(attr_val, (list, tuple)):
-                for i, item in enumerate(attr_val):
-                    if (
-                        isinstance(item, torch.Tensor)
-                        and not isinstance(item, torch.nn.Parameter)
-                        and get_buffer_address(item) is None
-                    ):
-                        item_addr = (
-                            f"{module_addr}.{attr_name}.{i}" if module_addr else f"{attr_name}.{i}"
-                        )
-                        _stamp(item, item_addr)
+        # Module-held plain tensors (attribute, list/tuple item, dict value such as a
+        # warm-filled cache) are buffer sources too, never dangling reads.
+        for held_name, held_tensor in iter_module_held_plain_tensors(submodule):
+            if get_buffer_address(held_tensor) is None:
+                _stamp(held_tensor, f"{module_addr}.{held_name}" if module_addr else held_name)
     if unstampable:
         import warnings
 

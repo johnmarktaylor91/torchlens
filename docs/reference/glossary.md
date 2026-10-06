@@ -102,6 +102,10 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   parent, not as a parameter edge, so it is absent from that read's `params`. `draw()` shows
   such a Parameter as a grey cylinder labeled `parameter <name>` in its owning module's box, with
   an edge to each op that reads its pre-mutation value; Parameters never mutated get no node.
+  BatchNorm calls. A plain tensor a module already holds when the forward starts (a tensor
+  attribute, a list/tuple item, or a dict value such as a warm-filled attention-bias cache) is
+  captured as a buffer too, addressed `<module>.<attr>`, `<module>.<attr>.<index>`, or
+  `<module>.<attr>.<key>`.
 
 **GradFn**
 : A first-class live backward-autograd node captured during backward logging. Portable artifacts
