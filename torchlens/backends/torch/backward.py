@@ -4223,7 +4223,8 @@ def install_autograd_wrappers() -> None:
                 forward_op_count_at_trigger=forward_op_count_at_trigger,
             )
 
-        if _state._logging_enabled and _state._active_trace is not None:
+        active_trace, logging_enabled = _state.active_capture()
+        if logging_enabled and active_trace is not None:
             from ._autograd_grad_boundary import record_autograd_grad_boundary
 
             return record_autograd_grad_boundary(engine, original, args, kwargs)

@@ -21,9 +21,8 @@ Helpers from ``core`` are imported lazily (``core`` imports this module).
 
 from __future__ import annotations
 
-import contextlib
 import inspect
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -35,14 +34,16 @@ if TYPE_CHECKING:
     from ..data_classes.op import Op
     from ..data_classes.trace import Trace
 
-# Live-parameter substitutions of every enclosing replay (id(live param) -> leaf),
-# so a recorded autograd.grad nested inside another one's subgraph differentiates
-# with respect to the OUTER replay's leaves instead of disconnected copies.
-_ACTIVE_PARAM_SUBSTITUTIONS: list[dict[int, torch.Tensor]] = []
+_ParamLeaves = dict[int, torch.Tensor]
+"""``id(live parameter) -> replay leaf`` for the parameters a replay differentiates."""
 
 
 class AutogradGradReplayError(RuntimeError):
-    """The recorded subgraph of an autograd.grad boundary op cannot be replayed."""
+    """The recorded subgraph of an autograd.grad boundary op cannot be replayed.
+
+    Raised only inside a replay; the replay executor turns it into a failed
+    validation, so it never reaches a caller.
+    """
 
 
 def original_autograd_grad() -> Callable[..., Any]:
@@ -61,28 +62,7 @@ def original_autograd_grad() -> Callable[..., Any]:
     return original if original is not None else torch.autograd.grad
 
 
-@contextlib.contextmanager
-def _param_substitutions(mapping: dict[int, torch.Tensor]) -> Iterator[None]:
-    """Expose this replay's parameter leaves to nested recorder replays."""
-
-    _ACTIVE_PARAM_SUBSTITUTIONS.append(mapping)
-    try:
-        yield
-    finally:
-        _ACTIVE_PARAM_SUBSTITUTIONS.pop()
-
-
-def _merged_param_substitutions(own: dict[int, torch.Tensor]) -> dict[int, torch.Tensor]:
-    """Return enclosing replays' parameter leaves overlaid with this replay's own."""
-
-    merged: dict[int, torch.Tensor] = {}
-    for outer in _ACTIVE_PARAM_SUBSTITUTIONS:
-        merged.update(outer)
-    merged.update(own)
-    return merged
-
-
-def _substitute_params(value: Any, mapping: dict[int, torch.Tensor]) -> Any:
+def _substitute_params(value: Any, mapping: _ParamLeaves) -> Any:
     """Replace live parameter leaves in a nested argument by their replay leaves."""
 
     if isinstance(value, torch.Tensor):
@@ -120,11 +100,20 @@ def _write_path(container: Any, path: tuple[Any, ...], value: Any) -> Any:
     return assign_to_sequence_or_dict(container, path[0], child)
 
 
-def _slot_root(bound: inspect.BoundArguments, name: str, args_len: int) -> tuple[str, Any] | None:
+def _read_path(container: Any, path: tuple[Any, ...]) -> Any:
+    """Return the leaf of a nested argument at ``path``."""
+
+    value = container
+    for key in path:
+        value = value[key]
+    return value
+
+
+def _slot_root(bound: inspect.BoundArguments, name: str, args_len: int) -> tuple[str, Any]:
     """Return the ``(arg_domain, key)`` holding ``name`` in the original call."""
 
     if name not in bound.arguments:
-        return None
+        raise AutogradGradReplayError(f"autograd.grad call has no {name!r} argument")
     position = list(bound.signature.parameters).index(name)
     if position < args_len:
         return ("args", position)
@@ -144,6 +133,60 @@ def _parent_slots_under(layer: Op, slot: tuple[str, Any]) -> dict[tuple[Any, ...
     return found
 
 
+def _concrete_label(trace: Trace, label: str) -> str:
+    """Return the concrete op label a (possibly pass-less) graph label resolves to."""
+
+    from .core import _op_for_validation_label
+
+    return _op_for_validation_label(trace, label).label
+
+
+def _fresh_leaf(value: torch.Tensor, substitutions: _ParamLeaves, nested: bool) -> torch.Tensor:
+    """Return the differentiable leaf an autograd.grad input slot replays from.
+
+    A top-level replay always starts from a fresh leaf holding the saved value.
+    A replay nested inside another one's subgraph keeps an input that already
+    carries the enclosing replay's graph, so its gradients stay connected.
+    """
+
+    if id(value) in substitutions:
+        return substitutions[id(value)]
+    if nested and value.requires_grad:
+        return value
+    return value.detach().clone().requires_grad_(True)
+
+
+def _perturbed_node(replayed: torch.Tensor, perturbed: torch.Tensor) -> torch.Tensor:
+    """Return a replay node whose VALUE is the perturbed value, still tied to the graph.
+
+    A gradient never reads its root's value, only the root's dependence on the
+    inputs, so an additive offset would test nothing. The perturbed node is
+    ``replayed * ratio + offset``: at the replay point it equals ``perturbed``
+    exactly, and its derivative is scaled by ``ratio`` (``perturbed / saved``,
+    or 2 where the saved value is zero), so the perturbation reaches the
+    gradient through the recorded subgraph.
+    """
+
+    saved = replayed.detach()
+    perturbed = perturbed.to(device=saved.device, dtype=saved.dtype)
+    ratio = torch.where(saved != 0, perturbed / torch.where(saved != 0, saved, 1), 2.0)
+    offset = perturbed - saved * ratio
+    return replayed * ratio + offset
+
+
+def _select_output(op: Op, output: Any) -> Any:
+    """Pick the leaf one op represents out of its func's (possibly multi) return."""
+
+    from .core import _slice_recomputed_output_by_path
+
+    container_path = tuple(getattr(op, "container_path", ()) or ())
+    if container_path and not isinstance(output, torch.Tensor):
+        return _slice_recomputed_output_by_path(output, container_path)
+    if isinstance(output, (list, tuple)):
+        return output[op.multi_output_index]
+    return output
+
+
 class _SubgraphReplay:
     """Recompute the recorded forward subgraph between a boundary's inputs and roots.
 
@@ -158,12 +201,14 @@ class _SubgraphReplay:
         trace: Trace,
         input_values: dict[str, torch.Tensor],
         perturbed_inputs: frozenset[str],
-        param_leaves: dict[int, torch.Tensor],
+        param_leaves: _ParamLeaves,
+        nested: bool,
     ) -> None:
         self.trace = trace
         self.input_values = input_values
         self.perturbed_inputs = perturbed_inputs
         self.param_leaves = param_leaves
+        self.nested = nested
         self.values: dict[str, torch.Tensor] = {}
         self.depends: dict[str, bool] = {}
 
@@ -226,7 +271,7 @@ class _SubgraphReplay:
 
         slot_value = self.input_values[op.label]
         if not depends_upstream:
-            return _fresh_leaf(slot_value, self.param_leaves)
+            return _fresh_leaf(slot_value, self.param_leaves, self.nested)
         node = self._replay_op(op)
         if op.label in self.perturbed_inputs:
             return _perturbed_node(node, slot_value)
@@ -239,6 +284,23 @@ class _SubgraphReplay:
         if self.depends.get(parent.label, False):
             return self.values[parent.label]
         return None
+
+    def _splice_parents(self, op: Op, input_args: dict[str, Any]) -> None:
+        """Write replayed parents and parameter leaves into ``op``'s replay args."""
+
+        is_inplace = bool(getattr(op, "is_inplace", False))
+        for arg_domain in ("args", "kwargs"):
+            positions = (getattr(op, "parent_arg_positions", {}) or {}).get(arg_domain, {})
+            for key, parent_label in positions.items():
+                replayed = self._connected_value(parent_label)
+                if replayed is None:
+                    continue
+                if is_inplace:
+                    replayed = replayed.clone()
+                key_path = key if isinstance(key, tuple) else (key,)
+                input_args[arg_domain] = _write_path(input_args[arg_domain], key_path, replayed)
+        input_args["args"] = list(_substitute_params(list(input_args["args"]), self.param_leaves))
+        input_args["kwargs"] = _substitute_params(dict(input_args["kwargs"]), self.param_leaves)
 
     def _replay_op(self, op: Op) -> torch.Tensor:
         """Re-execute one op from its saved arguments with replayed parents spliced in."""
@@ -253,57 +315,113 @@ class _SubgraphReplay:
             raise AutogradGradReplayError(
                 f"subgraph op {op.label!r} has no saved arguments ({reason})"
             )
-        is_inplace = bool(getattr(op, "is_inplace", False))
-        for arg_domain in ("args", "kwargs"):
-            positions = (getattr(op, "parent_arg_positions", {}) or {}).get(arg_domain, {})
-            for key, parent_label in positions.items():
-                replayed = self._connected_value(parent_label)
-                if replayed is None:
-                    continue
-                if is_inplace:
-                    replayed = replayed.clone()
-                key_path = key if isinstance(key, tuple) else (key,)
-                container = input_args[arg_domain]
-                input_args[arg_domain] = _write_path(container, key_path, replayed)
-        input_args["args"] = list(_substitute_params(list(input_args["args"]), self.param_leaves))
-        input_args["kwargs"] = _substitute_params(dict(input_args["kwargs"]), self.param_leaves)
-        output = _execute_func_with_restored_state(op, input_args, [], op.label, False)
+        self._splice_parents(op, input_args)
+        if is_autograd_grad_recorder(op.func):
+            # A recorded grad inside this grad's subgraph: replay it against this
+            # replay's leaves so its gradients stay connected to them.
+            output = _select_output(op, _replay_boundary(op, input_args, [], self.param_leaves))
+        else:
+            output = _execute_func_with_restored_state(op, input_args, [], op.label, False)
         if not isinstance(output, torch.Tensor):
             raise AutogradGradReplayError(f"subgraph op {op.label!r} did not replay a tensor")
         return output
 
 
-def _fresh_leaf(value: torch.Tensor, substitutions: dict[int, torch.Tensor]) -> torch.Tensor:
-    """Return the differentiable leaf an autograd.grad input slot replays from.
+def _bind_inputs(
+    layer: Op,
+    trace: Trace,
+    inputs_value: Any,
+    inputs_slot: tuple[str, Any],
+    outer: _ParamLeaves | None,
+) -> tuple[Any, dict[tuple[Any, ...], str], dict[str, torch.Tensor], _ParamLeaves]:
+    """Split the ``inputs`` argument into op inputs and parameter leaves.
 
-    A top-level replay always starts from a fresh leaf holding the saved value.
-    A replay nested inside another one's subgraph keeps an input that already
-    carries the enclosing replay's graph, so its gradients stay connected.
+    Returns the inputs argument with fresh leaves at its non-op slots, the op
+    slots (path -> op label), each op input's slot value, and the parameter
+    leaves (an enclosing replay's leaves overlaid with this call's own).
     """
 
-    if id(value) in substitutions:
-        return substitutions[id(value)]
-    if _ACTIVE_PARAM_SUBSTITUTIONS and value.requires_grad:
-        return value
-    return value.detach().clone().requires_grad_(True)
+    substitutions: _ParamLeaves = dict(outer or {})
+    op_slots = {
+        path: _concrete_label(trace, label)
+        for path, label in _parent_slots_under(layer, inputs_slot).items()
+    }
+    input_values: dict[str, torch.Tensor] = {}
+    for path, tensor in _tensor_leaf_paths(inputs_value, ()):
+        if path in op_slots:
+            input_values[op_slots[path]] = tensor
+            continue
+        leaf = _fresh_leaf(tensor, substitutions, outer is not None)
+        inputs_value = _write_path(inputs_value, path, leaf)
+        if isinstance(tensor, torch.nn.Parameter):
+            substitutions[id(tensor)] = leaf
+    return inputs_value, op_slots, input_values, substitutions
 
 
-def _perturbed_node(replayed: torch.Tensor, perturbed: torch.Tensor) -> torch.Tensor:
-    """Return a replay node whose VALUE is the perturbed value, still tied to the graph.
+def _replayed_outputs(
+    replay: _SubgraphReplay,
+    layer: Op,
+    outputs_value: Any,
+    outputs_slot: tuple[str, Any],
+    perturbed: frozenset[str],
+) -> Any:
+    """Return the ``outputs`` argument with each recorded root replaced by its replay."""
 
-    A gradient never reads its root's value, only the root's dependence on the
-    inputs, so an additive offset would test nothing. The perturbed node is
-    ``replayed * ratio + offset``: at the replay point it equals ``perturbed``
-    exactly, and its derivative is scaled by ``ratio`` (``perturbed / saved``,
-    or 2 where the saved value is zero), so the perturbation reaches the
-    gradient through the recorded subgraph.
-    """
+    from ..utils.tensor_utils import tensor_nanequal
 
-    saved = replayed.detach()
-    perturbed = perturbed.to(device=saved.device, dtype=saved.dtype)
-    ratio = torch.where(saved != 0, perturbed / torch.where(saved != 0, saved, 1), 2.0)
-    offset = perturbed - saved * ratio
-    return replayed * ratio + offset
+    for path, root_label in _parent_slots_under(layer, outputs_slot).items():
+        label = replay.resolve(root_label).label
+        replayed_root = replay.value(label)
+        saved_root = _read_path(outputs_value, path)
+        if label in perturbed:
+            replayed_root = _perturbed_node(replayed_root, saved_root)
+        elif not perturbed and not tensor_nanequal(
+            replayed_root.detach(), saved_root.detach(), allow_tolerance=True
+        ):
+            raise AutogradGradReplayError(
+                f"replayed autograd.grad root {label!r} does not reproduce its saved value"
+            )
+        outputs_value = _write_path(outputs_value, path, replayed_root)
+    return outputs_value
+
+
+def _replay_boundary(
+    layer: Op,
+    input_args: dict[str, Any],
+    layers_to_perturb: list[str],
+    outer: _ParamLeaves | None,
+) -> tuple[Any, ...]:
+    """Replay one autograd.grad boundary op; ``outer`` is an enclosing replay's leaves."""
+
+    from .._state import pause_logging
+
+    trace = layer._source_trace
+    if trace is None:
+        raise AutogradGradReplayError("autograd.grad boundary op has no source trace")
+    args = list(input_args["args"])
+    bound = grad_signature(original_autograd_grad()).bind(*args, **dict(input_args["kwargs"]))
+    inputs_value, op_slots, input_values, param_leaves = _bind_inputs(
+        layer, trace, bound.arguments["inputs"], _slot_root(bound, "inputs", len(args)), outer
+    )
+    perturbed = frozenset(_concrete_label(trace, label) for label in layers_to_perturb)
+    replay = _SubgraphReplay(trace, input_values, perturbed, param_leaves, outer is not None)
+    with pause_logging(), torch.enable_grad():
+        bound.arguments["outputs"] = _replayed_outputs(
+            replay,
+            layer,
+            bound.arguments["outputs"],
+            _slot_root(bound, "outputs", len(args)),
+            perturbed,
+        )
+        for path, label in op_slots.items():
+            inputs_value = _write_path(inputs_value, path, replay.value(label))
+        bound.arguments["inputs"] = inputs_value
+        grads = original_autograd_grad()(*bound.args, **bound.kwargs)
+    if outer is not None:
+        # Inside an enclosing replay the gradients stay graph-connected, as the
+        # recorded create_graph call's outputs were.
+        return tuple(grads)
+    return tuple(g.detach() if isinstance(g, torch.Tensor) else g for g in grads)
 
 
 def replay_autograd_grad_boundary(
@@ -335,80 +453,7 @@ def replay_autograd_grad_boundary(
         the saved roots on a plain replay.
     """
 
-    from .._state import pause_logging
-    from ..utils.tensor_utils import tensor_nanequal
-    from .core import _op_for_validation_label
-
-    trace = layer._source_trace
-    if trace is None:
-        raise AutogradGradReplayError("autograd.grad boundary op has no source trace")
-    args = list(input_args["args"])
-    kwargs = dict(input_args["kwargs"])
-    bound = grad_signature(original_autograd_grad()).bind(*args, **kwargs)
-    outputs_slot = _slot_root(bound, "outputs", len(args))
-    inputs_slot = _slot_root(bound, "inputs", len(args))
-    if outputs_slot is None or inputs_slot is None:
-        raise AutogradGradReplayError("autograd.grad call has no outputs/inputs argument")
-
-    nested = bool(_ACTIVE_PARAM_SUBSTITUTIONS)
-    outer = _merged_param_substitutions({})
-    perturbed = frozenset(
-        _op_for_validation_label(trace, label).label for label in layers_to_perturb
-    )
-    input_parents = {
-        path: _op_for_validation_label(trace, label).label
-        for path, label in _parent_slots_under(layer, inputs_slot).items()
-    }
-    input_values: dict[str, torch.Tensor] = {}
-    param_leaves: dict[int, torch.Tensor] = {}
-    inputs_value = bound.arguments["inputs"]
-    input_paths = _tensor_leaf_paths(inputs_value, ())
-    for path, tensor in input_paths:
-        if path in input_parents:
-            input_values[input_parents[path]] = tensor
-        else:
-            leaf = _fresh_leaf(tensor, outer)
-            inputs_value = _write_path(inputs_value, path, leaf)
-            if isinstance(tensor, torch.nn.Parameter):
-                param_leaves[id(tensor)] = leaf
-    param_leaves = _merged_param_substitutions(param_leaves)
-
-    replay = _SubgraphReplay(trace, input_values, perturbed, param_leaves)
-    outputs_value = bound.arguments["outputs"]
-    with pause_logging(), torch.enable_grad(), _param_substitutions(param_leaves):
-        for path, root_label in _parent_slots_under(layer, outputs_slot).items():
-            label = _op_for_validation_label(trace, root_label).label
-            replayed_root = replay.value(label)
-            saved_root = _read_path(outputs_value, path)
-            if label in perturbed:
-                replayed_root = _perturbed_node(replayed_root, saved_root)
-            elif not perturbed and not tensor_nanequal(
-                replayed_root.detach(), saved_root.detach(), allow_tolerance=True
-            ):
-                raise AutogradGradReplayError(
-                    f"replayed autograd.grad root {label!r} does not reproduce its saved value"
-                )
-            outputs_value = _write_path(outputs_value, path, replayed_root)
-        for path, _tensor in input_paths:
-            if path in input_parents:
-                inputs_value = _write_path(inputs_value, path, replay.value(input_parents[path]))
-        bound.arguments["outputs"] = outputs_value
-        bound.arguments["inputs"] = inputs_value
-        grads = original_autograd_grad()(*bound.args, **bound.kwargs)
-    if nested:
-        # Inside an enclosing replay the gradients stay graph-connected, as the
-        # recorded create_graph call's outputs were.
-        return tuple(grads)
-    return tuple(g.detach() if isinstance(g, torch.Tensor) else g for g in grads)
-
-
-def _read_path(container: Any, path: tuple[Any, ...]) -> Any:
-    """Return the leaf of a nested argument at ``path``."""
-
-    value = container
-    for key in path:
-        value = value[key]
-    return value
+    return _replay_boundary(layer, input_args, layers_to_perturb, None)
 
 
 def execute_replay_func(layer: Op, input_args: dict[str, Any], layers_to_perturb: list[str]) -> Any:
