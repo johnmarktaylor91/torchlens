@@ -104,3 +104,59 @@ def test_default_last_layer_reads_final_norm(stack: dict[str, Any]) -> None:
         stack["log_pos"], "model.norm", negative_log=stack["log_neg"], layer=1
     )
     _assert_same(payload["steering_vector"], direct)
+
+
+def test_layer_object_site_resolves_in_negative_log(stack: dict[str, Any]) -> None:
+    """A Layer-object site reads the negative trace's layer, not the positive one."""
+
+    direct = dialz.SteeringVector.train(
+        stack["steering_model"], stack["dataset"], hidden_layers=[0], batch_size=1
+    )
+    # dialz wraps each decoder layer; its output op is one pass of a two-pass layer.
+    site = stack["log_pos"]["model.layers.0"]
+    payload = tl.bridge.dialz.vector(
+        stack["log_pos"],
+        site,
+        negative_log=stack["log_neg"],
+        layer=0,
+    )
+    _assert_same(payload["steering_vector"], direct)
+
+
+def test_padded_unequal_prompts_match_batched_train(stack: dict[str, Any]) -> None:
+    """Padded unequal prompts read the last real token, as dialz does."""
+
+    # dialz loads its own tokenizer with pad_token_id = 0 and the default side.
+    tok = transformers.AutoTokenizer.from_pretrained(_TINY)
+    tok.pad_token_id = 0
+    model = stack["steering_model"].model
+    pairs = [(f"I love {w}", f"I really hate {w}") for w in _WORDS]
+    texts = [text for pair in pairs for text in pair]
+    longest = max(len(tok(text).input_ids) for text in texts)
+    assert len({len(tok(text).input_ids) for text in texts}) > 1
+    dataset = dialz.Dataset()
+    for positive, negative in pairs:
+        dataset.add_entry(positive, negative)
+
+    def trace(prompts: list[str]) -> Any:
+        enc = tok(prompts, return_tensors="pt", padding="max_length", max_length=longest)
+        kwargs = {
+            "input_ids": enc.input_ids.to(model.device),
+            "attention_mask": enc.attention_mask.to(model.device),
+        }
+        capture = tl.options.CaptureOptions(layers_to_save="all")
+        return tl.trace(model, (), input_kwargs=kwargs, capture=capture)
+
+    log_pos = trace([p for p, _ in pairs])
+    log_neg = trace([n for _, n in pairs])
+    try:
+        direct = dialz.SteeringVector.train(
+            stack["steering_model"], dataset, hidden_layers=[0], batch_size=len(texts)
+        )
+        payload = tl.bridge.dialz.vector(log_pos, "model.layers.0", negative_log=log_neg, layer=0)
+    finally:
+        log_pos.cleanup()
+        log_neg.cleanup()
+    np.testing.assert_allclose(
+        payload["steering_vector"].directions[0], direct.directions[0], atol=5e-3, rtol=0
+    )

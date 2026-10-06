@@ -6,8 +6,8 @@ own forward passes: read one token per prompt, then apply an aggregator (default
 ``steering_vectors.aggregators.mean_aggregator()``) to the positive and negative
 rows.
 
-The private helper ``_contrastive_rows`` is shared with the repeng and dialz
-bridges, which train from the same positive/negative row layout.
+The row reading is shared with the repeng and dialz bridges
+(``torchlens.bridge._contrastive``), which train from the same layout.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from typing import Any
 
 import torch
 
-from ._utils import out_at
+from ._contrastive import _contrastive_rows
 
 
 def vector(
@@ -27,6 +27,8 @@ def vector(
     *,
     negative_log: Any | None = None,
     read_token_index: int | Sequence[int] | None = -1,
+    attention_mask: torch.Tensor | None = None,
+    negative_attention_mask: torch.Tensor | None = None,
     trainer: Any | None = None,
     layer: int | None = None,
     layer_type: str = "decoder_block",
@@ -47,12 +49,21 @@ def vector(
         when ``negative_log`` is given.
     negative_log:
         Optional TorchLens ``Trace`` of the negative prompts. Contrastive prompts
-        usually live in two traces; without it both sites resolve in ``log``.
+        usually live in two traces; without it both sites resolve in ``log``. A
+        layer-object site is re-resolved in ``negative_log`` by its label.
     read_token_index:
         Token position read from every prompt before the trainer runs (default
         ``-1``, the last token, as in ``train_steering_vector``). A sequence gives
-        one position per prompt (for padded batches); ``None`` passes the outs
-        unsliced.
+        one position per prompt; ``None`` passes the outs unsliced.
+    attention_mask:
+        ``[n_prompts, n_tokens]`` mask of the positive prompts (1 for real
+        tokens). Read from the trace's saved ``attention_mask`` input when
+        omitted. With a mask, ``read_token_index`` counts within each prompt's
+        unpadded tokens (``-1`` is the last real token), so right- or
+        left-padded batches of unequal-length prompts read the right token.
+    negative_attention_mask:
+        Mask of the negative prompts. Defaults to ``attention_mask`` when both
+        sites live in ``log``, else to ``negative_log``'s saved mask.
     trainer:
         Aggregator called as ``trainer(positive_rows, negative_rows, **kwargs)``
         with ``[n_prompts, hidden]`` rows. Defaults to
@@ -79,7 +90,8 @@ def vector(
     ImportError
         If steering-vectors is unavailable.
     ValueError
-        If no negative activations are given or the rows do not line up.
+        If no negative activations are given, the rows do not line up, or the
+        positive and negative rows are identical.
     """
 
     try:
@@ -95,6 +107,8 @@ def vector(
         negative_site,
         negative_log=negative_log,
         read_token_index=read_token_index,
+        attention_mask=attention_mask,
+        negative_attention_mask=negative_attention_mask,
     )
     train = trainer if trainer is not None else steering_module.mean_aggregator()
     result = train(positive, negative, **kwargs)
@@ -108,104 +122,6 @@ def vector(
         "positive": positive,
         "negative": negative,
     }
-
-
-def _contrastive_rows(
-    log: Any,
-    positive_site: Any,
-    negative_site: Any | None,
-    *,
-    negative_log: Any | None,
-    read_token_index: int | Sequence[int] | None,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """Return aligned ``[n_prompts, hidden]`` positive and negative rows.
-
-    Parameters
-    ----------
-    log:
-        Trace holding the positive site.
-    positive_site:
-        Positive site.
-    negative_site:
-        Negative site; defaults to ``positive_site`` when ``negative_log`` is set.
-    negative_log:
-        Optional trace holding the negative site.
-    read_token_index:
-        Token position(s) to read, or ``None`` for unsliced outs.
-
-    Returns
-    -------
-    tuple[torch.Tensor, torch.Tensor]
-        Positive and negative rows, detached.
-
-    Raises
-    ------
-    ValueError
-        If no negative site is given, or the two sides disagree in shape.
-    """
-
-    if negative_site is None:
-        if negative_log is None:
-            raise ValueError(
-                "Contrastive steering needs negative activations: pass negative_site=, "
-                "or negative_log= (a trace of the negative prompts; the site then "
-                "defaults to positive_site)."
-            )
-        negative_site = positive_site
-    negative_trace = log if negative_log is None else negative_log
-    positive = _read_rows(out_at(log, positive_site), read_token_index, "positive")
-    negative = _read_rows(out_at(negative_trace, negative_site), read_token_index, "negative")
-    if positive.shape != negative.shape:
-        raise ValueError(
-            f"Positive rows {tuple(positive.shape)} and negative rows "
-            f"{tuple(negative.shape)} must match: trace one negative prompt per "
-            "positive prompt, padded to the same layout."
-        )
-    return positive, negative
-
-
-def _read_rows(
-    out: torch.Tensor, read_token_index: int | Sequence[int] | None, side: str
-) -> torch.Tensor:
-    """Slice one token per prompt out of a ``[n, tokens, hidden]`` out.
-
-    Parameters
-    ----------
-    out:
-        Saved out tensor.
-    read_token_index:
-        Token position, per-prompt positions, or ``None`` for no slicing.
-    side:
-        ``"positive"`` or ``"negative"`` for error messages.
-
-    Returns
-    -------
-    torch.Tensor
-        Detached rows.
-
-    Raises
-    ------
-    ValueError
-        If the out has too few dimensions or the positions do not match the rows.
-    """
-
-    out = out.detach()
-    if read_token_index is None:
-        return out
-    if out.dim() < 3:
-        raise ValueError(
-            f"The {side} out has shape {tuple(out.shape)}; reading a token needs "
-            "[n_prompts, n_tokens, hidden]. Pass read_token_index=None for outs "
-            "that are already one row per prompt."
-        )
-    if isinstance(read_token_index, int):
-        return out[:, read_token_index]
-    indices = torch.as_tensor(list(read_token_index), dtype=torch.long, device=out.device)
-    if indices.numel() != out.shape[0]:
-        raise ValueError(
-            f"read_token_index lists {indices.numel()} positions for {out.shape[0]} {side} prompts."
-        )
-    return out[torch.arange(out.shape[0], device=out.device), indices]
 
 
 __all__ = ["vector"]

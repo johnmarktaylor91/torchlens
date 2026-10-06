@@ -122,3 +122,76 @@ def test_missing_negative_is_refused(stack: dict[str, Any]) -> None:
 
     with pytest.raises(ValueError, match="negative_log="):
         tl.bridge.steering_vectors.vector(stack["log_pos"], "model.layers.1")
+
+
+def test_layer_object_site_resolves_in_negative_log(stack: dict[str, Any]) -> None:
+    """A Layer-object site is re-resolved in negative_log, not reused from log."""
+
+    site = stack["log_pos"]["model.layers.1"]
+    assert hasattr(site, "out") and hasattr(site, "layer_label")
+    direct = _direct(stack).layer_activations[1]
+    payload = tl.bridge.steering_vectors.vector(
+        stack["log_pos"], site, negative_log=stack["log_neg"]
+    )
+    assert torch.equal(payload["vector"], direct)
+    assert not torch.equal(payload["positive"], payload["negative"])
+
+
+def test_identical_rows_are_refused(stack: dict[str, Any]) -> None:
+    """Identical positive and negative rows (a zero vector) are refused."""
+
+    with pytest.raises(ValueError, match="identical"):
+        tl.bridge.steering_vectors.vector(
+            stack["log_pos"], "model.layers.1", negative_log=stack["log_pos"]
+        )
+
+
+def test_padded_unequal_prompts_match_batched_package(stack: dict[str, Any]) -> None:
+    """Right-padded batches read the last real token, as the package does."""
+
+    tok = transformers.AutoTokenizer.from_pretrained(_TINY, padding_side="right")
+    if tok.pad_token_id is None:
+        tok.pad_token = tok.eos_token
+    pairs = [(f"I love {w}", f"I really hate {w}") for w in _WORDS]
+    lengths = {len(tok(text).input_ids) for pair in pairs for text in pair}
+    assert len(lengths) > 1
+
+    def trace(prompts: list[str]) -> tuple[Any, torch.Tensor]:
+        enc = tok(prompts, return_tensors="pt", padding=True)
+        assert bool((enc.attention_mask == 0).any())
+        kwargs = {"input_ids": enc.input_ids, "attention_mask": enc.attention_mask}
+        capture = tl.options.CaptureOptions(layers_to_save="all")
+        return tl.trace(stack["model"], (), input_kwargs=kwargs, capture=capture), (
+            enc.attention_mask
+        )
+
+    log_pos, mask_pos = trace([p for p, _ in pairs])
+    log_neg, mask_neg = trace([n for _, n in pairs])
+    try:
+        direct = sv.train_steering_vector(
+            stack["model"], tok, pairs, layers=[1], read_token_index=-1, batch_size=len(pairs)
+        ).layer_activations[1]
+        captured = tl.bridge.steering_vectors.vector(
+            log_pos, "model.layers.1", negative_log=log_neg
+        )
+        explicit = tl.bridge.steering_vectors.vector(
+            log_pos,
+            "model.layers.1",
+            negative_log=log_neg,
+            attention_mask=mask_pos,
+            negative_attention_mask=mask_neg,
+        )
+        unmasked = tl.bridge.steering_vectors.vector(
+            log_pos,
+            "model.layers.1",
+            negative_log=log_neg,
+            attention_mask=torch.ones_like(mask_pos),
+            negative_attention_mask=torch.ones_like(mask_neg),
+        )
+    finally:
+        log_pos.cleanup()
+        log_neg.cleanup()
+    torch.testing.assert_close(captured["vector"], direct, atol=1e-5, rtol=0)
+    assert torch.equal(captured["vector"], explicit["vector"])
+    # Reading position -1 of the padded batch picks pad tokens and drifts away.
+    assert not torch.allclose(unmasked["vector"], direct, atol=1e-5, rtol=0)

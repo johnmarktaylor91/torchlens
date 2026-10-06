@@ -186,7 +186,9 @@ gradcam = ["grad-cam~=1.5"]
 # [lit,shap] resolves. Keep this pin and the all-stretch copy identical.
 shap = ["shap>=0.45.1,<1"]
 inseq = ["inseq~=0.6"]
-steering = ["steering-vectors~=0.1"]
+# steering-vectors floor = the tested line (0.12.2, tests/test_bridge_real_steering_vectors.py);
+# the bridge calls steering_vectors.mean_aggregator, absent from early 0.x releases.
+steering = ["steering-vectors~=0.12"]
 repeng = ["repeng~=0.4"]
 # D05 extras audit (2026-09-02): dialz 0.2 and 1.x import IPython.display at import
 # time (dialz/visualize.py) without declaring ipython, so `torchlens[dialz]` installed
@@ -231,7 +233,7 @@ all-stretch = [
     "grad-cam~=1.5",
     "shap>=0.45.1,<1",
     "inseq~=0.6",
-    "steering-vectors~=0.1",
+    "steering-vectors~=0.12",
     "repeng~=0.4",
     # dialz: ipython rider + 3.13 exclusion, see the dialz extra above.
     "dialz>=0.2,<2; python_version < '3.13'",

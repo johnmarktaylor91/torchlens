@@ -13,8 +13,9 @@ import inspect
 from collections.abc import Sequence
 from typing import Any
 
-from .repeng import _interleave, _model_type, _read_directions
-from .steering_vectors import _contrastive_rows
+import torch
+
+from ._contrastive import _contrastive_rows, _interleave, _model_type, _read_directions
 
 
 def vector(
@@ -25,6 +26,8 @@ def vector(
     layer: int,
     negative_log: Any | None = None,
     read_token_index: int | Sequence[int] | None = -1,
+    attention_mask: torch.Tensor | None = None,
+    negative_attention_mask: torch.Tensor | None = None,
     method: str | None = None,
     model_type: str | None = None,
 ) -> dict[str, Any]:
@@ -46,11 +49,21 @@ def vector(
         Layer index the direction is keyed by in ``SteeringVector.directions``;
         ``SteeringModel.set_control`` applies it to that decoder layer.
     negative_log:
-        Optional TorchLens ``Trace`` of the negative prompts.
+        Optional TorchLens ``Trace`` of the negative prompts. A layer-object
+        site is re-resolved there by its label.
     read_token_index:
         Token position read per prompt (default ``-1``, the last token, which is
         what ``SteeringVector.train`` reads); a sequence gives one position per
         prompt; ``None`` passes ``[n_prompts, hidden]`` outs unsliced.
+    attention_mask:
+        ``[n_prompts, n_tokens]`` mask of the positive prompts (1 for real
+        tokens). Read from the trace's saved ``attention_mask`` input when
+        omitted. With a mask, ``read_token_index`` counts within each prompt's
+        unpadded tokens (``-1`` is the last real token), so right- or
+        left-padded batches of unequal-length prompts read the right token.
+    negative_attention_mask:
+        Mask of the negative prompts. Defaults to ``attention_mask`` when both
+        sites live in ``log``, else to ``negative_log``'s saved mask.
     method:
         dialz training method. Defaults to the installed dialz's own default
         (``"pca"`` in dialz 1.x, ``"pca_diff"`` in 0.2; both spellings are
@@ -70,8 +83,8 @@ def vector(
     ImportError
         If dialz is unavailable.
     ValueError
-        If no negative activations are given, the rows do not line up, the
-        method is unknown, or no model type can be found.
+        If no negative activations are given, the rows do not line up or are
+        identical, the method is unknown, or no model type can be found.
     """
 
     try:
@@ -87,6 +100,8 @@ def vector(
         negative_site,
         negative_log=negative_log,
         read_token_index=read_token_index,
+        attention_mask=attention_mask,
+        negative_attention_mask=negative_attention_mask,
     )
     chosen = method if method is not None else _default_method(dialz_module)
     direction = _read_directions(

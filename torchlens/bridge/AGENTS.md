@@ -95,19 +95,27 @@ optional dependency.
 - Contrastive steering family (`steering_vectors.py`, `repeng.py`, `dialz.py`):
   each trains the package's own vector from saved activations, never by
   re-running the model. Shared signature: `(log, positive_site,
-  negative_site=None, *, negative_log=None, read_token_index=-1, ...)`; the
-  negative prompts usually live in a second trace (`negative_log=`, the site
-  then defaults to `positive_site`), and one token per prompt is read before
-  training (`-1` = last; a sequence = one index per prompt; `None` = unsliced
-  `[n, hidden]` outs). Private shared helpers: `steering_vectors._contrastive_rows`,
-  `repeng._read_directions` / `_interleave` / `_model_type`. On HF decoders
+  negative_site=None, *, negative_log=None, read_token_index=-1,
+  attention_mask=None, negative_attention_mask=None, ...)`; the negative
+  prompts usually live in a second trace (`negative_log=`, the site then
+  defaults to `positive_site`; a layer-object site is re-resolved there by its
+  `layer_label`), and one token per prompt is read before training (`-1` =
+  last; a sequence = one index per prompt; `None` = unsliced `[n, hidden]`
+  outs). Padding: each side's mask is the explicit one or the trace's saved
+  `attention_mask` input; with a mask, indices count within each prompt's
+  unpadded tokens (steering-vectors' `adjust_read_indices_for_padding`), so
+  `-1` is the last real token as repeng and dialz read it. Identical positive
+  and negative rows (an all-zero vector) are refused. Private shared helpers
+  live in `_contrastive.py`. On HF decoders
   trace with `config.use_cache = False`, or `"model.layers.<i>"` is ambiguous
   (hidden state plus KV-cache outputs).
   - `steering_vectors.py`: `vector(..., trainer=None, layer=None,
     layer_type="decoder_block")` (extra `torchlens[steering]`); the default
     trainer is `steering_vectors.mean_aggregator()`; `layer=` adds a real
     `SteeringVector` under `steering_vector`. Bit-identical to
-    `train_steering_vector(..., read_token_index=-1, batch_size=1)`.
+    `train_steering_vector(..., read_token_index=-1, batch_size=1)`; padded
+    batches match the package's batched run when the mask is known. Pinned
+    to the tested line, `steering-vectors~=0.12`.
   - `repeng.py`: `control_vector(..., layer, method="pca_diff",
     model_type=None)` (extra `torchlens[repeng]`) replicates
     `repeng.extract.read_representations` (PCA, sign rule, in-place centring
