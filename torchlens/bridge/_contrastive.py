@@ -205,10 +205,10 @@ def _read_rows(
             "[n_prompts, n_tokens, hidden]. Pass read_token_index=None for outs "
             "that are already one row per prompt."
         )
-    raw = [read_token_index] if isinstance(read_token_index, int) else list(read_token_index)
-    indices = torch.as_tensor(raw, dtype=torch.long, device=out.device)
-    if indices.numel() == 1:
-        indices = indices.expand(out.shape[0])
+    if isinstance(read_token_index, int):
+        indices = torch.full((out.shape[0],), read_token_index, dtype=torch.long, device=out.device)
+    else:
+        indices = torch.as_tensor(list(read_token_index), dtype=torch.long, device=out.device)
     if indices.numel() != out.shape[0]:
         raise ValueError(
             f"read_token_index lists {indices.numel()} positions for {out.shape[0]} {side} prompts."

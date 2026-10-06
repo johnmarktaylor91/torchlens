@@ -112,9 +112,11 @@ def test_layer_object_site_resolves_in_negative_log(stack: dict[str, Any]) -> No
     direct = dialz.SteeringVector.train(
         stack["steering_model"], stack["dataset"], hidden_layers=[0], batch_size=1
     )
+    # dialz wraps each decoder layer, so take the one record the string resolves to.
+    site = stack["log_pos"].resolve_sites("model.layers.0", max_fanout=1).first()
     payload = tl.bridge.dialz.vector(
         stack["log_pos"],
-        stack["log_pos"]["model.layers.0"],
+        site,
         negative_log=stack["log_neg"],
         layer=0,
     )

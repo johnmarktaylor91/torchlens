@@ -349,6 +349,40 @@ def test_steering_mismatched_rows_refused(monkeypatch: pytest.MonkeyPatch) -> No
         )
 
 
+def test_contrastive_rows_read_last_real_token_under_padding() -> None:
+    """With a mask, -1 is each prompt's last real token on either padding side."""
+
+    from torchlens.bridge._contrastive import _read_rows
+
+    out = torch.arange(2 * 4 * 1, dtype=torch.float32).reshape(2, 4, 1)
+    right = torch.tensor([[1, 1, 0, 0], [1, 1, 1, 1]])
+    left = torch.tensor([[0, 0, 1, 1], [1, 1, 1, 1]])
+    assert _read_rows(out, -1, right, "positive").flatten().tolist() == [1.0, 7.0]
+    assert _read_rows(out, -1, left, "positive").flatten().tolist() == [3.0, 7.0]
+    assert _read_rows(out, 0, left, "positive").flatten().tolist() == [2.0, 4.0]
+    assert _read_rows(out, -1, None, "positive").flatten().tolist() == [3.0, 7.0]
+    with pytest.raises(ValueError, match="attention_mask has shape"):
+        _read_rows(out, -1, right[:, :3], "positive")
+    with pytest.raises(ValueError, match="no unmasked token"):
+        _read_rows(out, -1, torch.zeros(2, 4, dtype=torch.long), "positive")
+
+
+def test_contrastive_rows_refuse_identical_sides() -> None:
+    """Identical positive and negative rows would train an all-zero vector."""
+
+    from torchlens.bridge._contrastive import _contrastive_rows
+
+    same = torch.randn(3, 4, 2)
+    with pytest.raises(ValueError, match="identical"):
+        _contrastive_rows(
+            _FakeLog([]),
+            _FakeLayer("p", out=same),
+            _FakeLayer("n", out=same.clone()),
+            negative_log=None,
+            read_token_index=-1,
+        )
+
+
 def test_repeng_pca_center_matches_repeng_in_place_centering(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
