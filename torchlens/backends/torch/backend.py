@@ -361,7 +361,7 @@ class TorchBackend:
         _prepare_model_session(cast(Any, session), cast(torch.nn.Module, model), optimizer)
         # Last, while wrapped: point module-held pristine torch functions at the
         # wrappers so this capture needs no rescue forward; undone at cleanup.
-        rebind_held_torch_refs(cast("Trace", session), cast(torch.nn.Module, model))
+        rebind_held_torch_refs(session, cast(torch.nn.Module, model))
         return model
 
     def cleanup_model_session(self, session: object, prepared_model: object) -> None:
@@ -381,7 +381,7 @@ class TorchBackend:
             """Run the legacy model teardown at its historical call site."""
 
             try:
-                restore_held_torch_refs(cast("Trace", session))
+                restore_held_torch_refs(session)
             finally:
                 uninstall_buffer_write_tracker(cast("Trace", session))
                 _cleanup_model_session(
@@ -1220,10 +1220,6 @@ class TorchBackend:
         # Clean up model session state and strip TorchLens metadata from any
         # partially-constructed tensor entries to avoid stale references (#110).
         from ...partial import PartialTrace, _register_failed_capture
-
-        # The partial-trace scrub below drops runtime-only trace fields, the
-        # held-reference undo list among them: restore the user's holders first.
-        restore_held_torch_refs(cast("Trace", session))
 
         # Stamp the failed forward's ACTUAL buffer-write record (value-changing
         # journal events) on the exception while the journal is still live —

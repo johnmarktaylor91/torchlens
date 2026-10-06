@@ -327,23 +327,87 @@ def test_transformers_activation_built_before_capture_needs_no_rescue(
 def test_held_reference_is_restored_when_the_forward_raises(
     raw: types.SimpleNamespace,
 ) -> None:
-    """The undo runs on a failed capture too."""
+    """The undo runs on a failed capture too.
+
+    Partial and closure holders are used because a failed capture also
+    releases the model, and release normalizes direct attributes and builtin
+    containers to the live wrappers (a separate, documented behavior).
+    """
+
+    gelu = raw.gelu
+
+    def invoke(v: torch.Tensor) -> torch.Tensor:
+        return gelu(v)
 
     class Boom(nn.Module):
         def __init__(self) -> None:
             super().__init__()
-            self.act = raw.gelu
+            self.act = functools.partial(raw.gelu)
+            self.helper = invoke
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
-            self.act(x)
+            self.helper(self.act(x))
             raise RuntimeError("boom")
 
     model = Boom()
+    held = model.act
     wrap_torch()
     with pytest.raises(RuntimeError, match="boom"):
         tl.trace(model, torch.randn(2, 4))
 
-    assert model.act is raw.gelu
+    assert model.act is held
+    assert held.func is raw.gelu
+    assert invoke.__closure__ is not None
+    assert invoke.__closure__[0].cell_contents is gelu
+
+
+def test_aliased_holders_stay_aliased_during_the_capture(raw: types.SimpleNamespace) -> None:
+    """One rebuilt replacement per original: ``a is b`` holds inside the forward."""
+
+    class Aliased(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.a = self.b = functools.partial(raw.gelu)
+            self.seen: list[bool] = []
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            self.seen.append(self.a is self.b)
+            return self.b(self.a(x))
+
+    model = Aliased()
+    held = model.a
+    wrap_torch()
+    trace = tl.trace(model, torch.randn(2, 4))
+
+    assert model.seen == [True]
+    assert [op.func_name for op in trace.ops].count("gelu") == 2
+    assert model.a is held and model.b is held
+
+
+def test_forward_time_holder_edits_are_never_clobbered(raw: types.SimpleNamespace) -> None:
+    """Cleanup restores only locations that still hold what the rebind installed."""
+
+    class Editing(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.items = [raw.gelu]
+            self.table = {"op": raw.tanh, "gone": raw.relu}
+            self.act = raw.gelu
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            y = self.table["op"](self.items[0](x))
+            self.items.clear()
+            del self.table["gone"]
+            self.act = torch.sigmoid
+            return y
+
+    model = Editing()
+    wrap_torch()
+    tl.trace(model, torch.randn(2, 4))
+
+    assert model.items == []
+    assert set(model.table) == {"op"} and model.table["op"] is raw.tanh
+    assert model.act is torch.sigmoid
 
 
 def test_iql_output_activation_returned_by_the_root_is_rescued(

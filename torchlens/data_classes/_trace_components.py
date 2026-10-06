@@ -525,9 +525,6 @@ TRACE_EXTERNAL_WRITE_EXEMPTIONS: dict[str, str] = {
     "_higher_order_grad_fn_terminals": (
         "torch backward: differentiable-pass terminal queue; popped by the rewalk that consumes it"
     ),
-    "_held_torch_ref_rebinds": (
-        "torch model prep: capture-scoped held torch-ref rebind undo list; popped at session cleanup"
-    ),
     "_module_boundary_adoptions": (
         "torch model prep: module-boundary (entry and exit) adoption queue; popped by its postprocess step "
         "and scrub-declared"
