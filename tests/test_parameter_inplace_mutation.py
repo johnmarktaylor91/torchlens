@@ -18,7 +18,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.backends.torch import wrappers
+from torchlens.backends.torch import param_mutation, wrappers
 
 
 class _ParamMutator(nn.Module):
@@ -193,9 +193,12 @@ def test_validation_still_fails_when_the_parameter_mutation_is_dropped(
     def _drop_prepared_parameter_mutations(
         trace: Any, value: Any, *, source: Any, was_inplace: bool, is_storage_rebind: bool = False
     ) -> Any:
-        if was_inplace and isinstance(source, nn.Parameter):
-            if not wrappers._is_unregistered_parameter(trace, source):
-                return value
+        if (
+            was_inplace
+            and isinstance(source, nn.Parameter)
+            and not param_mutation.is_unregistered_parameter(trace, source)
+        ):
+            return value
         return original(
             trace,
             value,
@@ -308,3 +311,81 @@ def test_trainable_parameter_mutated_without_no_grad_still_raises_like_eager() -
         _FrozenMutator(requires_grad=True)(x)
     with pytest.raises(RuntimeError, match="leaf Variable that requires grad"):
         tl.trace(_FrozenMutator(requires_grad=True), x)
+
+
+class _FrozenGradOperandMutator(nn.Module):
+    """Mutate a frozen Parameter in place with a grad-requiring operand."""
+
+    def __init__(self, spelling: str) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+        self.temp = nn.Parameter(0.9 * torch.ones([]), requires_grad=False)
+        self.spelling = spelling
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        operand = self.lin.weight.sum()
+        if self.spelling == "keyword":
+            self.temp.add_(other=operand)
+        else:
+            self.temp.add_(operand)
+        return x / self.temp
+
+
+@pytest.mark.parametrize("spelling", ["positional", "keyword"])
+def test_frozen_parameter_with_grad_operand_is_never_run_untracked(spelling: str) -> None:
+    """A grad-requiring operand in any spelling keeps the call tracked.
+
+    Eager makes the frozen Parameter a non-leaf here. Capture's forced
+    ``requires_grad`` makes autograd refuse the same call, and that refusal must
+    surface in every spelling: running the keyword spelling under ``no_grad``
+    would silently drop the Parameter's autograd history.
+    """
+
+    x = torch.randn(3, 4)
+    eager = _FrozenGradOperandMutator(spelling)
+    eager(x)
+    assert eager.temp.grad_fn is not None
+    with pytest.raises(RuntimeError, match="leaf Variable that requires grad"):
+        tl.trace(_FrozenGradOperandMutator(spelling), x)
+
+
+def test_operand_scan_reaches_nested_containers() -> None:
+    """The frozen-receiver operand scan descends into tuples, lists and dicts."""
+
+    grad = torch.ones(2, requires_grad=True)
+    plain = torch.ones(2)
+    operand = (plain, [{"values": grad}], 3)
+    found = list(param_mutation._iter_operand_tensors(operand))
+    assert len(found) == 2
+    assert found[0] is plain and found[1] is grad
+
+
+class _LazyThenMutate(nn.Module):
+    """A lazy layer materialized in forward beside an initialized, mutated Parameter."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lazy = nn.LazyLinear(4)
+        self.temp = nn.Parameter(0.9 * torch.ones([]))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            self.temp.clamp_(0.001, 0.5)
+        return self.lazy(x) / self.temp
+
+
+def test_lazy_materialization_is_not_a_parameter_mutation() -> None:
+    """Lazy init writes stay out of the graph; an initialized Parameter's write is logged."""
+
+    trace = tl.trace(_LazyThenMutate(), torch.randn(3, 4))
+    assert sorted(layer.layer_type for layer in trace.layer_list) == [
+        "clamp",
+        "input",
+        "linear",
+        "output",
+        "truediv",
+    ]
+    assert trace.num_ops == 3
+    clamp = _ops_by_type(trace, "clamp")[0]
+    assert [p.address for p in clamp.params] == ["temp"]
+    assert clamp.label in _parent_labels(trace, _ops_by_type(trace, "truediv")[0])

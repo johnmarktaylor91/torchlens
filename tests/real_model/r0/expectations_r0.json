@@ -758,7 +758,7 @@
      "resid_post"
     ]
    },
-   "n_ops": 585,
+   "n_ops": 589,
    "recipes": {
     "embedding": 1,
     "layer_norm": 6,
