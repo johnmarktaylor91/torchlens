@@ -84,13 +84,30 @@ class LegendSection:
     rows: tuple[LegendRow, ...]
 
 
-def theme_role_sections(theme: VisualizationTheme) -> tuple[LegendSection, ...]:
+def theme_role_sections(
+    theme: VisualizationTheme, *, mutated_parameter: bool = False
+) -> tuple[LegendSection, ...]:
     """Build the node-role legend section from the RENDERED specs.
 
     The swatches resolve through the same ``NodeSpec`` + ``apply_theme_to_spec``
     path the graph nodes use, so the legend shows the colors actually painted
     (the dark theme remaps parameterized fills, for example) -- never the
     aspirational palette hexes.
+
+    Parameters
+    ----------
+    theme:
+        Resolved theme.
+    mutated_parameter:
+        Whether the render drew a mutated-Parameter source node. Its row is
+        gated on that, like the backward key's rows: a row for a node kind the
+        render does not draw would be an unexplained claim, and plain renders
+        keep their legend unchanged.
+
+    Returns
+    -------
+    tuple[LegendSection, ...]
+        The one role section.
     """
 
     from ._render_common import (
@@ -112,6 +129,21 @@ def theme_role_sections(theme: VisualizationTheme) -> tuple[LegendSection, ...]:
             None,
         ),
         ("buffer", NodeSpec(["buffer"], shape="cylinder", fillcolor=DEFAULT_BG_COLOR), "cylinder"),
+        *(
+            (
+                (
+                    "mutated parameter",
+                    NodeSpec(
+                        ["mutated parameter"],
+                        shape="cylinder",
+                        fillcolor=TRAINABLE_PARAMS_BG_COLOR,
+                    ),
+                    "cylinder",
+                ),
+            )
+            if mutated_parameter
+            else ()
+        ),
         ("boolean", NodeSpec(["boolean"], shape="oval", fillcolor=BOOL_NODE_COLOR), None),
         (
             "intervention/cone",

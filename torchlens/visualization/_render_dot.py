@@ -108,6 +108,7 @@ class _ForwardIRWork:
     captured_edges: list[CapturedForwardEdge]
     container_regions: list[ContainerClusterSpec]
     container_overlay_edges: list[ContainerOverlayEdge]
+    mutated_parameter_nodes: tuple[str, ...] = ()
 
 
 def _strip_render_extension(vis_outpath: str) -> str:
@@ -705,6 +706,11 @@ def _populate_forward_ir(trace: "Trace", context: _ForwardRenderContext) -> _For
             )
     for node_args in pending_container_collapse_nodes:
         forward_ir_builder.node(**node_args)
+    from ._mutated_params import add_mutated_parameter_nodes
+
+    mutated_parameter_nodes = add_mutated_parameter_nodes(
+        trace, context, forward_ir_builder, module_cluster_dict
+    )
 
     container_overlay_edges: list[ContainerOverlayEdge] = []
     if request.show_containers == "nodes" and request.vis_mode == "unrolled":
@@ -746,6 +752,7 @@ def _populate_forward_ir(trace: "Trace", context: _ForwardRenderContext) -> _For
         captured_edges=captured_forward_edges,
         container_regions=container_clusters,
         container_overlay_edges=container_overlay_edges,
+        mutated_parameter_nodes=mutated_parameter_nodes,
     )
 
 
@@ -939,7 +946,9 @@ def _emit_and_finish_forward(
 
     legend_sections: tuple[LegendSection, ...] = ()
     if request.show_legend is True:
-        legend_sections += theme_role_sections(context.theme)
+        legend_sections += theme_role_sections(
+            context.theme, mutated_parameter=bool(work.mutated_parameter_nodes)
+        )
     if request.encoding is not None and request.show_legend is not False:
         # None (AUTO) or True with an active channel -> disclosure section;
         # explicit False is honored (a deliberate act; the docs state the

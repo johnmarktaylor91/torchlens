@@ -2126,3 +2126,19 @@ env: n/a
 torch: n/a
 source: 20c222a3c
 recorded: 2026-10-05T08:31:18+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: paramviz lane: new read-only consumer module torchlens/visualization/_mutated_params.py
+env: py3.11-torch2.13.0
+torch: 2.13.0+cpu
+source: 308b0c3f73c71e2051b35e489cae5d9ea6deef73 (clean)
+recorded: 2026-10-06T03:04:28.919841+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: paramviz lane: new read-only consumer module torchlens/visualization/_mutated_params.py
+env: py3.11-torch2.13.0
+torch: 2.13.0+cpu
+source: 308b0c3f73c71e2051b35e489cae5d9ea6deef73 (clean)
+recorded: 2026-10-06T03:04:33.144339+00:00
