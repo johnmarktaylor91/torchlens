@@ -10,12 +10,13 @@ default) is not represented by the boundary, so validation must fail on it.
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable, Iterator
 from typing import Any
 
 import pytest
 import torch
-from _stale_holders import OpaqueCallable
+from _stale_holders import OpaqueCallable, count_root_forwards, provenance_warnings
 from torch import nn
 
 import torchlens as tl
@@ -333,3 +334,44 @@ def test_multi_dispatch_opaque_output_fails_completeness(grad: bool) -> None:
     """
 
     _assert_completeness_failure(_Parent(_BodyChild(_composite_aten_output)), grad=grad)
+
+
+def _bare(func: Callable[..., Any]) -> Callable[..., Any]:
+    """The original torch callable itself, held directly as these cases did before the rebind."""
+
+    wrap_torch()
+    return _state._decorated_to_orig.get(id(func), func)
+
+
+@pytest.mark.parametrize("grad", [True, False], ids=["grad", "no_grad"])
+@pytest.mark.parametrize(
+    "build",
+    [
+        lambda: _Parent(_StaleHiddenChild()),
+        lambda: _Parent(_Middle()),
+        lambda: _Parent(_BodyChild(_stale_op_builds_view_base)),
+        lambda: _Parent(_BodyChild(_freed_stale_intermediates)),
+    ],
+    ids=["iql_hidden_and_output", "nested_boundary", "view_base", "freed_intermediates"],
+)
+def test_attribute_held_originals_are_rebound_and_validate(
+    build: Callable[[], nn.Module], grad: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The attribute-held cases above with the bare original, as they were first written.
+
+    Capture preparation rebinds each held original to its wrapper for the
+    capture, so the stale ops are no escape: one forward, the relu captured,
+    no provenance warning, and validation passes.
+    """
+
+    monkeypatch.setitem(globals(), "_raw", _bare)
+    model = build().eval()
+    calls = count_root_forwards(model)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        trace = tl.trace(model, torch.randn(3, 4))
+    assert calls == [1]
+    assert provenance_warnings(caught) == []
+    assert trace.rescue_rerun is None
+    assert "relu" in [op.func_name for op in trace.ops]
+    assert _validate(build(), grad=grad), tl.validation.last_validation_failure()

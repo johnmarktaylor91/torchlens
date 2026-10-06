@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 import torch
-from _stale_holders import OpaqueCallable
+from _stale_holders import OpaqueCallable, count_root_forwards
 from torch import nn
 
 import torchlens as tl
@@ -1035,3 +1035,23 @@ def test_nan_holding_model_still_flags_a_real_state_write() -> None:
     assert set(changed) == {"buffer:nan_buffer", "param:weight"}
     assert torch.equal(model.weight, snapshot["param:weight"]), "the flagged write was not restored"
     assert model.nan_buffer[1].item() == 1.0
+
+
+def test_closure_held_original_is_rebound_without_rescue() -> None:
+    """The stale-closure case with the bare original, as the rescue tests first held it.
+
+    Capture preparation rebinds the closure cell to the wrapper, so ``cos``
+    is captured in one forward with no rescue, and the cell holds the
+    original again afterwards.
+    """
+
+    unwrap_torch()
+    raw = torch.cos
+    wrap_torch()
+    model = _stale_closure_model(raw)
+    calls = count_root_forwards(model)
+    trace = tl.trace(model, torch.tensor([0.25, 0.5]))
+
+    assert calls == [1]
+    assert trace.rescue_rerun is None
+    assert [op.func_name for op in trace.ops].count("cos") == 1

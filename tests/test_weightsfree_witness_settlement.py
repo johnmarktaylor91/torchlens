@@ -179,3 +179,27 @@ def test_settlement_invariant_rejects_a_verified_value_free_trace() -> None:
         enforce_settlement_invariants(trace)
 
     assert excinfo.value.fields["invariant"] == "capture_verified is True on a value-free capture"
+
+
+@pytest.mark.usefixtures("_witness_armed")
+@pytest.mark.parametrize("device", ["meta", "cpu"])
+def test_attribute_held_original_relu_is_rebound_and_witnessed(device: str) -> None:
+    """The stale-relu case with the bare original, as it was first written.
+
+    Capture preparation rebinds the held original to its wrapper, so the relu
+    is captured in the one forward and the witness accounts for every dispatch.
+    """
+
+    stale_relu = _state._decorated_to_orig.get(id(torch.relu), torch.relu)
+    with torch.device(device):
+        model = _StaleReluAfterLinear(stale_relu)
+    trace = tl.trace(
+        model.eval(),
+        torch.empty(2, 4, device=device),
+        capture=CaptureOptions(structure_only=True),
+    )
+
+    assert "relu" in [op.func_name for op in trace.ops]
+    assert trace.rescue_rerun is None
+    assert trace.completeness_witness_verified is True
+    assert model.stale_relu is stale_relu

@@ -20,3 +20,18 @@ class OpaqueCallable:
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return self._fn(*args, **kwargs)
+
+
+def count_root_forwards(model: Any) -> list[int]:
+    """Count the root module's forward calls with a pre-hook (one entry per call)."""
+
+    calls: list[int] = []
+    model.register_forward_pre_hook(lambda _module, _args: calls.append(1))
+    return calls
+
+
+def provenance_warnings(caught: list[Any]) -> list[str]:
+    """Return the stale-reference provenance and capture-gap warning texts."""
+
+    markers = ("no graph/source provenance", "re-ran the forward pass", "adopted at module exit")
+    return [str(w.message) for w in caught if any(m in str(w.message) for m in markers)]
