@@ -64,11 +64,17 @@ def test_cell_1_default_backend_native_zero_is_named() -> None:
     attention_overloads = [
         name for name in report.native_by_overload if "scaled_dot_product" in name
     ]
+    assert report.torchlens_total is not None and report.native_total is not None
     # Torch releases through 2.13 lack the CPU fused-attention rule; builds
-    # carrying pytorch/pytorch#195801 (merged 2026-09-17) record it.
+    # carrying pytorch/pytorch#195801 (merged 2026-09-17) record it. Either
+    # way one branch makes a real claim about this torch build.
     if attention_overloads:
         assert all(report.native_by_overload[name] > 0 for name in attention_overloads)
-    assert report.torchlens_total is not None
+    else:
+        # Both sides count the projections; only TorchLens counts attention,
+        # so the missing rule shows as native falling short of TorchLens.
+        assert any("linear" in name or "mm" in name for name in report.native_by_overload)
+        assert report.native_total < report.torchlens_total
     # The registry gap is NAMED when native reads zero against our nonzero.
     if report.native_total == 0:
         assert any(

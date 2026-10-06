@@ -54,6 +54,10 @@ class _MidForwardProbe(nn.Module):
             "summary_count": _live_op_count(trace),
             "live_repr": repr(trace),
         }
+        try:
+            trace.summary(level="op")
+        except Exception as exc:  # noqa: BLE001 - recorded for the test to assert on
+            self.observations["summary_error"] = exc
         return torch.relu(y)
 
 
@@ -154,6 +158,25 @@ def test_live_repr_reads_events_during_capture() -> None:
     count = model.observations["summary_count"]
     assert count == model.observations["event_count"]
     assert f"layers={count}" in model.observations["live_repr"]
+
+
+def test_mid_forward_summary_refuses_typed() -> None:
+    """summary() during an active forward refuses with trace_not_finished.
+
+    The removed legacy renderer printed a partial live table; the rebuilt
+    summary has no partial form, so the call must refuse typed instead of
+    running over a half-built trace.
+    """
+
+    from torchlens._errors import CaptureContextError
+
+    model = _MidForwardProbe()
+    tl.trace(model, torch.randn(1, 3), capture=tl.options.CaptureOptions(layers_to_save="all"))
+
+    error = model.observations.get("summary_error")
+    assert isinstance(error, CaptureContextError)
+    assert error.fields["code"] == "trace_not_finished"
+    assert "repr(trace)" in str(error)
 
 
 def test_atomic_module_classification_matches_phase1_expectation() -> None:

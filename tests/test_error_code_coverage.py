@@ -172,7 +172,6 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "sweep_values_empty",
         "sweep_values_missing",
         "tensor_connection_labels_missing",
-        "trace_not_finished",
     }
 )
 

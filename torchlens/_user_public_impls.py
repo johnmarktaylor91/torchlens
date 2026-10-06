@@ -353,12 +353,20 @@ def _validate_summary_grammar(summary_kwargs: dict[str, Any]) -> None:
 
     ``Trace.summary`` resolves the same configuration again after capture;
     resolving here first makes removed legacy spellings and unknown options
-    refuse typed before the model executes.
+    refuse typed before the model executes. ``None`` means "default" only
+    for grammar options; any other name is checked by presence, matching
+    ``Trace.summary``, so ``preset=None`` refuses here too.
     """
 
-    from .report._summary_config import resolve_config
+    from .report._summary_config import GRAMMAR_OPTIONS, resolve_config
 
-    resolve_config(**{name: value for name, value in summary_kwargs.items() if value is not None})
+    resolve_config(
+        **{
+            name: value
+            for name, value in summary_kwargs.items()
+            if value is not None or name not in GRAMMAR_OPTIONS
+        }
+    )
 
 
 def _validate_summary_modes(execution_mode: str, grad_mode: str) -> None:
@@ -495,7 +503,8 @@ def _weightsfree_summary_facade(
 def _finalize_summary_report(report: Any, execution_mode: str, grad_mode: str) -> str:
     """Suffix the execution disclosure, keeping the typed detached report.
 
-    The report survives its Trace's cleanup by construction (C02, summary
+    The rebuilt payload is carried over so the result methods
+    (``to_markdown``, ``to_html``, ``render``) keep working. The report survives its Trace's cleanup by construction (C02, summary
     item 10: it retains neither the model nor the Trace).
     """
 
@@ -504,7 +513,11 @@ def _finalize_summary_report(report: Any, execution_mode: str, grad_mode: str) -
     full_text = str(report) + "\n" + _summary_execution_note(execution_mode, grad_mode)
     if isinstance(report, SummaryReport):
         return SummaryReport(
-            full_text, rows=report.rows, totals=report.totals, capture=report.capture
+            full_text,
+            rows=report.rows,
+            totals=report.totals,
+            capture=report.capture,
+            rebuilt=report._rebuilt,
         )
     return full_text
 

@@ -852,6 +852,16 @@ class TraceVisualizationMixin(_TraceMixinBase):
             **({"max_rows": max_rows} if max_rows is not None else {}),
             **unsupported,
         )
+        if not self._tracing_finished:  # a cleaned trace raises trace_cleaned_up here
+            from .._errors import CaptureContextError
+
+            raise CaptureContextError(
+                "trace.summary() cannot run before the forward pass is complete; "
+                "a partial capture has no summary (repr(trace) shows the live op count).",
+                code="trace_not_finished",
+                remedy="call summary() after trace(...) has returned; use repr(trace) mid-forward",
+                operation="summary",
+            )
         return build_rebuilt_summary(
             self,
             config,

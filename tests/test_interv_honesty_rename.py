@@ -30,8 +30,22 @@ def test_old_spelling_is_gone() -> None:
     assert not hasattr(intervention, "resample_ablate")
     assert "resample_ablate" not in intervention.__all__
     assert "resample_ablate" not in tl.__all__
-    with pytest.raises(AttributeError):
-        tl.resample_ablate  # noqa: B018 - the attribute access IS the assertion
+    assert "resample_ablate" not in dir(tl)
+
+
+@pytest.mark.parametrize("owner", ["torchlens", "intervention", "helpers"])
+def test_old_spelling_raises_typed_error_naming_the_replacement(owner: str) -> None:
+    """Every removed spelling raises facade_redirect naming scramble_elements."""
+
+    import torchlens.intervention as intervention
+    from torchlens._errors import FacadeTeachingError
+    from torchlens.intervention import helpers
+
+    module = {"torchlens": tl, "intervention": intervention, "helpers": helpers}[owner]
+    with pytest.raises(FacadeTeachingError) as excinfo:
+        module.resample_ablate  # noqa: B018 - the attribute access IS the assertion
+    assert excinfo.value.fields["code"] == "facade_redirect"
+    assert "torchlens.intervention.scramble_elements" in str(excinfo.value)
 
 
 def test_constructor_mints_the_honest_name() -> None:
@@ -62,6 +76,26 @@ def test_serialized_specs_load_under_both_names(persisted_name: str) -> None:
     hook = spec.factory()
     sampled = hook(torch.zeros(4), hook=None)
     assert torch.equal(sampled, torch.ones(4))
+
+
+def test_import_ref_to_the_retired_name_fails_closed_typed() -> None:
+    """An import ref ``torchlens.intervention.helpers:resample_ablate`` refuses typed.
+
+    Built-in helpers persist by NAME (above), so only a hand-wrapped
+    import-ref helper saved before 2.35.0 could carry this path. The name
+    left the vetted-inert allowlist with the rename; such a ref must fail
+    closed with a TorchLens error, never resolve and never crash raw.
+    """
+
+    from torchlens.intervention import helpers
+    from torchlens.intervention.resolver import resolve_import_ref
+
+    current = resolve_import_ref("torchlens.intervention.helpers:scramble_elements")
+    assert current is helpers.scramble_elements
+    with pytest.raises(Exception) as excinfo:
+        resolve_import_ref("torchlens.intervention.helpers:resample_ablate")
+    assert type(excinfo.value).__module__.startswith("torchlens")
+    assert "resample_ablate" in str(excinfo.value)
 
 
 def test_empty_source_refusal_names_the_honest_helper() -> None:

@@ -46,6 +46,18 @@ def test_facade_accepts_explicit_meta_inputs() -> None:
     assert "hypothes" in report.lower() or "structure-only" in report.lower()
 
 
+def test_facade_report_keeps_its_result_exports() -> None:
+    """The execution-note suffix keeps the rebuilt payload, so exports work."""
+
+    report = tl.summary(_meta_model(), input_size=(2, 8))
+    markdown = report.to_markdown()
+    assert markdown.startswith("| ")
+    assert "Linear" in markdown or "fc" in markdown
+    assert "<table" in report.to_html()
+    assert report.render("unicode")
+    assert "Execution:" in str(report)
+
+
 def test_bare_facade_refuses_rather_than_guessing() -> None:
     with pytest.raises(Exception) as excinfo:
         tl.summary(_meta_model())

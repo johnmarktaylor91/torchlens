@@ -1540,6 +1540,8 @@ _VETTED_INERT_FIRST_PARTY: frozenset[tuple[str, str]] = frozenset(
         # the intervention resolver's ``torchlens.intervention.helpers:<name>`` refs).
         ("torchlens.intervention.helpers", "zero_ablate"),
         ("torchlens.intervention.helpers", "mean_ablate"),
+        # resample_ablate left with its 2.35.0 rename: name-saved specs still load
+        # via rebuild_builtin_helper; an import ref to it fails closed (tested).
         ("torchlens.intervention.helpers", "scramble_elements"),
         ("torchlens.intervention.helpers", "steer"),
         ("torchlens.intervention.helpers", "scale"),
