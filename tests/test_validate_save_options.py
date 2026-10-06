@@ -326,3 +326,16 @@ def test_cuda_example_models_keep_their_verdict_with_host_activations(model_name
     x = torch.rand(6, 3, 24, 24, device="cuda")
     assert tl.validate(model, x, scope="forward", random_seed=0) is True
     assert tl.validate(model, x, scope="forward", random_seed=0, output_device="cpu") is True
+
+
+@_CUDA
+def test_cuda_tensor_nanequal_compares_values_across_devices() -> None:
+    """``tensor_nanequal`` compares a CUDA and a CPU tensor by value instead of raising."""
+
+    from torchlens.utils.tensor_utils import tensor_nanequal
+
+    t = torch.tensor([1.0, float("nan"), 3.0])
+    assert tensor_nanequal(t.cuda(), t)
+    assert tensor_nanequal(t, t.cuda())
+    assert not tensor_nanequal(t.cuda(), t + 1)
+    assert not tensor_nanequal(t.cuda(), torch.tensor([1.0, 2.0, 3.0]))

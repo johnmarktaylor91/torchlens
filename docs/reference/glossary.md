@@ -491,7 +491,10 @@ attribution-target alias. See the [attribution reference](attribution.md).
   with the same values and defaults as `CaptureOptions.output_device` (`"same"`) and
   `CaptureOptions.save_budget` (`"auto"`): `output_device="cpu"` lets a GPU model validate
   with its saved activations in host memory (replay still runs each op on its original
-  device), and an exceeded budget raises `SaveBudgetExceededError` as the capture does. They
+  device), and an exceeded budget raises `SaveBudgetExceededError` as the capture does.
+  Saved function arguments (the replay inputs) stay on each op's device under
+  `output_device="cpu"`, so the GPU footprint roughly halves rather than disappearing; if
+  the GPU budget is still exceeded, pass `save_budget=None` or a larger value. They
   apply to the `"forward"`, `"saved"`, and `"intervention"` scopes; a non-default value on
   `"backward"` or `"receptive_field"` raises `TypeError`. The lower-level
   `torchlens.validation.validate_forward_pass` accepts the same two keywords.

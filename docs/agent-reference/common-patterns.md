@@ -38,6 +38,8 @@ overlay = armed_op.receptive_field.show(armed_unit, gradient=True)
 # tl.validate(gpu_model, x, scope="forward", output_device="cpu", save_budget=None) keeps
 # the validator capture's saved activations in host memory; output_device / save_budget
 # take CaptureOptions' values and defaults and apply to the forward/saved/intervention scopes.
+# Saved function arguments stay on the model device, so the GPU footprint roughly halves and
+# the GPU save_budget can still be exceeded (then pass save_budget=None or a larger value).
 ```
 
 Use the unified predicate surface for selective capture, windowed saves, interventions, and

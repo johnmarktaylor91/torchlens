@@ -937,7 +937,11 @@ def validate_forward_pass(
         Explicit backend name. ``None`` preserves legacy auto-resolution.
     output_device:
         Where the validator capture keeps saved activations (same values and
-        default as ``CaptureOptions.output_device``).
+        default as ``CaptureOptions.output_device``). Saved function
+        arguments (the replay inputs) stay on each op's device, so under
+        ``"cpu"`` the GPU footprint roughly halves rather than disappearing;
+        if the GPU budget is still exceeded, pass ``save_budget=None`` or a
+        larger value.
     save_budget:
         Per-device retained-bytes ceiling for the validator capture (same
         values and default as ``CaptureOptions.save_budget``).
@@ -1342,6 +1346,8 @@ def _validate_forward_pass_torch(
         and default as ``CaptureOptions.output_device``). Ground-truth outputs
         are snapshotted onto the same device so the output comparison stays
         exact; replay moves saved inputs back to each op's original device.
+        Saved function arguments stay on each op's device, so the GPU
+        footprint roughly halves and the GPU budget can still be exceeded.
     save_budget:
         Per-device retained-bytes ceiling for both validation captures (same
         values and default as ``CaptureOptions.save_budget``); exceeding it
