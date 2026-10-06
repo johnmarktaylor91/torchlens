@@ -98,7 +98,8 @@ def _negative_source(
     """Return the trace and site that hold the negative activations.
 
     A layer object belongs to the trace it came from, so when ``negative_log``
-    is given a layer-object site is re-resolved there by its ``layer_label``.
+    is given a layer-object site is re-resolved there by its label
+    (pass-qualified on a multi-pass layer).
 
     Parameters
     ----------
@@ -133,8 +134,31 @@ def _negative_source(
     if negative_log is None:
         return log, negative_site
     if hasattr(negative_site, "out") and hasattr(negative_site, "layer_label"):
-        negative_site = resolve_one_site(negative_log, negative_site.layer_label)
+        negative_site = resolve_one_site(negative_log, _site_label(negative_site))
     return negative_log, negative_site
+
+
+def _site_label(record: Any) -> str:
+    """Return the label that names one record in another trace of the same model.
+
+    Parameters
+    ----------
+    record:
+        Layer or op record.
+
+    Returns
+    -------
+    str
+        ``layer_label``, pass-qualified (``label:pass``) on a multi-pass layer.
+    """
+
+    label = str(record.layer_label)
+    num_passes = getattr(record, "num_passes", None)
+    if isinstance(num_passes, int) and num_passes > 1:
+        pass_index = getattr(record, "pass_index", None)
+        if isinstance(pass_index, int):
+            return f"{label}:{pass_index}"
+    return label
 
 
 def _captured_mask(log: Any) -> torch.Tensor | None:
