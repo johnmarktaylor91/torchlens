@@ -42,7 +42,7 @@ outside the pipeline and its windows.
 import os
 import time
 import warnings
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import torch
 
@@ -469,6 +469,30 @@ def _check_postprocess_contract(
         assert self._tracing_finished is True, "Step 17 must mark tracing finished"
 
 
+def _unattributed_op_offenders(ops: Any) -> list[str]:
+    """Return ``"label (positions)"`` rows for non-output ops with source-less args."""
+
+    offenders: list[str] = []
+    for op in ops:
+        if getattr(op, "type", None) == "output":
+            continue
+        positions = tuple(getattr(op, "unattributed_tensor_args", ()) or ())
+        if not positions:
+            continue
+        label = getattr(op, "label", None) or getattr(op, "layer_label", None) or op._label_raw
+        offenders.append(f"{label} ({', '.join(positions)})")
+    return offenders
+
+
+def _pop_boundary_adoptions(self: "Trace", field_name: str, suffix: str) -> list[str]:
+    """Pop one module-boundary adoption queue into human-readable offender rows."""
+
+    return [
+        f"{label} (adopted at module {boundary} {module_address}{suffix})"
+        for label, boundary, module_address in (self.__dict__.pop(field_name, None) or ())
+    ]
+
+
 def _warn_unattributed_tensor_args(self: "Trace") -> None:
     """Warn once for tensor arguments without graph/source provenance.
 
@@ -483,15 +507,22 @@ def _warn_unattributed_tensor_args(self: "Trace") -> None:
         Emits at most one aggregate warning.
     """
 
-    offenders: list[str] = []
-    for op in getattr(self, "layer_list", ()):
-        if getattr(op, "type", None) == "output":
-            continue
-        positions = tuple(getattr(op, "unattributed_tensor_args", ()) or ())
-        if not positions:
-            continue
-        label = getattr(op, "label", None) or getattr(op, "layer_label", None) or op._label_raw
-        offenders.append(f"{label} ({', '.join(positions)})")
+    from .._capture_honesty import (
+        ADVISORY_MODULE_BOUNDARY_ADOPTION,
+        ADVISORY_ORPHAN_UNATTRIBUTED_ARGS,
+        append_capture_advisory,
+    )
+
+    retained = getattr(self, "layer_list", ()) or ()
+    offenders = _unattributed_op_offenders(retained)
+    # Orphan pruning (step 3) runs BEFORE this step, so a source-less tensor whose
+    # only consumer was pruned (``G.sum().item()``, a control-flow predicate on a
+    # global) would lose its witness with the op. ``_orphan_logs`` stays on the
+    # trace; fold the pruned ops that are not also retained into the disclosure.
+    retained_ids = {id(op) for op in retained}
+    orphans = _unattributed_op_offenders(
+        op for op in (getattr(self, "_orphan_logs", ()) or ()) if id(op) not in retained_ids
+    )
     # R16: module-entry adoptions of untagged tensors (outside disclosed
     # transform/dynamo regions) are the module-consumed twin of the
     # unattributed-args case; without this fold, a stale-ref escape whose
@@ -501,30 +532,31 @@ def _warn_unattributed_tensor_args(self: "Trace") -> None:
     # module-returned twin (a stale ref whose output a module returns, e.g.
     # transformers' ``GELUActivation``): the boundary op tagged it before any
     # consumer could flag it.
-    adoptions = [
-        f"{label} (adopted at module {boundary} {module_address})"
-        for label, boundary, module_address in (
-            self.__dict__.pop("_module_boundary_adoptions", None) or ()
-        )
-    ]
-    offenders.extend(adoptions)
-    if not offenders:
+    adoptions = _pop_boundary_adoptions(self, "_module_boundary_adoptions", "")
+    # Closure/forward-global tensors a module consumes or returns directly: no
+    # escape (they predate the forward), but no source either.
+    outside = _pop_boundary_adoptions(
+        self, "_module_boundary_outside_sources", ", closure or forward-global tensor"
+    )
+    if not (offenders or orphans or adoptions or outside):
         return
     # Adopted tensors leave a functionless internal-source node that replays and
-    # validates; persist the adoption so forward validation fails it (per-op
-    # positions already persist as ``Op.unattributed_tensor_args``).
-    if adoptions:
-        from .._capture_honesty import ADVISORY_MODULE_BOUNDARY_ADOPTION, append_capture_advisory
-
-        append_capture_advisory(self, ADVISORY_MODULE_BOUNDARY_ADOPTION, adoptions)
-    # Session-time escape signal: the capture entry reads this flag to decide
-    # whether a rescue re-run (TorchFunctionMode net) should be attempted.
-    self._had_unattributed_tensor_args = True
+    # validates, and pruned ops leave nothing at all; persist both so forward
+    # validation fails them (retained per-op positions already persist as
+    # ``Op.unattributed_tensor_args``). Rows are written before the warning,
+    # which a warning filter may raise.
+    append_capture_advisory(self, ADVISORY_MODULE_BOUNDARY_ADOPTION, adoptions + outside)
+    append_capture_advisory(self, ADVISORY_ORPHAN_UNATTRIBUTED_ARGS, orphans)
+    if offenders or orphans or adoptions:
+        # Session-time escape signal: the capture entry reads this flag to decide
+        # whether a rescue re-run (TorchFunctionMode net) should be attempted.
+        self._had_unattributed_tensor_args = True
     warnings.warn(
         "TorchLens found tensor arguments with no graph/source provenance. "
         "These are usually tensors captured from outside the traced model; "
         "module tensor attributes, inputs, parameters, and buffers are known sources. "
-        "Offending ops/arg positions: " + "; ".join(offenders),
+        "Offending ops/arg positions: "
+        + "; ".join(offenders + [f"{row} (pruned)" for row in orphans] + adoptions + outside),
         UserWarning,
         stacklevel=2,
     )

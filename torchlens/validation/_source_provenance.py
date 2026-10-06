@@ -4,8 +4,9 @@ Forward replay re-executes each op on its SAVED arguments, so a tensor argument
 with no recorded graph or source provenance replays perfectly: the source-less
 value sits in the saved arguments, and nothing upstream is ever asked to produce
 it. The capture already detects these gaps (the ``unattributed_tensor_args``
-witness, module-boundary adoptions of untagged tensors, and the module-held
-tensor scan's ``held_tensor_scan_truncated`` cut), but used to only warn about
+witness, module-boundary adoptions of untagged tensors, orphan-pruned ops that
+carried that witness, and the module-held tensor scan's
+``held_tensor_scan_truncated`` cut), but used to only warn about
 them, so ``tl.validate(scope="forward")`` returned True on a graph that was
 missing the tensor's origin. ``check_source_provenance`` turns each gap into a
 recorded ``CHECK_SOURCE_PROVENANCE`` failure on the FINAL validation trace (a
@@ -22,6 +23,7 @@ from .._capture_honesty import (
     ADVISORIES_ANNOTATIONS_KEY,
     ADVISORY_HELD_SCAN_TRUNCATED,
     ADVISORY_MODULE_BOUNDARY_ADOPTION,
+    ADVISORY_ORPHAN_UNATTRIBUTED_ARGS,
 )
 from .diagnostics import CHECK_SOURCE_PROVENANCE, ValidationFailure, record_validation_failure
 
@@ -29,7 +31,11 @@ if TYPE_CHECKING:
     from ..data_classes.trace import Trace
     from .core import ValidationDecisionRecorder
 
-_GAP_ADVISORY_KINDS = (ADVISORY_MODULE_BOUNDARY_ADOPTION, ADVISORY_HELD_SCAN_TRUNCATED)
+_GAP_ADVISORY_KINDS = (
+    ADVISORY_MODULE_BOUNDARY_ADOPTION,
+    ADVISORY_HELD_SCAN_TRUNCATED,
+    ADVISORY_ORPHAN_UNATTRIBUTED_ARGS,
+)
 
 
 def source_provenance_gaps(trace: "Trace") -> list[tuple[str, str | None, str]]:

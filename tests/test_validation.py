@@ -779,18 +779,24 @@ def test_trace_clears_forward_global_tensor_labels_between_sessions() -> None:
     try:
         model = GlobalTensorForwardModel()
 
-        tl.trace(
-            model,
-            x,
-            save=None,
-            capture=tl.options.CaptureOptions(layers_to_save=None, inference_only=True),
-        )
-        second_trace = tl.trace(
-            model,
-            x,
-            save=None,
-            capture=tl.options.CaptureOptions(layers_to_save=None, inference_only=True),
-        )
+        # The forward-global tensor the child module consumes has no graph/source
+        # provenance: each capture discloses its module-entry adoption (and forward
+        # validation would fail on source_provenance); the concern under test is
+        # stale-label clearing.
+        with pytest.warns(UserWarning, match="closure or forward-global tensor"):
+            tl.trace(
+                model,
+                x,
+                save=None,
+                capture=tl.options.CaptureOptions(layers_to_save=None, inference_only=True),
+            )
+        with pytest.warns(UserWarning, match="closure or forward-global tensor"):
+            second_trace = tl.trace(
+                model,
+                x,
+                save=None,
+                capture=tl.options.CaptureOptions(layers_to_save=None, inference_only=True),
+            )
 
         assert second_trace.num_ops > 0
     finally:

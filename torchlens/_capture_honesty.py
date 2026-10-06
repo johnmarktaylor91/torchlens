@@ -38,6 +38,10 @@ ADVISORY_MODULE_BOUNDARY_ADOPTION = "module_boundary_adoption"
 #: Advisory kind recorded when the module-held plain-tensor scan was cut
 #: (``backends/torch/buffer_writes.warn_held_scan_truncated``).
 ADVISORY_HELD_SCAN_TRUNCATED = "held_tensor_scan_truncated"
+#: Advisory kind recorded when an orphan-pruned op had source-less tensor arguments
+#: (``G.sum().item()``, a control-flow predicate on a closure tensor): the pruned op
+#: takes its ``Op.unattributed_tensor_args`` witness with it otherwise.
+ADVISORY_ORPHAN_UNATTRIBUTED_ARGS = "orphan_unattributed_tensor_args"
 
 
 def append_capture_advisory(trace: Any, kind: str, entries: list[str]) -> None:

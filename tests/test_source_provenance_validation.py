@@ -144,6 +144,123 @@ def test_module_boundary_adoption_fails_forward_validation() -> None:
     assert _failure_reasons() == ("source_provenance", ["module_boundary_adoption"])
 
 
+# --- Review fixes: a module RETURNING an outside tensor; orphan-pruned consumers ---
+
+
+class _ReturnsGlobal(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return _GLOBAL_TABLE
+
+
+def _returns_outside_parent(sub: nn.Module) -> nn.Module:
+    class _Parent(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.sub = sub
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.sub(x) + x
+
+    return _Parent()
+
+
+def _returns_closure() -> nn.Module:
+    table = torch.randn(5)
+
+    class _ReturnsClosure(nn.Module):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return table
+
+    return _ReturnsClosure()
+
+
+@pytest.mark.parametrize(
+    "make_sub", [_returns_closure, _ReturnsGlobal], ids=["closure", "module_global"]
+)
+def test_submodule_returning_an_outside_tensor_fails(make_sub: Any) -> None:
+    """The pre-forward snapshot no longer hides a closure/global a module returns."""
+
+    x = torch.randn(5)
+    model = _returns_outside_parent(make_sub())
+    with pytest.warns(UserWarning, match="closure or forward-global tensor"):
+        trace = tl.trace(copy.deepcopy(model), x)
+    kinds = [row["kind"] for row in trace.annotations.get("capture_advisories", [])]
+    assert kinds == ["module_boundary_adoption"]
+    assert _validate(model, x) is False
+    assert _failure_reasons() == ("source_provenance", ["module_boundary_adoption"])
+
+
+class _GlobalItemSink(nn.Module):
+    """The only consumer of the global is ``.item()``-bound, so it is orphan-pruned."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x + _GLOBAL_TABLE.sum().item()
+
+
+class _GlobalControlFlowSink(nn.Module):
+    """The global only drives a branch predicate, which is orphan-pruned."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x * 2 if (_GLOBAL_TABLE.sum() > 0).item() else x * 3
+
+
+@pytest.mark.parametrize(
+    "model", [_GlobalItemSink(), _GlobalControlFlowSink()], ids=["item", "control_flow"]
+)
+def test_orphan_pruned_consumer_keeps_the_source_less_witness(model: nn.Module) -> None:
+    x = torch.randn(5)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(model, x)
+    rows = [
+        row
+        for row in trace.annotations.get("capture_advisories", [])
+        if row["kind"] == "orphan_unattributed_tensor_args"
+    ]
+    assert len(rows) == 1 and "sum" in rows[0]["message"]
+    assert _validate(model, x) is False
+    assert _failure_reasons() == ("source_provenance", ["orphan_unattributed_tensor_args"])
+
+
+class _ReturnsOwn(nn.Module):
+    """Returns its own held plain tensor, buffer or Parameter directly."""
+
+    def __init__(self, which: str) -> None:
+        super().__init__()
+        self.which = which
+        self.table = torch.randn(5)
+        self.register_buffer("offset", torch.randn(5))
+        self.weight = nn.Parameter(torch.randn(5))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return getattr(self, self.which)
+
+
+class _OrphanFromConstants(nn.Module):
+    """An orphan-pruned predicate over a tensor created inside forward has a source."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x * 2 if (torch.ones(3).sum() > 0).item() else x * 3
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        _returns_outside_parent(_ReturnsOwn("table")),
+        _returns_outside_parent(_ReturnsOwn("offset")),
+        _returns_outside_parent(_ReturnsOwn("weight")),
+        _OrphanFromConstants(),
+    ],
+    ids=["returns_held", "returns_buffer", "returns_param", "orphan_from_constants"],
+)
+def test_model_owned_returns_and_sourced_orphans_still_validate(model: nn.Module) -> None:
+    torch.manual_seed(0)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert tl.validate(model, torch.randn(5), scope="forward") is True
+    assert last_validation_failure() is None
+
+
 # --- Negative: every known source still validates ---------------------------------
 
 
