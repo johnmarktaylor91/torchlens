@@ -9,9 +9,9 @@
       "doc": "docs/migration/inseq.md",
       "kind": "undersell-falsehood",
       "receipt": "Line 14 says HuggingFace convenience wrappers have 'No direct public wrapper ... Deferred to v2.x' while torchlens/bridge/hf.py ships trace_text.",
-      "status": "open",
-      "verified_at": "2026-08-26 (mega/A12 checkout; line 14 live)",
-      "owner_next": "D01 (prose truth sweep)"
+      "status": "fixed",
+      "verified_at": "2026-10-05 (wip/next-cleanup; the row now names bridge.hf.trace_text)",
+      "owner_next": "none"
     },
     {
       "id": "saelens-utilities-undersold",
@@ -38,9 +38,9 @@
       "id": "captum-ig-no-equivalent",
       "doc": "docs/migration/captum.md",
       "kind": "undersell-falsehood",
-      "receipt": "Historically said integrated gradients has 'no direct equivalent' while torchlens/attribution exports one.",
+      "receipt": "Said integrated gradients has 'no direct equivalent' while torchlens/attribution exports one. The 2026-08-26 'fixed' verdict was wrong (the line was still live at 4bfb8e68b); fixed 2026-10-05 together with the saliency, occlusion and conductance rows.",
       "status": "fixed",
-      "verified_at": "2026-08-26 (mega/A12 checkout; the line is gone)",
+      "verified_at": "2026-10-05 (wip/next-cleanup; captum.md rows now name tl.attribution methods)",
       "owner_next": "none (closed by an earlier fix wave; D01 re-verifies in the sweep)"
     },
     {
