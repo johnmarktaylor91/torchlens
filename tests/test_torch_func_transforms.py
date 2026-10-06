@@ -7,6 +7,7 @@ from typing import cast
 import pytest
 import torch
 import torch.nn as nn
+from _stale_holders import OpaqueCallable
 
 import torchlens as tl
 from torchlens import Recording, Trace, _state
@@ -148,7 +149,8 @@ class RawGradOverModuleModel(nn.Module):
 
         super().__init__()
         wrap_torch()
-        self.raw_grad = _state._decorated_to_orig[id(torch.func.grad)]
+        # A custom callable object: capture preparation never rebinds it.
+        self.raw_grad = OpaqueCallable(_state._decorated_to_orig[id(torch.func.grad)])
         self.inner = nn.Linear(4, 4)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

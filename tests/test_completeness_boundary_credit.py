@@ -15,6 +15,7 @@ from typing import Any
 
 import pytest
 import torch
+from _stale_holders import OpaqueCallable
 from torch import nn
 
 import torchlens as tl
@@ -43,10 +44,16 @@ def _isolated_witness_mode() -> Iterator[None]:
 
 
 def _raw(func: Callable[..., Any]) -> Callable[..., Any]:
-    """Return the original torch callable behind an installed TorchLens wrapper."""
+    """Return the original torch callable behind an installed wrapper, in an opaque holder.
+
+    Capture preparation rebinds pristine torch functions held directly on a
+    model, so a bare original would no longer escape; the custom callable
+    object is a holder it never rebinds, which keeps the escape these
+    completeness tripwires must catch.
+    """
 
     wrap_torch()
-    return _state._decorated_to_orig.get(id(func), func)
+    return OpaqueCallable(_state._decorated_to_orig.get(id(func), func))
 
 
 class _OpaqueOutputChild(nn.Module):

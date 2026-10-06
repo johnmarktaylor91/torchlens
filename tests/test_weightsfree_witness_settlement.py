@@ -15,6 +15,7 @@ from typing import Any
 
 import pytest
 import torch
+from _stale_holders import OpaqueCallable
 from torch import nn
 
 import torchlens as tl
@@ -127,7 +128,9 @@ def test_witness_gap_still_ceilings_a_value_free_capture(
 
     # Keep the primary capture: the rescue re-run would replace its verdict.
     monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)
-    stale_relu = _state._decorated_to_orig.get(id(torch.relu), torch.relu)
+    # A custom callable object: capture preparation never rebinds it, so the
+    # pristine relu still escapes the wrappers.
+    stale_relu = OpaqueCallable(_state._decorated_to_orig.get(id(torch.relu), torch.relu))
     with torch.device(device):
         model = _StaleReluAfterLinear(stale_relu)
     trace = tl.trace(

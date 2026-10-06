@@ -63,7 +63,8 @@ def _wrapper_for(value: Any) -> Any | None:
     _decorated_to_orig, orig_to_decorated = _state.wrap_epoch_ledgers()
     if id(value) not in orig_to_decorated:
         return None
-    return _live_counterpart(value)
+    live = _live_counterpart(value)
+    return None if live is value else live  # unwrapped: the original is live
 
 
 def _is_library_function(fn: types.FunctionType) -> bool:
@@ -114,13 +115,13 @@ class _Rebinder:
     """Rebind for one capture, journaling each undo before its mutation."""
 
     def __init__(self, journal: list[Callable[[], None]]) -> None:
-        self.journal = journal
+        self.undo_journal = journal
         self._seen_functions: set[int] = set()
         # Rebuilt immutable holders by original id: an aliased partial or
         # tuple gets ONE replacement, so ``a is b`` holds during the forward.
         self._rebuilt: dict[int, Any] = {}
 
-    def replacement(self, value: Any, depth: int) -> Any | None:
+    def rebound(self, value: Any, depth: int) -> Any | None:
         """Return a rebound replacement for ``value``, or ``None``.
 
         Identity-bearing mutable holders (lists, dicts, function cells and
@@ -142,7 +143,7 @@ class _Rebinder:
         elif value_type is tuple or _is_namedtuple_instance(value):
             rebuilt = self._tuple(value, depth + 1)
         elif value_type is types.FunctionType:
-            self.function(value, depth + 1)
+            self.rebind_function(value, depth + 1)
         elif value_type is list:
             self._list(value, depth + 1)
         elif value_type is dict:
@@ -151,7 +152,7 @@ class _Rebinder:
             self._rebuilt[id(value)] = rebuilt
         return rebuilt
 
-    def function(self, fn: types.FunctionType, depth: int) -> None:
+    def rebind_function(self, fn: types.FunctionType, depth: int) -> None:
         """Rebind pristine refs in a function's closure cells and defaults."""
 
         if id(fn) in self._seen_functions or _is_library_function(fn):
@@ -162,9 +163,9 @@ class _Rebinder:
                 contents = cell.cell_contents
             except ValueError:  # an empty cell
                 continue
-            new = self.replacement(contents, depth)
+            new = self.rebound(contents, depth)
             if new is not None:
-                self.journal.append(functools.partial(_restore_cell, cell, contents, new))
+                self.undo_journal.append(functools.partial(_restore_cell, cell, contents, new))
                 cell.cell_contents = new
         defaults = fn.__defaults__
         swapped = self._tuple(defaults, depth) if defaults else None
@@ -176,17 +177,21 @@ class _Rebinder:
             self._set_attr(fn, "__kwdefaults__", kwdefaults, swapped_kw)
 
     def _set_attr(self, owner: Any, name: str, original: Any, new: Any) -> None:
-        self.journal.append(functools.partial(_restore_attr, owner, name, original, new))
+        """Journal, then set, an attribute rebind."""
+
+        self.undo_journal.append(functools.partial(_restore_attr, owner, name, original, new))
         setattr(owner, name, new)
 
     def _set_item(self, container: Any, key: Any, original: Any, new: Any) -> None:
-        self.journal.append(functools.partial(_restore_item, container, key, original, new))
+        """Journal, then set, an item or module-slot rebind."""
+
+        self.undo_journal.append(functools.partial(_restore_item, container, key, original, new))
         container[key] = new
 
     def _partial(self, value: functools.partial[Any], depth: int) -> functools.partial[Any] | None:
         """Rebuild a partial whose ``func``, ``args`` or ``keywords`` hold a pristine ref."""
 
-        func = self.replacement(value.func, depth)
+        func = self.rebound(value.func, depth)
         args = self._tuple(value.args, depth) if value.args else None
         keywords = self._keywords(value.keywords, depth) if value.keywords else None
         if func is None and args is None and keywords is None:
@@ -202,25 +207,31 @@ class _Rebinder:
     def _keywords(self, mapping: dict[str, Any], depth: int) -> dict[str, Any] | None:
         """Return a rebound copy of a keyword mapping, or ``None`` if nothing changed."""
 
-        swapped = {key: self.replacement(val, depth) for key, val in mapping.items()}
+        swapped = {key: self.rebound(val, depth) for key, val in mapping.items()}
         if all(val is None for val in swapped.values()):
             return None
         return {key: mapping[key] if new is None else new for key, new in swapped.items()}
 
     def _list(self, container: list[Any], depth: int) -> None:
+        """Rebind a list's items in place."""
+
         for index, item in enumerate(container):
-            new = self.replacement(item, depth)
+            new = self.rebound(item, depth)
             if new is not None:
                 self._set_item(container, index, item, new)
 
     def _dict(self, container: dict[Any, Any], depth: int) -> None:
+        """Rebind a dict's values in place (keys are never rebound)."""
+
         for key, item in tuple(container.items()):
-            new = self.replacement(item, depth)
+            new = self.rebound(item, depth)
             if new is not None:
                 self._set_item(container, key, item, new)
 
     def _tuple(self, values: tuple[Any, ...], depth: int) -> tuple[Any, ...] | None:
-        swapped = [self.replacement(item, depth) for item in values]
+        """Return a rebuilt tuple or namedtuple, or ``None`` if nothing changed."""
+
+        swapped = [self.rebound(item, depth) for item in values]
         if all(item is None for item in swapped):
             return None
         items = [new if new is not None else old for new, old in zip(swapped, values, strict=True)]
@@ -231,19 +242,19 @@ class _Rebinder:
         except (TypeError, ValueError):  # an exotic ``_make``: leave it to the rescue
             return None
 
-    def module(self, module: nn.Module) -> None:
+    def rebind_module(self, module: nn.Module) -> None:
         """Rebind one module's instance attributes and its class ``forward``."""
 
         slots = module.__dict__
         for name, value in tuple(slots.items()):
             if name in _MODULE_INTERNAL_SLOTS or name.startswith("_tl"):
                 continue
-            new = self.replacement(value, 0)
+            new = self.rebound(value, 0)
             if new is not None:
                 self._set_item(slots, name, value, new)
         class_forward = getattr(type(module), "forward", None)
         if type(class_forward) is types.FunctionType:
-            self.function(class_forward, 1)
+            self.rebind_function(class_forward, 1)
 
 
 def rebind_held_torch_refs(session: object, model: nn.Module) -> None:
@@ -256,14 +267,12 @@ def rebind_held_torch_refs(session: object, model: nn.Module) -> None:
     """
 
     restore_held_torch_refs(session)  # a leftover journal under a reused id
-    if not _state._is_decorated:
-        return
     journal: list[Callable[[], None]] = []
     _PENDING_UNDO[id(session)] = journal
     try:
         rebinder = _Rebinder(journal)
         for module in model.modules():
-            rebinder.module(module)
+            rebinder.rebind_module(module)
     except BaseException:
         restore_held_torch_refs(session)
         raise

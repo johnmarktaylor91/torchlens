@@ -308,7 +308,9 @@ def test_transformers_activation_built_before_capture_needs_no_rescue(
 ) -> None:
     """The real transformers activations, built pre-wrap: one forward, no warning, untouched."""
 
-    activations = pytest.importorskip("transformers.activations")
+    pytest.importorskip("transformers")
+    from transformers import activations
+
     act = activations.get_activation(act_name)
     assert type(act).__name__ == class_name
     held_before = act.act
