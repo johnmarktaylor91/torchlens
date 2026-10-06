@@ -95,7 +95,12 @@
 - An in-place write to a prepared Parameter inside `forward` is a logged op (receiver positional
   or `input=`); a frozen Parameter written with a grad-requiring operand runs tracked with its own
   `requires_grad=False` and ends a non-leaf, as in eager, so `restore_param_requires_grad` and the
-  prep-time forcing skip non-leaf Parameters. An `out=` write into a Parameter is still uncaptured:
+  prep-time forcing skip non-leaf Parameters. Validate a fresh copy, not an already-run model: a
+  deepcopy of the run model makes that Parameter a trainable leaf (torch's `Parameter.__deepcopy__`),
+  so `tl.validate(..., scope="forward")` raises torch's leaf error, as a second eager forward on
+  such a deepcopy does, and `scope="backward"` returns False with a "not autograd leaves" warning.
+  Backward validation cuts the history its own stock pass leaves on such a Parameter (`detach_`,
+  flag restored) so the captured pass starts from the pre-call model. An `out=` write into a Parameter is still uncaptured:
   `tl.validate` fails it on completeness (pinned in `tests/test_parameter_inplace_mutation.py`).
 - `torchlens.__version__` and `pyproject.toml` are release-pipeline state; do not update them
   in feature/docs tasks unless release work explicitly asks for it.

@@ -236,10 +236,12 @@ def _param_grads(model: nn.Module) -> dict[str, torch.Tensor]:
     dict[str, torch.Tensor]
         Detached grad clones for parameters with grads.
     """
+    # A non-leaf Parameter (a frozen one written in place with a grad-requiring
+    # operand) never gets ``.grad`` unless it retains grad, and reading it warns.
     return {
         name: parameter.grad.detach().clone()
         for name, parameter in model.named_parameters()
-        if parameter.grad is not None
+        if (parameter.is_leaf or parameter.retains_grad) and parameter.grad is not None
     }
 
 
