@@ -836,7 +836,11 @@ def _record_pruned_source_less_witness(self: "Trace", orphan_nodes: set[str]) ->
         if not positions:
             continue
         if escape_sources is None:
-            escape_sources = host_escape_source_labels(self)
+            # Armed captures record escapes in the completeness witness; plain
+            # captures in the scalar-escape belt.
+            escape_sources = host_escape_source_labels(self) | frozenset(
+                self.__dict__.get("_plain_scalar_escape_labels", ())
+            )
         if _rng_orphan_drove_control_or_output(self, label, escape_sources):
             witness.append(f"{label} ({', '.join(positions)}, pruned)")
     if witness:

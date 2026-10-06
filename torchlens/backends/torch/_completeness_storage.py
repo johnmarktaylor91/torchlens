@@ -517,6 +517,7 @@ def _make_plain_scalar_escape_method(
             and get_tensor_label(self) is not None
         ):
             state.count += 1
+            state.labels.add(str(get_tensor_label(self)))
             if state.first_file is None:
                 state.first_file, state.first_line = _first_scalar_escape_source()
             if name == "__bool__":
@@ -702,6 +703,10 @@ def capture_scalar_escape_warning(trace: Any) -> Iterator[None]:
         raise
     else:
         _restore_scalar_belt()
+        if state.labels:
+            # Read (and popped) by postprocess: the source-less witness of an
+            # orphan-pruned op is kept only when its value reached an escape.
+            state.trace.__dict__["_plain_scalar_escape_labels"] = frozenset(state.labels)
         _warn_escapes()
 
 

@@ -519,6 +519,7 @@ def _warn_unattributed_tensor_args(self: "Trace") -> None:
     # control-flow predicate on a global) would lose its witness with the op;
     # ``_remove_orphan_nodes`` reads the witness before removal.
     orphans = list(self.__dict__.pop("_orphan_unattributed_tensor_args", None) or ())
+    self.__dict__.pop("_plain_scalar_escape_labels", None)
     # R16: module-entry adoptions of untagged tensors (outside disclosed
     # transform/dynamo regions) are the module-consumed twin of the
     # unattributed-args case; without this fold, a stale-ref escape whose
