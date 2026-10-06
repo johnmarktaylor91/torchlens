@@ -91,6 +91,11 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         "repeng extra; real-package bridge leg in nightly.yml bridges-real",
     ),
     "shap": (OPTIONAL_PREVIEW, "shap extra; real-package bridge leg in nightly.yml bridges-real"),
+    "sklearn": (
+        OPTIONAL_PREVIEW,
+        "scikit-learn PCA, pulled in by the repeng and dialz extras; gates the fake-based "
+        "contrastive read-representation parity tests in test_bridges_stretch.py",
+    ),
     "steering_vectors": (
         OPTIONAL_PREVIEW,
         "steering extra; real-package bridge leg in nightly.yml bridges-real",
