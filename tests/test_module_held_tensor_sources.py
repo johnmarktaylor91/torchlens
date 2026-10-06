@@ -396,8 +396,11 @@ class _TooDeep(nn.Module):
 
 def test_depth_bound_cut_is_disclosed_at_capture() -> None:
     x = torch.randn(5)
-    with pytest.warns(UserWarning, match=r"stopped scanning module-held containers"):
+    with pytest.warns(UserWarning, match=r"stopped scanning module-held containers") as record:
         trace = tl.trace(_TooDeep(), x)
+    fired = [w.message for w in record if "stopped scanning" in str(w.message)]
+    assert {getattr(m, "fields", {}).get("code") for m in fired} == {"held_tensor_scan_truncated"}
+    assert "deep['a']['b']['c']['d'] (depth bound 4)" in str(fired[0])
     assert list(trace.buffer_layers) == []
     assert [op.type for op in trace.layer_list] == ["input", "relu", "output"]
 

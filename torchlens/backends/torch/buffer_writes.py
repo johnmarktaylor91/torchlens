@@ -339,9 +339,8 @@ def iter_module_held_plain_tensors(
         if isinstance(attr_val, torch.Tensor):
             if not isinstance(attr_val, nn.Parameter):
                 yield attr_name, attr_val
-        elif isinstance(attr_val, dict):
-            if attr_val:
-                yield from scan.walk(attr_val, attr_name, 1)
+        elif isinstance(attr_val, dict) and attr_val:
+            yield from scan.walk(attr_val, attr_name, 1)
         elif isinstance(attr_val, (list, tuple)):
             # Top-level items keep the original unbounded ``name.<index>`` scan; only
             # containers below them enter the bounded walk.
@@ -351,9 +350,13 @@ def iter_module_held_plain_tensors(
                 if isinstance(item, torch.Tensor):
                     if not isinstance(item, nn.Parameter):
                         yield name, item
-                elif isinstance(item, (list, tuple, dict)) and item:
-                    if id(item) not in scan.entered and scan.admit(name):
-                        yield from scan.walk(item, name, 2)
+                elif (
+                    isinstance(item, (list, tuple, dict))
+                    and item
+                    and id(item) not in scan.entered
+                    and scan.admit(name)
+                ):
+                    yield from scan.walk(item, name, 2)
 
 
 def warn_held_scan_truncated(truncations: list[str]) -> None:
@@ -369,12 +372,19 @@ def warn_held_scan_truncated(truncations: list[str]) -> None:
         return
     import warnings
 
+    from ..._errors import TorchLensWarning
+
     shown = "; ".join(truncations[:5])
     suffix = "" if len(truncations) <= 5 else f" (+{len(truncations) - 5} more)"
     warnings.warn(
-        f"TorchLens stopped scanning module-held containers for plain tensors at "
-        f"{len(truncations)} place(s): {shown}{suffix}. A tensor past the cut that "
-        "the forward reads has no buffer source and fails graph validation.",
+        TorchLensWarning(
+            f"TorchLens stopped scanning module-held containers for plain tensors at "
+            f"{len(truncations)} place(s): {shown}{suffix}. A tensor past the cut that "
+            "the forward reads has no buffer source and fails graph validation. "
+            "Remedy: register tensors the forward reads with register_buffer, or hold "
+            "them in shallower or smaller containers",
+            code="held_tensor_scan_truncated",
+        ),
         stacklevel=3,
     )
 
