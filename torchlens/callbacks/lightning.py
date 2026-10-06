@@ -210,7 +210,9 @@ class _LayerProfilerCallbackMixin:
         from torchlens.options import CaptureOptions
 
         model_input = self._model_input(batch)
-        was_training = bool(getattr(pl_module, "training", False))
+        # Snapshot every submodule's flag: ``pl_module.train()`` afterwards
+        # would flip a frozen (eval-mode) backbone back into train mode.
+        training_flags = [(module, module.training) for module in pl_module.modules()]
         pl_module.eval()
         try:
             with torch.no_grad():
@@ -220,8 +222,8 @@ class _LayerProfilerCallbackMixin:
                     capture=CaptureOptions(layers_to_save=self.layers_to_save),
                 )
         finally:
-            if was_training:
-                pl_module.train()
+            for module, was_training in training_flags:
+                module.training = was_training
 
         try:
             record = {
