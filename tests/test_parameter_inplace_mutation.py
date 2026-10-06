@@ -20,6 +20,9 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.backends.torch import param_mutation, wrappers
+from torchlens.errors import TorchLensWarning
+from torchlens.options import CaptureOptions
+from torchlens.validation.invariants import MetadataInvariantError
 
 
 class _ParamMutator(nn.Module):
@@ -183,15 +186,12 @@ def test_plain_capture_graph_unchanged_without_mutation() -> None:
     assert trace.num_ops == 2
 
 
-@pytest.mark.smoke
-def test_validation_still_fails_when_the_parameter_mutation_is_dropped(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The completeness tripwire bites if capture drops the Parameter mutation again."""
+def _drop_prepared_parameter_mutations(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make capture drop every prepared-Parameter mutation op (the old gap)."""
 
     original = wrappers._parameter_mutation_output_for_logging
 
-    def _drop_prepared_parameter_mutations(
+    def _drop(
         trace: Any, value: Any, *, source: Any, was_inplace: bool, is_storage_rebind: bool = False
     ) -> Any:
         if (
@@ -208,9 +208,16 @@ def test_validation_still_fails_when_the_parameter_mutation_is_dropped(
             is_storage_rebind=is_storage_rebind,
         )
 
-    monkeypatch.setattr(
-        wrappers, "_parameter_mutation_output_for_logging", _drop_prepared_parameter_mutations
-    )
+    monkeypatch.setattr(wrappers, "_parameter_mutation_output_for_logging", _drop)
+
+
+@pytest.mark.smoke
+def test_validation_still_fails_when_the_parameter_mutation_is_dropped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The completeness tripwire bites if capture drops the Parameter mutation again."""
+
+    _drop_prepared_parameter_mutations(monkeypatch)
     with pytest.warns(Warning):
         assert tl.validate(_ParamMutator("clamp_"), torch.randn(3, 4), scope="forward") is False
     # The failure is the completeness tripwire on the dropped op, not an unrelated check.
@@ -317,12 +324,15 @@ def test_trainable_parameter_mutated_without_no_grad_still_raises_like_eager() -
 class _FrozenGradOperandMutator(nn.Module):
     """Mutate a frozen Parameter in place with an operand that may require grad."""
 
-    def __init__(self, spelling: str, grad_operand: bool = True) -> None:
+    def __init__(
+        self, spelling: str, grad_operand: bool = True, through_linear: bool = False
+    ) -> None:
         super().__init__()
         self.lin = nn.Linear(4, 4)
         self.temp = nn.Parameter(torch.full((4,), 0.9), requires_grad=False)
         self.spelling = spelling
         self.grad_operand = grad_operand
+        self.through_linear = through_linear
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         operand = self.lin.weight.sum(0)
@@ -335,6 +345,8 @@ class _FrozenGradOperandMutator(nn.Module):
             self.temp.index_put_(indices=(index,), values=operand[:2])
         else:
             self.temp.add_(operand)
+        if self.through_linear:
+            x = self.lin(x)
         return x / self.temp
 
 
@@ -531,3 +543,124 @@ def test_lazy_materialization_is_not_a_parameter_mutation() -> None:
     clamp = _ops_by_type(trace, "clamp")[0]
     assert [p.address for p in clamp.params] == ["temp"]
     assert clamp.label in _parent_labels(trace, _ops_by_type(trace, "truediv")[0])
+
+
+@pytest.mark.parametrize("spelling", ["positional", "keyword", "nested"])
+def test_frozen_parameter_with_grad_operand_validates_backward(spelling: str) -> None:
+    """Backward validation passes on the parity case and returns the model as it came.
+
+    The stock pass turns the frozen Parameter into a non-leaf whose history chains
+    into that pass; the captured pass must start from the pre-call (leaf) model, or
+    it would differentiate through the stock pass's graph as well. (The model calls
+    ``lin`` so the module-output gradient census has a non-root call to compare.)
+    """
+
+    torch.manual_seed(0)
+    model = _FrozenGradOperandMutator(spelling, through_linear=True)
+    x = torch.randn(3, 4)
+    validated = copy.deepcopy(model)
+    assert tl.validate(validated, x, scope="backward") is True
+    assert validated.temp.is_leaf is True
+    assert validated.temp.requires_grad is False
+    assert torch.equal(validated.temp.detach(), model.temp.detach())
+    assert validated.lin.weight.is_leaf is True
+    assert validated.lin.weight.requires_grad is True
+
+
+@pytest.mark.parametrize("spelling", ["positional", "keyword", "nested"])
+def test_frozen_parameter_mutation_op_records_its_gradient(spelling: str) -> None:
+    """The gradient flowing through the mutated Parameter is the mutation op's gradient."""
+
+    torch.manual_seed(0)
+    model = _FrozenGradOperandMutator(spelling, through_linear=True)
+    x = torch.randn(3, 4)
+    eager = copy.deepcopy(model)
+    eager_out = eager(x)
+    eager_temp = eager.temp
+    eager_temp.retain_grad()
+    eager_out.sum().backward()
+
+    trace = tl.trace(copy.deepcopy(model), x, capture=CaptureOptions(save_grads="all"))
+    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    mutation = _ops_by_type(trace, _GRAD_OPERAND_OP[spelling])[0]
+    assert mutation.grad is not None
+    assert torch.allclose(mutation.grad, eager_temp.grad)
+
+
+def test_no_grad_parameter_mutation_registers_no_gradient_hook() -> None:
+    """Narrowness: a trainable Parameter clamped under ``no_grad`` stays hook-free."""
+
+    torch.manual_seed(0)
+    model = _ParamMutator("clamp_")
+    trace = tl.trace(model, torch.randn(3, 4), capture=CaptureOptions(save_grads="all"))
+    assert model.temp.is_leaf is True
+    assert not model.temp._backward_hooks
+    assert _ops_by_type(trace, "clamp")
+
+
+def test_backward_validation_refuses_an_already_run_model_loudly() -> None:
+    """Narrowness: a Parameter that is a non-leaf BEFORE validation is not compared.
+
+    After one forward the frozen Parameter carries that pass's autograd history (as
+    in eager); no stock pass on this object describes a fresh model, so backward
+    validation fails closed with a reason instead of comparing stale gradients.
+    """
+
+    torch.manual_seed(0)
+    model = _FrozenGradOperandMutator("positional")
+    x = torch.randn(3, 4)
+    model(x)
+    assert model.temp.is_leaf is False
+    with pytest.warns(TorchLensWarning, match="not autograd leaves before validation") as caught:
+        assert tl.validate(model, x, scope="backward") is False
+    codes = [getattr(w.message, "fields", {}).get("code") for w in caught]
+    assert "backward_validation_non_leaf_parameter" in codes
+    assert model.temp.is_leaf is False
+
+
+def test_forward_validation_of_an_already_run_model_raises_torchs_leaf_error() -> None:
+    """Eager parity: a deepcopy of the run model makes the Parameter a trainable leaf.
+
+    ``Parameter.__deepcopy__`` turns the non-leaf into a leaf requiring grad, so the
+    ground-truth forward on that copy raises torch's own error, exactly as a second
+    eager forward on a deepcopy does.
+    """
+
+    torch.manual_seed(0)
+    model = _FrozenGradOperandMutator("positional")
+    x = torch.randn(3, 4)
+    model(x)
+    eager_copy = copy.deepcopy(model)
+    assert eager_copy.temp.is_leaf is True
+    assert eager_copy.temp.requires_grad is True
+    with pytest.raises(RuntimeError, match="leaf Variable that requires grad"):
+        eager_copy(x)
+    with pytest.raises(RuntimeError, match="leaf Variable that requires grad"):
+        tl.validate(model, x, scope="forward")
+
+
+def test_backward_validation_still_fails_when_the_frozen_mutation_is_dropped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The backward scope still bites if capture drops the grad-carrying mutation."""
+
+    _drop_prepared_parameter_mutations(monkeypatch)
+    torch.manual_seed(0)
+    model = _FrozenGradOperandMutator("positional", through_linear=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with pytest.raises(MetadataInvariantError, match="missing op label"):
+            tl.validate(model, torch.randn(3, 4), scope="backward")
+
+
+@pytest.mark.parametrize("op", ["clamp_", "twice"])
+def test_no_grad_parameter_mutation_validates_backward(op: str) -> None:
+    """The MIX-HIC shape (trainable Parameter clamped under ``no_grad``) passes backward."""
+
+    torch.manual_seed(0)
+    model = _ParamMutator(op)
+    x = torch.randn(3, 4)
+    validated = copy.deepcopy(model)
+    assert tl.validate(validated, x, scope="backward") is True
+    assert torch.equal(validated.temp.detach(), model.temp.detach())
+    assert validated.temp.is_leaf is True

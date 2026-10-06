@@ -912,10 +912,13 @@ def _label_mutated_prepared_parameter(
     parameter edge). Plain captures never reach this, so their graphs are
     unchanged.
 
-    No backward hook is registered: autograd refuses an in-place op on a leaf that
-    requires grad, so a Parameter mutation runs under ``no_grad`` or on a frozen
-    Parameter and no gradient flows through it. A persistent hook on model state
-    would also outlive the capture.
+    A gradient hook is registered only when the mutation left the Parameter with
+    autograd history (a frozen Parameter written with a grad-requiring operand ends
+    a non-leaf, as in eager): the gradient then flows through the live Parameter,
+    so it takes the op's gradient the way any live in-place result does. Such a
+    hook lives on this pass's ``grad_fn`` node, not on the Parameter. A Parameter
+    still a leaf (mutated under ``no_grad``) gets none: no gradient flows through
+    the write, and a hook on a leaf would outlive the capture on model state.
 
     Parameters
     ----------
@@ -931,6 +934,10 @@ def _label_mutated_prepared_parameter(
         return
     set_tensor_label(param, out_label)
     _propagate_mutation_label_to_storage_aliases(trace, param, out_label)
+    with internal_scalar_read():
+        carries_history = param.grad_fn is not None
+    if carries_history:
+        _register_inplace_live_grad_hook(trace, param, out_label)
 
 
 def _canonical_capture_callable(

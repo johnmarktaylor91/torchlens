@@ -15,6 +15,7 @@ from .._capture_state_helpers import unwrap_compiled_model
 from .._input_coerce import _coerce_input_args
 from .._input_walk import INPUT_TREE_MAX_DEPTH, raise_input_tree_depth_refusal
 from .._robustness import check_model_and_input_variants
+from ..errors import TorchLensWarning
 from ..intervention.errors import AppendStateValidationWarning
 from ..options import CaptureOptions
 from ..utils.arg_handling import normalize_input_args
@@ -236,11 +237,97 @@ def _param_grads(model: nn.Module) -> dict[str, torch.Tensor]:
     dict[str, torch.Tensor]
         Detached grad clones for parameters with grads.
     """
+    # A non-leaf Parameter (a frozen one written in place with a grad-requiring
+    # operand) never gets ``.grad`` unless it retains grad, and reading it warns.
     return {
         name: parameter.grad.detach().clone()
         for name, parameter in model.named_parameters()
-        if parameter.grad is not None
+        if (parameter.is_leaf or parameter.retains_grad) and parameter.grad is not None
     }
+
+
+def _leaf_parameter_flags(model: nn.Module) -> tuple[tuple[nn.Parameter, bool], ...]:
+    """Record each leaf Parameter with its ``requires_grad`` before a validation pass.
+
+    Parameters
+    ----------
+    model:
+        Model about to run the stock and candidate passes.
+
+    Returns
+    -------
+    tuple[tuple[nn.Parameter, bool], ...]
+        Every Parameter that is an autograd leaf now, with its current flag.
+    """
+
+    return tuple(
+        (parameter, parameter.requires_grad)
+        for parameter in model.parameters()
+        if parameter.is_leaf
+    )
+
+
+def _restore_leaf_parameters(leaf_flags: tuple[tuple[nn.Parameter, bool], ...]) -> None:
+    """Make Parameters that a pass turned into non-leaves leaves again, in place.
+
+    A forward that mutates a frozen Parameter in place with a grad-requiring
+    operand turns it into a non-leaf whose ``grad_fn`` chains into that pass's
+    graph, exactly as eager does. ``load_state_dict`` restores its VALUE but not
+    that history, so the next pass on the same object would differentiate
+    through the stale graph too (a second eager forward on that object does the
+    same) and its gradients could not equal a fresh model's. Validation's state
+    contract is the pre-call model, so the history is cut (``detach_`` keeps the
+    object and its storage) and the recorded flag is put back. (A Parameter that
+    is already a non-leaf before validation is refused up front, so it never
+    reaches here.)
+
+    Parameters
+    ----------
+    leaf_flags:
+        Output of :func:`_leaf_parameter_flags` taken before the passes.
+    """
+
+    for parameter, requires_grad in leaf_flags:
+        if parameter.is_leaf:
+            continue
+        parameter.detach_()
+        parameter.requires_grad_(requires_grad)
+
+
+def _refuse_non_leaf_parameters(model: nn.Module) -> bool:
+    """Warn and report True when a Parameter is already a non-leaf before validation.
+
+    Parameters
+    ----------
+    model:
+        Model about to be validated.
+
+    Returns
+    -------
+    bool
+        True when validation must return False: some Parameter carries the
+        autograd history of an earlier forward, so no stock pass on this object
+        describes the model the caller holds.
+    """
+
+    non_leaf_names = [name for name, parameter in model.named_parameters() if not parameter.is_leaf]
+    if not non_leaf_names:
+        return False
+    warnings.warn(
+        TorchLensWarning(
+            "validate_backward_pass cannot compare gradients: Parameter(s) "
+            f"{non_leaf_names[:3]} are not autograd leaves before validation (an "
+            "earlier forward mutated them in place with a grad-requiring operand, "
+            "as eager allows). Their gradient history chains into that earlier "
+            "pass, so stock and captured gradients would not describe the same "
+            "model; returning False. Remedy: validate a fresh copy of the model "
+            "instead",
+            code="backward_validation_non_leaf_parameter",
+            non_leaf_parameters=list(non_leaf_names),
+        ),
+        stacklevel=3,
+    )
+    return True
 
 
 def _clone_state_dict_with_metadata(model: nn.Module) -> OrderedDict[str, torch.Tensor]:
@@ -486,7 +573,10 @@ def validate_backward_pass(
         random_seed = random.randint(1, 4294967294)
     input_args = normalize_input_args(input_args, model)
     model_device = next((parameter.device for parameter in model.parameters()), None)
+    if _refuse_non_leaf_parameters(model):
+        return False
     state_dict = _clone_state_dict_with_metadata(model)
+    leaf_flags = _leaf_parameter_flags(model)
     original_training = model.training
     trace = None
     stock_module_grads = None
@@ -538,6 +628,7 @@ def validate_backward_pass(
         expected_param_grads = _param_grads(model)
 
         model.load_state_dict(state_dict)
+        _restore_leaf_parameters(leaf_flags)
         _restore_training_mode(model, original_training)
         set_random_seed(random_seed)
         logged_inputs, logged_kwargs = _prepare_inputs_for_backward(
@@ -669,6 +760,7 @@ def validate_backward_pass(
         return params_passed
     finally:
         model.load_state_dict(state_dict)
+        _restore_leaf_parameters(leaf_flags)
         _restore_training_mode(model, original_training)
         model.zero_grad(set_to_none=True)
         if trace is not None:
