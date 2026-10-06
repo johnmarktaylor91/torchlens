@@ -7,9 +7,6 @@ metric	count
 s17_total_sites	3406
 s17_uncoded_sites	1733
 s17_unclassified_sites	2182
-s18_total_sites	227
+s18_total_sites	228
 s18_uncoded_sites	168
-s18_contract_rows	59
-s18_total_sites	226
-s18_uncoded_sites	168
-s18_contract_rows	58
+s18_contract_rows	60
