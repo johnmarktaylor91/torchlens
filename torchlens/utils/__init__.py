@@ -775,7 +775,38 @@ def list_ops(
     return _log_ops_for_mode(model, x, mode)
 
 
-def flop_count(model: nn.Module, x: Any, *, count_fma_as_two: bool | None = None) -> int:
+def _refuse_flop_count_options(flop_convention: Any, unsupported: dict[str, Any]) -> None:
+    """Refuse a removed or unknown ``flop_count`` option before any capture runs."""
+
+    from torchlens._errors import InvalidArgumentError
+
+    if "count_fma_as_two" in unsupported:
+        problem = (
+            "flop_count() no longer accepts count_fma_as_two= (removed); use "
+            "flop_convention='fma2' (was True) or flop_convention='fma1' (was False)."
+        )
+    elif unsupported:
+        problem = (
+            f"flop_count() got unknown option(s) {sorted(unsupported)}; its only "
+            "option is flop_convention ('fma2' or 'fma1')."
+        )
+    elif flop_convention not in ("fma2", "fma1"):
+        problem = (
+            f"flop_count() got invalid flop_convention={flop_convention!r}; "
+            "valid choices: 'fma2', 'fma1'."
+        )
+    else:
+        return
+    raise InvalidArgumentError(
+        problem,
+        code="flop_count_option_invalid",
+        remedy="pass flop_convention='fma2' or flop_convention='fma1'",
+    )
+
+
+def flop_count(
+    model: nn.Module, x: Any, *, flop_convention: str = "fma2", **unsupported: Any
+) -> int:
     """Return a lightweight forward FLOP count from TorchLens metadata.
 
     Parameters
@@ -784,14 +815,23 @@ def flop_count(model: nn.Module, x: Any, *, count_fma_as_two: bool | None = None
         PyTorch model to run.
     x:
         Input passed to ``trace``.
-    count_fma_as_two:
-        FMA convention (sentinel default: omitted != explicit). ``None`` and
-        ``True`` count under the stored fma=2 convention (one
-        multiply-accumulate = 2 FLOPs). ``False`` recounts under fma=1 from
-        each op's two-term compute record; ops with no derivable MAC split
-        make the conversion impossible and refuse typed
-        (``flop_convention_unavailable``) -- the request is NEVER
-        accepted-and-ignored.
+    flop_convention:
+        ``"fma2"`` (default; one multiply-accumulate = 2 FLOPs, the stored
+        convention) or ``"fma1"`` (recount from each op's two-term compute
+        record). Ops with no derivable MAC split make the fma=1 conversion
+        impossible and refuse typed (``flop_convention_unavailable``) -- the
+        request is NEVER accepted-and-ignored. Same vocabulary as
+        ``summary(flop_convention=...)``.
+    **unsupported:
+        Refused typed (``flop_count_option_invalid``). The removed
+        ``count_fma_as_two`` spelling names ``flop_convention`` as its
+        replacement.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``flop_count_option_invalid`` for an unknown or removed option name
+        or a ``flop_convention`` outside ``"fma2"``/``"fma1"``.
 
     Returns
     -------
@@ -805,12 +845,13 @@ def flop_count(model: nn.Module, x: Any, *, count_fma_as_two: bool | None = None
     from torchlens.options import CaptureOptions
     from torchlens.report._compute_truth import forward_flops_total
 
+    _refuse_flop_count_options(flop_convention, unsupported)
     trace = cast(Callable[..., Any], trace_fn)(
         model,
         x,
         capture=CaptureOptions(layers_to_save=None),
     )
-    fma = 1 if count_fma_as_two is False else 2
+    fma = 1 if flop_convention == "fma1" else 2
     return int(forward_flops_total(trace, fma=fma))
 
 

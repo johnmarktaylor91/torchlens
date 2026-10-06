@@ -238,7 +238,7 @@ def format_flops(
 
     A pure formatter: it never converts between FMA conventions (the
     ``count_fma_as_two`` kwarg it once accepted-and-discarded is REMOVED --
-    convention selection lives on the counting surfaces such as
+    convention selection is ``flop_convention=`` on the counting surfaces
     ``Trace.summary``/``flop_count``, which honor it or refuse typed).
 
     Parameters

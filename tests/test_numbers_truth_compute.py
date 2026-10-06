@@ -121,15 +121,39 @@ def test_fma_outside_the_closed_vocabulary_refuses_typed() -> None:
 
 @pytest.mark.smoke
 def test_flop_count_conventions() -> None:
-    """A6: utils.flop_count honors the sentinel/True/False convention."""
+    """A6: utils.flop_count honors the default/fma2/fma1 convention."""
 
     from torchlens.utils import flop_count
 
     model = nn.Linear(8, 16, bias=True)
     x = torch.randn(2, 8)
     assert flop_count(model, x) == 544
-    assert flop_count(model, x, count_fma_as_two=True) == 544
-    assert flop_count(model, x, count_fma_as_two=False) == 288
+    assert flop_count(model, x, flop_convention="fma2") == 544
+    assert flop_count(model, x, flop_convention="fma1") == 288
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize(
+    ("kwargs", "taught"),
+    [
+        ({"count_fma_as_two": False}, "flop_convention='fma1'"),
+        ({"count_fma_as_two": True}, "flop_convention='fma2'"),
+        ({"fma": 1}, "flop_convention"),
+        ({"flop_convention": "fma3"}, "'fma2', 'fma1'"),
+    ],
+)
+def test_flop_count_refuses_removed_and_unknown_options(
+    kwargs: dict[str, object], taught: str
+) -> None:
+    """The removed count_fma_as_two spelling refuses typed naming flop_convention."""
+
+    from torchlens._errors import InvalidArgumentError
+    from torchlens.utils import flop_count
+
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        flop_count(nn.Linear(2, 2), torch.randn(1, 2), **kwargs)  # type: ignore[arg-type]
+    assert excinfo.value.fields["code"] == "flop_count_option_invalid"
+    assert taught in str(excinfo.value)
 
 
 def test_macs_format_in_mac_units_never_flops() -> None:
