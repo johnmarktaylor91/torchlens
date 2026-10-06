@@ -1529,6 +1529,34 @@ def _resolve_swap_value(other_label: Any) -> Any:
     return getattr(other_label, "out", other_label)
 
 
+#: Removed spellings: each raises the typed ``facade_redirect`` error naming
+#: its replacement (clean break, no alias).
+_REDIRECTS: dict[str, str] = {
+    "resample_ablate": "use torchlens.intervention.scramble_elements -- resample_ablate was renamed",
+}
+
+
+def __getattr__(name: str) -> Any:
+    """Raise the typed teaching error for a removed helper spelling.
+
+    Parameters
+    ----------
+    name:
+        Attribute name being looked up on ``torchlens.intervention.helpers``.
+
+    Raises
+    ------
+    AttributeError
+        Typed ``facade_redirect`` for a removed spelling, plain otherwise.
+    """
+
+    from ..utils.facade import resolve_facade_attr
+
+    return resolve_facade_attr(
+        owner=__name__, name=name, module_globals=globals(), redirects=_REDIRECTS
+    )
+
+
 __all__ = [
     "HELPER_REGISTRY_VERSION",
     "bwd_hook",

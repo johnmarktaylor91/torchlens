@@ -310,7 +310,7 @@ _ALLOWED: dict[str, tuple[frozenset[str], str]] = {
     ),
     "torchlens/__init__.py": (
         frozenset({"paper_era"}),
-        "teaching redirect table: the three paper-era rows raise a typed "
+        "teaching redirect table: the paper-era rows raise a typed "
         "facade_redirect AttributeError naming the canonical home (AUD-CODE "
         "3.14; GATE-FIX row 1) -- a redirect for a removed name is the table's "
         "purpose, never a resurrection; tests/test_w051_capt3_paper_era_redirects.py pins them",

@@ -3,7 +3,8 @@
 The moved-name ``__getattr__`` table, the paper-era API shims, and the
 deprecated top-level wrapper functions were deleted by the 2026-08-19
 shim-removal lane. Contract now: the historical top-level spellings raise
-``AttributeError`` and the canonical submodule spellings resolve.
+the typed ``facade_redirect`` ``FacadeTeachingError`` (an ``AttributeError``)
+naming their canonical home, and the canonical submodule spellings resolve.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import importlib
 import pytest
 
 import torchlens
+from torchlens._errors import FacadeTeachingError
 
 #: (removed top-level name, canonical module, canonical attribute).
 REMOVED_TOP_LEVEL_CASES = [
@@ -104,20 +106,23 @@ REMOVED_PAPER_ERA_NAMES = [
 def test_moved_name_is_gone_and_canonical_resolves(
     old_name: str, module_name: str, new_name: str
 ) -> None:
-    """The old top-level spelling refuses; the canonical spelling resolves."""
+    """The old top-level spelling refuses typed naming its home; the canonical resolves."""
 
-    with pytest.raises(AttributeError):
+    with pytest.raises(FacadeTeachingError) as excinfo:
         getattr(torchlens, old_name)
+    assert excinfo.value.fields["code"] == "facade_redirect"
+    assert module_name in str(excinfo.value)
     module = importlib.import_module(module_name)
     assert getattr(module, new_name) is not None
 
 
 @pytest.mark.parametrize("name", REMOVED_WRAPPER_NAMES + REMOVED_PAPER_ERA_NAMES)
 def test_removed_top_level_wrapper_is_gone(name: str) -> None:
-    """Removed wrapper and paper-era spellings raise AttributeError."""
+    """Removed wrapper and paper-era spellings raise the typed redirect error."""
 
-    with pytest.raises(AttributeError):
+    with pytest.raises(FacadeTeachingError) as excinfo:
         getattr(torchlens, name)
+    assert excinfo.value.fields["code"] == "facade_redirect"
 
 
 def test_dir_lists_no_removed_names() -> None:

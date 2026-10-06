@@ -389,6 +389,12 @@ _LAZY_NAMES: dict[str, str] = {
     "run": ".rerun",
 }
 
+#: Removed spellings: each raises the typed ``facade_redirect`` error naming
+#: its replacement (clean break, no alias).
+_REDIRECTS: dict[str, str] = {
+    "resample_ablate": "use torchlens.intervention.scramble_elements -- resample_ablate was renamed",
+}
+
 
 def __getattr__(name: str) -> Any:
     """Resolve the cycle-deferred public names on first access.
@@ -411,7 +417,11 @@ def __getattr__(name: str) -> Any:
 
     module_name = _LAZY_NAMES.get(name)
     if module_name is None:
-        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+        from ..utils.facade import resolve_facade_attr
+
+        return resolve_facade_attr(
+            owner=__name__, name=name, module_globals=globals(), redirects=_REDIRECTS
+        )
     from importlib import import_module
 
     value = getattr(import_module(module_name, __name__), name)

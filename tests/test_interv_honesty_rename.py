@@ -30,8 +30,22 @@ def test_old_spelling_is_gone() -> None:
     assert not hasattr(intervention, "resample_ablate")
     assert "resample_ablate" not in intervention.__all__
     assert "resample_ablate" not in tl.__all__
-    with pytest.raises(AttributeError):
-        tl.resample_ablate  # noqa: B018 - the attribute access IS the assertion
+    assert "resample_ablate" not in dir(tl)
+
+
+@pytest.mark.parametrize("owner", ["torchlens", "intervention", "helpers"])
+def test_old_spelling_raises_typed_error_naming_the_replacement(owner: str) -> None:
+    """Every removed spelling raises facade_redirect naming scramble_elements."""
+
+    import torchlens.intervention as intervention
+    from torchlens._errors import FacadeTeachingError
+    from torchlens.intervention import helpers
+
+    module = {"torchlens": tl, "intervention": intervention, "helpers": helpers}[owner]
+    with pytest.raises(FacadeTeachingError) as excinfo:
+        module.resample_ablate  # noqa: B018 - the attribute access IS the assertion
+    assert excinfo.value.fields["code"] == "facade_redirect"
+    assert "torchlens.intervention.scramble_elements" in str(excinfo.value)
 
 
 def test_constructor_mints_the_honest_name() -> None:
