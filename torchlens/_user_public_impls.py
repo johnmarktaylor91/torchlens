@@ -1096,6 +1096,10 @@ def _warn_if_validation_trace_not_reproducible(
         fresh re-trace check itself cannot be completed.
     """
 
+    # Read outside the guard below: a trace without its save options must fail
+    # loudly, never read as an "unavailable" re-trace.
+    retrace_output_device = cast(OutputDeviceLiteral, first_trace.output_device)
+    retrace_save_budget = first_trace.save_budget
     second_trace: Trace | None = None
     try:
         # Buffer-source identity is assigned during postprocessing only when the
@@ -1124,8 +1128,8 @@ def _warn_if_validation_trace_not_reproducible(
                 save_arg_values=False,
                 random_seed=random_seed,
                 save_rng_states=False,
-                output_device=cast(OutputDeviceLiteral, first_trace.output_device),
-                save_budget=first_trace.save_budget,
+                output_device=retrace_output_device,
+                save_budget=retrace_save_budget,
             )
         finally:
             _state._completeness_witness_mode = prior_witness_mode
