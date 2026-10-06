@@ -443,6 +443,47 @@ def test_tracker_exports_accept_existing_objects(export_log: Any, tmp_path: Path
     assert "table" in wandb_result
 
 
+def test_mlflow_export_routes_run_id_by_client_shape(export_log: Any) -> None:
+    """MlflowClient-style log_metric(run_id, key, value) needs run_id; fluent takes it as kwarg."""
+
+    class _Client:
+        def __init__(self) -> None:
+            self.calls: list[tuple[Any, ...]] = []
+
+        def log_metric(self, run_id: str, key: str, value: float, step: int | None = None) -> None:
+            self.calls.append((run_id, key, value))
+
+    class _Fluent:
+        def __init__(self) -> None:
+            self.calls: list[tuple[Any, ...]] = []
+
+        def log_metric(self, key: str, value: float, step: int | None = None, run_id: Any = None):
+            self.calls.append((key, value, run_id))
+
+    class _Bare:
+        def log_metric(self, key: str, value: float) -> None:
+            del key, value
+
+    client = _Client()
+    with pytest.raises(TypeError, match="without run_id"):
+        tl.export.mlflow(export_log, client=client)
+    assert client.calls == []
+    metrics = tl.export.mlflow(export_log, client=client, run_id="r1")
+    assert {(call[0], call[1]) for call in client.calls} == {
+        ("r1", f"torchlens.{key}")
+        for key in ("num_layers", "num_saved_ops", "total_activation_memory")
+    }
+    assert client.calls[0][2] == metrics[client.calls[0][1].split(".", 1)[1]]
+
+    fluent = _Fluent()
+    tl.export.mlflow(export_log, client=fluent, run_id="r2")
+    assert {call[2] for call in fluent.calls} == {"r2"}
+    with pytest.raises(TypeError, match="takes no run_id"):
+        tl.export.mlflow(export_log, client=_Bare(), run_id="r3")
+    with pytest.raises(TypeError, match="without a client"):
+        tl.export.mlflow(export_log, run_id="r4")
+
+
 def test_tracker_exports_reject_paths_with_clear_type_errors(
     export_log: Any, tmp_path: Path
 ) -> None:
@@ -667,13 +708,13 @@ def test_hub_push_scrubs_local_paths_from_uploaded_trace(export_log: Any) -> Non
         assert user.encode() not in contents, "uploaded artifact leaked the username"
 
 
-def test_depyf_bridge_fails_soft_when_extra_missing() -> None:
+def test_depyf_bridge_fails_soft_when_extra_missing(tmp_path: Path) -> None:
     """depyf bridge should explain the missing optional dependency."""
 
     if importlib.util.find_spec("depyf") is not None:
         pytest.skip("Installed depyf API varies; smoke coverage is in the extras matrix.")
     with pytest.raises(ImportError, match=r"torchlens\[depyf\]"):
-        tl.bridge.depyf.dump(nn.Linear(1, 1), torch.randn(1, 1))
+        tl.bridge.depyf.dump(nn.Linear(1, 1), torch.randn(1, 1), tmp_path)
 
 
 def test_netron_export_is_valid_onnx_modelproto_json(export_log: Any, tmp_path: Path) -> None:

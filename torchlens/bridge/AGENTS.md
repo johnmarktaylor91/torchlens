@@ -10,10 +10,27 @@ optional dependency.
   raises `ValueError` when the model was garbage-collected.
 - `resolve_one_site()`, `out_at()`, `first_input_tensor()`, `tensor_layers()`
   map site-like values (labels/selectors/layer objects) to saved tensor outs.
+- `module_for_site(log, site, *, bridge=)` is the ONE module resolver the
+  attribution bridges share (Grad-CAM `layer()`, Captum `layer()`): a module
+  address returns that module; an op label returns the OUTERMOST module in
+  the op's `output_of_module_calls` (`relu_17_66` in resnet18 is `layer4`,
+  never the inner `layer4.1.relu`); a pass-qualified address resolves through
+  the op that call returns the same way (`layer4.1.relu:2` is `layer4`); an
+  op label or pass-qualified address whose resolved module runs more than
+  once refuses typed (`bridge_module_site_multi_call`, remedy naming the
+  nearest enclosing single-call module), because a module hook sees every
+  call.
 
 ## Adapter files and main entry points
-- `captum.py`: `attribute()`, `layer()` (extra: `torchlens[captum]`).
-- `shap.py`: `explain()` (default `shap.DeepExplainer`; extra `torchlens[shap]`).
+- `captum.py`: `attribute()`, `layer()` (extra: `torchlens[captum]`;
+  `layer()` is `_utils.module_for_site`).
+- `shap.py`: `explain(log, *, background, inputs=None, ...)` (default
+  `shap.DeepExplainer`; extra `torchlens[shap]`, `shap>=0.45.1,<1`).
+  `background` is REQUIRED keyword-only: the old default made the explained
+  inputs their own background, which gives all-zero values for one input.
+  `background=None` refuses typed (`bridge_shap_background_missing`) before
+  shap is called.
+  `inputs` defaults to the first saved input tensor.
 - `sae_lens.py`: `encode()`, `decode()` (extra: `torchlens[sae]`).
 - `lit/`: `model(net, tokenizer, *, task=, sites=, ...)` wraps a LIVE model as
   a real `lit_nlp.api.model.Model` (classification + causal LM); `dataset()`,
@@ -29,8 +46,22 @@ optional dependency.
   the functions).
 - `huggingface.py`: `push_to_hub()` for artifacts (extra: `torchlens[hf]`).
 - `profiler.py`: `execution_trace()`, `join()` correlate a Kineto/Chrome trace
-  with captured layers; stdlib-only, no import gate.
-- `gradcam.py`: `cam()`, `layer()` (extra: `torchlens[gradcam]`).
+  with captured layers; stdlib-only, no import gate. `join()` (schema
+  `torchlens.profiler_join.v2`) assigns each complete event to at most one
+  layer: a `record_function` range whose name EQUALS a layer label, else the
+  k-th outermost `aten::<op>` event (an aten event inside ANY other aten
+  event on its thread is internal and never counts; `add` and `__add__` pool
+  under `aten::add` in execution order) to the k-th layer of that op, `k mod
+  L` for n repeated forwards. Every assigned type must imply the same n
+  (payload `forwards`). Types whose event count is not a multiple of their
+  layer count, or whose n differs from the n most types share, stay unmatched
+  in `mismatched_op_types` (with a `UserWarning`); every unmatched event is
+  counted by name in `unmatched_event_counts`. Host-side times: not a rate
+  denominator.
+- `gradcam.py`: `cam()`, `layer()` (extra: `torchlens[gradcam]`). `cam()`
+  splits `**kwargs` by name: keywords the CAM constructor declares
+  (`reshape_transform`, ...) go to the constructor, the rest (`aug_smooth`,
+  `eigen_smooth`) to the CAM call. `layer()` is `_utils.module_for_site`.
 - `brain_score.py`: `per_layer()` takes a CALLABLE offline benchmark (no
   import gate; raises `TypeError` on non-callables). `get_activations_fn()`
   builds the `get_activations(images, layer_names) -> OrderedDict[str,
@@ -61,6 +92,59 @@ optional dependency.
   stable payload schema; offline, no import gate.
 - `inseq.py`: `attribute()` (extra: `torchlens[inseq]`).
 - `depyf.py`: `dump()` (extra: `torchlens[depyf]`).
+- Contrastive steering family (`steering_vectors.py`, `repeng.py`, `dialz.py`):
+  each trains the package's own vector from saved activations, never by
+  re-running the model. Shared signature: `(log, positive_site,
+  negative_site=None, *, negative_log=None, read_token_index=-1,
+  attention_mask=None, negative_attention_mask=None, ...)`; the negative
+  prompts usually live in a second trace (`negative_log=`, the site then
+  defaults to `positive_site`; a layer-object site is re-resolved there by its
+  `layer_label`), and one token per prompt is read before training (`-1` =
+  last; a sequence = one index per prompt; `None` = unsliced `[n, hidden]`
+  outs). Padding: each side's mask is the explicit one or the trace's saved
+  `attention_mask` input; with a mask, indices count within each prompt's
+  unpadded tokens (steering-vectors' `adjust_read_indices_for_padding`), so
+  `-1` is the last real token as repeng and dialz read it. Identical positive
+  and negative rows (an all-zero vector) are refused. Private shared helpers
+  live in `_contrastive.py`. On HF decoders
+  trace with `config.use_cache = False`, or `"model.layers.<i>"` is ambiguous
+  (hidden state plus KV-cache outputs).
+  - `steering_vectors.py`: `vector(..., trainer=None, layer=None,
+    layer_type="decoder_block")` (extra `torchlens[steering]`); the default
+    trainer is `steering_vectors.mean_aggregator()`; `layer=` adds a real
+    `SteeringVector` under `steering_vector`. Bit-identical to
+    `train_steering_vector(..., read_token_index=-1, batch_size=1)`; padded
+    batches match the package's batched run when the mask is known. Pinned
+    to the tested line, `steering-vectors~=0.12`.
+  - `repeng.py`: `control_vector(..., layer, method="pca_diff",
+    model_type=None)` (extra `torchlens[repeng]`) replicates
+    `repeng.extract.read_representations` (PCA, sign rule, in-place centring
+    for `pca_center`) and returns a real `repeng.ControlVector`.
+  - `dialz.py`: `vector(..., layer, method=None, model_type=None)` (extra
+    `torchlens[dialz]`, dialz 0.2 through 1.x) does the same against
+    `dialz.vector.read_representations` and returns a real
+    `dialz.SteeringVector`; `method=None` follows the installed release's
+    default (`pca` in 1.x, `pca_diff` in 0.2). The old `analyze()` is removed.
+  - repeng/dialz layer `i` matches `hidden_states[i + 1]`, which is the
+    output of `model.layers.<i>` except at the last layer, where Hugging Face
+    returns the final-norm output (site `"model.norm"`).
+- `nnsight.py`: `from_trace()` normalizes a cached nnsight-style trace (a
+  mapping, `to_dict()` returning a mapping, or an object with `nodes`) into
+  a stable payload schema; anything else, including a live nnsight 0.7
+  tracer, raises `TypeError` naming the supported shapes (never an empty
+  payload). Offline, no import gate.
+- `inseq.py`: `attribute(model_or_id, inputs, *, method="integrated_gradients",
+  generated_texts=None, attribution_model=None, **kwargs)`; names follow
+  inseq 0.7 (`load_model(model, attribution_method)`,
+  `AttributionModel.attribute(input_texts, generated_texts=...)`); inseq
+  swallows unknown keywords with only a warning, so a wrong spelling is
+  silently ignored -- verify keywords against inseq's signatures (extra:
+  `torchlens[inseq]`).
+- `depyf.py`: `dump(model, x, path, **prepare_debug_kwargs) -> list[Path]`
+  runs `with depyf.prepare_debug(path): torch.compile(model)(*x)` and
+  returns the files written; `path` is required; a cached compile that
+  dumps nothing raises `RuntimeError` naming `torch._dynamo.reset()`
+  (extra: `torchlens[depyf]`).
 - `dialz.py`: `analyze()` (extra: `torchlens[dialz]`).
 - `repeng.py`: `control_vector()` (extra: `torchlens[repeng]`).
 - `steering_vectors.py`: `vector()` (extra: `torchlens[steering]`).
@@ -71,14 +155,19 @@ optional dependency.
   naming the exact extra, e.g.
   "Captum bridge requires the `captum` extra: install torchlens[captum].".
 - Tests gate on the dependency with `pytest.importorskip()`; offline adapters
-  (`brain_score`, `nnsight`, `profiler`) run without extras.
+  (`brain_score`, `nnsight`, `profiler`) run without extras. Fake-module
+  tests pass while the real package fails (depyf, inseq and nnsight all
+  did), so each bridge also keeps a real-package file
+  `tests/test_bridge_real_<bridge>.py` that compares against the package
+  used directly.
 
 ## Local Invariants / Gotchas
 - Adding an adapter requires updating BOTH `_BRIDGE_MODULES` and `__all__` in
   `__init__.py`; a name missing from `_BRIDGE_MODULES` raises
   `AttributeError` on access.
-- Bridges that execute the model (`captum`, `shap`, `gradcam`, `repeng`,
-  `steering_vectors`, ...) need the source model alive; `tl.release_model()`
+- Bridges that execute the model (`captum`, `shap`, `gradcam`, ...) need the
+  source model alive (repeng/dialz read only its `config.model_type`, and
+  only when `model_type=` is not given); `tl.release_model()`
   or a dropped reference makes `source_model()` raise.
 - Site arguments must carry saved tensor outs; `out_at()` raises `ValueError`
   otherwise. Keep error messages actionable (name the site and the extra).

@@ -7,6 +7,8 @@ members of the export-target registry.
 
 from __future__ import annotations
 
+import functools
+import inspect
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +17,7 @@ from .._capture_honesty import (
     capture_honesty_facts,
     honesty_preamble_lines,
 )
+from .._errors import ArgumentTypeError, KeywordConflictError
 from ._common import _scalarize_cell
 
 __tl_layer__ = "L8"
@@ -104,32 +107,91 @@ def wandb(log: Any, run: Any | None = None, name: str = "torchlens_trace") -> di
     }
 
 
-def mlflow(log: Any, client: Any | None = None, prefix: str = "torchlens") -> dict[str, Any]:
-    """Log simple TorchLens metrics to an existing MLflow-like client.
+def mlflow(
+    log: Any,
+    client: Any | None = None,
+    prefix: str = "torchlens",
+    *,
+    run_id: str | None = None,
+) -> dict[str, Any]:
+    """Log simple TorchLens metrics through MLflow.
+
+    Two client shapes are accepted, told apart by ``log_metric``'s signature
+    (this package never imports mlflow): the fluent ``mlflow`` module
+    (``log_metric(key, value, ...)``, logging to the active run, or to
+    ``run_id`` when given) and an ``mlflow.MlflowClient``
+    (``log_metric(run_id, key, value, ...)``), which needs ``run_id``.
 
     Parameters
     ----------
     log:
         TorchLens ``Trace`` to summarize.
     client:
-        Optional object exposing ``log_metric``.
+        Optional ``mlflow`` module, ``mlflow.MlflowClient``, or other object
+        exposing ``log_metric(key, value)``.
     prefix:
         Metric name prefix.
+    run_id:
+        MLflow run to log into. Required with an ``MlflowClient``; with the
+        fluent module it is forwarded as ``run_id=``.
 
     Returns
     -------
     dict[str, Any]
         Metrics that were prepared for logging.
+
+    Raises
+    ------
+    TypeError
+        If ``client`` lacks ``log_metric``, an ``MlflowClient`` comes without
+        ``run_id``, or ``run_id`` is given to a client that cannot take it.
     """
 
     metrics = _summary_metrics(log)
     if client is not None:
         _require_tracker_object(client, method_name="mlflow", required_method="log_metric")
+        log_metric = _mlflow_log_metric(client.log_metric, run_id)
         for key, value in metrics.items():
-            client.log_metric(f"{prefix}.{key}", value)
+            log_metric(f"{prefix}.{key}", value)
+    elif run_id is not None:
+        raise KeywordConflictError(
+            "torchlens.export.mlflow got run_id= without a client to log through",
+            code="tracker_mlflow_run_id_without_client",
+            remedy="pass client=mlflow.MlflowClient() with run_id=, or drop run_id=",
+        )
     # Honesty facts are returned (not logged): log_metric accepts numerics
     # only, and coercing verification facts to numbers would misstate them.
     return {**metrics, "capture_honesty": capture_honesty_facts(log)}
+
+
+def _mlflow_log_metric(log_metric: Any, run_id: str | None) -> Any:
+    """Bind ``run_id`` for the client shape ``log_metric`` belongs to."""
+
+    try:
+        params = list(inspect.signature(log_metric).parameters.values())
+    except (TypeError, ValueError):
+        params = []
+    if params and params[0].name == "run_id":
+        if run_id is None:
+            raise ArgumentTypeError(
+                "torchlens.export.mlflow got an MlflowClient-style client "
+                "(log_metric(run_id, key, value)) without run_id=",
+                code="tracker_mlflow_run_id_missing",
+                remedy=(
+                    "pass run_id=run.info.run_id, or pass the fluent `mlflow` module to "
+                    "log into the active run"
+                ),
+            )
+        return functools.partial(log_metric, run_id)
+    if run_id is None:
+        return log_metric
+    if any(param.name == "run_id" for param in params):
+        return functools.partial(log_metric, run_id=run_id)
+    raise KeywordConflictError(
+        "torchlens.export.mlflow got run_id= but this client's log_metric takes no run_id",
+        code="tracker_mlflow_run_id_unsupported",
+        remedy="drop run_id=, or pass an mlflow.MlflowClient",
+    )
 
 
 def aim(log: Any, run: Any | None = None, prefix: str = "torchlens") -> dict[str, Any]:

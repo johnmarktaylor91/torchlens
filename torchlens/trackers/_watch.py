@@ -1109,7 +1109,12 @@ def watch(
     grain:
         ``"op"`` requests op-grain identity and refuses typed this window.
     descriptor:
-        Histogram grid override (see ``WANDB_SAFE_DESCRIPTOR``).
+        Histogram grid override. Only when both this and ``settings`` are
+        None does the first sink offering ``default_histogram_descriptor()``
+        supply the grid (``WandbSink``: ``WANDB_SAFE_DESCRIPTOR``, 497
+        buckets), and that one grid then applies to every sink; otherwise the
+        caller's grid, or the C06 default grid, applies and each sink's
+        preflight judges it.
     budgets:
         Hard caps checked against the plan as preflight FACTS:
         ``max_sites``, ``max_bytes_per_step``, ``max_elements_per_step``.
@@ -1165,6 +1170,8 @@ def watch(
             ),
         )
     streams = tuple(_SIGNAL_STREAMS[signal] for signal in requested if signal in _SIGNAL_STREAMS)
+    if descriptor is None and settings is None and needs_histograms:
+        descriptor = _sink_default_descriptor(sinks)
     base_settings = _resolve_settings(settings, descriptor, needs_histograms)
     _refuse_second_session(model, grammar)
     _preflight_histogram_sinks(sinks, base_settings.descriptor, needs_histograms)
@@ -1293,6 +1300,26 @@ def _refuse_second_session(model: torch.nn.Module, grammar: TagGrammar) -> None:
                 "the two series stay distinguishable."
             ),
         )
+
+
+def _sink_default_descriptor(sinks: tuple[Any, ...]) -> HistogramDescriptor | None:
+    """The first sink-offered histogram grid; the caller passed neither grid nor settings.
+
+    A sink may expose ``default_histogram_descriptor()`` (``WandbSink`` returns
+    ``WANDB_SAFE_DESCRIPTOR``, which fits wandb's bucket cap). The first offer
+    applies to every sink of the session; every sink's preflight still judges
+    it, so a later sink with a tighter cap refuses rather than truncating.
+    Any ``settings=`` object, even ``WatchSettings()``, is a caller choice and
+    is never overridden.
+    """
+
+    for sink in sinks:
+        offer = getattr(sink, "default_histogram_descriptor", None)
+        if callable(offer):
+            offered = offer()
+            if isinstance(offered, HistogramDescriptor):
+                return offered
+    return None
 
 
 def _preflight_histogram_sinks(

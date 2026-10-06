@@ -1011,6 +1011,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/backends/torch/rescue.py", "__all__"),
         ("torchlens/brainpipe.py", "__all__"),
         ("torchlens/bridge/__init__.py", "__all__"),
+        ("torchlens/bridge/_contrastive.py", "__all__"),
         ("torchlens/bridge/_utils.py", "__all__"),
         ("torchlens/bridge/brain_score.py", "__all__"),
         ("torchlens/bridge/captum.py", "__all__"),

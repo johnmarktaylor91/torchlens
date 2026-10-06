@@ -56,9 +56,8 @@ FIXED_IMPORT_CYCLES = (
 #: (``importlib.util.find_spec``) so an environment that DOES install the
 #: package still gets the real standalone-import proof.
 OPTIONAL_DEPENDENCY_MODULES: dict[str, str] = {
-    # pyproject.toml: lit-nlp 1.3 requires shap<0.46, conflicting with the
-    # shap~=0.46 pin, so [lit] stays permanently excluded from
-    # all/all-stretch (Batch-8 ruling) -- no CI leg ever installs it
+    # pyproject.toml: lit-nlp 1.3 requires numpy<2, so [lit] stays excluded
+    # from all/all-stretch (Batch-8 ruling) -- no CI leg ever installs it
     # alongside the rest of the suite's extras.
     "torchlens.bridge.lit._adapters": "lit_nlp",
 }

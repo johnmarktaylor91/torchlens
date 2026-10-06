@@ -1,11 +1,21 @@
-"""repeng bridge helpers."""
+"""repeng bridge helpers.
+
+Builds a real ``repeng.ControlVector`` from contrastive saved TorchLens
+activations. ``ControlVector.train`` runs the model itself and then computes the
+direction in ``repeng.extract.read_representations``; this bridge replicates that
+direction math on the saved last-token activations instead of re-running the
+model. The private helper ``_read_directions`` is shared with the dialz bridge,
+whose ``read_representations`` is a fork of repeng's.
+"""
 
 from __future__ import annotations
 
-import inspect
+from collections.abc import Sequence
 from typing import Any
 
-from ._utils import out_at
+import torch
+
+from ._contrastive import _contrastive_rows, _interleave, _model_type, _read_directions
 
 
 def control_vector(
@@ -13,35 +23,67 @@ def control_vector(
     positive_site: Any,
     negative_site: Any | None = None,
     *,
-    vector_factory: Any | None = None,
-    **kwargs: Any,
+    layer: int,
+    negative_log: Any | None = None,
+    read_token_index: int | Sequence[int] | None = -1,
+    attention_mask: torch.Tensor | None = None,
+    negative_attention_mask: torch.Tensor | None = None,
+    method: str = "pca_diff",
+    model_type: str | None = None,
 ) -> dict[str, Any]:
-    """Build a repeng control vector from saved TorchLens outs.
+    """Build a ``repeng.ControlVector`` from contrastive saved TorchLens outs.
 
     Parameters
     ----------
     log:
-        TorchLens ``Trace``.
+        TorchLens ``Trace`` of the positive prompts (one prompt per batch row).
     positive_site:
-        Site containing positive outs.
+        Site whose saved out holds the positive hidden states. repeng's layer
+        ``i`` reads ``hidden_states[i + 1]``: the output of decoder layer ``i``
+        (``"model.layers.<i>"``), except for the last layer, where Hugging Face
+        returns the final-norm output (``"model.norm"``).
     negative_site:
-        Optional site containing negative outs.
-    vector_factory:
-        Optional downstream factory or class.
-    **kwargs:
-        Additional keyword arguments forwarded to the downstream factory.
+        Site holding the negative hidden states. Defaults to ``positive_site``
+        when ``negative_log`` is given.
+    layer:
+        Layer index the direction is keyed by in ``ControlVector.directions``;
+        ``ControlModel`` applies it to that decoder layer.
+    negative_log:
+        Optional TorchLens ``Trace`` of the negative prompts. A layer-object
+        site is re-resolved there by its label.
+    read_token_index:
+        Token position read per prompt (default ``-1``, the last token, which is
+        what ``ControlVector.train`` reads); a sequence gives one position per
+        prompt; ``None`` passes ``[n_prompts, hidden]`` outs unsliced.
+    attention_mask:
+        ``[n_prompts, n_tokens]`` mask of the positive prompts (1 for real
+        tokens). Read from the trace's saved ``attention_mask`` input when
+        omitted. With a mask, ``read_token_index`` counts within each prompt's
+        unpadded tokens (``-1`` is the last real token), so right- or
+        left-padded batches of unequal-length prompts read the right token.
+    negative_attention_mask:
+        Mask of the negative prompts. Defaults to ``attention_mask`` when both
+        sites live in ``log``, else to ``negative_log``'s saved mask.
+    method:
+        repeng's training method: ``"pca_diff"`` (default), ``"pca_center"``, or
+        ``"umap"`` (needs the ``umap`` package).
+    model_type:
+        ``ControlVector.model_type``. Defaults to the traced model's
+        ``config.model_type``.
 
     Returns
     -------
     dict[str, Any]
-        Contract payload containing the downstream control vector.
+        Payload with ``control_vector`` (a ``repeng.ControlVector``) and the
+        ``positive``/``negative`` rows.
 
     Raises
     ------
     ImportError
         If repeng is unavailable.
-    RuntimeError
-        If no supported factory is exposed.
+    ValueError
+        If no negative activations are given, the rows do not line up or are
+        identical, the method is unknown, or no model type can be found.
     """
 
     try:
@@ -51,11 +93,21 @@ def control_vector(
             "repeng bridge requires the `repeng` extra: install torchlens[repeng]."
         ) from exc
 
-    positive = out_at(log, positive_site)
-    negative = None if negative_site is None else out_at(log, negative_site)
-    factory, is_default = _resolve_factory(repeng_module, vector_factory)
-    result = _call_factory(
-        factory, positive=positive, negative=negative, is_default=is_default, **kwargs
+    positive, negative = _contrastive_rows(
+        log,
+        positive_site,
+        negative_site,
+        negative_log=negative_log,
+        read_token_index=read_token_index,
+        attention_mask=attention_mask,
+        negative_attention_mask=negative_attention_mask,
+    )
+    hiddens = _interleave(positive, negative)
+    direction = _read_directions(
+        hiddens, method, diff_methods=("pca_diff",), center_in_place=True, mean_diff=False
+    )
+    result = repeng_module.ControlVector(
+        model_type=_model_type(log, model_type), directions={int(layer): direction}
     )
     return {
         "schema": "torchlens.repeng.v1",
@@ -63,116 +115,6 @@ def control_vector(
         "positive": positive,
         "negative": negative,
     }
-
-
-def _resolve_factory(module: Any, vector_factory: Any | None) -> tuple[Any, bool]:
-    """Return a repeng control-vector factory and whether it is a library default.
-
-    Parameters
-    ----------
-    module:
-        Imported ``repeng`` module.
-    vector_factory:
-        Optional explicit factory.
-
-    Returns
-    -------
-    tuple[Any, bool]
-        The callable factory and ``True`` when it was resolved as a library
-        default (rather than supplied explicitly by the caller).
-
-    Raises
-    ------
-    RuntimeError
-        If no factory is available.
-    """
-
-    if vector_factory is not None:
-        return vector_factory, False
-    control_vector_cls = getattr(module, "ControlVector", None)
-    train = getattr(control_vector_cls, "train", None)
-    if callable(train):
-        return train, True
-    if callable(control_vector_cls):
-        return control_vector_cls, True
-    raise RuntimeError("Installed repeng does not expose ControlVector or ControlVector.train.")
-
-
-def _accepts_out_pair(
-    factory: Any, positive: Any, negative: Any | None, kwargs: dict[str, Any]
-) -> bool:
-    """Return whether ``factory`` can bind the ``(positive, negative)`` out pair.
-
-    Parameters
-    ----------
-    factory:
-        Candidate factory callable.
-    positive:
-        Positive outs.
-    negative:
-        Optional negative outs.
-    kwargs:
-        Additional keyword arguments to be forwarded.
-
-    Returns
-    -------
-    bool
-        ``True`` when the call binds cleanly (or the signature cannot be
-        introspected, in which case the caller attempts the call directly).
-    """
-
-    try:
-        signature = inspect.signature(factory)
-    except (TypeError, ValueError):
-        return True
-    try:
-        signature.bind(positive, negative, **kwargs)
-    except TypeError:
-        return False
-    return True
-
-
-def _call_factory(
-    factory: Any, *, positive: Any, negative: Any | None, is_default: bool, **kwargs: Any
-) -> Any:
-    """Call a repeng vector factory with the normalized out pair.
-
-    Parameters
-    ----------
-    factory:
-        Factory callable.
-    positive:
-        Positive outs.
-    negative:
-        Optional negative outs.
-    is_default:
-        Whether ``factory`` was resolved as a repeng library default.
-    **kwargs:
-        Additional factory keyword arguments.
-
-    Returns
-    -------
-    Any
-        Downstream vector object.
-
-    Raises
-    ------
-    RuntimeError
-        When the library-default factory cannot accept the ``(positive, negative)``
-        out pair. repeng's ``ControlVector.train`` takes ``(model, tokenizer,
-        dataset, ...)``, which cannot be driven from saved TorchLens outs; rather
-        than silently misbind the activation tensors into those slots, require an
-        explicit ``vector_factory``.
-    """
-
-    if is_default and not _accepts_out_pair(factory, positive, negative, kwargs):
-        raise RuntimeError(
-            "The default repeng factory (ControlVector.train) expects "
-            "(model, tokenizer, dataset, ...) arguments and cannot be built from "
-            "saved TorchLens outs. Pass an explicit vector_factory that accepts "
-            "(positive_out, negative_out)."
-        )
-    return factory(positive, negative, **kwargs)
 
 
 __all__ = ["control_vector"]

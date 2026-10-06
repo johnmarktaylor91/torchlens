@@ -8,6 +8,8 @@ from typing import Any, cast
 import torch
 from torch import nn
 
+from .._errors import InvalidArgumentError
+
 
 def source_model(log: Any) -> nn.Module:
     """Return the live source model retained by a model log.
@@ -73,6 +75,268 @@ def resolve_one_site(log: Any, site: Any) -> Any:
             # trace lookup teaches its own error when this also misses.
             return log[site]
         raise
+
+
+def module_for_site(log: Any, site: Any, *, bridge: str) -> nn.Module:
+    """Resolve a TorchLens site to the live module whose forward hook sees it.
+
+    Attribution bridges (Grad-CAM, Captum layer methods) hook a module, so a
+    site must name exactly one module call. A plain module address
+    (``"layer4"``) or ``"self"`` returns that module. Any other site resolves
+    to one op; the op's tensor may be the output of several nested modules
+    (``layer4.1.relu``, ``layer4.1``, ``layer4``), and the OUTERMOST of them
+    is the module whose output that tensor is. A pass-qualified address
+    (``"layer4.1.relu:2"``) names one module call; its output tensor resolves
+    the same way (``layer4.1.relu:2`` returns ``layer4``'s output, so it
+    resolves to ``layer4``). A pass-qualified address or an op label names
+    one call, so the resolved module must run exactly once in the trace: a
+    module hook would see every call, not the one named.
+
+    Parameters
+    ----------
+    log:
+        TorchLens ``Trace`` with a live source model reference.
+    site:
+        Module address, module pass label, op label, selector, or layer object.
+    bridge:
+        Bridge name used in refusal messages.
+
+    Returns
+    -------
+    nn.Module
+        Live PyTorch module.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``bridge_module_site_unresolved`` when the site is not the output of
+        any module, ``bridge_module_site_ambiguous`` when two sibling modules
+        share the outermost depth, and ``bridge_module_site_multi_call`` when
+        the resolved module runs more than once in the trace.
+    """
+
+    model = source_model(log)
+    modules = dict(model.named_modules())
+    if site == "self":
+        return model
+    if isinstance(site, str) and site in modules:
+        return cast(nn.Module, modules[site])
+    if isinstance(site, str):
+        address, _, suffix = site.rpartition(":")
+        if address in modules and suffix.isdigit():
+            owner = _pass_output_owner(log, modules, site) or address
+            return _single_call_module(log, modules, owner, site=site, bridge=bridge)
+
+    resolved = resolve_one_site(log, site)
+    addresses = _owning_addresses(resolved, modules)
+    if not addresses:
+        raise InvalidArgumentError(
+            f"Could not resolve {bridge} layer for site {site!r}: the site is not the "
+            "output of any module of the source model",
+            code="bridge_module_site_unresolved",
+            remedy="pass a module address such as 'layer4', or the label of an op whose "
+            "tensor a module returns",
+        )
+    depth = min(_address_depth(address) for address in addresses)
+    outermost = [address for address in addresses if _address_depth(address) == depth]
+    if len(outermost) > 1:
+        raise InvalidArgumentError(
+            f"{bridge} site {site!r} is the output of sibling modules {outermost!r}; "
+            "no one module owns it",
+            code="bridge_module_site_ambiguous",
+            remedy="pass one of those module addresses directly",
+        )
+    return _single_call_module(log, modules, outermost[0], site=site, bridge=bridge)
+
+
+def _owning_addresses(layer: Any, modules: dict[str, nn.Module]) -> list[str]:
+    """Return the source-model module addresses whose output ``layer``'s tensor is.
+
+    Parameters
+    ----------
+    layer:
+        Layer-pass-like record with ``output_of_module_calls``.
+    modules:
+        ``named_modules()`` mapping of the source model.
+
+    Returns
+    -------
+    list[str]
+        Distinct module addresses, in the record's order.
+    """
+
+    calls = getattr(layer, "output_of_module_calls", ()) or ()
+    return [
+        address
+        for address in dict.fromkeys(_module_call_address(call) for call in calls)
+        if address in modules
+    ]
+
+
+def _pass_output_owner(log: Any, modules: dict[str, nn.Module], site: str) -> str | None:
+    """Return the outermost module owning the output of module call ``site``.
+
+    Parameters
+    ----------
+    log:
+        TorchLens ``Trace``.
+    modules:
+        ``named_modules()`` mapping of the source model.
+    site:
+        Pass-qualified module address such as ``"layer4.1.relu:2"``.
+
+    Returns
+    -------
+    str | None
+        The single outermost owning address shared by every op that call
+        returns; None when no op names the call or the owners disagree (the
+        caller then falls back to the call's own module).
+    """
+
+    owners: set[str] = set()
+    for layer in getattr(log, "layer_list", []):
+        calls = getattr(layer, "output_of_module_calls", ()) or ()
+        if not any(_module_call_label(call) == site for call in calls):
+            continue
+        addresses = _owning_addresses(layer, modules)
+        depth = min(_address_depth(address) for address in addresses)
+        outermost = [address for address in addresses if _address_depth(address) == depth]
+        if len(outermost) != 1:
+            return None
+        owners.add(outermost[0])
+    return owners.pop() if len(owners) == 1 else None
+
+
+def _module_call_label(call: Any) -> str:
+    """Return one ``output_of_module_calls`` entry as ``"address:call_index"``."""
+
+    if isinstance(call, tuple) and len(call) >= 2:
+        return f"{call[0]}:{call[1]}"
+    return str(call)
+
+
+def _module_call_address(call: Any) -> str:
+    """Return the module address of one ``output_of_module_calls`` entry.
+
+    Parameters
+    ----------
+    call:
+        ``(address, call_index)`` tuple or ``"address:call_index"`` string.
+
+    Returns
+    -------
+    str
+        Module dotted address.
+    """
+
+    if isinstance(call, tuple) and call:
+        return str(call[0])
+    text = str(call)
+    address, _, suffix = text.rpartition(":")
+    return address if address and suffix.isdigit() else text
+
+
+def _address_depth(address: str) -> int:
+    """Return the nesting depth of a module address (root is 0)."""
+
+    return 0 if not address else address.count(".") + 1
+
+
+def _single_call_module(
+    log: Any, modules: dict[str, nn.Module], address: str, *, site: Any, bridge: str
+) -> nn.Module:
+    """Return ``modules[address]`` after refusing a module that runs more than once.
+
+    Parameters
+    ----------
+    log:
+        TorchLens ``Trace``.
+    modules:
+        ``named_modules()`` mapping of the source model.
+    address:
+        Resolved module address.
+    site:
+        Original site, for the refusal message.
+    bridge:
+        Bridge name used in refusal messages.
+
+    Returns
+    -------
+    nn.Module
+        The resolved live module.
+    """
+
+    calls = _module_num_calls(log, address)
+    if calls > 1:
+        enclosing = _enclosing_single_call(log, modules, address)
+        hint = (
+            f"pass the enclosing module {enclosing!r}, which runs once (it hooks that "
+            "module's own output, not this tensor), or "
+            if enclosing
+            else ""
+        )
+        raise InvalidArgumentError(
+            f"{bridge} site {site!r} resolves to module {address!r}, which runs {calls} "
+            "times in this trace; a module hook sees every call, not the one the site names",
+            code="bridge_module_site_multi_call",
+            remedy=f"{hint}pick a site whose outermost owning module runs once",
+        )
+    return modules[address]
+
+
+def _enclosing_single_call(log: Any, modules: dict[str, nn.Module], address: str) -> str | None:
+    """Return the nearest enclosing module address that runs once, if any.
+
+    Parameters
+    ----------
+    log:
+        TorchLens ``Trace``.
+    modules:
+        ``named_modules()`` mapping of the source model.
+    address:
+        Address of a module that runs more than once.
+
+    Returns
+    -------
+    str | None
+        Nearest proper ancestor (never the root) with one call; None if none.
+    """
+
+    parts = address.split(".")
+    for end in range(len(parts) - 1, 0, -1):
+        parent = ".".join(parts[:end])
+        if parent in modules and _module_num_calls(log, parent) == 1:
+            return parent
+    return None
+
+
+def _module_num_calls(log: Any, address: str) -> int:
+    """Return how many times module ``address`` ran in the trace.
+
+    Parameters
+    ----------
+    log:
+        TorchLens ``Trace``.
+    address:
+        Module dotted address.
+
+    Returns
+    -------
+    int
+        Call count; the trace's module record when available, else the number
+        of distinct calls named in the ops' ``output_of_module_calls``.
+    """
+
+    try:
+        return int(log.modules[address].num_calls)
+    except Exception:  # noqa: BLE001 - duck-typed logs without a module record count below
+        pass
+    seen: set[Any] = set()
+    for layer in getattr(log, "layer_list", []):
+        for call in getattr(layer, "output_of_module_calls", ()) or ():
+            if _module_call_address(call) == address:
+                seen.add(call if isinstance(call, tuple) else str(call))
+    return max(len(seen), 1)
 
 
 def out_at(log: Any, site: Any) -> torch.Tensor:
@@ -235,6 +499,7 @@ def _default_tensor_layer_sweep(
 
 
 __all__ = [
+    "module_for_site",
     "out_at",
     "first_input_tensor",
     "resolve_one_site",

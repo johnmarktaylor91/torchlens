@@ -106,9 +106,9 @@ applied manually with `pad_token_id`, falling back to `eos_token_id`.
 - Upstream is dormant externally (no release since 2024-12-20; user issues
   unanswered since then). The bridge is experimental; its stability rests on
   LIT's frozen typed Model API.
-- `[lit]` and `[shap]` cannot co-resolve against lit-nlp 1.3.1 (`shap<0.46`
-  vs torchlens `shap~=0.46`). The bridge uses torchlens-native salience and
-  does not need the shap bridge.
+- `[lit,shap]` resolves to the shap 0.45 line: lit-nlp 1.3.1 requires
+  `shap>=0.42,<0.46` and torchlens' shap extra admits `shap>=0.45.1`. The LIT
+  bridge uses torchlens-native salience and does not need the shap bridge.
 - Latency: a single-example CPU trace is ~0.3-2.5 s for a 6-12-block
   transformer — that is the interactive promise; batched `warm_start` is far
   cheaper per example; GPU is the real lever.
