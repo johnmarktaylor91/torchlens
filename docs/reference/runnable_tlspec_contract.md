@@ -3132,7 +3132,8 @@ all unsuccessful model attempts as well as every unavailable unique key. A sweep
 catalog (the Model Menagerie battery) is deliberately separate and runs downstream; the classics
 corpus plus test-suite corpus is the runnable release gate.
 
-**Documented bounded dispositions.** Exactly one key holds one, and nothing broader is excused:
+**Documented bounded dispositions.** Exactly two hold one (the `torch.Tensor.__new__` key and the
+legacy dtype-constructor and `Variable` family below), and nothing broader is excused:
 
 - `FunctionRegistryKey("torch.Tensor", "__new__", "method")`, the legacy `torch.Tensor(...)`
   constructor called inside `forward`. Observable behavior: runnable save refuses typed at the
@@ -3146,3 +3147,12 @@ corpus plus test-suite corpus is the runnable release gate.
   size-form uninitialized-memory taint); until it ships, the refusal is pinned by
   `tests/test_runnable_resolver_release_keys.py`, which fails if the refusal goes silent or the key
   starts resolving.
+
+- The legacy dtype constructors (`torch.FloatTensor(...)` and its siblings, `torch.cuda.*Tensor`)
+  and `torch.autograd.Variable(...)`, captured as ops named after the class. Observable behavior:
+  the dtype classes carry the same hidden `cdata=` overload and resolve `unavailable`
+  (`nonforward_callable_denied`), `Variable` stays unresolved, and running a saved runnable
+  artifact that uses them refuses at reattachment (`ReattachError`). Unlike the
+  `torch.Tensor.__new__` key, runnable save does not refuse up front: the artifact is written and
+  the refusal comes only at `run()`. Bound: only forwards that call these constructors. Pinned by
+  `tests/test_legacy_tensor_constructors.py`.

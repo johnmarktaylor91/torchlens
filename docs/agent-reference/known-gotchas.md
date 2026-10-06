@@ -94,3 +94,10 @@
 - `copy()` on `Op` deep-copies graph metadata and shares tensor payloads/callables; see data_classes/AGENTS.md.
 - `torchlens.__version__` and `pyproject.toml` are release-pipeline state; do not update them
   in feature/docs tasks unless release work explicitly asks for it.
+- Legacy constructors (`torch.FloatTensor(...)` and siblings, `Variable(...)`) are captured by
+  patching the class's `__new__` in place (`backends/torch/legacy_ctors.py`). While wrapped, a
+  warning their C constructor raises (the `volatile=` removal, the `torch.cuda.*Tensor`
+  deprecation) is attributed to `utils/_type_new_slot.py`, not the caller, so per-location
+  `warnings` filters and `-W error` tracebacks differ from eager; message and category are
+  unchanged. A class that already dispatches through another tool's Python `__new__` at wrap time
+  is left uncaptured with a `TorchLensWarning` (`skipped_legacy_constructor_classes()`).

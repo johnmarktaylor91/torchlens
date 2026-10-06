@@ -54,6 +54,7 @@ from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning
 from ._torch_symbols import shadowed_torch_submodule, torch_attr
+from ._type_new_slot import probe_type_new_slot_patch
 
 __all__ = [
     "AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED",
@@ -141,6 +142,7 @@ __all__ = [
     "force_mha_slow_path",
     "HAS_CACHED_UNTYPED_STORAGE_WRAPPER",
     "HAS_TENSOR_SEQUENCE_SLOT_FIX",
+    "HAS_LEGACY_CONSTRUCTOR_NEW_PATCH",
     "HAS_TORCH_FUNC",
     "HAS_TORCH_VF",
     "HAS_VARIABLE_FUNCTIONS",
@@ -1855,6 +1857,10 @@ HAS_GENERATOR_GRAPHSAFE_SET_STATE: bool = hasattr(torch.Generator, "graphsafe_se
 HAS_GENERATOR_PHILOX_STATE: bool = hasattr(torch.Generator, "philox_state")
 HAS_SAFE_WEIGHTS_ONLY_LOAD: bool = _probe_safe_weights_only_load()
 HAS_TENSOR_SEQUENCE_SLOT_FIX: bool = _probe_tensor_sequence_slot_fix()
+# Legacy ``torch.<dtype>Tensor`` constructor capture (``backends/torch/legacy_ctors.py``).
+HAS_LEGACY_CONSTRUCTOR_NEW_PATCH: bool = probe_type_new_slot_patch(
+    getattr(torch, "FloatTensor", None)
+)
 HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE: bool = _probe_parameter_as_subclass_in_dispatch_mode()
 HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE: bool = _probe_subclass_ctor_in_dispatch_mode()
 # r-b4 R26-5a: ROLL_TENSOR_SHIFTS_SUPPORTED is a TEST HELPER, not a published
@@ -2060,6 +2066,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_GENERATOR_PHILOX_STATE",
     "HAS_SAFE_WEIGHTS_ONLY_LOAD",
     "HAS_TENSOR_SEQUENCE_SLOT_FIX",
+    "HAS_LEGACY_CONSTRUCTOR_NEW_PATCH",
     "HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE",
     "HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE",
     "HAS_SAVED_TENSORS_HOOK_INTROSPECTION",

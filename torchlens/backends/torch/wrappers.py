@@ -3212,6 +3212,9 @@ def _unwrap_torch_locked() -> None:
     from .backward import uninstall_autograd_wrappers
 
     uninstall_autograd_wrappers()
+    from .legacy_ctors import uninstall_legacy_constructor_wrappers
+
+    uninstall_legacy_constructor_wrappers()
 
     if not _state._decorated_to_orig:
         _state._is_decorated = False
@@ -3443,6 +3446,11 @@ def _wrap_torch_locked(
     _ensure_torchvision_ops_decorated()
 
     from .belt import sweep_stale_belt_references
+    from .legacy_ctors import install_legacy_constructor_wrappers
+
+    # Legacy ``torch.<dtype>Tensor`` / ``Variable`` classes are patched in place
+    # (idempotent; restored by ``_unwrap_torch_locked``).
+    install_legacy_constructor_wrappers()
 
     if _state._is_decorated:
         install_autograd_wrappers()
