@@ -17,6 +17,7 @@ import copy
 import warnings
 from typing import Any
 
+import numpy as np
 import pytest
 import torch
 from torch import nn
@@ -349,3 +350,99 @@ def test_genuine_hook_replacement_still_validates() -> None:
     replaced = [op for op in trace.layer_list if op.intervention_replaced]
     assert replaced, "expected a genuine intervention replacement op"
     assert _validate(model, x) is True
+
+
+# --- Boundary review fixes: data egress (``tolist``/``numpy``/``__array__``) ---------
+
+_GLOBAL_SCALAR = torch.tensor(2.5)
+
+
+class _Egress(nn.Module):
+    """Reads a module-global tensor's data into Python through one escape spelling."""
+
+    def __init__(self, read: Any) -> None:
+        super().__init__()
+        self.read = read
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.read(x)
+
+
+_PRUNED_OP_EGRESS = {
+    "sum_tolist": lambda x: x * _GLOBAL_TABLE.sum().tolist(),
+    "argsort_tolist": lambda x: x[_GLOBAL_TABLE.argsort().tolist()],
+    "sum_numpy": lambda x: x * float(_GLOBAL_TABLE.sum().numpy()),
+    "sum_cpu_numpy": lambda x: x * float(_GLOBAL_TABLE.sum().cpu().numpy()),
+    "sum_array": lambda x: x * float(np.asarray(_GLOBAL_TABLE.sum())),
+    "sum_dunder_array": lambda x: x * float(_GLOBAL_TABLE.sum().__array__()),
+}
+
+_DIRECT_EGRESS = {
+    "tensor_of_tolist": lambda x: x + torch.tensor(_GLOBAL_TABLE.tolist()),
+    "from_numpy": lambda x: x + torch.from_numpy(_GLOBAL_TABLE.cpu().numpy().copy()),
+    "asarray": lambda x: x * float(np.asarray(_GLOBAL_SCALAR)),
+    "item": lambda x: x * _GLOBAL_SCALAR.item(),
+    "float": lambda x: x * float(_GLOBAL_SCALAR),
+    "int": lambda x: x * int(_GLOBAL_SCALAR),
+}
+
+
+@pytest.mark.parametrize("read", list(_PRUNED_OP_EGRESS.values()), ids=list(_PRUNED_OP_EGRESS))
+def test_data_egress_through_a_pruned_op_keeps_the_source_less_witness(read: Any) -> None:
+    """``x * G.sum().tolist()`` used to validate: the walk saw no escape label."""
+
+    assert _validate(_Egress(read), torch.randn(5)) is False
+    assert _failure_reasons() == ("source_provenance", ["orphan_unattributed_tensor_args"])
+
+
+@pytest.mark.parametrize("read", list(_DIRECT_EGRESS.values()), ids=list(_DIRECT_EGRESS))
+def test_direct_data_read_of_a_source_less_tensor_fails(read: Any) -> None:
+    """``torch.tensor(G.tolist())`` reads a global with no op to carry a witness."""
+
+    model = _Egress(read)
+    x = torch.randn(5)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(model, x)
+    rows = [
+        row
+        for row in trace.annotations.get("capture_advisories", [])
+        if row["kind"] == "orphan_unattributed_tensor_args"
+    ]
+    assert len(rows) == 1 and "source-less tensor" in rows[0]["message"], rows
+    assert _validate(model, x) is False
+    assert _failure_reasons() == ("source_provenance", ["orphan_unattributed_tensor_args"])
+
+
+class _OwnEgress(nn.Module):
+    """Reads its own sources' data into Python: input, held tensor, buffer, Parameter."""
+
+    def __init__(self, which: str) -> None:
+        super().__init__()
+        self.which = which
+        self.table = torch.randn(5)
+        self.register_buffer("offset", torch.tensor(1.5))
+        self.weight = nn.Parameter(torch.randn(5))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if self.which == "input_sum_tolist":
+            return x * x.sum().tolist()
+        if self.which == "constant_numpy":
+            return x * float(torch.ones(3).sum().numpy())
+        if self.which == "held_tolist":
+            return x + torch.tensor(self.table.tolist())
+        if self.which == "buffer_item":
+            return x * self.offset.item()
+        return x * float(np.asarray(self.weight.detach().sum()))
+
+
+@pytest.mark.parametrize(
+    "which",
+    ["input_sum_tolist", "constant_numpy", "held_tolist", "buffer_item", "param_array"],
+)
+def test_data_egress_of_sourced_tensors_still_validates(which: str) -> None:
+    torch.manual_seed(0)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert tl.validate(_OwnEgress(which), torch.randn(5), scope="forward") is True
+    assert last_validation_failure() is None

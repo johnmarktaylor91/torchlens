@@ -14,6 +14,7 @@ from __future__ import annotations
 import shutil
 import warnings
 from pathlib import Path
+from typing import Any
 
 import pytest
 import torch
@@ -192,3 +193,98 @@ def test_recorders_are_wrapped_epoch_scoped() -> None:
         wrap_torch()
     for cls in (torch._ops.OpOverloadPacket, torch._ops.OpOverload):
         assert getattr(cls.__dict__["__call__"], marker, False)
+
+
+# --- Boundary review fixes: operators that mutate an argument and return nothing ----
+
+if _HAS_CUSTOM_OP:
+    _VF_MUL_ = torch._C.TensorBase.mul_
+
+    @torch.library.custom_op("tltest_r11::scale_", mutates_args=("x",))
+    def _scale_(x: torch.Tensor, scale: float) -> None:
+        _VF_MUL_(x, scale)  # an unpatchable C write, like a C++ kernel
+
+    @torch.library.custom_op("tltest_r11::doubled", mutates_args=("x",))
+    def _doubled(x: torch.Tensor) -> None:
+        _VF_MUL_(x, 2.0)
+
+    @torch.library.custom_op("tltest_r11::write_into", mutates_args=("dst",))
+    def _write_into(src: torch.Tensor, dst: torch.Tensor) -> None:
+        torch._C.TensorBase.copy_(dst, src)
+
+
+class _MutatingCustomOpModel(nn.Module):
+    def __init__(self, op_name: str) -> None:
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+        self.op_name = op_name
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = self.fc(x).clone()
+        if self.op_name == "scale_":
+            _scale_(y, 2.0)
+        elif self.op_name == "doubled":
+            _doubled(y)
+        elif self.op_name == "foreach":
+            torch.ops.aten._foreach_mul_.Scalar([y], 2.0)
+        else:
+            _write_into(x * 3.0, y)
+        return y + 1
+
+
+def _unrecorded_mutation_rows(trace: Any) -> list[dict[str, object]]:
+    return [
+        row
+        for row in trace.annotations.get("capture_advisories", [])
+        if row["kind"] == "unrecorded_operator_mutation"
+    ]
+
+
+@pytest.mark.smoke
+@pytest.mark.skipif(not _HAS_CUSTOM_OP, reason="torch.library.custom_op needs torch>=2.4")
+@pytest.mark.parametrize("op_name", ["scale_", "doubled"])
+def test_receiver_mutating_custom_op_is_recorded_in_place(op_name: str) -> None:
+    """``mutates_args`` returning None used to vanish: the add read the doubled value."""
+
+    model = _MutatingCustomOpModel(op_name)
+    _assert_recorded_and_valid(model, op_name)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(model, torch.randn(3, 4))
+    mutation = next(op for op in trace.ops if op.func_name == op_name)
+    add = next(op for op in trace.ops if op.func_name == "__add__")
+    assert mutation.label in add.parents, (mutation.label, add.parents)
+    assert not _unrecorded_mutation_rows(trace)
+
+
+@pytest.mark.smoke
+@pytest.mark.skipif(not _HAS_CUSTOM_OP, reason="torch.library.custom_op needs torch>=2.4")
+@pytest.mark.parametrize("op_name", ["write_into", "foreach"])
+def test_unrecordable_mutating_operator_fails_validation(op_name: str) -> None:
+    """A write to a non-first or list argument is disclosed, never a silent pass."""
+
+    model = _MutatingCustomOpModel(op_name)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(model, torch.randn(3, 4))
+    assert _unrecorded_mutation_rows(trace)
+    assert not _validate(model, torch.randn(3, 4))
+    failure = last_validation_failure()
+    assert failure is not None
+
+
+@pytest.mark.smoke
+@pytest.mark.skipif(not _HAS_CUSTOM_OP, reason="torch.library.custom_op needs torch>=2.4")
+def test_unreadable_schema_none_return_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A None-returning operator whose schema cannot be read is disclosed."""
+
+    from torchlens.backends.torch import _torch_ops_calls
+
+    monkeypatch.setattr(_torch_ops_calls, "_DECORATED_BY_OP", {})
+    monkeypatch.setattr(_torch_ops_calls, "_overload_schemas", lambda op: None)
+    model = _MutatingCustomOpModel("scale_")
+    assert not _validate(model, torch.randn(3, 4))
+    failure = last_validation_failure()
+    assert failure is not None
+    assert failure.check == "source_provenance", failure
+    assert "unrecorded_operator_mutation" in failure.extra["reasons"], failure
