@@ -71,6 +71,30 @@ FULL_TEST_EXTRA_SENTINEL = "torch_geometric"
 # Keep sorted; the inventory test enforces exact set equality.
 IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
     "IPython": (OPTIONAL_PREVIEW, "notebook extra"),
+    "depyf": (OPTIONAL_PREVIEW, "depyf extra; real-package bridge leg in nightly.yml bridges-real"),
+    "dialz": (OPTIONAL_PREVIEW, "dialz extra; real-package bridge leg in nightly.yml bridges-real"),
+    "inseq": (OPTIONAL_PREVIEW, "inseq extra; real-package bridge leg in nightly.yml bridges-real"),
+    "mlflow": (
+        OPTIONAL_PREVIEW,
+        "MLflow tracker export (no declared extra); nightly.yml bridges-real track leg",
+    ),
+    "nnsight": (
+        OPTIONAL_PREVIEW,
+        "nnsight extra; real-package bridge leg in nightly.yml bridges-real",
+    ),
+    "pytorch_grad_cam": (
+        OPTIONAL_PREVIEW,
+        "gradcam extra; real-package bridge leg in nightly.yml bridges-real",
+    ),
+    "repeng": (
+        OPTIONAL_PREVIEW,
+        "repeng extra; real-package bridge leg in nightly.yml bridges-real",
+    ),
+    "shap": (OPTIONAL_PREVIEW, "shap extra; real-package bridge leg in nightly.yml bridges-real"),
+    "steering_vectors": (
+        OPTIONAL_PREVIEW,
+        "steering extra; real-package bridge leg in nightly.yml bridges-real",
+    ),
     "treescope": (
         OPTIONAL_PREVIEW,
         "treescope bridge extra (F16); absent-treescope is itself a supported "
