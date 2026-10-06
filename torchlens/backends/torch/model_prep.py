@@ -1088,9 +1088,9 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
     """Tag buffer tensors with ``_tl.address`` for later identification.
 
     Buffers are non-parameter tensors registered via ``register_buffer()`` or
-    held as plain tensors in module state (attribute, list/tuple item or dict
-    value; see ``iter_module_held_plain_tensors``). They are tagged here so that when a
-    buffer first appears as an argument to a wrapped torch function, the
+    held as plain tensors in module state (attribute, list/tuple item, dict value,
+    bounded nesting; see ``iter_module_held_plain_tensors``). They are tagged here so
+    that when a buffer first appears as an argument to a wrapped torch function, the
     interceptor can call ``log_source_tensor`` with the correct address.
 
     Uses ``named_buffers()`` for registered buffers and a ``__dict__`` scan for
@@ -1108,12 +1108,17 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
     registry (``trace._session_buffer_identity``) consulted by the buffer-rung
     storage-identity belt; the registry is reset here at session start.
     """
-    from .buffer_writes import iter_module_held_plain_tensors, register_session_buffer_stamp
+    from .buffer_writes import (
+        iter_module_held_plain_tensors,
+        register_session_buffer_stamp,
+        warn_held_scan_truncated,
+    )
 
     _state._tagged_buffer_ids.clear()
     trace._session_buffer_inventory = []
     trace._session_buffer_identity = {}
     unstampable: list[str] = []
+    held_truncations: list[str] = []
 
     def _stamp(tensor: torch.Tensor, address: str) -> None:
         """Stamp one buffer into the session registries, collecting failures."""
@@ -1139,9 +1144,11 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
                 _stamp(buf_tensor, address)
         # Module-held plain tensors (attribute, list/tuple item, dict value such as a
         # warm-filled cache) are buffer sources too, never dangling reads.
-        for held_name, held_tensor in iter_module_held_plain_tensors(submodule):
+        held = iter_module_held_plain_tensors(submodule, held_truncations, module_addr)
+        for held_name, held_tensor in held:
             if get_buffer_address(held_tensor) is None:
                 _stamp(held_tensor, f"{module_addr}.{held_name}" if module_addr else held_name)
+    warn_held_scan_truncated(held_truncations)
     if unstampable:
         import warnings
 

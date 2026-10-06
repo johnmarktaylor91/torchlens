@@ -116,6 +116,12 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   node: a collapsed module box or `skip_fn` that hides that op hides the node with it, and a
   `module=` focus draws it only when the focused module is the owner or contains it. Parameters
   never mutated get no node. The legend row's swatch is the trainable-parameter grey.
+  attribute, a list/tuple item, or a dict value such as a warm-filled attention-bias cache,
+  nested up to four container levels) is captured as a buffer too, addressed
+  `<module>.<attr>`, `<module>.<attr>.<index>`, or `<module>.<attr>[<key>]` with one
+  `[<index>]`/`[<key>]` per nested level, e.g. `attn.attention_bias_cache['cpu']`. The key
+  is its `repr` with `.`, `:` and `%` percent-escaped, so the last `.` always separates the
+  owning module; keys that print alike get `#2`, `#3`, ...
 
 **GradFn**
 : A first-class live backward-autograd node captured during backward logging. Portable artifacts
