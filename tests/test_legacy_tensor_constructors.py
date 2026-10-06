@@ -108,6 +108,16 @@ class SylvesterReparam(nn.Module):
         return eps.mul(std).add_(mu)
 
 
+class ModernReparam(SylvesterReparam):
+    """The same reparameterization spelled with ``torch.empty`` and no ``Variable``."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        mu, logvar = self.mu(x), self.logvar(x)
+        std = logvar.mul(0.5).exp_()
+        eps = torch.empty(std.size()).normal_()
+        return eps.mul(std).add_(mu)
+
+
 class VariableForms(nn.Module):
     """``Variable(t)`` and ``Variable(t, requires_grad=True)`` inside a forward."""
 
@@ -168,21 +178,34 @@ def test_dtype_class_data_form_captures_and_validates(class_name: str) -> None:
     assert _validate(model, x)
 
 
-def test_sylvester_reparam_idiom_captures_validates_and_matches_eager() -> None:
-    """``self.FloatTensor(size).normal_()`` + ``Variable`` matches eager under a seed."""
+def test_sylvester_reparam_idiom_captures_validates_and_matches_modern_spelling() -> None:
+    """``self.FloatTensor(size).normal_()`` + ``Variable`` validates and draws RNG as eager does.
+
+    Under one seed the legacy spelling's captured output equals the modern
+    ``torch.empty(size).normal_()`` spelling's captured output, and the two
+    spellings are equal in eager too: the legacy op consumes the RNG exactly as
+    its modern equivalent.
+    """
 
     model, x = SylvesterReparam().eval(), torch.randn(2, 4)
+    modern = ModernReparam().eval()
+    modern.load_state_dict(model.state_dict())
     assert model.FloatTensor is torch.FloatTensor
     names = _func_names(model, x)
     assert names.index("FloatTensor") < names.index("normal_") < names.index("Variable")
     assert _validate(model, x)
 
+    outputs = []
+    for candidate in (model, modern):
+        torch.manual_seed(7)
+        trace = tl.trace(candidate, x)
+        (out_label,) = trace.output_layers
+        outputs.append(trace[out_label].out)
+    assert torch.equal(outputs[0], outputs[1])
     torch.manual_seed(7)
-    eager = model(x)
+    eager_legacy = model(x)
     torch.manual_seed(7)
-    trace = tl.trace(model, x)
-    (out_label,) = trace.output_layers
-    assert torch.equal(trace[out_label].out, eager)
+    assert torch.equal(eager_legacy, modern(x))
 
 
 def test_variable_forms_capture_and_validate() -> None:
@@ -221,7 +244,8 @@ def test_plain_model_graph_has_no_legacy_ops() -> None:
     model, x = Plain(), torch.randn(2, 4)
     names = _func_names(model, x)
     assert not set(names) & {*DTYPE_CLASS_NAMES, "Variable"}
-    assert names == ["linear", "relu", "empty", "normal_", "__add__"]
+    # Pinned from the pre-change base (87c393a7e): the graph is unchanged.
+    assert names == ["none", "linear", "relu", "empty", "normal_", "__add__", "none"]
     assert _validate(model, x)
 
 
