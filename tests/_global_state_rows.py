@@ -977,6 +977,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/backends/torch/_fire_timing.py", "__all__"),
         ("torchlens/backends/torch/_gradfn_markers.py", "__all__"),
         ("torchlens/backends/torch/_held_refs.py", "__all__"),
+        ("torchlens/backends/torch/_held_refs_capture.py", "__all__"),
         ("torchlens/backends/torch/_op_markers.py", "__all__"),
         ("torchlens/backends/torch/_tl.py", "__all__"),
         ("torchlens/backends/torch/_weightsfree_ctx.py", "__all__"),

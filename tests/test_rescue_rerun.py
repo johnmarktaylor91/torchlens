@@ -15,6 +15,7 @@ from typing import Any
 
 import pytest
 import torch
+from _stale_holders import OpaqueCallable
 from torch import nn
 
 import torchlens as tl
@@ -24,12 +25,12 @@ from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 
 @pytest.fixture()
 def raw_cos() -> Any:
-    """A pristine pre-wrap ``torch.cos`` reference, rewrapping afterwards."""
+    """A pristine pre-wrap ``torch.cos`` in an unrebindable holder, rewrapping afterwards."""
     unwrap_torch()
     raw = torch.cos
     assert not is_decorated_function(raw)
     try:
-        yield raw
+        yield OpaqueCallable(raw)
     finally:
         wrap_torch()
 

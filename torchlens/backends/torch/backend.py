@@ -1221,6 +1221,10 @@ class TorchBackend:
         # partially-constructed tensor entries to avoid stale references (#110).
         from ...partial import PartialTrace, _register_failed_capture
 
+        # The partial-trace scrub below drops runtime-only trace fields, the
+        # held-reference undo list among them: restore the user's holders first.
+        restore_held_torch_refs(cast("Trace", session))
+
         # Stamp the failed forward's ACTUAL buffer-write record (value-changing
         # journal events) on the exception while the journal is still live —
         # ``cleanup_model_session`` below clears ``capture_events``, and the

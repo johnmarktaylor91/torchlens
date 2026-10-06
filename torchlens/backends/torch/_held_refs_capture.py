@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import functools
 import types
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
 from torch import nn
@@ -36,6 +36,8 @@ __all__ = ["rebind_held_torch_refs", "restore_held_torch_refs"]
 _UNDO_FIELD = "_held_torch_ref_rebinds"
 # Container nesting the scan descends (the ``{"acts": [F.gelu]}`` shape is 2).
 _MAX_DEPTH = 4
+# Module roots whose functions are library code, never user holders.
+_LIBRARY_ROOTS = ("torch", "torchlens")
 # nn.Module bookkeeping slots: never user holders, skipped for cost.
 _MODULE_INTERNAL_SLOTS = frozenset(
     {
@@ -59,11 +61,19 @@ def _wrapper_for(value: Any) -> Any | None:
     return _live_counterpart(value)
 
 
-def _is_torchlens_function(fn: types.FunctionType) -> bool:
-    """TorchLens's own functions (decorated forwards, hooks) are never rebound."""
+def _is_library_function(fn: types.FunctionType) -> bool:
+    """Torch's and TorchLens's own functions are never scanned.
 
+    A wrapper's closure holds the pristine original it calls; rebinding that
+    cell to the wrapper would make the wrapper call itself. Torch's Python
+    functions are ledgered originals or library internals, never user holders.
+    """
+
+    decorated_to_orig, orig_to_decorated = _state.wrap_epoch_ledgers()
+    if id(fn) in decorated_to_orig or id(fn) in orig_to_decorated:
+        return True
     module_name = getattr(fn, "__module__", None) or ""
-    return module_name == "torchlens" or module_name.startswith("torchlens.")
+    return any(module_name == root or module_name.startswith(f"{root}.") for root in _LIBRARY_ROOTS)
 
 
 class _Rebinder:
@@ -88,10 +98,7 @@ class _Rebinder:
             return None
         value_type = type(value)
         if value_type is functools.partial:
-            func = self.replacement(value.func, depth + 1)
-            if func is None:
-                return None
-            return functools.partial(func, *value.args, **value.keywords)
+            return self._partial(value, depth + 1)
         if value_type is types.FunctionType:
             self.function(value, depth + 1)
         elif value_type is list:
@@ -105,7 +112,7 @@ class _Rebinder:
     def function(self, fn: types.FunctionType, depth: int) -> None:
         """Rebind pristine refs in a function's closure cells and defaults."""
 
-        if id(fn) in self._seen_functions or _is_torchlens_function(fn):
+        if id(fn) in self._seen_functions or _is_library_function(fn):
             return
         self._seen_functions.add(id(fn))
         for cell in fn.__closure__ or ():
@@ -125,13 +132,34 @@ class _Rebinder:
                 self.undo.append(functools.partial(setattr, fn, "__defaults__", defaults))
         kwdefaults = fn.__kwdefaults__
         if kwdefaults:
-            rebuilt = {key: self.replacement(val, depth) for key, val in kwdefaults.items()}
-            if any(val is not None for val in rebuilt.values()):
-                fn.__kwdefaults__ = {
-                    key: rebuilt[key] if rebuilt[key] is not None else val
-                    for key, val in kwdefaults.items()
-                }
+            swapped_kw = self._keywords(kwdefaults, depth)
+            if swapped_kw is not None:
+                fn.__kwdefaults__ = swapped_kw
                 self.undo.append(functools.partial(setattr, fn, "__kwdefaults__", kwdefaults))
+
+    def _partial(self, value: functools.partial[Any], depth: int) -> functools.partial[Any] | None:
+        """Rebuild a partial whose ``func``, ``args`` or ``keywords`` hold a pristine ref."""
+
+        func = self.replacement(value.func, depth)
+        args = self._tuple(value.args, depth) if value.args else None
+        keywords = self._keywords(value.keywords, depth) if value.keywords else None
+        if func is None and args is None and keywords is None:
+            return None
+        rebuilt = functools.partial(
+            value.func if func is None else func,
+            *(value.args if args is None else args),
+            **(value.keywords if keywords is None else keywords),
+        )
+        rebuilt.__dict__.update(value.__dict__)
+        return rebuilt
+
+    def _keywords(self, mapping: dict[str, Any], depth: int) -> dict[str, Any] | None:
+        """Return a rebound copy of a keyword mapping, or ``None`` if nothing changed."""
+
+        swapped = {key: self.replacement(val, depth) for key, val in mapping.items()}
+        if all(val is None for val in swapped.values()):
+            return None
+        return {key: mapping[key] if new is None else new for key, new in swapped.items()}
 
     def _list(self, container: list[Any], depth: int) -> None:
         for index, item in enumerate(container):
@@ -186,26 +214,34 @@ def rebind_held_torch_refs(trace: Trace, model: nn.Module) -> None:
     """Rebind module-held pristine torch functions to the live wrappers.
 
     Called last in per-session preparation, while the wrappers are installed.
-    A module whose scan fails is left as it is (its references keep the
-    rescue path); the undo list is parked on the trace for
-    :func:`restore_held_torch_refs`.
+    The undo list is parked on the trace for :func:`restore_held_torch_refs`;
+    if the scan itself fails, everything it already rebound is restored before
+    the error propagates, so the model is never left half rebound.
     """
 
     if not _state._is_decorated:
         return
     rebinder = _Rebinder()
-    for module in model.modules():
-        try:
+    try:
+        for module in model.modules():
             rebinder.module(module)
-        except Exception:  # noqa: BLE001 - an unscannable holder keeps the rescue path
-            continue
+    except BaseException:
+        _run_undo(rebinder.undo)
+        raise
     if rebinder.undo:
         trace.__dict__[_UNDO_FIELD] = rebinder.undo
 
 
 def restore_held_torch_refs(trace: Trace) -> None:
-    """Undo this capture's rebinds, newest first, leaving the user's objects intact."""
+    """Undo this capture's rebinds, newest first, leaving the user's objects intact.
 
-    undo = trace.__dict__.pop(_UNDO_FIELD, None) or ()
+    Idempotent: the undo list is popped, so the failed-forward path may call it
+    before its trace scrub and the shared session cleanup again after.
+    """
+
+    _run_undo(trace.__dict__.pop(_UNDO_FIELD, None) or ())
+
+
+def _run_undo(undo: Sequence[Callable[[], None]]) -> None:
     for action in reversed(undo):
         action()

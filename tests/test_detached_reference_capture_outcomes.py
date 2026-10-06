@@ -19,14 +19,14 @@ escape is either recovered+disclosed or unrecovered+disclosed.
 Row inventory (safety-net verdict, design-review matrices):
 
 - Formerly crawler-covered holders (module-level refs, class attrs, function
-  defaults, model instance holders incl. partial internals): RESCUED since
-  the crawler deletion — recovered with wrapper fidelity and disclosure, and
-  the user's objects are never mutated.
+  defaults): RESCUED since the crawler deletion, recovered with wrapper
+  fidelity and disclosure. Model instance holders (direct, list, dict,
+  partial internals) and closure cells are rebound to the wrappers for the
+  capture and restored after it, so they capture in one forward.
 - Deletion direction: TorchLens no longer rewrites user objects (identity
   pinned), and a stale WRAPPER reference held across ``unwrap_torch()``
   computes correctly and logs nothing.
-- The 7 crawler-missed classes (RESCUED since stage 2): closure cells,
-  staticmethods, module-level partials, plain-object attrs, pre-bound tensor
+- The crawler-missed classes (RESCUED since stage 2): staticmethods, module-level partials, plain-object attrs, pre-bound tensor
   methods, torch-free-source module class attrs, C-held refs (``lru_cache``
   proxy).
 - The protocol-invisible class (``from_numpy`` / ``frombuffer`` /
@@ -54,6 +54,7 @@ import importlib
 import sys
 import threading
 import types
+import warnings
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -61,6 +62,7 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
+from _stale_holders import OpaqueCallable
 from torch import nn
 
 import torchlens as tl
@@ -213,9 +215,10 @@ def uses_default(x: Any, op: Any = tanh) -> Any:
 def test_model_instance_holders_are_captured(corpus_env: _CorpusEnv) -> None:
     """Direct / list / dict / partial(.func/.args/.keywords) model holders.
 
-    DELIBERATE FLIP (crawler deletion): recovered via rescue with the exact
-    historical op counts, and — the deletion's point — the user's objects are
-    never rewritten (identity pinned below)."""
+    Capture preparation rebinds these holders to the live wrappers for the
+    capture, so the ops are captured directly in ONE forward with the exact
+    historical op counts and no rescue, and the user's objects are restored
+    afterwards (identity pinned below)."""
 
     def apply_op(op: Callable[..., Any], v: torch.Tensor) -> torch.Tensor:
         return op(v)
@@ -247,13 +250,15 @@ def test_model_instance_holders_are_captured(corpus_env: _CorpusEnv) -> None:
     )
     wrap_torch()
     trace = tl.trace(model, torch.tensor([0.25, 0.5]))
-    _assert_rescued(trace, "relu", "sigmoid", "tanh", "cos")
+    _assert_captured(trace, "relu", "sigmoid", "tanh", "cos")
+    assert trace.rescue_rerun is None
+    assert trace.capture_verification_reason != "mode_rescue_rerun"
     names = _op_names(trace)
     assert names.count("relu") == 1
     assert names.count("sigmoid") == 2  # list holder + partial.args holder
     assert names.count("tanh") == 2  # dict holder + partial.keywords holder
     assert names.count("cos") == 1
-    # The deletion's point: TorchLens never rewrites the user's objects.
+    # The capture-scoped rebind is fully undone: the user's objects are intact.
     assert (
         model.direct,
         model.items[0],
@@ -269,7 +274,11 @@ def test_model_instance_holders_are_captured(corpus_env: _CorpusEnv) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_closure_cell_ref_is_rescued(corpus_env: _CorpusEnv) -> None:
+def test_closure_cell_ref_is_rebound_for_the_capture(corpus_env: _CorpusEnv) -> None:
+    """A closure cell holding a pristine ref is rebound for the capture.
+
+    The op is captured in one forward without a provenance warning or a
+    rescue, and the cell holds the original object again afterwards."""
     raw_cos = corpus_env.cos
 
     def make_closure() -> Callable[[torch.Tensor], torch.Tensor]:
@@ -284,7 +293,13 @@ def test_closure_cell_ref_is_rescued(corpus_env: _CorpusEnv) -> None:
         def forward(self, v: torch.Tensor) -> torch.Tensor:
             return torch.relu(closure(torch.sigmoid(v)))
 
-    _assert_rescued(_trace_with_provenance_warning(Model()), "cos")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        trace = _trace(Model())
+    assert _op_names(trace) == ["none", "sigmoid", "cos", "relu", "none"]
+    assert trace.rescue_rerun is None
+    assert closure.__closure__ is not None
+    assert closure.__closure__[0].cell_contents is raw_cos
 
 
 def test_staticmethod_ref_is_rescued(corpus_env: _CorpusEnv) -> None:
@@ -566,8 +581,9 @@ def test_midgraph_escape_is_rescued_full_signature(corpus_env: _CorpusEnv) -> No
     zero diagnostics). Now the escape signal triggers the rescue re-run: cos
     is captured between sigmoid and relu, relu has a real parent again, and
     the trace carries the full disclosure. Flipping this row back to a
-    silent miss must be impossible."""
-    raw_cos = corpus_env.cos
+    silent miss must be impossible. The stale ref sits in a custom callable
+    object, a holder capture preparation never rebinds."""
+    raw_cos = OpaqueCallable(corpus_env.cos)
 
     def make_closure() -> Callable[[torch.Tensor], torch.Tensor]:
         def invoke(v: torch.Tensor) -> torch.Tensor:
