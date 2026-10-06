@@ -99,7 +99,9 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   BatchNorm calls. An in-place op on a Parameter inside `forward`
   (`with torch.no_grad(): self.temp.clamp_(lo, hi)`) is captured as an op whose `params` holds
   that Parameter; every later read of the Parameter in the same pass binds to that op as a graph
-  parent, not as a parameter edge, so it is absent from that read's `params`.
+  parent, not as a parameter edge, so it is absent from that read's `params`. `draw()` shows
+  such a Parameter as a grey cylinder labeled `parameter <name>` in its owning module's box, with
+  an edge to each op that reads its pre-mutation value; Parameters never mutated get no node.
 
 **GradFn**
 : A first-class live backward-autograd node captured during backward logging. Portable artifacts
@@ -393,7 +395,7 @@ attribution-target alias. See the [attribution reference](attribution.md).
 **show_legend tri-state**
 : `show_legend` accepts `None` (default, AUTO: no legend unless an encoding channel is active,
   then a channel-only disclosure legend), `True` (full theme legend, plus channel rows when
-  active), and `False` (no legend, honored even with channels active — the encoding is then
+  active; its `mutated parameter` row appears only when the render draws one), and `False` (no legend, honored even with channels active — the encoding is then
   undisclosed). The `None` value is *(unstable — no deprecation shim owed)* pending ratification.
 
 ## Backend-neutral identity

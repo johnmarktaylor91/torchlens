@@ -408,6 +408,7 @@ def add_mutated_parameter_nodes(
         if (
             first_raw in skipped
             or first_raw not in entries
+            or first_unit is None
             or unit_kinds.get(first_unit) != "raw_op"
         ):
             continue
