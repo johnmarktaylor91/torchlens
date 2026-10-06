@@ -23,6 +23,16 @@ and object attributes capture the wrapper directly. It eliminates the stale-refe
 avoids a rescue forward. The historical broad `sys.modules` crawler is deleted, along with
 its `patch_policy=` / `patch_modules=` keywords.
 
+A model built before the first capture is covered without wrapping early when it holds the raw
+callable on the model itself: as a module attribute (transformers' `GELUActivation` keeps
+`F.gelu`), a `functools.partial` (`GELUTanh`), a closure cell or default argument of a held
+function or of the class `forward`, or as a value inside a plain `list`, `dict`, `tuple` or namedtuple
+attribute. Each capture points those references at the wrappers before its forward and puts the
+original objects back afterwards, so the model is left exactly as it was, and the capture takes one
+forward with no warning. References held anywhere else (a module global, a custom object, a dict key,
+a builtin subclass, a `forward` assigned on the instance) keep the provenance warning and the rescue
+forward described below.
+
 ## Capture completeness and Python call routes
 
 | When it can occur | What you see | Remedy |
