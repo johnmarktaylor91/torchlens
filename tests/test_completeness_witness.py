@@ -364,7 +364,7 @@ class _RegisteredParameterMutationModel(nn.Module):
     """Mutate prepared model state during the captured forward."""
 
     def __init__(self) -> None:
-        """Create the registered parameter that must remain a witnessed gap."""
+        """Create the registered parameter whose in-place write is captured."""
 
         super().__init__()
         self.weight = nn.Parameter(torch.ones(4, 4))
