@@ -108,6 +108,24 @@ class TestRemovedSpellings:
         assert successor in str(excinfo.value)
         assert calls == [], "the refusal must fire before the capture runs"
 
+    @pytest.mark.parametrize("name", sorted(_REMOVED_KWARGS))
+    def test_removed_kwarg_passed_as_none_refuses_up_front(self, toy_trace, name: str) -> None:
+        """<old>=None refuses on both doors, and before the forward on tl.summary."""
+
+        successor = _REMOVED_KWARGS[name][1]
+        with pytest.raises(InvalidArgumentError) as excinfo:
+            toy_trace.summary(**{name: None})
+        assert successor in str(excinfo.value)
+
+        model = _Toy()
+        calls: list[int] = []
+        model.register_forward_hook(lambda *_: calls.append(1))
+        with pytest.raises(InvalidArgumentError) as excinfo:
+            tl.summary(model, torch.randn(1, 4), **{name: None})
+        assert excinfo.value.fields["code"] == "summary_option_invalid"
+        assert successor in str(excinfo.value)
+        assert calls == [], "a None-valued removed spelling must refuse before the capture"
+
     @pytest.mark.parametrize("level", sorted(_REMOVED_LEVELS))
     def test_removed_level_refuses_before_capture_on_tl_summary(self, level: str) -> None:
         """tl.summary(model, x, level=<legacy preset>) refuses typed before capture."""

@@ -353,12 +353,20 @@ def _validate_summary_grammar(summary_kwargs: dict[str, Any]) -> None:
 
     ``Trace.summary`` resolves the same configuration again after capture;
     resolving here first makes removed legacy spellings and unknown options
-    refuse typed before the model executes.
+    refuse typed before the model executes. ``None`` means "default" only
+    for grammar options; any other name is checked by presence, matching
+    ``Trace.summary``, so ``preset=None`` refuses here too.
     """
 
-    from .report._summary_config import resolve_config
+    from .report._summary_config import GRAMMAR_OPTIONS, resolve_config
 
-    resolve_config(**{name: value for name, value in summary_kwargs.items() if value is not None})
+    resolve_config(
+        **{
+            name: value
+            for name, value in summary_kwargs.items()
+            if value is not None or name not in GRAMMAR_OPTIONS
+        }
+    )
 
 
 def _validate_summary_modes(execution_mode: str, grad_mode: str) -> None:
