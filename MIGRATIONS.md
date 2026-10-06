@@ -121,6 +121,17 @@ grammar option instead of a bare `TypeError`.
 | `level="waterfall"` | `trace.profile(level="op")`, or `trace.to_pandas()` in execution order |
 | `level="output"` | `trace.output_table()` |
 
+## `tl.utils.flop_count(count_fma_as_two=)` removed (clean break, no alias)
+
+`tl.utils.flop_count()` takes the same `flop_convention=` vocabulary as
+`summary()`. The old keyword raises `InvalidArgumentError`
+(`flop_count_option_invalid`) naming the replacement, before any capture runs.
+
+| Old spelling | New spelling |
+|---|---|
+| `flop_count(model, x, count_fma_as_two=True)` | `flop_count(model, x, flop_convention="fma2")` (the default) |
+| `flop_count(model, x, count_fma_as_two=False)` | `flop_count(model, x, flop_convention="fma1")` |
+
 ## Episode ledger grammar v2 (the C07X coordinated tlspec-v9 amendment)
 
 The persisted episode ledger (`trace.annotations["episode"]`) moves to

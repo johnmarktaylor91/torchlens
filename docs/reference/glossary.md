@@ -545,6 +545,13 @@ attribution-target alias. See the [attribution reference](attribution.md).
   display: `tl.Bytes` (memory), `tl.Duration` (seconds), `tl.Flops` (floating-point
   operations), `tl.Macs` (multiply-accumulates).
 
+**FLOP convention (`flop_convention=`)**
+: `"fma2"` (default; one multiply-accumulate = 2 FLOPs) or `"fma1"` (recounted
+  from each op's two-term compute record; refuses typed with
+  `flop_convention_unavailable` when an op has no MAC split). Accepted by
+  `summary(...)` and `tl.utils.flop_count(...)`; the removed `count_fma_as_two=`
+  spelling refuses typed naming it.
+
 **Lookup and reentrancy errors**
 : `tl.AmbiguousOpLookupError` is raised when a bare Op lookup matches multiple
   pass-qualified Ops; `tl.ReentrantTraceError` when a trace is started while another
