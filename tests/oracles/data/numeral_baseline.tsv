@@ -4583,13 +4583,6 @@ package-docstrings	torchlens/visualization/_segment_descriptors.py	24
 package-docstrings	torchlens/visualization/_segment_descriptors.py	27
 package-docstrings	torchlens/visualization/_segment_descriptors.py	43
 package-docstrings	torchlens/visualization/_stacking.py	4.1
-package-docstrings	torchlens/visualization/_summary_internal/_builder.py	10
-package-docstrings	torchlens/visualization/_summary_internal/_builder.py	12
-package-docstrings	torchlens/visualization/_summary_internal/_builder.py	13
-package-docstrings	torchlens/visualization/_summary_internal/_builder.py	1_1
-package-docstrings	torchlens/visualization/_summary_internal/_builder.py	67
-package-docstrings	torchlens/visualization/_summary_internal/_builder.py	718.9
-package-docstrings	torchlens/visualization/_summary_internal/_builder.py	88
 package-docstrings	torchlens/visualization/_summary_internal/_discoverability.py	13
 package-docstrings	torchlens/visualization/_summary_internal/_discoverability.py	35
 package-docstrings	torchlens/visualization/_surgery_diff.py	43
@@ -6398,7 +6391,6 @@ test-docstrings	tests/test_structure_only_teaching.py	3.11
 test-docstrings	tests/test_summary_rebuild_charset.py	11
 test-docstrings	tests/test_summary_rebuild_config.py	17
 test-docstrings	tests/test_summary_rebuild_config.py	3.10
-test-docstrings	tests/test_summary_rebuild_config.py	3.7
 test-docstrings	tests/test_summary_rebuild_ladder.py	120
 test-docstrings	tests/test_summary_rebuild_ladder.py	19
 test-docstrings	tests/test_summary_rebuild_ladder.py	3.1

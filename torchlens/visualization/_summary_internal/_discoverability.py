@@ -224,8 +224,6 @@ def _input_shape_summary(trace: Trace) -> str:
         Shape summary or ``"unknown"``.
     """
 
-    from ._builder import _combined_shape_str
-
     layers = getattr(trace, "input_layers", []) or []
     shape = _combined_shape_str(trace, layers)
     if shape and shape != "-":
@@ -622,3 +620,51 @@ def _shorten(text: str, *, limit: int) -> str:
     if len(text) <= limit:
         return text
     return f"{text[: max(0, limit - 3)]}..."
+
+
+def _combined_shape_str(trace: Trace, labels: Sequence[str]) -> str:
+    """Return a compact combined shape string for one or more labels.
+
+    Parameters
+    ----------
+    trace:
+        Finalized log object.
+    labels:
+        Layer labels whose shapes should be summarized.
+
+    Returns
+    -------
+    str
+        Shape summary string.
+    """
+    if not labels:
+        return "-"
+    shapes = []
+    for label in labels:
+        try:
+            shapes.append(_shape_str(getattr(trace[label], "shape", None)))
+        except KeyError:
+            continue
+    if not shapes:
+        return "-"
+    if len(shapes) == 1:
+        return shapes[0]
+    return f"{len(shapes)} tensors"
+
+
+def _shape_str(shape: Any) -> str:
+    """Format a tensor shape using ASCII-only list syntax.
+
+    Parameters
+    ----------
+    shape:
+        Shape-like object.
+
+    Returns
+    -------
+    str
+        ASCII shape string.
+    """
+    if shape is None:
+        return "-"
+    return str(list(shape)).replace(" ", "")
