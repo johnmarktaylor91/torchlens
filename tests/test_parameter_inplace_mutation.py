@@ -77,6 +77,10 @@ def _ops_by_type(trace: Any, op_type: str) -> list[Any]:
     return [layer for layer in trace.layers if layer.type == op_type]
 
 
+def _parent_labels(trace: Any, layer: Any) -> list[str]:
+    return [trace[parent].label for parent in layer.parents]
+
+
 def _eager_output_and_state(model: nn.Module, x: torch.Tensor) -> tuple[torch.Tensor, dict]:
     eager = copy.deepcopy(model)
     with torch.no_grad():
@@ -100,7 +104,7 @@ def test_parameter_inplace_op_is_captured_and_consumed(op: str) -> None:
     assert [p.address for p in mutation.params] == ["temp"]
     truediv = _ops_by_type(trace, "truediv")[0]
     # The later read consumes the mutation op's output, not the Parameter source.
-    assert mutation.label in list(truediv.parents)
+    assert mutation.label in _parent_labels(trace, truediv)
     assert "temp" not in [p.address for p in truediv.params]
     assert torch.allclose(trace[trace.output_layers[0]].out, eager_out)
 
@@ -123,9 +127,9 @@ def test_parameter_mutated_twice_chains_both_ops() -> None:
     mul = _ops_by_type(trace, "mul")[0]
     truediv = _ops_by_type(trace, "truediv")[0]
     assert [p.address for p in clamp.params] == ["temp"]
-    assert list(mul.parents) == [clamp.label]
+    assert _parent_labels(trace, mul) == [clamp.label]
     assert mul.params == [] or not list(mul.params)
-    assert mul.label in list(truediv.parents)
+    assert mul.label in _parent_labels(trace, truediv)
     assert torch.allclose(trace[trace.output_layers[0]].out, eager_out)
     assert tl.validate(copy.deepcopy(model), x, scope="forward") is True
 
@@ -143,9 +147,9 @@ def test_parameter_read_before_and_after_mutation() -> None:
     # The before-read sees the old value through its parameter edge ...
     assert [p.address for p in before.params] == ["scale"]
     assert torch.allclose(before.out, x * 2.0)
-    assert mutation.is_inplace
+    assert [p.address for p in mutation.params] == ["scale"]
     # ... and the after-read consumes the mutation op's output (the new value).
-    assert mutation.label in list(after.parents)
+    assert mutation.label in _parent_labels(trace, after)
     assert not list(after.params)
     assert torch.allclose(after.out, x * 6.0)
     assert torch.allclose(trace[trace.output_layers[0]].out, eager_out)
