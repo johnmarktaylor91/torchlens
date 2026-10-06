@@ -158,13 +158,18 @@ def test_shap_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
         def shap_values(self, inputs: torch.Tensor) -> torch.Tensor:
             """Return deterministic SHAP values."""
 
-            assert inputs is self.background
+            self.explained = inputs
             return torch.zeros_like(inputs)
 
     model, x, log = _bridge_log()
     monkeypatch.setitem(sys.modules, "shap", _module("shap", DeepExplainer=FakeDeepExplainer))
+    background = torch.zeros_like(x)
 
-    payload = tl.bridge.shap.explain(log, background=x)
+    payload = tl.bridge.shap.explain(log, background=background)
+
+    # The background goes to the constructor; the traced input is explained.
+    assert payload["explainer"].background is background
+    assert torch.equal(payload["explainer"].explained, x)
 
     assert payload["schema"] == "torchlens.shap.v1"
     assert payload["model"] is model

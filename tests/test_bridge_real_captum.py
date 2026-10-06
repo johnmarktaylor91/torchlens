@@ -68,4 +68,4 @@ def test_label_of_a_module_that_runs_twice_is_refused(resnet) -> None:
     ]
     with pytest.raises(InvalidArgumentError) as info:
         tl.bridge.captum.layer(log, label)
-    assert info.value.code == "bridge_module_site_multi_call"
+    assert info.value.fields["code"] == "bridge_module_site_multi_call"

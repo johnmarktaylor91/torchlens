@@ -186,9 +186,9 @@ def _assign_label_ranges(
         if label.strip():
             by_label.setdefault(label, index)
     for position, event in enumerate(events):
-        index = by_label.get(str(event.get("name", "")))
-        if index is not None:
-            assigned[index].append(event)
+        owner = by_label.get(str(event.get("name", "")))
+        if owner is not None:
+            assigned[owner].append(event)
             used.add(position)
 
 

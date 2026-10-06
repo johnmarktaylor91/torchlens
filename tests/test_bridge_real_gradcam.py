@@ -126,7 +126,7 @@ def test_label_of_a_module_that_runs_twice_is_refused(resnet) -> None:
     assert labels, "expected an op whose outermost module is layer4.1.relu"
     with pytest.raises(InvalidArgumentError) as info:
         tl.bridge.gradcam.layer(log, labels[0])
-    assert info.value.code == "bridge_module_site_multi_call"
+    assert info.value.fields["code"] == "bridge_module_site_multi_call"
     with pytest.raises(InvalidArgumentError) as info:
         tl.bridge.gradcam.layer(log, "layer4.1.relu:2")
-    assert info.value.code == "bridge_module_site_multi_call"
+    assert info.value.fields["code"] == "bridge_module_site_multi_call"
