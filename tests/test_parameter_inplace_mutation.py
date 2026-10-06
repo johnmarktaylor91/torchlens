@@ -545,6 +545,48 @@ def test_lazy_materialization_is_not_a_parameter_mutation() -> None:
     assert clamp.label in _parent_labels(trace, _ops_by_type(trace, "truediv")[0])
 
 
+class _LazyMutatesOwnWeight(nn.Module):
+    """A lazy layer whose own weight is scaled in place between two calls."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lazy = nn.LazyLinear(4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        first = self.lazy(x)
+        with torch.no_grad():
+            self.lazy.weight.mul_(0.5)
+        return first + self.lazy(x)
+
+
+def test_materialized_lazy_parameter_mutation_is_captured() -> None:
+    """The lazy exclusion covers only materialization: a warmed lazy weight's write is an op."""
+
+    torch.manual_seed(0)
+    model = _LazyMutatesOwnWeight()
+    x = torch.randn(3, 4)
+    model(x)  # warm: materializes the lazy weight and bias before any capture
+    eager_out, eager_state = _eager_output_and_state(model, x)
+
+    trace = tl.trace(copy.deepcopy(model), x)
+    mutations = _ops_by_type(trace, "mul")
+    assert len(mutations) == 1, [layer.label for layer in trace.layers]
+    mutation = mutations[0]
+    assert [p.address for p in mutation.params] == ["lazy.weight"]
+    linears = _ops_by_type(trace, "linear")
+    assert len(linears) == 2
+    assert mutation.label in _parent_labels(trace, linears[1])
+    assert mutation.label not in _parent_labels(trace, linears[0])
+    assert torch.allclose(trace[trace.output_layers[0]].out, eager_out)
+
+    traced_model = copy.deepcopy(model)
+    tl.trace(traced_model, x)
+    for key, value in traced_model.state_dict().items():
+        assert torch.equal(value, eager_state[key]), key
+
+    assert tl.validate(copy.deepcopy(model), x, scope="forward") is True
+
+
 @pytest.mark.parametrize("spelling", ["positional", "keyword", "nested"])
 def test_frozen_parameter_with_grad_operand_validates_backward(spelling: str) -> None:
     """Backward validation passes on the parity case and returns the model as it came.
