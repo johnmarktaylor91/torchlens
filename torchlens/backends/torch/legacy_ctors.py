@@ -264,11 +264,16 @@ def uninstall_legacy_constructor_wrappers() -> None:
     A class whose ``__new__`` was re-patched by a third party after ours is left
     as found (TorchLens never clobbers foreign patches) and stays registered,
     so a later uninstall can still restore it, and a later install re-patch it
-    from the recorded original, once the foreign patch is gone.
+    from the recorded original, once the foreign patch is gone. A foreign patch
+    already deleted again leaves the class on CPython's stale trampoline, so the
+    recorded original is put back then, exactly as a reinstall would.
     """
 
     for key, record in list(_INSTALLED.items()):
         if restore_new_override(record.patch):
+            del _INSTALLED[key]
+        elif not _foreign_new_in_effect(record.patch.cls, record):
+            reinstate_original_new(record.patch)
             del _INSTALLED[key]
 
 

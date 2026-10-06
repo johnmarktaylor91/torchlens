@@ -656,6 +656,55 @@ def test_foreign_new_set_after_wrap_then_removed_is_repatched_and_captured() -> 
     assert legacy_ctors.installed_legacy_constructor_classes()["Variable"] is Variable
 
 
+def test_foreign_new_removed_before_unwrap_leaves_no_stale_trampoline() -> None:
+    """Unwrap restores the C constructor when a foreign patch over ours is already gone.
+
+    A foreign ``Variable.__new__`` set over ours and deleted while wrapped leaves
+    CPython's ``slot_tp_new`` trampoline with no Python ``__new__`` in
+    ``Variable``'s dict. An unwrap-and-stop process must still end exactly as
+    found (C ``tp_new``, no dict entry, no record); a foreign patch still in
+    effect at unwrap is left untouched and keeps its record.
+    """
+
+    from torchlens.backends.torch import legacy_ctors
+    from torchlens.backends.torch.wrappers import unwrap_torch
+    from torchlens.utils._type_new_slot import _type_view
+
+    unwrap_torch()
+    c_tp_new = _type_view(Variable).tp_new
+    tl.trace(Plain(), torch.randn(2, 4))
+    ours = Variable.__dict__["__new__"].__func__
+
+    def foreign_new(subtype, *args, **kwargs):
+        return ours(subtype, *args, **kwargs)
+
+    try:
+        # Negative: a foreign patch still in effect at unwrap is never clobbered.
+        Variable.__new__ = staticmethod(foreign_new)  # type: ignore[method-assign]
+        unwrap_torch()
+        assert Variable.__dict__["__new__"].__func__ is foreign_new
+        assert "Variable" in _installed_records(legacy_ctors)
+        del Variable.__new__
+        tl.trace(Plain(), torch.randn(2, 4))  # re-patches from the recorded original
+
+        # Positive: deleted before the unwrap, the class goes back to its C constructor.
+        Variable.__new__ = staticmethod(foreign_new)  # type: ignore[method-assign]
+        del Variable.__new__
+        assert _type_view(Variable).tp_new != c_tp_new  # CPython left the trampoline
+        unwrap_torch()
+        assert _type_view(Variable).tp_new == c_tp_new
+        assert "__new__" not in Variable.__dict__
+        assert "Variable" not in _installed_records(legacy_ctors)
+        assert torch.equal(Variable(torch.ones(2)), torch.ones(2))
+    finally:
+        unwrap_torch()
+        if "__new__" in Variable.__dict__:
+            del Variable.__new__
+        _set_tp_new(Variable, c_tp_new)
+        tl.trace(Plain(), torch.randn(2, 4))
+    assert legacy_ctors.installed_legacy_constructor_classes()["Variable"] is Variable
+
+
 def test_python_new_set_and_removed_before_wrap_is_captured_not_skipped() -> None:
     """A ``Variable.__new__`` set and deleted before the first wrap is no foreign patch.
 
