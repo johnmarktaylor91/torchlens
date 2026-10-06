@@ -28,7 +28,7 @@ from __future__ import annotations
 import functools
 import sys
 from collections.abc import Callable
-from types import CodeType
+from types import CodeType, FrameType
 from typing import Any
 
 import torch._ops as _torch_ops
@@ -140,7 +140,7 @@ def _inside_wrapped_torch_call() -> bool:
     if not _WRAPPED_FUNC_CODE:
         return False
     wrapped_code = _WRAPPED_FUNC_CODE[0]
-    frame = sys._getframe(2)
+    frame: FrameType | None = sys._getframe(2)
     while frame is not None:
         if frame.f_code is wrapped_code:
             return True
