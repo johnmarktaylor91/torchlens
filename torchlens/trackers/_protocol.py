@@ -1,7 +1,7 @@
 """The DOCUMENTED sink protocol: capabilities, delivery states (memo 3.1/3.10).
 
 A sink is a SERIALIZER over the shared emission view, never an engine.
-The protocol is documented so third parties (Neptune, Comet, in-house) write
+The protocol is documented so third parties (Comet, in-house) write
 their own receivers -- TorchLens owns the engine, they own the sink. A
 requested capability a sink does not advertise refuses BY NAME before any
 partial emission; a sink failure latches and can never corrupt collection.
