@@ -249,9 +249,10 @@ class TestAttachPreflights:
 
     @pytest.mark.smoke
     def test_wandb_sink_supplies_its_safe_grid_when_none_is_chosen(self) -> None:
-        """No descriptor and no settings grid: the sink's cap-safe grid attaches."""
+        """No descriptor and no settings: the sink's cap-safe grid attaches."""
 
         from torchlens.observability import WatchSettings
+        from torchlens.observability._kernels import DEFAULT_DESCRIPTOR
 
         class _Run:
             def log(self, payload, step=None):  # noqa: ANN001
@@ -265,13 +266,16 @@ class TestAttachPreflights:
             assert session.collector.settings.descriptor is trk.WANDB_SAFE_DESCRIPTOR
         finally:
             session.close(unwinding=True)
-        # A settings object that leaves the grid untouched still gets the offer.
+        # Any settings object is a caller choice, even one that leaves the C06
+        # grid untouched: it is kept, so the over-cap default refuses exactly
+        # like descriptor=DEFAULT_DESCRIPTOR does.
+        for kwargs in ({"settings": WatchSettings()}, {"descriptor": DEFAULT_DESCRIPTOR}):
+            with pytest.raises(TrackersError) as info:
+                trk.watch(model, to=trk.WandbSink(_Run()), optimizer=opt, hist_every=1, **kwargs)
+            assert info.value.fields["code"] == "tracker_histogram_bucket_cap"
+        # Several offering sinks: the first offer applies to the whole session.
         session = trk.watch(
-            model,
-            to=trk.WandbSink(_Run()),
-            optimizer=opt,
-            hist_every=1,
-            settings=WatchSettings(),
+            model, to=(trk.WandbSink(_Run()), trk.WandbSink(_Run())), optimizer=opt, hist_every=1
         )
         try:
             assert session.collector.settings.descriptor is trk.WANDB_SAFE_DESCRIPTOR

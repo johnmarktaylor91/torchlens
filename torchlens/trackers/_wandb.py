@@ -10,9 +10,10 @@ engine; ~100 lines over the shared emission view, as designed.
 The 512-bucket cap is wandb's own (documented constructor limit); the
 default C06 grid at bpo=4 over [2^-48, 2^16] renders 513 bins per signed
 sketch, so the sink REDUCES bins-per-octave pressure honestly: it refuses
-typed rather than letting wandb silently re-bin. When the caller names no
-grid, ``watch`` asks the sink (``default_histogram_descriptor()``) and uses
-``WANDB_SAFE_DESCRIPTOR``; an explicit over-cap descriptor still refuses
+typed rather than letting wandb silently re-bin. When the caller passes
+neither ``descriptor=`` nor ``settings=``, ``watch`` asks the sink
+(``default_histogram_descriptor()``) and uses ``WANDB_SAFE_DESCRIPTOR``; an
+over-cap grid named by either (``WatchSettings()`` included) still refuses
 (the refusal names the arithmetic).
 """
 
@@ -83,9 +84,10 @@ class WandbSink:
     def default_histogram_descriptor(self) -> HistogramDescriptor:
         """The grid ``watch`` uses when the caller chose none (fits the cap).
 
-        ``watch`` consults this hook only when neither ``descriptor=`` nor
-        ``settings=`` names a grid; an explicit over-cap descriptor still
-        refuses in :meth:`preflight_histograms`.
+        ``watch`` consults this hook only when both ``descriptor=`` and
+        ``settings=`` are None; any caller grid, the C06 default carried by a
+        bare ``WatchSettings()`` included, is judged by
+        :meth:`preflight_histograms` and refuses when over the cap.
         """
 
         return WANDB_SAFE_DESCRIPTOR
