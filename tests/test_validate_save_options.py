@@ -146,7 +146,8 @@ def test_invalid_values_raise_the_capture_errors_before_any_forward(
     with pytest.raises(InvalidArgumentError) as excinfo:
         tl.validate(model, x, scope="forward", **kwargs)
     assert type(excinfo.value) is type(expected)
-    assert excinfo.value.code == expected.code
+    assert expected.fields.get("code") is not None
+    assert excinfo.value.fields.get("code") == expected.fields.get("code")
     assert model.forward_calls == 0
 
 
