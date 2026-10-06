@@ -7,6 +7,7 @@ module is bit-identical to LayerGradCam on the module named directly.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -35,14 +36,17 @@ def _outermost(layer: Any) -> str | None:
 
 
 @pytest.fixture(scope="module")
-def resnet() -> tuple[torch.nn.Module, torch.Tensor, Any]:
-    """Return a seeded resnet18, its input, and an all-saved trace."""
+def resnet() -> Iterator[tuple[torch.nn.Module, torch.Tensor, Any]]:
+    """Yield a seeded resnet18, its input, and an all-saved trace; clean up after."""
 
     torch.manual_seed(0)
     model = torchvision.models.resnet18(weights=None).eval()
     x = torch.randn(2, 3, 64, 64)
     log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
-    return model, x, log
+    try:
+        yield model, x, log
+    finally:
+        log.cleanup()
 
 
 def test_label_site_layer_gradcam_matches_direct(resnet) -> None:
