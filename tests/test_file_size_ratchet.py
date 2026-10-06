@@ -393,11 +393,11 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # policies) plus the replay reset of the controls no legacy setter writes;
     # extends FE's fp32_precision pair, no second flag or snapshot path;
     # measured ~4995. Debloat target unchanged: 3450.
-    # 5000 -> 5050 (2026-10-05 next-release legacy constructors): only the
-    # HAS_LEGACY_CONSTRUCTOR_NEW_PATCH flag registration (import, flag, two
-    # roster names); the ctypes tp_new layout and patch helpers live in the
-    # new utils/_type_new_slot.py. Debloat target unchanged: 3450.
-    "torchlens/utils/_torch_compat.py": 5050,
+    # Held at 5000 (2026-10-06 next-release): the legacy-constructor flag
+    # registration fit by moving the tensor sq_item ctypes layout mirror out to
+    # its stdlib-only sibling leaf utils/_type_sequence_slot.py (flag, probe and
+    # capability warning stay here); measured 4968. Debloat target: 3450.
+    "torchlens/utils/_torch_compat.py": 5000,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
     # 3300 -> 3320 (F24 observe): the device-memory bracket at the one

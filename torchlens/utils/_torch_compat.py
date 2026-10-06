@@ -38,7 +38,6 @@ keeps the modern signature but changes its version string.
 from __future__ import annotations
 
 import contextlib
-import ctypes
 import importlib
 import inspect
 import sys
@@ -899,45 +898,6 @@ def _probe_dynamo_explain_module() -> bool:
         return False
 
 
-class _PySequenceMethods(ctypes.Structure):
-    """Minimal ctypes mirror of CPython's PySequenceMethods struct."""
-
-    _fields_ = [
-        ("sq_length", ctypes.c_void_p),
-        ("sq_concat", ctypes.c_void_p),
-        ("sq_repeat", ctypes.c_void_p),
-        ("sq_item", ctypes.c_void_p),
-        ("was_sq_slice", ctypes.c_void_p),
-        ("sq_ass_item", ctypes.c_void_p),
-        ("was_sq_ass_slice", ctypes.c_void_p),
-        ("sq_contains", ctypes.c_void_p),
-        ("sq_inplace_concat", ctypes.c_void_p),
-        ("sq_inplace_repeat", ctypes.c_void_p),
-    ]
-
-
-class _PyTypeObject(ctypes.Structure):
-    """Partial ctypes mirror of CPython's PyTypeObject up to tp_as_sequence."""
-
-    _fields_ = [
-        ("ob_refcnt", ctypes.c_ssize_t),
-        ("ob_type", ctypes.c_void_p),
-        ("ob_size", ctypes.c_ssize_t),
-        ("tp_name", ctypes.c_char_p),
-        ("tp_basicsize", ctypes.c_ssize_t),
-        ("tp_itemsize", ctypes.c_ssize_t),
-        ("tp_dealloc", ctypes.c_void_p),
-        ("tp_vectorcall_offset", ctypes.c_ssize_t),
-        ("tp_getattr", ctypes.c_void_p),
-        ("tp_setattr", ctypes.c_void_p),
-        ("tp_as_async", ctypes.c_void_p),
-        ("tp_repr", ctypes.c_void_p),
-        ("tp_as_number", ctypes.c_void_p),
-        ("tp_as_sequence", ctypes.POINTER(_PySequenceMethods)),
-        ("tp_as_mapping", ctypes.c_void_p),
-    ]
-
-
 def _probe_legacy_constructor_new_patch() -> bool:
     """Return whether legacy ``torch.<dtype>Tensor`` constructors can be patched in place.
 
@@ -960,19 +920,18 @@ def _probe_legacy_constructor_new_patch() -> bool:
 def _probe_tensor_sequence_slot_fix() -> bool:
     """Return whether the CPython tensor ``sq_item`` slot fix can run.
 
+    The ctypes layout mirror lives in the stdlib-only leaf ``_type_sequence_slot``,
+    imported at probe time like ``_type_new_slot``.
+
     Returns
     -------
     bool
         True on CPython when the expected ``torch.Tensor`` type layout is visible.
     """
 
-    if sys.implementation.name != "cpython":
-        return False
-    try:
-        type_obj = _PyTypeObject.from_address(id(torch.Tensor))
-    except Exception:
-        return False
-    return type_obj.tp_name == b"Tensor" and bool(type_obj.tp_as_sequence)
+    from ._type_sequence_slot import sequence_slot_layout_problem
+
+    return sequence_slot_layout_problem(torch.Tensor, b"Tensor") is None
 
 
 def _probe_safe_weights_only_load() -> bool:
@@ -4398,27 +4357,13 @@ def fix_tensor_sequence_slot() -> bool:
         when the private CPython layout was unavailable.
     """
 
-    if sys.implementation.name != "cpython":
-        mark_torch_capability_missing(
-            "HAS_TENSOR_SEQUENCE_SLOT_FIX",
-            "Tensor __getitem__ wrap/unwrap may leave scalar tensors sequence-like",
-        )
+    from ._type_sequence_slot import clear_sequence_item_slot, sequence_slot_layout_problem
+
+    problem = sequence_slot_layout_problem(torch.Tensor, b"Tensor")
+    if problem is not None:
+        mark_torch_capability_missing("HAS_TENSOR_SEQUENCE_SLOT_FIX", problem)
         return False
-    try:
-        type_obj = _PyTypeObject.from_address(id(torch.Tensor))
-    except Exception:
-        mark_torch_capability_missing(
-            "HAS_TENSOR_SEQUENCE_SLOT_FIX",
-            "Tensor sequence-slot layout could not be inspected",
-        )
-        return False
-    if type_obj.tp_name != b"Tensor" or not type_obj.tp_as_sequence:
-        mark_torch_capability_missing(
-            "HAS_TENSOR_SEQUENCE_SLOT_FIX",
-            "Tensor sequence-slot layout did not match the expected CPython structure",
-        )
-        return False
-    type_obj.tp_as_sequence.contents.sq_item = None
+    clear_sequence_item_slot(torch.Tensor)
     return True
 
 
