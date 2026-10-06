@@ -109,7 +109,7 @@ def test_depyf_dump_refuses_when_nothing_was_dumped(
     prepare = _fake_prepare_debug([], [])
     monkeypatch.setitem(sys.modules, "depyf", _module("depyf", prepare_debug=prepare))
     monkeypatch.setattr(torch, "compile", lambda model: lambda *a: None)
-    with pytest.raises(RuntimeError, match="torch._dynamo.reset"):
+    with pytest.raises(RuntimeError, match=r"torch\.compiler\.reset\(\)"):
         depyf.dump("model", "x", tmp_path)
 
 
@@ -402,7 +402,7 @@ def test_contrastive_rows_read_last_real_token_under_padding() -> None:
 def test_contrastive_rows_refuse_identical_sides() -> None:
     """Identical positive and negative rows would train an all-zero vector."""
 
-    from torchlens.bridge._contrastive import _contrastive_rows
+    from torchlens.bridge._contrastive import _contrastive_rows, _ContrastiveRead
 
     same = torch.randn(3, 4, 2)
     with pytest.raises(ValueError, match="identical"):
@@ -410,8 +410,7 @@ def test_contrastive_rows_refuse_identical_sides() -> None:
             _FakeLog([]),
             _FakeLayer("p", out=same),
             _FakeLayer("n", out=same.clone()),
-            negative_log=None,
-            read_token_index=-1,
+            _ContrastiveRead(negative_log=None, read_token_index=-1),
         )
 
 
@@ -658,6 +657,30 @@ def test_module_site_unresolved_and_ambiguous_refuse_typed() -> None:
         module_for_site(SiteLog(), Site(), bridge="gradcam")
     assert info.value.fields["code"] == "bridge_module_site_ambiguous"
     assert info.value.fields["remedy"]
+
+
+def test_module_call_count_prefers_the_module_record_and_never_swallows_errors() -> None:
+    """The record's ``num_calls`` wins; only a missing record falls back to counting calls."""
+
+    from torchlens.bridge._utils import _module_num_calls
+
+    layers = [types.SimpleNamespace(output_of_module_calls=("a:1", "a:2", "b:1"))]
+    # Duck-typed log with no module records: distinct calls of the address are counted.
+    assert _module_num_calls(_FakeLog(layers), "a") == 2
+    # A module mapping without the address falls back the same way.
+    with_records = types.SimpleNamespace(
+        layer_list=layers, modules={"b": types.SimpleNamespace(num_calls=5)}
+    )
+    assert _module_num_calls(with_records, "a") == 2
+    assert _module_num_calls(with_records, "b") == 5
+
+    class BrokenModules:
+        def __contains__(self, key: object) -> bool:
+            raise RuntimeError("module table corrupted")
+
+    broken = types.SimpleNamespace(layer_list=layers, modules=BrokenModules())
+    with pytest.raises(RuntimeError, match="module table corrupted"):
+        _module_num_calls(broken, "a")
 
 
 # --------------------------------------------------------------------------- #

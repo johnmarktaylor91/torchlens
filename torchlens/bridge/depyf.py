@@ -75,7 +75,7 @@ def dump(model: Any, x: Any, path: str | Path, **kwargs: Any) -> list[Path]:
             f"depyf dumped no files into {output_dir}: torch.compile reused a cached "
             "compile of this model, so nothing was recompiled",
             code="bridge_depyf_nothing_dumped",
-            remedy="call torch._dynamo.reset() before dump() to force a fresh compile",
+            remedy="call torch.compiler.reset() before dump() to force a fresh compile",
         )
     return written
 

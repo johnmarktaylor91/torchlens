@@ -143,7 +143,7 @@ optional dependency.
 - `depyf.py`: `dump(model, x, path, **prepare_debug_kwargs) -> list[Path]`
   runs `with depyf.prepare_debug(path): torch.compile(model)(*x)` and
   returns the files written; `path` is required; a cached compile that
-  dumps nothing raises `RuntimeError` naming `torch._dynamo.reset()`
+  dumps nothing raises `RuntimeError` naming `torch.compiler.reset()`
   (extra: `torchlens[depyf]`).
 - `dialz.py`: `analyze()` (extra: `torchlens[dialz]`).
 - `repeng.py`: `control_vector()` (extra: `torchlens[repeng]`).
