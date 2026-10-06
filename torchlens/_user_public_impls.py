@@ -1124,7 +1124,7 @@ def _warn_if_validation_trace_not_reproducible(
                 save_arg_values=False,
                 random_seed=random_seed,
                 save_rng_states=False,
-                output_device=first_trace.output_device,
+                output_device=cast(OutputDeviceLiteral, first_trace.output_device),
                 save_budget=first_trace.save_budget,
             )
         finally:
