@@ -227,7 +227,7 @@ class _Rebinder:
         if type(values) is tuple:
             return tuple(items)
         try:
-            return type(values)._make(items)  # type: ignore[attr-defined, no-any-return]
+            return type(values)._make(items)  # type: ignore[attr-defined]
         except (TypeError, ValueError):  # an exotic ``_make``: leave it to the rescue
             return None
 
