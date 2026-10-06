@@ -379,7 +379,7 @@ _PRUNED_OP_EGRESS = {
 
 _DIRECT_EGRESS = {
     "tensor_of_tolist": lambda x: x + torch.tensor(_GLOBAL_TABLE.tolist()),
-    "from_numpy": lambda x: x + torch.from_numpy(_GLOBAL_TABLE.cpu().numpy().copy()),
+    "from_numpy": lambda x: x + torch.from_numpy(_GLOBAL_TABLE.numpy().copy()),
     "asarray": lambda x: x * float(np.asarray(_GLOBAL_SCALAR)),
     "item": lambda x: x * _GLOBAL_SCALAR.item(),
     "float": lambda x: x * float(_GLOBAL_SCALAR),

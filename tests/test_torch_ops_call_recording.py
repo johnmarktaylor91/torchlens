@@ -253,7 +253,8 @@ def test_receiver_mutating_custom_op_is_recorded_in_place(op_name: str) -> None:
         trace = tl.trace(model, torch.randn(3, 4))
     mutation = next(op for op in trace.ops if op.func_name == op_name)
     add = next(op for op in trace.ops if op.func_name == "__add__")
-    assert mutation.label in add.parents, (mutation.label, add.parents)
+    mutation_layer = mutation.label.split(":")[0]
+    assert add.parents == (mutation_layer,), (mutation_layer, add.parents)
     assert not _unrecorded_mutation_rows(trace)
 
 
