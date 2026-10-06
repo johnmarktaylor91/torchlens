@@ -271,7 +271,7 @@ def rebind_held_torch_refs(session: object, model: nn.Module) -> None:
     _PENDING_UNDO[id(session)] = journal
     try:
         rebinder = _Rebinder(journal)
-        for module in model.modules():
+        for _name, module in model.named_modules():
             rebinder.rebind_module(module)
     except BaseException:
         restore_held_torch_refs(session)
