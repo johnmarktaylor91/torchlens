@@ -8296,9 +8296,7 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source_nested_depth(
     zero ``intervention_replaced`` ops -- even after the depth-2 fix above.
     The fix must not make the tripwire pass silently on a genuine capture gap.
     """
-
-    # Keep the primary capture: the rescue re-run's aten recording recovers the stand-in.
-    monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)
+    monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)  # keep primary capture
 
     class _RawAtenGeluBlock(nn.Module):
         def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -8356,9 +8354,7 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source(
     ``has _forward_hooks`` proxy mislabeled exactly this case (cert round 3
     coupled hazard); reintroducing it makes this fail loudly.
     """
-
-    # Keep the primary capture: the rescue re-run's aten recording recovers the stand-in.
-    monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)
+    monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)  # keep primary capture
 
     model = _RawAtenReluNet().eval()
     x = torch.randn(3, 4)
