@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import warnings
 from pathlib import Path
 from typing import Any, cast
 
@@ -52,6 +53,26 @@ def execution_trace(log: Any, trace_path: str | Path) -> dict[str, Any]:
 def join(log: Any, kineto_trace: str | Path | dict[str, Any]) -> dict[str, Any]:
     """Join TorchLens layer records with a PyTorch Kineto trace payload.
 
+    Each complete event is assigned to at most one layer:
+
+    - A ``record_function`` range whose name EQUALS a layer label is that
+      layer's (exact equality, never substring).
+    - The op events of one type (``aten::conv2d`` for ``func_name ==
+      "conv2d"``; nested calls of the same name inside one outer event are not
+      counted twice) are matched in time order to that type's layers in
+      execution order: the k-th event to the k-th layer. When the event count
+      is a multiple ``n`` of the layer count (``n`` repeated forwards under
+      one profiler), event ``k`` goes to layer ``k mod L``. Events inside a
+      matched label range are left to that range.
+    - Any other event is unmatched and disclosed: ``unmatched_event_counts``
+      counts every unmatched complete event by name, and
+      ``mismatched_op_types`` names each op type whose event count is not a
+      multiple of its layer count (those events stay unmatched, with a
+      ``UserWarning``).
+
+    Durations are host-side profiler event times: a per-layer diagnostic, not
+    a rate denominator.
+
     Parameters
     ----------
     log:
@@ -65,38 +86,210 @@ def join(log: Any, kineto_trace: str | Path | dict[str, Any]) -> dict[str, Any]:
         Merged per-operation timing view.
     """
 
-    # D22 (F09): this bridge matches events by NAME SUBSTRING -- a
-    # collision-prone approximate diagnostic. It fills labeled diagnostic
-    # columns only and is FORBIDDEN as a rate denominator; device time
-    # enters report schemas only via the correlation-ID join.
+    # D22 (F09): host-side event times fill labeled diagnostic columns only and
+    # are FORBIDDEN as a rate denominator; device time enters report schemas
+    # only via the correlation-ID join.
     trace = _load_trace(kineto_trace)
-    events = _trace_events(trace)
+    events = [event for event in _trace_events(trace) if event.get("ph", "X") == "X"]
+    layers = list(getattr(log, "layer_list", []))
+    assigned: dict[int, list[dict[str, Any]]] = {index: [] for index in range(len(layers))}
+    used: set[int] = set()
+    _assign_label_ranges(layers, events, assigned, used)
+    mismatched = _assign_op_types(layers, events, assigned, used)
     rows = []
-    for layer in getattr(log, "layer_list", []):
-        label = str(getattr(layer, "layer_label", ""))
-        func_name = str(getattr(layer, "func_name", ""))
-        matched_events = [
-            event
-            for event in events
-            if _event_matches_layer(event, label=label, func_name=func_name)
-        ]
-        duration_us = sum(float(event.get("dur", 0.0) or 0.0) for event in matched_events)
+    for index, layer in enumerate(layers):
+        matched_events = assigned[index]
         rows.append(
             {
-                "layer_label": label,
-                "func_name": func_name,
+                "layer_label": str(getattr(layer, "layer_label", "")),
+                "func_name": str(getattr(layer, "func_name", "")),
                 "raw_index": getattr(layer, "raw_index", None),
                 "kineto_event_count": len(matched_events),
-                "kineto_duration_us": duration_us,
+                "kineto_duration_us": sum(_duration(event) for event in matched_events),
                 "kineto_events": matched_events,
             }
         )
+    unmatched: dict[str, int] = {}
+    for position, event in enumerate(events):
+        if position not in used:
+            name = str(event.get("name", ""))
+            unmatched[name] = unmatched.get(name, 0) + 1
+    if mismatched:
+        warnings.warn(
+            "profiler.join left op types unmatched because their event count is not a "
+            f"multiple of their layer count: {mismatched}",
+            UserWarning,
+            stacklevel=2,
+        )
     return {
-        "schema": "torchlens.profiler_join.v1",
-        "attribution": "name-matched (approximate; not for rates)",
+        "schema": "torchlens.profiler_join.v2",
+        "attribution": (
+            "order-matched: k-th event of an op type to k-th layer of that type; "
+            "record_function ranges by exact label (host-side; not for rates)"
+        ),
         "ops": rows,
+        "unmatched_event_counts": unmatched,
+        "mismatched_op_types": mismatched,
         "trace_metadata": _metadata(trace),
     }
+
+
+def _duration(event: dict[str, Any]) -> float:
+    """Return an event's duration in microseconds (0.0 when absent)."""
+
+    return float(event.get("dur", 0.0) or 0.0)
+
+
+def _start(event: dict[str, Any]) -> float:
+    """Return an event's start timestamp (0.0 when absent)."""
+
+    return float(event.get("ts", 0.0) or 0.0)
+
+
+def _contains(outer: dict[str, Any], inner: dict[str, Any]) -> bool:
+    """Return whether ``inner`` lies inside ``outer`` on the same thread.
+
+    Events without timestamps never contain one another.
+    """
+
+    if "ts" not in outer or "ts" not in inner:
+        return False
+    if (outer.get("pid"), outer.get("tid")) != (inner.get("pid"), inner.get("tid")):
+        return False
+    start, inner_start = _start(outer), _start(inner)
+    return start <= inner_start and inner_start + _duration(inner) <= start + _duration(outer)
+
+
+def _assign_label_ranges(
+    layers: list[Any],
+    events: list[dict[str, Any]],
+    assigned: dict[int, list[dict[str, Any]]],
+    used: set[int],
+) -> None:
+    """Assign events whose name equals a layer label to that layer.
+
+    Parameters
+    ----------
+    layers:
+        Layer records in execution order.
+    events:
+        Complete trace events.
+    assigned:
+        Per-layer event lists, filled in place.
+    used:
+        Positions of assigned events, filled in place.
+    """
+
+    by_label: dict[str, int] = {}
+    for index, layer in enumerate(layers):
+        label = str(getattr(layer, "layer_label", "") or "")
+        if label.strip():
+            by_label.setdefault(label, index)
+    for position, event in enumerate(events):
+        index = by_label.get(str(event.get("name", "")))
+        if index is not None:
+            assigned[index].append(event)
+            used.add(position)
+
+
+def _op_event_names(func_name: str) -> frozenset[str]:
+    """Return the profiler event names one TorchLens ``func_name`` records as.
+
+    Parameters
+    ----------
+    func_name:
+        TorchLens function name such as ``"conv2d"`` or ``"__add__"``.
+
+    Returns
+    -------
+    frozenset[str]
+        Exact event names (``conv2d``, ``aten::conv2d``; dunder methods also
+        map to their aten op, ``__add__`` to ``aten::add``).
+    """
+
+    names = {func_name, f"aten::{func_name}"}
+    if func_name.startswith("__") and func_name.endswith("__"):
+        names.add(f"aten::{func_name.strip('_')}")
+    return frozenset(names)
+
+
+def _assign_op_types(
+    layers: list[Any],
+    events: list[dict[str, Any]],
+    assigned: dict[int, list[dict[str, Any]]],
+    used: set[int],
+) -> dict[str, dict[str, int]]:
+    """Assign op events to layers of the same type by execution order.
+
+    Parameters
+    ----------
+    layers:
+        Layer records in execution order.
+    events:
+        Complete trace events.
+    assigned:
+        Per-layer event lists, filled in place.
+    used:
+        Positions of assigned events, filled in place.
+
+    Returns
+    -------
+    dict[str, dict[str, int]]
+        Op types left unmatched, with their event and layer counts.
+    """
+
+    ranges = [events[position] for position in used]
+    by_type: dict[str, list[int]] = {}
+    for index, layer in enumerate(layers):
+        func_name = str(getattr(layer, "func_name", "") or "")
+        if func_name.strip() and func_name != "none" and not assigned[index]:
+            by_type.setdefault(func_name, []).append(index)
+    mismatched: dict[str, dict[str, int]] = {}
+    for func_name, layer_indices in by_type.items():
+        names = _op_event_names(func_name)
+        pool = _outer_events(
+            [
+                position
+                for position, event in enumerate(events)
+                if position not in used
+                and str(event.get("name", "")) in names
+                and not any(_contains(outer, event) for outer in ranges)
+            ],
+            events,
+        )
+        if not pool:
+            continue
+        if len(pool) % len(layer_indices):
+            mismatched[func_name] = {"events": len(pool), "layers": len(layer_indices)}
+            continue
+        for k, position in enumerate(pool):
+            assigned[layer_indices[k % len(layer_indices)]].append(events[position])
+            used.add(position)
+    return mismatched
+
+
+def _outer_events(positions: list[int], events: list[dict[str, Any]]) -> list[int]:
+    """Drop events nested inside another event of the same pool; order by start.
+
+    Parameters
+    ----------
+    positions:
+        Event positions of one op type.
+    events:
+        Complete trace events.
+
+    Returns
+    -------
+    list[int]
+        Outermost event positions in time order (trace order breaks ties).
+    """
+
+    ordered = sorted(positions, key=lambda position: (_start(events[position]), position))
+    outer: list[int] = []
+    for position in ordered:
+        if not any(_contains(events[kept], events[position]) for kept in outer):
+            outer.append(position)
+    return outer
 
 
 def _load_trace(kineto_trace: str | Path | dict[str, Any]) -> dict[str, Any]:
@@ -144,37 +337,6 @@ def _trace_events(trace: dict[str, Any]) -> list[dict[str, Any]]:
     if events is None:
         events = []
     return [event for event in events if isinstance(event, dict)]
-
-
-def _event_matches_layer(event: dict[str, Any], *, label: str, func_name: str) -> bool:
-    """Return whether a Kineto event should be associated with a layer.
-
-    Parameters
-    ----------
-    event:
-        Kineto event dictionary.
-    label:
-        TorchLens layer label.
-    func_name:
-        TorchLens function name.
-
-    Returns
-    -------
-    bool
-        Whether the event name references the layer label or function.
-    """
-
-    event_name = str(event.get("name", ""))
-    if not event_name:
-        return False
-    # A blank label/func_name would substring-match EVERY event ("" in anything is
-    # True), so a layer record missing layer_label/func_name would silently absorb
-    # the entire trace. Refuse blank matches. The substring/many-to-many matching
-    # of NON-blank labels/funcs is the owner-reserved join contract and is left
-    # unchanged here.
-    label_match = bool(label.strip()) and label in event_name
-    func_match = bool(func_name.strip()) and func_name != "none" and func_name in event_name
-    return label_match or func_match
 
 
 def _metadata(trace: dict[str, Any]) -> dict[str, Any]:

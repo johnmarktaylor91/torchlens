@@ -8,6 +8,8 @@ from typing import Any, cast
 import torch
 from torch import nn
 
+from .._errors import InvalidArgumentError
+
 
 def source_model(log: Any) -> nn.Module:
     """Return the live source model retained by a model log.
@@ -73,6 +75,174 @@ def resolve_one_site(log: Any, site: Any) -> Any:
             # trace lookup teaches its own error when this also misses.
             return log[site]
         raise
+
+
+def module_for_site(log: Any, site: Any, *, bridge: str) -> nn.Module:
+    """Resolve a TorchLens site to the live module whose forward hook sees it.
+
+    Attribution bridges (Grad-CAM, Captum layer methods) hook a module, so a
+    site must name exactly one module call. A plain module address
+    (``"layer4"``) or ``"self"`` returns that module. Any other site resolves
+    to one op; the op's tensor may be the output of several nested modules
+    (``layer4.1.relu``, ``layer4.1``, ``layer4``), and the OUTERMOST of them
+    is the module whose output that tensor is. A pass-qualified address
+    (``"layer4.1.relu:2"``) or an op label names one call, so the resolved
+    module must run exactly once in the trace: a module hook would see every
+    call, not the one named.
+
+    Parameters
+    ----------
+    log:
+        TorchLens ``Trace`` with a live source model reference.
+    site:
+        Module address, module pass label, op label, selector, or layer object.
+    bridge:
+        Bridge name used in refusal messages.
+
+    Returns
+    -------
+    nn.Module
+        Live PyTorch module.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``bridge_module_site_unresolved`` when the site is not the output of
+        any module, ``bridge_module_site_ambiguous`` when two sibling modules
+        share the outermost depth, and ``bridge_module_site_multi_call`` when
+        the resolved module runs more than once in the trace.
+    """
+
+    model = source_model(log)
+    modules = dict(model.named_modules())
+    if site == "self":
+        return model
+    if isinstance(site, str) and site in modules:
+        return cast(nn.Module, modules[site])
+    if isinstance(site, str):
+        address, _, suffix = site.rpartition(":")
+        if address in modules and suffix.isdigit():
+            return _single_call_module(log, modules, address, site=site, bridge=bridge)
+
+    resolved = resolve_one_site(log, site)
+    addresses = [
+        address
+        for address in dict.fromkeys(
+            _module_call_address(call)
+            for call in getattr(resolved, "output_of_module_calls", ()) or ()
+        )
+        if address in modules
+    ]
+    if not addresses:
+        raise InvalidArgumentError(
+            f"Could not resolve {bridge} layer for site {site!r}: the site is not the "
+            "output of any module of the source model",
+            code="bridge_module_site_unresolved",
+            remedy="pass a module address such as 'layer4', or the label of an op whose "
+            "tensor a module returns",
+        )
+    depth = min(_address_depth(address) for address in addresses)
+    outermost = [address for address in addresses if _address_depth(address) == depth]
+    if len(outermost) > 1:
+        raise InvalidArgumentError(
+            f"{bridge} site {site!r} is the output of sibling modules {outermost!r}; "
+            "no one module owns it",
+            code="bridge_module_site_ambiguous",
+            remedy="pass one of those module addresses directly",
+        )
+    return _single_call_module(log, modules, outermost[0], site=site, bridge=bridge)
+
+
+def _module_call_address(call: Any) -> str:
+    """Return the module address of one ``output_of_module_calls`` entry.
+
+    Parameters
+    ----------
+    call:
+        ``(address, call_index)`` tuple or ``"address:call_index"`` string.
+
+    Returns
+    -------
+    str
+        Module dotted address.
+    """
+
+    if isinstance(call, tuple) and call:
+        return str(call[0])
+    text = str(call)
+    address, _, suffix = text.rpartition(":")
+    return address if address and suffix.isdigit() else text
+
+
+def _address_depth(address: str) -> int:
+    """Return the nesting depth of a module address (root is 0)."""
+
+    return 0 if not address else address.count(".") + 1
+
+
+def _single_call_module(
+    log: Any, modules: dict[str, nn.Module], address: str, *, site: Any, bridge: str
+) -> nn.Module:
+    """Return ``modules[address]`` after refusing a module that runs more than once.
+
+    Parameters
+    ----------
+    log:
+        TorchLens ``Trace``.
+    modules:
+        ``named_modules()`` mapping of the source model.
+    address:
+        Resolved module address.
+    site:
+        Original site, for the refusal message.
+    bridge:
+        Bridge name used in refusal messages.
+
+    Returns
+    -------
+    nn.Module
+        The resolved live module.
+    """
+
+    calls = _module_num_calls(log, address)
+    if calls > 1:
+        raise InvalidArgumentError(
+            f"{bridge} site {site!r} resolves to module {address!r}, which runs {calls} "
+            "times in this trace; a module hook sees every call, not the one the site names",
+            code="bridge_module_site_multi_call",
+            remedy=f"pass the module address {address!r} itself to hook all of its calls, "
+            "or pick a site whose module runs once",
+        )
+    return modules[address]
+
+
+def _module_num_calls(log: Any, address: str) -> int:
+    """Return how many times module ``address`` ran in the trace.
+
+    Parameters
+    ----------
+    log:
+        TorchLens ``Trace``.
+    address:
+        Module dotted address.
+
+    Returns
+    -------
+    int
+        Call count; the trace's module record when available, else the number
+        of distinct calls named in the ops' ``output_of_module_calls``.
+    """
+
+    try:
+        return int(log.modules[address].num_calls)
+    except Exception:  # noqa: BLE001 - duck-typed logs without a module record count below
+        pass
+    seen: set[Any] = set()
+    for layer in getattr(log, "layer_list", []):
+        for call in getattr(layer, "output_of_module_calls", ()) or ():
+            if _module_call_address(call) == address:
+                seen.add(call if isinstance(call, tuple) else str(call))
+    return max(len(seen), 1)
 
 
 def out_at(log: Any, site: Any) -> torch.Tensor:
@@ -235,6 +405,7 @@ def _default_tensor_layer_sweep(
 
 
 __all__ = [
+    "module_for_site",
     "out_at",
     "first_input_tensor",
     "resolve_one_site",

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any
 
 from torch import nn
 
-from ._utils import first_input_tensor, resolve_one_site, source_model
+# ``source_model`` stays importable from this module (audit notebook 16 calls
+# ``bridge.captum.source_model``).
+from ._utils import first_input_tensor, module_for_site, source_model  # noqa: F401
 
 
 def attribute(
@@ -63,6 +65,10 @@ def attribute(
 def layer(log: Any, site: Any) -> nn.Module:
     """Resolve a TorchLens module/site to the live PyTorch module Captum expects.
 
+    Shares Grad-CAM's resolver: a module address returns that module; an op
+    label returns the outermost module whose output the op's tensor is,
+    refusing when that module runs more than once.
+
     Parameters
     ----------
     log:
@@ -79,8 +85,9 @@ def layer(log: Any, site: Any) -> nn.Module:
     ------
     ImportError
         If Captum is unavailable.
-    ValueError
-        If the site cannot be mapped to a live module.
+    InvalidArgumentError
+        If the site maps to no module, to sibling modules, or to a module that
+        runs more than once (see :func:`torchlens.bridge._utils.module_for_site`).
     """
 
     try:
@@ -90,25 +97,7 @@ def layer(log: Any, site: Any) -> nn.Module:
             "Captum bridge requires the `captum` extra: install torchlens[captum]."
         ) from exc
 
-    model = source_model(log)
-    modules = dict(model.named_modules())
-    if site == "self":
-        return model
-    if isinstance(site, str):
-        address = site.rsplit(":", maxsplit=1)[0]
-        if address in modules:
-            return cast(nn.Module, modules[address])
-
-    resolved = resolve_one_site(log, site)
-    candidates = list(getattr(resolved, "output_of_module_calls", ()) or [])
-    module = getattr(resolved, "module", None)
-    if module is not None:
-        candidates.append(str(module))
-    for candidate in reversed(candidates):
-        address = str(candidate).rsplit(":", maxsplit=1)[0]
-        if address in modules:
-            return cast(nn.Module, modules[address])
-    raise ValueError(f"Could not resolve Captum layer for site {site!r}.")
+    return module_for_site(log, site, bridge="Captum")
 
 
 __all__ = ["attribute", "layer"]

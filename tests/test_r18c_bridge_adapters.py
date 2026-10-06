@@ -369,8 +369,8 @@ def test_profiler_blank_label_matches_nothing() -> None:
     assert row["kineto_duration_us"] == 0.0
 
 
-def test_profiler_named_label_still_matches() -> None:
-    """A non-blank label still matches its events (join contract unchanged)."""
+def test_profiler_label_range_matches_by_exact_equality() -> None:
+    """A record_function range matches the layer whose label it EQUALS, never a substring."""
 
     from torchlens.bridge import profiler
 
@@ -380,10 +380,69 @@ def test_profiler_named_label_still_matches() -> None:
             self.func_name = func
             self.raw_index = idx
 
-    trace = {"traceEvents": [{"name": "my_conv_kernel", "dur": 5.0}]}
-    row = profiler.join(_FakeLog([Layer("conv", "conv2d", 1)]), trace)["ops"][0]
+    trace = {
+        "traceEvents": [
+            {"name": "conv2d_1_1", "dur": 5.0},
+            {"name": "conv2d_1_1 cpu", "dur": 7.0},
+            {"name": "my_conv_kernel", "dur": 11.0},
+        ]
+    }
+    joined = profiler.join(_FakeLog([Layer("conv2d_1_1", "conv2d", 1)]), trace)
+    row = joined["ops"][0]
     assert row["kineto_event_count"] == 1
     assert row["kineto_duration_us"] == 5.0
+    assert joined["unmatched_event_counts"] == {"conv2d_1_1 cpu": 1, "my_conv_kernel": 1}
+
+
+def test_profiler_repeated_op_type_matches_kth_event_to_kth_layer() -> None:
+    """Two conv layers share two aten::conv2d events one each, in execution order."""
+
+    from torchlens.bridge import profiler
+
+    class Layer:
+        def __init__(self, label: str, func: str, idx: int) -> None:
+            self.layer_label = label
+            self.func_name = func
+            self.raw_index = idx
+
+    layers = [Layer("conv2d_1_1", "conv2d", 1), Layer("conv2d_2_3", "conv2d", 3)]
+    events = [
+        {"name": "aten::conv2d", "ph": "X", "ts": 0.0, "dur": 10.0, "tid": 1},
+        {"name": "aten::convolution", "ph": "X", "ts": 1.0, "dur": 8.0, "tid": 1},
+        {"name": "aten::conv2d", "ph": "X", "ts": 20.0, "dur": 30.0, "tid": 1},
+    ]
+    joined = profiler.join(_FakeLog(layers), {"traceEvents": events})
+    assert [row["kineto_duration_us"] for row in joined["ops"]] == [10.0, 30.0]
+    assert [row["kineto_event_count"] for row in joined["ops"]] == [1, 1]
+    assert joined["unmatched_event_counts"] == {"aten::convolution": 1}
+
+    # Two repeated forwards: 4 events over 2 layers, event k to layer k mod 2.
+    twice = events + [
+        {"name": "aten::conv2d", "ph": "X", "ts": 100.0, "dur": 1.0, "tid": 1},
+        {"name": "aten::conv2d", "ph": "X", "ts": 120.0, "dur": 3.0, "tid": 1},
+    ]
+    joined = profiler.join(_FakeLog(layers), {"traceEvents": twice})
+    assert [row["kineto_duration_us"] for row in joined["ops"]] == [11.0, 33.0]
+
+
+def test_profiler_count_mismatch_is_disclosed_not_guessed() -> None:
+    """Three events over two layers of one type stay unmatched, with a warning."""
+
+    from torchlens.bridge import profiler
+
+    class Layer:
+        def __init__(self, label: str, func: str, idx: int) -> None:
+            self.layer_label = label
+            self.func_name = func
+            self.raw_index = idx
+
+    layers = [Layer("relu_1_2", "relu", 2), Layer("relu_2_4", "relu", 4)]
+    events = [{"name": "aten::relu", "ph": "X", "ts": float(t), "dur": 1.0} for t in (0, 5, 9)]
+    with pytest.warns(UserWarning, match="relu"):
+        joined = profiler.join(_FakeLog(layers), {"traceEvents": events})
+    assert all(row["kineto_event_count"] == 0 for row in joined["ops"])
+    assert joined["mismatched_op_types"] == {"relu": {"events": 3, "layers": 2}}
+    assert joined["unmatched_event_counts"] == {"aten::relu": 3}
 
 
 # --------------------------------------------------------------------------- #

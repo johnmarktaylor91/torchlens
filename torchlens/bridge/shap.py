@@ -10,7 +10,7 @@ from ._utils import first_input_tensor, source_model
 def explain(
     log: Any,
     *,
-    background: Any | None = None,
+    background: Any,
     inputs: Any | None = None,
     explainer_class: Any | None = None,
     **kwargs: Any,
@@ -22,9 +22,13 @@ def explain(
     log:
         TorchLens ``Trace`` with a live source model reference.
     background:
-        Optional SHAP background data. Defaults to the first saved input tensor.
+        SHAP background (reference) data, required. SHAP values are each
+        input's contribution relative to the background's expected output, so
+        explaining an input against itself gives all zeros; there is no
+        default.
     inputs:
-        Optional inputs to explain. Defaults to ``background``.
+        Optional inputs to explain. Defaults to the first tensor input saved
+        in ``log``.
     explainer_class:
         Optional explainer class or factory. Defaults to ``shap.DeepExplainer``.
     **kwargs:
@@ -39,6 +43,8 @@ def explain(
     ------
     ImportError
         If SHAP is unavailable.
+    TypeError
+        If ``background`` is not passed.
     """
 
     try:
@@ -49,10 +55,9 @@ def explain(
         ) from exc
 
     model = source_model(log)
-    background_data = first_input_tensor(log) if background is None else background
-    input_data = background_data if inputs is None else inputs
+    input_data = first_input_tensor(log) if inputs is None else inputs
     factory = getattr(shap_module, "DeepExplainer") if explainer_class is None else explainer_class
-    explainer = factory(model, background_data, **kwargs)
+    explainer = factory(model, background, **kwargs)
     values = explainer.shap_values(input_data)
     return {
         "schema": "torchlens.shap.v1",
