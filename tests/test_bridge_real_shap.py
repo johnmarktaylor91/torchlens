@@ -56,6 +56,18 @@ def test_background_is_required() -> None:
         tl.bridge.shap.explain(log)
 
 
+def test_background_none_refuses_typed_before_shap() -> None:
+    """background=None refuses with a TorchLens code, not shap's own error."""
+
+    from torchlens._errors import InvalidArgumentError
+
+    _model, _x, _background, log = _setup()
+    with pytest.raises(InvalidArgumentError) as info:
+        tl.bridge.shap.explain(log, background=None)
+    assert info.value.fields["code"] == "bridge_shap_background_missing"
+    assert info.value.fields["remedy"]
+
+
 def test_explain_is_bit_identical_to_deep_explainer() -> None:
     """With a background, the bridge equals DeepExplainer(model, bg) on the traced input."""
 
