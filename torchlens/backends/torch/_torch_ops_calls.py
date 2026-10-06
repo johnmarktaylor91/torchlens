@@ -94,18 +94,37 @@ def _is_torchlens_decorated_op(op: Any) -> bool:
     return id(getattr(op, "_op", None)) in _state._decorated_to_orig
 
 
-def _decorated_for(op: Any) -> Callable[..., Any]:
+def _operator_callable(op: Any, original: Callable[..., Any], name: str) -> Callable[..., Any]:
+    """Return a plain function that runs ``op`` through the class's original ``__call__``.
+
+    The logging wrapper keeps logging enabled while it runs its callable (nested wrapped
+    calls are detected by barcode), so the replay callable must bypass the patched
+    ``__call__``; validation replays the op through this same function.
+    """
+
+    def call_operator(*args: Any, **kwargs: Any) -> Any:
+        """Invoke the operator with the pristine ``torch._ops`` call path."""
+        return original(op, *args, **kwargs)
+
+    call_operator.__name__ = name
+    call_operator.__qualname__ = name
+    return call_operator
+
+
+def _decorated_for(op: Any, original: Callable[..., Any]) -> Callable[..., Any]:
     """Return the cached logging wrapper for one operator object.
 
     Parameters
     ----------
     op:
         ``OpOverloadPacket`` or ``OpOverload`` being called.
+    original:
+        The class's original ``__call__``.
 
     Returns
     -------
     Callable[..., Any]
-        ``torch_func_decorator`` wrapper whose replay callable is ``op`` itself.
+        ``torch_func_decorator`` wrapper whose replay callable runs ``op`` unpatched.
     """
 
     cached = _DECORATED_BY_OP.get(id(op))
@@ -113,7 +132,8 @@ def _decorated_for(op: Any) -> Callable[..., Any]:
         return cached[1]
     from .wrappers import torch_func_decorator
 
-    decorated = torch_func_decorator(op, _recorded_op_name(op))
+    name = _recorded_op_name(op)
+    decorated = torch_func_decorator(_operator_callable(op, original, name), name)
     _DECORATED_BY_OP[id(op)] = (op, decorated)
     return decorated
 
@@ -142,7 +162,7 @@ def _make_recording_call(original: Callable[..., Any]) -> Callable[..., Any]:
             or _is_torchlens_decorated_op(self)
         ):
             return original(self, *args, **kwargs)
-        return _decorated_for(self)(*args, **kwargs)
+        return _decorated_for(self, original)(*args, **kwargs)
 
     _recording_call.__tl_torch_ops_recorder__ = True  # type: ignore[attr-defined]
     return _recording_call

@@ -4,7 +4,10 @@ When a module returns a tensor with no live label, module exit synthesizes a
 functionless boundary Op and marks the module-forward token capture-accounted.
 That credit covers the opaque construction of the exact boundary tensors, so the
 dispatch census passes; the adopted boundary tensor still has no recorded origin,
-so forward validation then fails on its ``source_provenance`` check. A
+so forward validation then fails on its ``source_provenance`` check. A direct
+``torch.ops.aten`` call is no longer such a boundary: it is recorded as an ordinary
+op with parents from its tensor arguments, so those shapes now capture with sources
+and validate (``tests/test_torch_ops_call_recording.py``). A
 stale raw torch call elsewhere in the same module body (a callable bound
 before TorchLens wrapped torch, as in IQL's ``hidden_activation=torch.relu``
 default) is not represented by the boundary, so validation must fail on it.
@@ -12,6 +15,7 @@ default) is not represented by the boundary, so validation must fail on it.
 
 from __future__ import annotations
 
+import copy
 import warnings
 from collections.abc import Callable, Iterator
 from typing import Any
@@ -156,36 +160,32 @@ def _assert_completeness_failure(model: nn.Module, *, grad: bool = True) -> None
     assert "bfs_completeness" in failure.summary()
 
 
-def _assert_credited_but_source_less(model: nn.Module, *, grad: bool = True) -> None:
-    """The census credits the boundary; only the adopted output's missing origin fails."""
+def _assert_recorded_and_valid(model: nn.Module, *, grad: bool = True) -> None:
+    """A direct ``torch.ops.aten`` output is a recorded op with sources, and validates."""
 
-    assert not _validate(model, grad=grad)
-    failure = tl.validation.last_validation_failure()
-    assert failure is not None
-    assert failure.check == "source_provenance", failure
-    assert failure.extra["reasons"] == ["module_boundary_adoption"], failure
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        trace = tl.trace(copy.deepcopy(model).eval(), torch.randn(3, 4))
+    assert provenance_warnings(caught) == []
+    assert not trace.annotations.get("capture_advisories"), trace.annotations
+    assert _validate(model, grad=grad), tl.validation.last_validation_failure()
 
 
 # The stale op's output reaches the next traced op with no recorded parent; that
-# provenance disclosure is expected alongside the completeness failure. An opaque
-# module RETURN is disclosed the same way (module-exit adoption record); the
-# boundary credits the dispatch that built it, and forward validation fails the
-# adoption on its ``source_provenance`` check.
+# provenance disclosure is expected alongside the completeness failure.
 _NO_PROVENANCE = "ignore:TorchLens found tensor arguments with no graph:UserWarning"
 
 
-@pytest.mark.filterwarnings(_NO_PROVENANCE)
-def test_single_opaque_output_op_is_credited_but_fails_source_provenance() -> None:
-    """The boundary credits the one direct-aten op that built the module output."""
+def test_single_direct_aten_output_op_is_recorded_and_validates() -> None:
+    """The direct-aten op that builds the module output is recorded, not adopted."""
 
-    _assert_credited_but_source_less(_Parent(_OpaqueOutputChild()))
+    _assert_recorded_and_valid(_Parent(_OpaqueOutputChild()))
 
 
-@pytest.mark.filterwarnings(_NO_PROVENANCE)
-def test_tuple_of_opaque_outputs_are_credited_but_fail_source_provenance() -> None:
-    """Every tensor of a tuple result that is a boundary output is credited."""
+def test_tuple_of_direct_aten_outputs_are_recorded_and_validate() -> None:
+    """Every tensor of a direct-aten tuple result is a recorded output with sources."""
 
-    _assert_credited_but_source_less(_Parent(_OpaqueTupleChild()))
+    _assert_recorded_and_valid(_Parent(_OpaqueTupleChild()))
 
 
 @pytest.mark.filterwarnings(_NO_PROVENANCE)
@@ -266,13 +266,12 @@ def _composite_aten_output(m: _BodyChild, x: torch.Tensor) -> torch.Tensor:
     return _ATEN.linear.default(x.view(1, 3, 4), m.fc.weight, m.fc.bias)
 
 
-@pytest.mark.filterwarnings(_NO_PROVENANCE)
 @pytest.mark.parametrize("grad", [True, False], ids=["grad", "no_grad"])
 @pytest.mark.parametrize("body", [_direct_aten_view_output, _direct_aten_split_output])
-def test_direct_aten_view_or_split_output_is_credited(body: Any, grad: bool) -> None:
-    """A direct-aten view or multi-output op whose result is the module output is credited."""
+def test_direct_aten_view_or_split_output_is_recorded_and_validates(body: Any, grad: bool) -> None:
+    """A direct-aten view or multi-output op whose result is the module output is recorded."""
 
-    _assert_credited_but_source_less(_Parent(_BodyChild(body)), grad=grad)
+    _assert_recorded_and_valid(_Parent(_BodyChild(body)), grad=grad)
 
 
 @pytest.mark.filterwarnings(_NO_PROVENANCE)
@@ -335,17 +334,17 @@ def test_output_scoped_credit_is_derived_from_the_wrapper_name(
         )
 
 
-@pytest.mark.filterwarnings(_NO_PROVENANCE)
 @pytest.mark.parametrize("grad", [True, False], ids=["grad", "no_grad"])
-def test_multi_dispatch_opaque_output_fails_completeness(grad: bool) -> None:
-    """One raw op means one aten dispatch: a composite op's inner dispatches stay flagged.
+def test_composite_direct_aten_output_is_recorded_and_validates(grad: bool) -> None:
+    """A composite direct-aten op is one recorded op that owns all its inner dispatches.
 
     ``aten.linear`` on a 3-d input decomposes above the Python dispatch key into
-    several dispatches (``view``, ``t``, ``addmm``, ...); only the last returns the
-    boundary tensor, so the others are census diagnostics and validation fails.
+    several dispatches (``view``, ``t``, ``addmm``, ...). As an unrecorded boundary only
+    the last was credited and validation failed; recorded, the op owns every dispatch
+    its call made, exactly like ``torch.nn.functional.linear``.
     """
 
-    _assert_completeness_failure(_Parent(_BodyChild(_composite_aten_output)), grad=grad)
+    _assert_recorded_and_valid(_Parent(_BodyChild(_composite_aten_output)), grad=grad)
 
 
 def _bare(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -355,8 +354,6 @@ def _bare(func: Callable[..., Any]) -> Callable[..., Any]:
     return _state._decorated_to_orig.get(id(func), func)
 
 
-# The direct-aten shapes' own untracked call carries the provenance disclosure.
-@pytest.mark.filterwarnings(_NO_PROVENANCE)
 @pytest.mark.parametrize("grad", [True, False], ids=["grad", "no_grad"])
 @pytest.mark.parametrize(
     ("build", "direct_aten"),
@@ -378,12 +375,9 @@ def test_attribute_held_originals_are_rebound_and_validate(
 
     Capture preparation rebinds each held original to its wrapper for the
     capture, so the held relu is no escape: the primary forward captures it.
-    The IQL shape takes one forward with no provenance warning and validates.
-    The other shapes also emit a direct ``torch.ops.aten`` call, which no
-    wrapper sees; that call (never the relu) triggers their one rescue
-    forward, so ``relu`` must not be among the recovered ops, and its adopted
-    output fails validation on ``source_provenance`` alone (the census and
-    every other check pass).
+    Every shape takes one forward with no provenance warning and validates:
+    the other shapes' direct ``torch.ops.aten`` call is recorded as an ordinary
+    op, so nothing escapes and no rescue forward runs.
     """
 
     monkeypatch.setitem(globals(), "_raw", _bare)
@@ -391,16 +385,10 @@ def test_attribute_held_originals_are_rebound_and_validate(
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         trace = tl.trace(model, torch.randn(3, 4))
-    assert "relu" in [op.func_name for op in trace.ops]
-    if direct_aten:
-        assert model.calls == [2]
-        assert trace.rescue_rerun is not None
-        assert "relu" not in trace.rescue_rerun["recovered_ops"]
-    else:
-        assert model.calls == [1]
-        assert provenance_warnings(caught) == []
-        assert trace.rescue_rerun is None
-    if direct_aten:
-        _assert_credited_but_source_less(build(), grad=grad)
-    else:
-        assert _validate(build(), grad=grad), tl.validation.last_validation_failure()
+    func_names = [op.func_name for op in trace.ops]
+    assert "relu" in func_names
+    assert ("tanh" in func_names or "t" in func_names) is direct_aten
+    assert model.calls == [1]
+    assert provenance_warnings(caught) == []
+    assert trace.rescue_rerun is None
+    assert _validate(build(), grad=grad), tl.validation.last_validation_failure()

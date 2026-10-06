@@ -118,8 +118,13 @@ def test_truncated_held_scan_fails_forward_validation_and_persists_an_advisory()
 
 
 class _Opaque(nn.Module):
+    """Stand-in for a pybind C++ extension call: a C function no wrapper can patch.
+
+    (A direct ``torch.ops`` call is recorded as an ordinary op, so it is no stand-in.)
+    """
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.ops.aten.tanh.default(x)
+        return torch._C._VariableFunctions.tanh(x)
 
 
 class _OpaqueHolder(nn.Module):
@@ -328,7 +333,7 @@ def test_genuine_hook_replacement_still_validates() -> None:
             return self.fc2(self.relu(self.fc1(x)))
 
     def _inject(module: nn.Module, inputs: Any, output: torch.Tensor) -> torch.Tensor:
-        return torch.ops.aten.mul.Tensor(output, torch.full_like(output, 0.5))
+        return torch._C._VariableFunctions.mul(output, torch.full_like(output, 0.5))
 
     model = _Mlp().eval()
     model.relu.register_forward_hook(_inject)
