@@ -47,15 +47,22 @@ def test_facade_accepts_explicit_meta_inputs() -> None:
 
 
 def test_facade_report_keeps_its_result_exports() -> None:
-    """The execution-note suffix keeps the rebuilt payload, so exports work."""
+    """The meta-model report keeps its rebuilt payload and its execution disclosure.
+
+    The eval/no_grad note rides in the payload, so the text, details(),
+    render() and HTML all carry it, and the exports work.
+    """
 
     report = tl.summary(_meta_model(), input_size=(2, 8))
     markdown = report.to_markdown()
     assert markdown.startswith("| ")
-    assert "Linear" in markdown or "fc" in markdown
-    assert "<table" in report.to_html()
-    assert report.render("unicode")
-    assert "Execution:" in str(report)
+    assert "fc1" in markdown
+    note = "eval mode, no_grad, state restored"
+    assert note in str(report)
+    assert f"execution: {note}" in report.details()
+    assert note in report.render("unicode")
+    html = report.to_html()
+    assert "<table" in html and note in html
 
 
 def test_bare_facade_refuses_rather_than_guessing() -> None:

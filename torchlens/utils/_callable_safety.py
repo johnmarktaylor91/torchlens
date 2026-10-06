@@ -1540,8 +1540,10 @@ _VETTED_INERT_FIRST_PARTY: frozenset[tuple[str, str]] = frozenset(
         # the intervention resolver's ``torchlens.intervention.helpers:<name>`` refs).
         ("torchlens.intervention.helpers", "zero_ablate"),
         ("torchlens.intervention.helpers", "mean_ablate"),
-        # resample_ablate left with its 2.35.0 rename: name-saved specs still load
-        # via rebuild_builtin_helper; an import ref to it fails closed (tested).
+        # No resample_ablate row: the old alias carried scramble_elements's
+        # qualname, so a row under the old name never matched. Name-saved specs
+        # load via rebuild_builtin_helper; an import ref to the old name fails at
+        # the helpers module's facade redirect (test_interv_honesty_rename).
         ("torchlens.intervention.helpers", "scramble_elements"),
         ("torchlens.intervention.helpers", "steer"),
         ("torchlens.intervention.helpers", "scale"),

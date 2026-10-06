@@ -138,3 +138,31 @@ class TestRemovedSpellings:
         assert excinfo.value.fields["code"] == "summary_level_invalid"
         assert _REMOVED_LEVELS[level] in str(excinfo.value)
         assert calls == [], "the refusal must fire before the capture runs"
+
+
+def test_removed_spelling_tables_match_the_source() -> None:
+    """This file's spelling tables cover exactly the source's removed tables."""
+
+    from torchlens.report._summary_config import REMOVED_SUMMARY_LEVELS, REMOVED_SUMMARY_OPTIONS
+
+    assert set(_REMOVED_KWARGS) == set(REMOVED_SUMMARY_OPTIONS)
+    assert set(_REMOVED_LEVELS) == set(REMOVED_SUMMARY_LEVELS)
+
+
+def test_grammar_options_match_what_resolve_config_consumes() -> None:
+    """GRAMMAR_OPTIONS is exactly the option set resolve_config reads.
+
+    _validate_summary_grammar drops None only for these names, so drift
+    would make tl.summary(model, x, <new option>=None) refuse falsely.
+    """
+
+    import inspect
+    import re
+
+    from torchlens.report import _summary_config
+
+    source = inspect.getsource(_summary_config.resolve_config)
+    popped = set(re.findall(r'kwargs\.pop\("(\w+)"', source))
+    closed = {axis for axis, _default, _valid in _summary_config._CLOSED_VOCABULARY_AXES}
+    assert "kwargs.pop(axis" in source  # the closed axes are popped by name
+    assert set(_summary_config.GRAMMAR_OPTIONS) == popped | closed

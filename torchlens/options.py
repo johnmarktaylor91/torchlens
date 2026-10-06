@@ -1284,13 +1284,19 @@ class VisualizationOptions:
         _set_frozen_fields(self, _VISUALIZATION_FIELDS, values)
         object.__setattr__(self, "_specified_fields", frozenset(specified_fields))
 
-    def __getattr__(self, name: str) -> Any:
-        """Name the replacement for a removed public member, else fail as usual."""
+    # Runtime only: under TYPE_CHECKING the hook would make every attribute
+    # type-check as Any, hiding typos and the removed spellings from mypy.
+    if not TYPE_CHECKING:
 
-        from .utils.facade import refuse_removed_member
+        def __getattr__(self, name: str) -> Any:
+            """Name the replacement for a removed public member, else fail as usual."""
 
-        refuse_removed_member("VisualizationOptions", name, _REMOVED_VISUALIZATION_OPTION_MEMBERS)
-        return object.__getattribute__(self, name)
+            from .utils.facade import refuse_removed_member
+
+            refuse_removed_member(
+                "VisualizationOptions", name, _REMOVED_VISUALIZATION_OPTION_MEMBERS
+            )
+            return object.__getattribute__(self, name)
 
     def as_dict(self) -> dict[str, Any]:
         """Return the option values as a plain dictionary."""

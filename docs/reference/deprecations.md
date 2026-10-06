@@ -43,7 +43,7 @@ unaffected.
 | `check_metadata_invariants` | `torchlens.validation.check_metadata_invariants` | removed |
 | `check_spec_compat` | `torchlens.validation.check_spec_compat` | removed |
 | `cleanup_tmp` | `torchlens.io.cleanup_tmp` | removed |
-| `get_model_metadata` | `torchlens.io.get_model_metadata` | removed |
+| `get_model_metadata` | `torchlens.io.log_model_metadata` | removed |
 | `list_logs` | `torchlens.io.list_logs` | removed |
 | `log_model_metadata` | `torchlens.io.log_model_metadata` | removed |
 | `trace_to_dagua_graph` | `torchlens.experimental.dagua.trace_to_dagua_graph` | removed |

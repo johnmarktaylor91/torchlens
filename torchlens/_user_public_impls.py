@@ -341,7 +341,7 @@ def _summary_report_from_trace(
     try:
         return trace.summary(
             **summary_kwargs,
-            _execution_note=_summary_execution_note(execution_mode, grad_mode, short=True),
+            _execution_note=_summary_execution_note(execution_mode, grad_mode),
             _input_synthesis=input_synthesis,
         )
     finally:
@@ -494,39 +494,19 @@ def _weightsfree_summary_facade(
             if input_size is not None:
                 envelope["input_plan"]["source"] = "declared_input_size"
                 envelope["input_plan"]["synthesized"] = ["meta_input_leaves"]
-        report = trace.summary(**summary_kwargs)
+        return trace.summary(
+            **summary_kwargs,
+            _execution_note=_summary_execution_note("eval", "off"),
+        )
     finally:
         trace.cleanup()
-    return _finalize_summary_report(report, "eval", "off")
 
 
-def _finalize_summary_report(report: Any, execution_mode: str, grad_mode: str) -> str:
-    """Suffix the execution disclosure, keeping the typed detached report.
+def _summary_execution_note(execution_mode: str, grad_mode: str) -> str:
+    """Return the compact execution disclosure the summary header hoists.
 
-    The rebuilt payload is carried over so the result methods
-    (``to_markdown``, ``to_html``, ``render``) keep working. The report survives its Trace's cleanup by construction (C02, summary
-    item 10: it retains neither the model nor the Trace).
-    """
-
-    from .report._summary_report import SummaryReport
-
-    full_text = str(report) + "\n" + _summary_execution_note(execution_mode, grad_mode)
-    if isinstance(report, SummaryReport):
-        return SummaryReport(
-            full_text,
-            rows=report.rows,
-            totals=report.totals,
-            capture=report.capture,
-            rebuilt=report._rebuilt,
-        )
-    return full_text
-
-
-def _summary_execution_note(execution_mode: str, grad_mode: str, *, short: bool = False) -> str:
-    """Return the execution disclosure for one-call summaries.
-
-    ``short=True`` yields the compact header form the rebuilt renderer
-    hoists; the default is the historical trailing line, byte-stable.
+    Both one-call doors pass it into ``trace.summary(_execution_note=...)``,
+    so the text, ``details()``, ``render()`` and HTML all carry it.
     """
 
     if execution_mode == "eval":
@@ -536,12 +516,7 @@ def _summary_execution_note(execution_mode: str, grad_mode: str, *, short: bool 
     else:
         mode_part = "caller's module modes"
     grad_part = "no_grad" if grad_mode == "off" else "caller's grad context"
-    if short:
-        return f"{mode_part}, {grad_part}, state restored"
-    return (
-        f"Execution: one-call capture ran in {mode_part} under {grad_part}; "
-        "module training flags and RNG state restored."
-    )
+    return f"{mode_part}, {grad_part}, state restored"
 
 
 def show_model_graph(

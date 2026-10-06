@@ -150,10 +150,14 @@ def test_flop_count_refuses_removed_and_unknown_options(
     from torchlens._errors import InvalidArgumentError
     from torchlens.utils import flop_count
 
+    model = nn.Linear(2, 2)
+    calls: list[int] = []
+    model.register_forward_hook(lambda *_: calls.append(1))
     with pytest.raises(InvalidArgumentError) as excinfo:
-        flop_count(nn.Linear(2, 2), torch.randn(1, 2), **kwargs)  # type: ignore[arg-type]
+        flop_count(model, torch.randn(1, 2), **kwargs)  # type: ignore[arg-type]
     assert excinfo.value.fields["code"] == "flop_count_option_invalid"
     assert taught in str(excinfo.value)
+    assert calls == [], "the refusal must fire before the model runs"
 
 
 def test_macs_format_in_mac_units_never_flops() -> None:

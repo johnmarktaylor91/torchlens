@@ -79,23 +79,29 @@ def test_serialized_specs_load_under_both_names(persisted_name: str) -> None:
 
 
 def test_import_ref_to_the_retired_name_fails_closed_typed() -> None:
-    """An import ref ``torchlens.intervention.helpers:resample_ablate`` refuses typed.
+    """An import ref ``torchlens.intervention.helpers:resample_ablate`` fails closed, teaching.
 
     Built-in helpers persist by NAME (above), so only a hand-wrapped
-    import-ref helper saved before 2.35.0 could carry this path. The name
-    left the vetted-inert allowlist with the rename; such a ref must fail
-    closed with a TorchLens error, never resolve and never crash raw.
+    import-ref helper saved before 2.35.0 could carry this path. Resolution
+    walks the module attribute, hits the helpers module's facade redirect,
+    and the resolver wraps that in ``ReplayPreconditionError``. The cause
+    must be the typed redirect naming ``scramble_elements``: without the
+    helpers-module redirect it would be a bare AttributeError.
     """
 
+    from torchlens._errors import FacadeTeachingError
     from torchlens.intervention import helpers
+    from torchlens.intervention.errors import ReplayPreconditionError
     from torchlens.intervention.resolver import resolve_import_ref
 
     current = resolve_import_ref("torchlens.intervention.helpers:scramble_elements")
     assert current is helpers.scramble_elements
-    with pytest.raises(Exception) as excinfo:
+    with pytest.raises(ReplayPreconditionError) as excinfo:
         resolve_import_ref("torchlens.intervention.helpers:resample_ablate")
-    assert type(excinfo.value).__module__.startswith("torchlens")
-    assert "resample_ablate" in str(excinfo.value)
+    cause = excinfo.value.__cause__
+    assert isinstance(cause, FacadeTeachingError)
+    assert cause.fields["code"] == "facade_redirect"
+    assert "torchlens.intervention.scramble_elements" in str(cause)
 
 
 def test_empty_source_refusal_names_the_honest_helper() -> None:

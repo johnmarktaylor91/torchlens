@@ -207,7 +207,7 @@ def flops_vs_dispatch(
             "native FCM counted ZERO FLOPs while TorchLens counted "
             f"{torchlens_total}: a flop_registry coverage gap (on CPU-default "
             "attention the missing overload is "
-            "aten::_scaled_dot_product_flash_attention_for_cpu, missing in "
+            "aten::_scaled_dot_product_flash_attention_for_cpu, known missing in "
             "torch releases through 2.13 and fixed on PyTorch main "
             "2026-09-17, pytorch/pytorch#195801) -- a coverage fact, never a "
             "truth verdict"
