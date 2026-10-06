@@ -314,39 +314,176 @@ def test_trainable_parameter_mutated_without_no_grad_still_raises_like_eager() -
 
 
 class _FrozenGradOperandMutator(nn.Module):
-    """Mutate a frozen Parameter in place with a grad-requiring operand."""
+    """Mutate a frozen Parameter in place with an operand that may require grad."""
 
-    def __init__(self, spelling: str) -> None:
+    def __init__(self, spelling: str, grad_operand: bool = True) -> None:
         super().__init__()
         self.lin = nn.Linear(4, 4)
-        self.temp = nn.Parameter(0.9 * torch.ones([]), requires_grad=False)
+        self.temp = nn.Parameter(torch.full((4,), 0.9), requires_grad=False)
         self.spelling = spelling
+        self.grad_operand = grad_operand
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        operand = self.lin.weight.sum()
+        operand = self.lin.weight.sum(0)
+        if not self.grad_operand:
+            operand = operand.detach()
         if self.spelling == "keyword":
             self.temp.add_(other=operand)
+        elif self.spelling == "nested":
+            index = torch.tensor([0, 2])
+            self.temp.index_put_(indices=(index,), values=operand[:2])
         else:
             self.temp.add_(operand)
         return x / self.temp
 
 
-@pytest.mark.parametrize("spelling", ["positional", "keyword"])
-def test_frozen_parameter_with_grad_operand_is_never_run_untracked(spelling: str) -> None:
-    """A grad-requiring operand in any spelling keeps the call tracked.
+_GRAD_OPERAND_OP = {"positional": "add", "keyword": "add", "nested": "index_put"}
 
-    Eager makes the frozen Parameter a non-leaf here. Capture's forced
-    ``requires_grad`` makes autograd refuse the same call, and that refusal must
-    surface in every spelling: running the keyword spelling under ``no_grad``
-    would silently drop the Parameter's autograd history.
+
+@pytest.mark.parametrize("spelling", ["positional", "keyword", "nested"])
+def test_frozen_parameter_with_grad_operand_captures_like_eager(spelling: str) -> None:
+    """Eager makes the frozen Parameter a non-leaf; capture now does the same.
+
+    The call runs tracked with the receiver's own (frozen) ``requires_grad``, so
+    autograd accepts it exactly as in eager. The Parameter ends as eager leaves
+    it (a non-leaf requiring grad), and the op is logged like any other
+    Parameter mutation. A later capture of the same model still works, as a
+    later eager forward does.
+    """
+
+    torch.manual_seed(0)
+    model = _FrozenGradOperandMutator(spelling)
+    x = torch.randn(3, 4)
+    eager = copy.deepcopy(model)
+    eager_out = eager(x)
+    assert eager.temp.grad_fn is not None
+
+    traced_model = copy.deepcopy(model)
+    trace = tl.trace(traced_model, x)
+    mutation = _ops_by_type(trace, _GRAD_OPERAND_OP[spelling])[0]
+    assert [p.address for p in mutation.params] == ["temp"]
+    truediv = _ops_by_type(trace, "truediv")[0]
+    assert mutation.label in _parent_labels(trace, truediv)
+    assert "temp" not in [p.address for p in truediv.params]
+    assert torch.allclose(trace[trace.output_layers[0]].out, eager_out.detach())
+    assert torch.equal(traced_model.temp.detach(), eager.temp.detach())
+    assert traced_model.temp.is_leaf is False
+    assert traced_model.temp.requires_grad is True
+    assert traced_model.temp.grad_fn is not None
+
+    second_eager_out = eager(x).detach()
+    second = tl.trace(traced_model, x)
+    assert torch.allclose(second[second.output_layers[0]].out, second_eager_out)
+    assert torch.equal(traced_model.temp.detach(), eager.temp.detach())
+
+    validated = copy.deepcopy(model)
+    assert tl.validate(validated, x, scope="forward") is True
+    assert torch.equal(validated.temp.detach(), model.temp.detach())
+
+
+def test_frozen_parameter_nested_operand_without_grad_runs_untracked() -> None:
+    """Narrowness: with no grad-requiring operand the write stays untracked, as in eager."""
+
+    torch.manual_seed(0)
+    model = _FrozenGradOperandMutator("nested", grad_operand=False)
+    x = torch.randn(3, 4)
+    eager = copy.deepcopy(model)
+    eager_out = eager(x).detach()
+    assert eager.temp.grad_fn is None
+
+    traced_model = copy.deepcopy(model)
+    trace = tl.trace(traced_model, x)
+    mutation = _ops_by_type(trace, "index_put")[0]
+    assert [p.address for p in mutation.params] == ["temp"]
+    assert torch.allclose(trace[trace.output_layers[0]].out, eager_out)
+    assert torch.equal(traced_model.temp.detach(), eager.temp.detach())
+    assert traced_model.temp.is_leaf is True
+    assert traced_model.temp.requires_grad is False
+    assert tl.validate(copy.deepcopy(model), x, scope="forward") is True
+
+
+class _KeywordReceiver(nn.Module):
+    """Mutate a Parameter through ``torch.clamp_`` with the receiver given by name."""
+
+    def __init__(self, spelling: str) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+        self.temp = nn.Parameter(0.9 * torch.ones([]))
+        self.spelling = spelling
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            if self.spelling == "keyword":
+                torch.clamp_(input=self.temp, min=0.001, max=0.5)
+            elif self.spelling == "positional":
+                torch.clamp_(self.temp, min=0.001, max=0.5)
+            else:
+                return self.lin(x) / torch.clamp(input=self.temp, min=0.001, max=0.5)
+        return self.lin(x) / self.temp
+
+
+def test_keyword_receiver_is_captured_like_a_positional_one() -> None:
+    torch.manual_seed(0)
+    x = torch.randn(3, 4)
+    keyword_model = _KeywordReceiver("keyword")
+    eager_out, eager_state = _eager_output_and_state(keyword_model, x)
+
+    traced_model = copy.deepcopy(keyword_model)
+    trace = tl.trace(traced_model, x)
+    clamp = _ops_by_type(trace, "clamp")[0]
+    assert [p.address for p in clamp.params] == ["temp"]
+    truediv = _ops_by_type(trace, "truediv")[0]
+    assert clamp.label in _parent_labels(trace, truediv)
+    assert "temp" not in [p.address for p in truediv.params]
+    assert torch.allclose(trace[trace.output_layers[0]].out, eager_out)
+    for key, value in traced_model.state_dict().items():
+        assert torch.equal(value, eager_state[key]), key
+
+    positional = tl.trace(_KeywordReceiver("positional"), x)
+    assert [layer.layer_type for layer in trace.layer_list] == [
+        layer.layer_type for layer in positional.layer_list
+    ]
+    assert tl.validate(copy.deepcopy(keyword_model), x, scope="forward") is True
+
+
+def test_keyword_input_of_an_out_of_place_call_stays_a_parameter_read() -> None:
+    """Narrowness: ``torch.clamp(input=p)`` reads ``p``; it is not a mutation."""
+
+    trace = tl.trace(_KeywordReceiver("functional"), torch.randn(3, 4))
+    clamp = _ops_by_type(trace, "clamp")[0]
+    assert [p.address for p in clamp.params] == ["temp"]
+    assert len(_ops_by_type(trace, "clamp")) == 1
+
+
+class _OutIntoParameter(nn.Module):
+    """Write ``a + b`` into the Parameter ``b`` through ``out=``."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.a = nn.Parameter(torch.full((4,), 0.5))
+        self.b = nn.Parameter(torch.full((4,), 0.25))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            torch.add(self.a, self.b, out=self.b)
+        return x * self.b
+
+
+def test_out_into_a_parameter_is_still_flagged_by_validation() -> None:
+    """Open gap, pinned loud: an ``out=`` write into a Parameter is not captured yet.
+
+    Capture logs no op for it, and the completeness tripwire must keep failing
+    validation so the missing state change never passes silently.
     """
 
     x = torch.randn(3, 4)
-    eager = _FrozenGradOperandMutator(spelling)
-    eager(x)
-    assert eager.temp.grad_fn is not None
-    with pytest.raises(RuntimeError, match="leaf Variable that requires grad"):
-        tl.trace(_FrozenGradOperandMutator(spelling), x)
+    trace = tl.trace(_OutIntoParameter(), x)
+    assert _ops_by_type(trace, "add") == []
+    with pytest.warns(Warning):
+        assert tl.validate(_OutIntoParameter(), x, scope="forward") is False
+    failure = tl.validation.last_validation_failure()
+    assert failure is not None
+    assert "bfs_completeness" in failure.summary()
 
 
 def test_operand_scan_reaches_nested_containers() -> None:
