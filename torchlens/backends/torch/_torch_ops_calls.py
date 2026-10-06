@@ -34,7 +34,6 @@ from __future__ import annotations
 
 import functools
 import sys
-import warnings
 from collections.abc import Callable
 from types import CodeType, FrameType
 from typing import Any
@@ -255,7 +254,11 @@ def _returning_mutated_receiver(call_operator: Callable[..., Any]) -> Callable[.
 
 
 def _disclose_unrecorded_mutation(trace: Any, op: Any) -> None:
-    """Persist a ``source_provenance`` gap for a mutating operator call left out of the graph.
+    """Queue a ``source_provenance`` gap for a mutating operator call left out of the graph.
+
+    The provenance disclosure step (``postprocess._warn_unattributed_tensor_args``) pops the
+    transient ``_unrecorded_operator_mutations``, persists it as an
+    ``unrecorded_operator_mutation`` capture advisory and names it in its one warning.
 
     Parameters
     ----------
@@ -265,17 +268,10 @@ def _disclose_unrecorded_mutation(trace: Any, op: Any) -> None:
         The operator that wrote its arguments and returned nothing.
     """
 
-    from ..._capture_honesty import (
-        ADVISORY_UNRECORDED_OPERATOR_MUTATION,
-        append_capture_advisory,
+    trace.__dict__.setdefault("_unrecorded_operator_mutations", []).append(
+        f"{_qualified_name(op) or _recorded_op_name(op)} (wrote its arguments, returned no "
+        "tensor; mutation not recorded)"
     )
-
-    entry = (
-        f"{_qualified_name(op) or _recorded_op_name(op)} wrote its arguments and returned "
-        "no tensor; the mutation is not in the graph"
-    )
-    append_capture_advisory(trace, ADVISORY_UNRECORDED_OPERATOR_MUTATION, [entry])
-    warnings.warn(f"TorchLens could not record a mutating operator call: {entry}.", stacklevel=3)
 
 
 def _decorated_for(op: Any, original: Callable[..., Any]) -> tuple[Callable[..., Any], str]:

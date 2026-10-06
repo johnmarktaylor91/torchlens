@@ -510,6 +510,7 @@ def _warn_unattributed_tensor_args(self: "Trace") -> None:
     from .._capture_honesty import (
         ADVISORY_MODULE_BOUNDARY_ADOPTION,
         ADVISORY_ORPHAN_UNATTRIBUTED_ARGS,
+        ADVISORY_UNRECORDED_OPERATOR_MUTATION,
         append_capture_advisory,
     )
 
@@ -538,7 +539,10 @@ def _warn_unattributed_tensor_args(self: "Trace") -> None:
     outside = _pop_boundary_adoptions(
         self, "_module_boundary_outside_sources", ", closure or forward-global tensor"
     )
-    if not (offenders or orphans or adoptions or outside):
+    # Direct ``torch.ops`` calls that wrote an argument the recorder could not record
+    # in place (``_torch_ops_calls._disclose_unrecorded_mutation``).
+    mutations = list(self.__dict__.pop("_unrecorded_operator_mutations", None) or ())
+    if not (offenders or orphans or adoptions or outside or mutations):
         return
     # Adopted tensors leave a functionless internal-source node that replays and
     # validates, and pruned ops leave nothing at all; persist both so forward
@@ -547,6 +551,7 @@ def _warn_unattributed_tensor_args(self: "Trace") -> None:
     # which a warning filter may raise.
     append_capture_advisory(self, ADVISORY_MODULE_BOUNDARY_ADOPTION, adoptions + outside)
     append_capture_advisory(self, ADVISORY_ORPHAN_UNATTRIBUTED_ARGS, orphans)
+    append_capture_advisory(self, ADVISORY_UNRECORDED_OPERATOR_MUTATION, mutations)
     if offenders or orphans or adoptions:
         # Session-time escape signal: the capture entry reads this flag to decide
         # whether a rescue re-run (TorchFunctionMode net) should be attempted.
@@ -555,7 +560,8 @@ def _warn_unattributed_tensor_args(self: "Trace") -> None:
         "TorchLens found tensor arguments with no graph/source provenance. "
         "These are usually tensors captured from outside the traced model; "
         "module tensor attributes, inputs, parameters, and buffers are known sources. "
-        "Offending ops/arg positions: " + "; ".join(offenders + orphans + adoptions + outside),
+        "Offending ops/arg positions: "
+        + "; ".join(offenders + orphans + adoptions + outside + mutations),
         UserWarning,
         stacklevel=2,
     )
