@@ -746,7 +746,11 @@ def test_mutation_gradient_hook_records_a_plain_backward_of_its_own_output() -> 
 
 
 def test_cleanup_removes_the_mutation_gradient_hook() -> None:
-    """``cleanup()`` removes the hook from the model's autograd history."""
+    """``cleanup()`` removes the hook from the model's autograd history.
+
+    The trace stays marked state-entangled, so its remaining op hooks on that
+    history stay gated after cleanup.
+    """
 
     from torchlens.backends.torch import tensor_tracking
 
@@ -758,7 +762,7 @@ def test_cleanup_removes_the_mutation_gradient_hook() -> None:
     assert len(handles) == 1
     assert handles[0].id in handles[0].hooks_dict_ref()
     trace.cleanup()
-    assert trace not in tensor_tracking._OWNED_STATE_GRAD_HOOK_HANDLES
+    assert tensor_tracking._OWNED_STATE_GRAD_HOOK_HANDLES[trace] == []
     for handle in handles:
         hooks = handle.hooks_dict_ref()
         assert hooks is None or handle.id not in hooks
