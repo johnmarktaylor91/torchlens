@@ -152,11 +152,18 @@ a container found at level 4 is not entered. Mirrors ``_FIDELITY_MAX_DEPTH``.
 """
 
 _HELD_SCAN_MAX_OBJECTS = 4096
-"""Tensors plus containers the held-tensor scan visits per module.
+"""Plain tensors the held-tensor scan stamps per module.
 
-Mirrors ``_robustness._ITER_TENSORS_MAX_NODES``. Scalar leaves (a vocabulary dict's
-strings and ints) are skipped by one type check and not counted, so the bound caps the
-costly work: stamping a tensor or entering a container.
+Mirrors ``_robustness._ITER_TENSORS_MAX_NODES``. Only tensors count: a tensor-free
+container (a merge table of string pairs, a deep config dict) never trips the bound.
+"""
+
+_HELD_SCAN_MAX_VISITS = 1 << 16
+"""Container items the held-tensor scan examines per module, of any type.
+
+A hard cost cap independent of what the containers hold, so a 200k-entry scalar table
+costs at most this many type checks. Reaching it ends the scan silently: no tensor has
+been seen past a cut, so there is nothing to disclose.
 """
 
 _HELD_KEY_MAX_CHARS = 40
@@ -197,14 +204,20 @@ def _render_held_key(key: Any) -> str:
 class _HeldScan:
     """Bounded, cycle-guarded preorder walk of one module's held containers.
 
-    Shared across the module's attributes so the object bound is per module. Names are
+    Shared across the module's attributes so the bounds are per module. Names are
     reserved in scan order; a repeat gets ``#2``, ``#3``, ... so no tensor is dropped.
+    A bound cut is recorded only when a plain tensor is actually found past it: a
+    container at the depth bound is searched (detect only, never stamped), and the
+    object bound is recorded at the first tensor beyond the stamped ones. Every item
+    examined, in either mode, counts against ``_HELD_SCAN_MAX_VISITS``, which ends the
+    scan silently.
     """
 
     def __init__(self, truncations: list[str] | None, module_address: str) -> None:
         self.prefix = f"{module_address}." if module_address else ""
         self.taken: set[str] = set()
-        self.visited = 0
+        self.stamped = 0
+        self.visits = 0
         self.entered: set[int] = set()
         self.truncations = truncations
         self.exhausted = False
@@ -226,22 +239,52 @@ class _HeldScan:
         if self.truncations is not None:
             self.truncations.append(self.prefix + note)
 
-    def admit(self, name: str) -> bool:
-        """Count one tensor or container against the object bound; False once exhausted."""
+    def _visit(self) -> bool:
+        """Count one examined item; past the visit cap end the scan silently."""
 
-        if self.exhausted:
+        if self.visits >= _HELD_SCAN_MAX_VISITS:
+            self.exhausted = True
             return False
-        if self.visited >= _HELD_SCAN_MAX_OBJECTS:
+        self.visits += 1
+        return True
+
+    def admit(self, name: str) -> bool:
+        """Count one plain tensor to stamp; at the object bound record the cut and stop."""
+
+        if self.stamped >= _HELD_SCAN_MAX_OBJECTS:
             self.exhausted = True
             self._cut(f"{name} (object bound {_HELD_SCAN_MAX_OBJECTS})")
             return False
-        self.visited += 1
+        self.stamped += 1
         return True
+
+    def holds_tensor(self, container: Any) -> bool:
+        """Detect-only search: does ``container`` hold a plain tensor at any depth?
+
+        Nothing is stamped or entered for the main walk; items share the visit cap.
+        """
+
+        seen = {id(container)}
+        stack = [_held_items(container)]
+        while stack:
+            entry = next(stack[-1], None)
+            if entry is None:
+                stack.pop()
+                continue
+            if not self._visit():
+                return False
+            item = entry[1]
+            if _is_plain_tensor(item):
+                return True
+            if _is_enterable(item) and id(item) not in seen and id(item) not in self.entered:
+                seen.add(id(item))
+                stack.append(_held_items(item))
+        return False
 
     def walk(self, container: Any, path: str, depth: int) -> Iterator[tuple[str, torch.Tensor]]:
         """Yield plain tensors under ``container`` (named ``path``, items at ``depth``).
 
-        Iterative with lazy item iterators, so a huge dict costs nothing past the bound
+        Iterative with lazy item iterators, so a huge dict costs nothing past the bounds
         and the depth bound is independent of Python's recursion limit.
         """
 
@@ -255,25 +298,34 @@ class _HeldScan:
             if entry is None:
                 stack.pop()
                 continue
+            if not self._visit():
+                return
             (key, is_key), item = entry
-            if isinstance(item, torch.Tensor):
-                is_container = False
-            elif isinstance(item, (list, tuple, dict)) and item and id(item) not in self.entered:
-                is_container = True
-            else:
+            is_tensor = _is_plain_tensor(item)
+            if not is_tensor and not (_is_enterable(item) and id(item) not in self.entered):
                 continue
             segment = _render_held_key(key) if is_key else str(key)
             name = self.reserve(f"{parent}[{segment}]")
-            if not self.admit(name):
-                return
-            if not is_container:
-                if not isinstance(item, nn.Parameter):
+            if is_tensor:
+                if self.admit(name):
                     yield name, item
-            elif level >= _HELD_SCAN_MAX_DEPTH:
-                self._cut(f"{name} (depth bound {_HELD_SCAN_MAX_DEPTH})")
-            else:
+            elif level < _HELD_SCAN_MAX_DEPTH:
                 self.entered.add(id(item))
                 stack.append((name, level + 1, _held_items(item)))
+            elif self.holds_tensor(item):
+                self._cut(f"{name} (depth bound {_HELD_SCAN_MAX_DEPTH})")
+
+
+def _is_plain_tensor(item: Any) -> bool:
+    """True for a tensor that is not a Parameter (Parameters have their own sources)."""
+
+    return isinstance(item, torch.Tensor) and not isinstance(item, nn.Parameter)
+
+
+def _is_enterable(item: Any) -> bool:
+    """True for a non-empty list/tuple/dict; str, bytes and numbers are leaves."""
+
+    return isinstance(item, (list, tuple, dict)) and bool(item)
 
 
 def _held_items(container: Any) -> Iterator[tuple[tuple[Any, bool], Any]]:
@@ -308,9 +360,11 @@ def iter_module_held_plain_tensors(
 
     Names are never dropped: a rendering that repeats an earlier name gets ``#2``,
     ``#3``, ... in scan order. Below the attribute's own list/tuple items the scan is
-    bounded (``_HELD_SCAN_MAX_DEPTH`` levels, ``_HELD_SCAN_MAX_OBJECTS`` tensors and
-    containers per module, cycle-guarded) and each cut is described in
-    ``truncations``; its cost is linear in the entries visited before the bound.
+    bounded (``_HELD_SCAN_MAX_DEPTH`` levels and ``_HELD_SCAN_MAX_OBJECTS`` tensors
+    per module, cycle-guarded). A cut is described in ``truncations`` only when a plain
+    tensor actually lies past it, so tensor-free containers never produce one. Cost is
+    capped at ``_HELD_SCAN_MAX_VISITS`` examined items per module; reaching that cap
+    ends the scan silently (a tensor held only past it is missed without disclosure).
 
     Private (``_``) and ``tl_`` attributes and Parameters are never yielded.
     A tensor created inside ``forward`` is not module state at preparation time
@@ -350,12 +404,7 @@ def iter_module_held_plain_tensors(
                 if isinstance(item, torch.Tensor):
                     if not isinstance(item, nn.Parameter):
                         yield name, item
-                elif (
-                    isinstance(item, (list, tuple, dict))
-                    and item
-                    and id(item) not in scan.entered
-                    and scan.admit(name)
-                ):
+                elif _is_enterable(item) and id(item) not in scan.entered:
                     yield from scan.walk(item, name, 2)
 
 
