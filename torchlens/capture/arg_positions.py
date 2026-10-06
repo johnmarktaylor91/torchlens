@@ -1819,6 +1819,7 @@ FUNC_ARG_SPECS["ger"] = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "vec2"
 FUNC_ARG_SPECS["gumbelsoftmax"] = ArgSpec(positions=(0,), tensor_kwargs=("logits",))
 FUNC_ARG_SPECS["hspmm"] = ArgSpec(positions=(0, 1), tensor_kwargs=("mat1", "mat2"))
 FUNC_ARG_SPECS["isin"] = ArgSpec(positions=(0, 1), tensor_kwargs=("elements", "test_elements"))
+FUNC_ARG_SPECS["issamesize"] = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "self", "other"))
 FUNC_ARG_SPECS["issetto"] = ArgSpec(positions=(0, 1), tensor_kwargs=("self", "tensor"))
 FUNC_ARG_SPECS["ldlsolve"] = ArgSpec(positions=(0, 1, 2), tensor_kwargs=("LD", "pivots", "B"))
 FUNC_ARG_SPECS["lobpcg"] = ArgSpec(positions=(0, 2, 3, 5), tensor_kwargs=("A", "B", "X", "iK"))

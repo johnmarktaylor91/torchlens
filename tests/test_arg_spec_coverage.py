@@ -75,6 +75,7 @@ _HIGH_CONFIDENCE_STATIC_NAMES = frozenset(
         "isin",
         "isinference",
         "isnonzero",
+        "issamesize",
         "issetto",
         "laguerrepolynomiall",
         "lcm",
@@ -188,7 +189,6 @@ _KNOWN_UNSUPPORTED_ARG_SPEC_REASONS = {
     # the entry became exactly the stale class this table's cross-check catches.
     "hsmm": "demoted fragment: no operator schema available",
     "ipu": "demoted fragment: no operator schema available",
-    "issamesize": "metadata/control helper with no validated tensor-input schema",
     "iszerotensor": "metadata/control helper with no validated tensor-input schema",
     "lazyclone": "internal/private helper left on dynamic fallback until independently validated",
     "linalgcheckerrors": "internal/private helper left on dynamic fallback until independently validated",
@@ -327,6 +327,7 @@ _EXPECTED_KWARGS = {
     "gumbelsoftmax": ("logits",),
     "hspmm": ("mat1", "mat2"),
     "isin": ("elements", "test_elements"),
+    "issamesize": ("input", "self", "other"),
     "issetto": ("self", "tensor"),
     "ldlsolve": ("LD", "pivots", "B"),
     "lobpcg": ("A", "B", "X", "iK"),
