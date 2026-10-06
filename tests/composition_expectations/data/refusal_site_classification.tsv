@@ -1232,3 +1232,4 @@ torchlens.backends.torch.wrappers:torch_func_decorator.wrapped_func:SubclassCons
 torchlens.bridge._utils:module_for_site:InvalidArgumentError::1	CONTRACTED	bridge_module_site_unresolved	attribution-bridge module resolver (Grad-CAM/Captum layer); typed + code + remedy, contracted in its own change
 torchlens.bridge._utils:module_for_site:InvalidArgumentError::2	CONTRACTED	bridge_module_site_ambiguous	attribution-bridge module resolver, sibling-module tie; typed + code + remedy
 torchlens.bridge._utils:_single_call_module:InvalidArgumentError::1	CONTRACTED	bridge_module_site_multi_call	attribution-bridge module resolver, module runs more than once; typed + code + remedy
+torchlens.bridge.shap:explain:InvalidArgumentError::1	CONTRACTED	bridge_shap_background_missing	SHAP bridge background=None refuses typed before DeepExplainer raises its own error; typed + code + remedy + contract-doc row

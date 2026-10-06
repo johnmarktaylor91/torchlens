@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .._errors import InvalidArgumentError
 from ._utils import first_input_tensor, source_model
 
 
@@ -45,8 +46,18 @@ def explain(
         If SHAP is unavailable.
     TypeError
         If ``background`` is not passed.
+    InvalidArgumentError
+        ``bridge_shap_background_missing`` when ``background`` is None.
     """
 
+    if background is None:
+        raise InvalidArgumentError(
+            "tl.bridge.shap.explain got background=None; SHAP values are relative to a "
+            "background's expected output, and there is no default",
+            code="bridge_shap_background_missing",
+            remedy="pass background= a batch of reference inputs shaped like the model input, "
+            "for example a few dataset samples or torch.zeros_like(x)",
+        )
     try:
         import shap as shap_module
     except ImportError as exc:

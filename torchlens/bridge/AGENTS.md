@@ -14,9 +14,12 @@ optional dependency.
   attribution bridges share (Grad-CAM `layer()`, Captum `layer()`): a module
   address returns that module; an op label returns the OUTERMOST module in
   the op's `output_of_module_calls` (`relu_17_66` in resnet18 is `layer4`,
-  never the inner `layer4.1.relu`); an op label or pass-qualified address
-  whose module runs more than once refuses typed
-  (`bridge_module_site_multi_call`), because a module hook sees every call.
+  never the inner `layer4.1.relu`); a pass-qualified address resolves through
+  the op that call returns the same way (`layer4.1.relu:2` is `layer4`); an
+  op label or pass-qualified address whose resolved module runs more than
+  once refuses typed (`bridge_module_site_multi_call`, remedy naming the
+  nearest enclosing single-call module), because a module hook sees every
+  call.
 
 ## Adapter files and main entry points
 - `captum.py`: `attribute()`, `layer()` (extra: `torchlens[captum]`;
@@ -25,6 +28,8 @@ optional dependency.
   `shap.DeepExplainer`; extra `torchlens[shap]`, `shap>=0.45.1,<1`).
   `background` is REQUIRED keyword-only: the old default made the explained
   inputs their own background, which gives all-zero values for one input.
+  `background=None` refuses typed (`bridge_shap_background_missing`) before
+  shap is called.
   `inputs` defaults to the first saved input tensor.
 - `sae_lens.py`: `encode()`, `decode()` (extra: `torchlens[sae]`).
 - `lit/`: `model(net, tokenizer, *, task=, sites=, ...)` wraps a LIVE model as
@@ -44,10 +49,13 @@ optional dependency.
   with captured layers; stdlib-only, no import gate. `join()` (schema
   `torchlens.profiler_join.v2`) assigns each complete event to at most one
   layer: a `record_function` range whose name EQUALS a layer label, else the
-  k-th `aten::<func_name>` event (outermost of same-name nesting, time order)
-  to the k-th layer of that type, `k mod L` for n repeated forwards. Types
-  whose event count is not a multiple of their layer count stay unmatched in
-  `mismatched_op_types` (with a `UserWarning`); every unmatched event is
+  k-th outermost `aten::<op>` event (an aten event inside ANY other aten
+  event on its thread is internal and never counts; `add` and `__add__` pool
+  under `aten::add` in execution order) to the k-th layer of that op, `k mod
+  L` for n repeated forwards. Every assigned type must imply the same n
+  (payload `forwards`). Types whose event count is not a multiple of their
+  layer count, or whose n differs from the n most types share, stay unmatched
+  in `mismatched_op_types` (with a `UserWarning`); every unmatched event is
   counted by name in `unmatched_event_counts`. Host-side times: not a rate
   denominator.
 - `gradcam.py`: `cam()`, `layer()` (extra: `torchlens[gradcam]`). `cam()`

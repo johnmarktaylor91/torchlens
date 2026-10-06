@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import warnings
+from itertools import chain
 from pathlib import Path
 from typing import Any, cast
 
@@ -57,18 +58,22 @@ def join(log: Any, kineto_trace: str | Path | dict[str, Any]) -> dict[str, Any]:
 
     - A ``record_function`` range whose name EQUALS a layer label is that
       layer's (exact equality, never substring).
-    - The op events of one type (``aten::conv2d`` for ``func_name ==
-      "conv2d"``; nested calls of the same name inside one outer event are not
-      counted twice) are matched in time order to that type's layers in
-      execution order: the k-th event to the k-th layer. When the event count
-      is a multiple ``n`` of the layer count (``n`` repeated forwards under
-      one profiler), event ``k`` goes to layer ``k mod L``. Events inside a
-      matched label range are left to that range.
+    - Only OUTERMOST op events count: an ``aten::*`` event inside any other
+      ``aten::*`` event on the same thread (``aten::matmul`` inside
+      ``aten::linear``) is an internal call, never a layer's own op. The
+      outermost events of one aten op (``aten::conv2d`` for ``func_name ==
+      "conv2d"``; ``"add"`` and ``"__add__"`` pool under ``aten::add``) are
+      matched in time order to that op's layers in execution order: the k-th
+      event to the k-th layer. When the event count is a multiple ``n`` of
+      the layer count (``n`` repeated forwards under one profiler), event
+      ``k`` goes to layer ``k mod L``. Every assigned op type must imply the
+      same ``n`` (returned as ``forwards``). Events inside a matched label
+      range are left to that range.
     - Any other event is unmatched and disclosed: ``unmatched_event_counts``
       counts every unmatched complete event by name, and
       ``mismatched_op_types`` names each op type whose event count is not a
-      multiple of its layer count (those events stay unmatched, with a
-      ``UserWarning``).
+      multiple of its layer count, or whose ``n`` differs from the one most
+      op types share (those events stay unmatched, with a ``UserWarning``).
 
     Durations are host-side profiler event times: a per-layer diagnostic, not
     a rate denominator.
@@ -95,7 +100,7 @@ def join(log: Any, kineto_trace: str | Path | dict[str, Any]) -> dict[str, Any]:
     assigned: dict[int, list[dict[str, Any]]] = {index: [] for index in range(len(layers))}
     used: set[int] = set()
     _assign_label_ranges(layers, events, assigned, used)
-    mismatched = _assign_op_types(layers, events, assigned, used)
+    mismatched, forwards = _assign_op_types(layers, events, assigned, used)
     rows = []
     for index, layer in enumerate(layers):
         matched_events = assigned[index]
@@ -115,10 +120,16 @@ def join(log: Any, kineto_trace: str | Path | dict[str, Any]) -> dict[str, Any]:
             name = str(event.get("name", ""))
             unmatched[name] = unmatched.get(name, 0) + 1
     if mismatched:
+        from ..errors._base import TorchLensWarning
+
         warnings.warn(
-            "profiler.join left op types unmatched because their event count is not a "
-            f"multiple of their layer count: {mismatched}",
-            UserWarning,
+            TorchLensWarning(
+                "profiler.join left op types unmatched because their event count is not a "
+                "multiple of their layer count, or implies a different number of forwards "
+                f"than the other op types: {mismatched}. Remedy: profile whole forward "
+                "passes only, under one profiler, of the model the trace was captured from",
+                code="profiler_join_op_types_unmatched",
+            ),
             stacklevel=2,
         )
     return {
@@ -130,6 +141,7 @@ def join(log: Any, kineto_trace: str | Path | dict[str, Any]) -> dict[str, Any]:
         "ops": rows,
         "unmatched_event_counts": unmatched,
         "mismatched_op_types": mismatched,
+        "forwards": forwards,
         "trace_metadata": _metadata(trace),
     }
 
@@ -207,10 +219,124 @@ def _op_event_names(func_name: str) -> frozenset[str]:
         map to their aten op, ``__add__`` to ``aten::add``).
     """
 
-    names = {func_name, f"aten::{func_name}"}
+    return frozenset({func_name, f"aten::{func_name}", _aten_name(func_name)})
+
+
+def _aten_name(func_name: str) -> str:
+    """Return the aten event name a TorchLens ``func_name`` pools under.
+
+    ``"add"`` and ``"__add__"`` both give ``"aten::add"``, so their layers share
+    one pool in execution order.
+    """
+
     if func_name.startswith("__") and func_name.endswith("__"):
-        names.add(f"aten::{func_name.strip('_')}")
-    return frozenset(names)
+        return f"aten::{func_name.strip('_')}"
+    return f"aten::{func_name}"
+
+
+def _op_type_groups(
+    layers: list[Any], assigned: dict[int, list[dict[str, Any]]]
+) -> dict[str, tuple[frozenset[str], list[int]]]:
+    """Group unassigned layers by the aten op they record as.
+
+    Parameters
+    ----------
+    layers:
+        Layer records in execution order.
+    assigned:
+        Per-layer event lists; layers that already hold a label range are skipped.
+
+    Returns
+    -------
+    dict[str, tuple[frozenset[str], list[int]]]
+        Group key (member ``func_name`` spellings joined by ``"/"``) to the
+        group's event names and its layer indices in execution order.
+    """
+
+    members: dict[str, list[str]] = {}
+    indices: dict[str, list[int]] = {}
+    for index, layer in enumerate(layers):
+        func_name = str(getattr(layer, "func_name", "") or "")
+        if not func_name.strip() or func_name == "none" or assigned[index]:
+            continue
+        aten = _aten_name(func_name)
+        spellings = members.setdefault(aten, [])
+        if func_name not in spellings:
+            spellings.append(func_name)
+        indices.setdefault(aten, []).append(index)
+    groups: dict[str, tuple[frozenset[str], list[int]]] = {}
+    for aten, spellings in members.items():
+        names = frozenset(chain.from_iterable(_op_event_names(name) for name in spellings))
+        groups["/".join(spellings)] = (names, indices[aten])
+    return groups
+
+
+def _outermost_op_events(events: list[dict[str, Any]], op_names: frozenset[str]) -> set[int]:
+    """Return positions of op events not contained in any other op event.
+
+    An op event is any ``aten::*`` event or one named in ``op_names``. One
+    sweep per thread, in start order (longer first on ties, trace order last):
+    an event whose end does not pass the furthest end seen so far lies inside
+    an earlier op event, so ``aten::matmul`` inside ``aten::linear`` is dropped
+    whatever its name. Events without a timestamp are never nested.
+
+    Parameters
+    ----------
+    events:
+        Complete trace events.
+    op_names:
+        Non-aten event names the layers' op types record as.
+
+    Returns
+    -------
+    set[int]
+        Outermost op event positions.
+    """
+
+    threads: dict[tuple[Any, Any], list[int]] = {}
+    outermost: set[int] = set()
+    for position, event in enumerate(events):
+        name = str(event.get("name", ""))
+        if not (name.startswith("aten::") or name in op_names):
+            continue
+        if "ts" not in event:
+            outermost.add(position)
+            continue
+        threads.setdefault((event.get("pid"), event.get("tid")), []).append(position)
+    for positions in threads.values():
+        positions.sort(key=lambda p: (_start(events[p]), -_duration(events[p]), p))
+        furthest = float("-inf")
+        for position in positions:
+            end = _start(events[position]) + _duration(events[position])
+            if end > furthest:
+                outermost.add(position)
+                furthest = end
+    return outermost
+
+
+def _consensus_forwards(forwards: dict[str, int]) -> int | None:
+    """Return the forward count most op types agree on, or None on a tie.
+
+    Parameters
+    ----------
+    forwards:
+        Op type to its event count divided by its layer count.
+
+    Returns
+    -------
+    int | None
+        The single most common count; None when no op type matched or two
+        counts tie for most common.
+    """
+
+    tally: dict[int, int] = {}
+    for count in forwards.values():
+        tally[count] = tally.get(count, 0) + 1
+    if not tally:
+        return None
+    best = max(tally.values())
+    winners = [count for count, votes in tally.items() if votes == best]
+    return winners[0] if len(winners) == 1 else None
 
 
 def _assign_op_types(
@@ -218,8 +344,8 @@ def _assign_op_types(
     events: list[dict[str, Any]],
     assigned: dict[int, list[dict[str, Any]]],
     used: set[int],
-) -> dict[str, dict[str, int]]:
-    """Assign op events to layers of the same type by execution order.
+) -> tuple[dict[str, dict[str, Any]], int | None]:
+    """Assign outermost op events to layers of the same aten op by execution order.
 
     Parameters
     ----------
@@ -234,62 +360,53 @@ def _assign_op_types(
 
     Returns
     -------
-    dict[str, dict[str, int]]
-        Op types left unmatched, with their event and layer counts.
+    tuple[dict[str, dict[str, Any]], int | None]
+        Op types left unmatched (event and layer counts, plus ``forwards`` and
+        ``expected_forwards`` (None on a tie) when the type's count disagrees
+        with the other types'), and the forward count every assigned type
+        shares.
     """
 
+    groups = _op_type_groups(layers, assigned)
+    all_names = frozenset(chain.from_iterable(names for names, _ in groups.values()))
+    outermost = _outermost_op_events(events, all_names)
     ranges = [events[position] for position in used]
-    by_type: dict[str, list[int]] = {}
-    for index, layer in enumerate(layers):
-        func_name = str(getattr(layer, "func_name", "") or "")
-        if func_name.strip() and func_name != "none" and not assigned[index]:
-            by_type.setdefault(func_name, []).append(index)
-    mismatched: dict[str, dict[str, int]] = {}
-    for func_name, layer_indices in by_type.items():
-        names = _op_event_names(func_name)
-        pool = _outer_events(
-            [
+    mismatched: dict[str, dict[str, Any]] = {}
+    pools: dict[str, list[int]] = {}
+    forwards: dict[str, int] = {}
+    for key, (names, layer_indices) in groups.items():
+        pool = sorted(
+            (
                 position
-                for position, event in enumerate(events)
+                for position in outermost
                 if position not in used
-                and str(event.get("name", "")) in names
-                and not any(_contains(outer, event) for outer in ranges)
-            ],
-            events,
+                and str(events[position].get("name", "")) in names
+                and not any(_contains(outer, events[position]) for outer in ranges)
+            ),
+            key=lambda position: (_start(events[position]), position),
         )
         if not pool:
             continue
         if len(pool) % len(layer_indices):
-            mismatched[func_name] = {"events": len(pool), "layers": len(layer_indices)}
+            mismatched[key] = {"events": len(pool), "layers": len(layer_indices)}
+            continue
+        pools[key] = pool
+        forwards[key] = len(pool) // len(layer_indices)
+    expected = _consensus_forwards(forwards)
+    for key, pool in pools.items():
+        layer_indices = groups[key][1]
+        if forwards[key] != expected:
+            mismatched[key] = {
+                "events": len(pool),
+                "layers": len(layer_indices),
+                "forwards": forwards[key],
+                "expected_forwards": expected,
+            }
             continue
         for k, position in enumerate(pool):
             assigned[layer_indices[k % len(layer_indices)]].append(events[position])
             used.add(position)
-    return mismatched
-
-
-def _outer_events(positions: list[int], events: list[dict[str, Any]]) -> list[int]:
-    """Drop events nested inside another event of the same pool; order by start.
-
-    Parameters
-    ----------
-    positions:
-        Event positions of one op type.
-    events:
-        Complete trace events.
-
-    Returns
-    -------
-    list[int]
-        Outermost event positions in time order (trace order breaks ties).
-    """
-
-    ordered = sorted(positions, key=lambda position: (_start(events[position]), position))
-    outer: list[int] = []
-    for position in ordered:
-        if not any(_contains(events[kept], events[position]) for kept in outer):
-            outer.append(position)
-    return outer
+    return mismatched, expected
 
 
 def _load_trace(kineto_trace: str | Path | dict[str, Any]) -> dict[str, Any]:
