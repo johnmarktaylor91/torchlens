@@ -712,7 +712,12 @@ def test_mutation_gradient_hook_records_only_its_own_traces_backward() -> None:
 
 
 def test_mutation_gradient_hook_records_a_plain_backward_of_its_own_output() -> None:
-    """Narrowness: an implicit pass on the trace's OWN output still records the op grad."""
+    """Narrowness: a plain ``.backward()`` on the trace's OWN output still records it.
+
+    TorchLens routes such a call through the trace's backward (a managed bracket when
+    the roots match, else an implicit pass its own op hooks open), so the gate on the
+    model-state hook must admit it.
+    """
 
     torch.manual_seed(0)
     model = _FrozenGradOperandMutator("positional", through_linear=True)
@@ -724,7 +729,8 @@ def test_mutation_gradient_hook_records_a_plain_backward_of_its_own_output() -> 
     eager_out.sum().backward()
 
     trace = tl.trace(copy.deepcopy(model), x, capture=CaptureOptions(save_grads="all"))
-    with pytest.warns(RuntimeWarning, match="implicit backward pass"):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
         trace[trace.output_layers[0]].out.sum().backward()
     mutation = _ops_by_type(trace, "add")[0]
     assert mutation.grad is not None
