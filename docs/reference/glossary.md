@@ -96,7 +96,10 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   have multiple captured versions. A training-mode `BatchNorm2d` collapse label can say
   “5 layers total” because it counts the parameter leaves `weight` and `bias` plus the buffer
   leaves `running_mean`, `running_var`, and `num_batches_tracked`; it is not claiming five
-  BatchNorm calls.
+  BatchNorm calls. A plain tensor a module already holds when the forward starts (a tensor
+  attribute, a list/tuple item, or a dict value such as a warm-filled attention-bias cache) is
+  captured as a buffer too, addressed `<module>.<attr>`, `<module>.<attr>.<index>`, or
+  `<module>.<attr>.<key>`.
 
 **GradFn**
 : A first-class live backward-autograd node captured during backward logging. Portable artifacts
