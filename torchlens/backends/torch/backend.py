@@ -40,6 +40,7 @@ from ...utils.introspection import (
 from ...utils.rng import log_current_rng_states, set_random_seed, set_rng_from_saved_states
 from ...utils.tensor_utils import _is_cuda_available, safe_copy
 from . import _tl
+from ._held_refs_capture import rebind_held_torch_refs, restore_held_torch_refs
 from .aliasing import detect_torch_alias_contract
 from .buffer_writes import reconcile_buffer_writes, uninstall_buffer_write_tracker
 from .completeness_witness import capture_completeness_witness, capture_scalar_escape_warning
@@ -358,6 +359,9 @@ class TorchBackend:
         """Apply per-session torch model preparation."""
         optimizer = getattr(session, "_optimizer", None)
         _prepare_model_session(cast(Any, session), cast(torch.nn.Module, model), optimizer)
+        # Last, while wrapped: point module-held pristine torch functions at the
+        # wrappers so this capture needs no rescue forward; undone at cleanup.
+        rebind_held_torch_refs(session, cast(torch.nn.Module, model))
         return model
 
     def cleanup_model_session(self, session: object, prepared_model: object) -> None:
@@ -376,13 +380,16 @@ class TorchBackend:
         def cleanup_action() -> None:
             """Run the legacy model teardown at its historical call site."""
 
-            uninstall_buffer_write_tracker(cast("Trace", session))
-            _cleanup_model_session(
-                cast("Trace", session),
-                cast(torch.nn.Module, model),
-                input_tensors,
-                input_objects,
-            )
+            try:
+                restore_held_torch_refs(session)
+            finally:
+                uninstall_buffer_write_tracker(cast("Trace", session))
+                _cleanup_model_session(
+                    cast("Trace", session),
+                    cast(torch.nn.Module, model),
+                    input_tensors,
+                    input_objects,
+                )
 
         capture_session = capture_session_for(session)
         if capture_session is None:

@@ -10,11 +10,13 @@ default) is not represented by the boundary, so validation must fail on it.
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable, Iterator
 from typing import Any
 
 import pytest
 import torch
+from _stale_holders import CountedRoot, OpaqueCallable, provenance_warnings
 from torch import nn
 
 import torchlens as tl
@@ -43,10 +45,16 @@ def _isolated_witness_mode() -> Iterator[None]:
 
 
 def _raw(func: Callable[..., Any]) -> Callable[..., Any]:
-    """Return the original torch callable behind an installed TorchLens wrapper."""
+    """Return the original torch callable behind an installed wrapper, in an opaque holder.
+
+    Capture preparation rebinds pristine torch functions held directly on a
+    model, so a bare original would no longer escape; the custom callable
+    object is a holder it never rebinds, which keeps the escape these
+    completeness tripwires must catch.
+    """
 
     wrap_torch()
-    return _state._decorated_to_orig.get(id(func), func)
+    return OpaqueCallable(_state._decorated_to_orig.get(id(func), func))
 
 
 class _OpaqueOutputChild(nn.Module):
@@ -326,3 +334,56 @@ def test_multi_dispatch_opaque_output_fails_completeness(grad: bool) -> None:
     """
 
     _assert_completeness_failure(_Parent(_BodyChild(_composite_aten_output)), grad=grad)
+
+
+def _bare(func: Callable[..., Any]) -> Callable[..., Any]:
+    """The original torch callable itself, held directly as these cases did before the rebind."""
+
+    wrap_torch()
+    return _state._decorated_to_orig.get(id(func), func)
+
+
+# The direct-aten shapes' own untracked call carries the provenance disclosure.
+@pytest.mark.filterwarnings(_NO_PROVENANCE)
+@pytest.mark.parametrize("grad", [True, False], ids=["grad", "no_grad"])
+@pytest.mark.parametrize(
+    ("build", "direct_aten"),
+    [
+        (lambda: _Parent(_StaleHiddenChild()), False),
+        (lambda: _Parent(_Middle()), True),
+        (lambda: _Parent(_BodyChild(_stale_op_builds_view_base)), True),
+        (lambda: _Parent(_BodyChild(_freed_stale_intermediates)), True),
+    ],
+    ids=["iql_hidden_and_output", "nested_boundary", "view_base", "freed_intermediates"],
+)
+def test_attribute_held_originals_are_rebound_and_validate(
+    build: Callable[[], nn.Module],
+    direct_aten: bool,
+    grad: bool,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The attribute-held cases above with the bare original, as they were first written.
+
+    Capture preparation rebinds each held original to its wrapper for the
+    capture, so the held relu is no escape: the primary forward captures it,
+    and validation passes. The IQL shape takes one forward with no provenance
+    warning. The other shapes also emit a direct ``torch.ops.aten`` call,
+    which no wrapper sees; that call (never the relu) triggers their one
+    rescue forward, so ``relu`` must not be among the recovered ops.
+    """
+
+    monkeypatch.setitem(globals(), "_raw", _bare)
+    model = CountedRoot(build()).eval()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        trace = tl.trace(model, torch.randn(3, 4))
+    assert "relu" in [op.func_name for op in trace.ops]
+    if direct_aten:
+        assert model.calls == [2]
+        assert trace.rescue_rerun is not None
+        assert "relu" not in trace.rescue_rerun["recovered_ops"]
+    else:
+        assert model.calls == [1]
+        assert provenance_warnings(caught) == []
+        assert trace.rescue_rerun is None
+    assert _validate(build(), grad=grad), tl.validation.last_validation_failure()

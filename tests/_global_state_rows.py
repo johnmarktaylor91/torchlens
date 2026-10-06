@@ -24,6 +24,11 @@ _SCOPED_CAPTURE_STATE = frozenset(
         # would make every later session refuse profiler_session_nested,
         # exactly the leak class this row catches.
         ("torchlens/observability/_session.py", "_ACTIVE_SESSION"),
+        # Held torch-ref rebind journals, keyed by session: registered in
+        # per-session model prep and drained at session cleanup -- a survivor
+        # past the session would leave a user's held reference pointing at a
+        # wrapper, exactly the leak class this row catches.
+        ("torchlens/backends/torch/_held_refs_capture.py", "_PENDING_UNDO"),
         # The four scalar control slots below are assigned ONLY through the
         # module object from other modules (no ast.Global anywhere), so the
         # pre-rebind-detector inventory could never classify them
@@ -984,6 +989,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/backends/torch/_fire_timing.py", "__all__"),
         ("torchlens/backends/torch/_gradfn_markers.py", "__all__"),
         ("torchlens/backends/torch/_held_refs.py", "__all__"),
+        ("torchlens/backends/torch/_held_refs_capture.py", "__all__"),
         ("torchlens/backends/torch/_op_markers.py", "__all__"),
         ("torchlens/backends/torch/_tl.py", "__all__"),
         ("torchlens/backends/torch/_weightsfree_ctx.py", "__all__"),

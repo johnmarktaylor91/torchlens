@@ -4159,6 +4159,13 @@ def test_gpt_bigcode():
     TorchScript-scriptable, so importing it while wrappers are installed (any
     earlier capture this session) raises. The import below therefore runs under
     ``unwrap_torch()``; the capture itself re-wraps lazily.
+
+    The model is built before that re-wrap, so ``GELUTanh`` holds a
+    ``functools.partial`` of the pristine ``F.gelu``: the stale pre-wrap
+    reference a user process has whenever it builds a model before its first
+    capture. Preparation rebinds it to the wrapper for each capture and restores
+    it afterwards, so the capture and the validation run with no provenance
+    warning (the suite's warnings-as-errors would fail the test) and no rescue.
     """
     pytest.importorskip("transformers")
     from torchlens.backends.torch.wrappers import unwrap_torch
@@ -4184,7 +4191,8 @@ def test_gpt_bigcode():
         input_kwargs=model_kwargs,
         view="unrolled",
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "gpt_bigcode")
+            save_only=True,
+            container_path=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "gpt_bigcode"),
         ),
     )
     assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)

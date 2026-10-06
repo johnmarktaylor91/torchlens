@@ -201,11 +201,6 @@ KNOWN_FAILURES: tuple[KnownFailure, ...] = (
         tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
     ),
     KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_timm_xcit_tiny_24_p8_224",
-        reason="assert False: validate_forward_pass(...) returned False",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
         nodeid="tests/bench/test_capture_bench.py::test_capture_bench_matrix",
         reason=(
             "UserWarning promoted to error: tensor arguments with no graph/source "

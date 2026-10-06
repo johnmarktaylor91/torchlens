@@ -19,6 +19,7 @@ from typing import Any
 
 import pytest
 import torch
+from _stale_holders import OpaqueCallable
 from torch import nn
 
 import torchlens as tl
@@ -39,10 +40,16 @@ def _legacy_weight_norm(module: nn.Module) -> nn.Module:
 
 
 def _raw(func: Callable[..., Any]) -> Callable[..., Any]:
-    """Return the original torch callable behind an installed TorchLens wrapper."""
+    """Return the original torch callable behind an installed wrapper, in an opaque holder.
+
+    Capture preparation rebinds pristine torch functions held directly on a
+    model, so a bare original would no longer escape; the custom callable
+    object is a holder it never rebinds, which keeps the escape these
+    completeness tripwires must catch.
+    """
 
     wrap_torch()
-    return _state._decorated_to_orig.get(id(func), func)
+    return OpaqueCallable(_state._decorated_to_orig.get(id(func), func))
 
 
 class _NestedWeightNorm(nn.Module):
@@ -256,3 +263,24 @@ def test_completeness_backstop_counts_module_forward_owned_drop(module_token: st
             )
         )
         assert dispatch == captured, benign_owner
+
+
+@pytest.mark.usefixtures("_restore_alias")
+def test_attribute_held_original_alias_is_rebound_and_validates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The stale-alias case with the bare original, as it was first written.
+
+    Capture preparation rebinds the held ``_weight_norm`` original to its
+    wrapper, so the alias the forward installs is tracked: no escape, and
+    ``bfs_completeness`` passes.
+    """
+
+    def bare(func: Callable[..., Any]) -> Callable[..., Any]:
+        wrap_torch()
+        return _state._decorated_to_orig.get(id(func), func)
+
+    monkeypatch.setitem(globals(), "_raw", bare)
+    model = _NestedWeightNorm(stale_alias=True)
+    assert not isinstance(model.raw_weight_norm, OpaqueCallable)
+    assert _validate(model), tl.validation.last_validation_failure()

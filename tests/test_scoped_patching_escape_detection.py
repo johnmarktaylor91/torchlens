@@ -15,6 +15,7 @@ import example_models
 import numpy as np
 import pytest
 import torch
+from _stale_holders import OpaqueCallable
 from torch import nn
 
 import torchlens as tl
@@ -95,8 +96,13 @@ def _module_with_hidden_class_ref(name: str, raw: Callable[..., Any]) -> types.M
 
 
 @pytest.mark.parametrize("holder_kind", ["closure", "dict", "list", "instance"])
-def test_builtin_holder_attacks_emit_shadow_report(holder_kind: str) -> None:
-    """Ordinary-call builtin holders missed by crawling are reported at runtime."""
+def test_builtin_holder_attacks_are_rebound_or_shadow_reported(holder_kind: str) -> None:
+    """Builtin holders are rebound for the capture; a custom object is reported.
+
+    Capture preparation rebinds pristine refs held in closure cells and exact
+    ``dict``/``list`` containers, so those calls are no escape at all. A plain
+    custom object is never rebound, and the shadow detector reports its call.
+    """
 
     raw = torch.relu
 
@@ -134,6 +140,10 @@ def test_builtin_holder_attacks_emit_shadow_report(holder_kind: str) -> None:
             return invoke(x)
 
     error, reports = _run_shadow_capture(Model())
+    if holder_kind != "instance":
+        assert error is None
+        assert reports == []
+        return
     assert isinstance(error, RuntimeError)
     assert len(reports) == 1
     assert "relu" in reports[0]
@@ -142,10 +152,14 @@ def test_builtin_holder_attacks_emit_shadow_report(holder_kind: str) -> None:
 
 
 def test_raw_python_functional_and_partial_emit_shadow_reports() -> None:
-    """Raw Python code identity is visible directly and through partial."""
+    """Raw Python code identity is visible directly and through partial.
+
+    Each call sits in a custom callable object, which capture preparation
+    never rebinds, so the raw code still runs and the detector must see it.
+    """
 
     raw = torch.nn.functional.softsign
-    invocations = (raw, functools.partial(raw))
+    invocations = (OpaqueCallable(raw), OpaqueCallable(functools.partial(raw)))
     for invoke in invocations:
 
         class Model(nn.Module):
@@ -163,8 +177,13 @@ def test_raw_python_functional_and_partial_emit_shadow_reports() -> None:
         unwrap_torch()
 
 
-def test_hidden_class_and_default_refs_emit_shadow_reports() -> None:
-    """Unrelated local class/default storage is not silently accepted."""
+def test_hidden_class_ref_is_shadow_reported_and_default_ref_rebound() -> None:
+    """Unrelated local class storage is reported; a default-arg ref is rebound.
+
+    Capture preparation rebinds a helper's default argument for the capture,
+    so that call is no escape; a class attribute is never rebound, and the
+    shadow detector reports it.
+    """
 
     raw = torch.relu
 
@@ -178,7 +197,7 @@ def test_hidden_class_and_default_refs_emit_shadow_reports() -> None:
 
         return op(x)
 
-    for invoke in (lambda value: Holder.op(value), uses_default):
+    for invoke, reported in ((lambda value: Holder.op(value), True), (uses_default, False)):
 
         class Model(nn.Module):
             """Invoke one unrelated hidden helper."""
@@ -189,8 +208,12 @@ def test_hidden_class_and_default_refs_emit_shadow_reports() -> None:
                 return invoke(x)
 
         error, reports = _run_shadow_capture(Model())
-        assert isinstance(error, RuntimeError)
-        assert len(reports) == 1
+        if reported:
+            assert isinstance(error, RuntimeError)
+            assert len(reports) == 1
+        else:
+            assert error is None
+            assert reports == []
         unwrap_torch()
 
 
@@ -403,9 +426,13 @@ def test_pause_logging_excludes_raw_internal_work() -> None:
 
 
 def test_synchronous_dataloader_callback_is_in_owner_thread_domain() -> None:
-    """A num_workers=0 callback escape is reported inside forward."""
+    """A num_workers=0 callback escape is reported inside forward.
 
-    raw = torch.relu
+    The raw call sits in a custom callable object, which capture preparation
+    never rebinds.
+    """
+
+    raw = OpaqueCallable(torch.relu)
 
     def collate(value: torch.Tensor) -> torch.Tensor:
         """Invoke the hidden raw callable synchronously."""
@@ -507,7 +534,8 @@ def test_rng_and_escape_profile_detectors_coarm_without_lost_detection() -> None
     if hasattr(sys, "monitoring"):
         pytest.skip("escape detection uses sys.monitoring instead of setprofile on Python 3.12+")
     generator = np.random.default_rng(123)
-    raw_relu = torch.relu
+    # A custom callable object: capture preparation never rebinds it.
+    raw_relu = OpaqueCallable(torch.relu)
 
     class DualDetectionModel(nn.Module):
         """Exercise one NumPy RNG draw and one raw torch callable escape."""
@@ -934,11 +962,12 @@ def test_owner_thread_scalar_only_stale_escape_is_shadow_reported() -> None:
     and unlabeled receivers cannot be flagged without false-positives on
     parameter/attribute scalar reads. This pin proves the opt-in shadow
     detector reports the stale CALL itself, so the documented remediation
-    path is real (b3-fable R02-1).
+    path is real (b3-fable R02-1). The stale ref sits in a custom callable
+    object, which capture preparation never rebinds.
     """
 
     unwrap_torch()
-    stale_norm = torch.linalg.norm
+    stale_norm = OpaqueCallable(torch.linalg.norm)
     wrap_torch(escape_detector="shadow")
 
     class Model(nn.Module):

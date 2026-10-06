@@ -10,6 +10,13 @@ returns ``self.act(x)``) was tagged by the module-exit boundary before any
 consumer saw it, so it became a clean ``internalsource`` node with no warning
 and no rescue. These rows pin each holder shape returned from a module, plus
 the negatives that must stay quiet.
+
+Preparation first rebinds the holder shapes it can reach (attributes,
+``functools.partial``, closures, default arguments, exact builtin containers,
+namedtuples) to the wrappers for the capture's duration and restores the
+user's objects afterwards, so those captures take ONE forward with no warning.
+Holders it cannot rebind (a module global, a custom object) keep the
+disclosure plus the rescue forward.
 """
 
 from __future__ import annotations
@@ -135,6 +142,41 @@ def _default_arg_module(fn: Callable[..., torch.Tensor]) -> nn.Module:
     return _DefaultArg()
 
 
+class _Box:
+    """A plain (non-module, non-container) object holding a callable."""
+
+    def __init__(self, fn: Callable[..., torch.Tensor]) -> None:
+        self.fn = fn
+
+
+class _BoxHolder(nn.Module):
+    """Stale function inside a custom object attribute."""
+
+    def __init__(self, fn: Callable[..., torch.Tensor]) -> None:
+        super().__init__()
+        self.box = _Box(fn)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return the boxed function's output."""
+
+        return self.box.fn(x)
+
+
+class _Counted(nn.Module):
+    """Root wrapper counting how many times the capture ran the forward."""
+
+    def __init__(self, inner: nn.Module) -> None:
+        super().__init__()
+        self.inner = inner
+        self.calls = [0]
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Count, then delegate."""
+
+        self.calls[0] += 1
+        return self.inner(x)
+
+
 def _module_global_module(env: types.SimpleNamespace) -> nn.Module:
     """``from torch.nn.functional import gelu`` in a defining module, called in forward."""
 
@@ -157,20 +199,43 @@ _HOLDERS: dict[str, Callable[[types.SimpleNamespace], nn.Module]] = {
     "namedtuple": lambda env: _NamedTupleHolder(env.gelu),
     "default_argument": lambda env: _default_arg_module(env.gelu),
     "module_global": _module_global_module,
+    "custom_object": lambda env: _BoxHolder(env.gelu),
 }
+# Holders the pre-capture rebind cannot reach: these keep the rescue path.
+_UNREBINDABLE = frozenset({"module_global", "custom_object"})
 
 
-@pytest.mark.parametrize("holder", sorted(_HOLDERS))
-def test_module_returned_stale_reference_is_rescued(
+@pytest.mark.parametrize("holder", sorted(set(_HOLDERS) - _UNREBINDABLE))
+def test_rebindable_stale_reference_captures_in_one_forward(
     raw: types.SimpleNamespace, holder: str
 ) -> None:
-    """Each holder shape, returned from a submodule, is disclosed and recovered."""
+    """Each reachable holder shape is rebound for the capture: one forward, no warning."""
 
-    model = _Holder(_HOLDERS[holder](raw))
+    model = _Counted(_Holder(_HOLDERS[holder](raw)))
     wrap_torch()
-    with pytest.warns(UserWarning, match=r"adopted at module exit act"):
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
         trace = tl.trace(model, torch.randn(2, 4))
 
+    assert model.calls == [1]
+    assert "gelu" in [op.func_name for op in trace.ops]
+    assert "internalsource" not in [layer.layer_type for layer in trace.layer_list]
+    assert trace.rescue_rerun is None
+    assert trace.capture_verified is not False
+
+
+@pytest.mark.parametrize("holder", sorted(_UNREBINDABLE))
+def test_unrebindable_stale_reference_is_disclosed_and_rescued(
+    raw: types.SimpleNamespace, holder: str
+) -> None:
+    """A holder the rebind cannot reach keeps the disclosure and the rescue forward."""
+
+    model = _Counted(_Holder(_HOLDERS[holder](raw)))
+    wrap_torch()
+    with pytest.warns(UserWarning, match=r"adopted at module exit inner\.act"):
+        trace = tl.trace(model, torch.randn(2, 4))
+
+    assert model.calls == [2]
     assert "gelu" in [op.func_name for op in trace.ops]
     assert "internalsource" not in [layer.layer_type for layer in trace.layer_list]
     assert trace.rescue_rerun is not None and trace.rescue_rerun["recovered"] is True
@@ -178,16 +243,173 @@ def test_module_returned_stale_reference_is_rescued(
     assert trace.capture_verification_reason == "mode_rescue_rerun"
 
 
-def test_rescue_never_rewrites_the_held_reference(raw: types.SimpleNamespace) -> None:
-    """The fix is a signal, not a mutation: the user's stored function keeps its identity."""
+def test_capture_leaves_every_held_reference_identical(raw: types.SimpleNamespace) -> None:
+    """The rebind is undone at cleanup: the same objects sit in the same slots."""
 
     act = _GELUActivationLike(raw.gelu)
-    model = _Holder(act)
+    partial_act = _CallFn(functools.partial(raw.gelu, approximate="tanh"))
+    closure_act = _CallFn(_closure(raw.gelu))
+    table = _NestedContainer(raw.gelu)
+    acts = _NamedTupleHolder(raw.gelu)
+    default_arg = _default_arg_module(raw.gelu)
+    before = (
+        act.act,
+        partial_act.fn,
+        partial_act.fn.func,
+        closure_act.fn.__closure__[0].cell_contents,
+        table.table,
+        table.table["acts"],
+        table.table["acts"][0],
+        acts.acts,
+        type(default_arg).forward.__defaults__,
+    )
+    holders = (act, partial_act, closure_act, table, acts, default_arg)
+    model = nn.Sequential(nn.Linear(4, 4), *[_Linear4(_Holder(h)) for h in holders])
     wrap_torch()
-    with pytest.warns(UserWarning, match=_PROVENANCE):
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
         tl.trace(model, torch.randn(2, 4))
 
-    assert act.act is raw.gelu
+    after = (
+        act.act,
+        partial_act.fn,
+        partial_act.fn.func,
+        closure_act.fn.__closure__[0].cell_contents,
+        table.table,
+        table.table["acts"],
+        table.table["acts"][0],
+        acts.acts,
+        type(default_arg).forward.__defaults__,
+    )
+    assert all(new is old for new, old in zip(after, before, strict=True))
+    assert act.act is raw.gelu and partial_act.fn.func is raw.gelu
+
+
+class _Linear4(nn.Module):
+    """Map a ``_Holder``'s 3 outputs back to 4 so holders chain in a Sequential."""
+
+    def __init__(self, holder: nn.Module) -> None:
+        super().__init__()
+        self.holder = holder
+        self.back = nn.Linear(3, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return back(holder(x))."""
+
+        return self.back(self.holder(x))
+
+
+@pytest.mark.heavy
+@pytest.mark.parametrize(
+    ("act_name", "class_name"), [("gelu", "GELUActivation"), ("gelu_pytorch_tanh", "GELUTanh")]
+)
+def test_transformers_activation_built_before_capture_needs_no_rescue(
+    raw: types.SimpleNamespace, act_name: str, class_name: str
+) -> None:
+    """The real transformers activations, built pre-wrap: one forward, no warning, untouched."""
+
+    pytest.importorskip("transformers")
+    from transformers import activations
+
+    act = activations.get_activation(act_name)
+    assert type(act).__name__ == class_name
+    held_before = act.act
+    model = _Counted(_Holder(act))
+    wrap_torch()
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        trace = tl.trace(model, torch.randn(2, 4))
+
+    assert model.calls == [1]
+    assert [op.func_name for op in trace.ops].count("gelu") == 1
+    assert trace.rescue_rerun is None
+    assert act.act is held_before
+
+
+def test_held_reference_is_restored_when_the_forward_raises(
+    raw: types.SimpleNamespace,
+) -> None:
+    """The undo runs on a failed capture too.
+
+    Partial and closure holders are used because a failed capture also
+    releases the model, and release normalizes direct attributes and builtin
+    containers to the live wrappers (a separate, documented behavior).
+    """
+
+    gelu = raw.gelu
+
+    def invoke(v: torch.Tensor) -> torch.Tensor:
+        return gelu(v)
+
+    class Boom(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.act = functools.partial(raw.gelu)
+            self.helper = invoke
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            self.helper(self.act(x))
+            raise RuntimeError("boom")
+
+    model = Boom()
+    held = model.act
+    wrap_torch()
+    with pytest.raises(RuntimeError, match="boom"):
+        tl.trace(model, torch.randn(2, 4))
+
+    assert model.act is held
+    assert held.func is raw.gelu
+    assert invoke.__closure__ is not None
+    assert invoke.__closure__[0].cell_contents is gelu
+
+
+def test_aliased_holders_stay_aliased_during_the_capture(raw: types.SimpleNamespace) -> None:
+    """One rebuilt replacement per original: ``a is b`` holds inside the forward."""
+
+    class Aliased(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.a = self.b = functools.partial(raw.gelu)
+            self.seen: list[bool] = []
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            self.seen.append(self.a is self.b)
+            return self.b(self.a(x))
+
+    model = Aliased()
+    held = model.a
+    wrap_torch()
+    trace = tl.trace(model, torch.randn(2, 4))
+
+    assert model.seen == [True]
+    assert [op.func_name for op in trace.ops].count("gelu") == 2
+    assert model.a is held and model.b is held
+
+
+def test_forward_time_holder_edits_are_never_clobbered(raw: types.SimpleNamespace) -> None:
+    """Cleanup restores only locations that still hold what the rebind installed."""
+
+    class Editing(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.items = [raw.gelu]
+            self.table = {"op": raw.tanh, "gone": raw.relu}
+            self.act = raw.gelu
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            y = self.table["op"](self.items[0](x))
+            self.items.clear()
+            del self.table["gone"]
+            self.act = torch.sigmoid
+            return y
+
+    model = Editing()
+    wrap_torch()
+    tl.trace(model, torch.randn(2, 4))
+
+    assert model.items == []
+    assert set(model.table) == {"op"} and model.table["op"] is raw.tanh
+    assert model.act is torch.sigmoid
 
 
 def test_iql_output_activation_returned_by_the_root_is_rescued(
@@ -203,10 +425,11 @@ def test_iql_output_activation_returned_by_the_root_is_rescued(
         def __init__(self, out_act: Callable[..., torch.Tensor]) -> None:
             super().__init__()
             self.fc = nn.Linear(4, 2)
-            self.output_activation = out_act
+            # A custom-object holder: the pre-capture rebind cannot reach it.
+            self.output_activation = _Box(out_act)
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.output_activation(self.fc(x))
+            return self.output_activation.fn(self.fc(x))
 
     model = IqlLike(raw.tanh)
     wrap_torch()

@@ -7,6 +7,7 @@ from typing import cast
 import pytest
 import torch
 import torch.nn as nn
+from _stale_holders import OpaqueCallable
 
 import torchlens as tl
 from torchlens import Recording, Trace, _state
@@ -148,7 +149,8 @@ class RawGradOverModuleModel(nn.Module):
 
         super().__init__()
         wrap_torch()
-        self.raw_grad = _state._decorated_to_orig[id(torch.func.grad)]
+        # A custom callable object: capture preparation never rebinds it.
+        self.raw_grad = OpaqueCallable(_state._decorated_to_orig[id(torch.func.grad)])
         self.inner = nn.Linear(4, 4)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -1130,3 +1132,26 @@ def test_variadic_tensor_builtin_arity_does_not_drop_late_operands(func_name: st
 
         assert len(add_ops) == arity
         assert {op.layer_label for op in add_ops} <= set(builtin.parents)
+
+
+class _BareRawGradOverModuleModel(RawGradOverModuleModel):
+    """``RawGradOverModuleModel`` holding the bare original ``torch.func.grad``."""
+
+    def __init__(self) -> None:
+        """Hold the original builder directly, as the case was first written."""
+
+        super().__init__()
+        self.raw_grad = _state._decorated_to_orig[id(torch.func.grad)]
+
+
+@pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
+def test_attribute_held_original_grad_is_rebound_to_a_boundary_op() -> None:
+    """The raw-grad case with the bare original: rebound, so the transform is a boundary op."""
+
+    model = _BareRawGradOverModuleModel().eval()
+    held = model.raw_grad
+    log = tl.trace(model, torch.randn(4), capture=CaptureOptions(layers_to_save="all"))
+
+    assert [op for op in log.ops if op.type == "grad"]
+    assert getattr(log, "_raw_transform_escape_detected", False) is False
+    assert model.raw_grad is held

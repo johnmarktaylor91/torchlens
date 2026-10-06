@@ -19,6 +19,7 @@ from typing import Any
 
 import pytest
 import torch
+from _stale_holders import OpaqueCallable
 from torch import nn
 from torch.overrides import TorchFunctionMode
 
@@ -221,13 +222,13 @@ def test_genuine_loss_still_refuses_the_rescue(
 
 @pytest.fixture()
 def raw_cos() -> Iterator[Any]:
-    """A pristine pre-wrap ``torch.cos`` reference, rewrapping afterwards."""
+    """A pristine pre-wrap ``torch.cos`` in an unrebindable holder, rewrapping afterwards."""
 
     unwrap_torch()
     raw = torch.cos
     assert not is_decorated_function(raw)
     try:
-        yield raw
+        yield OpaqueCallable(raw)
     finally:
         wrap_torch()
 
