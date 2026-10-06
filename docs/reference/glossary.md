@@ -111,6 +111,11 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   in place with a grad-requiring operand ends the pass a non-leaf, exactly as in eager. An `out=`
   write into a Parameter (`torch.add(a, b, out=p)`) is not captured yet; validation reports it as
   a completeness failure.
+  an edge to each op that reads its pre-mutation value, under both layout engines (`dot` and
+  `rank`). The node is drawn when the first in-place op on the Parameter is drawn as its own
+  node: a collapsed module box or `skip_fn` that hides that op hides the node with it, and a
+  `module=` focus draws it only when the focused module is the owner or contains it. Parameters
+  never mutated get no node. The legend row's swatch is the trainable-parameter grey.
 
 **GradFn**
 : A first-class live backward-autograd node captured during backward logging. Portable artifacts

@@ -319,19 +319,24 @@ def add_legend_table_to_graphviz(
 def legend_table_lines_for_rank_path(
     theme: Any,
     max_y: float,
+    *,
+    mutated_parameter: bool = False,
 ) -> list[str]:
     """Return raw-DOT lines for the rank path's pinned legend table.
 
     The rank path builds DOT text directly (no ``graphviz.Digraph``), and
     ``neato -n`` needs every node positioned, so the one table node is pinned
     left of the graph origin like the historical pinned cluster -- but as ONE
-    compact node instead of six.
+    compact node instead of six. ``mutated_parameter`` adds the gated
+    ``mutated parameter`` row exactly as on the dot path.
     """
 
     from .themes import THEME_PRESETS
 
     resolved = theme if theme is not None else THEME_PRESETS["torchlens"]
-    label = build_legend_table_label(theme_role_sections(resolved), resolved)
+    label = build_legend_table_label(
+        theme_role_sections(resolved, mutated_parameter=mutated_parameter), resolved
+    )
     return [
         f"  {LEGEND_NODE_NAME} [label={label} shape=plaintext margin=0 "
         f'fontname="{resolved.typography.family}" pos="-200.0,{max(max_y - 40.0, 40.0):.1f}!"]'

@@ -17,10 +17,10 @@ Parameter emits nothing, so its DOT stays byte-identical.
 
 from __future__ import annotations
 
-import re
 from collections.abc import Mapping, MutableMapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
+from urllib.parse import quote as _percent_quote
 
 from ._render_common import (
     FROZEN_PARAMS_BG_COLOR,
@@ -33,32 +33,13 @@ if TYPE_CHECKING:
     from .themes import VisualizationTheme
 
 __all__ = [
+    "MutatedParameterEmission",
     "MutatedParameterSource",
     "add_mutated_parameter_nodes",
     "find_mutated_parameter_sources",
     "mutated_parameter_fill",
     "mutated_parameter_node_name",
 ]
-
-#: In-place dunder operators: augmented assignment plus item assignment.
-_INPLACE_DUNDERS = frozenset(
-    {
-        "__iadd__",
-        "__isub__",
-        "__imul__",
-        "__itruediv__",
-        "__ifloordiv__",
-        "__imod__",
-        "__ipow__",
-        "__imatmul__",
-        "__iand__",
-        "__ior__",
-        "__ixor__",
-        "__ilshift__",
-        "__irshift__",
-        "__setitem__",
-    }
-)
 
 #: Unit kinds whose identifier is the emitted DOT node name of a reader.
 _DRAWABLE_READER_KINDS = frozenset({"raw_op", "module_box"})
@@ -97,6 +78,9 @@ class _ParamNodeStub:
 def _is_inplace_func_name(func_name: object) -> bool:
     """Return whether ``func_name`` names an in-place tensor operation.
 
+    Delegates to the capture wrapper's own receiver-mutation predicate so the
+    render cannot drift from what capture treats as a mutation.
+
     Parameters
     ----------
     func_name:
@@ -105,14 +89,15 @@ def _is_inplace_func_name(func_name: object) -> bool:
     Returns
     -------
     bool
-        True for trailing-underscore methods (``clamp_``) and in-place dunders.
+        True for trailing-underscore methods (``clamp_``), augmented-assignment
+        dunders, and item assignment.
     """
 
     if not isinstance(func_name, str) or not func_name:
         return False
-    if func_name.startswith("__"):
-        return func_name in _INPLACE_DUNDERS
-    return func_name.endswith("_")
+    from ..backends.torch.wrappers import _func_mutates_receiver
+
+    return _func_mutates_receiver(func_name)
 
 
 def _receiver_param(op: Any) -> Any | None:
@@ -193,10 +178,14 @@ def mutated_parameter_node_name(address: str) -> str:
     Returns
     -------
     str
-        DOT-safe identifier that cannot collide with op node names.
+        Identifier unique per address: every character outside
+        ``[A-Za-z0-9_.~-]`` is percent-encoded (``%`` itself included), so the
+        mapping is injective (``a.b`` and ``a_b`` stay distinct) and the name
+        carries no DOT port separator or quote. Graphviz quotes it on emission,
+        the same as the dotted module-cluster names.
     """
 
-    return _NODE_NAME_PREFIX + re.sub(r"\W", "_", address)
+    return _NODE_NAME_PREFIX + _percent_quote(address, safe="")
 
 
 def mutated_parameter_fill(param: Any) -> str:
@@ -219,37 +208,69 @@ def mutated_parameter_fill(param: Any) -> str:
     return TRAINABLE_PARAMS_BG_COLOR
 
 
-def _raw_label(op: Any, vis_mode: str) -> str:
-    """Return the raw render label of ``op`` in the active mode.
+def _natural_label(node: Any, vis_mode: str) -> str:
+    """Return the trace label identifying ``node`` independent of focus rewriting.
 
     Parameters
     ----------
-    op:
-        Captured op.
+    node:
+        Captured op (or, in rolled mode, its layer).
     vis_mode:
         ``"unrolled"`` or ``"rolled"``.
 
     Returns
     -------
     str
-        The label keyed by the node universe's endpoint projection.
+        The op's pass-qualified label (unrolled) or its layer label (rolled).
     """
 
-    return str(op.label) if vis_mode == "unrolled" else str(op.layer_label)
+    if vis_mode == "unrolled" and hasattr(node, "label"):
+        return str(node.label)
+    return str(node.layer_label)
 
 
-def _owner_module_path(entry: Any, param: Any, vis_mode: str) -> tuple[str, ...]:
-    """Return the module-cluster path the Parameter's node is drawn in.
+def _render_label_index(entries_to_plot: Mapping[str, Any], vis_mode: str) -> dict[str, str]:
+    """Map each plotted op's natural label to the label the render keys it by.
 
-    The node sits in its owning module's cluster on the first mutation's
-    rendered module path. When the owner is the module the op is drawn AS (an
-    atomic-module box), the node sits beside it in the enclosing scope; when
-    the owner is not on the path at all, at top level.
+    A plain render keys unrolled entries by the op's pass-qualified label; a
+    module-focused render rewraps entries as focus nodes keyed by layer label,
+    so the op label is resolved through the wrapped original.
+
+    Parameters
+    ----------
+    entries_to_plot:
+        Source-graph entries (focus-rewritten when a module focus is active).
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"``.
+
+    Returns
+    -------
+    dict[str, str]
+        Natural label to render label; focus boundary nodes are omitted.
+    """
+
+    from ._render_common import BoundaryNode, FocusNode
+    from ._render_edges import _render_node_label
+
+    index: dict[str, str] = {}
+    for node in entries_to_plot.values():
+        if isinstance(node, BoundaryNode):
+            continue
+        original = node.original if isinstance(node, FocusNode) else node
+        index[_natural_label(original, vis_mode)] = _render_node_label(node, vis_mode)
+    return index
+
+
+def _owner_module_path(entry: Any, param: Any, vis_mode: str) -> tuple[str, ...] | None:
+    """Return the owning module's cluster path on ``entry``'s rendered module path.
+
+    When the owner is the module the op is drawn AS (an atomic-module box),
+    the path stops at the enclosing scope.
 
     Parameters
     ----------
     entry:
-        Render entry of the first mutation.
+        Render entry of an op drawn as its own node.
     param:
         ``Param`` record.
     vis_mode:
@@ -257,21 +278,24 @@ def _owner_module_path(entry: Any, param: Any, vis_mode: str) -> tuple[str, ...]
 
     Returns
     -------
-    tuple[str, ...]
-        Module path (pass-qualified when unrolled); empty for top level.
+    tuple[str, ...] | None
+        Module path (pass-qualified when unrolled), empty for a root-owned
+        Parameter; ``None`` when the owner is not on the op's module path.
     """
 
+    owner = str(getattr(param, "module_address", "") or "")
+    if not owner:
+        return ()
     modules = [str(module) for module in (getattr(entry, "modules", ()) or ())]
     if vis_mode == "rolled":
         modules = [module.split(":")[0] for module in modules]
     rendered_scope = modules[:-1] if getattr(entry, "is_atomic_module", False) else modules
-    owner = str(getattr(param, "module_address", "") or "")
     for depth, module in enumerate(rendered_scope):
         if module.split(":")[0] == owner:
             return tuple(rendered_scope[: depth + 1])
     if any(module.split(":")[0] == owner for module in modules):
         return tuple(rendered_scope)
-    return ()
+    return None
 
 
 def _param_node_args(param: Any, theme: VisualizationTheme | None) -> dict[str, str]:
@@ -316,12 +340,31 @@ def _param_node_args(param: Any, theme: VisualizationTheme | None) -> dict[str, 
     return node_args
 
 
+@dataclass(frozen=True)
+class MutatedParameterEmission:
+    """One drawn mutated-Parameter node and its read edges, engine-neutral.
+
+    Parameters
+    ----------
+    cluster_key:
+        Module-cluster key the node sits in, or ``None`` for top level.
+    node_args:
+        Graphviz node arguments, ``name`` included.
+    edges:
+        ``(cluster_key, edge_args)`` per read edge; ``None`` is top level.
+    """
+
+    cluster_key: str | None
+    node_args: Mapping[str, Any]
+    edges: tuple[tuple[str | None, Mapping[str, Any]], ...]
+
+
 def _queue(
     module_clusters: MutableMapping[str, Any],
     builder: Any,
-    module_key: str | int,
+    cluster_key: str | None,
     kind: str,
-    args: dict[str, Any],
+    args: Mapping[str, Any],
 ) -> None:
     """Queue a node or edge in its module cluster, or at top level.
 
@@ -331,21 +374,21 @@ def _queue(
         Module-cluster accumulator.
     builder:
         Top-level graph builder.
-    module_key:
-        Cluster key, or ``-1`` for top level.
+    cluster_key:
+        Cluster key, or ``None`` for top level.
     kind:
         ``"nodes"`` or ``"edges"``.
     args:
         Graphviz arguments.
     """
 
-    if module_key == -1:
+    if cluster_key is None:
         if kind == "nodes":
             builder.node(**args)
         else:
             builder.edge(**args)
         return
-    module_clusters[str(module_key)].setdefault(kind, []).append(args)
+    module_clusters[cluster_key].setdefault(kind, []).append(dict(args))
 
 
 @dataclass(frozen=True)
@@ -355,43 +398,46 @@ class _EmitScope:
     Parameters
     ----------
     entries:
-        Render entries keyed by raw render label.
+        Render entries keyed by render label.
+    render_labels:
+        Natural op label to render label (see ``_render_label_index``).
     projection:
-        Raw render label to visible unit identifier.
+        Render label to visible unit identifier.
     unit_kinds:
         Visible unit identifier to unit kind.
     skipped:
-        Raw render labels removed by the skip predicate.
+        Render labels removed by the skip predicate.
     vis_mode:
         ``"unrolled"`` or ``"rolled"``.
     vis_call_depth:
         Active module depth.
+    focus_address:
+        Address of the focused module, or ``None`` without a module focus.
+    cluster_keys:
+        Module-cluster keys the render drew before the Parameter nodes.
     theme:
         Active theme.
-    builder:
-        Top-level graph builder.
-    module_clusters:
-        Module-cluster accumulator.
     """
 
     entries: Mapping[str, Any]
+    render_labels: Mapping[str, str]
     projection: Mapping[str, str]
     unit_kinds: Mapping[str, str]
     skipped: frozenset[str]
     vis_mode: str
     vis_call_depth: int
+    focus_address: str | None
+    cluster_keys: frozenset[str]
     theme: VisualizationTheme | None
-    builder: Any
-    module_clusters: MutableMapping[str, Any]
 
 
-def _drawn_unit(raw: str, scope: _EmitScope, kinds: frozenset[str]) -> str | None:
-    """Return the visible unit drawing raw label ``raw``, if it has an allowed kind.
+def _drawn_unit(op: Any, scope: _EmitScope, kinds: frozenset[str]) -> tuple[str, str] | None:
+    """Return the render label and visible unit drawing ``op``, if of an allowed kind.
 
     Parameters
     ----------
-    raw:
-        Raw render label.
+    op:
+        Captured op.
     scope:
         Per-draw lookups.
     kinds:
@@ -399,20 +445,119 @@ def _drawn_unit(raw: str, scope: _EmitScope, kinds: frozenset[str]) -> str | Non
 
     Returns
     -------
-    str | None
-        The unit identifier (the emitted DOT node name), or ``None``.
+    tuple[str, str] | None
+        ``(render_label, unit_id)``; the unit id is the emitted DOT node name.
+        ``None`` when the op is not plotted, skipped, or drawn as another kind.
     """
 
-    if raw in scope.skipped or raw not in scope.entries:
+    raw = scope.render_labels.get(_natural_label(op, scope.vis_mode))
+    if raw is None or raw in scope.skipped or raw not in scope.entries:
         return None
     unit = scope.projection.get(raw)
     if unit is None or scope.unit_kinds.get(unit) not in kinds:
         return None
-    return unit
+    return raw, unit
 
 
-def _emit_source(source: MutatedParameterSource, scope: _EmitScope) -> str | None:
-    """Queue one Parameter node and its read edges; return the node name.
+def _owner_in_focus(param: Any, focus_address: str | None) -> bool:
+    """Return whether the Parameter's owner lies inside the module focus.
+
+    Parameters
+    ----------
+    param:
+        ``Param`` record.
+    focus_address:
+        Focused module address, or ``None`` without a focus.
+
+    Returns
+    -------
+    bool
+        True without a focus, or when the owner is the focused module or one
+        of its descendants.
+    """
+
+    if not focus_address:
+        return True
+    owner = str(getattr(param, "module_address", "") or "")
+    return owner == focus_address or owner.startswith(focus_address + ".")
+
+
+def _node_cluster_path(source: MutatedParameterSource, scope: _EmitScope) -> tuple[str, ...]:
+    """Return the module path the Parameter's node is drawn in.
+
+    The owner's cluster on the first mutation's path wins; a Parameter mutated
+    outside its owner (a shared Parameter) takes the owner's drawn cluster on
+    the first drawn reader's module path (the pass that read it first);
+    otherwise the node sits at top level.
+
+    Parameters
+    ----------
+    source:
+        Mutated Parameter.
+    scope:
+        Per-draw lookups.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Module path; empty for top level.
+    """
+
+    drawn = _drawn_unit(source.first_mutation, scope, frozenset({"raw_op"}))
+    if drawn is not None:
+        path = _owner_module_path(scope.entries[drawn[0]], source.param, scope.vis_mode)
+        if path is not None:
+            return path
+    owner = str(getattr(source.param, "module_address", "") or "")
+    for reader in source.readers:
+        drawn = _drawn_unit(reader, scope, frozenset({"raw_op"}))
+        if drawn is None:
+            continue
+        modules = [
+            str(module) for module in (getattr(scope.entries[drawn[0]], "modules", ()) or ())
+        ]
+        if scope.vis_mode == "rolled":
+            modules = [module.split(":")[0] for module in modules]
+        for depth, module in enumerate(modules):
+            # Only a cluster the render already drew (an atomic module is a box).
+            if module.split(":")[0] == owner and module in scope.cluster_keys:
+                return tuple(modules[: depth + 1])
+    return ()
+
+
+def _edge_args(node_name: str, head: str) -> dict[str, Any]:
+    """Return Graphviz arguments for one dashed Parameter read edge.
+
+    Parameters
+    ----------
+    node_name:
+        Parameter node name.
+    head:
+        Reader unit identifier.
+
+    Returns
+    -------
+    dict[str, Any]
+        Edge arguments.
+    """
+
+    from ._typography import DEFAULT_TYPOGRAPHY
+
+    return {
+        "tail_name": node_name,
+        "head_name": head,
+        "color": "black",
+        "fontcolor": "black",
+        "style": "dashed",
+        "arrowsize": ".7",
+        "labelfontsize": DEFAULT_TYPOGRAPHY.annotation_pt,
+    }
+
+
+def _emission_for(
+    source: MutatedParameterSource, scope: _EmitScope
+) -> MutatedParameterEmission | None:
+    """Resolve one Parameter node and its read edges.
 
     Parameters
     ----------
@@ -423,48 +568,64 @@ def _emit_source(source: MutatedParameterSource, scope: _EmitScope) -> str | Non
 
     Returns
     -------
-    str | None
-        The node name, or ``None`` when the first mutation is not drawn as its
-        own node.
+    MutatedParameterEmission | None
+        The emission, or ``None`` when the first mutation is not drawn as its
+        own node or the owner lies outside the module focus.
     """
 
     from ._render_edges import _get_lowest_module_for_two_nodes
     from ._render_leaf import _base_node_for_metadata
-    from ._typography import DEFAULT_TYPOGRAPHY
 
-    first_raw = _raw_label(source.first_mutation, scope.vis_mode)
-    if _drawn_unit(first_raw, scope, frozenset({"raw_op"})) is None:
+    if not _owner_in_focus(source.param, scope.focus_address):
+        return None
+    if _drawn_unit(source.first_mutation, scope, frozenset({"raw_op"})) is None:
         return None
     node_args = _param_node_args(source.param, scope.theme)
     node_name = node_args["name"]
-    module_path = _owner_module_path(scope.entries[first_raw], source.param, scope.vis_mode)
-    owner_key: str | int = module_path[-1] if module_path else -1
-    _queue(scope.module_clusters, scope.builder, owner_key, "nodes", node_args)
+    module_path = _node_cluster_path(source, scope)
     stub = _ParamNodeStub(modules=list(module_path))
     heads: set[str] = set()
+    edges: list[tuple[str | None, Mapping[str, Any]]] = []
     for reader in source.readers:
-        raw = _raw_label(reader, scope.vis_mode)
-        head = _drawn_unit(raw, scope, _DRAWABLE_READER_KINDS)
-        if head is None or head in heads:
+        drawn = _drawn_unit(reader, scope, _DRAWABLE_READER_KINDS)
+        if drawn is None or drawn[1] in heads:
             continue
-        heads.add(head)
+        heads.add(drawn[1])
         edge_key = _get_lowest_module_for_two_nodes(
             stub,  # type: ignore[arg-type]
-            _base_node_for_metadata(scope.entries[raw]),
+            _base_node_for_metadata(scope.entries[drawn[0]]),
             False,
             scope.vis_call_depth,
         )
-        edge_args = {
-            "tail_name": node_name,
-            "head_name": head,
-            "color": "black",
-            "fontcolor": "black",
-            "style": "dashed",
-            "arrowsize": ".7",
-            "labelfontsize": DEFAULT_TYPOGRAPHY.annotation_pt,
-        }
-        _queue(scope.module_clusters, scope.builder, edge_key, "edges", edge_args)
-    return node_name
+        edges.append((None if edge_key == -1 else str(edge_key), _edge_args(node_name, drawn[1])))
+    return MutatedParameterEmission(
+        cluster_key=module_path[-1] if module_path else None,
+        node_args=node_args,
+        edges=tuple(edges),
+    )
+
+
+def _focus_address(trace: Trace, context: _ForwardRenderContext) -> str | None:
+    """Return the focused module's address, or ``None`` without a module focus.
+
+    Parameters
+    ----------
+    trace:
+        Trace being rendered.
+    context:
+        Resolved forward render context.
+
+    Returns
+    -------
+    str | None
+        Focus address.
+    """
+
+    if context.request.module is None:
+        return None
+    from .source_graph import _resolve_focus_module
+
+    return str(_resolve_focus_module(trace, context.request.module).address)
 
 
 def add_mutated_parameter_nodes(
@@ -472,12 +633,13 @@ def add_mutated_parameter_nodes(
     context: _ForwardRenderContext,
     builder: Any,
     module_clusters: MutableMapping[str, Any],
-) -> tuple[str, ...]:
+) -> tuple[MutatedParameterEmission, ...]:
     """Emit one source node per mutated Parameter plus its read edges.
 
     A node is drawn only when the Parameter's first mutation is itself drawn
-    as its own node; a mutation hidden in a collapsed module, skipped, or
-    outside a module focus stays hidden with it.
+    as its own node; a mutation hidden in a collapsed module or skipped stays
+    hidden with it. Under a module focus the node is drawn when its owner is
+    the focused module or inside it.
 
     Parameters
     ----------
@@ -492,8 +654,9 @@ def add_mutated_parameter_nodes(
 
     Returns
     -------
-    tuple[str, ...]
-        Names of the emitted Parameter nodes; empty when none was drawn.
+    tuple[MutatedParameterEmission, ...]
+        The drawn nodes with their edges (the rank engine re-emits them);
+        empty when none was drawn.
     """
 
     sources = find_mutated_parameter_sources(trace)
@@ -503,19 +666,26 @@ def add_mutated_parameter_nodes(
 
     universe = context.node_universe
     vis_mode = context.request.vis_mode
+    entries_to_plot = universe.source_graph.entries_to_plot
     scope = _EmitScope(
-        entries={
-            _render_node_label(node, vis_mode): node
-            for node in universe.source_graph.entries_to_plot.values()
-        },
+        entries={_render_node_label(node, vis_mode): node for node in entries_to_plot.values()},
+        render_labels=_render_label_index(entries_to_plot, vis_mode),
         projection=universe.endpoint_projection,
         unit_kinds={unit.unit_id: unit.kind for unit in universe.units},
         skipped=frozenset(universe.source_graph.skipped_labels),
         vis_mode=vis_mode,
         vis_call_depth=context.request.vis_call_depth,
+        focus_address=_focus_address(trace, context),
+        cluster_keys=frozenset(str(key) for key in module_clusters),
         theme=context.theme,
-        builder=builder,
-        module_clusters=module_clusters,
     )
-    emitted = (_emit_source(source, scope) for source in sources)
-    return tuple(name for name in emitted if name is not None)
+    emissions: list[MutatedParameterEmission] = []
+    for source in sources:
+        emission = _emission_for(source, scope)
+        if emission is None:
+            continue
+        emissions.append(emission)
+        _queue(module_clusters, builder, emission.cluster_key, "nodes", emission.node_args)
+        for edge_key, edge_args in emission.edges:
+            _queue(module_clusters, builder, edge_key, "edges", edge_args)
+    return tuple(emissions)

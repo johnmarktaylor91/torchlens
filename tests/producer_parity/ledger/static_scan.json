@@ -9012,7 +9012,7 @@
   "field": "modules",
   "file": "torchlens/visualization/_mutated_params.py",
   "has_default": true,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": true
  },
  {
