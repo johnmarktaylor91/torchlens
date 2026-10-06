@@ -120,11 +120,16 @@ def join(log: Any, kineto_trace: str | Path | dict[str, Any]) -> dict[str, Any]:
             name = str(event.get("name", ""))
             unmatched[name] = unmatched.get(name, 0) + 1
     if mismatched:
+        from ..errors._base import TorchLensWarning
+
         warnings.warn(
-            "profiler.join left op types unmatched because their event count is not a "
-            "multiple of their layer count, or implies a different number of forwards "
-            f"than the other op types: {mismatched}",
-            UserWarning,
+            TorchLensWarning(
+                "profiler.join left op types unmatched because their event count is not a "
+                "multiple of their layer count, or implies a different number of forwards "
+                f"than the other op types: {mismatched}. Remedy: profile whole forward "
+                "passes only, under one profiler, of the model the trace was captured from",
+                code="profiler_join_op_types_unmatched",
+            ),
             stacklevel=2,
         )
     return {

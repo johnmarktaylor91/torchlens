@@ -522,6 +522,39 @@ def test_profiler_dunder_and_plain_spellings_pool_in_execution_order() -> None:
     assert joined["mismatched_op_types"] == {}
 
 
+def test_module_site_unresolved_and_ambiguous_refuse_typed() -> None:
+    """A site no module returns, or one two sibling modules return, refuses with its code."""
+
+    from torchlens._errors import InvalidArgumentError
+    from torchlens.bridge._utils import module_for_site
+
+    model = torch.nn.Sequential()
+    model.add_module("a", torch.nn.Identity())
+    model.add_module("b", torch.nn.Identity())
+
+    class Site:
+        out = torch.zeros(1)
+        layer_label = "add_1_1"
+        output_of_module_calls: tuple[str, ...] = ()
+
+    class SiteLog:
+        layer_list: list[Any] = []
+
+        def _source_model_ref(self) -> torch.nn.Module:
+            return model
+
+    with pytest.raises(InvalidArgumentError) as info:
+        module_for_site(SiteLog(), Site(), bridge="gradcam")
+    assert info.value.fields["code"] == "bridge_module_site_unresolved"
+    assert info.value.fields["remedy"]
+
+    Site.output_of_module_calls = ("a:1", "b:1")
+    with pytest.raises(InvalidArgumentError) as info:
+        module_for_site(SiteLog(), Site(), bridge="gradcam")
+    assert info.value.fields["code"] == "bridge_module_site_ambiguous"
+    assert info.value.fields["remedy"]
+
+
 # --------------------------------------------------------------------------- #
 # LOW-9 profiler: null traceEvents/events tolerated
 # --------------------------------------------------------------------------- #
