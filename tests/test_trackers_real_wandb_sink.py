@@ -45,7 +45,9 @@ def test_default_watch_attaches_and_fits_the_cap(tmp_path: Path, monkeypatch) ->
     # A MemorySink beside the WandbSink records exactly what the session emitted.
     memory = trk.MemorySink()
     try:
-        session = trk.watch(model, to=(trk.WandbSink(run), memory), optimizer=opt, hist_every=1)
+        session = trk.watch(
+            model, to=(trk.WandbSink(run), memory), optimizer=opt, every=1, hist_every=1
+        )
         try:
             _train(session, model, opt)
         finally:
