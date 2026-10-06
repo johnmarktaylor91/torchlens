@@ -258,13 +258,6 @@ def scramble_elements(
     )
 
 
-#: Transitional binding: the top-level facade still routes
-#: ``tl.resample_ablate`` here until the facade owner flips the export to
-#: ``scramble_elements`` (hard rename, no warn-shim -- clean-v2 alias posture).
-#: Specs constructed through either spelling carry the honest name.
-resample_ablate = scramble_elements
-
-
 def steer(
     direction: torch.Tensor,
     magnitude: float = 1.0,
@@ -1550,7 +1543,6 @@ __all__ = [
     "noise",
     "project_off",
     "project_onto",
-    "resample_ablate",
     "scale",
     "scramble_elements",
     "splice_module",

@@ -87,14 +87,14 @@ def test_readme_idiom_subprocess_zero_warnings() -> None:
 def test_summary_has_no_escape_bytes_any_level(small_log: tl.Trace) -> None:
     """No returned summary string carries ESC bytes, at any level (A11)."""
 
-    for level in ("overview", "graph", "memory", "compute", "waterfall", "control_flow"):
-        text = small_log.summary(level=level)  # type: ignore[arg-type]
-        assert "\x1b" not in text, f"escape byte in level={level!r}"
+    for kwargs in ({}, {"level": "module"}, {"level": "op"}, {"view": "compute"}):
+        text = str(small_log.summary(**kwargs))
+        assert "\x1b" not in text, f"escape byte in summary({kwargs})"
 
 
 @pytest.mark.smoke
 def test_control_flow_summary_has_no_escape_bytes() -> None:
-    """The control-flow view (source locators) emits plain path:line text (A11)."""
+    """A conditional model's summary and provenance emit plain text (A11)."""
 
     log = tl.trace(
         _CondModel(),
@@ -102,8 +102,8 @@ def test_control_flow_summary_has_no_escape_bytes() -> None:
         capture=tl.options.CaptureOptions(layers_to_save=None),
     )
     try:
-        text = log.summary(level="control_flow")
-        assert "\x1b" not in text
+        for text in (str(log.summary(level="op")), log.provenance()):
+            assert "\x1b" not in text
     finally:
         log.cleanup()
 
@@ -111,25 +111,22 @@ def test_control_flow_summary_has_no_escape_bytes() -> None:
 def test_memory_footer_reports_measured_peak(small_log: tl.Trace) -> None:
     """The memory footer prints the measured peak + backend, never 'not tracked' (A7)."""
 
-    text = small_log.summary(level="memory")
+    from torchlens.observe import pass_peak_facts
+
+    text = str(small_log.summary())
     assert "not tracked" not in text
-    assert "Live forward-memory peak:" in text
     backend = small_log.forward_memory_backend
     assert backend in {"cpu", "cuda", "mps"}
-    assert f"({backend} basis" in text
-    peak = int(small_log.forward_peak_memory)
-    if peak == 0:
-        # Measured zero is disclosed as measured, distinct from unavailable.
-        assert "0 B measured" in text
-        assert "unavailable" not in text
-    else:
-        assert "measured" in text
+    facts = pass_peak_facts(small_log)
+    assert facts.value_bytes is not None
+    # The basis is always named; a measured value is never called unavailable.
+    assert f"({facts.meaning})" in text
+    assert "forward peak unavailable" not in text
 
 
 def test_memory_footer_unavailable_is_distinct(small_log: tl.Trace) -> None:
     """A capture with no recorded backend reports unavailable, never a fake zero (A7)."""
 
     small_log.forward_memory_backend = "unknown"
-    text = small_log.summary(level="memory")
-    assert "Live forward-memory peak: unavailable" in text
-    assert "0 B measured" not in text
+    text = str(small_log.summary())
+    assert "forward peak unavailable (not measured on this capture)" in text

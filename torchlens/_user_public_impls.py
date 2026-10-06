@@ -187,7 +187,9 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
         ``"off"`` (default) runs the captured forward under
         ``torch.no_grad()``. ``"same"`` keeps the caller's grad context.
     **summary_kwargs:
-        Forwarded to ``Trace.summary`` (rebuilt grammar or legacy presets).
+        Forwarded to ``Trace.summary`` (the summary grammar). They are
+        validated BEFORE the capture runs: a removed legacy spelling or an
+        unknown option refuses typed without executing the model.
 
     Returns
     -------
@@ -198,6 +200,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
     from .utils.rng import log_current_rng_states, set_rng_from_saved_states
 
     _validate_summary_modes(execution_mode, grad_mode)
+    _validate_summary_grammar(summary_kwargs)
     _reject_opaque_wrappers(model)
     model = unwrap_compiled_model(model)
     model = _unwrap_data_parallel(model)
@@ -333,42 +336,29 @@ def _summary_report_from_trace(
     grad_mode: str,
     input_synthesis: str | None,
 ) -> str:
-    """Route one captured trace through the summary grammars and clean up."""
+    """Render one captured trace's summary, then clean the trace up."""
 
-    from ._errors import InvalidArgumentError
-    from .report._summary_config import route_summary_call
-
-    route_kwargs = dict(summary_kwargs)
-    level = route_kwargs.pop("level", None)
-    route = route_summary_call(level, route_kwargs)
-    if input_synthesis is not None and isinstance(level, str) and level == "output":
-        raise InvalidArgumentError(
-            "decoded-output views refuse synthetic inputs: a label table computed "
-            "from noise is the most misleading thing this surface could print.",
-            code="summary_synthetic_output_refused",
-            remedy="pass a real input for output views, or drop level='output'",
-        )
     try:
-        if route == "rebuilt":
-            return trace.summary(
-                **summary_kwargs,
-                _execution_note=_summary_execution_note(execution_mode, grad_mode, short=True),
-                _input_synthesis=input_synthesis,
-            )
-        report = trace.summary(**summary_kwargs)
+        return trace.summary(
+            **summary_kwargs,
+            _execution_note=_summary_execution_note(execution_mode, grad_mode, short=True),
+            _input_synthesis=input_synthesis,
+        )
     finally:
         trace.cleanup()
-    finalized = _finalize_summary_report(report, execution_mode, grad_mode)
-    if input_synthesis is None:
-        return finalized
-    from .report._summary_report import SummaryReport
 
-    full_text = str(finalized) + f"\nSynthetic input: {input_synthesis}."
-    if isinstance(finalized, SummaryReport):
-        return SummaryReport(
-            full_text, rows=finalized.rows, totals=finalized.totals, capture=finalized.capture
-        )
-    return full_text
+
+def _validate_summary_grammar(summary_kwargs: dict[str, Any]) -> None:
+    """Resolve the summary grammar up front so a bad option never runs a capture.
+
+    ``Trace.summary`` resolves the same configuration again after capture;
+    resolving here first makes removed legacy spellings and unknown options
+    refuse typed before the model executes.
+    """
+
+    from .report._summary_config import resolve_config
+
+    resolve_config(**{name: value for name, value in summary_kwargs.items() if value is not None})
 
 
 def _validate_summary_modes(execution_mode: str, grad_mode: str) -> None:

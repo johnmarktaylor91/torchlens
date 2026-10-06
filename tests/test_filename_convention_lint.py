@@ -54,7 +54,6 @@ _LEDGERED_SPRINT_TOKEN_FILES: frozenset[str] = frozenset(
         "test_r18i3_utils_residue.py",
         "test_r18i_utils_options.py",
         "test_r18j_recurrent_render.py",
-        "test_r18k_summary_builder.py",
         "test_r18l_viz_rank.py",
         "test_r18m_safe_unpickle_alloc.py",
         "test_r18n_bundle_save_atomic.py",

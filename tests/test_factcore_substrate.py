@@ -270,11 +270,6 @@ def test_scope_label_on_payload_stripped_artifact(tmp_path) -> None:
     assert footer and "retained now" in footer[0] and "at capture" in footer[0]
     health = [line for line in loaded.summary().splitlines() if "health" in line.lower()]
     assert health and "NOT-CHECKED" in health[0]
-    # Legacy preset spelling keeps the historical footer wording.
-    legacy_footer = [
-        line for line in loaded.summary(level="overview").splitlines() if "Saved outs" in line
-    ]
-    assert legacy_footer and "retained now" in legacy_footer[0] and "at capture" in legacy_footer[0]
 
 
 def test_agent_json_carries_scoped_memory_and_health() -> None:

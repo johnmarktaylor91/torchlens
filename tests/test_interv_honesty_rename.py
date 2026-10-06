@@ -1,14 +1,13 @@
 """Intervention honesty: the ``resample_ablate`` -> ``scramble_elements``
 honest rename (edits memo row 1, decision D19; alias posture: hard rename,
-no warn-shim, artifact-load compatibility KEPT).
+no alias, artifact-load compatibility KEPT).
 
 The helper is an elementwise iid scramble -- a false friend of the field's
 "resampling ablation" (coherent donor patching). Same bytes, honest name:
 
-- ``scramble_elements`` is the canonical in-package constructor.
-- The old in-package binding still resolves (the top-level facade flip is the
-  facade owner's amendment) and mints specs carrying the HONEST name.
-- Persisted specs naming ``resample_ablate`` keep loading.
+- ``scramble_elements`` is the only constructor; the ``resample_ablate``
+  spelling is gone from ``torchlens.intervention`` and the ``tl.*`` facade.
+- Persisted specs naming ``resample_ablate`` keep loading (artifact format).
 """
 
 from __future__ import annotations
@@ -21,36 +20,37 @@ from torchlens.intervention import scramble_elements
 from torchlens.intervention.helpers import rebuild_builtin_helper
 
 
-def test_old_binding_is_the_same_function() -> None:
-    """The transitional binding aliases the canonical constructor exactly."""
+def test_old_spelling_is_gone() -> None:
+    """Clean break: no alias survives in the helpers module, the package, or tl.*."""
 
+    import torchlens.intervention as intervention
     from torchlens.intervention import helpers
 
-    assert helpers.resample_ablate is helpers.scramble_elements
-    assert tl.resample_ablate is scramble_elements
+    assert not hasattr(helpers, "resample_ablate")
+    assert not hasattr(intervention, "resample_ablate")
+    assert "resample_ablate" not in intervention.__all__
+    assert "resample_ablate" not in tl.__all__
+    with pytest.raises(AttributeError):
+        tl.resample_ablate  # noqa: B018 - the attribute access IS the assertion
 
 
-def test_both_spellings_mint_the_honest_name() -> None:
-    """Specs carry ``scramble_elements`` regardless of construction spelling."""
+def test_constructor_mints_the_honest_name() -> None:
+    """Specs carry the honest helper name."""
 
-    via_new = scramble_elements(torch.ones(3), seed=0)
-    via_old = tl.resample_ablate(torch.ones(3), seed=0)
-    assert via_new.helper_name == "scramble_elements"
-    assert via_old.helper_name == "scramble_elements"
+    assert scramble_elements(torch.ones(3), seed=0).helper_name == "scramble_elements"
 
 
 @pytest.mark.smoke
-def test_seeded_draws_identical_across_spellings() -> None:
-    """Same bytes: the rename changes no behavior."""
+def test_seeded_draws_are_reproducible() -> None:
+    """Same seed, same draws (the rename changed no behavior)."""
 
     source = torch.arange(12.0)
     out = torch.zeros(2, 3)
 
-    hook_new = scramble_elements(source, seed=7).factory()
-    hook_old = tl.resample_ablate(source, seed=7).factory()
-    sampled_new = hook_new(out, hook=None)
-    sampled_old = hook_old(out, hook=None)
-    assert torch.equal(sampled_new, sampled_old)
+    first = scramble_elements(source, seed=7).factory()(out, hook=None)
+    second = scramble_elements(source, seed=7).factory()(out, hook=None)
+    assert torch.equal(first, second)
+    assert set(first.flatten().tolist()) <= set(source.tolist())
 
 
 @pytest.mark.parametrize("persisted_name", ["scramble_elements", "resample_ablate"])

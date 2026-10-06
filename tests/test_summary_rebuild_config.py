@@ -1,9 +1,9 @@
-"""F08 config grammar: one compat table, typed conflicts, nothing silent.
+"""F08 config grammar: typed refusals, typed conflicts, nothing silent.
 
 Summary memo 3.10: unknown names teach with a nearest match; contradictory
-axes raise ``summary_option_conflict``; legacy spellings keep their
-historical byte-stable rendering through the ONE compatibility table; the
-fma1 convention is honored or refused typed, never accepted-and-ignored.
+axes raise ``summary_option_conflict``; the removed legacy spellings refuse
+typed naming their successor (pinned in test_summary_removed_spellings.py);
+the fma1 convention is honored or refused typed, never accepted-and-ignored.
 """
 
 from __future__ import annotations
@@ -46,8 +46,10 @@ def toy_trace():
 def test_unknown_option_teaches_with_nearest_match(toy_trace) -> None:
     """An unknown option names itself and the valid grammar."""
 
-    with pytest.raises(TypeError, match="colums|unexpected keyword"):
+    with pytest.raises(InvalidArgumentError, match="colums") as excinfo:
         toy_trace.summary(colums=["name"])
+    assert excinfo.value.fields["code"] == "summary_option_invalid"
+    assert "columns" in str(excinfo.value)  # the did-you-mean
 
 
 def test_unknown_view_refuses_typed(toy_trace) -> None:
@@ -67,17 +69,6 @@ def test_unknown_level_keeps_the_historical_code(toy_trace) -> None:
     assert excinfo.value.fields["code"] == "summary_level_invalid"
 
 
-def test_mixed_grammars_conflict_typed(toy_trace) -> None:
-    """Legacy spellings + rebuilt axes in one call contradict (ONE table)."""
-
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        toy_trace.summary(level="memory", view="compute")
-    assert excinfo.value.fields["code"] == "summary_option_conflict"
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        toy_trace.summary(show_ops=True, style="unicode")
-    assert excinfo.value.fields["code"] == "summary_option_conflict"
-
-
 def test_op_level_conflicts_with_depth(toy_trace) -> None:
     """level='op' + depth= contradict; the refusal teaches the fix."""
 
@@ -93,19 +84,6 @@ def test_buffer_rows_refuse_until_qualified_names(toy_trace) -> None:
         toy_trace.summary(buffers="rows")
     assert excinfo.value.fields["code"] == "summary_option_invalid"
     assert "qualified" in str(excinfo.value)
-
-
-def test_legacy_spellings_stay_byte_stable(toy_trace) -> None:
-    """The compat table's legacy route reproduces the historical text."""
-
-    from torchlens.visualization._summary_internal import render_model_summary
-
-    assert str(toy_trace.summary(level="overview")) == render_model_summary(toy_trace)
-    # preset-only historically CRASHED against the default level; the compat
-    # route resolves it to its own preset (a strict fix, not a text change).
-    assert str(toy_trace.summary(preset="graph")) == render_model_summary(
-        toy_trace, level="graph", preset="graph"
-    )
 
 
 @pytest.mark.smoke
@@ -161,15 +139,6 @@ def test_input_args_xor_input_size() -> None:
     with pytest.raises(ArgumentConflictError) as excinfo:
         tl.summary(_Toy(), torch.randn(2, 8), input_size=(2, 8))
     assert excinfo.value.fields["code"] == "input_rung_conflict"
-
-
-def test_synthetic_input_refuses_decoded_output_view() -> None:
-    """A label table computed from noise refuses typed (memo 3.7)."""
-
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        tl.summary(_Toy(), input_size=(2, 8), level="output")
-    assert excinfo.value.fields["code"] == "summary_synthetic_output_refused"
-    assert "synthetic" in str(excinfo.value)
 
 
 def test_zero_input_inference_failure_teaches_the_real_input_spelling() -> None:

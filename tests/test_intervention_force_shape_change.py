@@ -65,7 +65,7 @@ _FLAG_HELPERS: dict[str, Callable[[], HelperSpec]] = {
     "noise": lambda: tl.noise(0.1, seed=0, force_shape_change=True),
     "clamp": lambda: tl.clamp(min=0.0, force_shape_change=True),
     "mean_ablate": lambda: tl.mean_ablate(force_shape_change=True),
-    "resample_ablate": lambda: tl.resample_ablate(seed=0, force_shape_change=True),
+    "scramble_elements": lambda: tl.intervention.scramble_elements(seed=0, force_shape_change=True),
     "add": lambda: tl.add(1.0, force_shape_change=True),
     "splice_module": lambda: tl.splice_module(_ToDouble(), force_shape_change=True),
     "grad_zero": lambda: tl.grad_zero(force_shape_change=True),

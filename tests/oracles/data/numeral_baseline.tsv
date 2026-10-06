@@ -571,7 +571,7 @@ docs-md	docs/agent-reference/current-2-x-surface.md	100
 docs-md	docs/agent-reference/current-2-x-surface.md	106
 docs-md	docs/agent-reference/current-2-x-surface.md	11
 docs-md	docs/agent-reference/current-2-x-surface.md	11,
-docs-md	docs/agent-reference/current-2-x-surface.md	116
+docs-md	docs/agent-reference/current-2-x-surface.md	115
 docs-md	docs/agent-reference/current-2-x-surface.md	12
 docs-md	docs/agent-reference/current-2-x-surface.md	124
 docs-md	docs/agent-reference/current-2-x-surface.md	14
@@ -657,7 +657,7 @@ docs-md	docs/agent-reference/package/key-concepts.md	2.18
 docs-md	docs/agent-reference/package/key-concepts.md	37
 docs-md	docs/agent-reference/package/key-concepts.md	562
 docs-md	docs/agent-reference/package/newer-2-x-subsystems.md	20
-docs-md	docs/agent-reference/package/public-surface.md	116
+docs-md	docs/agent-reference/package/public-surface.md	115
 docs-md	docs/agent-reference/package/public-surface.md	2.16
 docs-md	docs/agent-reference/package/public-surface.md	37
 docs-md	docs/agent-reference/package/public-surface.md	39
@@ -723,7 +723,7 @@ docs-md	docs/conditional_attribution.md	3.10
 docs-md	docs/conditional_attribution.md	3.11
 docs-md	docs/facets.md	1.0
 docs-md	docs/for-ai-agents.md	10
-docs-md	docs/for-ai-agents.md	116
+docs-md	docs/for-ai-agents.md	115
 docs-md	docs/for-ai-agents.md	12
 docs-md	docs/for-ai-agents.md	120
 docs-md	docs/for-ai-agents.md	15
@@ -838,7 +838,7 @@ docs-md	docs/migration/lovely_stats_line.md	26
 docs-md	docs/migration/lovely_stats_line.md	50
 docs-md	docs/migration/scoped_detached_patching.md	16
 docs-md	docs/migration/scoped_detached_patching.md	27
-docs-md	docs/migration/v2.0_api_changes.md	116
+docs-md	docs/migration/v2.0_api_changes.md	115
 docs-md	docs/migration/v2.0_api_changes.md	2.0
 docs-md	docs/migration/v2.0_api_changes.md	2026
 docs-md	docs/migration/v2.0_api_changes.md	42
@@ -4583,13 +4583,6 @@ package-docstrings	torchlens/visualization/_segment_descriptors.py	24
 package-docstrings	torchlens/visualization/_segment_descriptors.py	27
 package-docstrings	torchlens/visualization/_segment_descriptors.py	43
 package-docstrings	torchlens/visualization/_stacking.py	4.1
-package-docstrings	torchlens/visualization/_summary_internal/_builder.py	10
-package-docstrings	torchlens/visualization/_summary_internal/_builder.py	12
-package-docstrings	torchlens/visualization/_summary_internal/_builder.py	13
-package-docstrings	torchlens/visualization/_summary_internal/_builder.py	1_1
-package-docstrings	torchlens/visualization/_summary_internal/_builder.py	67
-package-docstrings	torchlens/visualization/_summary_internal/_builder.py	718.9
-package-docstrings	torchlens/visualization/_summary_internal/_builder.py	88
 package-docstrings	torchlens/visualization/_summary_internal/_discoverability.py	13
 package-docstrings	torchlens/visualization/_summary_internal/_discoverability.py	35
 package-docstrings	torchlens/visualization/_surgery_diff.py	43
@@ -6398,7 +6391,6 @@ test-docstrings	tests/test_structure_only_teaching.py	3.11
 test-docstrings	tests/test_summary_rebuild_charset.py	11
 test-docstrings	tests/test_summary_rebuild_config.py	17
 test-docstrings	tests/test_summary_rebuild_config.py	3.10
-test-docstrings	tests/test_summary_rebuild_config.py	3.7
 test-docstrings	tests/test_summary_rebuild_ladder.py	120
 test-docstrings	tests/test_summary_rebuild_ladder.py	19
 test-docstrings	tests/test_summary_rebuild_ladder.py	3.1

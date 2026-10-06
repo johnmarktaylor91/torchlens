@@ -20,24 +20,15 @@ def _model() -> nn.Module:
     return nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
 
 
-def test_summary_returns_str_subclass_byte_identical() -> None:
-    """Legacy preset text is byte-stable; the type gains the data payload.
-
-    The bare default flipped to the rebuilt ladder (F08); the historical
-    byte-identity promise now rides the compatibility-table route.
-    """
+def test_summary_returns_str_subclass_with_data_payload() -> None:
+    """The report is a str subclass carrying the typed data payload."""
 
     trace = tl.trace(_model(), torch.randn(2, 4))
-    report = trace.summary(level="overview")
+    report = trace.summary()
     assert isinstance(report, SummaryReport)
     assert isinstance(report, str)
-    from torchlens.visualization._summary_internal import render_model_summary
-
-    assert str(report) == render_model_summary(trace)
     assert repr(report) == str(report)  # bare display renders the table (D7)
-    rebuilt = trace.summary()
-    assert isinstance(rebuilt, SummaryReport)
-    assert "view:" in str(rebuilt)
+    assert "view:" in str(report)
 
 
 def test_one_call_door_returns_report_with_disclosure() -> None:
@@ -48,8 +39,6 @@ def test_one_call_door_returns_report_with_disclosure() -> None:
     # The rebuilt door hoists the disclosure into the header line.
     assert "eval mode, no_grad, state restored" in str(report).splitlines()[0]
     assert report.totals.params_total == 30
-    legacy = tl.summary(_model(), torch.randn(2, 4), level="overview")
-    assert "eval" in str(legacy).splitlines()[-1]
 
 
 def test_raw_numbers_pin() -> None:

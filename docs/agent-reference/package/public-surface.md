@@ -1,6 +1,6 @@
 ## Public Surface
 
-`torchlens.__all__` is intentionally small and currently has 116 names. New user-facing
+`torchlens.__all__` is intentionally small and currently has 115 names. New user-facing
 objects should usually live under submodules (`torchlens.io`, `torchlens.options`,
 `torchlens.bridge`, `torchlens.errors`, etc.). Interim-phase policy is remove-and-rename,
 never deprecation shims (tests/test_deprecation_inventory.py pins the package
@@ -77,7 +77,6 @@ classifier_trace = tl.trace(
     model, x, capture=tl.options.CaptureOptions(output_style="classification", output_head="logits")
 )
 classifier_trace.output_table(top_n=5)
-classifier_trace.summary(level="output")
 
 input_trace = tl.trace(
     model,

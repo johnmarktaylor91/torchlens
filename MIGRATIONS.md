@@ -83,10 +83,43 @@ Which "resample" do you mean?
 | Batch-row permutation | `torchlens.intervention.permute_batch` (shipped, lane F02) |
 | Per-row donor resampling | `torchlens.intervention.resample_rows_from` (shipped, lane F02) |
 
-Compatibility: saved intervention specs and pickles that persist the helper
-name `"resample_ablate"` keep loading (they reconstruct through the renamed
-constructor). No runtime deprecation shim is added; the old top-level
-spelling is retired with the facade export flip.
+Compatibility: saved intervention specs that persist the helper name
+`"resample_ablate"` keep loading (they reconstruct through the renamed
+constructor). The `resample_ablate` spelling itself is REMOVED, with no
+alias: `tl.resample_ablate`, `torchlens.intervention.resample_ablate`, and
+`torchlens.intervention.helpers.resample_ablate` no longer exist.
+
+| Old spelling | New spelling |
+|---|---|
+| `tl.resample_ablate(...)` | `torchlens.intervention.scramble_elements(...)` |
+| `torchlens.intervention.resample_ablate(...)` | `torchlens.intervention.scramble_elements(...)` |
+
+## Legacy `summary()` spellings removed (clean break, no aliases)
+
+`Trace.summary()` and `tl.summary()` no longer accept the legacy keyword
+spellings or the legacy `level=` preset names, and the historical renderer
+behind them is deleted. Each removed spelling raises `InvalidArgumentError`
+(`summary_option_invalid` for keywords, `summary_level_invalid` for level
+presets) whose message names the replacement; `tl.summary()` refuses before
+running any capture. Unknown option names now refuse typed with the nearest
+grammar option instead of a bare `TypeError`.
+
+| Old spelling | New spelling |
+|---|---|
+| `preset=` | `view=` (`"overview"` / `"compute"`) for columns, `level=` for row grain |
+| `fields=` | `columns=` |
+| `show_ops=True`, `include_ops=True` | `level="op"` |
+| `mode=` | `level="op"`, or `fold_repeats=False` to unfold repeated runs |
+| `print_to=fn` | `report.print(file=...)`, or `fn(str(report))` |
+| `count_fma_as_two=True` / `False` | `flop_convention="fma2"` / `"fma1"` |
+| `show_input_preprocessing_details=True` | `trace.provenance()` and `trace.input_preprocessor` (`verified`, `source`, `identifier`) |
+| `level="overview"` | `view="overview"` (the default) |
+| `level="compute"`, `level="cost"` | `view="compute"` |
+| `level="graph"` | `trace.to_agent_json()` (op rows, edges, hierarchy) or `trace.draw()` |
+| `level="memory"` | `trace.profile(sort_by="activation_memory")`; memory totals stay in the summary footer |
+| `level="control_flow"` | `trace.conditional_records` and the `conditional_*` columns of `trace.to_pandas()` |
+| `level="waterfall"` | `trace.profile(level="op")`, or `trace.to_pandas()` in execution order |
+| `level="output"` | `trace.output_table()` |
 
 ## Episode ledger grammar v2 (the C07X coordinated tlspec-v9 amendment)
 

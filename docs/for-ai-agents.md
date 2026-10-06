@@ -56,7 +56,7 @@ on the measured fixtures.
 
 ## Public surface map
 
-`torchlens.__all__` currently exposes 116 names. The most-used ones, grouped by job (this
+`torchlens.__all__` currently exposes 115 names. The most-used ones, grouped by job (this
 table is a selection, not the full list — read `torchlens.__all__` for that):
 
 | Job | Names |
@@ -67,7 +67,7 @@ table is a selection, not the full list — read `torchlens.__all__` for that):
 | Data objects | `Trace`, `Layer`, `Op`, `Quantity`, `Bytes`, `Duration`, `Flops`, `Macs` |
 | Site discovery | `label`, `func`, `func_transform`, `module`, `contains`, `where`, `in_module`, `head`, `output`, `grad_fn`, `facet` |
 | Predicate composition | `followed_by`, `preceded_by`, `without_op`, `when` (the former `intervening` alias is removed) |
-| Activation helpers | `zero_ablate`, `mean_ablate`, `resample_ablate` (canonical constructor: `torchlens.intervention.scramble_elements`), `replace_with`, `swap_with`, `steer`, `scale`, `clamp`, `noise`, `project_onto`, `project_off`, `splice_module` |
+| Activation helpers | `zero_ablate`, `mean_ablate`, `torchlens.intervention.scramble_elements` (elementwise iid scramble), `replace_with`, `swap_with`, `steer`, `scale`, `clamp`, `noise`, `project_onto`, `project_off`, `splice_module` |
 | Backward helpers | `bwd_hook`, `grad_zero`, `grad_scale`, `grad_clamp`, `grad_noise`, `grad_clip` |
 | Extraction and validation | `pluck`, `extract`, `extract_dataset`, `validate` (the former `peek` and `batched_extract` aliases are removed); disk-mode `extract_dataset` writes a self-describing manifest, resumes with `resume=True`, and loads back via `torchlens.dataset_extraction.load_extraction` (DOCUMENTED-UNSTABLE spellings) |
 | Subpackages | `facets`, `fastlog` |

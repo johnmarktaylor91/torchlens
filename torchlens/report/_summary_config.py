@@ -3,10 +3,11 @@
 Orthogonal axes, one column registry, nothing silent: granularity
 (level/depth/fold_repeats/buffers) x presentation (view/columns) x
 selection (filter) x numbers (flop_convention/units) x output (style).
-Every legacy spelling maps through the ONE compatibility table below;
-contradictions raise typed ``summary_option_conflict``; unknown names get
-a nearest-match teaching refusal. Nothing is ever accepted-and-ignored
-(the count_fma_as_two lesson, made structural).
+The legacy spellings are REMOVED (clean break, no aliases): each one
+refuses typed and names its successor (``REMOVED_SUMMARY_OPTIONS`` /
+``REMOVED_SUMMARY_LEVELS``); contradictions raise typed
+``summary_option_conflict``; unknown names get a nearest-match teaching
+refusal. Nothing is ever accepted-and-ignored.
 
 Spellings DOCUMENTED-UNSTABLE pending naming-session ratification.
 """
@@ -26,18 +27,46 @@ LEVELS: tuple[str, ...] = ("auto", "module", "op")
 #: View presets implemented natively by the rebuilt renderer.
 NATIVE_VIEWS: tuple[str, ...] = ("overview", "compute")
 
-#: Legacy ``level=`` values that keep their historical presentation and
-#: route to the legacy renderer through the compatibility table.
-LEGACY_LEVELS: tuple[str, ...] = (
-    "overview",
-    "graph",
-    "memory",
-    "control_flow",
-    "compute",
-    "cost",
-    "waterfall",
-    "output",
-)
+#: Removed legacy ``level=`` preset names -> what replaces each one. They
+#: refuse typed (``summary_level_invalid``) naming the replacement; there is
+#: no alias and no historical renderer behind them.
+REMOVED_SUMMARY_LEVELS: dict[str, str] = {
+    "overview": "view='overview' (the default column bundle)",
+    "compute": "view='compute'",
+    "cost": "view='compute'",
+    "graph": "trace.to_agent_json() (op rows, edges, module hierarchy) or trace.draw()",
+    "memory": (
+        "trace.profile(sort_by='activation_memory') for per-op tensor memory; "
+        "the summary footer carries the memory totals"
+    ),
+    "control_flow": (
+        "trace.conditional_records and the conditional_* columns of trace.to_pandas() "
+        "(multi-pass layers: num_passes)"
+    ),
+    "waterfall": (
+        "trace.profile(level='op') for per-op time and activation memory, "
+        "or trace.to_pandas() in execution order"
+    ),
+    "output": "trace.output_table()",
+}
+
+#: Removed legacy keyword spellings -> what replaces each one. They refuse
+#: typed (``summary_option_invalid``) naming the replacement; there is no
+#: alias and no historical renderer behind them.
+REMOVED_SUMMARY_OPTIONS: dict[str, str] = {
+    "preset": "view= ('overview' | 'compute') for the column bundle, level= for row grain",
+    "fields": "columns= (bundle name, exact ordered list, or +name/-name deltas)",
+    "show_ops": "level='op' (one row per executed op pass)",
+    "include_ops": "level='op' (one row per executed op pass)",
+    "mode": (
+        "level='op' (one row per executed op pass) or fold_repeats=False (unfold repeated runs)"
+    ),
+    "print_to": "report.print(file=...) on the returned report, or print_to(str(report))",
+    "count_fma_as_two": "flop_convention='fma2' (was True) or flop_convention='fma1' (was False)",
+    "show_input_preprocessing_details": (
+        "trace.provenance() and trace.input_preprocessor (verified, source, identifier)"
+    ),
+}
 
 #: Style vocabulary (charset contract, memo 3.9).
 STYLES: tuple[str, ...] = ("auto", "ascii", "unicode")
@@ -84,21 +113,6 @@ VIEW_BUNDLES: dict[str, tuple[str, ...]] = {
     "compute": ("name", "output", "params", "flops", "macs", "evidence"),
 }
 
-#: The ONE legacy compatibility table: legacy spelling -> disposition.
-#: "legacy_render" keeps the historical presentation byte-stable through
-#: the historical builder; "map" rewrites to a new-grammar axis.
-LEGACY_COMPAT_TABLE: dict[str, str] = {
-    "preset": "legacy_render",
-    "fields": "legacy_render",
-    "show_ops": "legacy_render",
-    "include_ops": "legacy_render",
-    "mode": "legacy_render",
-    "print_to": "legacy_render",
-    "count_fma_as_two": "legacy_render",
-    "show_input_preprocessing_details": "legacy_render",
-    "level:legacy_preset": "legacy_render",
-}
-
 
 @dataclass(frozen=True)
 class SummaryConfig:
@@ -140,15 +154,25 @@ def _did_you_mean(name: str, valid: tuple[str, ...]) -> str:
 
 
 def _refuse_choice(
-    axis: str, value: Any, valid: tuple[str, ...], code: str = "summary_option_invalid"
+    axis: str,
+    value: Any,
+    valid: tuple[str, ...],
+    code: str = "summary_option_invalid",
+    successor: str | None = None,
 ) -> None:
-    """Typed teaching refusal for a closed-vocabulary axis."""
+    """Typed teaching refusal for a closed-vocabulary axis.
 
-    raise InvalidArgumentError(
-        f"summary() got invalid {axis}={value!r}.{_did_you_mean(str(value), valid)}",
-        code=code,
-        remedy=f"pass one of: {', '.join(valid)}",
-    )
+    ``successor`` names what replaces a REMOVED value (the legacy level
+    presets); the refusal then teaches the replacement, not a near match.
+    """
+
+    if successor is not None:
+        problem = f"summary() no longer accepts {axis}={value!r} (removed); use {successor}."
+        remedy = f"use {successor}"
+    else:
+        problem = f"summary() got invalid {axis}={value!r}.{_did_you_mean(str(value), valid)}"
+        remedy = f"pass one of: {', '.join(valid)}"
+    raise InvalidArgumentError(problem, code=code, remedy=remedy)
 
 
 def _apply_column_deltas(columns: Any, names: list[str]) -> tuple[str, ...]:
@@ -188,7 +212,8 @@ def _resolve_level(level: Any) -> Any:
     """Validate level=, keeping the historical refusal code (taxonomy pin)."""
 
     if level not in LEVELS:
-        _refuse_choice("level", level, LEVELS + LEGACY_LEVELS, code="summary_level_invalid")
+        successor = REMOVED_SUMMARY_LEVELS.get(level) if isinstance(level, str) else None
+        _refuse_choice("level", level, LEVELS, code="summary_level_invalid", successor=successor)
     return level
 
 
@@ -242,6 +267,45 @@ _CLOSED_VOCABULARY_AXES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
 )
 
 
+#: Every option name of the rebuilt grammar (the did-you-mean vocabulary).
+GRAMMAR_OPTIONS: tuple[str, ...] = (
+    "level",
+    "view",
+    "depth",
+    "columns",
+    "filter",
+    "buffers",
+    "fold_repeats",
+    "max_rows",
+    "flop_convention",
+    "units",
+    "style",
+)
+
+
+def _refuse_unknown_options(unknown: list[str]) -> None:
+    """Typed refusal for option names outside the grammar.
+
+    A removed legacy spelling teaches its successor; any other unknown name
+    gets the nearest grammar option.
+    """
+
+    removed = [name for name in unknown if name in REMOVED_SUMMARY_OPTIONS]
+    if removed:
+        successors = "; ".join(f"{name}= -> {REMOVED_SUMMARY_OPTIONS[name]}" for name in removed)
+        problem = (
+            f"summary() no longer accepts {', '.join(f'{name}=' for name in removed)} "
+            f"(removed legacy spelling); use {successors}."
+        )
+        remedy = f"replace {successors}"
+    else:
+        problem = f"summary() got unknown option(s): {', '.join(unknown)}." + _did_you_mean(
+            unknown[0], GRAMMAR_OPTIONS
+        )
+        remedy = "see docs/reference/summary.md for the option grammar"
+    raise InvalidArgumentError(problem, code="summary_option_invalid", remedy=remedy)
+
+
 def resolve_config(**kwargs: Any) -> SummaryConfig:
     """Validate and freeze one new-grammar configuration.
 
@@ -267,28 +331,7 @@ def resolve_config(**kwargs: Any) -> SummaryConfig:
     columns = _resolve_columns(kwargs.pop("columns", None), view)
     filter_ = kwargs.pop("filter", None)
     if kwargs:
-        unknown = sorted(kwargs)
-        raise InvalidArgumentError(
-            f"summary() got unknown option(s): {', '.join(unknown)}."
-            + _did_you_mean(
-                unknown[0],
-                (
-                    "level",
-                    "view",
-                    "depth",
-                    "columns",
-                    "filter",
-                    "buffers",
-                    "fold_repeats",
-                    "max_rows",
-                    "flop_convention",
-                    "units",
-                    "style",
-                ),
-            ),
-            code="summary_option_invalid",
-            remedy="see docs/reference/summary.md for the option grammar",
-        )
+        _refuse_unknown_options(sorted(kwargs))
     if level == "op" and depth not in ("auto", "all", None):
         raise InvalidArgumentError(
             "level='op' renders one row per executed op pass; depth= applies to "
@@ -309,58 +352,3 @@ def resolve_config(**kwargs: Any) -> SummaryConfig:
         units=closed["units"],
         style=closed["style"],
     )
-
-
-#: Legacy-only kwarg names (any one routes the call to the legacy renderer).
-LEGACY_ONLY_KWARGS: tuple[str, ...] = (
-    "preset",
-    "fields",
-    "show_ops",
-    "include_ops",
-    "mode",
-    "print_to",
-    "count_fma_as_two",
-    "show_input_preprocessing_details",
-)
-
-#: New-grammar-only kwarg names (any one demands the rebuilt renderer).
-NEW_ONLY_KWARGS: tuple[str, ...] = (
-    "view",
-    "depth",
-    "filter",
-    "buffers",
-    "fold_repeats",
-    "flop_convention",
-    "units",
-    "style",
-)
-
-
-def route_summary_call(level: Any, kwargs: dict[str, Any]) -> str:
-    """Route one summary() call through the ONE compatibility table.
-
-    Returns ``"legacy"`` (historical presentation, byte-stable) or
-    ``"rebuilt"``. A call mixing legacy-only spellings with new-grammar
-    axes contradicts itself and refuses typed -- nothing is silently
-    dropped from either grammar.
-    """
-
-    legacy_hits = [name for name in LEGACY_ONLY_KWARGS if kwargs.get(name) is not None]
-    new_hits = [name for name in NEW_ONLY_KWARGS if name in kwargs]
-    if isinstance(level, str) and level in LEGACY_LEVELS:
-        # Legacy level= values keep their historical meaning (a presentation
-        # preset) and their historical byte-stable rendering.
-        legacy_hits.append(f"level={level!r}")
-    elif level is not None and level != "auto":
-        new_hits.append(f"level={level!r}")
-    if legacy_hits and new_hits:
-        raise InvalidArgumentError(
-            "summary() mixes legacy spellings "
-            f"({', '.join(sorted(set(legacy_hits)))}) with rebuilt-grammar axes "
-            f"({', '.join(sorted(set(new_hits)))}); the compatibility table maps "
-            "each call to exactly one grammar.",
-            code="summary_option_conflict",
-            remedy="use the rebuilt grammar (level/view/depth/columns/...) alone, "
-            "or the legacy spellings alone",
-        )
-    return "legacy" if legacy_hits else "rebuilt"

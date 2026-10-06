@@ -118,16 +118,10 @@ def test_list_logs_returns_tuple_snapshot() -> None:
 
 
 def test_summary_includes_phase13_sections() -> None:
-    """The discoverability fields live on provenance() and the legacy preset.
-
-    The rebuilt default relocated the preamble (summary memo 3.6):
-    ``trace.provenance()`` serves it byte-for-byte and the legacy preset
-    spelling still embeds it.
-    """
+    """The discoverability fields live on provenance() (summary memo 3.6)."""
 
     log = _capture(name="phase13_summary")
-    summary = log.summary(level="overview")
-    assert log.provenance() in summary
+    summary = log.provenance()
 
     assert "TorchLens Discoverability Summary" in summary
     assert "state:" in summary
