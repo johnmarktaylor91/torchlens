@@ -286,9 +286,12 @@ def recover_c_new_from_bases(cls: type) -> int | None:
     owner, entry = effective_new_entry(cls)
     if owner is None or owner is cls or not is_c_new_entry(entry):
         return None
-    if getattr(entry, "__self__", None) is not owner or has_python_new_trampoline(owner):
+    if has_python_new_trampoline(owner):
         return None
-    return int(_type_view(owner).tp_new or 0) or None
+    owner_tp_new = int(_type_view(owner).tp_new or 0)
+    if getattr(entry, "__self__", None) is not owner:
+        return None
+    return owner_tp_new or None
 
 
 def _set_or_del_type_attr(cls: type, name: str, value: Any) -> None:
