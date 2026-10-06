@@ -9289,46 +9289,6 @@
  },
  {
   "ambiguous": true,
-  "field": "label_raw",
-  "file": "torchlens/visualization/_summary_internal/_builder.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": false,
-  "field": "layer_label_raw",
-  "file": "torchlens/visualization/_summary_internal/_builder.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/visualization/_summary_internal/_builder.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "output",
-  "file": "torchlens/visualization/_summary_internal/_builder.py",
-  "has_default": false,
-  "sites": 2,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "parents",
-  "file": "torchlens/visualization/_summary_internal/_builder.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
-  "ambiguous": true,
   "field": "kind",
   "file": "torchlens/visualization/_summary_internal/_discoverability.py",
   "has_default": true,
