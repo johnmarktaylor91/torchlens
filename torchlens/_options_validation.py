@@ -238,6 +238,33 @@ def _validate_bool_option(name: str, value: Any) -> None:
         )
 
 
+def _validate_output_device(output_device: Any) -> None:
+    """Validate an ``output_device`` save option value.
+
+    Shared by the capture entry (``tl.trace``) and ``tl.validate`` so both
+    refuse the same values with the same typed error.
+
+    Parameters
+    ----------
+    output_device:
+        Candidate ``output_device`` value.
+
+    Raises
+    ------
+    InvalidArgumentError
+        (``code="output_device_invalid"``) if the value is not ``"same"``,
+        ``"cpu"``, or ``"cuda"``.
+    """
+
+    if output_device not in ["same", "cpu", "cuda"]:
+        raise InvalidArgumentError(
+            f"output_device={output_device!r} is not supported",
+            code="output_device_invalid",
+            remedy="set output_device to 'same', 'cpu', or 'cuda'",
+            argument="output_device",
+        )
+
+
 def _validate_capture_values(values: Mapping[str, Any]) -> None:
     """Validate resolved capture field values.
 

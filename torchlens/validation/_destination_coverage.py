@@ -150,7 +150,7 @@ def _index_put_destination_is_fully_overwritten(
     if not isinstance(destination, torch.Tensor) or not isinstance(values, torch.Tensor):
         return False
     # Narrow: the perturbed parent must be the DESTINATION, never the values/index.
-    if not torch.equal(perturbed_tensor, destination):
+    if not torch.equal(perturbed_tensor.to(destination.device), destination):
         return False
     # accumulate=True adds the value to the prior destination, so the prior value
     # is NOT irrelevant -- never exempt that case. accumulate may arrive as a

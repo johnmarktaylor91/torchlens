@@ -62,6 +62,7 @@ from ._index_domain import (
     index_domain_single_entry_values,
     layer_has_index_domain_parent,
 )
+from ._replay_device import align_output_to_saved_device, align_parent_to_slot_device
 from .exemptions import (
     CUSTOM_EXEMPTION_CHECKS,
     SKIP_PERTURBATION_ENTIRELY,
@@ -2616,7 +2617,7 @@ def _execute_func_with_restored_state(
     elif isinstance(recomputed_output, (list, tuple)):
         recomputed_output = recomputed_output[layer.multi_output_index]
 
-    return recomputed_output
+    return align_output_to_saved_device(recomputed_output, _saved_out_payload(layer))
 
 
 def _slice_recomputed_output_by_path(
@@ -3597,7 +3598,7 @@ def _delta_is_broadcastable_below_spacing(
         below the corresponding spacing.
     """
 
-    delta_broadcast, spacing_broadcast = torch.broadcast_tensors(delta, spacing)
+    delta_broadcast, spacing_broadcast = torch.broadcast_tensors(delta.to(spacing.device), spacing)
     return bool(torch.all(delta_broadcast < spacing_broadcast).item())
 
 
@@ -3768,8 +3769,9 @@ def _prepare_input_args_for_validating_layer(
                 if parent_layer_arg in layers_to_perturb:
                     return None, "missing_saved_parent_payload"
                 continue
-            parent_values = parent_values.detach().clone()
-
+            parent_values = align_parent_to_slot_device(
+                input_args, arg_type, key, parent_values.detach().clone()
+            )
             if parent_layer_arg in layers_to_perturb:
                 if perturb_strategy == "default":
                     parent_layer_func_values = _perturb_parent_values_for_layer(
@@ -3790,7 +3792,9 @@ def _prepare_input_args_for_validating_layer(
                     )
             else:
                 parent_layer_func_values = parent_values
-
+            parent_layer_func_values = align_parent_to_slot_device(
+                input_args, arg_type, key, parent_layer_func_values
+            )
             if not isinstance(key, tuple):
                 input_args[arg_type][key] = parent_layer_func_values
             else:

@@ -22,6 +22,7 @@ metadata invariants, intervention readiness, and unified `.tlspec` manifest sche
 | `_destination_coverage.py` | Destination-overwrite coverage proofs for indexed writes (`__setitem__`, `index_put`, `scatter`): exact-once coverage and unique targets |
 | `_value_predicates.py` | Saved-value predicates (all zero / inf / NaN / finite, constant along a dim) read by the posthoc value-proof decisions |
 | `_integer_mod_proof.py` | Saved-call proof that an integer `% +-1` is identically zero (used by the `integer_mod_unit_divisor` posthoc decision) |
+| `_replay_device.py` | Replay device alignment when an `output_device` capture keeps saved payloads off the op's device: parent payloads move to the slot's saved-argument device, recomputed outputs to the saved output's device |
 | `_completeness_backstop.py` | `completeness_backstop_counts`: dispatcher-witness census vs captured ops, including the module-forward-owned drop rule |
 | `status.py` | Replay-validation status objects |
 | `diagnostics.py` | Structured replay-failure diagnostics (add-only relative to pass/fail) |
@@ -102,6 +103,13 @@ bridge extras.
   `receptive_field` (own dispatch, gate, and tri-state return; see
   `_validate_receptive_field_scope`).
 - Reject scope-specific kwargs early when they do not apply.
+- `output_device` / `save_budget` (same values and defaults as `CaptureOptions`) thread to
+  both validator captures (the first capture and its reproducibility re-trace) for the
+  forward, saved, and intervention scopes; backward and receptive_field refuse non-default
+  values with `TypeError`. With saved activations off the op's device, replay moves each
+  swapped-in parent payload to the device of the op's own saved argument at that slot and
+  the recomputed output to the saved output's device (`_replay_device.py`; exact copies,
+  no tolerance change). Saved arguments themselves stay on the op's device.
 
 ## exemptions.py
 
