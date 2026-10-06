@@ -83,7 +83,21 @@ class _PreexistingWorker:
         return value
 
     def stop(self) -> None:
+        """Stop the worker and join it, so its exit cannot land in a later capture window."""
+
         self.jobs.put(None)
+        self.thread.join()
+
+
+def test_stopped_preexisting_worker_has_exited() -> None:
+    """A stopped worker thread is gone before the next test captures. A pre-existing thread that
+    exits inside a later capture window changes the thread count, which (correctly) ceilings that
+    unrelated capture to UNVERIFIABLE, so ``stop()`` must join."""
+
+    worker = _PreexistingWorker()
+    worker.run(lambda: None)
+    worker.stop()
+    assert not worker.thread.is_alive()
 
 
 @pytest.fixture

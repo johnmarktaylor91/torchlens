@@ -576,7 +576,10 @@ class _PreexistingWorker:
         return value
 
     def stop(self) -> None:
+        """Stop the worker and join it, so its exit cannot land in a later capture window."""
+
         self._jobs.put(None)
+        self._thread.join()
 
 
 def _annotations_model(worker: _PreexistingWorker) -> nn.Module:

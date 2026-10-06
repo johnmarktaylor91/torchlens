@@ -130,7 +130,10 @@ class _PreexistingWorker:
         return value
 
     def stop(self) -> None:
+        """Stop the worker and join it, so its exit cannot land in a later capture window."""
+
         self.jobs.put(None)
+        self.thread.join()
 
 
 @pytest.fixture
