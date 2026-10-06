@@ -2179,3 +2179,11 @@ env: py3.11-torch2.13.0
 torch: 2.13.0+cpu
 source: 86e56f4b9f2d79ad34c588b6419551ee034874a3 (clean)
 recorded: 2026-10-06T11:10:38.029745+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: r12: autograd.grad boundary replay reads op fields
+env: py3.11-torch2.13.0
+torch: 2.13.0+cpu
+source: 09678a53ce68647aca51a55bdec2e8848bc1973e (dirty)
+recorded: 2026-10-06T17:44:17.488574+00:00

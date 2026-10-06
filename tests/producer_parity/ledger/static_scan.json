@@ -8329,6 +8329,22 @@
  },
  {
   "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/validation/_autograd_grad_replay.py",
+  "has_default": true,
+  "sites": 2,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/validation/_autograd_grad_replay.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
   "field": "func_call_id",
   "file": "torchlens/validation/_completeness_backstop.py",
   "has_default": false,

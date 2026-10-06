@@ -572,7 +572,6 @@ VARIADIC_TENSOR_ARG_FUNCS: frozenset[str] = frozenset(
         "autogradjvp",
         "autogradhvp",
         "autogradvhp",
-        "autogradgrad",
         "meshgrid",
         # Collective boundary nodes pass their contribution tensors as
         # positional call_args; the list-taking collectives (and root-only
@@ -1614,6 +1613,11 @@ FUNC_ARG_SPECS["cat"] = ArgSpec(sequence_positions=(0,), tensor_kwargs=("tensors
 FUNC_ARG_SPECS["concat"] = FUNC_ARG_SPECS["cat"]
 FUNC_ARG_SPECS["concatenate"] = FUNC_ARG_SPECS["cat"]
 FUNC_ARG_SPECS["stack"] = ArgSpec(sequence_positions=(0,), tensor_kwargs=("tensors",))
+# In-forward ``torch.autograd.grad`` boundary op: ``outputs``, ``inputs`` and
+# ``grad_outputs`` each hold a tensor or a shallow tensor sequence (any length).
+FUNC_ARG_SPECS["autogradgrad"] = ArgSpec(
+    positions=(0, 1, 2), tensor_kwargs=("outputs", "inputs", "grad_outputs")
+)
 FUNC_ARG_SPECS["where"] = ArgSpec(
     positions=(0, 1, 2), tensor_kwargs=("condition", "input", "other")
 )

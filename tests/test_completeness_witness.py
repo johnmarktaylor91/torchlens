@@ -1192,8 +1192,12 @@ def test_mid_forward_autograd_grad_is_an_exact_backward_boundary() -> None:
     """Exclude only engine dispatches represented by the captured backward pass."""
 
     wrap_torch(completeness_witness=True)
-    with pytest.warns(UserWarning, match="no graph/source provenance"):
+    # The call is a recorded autogradgrad boundary op: its gradients carry
+    # provenance, so no source-provenance warning fires.
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         trace = tl.trace(_MidForwardAutogradGradModel(), torch.randn(2, 4))
+    assert not [w for w in caught if "no graph/source provenance" in str(w.message)]
 
     boundary_rows = [
         row for row in trace.completeness_decompositions if row["owner_wrapper"] == "autograd:grad"
