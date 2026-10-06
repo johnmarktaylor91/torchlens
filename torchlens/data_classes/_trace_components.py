@@ -529,6 +529,10 @@ TRACE_EXTERNAL_WRITE_EXEMPTIONS: dict[str, str] = {
         "torch model prep: module-boundary (entry and exit) adoption queue; popped by its postprocess step "
         "and scrub-declared"
     ),
+    "_orphan_unattributed_tensor_args": (
+        "postprocess orphan removal: source-less-argument witness of pruned ops; popped by "
+        "the provenance disclosure step later in the same postprocess and scrub-declared"
+    ),
     "_module_boundary_outside_sources": (
         "torch model prep: module-boundary adoptions of closure/forward-global tensors (no "
         "escape signal); popped by the same postprocess step and scrub-declared"

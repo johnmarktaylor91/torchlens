@@ -513,16 +513,12 @@ def _warn_unattributed_tensor_args(self: "Trace") -> None:
         append_capture_advisory,
     )
 
-    retained = getattr(self, "layer_list", ()) or ()
-    offenders = _unattributed_op_offenders(retained)
-    # Orphan pruning (step 3) runs BEFORE this step, so a source-less tensor whose
-    # only consumer was pruned (``G.sum().item()``, a control-flow predicate on a
-    # global) would lose its witness with the op. ``_orphan_logs`` stays on the
-    # trace; fold the pruned ops that are not also retained into the disclosure.
-    retained_ids = {id(op) for op in retained}
-    orphans = _unattributed_op_offenders(
-        op for op in (getattr(self, "_orphan_logs", ()) or ()) if id(op) not in retained_ids
-    )
+    offenders = _unattributed_op_offenders(getattr(self, "layer_list", ()) or ())
+    # Orphan pruning (step 3) runs BEFORE this step and strips the pruned ops, so a
+    # source-less tensor whose only consumer was pruned (``G.sum().item()``, a
+    # control-flow predicate on a global) would lose its witness with the op;
+    # ``_remove_orphan_nodes`` reads the witness before removal.
+    orphans = list(self.__dict__.pop("_orphan_unattributed_tensor_args", None) or ())
     # R16: module-entry adoptions of untagged tensors (outside disclosed
     # transform/dynamo regions) are the module-consumed twin of the
     # unattributed-args case; without this fold, a stale-ref escape whose
@@ -555,8 +551,7 @@ def _warn_unattributed_tensor_args(self: "Trace") -> None:
         "TorchLens found tensor arguments with no graph/source provenance. "
         "These are usually tensors captured from outside the traced model; "
         "module tensor attributes, inputs, parameters, and buffers are known sources. "
-        "Offending ops/arg positions: "
-        + "; ".join(offenders + [f"{row} (pruned)" for row in orphans] + adoptions + outside),
+        "Offending ops/arg positions: " + "; ".join(offenders + orphans + adoptions + outside),
         UserWarning,
         stacklevel=2,
     )

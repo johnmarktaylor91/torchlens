@@ -633,6 +633,26 @@ def _remove_orphan_nodes(self: "Trace") -> None:
         if isinstance(func_call_id, int)
     }
 
+    # Read the source-less-argument witness of the ops being pruned NOW: removal
+    # strips their fields, and the provenance disclosure step
+    # (``_warn_unattributed_tensor_args``) runs later, so a source-less tensor whose
+    # only consumer is pruned (``G.sum().item()``, a branch predicate) would lose
+    # its witness. ``keep_orphans`` leaves the ops (and their witness) in the trace.
+    orphan_witness = [
+        f"{label} ({', '.join(positions)}, pruned)"
+        for label in self._raw_graph_ws.raw_layer_labels_list
+        if label in orphan_nodes
+        for positions in (
+            tuple(
+                getattr(self._raw_graph_ws.raw_layer_dict[label], "unattributed_tensor_args", ())
+                or ()
+            ),
+        )
+        if positions
+    ]
+    if orphan_witness:
+        self.__dict__["_orphan_unattributed_tensor_args"] = orphan_witness
+
     # Batch-remove orphaned nodes and rebuild the ordered layer dict/list.
     orphan_entries = [self._raw_graph_ws.raw_layer_dict[label] for label in orphan_nodes]
     self._batch_remove_log_entries(orphan_entries, remove_references=True)
