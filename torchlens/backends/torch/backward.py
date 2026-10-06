@@ -4213,13 +4213,21 @@ def install_autograd_wrappers() -> None:
                     return original(*args, **kwargs)
             return original(*args, **kwargs)
 
-        return _capture_autograd_engine_call(
-            roots,
-            run,
-            trigger="autograd_grad",
-            engine_flags=dict(kwargs),
-            forward_op_count_at_trigger=forward_op_count_at_trigger,
-        )
+        def engine() -> Any:
+            """Run the original call inside the backward capture of its engine pass."""
+            return _capture_autograd_engine_call(
+                roots,
+                run,
+                trigger="autograd_grad",
+                engine_flags=dict(kwargs),
+                forward_op_count_at_trigger=forward_op_count_at_trigger,
+            )
+
+        if _state._logging_enabled and _state._active_trace is not None:
+            from ._autograd_grad_boundary import record_autograd_grad_boundary
+
+            return record_autograd_grad_boundary(engine, original, args, kwargs)
+        return engine()
 
     # Provenance parity with every namespace wrapper (grind-r5 b8 R56): the
     # entry wrappers carry the original's metadata so introspection reports

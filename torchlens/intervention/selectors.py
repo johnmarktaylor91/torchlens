@@ -1274,7 +1274,7 @@ def func(name: str, *, output: int | str | None = None) -> FuncSelector:
 
 
 def func_transform(kind: str | None = None) -> FuncTransformSelector:
-    """Create a torch.func transform selector.
+    """Create a torch.func / torch.autograd transform-boundary selector.
 
     Parameters
     ----------

@@ -572,6 +572,7 @@ VARIADIC_TENSOR_ARG_FUNCS: frozenset[str] = frozenset(
         "autogradjvp",
         "autogradhvp",
         "autogradvhp",
+        "autogradgrad",
         "meshgrid",
         # Collective boundary nodes pass their contribution tensors as
         # positional call_args; the list-taking collectives (and root-only
