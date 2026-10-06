@@ -54,7 +54,6 @@ from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning
 from ._torch_symbols import shadowed_torch_submodule, torch_attr
-from ._type_new_slot import probe_type_new_slot_patch
 
 __all__ = [
     "AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED",
@@ -937,6 +936,25 @@ class _PyTypeObject(ctypes.Structure):
         ("tp_as_sequence", ctypes.POINTER(_PySequenceMethods)),
         ("tp_as_mapping", ctypes.c_void_p),
     ]
+
+
+def _probe_legacy_constructor_new_patch() -> bool:
+    """Return whether legacy ``torch.<dtype>Tensor`` constructors can be patched in place.
+
+    The ctypes layout probe lives in ``_type_new_slot`` (a stdlib-only leaf);
+    it is imported here, at probe time, so this module's eager import closure
+    does not grow.
+
+    Returns
+    -------
+    bool
+        True on CPython when ``torch.FloatTensor``'s type layout matches the
+        mirror ``backends/torch/legacy_ctors.py`` patches through.
+    """
+
+    from ._type_new_slot import probe_type_new_slot_patch
+
+    return probe_type_new_slot_patch(getattr(torch, "FloatTensor", None))
 
 
 def _probe_tensor_sequence_slot_fix() -> bool:
@@ -1858,9 +1876,7 @@ HAS_GENERATOR_PHILOX_STATE: bool = hasattr(torch.Generator, "philox_state")
 HAS_SAFE_WEIGHTS_ONLY_LOAD: bool = _probe_safe_weights_only_load()
 HAS_TENSOR_SEQUENCE_SLOT_FIX: bool = _probe_tensor_sequence_slot_fix()
 # Legacy ``torch.<dtype>Tensor`` constructor capture (``backends/torch/legacy_ctors.py``).
-HAS_LEGACY_CONSTRUCTOR_NEW_PATCH: bool = probe_type_new_slot_patch(
-    getattr(torch, "FloatTensor", None)
-)
+HAS_LEGACY_CONSTRUCTOR_NEW_PATCH: bool = _probe_legacy_constructor_new_patch()
 HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE: bool = _probe_parameter_as_subclass_in_dispatch_mode()
 HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE: bool = _probe_subclass_ctor_in_dispatch_mode()
 # r-b4 R26-5a: ROLL_TENSOR_SHIFTS_SUPPORTED is a TEST HELPER, not a published

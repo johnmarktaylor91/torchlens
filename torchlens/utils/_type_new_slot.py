@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import ctypes
 import sys
+import types
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -183,7 +184,8 @@ def probe_type_new_slot_patch(cls: Any) -> bool:
             all(_layout_matches(ref) for ref in (cls, _InheritedNewProbe, _PythonNewProbe))
             and _tp_new_slot_verified()
         )
-    except Exception:
+    except (AttributeError, TypeError, ValueError, OSError):
+        # A non-CPython-shaped object or an unreadable field: degrade to False.
         return False
 
 
@@ -191,9 +193,12 @@ def has_python_new_trampoline(cls: type) -> bool:
     """Return whether ``cls``'s constructor slot is CPython's ``slot_tp_new``.
 
     True when a Python-level ``__new__`` (``staticmethod`` or function) is in
-    effect for ``cls``, either its own or one set on a base and propagated:
-    the C ``tp_new`` is then no longer reachable through the slot. Only valid
-    after :func:`probe_type_new_slot_patch` passed.
+    effect for ``cls``, either its own or one set on a base and propagated,
+    and ALSO after such a ``__new__`` was deleted again: CPython keeps the
+    trampoline then, so the slot alone never says whether a foreign patch is
+    present (:func:`effective_new_entry` does). Either way the C ``tp_new`` is
+    no longer reachable through the slot. Only valid after
+    :func:`probe_type_new_slot_patch` passed.
 
     Parameters
     ----------
@@ -207,6 +212,83 @@ def has_python_new_trampoline(cls: type) -> bool:
     """
 
     return bool(_type_view(cls).tp_new == _type_view(_PythonNewProbe).tp_new)
+
+
+def effective_new_entry(cls: type) -> tuple[type | None, Any]:
+    """Return the ``__new__`` entry CPython's ``slot_tp_new`` would call for ``cls``.
+
+    The MRO dicts, not the slot pointer, say which ``__new__`` is in effect:
+    once any Python ``__new__`` has been on a class, CPython keeps its slot on
+    the trampoline even after that ``__new__`` is deleted.
+
+    Parameters
+    ----------
+    cls:
+        Class to inspect.
+
+    Returns
+    -------
+    tuple[type | None, Any]
+        ``(owner, entry)``: the first class along ``cls.__mro__`` whose
+        ``__dict__`` holds ``__new__``, and that raw entry (a builtin for a C
+        constructor, a ``staticmethod`` or function for a Python one), or
+        ``(None, None)`` when no class defines one.
+    """
+
+    for owner in cls.__mro__:
+        entry = owner.__dict__.get("__new__", _ABSENT)
+        if entry is not _ABSENT:
+            return owner, entry
+    return None, None
+
+
+def is_c_new_entry(entry: Any) -> bool:
+    """Return whether a ``__new__`` dict entry is a C constructor's builtin wrapper.
+
+    Parameters
+    ----------
+    entry:
+        Raw ``__dict__["__new__"]`` value from :func:`effective_new_entry`.
+
+    Returns
+    -------
+    bool
+        True for the ``builtin_function_or_method`` CPython stores for a C
+        ``tp_new``; False for any Python-level ``__new__``.
+    """
+
+    return isinstance(entry, types.BuiltinFunctionType)
+
+
+def recover_c_new_from_bases(cls: type) -> int | None:
+    """Return the C ``tp_new`` that ``cls``'s stale trampoline dispatches to.
+
+    When ``cls`` sits on the Python-``__new__`` trampoline with no Python
+    ``__new__`` left in its MRO, ``slot_tp_new`` finds the nearest base's C
+    builtin and calls that base's ``tp_new``. This returns that same pointer,
+    read from the base that owns the builtin, so a wrapper can call it without
+    going back through the trampoline. Only valid after
+    :func:`probe_type_new_slot_patch` passed.
+
+    Parameters
+    ----------
+    cls:
+        Class whose slot is the trampoline.
+
+    Returns
+    -------
+    int | None
+        The owning base's C ``tp_new``, or ``None`` when the entry in effect is
+        not a C builtin, the builtin is bound to another type, the owner is
+        ``cls`` itself, or the owner's own slot is also the trampoline.
+    """
+
+    owner, entry = effective_new_entry(cls)
+    if owner is None or owner is cls or not is_c_new_entry(entry):
+        return None
+    if getattr(entry, "__self__", None) is not owner or has_python_new_trampoline(owner):
+        return None
+    return int(_type_view(owner).tp_new or 0) or None
 
 
 def _set_or_del_type_attr(cls: type, name: str, value: Any) -> None:
@@ -254,13 +336,21 @@ class TypeNewPatch:
     installed_new: staticmethod
 
 
-def original_new_caller(cls: type) -> Callable[[type, tuple[Any, ...], dict[str, Any]], Any]:
-    """Return a callable running ``cls``'s current C ``tp_new`` directly.
+def original_new_caller(
+    cls: type, c_tp_new: int | None = None
+) -> Callable[[type, tuple[Any, ...], dict[str, Any]], Any]:
+    """Return a callable running ``cls``'s C constructor directly.
 
     Parameters
     ----------
     cls:
         Class whose (not yet patched) constructor slot to capture.
+    c_tp_new:
+        The C ``tp_new`` to call instead of ``cls``'s current slot. Required
+        when that slot is CPython's Python-``__new__`` trampoline (see
+        :func:`recover_c_new_from_bases`): snapshotting the trampoline would
+        make the "original" look ``__new__`` up again and re-enter the
+        override forever.
 
     Returns
     -------
@@ -269,7 +359,7 @@ def original_new_caller(cls: type) -> Callable[[type, tuple[Any, ...], dict[str,
         ``kwargs`` is passed as NULL, exactly as a plain call passes it.
     """
 
-    tp_new = _TP_NEW_FUNCTYPE(_type_view(cls).tp_new)
+    tp_new = _TP_NEW_FUNCTYPE(c_tp_new if c_tp_new is not None else _type_view(cls).tp_new)
 
     def call(subtype: type, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
         """Run the captured C constructor."""
@@ -321,17 +411,36 @@ def restore_new_override(patch: TypeNewPatch) -> bool:
         ``__new__`` (it is left untouched, never clobbered).
     """
 
-    cls = patch.cls
-    if cls.__dict__.get("__new__") is not patch.installed_new:
+    if patch.cls.__dict__.get("__new__") is not patch.installed_new:
         return False
-    _set_or_del_type_attr(cls, "__new__", patch.original_dict_new)
+    reinstate_original_new(patch)
+    return True
+
+
+def reinstate_original_new(patch: TypeNewPatch) -> None:
+    """Put back the pre-install ``__dict__`` entry and ``tp_new``, whatever replaced ours.
+
+    Used directly when a third party replaced our override and has since
+    removed its own ``__new__``: CPython then leaves the slot on the
+    trampoline with nothing Python-level to dispatch to. The caller must have
+    checked (:func:`effective_new_entry`) that no foreign ``__new__`` is in
+    effect; this never clobbers one by itself.
+
+    Parameters
+    ----------
+    patch:
+        Record returned by :func:`install_new_override`.
+    """
+
+    cls = patch.cls
+    if cls.__dict__.get("__new__", _ABSENT) is not patch.original_dict_new:
+        _set_or_del_type_attr(cls, "__new__", patch.original_dict_new)
     # ``type.__setattr__`` cannot put a C ``tp_new`` back (it keeps the
     # ``slot_tp_new`` trampoline when the restored entry is the C wrapper), so
     # the saved pointer is written back directly.
     _type_view(cls).tp_new = patch.original_tp_new
     ctypes.pythonapi.PyType_Modified(ctypes.py_object(cls))
     _restore_inheriting_subclasses(cls, patch.original_tp_new)
-    return True
 
 
 def _restore_inheriting_subclasses(cls: type, original_tp_new: int) -> None:
