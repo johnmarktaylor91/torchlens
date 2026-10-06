@@ -29,7 +29,7 @@ from ._render_common import (
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
-    from .node_universe import NodeUniverse
+    from ._render_dot import _ForwardRenderContext
     from .themes import VisualizationTheme
 
 __all__ = [
@@ -348,15 +348,130 @@ def _queue(
     module_clusters[str(module_key)].setdefault(kind, []).append(args)
 
 
+@dataclass(frozen=True)
+class _EmitScope:
+    """Per-draw lookups shared by every mutated-Parameter emission.
+
+    Parameters
+    ----------
+    entries:
+        Render entries keyed by raw render label.
+    projection:
+        Raw render label to visible unit identifier.
+    unit_kinds:
+        Visible unit identifier to unit kind.
+    skipped:
+        Raw render labels removed by the skip predicate.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"``.
+    vis_call_depth:
+        Active module depth.
+    theme:
+        Active theme.
+    builder:
+        Top-level graph builder.
+    module_clusters:
+        Module-cluster accumulator.
+    """
+
+    entries: Mapping[str, Any]
+    projection: Mapping[str, str]
+    unit_kinds: Mapping[str, str]
+    skipped: frozenset[str]
+    vis_mode: str
+    vis_call_depth: int
+    theme: VisualizationTheme | None
+    builder: Any
+    module_clusters: MutableMapping[str, Any]
+
+
+def _drawn_unit(raw: str, scope: _EmitScope, kinds: frozenset[str]) -> str | None:
+    """Return the visible unit drawing raw label ``raw``, if it has an allowed kind.
+
+    Parameters
+    ----------
+    raw:
+        Raw render label.
+    scope:
+        Per-draw lookups.
+    kinds:
+        Accepted unit kinds.
+
+    Returns
+    -------
+    str | None
+        The unit identifier (the emitted DOT node name), or ``None``.
+    """
+
+    if raw in scope.skipped or raw not in scope.entries:
+        return None
+    unit = scope.projection.get(raw)
+    if unit is None or scope.unit_kinds.get(unit) not in kinds:
+        return None
+    return unit
+
+
+def _emit_source(source: MutatedParameterSource, scope: _EmitScope) -> str | None:
+    """Queue one Parameter node and its read edges; return the node name.
+
+    Parameters
+    ----------
+    source:
+        Mutated Parameter to draw.
+    scope:
+        Per-draw lookups.
+
+    Returns
+    -------
+    str | None
+        The node name, or ``None`` when the first mutation is not drawn as its
+        own node.
+    """
+
+    from ._render_edges import _get_lowest_module_for_two_nodes
+    from ._render_leaf import _base_node_for_metadata
+    from ._typography import DEFAULT_TYPOGRAPHY
+
+    first_raw = _raw_label(source.first_mutation, scope.vis_mode)
+    if _drawn_unit(first_raw, scope, frozenset({"raw_op"})) is None:
+        return None
+    node_args = _param_node_args(source.param, scope.theme)
+    node_name = node_args["name"]
+    module_path = _owner_module_path(scope.entries[first_raw], source.param, scope.vis_mode)
+    owner_key: str | int = module_path[-1] if module_path else -1
+    _queue(scope.module_clusters, scope.builder, owner_key, "nodes", node_args)
+    stub = _ParamNodeStub(modules=list(module_path))
+    heads: set[str] = set()
+    for reader in source.readers:
+        raw = _raw_label(reader, scope.vis_mode)
+        head = _drawn_unit(raw, scope, _DRAWABLE_READER_KINDS)
+        if head is None or head in heads:
+            continue
+        heads.add(head)
+        edge_key = _get_lowest_module_for_two_nodes(
+            stub,  # type: ignore[arg-type]
+            _base_node_for_metadata(scope.entries[raw]),
+            False,
+            scope.vis_call_depth,
+        )
+        edge_args = {
+            "tail_name": node_name,
+            "head_name": head,
+            "color": "black",
+            "fontcolor": "black",
+            "style": "dashed",
+            "arrowsize": ".7",
+            "labelfontsize": DEFAULT_TYPOGRAPHY.annotation_pt,
+        }
+        _queue(scope.module_clusters, scope.builder, edge_key, "edges", edge_args)
+    return node_name
+
+
 def add_mutated_parameter_nodes(
     trace: Trace,
-    *,
-    universe: NodeUniverse,
+    context: _ForwardRenderContext,
     builder: Any,
     module_clusters: MutableMapping[str, Any],
-    vis_mode: str,
-    vis_call_depth: int,
-    theme: VisualizationTheme | None,
 ) -> tuple[str, ...]:
     """Emit one source node per mutated Parameter plus its read edges.
 
@@ -368,18 +483,12 @@ def add_mutated_parameter_nodes(
     ----------
     trace:
         Trace being rendered.
-    universe:
-        Visible node universe of this draw.
+    context:
+        Resolved forward render context (node universe, request, theme).
     builder:
         Top-level graph builder.
     module_clusters:
         Module-cluster accumulator.
-    vis_mode:
-        ``"unrolled"`` or ``"rolled"``.
-    vis_call_depth:
-        Active module depth.
-    theme:
-        Active theme.
 
     Returns
     -------
@@ -390,57 +499,23 @@ def add_mutated_parameter_nodes(
     sources = find_mutated_parameter_sources(trace)
     if not sources:
         return ()
-    from ._render_edges import _get_lowest_module_for_two_nodes, _render_node_label
-    from ._render_leaf import _base_node_for_metadata
-    from ._typography import DEFAULT_TYPOGRAPHY
+    from ._render_edges import _render_node_label
 
-    source_graph = universe.source_graph
-    skipped = source_graph.skipped_labels
-    projection = universe.endpoint_projection
-    unit_kinds = {unit.unit_id: unit.kind for unit in universe.units}
-    entries = {
-        _render_node_label(node, vis_mode): node for node in source_graph.entries_to_plot.values()
-    }
-    emitted: list[str] = []
-    for source in sources:
-        first_raw = _raw_label(source.first_mutation, vis_mode)
-        first_unit = projection.get(first_raw)
-        if (
-            first_raw in skipped
-            or first_raw not in entries
-            or first_unit is None
-            or unit_kinds.get(first_unit) != "raw_op"
-        ):
-            continue
-        node_args = _param_node_args(source.param, theme)
-        node_name = node_args["name"]
-        module_path = _owner_module_path(entries[first_raw], source.param, vis_mode)
-        stub = _ParamNodeStub(modules=list(module_path))
-        _queue(module_clusters, builder, module_path[-1] if module_path else -1, "nodes", node_args)
-        heads: set[str] = set()
-        for reader in source.readers:
-            raw = _raw_label(reader, vis_mode)
-            head = projection.get(raw)
-            if raw in skipped or raw not in entries or head is None or head in heads:
-                continue
-            if unit_kinds.get(head) not in _DRAWABLE_READER_KINDS:
-                continue
-            heads.add(head)
-            edge_key = _get_lowest_module_for_two_nodes(
-                stub,  # type: ignore[arg-type]
-                _base_node_for_metadata(entries[raw]),
-                False,
-                vis_call_depth,
-            )
-            edge_args = {
-                "tail_name": node_name,
-                "head_name": head,
-                "color": "black",
-                "fontcolor": "black",
-                "style": "dashed",
-                "arrowsize": ".7",
-                "labelfontsize": DEFAULT_TYPOGRAPHY.annotation_pt,
-            }
-            _queue(module_clusters, builder, edge_key, "edges", edge_args)
-        emitted.append(node_name)
-    return tuple(emitted)
+    universe = context.node_universe
+    vis_mode = context.request.vis_mode
+    scope = _EmitScope(
+        entries={
+            _render_node_label(node, vis_mode): node
+            for node in universe.source_graph.entries_to_plot.values()
+        },
+        projection=universe.endpoint_projection,
+        unit_kinds={unit.unit_id: unit.kind for unit in universe.units},
+        skipped=frozenset(universe.source_graph.skipped_labels),
+        vis_mode=vis_mode,
+        vis_call_depth=context.request.vis_call_depth,
+        theme=context.theme,
+        builder=builder,
+        module_clusters=module_clusters,
+    )
+    emitted = (_emit_source(source, scope) for source in sources)
+    return tuple(name for name in emitted if name is not None)

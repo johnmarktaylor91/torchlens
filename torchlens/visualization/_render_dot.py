@@ -709,13 +709,7 @@ def _populate_forward_ir(trace: "Trace", context: _ForwardRenderContext) -> _For
     from ._mutated_params import add_mutated_parameter_nodes
 
     mutated_parameter_nodes = add_mutated_parameter_nodes(
-        trace,
-        universe=context.node_universe,
-        builder=forward_ir_builder,
-        module_clusters=module_cluster_dict,
-        vis_mode=request.vis_mode,
-        vis_call_depth=request.vis_call_depth,
-        theme=context.theme,
+        trace, context, forward_ir_builder, module_cluster_dict
     )
 
     container_overlay_edges: list[ContainerOverlayEdge] = []
