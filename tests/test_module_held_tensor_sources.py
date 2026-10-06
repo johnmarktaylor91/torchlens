@@ -19,7 +19,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.backends.torch.buffer_writes import iter_module_held_plain_tensors
 
 
 class _DictCachedBias(nn.Module):
@@ -197,6 +196,8 @@ def test_dict_held_tensor_mutated_in_place_matches_eager_and_validates() -> None
 
 
 def test_iter_module_held_plain_tensors_holder_shapes_and_unique_names() -> None:
+    from torchlens.backends.torch.buffer_writes import iter_module_held_plain_tensors
+
     module = nn.Linear(2, 2)
     plain = torch.zeros(1)
     listed = torch.ones(1)
