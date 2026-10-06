@@ -222,6 +222,14 @@ def test_orphan_pruned_consumer_keeps_the_source_less_witness(model: nn.Module) 
     assert _failure_reasons() == ("source_provenance", ["orphan_unattributed_tensor_args"])
 
 
+class _DeadGlobalOp(nn.Module):
+    """A pruned op on a global whose result feeds nothing: no gap in the outputs' provenance."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        _GLOBAL_TABLE * 2
+        return x * 2
+
+
 class _ReturnsOwn(nn.Module):
     """Returns its own held plain tensor, buffer or Parameter directly."""
 
@@ -250,8 +258,9 @@ class _OrphanFromConstants(nn.Module):
         _returns_outside_parent(_ReturnsOwn("offset")),
         _returns_outside_parent(_ReturnsOwn("weight")),
         _OrphanFromConstants(),
+        _DeadGlobalOp(),
     ],
-    ids=["returns_held", "returns_buffer", "returns_param", "orphan_from_constants"],
+    ids=["returns_held", "returns_buffer", "returns_param", "orphan_from_constants", "dead_op"],
 )
 def test_model_owned_returns_and_sourced_orphans_still_validate(model: nn.Module) -> None:
     torch.manual_seed(0)

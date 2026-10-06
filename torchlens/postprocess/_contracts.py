@@ -510,6 +510,7 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
                 "parents",
                 "recurrent_ops",
                 "root_ancestors",
+                "unattributed_tensor_args",
             )
         ),
         # Probes (reviewed): out_ref gates load/stream-rehydrated
