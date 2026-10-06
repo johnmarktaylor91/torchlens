@@ -561,3 +561,53 @@ def test_opaque_module_return_is_disclosed_unrecovered_and_still_validates() -> 
     assert trace.capture_verification_reason == "escape_rescue_unrecovered"
     with pytest.warns(UserWarning, match=_PROVENANCE):
         assert tl.validate(model, x, scope="forward")
+
+
+def test_model_preparation_allocates_no_func_call_ids(
+    raw: types.SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rebinding held refs during model preparation never ticks the call-id counter.
+
+    The model holds a pristine builtin (``F.gelu`` in a partial) and the
+    pristine Python ``F.relu`` that ``nn.TransformerEncoderLayer`` binds as
+    its default activation; only the forward may allocate ``func_call_id``s.
+    """
+
+    from torchlens import _state
+    from torchlens.backends.torch.backend import TorchBackend
+
+    allocated: list[int] = []
+    real_next = _state.next_func_call_id
+
+    def counting_next() -> int:
+        allocated.append(1)
+        return real_next()
+
+    during_prep: list[int] = []
+    real_prepare = TorchBackend.prepare_model_session
+
+    def counting_prepare(self: TorchBackend, session: object, model: object) -> object:
+        before = len(allocated)
+        try:
+            return real_prepare(self, session, model)
+        finally:
+            during_prep.append(len(allocated) - before)
+
+    monkeypatch.setattr(_state, "next_func_call_id", counting_next)
+    monkeypatch.setattr(TorchBackend, "prepare_model_session", counting_prepare)
+
+    class Mixed(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.act = functools.partial(raw.gelu, approximate="tanh")
+            self.encoder = nn.TransformerEncoderLayer(4, 2, dim_feedforward=8, dropout=0.0)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.act(self.encoder(x))
+
+    model = Mixed().eval()
+    wrap_torch()
+    tl.trace(model, torch.randn(2, 3, 4))
+
+    assert during_prep == [0]
+    assert allocated
