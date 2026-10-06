@@ -20,6 +20,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
+from typing import Any
 
 from .._errors import InvalidArgumentError
 from ._typography import DEFAULT_TYPOGRAPHY, HIGH_CONTRAST_TYPOGRAPHY, TypographyRecord
@@ -79,6 +80,15 @@ _DARK_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
 )
 
 
+#: Theme fields deleted outright (lane F12; no alias kept).
+_REMOVED_THEME_MEMBERS: dict[str, str] = {
+    "legend_items": (
+        "legends now derive from the active encoding channels; style them through "
+        "VisualizationTheme.semantic_palette and ramp -- legend_items was deleted"
+    ),
+}
+
+
 @dataclass(frozen=True)
 class VisualizationTheme:
     """Resolved visual skin values for graph renderers.
@@ -132,6 +142,14 @@ class VisualizationTheme:
     ramp: tuple[str, str, str] = ("#F2F2F2", "#79A8CC", "#0072B2")
     neutral_aggregate_fill: str = "#E8EEF2"
     typography: TypographyRecord = field(default=DEFAULT_TYPOGRAPHY)
+
+    def __getattr__(self, name: str) -> Any:
+        """Name the replacement for a removed public member, else fail as usual."""
+
+        from ..utils.facade import refuse_removed_member
+
+        refuse_removed_member("VisualizationTheme", name, _REMOVED_THEME_MEMBERS)
+        return object.__getattribute__(self, name)
 
 
 # Every preset pins a font family on ALL THREE scopes (graph covers cluster

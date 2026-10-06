@@ -389,6 +389,27 @@ _MISSING_ATTR_HINTS: dict[str, str] = {
 }
 
 
+#: Public Trace members removed by the 2026-10-01 shim removal (remove-and-
+#: rename, no alias): a lookup names the replacement, typed.
+_REMOVED_TRACE_MEMBERS: dict[str, str] = {
+    "replay": "use trace.push(...) -- Trace.replay was renamed",
+    "replay_from": "use trace.push_from(...) -- Trace.replay_from was renamed",
+    "rerun": "use trace.run(model, x) -- Trace.rerun was renamed",
+    "validate_saved_outs": (
+        "use trace.validate_forward_pass(...) -- validate_saved_outs was its removed alias"
+    ),
+    "conditional_then_entry_edges": (
+        "use trace.conditional_arm_entry_edges (one mapping for then, elif and else arms)"
+    ),
+    "conditional_elif_entry_edges": (
+        "use trace.conditional_arm_entry_edges (one mapping for then, elif and else arms)"
+    ),
+    "conditional_else_entry_edges": (
+        "use trace.conditional_arm_entry_edges (one mapping for then, elif and else arms)"
+    ),
+}
+
+
 def _raise_missing_trace_attribute(trace: "Trace", name: str) -> Any:
     """Raise the canonical error for one missing Trace attribute.
 
@@ -418,6 +439,9 @@ def _raise_missing_trace_attribute(trace: "Trace", name: str) -> Any:
             remedy="re-capture with tl.trace(...); cleanup() permanently empties a Trace",
             attribute=name,
         )
+    from ..utils.facade import refuse_removed_member
+
+    refuse_removed_member(type(trace).__name__, name, _REMOVED_TRACE_MEMBERS)
     hint = _MISSING_ATTR_HINTS.get(name)
     if hint is not None:
         raise AttributeError(f"{type(trace).__name__!s} object has no attribute {name!r}; {hint}")
