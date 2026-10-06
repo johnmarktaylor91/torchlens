@@ -445,6 +445,83 @@ def test_profiler_count_mismatch_is_disclosed_not_guessed() -> None:
     assert joined["unmatched_event_counts"] == {"aten::relu": 3}
 
 
+class _ProfLayer:
+    def __init__(self, label: str, func: str, idx: int) -> None:
+        self.layer_label = label
+        self.func_name = func
+        self.raw_index = idx
+
+
+def _x(name: str, ts: float, dur: float) -> dict[str, Any]:
+    return {"name": name, "ph": "X", "ts": ts, "dur": dur, "tid": 1}
+
+
+def test_profiler_aten_event_nested_in_other_aten_op_is_internal() -> None:
+    """An aten::matmul inside aten::linear is the linear's internal call, not a matmul layer's."""
+
+    from torchlens.bridge import profiler
+
+    layers = [_ProfLayer("linear_1_1", "linear", 1), _ProfLayer("matmul_1_2", "matmul", 2)]
+    forward = [
+        _x("aten::linear", 0.0, 10.0),
+        _x("aten::matmul", 1.0, 8.0),
+        _x("aten::matmul", 20.0, 5.0),
+    ]
+    # Two forwards: the old same-name filter saw 4 matmuls over 1 layer as "4 forwards".
+    events = forward + [{**e, "ts": e["ts"] + 100.0} for e in forward]
+    joined = profiler.join(_FakeLog(layers), {"traceEvents": events})
+    assert [row["kineto_duration_us"] for row in joined["ops"]] == [20.0, 10.0]
+    assert [e["ts"] for e in joined["ops"][1]["kineto_events"]] == [20.0, 120.0]
+    assert joined["unmatched_event_counts"] == {"aten::matmul": 2}
+    assert joined["forwards"] == 2
+    assert joined["mismatched_op_types"] == {}
+
+
+def test_profiler_inconsistent_forward_count_is_disclosed() -> None:
+    """An op type whose count implies a different forward count stays unmatched."""
+
+    from torchlens.bridge import profiler
+
+    layers = [
+        _ProfLayer("conv2d_1_1", "conv2d", 1),
+        _ProfLayer("relu_1_2", "relu", 2),
+        _ProfLayer("matmul_1_3", "matmul", 3),
+    ]
+    events = [
+        _x("aten::conv2d", 0.0, 1.0),
+        _x("aten::relu", 2.0, 1.0),
+        _x("aten::matmul", 4.0, 1.0),
+        _x("aten::conv2d", 10.0, 1.0),
+        _x("aten::relu", 12.0, 1.0),
+        _x("aten::matmul", 14.0, 1.0),
+        _x("aten::matmul", 16.0, 1.0),
+        _x("aten::matmul", 18.0, 1.0),
+    ]
+    with pytest.warns(UserWarning, match="matmul"):
+        joined = profiler.join(_FakeLog(layers), {"traceEvents": events})
+    assert [row["kineto_event_count"] for row in joined["ops"]] == [2, 2, 0]
+    assert joined["forwards"] == 2
+    assert joined["mismatched_op_types"] == {
+        "matmul": {"events": 4, "layers": 1, "forwards": 4, "expected_forwards": 2}
+    }
+
+
+def test_profiler_dunder_and_plain_spellings_pool_in_execution_order() -> None:
+    """``add`` and ``__add__`` layers share aten::add events in execution order."""
+
+    from torchlens.bridge import profiler
+
+    layers = [
+        _ProfLayer("add_1_1", "add", 1),
+        _ProfLayer("__add___1_2", "__add__", 2),
+        _ProfLayer("add_2_3", "add", 3),
+    ]
+    events = [_x("aten::add", float(t), float(d)) for t, d in ((0, 1), (5, 2), (9, 3))]
+    joined = profiler.join(_FakeLog(layers), {"traceEvents": events})
+    assert [row["kineto_duration_us"] for row in joined["ops"]] == [1.0, 2.0, 3.0]
+    assert joined["mismatched_op_types"] == {}
+
+
 # --------------------------------------------------------------------------- #
 # LOW-9 profiler: null traceEvents/events tolerated
 # --------------------------------------------------------------------------- #
