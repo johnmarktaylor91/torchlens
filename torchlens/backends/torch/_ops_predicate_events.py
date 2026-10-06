@@ -56,6 +56,7 @@ from ._tl import (
     get_label_list,
     get_live_tensor_label,
     get_param_meta,
+    promote_mutated_parameters,
     set_tensor_label,
 )
 from .tensor_tracking import (
@@ -402,11 +403,11 @@ def _extract_arg_tensors_and_params(
     if not is_variadic_transform:
         spec = FUNC_ARG_SPECS.get(normalized_name)
         if spec is not None and dynamic_spec_covers_call(spec, args, kwargs):
-            return extract_tensors_and_params(spec, args, kwargs)
+            return promote_mutated_parameters(*extract_tensors_and_params(spec, args, kwargs))
         if spec is None:
             cached = _st._dynamic_arg_specs.get(normalized_name)
             if isinstance(cached, ArgSpec) and dynamic_spec_covers_call(cached, args, kwargs):
-                return extract_tensors_and_params(cached, args, kwargs)
+                return promote_mutated_parameters(*extract_tensors_and_params(cached, args, kwargs))
 
     # Tier 3 fallback: BFS crawl. Cache/union-merge the derived spec only for
     # fixed-arity functions with no static entry; variadic transform ops,
@@ -419,7 +420,10 @@ def _extract_arg_tensors_and_params(
         and _st._dynamic_arg_specs.get(normalized_name) is not DYNAMIC_SPEC_UNCACHEABLE
     ):
         _cache_dynamic_spec(normalized_name, args, kwargs, arg_tensors, arg_parameters)
-    return arg_tensors, arg_parameters
+    # A Parameter mutated in place earlier in this pass binds as a graph parent of
+    # its mutation op (``promote_mutated_parameters``); the cached spec above keeps
+    # recording slot positions only, so it is unaffected.
+    return promote_mutated_parameters(arg_tensors, arg_parameters)
 
 
 def _build_param_fields(

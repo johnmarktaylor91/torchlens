@@ -364,7 +364,7 @@ class _RegisteredParameterMutationModel(nn.Module):
     """Mutate prepared model state during the captured forward."""
 
     def __init__(self) -> None:
-        """Create the registered parameter that must remain a witnessed gap."""
+        """Create the registered parameter whose in-place write is captured."""
 
         super().__init__()
         self.weight = nn.Parameter(torch.ones(4, 4))
@@ -1149,8 +1149,13 @@ def test_finalize_census_keeps_dispatch_reason_across_later_guard_passes() -> No
     assert len(trace.completeness_diagnostics) == 1
 
 
-def test_dynamic_parameter_initializers_are_captured_without_hiding_state_mutations() -> None:
-    """Capture temporary Parameter initialization while registered-state writes fail closed."""
+def test_dynamic_parameter_initializers_and_registered_state_writes_are_captured() -> None:
+    """Capture temporary Parameter initialization and in-place writes to prepared state.
+
+    A registered Parameter mutated in place inside ``forward`` used to stay a
+    witnessed ``owner_not_captured`` gap; it is now a captured op whose output the
+    later read consumes (JMT decision 2026-10-05, MIX-HIC ``self.temp.clamp_``).
+    """
 
     wrap_torch(completeness_witness=True)
     temporary_trace = tl.trace(_DynamicParameterInitializationModel(), torch.randn(2, 4))
@@ -1165,14 +1170,15 @@ def test_dynamic_parameter_initializers_are_captured_without_hiding_state_mutati
     assert temporary_trace.completeness_diagnostics == []
     assert temporary_trace.capture_verified is True
 
-    with pytest.warns(TorchLensCaptureGapWarning, match="aten.uniform_"):
-        state_trace = tl.trace(_RegisteredParameterMutationModel(), torch.randn(2, 4))
+    state_trace = tl.trace(_RegisteredParameterMutationModel(), torch.randn(2, 4))
 
-    assert state_trace.capture_verified is False
-    assert [
-        (row["operator"], row["reason"], row["mutates"])
-        for row in state_trace.completeness_diagnostics
-    ] == [("aten.uniform_.default", "owner_not_captured", True)]
+    assert state_trace.capture_verified is True
+    assert state_trace.completeness_diagnostics == []
+    uniform_ops = [layer for layer in state_trace.layers if layer.type == "uniform"]
+    assert len(uniform_ops) == 1
+    assert [param.address for param in uniform_ops[0].params] == ["weight"]
+    matmul = [layer for layer in state_trace.layers if layer.type == "matmul"][0]
+    assert [state_trace[parent].label for parent in matmul.parents][-1] == uniform_ops[0].label
 
 
 def test_mid_forward_autograd_grad_is_an_exact_backward_boundary() -> None:

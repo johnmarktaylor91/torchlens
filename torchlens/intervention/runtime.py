@@ -6,7 +6,7 @@ import inspect
 import time
 import warnings
 from collections.abc import Iterator
-from contextlib import contextmanager, suppress
+from contextlib import contextmanager, nullcontext, suppress
 from types import SimpleNamespace
 from typing import Any
 
@@ -680,8 +680,12 @@ def _apply_inplace_replacement_to_mutated_storage(
     )
     if safe_to_copy:
         assert destination is not None
+        # A Parameter receiver is only legally written untracked (eager runs
+        # its in-place op under ``no_grad`` or on a frozen Parameter), so the
+        # replacement write is untracked too.
+        grad_ctx = torch.no_grad() if isinstance(destination, torch.nn.Parameter) else nullcontext()
         try:
-            with pause_logging():
+            with pause_logging(), grad_ctx:
                 destination.copy_(result)
         except Exception:
             safe_to_copy = False

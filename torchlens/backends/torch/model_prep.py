@@ -62,6 +62,7 @@ from ._module_arg_stubs import first_stub_shape, stub_module_arg_payloads
 from ._tl import (
     begin_label_session,
     clear_meta,
+    clear_param_meta,
     end_label_session,
     get_buffer_address,
     get_live_tensor_label,
@@ -2794,12 +2795,12 @@ def _restore_session_param_state(trace: "Trace", model: nn.Module) -> None:
     inventory = getattr(trace, "_session_param_inventory", None)
     for param in inventory or ():
         restore_param_requires_grad(param)
-        clear_meta(param)
+        clear_param_meta(param)
     if inventory:
         trace._session_param_inventory = []
     for param in model.parameters():
         restore_param_requires_grad(param)
-        clear_meta(param)
+        clear_param_meta(param)
 
 
 def _cleanup_model_session(

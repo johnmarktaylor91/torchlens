@@ -12,6 +12,7 @@ from ._tl import (
     get_tensor_label,
     get_tensor_meta,
     is_tensor_data_alias,
+    mutated_parameter_label,
     session_label_storage_intact,
     session_meta_is_anchored,
 )
@@ -118,7 +119,7 @@ def _unattributed_tensor_arg_positions(
             in ``parents`` when the tensor is consumed as an input edge.
         """
 
-        if isinstance(value, torch.nn.Parameter):
+        if isinstance(value, torch.nn.Parameter) and mutated_parameter_label(value) is None:
             return ()
         meta = get_tensor_meta(value)
         if meta is None:
@@ -199,7 +200,10 @@ def _unattributed_tensor_arg_positions(
             if unsafe_data_alias_receiver or not _tensor_has_known_provenance(trace, value):
                 positions.append(path)
                 return
-            if isinstance(value, torch.nn.Parameter):
+            # A Parameter mutated in place earlier in this pass binds as a graph
+            # parent of its mutation op (``promote_mutated_parameters``), so it is
+            # witnessed by the label branch below, not the parameter rung.
+            if isinstance(value, torch.nn.Parameter) and mutated_parameter_label(value) is None:
                 # r29 F3a: the parameter rung. A Parameter never appears in
                 # ``parent_arg_positions`` (the recorder skips it) and
                 # ``tensor_session_parent_labels`` returns ``()`` for it, so a

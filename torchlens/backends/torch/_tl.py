@@ -944,6 +944,23 @@ def clear_meta(obj: Any) -> None:
         _PARAM_REGISTRY.pop(obj, None)
 
 
+def clear_param_meta(param: Any) -> None:
+    """Remove both TorchLens namespaces a prepared Parameter can carry.
+
+    A Parameter's session metadata lives in the parameter registry, but a
+    Parameter mutated in place during a capture also carries a tensor label on
+    its ``._tl`` attribute (``wrappers._label_mutated_prepared_parameter``).
+    :func:`clear_meta` stops at the attribute, so this clears both.
+
+    Parameters
+    ----------
+    param : Any
+        Parameter whose TorchLens metadata should be cleared.
+    """
+    clear_meta(param)
+    _PARAM_REGISTRY.pop(param, None)
+
+
 def get_tensor_meta(t: Any) -> TensorMeta | None:
     """Return tensor metadata, raising on foreign or wrong-kind metadata.
 
@@ -1276,6 +1293,63 @@ def get_live_label_list(tensor_list: Iterable[Any], live_labels: Iterable[str]) 
         if label is not None:
             labels.append(label)
     return labels
+
+
+def mutated_parameter_label(param: Any) -> str | None:
+    """Return the current-session mutation label a Parameter carries, if any.
+
+    Only ``wrappers._label_mutated_prepared_parameter`` labels a Parameter: after
+    an in-place op mutated a prepared Parameter, its reads bind to that op. The
+    ``._tl`` precheck keeps the common unlabeled Parameter off the label gate.
+
+    Parameters
+    ----------
+    param : Any
+        Parameter to inspect.
+
+    Returns
+    -------
+    str | None
+        The live mutation-op label, or ``None`` for an unmutated Parameter.
+    """
+    if getattr(param, "_tl", None) is None:
+        return None
+    return get_tensor_label(param)
+
+
+def promote_mutated_parameters(
+    tensors: list[Any], params: list[Any]
+) -> tuple[list[Any], list[Any]]:
+    """Move Parameters that carry a current-session label into the tensor list.
+
+    A prepared Parameter is labeled only after an in-place op mutated it during
+    the active capture (``wrappers._label_mutated_prepared_parameter``). From then
+    on a read of it consumes that op's output, so it binds as a graph parent
+    instead of a parameter edge. Unlabeled Parameters, and Parameters whose label
+    belongs to an earlier capture session, stay parameter edges.
+
+    Parameters
+    ----------
+    tensors : list[Any]
+        Non-Parameter tensors extracted from an op's arguments.
+    params : list[Any]
+        Parameters extracted from the same arguments.
+
+    Returns
+    -------
+    tuple[list[Any], list[Any]]
+        ``(tensors, params)`` with mutated Parameters moved to ``tensors``; the
+        inputs are returned unchanged when no Parameter is labeled.
+    """
+
+    if not params or all(getattr(param, "_tl", None) is None for param in params):
+        return tensors, params
+    promoted = [param for param in params if mutated_parameter_label(param) is not None]
+    if not promoted:
+        return tensors, params
+    promoted_ids = {id(param) for param in promoted}
+    kept = [param for param in params if id(param) not in promoted_ids]
+    return [*tensors, *promoted], kept
 
 
 def clear_tensor_label(t: Any) -> None:

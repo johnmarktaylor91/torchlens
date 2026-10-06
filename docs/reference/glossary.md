@@ -96,7 +96,10 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   have multiple captured versions. A training-mode `BatchNorm2d` collapse label can say
   “5 layers total” because it counts the parameter leaves `weight` and `bias` plus the buffer
   leaves `running_mean`, `running_var`, and `num_batches_tracked`; it is not claiming five
-  BatchNorm calls.
+  BatchNorm calls. An in-place op on a Parameter inside `forward`
+  (`with torch.no_grad(): self.temp.clamp_(lo, hi)`) is captured as an op whose `params` holds
+  that Parameter; every later read of the Parameter in the same pass binds to that op as a graph
+  parent, not as a parameter edge, so it is absent from that read's `params`.
 
 **GradFn**
 : A first-class live backward-autograd node captured during backward logging. Portable artifacts
