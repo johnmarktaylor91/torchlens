@@ -615,13 +615,13 @@ jobs:
           with open("pyproject.toml", "rb") as fh:
               extras = sorted(tomllib.load(fh)["project"]["optional-dependencies"])
           # KNOWN-UNSATISFIABLE LEDGER (disclosed skips, never silent).
-          # EMPTY as of the Batch-8 fix-by-exclusion repair: lit-nlp left the
-          # all/all-stretch rollup (lit-nlp 1.3 requires shap<0.46 against
-          # the shap~=0.46 pin), so both meta-extras resolve and EVERY
-          # declared extra is now gated here. [lit,shap] remains
-          # unsatisfiable by design, but that is a combination, not a
-          # declared extra, so it needs no ledger row. If an extra stops
-          # resolving, add it here WITH its conflict named, and report loudly.
+          # EMPTY: both meta-extras resolve and EVERY declared extra is gated
+          # here. lit-nlp stays out of the all/all-stretch rollup because it
+          # requires numpy<2; the shap extra's floor was widened to 0.45.1
+          # (the bridge is bit-identical to DeepExplainer on shap 0.45.1), so
+          # the [lit,shap] combination now resolves and the lit-real job
+          # asserts it. If an extra stops resolving, add it here WITH its
+          # conflict named, and report loudly.
           known_unsatisfiable = set()
           failures = []
           fixed = []
@@ -1135,10 +1135,11 @@ jobs:
     # tests.yml floor rows already run). tests/test_lit_bridge_real.py loads
     # its tiny checkpoints OFFLINE and skips when they are not cached, so the
     # cache is warmed FIRST -- a skip cascade would otherwise pass the PASSED
-    # floor check as red, never as green. The [lit,hf] COMBINATION is resolved
-    # on every advertised interpreter (the extras gate resolves single extras
-    # only) and [lit,shap] is asserted UNSATISFIABLE, documenting the
-    # by-design shap<0.46 conflict named in pyproject.
+    # floor check as red, never as green. The [lit,hf] and [lit,shap]
+    # COMBINATIONS are resolved on every advertised interpreter (the extras
+    # gate resolves single extras only): lit-nlp 1.3 requires
+    # shap>=0.42,<0.46 and the shap extra admits shap>=0.45.1, so [lit,shap]
+    # resolves to the 0.45 line.
     name: LIT bridge (real lit-nlp)
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -1156,20 +1157,19 @@ jobs:
           # No uv.lock: key the uv cache on the dependency declarations.
           cache-dependency-glob: "pyproject.toml"
 
-      - name: Resolve the [lit,hf] combination on every advertised interpreter; assert [lit,shap] unsatisfiable
+      - name: Resolve the [lit,hf] and [lit,shap] combinations on every advertised interpreter
         run: |
           printf 'numpy==1.26.4\n' > "${{ runner.temp }}/numpy1.txt"
           for pv in 3.10 3.11 3.12 3.13; do
             uv pip compile pyproject.toml --extra lit --extra hf -c "${{ runner.temp }}/numpy1.txt" \
               --python-version "$pv" --no-header -q -o "${{ runner.temp }}/lit-hf-$pv.txt"
             echo "[lit,hf] resolves on $pv"
+            # set -e fails the step if [lit,shap] stops resolving.
+            uv pip compile pyproject.toml --extra lit --extra shap -c "${{ runner.temp }}/numpy1.txt" \
+              --python-version "$pv" --no-header -q -o "${{ runner.temp }}/lit-shap-$pv.txt"
+            grep -E '^shap==0\.45\.' "${{ runner.temp }}/lit-shap-$pv.txt"
+            echo "[lit,shap] resolves on $pv"
           done
-          if uv pip compile pyproject.toml --extra lit --extra shap --python-version 3.12 \
-               --no-header -q -o "${{ runner.temp }}/lit-shap.txt" 2>/dev/null; then
-            echo "[lit,shap] RESOLVED: the documented by-design conflict is gone; update pyproject's lit/all-stretch notes"
-            exit 1
-          fi
-          echo "[lit,shap] unsatisfiable by design (documented)"
 
       - name: Install lit-nlp + transformers on numpy 1.x
         run: |

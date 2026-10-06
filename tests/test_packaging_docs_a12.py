@@ -62,12 +62,16 @@ def test_extras_composition_repairs_hold() -> None:
     extras = _extras()
 
     # fix-by-exclusion: both meta-extras exist, alias each other, and lit-nlp
-    # (the shap<0.46 conflict) stays OUT of the rollup.
+    # (numpy<2) stays OUT of the rollup.
     assert extras["all"] == ["torchlens[all-stretch]"]
     assert not any("lit-nlp" in req for req in extras["all-stretch"]), (
-        "lit-nlp re-entered all-stretch: lit-nlp 1.3 requires shap<0.46 against "
-        "the shap~=0.46 pin, which made [all] known-unsatisfiable through 2.34.1"
+        "lit-nlp re-entered all-stretch: lit-nlp 1.3 requires numpy<2, which "
+        "would pin every [all] install to numpy 1.x"
     )
+    # the shap extra admits lit-nlp 1.3's shap<0.46 line, and all-stretch
+    # carries the identical pin.
+    assert extras["shap"] == ["shap>=0.45.1,<1"]
+    assert "shap>=0.45.1,<1" in extras["all-stretch"]
 
     # the lit extra stays bounded to the 1.3 line (LIT-panel memo item 1).
     assert extras["lit"] == ["lit-nlp>=1.3,<1.4"]
