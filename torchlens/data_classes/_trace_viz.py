@@ -852,7 +852,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             **({"max_rows": max_rows} if max_rows is not None else {}),
             **unsupported,
         )
-        if not getattr(self, "_tracing_finished", False):
+        if not self._tracing_finished:  # a cleaned trace raises trace_cleaned_up here
             from .._errors import CaptureContextError
 
             raise CaptureContextError(
