@@ -18,7 +18,7 @@ import torchlens as tl
 
 mlflow = pytest.importorskip("mlflow")
 
-pytestmark = [pytest.mark.optional, pytest.mark.slow]
+pytestmark = [pytest.mark.optional, pytest.mark.heavy]
 
 _KEYS = ("num_layers", "num_saved_ops", "total_activation_memory")
 

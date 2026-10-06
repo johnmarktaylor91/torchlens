@@ -65,6 +65,9 @@ class TestRelayPinWandb:
                 bucket_counts=[1] * 600,
                 global_step=102,
             )
+            # A later step commits the step-102 row through the relay's
+            # step-change flush instead of relying on the tail flush at finish.
+            writer.add_scalar("tail/marker", 0.0, global_step=200)
             writer.close()
         finally:
             run.finish()
@@ -75,8 +78,10 @@ class TestRelayPinWandb:
         assert [row["global_step"] for row in scalars] == [100, 102, 104]
         assert [row["_step"] for row in scalars] == [0, 1, 2]
         assert [row["gradients/norm/w"] for row in scalars] == [101, 103, 105]
-        narrow = next(row for row in rows if "hist/nonuniform/_type" in row)
-        wide = next(row for row in rows if "hist/wide/_type" in row)
+        keys = [sorted(row) for row in rows]
+        narrow = next((row for row in rows if "hist/nonuniform/_type" in row), None)
+        wide = next((row for row in rows if "hist/wide/_type" in row), None)
+        assert narrow is not None and wide is not None, keys
         # Loss 2: every histogram summary field is destroyed.
         for row, tag in ((narrow, "hist/nonuniform"), (wide, "hist/wide")):
             kept = {key.rsplit("/", 1)[1] for key in row if key.startswith(f"{tag}/")}

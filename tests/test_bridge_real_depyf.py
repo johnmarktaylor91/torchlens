@@ -6,7 +6,9 @@ sources as ``with depyf.prepare_debug(path): torch.compile(model)(x)``.
 
 from __future__ import annotations
 
+import contextlib
 import re
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -17,7 +19,7 @@ import torchlens as tl
 
 depyf = pytest.importorskip("depyf")
 
-pytestmark = [pytest.mark.optional, pytest.mark.slow]
+pytestmark = [pytest.mark.optional, pytest.mark.heavy]
 
 _UUID = re.compile(r"[0-9a-f]{8}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{12}")
 _COUNTER = re.compile(r"(__compiled_fn|__transformed_code|_for_inner|full_code_for_inner)_(\d+)")
@@ -36,6 +38,25 @@ def _shape(names: list[str]) -> set[str]:
     return {_COUNTER.sub(r"\1_N", _UUID.sub("UUID", name)) for name in names}
 
 
+@pytest.fixture
+def no_compile_caches() -> Iterator[None]:
+    """Disable Inductor's on-disk caches so both runs execute every pass.
+
+    A warm FX-graph / AOT-autograd cache skips the post-grad pass and so
+    drops its ``AFTER_POST_GRAD`` dump: a cache artifact, not a bridge one.
+    """
+
+    import torch._functorch.config as functorch_config
+    import torch._inductor.config as inductor_config
+
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(inductor_config.patch(fx_graph_cache=False))
+        if hasattr(functorch_config, "enable_autograd_cache"):
+            stack.enter_context(functorch_config.patch(enable_autograd_cache=False))
+        yield
+
+
+@pytest.mark.usefixtures("no_compile_caches")
 def test_dump_writes_what_depyf_writes_directly(tmp_path: Path) -> None:
     model, x = _model(), torch.randn(2, 3, 16, 16)
     torch._dynamo.reset()

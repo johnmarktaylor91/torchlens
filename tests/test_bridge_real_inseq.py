@@ -17,7 +17,7 @@ import torchlens as tl
 
 inseq = pytest.importorskip("inseq")
 
-pytestmark = [pytest.mark.optional, pytest.mark.slow]
+pytestmark = [pytest.mark.optional, pytest.mark.heavy]
 
 _TINY = "hf-internal-testing/tiny-random-gpt2"
 _SOURCE = "Hello world"
