@@ -59,6 +59,10 @@ from ...utils.tensor_utils import (
 from . import module_stack as _mstack
 from ._held_refs import normalize_held_torch_function_refs, register_released_model
 from ._module_arg_stubs import first_stub_shape, stub_module_arg_payloads
+from ._module_boundary_adoption import (
+    collect_pre_forward_tensor_ids,
+    record_module_boundary_adoption,
+)
 from ._tl import (
     begin_label_session,
     clear_meta,
@@ -722,7 +726,7 @@ def _prepare_model_session(
     # Pre-forward ownership snapshot for the R16 module-entry adoption
     # disclosure: tensors reachable NOW (nested caches, forward globals) are
     # model-owned known sources; anything first seen mid-forward is not.
-    owned_at_entry, forward_outside_ids = _collect_pre_forward_tensor_ids(model)
+    owned_at_entry, forward_outside_ids = collect_pre_forward_tensor_ids(model)
     trace._module_capture_ws.module_build_data["model_owned_tensor_ids_at_entry"] = owned_at_entry
     trace._module_capture_ws.module_build_data["forward_outside_tensor_ids_at_entry"] = (
         forward_outside_ids
@@ -1328,7 +1332,7 @@ def _record_module_entry_metadata(
             )
             label = get_tensor_label(t)
             # R16: adoption must not LAUNDER an escape (see the helper).
-            _record_module_boundary_adoption(trace, t, label, "entry", module_address)
+            record_module_boundary_adoption(trace, t, label, "entry", module_address)
         if label is None:
             continue  # Skip untracked tensors (e.g. external constants) (#117)
         input_tensor_labels.add(label)
@@ -2038,44 +2042,6 @@ def _make_user_forward_hook_wrapper(
     return wrapped_hook
 
 
-def _record_module_boundary_adoption(
-    trace: "Trace", t: torch.Tensor, label: str | None, boundary: str, module_address: str
-) -> None:
-    """Record an untagged tensor adopted as an internal source at a module boundary.
-
-    R16: adoption must not LAUNDER an escape. A stale pre-wrap torch reference
-    leaves an untagged output; when a module CONSUMES it (``entry``) or RETURNS
-    it (``exit``; transformers' ``GELUActivation`` holds ``F.gelu`` and returns
-    ``self.act(x)``), no wrapped op ever sees an unattributed argument, so the
-    op vanished with no warning and no rescue. The record makes postprocess
-    raise the same provenance warning and escape signal the function path
-    raises. Disclosed transform/dynamo regions legitimately produce untagged
-    tensors, and a tensor in the PRE-FORWARD ownership snapshot existed before
-    the forward (a nested cache or forward-global whose stale labels the
-    previous session cleared); neither is an escape.
-
-    Not being an escape is not provenance, though: a snapshot tensor reachable
-    ONLY from a forward callable (a closure cell or module-global tensor a
-    module consumes or returns directly) is no model-held source, exactly as
-    the per-op ``unattributed_tensor_args`` witness treats it. It is recorded on
-    ``_module_boundary_outside_sources``, which postprocess discloses and
-    persists as a ``source_provenance`` gap without raising the escape signal.
-    """
-
-    if (
-        label is None
-        or getattr(trace, "_raw_transform_escape_detected", False)
-        or getattr(trace, "_raw_dynamo_region_detected", False)
-    ):
-        return
-    build_data = trace._module_capture_ws.module_build_data
-    record = (str(label), boundary, str(module_address))
-    if id(t) not in (build_data.get("model_owned_tensor_ids_at_entry") or ()):
-        trace.__dict__.setdefault("_module_boundary_adoptions", []).append(record)
-    elif id(t) in (build_data.get("forward_outside_tensor_ids_at_entry") or ()):
-        trace.__dict__.setdefault("_module_boundary_outside_sources", []).append(record)
-
-
 def _record_module_exit_metadata(
     trace: "Trace",
     module: nn.Module,
@@ -2193,7 +2159,7 @@ def _record_module_exit_metadata(
             # twin never sees Parameters (``get_arg_tensors_for_resolution``
             # drops them) and buffers sit in the pre-forward ownership snapshot.
             if not fire_results and not isinstance(t, nn.Parameter):
-                _record_module_boundary_adoption(trace, t, tensor_label, "exit", address)
+                record_module_boundary_adoption(trace, t, tensor_label, "exit", address)
         if tensor_label is None:
             continue
         if fire_results:
@@ -3169,61 +3135,8 @@ def _collect_model_owned_tensor_ids(model: nn.Module) -> dict[int, torch.Tensor]
         set semantics; the values exist only to pin the ids.
     """
 
-    owned, _ = _collect_pre_forward_tensor_ids(model)
+    owned, _ = collect_pre_forward_tensor_ids(model)
     return owned
-
-
-def _collect_pre_forward_tensor_ids(
-    model: nn.Module,
-) -> tuple[dict[int, torch.Tensor], frozenset[int]]:
-    """Return the pinned pre-forward snapshot and its forward-callable-only subset.
-
-    Module ``__dict__`` object graphs are walked first, every forward callable's
-    defaults, closure cells and referenced globals second, through ONE shared
-    ``seen`` set, so the second subset holds exactly the tensors reachable ONLY
-    from a forward callable (a closure or module-global tensor). Those are not
-    model-held sources: the held-tensor scan never stamps them and the per-op
-    ``unattributed_tensor_args`` witness flags them, so the module-boundary
-    adoption record must still persist a ``source_provenance`` gap for them.
-
-    Parameters
-    ----------
-    model
-        The prepared root model.
-
-    Returns
-    -------
-    tuple[dict[int, torch.Tensor], frozenset[int]]
-        The pinned ``id -> tensor`` snapshot (see
-        :func:`_collect_model_owned_tensor_ids`) and the ids reachable only from
-        forward callables.
-    """
-
-    owned: dict[int, torch.Tensor] = {}
-    callable_only: set[int] = set()
-    seen: set[int] = set()
-
-    def _note(tensor: torch.Tensor) -> None:
-        """Record and pin one reachable tensor under its object id."""
-
-        owned[id(tensor)] = tensor
-
-    def _note_callable(tensor: torch.Tensor) -> None:
-        """Record one tensor first reached through a forward callable."""
-
-        if id(tensor) not in owned:
-            callable_only.add(id(tensor))
-        owned[id(tensor)] = tensor
-
-    submodules = list(model.modules())
-    for submodule in submodules:
-        for attr_val in submodule.__dict__.values():
-            _clear_session_tensor_metadata(attr_val, seen, visit=_note)
-    for submodule in submodules:
-        _clear_callable_session_tensor_metadata(
-            getattr(submodule, "forward", None), seen, visit=_note_callable
-        )
-    return owned, frozenset(callable_only)
 
 
 def _undecorate_model_tensors(trace: "Trace", model: nn.Module) -> None:
