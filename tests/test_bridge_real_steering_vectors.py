@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 from collections import Counter
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -26,7 +27,7 @@ _WORDS = ["cats", "rain", "music", "coffee", "school", "summer", "dogs", "work"]
 
 
 @pytest.fixture(scope="module")
-def stack() -> dict[str, Any]:
+def stack() -> Iterator[dict[str, Any]]:
     """Load the tiny Llama and trace equal-length positive and negative prompts."""
 
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
@@ -49,13 +50,18 @@ def stack() -> dict[str, Any]:
         ids = tok(prompts, return_tensors="pt").input_ids
         return tl.trace(model, ids, capture=tl.options.CaptureOptions(layers_to_save="all"))
 
-    return {
+    stack = {
         "model": model,
         "tok": tok,
         "pairs": pairs,
         "log_pos": trace([p for p, _ in pairs]),
         "log_neg": trace([n for _, n in pairs]),
     }
+    try:
+        yield stack
+    finally:
+        stack["log_pos"].cleanup()
+        stack["log_neg"].cleanup()
 
 
 def _direct(stack: dict[str, Any], **kwargs: Any) -> Any:

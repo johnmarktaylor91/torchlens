@@ -206,7 +206,7 @@ def _fit_direction(train: np.ndarray, method: str) -> np.ndarray:
     if method == "mean_diff":
         return np.mean(train, axis=0).astype(np.float32)
     if method == "umap":
-        import umap  # type: ignore[import-not-found]
+        import umap
 
         embedding = umap.UMAP(n_components=1).fit_transform(train).astype(np.float32)
         return np.sum(train * embedding, axis=0) / np.sum(embedding)

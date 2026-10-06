@@ -123,6 +123,8 @@ def _default_method(module: Any) -> str:
     """
 
     reader = getattr(getattr(module, "vector", None), "read_representations", None)
+    if not callable(reader):
+        return "pca"
     try:
         default = inspect.signature(reader).parameters["method"].default
     except (TypeError, ValueError, KeyError):

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 from collections import Counter
+from collections.abc import Iterator
 from typing import Any
 
 import numpy as np
@@ -26,7 +27,7 @@ _WORDS = ["cats", "rain", "music", "coffee", "school", "summer", "dogs", "work"]
 
 
 @pytest.fixture(scope="module")
-def stack() -> dict[str, Any]:
+def stack() -> Iterator[dict[str, Any]]:
     """Build a dialz SteeringModel and trace equal-length prompts through it."""
 
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
@@ -52,12 +53,17 @@ def stack() -> dict[str, Any]:
         ids = tok(prompts, return_tensors="pt").input_ids.to(model.device)
         return tl.trace(model, ids, capture=tl.options.CaptureOptions(layers_to_save="all"))
 
-    return {
+    stack = {
         "steering_model": steering_model,
         "dataset": dataset,
         "log_pos": trace([p for p, _ in pairs]),
         "log_neg": trace([n for _, n in pairs]),
     }
+    try:
+        yield stack
+    finally:
+        stack["log_pos"].cleanup()
+        stack["log_neg"].cleanup()
 
 
 def _assert_same(bridge: Any, direct: Any) -> None:
