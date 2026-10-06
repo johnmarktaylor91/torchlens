@@ -190,6 +190,9 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         ("torchlens/backends/torch/backward.py", "_ORIGINAL_SAVED_TENSORS_HOOKS_ENTER"),
         ("torchlens/backends/torch/backward.py", "_ORIGINAL_SAVED_TENSORS_HOOKS_INIT"),
         ("torchlens/backends/torch/backward.py", "_SAVED_TENSORS_HOOKS_INIT_PATCHED"),
+        # Patched legacy constructor classes (torch.<dtype>Tensor, Variable):
+        # installed by wrap_torch, restored and emptied by unwrap_torch.
+        ("torchlens/backends/torch/legacy_ctors.py", "_INSTALLED"),
         ("torchlens/backends/torch/belt.py", "_ledger"),
         ("torchlens/backends/torch/belt.py", "_member_map"),
         ("torchlens/backends/torch/belt.py", "_report"),
