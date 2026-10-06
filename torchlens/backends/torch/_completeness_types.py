@@ -269,6 +269,3 @@ class _PlainScalarEscapeState:
     count: int = 0
     first_file: str | None = None
     first_line: int | None = None
-    #: Raw labels of the tensors whose data escaped; postprocess orphan removal
-    #: reads them to tell a pruned op that steered Python from a dead one.
-    labels: set[str] = field(default_factory=set)

@@ -1827,6 +1827,10 @@ PINNED_ORDER_PAIRS: Mapping[tuple[str, str], PinnedPair] = MappingProxyType(
                     # root_ancestors closure the removal scrub rebinds.
                     "root_ancestors",
                     "token:raw_graph_ws",
+                    # r9-sourceless: orphan removal reads the source-less
+                    # witness of the ops it prunes; step 1 seeds it on the
+                    # output rows it mints (output rows are never witnessed).
+                    "unattributed_tensor_args",
                 )
             ),
             "orphan removal floods and scrubs the COMPLETE raw graph: step 1 "
