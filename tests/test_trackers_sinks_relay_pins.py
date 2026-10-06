@@ -11,6 +11,8 @@ in test_trackers_sinks_delivery.py.
 
 from __future__ import annotations
 
+import time
+
 import pytest
 
 #: The versions the fidelity table was measured at. A different installed
@@ -22,6 +24,7 @@ MEASURED_CLEARML = "2.1.12"
 class TestRelayPinWandb:
     """T-RELAY-W: the wandb TB relay's measured losses stay lost."""
 
+    @pytest.mark.heavy
     def test_relay_rewrites_steps_and_drops_summaries(self, tmp_path, monkeypatch) -> None:  # noqa: ANN001
         wandb = pytest.importorskip("wandb")
         pytest.importorskip("tensorboard")
@@ -65,10 +68,14 @@ class TestRelayPinWandb:
                 bucket_counts=[1] * 600,
                 global_step=102,
             )
-            # A later step commits the step-102 row through the relay's
-            # step-change flush instead of relying on the tail flush at finish.
-            writer.add_scalar("tail/marker", 0.0, global_step=200)
+            # Later steps commit the step-102 row through the relay's
+            # step-change flush, and the pause lets the relay's file poller
+            # read the events: at 0.30.0, finish() straight after close()
+            # dropped every event after the first histogram in 2 of 5 runs.
+            for step in (200, 201):
+                writer.add_scalar("tail/marker", 0.0, global_step=step)
             writer.close()
+            time.sleep(3.0)
         finally:
             run.finish()
         rows = history_rows(tmp_path)
