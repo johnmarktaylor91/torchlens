@@ -54,7 +54,7 @@ def _outcome(fn) -> tuple[object, str]:
 
     try:
         out = fn()
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - the outcome comparison records any eager error
         return type(exc), str(exc)
     return "ok", f"{tuple(out.shape)} {out.dtype}"
 
@@ -584,3 +584,147 @@ def test_failed_layout_probe_leaves_everything_unwrapped_and_flag_false(monkeypa
     finally:
         tl.trace(Plain(), torch.randn(2, 4))
     assert legacy_ctors.installed_legacy_constructor_classes()["FloatTensor"] is torch.FloatTensor
+
+
+def test_foreign_new_set_after_wrap_then_removed_is_repatched_and_captured() -> None:
+    """A foreign ``Variable.__new__`` set over ours and later deleted never leaves a stale record.
+
+    CPython keeps ``Variable`` on the ``slot_tp_new`` trampoline after the
+    foreign ``__new__`` is deleted, with no Python ``__new__`` left in the MRO.
+    The old slot-pointer heuristic read that as "foreign patch still present",
+    kept the stale record, skipped the class and still listed it as installed,
+    so ``Variable`` went silently uncaptured and later foreign patches went
+    undisclosed. The next wrap must restore the recorded C constructor and
+    re-patch; a foreign patch still in effect must be left untouched.
+    """
+
+    from torchlens._errors import TorchLensWarning
+    from torchlens.backends.torch import legacy_ctors
+    from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
+    from torchlens.utils._type_new_slot import _type_view
+
+    unwrap_torch()
+    c_tp_new = _type_view(Variable).tp_new
+    tl.trace(Plain(), torch.randn(2, 4))
+    ours = Variable.__dict__["__new__"].__func__
+
+    def foreign_new(subtype, *args, **kwargs):
+        return ours(subtype, *args, **kwargs)
+
+    Variable.__new__ = staticmethod(foreign_new)  # type: ignore[method-assign]
+    try:
+        unwrap_torch()  # leaves the foreign patch as found
+        wrap_torch()  # foreign patch still in effect: untouched, not re-patched over
+        assert Variable.__dict__["__new__"].__func__ is foreign_new
+        assert "Variable" not in legacy_ctors.skipped_legacy_constructor_classes()
+        unwrap_torch()
+        del Variable.__new__
+        assert _type_view(Variable).tp_new != c_tp_new  # CPython left the trampoline
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            wrap_torch()
+        assert not [w for w in caught if issubclass(w.category, TorchLensWarning)]
+        assert legacy_ctors.installed_legacy_constructor_classes()["Variable"] is Variable
+        assert legacy_ctors.skipped_legacy_constructor_classes() == {}
+        record = _installed_records(legacy_ctors)["Variable"]
+        assert Variable.__dict__["__new__"] is record.patch.installed_new
+        assert record.patch.original_tp_new == c_tp_new
+        assert "Variable" in _func_names(VariableOnly(), torch.randn(2, 4))
+        assert _validate(VariableOnly(), torch.randn(2, 4))
+        assert torch.equal(Variable(torch.ones(2)), torch.ones(2))
+        unwrap_torch()
+        assert _type_view(Variable).tp_new == c_tp_new
+        assert "__new__" not in Variable.__dict__
+
+        # The stale record no longer silences the disclosure of a later foreign patch.
+        Variable.__new__ = staticmethod(foreign_new)  # type: ignore[method-assign]
+        legacy_ctors._WARNED_FOREIGN_NEW.discard("Variable")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            wrap_torch()
+        disclosures = [w for w in caught if issubclass(w.category, TorchLensWarning)]
+        assert len(disclosures) == 1 and "Variable uncaptured" in str(disclosures[0].message)
+        assert disclosures[0].message.fields["code"] == "legacy_constructor_uncaptured"
+        assert legacy_ctors.skipped_legacy_constructor_classes() == {"Variable": Variable}
+        assert "Variable" not in legacy_ctors.installed_legacy_constructor_classes()
+    finally:
+        unwrap_torch()
+        if "__new__" in Variable.__dict__:
+            del Variable.__new__
+        _set_tp_new(Variable, c_tp_new)
+        tl.trace(Plain(), torch.randn(2, 4))
+    assert legacy_ctors.installed_legacy_constructor_classes()["Variable"] is Variable
+
+
+def test_python_new_set_and_removed_before_wrap_is_captured_not_skipped() -> None:
+    """A ``Variable.__new__`` set and deleted before the first wrap is no foreign patch.
+
+    The class is left on the trampoline with nothing Python-level in its MRO,
+    so it is captured (no skip, no warning) through the C constructor its base
+    owns, and unwrap restores exactly the slot TorchLens found.
+    """
+
+    from torchlens._errors import TorchLensWarning
+    from torchlens.backends.torch import legacy_ctors
+    from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
+    from torchlens.utils._type_new_slot import _type_view, recover_c_new_from_bases
+
+    unwrap_torch()
+    c_tp_new = _type_view(Variable).tp_new
+    Variable.__new__ = staticmethod(  # type: ignore[method-assign]
+        lambda subtype, *a, **k: torch._C._LegacyVariableBase.__new__(subtype, *a, **k)
+    )
+    del Variable.__new__
+    stale_slot = _type_view(Variable).tp_new
+    try:
+        assert stale_slot != c_tp_new
+        assert recover_c_new_from_bases(Variable) == c_tp_new
+        legacy_ctors._WARNED_FOREIGN_NEW.discard("Variable")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            wrap_torch()
+        assert not [w for w in caught if issubclass(w.category, TorchLensWarning)]
+        assert legacy_ctors.installed_legacy_constructor_classes()["Variable"] is Variable
+        assert legacy_ctors.skipped_legacy_constructor_classes() == {}
+        t = torch.ones(2)
+        out = Variable(t)
+        assert torch.equal(out, t) and out is not t
+        leaf = Variable(t, requires_grad=True)
+        assert leaf.requires_grad and leaf.grad_fn is None
+        assert "Variable" in _func_names(VariableOnly(), torch.randn(2, 4))
+        assert _validate(VariableOnly(), torch.randn(2, 4))
+        unwrap_torch()
+        assert _type_view(Variable).tp_new == stale_slot  # restored as found
+        assert "__new__" not in Variable.__dict__
+        assert torch.equal(Variable(t), t)
+    finally:
+        unwrap_torch()
+        _set_tp_new(Variable, c_tp_new)
+        tl.trace(Plain(), torch.randn(2, 4))
+    assert legacy_ctors.installed_legacy_constructor_classes()["Variable"] is Variable
+
+
+def test_c_constructor_recovery_refuses_what_it_cannot_prove() -> None:
+    """``recover_c_new_from_bases`` returns ``None`` unless a base's C builtin is in effect."""
+
+    from torchlens.utils._type_new_slot import (
+        effective_new_entry,
+        is_c_new_entry,
+        recover_c_new_from_bases,
+    )
+
+    owner, entry = effective_new_entry(torch.FloatTensor)
+    assert owner is torch.FloatTensor  # its own builtin (or our override while wrapped)
+    assert recover_c_new_from_bases(torch.FloatTensor) is None
+
+    class PyNew:
+        def __new__(cls):
+            return object.__new__(cls)
+
+    class Child(PyNew):
+        pass
+
+    owner, entry = effective_new_entry(Child)
+    assert owner is PyNew and not is_c_new_entry(entry)
+    assert recover_c_new_from_bases(Child) is None
+    assert is_c_new_entry(object.__dict__["__new__"])

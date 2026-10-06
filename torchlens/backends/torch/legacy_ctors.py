@@ -31,10 +31,14 @@ from ...constants import LEGACY_TENSOR_CONSTRUCTOR_SITES
 from ...utils import _torch_compat
 from ...utils._type_new_slot import (
     TypeNewPatch,
+    effective_new_entry,
     has_python_new_trampoline,
     install_new_override,
+    is_c_new_entry,
     original_new_caller,
     probe_type_new_slot_patch,
+    recover_c_new_from_bases,
+    reinstate_original_new,
     restore_new_override,
 )
 
@@ -58,8 +62,9 @@ class _InstalledLegacyConstructor:
 #: legacy class alive for the life of the process.
 _INSTALLED: dict[int, _InstalledLegacyConstructor] = {}
 
-#: func name -> class left unpatched because a Python-level ``__new__`` was
-#: already in effect on it at install time (rebuilt on every install).
+#: func name -> class left unpatched at install time because a foreign
+#: Python-level ``__new__`` was in effect on it, or its stale trampoline slot
+#: had no recoverable C constructor (rebuilt on every install).
 _SKIPPED_FOREIGN_NEW: dict[str, type] = {}
 
 #: Classes already warned about, so a repeated ``wrap_torch`` warns once.
@@ -84,7 +89,7 @@ def _resolve_class(namespace_name: str, class_name: str) -> type | None:
     return cls if isinstance(cls, type) else None
 
 
-def _build_new_impl(cls: type, func_name: str) -> Callable[..., Any]:
+def _build_new_impl(cls: type, func_name: str, c_tp_new: int | None = None) -> Callable[..., Any]:
     """Return the ``__new__`` replacement that logs ``cls(...)`` calls.
 
     Parameters
@@ -93,6 +98,9 @@ def _build_new_impl(cls: type, func_name: str) -> Callable[..., Any]:
         The legacy constructor class, still unpatched.
     func_name:
         Recorded op name.
+    c_tp_new:
+        The C constructor to call when ``cls``'s own slot is a stale
+        trampoline; ``None`` snapshots ``cls``'s current (C) slot.
 
     Returns
     -------
@@ -104,7 +112,7 @@ def _build_new_impl(cls: type, func_name: str) -> Callable[..., Any]:
 
     from .wrappers import torch_func_decorator
 
-    call_original = original_new_caller(cls)
+    call_original = original_new_caller(cls, c_tp_new)
 
     def original(*args: Any, **kwargs: Any) -> Any:
         """Run the eager legacy constructor for ``cls``."""
@@ -139,28 +147,22 @@ def _resolve_roster() -> list[tuple[str, type]]:
     return resolved
 
 
-def _still_installed(cls: type) -> bool:
-    """Return whether our patch on ``cls`` is still live; drop a stale record.
+def _foreign_new_in_effect(cls: type, record: _InstalledLegacyConstructor | None) -> bool:
+    """Return whether another tool's Python ``__new__`` is what ``cls(...)`` dispatches to.
 
-    A record whose override a third party replaced stays registered while
-    that foreign ``__new__`` is in effect; once it is gone (the slot is no
-    longer a Python trampoline) the record is dropped so the class is
-    re-patched instead of being left uncaptured for good.
+    Decided from the MRO dicts, never from the slot pointer: CPython leaves the
+    slot on the Python trampoline after a foreign ``__new__`` is deleted, so a
+    trampoline alone does not mean a foreign patch is present.
     """
 
-    record = _INSTALLED.get(id(cls))
-    if record is None:
+    _owner, entry = effective_new_entry(cls)
+    if entry is None or is_c_new_entry(entry):
         return False
-    if cls.__dict__.get("__new__") is record.patch.installed_new:
-        return True
-    if has_python_new_trampoline(cls):
-        return True
-    del _INSTALLED[id(cls)]
-    return False
+    return record is None or entry is not record.patch.installed_new
 
 
-def _skip_foreign_new(func_name: str, cls: type) -> None:
-    """Record and disclose (once) a class left unpatched over a foreign ``__new__``."""
+def _skip_class(func_name: str, cls: type, reason: str) -> None:
+    """Record and disclose (once) a class left unpatched and therefore uncaptured."""
 
     _SKIPPED_FOREIGN_NEW[func_name] = cls
     if func_name in _WARNED_FOREIGN_NEW:
@@ -169,15 +171,59 @@ def _skip_foreign_new(func_name: str, cls: type) -> None:
     from ..._errors import TorchLensWarning
 
     warnings.warn(
-        f"TorchLens left the legacy constructor {cls.__module__}.{cls.__qualname__} "
-        "uncaptured: its constructor slot already dispatches through a Python-level __new__ "
-        "(another tool's patch on it or on a base). "
-        "TorchLens never clobbers foreign patches, so calls to it during capture are not "
-        "logged and tl.validate may report them as unowned dispatches. Remove the other "
-        "patch before the first capture to capture it.",
-        TorchLensWarning,
-        stacklevel=4,
+        TorchLensWarning(
+            f"TorchLens left the legacy constructor {cls.__module__}.{cls.__qualname__} "
+            f"uncaptured: {reason}. TorchLens never clobbers foreign patches, so calls to it "
+            "during capture are not logged and tl.validate may report them as unowned "
+            "dispatches. Remedy: remove the other tool's __new__ patch before the first "
+            "capture (in a fresh process if it was already applied and removed)",
+            code="legacy_constructor_uncaptured",
+            constructor=f"{cls.__module__}.{cls.__qualname__}",
+        ),
+        stacklevel=5,
     )
+
+
+def _install_one(func_name: str, cls: type) -> None:
+    """Patch one roster class unless our patch is live or a foreign ``__new__`` holds it.
+
+    A record whose override a third party replaced stays registered while that
+    foreign ``__new__`` is in effect (it may delegate to ours). Once the foreign
+    entry is gone, CPython leaves ``cls`` on the trampoline, so the recorded
+    pre-install ``__dict__`` entry and C ``tp_new`` are put back first and the
+    class is re-patched from them; the trampoline is never snapshotted as the
+    "original", which would re-enter our override forever.
+    """
+
+    record = _INSTALLED.get(id(cls))
+    if record is not None and cls.__dict__.get("__new__") is record.patch.installed_new:
+        return
+    if _foreign_new_in_effect(cls, record):
+        if record is None:
+            _skip_class(
+                func_name,
+                cls,
+                "another tool's Python-level __new__ is in effect on it (on the class or a base)",
+            )
+        return
+    if record is not None:
+        reinstate_original_new(record.patch)
+        del _INSTALLED[id(cls)]
+    c_tp_new: int | None = None
+    if has_python_new_trampoline(cls):
+        # A Python ``__new__`` was set and deleted before TorchLens saw the
+        # class: call the C constructor the stale trampoline dispatches to.
+        c_tp_new = recover_c_new_from_bases(cls)
+        if c_tp_new is None:
+            _skip_class(
+                func_name,
+                cls,
+                "a Python-level __new__ was set on it and removed, and its C constructor "
+                "cannot be recovered from its bases",
+            )
+            return
+    patch = install_new_override(cls, _build_new_impl(cls, func_name, c_tp_new))
+    _INSTALLED[id(cls)] = _InstalledLegacyConstructor(func_name=func_name, patch=patch)
 
 
 def install_legacy_constructor_wrappers() -> None:
@@ -187,9 +233,10 @@ def install_legacy_constructor_wrappers() -> None:
     an unexpected type layout); legacy constructors then stay uncaptured, as
     before, and validation completeness reports them. Every class's layout is
     re-probed before anything is written: one failure flips the flag through
-    ``mark_torch_capability_missing`` and patches nothing. A class already
-    carrying a Python-level ``__new__`` (another tool's patch) is skipped with
-    a one-time ``TorchLensWarning`` and listed by
+    ``mark_torch_capability_missing`` and patches nothing. A class on which
+    another tool's Python-level ``__new__`` is in effect (found in the MRO
+    dicts) is skipped with a one-time ``TorchLensWarning`` (code
+    ``legacy_constructor_uncaptured``) and listed by
     :func:`skipped_legacy_constructor_classes`; wrapping over it would make the
     saved "original" re-enter our own override forever.
     """
@@ -208,13 +255,7 @@ def install_legacy_constructor_wrappers() -> None:
         return
     _SKIPPED_FOREIGN_NEW.clear()
     for func_name, cls in roster:
-        if _still_installed(cls):
-            continue
-        if has_python_new_trampoline(cls):
-            _skip_foreign_new(func_name, cls)
-            continue
-        patch = install_new_override(cls, _build_new_impl(cls, func_name))
-        _INSTALLED[id(cls)] = _InstalledLegacyConstructor(func_name=func_name, patch=patch)
+        _install_one(func_name, cls)
 
 
 def uninstall_legacy_constructor_wrappers() -> None:
@@ -222,7 +263,8 @@ def uninstall_legacy_constructor_wrappers() -> None:
 
     A class whose ``__new__`` was re-patched by a third party after ours is left
     as found (TorchLens never clobbers foreign patches) and stays registered,
-    so a later uninstall can still restore it once the foreign patch is gone.
+    so a later uninstall can still restore it, and a later install re-patch it
+    from the recorded original, once the foreign patch is gone.
     """
 
     for key, record in list(_INSTALLED.items()):

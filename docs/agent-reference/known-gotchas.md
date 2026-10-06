@@ -99,5 +99,7 @@
   warning their C constructor raises (the `volatile=` removal, the `torch.cuda.*Tensor`
   deprecation) is attributed to `utils/_type_new_slot.py`, not the caller, so per-location
   `warnings` filters and `-W error` tracebacks differ from eager; message and category are
-  unchanged. A class that already dispatches through another tool's Python `__new__` at wrap time
-  is left uncaptured with a `TorchLensWarning` (`skipped_legacy_constructor_classes()`).
+  unchanged. A class on which another tool's Python `__new__` is in effect at wrap time (read from
+  the MRO dicts, never the slot pointer) is left uncaptured with a `TorchLensWarning` (code
+  `legacy_constructor_uncaptured`; `skipped_legacy_constructor_classes()`); once that patch is
+  removed, the next wrap re-patches the class from the recorded C constructor.
