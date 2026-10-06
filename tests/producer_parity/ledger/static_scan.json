@@ -9002,6 +9002,30 @@
  {
   "ambiguous": true,
   "field": "kind",
+  "file": "torchlens/visualization/_mutated_params.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/visualization/_mutated_params.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/visualization/_mutated_params.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
   "file": "torchlens/visualization/_rank_layout_internal/layout.py",
   "has_default": false,
   "sites": 5,
