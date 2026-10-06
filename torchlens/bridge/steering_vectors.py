@@ -1,9 +1,21 @@
-"""steering-vectors bridge helpers."""
+"""steering-vectors bridge helpers.
+
+Builds a steering-vectors ``SteeringVector`` from contrastive saved TorchLens
+activations, doing what ``steering_vectors.train_steering_vector`` does after its
+own forward passes: read one token per prompt, then apply an aggregator (default
+``steering_vectors.aggregators.mean_aggregator()``) to the positive and negative
+rows.
+
+The private helper ``_contrastive_rows`` is shared with the repeng and dialz
+bridges, which train from the same positive/negative row layout.
+"""
 
 from __future__ import annotations
 
-import inspect
+from collections.abc import Sequence
 from typing import Any
+
+import torch
 
 from ._utils import out_at
 
@@ -13,36 +25,61 @@ def vector(
     positive_site: Any,
     negative_site: Any | None = None,
     *,
+    negative_log: Any | None = None,
+    read_token_index: int | Sequence[int] | None = -1,
     trainer: Any | None = None,
+    layer: int | None = None,
+    layer_type: str = "decoder_block",
     **kwargs: Any,
 ) -> dict[str, Any]:
-    """Train or build a steering vector from saved TorchLens outs.
+    """Build a steering vector from contrastive saved TorchLens outs.
 
     Parameters
     ----------
     log:
-        TorchLens ``Trace``.
+        TorchLens ``Trace`` of the positive prompts (one prompt per batch row).
     positive_site:
-        Site containing positive-class outs.
+        Site whose saved out holds the positive activations, shaped
+        ``[n_prompts, n_tokens, hidden]`` (or ``[n_prompts, hidden]`` with
+        ``read_token_index=None``).
     negative_site:
-        Optional site containing negative-class outs.
+        Site holding the negative activations. Defaults to ``positive_site``
+        when ``negative_log`` is given.
+    negative_log:
+        Optional TorchLens ``Trace`` of the negative prompts. Contrastive prompts
+        usually live in two traces; without it both sites resolve in ``log``.
+    read_token_index:
+        Token position read from every prompt before the trainer runs (default
+        ``-1``, the last token, as in ``train_steering_vector``). A sequence gives
+        one position per prompt (for padded batches); ``None`` passes the outs
+        unsliced.
     trainer:
-        Optional callable trainer. Defaults to the installed package's
-        ``train_steering_vector`` function.
+        Aggregator called as ``trainer(positive_rows, negative_rows, **kwargs)``
+        with ``[n_prompts, hidden]`` rows. Defaults to
+        ``steering_vectors.aggregators.mean_aggregator()``; any steering-vectors
+        aggregator (``pca_aggregator()``, ``logistic_aggregator()``) fits.
+    layer:
+        Optional layer number the site corresponds to. When given, the payload
+        also carries a real ``steering_vectors.SteeringVector`` keyed by it,
+        ready for ``patch_activations`` / ``apply``.
+    layer_type:
+        steering-vectors layer type for that ``SteeringVector`` (default
+        ``"decoder_block"``).
     **kwargs:
         Additional keyword arguments forwarded to the trainer.
 
     Returns
     -------
     dict[str, Any]
-        Contract payload containing the downstream steering vector.
+        Payload with ``vector`` (the aggregated tensor), ``steering_vector``
+        (a ``SteeringVector`` or ``None``), and the ``positive``/``negative`` rows.
 
     Raises
     ------
     ImportError
         If steering-vectors is unavailable.
-    RuntimeError
-        If the installed package does not expose a supported trainer.
+    ValueError
+        If no negative activations are given or the rows do not line up.
     """
 
     try:
@@ -52,129 +89,123 @@ def vector(
             "steering-vectors bridge requires the `steering` extra: install torchlens[steering]."
         ) from exc
 
-    positive = out_at(log, positive_site)
-    negative = None if negative_site is None else out_at(log, negative_site)
-    train, is_default = _resolve_trainer(steering_module, trainer)
-    result = _call_trainer(
-        train, positive=positive, negative=negative, is_default=is_default, **kwargs
+    positive, negative = _contrastive_rows(
+        log,
+        positive_site,
+        negative_site,
+        negative_log=negative_log,
+        read_token_index=read_token_index,
     )
+    train = trainer if trainer is not None else steering_module.mean_aggregator()
+    result = train(positive, negative, **kwargs)
+    steering_vector = None
+    if layer is not None:
+        steering_vector = steering_module.SteeringVector({int(layer): result}, layer_type)
     return {
         "schema": "torchlens.steering_vectors.v1",
         "vector": result,
+        "steering_vector": steering_vector,
         "positive": positive,
         "negative": negative,
     }
 
 
-def _resolve_trainer(module: Any, trainer: Any | None) -> tuple[Any, bool]:
-    """Return a steering-vector trainer callable and whether it is a library default.
+def _contrastive_rows(
+    log: Any,
+    positive_site: Any,
+    negative_site: Any | None,
+    *,
+    negative_log: Any | None,
+    read_token_index: int | Sequence[int] | None,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return aligned ``[n_prompts, hidden]`` positive and negative rows.
 
     Parameters
     ----------
-    module:
-        Imported ``steering_vectors`` module.
-    trainer:
-        Optional explicit trainer.
+    log:
+        Trace holding the positive site.
+    positive_site:
+        Positive site.
+    negative_site:
+        Negative site; defaults to ``positive_site`` when ``negative_log`` is set.
+    negative_log:
+        Optional trace holding the negative site.
+    read_token_index:
+        Token position(s) to read, or ``None`` for unsliced outs.
 
     Returns
     -------
-    tuple[Any, bool]
-        The callable trainer and ``True`` when it was resolved as a library
-        default (rather than supplied explicitly by the caller).
+    tuple[torch.Tensor, torch.Tensor]
+        Positive and negative rows, detached.
 
     Raises
     ------
-    RuntimeError
-        If no trainer is available.
+    ValueError
+        If no negative site is given, or the two sides disagree in shape.
     """
 
-    if trainer is not None:
-        return trainer, False
-    candidate = getattr(module, "train_steering_vector", None)
-    if callable(candidate):
-        return candidate, True
-    vector_cls = getattr(module, "SteeringVector", None)
-    class_train = getattr(vector_cls, "train", None)
-    if callable(class_train):
-        return class_train, True
-    raise RuntimeError("Installed steering_vectors does not expose a supported trainer.")
-
-
-def _accepts_out_pair(
-    trainer: Any, positive: Any, negative: Any | None, kwargs: dict[str, Any]
-) -> bool:
-    """Return whether ``trainer`` can bind the ``(positive, negative)`` out pair.
-
-    Parameters
-    ----------
-    trainer:
-        Candidate trainer callable.
-    positive:
-        Positive-class outs.
-    negative:
-        Optional negative-class outs.
-    kwargs:
-        Additional keyword arguments to be forwarded.
-
-    Returns
-    -------
-    bool
-        ``True`` when the call binds cleanly (or the signature cannot be
-        introspected, in which case the caller attempts the call directly).
-    """
-
-    try:
-        signature = inspect.signature(trainer)
-    except (TypeError, ValueError):
-        return True
-    try:
-        signature.bind(positive, negative, **kwargs)
-    except TypeError:
-        return False
-    return True
-
-
-def _call_trainer(
-    trainer: Any, *, positive: Any, negative: Any | None, is_default: bool, **kwargs: Any
-) -> Any:
-    """Call a steering-vector trainer with the normalized out pair.
-
-    Parameters
-    ----------
-    trainer:
-        Trainer callable.
-    positive:
-        Positive-class outs.
-    negative:
-        Optional negative-class outs.
-    is_default:
-        Whether ``trainer`` was resolved as a steering_vectors library default.
-    **kwargs:
-        Additional trainer keyword arguments.
-
-    Returns
-    -------
-    Any
-        Downstream steering vector.
-
-    Raises
-    ------
-    RuntimeError
-        When the library-default trainer cannot accept the ``(positive, negative)``
-        out pair. ``train_steering_vector`` takes ``(model, tokenizer,
-        training_samples, ...)``, which cannot be driven from saved TorchLens outs;
-        rather than silently misbind the activation tensors into those slots,
-        require an explicit ``trainer``.
-    """
-
-    if is_default and not _accepts_out_pair(trainer, positive, negative, kwargs):
-        raise RuntimeError(
-            "The default steering_vectors trainer (train_steering_vector) expects "
-            "(model, tokenizer, training_samples, ...) arguments and cannot be built "
-            "from saved TorchLens outs. Pass an explicit trainer that accepts "
-            "(positive_out, negative_out)."
+    if negative_site is None:
+        if negative_log is None:
+            raise ValueError(
+                "Contrastive steering needs negative activations: pass negative_site=, "
+                "or negative_log= (a trace of the negative prompts; the site then "
+                "defaults to positive_site)."
+            )
+        negative_site = positive_site
+    negative_trace = log if negative_log is None else negative_log
+    positive = _read_rows(out_at(log, positive_site), read_token_index, "positive")
+    negative = _read_rows(out_at(negative_trace, negative_site), read_token_index, "negative")
+    if positive.shape != negative.shape:
+        raise ValueError(
+            f"Positive rows {tuple(positive.shape)} and negative rows "
+            f"{tuple(negative.shape)} must match: trace one negative prompt per "
+            "positive prompt, padded to the same layout."
         )
-    return trainer(positive, negative, **kwargs)
+    return positive, negative
+
+
+def _read_rows(
+    out: torch.Tensor, read_token_index: int | Sequence[int] | None, side: str
+) -> torch.Tensor:
+    """Slice one token per prompt out of a ``[n, tokens, hidden]`` out.
+
+    Parameters
+    ----------
+    out:
+        Saved out tensor.
+    read_token_index:
+        Token position, per-prompt positions, or ``None`` for no slicing.
+    side:
+        ``"positive"`` or ``"negative"`` for error messages.
+
+    Returns
+    -------
+    torch.Tensor
+        Detached rows.
+
+    Raises
+    ------
+    ValueError
+        If the out has too few dimensions or the positions do not match the rows.
+    """
+
+    out = out.detach()
+    if read_token_index is None:
+        return out
+    if out.dim() < 3:
+        raise ValueError(
+            f"The {side} out has shape {tuple(out.shape)}; reading a token needs "
+            "[n_prompts, n_tokens, hidden]. Pass read_token_index=None for outs "
+            "that are already one row per prompt."
+        )
+    if isinstance(read_token_index, int):
+        return out[:, read_token_index]
+    indices = torch.as_tensor(list(read_token_index), dtype=torch.long, device=out.device)
+    if indices.numel() != out.shape[0]:
+        raise ValueError(
+            f"read_token_index lists {indices.numel()} positions for {out.shape[0]} {side} prompts."
+        )
+    return out[torch.arange(out.shape[0], device=out.device), indices]
 
 
 __all__ = ["vector"]
