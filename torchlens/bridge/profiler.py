@@ -135,8 +135,8 @@ def join(log: Any, kineto_trace: str | Path | dict[str, Any]) -> dict[str, Any]:
     return {
         "schema": "torchlens.profiler_join.v2",
         "attribution": (
-            "order-matched: k-th event of an op type to k-th layer of that type; "
-            "record_function ranges by exact label (host-side; not for rates)"
+            "order-matched (approximate; not for rates): k-th event of an op type to "
+            "k-th layer of that type; record_function ranges by exact label (host-side)"
         ),
         "ops": rows,
         "unmatched_event_counts": unmatched,

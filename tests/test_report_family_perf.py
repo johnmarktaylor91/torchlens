@@ -281,15 +281,23 @@ def test_compute_rows_reserve_device_attribution_slots(small_trace) -> None:
         assert row.attribution_status is None
 
 
-def test_name_matched_bridge_is_relabeled() -> None:
-    """D22: the name-substring bridge is a labeled approximate diagnostic."""
+def test_profiler_join_bridge_is_labeled_approximate() -> None:
+    """D22: the profiler join bridge is a labeled approximate diagnostic.
 
-    import inspect
+    The join matches events to layers by execution order (it stopped matching
+    by name substring), so the label names the order match; the honesty part
+    the label exists for, ``(approximate; not for rates)``, is pinned on the
+    returned payload, and the old substring label must not come back.
+    """
 
     from torchlens.bridge import profiler
 
-    source = inspect.getsource(profiler.join)
-    assert "name-matched (approximate; not for rates)" in source
+    model = nn.Linear(4, 4).eval()
+    log = tl.trace(model, torch.randn(2, 4))
+    payload = profiler.join(log, {"traceEvents": []})
+    attribution = payload["attribution"]
+    assert attribution.startswith("order-matched (approximate; not for rates)")
+    assert "name-matched" not in attribution
 
 
 # ---------------------------------------------------------------------------
