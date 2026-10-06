@@ -351,6 +351,41 @@ def test_unwrap_restores_legacy_classes_exactly_and_rewrap_reinstalls() -> None:
     assert _validate(SylvesterReparam(), torch.randn(2, 4))
 
 
+def test_legacy_constructor_ops_never_become_runnable(tmp_path) -> None:
+    """Runnable save refuses the legacy-constructor ops typed; the resolver never resolves them.
+
+    The legacy constructors carry the same hidden ``cdata=`` raw-pointer overload
+    as ``torch.Tensor.__new__`` (the documented bounded disposition), so capture
+    support must not make them replayable from an untrusted bundle.
+    """
+
+    from torchlens._io.runnable import (
+        build_sparse_run_descriptor,
+        preflight_sparse_run_descriptor,
+    )
+    from torchlens.errors import RunnablePreflightError
+    from torchlens.runnable import ResolverStatus
+
+    trace = tl.trace(
+        SylvesterReparam().eval(),
+        torch.randn(2, 4),
+        capture=tl.options.CaptureOptions(
+            intervention_ready=True, capture_container_structure=True, cache=False
+        ),
+    )
+    with pytest.raises(RunnablePreflightError):
+        tl.save(trace, tmp_path / "legacy.tlspec", level="runnable")
+    report, attachments = preflight_sparse_run_descriptor(build_sparse_run_descriptor(trace))
+    assert attachments is None
+    legacy_records = [
+        record
+        for record in report.resolver_records
+        if record.recorded_key.qualname.rsplit(".", 1)[-1] in {"FloatTensor", "Variable"}
+    ]
+    assert legacy_records
+    assert all(record.status is ResolverStatus.UNAVAILABLE for record in legacy_records)
+
+
 def _installed_records(legacy_ctors):
     """Return the installed records keyed by func name (test-only peek)."""
 
