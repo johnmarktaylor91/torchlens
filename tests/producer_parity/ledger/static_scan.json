@@ -8784,6 +8784,14 @@
   "via_getattr": true
  },
  {
+  "ambiguous": false,
+  "field": "unattributed_tensor_args",
+  "file": "torchlens/validation/_source_provenance.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": true,
   "field": "modules",
   "file": "torchlens/validation/_stock_layer_grads.py",
