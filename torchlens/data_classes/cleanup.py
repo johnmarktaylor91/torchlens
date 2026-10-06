@@ -62,6 +62,7 @@ def cleanup(self: "Trace") -> None:
     from .._errors import CaptureContextError
     from .._fast_run import close_fast_run_session
     from ..backends.torch.backward import _purge_trace_from_backward_registry
+    from ..backends.torch.tensor_tracking import remove_owned_state_grad_hooks
     from ..captured_run import forget_event_stream
 
     if self.__dict__.get("_tl_cleaned_up", False):
@@ -82,6 +83,9 @@ def cleanup(self: "Trace") -> None:
 
     close_fast_run_session(self)
     _purge_trace_from_backward_registry(self)
+    # Gradient hooks on model state (a mutated Parameter's history) outlive the
+    # pass; remove them so later backward passes on the model never reach them.
+    remove_owned_state_grad_hooks(self)
     forget_event_stream(self)
     cleanup_trace_visualizer_dir(self)
     # Snapshot the CUDA gate BEFORE the attribute deletions below drop

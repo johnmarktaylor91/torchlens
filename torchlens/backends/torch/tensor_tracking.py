@@ -36,6 +36,56 @@ if TYPE_CHECKING:
 
 
 _IMPLICIT_BACKWARD_TASK_IDS: weakref.WeakKeyDictionary[Any, int] = weakref.WeakKeyDictionary()
+# Removable handles of gradient hooks that sit on model state (a mutated prepared
+# Parameter's autograd history), keyed weakly by the owning trace; cleanup()
+# removes them (``remove_owned_state_grad_hooks``) and they die with the trace.
+_OWNED_STATE_GRAD_HOOK_HANDLES: weakref.WeakKeyDictionary[Any, list[Any]] = (
+    weakref.WeakKeyDictionary()
+)
+
+
+def _owning_backward_is_running(*candidates: Any) -> bool:
+    """Return whether one of ``candidates`` is differentiating its own graph now.
+
+    True inside the trace's managed backward bracket (``log_backward`` and the
+    other TorchLens triggers), or inside the engine task of an implicit pass the
+    trace's own op hooks already opened (a plain ``.backward()`` on its outputs:
+    the hooks on downstream ops fire before any hook deeper in the graph).
+
+    Parameters
+    ----------
+    *candidates:
+        Traces to check (``None`` entries are skipped).
+
+    Returns
+    -------
+    bool
+        Whether a candidate's own backward is running.
+    """
+
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        if getattr(candidate, "_tl_active_backward_bracket", False):
+            return True
+        if getattr(candidate, "_implicit_backward_pass_open", False):
+            task_id = _current_backward_graph_task_id()
+            if task_id is not None and _IMPLICIT_BACKWARD_TASK_IDS.get(candidate) == task_id:
+                return True
+    return False
+
+
+def remove_owned_state_grad_hooks(trace: Any) -> None:
+    """Remove the model-state gradient hooks ``trace`` registered.
+
+    Parameters
+    ----------
+    trace:
+        Trace being cleaned up.
+    """
+
+    for handle in _OWNED_STATE_GRAD_HOOK_HANDLES.pop(trace, ()):
+        handle.remove()
 
 
 def _is_fork_relative(trace: "Trace", other: "Trace") -> bool:
@@ -73,7 +123,12 @@ def _is_fork_relative(trace: "Trace", other: "Trace") -> bool:
 
 
 def _add_tensor_backward_hook(
-    trace: "Trace", t: torch.Tensor, tensor_label: str, *, take_ownership: bool = False
+    trace: "Trace",
+    t: torch.Tensor,
+    tensor_label: str,
+    *,
+    take_ownership: bool = False,
+    owning_backward_only: bool = False,
 ) -> None:
     """Register a backward hook on ``t`` that captures its grad into Trace.
 
@@ -102,6 +157,13 @@ def _add_tensor_backward_hook(
         take_ownership: Transfer gradient-emission ownership of
             ``tensor_label`` to this tensor even if another tensor already
             holds it.
+        owning_backward_only: The hook sits on MODEL STATE (a mutated
+            prepared Parameter's autograd history), which later forwards on
+            the same model chain onto, so every later backward reaches it.
+            Record only while the owning trace's own backward runs
+            (``_owning_backward_is_running``) and keep the handle so
+            ``cleanup()`` removes the hook. Plain hooks die with their pass's
+            tensors and keep the historical implicit-pass recording.
     """
     # r65: TorchLens's OWN hook-bookkeeping ``grad_fn``/``requires_grad`` reads, hoisted
     # under the explicit internal-read marker so the r65 state-metadata property observer
@@ -179,6 +241,8 @@ def _add_tensor_backward_hook(
             and _is_fork_relative(active_trace, managed_trace)
         ):
             active_trace = managed_trace
+        if owning_backward_only and not _owning_backward_is_running(trace_ref(), active_trace):
+            return
         if active_trace is not None:
             # One-owner-per-label must hold on the FINAL emission target, not
             # just the hook's own trace: after a refresh-projection or fork
@@ -214,7 +278,9 @@ def _add_tensor_backward_hook(
     from .completeness_witness import internal_scalar_read
 
     with internal_scalar_read():
-        t.register_hook(log_grad_to_model_history)
+        handle = t.register_hook(log_grad_to_model_history)
+    if owning_backward_only:
+        _OWNED_STATE_GRAD_HOOK_HANDLES.setdefault(trace, []).append(handle)
 
 
 def _ensure_backward_event_stream(trace: "Trace") -> Any:
