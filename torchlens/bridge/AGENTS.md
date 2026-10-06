@@ -10,10 +10,22 @@ optional dependency.
   raises `ValueError` when the model was garbage-collected.
 - `resolve_one_site()`, `out_at()`, `first_input_tensor()`, `tensor_layers()`
   map site-like values (labels/selectors/layer objects) to saved tensor outs.
+- `module_for_site(log, site, *, bridge=)` is the ONE module resolver the
+  attribution bridges share (Grad-CAM `layer()`, Captum `layer()`): a module
+  address returns that module; an op label returns the OUTERMOST module in
+  the op's `output_of_module_calls` (`relu_17_66` in resnet18 is `layer4`,
+  never the inner `layer4.1.relu`); an op label or pass-qualified address
+  whose module runs more than once refuses typed
+  (`bridge_module_site_multi_call`), because a module hook sees every call.
 
 ## Adapter files and main entry points
-- `captum.py`: `attribute()`, `layer()` (extra: `torchlens[captum]`).
-- `shap.py`: `explain()` (default `shap.DeepExplainer`; extra `torchlens[shap]`).
+- `captum.py`: `attribute()`, `layer()` (extra: `torchlens[captum]`;
+  `layer()` is `_utils.module_for_site`).
+- `shap.py`: `explain(log, *, background, inputs=None, ...)` (default
+  `shap.DeepExplainer`; extra `torchlens[shap]`, `shap>=0.45.1,<1`).
+  `background` is REQUIRED keyword-only: the old default made the explained
+  inputs their own background, which gives all-zero values for one input.
+  `inputs` defaults to the first saved input tensor.
 - `sae_lens.py`: `encode()`, `decode()` (extra: `torchlens[sae]`).
 - `lit/`: `model(net, tokenizer, *, task=, sites=, ...)` wraps a LIVE model as
   a real `lit_nlp.api.model.Model` (classification + causal LM); `dataset()`,
@@ -29,8 +41,19 @@ optional dependency.
   the functions).
 - `huggingface.py`: `push_to_hub()` for artifacts (extra: `torchlens[hf]`).
 - `profiler.py`: `execution_trace()`, `join()` correlate a Kineto/Chrome trace
-  with captured layers; stdlib-only, no import gate.
-- `gradcam.py`: `cam()`, `layer()` (extra: `torchlens[gradcam]`).
+  with captured layers; stdlib-only, no import gate. `join()` (schema
+  `torchlens.profiler_join.v2`) assigns each complete event to at most one
+  layer: a `record_function` range whose name EQUALS a layer label, else the
+  k-th `aten::<func_name>` event (outermost of same-name nesting, time order)
+  to the k-th layer of that type, `k mod L` for n repeated forwards. Types
+  whose event count is not a multiple of their layer count stay unmatched in
+  `mismatched_op_types` (with a `UserWarning`); every unmatched event is
+  counted by name in `unmatched_event_counts`. Host-side times: not a rate
+  denominator.
+- `gradcam.py`: `cam()`, `layer()` (extra: `torchlens[gradcam]`). `cam()`
+  splits `**kwargs` by name: keywords the CAM constructor declares
+  (`reshape_transform`, ...) go to the constructor, the rest (`aug_smooth`,
+  `eigen_smooth`) to the CAM call. `layer()` is `_utils.module_for_site`.
 - `brain_score.py`: `per_layer()` takes a CALLABLE offline benchmark (no
   import gate; raises `TypeError` on non-callables). `get_activations_fn()`
   builds the `get_activations(images, layer_names) -> OrderedDict[str,

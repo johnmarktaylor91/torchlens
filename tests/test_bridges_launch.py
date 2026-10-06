@@ -429,7 +429,7 @@ def test_profiler_join_merges_per_op_timing(tmp_path: Path) -> None:
         json.dumps(
             {
                 "traceEvents": [
-                    {"name": f"{conv_layer.layer_label} cpu", "ph": "X", "dur": 12.5},
+                    {"name": conv_layer.layer_label, "ph": "X", "dur": 12.5},
                     {"name": "unrelated", "ph": "X", "dur": 99.0},
                 ],
                 "metadata": {"fixture": True},

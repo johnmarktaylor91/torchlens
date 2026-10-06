@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any, cast
+import inspect
+from typing import Any
 
 from torch import nn
 
-from ._utils import first_input_tensor, resolve_one_site, source_model
+from ._utils import first_input_tensor, module_for_site, source_model
 
 
 def cam(
@@ -25,7 +26,8 @@ def cam(
     log:
         TorchLens ``Trace`` with a live source model reference.
     site:
-        Module address, module pass label, layer selector, or layer object.
+        Module address, module pass label, op label, layer selector, or layer
+        object; resolved by :func:`layer`.
     inputs:
         Optional input tensor. Defaults to the first tensor input saved in ``log``.
     targets:
@@ -33,7 +35,9 @@ def cam(
     cam_class:
         Optional CAM class or factory. Defaults to ``pytorch_grad_cam.GradCAM``.
     **kwargs:
-        Additional keyword arguments forwarded to the CAM constructor.
+        Options split by name: a keyword the CAM constructor names
+        (``reshape_transform``, ...) goes to the constructor; any other
+        (``aug_smooth``, ``eigen_smooth``, ...) goes to the CAM call.
 
     Returns
     -------
@@ -44,6 +48,8 @@ def cam(
     ------
     ImportError
         If pytorch-grad-cam is unavailable.
+    TypeError
+        If an option is named by neither the constructor nor the CAM call.
     """
 
     try:
@@ -57,8 +63,13 @@ def cam(
     target_layer = layer(log, site)
     input_tensor = first_input_tensor(log) if inputs is None else inputs
     factory = getattr(pytorch_grad_cam, "GradCAM") if cam_class is None else cam_class
-    cam_runner = factory(model=model, target_layers=[target_layer], **kwargs)
-    cam_output = _call_cam(cam_runner, input_tensor=input_tensor, targets=targets)
+    init_names = _named_parameters(factory)
+    init_kwargs = {key: value for key, value in kwargs.items() if key in init_names}
+    call_kwargs = {key: value for key, value in kwargs.items() if key not in init_names}
+    cam_runner = factory(model=model, target_layers=[target_layer], **init_kwargs)
+    cam_output = _call_cam(
+        cam_runner, input_tensor=input_tensor, targets=targets, call_kwargs=call_kwargs
+    )
     return {
         "schema": "torchlens.gradcam.v1",
         "cam": cam_output,
@@ -67,7 +78,32 @@ def cam(
     }
 
 
-def _call_cam(cam_runner: Any, *, input_tensor: Any, targets: Any | None) -> Any:
+def _named_parameters(factory: Any) -> frozenset[str]:
+    """Return the keyword names a CAM constructor or factory declares.
+
+    Parameters
+    ----------
+    factory:
+        CAM class or factory callable.
+
+    Returns
+    -------
+    frozenset[str]
+        Declared parameter names other than ``*args``/``**kwargs``; empty when
+        the signature cannot be read.
+    """
+
+    try:
+        parameters = inspect.signature(factory).parameters.values()
+    except (TypeError, ValueError):
+        return frozenset()
+    variadic = (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+    return frozenset(param.name for param in parameters if param.kind not in variadic)
+
+
+def _call_cam(
+    cam_runner: Any, *, input_tensor: Any, targets: Any | None, call_kwargs: dict[str, Any]
+) -> Any:
     """Call a CAM runner, honoring context-manager implementations.
 
     Parameters
@@ -78,6 +114,8 @@ def _call_cam(cam_runner: Any, *, input_tensor: Any, targets: Any | None) -> Any
         Input tensor forwarded as ``input_tensor``.
     targets:
         Optional CAM targets.
+    call_kwargs:
+        Call options such as ``aug_smooth`` and ``eigen_smooth``.
 
     Returns
     -------
@@ -87,12 +125,16 @@ def _call_cam(cam_runner: Any, *, input_tensor: Any, targets: Any | None) -> Any
 
     if hasattr(cam_runner, "__enter__") and hasattr(cam_runner, "__exit__"):
         with cam_runner as entered:
-            return entered(input_tensor=input_tensor, targets=targets)
-    return cam_runner(input_tensor=input_tensor, targets=targets)
+            return entered(input_tensor=input_tensor, targets=targets, **call_kwargs)
+    return cam_runner(input_tensor=input_tensor, targets=targets, **call_kwargs)
 
 
 def layer(log: Any, site: Any) -> nn.Module:
     """Resolve a TorchLens site to a pytorch-grad-cam target layer.
+
+    A module address returns that module. An op label returns the outermost
+    module whose output the op's tensor is (``relu_17_66`` in a resnet18 is
+    the output of ``layer4``), refusing when that module runs more than once.
 
     Parameters
     ----------
@@ -105,27 +147,15 @@ def layer(log: Any, site: Any) -> nn.Module:
     -------
     nn.Module
         Live PyTorch module.
+
+    Raises
+    ------
+    InvalidArgumentError
+        If the site maps to no module, to sibling modules, or to a module that
+        runs more than once (see :func:`torchlens.bridge._utils.module_for_site`).
     """
 
-    model = source_model(log)
-    modules = dict(model.named_modules())
-    if site == "self":
-        return model
-    if isinstance(site, str):
-        address = site.rsplit(":", maxsplit=1)[0]
-        if address in modules:
-            return cast(nn.Module, modules[address])
-
-    resolved = resolve_one_site(log, site)
-    candidates = list(getattr(resolved, "output_of_module_calls", ()) or [])
-    module = getattr(resolved, "module", None)
-    if module is not None:
-        candidates.append(str(module))
-    for candidate in reversed(candidates):
-        address = str(candidate).rsplit(":", maxsplit=1)[0]
-        if address in modules:
-            return cast(nn.Module, modules[address])
-    raise ValueError(f"Could not resolve Grad-CAM layer for site {site!r}.")
+    return module_for_site(log, site, bridge="Grad-CAM")
 
 
 __all__ = ["cam", "layer"]
