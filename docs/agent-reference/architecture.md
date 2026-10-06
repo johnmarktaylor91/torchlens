@@ -45,9 +45,9 @@ Key entry points:
   a 1:1 glyph table (`ascii == degrade(unicode)` CI-pinned; detection fails
   toward ASCII; `TORCHLENS_SUMMARY_STYLE` overrides). Identity partition is
   law (every param identity / op event owned by exactly one row at every
-  depth/fold/filter/elision). Legacy spellings keep their historical
-  byte-stable text through ONE compatibility table; mixing grammars refuses
-  `summary_option_conflict`; `fma1` refuses `flop_convention_unavailable`
+  depth/fold/filter/elision). The legacy spellings are removed: each refuses
+  typed naming its successor (`REMOVED_SUMMARY_OPTIONS`/`REMOVED_SUMMARY_LEVELS`
+  in `report/_summary_config.py`); `fma1` refuses `flop_convention_unavailable`
   when underivable. One-call input precedence: args XOR `input_size=` XOR
   zero-input (reuses `infer_input_shape`'s verified trace, synthesis
   disclosed). Result API: `render`/`print`/`details`/`to_pandas`/

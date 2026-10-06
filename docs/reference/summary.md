@@ -83,15 +83,32 @@ tl.summary(model, input_args=None, input_kwargs=None,
 ```
 
 Granularity, presentation, selection, numbers, and output are orthogonal
-axes. Legacy spellings (`level="graph"`, `preset=`, `fields=`,
-`show_ops=`, `count_fma_as_two=`) keep their historical byte-stable
-rendering through one compatibility table; mixing the two grammars raises
+axes. Contradictory axes (`level="op"` with a `depth=` cut) raise
 `summary_option_conflict`. Nothing is ever accepted-and-ignored.
+
+The legacy spellings are removed (no aliases). Each refuses typed and names
+its successor:
+
+| Removed spelling | Use instead |
+|---|---|
+| `preset=` | `view=` (`"overview"` / `"compute"`) for columns, `level=` for row grain |
+| `fields=` | `columns=` |
+| `show_ops=`, `include_ops=` | `level="op"` |
+| `mode=` | `level="op"`, or `fold_repeats=False` to unfold repeated runs |
+| `print_to=` | `report.print(file=...)`, or `print_to(str(report))` |
+| `count_fma_as_two=` | `flop_convention="fma2"` (was `True`) / `"fma1"` (was `False`) |
+| `show_input_preprocessing_details=` | `trace.provenance()` and `trace.input_preprocessor` |
+| `level="overview"` | `view="overview"` (the default) |
+| `level="compute"`, `level="cost"` | `view="compute"` |
+| `level="graph"` | `trace.to_agent_json()` (op rows, edges, hierarchy) or `trace.draw()` |
+| `level="memory"` | `trace.profile(sort_by="activation_memory")`; totals stay in the footer |
+| `level="control_flow"` | `trace.conditional_records` and the `conditional_*` columns of `trace.to_pandas()` |
+| `level="waterfall"` | `trace.profile(level="op")`, or `trace.to_pandas()` in execution order |
+| `level="output"` | `trace.output_table()` |
 
 With NO input at all, `tl.summary(model)` infers a verified input via
 `infer_input_shape`, reuses its verification trace (no second capture),
-and disclosures the synthesis; decoded-output views refuse synthetic
-inputs typed.
+and discloses the synthesis.
 
 ## The string contract
 

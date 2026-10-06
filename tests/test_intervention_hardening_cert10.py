@@ -4,7 +4,7 @@ BLOCKER -- ``_record_predicate_intervention_spec``
 (``torchlens/backends/torch/ops.py``) built its dedup cache key from
 ``repr(decision.hook)``. When the fired helper is a ``HelperSpec`` carrying a live
 ``torch.Tensor`` argument -- i.e. TorchLens's flagship activation-steering/ablation
-helpers ``tl.steer``, ``mean_ablate``, ``resample_ablate``, ``project_onto``/
+helpers ``tl.steer``, ``mean_ablate``, ``scramble_elements``, ``project_onto``/
 ``project_off``, ``swap_with`` -- that ``repr()`` call reprs the dataclass's tensor
 field, which routes through TorchLens's own intercepted ``Tensor.__repr__``. The
 interception itself (``print_override`` in ``torchlens/utils/tensor_utils.py``)

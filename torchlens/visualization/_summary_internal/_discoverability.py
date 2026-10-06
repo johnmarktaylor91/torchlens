@@ -1,8 +1,7 @@
-"""Discoverability preamble rendering for Trace summaries (split from _builder).
+"""The capture-provenance block served by ``trace.provenance()``.
 
-The ~35-line preamble block and its exclusive helpers. The F08 summary
-rebuild relocates this text to trace.provenance() byte-identically; until
-then it renders here, split out to keep _builder under its size ceiling.
+The ~35-line block and its exclusive helpers (formerly the summary
+preamble; the F08 rebuild moved it to ``trace.provenance()`` byte-identically).
 """
 
 from __future__ import annotations
@@ -11,20 +10,11 @@ from collections.abc import Mapping, Sequence
 from typing import (
     TYPE_CHECKING,
     Any,
-    Literal,
     cast,
 )
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
-
-
-SummaryLevel = Literal[
-    "overview", "graph", "memory", "control_flow", "compute", "cost", "waterfall", "output"
-]
-SummaryMode = Literal["auto", "rolled", "unrolled"]
-
-_LEVEL_ALIASES: dict[str, str] = {"cost": "compute"}
 
 
 def format_discoverability_summary(

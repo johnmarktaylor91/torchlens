@@ -960,13 +960,11 @@ torchlens.attribution._viz:overlay:AttributionError::1	KNOWN-GAP		pre-F06 attrib
 torchlens.attribution._noise_tunnel:_validate_noise_bank_coverage:AttributionError::1	CONTRACTED	noise_bank_invalid	F06 up-front tunnel bank-coverage refusal (a defective bank is tunnel configuration, not a child failure)
 torchlens.attribution._noise_tunnel:noise_tunnel._call_sample:AttributionError::1	INTERNAL	noise_tunnel_route_unbound	F06 internal invariant tripwire; fires only on TorchLens contract breaches, coded for diagnostics (T51 union fix)
 torchlens.attribution._text:text:AttributionError::3	INTERNAL	text_auto_ladder_empty	F06 internal invariant tripwire; fires only on TorchLens contract breaches, coded for diagnostics (T51 union fix)
-torchlens._user_public_impls:_summary_report_from_trace:InvalidArgumentError::1	CONTRACTED	summary_synthetic_output_refused	F08 semantic refusal: decoded-output views refuse synthetic inputs; typed + contract row
 torchlens.data_classes._trace_viz:TraceVisualizationMixin.summary:InvalidArgumentError::1	CONTRACTED	summary_one_call_only	F08: one-call-only spellings on trace.summary() teach tl.summary; typed + contract row
 torchlens.report._summary_config:_refuse_choice:InvalidArgumentError::1	CONTRACTED	summary_option_invalid	F08 closed-vocabulary teaching refusal chokepoint (also emits the pinned summary_level_invalid); did-you-mean + contract rows
 torchlens.report._summary_config:_resolve_buffers:InvalidArgumentError::1	CONTRACTED	summary_option_invalid	F08 buffers='rows' qualified-name gate; typed + contract row
-torchlens.report._summary_config:resolve_config:InvalidArgumentError::1	CONTRACTED	summary_option_invalid	F08 unknown-option refusal with nearest match; typed + contract row
-torchlens.report._summary_config:resolve_config:InvalidArgumentError::2	CONTRACTED	summary_option_conflict	F08 level='op' x depth= contradiction; typed + contract row
-torchlens.report._summary_config:route_summary_call:InvalidArgumentError::1	CONTRACTED	summary_option_conflict	F08 ONE compatibility table: mixed legacy/rebuilt grammars refuse; typed + contract row
+torchlens.report._summary_config:_refuse_unknown_options:InvalidArgumentError::1	CONTRACTED	summary_option_invalid	F08 unknown-option refusal: a removed legacy spelling names its successor, any other name gets the nearest grammar option; typed + contract row
+torchlens.report._summary_config:resolve_config:InvalidArgumentError::1	CONTRACTED	summary_option_conflict	F08 level='op' x depth= contradiction; typed + contract row
 torchlens.report._summary_report:SummaryReport._rebuilt_or_refuse:InvalidArgumentError::1	CONTRACTED	summary_result_legacy	F08 result API on legacy-preset reports teaches the rebuilt grammar; typed + contract row
 torchlens.report._summary_report:SummaryReport.render:InvalidArgumentError::1	CONTRACTED	summary_option_invalid	F08 render style closed vocabulary; typed + contract row
 torchlens.report._summary_report:SummaryReport.print:InvalidArgumentError::1	CONTRACTED	summary_option_invalid	F08 print style closed vocabulary; typed + contract row

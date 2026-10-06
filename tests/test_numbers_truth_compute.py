@@ -62,24 +62,14 @@ def test_relu_has_zero_macs_non_mac() -> None:
 
 @pytest.mark.smoke
 def test_fma_convention_honored_never_discarded() -> None:
-    """A6: fma=1 renders 288 on the toy; explicit True is acknowledged."""
+    """A6: fma=1 renders 288 on the toy; the default convention is fma=2."""
 
     log = _capture(nn.Linear(8, 16, bias=True), torch.randn(2, 8))
     try:
-        default_text = log.summary(level="overview")
-        assert "Forward FLOPs: 544 FLOPs" in default_text
-        assert "fma=2 (one multiply-accumulate = 2 FLOPs)" in default_text
+        default_text = str(log.summary())
+        assert "544 FLOPs fwd (fma=2)" in default_text
         assert "FLOPs // 2" not in default_text  # the old footer sentence is dead
-
-        fma1_text = log.summary(count_fma_as_two=False)
-        assert "Forward FLOPs (fma=1): 288 FLOPs" in fma1_text
-        assert "fma=1 (explicit" in fma1_text
-
-        explicit_text = log.summary(count_fma_as_two=True)
-        assert "fma=2 (explicit)" in explicit_text
-
-        # The rebuilt grammar honors the same convention axis (A6).
-        assert "544 FLOPs fwd (fma=2)" in log.summary()
+        assert "544 FLOPs fwd (fma=2)" in log.summary(flop_convention="fma2")
         assert "288 FLOPs fwd (fma=1)" in log.summary(flop_convention="fma1")
     finally:
         log.cleanup()
@@ -103,15 +93,10 @@ def test_fma1_refuses_typed_on_underivable_split() -> None:
         log = _capture(_MulModel(), torch.randn(2, 3))
         try:
             with pytest.raises(InvalidArgumentError, match="MAC split") as excinfo:
-                log.summary(count_fma_as_two=False)
-            assert excinfo.value.fields["code"] == "flop_convention_unavailable"
-            # The rebuilt grammar refuses the same request with the same code.
-            with pytest.raises(InvalidArgumentError, match="MAC split") as rebuilt_excinfo:
                 log.summary(flop_convention="fma1")
-            assert rebuilt_excinfo.value.fields["code"] == "flop_convention_unavailable"
+            assert excinfo.value.fields["code"] == "flop_convention_unavailable"
             # The default convention still renders (the refusal is scoped to
-            # the explicit non-native request) -- on BOTH routes.
-            assert "Forward FLOPs" in log.summary(level="overview")
+            # the explicit non-native request).
             assert "FLOPs fwd (fma=2)" in log.summary()
         finally:
             log.cleanup()
@@ -152,15 +137,11 @@ def test_macs_format_in_mac_units_never_flops() -> None:
 
     log = _capture(nn.Linear(8, 16, bias=True), torch.randn(2, 8))
     try:
-        text = log.summary(level="overview")
-        assert "MACs: 256 MACs" in text
-        # The disease string: a MAC count wearing FLOP units.
-        assert "MACs: 256 FLOPs" not in text
-        assert "MACs: 512" not in text
-        # Rebuilt footer: the same MAC truth in MAC units.
-        rebuilt = log.summary()
+        # The footer: the MAC truth in MAC units, never wearing FLOP units.
+        rebuilt = str(log.summary())
         assert "256 MACs" in rebuilt
         assert "512 MACs" not in rebuilt
+        assert "256 FLOPs" not in rebuilt
     finally:
         log.cleanup()
 

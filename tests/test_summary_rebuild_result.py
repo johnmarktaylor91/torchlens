@@ -179,11 +179,11 @@ def test_details_serves_capture_facts() -> None:
     assert "view:" in details
 
 
-def test_legacy_reports_refuse_rebuilt_methods_typed() -> None:
-    """A legacy-preset report teaches instead of half-working."""
+def test_payloadless_reports_refuse_rebuilt_methods_typed() -> None:
+    """A report assembled from text (no rebuilt payload) teaches instead of half-working."""
 
     trace = tl.trace(_Toy(), torch.randn(2, 8))
-    legacy = trace.summary(level="overview")
+    legacy = tl.report.build_summary_report(trace, "assembled text")
     with pytest.raises(InvalidArgumentError) as excinfo:
         legacy.to_html()
     assert excinfo.value.fields["code"] == "summary_result_legacy"

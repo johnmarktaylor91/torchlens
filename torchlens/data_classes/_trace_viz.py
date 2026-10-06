@@ -749,16 +749,6 @@ class TraceVisualizationMixin(_TraceMixinBase):
         flop_convention: str | None = None,
         units: str | None = None,
         style: str | None = None,
-        # Legacy spellings (routed through the ONE compatibility table;
-        # historical presentation preserved byte-stable).
-        fields: list[str] | None = None,
-        mode: Literal["auto", "rolled", "unrolled"] | None = None,
-        show_ops: bool | None = None,
-        preset: str | None = None,
-        include_ops: bool | None = None,
-        print_to: Callable[[str], None] | None = None,
-        count_fma_as_two: bool | None = None,
-        show_input_preprocessing_details: bool | None = None,
         # One-call-only spellings (typed errors here, never no-ops).
         input_size: Any = None,
         execution_mode: str | None = None,
@@ -766,23 +756,24 @@ class TraceVisualizationMixin(_TraceMixinBase):
         # Internal plumbing from the one-call door (not public grammar).
         _execution_note: str | None = None,
         _input_synthesis: str | None = None,
+        # Anything else refuses typed (removed legacy spellings name their
+        # successor; unknown names get the nearest grammar option).
+        **unsupported: Any,
     ) -> str:
-        """Render a summary of this capture (the rebuilt view by default).
+        """Render a summary of this capture.
 
         A bare ``trace.summary()`` resolves the automatic view ladder
         (hybrid / folded module tree / elision) under a 48-body-row budget
         and returns a detached typed report whose ``str`` payload is
-        canonical byte-stable ASCII. Legacy preset spellings (``level=
-        "graph"``, ``preset=``, ``fields=``, ``show_ops=``, ...) keep
-        their historical rendering through the one compatibility table;
-        mixing the two grammars raises ``summary_option_conflict``.
+        canonical byte-stable ASCII. The legacy spellings (``level=
+        "graph"``, ``preset=``, ``fields=``, ``show_ops=``, ...) are
+        removed: each refuses typed and names its replacement.
 
         Parameters
         ----------
         level:
             Rebuilt row grain: ``"auto"`` (default) | ``"module"`` |
-            ``"op"`` -- or a legacy preset name, which routes the whole
-            call to the historical renderer.
+            ``"op"``.
         view:
             Column/footer preset: ``"overview"`` (default) | ``"compute"``.
         depth:
@@ -806,13 +797,12 @@ class TraceVisualizationMixin(_TraceMixinBase):
         style:
             ``"auto"`` | ``"ascii"`` | ``"unicode"`` for display helpers;
             ``str(result)`` is ALWAYS the canonical ASCII payload.
-        fields, mode, show_ops, preset, include_ops, print_to, \
-        count_fma_as_two, show_input_preprocessing_details:
-            Legacy spellings, preserved byte-stable via the compatibility
-            table. ``count_fma_as_two=False`` renders fma=1 totals from
-            the two-term compute record and refuses typed
-            (``flop_convention_unavailable``) when the split is missing --
-            never accepted-and-ignored.
+        **unsupported:
+            Refused typed (``summary_option_invalid``): a removed legacy
+            spelling (``preset``, ``fields``, ``show_ops``, ``include_ops``,
+            ``mode``, ``print_to``, ``count_fma_as_two``,
+            ``show_input_preprocessing_details``) names its replacement;
+            any other name gets the nearest grammar option.
         input_size, execution_mode, grad_mode:
             ONE-CALL-ONLY spellings: valid on ``tl.summary(model, ...)``,
             typed errors here (this method reports an existing capture).
@@ -821,7 +811,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         -------
         str
             A ``SummaryReport`` (``str`` subclass) carrying typed rows,
-            totals, capture facts, and -- on the rebuilt path -- the
+            totals, capture facts, and the
             render/print/to_pandas/to_markdown/to_html result API.
         """
         from .._errors import InvalidArgumentError
@@ -839,18 +829,6 @@ class TraceVisualizationMixin(_TraceMixinBase):
                 code="summary_one_call_only",
                 remedy="use tl.summary(model, x, ...) for one-call execution options",
             )
-        from ..report._summary_config import route_summary_call
-
-        legacy_kwargs: dict[str, Any] = {
-            "preset": preset,
-            "fields": fields,
-            "show_ops": show_ops,
-            "include_ops": include_ops,
-            "mode": mode,
-            "print_to": print_to,
-            "count_fma_as_two": count_fma_as_two,
-            "show_input_preprocessing_details": show_input_preprocessing_details,
-        }
         new_kwargs: dict[str, Any] = {}
         for name, value in (
             ("view", view),
@@ -864,25 +842,6 @@ class TraceVisualizationMixin(_TraceMixinBase):
         ):
             if value is not None:
                 new_kwargs[name] = value
-        # columns= is shared by both grammars: the router decides from the
-        # other axes; on the legacy route it keeps its alias-of-fields meaning.
-        route = route_summary_call(level, {**legacy_kwargs, **new_kwargs})
-        if route == "legacy":
-            return self._summary_legacy(
-                level=level if isinstance(level, str) else (preset or "overview"),
-                preset=preset,
-                fields=fields,
-                columns=columns,
-                mode=mode if mode is not None else "auto",
-                show_ops=bool(show_ops) if show_ops is not None else False,
-                include_ops=include_ops,
-                max_rows=max_rows if max_rows is not None else 200,
-                print_to=print_to,
-                count_fma_as_two=count_fma_as_two,
-                show_input_preprocessing_details=bool(show_input_preprocessing_details)
-                if show_input_preprocessing_details is not None
-                else False,
-            )
         from ..report._summary_config import resolve_config
         from ..report._summary_result import build_rebuilt_summary
 
@@ -891,6 +850,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             columns=columns,
             **new_kwargs,
             **({"max_rows": max_rows} if max_rows is not None else {}),
+            **unsupported,
         )
         return build_rebuilt_summary(
             self,
@@ -898,44 +858,6 @@ class TraceVisualizationMixin(_TraceMixinBase):
             execution_note=_execution_note,
             input_synthesis=_input_synthesis,
         )
-
-    def _summary_legacy(
-        self: "Trace",
-        *,
-        level: str,
-        preset: str | None,
-        fields: list[str] | None,
-        columns: list[str] | None,
-        mode: str,
-        show_ops: bool,
-        include_ops: bool | None,
-        max_rows: int | None,
-        print_to: Callable[[str], None] | None,
-        count_fma_as_two: bool | None,
-        show_input_preprocessing_details: bool,
-    ) -> str:
-        """The historical renderer, byte-stable (the compat table's target)."""
-
-        from ..report._summary_report import build_summary_report
-        from ..visualization._summary_internal import render_model_summary
-
-        text = render_model_summary(
-            self,
-            level=cast(Any, level),
-            preset=cast(Any, preset),
-            fields=fields,
-            columns=columns,
-            mode=cast(Any, mode),
-            show_ops=show_ops,
-            include_ops=include_ops,
-            max_rows=max_rows,
-            print_to=print_to,
-            count_fma_as_two=count_fma_as_two,
-            show_input_preprocessing_details=show_input_preprocessing_details,
-        )
-        # C02 (summary item 10): the summary is a detached typed report --
-        # a str subclass carrying rows/totals/capture, byte-identical text.
-        return build_summary_report(self, text)
 
     def provenance(self: "Trace") -> str:
         """The capture-provenance block (the relocated summary preamble).

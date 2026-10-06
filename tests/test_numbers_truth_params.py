@@ -112,11 +112,7 @@ def test_tie_is_named_and_per_path_total_printed() -> None:
     try:
         assert log.tied_param_groups == (("emb.weight", "head.weight"),)
         assert log.num_params_by_path == 80
-        text = log.summary(level="overview")
-        assert "Params: 40 unique (parameter identity)" in text
-        assert "emb.weight = head.weight" in text
-        assert "per-module-path total: 80" in text
-        # Rebuilt footer: both totals printed, the tie named (A2).
+        # The footer prints both totals and names the tie (A2).
         rebuilt = log.summary()
         assert "40 declared unique" in rebuilt
         assert "80 by module path" in rebuilt
@@ -151,10 +147,7 @@ def test_declared_executed_unexecuted_split_named() -> None:
         assert log.num_params_executed == 36
         assert log.num_params_unexecuted == 21
         assert set(log.unexecuted_param_names) == {"dead.weight", "dead.bias"}
-        text = log.summary(level="overview")
-        assert "Never executed: 21 params" in text
-        assert "dead.weight" in text
-        # Rebuilt footer: the unexecuted split named, never dropped (A3).
+        # The footer names the unexecuted split, never drops it (A3).
         rebuilt = log.summary()
         assert "21 never ran: dead" in rebuilt
     finally:
@@ -167,12 +160,9 @@ def test_trainability_is_a_tri_state() -> None:
     model = PartialFreeze()
     log = _capture(model, torch.randn(2, 4))
     try:
-        text = log.summary(level="overview")
-        assert "| partial" in text
         assert log.num_params_trainable == 16
         assert log.num_params_frozen == 4
-        assert "trainable: 16 (80.0%); frozen: 4" in text
-        # Rebuilt table: the train column auto-appears and reads 'partial'.
+        # The train column auto-appears and reads 'partial'.
         rebuilt = log.summary()
         assert "partial" in rebuilt
         assert "trainable 16 (80%)" in rebuilt

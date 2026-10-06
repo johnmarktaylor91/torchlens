@@ -212,7 +212,9 @@ def test_append_batch_dependent_helper_rejected_after_clean_rerun() -> None:
     model.eval()
     x = torch.randn(2, 3)
     log = _capture(model, x)
-    log.attach_hooks(tl.func("relu"), tl.resample_ablate(source=torch.zeros(2, 3), seed=1))
+    log.attach_hooks(
+        tl.func("relu"), tl.intervention.scramble_elements(source=torch.zeros(2, 3), seed=1)
+    )
     log.run(model, x)
 
     with pytest.raises(AppendBatchDependenceError):

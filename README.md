@@ -381,9 +381,9 @@ scaled = tl.trace(model, x, save=tl.func('relu'),
                   intervene=tl.when(tl.func('relu'), tl.scale(0.5)))
 ```
 
-Available helpers: `tl.zero_ablate`, `tl.mean_ablate`, `tl.resample_ablate`,
-`tl.steer`, `tl.scale`, `tl.clamp`, `tl.noise`, `tl.project_onto`,
-`tl.project_off`, `tl.swap_with`, `tl.splice_module`.
+Available helpers: `tl.zero_ablate`, `tl.mean_ablate`,
+`torchlens.intervention.scramble_elements`, `tl.steer`, `tl.scale`, `tl.clamp`,
+`tl.noise`, `tl.project_onto`, `tl.project_off`, `tl.swap_with`, `tl.splice_module`.
 
 For post-hoc DAG replay and isolated experiments, capture with
 `intervention_ready=True` and use `log.fork()` + `log.push()` /
@@ -524,7 +524,7 @@ print(list_modules(model)[:3])               # every module address + class
 print(list_ops(model, torch.randn(1, 3, 64, 64))[:3])   # op counts per forward
 ```
 
-FLOP totals follow a declared convention (fma=2 by default; `count_fma_as_two=False`
+FLOP totals follow a declared convention (fma=2 by default; `flop_convention="fma1"`
 recounts under fma=1 where a MAC split is derivable, and refuses typed where it is
 not), and custom ops get first-class cost rules:
 

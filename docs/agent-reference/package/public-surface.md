@@ -77,7 +77,6 @@ classifier_trace = tl.trace(
     model, x, capture=tl.options.CaptureOptions(output_style="classification", output_head="logits")
 )
 classifier_trace.output_table(top_n=5)
-classifier_trace.summary(level="output")
 
 input_trace = tl.trace(
     model,

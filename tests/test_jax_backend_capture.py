@@ -1258,7 +1258,7 @@ def test_jax_region_summary_pandas_and_draw_work(tmp_path: Path) -> None:
         jax_max_control_flow_unroll=2,
     )
 
-    assert "jax_region" in trace.summary(show_ops=True)
+    assert "jax_region" in trace.summary(level="op")
     assert len(trace.to_pandas()) == len(trace.layer_list)
     dot = trace.draw(
         vis_outpath=str(tmp_path / "jax_region_graph"),

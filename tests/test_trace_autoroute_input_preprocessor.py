@@ -48,18 +48,16 @@ def test_summary_includes_input_preprocessing_when_present() -> None:
         description="ImageNet default (UNVERIFIED): resize 256",
     )
 
-    # Preprocessing provenance lives on provenance()/the legacy preset after
-    # the rebuilt default relocated the preamble (summary memo 3.6).
-    summary = log.summary(level="overview")
+    # Preprocessing provenance lives on provenance() (summary memo 3.6).
+    provenance = log.provenance()
 
-    assert "Input preprocessing:" in summary
-    assert "ImageNet default (UNVERIFIED): resize 256" in summary
-    assert "WARNING: input preprocessing is UNVERIFIED" not in summary
-    assert "Input preprocessing:" in log.provenance()
+    assert "Input preprocessing:" in provenance
+    assert "ImageNet default (UNVERIFIED): resize 256" in provenance
+    assert "WARNING: input preprocessing is UNVERIFIED" not in provenance
 
 
-def test_summary_can_include_unverified_input_preprocessing_detail() -> None:
-    """Trace summary should optionally show unverified preprocessing detail."""
+def test_unverified_input_preprocessing_detail_is_reachable() -> None:
+    """The verification/source detail is reachable on trace.input_preprocessor."""
 
     log = tl.trace(
         _TinyModel(), torch.ones(1), capture=tl.options.CaptureOptions(layers_to_save="none")
@@ -72,10 +70,11 @@ def test_summary_can_include_unverified_input_preprocessing_detail() -> None:
         description="ImageNet default (UNVERIFIED): resize 256",
     )
 
-    summary = log.summary(show_input_preprocessing_details=True)
-
-    assert "status: UNVERIFIED; source=imagenet_default" in summary
-    assert "WARNING: input preprocessing is UNVERIFIED" in summary
+    record = log.input_preprocessor
+    assert record.verified is False
+    assert record.source == "imagenet_default"
+    assert record.identifier == "ImageNet-default-resize256-crop224"
+    assert "ImageNet default (UNVERIFIED): resize 256" in log.provenance()
 
 
 def test_input_transform_summary_render_is_opt_in() -> None:

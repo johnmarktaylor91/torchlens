@@ -96,7 +96,6 @@ register_container	toy	referenced	F36-freeze
 register_tensor_connection	toy	referenced	F36-freeze
 release_model	R1	referenced	F36-freeze
 replace_with	toy	referenced	F36-freeze
-resample_ablate	toy	referenced	F36-freeze
 run	R1	referenced	F36-freeze
 saturated	toy	referenced	F36-freeze
 save	R1	referenced	F36-freeze

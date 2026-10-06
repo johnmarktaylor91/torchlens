@@ -88,7 +88,6 @@ TARGET_ALL = [
     "project_off",
     "project_onto",
     "replace_with",
-    "resample_ablate",
     "scale",
     "splice_module",
     "span",

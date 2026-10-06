@@ -25,17 +25,18 @@ Reporting helpers over finished captures and observer metadata (`tl.report`).
   substrate: FactCore (params/compute/memory/counts/identity), the canonical
   compute aggregation (the ONE reader of raw per-op compute fields), and the
   three-state health facts. Every summary/profile number is a projection.
-- `_summary_report.py` — `SummaryReport(str)`: the detached typed result both
-  summary grammars return (rows/totals/capture + the F08 result API:
+- `_summary_report.py` — `SummaryReport(str)`: the detached typed result
+  `summary()` returns (rows/totals/capture + the F08 result API:
   `render`/`print`/`details`/`to_pandas`/`to_markdown`/`to_html` + scalar
-  raw fields). The str payload is canonical byte-stable ASCII on the rebuilt
-  path; legacy preset spellings stay byte-identical to the historical text.
+  raw fields). The str payload is canonical byte-stable ASCII.
 - `_summary_ladder.py` — the F08 auto view ladder (coalesced hybrid ->
   strictly folded module tree -> descending depth -> protected elision) under
   the derived 48-body-row budget, with the identity-partition invariant
   (`owned_ops`/`owned_params` disjoint-and-total across rows + root remainder).
 - `_summary_config.py` — the summary option grammar: column registry, view
-  bundles, the ONE legacy compatibility table (`route_summary_call`), typed
+  bundles, the removed-spelling tables (`REMOVED_SUMMARY_OPTIONS`,
+  `REMOVED_SUMMARY_LEVELS`: each legacy spelling refuses typed naming its
+  successor), typed
   `summary_option_conflict`/`summary_option_invalid`/`summary_level_invalid`.
 - `_summary_charset.py` — the charset contract: 1:1 glyph table, byte-exact
   `degrade()`, fail-toward-ASCII `detect_style()` ladder
