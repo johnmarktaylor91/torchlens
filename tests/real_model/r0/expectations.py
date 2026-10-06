@@ -17,6 +17,13 @@ moved under the same upstream attention-interface / kernel-dispatch
 refactor that added T5's SDPA support (see ``SDPA_UNSUPPORTED_FAMILIES``
 below). No row's recipe classification, facet floors, or false-claims
 manifest changed.
+rwkv (eager, 585->589, 2026-10-05) is the intended effect of capturing in-place
+ops on a prepared ``nn.Parameter``: ``RwkvModel._rescale_layers`` runs, on the
+first eval forward and under ``torch.no_grad()``,
+``block.attention.output.weight.div_(...)`` and
+``block.feed_forward.value.weight.div_(...)`` for each of the 2 blocks. Those
+4 ``div_`` ops are now logged with the weight as their parameter input, and the
+block's output ``linear`` reads the mutated weight through them.
 
 - ``recipes``: the EXACT per-family recipe classification map (a recipe
   appearing on fewer modules is a regression; on more, a conscious update).

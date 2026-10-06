@@ -36,7 +36,6 @@ from ...constants import _get_torchvision_funcs, get_orig_torch_funcs
 from ...data_classes.func_call_location import FuncCallLocation
 from ...data_classes.internal_types import FuncExecutionContext
 from ...utils._torch_compat import (
-    HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE,
     HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE,
     dynamo_is_compiling,
     fix_tensor_sequence_slot,
@@ -69,7 +68,6 @@ from ._op_markers import _pop_op_markers, _push_op_markers
 from ._tl import (
     _DETACHED_ACTIVATION_PROPAGATION_FUNCS,
     DescriptorCompatProperty,
-    get_param_meta,
     get_tensor_label,
     has_detached_saved_activations,
     is_decorated_function,
@@ -110,6 +108,11 @@ from .ops import (
     apply_live_hooks_to_outputs,
     log_function_output_tensors,
     register_call_input_container_snapshots,
+)
+from .param_mutation import (
+    frozen_parameter_receiver_context as _frozen_parameter_receiver_context,
+    is_prepared_parameter_receiver as _is_prepared_parameter_receiver,
+    parameter_mutation_output_for_logging as _parameter_mutation_output_for_logging,
 )
 from .sources import log_source_tensor
 
@@ -895,35 +898,6 @@ def _collect_output_tensors(out: Any) -> list[torch.Tensor]:
     )
 
 
-def _is_unregistered_parameter(trace: Any, value: Any) -> bool:
-    """Return whether ``value`` is a Parameter outside the prepared model state.
-
-    Parameters
-    ----------
-    trace:
-        Active capture trace carrying the current-session parameter registry.
-    value:
-        Candidate operation output.
-
-    Returns
-    -------
-    bool
-        ``True`` for a Parameter that is not the exact prepared parameter object
-        recorded at its stamped address in this capture.
-    """
-
-    if not isinstance(value, torch.nn.Parameter):
-        return False
-    meta = get_param_meta(value)
-    address = None if meta is None else meta.param_address
-    if not address:
-        return True
-    param_logs = getattr(trace, "param_logs", None)
-    if param_logs is None or address not in param_logs:
-        return True
-    return getattr(param_logs[address], "_param_ref", None) is not value
-
-
 def _label_mutated_prepared_parameter(
     trace: Any, param: torch.nn.Parameter, out_label: str | None
 ) -> None:
@@ -956,115 +930,6 @@ def _label_mutated_prepared_parameter(
         return
     set_tensor_label(param, out_label)
     _propagate_mutation_label_to_storage_aliases(trace, param, out_label)
-
-
-def _frozen_parameter_receiver_context(
-    args: tuple[Any, ...],
-    kwargs: dict[str, Any],
-    has_inplace_signature: bool,
-    inplace_param_index: int | None,
-) -> Any:
-    """Run an in-place op on a frozen prepared Parameter untracked, as eager does.
-
-    Capture forces ``requires_grad=True`` on floating prepared Parameters so their
-    reads are gradient-capable. A Parameter frozen by the user
-    (``requires_grad=False``) may legally be mutated in place with grad mode on
-    (EMA weights, fixed tables); under the forced flag autograd would refuse the
-    same call. When no other top-level tensor argument requires grad, the eager
-    call records no autograd history, so executing it under ``torch.no_grad()``
-    is value- and graph-identical to eager. Any other case runs unchanged.
-
-    Parameters
-    ----------
-    args:
-        Positional arguments of the wrapped call; ``args[0]`` is the receiver.
-    kwargs:
-        Keyword arguments of the wrapped call.
-    has_inplace_signature:
-        Whether the callable's name marks it as an in-place mutator.
-    inplace_param_index:
-        Positional slot of an ``inplace`` flag, if the callable has one.
-
-    Returns
-    -------
-    Any
-        ``torch.no_grad()`` for a frozen prepared Parameter receiver, otherwise a
-        null context.
-    """
-
-    if not args or not isinstance(args[0], torch.nn.Parameter):
-        return nullcontext()
-    receiver = args[0]
-    if not receiver.requires_grad or not torch.is_grad_enabled():
-        return nullcontext()
-    if not has_inplace_signature and not _call_requests_inplace(inplace_param_index, args, kwargs):
-        return nullcontext()
-    meta = get_param_meta(receiver)
-    if meta is None or meta.requires_grad_before_capture is not False:
-        return nullcontext()
-    for operand in args[1:]:
-        if isinstance(operand, torch.Tensor) and operand.requires_grad:
-            return nullcontext()
-    return torch.no_grad()
-
-
-def _parameter_mutation_output_for_logging(
-    trace: Any,
-    value: Any,
-    *,
-    source: Any,
-    was_inplace: bool,
-    is_storage_rebind: bool = False,
-) -> Any:
-    """Convert a Parameter mutation result into a loggable Tensor.
-
-    PyTorch constructs module Parameters from ordinary factory tensors, and the
-    conversion intentionally drops TorchLens tensor labels. Initializers such as
-    ``uniform_`` then return the new Parameter itself. Parameter outputs are normally
-    excluded because prepared model state remains a source rather than an op output,
-    but that rule also dropped real initialization ops for modules created inside
-    ``forward``.
-
-    A prepared model Parameter mutated in place (``with torch.no_grad():
-    self.temp.clamp_(lo, hi)``) is converted too: the op is logged with the
-    Parameter as its parameter input, and the live Parameter then carries the op's
-    label (see ``_label_mutated_prepared_parameter``) so every later read in the
-    pass consumes the op's output. A storage-rebinding ``param.data = rhs`` setter on
-    prepared state is NOT converted: it stays excluded, and therefore visible to the
-    completeness tripwire.
-
-    Parameters
-    ----------
-    trace:
-        Active capture trace.
-    value:
-        Safe-copied operation output.
-    source:
-        Live same-object return whose current-session registration is authoritative.
-    was_inplace:
-        Whether the wrapped callable has an in-place mutation signature.
-    is_storage_rebind:
-        Whether the call is a storage-rebinding ``.data`` setter.
-
-    Returns
-    -------
-    Any
-        A plain Tensor snapshot for in-place Parameter mutations; otherwise
-        ``value`` unchanged.
-    """
-
-    if not was_inplace or not isinstance(source, torch.nn.Parameter):
-        return value
-    if is_storage_rebind and not _is_unregistered_parameter(trace, source):
-        return value
-    with _state.pause_logging():
-        if HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE:
-            plain_value = value.as_subclass(torch.Tensor)
-        else:
-            plain_value = torch.ops.aten.detach.default(value)
-        tensor = safe_copy(plain_value, detach_tensor=True)
-        tensor.requires_grad_(value.requires_grad)
-    return tensor
 
 
 def _canonical_capture_callable(
@@ -2103,8 +1968,15 @@ def torch_func_decorator(
             device_memory_before = _dm_read_before(trace)
         mode_pause = pause_own_dispatch_modes() if pauses_owned_modes else nullcontext(())
         paused_modes: tuple[Any, ...] = ()
-        frozen_receiver_ctx = _frozen_parameter_receiver_context(
-            args, kwargs, has_inplace_signature, inplace_param_index
+        frozen_receiver_ctx = (
+            _frozen_parameter_receiver_context(
+                trace,
+                args,
+                kwargs,
+                has_inplace_signature or _call_requests_inplace(inplace_param_index, args, kwargs),
+            )
+            if args and isinstance(args[0], torch.nn.Parameter)
+            else nullcontext()
         )
         try:
             with mode_pause as paused_modes, frozen_receiver_ctx:
@@ -2211,8 +2083,7 @@ def torch_func_decorator(
         mutates_prepared_parameter = (
             was_inplace
             and not is_storage_rebinding_setter
-            and isinstance(args[0], torch.nn.Parameter)
-            and not _is_unregistered_parameter(trace, args[0])
+            and _is_prepared_parameter_receiver(trace, args[0])
         )
         if mutates_prepared_parameter:
             record_is_inplace = True
