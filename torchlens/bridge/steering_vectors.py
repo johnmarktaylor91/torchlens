@@ -20,7 +20,7 @@ import torch
 from ._contrastive import _contrastive_rows, _ContrastiveRead
 
 
-def vector(
+def vector(  # noqa: PLR0913 -- mirrors upstream steering_vectors signature
     log: Any,
     positive_site: Any,
     negative_site: Any | None = None,
