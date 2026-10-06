@@ -38,6 +38,7 @@ blind spot r66 hon1-F6 flagged).
 
 from __future__ import annotations
 
+import contextlib
 import shutil
 import sys
 import types
@@ -950,17 +951,21 @@ def test_get_rng_state_store_only_stays_verified(tmp_path: Path) -> None:
 
 def test_get_rng_state_branch_on_bytes_never_verified(tmp_path: Path) -> None:
     """Z-a structural coverage pin: state-byte control flow rides the escape belt."""
-    trace = _capture(_GetStateBranch(), torch.tensor([2.0]), seed=1)
+    # The engine-state tensor has no graph/source provenance and steers the branch
+    # through a pruned ``getitem``: the capture discloses it (source_provenance).
+    with pytest.warns(UserWarning, match="no graph/source provenance"):
+        trace = _capture(_GetStateBranch(), torch.tensor([2.0]), seed=1)
     descriptor = build_sparse_run_descriptor(trace)
     assert descriptor.witness_completeness is WitnessCompleteness.INCOMPLETE_SCALAR_ESCAPE
     for run_seed in (1, 9):
-        result = _roundtrip_run(
-            _GetStateBranch(),
-            torch.tensor([2.0]),
-            capture_seed=1,
-            run_seed=run_seed,
-            tmp=tmp_path,
-        )
+        with pytest.warns(UserWarning, match="no graph/source provenance"):
+            result = _roundtrip_run(
+                _GetStateBranch(),
+                torch.tensor([2.0]),
+                capture_seed=1,
+                run_seed=run_seed,
+                tmp=tmp_path,
+            )
         assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
 
 
@@ -1004,14 +1009,23 @@ def test_r67_private_generator_seed_ceilings_every_run(model_cls: type, tmp_path
     VERIFIED+ATTESTED while a fresh oracle flipped the branch ~50% of the time.
     """
 
-    trace = _capture(model_cls(), torch.tensor([2.0]), seed=1)
+    # The HELD generator's state tensor has no graph/source provenance and steers the
+    # branch through a pruned op: that capture discloses it (source_provenance).
+    def _disclosed() -> Any:
+        if model_cls is _HeldGenSeedBranch:
+            return pytest.warns(UserWarning, match="no graph/source provenance")
+        return contextlib.nullcontext()
+
+    with _disclosed():
+        trace = _capture(model_cls(), torch.tensor([2.0]), seed=1)
     profile = build_sparse_run_descriptor(trace).rng_profile
     assert profile.host_rng_consumed is True
     assert profile.capture_seed is None
     assert any("torch.Generator.seed" in name for name in trace._runnable.host_rng_channels)
-    result = _roundtrip_run(
-        model_cls(), torch.tensor([2.0]), capture_seed=1, run_seed=1, tmp=tmp_path
-    )
+    with _disclosed():
+        result = _roundtrip_run(
+            model_cls(), torch.tensor([2.0]), capture_seed=1, run_seed=1, tmp=tmp_path
+        )
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
