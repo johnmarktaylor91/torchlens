@@ -588,7 +588,11 @@ class Param:
             param = self._resolve_live_param()
         except PostTraceParamUnavailable:
             return
-        if not self._has_grad and param is not None and param.grad is not None:
+        # A non-leaf Parameter (a frozen one written in place with a grad
+        # operand) never gets ``.grad`` populated, and reading it warns.
+        if param is None or not (param.is_leaf or param.retains_grad):
+            return
+        if not self._has_grad and param.grad is not None:
             grad = param.grad
             self._has_grad = True
             self._grad_shape = tuple(grad.shape)

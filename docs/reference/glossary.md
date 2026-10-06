@@ -100,6 +100,10 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   (`with torch.no_grad(): self.temp.clamp_(lo, hi)`) is captured as an op whose `params` holds
   that Parameter; every later read of the Parameter in the same pass binds to that op as a graph
   parent, not as a parameter edge, so it is absent from that read's `params`.
+  The receiver may be given by keyword (`torch.clamp_(input=p, ...)`). A frozen Parameter written
+  in place with a grad-requiring operand ends the pass a non-leaf, exactly as in eager. An `out=`
+  write into a Parameter (`torch.add(a, b, out=p)`) is not captured yet; validation reports it as
+  a completeness failure.
 
 **GradFn**
 : A first-class live backward-autograd node captured during backward logging. Portable artifacts

@@ -11,6 +11,7 @@ consumes the op's output.
 from __future__ import annotations
 
 import copy
+import warnings
 from typing import Any
 
 import pytest
@@ -337,7 +338,7 @@ class _FrozenGradOperandMutator(nn.Module):
         return x / self.temp
 
 
-_GRAD_OPERAND_OP = {"positional": "add", "keyword": "add", "nested": "index_put"}
+_GRAD_OPERAND_OP = {"positional": "add", "keyword": "add", "nested": "indexput"}
 
 
 @pytest.mark.parametrize("spelling", ["positional", "keyword", "nested"])
@@ -359,7 +360,11 @@ def test_frozen_parameter_with_grad_operand_captures_like_eager(spelling: str) -
     assert eager.temp.grad_fn is not None
 
     traced_model = copy.deepcopy(model)
-    trace = tl.trace(traced_model, x)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        trace = tl.trace(traced_model, x)
+        assert trace.params["temp"].has_grad is False
+    assert not [w for w in caught if "not a leaf Tensor" in str(w.message)]
     mutation = _ops_by_type(trace, _GRAD_OPERAND_OP[spelling])[0]
     assert [p.address for p in mutation.params] == ["temp"]
     truediv = _ops_by_type(trace, "truediv")[0]
@@ -393,7 +398,7 @@ def test_frozen_parameter_nested_operand_without_grad_runs_untracked() -> None:
 
     traced_model = copy.deepcopy(model)
     trace = tl.trace(traced_model, x)
-    mutation = _ops_by_type(trace, "index_put")[0]
+    mutation = _ops_by_type(trace, "indexput")[0]
     assert [p.address for p in mutation.params] == ["temp"]
     assert torch.allclose(trace[trace.output_layers[0]].out, eager_out)
     assert torch.equal(traced_model.temp.detach(), eager.temp.detach())
