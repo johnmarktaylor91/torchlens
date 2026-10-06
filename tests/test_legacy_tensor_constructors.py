@@ -352,38 +352,43 @@ def test_unwrap_restores_legacy_classes_exactly_and_rewrap_reinstalls() -> None:
 
 
 def test_legacy_constructor_ops_never_become_runnable(tmp_path) -> None:
-    """Runnable save refuses the legacy-constructor ops typed; the resolver never resolves them.
+    """The resolver never resolves the legacy-constructor ops; a runnable run refuses typed.
 
-    The legacy constructors carry the same hidden ``cdata=`` raw-pointer overload
-    as ``torch.Tensor.__new__`` (the documented bounded disposition), so capture
-    support must not make them replayable from an untrusted bundle.
+    The legacy dtype constructors carry the same hidden ``cdata=`` raw-pointer
+    overload as ``torch.Tensor.__new__`` (the documented bounded disposition), so
+    capture support must not make them replayable from an untrusted bundle: the
+    dtype classes stay ``nonforward_callable_denied`` and ``Variable`` stays
+    unresolved, and running a saved runnable artifact refuses at reattachment.
     """
 
     from torchlens._io.runnable import (
         build_sparse_run_descriptor,
         preflight_sparse_run_descriptor,
     )
-    from torchlens.errors import RunnablePreflightError
+    from torchlens.errors import ReattachError
     from torchlens.runnable import ResolverStatus
 
+    x = torch.randn(2, 4)
     trace = tl.trace(
         SylvesterReparam().eval(),
-        torch.randn(2, 4),
+        x,
         capture=tl.options.CaptureOptions(
             intervention_ready=True, capture_container_structure=True, cache=False
         ),
     )
-    with pytest.raises(RunnablePreflightError):
-        tl.save(trace, tmp_path / "legacy.tlspec", level="runnable")
     report, attachments = preflight_sparse_run_descriptor(build_sparse_run_descriptor(trace))
     assert attachments is None
-    legacy_records = [
-        record
+    statuses = {
+        record.recorded_key.qualname: (record.status, record.provenance)
         for record in report.resolver_records
-        if record.recorded_key.qualname.rsplit(".", 1)[-1] in {"FloatTensor", "Variable"}
-    ]
-    assert legacy_records
-    assert all(record.status is ResolverStatus.UNAVAILABLE for record in legacy_records)
+        if record.recorded_key.qualname in {"FloatTensor", "Variable"}
+    }
+    assert statuses["FloatTensor"] == (ResolverStatus.UNAVAILABLE, "nonforward_callable_denied")
+    assert statuses["Variable"][0] is ResolverStatus.UNAVAILABLE
+    path = tmp_path / "legacy.tlspec"
+    tl.save(trace, path, level="runnable", include_weights=True)
+    with pytest.raises(ReattachError):
+        tl.load(path).run(inputs=x, seed=0)
 
 
 def _installed_records(legacy_ctors):
