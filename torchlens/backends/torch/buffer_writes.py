@@ -443,20 +443,28 @@ def iter_module_held_plain_tensors(
     scan.finish()
 
 
-def warn_held_scan_truncated(truncations: list[str]) -> None:
+def warn_held_scan_truncated(truncations: list[str], trace: Trace | None = None) -> None:
     """Disclose, once per capture, held-tensor scans cut by their bounds.
 
     Parameters
     ----------
     truncations:
         Descriptions collected by ``iter_module_held_plain_tensors``.
+    trace:
+        Capture trace; when given, the cut is persisted as a
+        ``held_tensor_scan_truncated`` capture advisory BEFORE warning, which
+        forward validation reads as a source-provenance failure.
     """
 
     if not truncations:
         return
     import warnings
 
+    from ..._capture_honesty import ADVISORY_HELD_SCAN_TRUNCATED, append_capture_advisory
     from ..._errors import TorchLensWarning
+
+    if trace is not None:
+        append_capture_advisory(trace, ADVISORY_HELD_SCAN_TRUNCATED, truncations)
 
     shown = "; ".join(truncations[:5])
     suffix = "" if len(truncations) <= 5 else f" (+{len(truncations) - 5} more)"
@@ -465,8 +473,8 @@ def warn_held_scan_truncated(truncations: list[str]) -> None:
             f"TorchLens stopped scanning module-held containers for plain tensors at "
             f"{len(truncations)} place(s): {shown}{suffix}. A tensor past a cut that "
             "the forward reads gets no buffer source: the capture warns about an input "
-            "with no provenance, the graph shows the read without the held tensor, and "
-            "graph validation does not catch it. Remedy: register tensors the forward "
+            "with no provenance and the graph shows the read without the held tensor; "
+            "forward validation of this capture fails. Remedy: register tensors the forward "
             "reads with register_buffer, or hold them in shallower or smaller containers",
             code="held_tensor_scan_truncated",
         ),

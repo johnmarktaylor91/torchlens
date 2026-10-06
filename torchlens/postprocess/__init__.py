@@ -501,12 +501,22 @@ def _warn_unattributed_tensor_args(self: "Trace") -> None:
     # module-returned twin (a stale ref whose output a module returns, e.g.
     # transformers' ``GELUActivation``): the boundary op tagged it before any
     # consumer could flag it.
-    for label, boundary, module_address in (
-        self.__dict__.pop("_module_boundary_adoptions", None) or ()
-    ):
-        offenders.append(f"{label} (adopted at module {boundary} {module_address})")
+    adoptions = [
+        f"{label} (adopted at module {boundary} {module_address})"
+        for label, boundary, module_address in (
+            self.__dict__.pop("_module_boundary_adoptions", None) or ()
+        )
+    ]
+    offenders.extend(adoptions)
     if not offenders:
         return
+    # Adopted tensors leave a functionless internal-source node that replays and
+    # validates; persist the adoption so forward validation fails it (per-op
+    # positions already persist as ``Op.unattributed_tensor_args``).
+    if adoptions:
+        from .._capture_honesty import ADVISORY_MODULE_BOUNDARY_ADOPTION, append_capture_advisory
+
+        append_capture_advisory(self, ADVISORY_MODULE_BOUNDARY_ADOPTION, adoptions)
     # Session-time escape signal: the capture entry reads this flag to decide
     # whether a rescue re-run (TorchFunctionMode net) should be attempted.
     self._had_unattributed_tensor_args = True

@@ -38,6 +38,13 @@ CHECK_PERTURBATION = "perturbation"
 CHECK_ARG_LOGGING = "argument_logging"
 CHECK_COMPLETENESS = "bfs_completeness"
 CHECK_METADATA_INVARIANT = "metadata_invariant"
+#: A captured op consumed a tensor argument with no recorded graph or source
+#: provenance (``Op.unattributed_tensor_args``), a module boundary adopted an
+#: untagged tensor as an internal source, or the module-held tensor scan was cut
+#: (``held_tensor_scan_truncated``). Replay from saved arguments cannot see any of
+#: these, because the source-less value sits in the saved arguments, so this
+#: completeness-family check fails the run on the final trace instead.
+CHECK_SOURCE_PROVENANCE = "source_provenance"
 #: An early structural refusal in ``_validate_forward_pass_torch`` (an
 #: unreproducible input topology, an unsnapshotable plain attribute, a
 #: non-pristine ground truth, a dropped-output enumeration defect) that

@@ -63,6 +63,7 @@ from ._index_domain import (
     layer_has_index_domain_parent,
 )
 from ._replay_device import align_output_to_saved_device, align_parent_to_slot_device
+from ._source_provenance import check_source_provenance
 from .exemptions import (
     CUSTOM_EXEMPTION_CHECKS,
     SKIP_PERTURBATION_ENTIRELY,
@@ -1114,6 +1115,9 @@ def validate_saved_outs(
         status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
         setattr(self, "_validation_replay_status", status)
         return status
+    # Source-less tensor args replay fine from saved args; fail them here.
+    if (gap_status := check_source_provenance(self, decision_recorder, verbose)) is not None:
+        return gap_status
 
     # Metadata invariant checks (after out validation ops)
     if validate_metadata:

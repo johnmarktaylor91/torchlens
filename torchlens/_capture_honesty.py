@@ -31,6 +31,47 @@ DATAFRAME_ATTRS_KEY = "torchlens_capture_honesty"
 #: Key under which capture-time advisories live in ``Trace.annotations``.
 ADVISORIES_ANNOTATIONS_KEY = "capture_advisories"
 
+#: ``Trace.annotations["capture_advisories"]`` kind recorded when a module boundary
+#: adopts an untagged tensor as an internal source (postprocess
+#: ``_warn_unattributed_tensor_args``).
+ADVISORY_MODULE_BOUNDARY_ADOPTION = "module_boundary_adoption"
+#: Advisory kind recorded when the module-held plain-tensor scan was cut
+#: (``backends/torch/buffer_writes.warn_held_scan_truncated``).
+ADVISORY_HELD_SCAN_TRUNCATED = "held_tensor_scan_truncated"
+
+
+def append_capture_advisory(trace: Any, kind: str, entries: list[str]) -> None:
+    """Persist one source-provenance gap advisory row on a capture trace.
+
+    The row is written BEFORE any warning is raised (warning filters may raise) so
+    the gap survives on the trace for forward validation's source-provenance check
+    (``validation/_source_provenance.py``) and the report honesty preambles, never
+    evaporating with a process-transient warning.
+
+    Parameters
+    ----------
+    trace:
+        Capture trace whose ``annotations`` carry the advisory family.
+    kind:
+        One of the gap advisory kinds defined in this module.
+    entries:
+        Human-readable gap descriptions; at least one.
+    """
+
+    annotations = getattr(trace, "annotations", None)
+    if not isinstance(annotations, dict) or not entries:
+        return
+    rows = annotations.setdefault(ADVISORIES_ANNOTATIONS_KEY, [])
+    if isinstance(rows, list):
+        rows.append(
+            {
+                "kind": kind,
+                "count": len(entries),
+                "first_location": None,
+                "message": "; ".join(entries),
+            }
+        )
+
 
 def capture_verification(log: Any) -> dict[str, Any]:
     """Return the capture's verification/outcome facts, never inferred.

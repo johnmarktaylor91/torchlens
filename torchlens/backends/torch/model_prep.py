@@ -1148,7 +1148,7 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
         for held_name, held_tensor in held:
             if get_buffer_address(held_tensor) is None:
                 _stamp(held_tensor, f"{module_addr}.{held_name}" if module_addr else held_name)
-    warn_held_scan_truncated(held_truncations)
+    warn_held_scan_truncated(held_truncations, trace)
     if unstampable:
         import warnings
 
