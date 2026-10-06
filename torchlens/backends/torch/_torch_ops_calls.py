@@ -249,8 +249,8 @@ def _returning_mutated_receiver(call_operator: Callable[..., Any]) -> Callable[.
         call_operator(*args, **kwargs)
         return args[0]
 
-    _call_returning_receiver.__name__ = call_operator.__name__  # type: ignore[attr-defined]
-    _call_returning_receiver.__qualname__ = call_operator.__name__  # type: ignore[attr-defined]
+    _call_returning_receiver.__name__ = call_operator.__name__
+    _call_returning_receiver.__qualname__ = call_operator.__name__
     return _call_returning_receiver
 
 
