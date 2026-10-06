@@ -7,7 +7,7 @@ import weakref
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import torch
 
@@ -434,6 +434,27 @@ def log_value(name: str, value: Any) -> None:
             "torchlens.report.log_value) must be called during trace."
         )
     trace.annotations.setdefault("logged_values", {})[str(name)] = value
+
+
+#: Removed public names: each raises the typed ``facade_redirect`` error naming
+#: its replacement (clean break, no alias).
+_REDIRECTS: dict[str, str] = {
+    "record_span": "use torchlens.observers.span -- record_span was renamed"
+}
+
+
+# Runtime only: under TYPE_CHECKING a module ``__getattr__`` would make every
+# name on this module type-check as Any.
+if not TYPE_CHECKING:
+
+    def __getattr__(name: str) -> Any:
+        """Raise the typed teaching error for a removed torchlens.observers name."""
+
+        from .utils.facade import resolve_facade_attr
+
+        return resolve_facade_attr(
+            owner=__name__, name=name, module_globals=globals(), redirects=_REDIRECTS
+        )
 
 
 __all__ = ["TapObserver", "TapRecord", "active_span_records", "log_value", "span", "tap"]

@@ -6,7 +6,7 @@ import copy
 import json
 import re
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .._io import _json
 from ..intervention.resolver import resolve_sites
@@ -1298,6 +1298,35 @@ def _require_str_enum(
     if not isinstance(value, str) or value not in allowed_values:
         allowed = ", ".join(sorted(allowed_values))
         raise ValueError(f"Manifest field {field_name!r} must be one of: {allowed}.")
+
+
+#: Removed public names: each raises the typed ``facade_redirect`` error naming
+#: its replacement (clean break, no alias).
+_REDIRECTS: dict[str, str] = {
+    "validate_saved_outs": (
+        "use torchlens.validation.validate(model, x, scope='saved'), or "
+        "trace.validate_forward_pass(ground_truth_outputs) -- validate_saved_outs was removed"
+    ),
+    "validate_trace_saved_outs": (
+        "use torchlens.validation.validate(model, x, scope='saved'), or "
+        "trace.validate_forward_pass(ground_truth_outputs) -- validate_trace_saved_outs "
+        "was removed"
+    ),
+}
+
+
+# Runtime only: under TYPE_CHECKING a module ``__getattr__`` would make every
+# name on this module type-check as Any.
+if not TYPE_CHECKING:
+
+    def __getattr__(name: str) -> Any:
+        """Raise the typed teaching error for a removed torchlens.validation name."""
+
+        from ..utils.facade import resolve_facade_attr
+
+        return resolve_facade_attr(
+            owner=__name__, name=name, module_globals=globals(), redirects=_REDIRECTS
+        )
 
 
 __all__ = [

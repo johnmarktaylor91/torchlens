@@ -140,7 +140,8 @@ gone: `trace.summary()` mid-forward now raises `CaptureContextError`
 
 ## Removed member spellings name their replacement (typed redirect)
 
-The alias members deleted by the 2026-10-01 shim removal, and the deleted
+The alias members and public subpackage names deleted by the 2026-10-01
+shim removal and the F38 sweep, and the deleted
 `VisualizationTheme.legend_items` field, are still gone (no alias). Looking
 one up now raises `FacadeTeachingError` (code `facade_redirect`, an
 `AttributeError` subclass, so `getattr(obj, name, default)` still degrades)
@@ -157,6 +158,10 @@ replaces the attribute error on that path. Attribute access such as
 | `Bundle.replay`, `Bundle.rerun` | `bundle.push`, `bundle.run` |
 | `VisualizationOptions.mode`, `.max_module_depth`, `.layout_engine`, `.node_mode` | `.view`, `.depth`, `.layout`, `.node_style` |
 | `VisualizationTheme.legend_items` | legends derive from the encoding channels; style via `semantic_palette` and `ramp` |
+| `torchlens.validation.validate_saved_outs`, `.validate_trace_saved_outs` | `torchlens.validation.validate(model, x, scope="saved")`, or `trace.validate_forward_pass(...)` |
+| `torchlens.io.get_model_metadata` | `torchlens.io.log_model_metadata` |
+| `torchlens.observers.record_span` | `torchlens.observers.span` |
+| `torchlens.intervention.intervening`, `.replay_from` | `torchlens.intervention.without_op`, `.push_from` |
 
 ## Episode ledger grammar v2 (the C07X coordinated tlspec-v9 amendment)
 
