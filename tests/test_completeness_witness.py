@@ -227,7 +227,7 @@ class _DirectAtenGapModel(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Bypass the Python wrapper namespace for the relu call."""
 
-        escaped = torch.ops.aten.relu.default(x)
+        escaped = torch._C._VariableFunctions.relu(x)
         return torch.sigmoid(escaped)
 
 
@@ -248,7 +248,7 @@ class _DirectAtenChild(nn.Module):
             Direct aten result.
         """
 
-        return torch.ops.aten.relu.default(x)
+        return torch._C._VariableFunctions.relu(x)
 
 
 class _DirectAtenSubmoduleGapModel(nn.Module):
@@ -283,7 +283,7 @@ class _DirectAtenIntermediateChild(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Return a traced sigmoid of an unwrapped relu intermediate."""
 
-        escaped = torch.ops.aten.relu.default(x)
+        escaped = torch._C._VariableFunctions.relu(x)
         return torch.sigmoid(escaped)
 
 
@@ -309,8 +309,8 @@ class _MutatingDirectAtenOutputChild(nn.Module):
         """Return raw relu output after an observable unwrapped in-place mutation."""
 
         y = x + 1
-        torch.ops.aten.mul_.Tensor(y, 2)
-        return torch.ops.aten.relu.default(y)
+        torch._C.TensorBase.mul_(y, 2)
+        return torch._C._VariableFunctions.relu(y)
 
 
 class _MutatingDirectAtenOutputSubmoduleModel(nn.Module):
@@ -669,7 +669,7 @@ def test_genuine_replacement_hook_dispatch_is_tagged_in_replacement_hook() -> No
             return self.relu(self.fc1(x))
 
     def _replacement_hook(module, inputs, output):  # type: ignore[no-untyped-def]
-        return torch.ops.aten.mul.Tensor(output, torch.tensor(0.5))
+        return torch._C._VariableFunctions.mul(output, torch.tensor(0.5))
 
     wrap_torch(completeness_witness=True)
     model = _Mlp().eval()
@@ -1239,7 +1239,7 @@ class _DirectMutatingAtenModel(nn.Module):
         """Mutate a tensor in place through a direct (unwrapped) aten call."""
 
         y = x + 1
-        torch.ops.aten.mul_.Tensor(y, 2)
+        torch._C.TensorBase.mul_(y, 2)
         return torch.sigmoid(y)
 
 

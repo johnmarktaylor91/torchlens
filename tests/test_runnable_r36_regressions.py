@@ -351,13 +351,13 @@ class TestHon23ParamDerivedContamination:
 
 class _RawMutation(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        torch.ops.aten.add_.Tensor(x, 1)
+        torch._C.TensorBase.add_(x, 1)
         return torch.relu(x)
 
 
 class _RawNonMutating(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        y = torch.ops.aten.mul.Tensor(x, 2)
+        y = torch._C._VariableFunctions.mul(x, 2)
         return torch.relu(y)
 
 

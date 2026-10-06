@@ -101,7 +101,7 @@ from ._tl import (
     is_tensor_data_alias,
     session_meta_is_anchored,
 )
-from ._torch_ops_calls import suppress_torch_ops_call_logging
+from ._torch_ops_calls import enter_suppressed_region, exit_suppressed_region
 from .buffer_writes import peek_buffer_write_tracker, session_validated_buffer_address
 from .escape_detection import (
     ExpectedOriginalToken,
@@ -1382,11 +1382,11 @@ class _CompletenessDispatchMode(_TorchLensDispatchMode):
                         pre_dispatch_receiver_numel = None
         finally:
             self.state.callback_ns += time.perf_counter_ns() - started
+        # The observed operator re-executes through ``torch.ops`` machinery; it is a
+        # dispatch TorchLens already attributes, never a user ``torch.ops`` call.
+        enter_suppressed_region()
         try:
-            # The observed operator re-executes through ``torch.ops`` machinery; it is a
-            # dispatch TorchLens already attributes, never a user ``torch.ops`` call.
-            with suppress_torch_ops_call_logging():
-                result = func(*args, **(kwargs or {}))
+            result = func(*args, **(kwargs or {}))
         except BaseException as exc:
             # r35 I2 lifecycle ledger: an op that RAISED left no captured artifact,
             # so a branch taken *because* it raised has no witness anchor. Record
@@ -1401,6 +1401,8 @@ class _CompletenessDispatchMode(_TorchLensDispatchMode):
 
                 _finish_aten_call(self.state, aten_pending, exception=exc)
             raise
+        finally:
+            exit_suppressed_region()
         if event is not None:
             if _dispatch_result_holds_tensor(result):
                 event.outcome = "returned_tensor"

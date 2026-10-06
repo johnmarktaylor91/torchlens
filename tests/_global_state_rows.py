@@ -13,6 +13,10 @@ obvious from the name.
 
 _SCOPED_CAPTURE_STATE = frozenset(
     {
+        # torch.ops recorder suppression depth: incremented/decremented in the
+        # census redispatch's own try/finally; a survivor would silently stop
+        # recording user torch.ops calls.
+        ("torchlens/backends/torch/_torch_ops_calls.py", "_SUPPRESS_DEPTH"),
         # Governed-artifact-load window depth: incremented/decremented in the
         # governed_artifact_load() try/finally around .tlspec restore frames;
         # a survivor past the load window would arm the unknown-field refusal
@@ -132,6 +136,12 @@ pins the high-risk members against exception and interruption paths.
 
 _INSTALL_STATE_AND_CACHES = frozenset(
     {
+        # torch.ops call-class recorders: originals captured at wrap_torch, restored
+        # and cleared at unwrap_torch; the per-operator wrapper cache is cleared with
+        # them; the shared wrapper code object is an install-time constant.
+        ("torchlens/backends/torch/_torch_ops_calls.py", "_DECORATED_BY_OP"),
+        ("torchlens/backends/torch/_torch_ops_calls.py", "_ORIGINAL_CALLS"),
+        ("torchlens/backends/torch/_torch_ops_calls.py", "_WRAPPED_FUNC_CODE"),
         # S3 pre-release field registrar (wave -0.5). _REGISTRY and
         # _ANNOTATIONS_KEY_REGISTRY are DECLARATION tables populated at import
         # by register_prerelease_field (DROP-only, refuses non-DROP), so they are

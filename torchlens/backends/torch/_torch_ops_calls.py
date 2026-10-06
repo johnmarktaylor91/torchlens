@@ -15,16 +15,20 @@ object itself as the replay callable, so the op is recorded with parents from it
 arguments exactly like any wrapped torch function, and validation replays it by calling
 the operator again. Outside a logging window the patch is one bool read.
 
-Calls that TorchLens itself makes are never recorded: every wrapped torch function pauses
-logging before it reaches the dispatcher, and the dispatcher-census handler re-executes the
-operator it observed inside :func:`suppress_torch_ops_call_logging`.
+Calls that TorchLens or torch itself makes are never recorded: a ``torch.ops`` call inside
+a wrapped torch function's original (a decomposition, a custom op's body) is detected by a
+frame walk, the dispatcher-census handler re-executes the operator it observed inside
+:func:`enter_suppressed_region` / :func:`exit_suppressed_region`, and the namespaces in
+``_UNRECORDED_NAMESPACES`` (collectives, quantized kernels, profiler markers) keep their
+dedicated paths.
 """
 
 from __future__ import annotations
 
 import functools
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+import sys
+from collections.abc import Callable
+from types import CodeType
 from typing import Any
 
 import torch._ops as _torch_ops
@@ -38,27 +42,47 @@ Higher-order operators (``torch.cond``, ``while_loop``) and TorchBind overloads 
 patched: they run user callables or script objects and are not plain tensor operators.
 """
 
+_UNRECORDED_NAMESPACES: frozenset[str] = frozenset(
+    {
+        # Collectives: replaying one during validation would re-enter the process group;
+        # funcol keeps its own armed boundary path (``funcol.py``).
+        "_c10d_functional",
+        "_c10d_functional_autograd",
+        "c10d",
+        "c10d_functional",
+        "_dtensor",
+        # Quantized kernels: model preparation adopts quantized modules as
+        # ``quantized_*`` boundaries with their own FLOP estimates.
+        "quantized",
+        # Profiler range markers return script objects, never tensors.
+        "profiler",
+    }
+)
+"""Operator namespaces whose direct calls keep their dedicated (unrecorded) path."""
+
+_CALL_ATTR = "__call__"
 _ORIGINAL_CALLS: dict[type, Callable[..., Any]] = {}
 _DECORATED_BY_OP: dict[int, tuple[Any, Callable[..., Any]]] = {}
+_WRAPPED_FUNC_CODE: list[CodeType] = []
 _SUPPRESS_DEPTH = 0
 
 
-@contextmanager
-def suppress_torch_ops_call_logging() -> Iterator[None]:
-    """Run an operator call that TorchLens itself issues without recording it.
+def enter_suppressed_region() -> None:
+    """Begin a region whose ``torch.ops`` calls TorchLens itself issues (census redispatch).
 
-    Yields
-    ------
-    None
-        ``torch.ops.*`` calls inside the block pass straight to the operator.
+    Paired with :func:`exit_suppressed_region` in the caller's own ``try``/``finally`` so the
+    redispatch frame stays the innermost TorchLens frame for failure classification.
     """
 
     global _SUPPRESS_DEPTH
     _SUPPRESS_DEPTH += 1
-    try:
-        yield
-    finally:
-        _SUPPRESS_DEPTH -= 1
+
+
+def exit_suppressed_region() -> None:
+    """End a region opened by :func:`enter_suppressed_region`."""
+
+    global _SUPPRESS_DEPTH
+    _SUPPRESS_DEPTH -= 1
 
 
 def _recorded_op_name(op: Any) -> str:
@@ -80,35 +104,48 @@ def _recorded_op_name(op: Any) -> str:
     name = getattr(packet, "__name__", None)
     if isinstance(name, str) and name:
         return name
-    qualified = str(getattr(packet, "_qualified_op_name", "op"))
-    return qualified.rsplit("::", 1)[-1]
+    return _qualified_name(op).rsplit("::", 1)[-1]
 
 
-def _is_torchlens_decorated_op(op: Any) -> bool:
-    """Return whether the operator's inner callable is already a TorchLens wrapper.
+def _qualified_name(op: Any) -> str:
+    """Return ``namespace::name`` for an operator object (empty when unknown)."""
 
-    Torchvision's ``torch.ops.torchvision.*`` packets get their ``_op`` replaced by a
-    decorated wrapper at wrap time; those keep their existing recording path.
+    packet = getattr(op, "_overloadpacket", op)
+    return str(getattr(packet, "_qualified_op_name", ""))
+
+
+def _keeps_dedicated_path(op: Any) -> bool:
+    """Return whether this operator must not be recorded by the ``torch.ops`` recorder.
+
+    Torchvision packets whose ``_op`` is already a TorchLens wrapper keep that path, and
+    the namespaces in ``_UNRECORDED_NAMESPACES`` keep their dedicated handling.
     """
 
-    return id(getattr(op, "_op", None)) in _state._decorated_to_orig
+    decorated_to_orig, _ = _state.wrap_epoch_ledgers()
+    if id(getattr(op, "_op", None)) in decorated_to_orig:
+        return True
+    return _qualified_name(op).split("::", 1)[0] in _UNRECORDED_NAMESPACES
 
 
-def _operator_callable(op: Any, original: Callable[..., Any], name: str) -> Callable[..., Any]:
-    """Return a plain function that runs ``op`` through the class's original ``__call__``.
+def _inside_wrapped_torch_call() -> bool:
+    """Return whether the caller runs inside a wrapped torch function's original call.
 
-    The logging wrapper keeps logging enabled while it runs its callable (nested wrapped
-    calls are detected by barcode), so the replay callable must bypass the patched
-    ``__call__``; validation replays the op through this same function.
+    A wrapped torch function keeps logging enabled while its original runs (nested calls
+    are resolved by barcode), so torch's own Python code calling ``torch.ops`` there (a
+    decomposition, ``broadcast_in_dim``, a custom op's body) must not become a recorded op.
+    Every ``torch_func_decorator`` wrapper shares one code object, so one frame walk
+    answers it; only direct ``torch.ops`` calls made while a capture is logging pay it.
     """
 
-    def call_operator(*args: Any, **kwargs: Any) -> Any:
-        """Invoke the operator with the pristine ``torch._ops`` call path."""
-        return original(op, *args, **kwargs)
-
-    call_operator.__name__ = name
-    call_operator.__qualname__ = name
-    return call_operator
+    if not _WRAPPED_FUNC_CODE:
+        return False
+    wrapped_code = _WRAPPED_FUNC_CODE[0]
+    frame = sys._getframe(2)
+    while frame is not None:
+        if frame.f_code is wrapped_code:
+            return True
+        frame = frame.f_back
+    return False
 
 
 def _decorated_for(op: Any, original: Callable[..., Any]) -> Callable[..., Any]:
@@ -124,7 +161,10 @@ def _decorated_for(op: Any, original: Callable[..., Any]) -> Callable[..., Any]:
     Returns
     -------
     Callable[..., Any]
-        ``torch_func_decorator`` wrapper whose replay callable runs ``op`` unpatched.
+        ``torch_func_decorator`` wrapper whose callable runs ``op`` through the unpatched
+        ``__call__``. It is a C ``functools.partial`` (no TorchLens frame between the
+        wrapper's trampoline and the operator), so a failing operator classifies as the
+        user's op, and validation replays the op through it.
     """
 
     cached = _DECORATED_BY_OP.get(id(op))
@@ -133,7 +173,10 @@ def _decorated_for(op: Any, original: Callable[..., Any]) -> Callable[..., Any]:
     from .wrappers import torch_func_decorator
 
     name = _recorded_op_name(op)
-    decorated = torch_func_decorator(_operator_callable(op, original, name), name)
+    call_operator = functools.partial(original, op)
+    call_operator.__name__ = name  # type: ignore[attr-defined]
+    call_operator.__qualname__ = name  # type: ignore[attr-defined]
+    decorated = torch_func_decorator(call_operator, name)
     _DECORATED_BY_OP[id(op)] = (op, decorated)
     return decorated
 
@@ -155,11 +198,13 @@ def _make_recording_call(original: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(original)
     def _recording_call(self: Any, /, *args: Any, **kwargs: Any) -> Any:
         """Record a user ``torch.ops`` call during capture, else call through."""
+        trace, enabled = _state.active_capture()
         if (
-            not _state._logging_enabled
+            not enabled
+            or trace is None
             or _SUPPRESS_DEPTH
-            or _state._active_trace is None
-            or _is_torchlens_decorated_op(self)
+            or _keeps_dedicated_path(self)
+            or _inside_wrapped_torch_call()
         ):
             return original(self, *args, **kwargs)
         return _decorated_for(self, original)(*args, **kwargs)
@@ -177,15 +222,19 @@ def install_torch_ops_call_recorders() -> None:
         Class ``__call__`` attributes are replaced in place.
     """
 
+    if not _WRAPPED_FUNC_CODE:
+        from .wrappers import torch_func_decorator
+
+        _WRAPPED_FUNC_CODE.append(torch_func_decorator(len, "tl_torch_ops_probe").__code__)
     for class_name in _CALL_CLASS_NAMES:
         cls = getattr(_torch_ops, class_name, None)
         if not isinstance(cls, type) or cls in _ORIGINAL_CALLS:
             continue
-        current = cls.__dict__.get("__call__")
+        current = cls.__dict__.get(_CALL_ATTR)
         if current is None or getattr(current, "__tl_torch_ops_recorder__", False):
             continue
         _ORIGINAL_CALLS[cls] = current
-        setattr(cls, "__call__", _make_recording_call(current))
+        setattr(cls, _CALL_ATTR, _make_recording_call(current))
 
 
 def uninstall_torch_ops_call_recorders() -> None:
@@ -199,8 +248,8 @@ def uninstall_torch_ops_call_recorders() -> None:
     """
 
     for cls, original in list(_ORIGINAL_CALLS.items()):
-        current = cls.__dict__.get("__call__")
+        current = cls.__dict__.get(_CALL_ATTR)
         if getattr(current, "__tl_torch_ops_recorder__", False):
-            setattr(cls, "__call__", original)
+            setattr(cls, _CALL_ATTR, original)
         del _ORIGINAL_CALLS[cls]
     _DECORATED_BY_OP.clear()
