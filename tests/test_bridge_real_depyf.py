@@ -74,14 +74,15 @@ def test_dump_writes_what_depyf_writes_directly(tmp_path: Path) -> None:
     print(f"\ndirect files={len(direct)} bridge files={len(written)}")
 
 
-def test_cached_compile_is_never_an_empty_list(tmp_path: Path) -> None:
+@pytest.mark.usefixtures("no_compile_caches")
+def test_redump_into_the_same_directory_reports_the_rewritten_files(tmp_path: Path) -> None:
+    """Files already present count when the compile rewrites them (mtime or size)."""
+
     model, x = _model(), torch.randn(2, 3, 16, 16)
     torch._dynamo.reset()
-    assert tl.bridge.depyf.dump(model, x, tmp_path / "first")
-    try:
-        again = tl.bridge.depyf.dump(model, x, tmp_path / "second")
-    except RuntimeError as exc:
-        assert "torch._dynamo.reset" in str(exc)
-    else:
-        assert again
+    first = tl.bridge.depyf.dump(model, x, tmp_path)
     torch._dynamo.reset()
+    second = tl.bridge.depyf.dump(model, x, tmp_path)
+    torch._dynamo.reset()
+    assert first and second
+    assert _shape([p.name for p in second]) == _shape([p.name for p in first])
