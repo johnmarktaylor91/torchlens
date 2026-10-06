@@ -327,10 +327,12 @@ def _module_num_calls(log: Any, address: str) -> int:
         of distinct calls named in the ops' ``output_of_module_calls``.
     """
 
-    try:
-        return int(log.modules[address].num_calls)
-    except Exception:  # noqa: BLE001 - duck-typed logs without a module record count below
-        pass
+    modules = log.modules if hasattr(log, "modules") else None
+    record = modules[address] if modules is not None and address in modules else None
+    num_calls = getattr(record, "num_calls", None)
+    if num_calls is not None:
+        return int(num_calls)
+    # Duck-typed logs without a module record: count the distinct calls instead.
     seen: set[Any] = set()
     for layer in getattr(log, "layer_list", []):
         for call in getattr(layer, "output_of_module_calls", ()) or ():

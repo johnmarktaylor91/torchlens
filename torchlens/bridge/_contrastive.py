@@ -10,6 +10,7 @@ dialz forked.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -21,15 +22,38 @@ from ._utils import out_at, resolve_one_site, source_model
 ReadIndex = int | Sequence[int] | None
 
 
+@dataclass(frozen=True)
+class _ContrastiveRead:
+    """How the contrastive bridges read rows: the negative trace, token and masks.
+
+    ``steering_vectors.vector``, ``repeng.control_vector`` and ``dialz.vector``
+    take these four keywords with the same meaning and forward them unchanged.
+
+    Parameters
+    ----------
+    negative_log:
+        Optional trace holding the negative site.
+    read_token_index:
+        Token position(s) to read, or ``None`` for unsliced outs.
+    attention_mask:
+        ``[n_prompts, n_tokens]`` mask of the positive prompts; read from the
+        trace's ``attention_mask`` input when omitted.
+    negative_attention_mask:
+        Mask of the negative prompts; defaults to ``attention_mask`` when both
+        sides live in the positive trace, else is read from ``negative_log``.
+    """
+
+    negative_log: Any | None = None
+    read_token_index: ReadIndex = -1
+    attention_mask: torch.Tensor | None = None
+    negative_attention_mask: torch.Tensor | None = None
+
+
 def _contrastive_rows(
     log: Any,
     positive_site: Any,
     negative_site: Any | None,
-    *,
-    negative_log: Any | None,
-    read_token_index: ReadIndex,
-    attention_mask: torch.Tensor | None = None,
-    negative_attention_mask: torch.Tensor | None = None,
+    read: _ContrastiveRead,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Return aligned, distinct ``[n_prompts, hidden]`` positive and negative rows.
 
@@ -40,17 +64,10 @@ def _contrastive_rows(
     positive_site:
         Positive site.
     negative_site:
-        Negative site; defaults to ``positive_site`` when ``negative_log`` is set.
-    negative_log:
-        Optional trace holding the negative site.
-    read_token_index:
-        Token position(s) to read, or ``None`` for unsliced outs.
-    attention_mask:
-        ``[n_prompts, n_tokens]`` mask of the positive prompts; read from the
-        trace's ``attention_mask`` input when omitted.
-    negative_attention_mask:
-        Mask of the negative prompts; defaults to ``attention_mask`` when both
-        sides live in ``log``, else is read from ``negative_log``.
+        Negative site; defaults to ``positive_site`` when ``read.negative_log``
+        is set.
+    read:
+        Negative trace, token position(s) and attention masks to read with.
 
     Returns
     -------
@@ -65,19 +82,18 @@ def _contrastive_rows(
     """
 
     negative_trace, negative_site = _negative_source(
-        log, positive_site, negative_site, negative_log
+        log, positive_site, negative_site, read.negative_log
     )
-    positive_mask = attention_mask if attention_mask is not None else _captured_mask(log)
-    if negative_attention_mask is not None:
-        negative_mask: torch.Tensor | None = negative_attention_mask
-    elif negative_log is None:
+    positive_mask = read.attention_mask if read.attention_mask is not None else _captured_mask(log)
+    if read.negative_attention_mask is not None:
+        negative_mask: torch.Tensor | None = read.negative_attention_mask
+    elif read.negative_log is None:
         negative_mask = positive_mask
     else:
-        negative_mask = _captured_mask(negative_log)
-    positive = _read_rows(out_at(log, positive_site), read_token_index, positive_mask, "positive")
-    negative = _read_rows(
-        out_at(negative_trace, negative_site), read_token_index, negative_mask, "negative"
-    )
+        negative_mask = _captured_mask(read.negative_log)
+    index = read.read_token_index
+    positive = _read_rows(out_at(log, positive_site), index, positive_mask, "positive")
+    negative = _read_rows(out_at(negative_trace, negative_site), index, negative_mask, "negative")
     if positive.shape != negative.shape:
         raise InvalidArgumentError(
             f"Positive rows {tuple(positive.shape)} and negative rows "

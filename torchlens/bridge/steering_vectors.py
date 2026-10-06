@@ -17,7 +17,7 @@ from typing import Any
 
 import torch
 
-from ._contrastive import _contrastive_rows
+from ._contrastive import _contrastive_rows, _ContrastiveRead
 
 
 def vector(
@@ -105,10 +105,12 @@ def vector(
         log,
         positive_site,
         negative_site,
-        negative_log=negative_log,
-        read_token_index=read_token_index,
-        attention_mask=attention_mask,
-        negative_attention_mask=negative_attention_mask,
+        _ContrastiveRead(
+            negative_log=negative_log,
+            read_token_index=read_token_index,
+            attention_mask=attention_mask,
+            negative_attention_mask=negative_attention_mask,
+        ),
     )
     train = trainer if trainer is not None else steering_module.mean_aggregator()
     result = train(positive, negative, **kwargs)

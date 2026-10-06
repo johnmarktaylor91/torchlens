@@ -56,9 +56,11 @@ def _rows(positive: torch.Tensor, negative: torch.Tensor, **kwargs: Any) -> Any:
         _log(),
         _site(positive, "pos"),
         _site(negative, "neg"),
-        negative_log=None,
-        read_token_index=kwargs.pop("read_token_index", -1),
-        **kwargs,
+        _contrastive._ContrastiveRead(
+            negative_log=None,
+            read_token_index=kwargs.pop("read_token_index", -1),
+            **kwargs,
+        ),
     )
 
 

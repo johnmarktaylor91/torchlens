@@ -15,7 +15,13 @@ from typing import Any
 
 import torch
 
-from ._contrastive import _contrastive_rows, _interleave, _model_type, _read_directions
+from ._contrastive import (
+    _contrastive_rows,
+    _ContrastiveRead,
+    _interleave,
+    _model_type,
+    _read_directions,
+)
 
 
 def vector(
@@ -98,10 +104,12 @@ def vector(
         log,
         positive_site,
         negative_site,
-        negative_log=negative_log,
-        read_token_index=read_token_index,
-        attention_mask=attention_mask,
-        negative_attention_mask=negative_attention_mask,
+        _ContrastiveRead(
+            negative_log=negative_log,
+            read_token_index=read_token_index,
+            attention_mask=attention_mask,
+            negative_attention_mask=negative_attention_mask,
+        ),
     )
     chosen = method if method is not None else _default_method(dialz_module)
     direction = _read_directions(
