@@ -1203,6 +1203,94 @@ jobs:
             -p no:randomly --tb=short -q --junitxml="${{ runner.temp }}/lit.junit.xml"
           python scripts/check_ci_executed_tests.py "${{ runner.temp }}/lit.junit.xml" 0 --min-passed 16
 
+  bridges-real:
+    # Real-package bridge legs (round-2 walk bridge fix, 2026-10-05): every
+    # tests/test_bridge_real_*.py file importorskips its package, so without a
+    # leg that INSTALLS the package each file skips everywhere and a green run
+    # covers nothing. One leg per co-installable set; each compares the bridge
+    # with the package used directly and attests a PASSED floor so a skip
+    # cascade fails red. Tiny checkpoints are warmed first because the files
+    # run offline and skip when the checkpoint is not cached.
+    name: Bridge real-package (${{ matrix.leg }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - leg: vision
+            extras: "dev,gradcam,shap,captum"
+            pkgs: "torchvision"
+            files: "tests/test_bridge_real_gradcam.py tests/test_bridge_real_captum.py tests/test_bridge_real_shap.py tests/test_bridge_real_profiler.py"
+            floor: "13"
+          - leg: steer
+            extras: "dev,steering,dialz"
+            pkgs: "transformers"
+            files: "tests/test_bridge_real_steering_vectors.py tests/test_bridge_real_dialz.py"
+            floor: "13"
+          - leg: repeng
+            extras: "dev,repeng"
+            pkgs: "transformers"
+            files: "tests/test_bridge_real_repeng.py"
+            floor: "6"
+          - leg: interop
+            extras: "dev,depyf,inseq,nnsight"
+            pkgs: "transformers"
+            files: "tests/test_bridge_real_depyf.py tests/test_bridge_real_inseq.py tests/test_bridge_real_nnsight.py"
+            floor: "7"
+          - leg: track
+            extras: "dev,trackers-relay-test"
+            pkgs: "mlflow pandas"
+            files: "tests/test_export_real_mlflow.py tests/test_trackers_real_wandb_sink.py tests/test_trackers_sinks_relay_pins.py"
+            floor: "5"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Install the leg's extras on CPU torch
+        env:
+          EXTRAS: ${{ matrix.extras }}
+          PKGS: ${{ matrix.pkgs }}
+        run: |
+          # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          # shellcheck disable=SC2086
+          uv pip install --system \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[$EXTRAS]" "torch==2.13.0+cpu" $PKGS
+
+      - name: Warm the tiny-checkpoint cache (the test files run OFFLINE)
+        if: matrix.leg == 'steer' || matrix.leg == 'repeng' || matrix.leg == 'interop'
+        run: |
+          python - <<'PY'
+          from transformers import AutoModelForCausalLM, AutoTokenizer
+          for name in ("hf-internal-testing/tiny-random-LlamaForCausalLM", "hf-internal-testing/tiny-random-gpt2"):
+              AutoTokenizer.from_pretrained(name)
+              AutoModelForCausalLM.from_pretrained(name)
+              print("cached", name)
+          PY
+
+      - name: Real-package bridge gates (PASSED-count attested)
+        env:
+          FILES: ${{ matrix.files }}
+          FLOOR: ${{ matrix.floor }}
+          WANDB_MODE: offline
+        run: |
+          # shellcheck disable=SC2086
+          pytest $FILES -p no:randomly --tb=short -q --junitxml="${{ runner.temp }}/bridges.junit.xml"
+          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/bridges.junit.xml" 0 --min-passed "$FLOOR"
+
   brainscore-live:
     # F20 (brainpipe memo D-23/F-2; packaging_requests 2026-08-28, landed by
     # D05): the live Brain-Score verification leg -- released brainscore-vision
