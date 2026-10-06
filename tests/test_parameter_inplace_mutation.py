@@ -209,3 +209,102 @@ def test_validation_still_fails_when_the_parameter_mutation_is_dropped(
     )
     with pytest.warns(Warning):
         assert tl.validate(_ParamMutator("clamp_"), torch.randn(3, 4), scope="forward") is False
+    # The failure is the completeness tripwire on the dropped op, not an unrelated check.
+    failure = tl.validation.last_validation_failure()
+    assert failure is not None
+    assert "bfs_completeness" in failure.summary()
+    assert "dispatched vs" in failure.summary()
+
+
+class _AddThenScale(nn.Module):
+    """Shift a Parameter in place under ``no_grad``, then scale by it."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+        self.scale = nn.Parameter(torch.full((4,), 2.0))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            self.scale.add_(1.0)
+        return self.lin(x) * self.scale
+
+
+def test_intervention_on_the_parameter_mutation_op_applies() -> None:
+    """A live intervention on the mutation op lands in the Parameter; the op stays."""
+
+    torch.manual_seed(0)
+    model = _AddThenScale()
+    x = torch.randn(3, 4)
+    trace = tl.trace(model, x, intervene=tl.when(tl.func("add"), tl.zero_ablate()))
+    adds = _ops_by_type(trace, "add")
+    assert len(adds) == 1, [layer.label for layer in trace.layers]
+    mul = _ops_by_type(trace, "mul")[0]
+    assert adds[0].label in _parent_labels(trace, mul)
+    assert "scale" not in [p.address for p in mul.params]
+    # Eager semantics with the hook: the in-place op's result (zeroed) is the
+    # Parameter's new value, so every later read sees zeros.
+    assert torch.equal(model.scale.detach(), torch.zeros(4))
+    assert torch.equal(trace[trace.output_layers[0]].out, torch.zeros(3, 4))
+
+
+def test_intervention_elsewhere_keeps_the_parameter_mutation_unhooked() -> None:
+    """Narrowness: hooking another op leaves the mutation op and its value alone."""
+
+    torch.manual_seed(0)
+    model = _AddThenScale()
+    x = torch.randn(3, 4)
+    eager_lin = model.lin(x).detach()
+    trace = tl.trace(model, x, intervene=tl.when(tl.func("linear"), tl.zero_ablate()))
+    add = _ops_by_type(trace, "add")[0]
+    mul = _ops_by_type(trace, "mul")[0]
+    assert add.label in _parent_labels(trace, mul)
+    assert torch.equal(model.scale.detach(), torch.full((4,), 3.0))
+    assert not torch.equal(eager_lin, torch.zeros(3, 4))
+    assert torch.equal(trace[trace.output_layers[0]].out, torch.zeros(3, 4))
+
+
+class _FrozenMutator(nn.Module):
+    """Mutate a frozen (``requires_grad=False``) Parameter in place with grad mode on."""
+
+    def __init__(self, requires_grad: bool = False) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+        self.temp = nn.Parameter(0.9 * torch.ones([]), requires_grad=requires_grad)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        self.temp.mul_(0.5)
+        return self.lin(x) / self.temp
+
+
+def test_frozen_parameter_mutated_without_no_grad_captures_like_eager() -> None:
+    torch.manual_seed(0)
+    model = _FrozenMutator()
+    x = torch.randn(3, 4)
+    eager = copy.deepcopy(model)
+    eager_out = eager(x).detach()
+
+    traced_model = copy.deepcopy(model)
+    trace = tl.trace(traced_model, x)
+    mul = _ops_by_type(trace, "mul")[0]
+    assert [p.address for p in mul.params] == ["temp"]
+    truediv = _ops_by_type(trace, "truediv")[0]
+    assert mul.label in _parent_labels(trace, truediv)
+    assert "temp" not in [p.address for p in truediv.params]
+    assert torch.allclose(trace[trace.output_layers[0]].out, eager_out)
+    assert torch.equal(traced_model.temp.detach(), eager.temp.detach())
+    assert traced_model.temp.requires_grad is False
+
+    validated = copy.deepcopy(model)
+    assert tl.validate(validated, x, scope="forward") is True
+    assert torch.equal(validated.temp.detach(), model.temp.detach())
+
+
+def test_trainable_parameter_mutated_without_no_grad_still_raises_like_eager() -> None:
+    """Narrowness: only frozen Parameters run untracked; eager refuses this one too."""
+
+    x = torch.randn(3, 4)
+    with pytest.raises(RuntimeError, match="leaf Variable that requires grad"):
+        _FrozenMutator(requires_grad=True)(x)
+    with pytest.raises(RuntimeError, match="leaf Variable that requires grad"):
+        tl.trace(_FrozenMutator(requires_grad=True), x)
