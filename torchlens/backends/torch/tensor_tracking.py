@@ -23,7 +23,13 @@ from ...utils._torch_compat import get_current_graph_task_id_fn
 from ...utils.display import _record_phase_timing
 from ...utils.hashing import make_random_barcode, make_short_barcode_from_input
 from ...utils.tensor_utils import SaveMode, safe_copy
-from ._tl import get_param_meta, get_tensor_label, increment_param_call_index, set_param_meta
+from ._tl import (
+    get_param_meta,
+    get_tensor_label,
+    increment_param_call_index,
+    mutated_parameter_label,
+    set_param_meta,
+)
 
 if TYPE_CHECKING:
     from ...data_classes.trace import Trace
@@ -881,7 +887,11 @@ def _locate_parent_tensors_in_args(
 
     for arg_type, arg_struct in (("args", args), ("kwargs", kwargs)):
         for arg_key, arg in _iter_arg_container_items(arg_type, arg_struct):
-            arg_label = None if isinstance(arg, torch.nn.Parameter) else get_tensor_label(arg)
+            arg_label = (
+                mutated_parameter_label(arg)
+                if isinstance(arg, torch.nn.Parameter)
+                else get_tensor_label(arg)
+            )
             if arg_label in positions_by_label:
                 positions_by_label[arg_label][arg_type].append(arg_key)
 
@@ -890,7 +900,9 @@ def _locate_parent_tensors_in_args(
             # Second level of nesting (e.g., torch.cat([tensor_a, tensor_b])).
             for sub_arg_key, sub_arg in _iter_arg_container_items(arg, arg):
                 sub_arg_label = (
-                    None if isinstance(sub_arg, torch.nn.Parameter) else get_tensor_label(sub_arg)
+                    mutated_parameter_label(sub_arg)
+                    if isinstance(sub_arg, torch.nn.Parameter)
+                    else get_tensor_label(sub_arg)
                 )
                 # The former parent-first scan stopped at a top-level match for that
                 # parent, while still inspecting the container for every other parent.

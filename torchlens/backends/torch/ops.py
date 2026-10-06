@@ -180,6 +180,7 @@ from ._tl import (
     get_tensor_meta,
     is_tensor_data_alias,
     mark_detached_saved_activation,
+    mutated_parameter_label,
     pop_same_object_mutation,
     promote_mutated_parameters,
     session_label_storage_intact,

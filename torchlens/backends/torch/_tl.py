@@ -1295,6 +1295,28 @@ def get_live_label_list(tensor_list: Iterable[Any], live_labels: Iterable[str]) 
     return labels
 
 
+def mutated_parameter_label(param: Any) -> str | None:
+    """Return the current-session mutation label a Parameter carries, if any.
+
+    Only ``wrappers._label_mutated_prepared_parameter`` labels a Parameter: after
+    an in-place op mutated a prepared Parameter, its reads bind to that op. The
+    ``._tl`` precheck keeps the common unlabeled Parameter off the label gate.
+
+    Parameters
+    ----------
+    param : Any
+        Parameter to inspect.
+
+    Returns
+    -------
+    str | None
+        The live mutation-op label, or ``None`` for an unmutated Parameter.
+    """
+    if getattr(param, "_tl", None) is None:
+        return None
+    return get_tensor_label(param)
+
+
 def promote_mutated_parameters(
     tensors: list[Any], params: list[Any]
 ) -> tuple[list[Any], list[Any]]:
@@ -1322,7 +1344,7 @@ def promote_mutated_parameters(
 
     if not params or all(getattr(param, "_tl", None) is None for param in params):
         return tensors, params
-    promoted = [param for param in params if get_tensor_label(param) is not None]
+    promoted = [param for param in params if mutated_parameter_label(param) is not None]
     if not promoted:
         return tensors, params
     promoted_ids = {id(param) for param in promoted}

@@ -27,6 +27,7 @@ from ._tl import (
     get_param_meta,
     get_tensor_label,
     get_tensor_meta,
+    mutated_parameter_label,
     session_label_storage_intact,
     session_meta_is_anchored,
 )
@@ -117,7 +118,8 @@ def _classify_arg_component(
     """
 
     label = None
-    if not isinstance(value, torch.nn.Parameter):
+    # A Parameter mutated in place earlier in the pass replays from its mutation op.
+    if not isinstance(value, torch.nn.Parameter) or mutated_parameter_label(value) is not None:
         if trace is None:
             label = get_tensor_label(value)
         else:
