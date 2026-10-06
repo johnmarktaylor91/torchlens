@@ -162,8 +162,10 @@ _HELD_SCAN_MAX_VISITS = 1 << 16
 """Container items the held-tensor scan examines per module, of any type.
 
 A hard cost cap independent of what the containers hold, so a 200k-entry scalar table
-costs at most this many type checks. Reaching it ends the scan silently: no tensor has
-been seen past a cut, so there is nothing to disclose.
+costs at most this many type checks. Reaching it with items left unexamined ends the
+module's scan and is disclosed as a cut naming the container where it ended: a tensor
+past that point is missed. Only a module whose containers hold this many items reaches
+it, so ordinary tensor-free holders stay silent.
 """
 
 _HELD_KEY_MAX_CHARS = 40
@@ -208,15 +210,19 @@ class _HeldScan:
     reserved in scan order; a repeat gets ``#2``, ``#3``, ... so no tensor is dropped.
     A bound cut is recorded only when a plain tensor is actually found past it: a
     container at the depth bound is searched (detect only, never stamped), and the
-    object bound is recorded at the first tensor beyond the stamped ones. Every item
-    examined, in either mode, counts against ``_HELD_SCAN_MAX_VISITS``, which ends the
-    scan silently.
+    object bound is recorded at the first tensor beyond the stamped ones. A depth cut
+    whose tensors are all stamped elsewhere in the module (or are its registered
+    buffers) is dropped in ``finish``, since every read of them resolves. Every item
+    examined, in either mode, counts against ``_HELD_SCAN_MAX_VISITS``; reaching it with
+    items left ends the module's scan and records a visit-cap cut naming the container.
     """
 
     def __init__(self, truncations: list[str] | None, module_address: str) -> None:
         self.prefix = f"{module_address}." if module_address else ""
         self.taken: set[str] = set()
         self.stamped = 0
+        self.stamped_ids: set[int] = set()
+        self.depth_cuts: list[tuple[str, list[int]]] = []
         self.visits = 0
         self.entered: set[int] = set()
         self.truncations = truncations
@@ -239,14 +245,32 @@ class _HeldScan:
         if self.truncations is not None:
             self.truncations.append(self.prefix + note)
 
-    def _visit(self) -> bool:
-        """Count one examined item; past the visit cap end the scan silently."""
+    def _visit(self, holder: str) -> bool:
+        """Count one examined item of ``holder``; at the visit cap record the cut and stop.
+
+        Called only once an item has been fetched, so reaching the cap here always leaves
+        that item (and anything after it) unexamined.
+        """
 
         if self.visits >= _HELD_SCAN_MAX_VISITS:
+            if not self.exhausted:
+                self._cut(f"{holder} (visit cap {_HELD_SCAN_MAX_VISITS} items)")
             self.exhausted = True
             return False
         self.visits += 1
         return True
+
+    def stamp(self, tensor: torch.Tensor) -> None:
+        """Remember a yielded tensor so a depth cut holding only it is not disclosed."""
+
+        self.stamped_ids.add(id(tensor))
+
+    def finish(self) -> None:
+        """Record the depth cuts that hide at least one tensor not stamped by this module."""
+
+        for name, found in self.depth_cuts:
+            if any(found_id not in self.stamped_ids for found_id in found):
+                self._cut(f"{name} (depth bound {_HELD_SCAN_MAX_DEPTH})")
 
     def admit(self, name: str) -> bool:
         """Count one plain tensor to stamp; at the object bound record the cut and stop."""
@@ -258,12 +282,13 @@ class _HeldScan:
         self.stamped += 1
         return True
 
-    def holds_tensor(self, container: Any) -> bool:
-        """Detect-only search: does ``container`` hold a plain tensor at any depth?
+    def held_tensor_ids(self, container: Any, name: str) -> list[int]:
+        """Detect-only search: ids of the plain tensors ``container`` holds at any depth.
 
         Nothing is stamped or entered for the main walk; items share the visit cap.
         """
 
+        found: list[int] = []
         seen = {id(container)}
         stack = [_held_items(container)]
         while stack:
@@ -271,15 +296,15 @@ class _HeldScan:
             if entry is None:
                 stack.pop()
                 continue
-            if not self._visit():
-                return False
+            if not self._visit(name):
+                break
             item = entry[1]
             if _is_plain_tensor(item):
-                return True
-            if _is_enterable(item) and id(item) not in seen and id(item) not in self.entered:
+                found.append(id(item))
+            elif _is_enterable(item) and id(item) not in seen and id(item) not in self.entered:
                 seen.add(id(item))
                 stack.append(_held_items(item))
-        return False
+        return found
 
     def walk(self, container: Any, path: str, depth: int) -> Iterator[tuple[str, torch.Tensor]]:
         """Yield plain tensors under ``container`` (named ``path``, items at ``depth``).
@@ -298,7 +323,7 @@ class _HeldScan:
             if entry is None:
                 stack.pop()
                 continue
-            if not self._visit():
+            if not self._visit(parent):
                 return
             (key, is_key), item = entry
             is_tensor = _is_plain_tensor(item)
@@ -308,12 +333,15 @@ class _HeldScan:
             name = self.reserve(f"{parent}[{segment}]")
             if is_tensor:
                 if self.admit(name):
+                    self.stamp(item)
                     yield name, item
             elif level < _HELD_SCAN_MAX_DEPTH:
                 self.entered.add(id(item))
                 stack.append((name, level + 1, _held_items(item)))
-            elif self.holds_tensor(item):
-                self._cut(f"{name} (depth bound {_HELD_SCAN_MAX_DEPTH})")
+            else:
+                found = self.held_tensor_ids(item, name)
+                if found:
+                    self.depth_cuts.append((name, found))
 
 
 def _is_plain_tensor(item: Any) -> bool:
@@ -361,10 +389,12 @@ def iter_module_held_plain_tensors(
     Names are never dropped: a rendering that repeats an earlier name gets ``#2``,
     ``#3``, ... in scan order. Below the attribute's own list/tuple items the scan is
     bounded (``_HELD_SCAN_MAX_DEPTH`` levels and ``_HELD_SCAN_MAX_OBJECTS`` tensors
-    per module, cycle-guarded). A cut is described in ``truncations`` only when a plain
-    tensor actually lies past it, so tensor-free containers never produce one. Cost is
-    capped at ``_HELD_SCAN_MAX_VISITS`` examined items per module; reaching that cap
-    ends the scan silently (a tensor held only past it is missed without disclosure).
+    per module, cycle-guarded). A depth or object cut is described in ``truncations``
+    only when a plain tensor actually lies past it (and, for a depth cut, is not
+    stamped elsewhere in the module), so tensor-free containers never produce one.
+    Cost is capped at ``_HELD_SCAN_MAX_VISITS`` examined items per module; reaching
+    that cap with items left ends the module's scan and is described too, naming the
+    container where it ended (a tensor past that point is missed).
 
     Private (``_``) and ``tl_`` attributes and Parameters are never yielded.
     A tensor created inside ``forward`` is not module state at preparation time
@@ -387,11 +417,14 @@ def iter_module_held_plain_tensors(
 
     scan = _HeldScan(truncations, module_address)
     scan.taken.update(name for name in module.__dict__ if not name.startswith(("_", "tl_")))
+    for _, registered in module.named_buffers(recurse=False):
+        scan.stamp(registered)
     for attr_name, attr_val in module.__dict__.items():
         if attr_name.startswith(("_", "tl_")):
             continue
         if isinstance(attr_val, torch.Tensor):
             if not isinstance(attr_val, nn.Parameter):
+                scan.stamp(attr_val)
                 yield attr_name, attr_val
         elif isinstance(attr_val, dict) and attr_val:
             yield from scan.walk(attr_val, attr_name, 1)
@@ -403,9 +436,11 @@ def iter_module_held_plain_tensors(
                 name = scan.reserve(f"{attr_name}.{index}")
                 if isinstance(item, torch.Tensor):
                     if not isinstance(item, nn.Parameter):
+                        scan.stamp(item)
                         yield name, item
                 elif _is_enterable(item) and id(item) not in scan.entered:
                     yield from scan.walk(item, name, 2)
+    scan.finish()
 
 
 def warn_held_scan_truncated(truncations: list[str]) -> None:
@@ -428,10 +463,11 @@ def warn_held_scan_truncated(truncations: list[str]) -> None:
     warnings.warn(
         TorchLensWarning(
             f"TorchLens stopped scanning module-held containers for plain tensors at "
-            f"{len(truncations)} place(s): {shown}{suffix}. A tensor past the cut that "
-            "the forward reads has no buffer source and fails graph validation. "
-            "Remedy: register tensors the forward reads with register_buffer, or hold "
-            "them in shallower or smaller containers",
+            f"{len(truncations)} place(s): {shown}{suffix}. A tensor past a cut that "
+            "the forward reads gets no buffer source: the capture warns about an input "
+            "with no provenance, the graph shows the read without the held tensor, and "
+            "graph validation does not catch it. Remedy: register tensors the forward "
+            "reads with register_buffer, or hold them in shallower or smaller containers",
             code="held_tensor_scan_truncated",
         ),
         stacklevel=3,
