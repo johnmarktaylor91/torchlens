@@ -513,7 +513,7 @@ def test_dot_and_underscore_addresses_get_distinct_nodes(tmp_path: Path) -> None
     dotted, flat = '"mutatedparam_a.b"', "mutatedparam_a_b"
     assert "<B>parameter b</B>" in _node_line(dot, dotted)
     assert "<B>parameter a_b</B>" in _node_line(dot, flat)
-    clamp_of = dict(zip(receivers, clamps))
+    clamp_of = dict(zip(receivers, clamps, strict=True))
     edges = _edges(dot)
     assert {head for tail, head in edges if tail == dotted} == {clamp_of["a.b"]}
     assert {head for tail, head in edges if tail == flat} == {clamp_of["a_b"]}

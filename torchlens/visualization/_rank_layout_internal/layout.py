@@ -460,17 +460,13 @@ def _rank_node_statement(
     return next((statement for statement in statements if statement.kind == "node"), None)
 
 
-def _apply_rank_overlay(
+def _rank_overlay_entries(
     overlay_nodes: Sequence[tuple[str | None, Mapping[str, Any]]],
     overlay_edges: Sequence[Mapping[str, Any]],
     rank_names: Mapping[str, str],
     region_keys: set[str],
-    node_data: dict[str, dict[str, Any]],
-    module_direct_nodes: dict[str, list[str]],
-    root_node_names: list[str],
-    all_edges: list[dict[str, Any]],
-) -> None:
-    """Add renderer-synthesized nodes and edges that have no IR unit.
+) -> tuple[dict[str, dict[str, Any]], list[tuple[str | None, str]], list[dict[str, Any]]]:
+    """Resolve renderer-synthesized nodes and edges that have no IR unit.
 
     The dot path queues such nodes (mutated-Parameter sources) as DOT
     statements; the rank path builds from IR units, so the caller hands them
@@ -478,38 +474,39 @@ def _apply_rank_overlay(
 
     Args:
         overlay_nodes: ``(module_region_key | None, node_args)`` pairs;
-            ``node_args`` carries ``name``. An unknown region key places the
-            node at top level.
+            ``node_args`` carries ``name``.
         overlay_edges: Edge arguments with ``tail_name`` / ``head_name``.
         rank_names: IR node name to rank node name.
         region_keys: Module region keys of the IR.
-        node_data: Rank node table (extended in place).
-        module_direct_nodes: Region key to direct node names (extended).
-        root_node_names: Top-level node names (extended).
-        all_edges: Rank edge list (extended).
+
+    Returns:
+        Rank node-table entries; ``(region_key | None, name)`` placements,
+        ``None`` (top level) for a key that is not a module region; and rank
+        edge dicts.
     """
 
+    node_entries: dict[str, dict[str, Any]] = {}
+    placements: list[tuple[str | None, str]] = []
     for region_key, raw_attrs in overlay_nodes:
         attrs = dict(raw_attrs)
         name = str(attrs.pop("name"))
-        node_data[name] = {"attrs": attrs, "node_label": name}
-        if region_key in region_keys:
-            module_direct_nodes[str(region_key)].append(name)
-        else:
-            root_node_names.append(name)
+        node_entries[name] = {"attrs": attrs, "node_label": name}
+        placements.append((region_key if region_key in region_keys else None, name))
+    edges: list[dict[str, Any]] = []
     for raw_edge in overlay_edges:
         attrs = dict(raw_edge)
         tail = str(attrs.pop("tail_name"))
         head = str(attrs.pop("head_name"))
         attrs.pop("fontcolor", None)
         attrs.pop("labelfontsize", None)
-        all_edges.append(
+        edges.append(
             {
                 "tail_name": rank_names.get(tail, tail),
                 "head_name": rank_names.get(head, head),
                 **attrs,
             }
         )
+    return node_entries, placements, edges
 
 
 def render_rank_layout(
@@ -563,7 +560,7 @@ def render_rank_layout(
             caller can build the structured geometry record (vizmech D24).
         overlay_nodes: Synthesized nodes with no IR unit, as
             ``(module_region_key | None, node_args)`` (see
-            ``_apply_rank_overlay``).
+            ``_rank_overlay_entries``).
         overlay_edges: Edge arguments for the synthesized nodes.
         legend_mutated_parameter: Whether the legend lists the mutated
             Parameter row (the render drew one).
@@ -634,16 +631,16 @@ def render_rank_layout(
             }
         )
 
-    _apply_rank_overlay(
-        overlay_nodes,
-        overlay_edges,
-        rank_names,
-        region_keys,
-        node_data,
-        module_direct_nodes,
-        root_node_names,
-        all_edges,
+    overlay_entries, overlay_placements, overlay_rank_edges = _rank_overlay_entries(
+        overlay_nodes, overlay_edges, rank_names, region_keys
     )
+    node_data.update(overlay_entries)
+    for overlay_region, overlay_name in overlay_placements:
+        if overlay_region is None:
+            root_node_names.append(overlay_name)
+        else:
+            module_direct_nodes[overlay_region].append(overlay_name)
+    all_edges.extend(overlay_rank_edges)
 
     # ── Phase 2: Rank layout ──
     node_label_sizes: dict[str, tuple[float, float]] = {}
