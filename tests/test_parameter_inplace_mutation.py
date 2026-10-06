@@ -136,7 +136,6 @@ def test_parameter_mutated_twice_chains_both_ops() -> None:
     assert tl.validate(copy.deepcopy(model), x, scope="forward") is True
 
 
-@pytest.mark.smoke
 def test_parameter_read_before_and_after_mutation() -> None:
     model = _ReadBeforeAndAfter()
     x = torch.randn(2, 4)

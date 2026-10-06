@@ -247,7 +247,6 @@ class TestAttachPreflights:
         )
         safe.close(unwinding=True)
 
-    @pytest.mark.smoke
     def test_wandb_sink_supplies_its_safe_grid_when_none_is_chosen(self) -> None:
         """No descriptor and no settings: the sink's cap-safe grid attaches."""
 

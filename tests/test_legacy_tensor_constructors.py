@@ -178,7 +178,6 @@ def test_dtype_class_data_form_captures_and_validates(class_name: str) -> None:
     assert _validate(model, x)
 
 
-@pytest.mark.smoke
 def test_sylvester_reparam_idiom_captures_validates_and_matches_modern_spelling() -> None:
     """``self.FloatTensor(size).normal_()`` + ``Variable`` validates and draws RNG as eager does.
 

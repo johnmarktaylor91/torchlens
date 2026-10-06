@@ -132,7 +132,9 @@ def test_flop_count_conventions() -> None:
     assert flop_count(model, x, flop_convention="fma1") == 288
 
 
-@pytest.mark.smoke
+@pytest.mark.smoke_cells(
+    "test_flop_count_refuses_removed_and_unknown_options[kwargs0-flop_convention='fma1']"
+)
 @pytest.mark.parametrize(
     ("kwargs", "taught"),
     [

@@ -70,7 +70,6 @@ def toy_trace():
 
 @pytest.mark.smoke_cells(
     "test_removed_kwarg_refuses_typed_on_trace_summary[count_fma_as_two]",
-    "test_removed_level_refuses_typed_on_trace_summary[graph]",
 )
 class TestRemovedSpellings:
     """Every removed spelling refuses typed and names its replacement."""
