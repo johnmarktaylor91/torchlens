@@ -1529,7 +1529,7 @@ def increment_param_call_index(p: Any) -> int:
 
 
 def restore_param_requires_grad(p: Any) -> None:
-    """Restore a parameter's pre-capture ``requires_grad`` flag.
+    """Restore a parameter's pre-capture ``requires_grad`` flag (leaf parameters only).
 
     Parameters
     ----------
@@ -1537,7 +1537,12 @@ def restore_param_requires_grad(p: Any) -> None:
         Parameter-like object to restore.
     """
     meta = get_param_meta(p)
-    if meta is not None and meta.requires_grad_before_capture is not None:
+    if meta is None or meta.requires_grad_before_capture is None:
+        return
+    # A frozen Parameter mutated in place with a grad-requiring operand is a
+    # non-leaf after the pass, exactly as eager leaves it; torch refuses to set
+    # the flag of a non-leaf, and its flag is already the eager one.
+    if getattr(p, "is_leaf", True):
         p.requires_grad = meta.requires_grad_before_capture
 
 

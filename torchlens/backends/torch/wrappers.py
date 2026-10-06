@@ -113,6 +113,7 @@ from .param_mutation import (
     frozen_parameter_receiver_context as _frozen_parameter_receiver_context,
     is_prepared_parameter_receiver as _is_prepared_parameter_receiver,
     parameter_mutation_output_for_logging as _parameter_mutation_output_for_logging,
+    receiver_kwarg_as_positional as _receiver_kwarg_as_positional,
 )
 from .sources import log_source_tensor
 
@@ -1707,6 +1708,9 @@ def torch_func_decorator(
             return out
 
         trace = cast(Any, active_trace)
+        if has_inplace_signature and not args:
+            # ``torch.clamp_(input=p)``: an in-place receiver passed by keyword.
+            args, kwargs = _receiver_kwarg_as_positional(args, kwargs)
         if needs_device_injection:
             kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
 
