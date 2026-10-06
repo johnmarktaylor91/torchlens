@@ -11,4 +11,4 @@
 | Lightweight context manager only | No exact equivalent | TorchLens creates a persistent `Trace`; lightweight tracing is deferred to v2.x. |
 | Causal tracing utilities | Build with `Bundle`, helpers, and metrics | Turnkey causal-tracing dashboards are deferred to v2.x. |
 | Save edited trace recipe | `save_intervention(..., level=...)` | TorchLens has first-class recipe persistence. |
-| Fused attention internals | Manual unfused implementation | Not visible inside opaque kernels. |
+| Fused attention internals | Eager-attention load: the softmax and score ops are captured ops you read directly. Default fused SDPA load: `tl.trace(model, x, reconstruction_ready=True)` serves read-only reconstructed attention facets (`scores`, `pattern`, `z`, checked against the fused output; see `docs/facets.md`) | Head-level semantics are readable on fused models; the raw kernel intermediates are not captured ops, and editing them needs an eager recapture. |

@@ -59,8 +59,8 @@ validation, and core data-class names for the current 2.x surface.
 - `noise` - noise injection helper; `torchlens.intervention.helpers.noise`.
 - `project_off` - remove a projection direction; `torchlens.intervention.helpers.project_off`.
 - `project_onto` - project onto a direction; `torchlens.intervention.helpers.project_onto`.
-- `resample_ablate` - resample-ablation helper; `torchlens.intervention.helpers.resample_ablate`.
 - `scale` - scale activation helper; `torchlens.intervention.helpers.scale`.
+- `scramble_elements` - elementwise iid scramble helper (formerly `resample_ablate`); `torchlens.intervention.helpers.scramble_elements`.
 - `splice_module` - module-splicing helper; `torchlens.intervention.helpers.splice_module`.
 - `steer` - steering-vector helper; `torchlens.intervention.helpers.steer`.
 - `swap_with` - activation swap helper; `torchlens.intervention.helpers.swap_with`.

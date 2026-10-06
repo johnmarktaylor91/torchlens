@@ -74,7 +74,6 @@ log = tl.trace(
     model, x, capture=tl.options.CaptureOptions(output_style="classification", output_head="logits")
 )
 log.output_table(top_n=5)
-log.summary(level="output")
 log.to_pandas(include_decoded_output_summary=True)
 
 input_log = tl.trace(

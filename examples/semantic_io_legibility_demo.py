@@ -121,8 +121,8 @@ def main() -> None:
 
     auto_trace = tl.trace(model, x)
     print_table("auto-detected output labels", auto_trace)
-    print("\n## output summary")
-    print(auto_trace.summary(level="output"))
+    print("\n## output table")
+    print(auto_trace.output_table())
     print("\n## decode_output(top_n=1)")
     print(auto_trace.decode_output(top_n=1))
     output_rows = auto_trace.to_pandas(include_decoded_output_summary=True)

@@ -104,10 +104,7 @@ def test_unknown_ledger_names_reasons_and_remedies() -> None:
         assert len(group.example_labels) == 2
         assert all(shape is not None for shape in group.example_shapes)
         assert "register_op_rule('pad'" in group.remedy
-        footer = log.summary(level="overview")
-        assert "pad x2" in footer
-        assert "register_op_rule" in footer
-        # Rebuilt footer: unknown count, name, and the remedy survive.
+        # The footer: unknown count, name, and the remedy survive.
         rebuilt = log.summary()
         assert "pad" in rebuilt
         assert "register_op_rule" in rebuilt

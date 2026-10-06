@@ -181,6 +181,13 @@ class _BundleStructuralProperty:
         return self._getter(instance)
 
 
+#: Public Bundle methods removed by the 2026-10-01 shim removal (no alias kept).
+_REMOVED_BUNDLE_MEMBERS: dict[str, str] = {
+    "replay": "use bundle.push(...) -- Bundle.replay was renamed",
+    "rerun": "use bundle.run(model, x) -- Bundle.rerun was renamed",
+}
+
+
 class Bundle:
     """Flat container of Traces with relationship-gated operations.
 
@@ -471,6 +478,9 @@ class Bundle:
         _register_comparison_helpers(dynamic_custom_methods)
         helper = dynamic_custom_methods.get(name)
         if helper is None:
+            from ..utils.facade import refuse_removed_member
+
+            refuse_removed_member("Bundle", name, _REMOVED_BUNDLE_MEMBERS)
             raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
         return helper.__get__(self, type(self))
 

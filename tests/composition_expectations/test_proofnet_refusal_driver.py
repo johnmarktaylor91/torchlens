@@ -122,10 +122,16 @@ REFUSAL_ROWS: tuple[RefusalRow, ...] = (
         lambda: _tl().trace(_model(), _x()).edges,
     ),
     RefusalRow(
-        "RF-summary-grammar-mix",
+        "RF-summary-axis-conflict",
         "summary_option_conflict",
-        "legacy",
-        lambda: _tl().trace(_model(), _x()).summary(level="graph", view="tree"),
+        "depth=",
+        lambda: _tl().trace(_model(), _x()).summary(level="op", depth=2),
+    ),
+    RefusalRow(
+        "RF-summary-removed-spelling",
+        "summary_option_invalid",
+        "flop_convention=",
+        lambda: _tl().trace(_model(), _x()).summary(count_fma_as_two=False),
     ),
     RefusalRow(
         "RF-topk-param-population",

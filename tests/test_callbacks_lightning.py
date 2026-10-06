@@ -133,3 +133,43 @@ def test_maybe_profile_releases_activation_tensor_deterministically(tmp_path: Pa
         "activation tensor was still alive immediately after _maybe_profile "
         "returned -- cleanup() did not run (or did not run deterministically)"
     )
+
+
+class _FrozenBackboneModel(nn.Module):
+    """Training model whose backbone a user froze in eval mode."""
+
+    def __init__(self) -> None:
+        """Initialize the model."""
+
+        super().__init__()
+        self.backbone = nn.Sequential(nn.Linear(4, 4), nn.BatchNorm1d(4))
+        self.head = nn.Sequential(nn.Linear(4, 4), nn.Dropout(0.1))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the model."""
+
+        return self.head(self.backbone(x))
+
+
+@pytest.mark.parametrize("top_level_training", [True, False])
+def test_maybe_profile_restores_every_submodule_training_flag(
+    tmp_path: Path, top_level_training: bool
+) -> None:
+    """Profiling must restore each submodule's training flag exactly.
+
+    Regression test: the callback saved only the top-level flag and called
+    ``pl_module.train()`` afterwards, which switched a frozen eval-mode
+    backbone (BatchNorm statistics included) back into train mode.
+    """
+
+    callback = _make_callback(tmp_path)
+    model = _FrozenBackboneModel()
+    model.train(top_level_training)
+    model.backbone.eval()
+    model.head[1].train()
+    before = {name: module.training for name, module in model.named_modules()}
+
+    callback._maybe_profile("train", _FakeTrainer(), model, {"x": torch.ones(2, 4)}, 0)
+
+    after = {name: module.training for name, module in model.named_modules()}
+    assert after == before

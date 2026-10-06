@@ -444,7 +444,7 @@ def _record_predicate_intervention_spec(
         return
     seen = trace.__dict__.setdefault("_tl_predicate_intervention_spec_keys", set())
     # ``decision.hook`` may be a HelperSpec carrying live torch.Tensor args
-    # (tl.steer/mean_ablate/resample_ablate/project_onto/project_off/swap_with).
+    # (tl.steer/mean_ablate/scramble_elements/project_onto/project_off/swap_with).
     # repr()'ing it invokes TorchLens's own intercepted tensor __repr__, which
     # calls .detach() -- an untraced raw op that, outside pause_logging, still
     # consumes a live raw-op-counter slot and becomes a graph orphan, staling

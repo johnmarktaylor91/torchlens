@@ -74,8 +74,8 @@ def test_summary_footer_routes_through_the_gate() -> None:
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
     captured = tl.trace(model, torch.randn(2, 4))
     try:
-        summary_text = captured.summary(level="memory")
-        assert "Live forward-memory peak" in summary_text
+        summary_text = str(captured.summary())
+        assert "forward peak" in summary_text
         # On CPU the line must carry the labeled RSS meaning or honest absence,
         # never a bare unlabeled "measured" claim.
         assert ("NOT a tensor peak" in summary_text) or ("unavailable" in summary_text)

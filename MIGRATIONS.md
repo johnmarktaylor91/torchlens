@@ -83,10 +83,85 @@ Which "resample" do you mean?
 | Batch-row permutation | `torchlens.intervention.permute_batch` (shipped, lane F02) |
 | Per-row donor resampling | `torchlens.intervention.resample_rows_from` (shipped, lane F02) |
 
-Compatibility: saved intervention specs and pickles that persist the helper
-name `"resample_ablate"` keep loading (they reconstruct through the renamed
-constructor). No runtime deprecation shim is added; the old top-level
-spelling is retired with the facade export flip.
+Compatibility: saved intervention specs that persist the helper name
+`"resample_ablate"` keep loading (they reconstruct through the renamed
+constructor). The `resample_ablate` spelling itself is REMOVED, with no
+alias: `tl.resample_ablate`, `torchlens.intervention.resample_ablate`, and
+`torchlens.intervention.helpers.resample_ablate` no longer exist.
+
+| Old spelling | New spelling |
+|---|---|
+| `tl.resample_ablate(...)` | `torchlens.intervention.scramble_elements(...)` |
+| `torchlens.intervention.resample_ablate(...)` | `torchlens.intervention.scramble_elements(...)` |
+
+## Legacy `summary()` spellings removed (clean break, no aliases)
+
+`Trace.summary()` and `tl.summary()` no longer accept the legacy keyword
+spellings or the legacy `level=` preset names, and the historical renderer
+behind them is deleted. Each removed spelling raises `InvalidArgumentError`
+(`summary_option_invalid` for keywords, `summary_level_invalid` for level
+presets) whose message names the replacement; `tl.summary()` refuses before
+running any capture. Unknown option names now refuse typed with the nearest
+grammar option instead of a bare `TypeError`.
+
+| Old spelling | New spelling |
+|---|---|
+| `preset=` | `view=` (`"overview"` / `"compute"`) for columns, `level=` for row grain |
+| `fields=` | `columns=` |
+| `show_ops=True`, `include_ops=True` | `level="op"` |
+| `mode=` | `level="op"`, or `fold_repeats=False` to unfold repeated runs |
+| `print_to=fn` | `report.print(file=...)`, or `fn(str(report))` |
+| `count_fma_as_two=True` / `False` | `flop_convention="fma2"` / `"fma1"` |
+| `show_input_preprocessing_details=True` | `trace.provenance()` and `trace.input_preprocessor` (`verified`, `source`, `identifier`) |
+| `level="overview"` | `view="overview"` (the default) |
+| `level="compute"`, `level="cost"` | `view="compute"` |
+| `level="graph"` | `trace.to_agent_json()` (op rows, edges, hierarchy) or `trace.draw()` |
+| `level="memory"` | `trace.profile(sort_by="activation_memory")`; memory totals stay in the summary footer |
+| `level="control_flow"` | `trace.conditional_records` and the `conditional_*` columns of `trace.to_pandas()` |
+| `level="waterfall"` | `trace.profile(level="op")`, or `trace.to_pandas()` in execution order |
+| `level="output"` | `trace.output_table()` |
+
+The old renderer also printed a partial live table when `summary()` was called
+from inside a running forward (a hook or a module's `forward`). That preview is
+gone: `trace.summary()` mid-forward now raises `CaptureContextError`
+(`trace_not_finished`). Use `repr(trace)` for the live op count, and call
+`summary()` after `trace(...)` returns.
+
+## `tl.utils.flop_count(count_fma_as_two=)` removed (clean break, no alias)
+
+`tl.utils.flop_count()` takes the same `flop_convention=` vocabulary as
+`summary()`. The old keyword raises `InvalidArgumentError`
+(`flop_count_option_invalid`) naming the replacement, before any capture runs.
+
+| Old spelling | New spelling |
+|---|---|
+| `flop_count(model, x, count_fma_as_two=True)` | `flop_count(model, x, flop_convention="fma2")` (the default) |
+| `flop_count(model, x, count_fma_as_two=False)` | `flop_count(model, x, flop_convention="fma1")` |
+
+## Removed member spellings name their replacement (typed redirect)
+
+The alias members and public subpackage names deleted by the 2026-10-01
+shim removal and the F38 sweep, and the deleted
+`VisualizationTheme.legend_items` field, are still gone (no alias). Looking
+one up now raises `FacadeTeachingError` (code `facade_redirect`, an
+`AttributeError` subclass, so `getattr(obj, name, default)` still degrades)
+whose message names the replacement. (For removed module-level names,
+`from torchlens import <name>` shows a plain `ImportError` instead: CPython
+replaces the attribute error on that path. Attribute access such as
+`tl.resample_ablate` carries the redirect.)
+
+| Removed | Use |
+|---|---|
+| `Trace.replay`, `Trace.replay_from`, `Trace.rerun` | `trace.push`, `trace.push_from`, `trace.run` |
+| `Trace.validate_saved_outs` | `trace.validate_forward_pass` |
+| `Trace.conditional_then_entry_edges` / `_elif_` / `_else_` | `trace.conditional_arm_entry_edges` |
+| `Bundle.replay`, `Bundle.rerun` | `bundle.push`, `bundle.run` |
+| `VisualizationOptions.mode`, `.max_module_depth`, `.layout_engine`, `.node_mode` | `.view`, `.depth`, `.layout`, `.node_style` |
+| `VisualizationTheme.legend_items` | legends derive from the encoding channels; style via `semantic_palette` and `ramp` |
+| `torchlens.validation.validate_saved_outs`, `.validate_trace_saved_outs` | `torchlens.validation.validate(model, x, scope="saved")`, or `trace.validate_forward_pass(...)` |
+| `torchlens.io.get_model_metadata` | `torchlens.io.log_model_metadata` |
+| `torchlens.observers.record_span` | `torchlens.observers.span` |
+| `torchlens.intervention.intervening`, `.replay_from` | `torchlens.intervention.without_op`, `.push_from` |
 
 ## Episode ledger grammar v2 (the C07X coordinated tlspec-v9 amendment)
 

@@ -187,7 +187,7 @@ work; do not under-apply it to unlicensed or copyleft work.
   run-as-first-class-object and the run/experiment distinction behind the
   experiment ledger; ours is local-first, file-based, and intervention-native.
 - **Neptune TorchWatcher** -- the activation-watch precedent and per-layer
-  stat vocabulary. **ClearML** -- automatic TensorBoard capture and
+  stat vocabulary (the hosted Neptune service shut down in March 2026). **ClearML** -- automatic TensorBoard capture and
   `Logger.report_histogram`'s precomputed-values contract. **Hugging Face
   Trainer** -- derived logging cadence and `WANDB_WATCH` as the
   config-not-activation pattern.

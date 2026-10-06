@@ -160,18 +160,16 @@ def test_default_to_pandas_has_no_decoded_output_column_and_gated_column_is_outp
     assert "class-1" in str(non_null.iloc[0]["decoded_output_summary"])
 
 
-def test_summary_surfaces_output_postprocessing_and_output_level() -> None:
-    """Summary includes output provenance and an output table level."""
+def test_provenance_surfaces_output_postprocessing_and_output_table() -> None:
+    """provenance() carries output decode provenance; output_table() the labels."""
 
     trace = _trace_batch_classifier()
-    summary = trace.summary(level="overview")
-    output_summary = trace.summary(level="output")
+    summary = trace.provenance()
 
     assert "Output postprocessing:" in summary
     assert "style=classification" in summary
     assert "preview: item 0:" in summary
-    assert "Output Summary:" in output_summary
-    assert "class-1" in output_summary
+    assert "class-1" in trace.output_table().to_string()
 
 
 def test_summary_surfaces_undetected_output_style_hint() -> None:
@@ -180,7 +178,7 @@ def test_summary_surfaces_undetected_output_style_hint() -> None:
     trace = tl.trace(_Classifier(torch.zeros(1, 3)).eval(), torch.ones(1, 2))
 
     assert trace.decoded_output is None
-    assert "undetected; pass output_style= to decode." in trace.summary(level="overview")
+    assert "undetected; pass output_style= to decode." in trace.provenance()
 
 
 def test_redecode_after_load_raises_clearly_when_logits_dropped(tmp_path: Path) -> None:

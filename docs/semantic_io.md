@@ -16,7 +16,6 @@ time:
 ```python
 trace = tl.trace(model, x)
 trace.output_table(top_n=5)
-trace.summary(level="output")
 trace.decode_output(top_n=3)
 ```
 
@@ -307,7 +306,6 @@ trace = tl.trace(
 
 trace.model_profile
 trace.output_table(top_n=5)
-trace.summary(level="output")
 tl.repgeom.mds_evolution(trace, save=mds_layers, min_n=8)
 trace.draw(node_spec_fn=tl.repgeom.mds_scatter_node_spec(max_thumbnails=8))
 trace.draw(show_input_transform_summary=True)
@@ -324,7 +322,7 @@ See `examples/semantic_io_legibility_demo.py` for a deterministic copy-paste
 template. It demonstrates:
 
 - auto-detected label tables from `config.id2label`;
-- `summary(level="output")`, `decode_output()`, and gated pandas summaries;
+- `output_table()`, `decode_output()`, and gated pandas summaries;
 - `output_style=` override and `tl.autoroute.output.register(...)`;
 - original text input display with `show_input_transform_summary=True`;
 - `trace.raw_input` and `trace.input_preprocessor` provenance.
@@ -339,7 +337,6 @@ core flow runs without downloading external model weights.
 - `Trace.output_table(top_n=5, batch_items=None)`
 - `Trace.decode_output(top_n=None)`
 - `Trace.output_postprocessor`
-- `Trace.summary(level="output")`
 - `tl.autoroute.output.register(...)`
 - `tl.autoroute.output.unregister(...)`
 - `tl.autoroute.output.list()`

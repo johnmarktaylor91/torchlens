@@ -131,7 +131,6 @@ release_model	declared
 repgeom	submodule
 replace_with	declared
 report	submodule
-resample_ablate	declared
 run	declared
 runnable	submodule
 saturated	declared

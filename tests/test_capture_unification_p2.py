@@ -21,7 +21,7 @@ from torchlens.ir.workspaces import (
     RawGraphWorkspace,
     WrapperRuntimeWorkspace,
 )
-from torchlens.visualization._summary_internal._builder import _live_op_count, _live_op_rows
+from torchlens.visualization._summary_internal._builder import _live_op_count
 
 
 class _MidForwardProbe(nn.Module):
@@ -44,7 +44,6 @@ class _MidForwardProbe(nn.Module):
         label = get_tensor_label(y)
         assert isinstance(label, str)
         live_view = trace[label]
-        rows = _live_op_rows(trace)
         self.observations = {
             "raw_dict_len": len(trace._raw_graph_ws.raw_layer_dict),
             "raw_labels_len": len(trace._raw_graph_ws.raw_layer_labels_list),
@@ -53,8 +52,12 @@ class _MidForwardProbe(nn.Module):
             "getitem_label": live_view._label_raw,
             "getitem_shape": live_view.shape,
             "summary_count": _live_op_count(trace),
-            "summary_rows": rows,
+            "live_repr": repr(trace),
         }
+        try:
+            trace.summary(level="op")
+        except Exception as exc:  # noqa: BLE001 - recorded for the test to assert on
+            self.observations["summary_error"] = exc
         return torch.relu(y)
 
 
@@ -146,18 +149,34 @@ def test_in_pass_getitem_returns_event_backed_op() -> None:
     assert model.observations["getitem_shape"] == (1, 4)
 
 
-def test_live_preview_summary_reads_events_during_capture() -> None:
-    """Live preview rows should be rendered from emitted events."""
+def test_live_repr_reads_events_during_capture() -> None:
+    """The mid-capture repr counts ops from emitted events."""
 
     model = _MidForwardProbe()
     tl.trace(model, torch.randn(1, 3), capture=tl.options.CaptureOptions(layers_to_save="all"))
 
-    rows = model.observations["summary_rows"]
-    assert model.observations["summary_count"] == model.observations["event_count"]
-    assert rows
-    assert rows[-1]["name"].startswith("linear_")
-    assert rows[-1]["shape"] == "[1,4]"
-    assert rows[-1]["dtype"] == "float32"
+    count = model.observations["summary_count"]
+    assert count == model.observations["event_count"]
+    assert f"layers={count}" in model.observations["live_repr"]
+
+
+def test_mid_forward_summary_refuses_typed() -> None:
+    """summary() during an active forward refuses with trace_not_finished.
+
+    The removed legacy renderer printed a partial live table; the rebuilt
+    summary has no partial form, so the call must refuse typed instead of
+    running over a half-built trace.
+    """
+
+    from torchlens._errors import CaptureContextError
+
+    model = _MidForwardProbe()
+    tl.trace(model, torch.randn(1, 3), capture=tl.options.CaptureOptions(layers_to_save="all"))
+
+    error = model.observations.get("summary_error")
+    assert isinstance(error, CaptureContextError)
+    assert error.fields["code"] == "trace_not_finished"
+    assert "repr(trace)" in str(error)
 
 
 def test_atomic_module_classification_matches_phase1_expectation() -> None:

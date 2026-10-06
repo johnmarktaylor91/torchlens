@@ -1,6 +1,6 @@
 ## Current 2.x Surface
 
-- Top-level `torchlens.__all__` has 116 names: capture, save/load, intervention,
+- Top-level `torchlens.__all__` has 115 names: capture, save/load, intervention,
   selectors, helper transforms, observers, validation, and the three main log classes.
 - Relation accessors on FINISHED traces return IMMUTABLE views (authorized public type
   break, decided 2026-08-12): label sequences (`op.parents`, `op.children`, `op.modules`,
@@ -859,14 +859,14 @@
   every param identity and executed op event owned by exactly one row at every
   depth/fold/filter/elision; alias rows never enter the ladder. Grammar:
   level/view/depth/columns/filter/buffers/fold_repeats/max_rows/
-  flop_convention/units/style -- legacy spellings (`level="graph"`, `preset=`,
-  `fields=`, `show_ops=`, `count_fma_as_two=`) keep their historical
-  byte-stable text through ONE compatibility table; mixing grammars refuses
-  `summary_option_conflict`; nothing is accepted-and-ignored (`fma1` refuses
+  flop_convention/units/style -- the legacy spellings (`level="graph"`,
+  `preset=`, `fields=`, `show_ops=`, `count_fma_as_two=`, ...) are removed and
+  refuse typed naming their successor (see MIGRATIONS.md); nothing is
+  accepted-and-ignored (`fma1` refuses
   `flop_convention_unavailable` when underivable). One-call door: input
   precedence args XOR `input_size=` XOR zero-input (reuses
-  `infer_input_shape`'s verified trace; synthesis disclosed; decoded-output
-  views refuse synthetic inputs); `execution_mode`/`grad_mode`/`input_size`
+  `infer_input_shape`'s verified trace; synthesis disclosed);
+  `execution_mode`/`grad_mode`/`input_size`
   are one-call-only (`summary_one_call_only` on `trace.summary()`). Result
   API: `render`/`print`/`details`/`to_pandas`/`to_markdown`/`to_html` +
   scalar raw ints (the raw-numbers pin); the report survives model/Trace

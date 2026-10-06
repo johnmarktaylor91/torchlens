@@ -16,8 +16,9 @@ metadata + safetensors blobs, directory bundles); log administration delegates t
   keys are tolerated for structural analysis but execution resolution denies foreign
   imports unless explicitly trusted (`trust_custom_callables=True`, or better the
   narrow `allowed_custom_callable_modules={...}`).
-- `list_logs()` / `reset_naming_counter()` / `log_model_metadata()` /
-  `get_model_metadata()` — admin helpers.
+- `list_logs()` / `reset_naming_counter()` / `log_model_metadata()` — admin
+  helpers (`get_model_metadata` was removed; it was an alias of
+  `log_model_metadata`).
 - `save_intervention(...)` — write an intervention recipe (`Trace.save_intervention`
   routes here).
 - `TraceState` — the runtime state enum (`torchlens._trace_state`).

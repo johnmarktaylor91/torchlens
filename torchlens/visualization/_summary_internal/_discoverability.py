@@ -1,8 +1,7 @@
-"""Discoverability preamble rendering for Trace summaries (split from _builder).
+"""The capture-provenance block served by ``trace.provenance()``.
 
-The ~35-line preamble block and its exclusive helpers. The F08 summary
-rebuild relocates this text to trace.provenance() byte-identically; until
-then it renders here, split out to keep _builder under its size ceiling.
+The ~35-line block and its exclusive helpers (formerly the summary
+preamble; the F08 rebuild moved it to ``trace.provenance()`` byte-identically).
 """
 
 from __future__ import annotations
@@ -11,20 +10,11 @@ from collections.abc import Mapping, Sequence
 from typing import (
     TYPE_CHECKING,
     Any,
-    Literal,
     cast,
 )
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
-
-
-SummaryLevel = Literal[
-    "overview", "graph", "memory", "control_flow", "compute", "cost", "waterfall", "output"
-]
-SummaryMode = Literal["auto", "rolled", "unrolled"]
-
-_LEVEL_ALIASES: dict[str, str] = {"cost": "compute"}
+    from ...data_classes.trace import Trace
 
 
 def format_discoverability_summary(
@@ -233,8 +223,6 @@ def _input_shape_summary(trace: Trace) -> str:
     str
         Shape summary or ``"unknown"``.
     """
-
-    from ._builder import _combined_shape_str
 
     layers = getattr(trace, "input_layers", []) or []
     shape = _combined_shape_str(trace, layers)
@@ -632,3 +620,51 @@ def _shorten(text: str, *, limit: int) -> str:
     if len(text) <= limit:
         return text
     return f"{text[: max(0, limit - 3)]}..."
+
+
+def _combined_shape_str(trace: Trace, labels: Sequence[str]) -> str:
+    """Return a compact combined shape string for one or more labels.
+
+    Parameters
+    ----------
+    trace:
+        Finalized log object.
+    labels:
+        Layer labels whose shapes should be summarized.
+
+    Returns
+    -------
+    str
+        Shape summary string.
+    """
+    if not labels:
+        return "-"
+    shapes = []
+    for label in labels:
+        try:
+            shapes.append(_shape_str(getattr(trace[label], "shape", None)))
+        except KeyError:
+            continue
+    if not shapes:
+        return "-"
+    if len(shapes) == 1:
+        return shapes[0]
+    return f"{len(shapes)} tensors"
+
+
+def _shape_str(shape: Any) -> str:
+    """Format a tensor shape using ASCII-only list syntax.
+
+    Parameters
+    ----------
+    shape:
+        Shape-like object.
+
+    Returns
+    -------
+    str
+        ASCII shape string.
+    """
+    if shape is None:
+        return "-"
+    return str(list(shape)).replace(" ", "")

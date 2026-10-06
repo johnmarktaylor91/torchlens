@@ -208,7 +208,7 @@ def test_mlx_unsupported_helper_refuses_typed() -> None:
             _TwoLayerMLP(),
             _input(),
             backend="mlx",
-            intervene=tl.when(tl.func("relu"), tl.resample_ablate(mx.ones((3,)))),
+            intervene=tl.when(tl.func("relu"), tl.intervention.scramble_elements(mx.ones((3,)))),
         )
 
 

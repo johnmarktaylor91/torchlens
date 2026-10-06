@@ -7,10 +7,11 @@ reports them side by side -- signed deltas, per-side coverage ledgers,
 never one filling the other's unknown cells, never presented as "measured
 FLOPs" (both sides are analytic dispatch formulas).
 
-The cross-check is NEVER an oracle: FCM counts ZERO FLOPs for all
-CPU-default attention (``aten::_scaled_dot_product_flash_attention_for_cpu``
-is absent from its ``flop_registry`` -- a named, filed registry gap), so a
-zero on either side is a COVERAGE fact, not a truth verdict.
+The cross-check is NEVER an oracle: on torch releases through 2.13, FCM
+counts ZERO FLOPs for all CPU-default attention
+(``aten::_scaled_dot_product_flash_attention_for_cpu`` is absent from its
+``flop_registry``; fixed on PyTorch main 2026-09-17, pytorch/pytorch#195801),
+so a zero on either side is a COVERAGE fact, not a truth verdict.
 
 Contract: the builder snapshots RNG and module training modes, runs the
 TorchLens capture, restores state, runs the RAW model under
@@ -206,9 +207,10 @@ def flops_vs_dispatch(
             "native FCM counted ZERO FLOPs while TorchLens counted "
             f"{torchlens_total}: a flop_registry coverage gap (on CPU-default "
             "attention the missing overload is "
-            "aten::_scaled_dot_product_flash_attention_for_cpu; upstream "
-            "issue filed with the exact expected number) -- a coverage fact, "
-            "never a truth verdict"
+            "aten::_scaled_dot_product_flash_attention_for_cpu, known missing in "
+            "torch releases through 2.13 and fixed on PyTorch main "
+            "2026-09-17, pytorch/pytorch#195801) -- a coverage fact, never a "
+            "truth verdict"
         )
     if unknown_ops:
         notes.append(

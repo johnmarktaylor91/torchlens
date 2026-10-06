@@ -461,7 +461,7 @@ attribution-target alias. See the [attribution reference](attribution.md).
 : `tl.zero_ablate`, `tl.scale`, `tl.add`, `tl.clamp`, `tl.noise` (Gaussian noise),
   `tl.mean_ablate` (replace with a source mean), `torchlens.intervention.scramble_elements`
   (elementwise iid scramble from a flattened source -- the honest rename of
-  `tl.resample_ablate`, which still resolves; for coherent donor patching use
+  the removed `resample_ablate` spelling; for coherent donor patching use
   `tl.patch_from`), `tl.replace_with` (fixed value), `tl.swap_with` (another
   site's tensor), `tl.steer` (add a scaled steering direction), `tl.project_onto` /
   `tl.project_off` (keep or remove the component along a direction), and
@@ -580,6 +580,13 @@ attribution-target alias. See the [attribution reference](attribution.md).
 : `tl.Quantity` is the marker base for numeric quantity wrappers with unit-aware
   display: `tl.Bytes` (memory), `tl.Duration` (seconds), `tl.Flops` (floating-point
   operations), `tl.Macs` (multiply-accumulates).
+
+**FLOP convention (`flop_convention=`)**
+: `"fma2"` (default; one multiply-accumulate = 2 FLOPs) or `"fma1"` (recounted
+  from each op's two-term compute record; refuses typed with
+  `flop_convention_unavailable` when an op has no MAC split). Accepted by
+  `summary(...)` and `tl.utils.flop_count(...)`; the removed `count_fma_as_two=`
+  spelling refuses typed naming it.
 
 **Lookup and reentrancy errors**
 : `tl.AmbiguousOpLookupError` is raised when a bare Op lookup matches multiple

@@ -13,10 +13,10 @@ Binding laws carried here:
   strings through a typed report.
 - DETACHED: the report retains neither the model nor the Trace and
   survives cleanup and GC (pin: build report; del trace; to_dict() works).
-- ``SummaryReport`` subclasses ``str``. On the F08 rebuilt path the text
-  IS the canonical byte-stable ASCII contract (memo 3.9); legacy preset
-  spellings keep the historical renderer's text byte-identical through
-  the compatibility table.
+- ``SummaryReport`` subclasses ``str``. From ``summary()`` the text IS the
+  canonical byte-stable ASCII contract (memo 3.9). A report assembled from
+  caller text (``build_summary_report``) carries no rebuilt payload, and
+  the rebuilt-only result methods refuse it typed.
 
 Spellings DOCUMENTED-UNSTABLE pending naming-session ratification.
 """
@@ -140,14 +140,14 @@ class SummaryReport(str):
     # F08 result API (memo item 12). Heavy logic lives in _summary_result.
 
     def _rebuilt_or_refuse(self, method: str) -> Any:
-        """The rebuilt payload, or a typed teaching refusal on legacy paths."""
+        """The rebuilt payload, or a typed teaching refusal when there is none."""
 
         if self._rebuilt is None:
             from .._errors import InvalidArgumentError
 
             raise InvalidArgumentError(
-                f"{method}() serves rebuilt-grammar summaries; this report was "
-                "rendered by a legacy preset spelling.",
+                f"{method}() serves rebuilt-grammar summaries; this report "
+                "carries no rebuilt-grammar payload (it was assembled from text).",
                 code="summary_result_legacy",
                 remedy="call summary() with the rebuilt grammar (bare call, "
                 "level=, view=, depth=, ...)",
@@ -398,8 +398,9 @@ def build_summary_report(trace: Trace, text: str) -> SummaryReport:
     """Attach the detached typed data to one rendered summary text.
 
     The builder split (data / format / render): the DATA stage reads
-    FactCore; the FORMAT/RENDER stages produced ``text`` (the historical
-    renderer, byte-stable); this assembler never re-sums anything.
+    FactCore; the caller produced ``text``; this assembler never re-sums
+    anything. The result carries no rebuilt payload, so the rebuilt-only
+    result methods refuse it typed (``summary_result_legacy``).
     """
 
     rows, totals, capture = build_summary_data(trace)

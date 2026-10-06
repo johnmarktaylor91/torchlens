@@ -189,7 +189,9 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
         ``"off"`` (default) runs the captured forward under
         ``torch.no_grad()``. ``"same"`` keeps the caller's grad context.
     **summary_kwargs:
-        Forwarded to ``Trace.summary`` (rebuilt grammar or legacy presets).
+        Forwarded to ``Trace.summary`` (the summary grammar). They are
+        validated BEFORE the capture runs: a removed legacy spelling or an
+        unknown option refuses typed without executing the model.
 
     Returns
     -------
@@ -200,6 +202,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
     from .utils.rng import log_current_rng_states, set_rng_from_saved_states
 
     _validate_summary_modes(execution_mode, grad_mode)
+    _validate_summary_grammar(summary_kwargs)
     _reject_opaque_wrappers(model)
     model = unwrap_compiled_model(model)
     model = _unwrap_data_parallel(model)
@@ -335,42 +338,37 @@ def _summary_report_from_trace(
     grad_mode: str,
     input_synthesis: str | None,
 ) -> str:
-    """Route one captured trace through the summary grammars and clean up."""
+    """Render one captured trace's summary, then clean the trace up."""
 
-    from ._errors import InvalidArgumentError
-    from .report._summary_config import route_summary_call
-
-    route_kwargs = dict(summary_kwargs)
-    level = route_kwargs.pop("level", None)
-    route = route_summary_call(level, route_kwargs)
-    if input_synthesis is not None and isinstance(level, str) and level == "output":
-        raise InvalidArgumentError(
-            "decoded-output views refuse synthetic inputs: a label table computed "
-            "from noise is the most misleading thing this surface could print.",
-            code="summary_synthetic_output_refused",
-            remedy="pass a real input for output views, or drop level='output'",
-        )
     try:
-        if route == "rebuilt":
-            return trace.summary(
-                **summary_kwargs,
-                _execution_note=_summary_execution_note(execution_mode, grad_mode, short=True),
-                _input_synthesis=input_synthesis,
-            )
-        report = trace.summary(**summary_kwargs)
+        return trace.summary(
+            **summary_kwargs,
+            _execution_note=_summary_execution_note(execution_mode, grad_mode),
+            _input_synthesis=input_synthesis,
+        )
     finally:
         trace.cleanup()
-    finalized = _finalize_summary_report(report, execution_mode, grad_mode)
-    if input_synthesis is None:
-        return finalized
-    from .report._summary_report import SummaryReport
 
-    full_text = str(finalized) + f"\nSynthetic input: {input_synthesis}."
-    if isinstance(finalized, SummaryReport):
-        return SummaryReport(
-            full_text, rows=finalized.rows, totals=finalized.totals, capture=finalized.capture
-        )
-    return full_text
+
+def _validate_summary_grammar(summary_kwargs: dict[str, Any]) -> None:
+    """Resolve the summary grammar up front so a bad option never runs a capture.
+
+    ``Trace.summary`` resolves the same configuration again after capture;
+    resolving here first makes removed legacy spellings and unknown options
+    refuse typed before the model executes. ``None`` means "default" only
+    for grammar options; any other name is checked by presence, matching
+    ``Trace.summary``, so ``preset=None`` refuses here too.
+    """
+
+    from .report._summary_config import GRAMMAR_OPTIONS, resolve_config
+
+    resolve_config(
+        **{
+            name: value
+            for name, value in summary_kwargs.items()
+            if value is not None or name not in GRAMMAR_OPTIONS
+        }
+    )
 
 
 def _validate_summary_modes(execution_mode: str, grad_mode: str) -> None:
@@ -498,34 +496,19 @@ def _weightsfree_summary_facade(
             if input_size is not None:
                 envelope["input_plan"]["source"] = "declared_input_size"
                 envelope["input_plan"]["synthesized"] = ["meta_input_leaves"]
-        report = trace.summary(**summary_kwargs)
+        return trace.summary(
+            **summary_kwargs,
+            _execution_note=_summary_execution_note("eval", "off"),
+        )
     finally:
         trace.cleanup()
-    return _finalize_summary_report(report, "eval", "off")
 
 
-def _finalize_summary_report(report: Any, execution_mode: str, grad_mode: str) -> str:
-    """Suffix the execution disclosure, keeping the typed detached report.
+def _summary_execution_note(execution_mode: str, grad_mode: str) -> str:
+    """Return the compact execution disclosure the summary header hoists.
 
-    The report survives its Trace's cleanup by construction (C02, summary
-    item 10: it retains neither the model nor the Trace).
-    """
-
-    from .report._summary_report import SummaryReport
-
-    full_text = str(report) + "\n" + _summary_execution_note(execution_mode, grad_mode)
-    if isinstance(report, SummaryReport):
-        return SummaryReport(
-            full_text, rows=report.rows, totals=report.totals, capture=report.capture
-        )
-    return full_text
-
-
-def _summary_execution_note(execution_mode: str, grad_mode: str, *, short: bool = False) -> str:
-    """Return the execution disclosure for one-call summaries.
-
-    ``short=True`` yields the compact header form the rebuilt renderer
-    hoists; the default is the historical trailing line, byte-stable.
+    Both one-call doors pass it into ``trace.summary(_execution_note=...)``,
+    so the text, ``details()``, ``render()`` and HTML all carry it.
     """
 
     if execution_mode == "eval":
@@ -535,12 +518,7 @@ def _summary_execution_note(execution_mode: str, grad_mode: str, *, short: bool 
     else:
         mode_part = "caller's module modes"
     grad_part = "no_grad" if grad_mode == "off" else "caller's grad context"
-    if short:
-        return f"{mode_part}, {grad_part}, state restored"
-    return (
-        f"Execution: one-call capture ran in {mode_part} under {grad_part}; "
-        "module training flags and RNG state restored."
-    )
+    return f"{mode_part}, {grad_part}, state restored"
 
 
 def show_model_graph(

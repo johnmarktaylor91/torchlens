@@ -120,7 +120,6 @@ torchlens.release_model	torchlens.user_funcs	FACADE	facade	1	0
 torchlens.repgeom	torchlens.repgeom	L5	core	0	0
 torchlens.replace_with	torchlens.intervention	L4	core	1	0
 torchlens.report	torchlens.report	L7	present	0	1
-torchlens.resample_ablate	torchlens.intervention	L4	core	1	0
 torchlens.run	torchlens.intervention	L4	core	1	0
 torchlens.saturated	torchlens.selection_values	L4	core	1	0
 torchlens.save	torchlens._io.bundle	L3	core	1	0

@@ -1009,6 +1009,15 @@ class SaveOptions:
         return instance
 
 
+#: Alias properties removed by the 2026-10-01 shim removal (no alias kept).
+_REMOVED_VISUALIZATION_OPTION_MEMBERS: dict[str, str] = {
+    "mode": "use VisualizationOptions.view -- the mode alias was removed",
+    "max_module_depth": "use VisualizationOptions.depth -- the max_module_depth alias was removed",
+    "layout_engine": "use VisualizationOptions.layout -- the layout_engine alias was removed",
+    "node_mode": "use VisualizationOptions.node_style -- the node_mode alias was removed",
+}
+
+
 @dataclass(frozen=True, init=False)
 class VisualizationOptions:
     """Grouped visualization options for capture and graph-rendering APIs.
@@ -1274,6 +1283,20 @@ class VisualizationOptions:
         _validate_visualization_flag_fields(values)
         _set_frozen_fields(self, _VISUALIZATION_FIELDS, values)
         object.__setattr__(self, "_specified_fields", frozenset(specified_fields))
+
+    # Runtime only: under TYPE_CHECKING the hook would make every attribute
+    # type-check as Any, hiding typos and the removed spellings from mypy.
+    if not TYPE_CHECKING:
+
+        def __getattr__(self, name: str) -> Any:
+            """Name the replacement for a removed public member, else fail as usual."""
+
+            from .utils.facade import refuse_removed_member
+
+            refuse_removed_member(
+                "VisualizationOptions", name, _REMOVED_VISUALIZATION_OPTION_MEMBERS
+            )
+            return object.__getattribute__(self, name)
 
     def as_dict(self) -> dict[str, Any]:
         """Return the option values as a plain dictionary."""

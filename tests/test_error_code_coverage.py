@@ -163,7 +163,8 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "stack_ordinals_unavailable",
         "stack_output_not_tensor",
         "storage_argument_conflict",
-        "summary_fields_invalid",
+        # summary_fields_invalid: row DELETED (shrink-only lock-in) -- the code
+        # left the vocabulary with the removed legacy summary renderer.
         "sweep_intervention_conflict",
         "sweep_names_length_mismatch",
         "sweep_site_missing",
@@ -171,7 +172,6 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "sweep_values_empty",
         "sweep_values_missing",
         "tensor_connection_labels_missing",
-        "trace_not_finished",
     }
 )
 

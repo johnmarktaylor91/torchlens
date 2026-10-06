@@ -88,7 +88,7 @@ Forward helpers return `HelperSpec` objects that can be passed to `set`,
 | --- | --- | --- |
 | `tl.zero_ablate` | `zero_ablate(*, force_shape_change=False)` | Portable built-in; append-compatible unless shape changes are forced. |
 | `tl.mean_ablate` | `mean_ablate(source=None, *, over="self", force_shape_change=False)` | Portable for supported tensor/self sources; batch-dependent policies can block append. |
-| `scramble_elements` | `torchlens.intervention.scramble_elements(source=None, *, from_=None, seed=None, force_shape_change=False)` (the honest rename of `tl.resample_ablate`, which still resolves; elementwise iid scramble, NOT coherent resampling ablation -- see MIGRATIONS.md) | Built-in, stochastic; seeded runs are reproducible, append-incompatible. |
+| `scramble_elements` | `torchlens.intervention.scramble_elements(source=None, *, from_=None, seed=None, force_shape_change=False)` (the honest rename of the removed `resample_ablate` spelling; elementwise iid scramble, NOT coherent resampling ablation -- see MIGRATIONS.md) | Built-in, stochastic; seeded runs are reproducible, append-incompatible. |
 | `tl.steer` | `steer(direction, magnitude=1.0, *, coef=None, feature_axis=None, force_shape_change=False)` | Portable when `direction` is serializable tensor data. |
 | `tl.scale` | `scale(factor, *, force_shape_change=False)` | Portable built-in and append-compatible. |
 | `tl.clamp` | `clamp(*, min=None, max=None, force_shape_change=False)` | Portable built-in and append-compatible. |

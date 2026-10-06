@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 import torch
 from torch import nn
 
@@ -50,13 +51,13 @@ def test_animate_ops_returns_static_html() -> None:
     assert recurrent_label in html
 
 
-def test_summary_waterfall_includes_timing_and_memory() -> None:
-    """summary('waterfall') should render timing and memory columns."""
+def test_op_profile_includes_timing_and_memory() -> None:
+    """The per-op profile (successor of summary('waterfall')) has time and memory."""
 
+    pytest.importorskip("pandas")
     log = tl.trace(RecurrentLinear(), torch.randn(1, 3))
 
-    text = log.summary("waterfall")
+    frame = log.profile(level="op").to_pandas()
 
-    assert "Waterfall Summary" in text
-    assert "Time (ms)" in text
-    assert "Memory" in text
+    assert "time" in frame.columns
+    assert "activation_memory" in frame.columns

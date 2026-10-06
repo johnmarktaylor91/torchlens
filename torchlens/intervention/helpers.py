@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 from torch import nn
@@ -256,13 +256,6 @@ def scramble_elements(
         batch_independent=False,
         compatible_with_append=not force_shape_change,
     )
-
-
-#: Transitional binding: the top-level facade still routes
-#: ``tl.resample_ablate`` here until the facade owner flips the export to
-#: ``scramble_elements`` (hard rename, no warn-shim -- clean-v2 alias posture).
-#: Specs constructed through either spelling carry the honest name.
-resample_ablate = scramble_elements
 
 
 def steer(
@@ -1536,6 +1529,44 @@ def _resolve_swap_value(other_label: Any) -> Any:
     return getattr(other_label, "out", other_label)
 
 
+#: The one remedy text for the retired ``resample_ablate`` spelling, shared by
+#: this module and ``torchlens.intervention``. The root package keeps a literal
+#: copy (it must not import torch); tests/test_removed_member_redirects.py pins
+#: the three equal.
+_RESAMPLE_ABLATE_REDIRECT = (
+    "use torchlens.intervention.scramble_elements -- resample_ablate was renamed"
+)
+
+#: Removed spellings: each raises the typed ``facade_redirect`` error naming
+#: its replacement (clean break, no alias).
+_REDIRECTS: dict[str, str] = {"resample_ablate": _RESAMPLE_ABLATE_REDIRECT}
+
+
+# Under ``not TYPE_CHECKING`` so type checkers keep seeing the real module
+# surface (a module ``__getattr__`` would make every name type-check as Any).
+if not TYPE_CHECKING:
+
+    def __getattr__(name: str) -> Any:
+        """Raise the typed teaching error for a removed helper spelling.
+
+        Parameters
+        ----------
+        name:
+            Attribute name being looked up on ``torchlens.intervention.helpers``.
+
+        Raises
+        ------
+        AttributeError
+            Typed ``facade_redirect`` for a removed spelling, plain otherwise.
+        """
+
+        from ..utils.facade import resolve_facade_attr
+
+        return resolve_facade_attr(
+            owner=__name__, name=name, module_globals=globals(), redirects=_REDIRECTS
+        )
+
+
 __all__ = [
     "HELPER_REGISTRY_VERSION",
     "bwd_hook",
@@ -1550,7 +1581,6 @@ __all__ = [
     "noise",
     "project_off",
     "project_onto",
-    "resample_ablate",
     "scale",
     "scramble_elements",
     "splice_module",
