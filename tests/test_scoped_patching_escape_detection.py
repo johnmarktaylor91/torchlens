@@ -96,7 +96,7 @@ def _module_with_hidden_class_ref(name: str, raw: Callable[..., Any]) -> types.M
 
 
 @pytest.mark.parametrize("holder_kind", ["closure", "dict", "list", "instance"])
-def test_builtin_holder_attacks_emit_shadow_report(holder_kind: str) -> None:
+def test_builtin_holder_attacks_are_rebound_or_shadow_reported(holder_kind: str) -> None:
     """Builtin holders are rebound for the capture; a custom object is reported.
 
     Capture preparation rebinds pristine refs held in closure cells and exact
@@ -177,7 +177,7 @@ def test_raw_python_functional_and_partial_emit_shadow_reports() -> None:
         unwrap_torch()
 
 
-def test_hidden_class_and_default_refs_emit_shadow_reports() -> None:
+def test_hidden_class_ref_is_shadow_reported_and_default_ref_rebound() -> None:
     """Unrelated local class storage is reported; a default-arg ref is rebound.
 
     Capture preparation rebinds a helper's default argument for the capture,
