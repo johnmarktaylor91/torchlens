@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 import torch
-from _stale_holders import OpaqueCallable, count_root_forwards, provenance_warnings
+from _stale_holders import CountedRoot, OpaqueCallable, provenance_warnings
 from torch import nn
 
 import torchlens as tl
@@ -365,12 +365,11 @@ def test_attribute_held_originals_are_rebound_and_validate(
     """
 
     monkeypatch.setitem(globals(), "_raw", _bare)
-    model = build().eval()
-    calls = count_root_forwards(model)
+    model = CountedRoot(build()).eval()
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         trace = tl.trace(model, torch.randn(3, 4))
-    assert calls == [1]
+    assert model.calls == [1]
     assert provenance_warnings(caught) == []
     assert trace.rescue_rerun is None
     assert "relu" in [op.func_name for op in trace.ops]

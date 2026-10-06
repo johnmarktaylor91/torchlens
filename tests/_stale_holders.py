@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from torch import nn
+
 
 class OpaqueCallable:
     """A custom callable object: a holder the per-capture rebind never scans.
@@ -22,12 +24,19 @@ class OpaqueCallable:
         return self._fn(*args, **kwargs)
 
 
-def count_root_forwards(model: Any) -> list[int]:
-    """Count the root module's forward calls with a pre-hook (one entry per call)."""
+class CountedRoot(nn.Module):
+    """Root wrapper counting how many times a capture ran the forward."""
 
-    calls: list[int] = []
-    model.register_forward_pre_hook(lambda _module, _args: calls.append(1))
-    return calls
+    def __init__(self, inner: nn.Module) -> None:
+        super().__init__()
+        self.inner = inner
+        self.calls = [0]
+
+    def forward(self, *args: Any) -> Any:
+        """Count, then delegate."""
+
+        self.calls[0] += 1
+        return self.inner(*args)
 
 
 def provenance_warnings(caught: list[Any]) -> list[str]:
