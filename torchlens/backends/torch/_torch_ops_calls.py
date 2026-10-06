@@ -74,11 +74,11 @@ _DECORATED_BY_OP: dict[int, tuple[Any, Callable[..., Any], str]] = {}
 
 # Schema mutation classes (``_mutation_kind``).
 _MUTATION_NONE = "none"
-"""Writes no argument, or returns its outputs (in-place and ``out=`` ops return them)."""
+"""Writes no argument, or a return aliases every argument it writes (in-place, ``out=``)."""
 _MUTATION_RECEIVER = "receiver"
 """Writes exactly its first argument and returns nothing: recorded in place on it."""
 _MUTATION_UNRECORDABLE = "unrecordable"
-"""Writes some other argument (or a mix across overloads) and returns nothing."""
+"""Writes an argument it neither records in place nor returns (or overloads disagree)."""
 _MUTATION_UNKNOWN = "unknown"
 """No readable schema: a call that returns nothing is disclosed, never trusted."""
 _WRAPPED_FUNC_CODE: list[CodeType] = []
@@ -192,19 +192,34 @@ def _overload_schemas(op: Any) -> list[Any] | None:
     return schemas
 
 
-def _schema_mutation(schema: Any) -> str:
-    """Classify one schema's argument writes (``alias_info.is_write``, torch ground truth)."""
+def _alias_set(argument: Any) -> frozenset[str]:
+    """Return the alias-set names a schema argument or return carries (empty when none)."""
 
-    if getattr(schema, "returns", None):
-        return _MUTATION_NONE
+    return frozenset(getattr(getattr(argument, "alias_info", None), "before_set", None) or ())
+
+
+def _schema_mutation(schema: Any) -> str:
+    """Classify one schema's argument writes (``alias_info.is_write``, torch ground truth).
+
+    With returns, every written argument must share an alias set with a return
+    (``add_``: ``Tensor(a!) -> Tensor(a!)``; ``out=``): the returned tensor then carries
+    the write and is recorded. A write no return aliases (a custom op that updates state
+    and returns a fresh tensor) is unrecordable, never a silently stale graph.
+    """
+
     written = [
-        index
+        (index, argument)
         for index, argument in enumerate(getattr(schema, "arguments", None) or ())
         if getattr(getattr(argument, "alias_info", None), "is_write", False)
     ]
     if not written:
         return _MUTATION_NONE
-    return _MUTATION_RECEIVER if written == [0] else _MUTATION_UNRECORDABLE
+    returns = getattr(schema, "returns", None) or ()
+    if returns:
+        returned = frozenset().union(*(_alias_set(ret) for ret in returns))
+        aliased = all(_alias_set(argument) & returned for _, argument in written)
+        return _MUTATION_NONE if aliased else _MUTATION_UNRECORDABLE
+    return _MUTATION_RECEIVER if [i for i, _ in written] == [0] else _MUTATION_UNRECORDABLE
 
 
 def _mutation_kind(op: Any) -> str:
@@ -265,12 +280,12 @@ def _disclose_unrecorded_mutation(trace: Any, op: Any) -> None:
     trace:
         Active capture trace.
     op:
-        The operator that wrote its arguments and returned nothing.
+        The operator that wrote an argument it does not return.
     """
 
     trace.__dict__.setdefault("_unrecorded_operator_mutations", []).append(
-        f"{_qualified_name(op) or _recorded_op_name(op)} (wrote its arguments, returned no "
-        "tensor; mutation not recorded)"
+        f"{_qualified_name(op) or _recorded_op_name(op)} (wrote an argument it does not "
+        "return; mutation not recorded)"
     )
 
 
@@ -352,7 +367,8 @@ def _make_recording_call(original: Callable[..., Any]) -> Callable[..., Any]:
             if result is None:
                 _disclose_unrecorded_mutation(trace, self)
             return result
-        # Writes another argument, a list receiver, or a receiver passed by keyword.
+        # Writes another argument, an argument no return aliases, a list receiver, or a
+        # receiver passed by keyword.
         _disclose_unrecorded_mutation(trace, self)
         return original(self, *args, **kwargs)
 
