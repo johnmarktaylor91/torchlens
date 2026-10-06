@@ -18,13 +18,16 @@ corroborated user intervention replacement. Nothing else is exempt.
 
 from typing import TYPE_CHECKING
 
-from .._capture_honesty import ADVISORY_HELD_SCAN_TRUNCATED, ADVISORY_MODULE_BOUNDARY_ADOPTION
+from .._capture_honesty import (
+    ADVISORIES_ANNOTATIONS_KEY,
+    ADVISORY_HELD_SCAN_TRUNCATED,
+    ADVISORY_MODULE_BOUNDARY_ADOPTION,
+)
 from .diagnostics import CHECK_SOURCE_PROVENANCE, ValidationFailure, record_validation_failure
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
     from .core import ValidationDecisionRecorder
-    from .status import ValidationReplayStatus
 
 _GAP_ADVISORY_KINDS = (ADVISORY_MODULE_BOUNDARY_ADOPTION, ADVISORY_HELD_SCAN_TRUNCATED)
 
@@ -47,15 +50,15 @@ def source_provenance_gaps(trace: "Trace") -> list[tuple[str, str | None, str]]:
     from .core import _is_intentional_intervention_replacement
 
     gaps: list[tuple[str, str | None, str]] = []
-    for op in getattr(trace, "layer_list", ()):
-        if getattr(op, "type", None) == "output":
+    for op in trace.layer_list:
+        if op.type == "output":
             continue
-        positions = tuple(getattr(op, "unattributed_tensor_args", ()) or ())
+        positions = tuple(op.unattributed_tensor_args or ())
         if not positions or _is_intentional_intervention_replacement(op):
             continue
-        label = str(getattr(op, "label", None) or op.layer_label)
+        label = str(op.label or op.layer_label)
         gaps.append(("unattributed_tensor_args", label, f"{label} ({', '.join(positions)})"))
-    advisories = (getattr(trace, "annotations", None) or {}).get("capture_advisories") or ()
+    advisories = (trace.annotations or {}).get(ADVISORIES_ANNOTATIONS_KEY) or ()
     for row in advisories:
         if isinstance(row, dict) and row.get("kind") in _GAP_ADVISORY_KINDS:
             gaps.append((str(row["kind"]), None, str(row.get("message", ""))))
@@ -64,28 +67,31 @@ def source_provenance_gaps(trace: "Trace") -> list[tuple[str, str | None, str]]:
 
 def check_source_provenance(
     trace: "Trace", decision_recorder: "ValidationDecisionRecorder", verbose: bool = False
-) -> "ValidationReplayStatus | None":
-    """Fail the validation run when the trace carries any source-provenance gap.
+) -> bool:
+    """Record a failure when the trace carries any source-provenance gap.
+
+    Runs after the BFS completeness check and the metadata invariants, so an
+    earlier, more specific failure (or invariant raise) keeps precedence.
 
     Parameters
     ----------
     trace:
         Final validation trace.
     decision_recorder:
-        The run's decision recorder; a failed decision is appended on a gap.
+        The run's decision recorder; a ``failed`` decision is appended on a gap,
+        which fails the run status the caller builds from it.
     verbose:
         Whether to print the failure.
 
     Returns
     -------
-    ValidationReplayStatus | None
-        The failed run status (also stored as ``_validation_replay_status``) when
-        a gap exists, otherwise ``None`` and nothing is recorded.
+    bool
+        True when a gap was found and recorded.
     """
 
     gaps = source_provenance_gaps(trace)
     if not gaps:
-        return None
+        return False
     reason, op_label, _ = gaps[0]
     message = (
         "tensor arguments with no graph/source provenance (the graph is missing their "
@@ -96,19 +102,18 @@ def check_source_provenance(
     if verbose:
         print(message)
     op = trace.layer_dict_all_keys.get(op_label) if op_label is not None else None
+    func_name = (str(op.func_name or "") or None) if op is not None else None
     record_validation_failure(
         trace,
         ValidationFailure(
             check=CHECK_SOURCE_PROVENANCE,
             op_label=op_label,
-            func_name=(str(getattr(op, "func_name", "")) or None) if op is not None else None,
+            func_name=func_name,
             message=message,
             extra={"reasons": sorted({gap[0] for gap in gaps}), "n_gaps": len(gaps)},
         ),
     )
     decision_recorder.record(
-        op_label=op_label, func_name=None, phase="metadata", decision="failed", reason=reason
+        op_label=op_label, func_name=func_name, phase="metadata", decision="failed", reason=reason
     )
-    status = decision_recorder.as_status(backend=str(getattr(trace, "backend", "torch")))
-    setattr(trace, "_validation_replay_status", status)
-    return status
+    return True

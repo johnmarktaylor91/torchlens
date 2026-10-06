@@ -1115,9 +1115,6 @@ def validate_saved_outs(
         status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
         setattr(self, "_validation_replay_status", status)
         return status
-    # Source-less tensor args replay fine from saved args; fail them here.
-    if (gap_status := check_source_provenance(self, decision_recorder, verbose)) is not None:
-        return gap_status
 
     # Metadata invariant checks (after out validation ops)
     if validate_metadata:
@@ -1150,7 +1147,8 @@ def validate_saved_outs(
                 reason="metadata_invariant_exception",
             )
             raise
-
+    # Source-less tensor args replay fine from saved args; a gap records a failure here.
+    check_source_provenance(self, decision_recorder, verbose)
     status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
     setattr(self, "_validation_replay_status", status)
     return status

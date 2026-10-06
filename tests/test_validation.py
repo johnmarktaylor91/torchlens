@@ -39,6 +39,7 @@ from torchlens.validation import (
     check_metadata_invariants,
     get_validation_diagnostics,
     get_validation_failure,
+    last_validation_failure,
     validate_forward_pass,
 )
 from torchlens.validation._completeness_backstop import completeness_backstop_counts
@@ -110,6 +111,26 @@ def _assert_validation_capture_is_clean(model: nn.Module, x: torch.Tensor) -> No
         warnings.simplefilter("always")
         assert validate_forward_pass(model, [x], input_kwargs={})
     assert not any(isinstance(item.message, TorchLensCaptureGapWarning) for item in caught)
+
+
+def _assert_validation_fails_only_on_adoption(model: nn.Module, x: torch.Tensor) -> None:
+    """Assert forward validation fails only because a module boundary adopted an output.
+
+    Parameters
+    ----------
+    model:
+        Module whose opaque output is adopted as an internal source.
+    x:
+        Tensor passed as the module's sole positional input.
+    """
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        assert validate_forward_pass(model, [x], input_kwargs={}) is False
+    assert not any(isinstance(item.message, TorchLensCaptureGapWarning) for item in caught)
+    failure = last_validation_failure()
+    assert failure is not None and failure.check == "source_provenance"
+    assert failure.extra["reasons"] == ["module_boundary_adoption"]
 
 
 class _StaleLabelConstantModel(nn.Module):
@@ -808,9 +829,12 @@ def test_trace_clears_forward_global_container_tensor_labels_between_sessions() 
 
         # The global-container tensor genuinely has no graph/source provenance,
         # so each capture correctly emits the unattributed-tensor-args warning
-        # (cert10 diagnostic); the concern under test is stale-label clearing.
+        # (cert10 diagnostic) and forward validation fails on source_provenance;
+        # the concern under test is stale-label clearing.
         with pytest.warns(UserWarning, match="no graph/source provenance"):
-            assert validate_forward_pass(model, x, validate_metadata=True) is True
+            assert validate_forward_pass(model, x, validate_metadata=True) is False
+        failure = last_validation_failure()
+        assert failure is not None and failure.check == "source_provenance"
         with pytest.warns(UserWarning, match="no graph/source provenance"):
             second_trace = tl.trace(
                 model,
@@ -8305,7 +8329,7 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source_nested_depth(
         check_metadata_invariants(log)
     finally:
         log.cleanup()
-    _assert_validation_capture_is_clean(model, x)
+    _assert_validation_fails_only_on_adoption(model, x)
 
 
 def test_plain_trace_noop_hook_untraceable_exit_is_internal_source() -> None:
@@ -8332,11 +8356,12 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source() -> None:
         internal_sources = [op for op in log.ops if getattr(op, "is_internal_source", False)]
         assert internal_sources, "untraceable raw-ATen output must be an internal source"
         assert all(getattr(op, "func_name", None) == "none" for op in internal_sources)
-        # Validation passes legitimately (as a graph source, not via a hidden gap).
+        # Metadata invariants pass (a graph source, not a placeholder); forward
+        # validation fails only on the adopted output's missing origin.
         check_metadata_invariants(log)
     finally:
         log.cleanup()
-    _assert_validation_capture_is_clean(model, x)
+    _assert_validation_fails_only_on_adoption(model, x)
 
 
 def test_func_call_id_exemption_is_scoped_to_genuine_replacement() -> None:

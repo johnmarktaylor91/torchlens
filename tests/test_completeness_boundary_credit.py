@@ -2,7 +2,9 @@
 
 When a module returns a tensor with no live label, module exit synthesizes a
 functionless boundary Op and marks the module-forward token capture-accounted.
-That credit covers the opaque construction of the exact boundary tensors. A
+That credit covers the opaque construction of the exact boundary tensors, so the
+dispatch census passes; the adopted boundary tensor still has no recorded origin,
+so forward validation then fails on its ``source_provenance`` check. A
 stale raw torch call elsewhere in the same module body (a callable bound
 before TorchLens wrapped torch, as in IQL's ``hidden_activation=torch.relu``
 default) is not represented by the boundary, so validation must fail on it.
@@ -154,25 +156,36 @@ def _assert_completeness_failure(model: nn.Module, *, grad: bool = True) -> None
     assert "bfs_completeness" in failure.summary()
 
 
+def _assert_credited_but_source_less(model: nn.Module, *, grad: bool = True) -> None:
+    """The census credits the boundary; only the adopted output's missing origin fails."""
+
+    assert not _validate(model, grad=grad)
+    failure = tl.validation.last_validation_failure()
+    assert failure is not None
+    assert failure.check == "source_provenance", failure
+    assert failure.extra["reasons"] == ["module_boundary_adoption"], failure
+
+
 # The stale op's output reaches the next traced op with no recorded parent; that
 # provenance disclosure is expected alongside the completeness failure. An opaque
-# module RETURN is disclosed the same way (module-exit adoption record) while the
-# boundary still credits the dispatch that built it.
+# module RETURN is disclosed the same way (module-exit adoption record); the
+# boundary credits the dispatch that built it, and forward validation fails the
+# adoption on its ``source_provenance`` check.
 _NO_PROVENANCE = "ignore:TorchLens found tensor arguments with no graph:UserWarning"
 
 
 @pytest.mark.filterwarnings(_NO_PROVENANCE)
-def test_single_opaque_output_op_still_validates() -> None:
-    """The boundary still credits the one direct-aten op that built the module output."""
+def test_single_opaque_output_op_is_credited_but_fails_source_provenance() -> None:
+    """The boundary credits the one direct-aten op that built the module output."""
 
-    assert _validate(_Parent(_OpaqueOutputChild())), tl.validation.last_validation_failure()
+    _assert_credited_but_source_less(_Parent(_OpaqueOutputChild()))
 
 
 @pytest.mark.filterwarnings(_NO_PROVENANCE)
-def test_tuple_of_opaque_outputs_still_validates() -> None:
+def test_tuple_of_opaque_outputs_are_credited_but_fail_source_provenance() -> None:
     """Every tensor of a tuple result that is a boundary output is credited."""
 
-    assert _validate(_Parent(_OpaqueTupleChild())), tl.validation.last_validation_failure()
+    _assert_credited_but_source_less(_Parent(_OpaqueTupleChild()))
 
 
 @pytest.mark.filterwarnings(_NO_PROVENANCE)
@@ -256,11 +269,10 @@ def _composite_aten_output(m: _BodyChild, x: torch.Tensor) -> torch.Tensor:
 @pytest.mark.filterwarnings(_NO_PROVENANCE)
 @pytest.mark.parametrize("grad", [True, False], ids=["grad", "no_grad"])
 @pytest.mark.parametrize("body", [_direct_aten_view_output, _direct_aten_split_output])
-def test_direct_aten_view_or_split_output_validates(body: Any, grad: bool) -> None:
+def test_direct_aten_view_or_split_output_is_credited(body: Any, grad: bool) -> None:
     """A direct-aten view or multi-output op whose result is the module output is credited."""
 
-    model = _Parent(_BodyChild(body))
-    assert _validate(model, grad=grad), tl.validation.last_validation_failure()
+    _assert_credited_but_source_less(_Parent(_BodyChild(body)), grad=grad)
 
 
 @pytest.mark.filterwarnings(_NO_PROVENANCE)
@@ -365,11 +377,13 @@ def test_attribute_held_originals_are_rebound_and_validate(
     """The attribute-held cases above with the bare original, as they were first written.
 
     Capture preparation rebinds each held original to its wrapper for the
-    capture, so the held relu is no escape: the primary forward captures it,
-    and validation passes. The IQL shape takes one forward with no provenance
-    warning. The other shapes also emit a direct ``torch.ops.aten`` call,
-    which no wrapper sees; that call (never the relu) triggers their one
-    rescue forward, so ``relu`` must not be among the recovered ops.
+    capture, so the held relu is no escape: the primary forward captures it.
+    The IQL shape takes one forward with no provenance warning and validates.
+    The other shapes also emit a direct ``torch.ops.aten`` call, which no
+    wrapper sees; that call (never the relu) triggers their one rescue
+    forward, so ``relu`` must not be among the recovered ops, and its adopted
+    output fails validation on ``source_provenance`` alone (the census and
+    every other check pass).
     """
 
     monkeypatch.setitem(globals(), "_raw", _bare)
@@ -386,4 +400,7 @@ def test_attribute_held_originals_are_rebound_and_validate(
         assert model.calls == [1]
         assert provenance_warnings(caught) == []
         assert trace.rescue_rerun is None
-    assert _validate(build(), grad=grad), tl.validation.last_validation_failure()
+    if direct_aten:
+        _assert_credited_but_source_less(build(), grad=grad)
+    else:
+        assert _validate(build(), grad=grad), tl.validation.last_validation_failure()

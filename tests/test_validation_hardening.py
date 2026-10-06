@@ -584,11 +584,12 @@ def test_w34_factory_internal_sources_keep_exemption() -> None:
     assert _quiet_validate(_Factories(), torch.randn(3, 4)) is True
 
 
-def test_w34_outside_tensor_consumer_with_traced_parent_still_validates() -> None:
-    """Control (no new FP): the locked global-payload pattern stays green.
+def test_w34_outside_tensor_consumer_with_traced_parent_fails_source_provenance() -> None:
+    """A genuinely outside tensor beside a traced input fails forward validation.
 
-    A model consuming a genuinely outside tensor alongside a traced input has
-    known partial provenance; it warns but validates (locked behavior).
+    The global-payload pattern warns (no graph/source provenance) and, since the
+    source-provenance check, fails on ``source_provenance`` rather than on the
+    graph_connectivity invariant: the traced parent keeps the consumer connected.
     """
 
     outside = torch.randn(3, 4)
@@ -597,7 +598,9 @@ def test_w34_outside_tensor_consumer_with_traced_parent_still_validates() -> Non
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             return x + outside
 
-    assert _quiet_validate(_GlobalTensor(), torch.randn(3, 4)) is True
+    assert _quiet_validate(_GlobalTensor(), torch.randn(3, 4)) is False
+    failure = tl.validation.last_validation_failure()
+    assert failure is not None and failure.check == "source_provenance"
 
 
 def test_w34_unused_input_model_still_validates() -> None:
