@@ -138,6 +138,23 @@ gone: `trace.summary()` mid-forward now raises `CaptureContextError`
 | `flop_count(model, x, count_fma_as_two=True)` | `flop_count(model, x, flop_convention="fma2")` (the default) |
 | `flop_count(model, x, count_fma_as_two=False)` | `flop_count(model, x, flop_convention="fma1")` |
 
+## Removed member spellings name their replacement (typed redirect)
+
+The alias members deleted by the 2026-10-01 shim removal, and the deleted
+`VisualizationTheme.legend_items` field, are still gone (no alias). Looking
+one up now raises `FacadeTeachingError` (code `facade_redirect`, an
+`AttributeError` subclass, so `getattr(obj, name, default)` still degrades)
+whose message names the replacement:
+
+| Removed | Use |
+|---|---|
+| `Trace.replay`, `Trace.replay_from`, `Trace.rerun` | `trace.push`, `trace.push_from`, `trace.run` |
+| `Trace.validate_saved_outs` | `trace.validate_forward_pass` |
+| `Trace.conditional_then_entry_edges` / `_elif_` / `_else_` | `trace.conditional_arm_entry_edges` |
+| `Bundle.replay`, `Bundle.rerun` | `bundle.push`, `bundle.run` |
+| `VisualizationOptions.mode`, `.max_module_depth`, `.layout_engine`, `.node_mode` | `.view`, `.depth`, `.layout`, `.node_style` |
+| `VisualizationTheme.legend_items` | legends derive from the encoding channels; style via `semantic_palette` and `ramp` |
+
 ## Episode ledger grammar v2 (the C07X coordinated tlspec-v9 amendment)
 
 The persisted episode ledger (`trace.annotations["episode"]`) moves to

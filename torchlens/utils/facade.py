@@ -48,6 +48,7 @@ from .._errors import FacadeTeachingError, MissingDependencyError
 __all__ = [
     "DependencyGate",
     "facade_dir",
+    "refuse_removed_member",
     "resolve_facade_attr",
 ]
 
@@ -106,6 +107,34 @@ def _plain_missing(
         if matches:
             message += ". Did you mean: " + ", ".join(matches) + "?"
     return AttributeError(message)
+
+
+def refuse_removed_member(owner: str, name: str, removed: Mapping[str, str]) -> None:
+    """Raise the typed redirect when ``name`` is a removed public member of ``owner``.
+
+    Class ``__getattr__`` hooks call this on a lookup miss, before their own
+    plain ``AttributeError``, so a removed method or attribute spelling names
+    its replacement (``facade_redirect``) instead of failing bare. Any other
+    name returns normally and the caller fails as it always did.
+
+    Parameters
+    ----------
+    owner:
+        Public class name used in the message (``"Trace"``, ``"Bundle"``).
+    name:
+        Missing attribute name.
+    removed:
+        Removed public member -> remedy naming its replacement.
+    """
+
+    if name in removed:
+        raise FacadeTeachingError(
+            f"{owner}.{name} was removed",
+            code="facade_redirect",
+            remedy=removed[name],
+            owner=owner,
+            attribute=name,
+        )
 
 
 def resolve_facade_attr(
