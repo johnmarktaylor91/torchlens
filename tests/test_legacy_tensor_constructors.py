@@ -181,10 +181,10 @@ def test_dtype_class_data_form_captures_and_validates(class_name: str) -> None:
 def test_sylvester_reparam_idiom_captures_validates_and_matches_modern_spelling() -> None:
     """``self.FloatTensor(size).normal_()`` + ``Variable`` validates and draws RNG as eager does.
 
-    Under one seed the legacy spelling's captured output equals the modern
-    ``torch.empty(size).normal_()`` spelling's captured output, and the two
-    spellings are equal in eager too: the legacy op consumes the RNG exactly as
-    its modern equivalent.
+    With the capture seeded (``random_seed=7``) the legacy spelling's captured
+    output equals its eager output under ``torch.manual_seed(7)``, and both equal
+    the modern ``torch.empty(size).normal_()`` spelling: the legacy op consumes
+    the RNG exactly as its modern equivalent.
     """
 
     model, x = SylvesterReparam().eval(), torch.randn(2, 4)
@@ -197,15 +197,16 @@ def test_sylvester_reparam_idiom_captures_validates_and_matches_modern_spelling(
 
     outputs = []
     for candidate in (model, modern):
-        torch.manual_seed(7)
-        trace = tl.trace(candidate, x)
+        trace = tl.trace(candidate, x, capture=tl.options.CaptureOptions(random_seed=7))
         (out_label,) = trace.output_layers
         outputs.append(trace[out_label].out)
-    assert torch.equal(outputs[0], outputs[1])
     torch.manual_seed(7)
     eager_legacy = model(x)
     torch.manual_seed(7)
-    assert torch.equal(eager_legacy, modern(x))
+    eager_modern = modern(x)
+    assert torch.equal(eager_legacy, eager_modern)
+    assert torch.equal(outputs[0], eager_legacy)
+    assert torch.equal(outputs[1], eager_modern)
 
 
 def test_variable_forms_capture_and_validate() -> None:
