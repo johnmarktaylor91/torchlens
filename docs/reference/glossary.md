@@ -487,6 +487,14 @@ attribution-target alias. See the [attribution reference](attribution.md).
 **Validation entry**
 : `tl.validate(model, x, scope=...)` validates a model/input pair for a requested scope
   (for example `"saved"` or `"receptive_field"`), capturing what it needs itself.
+  Keyword-only `output_device` and `save_budget` set the validator capture's save options,
+  with the same values and defaults as `CaptureOptions.output_device` (`"same"`) and
+  `CaptureOptions.save_budget` (`"auto"`): `output_device="cpu"` lets a GPU model validate
+  with its saved activations in host memory (replay still runs each op on its original
+  device), and an exceeded budget raises `SaveBudgetExceededError` as the capture does. They
+  apply to the `"forward"`, `"saved"`, and `"intervention"` scopes; a non-default value on
+  `"backward"` or `"receptive_field"` raises `TypeError`. The lower-level
+  `torchlens.validation.validate_forward_pass` accepts the same two keywords.
 
 **Session admin**
 : `tl.release_model` releases a traced model from persistent TorchLens preparation

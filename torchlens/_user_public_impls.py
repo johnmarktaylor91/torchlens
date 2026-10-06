@@ -31,6 +31,7 @@ from ._literals import (
     BufferVisibilityLiteral,
     CollapseLiteral,
     FoldRepeatsLiteral,
+    OutputDeviceLiteral,
     VisDirectionLiteral,
     VisModeLiteral,
     VisNodeModeLiteral,
@@ -38,7 +39,8 @@ from ._literals import (
     VisRendererLiteral,
 )
 from ._robustness import check_model_and_input_variants
-from .backends import BackendName, resolve_backend_spec
+from ._save_budget import SaveBudgetOption
+from .backends import BackendName, BackendUnsupportedError, resolve_backend_spec
 from .data_classes.trace import Trace
 from .errors import TraceNotReproducibleWarning
 from .options import (
@@ -911,6 +913,8 @@ def validate_forward_pass(
     validate_metadata: bool = True,
     *,
     backend: BackendName | None = None,
+    output_device: OutputDeviceLiteral = "same",
+    save_budget: SaveBudgetOption = "auto",
 ) -> bool:
     """Validate that saved outs faithfully reproduce the model's output.
 
@@ -931,14 +935,42 @@ def validate_forward_pass(
         If True, also run metadata invariant checks.
     backend:
         Explicit backend name. ``None`` preserves legacy auto-resolution.
+    output_device:
+        Where the validator capture keeps saved activations (same values and
+        default as ``CaptureOptions.output_device``).
+    save_budget:
+        Per-device retained-bytes ceiling for the validator capture (same
+        values and default as ``CaptureOptions.save_budget``).
 
     Returns
     -------
     bool
         True if all validation checks pass, False otherwise.
+
+    Raises
+    ------
+    BackendUnsupportedError
+        If a non-default save option is requested for a non-torch backend.
     """
 
+    from ._options_validation import _validate_output_device
+    from ._save_budget import resolve_save_budget
+
+    _validate_output_device(output_device)
+    resolve_save_budget(save_budget)
     spec = resolve_backend_spec(backend, model, input_args, input_kwargs)
+    # Forward only non-default save options: a default call reaches every
+    # backend's entry with exactly the keywords it always received.
+    save_options: dict[str, Any] = {}
+    if output_device != "same":
+        save_options["output_device"] = output_device
+    if save_budget != "auto":
+        save_options["save_budget"] = save_budget
+    if save_options and spec.name != "torch":
+        raise BackendUnsupportedError(
+            f"Backend {spec.name!r} validation does not accept {sorted(save_options)!r}; "
+            "only the torch backend's validator capture honors these save options."
+        )
     return spec.validate_entry(
         model,
         input_args,
@@ -946,6 +978,7 @@ def validate_forward_pass(
         random_seed=random_seed,
         verbose=verbose,
         validate_metadata=validate_metadata,
+        **save_options,
     )
 
 
@@ -1026,6 +1059,8 @@ def _warn_if_validation_trace_not_reproducible(
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any],
     random_seed: int,
+    output_device: OutputDeviceLiteral = "same",
+    save_budget: SaveBudgetOption = "auto",
 ) -> Literal["matched", "mismatch", "unavailable"]:
     """Warn when a validation trace changes after one fresh re-trace.
 
@@ -1041,6 +1076,12 @@ def _warn_if_validation_trace_not_reproducible(
         Keyword inputs for the second capture.
     random_seed:
         Seed reused for the second capture to avoid RNG-only graph drift.
+    output_device, save_budget:
+        The first validation capture's save options, reused so the re-trace
+        runs under the same capture mode (and on a GPU model with
+        ``output_device="cpu"`` does not exceed the device budget the first
+        capture avoided, which would silently skip this check as
+        ``"unavailable"``).
 
     Returns
     -------
@@ -1078,6 +1119,8 @@ def _warn_if_validation_trace_not_reproducible(
                 save_arg_values=False,
                 random_seed=random_seed,
                 save_rng_states=False,
+                output_device=output_device,
+                save_budget=save_budget,
             )
         finally:
             _state._completeness_witness_mode = prior_witness_mode
@@ -1246,6 +1289,8 @@ def _validate_forward_pass_torch(
     validate_metadata: bool = True,
     *,
     num_threads: int | None = None,
+    output_device: OutputDeviceLiteral = "same",
+    save_budget: SaveBudgetOption = "auto",
     _trace_observer: Callable[[Trace | None], None] | None = None,
 ) -> bool:
     """Validate that saved outs faithfully reproduce the model's output.
@@ -1292,6 +1337,15 @@ def _validate_forward_pass_torch(
         Optional intra-op thread count for the validation forwards. ``None``
         preserves the process default; an integer pins for this harness call and
         restores the previous thread count afterward.
+    output_device:
+        Where both validation captures keep saved activations (same values
+        and default as ``CaptureOptions.output_device``). Ground-truth outputs
+        are snapshotted onto the same device so the output comparison stays
+        exact; replay moves saved inputs back to each op's original device.
+    save_budget:
+        Per-device retained-bytes ceiling for both validation captures (same
+        values and default as ``CaptureOptions.save_budget``); exceeding it
+        raises ``SaveBudgetExceededError``.
     _trace_observer:
         Optional private callback invoked with the completed validation trace
         after replay validation and before cleanup. Also invoked with
@@ -1533,7 +1587,12 @@ def _validate_forward_pass_torch(
             # validation FALSE-NEGATIVE. (Inputs are already deep-copied above; outputs
             # were not.) Snapshotting the value here corrects the ground truth fed to the
             # tripwire — it does NOT weaken any check.
-            ground_truth_output_tensors.append(entry[0].detach().clone())
+            ground_truth_snapshot = entry[0].detach().clone()
+            if output_device != "same":
+                # Saved outputs live on ``output_device``; an exact copy of
+                # the ground truth there keeps the comparison device-local.
+                ground_truth_snapshot = ground_truth_snapshot.to(output_device)
+            ground_truth_output_tensors.append(ground_truth_snapshot)
             addresses_used.append(entry[1])
         restore_state_dict_resilient(model, state_dict)
         if plain_attr_snapshot is not None:
@@ -1601,6 +1660,8 @@ def _validate_forward_pass_torch(
                 save_arg_values=True,
                 random_seed=random_seed,
                 save_rng_states=True,
+                output_device=output_device,
+                save_budget=save_budget,
             )
         finally:
             _state._completeness_witness_mode = prior_witness_mode
@@ -1618,6 +1679,8 @@ def _validate_forward_pass_torch(
                 reproducibility_input_args,
                 reproducibility_input_kwargs,
                 random_seed,
+                output_device=output_device,
+                save_budget=save_budget,
             )
         else:
             from .validation.diagnostics import ValidationDiagnostic, record_validation_diagnostic

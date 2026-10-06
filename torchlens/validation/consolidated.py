@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Any
 import torch
 from torch import nn
 
+from .._literals import OutputDeviceLiteral
+from .._save_budget import SaveBudgetOption
 from ..backends import BackendName, BackendUnsupportedError, resolve_backend_spec
 from ..errors import TorchLensWarning
 from ..options import CaptureOptions
@@ -164,6 +166,85 @@ def _validate_scope_keywords(
         _raise_backward_only("layer_grad_rtol", scope)
 
 
+#: Scopes whose validation runs the saving validator capture that honors the
+#: ``output_device`` / ``save_budget`` save options.
+_SAVE_OPTION_SCOPES = frozenset({"forward", "saved", "intervention"})
+
+
+def _validate_save_option_keywords(
+    scope: str,
+    *,
+    output_device: OutputDeviceLiteral,
+    save_budget: SaveBudgetOption,
+) -> None:
+    """Validate the validator capture's save options and their scope.
+
+    The values are checked with the same validators the capture entry uses,
+    BEFORE any forward runs, so an invalid value raises the capture's own typed
+    error. A non-default value on a scope whose validation does not run the
+    saving validator capture is refused rather than silently ignored.
+
+    Parameters
+    ----------
+    scope:
+        Normalized validation scope.
+    output_device:
+        Requested ``output_device`` for the validator capture.
+    save_budget:
+        Requested ``save_budget`` for the validator capture.
+
+    Raises
+    ------
+    InvalidArgumentError
+        If either value is invalid (``output_device_invalid`` /
+        ``save_budget_invalid``).
+    TypeError
+        If a non-default value is passed for ``scope="backward"`` or
+        ``scope="receptive_field"``.
+    """
+
+    from .._options_validation import _validate_output_device
+    from .._save_budget import resolve_save_budget
+
+    _validate_output_device(output_device)
+    resolve_save_budget(save_budget)
+    if scope in _SAVE_OPTION_SCOPES:
+        return
+    allowed = "scope='forward', 'saved', or 'intervention'"
+    if output_device != "same":
+        raise TypeError(f"output_device only valid for {allowed}")
+    if save_budget != "auto":
+        raise TypeError(f"save_budget only valid for {allowed}")
+
+
+def _save_option_kwargs(
+    output_device: OutputDeviceLiteral,
+    save_budget: SaveBudgetOption,
+) -> dict[str, Any]:
+    """Return the save-option keywords to forward, omitting default values.
+
+    Parameters
+    ----------
+    output_device:
+        Requested ``output_device``.
+    save_budget:
+        Requested ``save_budget``.
+
+    Returns
+    -------
+    dict[str, Any]
+        Only the non-default options, so a default call forwards exactly the
+        keywords it always did.
+    """
+
+    forwarded: dict[str, Any] = {}
+    if output_device != "same":
+        forwarded["output_device"] = output_device
+    if save_budget != "auto":
+        forwarded["save_budget"] = save_budget
+    return forwarded
+
+
 def _intervention_report(
     model: nn.Module,
     input_args: Any,
@@ -172,6 +253,7 @@ def _intervention_report(
     random_seed: int | None,
     verbose: bool,
     validate_metadata: bool,
+    save_options: dict[str, Any] | None = None,
 ) -> InterventionValidationReport:
     """Build an honesty-preserving intervention validation report.
 
@@ -189,6 +271,9 @@ def _intervention_report(
         Whether the underlying validation should emit diagnostics.
     validate_metadata:
         Whether metadata invariant checks should run.
+    save_options:
+        Non-default ``output_device`` / ``save_budget`` keywords for the
+        validator capture, or ``None``.
 
     Returns
     -------
@@ -206,6 +291,7 @@ def _intervention_report(
         random_seed=random_seed,
         verbose=verbose,
         validate_metadata=validate_metadata,
+        **(save_options or {}),
     )
     return InterventionValidationReport(
         invariance=forward_ok,
@@ -329,6 +415,8 @@ def validate(
     layer_grad_atol: float | None = None,
     layer_grad_rtol: float | None = None,
     backend: BackendName | None = None,
+    output_device: OutputDeviceLiteral = "same",
+    save_budget: SaveBudgetOption = "auto",
 ) -> bool | InterventionValidationReport | list[ReceptiveFieldValidation]:
     """Validate a model/input pair for a requested TorchLens scope.
 
@@ -366,6 +454,21 @@ def validate(
         Backward-only layer-gradient relative tolerance.
     backend:
         Explicit backend name. ``None`` preserves legacy auto-resolution.
+    output_device:
+        Where the validator capture keeps its saved activations, with the
+        same values and default as ``CaptureOptions.output_device``
+        (``"same"``, ``"cpu"``, or ``"cuda"``). ``"cpu"`` lets a GPU model
+        validate with its activations held in host memory; replay still runs
+        each op on its original device. Honored by the ``"forward"``,
+        ``"saved"``, and ``"intervention"`` scopes; a non-default value on
+        another scope raises ``TypeError``.
+    save_budget:
+        Per-device ceiling on the validator capture's retained bytes, with
+        the same values and default as ``CaptureOptions.save_budget``
+        (``"auto"``, a float fraction in ``(0, 1]``, an int byte cap, or
+        ``None`` to disable). Exceeding it raises
+        :class:`~torchlens.errors.SaveBudgetExceededError` exactly as the
+        capture does. Same scopes as ``output_device``.
 
     Returns
     -------
@@ -404,6 +507,10 @@ def validate(
         layer_grad_atol=layer_grad_atol,
         layer_grad_rtol=layer_grad_rtol,
     )
+    _validate_save_option_keywords(
+        normalized_scope, output_device=output_device, save_budget=save_budget
+    )
+    save_options = _save_option_kwargs(output_device, save_budget)
     if normalized_scope == "backward":
         spec = resolve_backend_spec(backend, model, input_args, input_kwargs)
         if not spec.capabilities.backward_capture:
@@ -476,6 +583,7 @@ def validate(
                     verbose=verbose,
                     validate_metadata=validate_metadata,
                     backend=backend,
+                    **save_options,
                 )
             except MetadataInvariantError as invariant_error:
                 # L9: the bool contract covers EVERY failure class. The
@@ -529,6 +637,7 @@ def validate(
         random_seed=random_seed,
         verbose=verbose,
         validate_metadata=validate_metadata,
+        save_options=save_options,
     )
 
 

@@ -3376,13 +3376,9 @@ def _trace_torch_model(
     grad_storage_path_value = streaming_options.bundle_path if should_save_grads else None
     retain_grads_in_memory_value = streaming_options.retain_in_memory
 
-    if output_device not in ["same", "cpu", "cuda"]:
-        raise InvalidArgumentError(
-            f"output_device={output_device!r} is not supported",
-            code="output_device_invalid",
-            remedy="set output_device to 'same', 'cpu', or 'cuda'",
-            argument="output_device",
-        )
+    from ._options_validation import _validate_output_device
+
+    _validate_output_device(output_device)
     if streaming_options.bundle_path is not None and streaming_options.out_callback is not None:
         raise ArgumentConflictError(
             "Both disk-backed output storage and an output callback were configured",

@@ -35,6 +35,9 @@ validated = tl.receptive_field.verify(armed, units="center")
 # autograd graph -- call it last (or re-capture) if later backward passes are needed.
 overlay = armed_op.receptive_field.show(armed_unit, gradient=True)
 # tl.validate(model, x, scope="receptive_field") captures an armed trace itself.
+# tl.validate(gpu_model, x, scope="forward", output_device="cpu", save_budget=None) keeps
+# the validator capture's saved activations in host memory; output_device / save_budget
+# take CaptureOptions' values and defaults and apply to the forward/saved/intervention scopes.
 ```
 
 Use the unified predicate surface for selective capture, windowed saves, interventions, and

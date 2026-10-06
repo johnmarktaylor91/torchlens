@@ -587,6 +587,10 @@ def tensor_nanequal(
         return tensor_a.is_meta and tensor_b.is_meta
 
     with pause_logging():
+        if tensor_a.device != tensor_b.device:
+            # Equality is device-independent: an output_device capture keeps
+            # saved payloads off the op's device, so compare exact host copies.
+            tensor_a, tensor_b = tensor_a.cpu(), tensor_b.cpu()
         if tensor_a.is_quantized or tensor_b.is_quantized:
             return _quantized_tensor_equal(tensor_a, tensor_b)
 
