@@ -495,7 +495,8 @@ def _weightsfree_summary_facade(
 def _finalize_summary_report(report: Any, execution_mode: str, grad_mode: str) -> str:
     """Suffix the execution disclosure, keeping the typed detached report.
 
-    The report survives its Trace's cleanup by construction (C02, summary
+    The rebuilt payload is carried over so the result methods
+    (``to_markdown``, ``to_html``, ``render``) keep working. The report survives its Trace's cleanup by construction (C02, summary
     item 10: it retains neither the model nor the Trace).
     """
 
@@ -504,7 +505,11 @@ def _finalize_summary_report(report: Any, execution_mode: str, grad_mode: str) -
     full_text = str(report) + "\n" + _summary_execution_note(execution_mode, grad_mode)
     if isinstance(report, SummaryReport):
         return SummaryReport(
-            full_text, rows=report.rows, totals=report.totals, capture=report.capture
+            full_text,
+            rows=report.rows,
+            totals=report.totals,
+            capture=report.capture,
+            rebuilt=report._rebuilt,
         )
     return full_text
 

@@ -306,7 +306,7 @@ def result_to_markdown(report: SummaryReport) -> str:
     payload = getattr(report, "_rebuilt", None)
     if payload is None:
         raise InvalidArgumentError(
-            "to_markdown() serves rebuilt-grammar summaries; this report was "
+            "to_markdown() serves rebuilt-grammar summaries; this report "
             "carries no rebuilt-grammar payload (it was assembled from text).",
             code="summary_result_legacy",
             remedy="call summary() with the rebuilt grammar (bare call, level=, view=, ...)",
