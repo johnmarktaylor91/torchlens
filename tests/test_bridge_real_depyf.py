@@ -19,7 +19,7 @@ import torchlens as tl
 
 depyf = pytest.importorskip("depyf")
 
-pytestmark = [pytest.mark.optional, pytest.mark.heavy]
+pytestmark = [pytest.mark.optional]
 
 _UUID = re.compile(r"[0-9a-f]{8}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{12}")
 _COUNTER = re.compile(r"(__compiled_fn|__transformed_code|_for_inner|full_code_for_inner)_(\d+)")
