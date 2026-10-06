@@ -128,14 +128,39 @@ def _hide_lit_nlp(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "lit_nlp", None)
 
 
-def test_import_inert_without_lit_nlp() -> None:
-    """``import torchlens.bridge.lit`` never imports the foreign peer (L8)."""
+def _is_lit_module(name: str) -> bool:
+    """Whether ``name`` is ``lit_nlp`` or one of its submodules."""
+
+    return name == "lit_nlp" or name.startswith("lit_nlp.")
+
+
+def test_import_inert_without_lit_nlp(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``import torchlens.bridge.lit`` never imports the foreign peer (L8).
+
+    Order- and path-independent: a fresh import of the bridge runs with every
+    ``lit_nlp`` module evicted (an earlier real-LIT test may have imported
+    the peer legitimately), and the check is that the import put none back.
+    ``monkeypatch`` restores the evicted modules and the original bridge
+    module objects afterwards.
+    """
+
+    import importlib
+
+    import torchlens.bridge as bridge_pkg
 
     assert tl.bridge.lit.__all__ == ["dataset", "layout", "model"]
-    # The bridge module resolved above; the peer must not have ridden along.
-    lit_modules = [m for m in sys.modules if m == "lit_nlp" or m.startswith("lit_nlp.")]
-    real = [m for m in lit_modules if sys.modules[m] is not None]
-    assert not real or all("torchlens" not in getattr(sys.modules[m], "__file__", "") for m in real)
+    monkeypatch.setattr(bridge_pkg, "lit", sys.modules["torchlens.bridge.lit"])
+    for name in list(sys.modules):
+        if (
+            _is_lit_module(name)
+            or name == "torchlens.bridge.lit"
+            or name.startswith("torchlens.bridge.lit.")
+        ):
+            monkeypatch.delitem(sys.modules, name)
+    fresh = importlib.import_module("torchlens.bridge.lit")
+    assert fresh.__all__ == ["dataset", "layout", "model"]
+    leaked = sorted(name for name in sys.modules if _is_lit_module(name))
+    assert leaked == [], f"importing torchlens.bridge.lit imported {leaked}"
 
 
 def test_stub_surface_is_gone() -> None:

@@ -17,6 +17,7 @@ from .._capture_honesty import (
     capture_honesty_facts,
     honesty_preamble_lines,
 )
+from .._errors import ArgumentTypeError, KeywordConflictError
 from ._common import _scalarize_cell
 
 __tl_layer__ = "L8"
@@ -153,7 +154,11 @@ def mlflow(
         for key, value in metrics.items():
             log_metric(f"{prefix}.{key}", value)
     elif run_id is not None:
-        raise TypeError("torchlens.export.mlflow got run_id= without a client to log through.")
+        raise KeywordConflictError(
+            "torchlens.export.mlflow got run_id= without a client to log through",
+            code="tracker_mlflow_run_id_without_client",
+            remedy="pass client=mlflow.MlflowClient() with run_id=, or drop run_id=",
+        )
     # Honesty facts are returned (not logged): log_metric accepts numerics
     # only, and coercing verification facts to numbers would misstate them.
     return {**metrics, "capture_honesty": capture_honesty_facts(log)}
@@ -168,20 +173,24 @@ def _mlflow_log_metric(log_metric: Any, run_id: str | None) -> Any:
         params = []
     if params and params[0].name == "run_id":
         if run_id is None:
-            raise TypeError(
+            raise ArgumentTypeError(
                 "torchlens.export.mlflow got an MlflowClient-style client "
-                "(log_metric(run_id, key, value)) without run_id=; pass "
-                "run_id=run.info.run_id, or pass the fluent `mlflow` module to log "
-                "into the active run."
+                "(log_metric(run_id, key, value)) without run_id=",
+                code="tracker_mlflow_run_id_missing",
+                remedy=(
+                    "pass run_id=run.info.run_id, or pass the fluent `mlflow` module to "
+                    "log into the active run"
+                ),
             )
         return functools.partial(log_metric, run_id)
     if run_id is None:
         return log_metric
     if any(param.name == "run_id" for param in params):
         return functools.partial(log_metric, run_id=run_id)
-    raise TypeError(
-        "torchlens.export.mlflow got run_id= but this client's log_metric takes no "
-        "run_id; drop run_id= or pass an mlflow.MlflowClient."
+    raise KeywordConflictError(
+        "torchlens.export.mlflow got run_id= but this client's log_metric takes no run_id",
+        code="tracker_mlflow_run_id_unsupported",
+        remedy="drop run_id=, or pass an mlflow.MlflowClient",
     )
 
 

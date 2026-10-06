@@ -15,6 +15,7 @@ from typing import Any
 import numpy as np
 import torch
 
+from .._errors import InvalidArgumentError
 from ._utils import out_at, resolve_one_site, source_model
 
 ReadIndex = int | Sequence[int] | None
@@ -78,16 +79,21 @@ def _contrastive_rows(
         out_at(negative_trace, negative_site), read_token_index, negative_mask, "negative"
     )
     if positive.shape != negative.shape:
-        raise ValueError(
+        raise InvalidArgumentError(
             f"Positive rows {tuple(positive.shape)} and negative rows "
-            f"{tuple(negative.shape)} must match: trace one negative prompt per "
-            "positive prompt."
+            f"{tuple(negative.shape)} must match",
+            code="bridge_contrastive_rows_mismatch",
+            remedy="trace one negative prompt per positive prompt, padded to the same length",
         )
     if torch.equal(positive, negative):
-        raise ValueError(
+        raise InvalidArgumentError(
             "The positive and negative rows are identical, so the steering vector "
-            "would be all zeros. Check that the negative site resolves in the "
-            "negative prompts' trace (negative_log=), not the positive one."
+            "would be all zeros",
+            code="bridge_contrastive_rows_identical",
+            remedy=(
+                "check that the negative site resolves in the negative prompts' trace "
+                "(negative_log=), not the positive one"
+            ),
         )
     return positive, negative
 
@@ -125,10 +131,13 @@ def _negative_source(
 
     if negative_site is None:
         if negative_log is None:
-            raise ValueError(
-                "Contrastive steering needs negative activations: pass negative_site=, "
-                "or negative_log= (a trace of the negative prompts; the site then "
-                "defaults to positive_site)."
+            raise InvalidArgumentError(
+                "Contrastive steering needs negative activations",
+                code="bridge_contrastive_negative_missing",
+                remedy=(
+                    "pass negative_site=, or negative_log= (a trace of the negative "
+                    "prompts; the site then defaults to positive_site)"
+                ),
             )
         negative_site = positive_site
     if negative_log is None:
@@ -224,18 +233,21 @@ def _read_rows(
     if read_token_index is None:
         return out
     if out.dim() < 3:
-        raise ValueError(
+        raise InvalidArgumentError(
             f"The {side} out has shape {tuple(out.shape)}; reading a token needs "
-            "[n_prompts, n_tokens, hidden]. Pass read_token_index=None for outs "
-            "that are already one row per prompt."
+            "[n_prompts, n_tokens, hidden]",
+            code="bridge_contrastive_read_token_rank",
+            remedy="pass read_token_index=None for outs that are already one row per prompt",
         )
     if isinstance(read_token_index, int):
         indices = torch.full((out.shape[0],), read_token_index, dtype=torch.long, device=out.device)
     else:
         indices = torch.as_tensor(list(read_token_index), dtype=torch.long, device=out.device)
     if indices.numel() != out.shape[0]:
-        raise ValueError(
-            f"read_token_index lists {indices.numel()} positions for {out.shape[0]} {side} prompts."
+        raise InvalidArgumentError(
+            f"read_token_index lists {indices.numel()} positions for {out.shape[0]} {side} prompts",
+            code="bridge_contrastive_read_token_count",
+            remedy="pass one int for every prompt, or one position per prompt",
         )
     if attention_mask is not None:
         indices = _adjust_for_padding(indices, attention_mask, out.shape[:2], side)
@@ -271,12 +283,18 @@ def _adjust_for_padding(
 
     mask = attention_mask.to(indices.device) == 1
     if tuple(mask.shape) != tuple(rows_tokens):
-        raise ValueError(
+        raise InvalidArgumentError(
             f"The {side} attention_mask has shape {tuple(mask.shape)}; the out "
-            f"reads [n_prompts, n_tokens] = {tuple(rows_tokens)}."
+            f"reads [n_prompts, n_tokens] = {tuple(rows_tokens)}",
+            code="bridge_contrastive_mask_shape",
+            remedy="pass the attention_mask the traced prompts were tokenized with",
         )
     if not bool(mask.any(dim=1).all()):
-        raise ValueError(f"A {side} prompt has no unmasked token in its attention_mask.")
+        raise InvalidArgumentError(
+            f"A {side} prompt has no unmasked token in its attention_mask",
+            code="bridge_contrastive_mask_empty_row",
+            remedy="drop empty prompts, or pass a mask with at least one 1 per row",
+        )
     positions = torch.arange(mask.shape[1], device=indices.device).expand_as(mask)
     start = torch.where(mask, positions, mask.shape[1]).min(dim=1).values
     end = torch.where(mask, positions, -1).max(dim=1).values
@@ -356,7 +374,11 @@ def _read_directions(
         train = h
     else:
         known = [*diff_methods, "pca_center", "umap", *(["mean_diff"] if mean_diff else [])]
-        raise ValueError(f"Unknown method {method!r}; expected one of {known}.")
+        raise InvalidArgumentError(
+            f"Unknown method {method!r}",
+            code="bridge_contrastive_method_unknown",
+            remedy=f"pass method= one of {known}",
+        )
     direction = _fit_direction(train, method)
     projected = (h @ direction) / np.linalg.norm(direction)
     pairs = range(0, h.shape[0], 2)
@@ -425,8 +447,10 @@ def _model_type(log: Any, model_type: str | None) -> str:
     except ValueError:
         found = None
     if not isinstance(found, str):
-        raise ValueError(
-            "Could not read config.model_type from the traced model; pass model_type=."
+        raise InvalidArgumentError(
+            "Could not read config.model_type from the traced model",
+            code="bridge_contrastive_model_type_unknown",
+            remedy="pass model_type= (for example 'llama')",
         )
     return found
 

@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from .._errors import ArgumentTypeError
+
 _SUPPORTED = (
     "a mapping, an object whose to_dict() returns a mapping, or an object exposing a "
     "non-None `nodes` attribute"
@@ -79,8 +81,10 @@ def _trace_payload(trace: Any) -> dict[str, Any]:
             "save the values you need inside the trace (`.save()`) and pass them "
             "as a mapping, e.g. {'nodes': [...], ...}."
         )
-    raise TypeError(
-        f"torchlens.bridge.nnsight.from_trace supports {_SUPPORTED}; got {type_name}.{hint}"
+    raise ArgumentTypeError(
+        f"torchlens.bridge.nnsight.from_trace supports {_SUPPORTED}; got {type_name}",
+        code="bridge_nnsight_trace_unsupported",
+        remedy=(hint.strip() or f"pass {_SUPPORTED}"),
     )
 
 
