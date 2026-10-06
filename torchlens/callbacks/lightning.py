@@ -212,7 +212,7 @@ class _LayerProfilerCallbackMixin:
         model_input = self._model_input(batch)
         # Snapshot every submodule's flag: ``pl_module.train()`` afterwards
         # would flip a frozen (eval-mode) backbone back into train mode.
-        training_flags = [(module, module.training) for module in pl_module.modules()]
+        training_flags = [(module, module.training) for _, module in pl_module.named_modules()]
         pl_module.eval()
         try:
             with torch.no_grad():
