@@ -353,8 +353,11 @@ Output:
 
 ### `mlflow`
 
-`tl.export.mlflow(log, client=None, prefix="torchlens")` prepares summary metrics and sends them
-to an optional existing object with `log_metric`; it returns the metrics either way.
+`tl.export.mlflow(log, client=None, prefix="torchlens", *, run_id=None)` prepares summary
+metrics and sends them through an optional MLflow client; it returns the metrics either way.
+Pass the fluent `mlflow` module to log into the active run, or an `mlflow.MlflowClient` together
+with `run_id=` (its `log_metric(run_id, key, value)` needs a run; without `run_id=` it raises
+`TypeError`). Any other object exposing `log_metric(key, value)` also works.
 
 ```python
 import torch

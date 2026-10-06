@@ -37,6 +37,18 @@ Two things to watch when carrying habits over:
   `extract_dataset(transform=...)` would silently z-score your FEATURES
   instead of your PIXELS.
 
+## thingsvision and TorchLens cannot share one environment
+
+Checked 2026-10-05 (Python 3.11, Linux x86_64): the current thingsvision
+release (2.7.3) pins `torchvision==0.15.2`, which requires torch 2.0.1,
+below TorchLens's `torch>=2.1` floor, so the two cannot be resolved into one
+environment. uv then falls back to thingsvision 1.4.4, which has no
+top-level `get_extractor`, so the thingsvision half of the comparison below
+does not run there either.
+Run the thingsvision side in its own environment and compare saved features
+(for example `.npy` files) across the two; TorchLens ships no thingsvision
+bridge, only the conventions credited above.
+
 ## The same task on both sides: ResNet-50 penultimate features
 
 thingsvision (current `module_names` list API):

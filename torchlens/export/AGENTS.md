@@ -14,9 +14,12 @@ tier rows: `present` native emitters, `bridge` foreign-peer writers).
   `flamegraph`, `memory_timeline`.
 - Tabular/array: `csv`, `parquet`, `json`, `xarray`.
 - Experiment trackers: `tensorboard(log, writer)`, `wandb(log, run)`,
-  `mlflow(log, client)`, `aim(log, run)` — the tracker OBJECT is passed in
-  (guarded by `_require_tracker_object`, duck-typed on the required method);
-  this package never imports tracker SDKs itself.
+  `mlflow(log, client, *, run_id=None)`, `aim(log, run)` — the tracker
+  OBJECT is passed in (guarded by `_require_tracker_object`, duck-typed on
+  the required method); this package never imports tracker SDKs itself.
+  `mlflow` tells the fluent module from an `MlflowClient` by
+  `log_metric`'s first parameter (`run_id`): a client needs `run_id=`
+  (typed `TypeError` otherwise); the fluent module gets it as a keyword.
 - Model viewers: `model_explorer`, `netron`.
 
 ## The netron subsystem (F14; kwarg spellings DOCUMENTED-UNSTABLE)

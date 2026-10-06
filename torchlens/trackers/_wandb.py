@@ -10,8 +10,10 @@ engine; ~100 lines over the shared emission view, as designed.
 The 512-bucket cap is wandb's own (documented constructor limit); the
 default C06 grid at bpo=4 over [2^-48, 2^16] renders 513 bins per signed
 sketch, so the sink REDUCES bins-per-octave pressure honestly: it refuses
-typed rather than letting wandb silently re-bin. Callers watching into wandb
-pick a narrower descriptor (the refusal names the arithmetic).
+typed rather than letting wandb silently re-bin. When the caller names no
+grid, ``watch`` asks the sink (``default_histogram_descriptor()``) and uses
+``WANDB_SAFE_DESCRIPTOR``; an explicit over-cap descriptor still refuses
+(the refusal names the arithmetic).
 """
 
 from __future__ import annotations
@@ -29,8 +31,9 @@ WANDB_BUCKET_CAP = 512
 
 #: A descriptor whose signed render (2 * bins_per_side + 1 center band) fits
 #: the wandb cap: (16 - (-46)) * 4 = 248 bins/side -> 497 buckets. The C06
-#: DEFAULT grid renders 513 and would refuse; watch(..., descriptor=
-#: WANDB_SAFE_DESCRIPTOR) is the one-line remedy the refusal names.
+#: DEFAULT grid renders 513 and would refuse, so watch() uses this grid for a
+#: WandbSink when the caller names none; it is also the one-line remedy the
+#: refusal names for an explicit over-cap descriptor.
 WANDB_SAFE_DESCRIPTOR = HistogramDescriptor(lo_exp=-46)
 
 
@@ -76,6 +79,16 @@ class WandbSink:
         """Scalars, raw histograms, and text; graphs are demoted (memo s9)."""
 
         return frozenset({"scalar", "raw_histogram", "text_manifest", "run_metadata"})
+
+    def default_histogram_descriptor(self) -> HistogramDescriptor:
+        """The grid ``watch`` uses when the caller chose none (fits the cap).
+
+        ``watch`` consults this hook only when neither ``descriptor=`` nor
+        ``settings=`` names a grid; an explicit over-cap descriptor still
+        refuses in :meth:`preflight_histograms`.
+        """
+
+        return WANDB_SAFE_DESCRIPTOR
 
     def preflight_histograms(self, descriptor: HistogramDescriptor) -> None:
         """Refuse an over-cap grid at ATTACH, before any emission.
