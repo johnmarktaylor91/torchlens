@@ -345,23 +345,29 @@ def _bare(func: Callable[..., Any]) -> Callable[..., Any]:
 
 @pytest.mark.parametrize("grad", [True, False], ids=["grad", "no_grad"])
 @pytest.mark.parametrize(
-    "build",
+    ("build", "direct_aten"),
     [
-        lambda: _Parent(_StaleHiddenChild()),
-        lambda: _Parent(_Middle()),
-        lambda: _Parent(_BodyChild(_stale_op_builds_view_base)),
-        lambda: _Parent(_BodyChild(_freed_stale_intermediates)),
+        (lambda: _Parent(_StaleHiddenChild()), False),
+        (lambda: _Parent(_Middle()), True),
+        (lambda: _Parent(_BodyChild(_stale_op_builds_view_base)), True),
+        (lambda: _Parent(_BodyChild(_freed_stale_intermediates)), True),
     ],
     ids=["iql_hidden_and_output", "nested_boundary", "view_base", "freed_intermediates"],
 )
 def test_attribute_held_originals_are_rebound_and_validate(
-    build: Callable[[], nn.Module], grad: bool, monkeypatch: pytest.MonkeyPatch
+    build: Callable[[], nn.Module],
+    direct_aten: bool,
+    grad: bool,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The attribute-held cases above with the bare original, as they were first written.
 
     Capture preparation rebinds each held original to its wrapper for the
-    capture, so the stale ops are no escape: one forward, the relu captured,
-    no provenance warning, and validation passes.
+    capture, so the held relu is no escape: the primary forward captures it,
+    and validation passes. The IQL shape takes one forward with no provenance
+    warning. The other shapes also emit a direct ``torch.ops.aten`` call,
+    which no wrapper sees; that call (never the relu) triggers their one
+    rescue forward, so ``relu`` must not be among the recovered ops.
     """
 
     monkeypatch.setitem(globals(), "_raw", _bare)
@@ -369,8 +375,13 @@ def test_attribute_held_originals_are_rebound_and_validate(
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         trace = tl.trace(model, torch.randn(3, 4))
-    assert model.calls == [1]
-    assert provenance_warnings(caught) == []
-    assert trace.rescue_rerun is None
     assert "relu" in [op.func_name for op in trace.ops]
+    if direct_aten:
+        assert model.calls == [2]
+        assert trace.rescue_rerun is not None
+        assert "relu" not in trace.rescue_rerun["recovered_ops"]
+    else:
+        assert model.calls == [1]
+        assert provenance_warnings(caught) == []
+        assert trace.rescue_rerun is None
     assert _validate(build(), grad=grad), tl.validation.last_validation_failure()
