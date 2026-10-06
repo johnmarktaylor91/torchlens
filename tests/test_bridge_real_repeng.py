@@ -125,3 +125,53 @@ def test_unknown_method_is_refused(stack: dict[str, Any]) -> None:
             layer=0,
             method="pca",
         )
+
+
+def test_layer_object_site_resolves_in_negative_log(stack: dict[str, Any]) -> None:
+    """A Layer-object site reads the negative trace's layer, not the positive one."""
+
+    direct = repeng.ControlVector.train(
+        stack["model"], stack["tok"], stack["dataset"], hidden_layers=[0], batch_size=1
+    )
+    payload = tl.bridge.repeng.control_vector(
+        stack["log_pos"],
+        stack["log_pos"]["model.layers.0"],
+        negative_log=stack["log_neg"],
+        layer=0,
+    )
+    _assert_same(payload["control_vector"], direct)
+
+
+def test_padded_unequal_prompts_match_batched_train(stack: dict[str, Any]) -> None:
+    """Right-padded unequal prompts read the last real token, as repeng does."""
+
+    tok = transformers.AutoTokenizer.from_pretrained(_TINY, padding_side="right")
+    tok.pad_token_id = 0
+    pairs = [(f"I love {w}", f"I really hate {w}") for w in _WORDS]
+    texts = [text for pair in pairs for text in pair]
+    longest = max(len(tok(text).input_ids) for text in texts)
+    assert len({len(tok(text).input_ids) for text in texts}) > 1
+
+    def trace(prompts: list[str]) -> Any:
+        # Pad to repeng's one-batch length so every row sees the same tokens.
+        enc = tok(prompts, return_tensors="pt", padding="max_length", max_length=longest)
+        kwargs = {"input_ids": enc.input_ids, "attention_mask": enc.attention_mask}
+        capture = tl.options.CaptureOptions(layers_to_save="all")
+        return tl.trace(stack["model"], (), input_kwargs=kwargs, capture=capture)
+
+    dataset = [repeng.DatasetEntry(positive=p, negative=n) for p, n in pairs]
+    log_pos = trace([p for p, _ in pairs])
+    log_neg = trace([n for _, n in pairs])
+    try:
+        direct = repeng.ControlVector.train(
+            stack["model"], tok, dataset, hidden_layers=[0], batch_size=len(texts)
+        )
+        payload = tl.bridge.repeng.control_vector(
+            log_pos, "model.layers.0", negative_log=log_neg, layer=0
+        )
+    finally:
+        log_pos.cleanup()
+        log_neg.cleanup()
+    np.testing.assert_allclose(
+        payload["control_vector"].directions[0], direct.directions[0], atol=1e-5, rtol=0
+    )
