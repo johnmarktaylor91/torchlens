@@ -136,6 +136,7 @@ class BackendRegistryError(ConfigurationError, ValueError):
         self,
         message: str,
         *,
+        code: str | None = None,
         remedy: str | None = None,
         **context: object,
     ) -> None:
@@ -145,6 +146,9 @@ class BackendRegistryError(ConfigurationError, ValueError):
         ----------
         message:
             Description of the rejected backend request and its cause.
+        code:
+            Stable refusal code. The class code is used when omitted; a raise
+            site passes it to declare its contracted code where it raises.
         remedy:
             Concrete caller action. The class-specific default is used when omitted.
         **context:
@@ -157,7 +161,7 @@ class BackendRegistryError(ConfigurationError, ValueError):
             message_text = f"{message_text}."
         super().__init__(
             f"{message_text} Remedy: {resolved_remedy.rstrip().rstrip('.')}.",
-            code=type(self).code,
+            code=code or type(self).code,
             remedy=resolved_remedy,
             **cast(dict[str, Any], context),
         )

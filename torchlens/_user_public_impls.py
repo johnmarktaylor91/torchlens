@@ -952,6 +952,7 @@ def validate_forward_pass(
         raise BackendUnsupportedError(
             f"Backend {spec.name!r} validation does not accept {sorted(save_options)!r}; "
             "only the torch backend's validator capture honors these save options.",
+            code="backend_unsupported",
             remedy="omit output_device and save_budget, or validate on the torch backend",
             backend=spec.name,
             options=sorted(save_options),
