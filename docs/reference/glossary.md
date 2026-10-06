@@ -97,9 +97,12 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   “5 layers total” because it counts the parameter leaves `weight` and `bias` plus the buffer
   leaves `running_mean`, `running_var`, and `num_batches_tracked`; it is not claiming five
   BatchNorm calls. A plain tensor a module already holds when the forward starts (a tensor
-  attribute, a list/tuple item, or a dict value such as a warm-filled attention-bias cache) is
-  captured as a buffer too, addressed `<module>.<attr>`, `<module>.<attr>.<index>`, or
-  `<module>.<attr>.<key>`.
+  attribute, a list/tuple item, or a dict value such as a warm-filled attention-bias cache,
+  nested up to four container levels) is captured as a buffer too, addressed
+  `<module>.<attr>`, `<module>.<attr>.<index>`, or `<module>.<attr>[<key>]` with one
+  `[<index>]`/`[<key>]` per nested level, e.g. `attn.attention_bias_cache['cpu']`. The key
+  is its `repr` with `.`, `:` and `%` percent-escaped, so the last `.` always separates the
+  owning module; keys that print alike get `#2`, `#3`, ...
 
 **GradFn**
 : A first-class live backward-autograd node captured during backward logging. Portable artifacts
