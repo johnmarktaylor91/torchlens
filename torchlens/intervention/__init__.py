@@ -96,6 +96,7 @@ from .errors import (
 )
 from .handles import HookHandle
 from .helpers import (
+    _RESAMPLE_ABLATE_REDIRECT,
     bwd_hook,
     clamp,
     grad_clamp,
@@ -391,9 +392,7 @@ _LAZY_NAMES: dict[str, str] = {
 
 #: Removed spellings: each raises the typed ``facade_redirect`` error naming
 #: its replacement (clean break, no alias).
-_REDIRECTS: dict[str, str] = {
-    "resample_ablate": "use torchlens.intervention.scramble_elements -- resample_ablate was renamed",
-}
+_REDIRECTS: dict[str, str] = {"resample_ablate": _RESAMPLE_ABLATE_REDIRECT}
 
 
 def __getattr__(name: str) -> Any:

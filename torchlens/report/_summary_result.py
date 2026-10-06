@@ -242,6 +242,8 @@ def render_result_html(payload: RebuiltPayload) -> str:
             for shape, dtype in zip(facts.input_shapes, facts.input_dtypes, strict=False)
         )
         header += f" | input {bits}"
+    if facts.execution_note:
+        header += f" | {facts.execution_note}"
     footer_lines = tuple(
         line
         for line in payload.ascii_text.rsplit("\n", 8)[-8:]

@@ -775,7 +775,7 @@ def list_ops(
     return _log_ops_for_mode(model, x, mode)
 
 
-def _refuse_flop_count_options(flop_convention: Any, unsupported: dict[str, Any]) -> None:
+def _refuse_flop_count_options(flop_convention: object, unsupported: dict[str, Any]) -> None:
     """Refuse a removed or unknown ``flop_count`` option before any capture runs."""
 
     from torchlens._errors import InvalidArgumentError
@@ -805,7 +805,11 @@ def _refuse_flop_count_options(flop_convention: Any, unsupported: dict[str, Any]
 
 
 def flop_count(
-    model: nn.Module, x: Any, *, flop_convention: str = "fma2", **unsupported: Any
+    model: nn.Module,
+    x: Any,
+    *,
+    flop_convention: Literal["fma2", "fma1"] = "fma2",
+    **unsupported: Any,
 ) -> int:
     """Return a lightweight forward FLOP count from TorchLens metadata.
 

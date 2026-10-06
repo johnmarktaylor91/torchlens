@@ -14,7 +14,7 @@ from typing import (
 )
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from ...data_classes.trace import Trace
 
 
 def format_discoverability_summary(

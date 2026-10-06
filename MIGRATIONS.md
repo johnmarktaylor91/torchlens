@@ -144,7 +144,10 @@ The alias members deleted by the 2026-10-01 shim removal, and the deleted
 `VisualizationTheme.legend_items` field, are still gone (no alias). Looking
 one up now raises `FacadeTeachingError` (code `facade_redirect`, an
 `AttributeError` subclass, so `getattr(obj, name, default)` still degrades)
-whose message names the replacement:
+whose message names the replacement. (For removed module-level names,
+`from torchlens import <name>` shows a plain `ImportError` instead: CPython
+replaces the attribute error on that path. Attribute access such as
+`tl.resample_ablate` carries the redirect.)
 
 | Removed | Use |
 |---|---|

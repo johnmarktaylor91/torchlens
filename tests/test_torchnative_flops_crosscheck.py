@@ -71,10 +71,12 @@ def test_cell_1_default_backend_native_zero_is_named() -> None:
     if attention_overloads:
         assert all(report.native_by_overload[name] > 0 for name in attention_overloads)
     else:
-        # Both sides count the projections; only TorchLens counts attention,
-        # so the missing rule shows as native falling short of TorchLens.
+        # Both sides count the projections. Attention FLOPs then either show
+        # as a gap (the fused CPU kernel ran and FCM had no rule for it) or
+        # were counted through a decomposed matmul path; never silently lost.
         assert any("linear" in name or "mm" in name for name in report.native_by_overload)
-        assert report.native_total < report.torchlens_total
+        decomposed = any("bmm" in name or "matmul" in name for name in report.native_by_overload)
+        assert decomposed or report.native_total < report.torchlens_total
     # The registry gap is NAMED when native reads zero against our nonzero.
     if report.native_total == 0:
         assert any(

@@ -127,9 +127,25 @@ def test_batchnorm_module_summary_uses_real_output_shape_and_dtype(training: boo
     ids=["default", "module", "op", "compute"],
 )
 def test_grammar_axes_render(tiny_summary_log: tl.Trace, kwargs: dict[str, str]) -> None:
-    """Every row grain and column bundle renders the model header."""
+    """Every row grain and column bundle renders the header and its own axis.
+
+    The per-axis checks fail if level= or view= were ignored: the compute
+    bundle adds macs/evidence and drops the (%) column, op grain shows op
+    labels, module grain shows only module rows.
+    """
     summary_text = tiny_summary_log.summary(**kwargs)
     assert summary_text.startswith("TinySummaryModel | input (1, 3, 8, 8) float32")
+    (column_header,) = [line for line in summary_text.splitlines() if "name (type)" in line]
+    if kwargs.get("view") == "compute":
+        assert "macs" in column_header and "evidence" in column_header
+        assert "(%)" not in column_header
+    else:
+        assert "(%)" in column_header and "macs" not in column_header
+    if kwargs.get("level") == "op":
+        assert "conv2d_" in summary_text and "linear_" in summary_text
+    elif kwargs.get("level") == "module":
+        assert "conv (Conv2d)" in summary_text
+        assert "conv2d_" not in summary_text
 
 
 @pytest.mark.parametrize("kwargs", [{"view": "compute"}, {"level": "op"}], ids=["compute", "op"])
