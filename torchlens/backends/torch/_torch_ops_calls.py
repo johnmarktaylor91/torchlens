@@ -15,6 +15,13 @@ object itself as the replay callable, so the op is recorded with parents from it
 arguments exactly like any wrapped torch function, and validation replays it by calling
 the operator again. Outside a logging window the patch is one bool read.
 
+An operator whose schema writes its first argument and returns nothing (a
+``torch.library.custom_op`` with ``mutates_args``) is recorded as an in-place op on that
+argument: the replay callable returns the mutated argument, so later reads of it come
+from the op. A mutating operator returning nothing that cannot be recorded that way
+(another argument written, a list receiver, an unreadable schema) is disclosed as a
+``source_provenance`` gap instead of vanishing from the graph.
+
 Calls that TorchLens or torch itself makes are never recorded: a ``torch.ops`` call inside
 a wrapped torch function's original (a decomposition, a custom op's body) is detected by a
 frame walk, the dispatcher-census handler re-executes the operator it observed inside
@@ -27,10 +34,12 @@ from __future__ import annotations
 
 import functools
 import sys
+import warnings
 from collections.abc import Callable
 from types import CodeType, FrameType
 from typing import Any
 
+import torch
 import torch._ops as _torch_ops
 
 from ... import _state
@@ -62,7 +71,17 @@ _UNRECORDED_NAMESPACES: frozenset[str] = frozenset(
 
 _CALL_ATTR = "__call__"
 _ORIGINAL_CALLS: dict[type, Callable[..., Any]] = {}
-_DECORATED_BY_OP: dict[int, tuple[Any, Callable[..., Any]]] = {}
+_DECORATED_BY_OP: dict[int, tuple[Any, Callable[..., Any], str]] = {}
+
+# Schema mutation classes (``_mutation_kind``).
+_MUTATION_NONE = "none"
+"""Writes no argument, or returns its outputs (in-place and ``out=`` ops return them)."""
+_MUTATION_RECEIVER = "receiver"
+"""Writes exactly its first argument and returns nothing: recorded in place on it."""
+_MUTATION_UNRECORDABLE = "unrecordable"
+"""Writes some other argument (or a mix across overloads) and returns nothing."""
+_MUTATION_UNKNOWN = "unknown"
+"""No readable schema: a call that returns nothing is disclosed, never trusted."""
 _WRAPPED_FUNC_CODE: list[CodeType] = []
 _SUPPRESS_DEPTH = 0
 
@@ -148,7 +167,118 @@ def _inside_wrapped_torch_call() -> bool:
     return False
 
 
-def _decorated_for(op: Any, original: Callable[..., Any]) -> Callable[..., Any]:
+def _overload_schemas(op: Any) -> list[Any] | None:
+    """Return the ``FunctionSchema`` of an overload, or of every overload of a packet.
+
+    Parameters
+    ----------
+    op:
+        ``OpOverload`` or ``OpOverloadPacket``.
+
+    Returns
+    -------
+    list[Any] | None
+        The schemas, or ``None`` when any of them cannot be read.
+    """
+
+    schema = getattr(op, "_schema", None)
+    if schema is not None:
+        return [schema]
+    overloads = getattr(op, "overloads", None)
+    if not callable(overloads):
+        return None
+    schemas = [getattr(getattr(op, name, None), "_schema", None) for name in overloads()]
+    if not schemas or any(schema is None for schema in schemas):
+        return None
+    return schemas
+
+
+def _schema_mutation(schema: Any) -> str:
+    """Classify one schema's argument writes (``alias_info.is_write``, torch ground truth)."""
+
+    if getattr(schema, "returns", None):
+        return _MUTATION_NONE
+    written = [
+        index
+        for index, argument in enumerate(getattr(schema, "arguments", None) or ())
+        if getattr(getattr(argument, "alias_info", None), "is_write", False)
+    ]
+    if not written:
+        return _MUTATION_NONE
+    return _MUTATION_RECEIVER if written == [0] else _MUTATION_UNRECORDABLE
+
+
+def _mutation_kind(op: Any) -> str:
+    """Return how an operator's schema writes its arguments (one of the ``_MUTATION_*``).
+
+    Parameters
+    ----------
+    op:
+        ``OpOverload`` or ``OpOverloadPacket`` being called.
+
+    Returns
+    -------
+    str
+        The shared class of every overload; overloads that disagree are unrecordable.
+    """
+
+    schemas = _overload_schemas(op)
+    if schemas is None:
+        return _MUTATION_UNKNOWN
+    kinds = {_schema_mutation(schema) for schema in schemas}
+    return kinds.pop() if len(kinds) == 1 else _MUTATION_UNRECORDABLE
+
+
+def _returning_mutated_receiver(call_operator: Callable[..., Any]) -> Callable[..., Any]:
+    """Return a replay callable that runs the operator and returns its mutated first argument.
+
+    Parameters
+    ----------
+    call_operator:
+        The operator call (``functools.partial`` of the original ``__call__``).
+
+    Returns
+    -------
+    Callable[..., Any]
+        Callable whose output is ``args[0]``, the tensor the operator wrote, so the
+        wrapper records it as an in-place op and validation replays it the same way.
+    """
+
+    def _call_returning_receiver(*args: Any, **kwargs: Any) -> Any:
+        """Run the operator, then return the argument it mutated."""
+        call_operator(*args, **kwargs)
+        return args[0]
+
+    _call_returning_receiver.__name__ = call_operator.__name__  # type: ignore[attr-defined]
+    _call_returning_receiver.__qualname__ = call_operator.__name__  # type: ignore[attr-defined]
+    return _call_returning_receiver
+
+
+def _disclose_unrecorded_mutation(trace: Any, op: Any) -> None:
+    """Persist a ``source_provenance`` gap for a mutating operator call left out of the graph.
+
+    Parameters
+    ----------
+    trace:
+        Active capture trace.
+    op:
+        The operator that wrote its arguments and returned nothing.
+    """
+
+    from ..._capture_honesty import (
+        ADVISORY_UNRECORDED_OPERATOR_MUTATION,
+        append_capture_advisory,
+    )
+
+    entry = (
+        f"{_qualified_name(op) or _recorded_op_name(op)} wrote its arguments and returned "
+        "no tensor; the mutation is not in the graph"
+    )
+    append_capture_advisory(trace, ADVISORY_UNRECORDED_OPERATOR_MUTATION, [entry])
+    warnings.warn(f"TorchLens could not record a mutating operator call: {entry}.", stacklevel=3)
+
+
+def _decorated_for(op: Any, original: Callable[..., Any]) -> tuple[Callable[..., Any], str]:
     """Return the cached logging wrapper for one operator object.
 
     Parameters
@@ -160,25 +290,33 @@ def _decorated_for(op: Any, original: Callable[..., Any]) -> Callable[..., Any]:
 
     Returns
     -------
-    Callable[..., Any]
+    tuple[Callable[..., Any], str]
         ``torch_func_decorator`` wrapper whose callable runs ``op`` through the unpatched
-        ``__call__``. It is a C ``functools.partial`` (no TorchLens frame between the
-        wrapper's trampoline and the operator), so a failing operator classifies as the
-        user's op, and validation replays the op through it.
+        ``__call__``, and the operator's ``_MUTATION_*`` class. The callable is a C
+        ``functools.partial`` (no TorchLens frame between the wrapper's trampoline and the
+        operator), so a failing operator classifies as the user's op, and validation
+        replays the op through it. For a receiver-mutating operator it is
+        :func:`_returning_mutated_receiver` around that partial, recorded in place.
     """
 
     cached = _DECORATED_BY_OP.get(id(op))
     if cached is not None and cached[0] is op:
-        return cached[1]
+        return cached[1], cached[2]
     from .wrappers import torch_func_decorator
 
     name = _recorded_op_name(op)
     call_operator = functools.partial(original, op)
     call_operator.__name__ = name  # type: ignore[attr-defined]
     call_operator.__qualname__ = name  # type: ignore[attr-defined]
-    decorated = torch_func_decorator(call_operator, name)
-    _DECORATED_BY_OP[id(op)] = (op, decorated)
-    return decorated
+    mutation = _mutation_kind(op)
+    if mutation == _MUTATION_RECEIVER:
+        decorated = torch_func_decorator(
+            _returning_mutated_receiver(call_operator), name, mutates_first_arg=True
+        )
+    else:
+        decorated = torch_func_decorator(call_operator, name)
+    _DECORATED_BY_OP[id(op)] = (op, decorated, mutation)
+    return decorated, mutation
 
 
 def _make_recording_call(original: Callable[..., Any]) -> Callable[..., Any]:
@@ -207,7 +345,20 @@ def _make_recording_call(original: Callable[..., Any]) -> Callable[..., Any]:
             or _inside_wrapped_torch_call()
         ):
             return original(self, *args, **kwargs)
-        return _decorated_for(self, original)(*args, **kwargs)
+        decorated, mutation = _decorated_for(self, original)
+        if mutation == _MUTATION_NONE:
+            return decorated(*args, **kwargs)
+        if mutation == _MUTATION_RECEIVER and args and isinstance(args[0], torch.Tensor):
+            decorated(*args, **kwargs)
+            return None
+        if mutation == _MUTATION_UNKNOWN:
+            result = decorated(*args, **kwargs)
+            if result is None:
+                _disclose_unrecorded_mutation(trace, self)
+            return result
+        # Writes another argument, a list receiver, or a receiver passed by keyword.
+        _disclose_unrecorded_mutation(trace, self)
+        return original(self, *args, **kwargs)
 
     _recording_call.__tl_torch_ops_recorder__ = True  # type: ignore[attr-defined]
     return _recording_call

@@ -1340,6 +1340,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_module_boundary_outside_sources",
         "_orphan_unattributed_tensor_args",
         "_plain_scalar_escape_labels",
+        "_plain_direct_escape_gaps",
         "_last_sibling_ordering_decision",
         # Sibling render diagnostic (same _render_dot write site as the row
         # above); left unenrolled, ONE draw() poisoned every later tl.save.

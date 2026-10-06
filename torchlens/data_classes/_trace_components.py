@@ -533,6 +533,10 @@ TRACE_EXTERNAL_WRITE_EXEMPTIONS: dict[str, str] = {
         "torch plain scalar-escape belt: raw labels whose data escaped to Python; read by "
         "orphan removal, popped by the provenance disclosure step and scrub-declared"
     ),
+    "_plain_direct_escape_gaps": (
+        "torch plain escape belt: user-code data reads of source-less tensors (no op); "
+        "popped by the provenance disclosure step and scrub-declared"
+    ),
     "_module_boundary_outside_sources": (
         "torch model prep: module-boundary adoptions of closure/forward-global tensors (no "
         "escape signal); popped by the same postprocess step and scrub-declared"

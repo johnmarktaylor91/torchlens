@@ -2023,6 +2023,9 @@ _first_scalar_escape_source = _rebind_function(
 _record_bool_consumer_location = _rebind_function(
     _completeness_storage._record_bool_consumer_location, globals()
 )
+_record_plain_direct_escape = _rebind_function(
+    _completeness_storage._record_plain_direct_escape, globals()
+)
 _make_plain_scalar_escape_method = _rebind_function(
     _completeness_storage._make_plain_scalar_escape_method, globals()
 )

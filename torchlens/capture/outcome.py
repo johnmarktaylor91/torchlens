@@ -865,6 +865,8 @@ _WITNESS_REDISPATCH_MARKER = "result = func(*args, **(kwargs or {}))"
 # (the census redispatch and unrecorded calls reach the operator through it).
 _TORCH_OPS_PASSTHROUGH_FILE = "_torch_ops_calls.py"
 _TORCH_OPS_PASSTHROUGH_MARKER = "return original(self, *args, **kwargs)"
+# Its in-place replay callable for a receiver-mutating operator (``mutates_args``).
+_TORCH_OPS_MUTATION_MARKER = "call_operator(*args, **kwargs)"
 
 
 def _frame_zone(filename: str) -> str:
@@ -950,7 +952,9 @@ def classify_failure_origin(exc: BaseException) -> FailureOrigin:
                 )
                 or (
                     frame.filename.endswith(_TORCH_OPS_PASSTHROUGH_FILE)
-                    and _TORCH_OPS_PASSTHROUGH_MARKER in line
+                    and (
+                        _TORCH_OPS_PASSTHROUGH_MARKER in line or _TORCH_OPS_MUTATION_MARKER in line
+                    )
                 )
             ):
                 return FailureOrigin.USER_OP

@@ -1524,6 +1524,7 @@ def torch_func_decorator(
     func: Callable[..., Any],
     func_name: str,
     property_accessor: str | None = None,
+    mutates_first_arg: bool = False,
 ) -> Callable[..., Any]:
     """Wrap a single torch function with toggle-gated logging.
 
@@ -1562,6 +1563,11 @@ def torch_func_decorator(
             that rewrites the receiver, so the wrapper reconstructs the receiver
             as the logged output for names in
             ``_MUTATING_TENSOR_PROPERTY_SETTERS``.
+        mutates_first_arg: The callable writes its first tensor argument in place and
+            returns it, whatever its name (a ``torch.ops`` operator whose schema
+            mutates its first argument and returns nothing; the recorder hands it a
+            callable that returns the mutated argument). Treated exactly like a
+            trailing-underscore in-place method.
 
     Returns:
         The wrapped function.
@@ -1575,11 +1581,12 @@ def torch_func_decorator(
     needs_device_injection = func_name in _DEVICE_CONSTRUCTOR_NAMES
     is_unlogged_func = func_name in funcs_not_to_log
     is_print_func = func_name in print_funcs
-    mutates_receiver = _func_mutates_receiver(func_name)
+    mutates_receiver = mutates_first_arg or _func_mutates_receiver(func_name)
     inplace_param_index = _positional_inplace_index(func)
     reconstructs_receiver_output = func_name in {"__setitem__", "zero_", "__delitem__"}
     has_inplace_signature = (
-        func_name.endswith("_")
+        mutates_first_arg
+        or func_name.endswith("_")
         or func_name.startswith("__i")
         or func_name in {"__setitem__", "__delitem__"}
         or is_mutating_property_setter

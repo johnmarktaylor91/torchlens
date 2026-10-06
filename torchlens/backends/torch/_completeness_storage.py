@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools
 import inspect
+import sys
 import threading
 import warnings
 from collections.abc import Iterator
@@ -41,6 +42,7 @@ if TYPE_CHECKING:
         _STORAGE_ACCESSOR_VALUE_READ,
         _TORCHLENS_ROOT,
         HOST_VALUE_ESCAPE_METHODS,
+        INVISIBLE_HOST_ESCAPE_FUNCS,
         STATE_METADATA_MIRROR,
         _CompletenessDispatchMode,
         _expand_state_alias_addresses,
@@ -71,6 +73,7 @@ __all__ = (
     "_make_host_value_escape_method",
     "_first_scalar_escape_source",
     "_record_bool_consumer_location",
+    "_record_plain_direct_escape",
     "_make_plain_scalar_escape_method",
     "_external_warning_stacklevel",
     "capture_scalar_escape_warning",
@@ -469,6 +472,42 @@ def _record_bool_consumer_location(trace: Any, source: torch.Tensor) -> None:
     bool_sources.add(label)
 
 
+def _record_plain_direct_escape(trace: Any, source: torch.Tensor, name: str) -> None:
+    """Queue a user-code data read of a source-less tensor as a provenance gap.
+
+    ``G.tolist()`` / ``float(G)`` / ``np.asarray(G)`` on a closure or module-global
+    tensor moves its value into Python with no op at all, so no pruned op can carry
+    the source-less witness. A read whose immediate caller is user code (not TorchLens,
+    not torch's own Python, which reads its temporaries inside wrapped calls) of a
+    tensor with no input/op/buffer/Parameter provenance is queued on the transient
+    ``_plain_direct_escape_gaps``; the provenance disclosure step persists it.
+
+    Parameters
+    ----------
+    trace:
+        Active plain capture trace.
+    source:
+        Unlabelled tensor receiver of the escape method.
+    name:
+        Escape method name.
+    """
+
+    from ._ops_arguments import _tensor_has_known_provenance
+
+    # Frame 0 is this helper, 1 the belt wrapper, 2 the escape's caller (C callers
+    # such as ``float()`` or NumPy's ``__array__`` lookup add no Python frame).
+    caller = sys._getframe(2)
+    filename = Path(caller.f_code.co_filename).resolve()
+    for root in (_TORCHLENS_ROOT, Path(torch.__file__).resolve().parent):
+        if filename.is_relative_to(root):
+            return
+    if _tensor_has_known_provenance(trace, source):
+        return
+    trace.__dict__.setdefault("_plain_direct_escape_gaps", []).append(
+        f"{name}() on a source-less tensor at {filename}:{caller.f_lineno} (no op)"
+    )
+
+
 def _make_plain_scalar_escape_method(
     original: Any,
     state: _PlainScalarEscapeState,
@@ -514,19 +553,25 @@ def _make_plain_scalar_escape_method(
             and _state._active_trace is state.trace
             and threading.get_ident() == state.owner_thread_id
             and not _internal_read_active()
-            and get_tensor_label(self) is not None
         ):
-            state.count += 1
-            # Raw labels whose data escaped, read (and popped) by postprocess: the
-            # source-less witness of an orphan-pruned op is kept only when its
-            # value reached an escape (a dead op's is not).
-            state.trace.__dict__.setdefault("_plain_scalar_escape_labels", set()).add(
-                str(get_tensor_label(self))
-            )
-            if state.first_file is None:
-                state.first_file, state.first_line = _first_scalar_escape_source()
-            if name == "__bool__":
-                _record_bool_consumer_location(state.trace, self)
+            label = get_tensor_label(self)
+            if label is None:
+                _record_plain_direct_escape(state.trace, self, name)
+            else:
+                # Raw labels whose data escaped, read (and popped) by postprocess: the
+                # source-less witness of an orphan-pruned op is kept only when its
+                # value reached an escape (a dead op's is not). Data conversions
+                # (``tolist``/``numpy``/``__array__``/``__dlpack__``) escape too, but
+                # are not scalar escapes: they feed the label set only.
+                state.trace.__dict__.setdefault("_plain_scalar_escape_labels", set()).add(
+                    str(label)
+                )
+                if name not in INVISIBLE_HOST_ESCAPE_FUNCS:
+                    state.count += 1
+                    if state.first_file is None:
+                        state.first_file, state.first_line = _first_scalar_escape_source()
+                    if name == "__bool__":
+                        _record_bool_consumer_location(state.trace, self)
         return original(self, *args, **kwargs)
 
     return wrapper
@@ -607,14 +652,17 @@ def capture_scalar_escape_warning(trace: Any) -> Iterator[None]:
     # ``__enter__`` raises) used to strand the already-installed methods for
     # the life of the process.
     try:
-        for name in HOST_VALUE_ESCAPE_METHODS & {
-            "item",
-            "__bool__",
-            "__int__",
-            "__float__",
-            "__index__",
-            "__complex__",
-        }:
+        for name in (
+            HOST_VALUE_ESCAPE_METHODS
+            & {
+                "item",
+                "__bool__",
+                "__int__",
+                "__float__",
+                "__index__",
+                "__complex__",
+            }
+        ) | INVISIBLE_HOST_ESCAPE_FUNCS:
             original = getattr(torch.Tensor, name, None)
             if original is None or not callable(original):
                 continue

@@ -42,6 +42,9 @@ ADVISORY_HELD_SCAN_TRUNCATED = "held_tensor_scan_truncated"
 #: (``G.sum().item()``, a control-flow predicate on a closure tensor): the pruned op
 #: takes its ``Op.unattributed_tensor_args`` witness with it otherwise.
 ADVISORY_ORPHAN_UNATTRIBUTED_ARGS = "orphan_unattributed_tensor_args"
+#: Advisory kind recorded when a direct ``torch.ops`` call wrote its arguments, returned
+#: nothing, and could not be recorded in place (``backends/torch/_torch_ops_calls.py``).
+ADVISORY_UNRECORDED_OPERATOR_MUTATION = "unrecorded_operator_mutation"
 
 
 def append_capture_advisory(trace: Any, kind: str, entries: list[str]) -> None:
