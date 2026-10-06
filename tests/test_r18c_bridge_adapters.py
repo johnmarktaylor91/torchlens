@@ -1,6 +1,6 @@
 """Regression tests for r18c bridge/compat adapter hardening.
 
-Covers depyf arity handling (A3-04), tensor_layers explicit-site validation
+Covers the depyf prepare_debug contract, tensor_layers explicit-site validation
 (A3-14), the extractor/ILG .model unwrap gate (A3-15), dialz analyzer-class
 instantiation (A3-16), the lovely non-mutating fallback (A3-17), the repeng /
 steering fail-loud default guard (A3-21), the profiler blank-label guard
@@ -51,49 +51,81 @@ class _FakeLog:
 
 
 # --------------------------------------------------------------------------- #
-# A3-04 depyf: signature-selected arity, in-body TypeError propagates
+# depyf: dump compiles under prepare_debug and returns the files it wrote
 # --------------------------------------------------------------------------- #
-def test_depyf_inbody_typeerror_propagates(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A TypeError raised inside depyf's dump must not trigger a silent retry."""
+def _fake_prepare_debug(files: list[str], calls: list[Any]) -> Any:
+    """Return a fake ``depyf.prepare_debug`` that writes ``files`` on exit."""
+
+    import contextlib
+    from pathlib import Path
+
+    @contextlib.contextmanager
+    def prepare_debug(dump_src_dir: str, **kwargs: Any) -> Any:
+        calls.append((dump_src_dir, kwargs))
+        yield
+        for name in files:
+            (Path(dump_src_dir) / name).write_text("# dumped\n")
+
+    return prepare_debug
+
+
+def test_depyf_dump_compiles_under_prepare_debug(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    """dump runs torch.compile(model)(x) inside prepare_debug and lists new files."""
 
     from torchlens.bridge import depyf
 
     calls: list[Any] = []
+    compiled_inputs: list[Any] = []
+    (tmp_path / "old.py").write_text("# pre-existing\n")
+    prepare = _fake_prepare_debug(["__compiled_fn_1.Forward_graph.0.py", "full_code.py"], calls)
+    monkeypatch.setitem(sys.modules, "depyf", _module("depyf", prepare_debug=prepare))
+    monkeypatch.setattr(torch, "compile", lambda model: lambda *a: compiled_inputs.append(a))
 
-    def dump(model: Any, x: Any = None) -> str:
-        calls.append(x)
-        if x is not None:
-            raise TypeError("internal depyf failure")
-        return "fallback-success"
+    written = depyf.dump("model", (1, 2), tmp_path, log_bytecode=True)
 
-    monkeypatch.setitem(sys.modules, "depyf", _module("depyf", dump=dump))
-    with pytest.raises(TypeError, match="internal depyf failure"):
-        depyf.dump("model", "example-input")
-    assert calls == ["example-input"]  # called once, never retried without x
-
-
-def test_depyf_reduced_arity_entrypoint(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A model-only entrypoint is bound by signature, not by exception fallback."""
-
-    from torchlens.bridge import depyf
-
-    def dump(model: Any) -> str:
-        return "model-only"
-
-    monkeypatch.setitem(sys.modules, "depyf", _module("depyf", dump=dump))
-    assert depyf.dump("model", "example-input") == "model-only"
+    assert [p.name for p in written] == ["__compiled_fn_1.Forward_graph.0.py", "full_code.py"]
+    assert calls == [(str(tmp_path), {"log_bytecode": True})]
+    assert compiled_inputs == [(1, 2)]
 
 
-def test_depyf_full_arity_receives_example_input(monkeypatch: pytest.MonkeyPatch) -> None:
-    """An entrypoint that accepts the example input actually receives it."""
+def test_depyf_dump_requires_path() -> None:
+    """The output directory is required; the bridge never picks one."""
 
     from torchlens.bridge import depyf
 
-    def dump(model: Any, x: Any) -> tuple[str, Any]:
-        return ("got", x)
+    with pytest.raises(TypeError):
+        depyf.dump("model", "x")  # type: ignore[call-arg]
 
-    monkeypatch.setitem(sys.modules, "depyf", _module("depyf", dump=dump))
-    assert depyf.dump("model", "example-input") == ("got", "example-input")
+
+def test_depyf_dump_refuses_when_nothing_was_dumped(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    """A cached compile that dumps nothing is refused, never an empty list."""
+
+    from torchlens.bridge import depyf
+
+    prepare = _fake_prepare_debug([], [])
+    monkeypatch.setitem(sys.modules, "depyf", _module("depyf", prepare_debug=prepare))
+    monkeypatch.setattr(torch, "compile", lambda model: lambda *a: None)
+    with pytest.raises(RuntimeError, match="torch._dynamo.reset"):
+        depyf.dump("model", "x", tmp_path)
+
+
+def test_depyf_inbody_error_propagates(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+    """A failure inside the compiled run surfaces unchanged."""
+
+    from torchlens.bridge import depyf
+
+    def _boom(*args: Any) -> None:
+        raise TypeError("internal compile failure")
+
+    prepare = _fake_prepare_debug(["x.py"], [])
+    monkeypatch.setitem(sys.modules, "depyf", _module("depyf", prepare_debug=prepare))
+    monkeypatch.setattr(torch, "compile", lambda model: _boom)
+    with pytest.raises(TypeError, match="internal compile failure"):
+        depyf.dump("model", "x", tmp_path)
 
 
 # --------------------------------------------------------------------------- #

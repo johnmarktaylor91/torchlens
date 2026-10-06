@@ -179,20 +179,26 @@ def test_inseq_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
 
         def attribute(
             self,
-            inputs: str,
+            input_texts: str,
+            generated_texts: str | None = None,
             *,
-            target_texts: str | None = None,
             step_scores: list[str] | None = None,
         ) -> dict[str, Any]:
-            """Return a deterministic attribution payload."""
+            """Return a deterministic attribution payload (inseq 0.7 keyword names)."""
 
-            return {"inputs": inputs, "target_texts": target_texts, "step_scores": step_scores}
+            return {
+                "inputs": input_texts,
+                "generated_texts": generated_texts,
+                "step_scores": step_scores,
+            }
 
-    def load_model(model_or_id: str, method: str) -> FakeAttributionModel:
+    loaded: list[str] = []
+
+    def load_model(model_or_id: str, attribution_method: str) -> FakeAttributionModel:
         """Return a fake attribution model."""
 
         assert model_or_id == "tiny"
-        assert method == "saliency"
+        loaded.append(attribution_method)
         return FakeAttributionModel()
 
     monkeypatch.setitem(sys.modules, "inseq", _module("inseq", load_model=load_model))
@@ -201,13 +207,16 @@ def test_inseq_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
         "tiny",
         "hello",
         method="saliency",
-        target_texts="world",
+        generated_texts="world",
         step_scores=["probability"],
     )
 
     assert payload["schema"] == "torchlens.inseq.v1"
     assert payload["method"] == "saliency"
-    assert payload["attributions"]["target_texts"] == "world"
+    assert payload["attributions"]["generated_texts"] == "world"
+    # The default method is inseq's own spelling, not "integrated_grads".
+    assert tl.bridge.inseq.attribute("tiny", "hello")["method"] == "integrated_gradients"
+    assert loaded == ["saliency", "integrated_gradients"]
 
 
 def test_steering_vectors_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> None:

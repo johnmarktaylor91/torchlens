@@ -48,7 +48,7 @@ from ..observability import (
     WatchSettings,
 )
 from ..observability._collector import StepTruth
-from ..observability._kernels import spine_result_from_vector, spine_vector
+from ..observability._kernels import DEFAULT_DESCRIPTOR, spine_result_from_vector, spine_vector
 from ..observability._schema import validate_step_order
 from ..utils.env_flags import closed_bool_env
 from ._amp import correct_spine, corrected_gradient_block, observed_grad_scale, unscale_stage
@@ -1109,7 +1109,10 @@ def watch(
     grain:
         ``"op"`` requests op-grain identity and refuses typed this window.
     descriptor:
-        Histogram grid override (see ``WANDB_SAFE_DESCRIPTOR``).
+        Histogram grid override. When neither this nor ``settings`` names a
+        grid, the first sink offering ``default_histogram_descriptor()``
+        supplies it (``WandbSink``: ``WANDB_SAFE_DESCRIPTOR``, 497 buckets);
+        otherwise the C06 default grid applies.
     budgets:
         Hard caps checked against the plan as preflight FACTS:
         ``max_sites``, ``max_bytes_per_step``, ``max_elements_per_step``.
@@ -1165,6 +1168,8 @@ def watch(
             ),
         )
     streams = tuple(_SIGNAL_STREAMS[signal] for signal in requested if signal in _SIGNAL_STREAMS)
+    if descriptor is None and needs_histograms:
+        descriptor = _sink_default_descriptor(sinks, settings)
     base_settings = _resolve_settings(settings, descriptor, needs_histograms)
     _refuse_second_session(model, grammar)
     _preflight_histogram_sinks(sinks, base_settings.descriptor, needs_histograms)
@@ -1293,6 +1298,28 @@ def _refuse_second_session(model: torch.nn.Module, grammar: TagGrammar) -> None:
                 "the two series stay distinguishable."
             ),
         )
+
+
+def _sink_default_descriptor(
+    sinks: tuple[Any, ...], settings: WatchSettings | None
+) -> HistogramDescriptor | None:
+    """The first sink-offered histogram grid, when the caller chose none.
+
+    A sink may expose ``default_histogram_descriptor()`` (``WandbSink`` returns
+    ``WANDB_SAFE_DESCRIPTOR``, which fits wandb's bucket cap). It applies only
+    when ``settings`` is absent or still carries the untouched C06 default
+    grid; a caller-chosen grid is kept and preflight judges it.
+    """
+
+    if settings is not None and settings.descriptor is not DEFAULT_DESCRIPTOR:
+        return None
+    for sink in sinks:
+        offer = getattr(sink, "default_histogram_descriptor", None)
+        if callable(offer):
+            offered = offer()
+            if isinstance(offered, HistogramDescriptor):
+                return offered
+    return None
 
 
 def _preflight_histogram_sinks(

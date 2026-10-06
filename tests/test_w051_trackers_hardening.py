@@ -205,6 +205,11 @@ class TestAttachPreflights:
 
     @pytest.mark.smoke
     def test_wandb_bucket_cap_refuses_at_attach_before_any_emission(self) -> None:
+        """An EXPLICIT over-cap grid still refuses at attach, before any row."""
+
+        from torchlens.observability import HistogramDescriptor, WatchSettings
+        from torchlens.observability._kernels import DEFAULT_DESCRIPTOR
+
         class _Run:
             def __init__(self) -> None:
                 self.logged: list = []
@@ -215,7 +220,22 @@ class TestAttachPreflights:
         model, opt = _mlp()
         run = _Run()
         with pytest.raises(TrackersError) as info:
-            trk.watch(model, to=trk.WandbSink(run), optimizer=opt, hist_every=1)
+            trk.watch(
+                model,
+                to=trk.WandbSink(run),
+                optimizer=opt,
+                hist_every=1,
+                descriptor=DEFAULT_DESCRIPTOR,
+            )
+        assert info.value.fields["code"] == "tracker_histogram_bucket_cap"
+        with pytest.raises(TrackersError) as info:
+            trk.watch(
+                model,
+                to=trk.WandbSink(run),
+                optimizer=opt,
+                hist_every=1,
+                settings=WatchSettings(descriptor=HistogramDescriptor()),
+            )
         assert info.value.fields["code"] == "tracker_histogram_bucket_cap"
         assert run.logged == []
         safe = trk.watch(
@@ -226,6 +246,43 @@ class TestAttachPreflights:
             descriptor=trk.WANDB_SAFE_DESCRIPTOR,
         )
         safe.close(unwinding=True)
+
+    @pytest.mark.smoke
+    def test_wandb_sink_supplies_its_safe_grid_when_none_is_chosen(self) -> None:
+        """No descriptor and no settings grid: the sink's cap-safe grid attaches."""
+
+        from torchlens.observability import WatchSettings
+
+        class _Run:
+            def log(self, payload, step=None):  # noqa: ANN001
+                del payload, step
+
+        model, opt = _mlp()
+        sink = trk.WandbSink(_Run())
+        assert sink.default_histogram_descriptor() is trk.WANDB_SAFE_DESCRIPTOR
+        session = trk.watch(model, to=sink, optimizer=opt, hist_every=1)
+        try:
+            assert session.collector.settings.descriptor is trk.WANDB_SAFE_DESCRIPTOR
+        finally:
+            session.close(unwinding=True)
+        # A settings object that leaves the grid untouched still gets the offer.
+        session = trk.watch(
+            model,
+            to=trk.WandbSink(_Run()),
+            optimizer=opt,
+            hist_every=1,
+            settings=WatchSettings(),
+        )
+        try:
+            assert session.collector.settings.descriptor is trk.WANDB_SAFE_DESCRIPTOR
+        finally:
+            session.close(unwinding=True)
+        # Sinks without the hook keep the C06 default grid.
+        session = trk.watch(model, to=trk.MemorySink(), optimizer=opt, hist_every=1)
+        try:
+            assert session.collector.settings.descriptor is not trk.WANDB_SAFE_DESCRIPTOR
+        finally:
+            session.close(unwinding=True)
 
     @pytest.mark.smoke
     def test_tensorboard_relay_refuses_histograms_at_attach(self, monkeypatch) -> None:  # noqa: ANN001

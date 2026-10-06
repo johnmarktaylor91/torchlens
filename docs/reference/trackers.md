@@ -100,6 +100,12 @@ were exactly the rows that vanished.
   (512-bucket cap) and `TensorBoardSink` (relay detected) refuse a
   `hist_every=` request at attach rather than latching on the first
   sampled step.
+- Sinks may also offer `default_histogram_descriptor()`. When the caller
+  passes no `descriptor=` and no `settings=` grid, `watch` uses the first
+  sink's offer: `WandbSink` offers `WANDB_SAFE_DESCRIPTOR` (497 buckets),
+  so `watch(model, to=WandbSink(run), hist_every=...)` attaches on the
+  default path. An explicit grid over the cap still refuses
+  (`tracker_histogram_bucket_cap`).
 - `watch_close_empty` counts DATA points only: heartbeat, manifest, and
   check rows never make an empty run look populated. A run whose every
   step is explained by a named skip (AMP-skipped, demoted missing phase)
@@ -111,7 +117,10 @@ were exactly the rows that vanished.
 ## What each route costs you (the measured fidelity table)
 
 Measured by the trackers panel (wandb 0.28.2, clearml 2.1.12, TB 2.21.0,
-real distilgpt2 tensors, offline; ClearML measured independently twice):
+real distilgpt2 tensors, offline; ClearML measured independently twice).
+The wandb relay's step rewrite, summary-field destruction and re-binning
+above 512 buckets were re-measured at wandb 0.30.0 and are unchanged; the
+`trackers-relay-test` extra pins that version:
 
 | | TB native | wandb native sink | wandb relay | ClearML relay |
 |---|---|---|---|---|

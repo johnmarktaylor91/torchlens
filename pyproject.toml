@@ -131,7 +131,7 @@ tlens-oracle = ["transformer-lens==3.8.0"]
 # for the T-RELAY-W / T-RELAY-C pins in tests/test_trackers_sinks_relay_pins.py
 # (importorskip today; activate by installing this extra). Exact pins on
 # purpose: a relay-fidelity pin against a floating tracker is not a pin.
-trackers-relay-test = ["wandb==0.28.2", "clearml==2.1.12", "tensorboard>=2.21"]
+trackers-relay-test = ["wandb==0.30.0", "clearml==2.1.12", "tensorboard>=2.21"]
 # F07 FORK-T1 branch A (tviz memo section 10): torchlens.tviz resolves
 # matplotlib at CALL time and refuses typed (tv_matplotlib_missing) naming this
 # extra; the band is the one already proven in the test extra. cairosvg is

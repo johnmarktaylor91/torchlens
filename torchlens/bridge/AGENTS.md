@@ -57,10 +57,23 @@ optional dependency.
   `MCPServer` high-level API (schemas derived from handler signatures — keep
   handler params in sync with `TOOL_SPECS`). No tool executes user code or
   mutates state; live capture stays a Python-process concern.
-- `nnsight.py`: `from_trace()` normalizes a cached nnsight-style trace into a
-  stable payload schema; offline, no import gate.
-- `inseq.py`: `attribute()` (extra: `torchlens[inseq]`).
-- `depyf.py`: `dump()` (extra: `torchlens[depyf]`).
+- `nnsight.py`: `from_trace()` normalizes a cached nnsight-style trace (a
+  mapping, `to_dict()` returning a mapping, or an object with `nodes`) into
+  a stable payload schema; anything else, including a live nnsight 0.7
+  tracer, raises `TypeError` naming the supported shapes (never an empty
+  payload). Offline, no import gate.
+- `inseq.py`: `attribute(model_or_id, inputs, *, method="integrated_gradients",
+  generated_texts=None, attribution_model=None, **kwargs)`; names follow
+  inseq 0.7 (`load_model(model, attribution_method)`,
+  `AttributionModel.attribute(input_texts, generated_texts=...)`); inseq
+  swallows unknown keywords with only a warning, so a wrong spelling is
+  silently ignored -- verify keywords against inseq's signatures (extra:
+  `torchlens[inseq]`).
+- `depyf.py`: `dump(model, x, path, **prepare_debug_kwargs) -> list[Path]`
+  runs `with depyf.prepare_debug(path): torch.compile(model)(*x)` and
+  returns the files written; `path` is required; a cached compile that
+  dumps nothing raises `RuntimeError` naming `torch._dynamo.reset()`
+  (extra: `torchlens[depyf]`).
 - `dialz.py`: `analyze()` (extra: `torchlens[dialz]`).
 - `repeng.py`: `control_vector()` (extra: `torchlens[repeng]`).
 - `steering_vectors.py`: `vector()` (extra: `torchlens[steering]`).
@@ -71,7 +84,11 @@ optional dependency.
   naming the exact extra, e.g.
   "Captum bridge requires the `captum` extra: install torchlens[captum].".
 - Tests gate on the dependency with `pytest.importorskip()`; offline adapters
-  (`brain_score`, `nnsight`, `profiler`) run without extras.
+  (`brain_score`, `nnsight`, `profiler`) run without extras. Fake-module
+  tests pass while the real package fails (depyf, inseq and nnsight all
+  did), so each bridge also keeps a real-package file
+  `tests/test_bridge_real_<bridge>.py` that compares against the package
+  used directly.
 
 ## Local Invariants / Gotchas
 - Adding an adapter requires updating BOTH `_BRIDGE_MODULES` and `__all__` in

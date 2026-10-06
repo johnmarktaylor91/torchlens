@@ -453,3 +453,13 @@ def test_nnsight_bridge_normalizes_offline_trace_fixture() -> None:
     assert payload["schema"] == "torchlens.nnsight_trace.v1"
     assert payload["nodes"] == [{"name": "embed"}, {"name": "proj"}]
     assert payload["metadata"]["source"] == "offline-fixture"
+
+
+def test_nnsight_bridge_refuses_unsupported_objects() -> None:
+    """An object with no mapping, to_dict() or nodes is refused, never emptied."""
+
+    class _LiveTracer:
+        """Stand-in for a live tracer: no to_dict, no nodes."""
+
+    with pytest.raises(TypeError, match="supports a mapping"):
+        tl.bridge.nnsight.from_trace(_LiveTracer())
