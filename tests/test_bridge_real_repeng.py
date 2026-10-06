@@ -8,6 +8,7 @@ transformers, or the checkpoint is unavailable.
 from __future__ import annotations
 
 import os
+from collections import Counter
 from typing import Any
 
 import numpy as np
@@ -38,13 +39,11 @@ def stack() -> dict[str, Any]:
     if tok.pad_token_id is None:
         tok.pad_token_id = 0  # repeng pads every batch; one prompt per batch never pads
     model.config.use_cache = False
-    pairs = [(f"I love {w}", f"I hate {w}") for w in _WORDS]
-    length = len(tok(pairs[0][0]).input_ids)
-    pairs = [
-        (p, n)
-        for p, n in pairs
-        if len(tok(p).input_ids) == length and len(tok(n).input_ids) == length
-    ]
+    candidates = [(f"I love {w}", f"I hate {w}") for w in _WORDS]
+    lengths = [(len(tok(p).input_ids), len(tok(n).input_ids)) for p, n in candidates]
+    # One unpadded batch per side: keep the pairs at the most common equal length.
+    length = Counter(a for a, b in lengths if a == b).most_common(1)[0][0]
+    pairs = [pair for pair, (a, b) in zip(candidates, lengths) if a == b == length]
     assert len(pairs) >= 3
 
     def trace(prompts: list[str]) -> Any:
