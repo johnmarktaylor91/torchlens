@@ -11,4 +11,4 @@
 | Neuron conductance | `tl.attribution.layer_conductance` (layer level) | Layer conductance only; neuron-level conductance stays in Captum. |
 | Compare attribution metrics across runs | `Bundle.joint_metric` or an explicit metric loop | Equivalent container-level computation. |
 | Persist attribution setup | `.tlspec/` for intervention recipe, separate code for metric | Partial; metrics are not fully serialized. |
-| Fused attention internals | Manual unfused implementation | TorchLens cannot see hidden fused intermediates. |
+| Fused attention internals | Eager-attention load: the softmax and score ops are captured ops you read directly. Default fused SDPA load: `tl.trace(model, x, reconstruction_ready=True)` serves read-only reconstructed attention facets (`scores`, `pattern`, `z`, checked against the fused output; see `docs/facets.md`) | Head-level semantics are readable on fused models; the raw kernel intermediates are not captured ops, and editing them needs an eager recapture. |

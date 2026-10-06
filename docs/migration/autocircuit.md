@@ -11,4 +11,4 @@
 | Save circuit intervention | `save_intervention(level="portable")` for supported recipes | Equivalent for recipe publication. |
 | Visualize graph with intervention marks | `log.show(..., vis_intervention_mode="node_mark")` | Equivalent graph-level visibility. |
 | Append evaluation batches | `rerun(..., append=True)` when graph/hash constraints match | Equivalent for compatible chunks. |
-| Fused attention internals | Manual unfused implementation | Hidden internals are not visible. |
+| Fused attention internals | Eager-attention load: the softmax and score ops are captured ops you read directly. Default fused SDPA load: `tl.trace(model, x, reconstruction_ready=True)` serves read-only reconstructed attention facets (`scores`, `pattern`, `z`, checked against the fused output; see `docs/facets.md`) | Head-level semantics are readable on fused models; the raw kernel intermediates are not captured ops, and editing them needs an eager recapture. |

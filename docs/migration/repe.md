@@ -11,4 +11,4 @@
 | Save steering recipe | `.tlspec/` portable save when direction tensors and built-ins are used | Equivalent publication path. |
 | Train/read representation directions | No direct equivalent | Deferred to v2.x or external RepE pipeline. |
 | Batch evaluation | `rerun(..., append=True)` when append constraints hold | Equivalent for compatible chunks. |
-| Intervene inside fused attention | Manual unfused attention | Opaque fused internals are hidden. |
+| Intervene inside fused attention | Default fused SDPA load: by-head and by-pattern patching through `torchlens.mechinterp.lowered_counterfactual` (no eager reload); eager-attention load: the softmax and score ops are ordinary intervention sites | Head-level and pattern-level edits work on fused models; other edits inside the fused kernel need an eager recapture. |

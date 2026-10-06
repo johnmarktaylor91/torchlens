@@ -10,7 +10,7 @@
 | Token-position patching | Tensor-shaped replacements or custom hooks | Equivalent if target tensors expose position dimensions. |
 | Save analysis setup | `.tlspec/` saves intervention recipe; metric code remains external | Partial. |
 | Visual attribution reports | The `tl.attribution.text` result renders per-token scores (`.show()`, `.to_html()`, `.to_text()`) | Per-token report for one target; no per-step generation heatmap. |
-| Fused attention internals | Manual unfused implementation | Hidden internals are not visible. |
+| Fused attention internals | Eager-attention load: the softmax and score ops are captured ops you read directly. Default fused SDPA load: `tl.trace(model, x, reconstruction_ready=True)` serves read-only reconstructed attention facets (`scores`, `pattern`, `z`, checked against the fused output; see `docs/facets.md`) | Head-level semantics are readable on fused models; the raw kernel intermediates are not captured ops, and editing them needs an eager recapture. |
 | HuggingFace convenience wrappers | `torchlens.bridge.hf.trace_text(model, text)` traces a Hugging Face language model from raw text; `tl.attribution.text` takes the model and its tokenizer | Shipped for capture and single-target token attribution. |
 
 ## Honest concession
