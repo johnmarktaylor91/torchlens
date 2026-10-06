@@ -537,13 +537,13 @@ def test_module_returning_its_own_parameter_or_buffer_is_not_an_escape(kind: str
     assert trace.capture_verification_reason is None
 
 
-def test_opaque_module_return_is_disclosed_unrecovered_and_still_validates() -> None:
+def test_opaque_module_return_is_disclosed_unrecovered_and_fails_validation() -> None:
     """Negative: a genuinely opaque producer (direct aten call) is not a stale ref.
 
     The module-exit record discloses it (provenance warning; the rescue finds
-    nothing to recover and settles ``escape_rescue_unrecovered``), and the
-    validation contract for an opaque single-dispatch module output is
-    unchanged: the boundary credits the dispatch that built it.
+    nothing to recover and settles ``escape_rescue_unrecovered``). The adopted
+    output has no recorded origin (the graph misses the ``x`` -> ``tanh`` edge),
+    so forward validation fails on the ``source_provenance`` check.
     """
 
     class Opaque(nn.Module):
@@ -560,7 +560,10 @@ def test_opaque_module_return_is_disclosed_unrecovered_and_still_validates() -> 
     assert trace.capture_verified is False
     assert trace.capture_verification_reason == "escape_rescue_unrecovered"
     with pytest.warns(UserWarning, match=_PROVENANCE):
-        assert tl.validate(model, x, scope="forward")
+        assert tl.validate(model, x, scope="forward") is False
+    failure = tl.validation.last_validation_failure()
+    assert failure is not None and failure.check == "source_provenance"
+    assert failure.extra["reasons"] == ["module_boundary_adoption"]
 
 
 def test_model_preparation_allocates_no_func_call_ids(

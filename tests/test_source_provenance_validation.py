@@ -67,7 +67,7 @@ def test_global_tensor_argument_fails_forward_validation() -> None:
     assert check == "source_provenance"
     assert reasons == ["unattributed_tensor_args"]
     failure = last_validation_failure()
-    assert failure is not None and failure.func_name == "add"
+    assert failure is not None and failure.func_name == "__add__"
     assert failure.op_label is not None and failure.op_label.startswith("add")
 
 
