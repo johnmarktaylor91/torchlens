@@ -576,7 +576,9 @@ def _setitem_destination_coverage_is_total(
         return False
     if not isinstance(destination, torch.Tensor):
         return False
-    if not torch.equal(perturbed_tensor, destination):
+    # Value identity is device-independent; an output_device capture keeps the
+    # perturbed parent's payload off the destination's device.
+    if not torch.equal(perturbed_tensor.to(destination.device), destination):
         return False
     try:
         selected = destination[index]
@@ -752,7 +754,7 @@ def _check_scatter_exempt(self: "Trace", layer: Op, layers_to_perturb: list[str]
     if scatter_components is None:
         return False
     dest, dim, index = scatter_components
-    if not torch.equal(perturbed_tensor, dest):
+    if not torch.equal(perturbed_tensor.to(dest.device), dest):
         return False
     return _scatter_index_fully_overwrites_dim(dest, dim, index)
 
@@ -2185,7 +2187,9 @@ def _posthoc_value_proof_decision(
         if isinstance(dividend, torch.Tensor) and isinstance(divisor, torch.Tensor):
             arg_positions = layer.parent_arg_positions.get("args", {})
             perturbed_label = layers_to_perturb[0]
-            if arg_positions.get(1) == perturbed_label and torch.equal(layer.out, dividend):
+            if arg_positions.get(1) == perturbed_label and torch.equal(
+                layer.out.to(dividend.device), dividend
+            ):
                 return PosthocPerturbDecision(
                     True,
                     "mod_divisor_irrelevant",

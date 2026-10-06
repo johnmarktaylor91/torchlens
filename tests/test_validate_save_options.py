@@ -312,3 +312,17 @@ def test_cuda_replay_still_detects_a_corrupted_saved_activation() -> None:
     """With host-held activations of a CUDA model the tripwire still fires."""
 
     _assert_corrupted_activation_fails("cuda")
+
+
+@_CUDA
+@pytest.mark.parametrize("model_name", ["GetAndSetItem", "InPlaceFuncs", "BatchNormModel"])
+def test_cuda_example_models_keep_their_verdict_with_host_activations(model_name: str) -> None:
+    """Posthoc exemption proofs (``__setitem__`` coverage) also work across devices."""
+
+    import example_models
+
+    torch.manual_seed(0)
+    model = getattr(example_models, model_name)().to("cuda")
+    x = torch.rand(6, 3, 24, 24, device="cuda")
+    assert tl.validate(model, x, scope="forward", random_seed=0) is True
+    assert tl.validate(model, x, scope="forward", random_seed=0, output_device="cpu") is True
