@@ -4159,6 +4159,12 @@ def test_gpt_bigcode():
     TorchScript-scriptable, so importing it while wrappers are installed (any
     earlier capture this session) raises. The import below therefore runs under
     ``unwrap_torch()``; the capture itself re-wraps lazily.
+
+    The model is built before that re-wrap, so ``GELUTanh`` holds a
+    ``functools.partial`` of the pristine ``F.gelu``: the stale pre-wrap
+    reference a user process has whenever it builds a model before its first
+    capture. The capture must disclose it (the module-exit adoption warning) and
+    the rescue re-run recovers the gelu ops, so validation still passes.
     """
     pytest.importorskip("transformers")
     from torchlens.backends.torch.wrappers import unwrap_torch
@@ -4178,16 +4184,19 @@ def test_gpt_bigcode():
     input_ids = torch.randint(0, 100, (2, 16))
     model_input = []
     model_kwargs = {"input_ids": input_ids}
-    show_model_graph(
-        model,
-        model_input,
-        input_kwargs=model_kwargs,
-        view="unrolled",
-        visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "gpt_bigcode")
-        ),
-    )
-    assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
+    with pytest.warns(UserWarning, match=r"adopted at module exit h\.0\.mlp\.act"):
+        show_model_graph(
+            model,
+            model_input,
+            input_kwargs=model_kwargs,
+            view="unrolled",
+            visualization=tl.options.VisualizationOptions(
+                save_only=True,
+                container_path=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "gpt_bigcode"),
+            ),
+        )
+    with pytest.warns(UserWarning, match="no graph/source provenance"):
+        assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
 
 
 @pytest.mark.slow
