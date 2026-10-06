@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import warnings
+from itertools import chain
 from pathlib import Path
 from typing import Any, cast
 
@@ -260,7 +261,7 @@ def _op_type_groups(
         indices.setdefault(aten, []).append(index)
     groups: dict[str, tuple[frozenset[str], list[int]]] = {}
     for aten, spellings in members.items():
-        names = frozenset().union(*(_op_event_names(name) for name in spellings))
+        names = frozenset(chain.from_iterable(_op_event_names(name) for name in spellings))
         groups["/".join(spellings)] = (names, indices[aten])
     return groups
 
@@ -362,7 +363,7 @@ def _assign_op_types(
     """
 
     groups = _op_type_groups(layers, assigned)
-    all_names = frozenset().union(*(names for names, _ in groups.values()))
+    all_names = frozenset(chain.from_iterable(names for names, _ in groups.values()))
     outermost = _outermost_op_events(events, all_names)
     ranges = [events[position] for position in used]
     mismatched: dict[str, dict[str, Any]] = {}
