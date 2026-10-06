@@ -70,7 +70,7 @@ def _relay_measurement(wandb, run_dir) -> list[dict]:  # noqa: ANN001
 class TestRelayPinWandb:
     """T-RELAY-W: the wandb TB relay's measured losses stay lost."""
 
-    @pytest.mark.slow  # ~12 s per relay run; up to three runs
+    @pytest.mark.heavy  # one relay run, about 12 s
     def test_relay_rewrites_steps_and_drops_summaries(self, tmp_path, monkeypatch) -> None:  # noqa: ANN001
         wandb = pytest.importorskip("wandb")
         pytest.importorskip("tensorboard")
@@ -81,23 +81,14 @@ class TestRelayPinWandb:
                 "revise the fidelity table before re-pinning"
             )
         monkeypatch.setenv("WANDB_MODE", "offline")
-        # The relay itself drops events nondeterministically at 0.30.0 (the
-        # step-102 histogram and everything after it went missing in about 1
-        # of 3 runs, standalone and under pytest, even with a drain pause), so
-        # the pinned losses are asserted on the first COMPLETE readback of up
-        # to three fresh runs; three incomplete readbacks fail.
-        attempts: list[str] = []
-        for attempt in range(3):
-            run_dir = tmp_path / f"attempt{attempt}"
-            monkeypatch.setenv("WANDB_DIR", str(run_dir))
-            rows = _relay_measurement(wandb, run_dir)
-            narrow = next((row for row in rows if "hist/nonuniform/_type" in row), None)
-            wide = next((row for row in rows if "hist/wide/_type" in row), None)
-            if narrow is not None and wide is not None:
-                break
-            keys = [sorted(k for k in row if not k.startswith("_")) for row in rows]
-            attempts.append(f"{len(rows)} rows: {keys}")
-        assert narrow is not None and wide is not None, attempts
+        monkeypatch.setenv("WANDB_DIR", str(tmp_path))
+        rows = _relay_measurement(wandb, tmp_path)
+        # Every event reaches the run: three scalars, both histograms, two tail
+        # markers, one history row each.
+        assert len(rows) == 7, [sorted(k for k in row if not k.startswith("_")) for row in rows]
+        (narrow,) = [row for row in rows if "hist/nonuniform/_type" in row]
+        (wide,) = [row for row in rows if "hist/wide/_type" in row]
+        assert [row["global_step"] for row in rows if "tail/marker" in row] == [200, 201]
         scalars = [row for row in rows if "gradients/norm/w" in row]
         # Loss 1: the caller step is demoted to a side key; wandb's own _step
         # advances 0,1,2 (the axis rewrite the native sink exists to fix).

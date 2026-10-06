@@ -64,3 +64,7 @@ def test_default_attribution_matches_inseq_direct() -> None:
     torch.testing.assert_close(
         b_seq.target_attributions, d_seq.target_attributions, equal_nan=True, rtol=0, atol=0
     )
+    # NaN == NaN under equal_nan, so the comparison alone would pass on an
+    # all-NaN result: some attribution must be a real number.
+    scores = [t for t in (b_seq.source_attributions, b_seq.target_attributions) if t is not None]
+    assert any(torch.isfinite(t).any() for t in scores), "every attribution is NaN"

@@ -42,8 +42,12 @@ def test_default_watch_attaches_and_fits_the_cap(tmp_path: Path, monkeypatch) ->
     monkeypatch.setenv("WANDB_MODE", "offline")
     model, opt = _mlp()
     run = wandb.init(dir=str(tmp_path), mode="offline")
+    # A MemorySink beside the WandbSink records exactly what the session emitted.
+    memory = trk.MemorySink()
     try:
-        session = trk.watch(model, to=trk.WandbSink(run), optimizer=opt, hist_every=1)
+        session = trk.watch(
+            model, to=(trk.WandbSink(run), memory), optimizer=opt, every=1, hist_every=1
+        )
         try:
             _train(session, model, opt)
         finally:
@@ -51,20 +55,27 @@ def test_default_watch_attaches_and_fits_the_cap(tmp_path: Path, monkeypatch) ->
     finally:
         run.finish()
     rows = history_rows(tmp_path)
-    hist_bins = [
-        len(value)
-        for row in rows
-        for key, value in row.items()
-        if key.endswith("/bins") and row.get(key.rsplit("/", 1)[0] + "/_type") == "histogram"
-    ]
+    arrived: dict[tuple[str, int], tuple[list, list]] = {}
+    for row in rows:
+        for key in row:
+            tag, _, field = key.rpartition("/")
+            if field == "_type" and row[key] == "histogram":
+                assert (tag, row["_step"]) not in arrived, (tag, row["_step"])
+                arrived[(tag, row["_step"])] = (row[f"{tag}/values"], row[f"{tag}/bins"])
+    emitted = {(point.tag, point.step): point for point in memory.histograms}
     expected_buckets = 2 * trk.WANDB_SAFE_DESCRIPTOR.bins_per_side + 1
-    assert hist_bins, "no histogram reached the offline run"
-    # Edges = buckets + 1; every histogram arrived un-rebinned on the safe grid.
-    assert set(hist_bins) == {expected_buckets + 1}
     assert expected_buckets <= trk.WANDB_BUCKET_CAP
-    steps = {row["_step"] for row in rows if any(k.endswith("/_type") for k in row)}
-    assert steps <= {10, 11}
-    print(f"\nhistogram rows={len(hist_bins)} buckets={expected_buckets} steps={sorted(steps)}")
+    assert emitted, "the session emitted no histogram"
+    # Exactly the emitted histograms arrived, at the caller's steps 10 and 11.
+    assert set(arrived) == set(emitted)
+    assert {step for _tag, step in arrived} == {10, 11}
+    for key, (values, edges) in arrived.items():
+        point = emitted[key]
+        # Un-rebinned on the safe grid: same counts, buckets + 1 edges.
+        assert len(point.counts) == expected_buckets
+        assert values == list(point.counts)
+        assert len(edges) == expected_buckets + 1
+    print(f"\nhistograms={len(arrived)} buckets={expected_buckets}")
 
 
 def test_explicit_over_cap_grid_still_refuses(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
