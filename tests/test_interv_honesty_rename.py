@@ -78,6 +78,26 @@ def test_serialized_specs_load_under_both_names(persisted_name: str) -> None:
     assert torch.equal(sampled, torch.ones(4))
 
 
+def test_import_ref_to_the_retired_name_fails_closed_typed() -> None:
+    """An import ref ``torchlens.intervention.helpers:resample_ablate`` refuses typed.
+
+    Built-in helpers persist by NAME (above), so only a hand-wrapped
+    import-ref helper saved before 2.35.0 could carry this path. The name
+    left the vetted-inert allowlist with the rename; such a ref must fail
+    closed with a TorchLens error, never resolve and never crash raw.
+    """
+
+    from torchlens.intervention import helpers
+    from torchlens.intervention.resolver import resolve_import_ref
+
+    current = resolve_import_ref("torchlens.intervention.helpers:scramble_elements")
+    assert current is helpers.scramble_elements
+    with pytest.raises(Exception) as excinfo:
+        resolve_import_ref("torchlens.intervention.helpers:resample_ablate")
+    assert type(excinfo.value).__module__.startswith("torchlens")
+    assert "resample_ablate" in str(excinfo.value)
+
+
 def test_empty_source_refusal_names_the_honest_helper() -> None:
     """Fire-time refusals teach the current name, not the retired one."""
 
