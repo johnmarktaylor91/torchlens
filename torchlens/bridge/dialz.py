@@ -24,7 +24,7 @@ from ._contrastive import (
 )
 
 
-def vector(
+def vector(  # noqa: PLR0913 -- mirrors upstream dialz signature
     log: Any,
     positive_site: Any,
     negative_site: Any | None = None,

@@ -24,7 +24,7 @@ from ._contrastive import (
 )
 
 
-def control_vector(
+def control_vector(  # noqa: PLR0913 -- mirrors upstream repeng signature
     log: Any,
     positive_site: Any,
     negative_site: Any | None = None,
