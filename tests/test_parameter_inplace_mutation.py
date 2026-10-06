@@ -20,6 +20,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.backends.torch import param_mutation, wrappers
+from torchlens.errors import TorchLensWarning
 from torchlens.options import CaptureOptions
 from torchlens.validation.invariants import MetadataInvariantError
 
@@ -610,8 +611,10 @@ def test_backward_validation_refuses_an_already_run_model_loudly() -> None:
     x = torch.randn(3, 4)
     model(x)
     assert model.temp.is_leaf is False
-    with pytest.warns(RuntimeWarning, match="not autograd leaves before validation"):
+    with pytest.warns(TorchLensWarning, match="not autograd leaves before validation") as caught:
         assert tl.validate(model, x, scope="backward") is False
+    codes = [getattr(w.message, "fields", {}).get("code") for w in caught]
+    assert "backward_validation_non_leaf_parameter" in codes
     assert model.temp.is_leaf is False
 
 

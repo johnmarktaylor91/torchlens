@@ -15,6 +15,7 @@ from .._capture_state_helpers import unwrap_compiled_model
 from .._input_coerce import _coerce_input_args
 from .._input_walk import INPUT_TREE_MAX_DEPTH, raise_input_tree_depth_refusal
 from .._robustness import check_model_and_input_variants
+from ..errors import TorchLensWarning
 from ..intervention.errors import AppendStateValidationWarning
 from ..options import CaptureOptions
 from ..utils.arg_handling import normalize_input_args
@@ -313,13 +314,17 @@ def _refuse_non_leaf_parameters(model: nn.Module) -> bool:
     if not non_leaf_names:
         return False
     warnings.warn(
-        "validate_backward_pass cannot compare gradients: Parameter(s) "
-        f"{non_leaf_names[:3]} are not autograd leaves before validation (an "
-        "earlier forward mutated them in place with a grad-requiring operand, "
-        "as eager allows). Their gradient history chains into that earlier "
-        "pass, so stock and captured gradients would not describe the same "
-        "model. Returning False; validate a fresh copy of the model instead.",
-        RuntimeWarning,
+        TorchLensWarning(
+            "validate_backward_pass cannot compare gradients: Parameter(s) "
+            f"{non_leaf_names[:3]} are not autograd leaves before validation (an "
+            "earlier forward mutated them in place with a grad-requiring operand, "
+            "as eager allows). Their gradient history chains into that earlier "
+            "pass, so stock and captured gradients would not describe the same "
+            "model; returning False. Remedy: validate a fresh copy of the model "
+            "instead",
+            code="backward_validation_non_leaf_parameter",
+            non_leaf_parameters=list(non_leaf_names),
+        ),
         stacklevel=3,
     )
     return True
