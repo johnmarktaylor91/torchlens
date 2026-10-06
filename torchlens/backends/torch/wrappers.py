@@ -3109,6 +3109,9 @@ def _unwrap_torch_locked() -> None:
     from .legacy_ctors import uninstall_legacy_constructor_wrappers
 
     uninstall_legacy_constructor_wrappers()
+    from ._torch_ops_calls import uninstall_torch_ops_call_recorders
+
+    uninstall_torch_ops_call_recorders()
 
     if not _state._decorated_to_orig:
         _state._is_decorated = False
@@ -3339,12 +3342,14 @@ def _wrap_torch_locked(
     # that landed after the first wrap gets its custom ops decorated here.
     _ensure_torchvision_ops_decorated()
 
+    from ._torch_ops_calls import install_torch_ops_call_recorders
     from .belt import sweep_stale_belt_references
     from .legacy_ctors import install_legacy_constructor_wrappers
 
     # Legacy ``torch.<dtype>Tensor`` / ``Variable`` classes are patched in place
     # (idempotent; restored by ``_unwrap_torch_locked``).
     install_legacy_constructor_wrappers()
+    install_torch_ops_call_recorders()
 
     if _state._is_decorated:
         install_autograd_wrappers()

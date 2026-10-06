@@ -101,6 +101,7 @@ from ._tl import (
     is_tensor_data_alias,
     session_meta_is_anchored,
 )
+from ._torch_ops_calls import suppress_torch_ops_call_logging
 from .buffer_writes import peek_buffer_write_tracker, session_validated_buffer_address
 from .escape_detection import (
     ExpectedOriginalToken,
@@ -1382,7 +1383,10 @@ class _CompletenessDispatchMode(_TorchLensDispatchMode):
         finally:
             self.state.callback_ns += time.perf_counter_ns() - started
         try:
-            result = func(*args, **(kwargs or {}))
+            # The observed operator re-executes through ``torch.ops`` machinery; it is a
+            # dispatch TorchLens already attributes, never a user ``torch.ops`` call.
+            with suppress_torch_ops_call_logging():
+                result = func(*args, **(kwargs or {}))
         except BaseException as exc:
             # r35 I2 lifecycle ledger: an op that RAISED left no captured artifact,
             # so a branch taken *because* it raised has no witness anchor. Record
