@@ -664,3 +664,106 @@ def test_no_grad_parameter_mutation_validates_backward(op: str) -> None:
     assert tl.validate(validated, x, scope="backward") is True
     assert torch.equal(validated.temp.detach(), model.temp.detach())
     assert validated.temp.is_leaf is True
+
+
+def _backward_through_own_output(trace: Any) -> None:
+    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+
+
+def test_mutation_gradient_hook_records_only_its_own_traces_backward() -> None:
+    """The model-state hook never records a later backward into the old trace.
+
+    The hook sits on the capture pass's ``grad_fn`` of the mutated Parameter, which
+    every later forward on the same model chains onto. A second capture's backward
+    and 20 eager training steps (both traces alive) must leave trace 1 with its one
+    pass: ``op.grad`` still works and ``backward_events`` does not grow. Root
+    matching must not open trace 1's managed bracket through that history either,
+    or every op upstream of the Parameter (the operand's ``sum``) would record too.
+    """
+
+    torch.manual_seed(0)
+    model = _FrozenGradOperandMutator("positional", through_linear=True)
+    x = torch.randn(3, 4)
+    capture = CaptureOptions(save_grads="all")
+    trace1 = tl.trace(model, x, capture=capture)
+    _backward_through_own_output(trace1)
+    op1 = _ops_by_type(trace1, "add")[0]
+    grad1 = op1.grad.clone()
+    operand1 = _ops_by_type(trace1, "sum")[0]
+    assert len(operand1.grads) == 1
+    events_after_own_backward = len(trace1.backward_events)
+
+    trace2 = tl.trace(model, x, capture=capture)
+    _backward_through_own_output(trace2)
+    op2 = _ops_by_type(trace2, "add")[0]
+    assert op2.grad is not None
+    assert len(op2.grads) == 1
+    assert len(trace1.backward_events) == events_after_own_backward
+    trace2_events = len(trace2.backward_events)
+
+    optimizer = torch.optim.SGD(
+        [p for p in model.parameters() if p.requires_grad and p.is_leaf], lr=0.01
+    )
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        for _ in range(20):
+            optimizer.zero_grad()
+            model(x).sum().backward()
+            optimizer.step()
+    assert [str(w.message) for w in caught] == []
+    assert len(op1.grads) == 1
+    assert torch.equal(op1.grad, grad1)
+    assert len(operand1.grads) == 1
+    assert len(trace1.backward_events) == events_after_own_backward
+    assert len(op2.grads) == 1
+    assert len(trace2.backward_events) == trace2_events
+
+
+def test_mutation_gradient_hook_records_a_plain_backward_of_its_own_output() -> None:
+    """Narrowness: a plain ``.backward()`` on the trace's OWN output still records it.
+
+    TorchLens routes such a call through the trace's backward (a managed bracket when
+    the roots match, else an implicit pass its own op hooks open), so the gate on the
+    model-state hook must admit it.
+    """
+
+    torch.manual_seed(0)
+    model = _FrozenGradOperandMutator("positional", through_linear=True)
+    x = torch.randn(3, 4)
+    eager = copy.deepcopy(model)
+    eager_out = eager(x)
+    eager_temp = eager.temp
+    eager_temp.retain_grad()
+    eager_out.sum().backward()
+
+    trace = tl.trace(copy.deepcopy(model), x, capture=CaptureOptions(save_grads="all"))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        trace[trace.output_layers[0]].out.sum().backward()
+    mutation = _ops_by_type(trace, "add")[0]
+    assert mutation.grad is not None
+    assert torch.allclose(mutation.grad, eager_temp.grad)
+
+
+def test_cleanup_removes_the_mutation_gradient_hook() -> None:
+    """``cleanup()`` removes the hook from the model's autograd history.
+
+    The trace stays marked state-entangled, so its remaining op hooks on that
+    history stay gated after cleanup.
+    """
+
+    from torchlens.backends.torch import tensor_tracking
+
+    torch.manual_seed(0)
+    model = _FrozenGradOperandMutator("positional", through_linear=True)
+    x = torch.randn(3, 4)
+    trace = tl.trace(model, x, capture=CaptureOptions(save_grads="all"))
+    handles = list(tensor_tracking._OWNED_STATE_GRAD_HOOK_HANDLES.get(trace, ()))
+    assert len(handles) == 1
+    assert handles[0].id in handles[0].hooks_dict_ref()
+    trace.cleanup()
+    assert tensor_tracking._OWNED_STATE_GRAD_HOOK_HANDLES[trace] == []
+    for handle in handles:
+        hooks = handle.hooks_dict_ref()
+        assert hooks is None or handle.id not in hooks
+    model(x).sum().backward()

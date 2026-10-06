@@ -64,10 +64,13 @@ from ._gradfn_markers import (
 from ._tl import detached_saved_activation_label, get_tensor_label
 from .escape_detection import expected_original_call
 from .tensor_tracking import (
+    _STATE_BOUNDARY_GRAD_FNS,
     _copy_grad_payload,
     _current_backward_graph_task_id,
+    _defer_at_state_boundary,
     _ensure_backward_event_stream,
     _forward_op_count_at_backward_trigger,
+    _resume_state_boundaries,
     _should_save_grad_payload,
     _trace_grad_save_mode,
 )
@@ -301,6 +304,8 @@ def _backward_registry_slot(trace: Any) -> tuple[weakref.ReferenceType[Any], set
             # object can reuse the id of a collected one.
             if _BACKWARD_GRAD_FN_REGISTRY.get(grad_fn_object_id) is dead_reference:
                 _BACKWARD_GRAD_FN_REGISTRY.pop(grad_fn_object_id, None)
+            if _STATE_BOUNDARY_GRAD_FNS.get(grad_fn_object_id) is dead_reference:
+                _STATE_BOUNDARY_GRAD_FNS.pop(grad_fn_object_id, None)
         owned_ids.clear()
 
     slot = (weakref.ref(trace, _evict), owned_ids)
@@ -375,6 +380,9 @@ def _purge_trace_from_backward_registry(trace: Any) -> None:
     ]
     for grad_fn_object_id in stale_ids:
         _BACKWARD_GRAD_FN_REGISTRY.pop(grad_fn_object_id, None)
+    for grad_fn_object_id, ref in list(_STATE_BOUNDARY_GRAD_FNS.items()):
+        if ref() is trace or ref() is None:
+            _STATE_BOUNDARY_GRAD_FNS.pop(grad_fn_object_id, None)
     slot = _BACKWARD_TRACE_SLOTS.get(trace)
     if slot is not None:
         # Keep the owned-key set in step with the table, so a re-armed trace
@@ -577,12 +585,16 @@ def _traces_for_roots(roots: Any) -> tuple[Any, ...]:
         root.grad_fn for root in _root_tensors(roots) if root.grad_fn is not None
     )
     seen: set[int] = set()
+    # Model-state boundary nodes whose owner has not matched yet, by owner id.
+    deferred: dict[int, list[Any]] = {}
     while queue:
         grad_fn_handle = queue.popleft()
         grad_fn_object_id = id(grad_fn_handle)
         if grad_fn_object_id in seen:
             continue
         seen.add(grad_fn_object_id)
+        if _defer_at_state_boundary(grad_fn_handle, matched_ids, deferred):
+            continue
         trace_ref = _BACKWARD_GRAD_FN_REGISTRY.get(grad_fn_object_id)
         if trace_ref is not None:
             trace = trace_ref()
@@ -595,6 +607,7 @@ def _traces_for_roots(roots: Any) -> tuple[Any, ...]:
             ):
                 matched.append(trace)
                 matched_ids.add(id(trace))
+                queue.extend(_resume_state_boundaries(trace, deferred, seen))
         queue.extend(_iter_next_grad_fns(grad_fn_handle))
     for stale_id in stale_ids:
         _BACKWARD_GRAD_FN_REGISTRY.pop(stale_id, None)

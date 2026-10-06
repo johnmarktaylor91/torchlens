@@ -100,7 +100,13 @@
   so `tl.validate(..., scope="forward")` raises torch's leaf error, as a second eager forward on
   such a deepcopy does, and `scope="backward"` returns False with a "not autograd leaves" warning.
   Backward validation cuts the history its own stock pass leaves on such a Parameter (`detach_`,
-  flag restored) so the captured pass starts from the pre-call model. An `out=` write into a Parameter is still uncaptured:
+  flag restored) so the captured pass starts from the pre-call model. The mutation op's gradient
+  hook sits on that pass's `grad_fn` in the Parameter's history, which later forwards chain onto, so
+  that node is a root-matching boundary (a later backward does not open the old trace's bracket
+  through it), every hook of that trace records only inside its own managed backward (no implicit
+  passes), and `cleanup()` removes the hook. Backward validation compares
+  Parameter and module-output grads, not per-op grads; the mutation op's gradient is pinned by tests.
+  An `out=` write into a Parameter is still uncaptured:
   `tl.validate` fails it on completeness (pinned in `tests/test_parameter_inplace_mutation.py`).
 - `torchlens.__version__` and `pyproject.toml` are release-pipeline state; do not update them
   in feature/docs tasks unless release work explicitly asks for it.

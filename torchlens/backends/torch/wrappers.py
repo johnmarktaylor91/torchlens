@@ -916,9 +916,11 @@ def _label_mutated_prepared_parameter(
     autograd history (a frozen Parameter written with a grad-requiring operand ends
     a non-leaf, as in eager): the gradient then flows through the live Parameter,
     so it takes the op's gradient the way any live in-place result does. Such a
-    hook lives on this pass's ``grad_fn`` node, not on the Parameter. A Parameter
-    still a leaf (mutated under ``no_grad``) gets none: no gradient flows through
-    the write, and a hook on a leaf would outlive the capture on model state.
+    hook lives on this pass's ``grad_fn`` node, which stays in the model's
+    autograd history (later forwards chain onto it), so it records only the
+    owning trace's own backward and ``cleanup()`` removes it. A Parameter still a
+    leaf (mutated under ``no_grad``) gets none: no gradient flows through the
+    write.
 
     Parameters
     ----------
@@ -937,7 +939,7 @@ def _label_mutated_prepared_parameter(
     with internal_scalar_read():
         carries_history = param.grad_fn is not None
     if carries_history:
-        _register_inplace_live_grad_hook(trace, param, out_label)
+        _register_inplace_live_grad_hook(trace, param, out_label, owning_backward_only=True)
 
 
 def _canonical_capture_callable(
@@ -1174,7 +1176,9 @@ def _propagate_data_alias_provenance(
                 mark_tensor_data_alias(output)
 
 
-def _register_inplace_live_grad_hook(trace: Any, tensor: Any, raw_label: str) -> None:
+def _register_inplace_live_grad_hook(
+    trace: Any, tensor: Any, raw_label: str, *, owning_backward_only: bool = False
+) -> None:
     """Hook the live in-place result so its gradient is captured under ``raw_label``.
 
     In-place ops log their output against a ``safe_copy`` whose grad_fn is a
@@ -1184,6 +1188,8 @@ def _register_inplace_live_grad_hook(trace: Any, tensor: Any, raw_label: str) ->
     registers the standard backward grad hook on the live tensor so the grad is
     captured. ``_add_tensor_backward_hook`` dedups by ``(label, id(tensor))`` and
     only hooks autograd-participating tensors, so the call is safe and cheap.
+    ``owning_backward_only`` is for a hook on model state that outlives the pass
+    (see ``_add_tensor_backward_hook``).
     """
 
     if not isinstance(tensor, torch.Tensor):
@@ -1192,7 +1198,13 @@ def _register_inplace_live_grad_hook(trace: Any, tensor: Any, raw_label: str) ->
 
     # The live tensor is what downstream ops consume, so it takes gradient
     # ownership of the label; the logged copy's hook (if any) stops emitting.
-    _add_tensor_backward_hook(trace, tensor, raw_label, take_ownership=True)
+    _add_tensor_backward_hook(
+        trace,
+        tensor,
+        raw_label,
+        take_ownership=True,
+        owning_backward_only=owning_backward_only,
+    )
 
 
 def _storage_overlap_byte_interval(t: torch.Tensor) -> tuple[int, int]:
