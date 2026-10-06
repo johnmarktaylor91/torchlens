@@ -84,9 +84,34 @@ optional dependency.
   stable payload schema; offline, no import gate.
 - `inseq.py`: `attribute()` (extra: `torchlens[inseq]`).
 - `depyf.py`: `dump()` (extra: `torchlens[depyf]`).
-- `dialz.py`: `analyze()` (extra: `torchlens[dialz]`).
-- `repeng.py`: `control_vector()` (extra: `torchlens[repeng]`).
-- `steering_vectors.py`: `vector()` (extra: `torchlens[steering]`).
+- Contrastive steering family (`steering_vectors.py`, `repeng.py`, `dialz.py`):
+  each trains the package's own vector from saved activations, never by
+  re-running the model. Shared signature: `(log, positive_site,
+  negative_site=None, *, negative_log=None, read_token_index=-1, ...)`; the
+  negative prompts usually live in a second trace (`negative_log=`, the site
+  then defaults to `positive_site`), and one token per prompt is read before
+  training (`-1` = last; a sequence = one index per prompt; `None` = unsliced
+  `[n, hidden]` outs). Private shared helpers: `steering_vectors._contrastive_rows`,
+  `repeng._read_directions` / `_interleave` / `_model_type`. On HF decoders
+  trace with `config.use_cache = False`, or `"model.layers.<i>"` is ambiguous
+  (hidden state plus KV-cache outputs).
+  - `steering_vectors.py`: `vector(..., trainer=None, layer=None,
+    layer_type="decoder_block")` (extra `torchlens[steering]`); the default
+    trainer is `steering_vectors.mean_aggregator()`; `layer=` adds a real
+    `SteeringVector` under `steering_vector`. Bit-identical to
+    `train_steering_vector(..., read_token_index=-1, batch_size=1)`.
+  - `repeng.py`: `control_vector(..., layer, method="pca_diff",
+    model_type=None)` (extra `torchlens[repeng]`) replicates
+    `repeng.extract.read_representations` (PCA, sign rule, in-place centring
+    for `pca_center`) and returns a real `repeng.ControlVector`.
+  - `dialz.py`: `vector(..., layer, method=None, model_type=None)` (extra
+    `torchlens[dialz]`, dialz 0.2 through 1.x) does the same against
+    `dialz.vector.read_representations` and returns a real
+    `dialz.SteeringVector`; `method=None` follows the installed release's
+    default (`pca` in 1.x, `pca_diff` in 0.2). The old `analyze()` is removed.
+  - repeng/dialz layer `i` matches `hidden_states[i + 1]`, which is the
+    output of `model.layers.<i>` except at the last layer, where Hugging Face
+    returns the final-norm output (site `"model.norm"`).
 
 ## Optional-dependency gating pattern
 - Never import an optional dependency at module top level. The pattern is a
@@ -100,8 +125,9 @@ optional dependency.
 - Adding an adapter requires updating BOTH `_BRIDGE_MODULES` and `__all__` in
   `__init__.py`; a name missing from `_BRIDGE_MODULES` raises
   `AttributeError` on access.
-- Bridges that execute the model (`captum`, `shap`, `gradcam`, `repeng`,
-  `steering_vectors`, ...) need the source model alive; `tl.release_model()`
+- Bridges that execute the model (`captum`, `shap`, `gradcam`, ...) need the
+  source model alive (repeng/dialz read only its `config.model_type`, and
+  only when `model_type=` is not given); `tl.release_model()`
   or a dropped reference makes `source_model()` raise.
 - Site arguments must carry saved tensor outs; `out_at()` raises `ValueError`
   otherwise. Keep error messages actionable (name the site and the extra).

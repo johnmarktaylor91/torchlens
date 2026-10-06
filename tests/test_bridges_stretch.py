@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import builtins
 import sys
+from dataclasses import dataclass
 from types import ModuleType
 from typing import Any
 
@@ -215,82 +216,151 @@ def test_inseq_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     assert payload["attributions"]["target_texts"] == "world"
 
 
+def _contrastive_logs() -> tuple[Any, Any]:
+    """Trace the tiny model on a positive and a negative batch of two inputs.
+
+    Returns
+    -------
+    tuple[Any, Any]
+        Positive and negative logs; ``"linear"`` outs are ``[2, 2]`` rows.
+    """
+
+    torch.manual_seed(121)
+    model = _TinyBridgeModel().eval()
+    options = tl.options.CaptureOptions(layers_to_save="all")
+    log_pos = tl.trace(model, torch.randn(2, 1, 8, 8) + 1.0, capture=options)
+    log_neg = tl.trace(model, torch.randn(2, 1, 8, 8), capture=options)
+    return log_pos, log_neg
+
+
 def test_steering_vectors_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
-    """steering-vectors bridge trains from saved out tensors."""
+    """steering-vectors bridge aggregates contrastive rows from two traces."""
 
-    def train_steering_vector(
-        positive: torch.Tensor, negative: torch.Tensor | None, *, normalize: bool
-    ) -> dict[str, Any]:
-        """Return a deterministic steering-vector payload."""
+    @dataclass
+    class SteeringVector:
+        """steering_vectors.SteeringVector fixture."""
 
-        return {
-            "shape": tuple(positive.shape),
-            "has_negative": negative is not None,
-            "normalize": normalize,
-        }
+        layer_activations: dict[int, torch.Tensor]
+        layer_type: str = "decoder_block"
 
-    _model, _x, log = _bridge_log()
+    def mean_aggregator() -> Any:
+        """Return the package's mean aggregator shape."""
+
+        return lambda pos, neg: (pos - neg).mean(dim=0)
+
+    log_pos, log_neg = _contrastive_logs()
     monkeypatch.setitem(
         sys.modules,
         "steering_vectors",
-        _module("steering_vectors", train_steering_vector=train_steering_vector),
+        _module("steering_vectors", mean_aggregator=mean_aggregator, SteeringVector=SteeringVector),
     )
 
-    payload = tl.bridge.steering_vectors.vector(log, "conv2d", "linear", normalize=True)
+    payload = tl.bridge.steering_vectors.vector(
+        log_pos, "linear", negative_log=log_neg, read_token_index=None, layer=3
+    )
 
+    expected = (payload["positive"] - payload["negative"]).mean(dim=0)
+    assert payload["positive"].shape == (2, 2)
     assert payload["schema"] == "torchlens.steering_vectors.v1"
-    assert payload["vector"]["has_negative"] is True
-    assert payload["vector"]["normalize"] is True
+    assert torch.equal(payload["vector"], expected)
+    assert torch.equal(payload["steering_vector"].layer_activations[3], expected)
+
+
+def _assert_signed_direction(
+    direction: Any, positive: torch.Tensor, negative: torch.Tensor
+) -> None:
+    """Assert a unit direction that projects positives above negatives."""
+
+    import numpy as np
+
+    assert direction.dtype == np.float32
+    assert np.isclose(np.linalg.norm(direction), 1.0, atol=1e-5)
+    projected_pos = positive.numpy() @ direction
+    projected_neg = negative.numpy() @ direction
+    assert (projected_pos > projected_neg).mean() >= 0.5
 
 
 def test_repeng_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
-    """repeng bridge builds a control vector from saved outs."""
+    """repeng bridge wraps the PCA direction of saved rows in a ControlVector."""
 
-    class FakeControlVector:
-        """repeng ControlVector fixture."""
+    pytest.importorskip("sklearn")
 
-        @staticmethod
-        def train(
-            positive: torch.Tensor, negative: torch.Tensor | None, *, rank: int
-        ) -> dict[str, Any]:
-            """Return a deterministic control-vector payload."""
+    @dataclass
+    class ControlVector:
+        """repeng.ControlVector fixture."""
 
-            return {
-                "rank": rank,
-                "positive_shape": tuple(positive.shape),
-                "negative": negative is not None,
-            }
+        model_type: str
+        directions: dict[int, Any]
 
-    _model, _x, log = _bridge_log()
-    monkeypatch.setitem(
-        sys.modules,
-        "repeng",
-        _module("repeng", ControlVector=FakeControlVector),
+    log_pos, log_neg = _contrastive_logs()
+    monkeypatch.setitem(sys.modules, "repeng", _module("repeng", ControlVector=ControlVector))
+
+    payload = tl.bridge.repeng.control_vector(
+        log_pos,
+        "linear",
+        negative_log=log_neg,
+        layer=2,
+        read_token_index=None,
+        model_type="tiny",
     )
 
-    payload = tl.bridge.repeng.control_vector(log, "conv2d", "linear", rank=1)
-
+    vector = payload["control_vector"]
     assert payload["schema"] == "torchlens.repeng.v1"
-    assert payload["control_vector"]["rank"] == 1
-    assert payload["control_vector"]["negative"] is True
+    assert vector.model_type == "tiny"
+    assert list(vector.directions) == [2]
+    _assert_signed_direction(vector.directions[2], payload["positive"], payload["negative"])
+    with pytest.raises(ValueError, match="model_type="):
+        tl.bridge.repeng.control_vector(
+            log_pos, "linear", negative_log=log_neg, layer=2, read_token_index=None
+        )
 
 
 def test_dialz_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
-    """dialz bridge sends labels and out lists to the downstream analyzer."""
+    """dialz bridge follows the installed default method and builds a SteeringVector."""
 
-    def analyze(outs: list[torch.Tensor], *, labels: list[str]) -> dict[str, Any]:
-        """Return a deterministic dialz analysis payload."""
+    pytest.importorskip("sklearn")
 
-        return {"labels": labels, "count": len(outs)}
+    @dataclass
+    class SteeringVector:
+        """dialz.SteeringVector fixture."""
 
-    _model, _x, log = _bridge_log()
-    monkeypatch.setitem(sys.modules, "dialz", _module("dialz", analyze=analyze))
+        model_type: str
+        directions: dict[int, Any]
 
-    payload = tl.bridge.dialz.analyze(log, sites=["conv2d", "linear"])
+    def read_representations(model: Any, tokenizer: Any, inputs: Any, method: str = "pca") -> Any:
+        """dialz 1.x signature shape: the default method name is read from here."""
 
-    assert payload["schema"] == "torchlens.dialz.v1"
-    assert payload["labels"] == payload["result"]["labels"]
-    assert payload["result"]["count"] == 2
+        raise AssertionError("the bridge never runs the model")
+
+    log_pos, log_neg = _contrastive_logs()
+    vector_module = _module("dialz.vector", read_representations=read_representations)
+    monkeypatch.setitem(
+        sys.modules,
+        "dialz",
+        _module("dialz", SteeringVector=SteeringVector, vector=vector_module),
+    )
+
+    payload = tl.bridge.dialz.vector(
+        log_pos, "linear", negative_log=log_neg, layer=1, read_token_index=None, model_type="t"
+    )
+    mean = tl.bridge.dialz.vector(
+        log_pos,
+        "linear",
+        negative_log=log_neg,
+        layer=1,
+        read_token_index=None,
+        model_type="t",
+        method="mean_diff",
+    )
+
+    assert payload["schema"] == "torchlens.dialz.v2"
+    _assert_signed_direction(
+        payload["steering_vector"].directions[1], payload["positive"], payload["negative"]
+    )
+    expected_mean = (payload["positive"] - payload["negative"]).numpy().mean(axis=0)
+    got_mean = mean["steering_vector"].directions[1]
+    # read_representations flips the sign when most pairs project the wrong way.
+    assert (got_mean == expected_mean).all() or (got_mean == -expected_mean).all()
 
 
 # The former mock-based LIT contract test is deliberately GONE (lane F31,
