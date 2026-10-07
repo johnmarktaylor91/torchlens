@@ -2542,13 +2542,20 @@ def get_accumulate_grad_class() -> Any:
     return accumulate_grad_cls
 
 
+_GRAD_COPY_NODE_NAMES = frozenset({"CloneBackward0", "ToCopyBackward0"})
+_GRAD_COPY_CHAIN_LIMIT = 8
+
+
 def grad_copy_source_is_leaf(copy: torch.Tensor) -> bool:
     """Return whether a grad-attached tensor copy was taken from an autograd leaf.
 
-    Saved argument snapshots are copies (``clone`` / ``to``) taken with grad
-    attached, so the copy itself is always a non-leaf. Its single autograd
-    input tells what the source was: an ``AccumulateGrad`` node means the
-    source was a leaf, any other node means it was an op output.
+    Saved argument snapshots are copies (``clone`` / ``to``, possibly copies of
+    copies) taken with grad attached, so the snapshot itself is a non-leaf.
+    Walking down its chain of single-input copy nodes reaches the source: an
+    ``AccumulateGrad`` node means the source was a leaf, any other node means
+    it was an op output. A copy chain the source itself carried (a user
+    ``clone()`` of a leaf) is indistinguishable here, so callers that know the
+    producing op should prefer its recorded ``grad_fn``.
 
     Parameters
     ----------
@@ -2558,22 +2565,29 @@ def grad_copy_source_is_leaf(copy: torch.Tensor) -> bool:
     Returns
     -------
     bool
-        ``True`` when ``copy`` is itself a leaf or its one autograd input is an
-        ``AccumulateGrad`` node; ``False`` otherwise.
+        ``True`` when ``copy`` is itself a leaf or its copy chain ends at an
+        ``AccumulateGrad`` node; ``False`` otherwise (including an over-long
+        chain).
     """
 
-    grad_fn = copy.grad_fn
-    if grad_fn is None:
-        return True
-    sources = [node for node, _ in getattr(grad_fn, "next_functions", ()) if node is not None]
-    if len(sources) != 1:
-        return False
-    # Same match as the backward capture's AccumulateGrad test: the class name,
-    # or the private class when this torch exposes it.
+    node = copy.grad_fn
     accumulate_grad_cls = get_accumulate_grad_class()
-    return type(sources[0]).__name__ == "AccumulateGrad" or bool(
-        accumulate_grad_cls and isinstance(sources[0], accumulate_grad_cls)
-    )
+    for _ in range(_GRAD_COPY_CHAIN_LIMIT):
+        if node is None:
+            return True
+        # Same match as the backward capture's AccumulateGrad test: the class
+        # name, or the private class when this torch exposes it.
+        if type(node).__name__ == "AccumulateGrad" or bool(
+            accumulate_grad_cls and isinstance(node, accumulate_grad_cls)
+        ):
+            return True
+        if type(node).__name__ not in _GRAD_COPY_NODE_NAMES:
+            return False
+        sources = [nxt for nxt, _ in getattr(node, "next_functions", ()) if nxt is not None]
+        if len(sources) != 1:
+            return False
+        node = sources[0]
+    return False
 
 
 def get_current_graph_task_id_fn() -> Callable[[], Any] | None:

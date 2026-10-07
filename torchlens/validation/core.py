@@ -3825,7 +3825,9 @@ def _build_replay_input_args(
             if isinstance(parent_layer_func_values, torch.Tensor):
                 parent_layer_func_values = _mirror_captured_requires_grad(
                     parent_layer_func_values,
-                    *_captured_slot_grad_flags(layer_to_validate_parents_for, arg_type, key),
+                    *_captured_slot_grad_flags(
+                        layer_to_validate_parents_for, arg_type, key, parent_layer
+                    ),
                 )
             if not isinstance(key, tuple):
                 input_args[arg_type][key] = parent_layer_func_values
@@ -5111,7 +5113,9 @@ def _snapshot_grad_flags(snapshot: Any) -> tuple[bool, bool]:
     return True, grad_copy_source_is_leaf(snapshot)
 
 
-def _captured_slot_grad_flags(layer: Op, arg_type: str, key: Any) -> tuple[bool, bool]:
+def _captured_slot_grad_flags(
+    layer: Op, arg_type: str, key: Any, parent_layer: Op | None = None
+) -> tuple[bool, bool]:
     """Return the captured ``(requires_grad, is_leaf)`` of the argument at one slot.
 
     Parameters
@@ -5123,11 +5127,16 @@ def _captured_slot_grad_flags(layer: Op, arg_type: str, key: Any) -> tuple[bool,
         Either ``"args"`` or ``"kwargs"``.
     key:
         Parent-argument position key, possibly nested as a tuple.
+    parent_layer:
+        Op whose output fills this slot, when it is a graph parent. Its
+        recorded ``grad_fn_class_name`` is the autograd fact for leafness: no
+        ``grad_fn`` means the consumed value was a leaf (a model input, or an
+        output re-marked with ``requires_grad_``).
 
     Returns
     -------
     tuple[bool, bool]
-        The snapshot's flags; ``(False, False)`` (the detached-replay behavior)
+        The captured flags; ``(False, False)`` (the detached-replay behavior)
         when no tensor snapshot sits at this position.
     """
 
@@ -5139,7 +5148,10 @@ def _captured_slot_grad_flags(layer: Op, arg_type: str, key: Any) -> tuple[bool,
         # No snapshot at this position (the parent fills a slot the saved args
         # do not carry): there is no captured flag to mirror.
         return False, False
-    return _snapshot_grad_flags(snapshot)
+    requires_grad, snapshot_leaf = _snapshot_grad_flags(snapshot)
+    if not requires_grad or parent_layer is None:
+        return requires_grad, snapshot_leaf
+    return True, getattr(parent_layer, "grad_fn_class_name", None) is None
 
 
 def _deep_clone_tensors(val: Any) -> Any:
