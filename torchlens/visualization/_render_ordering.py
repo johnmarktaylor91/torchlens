@@ -114,19 +114,10 @@ def _verify_and_apply_sibling_ordering(
         )
         for chain in chains
     }
-    survivors = tuple(
-        chain for chain in chains if ratios[_sibling_chain_key(chain)] <= SIBLING_ORDER_STRETCH_CAP
-    )
-    current_source = (
-        source if survivors == chains else _inject_sibling_rank_groups(baseline_source, survivors)
-    )
-    current_layout = (
-        injected
-        if survivors == chains
-        else _layout_ordered_dot_plain(current_source, rankdir, captured_edges, baseline)
-    )
-
-    for _ in range(2):
+    survivors = chains
+    current_source, current_layout = source, injected
+    # One stretch filter on the injected layout, then up to two retries.
+    for _ in range(3):
         bad_chains = tuple(
             chain
             for chain in survivors
@@ -134,9 +125,11 @@ def _verify_and_apply_sibling_ordering(
             > SIBLING_ORDER_STRETCH_CAP
         )
         if not bad_chains:
-            return current_source, _sibling_order_decision(chains, survivors, ratios)
+            break
         survivors = tuple(chain for chain in survivors if chain not in bad_chains)
         current_source = _inject_sibling_rank_groups(baseline_source, survivors)
+        if not _sibling_groups_fit(current_source, node_clusters):
+            return baseline_source, _sibling_order_decision(chains, (), ratios)
         current_layout = _layout_ordered_dot_plain(
             current_source, rankdir, captured_edges, baseline
         )

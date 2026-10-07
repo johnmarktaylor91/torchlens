@@ -334,6 +334,41 @@ def test_verify_rebuilds_when_a_chain_loses_a_rendered_node(
     assert decision.surviving_keys == (("src", ("top1", "top2")),)
 
 
+def test_rebuilt_retry_source_is_scope_checked(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A group re-inserted after a stretch drop is scope-checked before it reaches dot."""
+
+    real_baseline = _DUELING_SKELETON.replace("{INJECT}", "")
+    baseline = real_baseline.replace("\tsrc [label=<src>]", '\tsrc [label="subgraph cluster_l {"]')
+    clustered, stretched = _chain(("a2", "c"), "l"), _chain(("top1", "top2"))
+    # The renderer emits the clustered group inside the real cluster, so the first source is valid.
+    valid = _inject_sibling_rank_groups(real_baseline, (clustered, stretched))
+    source = valid.replace("\tsrc [label=<src>]", '\tsrc [label="subgraph cluster_l {"]')
+    names = ("src", "a", "b", "a2", "b2", "c", "d", "e", "top1", "top2")
+    layout = _render_ordering.PlainLayout(nodes=dict.fromkeys(names, (0.0, 0.0)), edge_spans={})
+    laid_out: list[str] = []
+
+    def fake_layout(dot_source: str, *args: object) -> object:
+        laid_out.append(dot_source)
+        return layout
+
+    monkeypatch.setattr(_render_ordering, "_layout_dot_plain", fake_layout)
+    monkeypatch.setattr(
+        _render_ordering,
+        "_sibling_chain_stretch_ratio",
+        lambda chain, *args: 10.0 if chain.targets == ("top1", "top2") else 1.0,
+    )
+    clusters = _render_ordering._dot_node_clusters(baseline)
+    assert _render_ordering._sibling_groups_fit(source, clusters)
+
+    final, decision = _render_ordering._verify_and_apply_sibling_ordering(
+        source, (clustered, stretched), [], "TB"
+    )
+
+    assert "tl:sibling-order" not in final
+    assert decision.survivor_count == 0
+    assert all(_render_ordering._sibling_groups_fit(s, clusters) for s in laid_out)
+
+
 class _Branches(torch.nn.Module):
     """Two parallel branches inside one parent module, like an inception block."""
 
