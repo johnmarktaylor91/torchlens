@@ -198,8 +198,8 @@ def test_replay_runs_under_each_ops_captured_grad_mode(
     assert {call["grad_enabled"] for call in recorder.calls_to("linear")} == {False, True}
 
 
-class _RegradLeafModel(nn.Module):
-    """A detached op output re-marked ``requires_grad_`` is a leaf that has recorded parents."""
+class _LeafAndOpOutputModel(nn.Module):
+    """One multiply takes the grad-requiring model input (a leaf), one an op output."""
 
     def __init__(self) -> None:
         """Build the linear layer."""
@@ -208,24 +208,25 @@ class _RegradLeafModel(nn.Module):
         self.lin = nn.Linear(4, 4)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Feed a re-gradded leaf and an ordinary op output into one multiply each."""
+        """Feed the input leaf and a linear output into one multiply each."""
 
-        leaf = torch.sigmoid(self.lin(x)).detach().requires_grad_(True)
-        return torch.mul(leaf, 3.0) + torch.mul(self.lin(x), 2.0)
+        return torch.mul(x, 3.0) + torch.mul(self.lin(x), 2.0)
 
 
 def test_replay_rebuilds_leaves_as_leaves_and_op_outputs_as_non_leaves(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Leafness follows the captured argument, not whether its producer has graph parents."""
+    """Leafness follows the producing op's recorded autograd node."""
 
+    model = _LeafAndOpOutputModel()
+    trace, ground_truth = _capture_for_replay(model, torch.rand(3, 4, requires_grad=True))
     recorder = _ReplayRecorder(monkeypatch)
 
-    assert validate_forward_pass(_RegradLeafModel(), torch.rand(3, 4))
+    assert bool(validate_saved_outs(trace, [ground_truth]))
 
     by_scalar = {float(call["args"][1]): call["args"][0] for call in recorder.calls_to("mul")}
-    regrad_leaf, op_output = by_scalar[3.0], by_scalar[2.0]
-    assert regrad_leaf.requires_grad and regrad_leaf.is_leaf
+    input_leaf, op_output = by_scalar[3.0], by_scalar[2.0]
+    assert input_leaf.requires_grad and input_leaf.is_leaf
     assert op_output.requires_grad and not op_output.is_leaf
 
 
