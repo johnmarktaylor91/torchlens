@@ -73,15 +73,26 @@ def _sample_codes() -> list[types.CodeType]:
     return [code for root in roots for code in _walk_codes(root)]
 
 
+def _runs_beneath(frame: types.FrameType, code: types.CodeType) -> bool:
+    """Return whether ``frame`` executes strictly beneath a frame running ``code``."""
+
+    caller = frame.f_back
+    while caller is not None:
+        if caller.f_code is code:
+            return True
+        caller = caller.f_back
+    return False
+
+
 @contextmanager
-def _count_python_frame_entries() -> Iterator[list[str]]:
-    """Record the code name of every Python frame entered while active."""
+def _count_frames_entered_beneath(code: types.CodeType) -> Iterator[list[str]]:
+    """Record every Python frame entered strictly beneath a frame running ``code``."""
 
     entered: list[str] = []
     previous = sys.getprofile()
 
     def profile(frame: types.FrameType, event: str, arg: Any) -> None:
-        if event == "call":
+        if event == "call" and _runs_beneath(frame, code):
             entered.append(frame.f_code.co_name)
 
     sys.setprofile(profile)
@@ -110,7 +121,8 @@ def test_col_offset_map_build_enters_no_python_frame() -> None:
 
     code = torch.nn.Module._call_impl.__code__
     assert len(code.co_code) > 400
-    with _count_python_frame_entries() as entered:
+    build_code = introspection._build_col_offset_map.__code__
+    with _count_frames_entered_beneath(build_code) as entered:
         offset_map = introspection._build_col_offset_map(code)
     assert offset_map
     assert entered == []
@@ -146,8 +158,10 @@ def test_cold_map_build_in_hooked_capture_triggers_no_rng_frame_snapshots() -> N
         finally:
             state["in_build"] -= 1
 
+    build_code = original_build.__code__
+
     def counting_snapshot(self: Any, frame: types.FrameType) -> None:
-        if state["in_build"]:
+        if state["in_build"] and _runs_beneath(frame, build_code):
             snapshots_in_build.append(frame.f_code.co_name)
         snapshotted_codes.add(frame.f_code)
         original_snapshot(self, frame)
