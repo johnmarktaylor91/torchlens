@@ -5130,8 +5130,12 @@ def _captured_slot_grad_flags(
     parent_layer:
         Op whose output fills this slot, when it is a graph parent. Its
         recorded ``grad_fn_class_name`` is the autograd fact for leafness: no
-        ``grad_fn`` means the consumed value was a leaf (a model input, or an
-        output re-marked with ``requires_grad_``).
+        ``grad_fn`` means the consumed value was a leaf (a model input). Any
+        recorded node means a non-leaf. A same-object in-place return that
+        leaves a leaf (``t.detach().requires_grad_()``) is recorded against
+        TorchLens's safe copy (``CloneBackward0``) and so replays as a
+        non-leaf: the safe direction, since every in-place op legal on the
+        captured leaf stays legal on a non-leaf.
 
     Returns
     -------
