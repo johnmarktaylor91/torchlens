@@ -10,10 +10,15 @@ ordering constraints and never touch Trace state.
 from __future__ import annotations
 
 import os
+import re
+import subprocess
 import tempfile
 import warnings
+from collections import defaultdict
 from typing import TYPE_CHECKING, cast
 
+from ..errors._base import TorchLensWarning
+from ..utils.display import user_stacklevel
 from . import _render_utils
 from ._render_common import (
     _SIBLING_ORDER_WARNING_EMITTED,
@@ -89,12 +94,18 @@ def _verify_and_apply_sibling_ordering(
 
     baseline_source = _strip_sibling_rank_groups(source)
     baseline = _layout_dot_plain(baseline_source, rankdir, captured_edges)
-    chains = _filter_sibling_chains_to_rendered_nodes(
+    rendered_chains = _filter_sibling_chains_to_rendered_nodes(
         cast(tuple[SiblingOrderChain, ...], chains), baseline.nodes
     )
+    chains = _filter_sibling_chains_to_member_cluster(rendered_chains, baseline_source)
     if not chains:
         return baseline_source, _sibling_order_decision((), (), {})
+    if chains != rendered_chains:
+        # A dropped chain may still sit in ``source``; rebuild from the baseline.
+        source = _inject_sibling_rank_groups(baseline_source, chains)
     injected = _layout_dot_plain(source, rankdir, captured_edges)
+    if baseline.nodes and not injected.nodes:
+        raise subprocess.SubprocessError("dot -Tplain produced no layout for the ordered graph")
     _assert_sibling_backstops(baseline, injected, chains, captured_edges)
 
     ratios = {
@@ -148,11 +159,144 @@ def _warn_sibling_order_fallback_once(exc: BaseException) -> None:
         return
     _SIBLING_ORDER_WARNING_EMITTED = True
     warnings.warn(
-        "Sibling-order verification failed; rendering without the optional sibling-order "
-        f"post-pass. ({type(exc).__name__}: {exc})",
-        RuntimeWarning,
-        stacklevel=3,
+        TorchLensWarning(
+            "Sibling-order verification failed; rendering the plain layout without the "
+            f"optional sibling-order post-pass. ({type(exc).__name__}: {exc}) "
+            "Remedy: pass order_siblings=False to skip the pass, or report the Graphviz "
+            "version and model if the plain layout looks wrong",
+            code="sibling_order_fallback",
+        ),
+        stacklevel=user_stacklevel(),
     )
+
+
+# Line shapes of the DOT that python-graphviz emits: one statement per line.
+_DOT_GRAPH_OPEN = re.compile(r"^\s*(?:strict\s+)?(?:di)?graph\b[^\[]*\{\s*$")
+_DOT_SUBGRAPH_OPEN = re.compile(r'^\s*subgraph\s+("(?:[^"\\]|\\.)*"|[^\s{]+)\s*\{\s*$')
+_DOT_ANONYMOUS_OPEN = re.compile(r"^\s*(?:subgraph\s*)?\{\s*$")
+_DOT_CLOSE = re.compile(r"^\s*\}\s*$")
+_DOT_ID = re.compile(r'"(?:[^"\\]|\\.)*"|[^\s\[\];{}=]+')
+_DOT_KEYWORDS = frozenset({"graph", "node", "edge"})
+# Sentinel for a node referenced from two clusters where neither contains the other.
+_AMBIGUOUS_CLUSTER = "\0ambiguous"
+
+
+def _filter_sibling_chains_to_member_cluster(
+    chains: tuple[SiblingOrderChain, ...],
+    baseline_source: str,
+) -> tuple[SiblingOrderChain, ...]:
+    """Keep sibling chains whose rank group sits in its members' own cluster.
+
+    Graphviz does not support a ``rank=same`` set whose members live in a
+    different cluster than the set itself: dot 2.43 warns "already in a
+    rankset, deleted from cluster" and pulls the node out of its cluster, and
+    dot 16 fails with "trouble in init_rank" or crashes. A chain survives only
+    when every target's innermost cluster is the cluster its group is emitted
+    into (``lca_key``), or all targets and the group are top-level. When the
+    baseline DOT cannot be parsed, every chain is dropped (invariant 11).
+
+    Parameters
+    ----------
+    chains:
+        Candidate sibling chains.
+    baseline_source:
+        DOT source with every sibling-order rank group stripped.
+
+    Returns
+    -------
+    tuple[SiblingOrderChain, ...]
+        Chains that are safe to emit, in input order.
+    """
+
+    if not chains:
+        return chains
+    innermost = _dot_innermost_clusters(baseline_source)
+    if innermost is None:
+        return ()
+    return tuple(
+        chain
+        for chain in chains
+        if all(innermost.get(target) == _sibling_group_cluster(chain) for target in chain.targets)
+    )
+
+
+def _sibling_group_cluster(chain: SiblingOrderChain) -> str | None:
+    """Return the DOT cluster name a chain's rank group is emitted into."""
+
+    if chain.lca_key == -1:
+        return None
+    return f"cluster_{cast(str, chain.lca_key).replace(':', '_pass')}"
+
+
+def _dot_innermost_clusters(source: str) -> dict[str, str | None] | None:
+    """Map each DOT node to the innermost cluster that contains it.
+
+    A node belongs to every subgraph that names it, so its innermost cluster
+    is the deepest cluster path among its references. Top-level nodes map to
+    ``None``; nodes named from two unrelated clusters map to a sentinel that
+    matches no group. Returns ``None`` when the braces do not balance.
+    """
+
+    paths = _dot_node_cluster_paths(source)
+    if paths is None:
+        return None
+    innermost: dict[str, str | None] = {}
+    for name, node_paths in paths.items():
+        deepest = max(node_paths, key=len)
+        if any(path != deepest[: len(path)] for path in node_paths):
+            innermost[name] = _AMBIGUOUS_CLUSTER
+        else:
+            innermost[name] = deepest[-1] if deepest else None
+    return innermost
+
+
+def _dot_node_cluster_paths(source: str) -> dict[str, set[tuple[str, ...]]] | None:
+    """Return the cluster paths at which each node is referenced in ``source``."""
+
+    stack: list[str | None] = []
+    paths: dict[str, set[tuple[str, ...]]] = defaultdict(set)
+    for line in source.splitlines():
+        subgraph_match = _DOT_SUBGRAPH_OPEN.match(line)
+        if subgraph_match is not None:
+            name = _unquote_dot_id(subgraph_match.group(1))
+            stack.append(name if name.startswith("cluster") else None)
+        elif _DOT_GRAPH_OPEN.match(line) or _DOT_ANONYMOUS_OPEN.match(line):
+            stack.append(None)
+        elif _DOT_CLOSE.match(line):
+            if not stack:
+                return None
+            stack.pop()
+        elif stack:
+            cluster_path = tuple(name for name in stack if name is not None)
+            for node_name in _dot_statement_node_refs(line):
+                paths[node_name].add(cluster_path)
+    return None if stack else dict(paths)
+
+
+def _dot_statement_node_refs(line: str) -> tuple[str, ...]:
+    """Return the node names a node or edge statement line references."""
+
+    text = line.strip()
+    first = _DOT_ID.match(text)
+    if first is None or text.startswith("//"):
+        return ()
+    rest = text[first.end() :].lstrip()
+    if rest.startswith("=") or (first.group(0) in _DOT_KEYWORDS and rest.startswith("[")):
+        return ()
+    if not rest.startswith("->"):
+        return (_unquote_dot_id(first.group(0)),) if not rest or rest.startswith("[") else ()
+    second = _DOT_ID.match(rest[2:].lstrip())
+    if second is None:
+        return ()
+    return _unquote_dot_id(first.group(0)), _unquote_dot_id(second.group(0))
+
+
+def _unquote_dot_id(token: str) -> str:
+    """Return a DOT identifier without its quotes and escapes."""
+
+    if len(token) >= 2 and token.startswith('"') and token.endswith('"'):
+        return token[1:-1].replace('\\"', '"')
+    return token
 
 
 def _sibling_chain_key(chain: SiblingOrderChain) -> tuple[str, tuple[str, ...]]:
@@ -258,6 +402,8 @@ def _strip_sibling_rank_groups(source: str) -> str:
 
 
 __all__ = [
+    "_dot_innermost_clusters",
+    "_filter_sibling_chains_to_member_cluster",
     "_layout_dot_plain",
     "_queue_sibling_rank_group",
     "_should_order_siblings",
