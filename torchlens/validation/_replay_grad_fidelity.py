@@ -48,6 +48,7 @@ def built_outside_inference_mode(build: Callable[..., _R]) -> Callable[..., _R]:
 
     @functools.wraps(build)
     def wrapper(*args: Any, **kwargs: Any) -> _R:
+        """Run ``build`` with inference mode off."""
         with torch.inference_mode(False):
             return build(*args, **kwargs)
 
