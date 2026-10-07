@@ -82,7 +82,6 @@ def test_raw_aten_packet_call_is_recorded_and_validates() -> None:
     _assert_recorded_and_valid(_RawAtenTimesOne(), "tanh")
 
 
-@pytest.mark.smoke
 def test_raw_aten_overload_module_return_is_recorded_and_validates() -> None:
     """A submodule returning ``torch.ops.aten.sigmoid.default(...)`` is no longer adopted."""
 
@@ -108,7 +107,6 @@ class _CustomOpModel(nn.Module):
         return _scaled_tanh(self.fc(x), 2.0) + x
 
 
-@pytest.mark.smoke
 @pytest.mark.skipif(not _HAS_CUSTOM_OP, reason="torch.library.custom_op needs torch>=2.4")
 def test_library_custom_op_is_recorded_and_validates() -> None:
     _assert_recorded_and_valid(_CustomOpModel(), "scaled_tanh")
@@ -166,7 +164,6 @@ class _ClosureIntoCustomOp(nn.Module):
         self.forward = lambda x: torch.ops.aten.add.Tensor(x, table) * 2.0  # type: ignore[method-assign]
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "build", [_GlobalIntoRawAten, _ClosureIntoCustomOp], ids=["global", "closure"]
 )
@@ -180,7 +177,6 @@ def test_source_less_argument_to_a_recorded_op_still_fails(build: type[nn.Module
     assert failure.extra["reasons"] == ["unattributed_tensor_args"], failure
 
 
-@pytest.mark.smoke
 def test_recorders_are_wrapped_epoch_scoped() -> None:
     """``unwrap_torch`` restores the pristine ``torch._ops`` call classes; ``wrap_torch`` re-arms."""
 
@@ -241,7 +237,6 @@ def _unrecorded_mutation_rows(trace: Any) -> list[dict[str, object]]:
     ]
 
 
-@pytest.mark.smoke
 @pytest.mark.skipif(not _HAS_CUSTOM_OP, reason="torch.library.custom_op needs torch>=2.4")
 @pytest.mark.parametrize("op_name", ["scale_", "doubled"])
 def test_receiver_mutating_custom_op_is_recorded_in_place(op_name: str) -> None:
@@ -259,7 +254,7 @@ def test_receiver_mutating_custom_op_is_recorded_in_place(op_name: str) -> None:
     assert not _unrecorded_mutation_rows(trace)
 
 
-@pytest.mark.smoke
+@pytest.mark.smoke_cells("test_unrecordable_mutating_operator_fails_validation[write_into]")
 @pytest.mark.skipif(not _HAS_CUSTOM_OP, reason="torch.library.custom_op needs torch>=2.4")
 @pytest.mark.parametrize("op_name", ["write_into", "foreach"])
 def test_unrecordable_mutating_operator_fails_validation(op_name: str) -> None:
@@ -282,7 +277,6 @@ def test_unrecordable_mutating_operator_fails_validation(op_name: str) -> None:
         assert "unrecorded_operator_mutation" in failure.extra["reasons"], failure
 
 
-@pytest.mark.smoke
 @pytest.mark.skipif(not _HAS_CUSTOM_OP, reason="torch.library.custom_op needs torch>=2.4")
 def test_unreadable_schema_none_return_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     """A None-returning operator whose schema cannot be read is disclosed."""
@@ -363,7 +357,6 @@ class _AliasedWriteModel(nn.Module):
         return out + y
 
 
-@pytest.mark.smoke
 @pytest.mark.skipif(not _HAS_CUSTOM_OP, reason="torch.library.custom_op needs torch>=2.4")
 @pytest.mark.parametrize("op_name", ["mut_ret", "unknown_ret", "buf_ret"])
 def test_write_no_return_aliases_fails_validation(op_name: str) -> None:
@@ -382,7 +375,6 @@ def test_write_no_return_aliases_fails_validation(op_name: str) -> None:
     assert "unrecorded_operator_mutation" in failure.extra["reasons"], failure
 
 
-@pytest.mark.smoke
 @pytest.mark.skipif(not _HAS_CUSTOM_OP, reason="torch.library.custom_op needs torch>=2.4")
 @pytest.mark.parametrize("op_name", ["add_", "out", "inplace"])
 def test_write_a_return_aliases_is_still_recorded(op_name: str) -> None:
