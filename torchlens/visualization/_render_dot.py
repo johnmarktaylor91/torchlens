@@ -842,7 +842,9 @@ def _finalize_forward_ir(
         request.vis_mode,
         work.module_clusters,
         overrides,
-        list(forward_render_ir.ordering_constraints),
+        # Cluster-scoped chains are already queued on their module cluster;
+        # re-emitting them at top level put clustered nodes in a root rankset.
+        [chain for chain in forward_render_ir.ordering_constraints if chain.lca_key == -1],
         forward_render_ir.regions,
     )
     return replace(forward_render_ir, dot_statements=tuple(work.builder.calls))
@@ -975,6 +977,26 @@ def _emit_and_finish_forward(
     if context.source_text is not None and not compose_code_panel:
         render_code_panel_subgraph(dot, context.source_text)
 
+    source_override = None
+    trace._last_sibling_ordering_decision = SiblingOrderDecision(0, 0, {}, ())
+    if forward_render_ir.ordering_constraints:
+        try:
+            source_override, decision = _verify_and_apply_sibling_ordering(
+                dot.source,
+                forward_render_ir.ordering_constraints,
+                work.captured_edges,
+                context.rankdir,
+            )
+            trace._last_sibling_ordering_decision = decision
+        except (subprocess.SubprocessError, OSError) as exc:
+            if _strict_sibling_order_checks_enabled():
+                raise
+            # dot.source still carries the rank groups that broke the ordered
+            # layout (a dot 16 init_rank error or crash), so render the plain one.
+            source_override = _strip_sibling_rank_groups(dot.source)
+            _warn_sibling_order_fallback_once(exc)
+    final_source = source_override if source_override is not None else dot.source
+
     render_timeout = 120
     if in_notebook() and not target.save_only:
         try:
@@ -992,7 +1014,7 @@ def _emit_and_finish_forward(
         # every CLI path was already bounded at ``render_timeout`` with a
         # typed error. Timeout/failure map to the same typed raises.
         with tempfile.NamedTemporaryFile("w", suffix=".dot", delete=False) as notebook_source_file:
-            notebook_source_file.write(dot.source)
+            notebook_source_file.write(final_source)
             notebook_source_path = notebook_source_file.name
         try:
             notebook_image_root = getattr(trace, "_visualizer_dir", None)
@@ -1022,22 +1044,6 @@ def _emit_and_finish_forward(
             )
         display_fn(SVG(graph_svg))
 
-    source_override = None
-    trace._last_sibling_ordering_decision = SiblingOrderDecision(0, 0, {}, ())
-    if forward_render_ir.ordering_constraints:
-        try:
-            source_override, decision = _verify_and_apply_sibling_ordering(
-                dot.source,
-                forward_render_ir.ordering_constraints,
-                work.captured_edges,
-                context.rankdir,
-            )
-            trace._last_sibling_ordering_decision = decision
-        except (subprocess.SubprocessError, OSError) as exc:
-            if _strict_sibling_order_checks_enabled():
-                raise
-            _warn_sibling_order_fallback_once(exc)
-
     # r-b6 R19-6 / T9 (grind-p3): the visualizer scratch dir is created
     # LAZILY while nodes render (raw-input montages, feature maps). The root
     # is passed to the Graphviz subprocess as its working directory below,
@@ -1045,7 +1051,6 @@ def _emit_and_finish_forward(
     # relative image refs instead of a per-run mkdtemp path that dies with
     # the trace.
     late_visualizer_dir = getattr(trace, "_visualizer_dir", None)
-    final_source = source_override if source_override is not None else dot.source
     source_path = dot.save(target.outpath)
     with open(source_path, "w", encoding="utf-8") as source_file:
         source_file.write(final_source)

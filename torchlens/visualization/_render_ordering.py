@@ -10,10 +10,16 @@ ordering constraints and never touch Trace state.
 from __future__ import annotations
 
 import os
+import re
+import subprocess
 import tempfile
 import warnings
+from collections import defaultdict
+from dataclasses import replace
 from typing import TYPE_CHECKING, cast
 
+from ..errors._base import TorchLensWarning
+from ..utils.display import user_stacklevel
 from . import _render_utils
 from ._render_common import (
     _SIBLING_ORDER_WARNING_EMITTED,
@@ -89,12 +95,17 @@ def _verify_and_apply_sibling_ordering(
 
     baseline_source = _strip_sibling_rank_groups(source)
     baseline = _layout_dot_plain(baseline_source, rankdir, captured_edges)
-    chains = _filter_sibling_chains_to_rendered_nodes(
-        cast(tuple[SiblingOrderChain, ...], chains), baseline.nodes
+    candidates = cast(tuple[SiblingOrderChain, ...], chains)
+    node_clusters = _dot_node_clusters(baseline_source)
+    chains = _fit_sibling_chains_to_clusters(
+        _filter_sibling_chains_to_rendered_nodes(candidates, baseline.nodes), node_clusters
     )
-    if not chains:
+    if chains != candidates:
+        # ``source`` still holds dropped or moved groups; rebuild from the baseline.
+        source = _inject_sibling_rank_groups(baseline_source, chains)
+    if not chains or not _sibling_groups_fit(source, node_clusters):
         return baseline_source, _sibling_order_decision((), (), {})
-    injected = _layout_dot_plain(source, rankdir, captured_edges)
+    injected = _layout_ordered_dot_plain(source, rankdir, captured_edges, baseline)
     _assert_sibling_backstops(baseline, injected, chains, captured_edges)
 
     ratios = {
@@ -103,19 +114,10 @@ def _verify_and_apply_sibling_ordering(
         )
         for chain in chains
     }
-    survivors = tuple(
-        chain for chain in chains if ratios[_sibling_chain_key(chain)] <= SIBLING_ORDER_STRETCH_CAP
-    )
-    current_source = (
-        source if survivors == chains else _inject_sibling_rank_groups(baseline_source, survivors)
-    )
-    current_layout = (
-        injected
-        if survivors == chains
-        else _layout_dot_plain(current_source, rankdir, captured_edges)
-    )
-
-    for _ in range(2):
+    survivors = chains
+    current_source, current_layout = source, injected
+    # One stretch filter on the injected layout, then up to two retries.
+    for _ in range(3):
         bad_chains = tuple(
             chain
             for chain in survivors
@@ -123,10 +125,14 @@ def _verify_and_apply_sibling_ordering(
             > SIBLING_ORDER_STRETCH_CAP
         )
         if not bad_chains:
-            return current_source, _sibling_order_decision(chains, survivors, ratios)
+            break
         survivors = tuple(chain for chain in survivors if chain not in bad_chains)
         current_source = _inject_sibling_rank_groups(baseline_source, survivors)
-        current_layout = _layout_dot_plain(current_source, rankdir, captured_edges)
+        if not _sibling_groups_fit(current_source, node_clusters):
+            return baseline_source, _sibling_order_decision(chains, (), ratios)
+        current_layout = _layout_ordered_dot_plain(
+            current_source, rankdir, captured_edges, baseline
+        )
     return current_source, _sibling_order_decision(chains, survivors, ratios)
 
 
@@ -148,11 +154,275 @@ def _warn_sibling_order_fallback_once(exc: BaseException) -> None:
         return
     _SIBLING_ORDER_WARNING_EMITTED = True
     warnings.warn(
-        "Sibling-order verification failed; rendering without the optional sibling-order "
-        f"post-pass. ({type(exc).__name__}: {exc})",
-        RuntimeWarning,
-        stacklevel=3,
+        TorchLensWarning(
+            "Sibling-order verification failed; rendering the plain layout without the "
+            f"optional sibling-order post-pass. ({type(exc).__name__}: {exc}) "
+            "Remedy: pass order_siblings=False to skip the pass, or report the Graphviz "
+            "version and model if the plain layout looks wrong",
+            code="sibling_order_fallback",
+        ),
+        stacklevel=user_stacklevel(),
     )
+
+
+# Line shapes of the DOT that python-graphviz emits: one statement per line.
+_DOT_GRAPH_OPEN = re.compile(r"^\s*(?:strict\s+)?(?:di)?graph\b[^\[]*\{\s*$")
+_DOT_SUBGRAPH_OPEN = re.compile(r'^\s*subgraph\s+("(?:[^"\\]|\\.)*"|[^\s{]+)\s*\{\s*$')
+_DOT_ANONYMOUS_OPEN = re.compile(r"^\s*(?:subgraph\s*)?\{\s*$")
+_DOT_CLOSE = re.compile(r"^\s*\}\s*$")
+_DOT_ID = re.compile(r'"(?:[^"\\]|\\.)*"|[^\s\[\];{}=]+')
+_DOT_KEYWORDS = frozenset({"graph", "node", "edge"})
+
+
+def _layout_ordered_dot_plain(
+    source: str,
+    rankdir: str,
+    captured_edges: list[CapturedForwardEdge],
+    baseline: PlainLayout,
+) -> PlainLayout:
+    """Lay out an ordered DOT source, raising when dot returns no layout for it.
+
+    An empty layout has no edge spans, so the stretch check would pass it as
+    harmless; raising routes it to the plain-layout fallback instead.
+    """
+
+    layout = _layout_dot_plain(source, rankdir, captured_edges)
+    if baseline.nodes and not layout.nodes:
+        raise subprocess.SubprocessError("dot -Tplain produced no layout for the ordered graph")
+    return layout
+
+
+def _fit_sibling_chains_to_clusters(
+    chains: tuple[SiblingOrderChain, ...],
+    node_clusters: dict[str, tuple[str, ...] | None] | None,
+) -> tuple[SiblingOrderChain, ...]:
+    """Place each sibling chain's rank group in a cluster that holds all its targets.
+
+    dot does not support a top-level ``rank=same`` set over nodes that live in
+    a cluster: dot 2.43 may pull the node out of its cluster ("already in a
+    rankset, deleted from cluster") and dot 16 fails with "trouble in
+    init_rank" or crashes. A set emitted inside a cluster may span that
+    cluster's nested clusters. So a chain keeps its group when the group's
+    cluster (``lca_key``) encloses every target, moves into the deepest
+    cluster shared by all targets otherwise, and is dropped when its targets
+    share no cluster yet some are clustered. Unparseable DOT, unknown targets
+    and nodes named from two unrelated clusters drop chains (invariant 11).
+
+    Parameters
+    ----------
+    chains:
+        Candidate sibling chains.
+    node_clusters:
+        :func:`_dot_node_clusters` of the baseline DOT, ``None`` when unreadable.
+
+    Returns
+    -------
+    tuple[SiblingOrderChain, ...]
+        Chains safe to emit, in input order, some with a moved ``lca_key``.
+    """
+
+    if node_clusters is None:
+        return ()
+    placed = (_place_sibling_chain(chain, node_clusters) for chain in chains)
+    return tuple(chain for chain in placed if chain is not None)
+
+
+def _place_sibling_chain(
+    chain: SiblingOrderChain,
+    node_clusters: dict[str, tuple[str, ...] | None],
+) -> SiblingOrderChain | None:
+    """Return ``chain`` placed in a cluster holding every target, or ``None``."""
+
+    paths = [node_clusters.get(target) for target in chain.targets]
+    if any(path is None for path in paths):
+        return None
+    member_paths = cast(list[tuple[str, ...]], paths)
+    shared = _shared_cluster_prefix(member_paths)
+    if not shared:
+        return chain if chain.lca_key == -1 and not any(member_paths) else None
+    if chain.lca_key != -1 and _cluster_name(cast(str, chain.lca_key)) in shared:
+        return chain
+    module_key = shared[-1].removeprefix("cluster_")
+    if ":" in module_key or _cluster_name(module_key) != shared[-1]:
+        return None
+    # ``_inject_sibling_rank_groups`` maps this key back to the same cluster name.
+    return replace(chain, lca_key=module_key)
+
+
+def _shared_cluster_prefix(paths: list[tuple[str, ...]]) -> tuple[str, ...]:
+    """Return the outermost-first cluster names common to every path."""
+
+    shared = paths[0]
+    for path in paths[1:]:
+        length = 0
+        while length < min(len(shared), len(path)) and shared[length] == path[length]:
+            length += 1
+        shared = shared[:length]
+    return shared
+
+
+def _cluster_name(module_key: str) -> str:
+    """Return the DOT cluster name TorchLens emits for a rendered module key."""
+
+    return f"cluster_{module_key.replace(':', '_pass')}"
+
+
+def _dot_node_clusters(source: str) -> dict[str, tuple[str, ...] | None] | None:
+    """Map each DOT node to the nested cluster names that contain it, outermost first.
+
+    A node belongs to every subgraph that names it, so its clusters are the
+    deepest cluster path among its references. Top-level nodes map to ``()``;
+    nodes named from two unrelated clusters map to ``None``. Returns ``None``
+    when the DOT is outside the one-statement-per-line shape this parser reads.
+    """
+
+    paths = _dot_node_cluster_paths(source)
+    if paths is None:
+        return None
+    node_clusters: dict[str, tuple[str, ...] | None] = {}
+    for name, node_paths in paths.items():
+        deepest = max(node_paths, key=len)
+        nested = all(path == deepest[: len(path)] for path in node_paths)
+        node_clusters[name] = deepest if nested else None
+    return node_clusters
+
+
+def _sibling_groups_fit(
+    source: str, node_clusters: dict[str, tuple[str, ...] | None] | None
+) -> bool:
+    """Return whether every sibling-order group in ``source`` sits in a cluster holding its nodes.
+
+    Checks the DOT actually about to be laid out, so a group that string
+    insertion placed elsewhere than :func:`_place_sibling_chain` intended
+    disables the pass instead of reaching dot.
+    """
+
+    statements = _dot_scoped_statements(source)
+    if statements is None or node_clusters is None:
+        return False
+    group_path: tuple[str, ...] | None = None
+    for cluster_path, line in statements:
+        if "tl:sibling-order:start" in line:
+            group_path = cluster_path
+        elif "tl:sibling-order:end" in line:
+            group_path = None
+        elif group_path is not None and not all(
+            _group_holds_node(group_path, node_clusters.get(name))
+            for name in _dot_statement_node_refs(line)
+        ):
+            return False
+    return True
+
+
+def _group_holds_node(group_path: tuple[str, ...], clusters: tuple[str, ...] | None) -> bool:
+    """Return whether a group at ``group_path`` may hold a node in ``clusters``."""
+
+    if clusters is None or clusters[: len(group_path)] != group_path:
+        return False
+    return bool(group_path) or not clusters
+
+
+def _dot_node_cluster_paths(source: str) -> dict[str, set[tuple[str, ...]]] | None:
+    """Return the cluster paths at which each node is referenced in ``source``."""
+
+    statements = _dot_scoped_statements(source)
+    if statements is None:
+        return None
+    paths: dict[str, set[tuple[str, ...]]] = defaultdict(set)
+    for cluster_path, line in statements:
+        for node_name in _dot_statement_node_refs(line):
+            paths[node_name].add(cluster_path)
+    return dict(paths)
+
+
+def _dot_scoped_statements(source: str) -> list[tuple[tuple[str, ...], str]] | None:
+    """Return each statement line of ``source`` with its enclosing cluster names.
+
+    Returns ``None`` when the braces do not balance or a quoted string or HTML
+    label spans lines.
+    """
+
+    stack: list[str | None] = []
+    statements: list[tuple[tuple[str, ...], str]] = []
+    for line in source.splitlines():
+        if not _dot_line_is_complete(line):
+            return None
+        opened = _dot_opened_scope(line)
+        if opened is not None:
+            stack.append(opened[0])
+        elif _DOT_CLOSE.match(line):
+            if not stack:
+                return None
+            stack.pop()
+        elif stack:
+            statements.append((tuple(name for name in stack if name is not None), line))
+    return None if stack else statements
+
+
+def _dot_opened_scope(line: str) -> tuple[str | None] | None:
+    """Return ``(cluster name,)`` when ``line`` opens a scope (``(None,)`` if not a cluster)."""
+
+    subgraph_match = _DOT_SUBGRAPH_OPEN.match(line)
+    if subgraph_match is not None:
+        name = _unquote_dot_id(subgraph_match.group(1))
+        return (name if name.startswith("cluster") else None,)
+    if _DOT_GRAPH_OPEN.match(line) or _DOT_ANONYMOUS_OPEN.match(line):
+        return (None,)
+    return None
+
+
+def _dot_line_is_complete(line: str) -> bool:
+    """Return whether ``line`` closes every quoted string and HTML label it opens.
+
+    A multi-line label could hide ``{`` or ``}`` lines from the brace tracking,
+    so such DOT is refused rather than misread. Inside an HTML label ``"`` is
+    plain text; outside, the ``>`` of an ``->`` edge operator opens nothing.
+    """
+
+    in_quote = False
+    html_depth = 0
+    previous = ""
+    escaped = False
+    for char in line:
+        if in_quote:
+            in_quote = escaped or char != '"'
+            escaped = not escaped and char == "\\"
+        elif html_depth:
+            html_depth += {"<": 1, ">": -1}.get(char, 0)
+        elif char == '"':
+            in_quote = True
+        elif char == "<":
+            html_depth = 1
+        elif char == ">" and previous != "-":
+            return False
+        previous = char
+    return not in_quote and html_depth == 0
+
+
+def _dot_statement_node_refs(line: str) -> tuple[str, ...]:
+    """Return the node names a node or edge statement line references."""
+
+    text = line.strip()
+    first = _DOT_ID.match(text)
+    if first is None or text.startswith("//"):
+        return ()
+    rest = text[first.end() :].lstrip()
+    if rest.startswith("=") or (first.group(0) in _DOT_KEYWORDS and rest.startswith("[")):
+        return ()
+    if not rest.startswith("->"):
+        return (_unquote_dot_id(first.group(0)),) if not rest or rest.startswith("[") else ()
+    second = _DOT_ID.match(rest[2:].lstrip())
+    if second is None:
+        return ()
+    return _unquote_dot_id(first.group(0)), _unquote_dot_id(second.group(0))
+
+
+def _unquote_dot_id(token: str) -> str:
+    """Return a DOT identifier without its quotes and escapes."""
+
+    if len(token) >= 2 and token.startswith('"') and token.endswith('"'):
+        return token[1:-1].replace('\\"', '"')
+    return token
 
 
 def _sibling_chain_key(chain: SiblingOrderChain) -> tuple[str, tuple[str, ...]]:
@@ -258,6 +528,9 @@ def _strip_sibling_rank_groups(source: str) -> str:
 
 
 __all__ = [
+    "_dot_node_clusters",
+    "_fit_sibling_chains_to_clusters",
+    "_sibling_groups_fit",
     "_layout_dot_plain",
     "_queue_sibling_rank_group",
     "_should_order_siblings",
