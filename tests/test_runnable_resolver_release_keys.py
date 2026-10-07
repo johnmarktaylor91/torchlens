@@ -122,7 +122,15 @@ def _loaded_run_matches_live(model: nn.Module, inputs: torch.Tensor, tmp_path: P
     torch.testing.assert_close(result.output, model(inputs))
 
 
-@pytest.mark.smoke
+# Every fft cell runs the same resolver path; smoke keeps one per shape class (1-D,
+# real inverse, 2-D, n-D, shift helper) and the rest run in the backstop tiers.
+@pytest.mark.smoke_cells(
+    "test_private_fft_key_resolves_to_the_public_callable[fft]",
+    "test_private_fft_key_resolves_to_the_public_callable[irfft]",
+    "test_private_fft_key_resolves_to_the_public_callable[rfft2]",
+    "test_private_fft_key_resolves_to_the_public_callable[ifftn]",
+    "test_private_fft_key_resolves_to_the_public_callable[fftshift]",
+)
 @pytest.mark.parametrize("name", _FFT_NAMES)
 def test_private_fft_key_resolves_to_the_public_callable(name: str) -> None:
     """A ``torch._C._fft`` key resolves exactly, to the object ``torch.fft`` exports."""
@@ -150,7 +158,13 @@ def test_private_linalg_key_resolves_exactly() -> None:
     assert resolved[0] is runnable_load._unwrap_decorated(torch.linalg.inv)
 
 
-@pytest.mark.smoke
+@pytest.mark.smoke_cells(
+    "test_public_fft_key_resolves_to_the_public_callable[fft]",
+    "test_public_fft_key_resolves_to_the_public_callable[irfft]",
+    "test_public_fft_key_resolves_to_the_public_callable[rfft2]",
+    "test_public_fft_key_resolves_to_the_public_callable[ifftn]",
+    "test_public_fft_key_resolves_to_the_public_callable[fftshift]",
+)
 @pytest.mark.parametrize("name", _FFT_NAMES)
 def test_public_fft_key_resolves_to_the_public_callable(name: str) -> None:
     """The ``torch.fft`` key form resolves exactly to the same object.
