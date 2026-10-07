@@ -4747,6 +4747,11 @@ class host_nondeterminism_monitor:
             self._flag_uncertain("teardown_interrupted")
             if deferred is None:
                 deferred = exc
+        # A thread parked in an in-window wait wrapper, or still holding a retired profile
+        # hook, keeps this monitor reachable; past the settled verdict it must not pin the model.
+        self._model = None
+        self._generator_states, self._deep_generator_states = [], []
+        self._numpy_frame_rng_states = {}
         if deferred is not None:
             raise deferred
 

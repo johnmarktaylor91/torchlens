@@ -5,10 +5,11 @@ README.md) runs in a fresh subprocess with every warning recorded, twice:
 
 - ZERO warnings (deprecations included) -- the gate that guards the first
   screen forever;
-- the two runs' stdout must be byte-identical after normalizing EXACTLY the
-  declared volatile-field list (today: ``capture_timestamp`` and the summary's
-  host-RSS ``forward peak`` token) -- a NEW volatile field FAILS this gate
-  rather than being silently normalized;
+- the two runs' stdout (taken after the pretrained weights are cached, since
+  torch.hub announces a first download on stdout) must be byte-identical after
+  normalizing EXACTLY the declared volatile-field list (today:
+  ``capture_timestamp`` and the summary's host-RSS ``forward peak`` token) --
+  a NEW volatile field FAILS this gate rather than being silently normalized;
 - pinned structural facts (real resnet18, eval mode, the stable-address
   activation shape) so a content regression cannot hide behind determinism.
 
@@ -94,6 +95,25 @@ def _run_screen_one(tmp_path: Path, run_id: int) -> dict:
     return json.loads(completed.stdout)
 
 
+def _warm_pretrained_weights_cache(block: str) -> None:
+    """Download the block's torchvision pretrained weights before the compared runs.
+
+    On a cold torch hub cache the block's first run downloads its weights, and
+    torch.hub announces that one-time download on stdout (``Downloading: ...``).
+    That line reflects the cache's state, not the screen's output, so the gate
+    fills the cache in-process first; both compared runs stay cold subprocesses.
+
+    Parameters
+    ----------
+    block:
+        The README first-screen source.
+    """
+
+    models = pytest.importorskip("torchvision.models")
+    for builder, weights in re.findall(r"models\.(\w+)\(weights=\"(\w+)\"\)", block):
+        models.get_model_weights(builder)[weights].get_state_dict(progress=False)
+
+
 def _normalize(text: str) -> str:
     """Blank exactly the declared volatile lines, nothing else."""
 
@@ -106,6 +126,7 @@ def test_readme_first_screen_zero_warnings_and_reproducible(tmp_path: Path) -> N
     """The gate: zero warnings, reproducible modulo the declared normalizer."""
 
     pytest.importorskip("torchvision")
+    _warm_pretrained_weights_cache(_first_readme_python_block())
     first = _run_screen_one(tmp_path, 1)
     second = _run_screen_one(tmp_path, 2)
     assert first["warnings"] == [], (
