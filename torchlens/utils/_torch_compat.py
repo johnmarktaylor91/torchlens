@@ -2568,10 +2568,12 @@ def grad_copy_source_is_leaf(copy: torch.Tensor) -> bool:
     sources = [node for node, _ in getattr(grad_fn, "next_functions", ()) if node is not None]
     if len(sources) != 1:
         return False
+    # Same match as the backward capture's AccumulateGrad test: the class name,
+    # or the private class when this torch exposes it.
     accumulate_grad_cls = get_accumulate_grad_class()
-    if accumulate_grad_cls:
-        return isinstance(sources[0], accumulate_grad_cls)
-    return type(sources[0]).__name__ == "AccumulateGrad"
+    return type(sources[0]).__name__ == "AccumulateGrad" or bool(
+        accumulate_grad_cls and isinstance(sources[0], accumulate_grad_cls)
+    )
 
 
 def get_current_graph_task_id_fn() -> Callable[[], Any] | None:

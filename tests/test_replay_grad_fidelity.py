@@ -93,13 +93,19 @@ class _ReplayRecorder:
 def _assert_conv_weights_require_grad(recorder: _ReplayRecorder) -> None:
     """Every conv replay ran with grad enabled on a grad-requiring non-leaf weight."""
 
+    derived_weights = 0
     for call in recorder.calls_to("conv2d"):
         weight = call["args"][1]
         assert isinstance(weight, torch.Tensor)
         assert weight.requires_grad, "replay weight lost the captured requires_grad"
-        assert not weight.is_leaf, "the derived weight was a non-leaf at capture"
         assert call["grad_enabled"] is True
         assert call["inference_mode"] is False
+        if not isinstance(weight, nn.Parameter):
+            # A masked weight (not the live parameter the last conv uses) was a
+            # non-leaf at capture and must be rebuilt as one.
+            assert not weight.is_leaf, "the derived weight was a non-leaf at capture"
+            derived_weights += 1
+    assert derived_weights, "no conv replay received a derived weight"
 
 
 def _capture_for_replay(model: nn.Module, x: torch.Tensor) -> tuple[Any, torch.Tensor]:
