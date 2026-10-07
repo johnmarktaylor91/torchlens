@@ -73,26 +73,37 @@ def _sample_codes() -> list[types.CodeType]:
     return [code for root in roots for code in _walk_codes(root)]
 
 
-def _runs_beneath(frame: types.FrameType, code: types.CodeType) -> bool:
-    """Return whether ``frame`` executes strictly beneath a frame running ``code``."""
+def _is_real_build_frame(frame: types.FrameType) -> bool:
+    """Return whether ``frame`` runs TorchLens's own ``_build_col_offset_map``.
+
+    Matched by name and file rather than function identity, so a wrapper that a
+    test or plugin installs around the module attribute is not mistaken for it.
+    """
+
+    code = frame.f_code
+    return code.co_name == "_build_col_offset_map" and code.co_filename == introspection.__file__
+
+
+def _runs_beneath_build(frame: types.FrameType) -> bool:
+    """Return whether ``frame`` executes strictly beneath the real map build."""
 
     caller = frame.f_back
     while caller is not None:
-        if caller.f_code is code:
+        if _is_real_build_frame(caller):
             return True
         caller = caller.f_back
     return False
 
 
 @contextmanager
-def _count_frames_entered_beneath(code: types.CodeType) -> Iterator[list[str]]:
-    """Record every Python frame entered strictly beneath a frame running ``code``."""
+def _count_frames_entered_beneath_build() -> Iterator[list[str]]:
+    """Record every Python frame entered strictly beneath the real map build."""
 
     entered: list[str] = []
     previous = sys.getprofile()
 
     def profile(frame: types.FrameType, event: str, arg: Any) -> None:
-        if event == "call" and _runs_beneath(frame, code):
+        if event == "call" and _runs_beneath_build(frame):
             entered.append(frame.f_code.co_name)
 
     sys.setprofile(profile)
@@ -121,8 +132,7 @@ def test_col_offset_map_build_enters_no_python_frame() -> None:
 
     code = torch.nn.Module._call_impl.__code__
     assert len(code.co_code) > 400
-    build_code = introspection._build_col_offset_map.__code__
-    with _count_frames_entered_beneath(build_code) as entered:
+    with _count_frames_entered_beneath_build() as entered:
         offset_map = introspection._build_col_offset_map(code)
     assert offset_map
     assert entered == []
@@ -158,10 +168,8 @@ def test_cold_map_build_in_hooked_capture_triggers_no_rng_frame_snapshots() -> N
         finally:
             state["in_build"] -= 1
 
-    build_code = original_build.__code__
-
     def counting_snapshot(self: Any, frame: types.FrameType) -> None:
-        if state["in_build"] and _runs_beneath(frame, build_code):
+        if state["in_build"] and _runs_beneath_build(frame):
             snapshots_in_build.append(frame.f_code.co_name)
         snapshotted_codes.add(frame.f_code)
         original_snapshot(self, frame)
