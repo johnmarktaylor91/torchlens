@@ -37,6 +37,14 @@ block's output ``linear`` reads the mutated weight through them.
   fixing lane deletes its row (the memo's enumerated-red idiom, test-side).
 - ``n_ops``: op-count golden, asserted only under a matching
   resolved-config fingerprint (memo D7 class 4).
+- ``n_ops_by_transformers``: optional per-impl list of ``{"min_version",
+  "n_ops"}`` entries that replace ``n_ops`` when the installed transformers is
+  at least ``min_version`` (:func:`expected_n_ops`). Only llama carries one:
+  transformers 5.19 rewrote ``LlamaRotaryEmbedding.forward`` (``inv_freq``
+  ``__getitem__``/``expand``/``to``/``__matmul__``/``transpose`` became one
+  ``to`` and ``__mul__``), so llama is 180 (eager) / 144 (sdpa) there, against
+  183 / 147 on the pinned 5.18.0. The op diff was checked to be exactly that
+  rotary block on torch 2.7.1 and 2.14.1 (2026-10-07, next-release CI round).
 
 Ownership of the known-false rows (for the teaching message):
 ``final_norm_present`` -> lane A02 (semantic RESIDUAL slice, final-norm
@@ -275,6 +283,35 @@ KNOWN_RED: tuple[KnownRed, ...] = (
 )
 
 KNOWN_RED_BY_ID = {row.red_id: row for row in KNOWN_RED}
+
+
+def expected_n_ops(expected: dict) -> int:
+    """Return the op-count golden for the installed transformers version.
+
+    Parameters
+    ----------
+    expected:
+        One family/impl row of ``expectations_r0.json``.
+
+    Returns
+    -------
+    int
+        The ``n_ops`` of the highest ``n_ops_by_transformers`` entry whose
+        ``min_version`` the installed transformers meets, else ``n_ops``.
+    """
+
+    import transformers
+    from packaging.version import Version
+
+    installed = Version(transformers.__version__)
+    applicable = [
+        entry
+        for entry in expected.get("n_ops_by_transformers", ())
+        if installed >= Version(entry["min_version"])
+    ]
+    if not applicable:
+        return int(expected["n_ops"])
+    return int(max(applicable, key=lambda entry: Version(entry["min_version"]))["n_ops"])
 
 
 def load_expectations() -> dict:

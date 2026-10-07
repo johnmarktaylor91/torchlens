@@ -575,6 +575,12 @@
     ]
    },
    "n_ops": 183,
+   "n_ops_by_transformers": [
+    {
+     "min_version": "5.19",
+     "n_ops": 180
+    }
+   ],
    "recipes": {
     "embedding": 1,
     "gated_mlp": 2,
@@ -635,6 +641,12 @@
     ]
    },
    "n_ops": 147,
+   "n_ops_by_transformers": [
+    {
+     "min_version": "5.19",
+     "n_ops": 144
+    }
+   ],
    "recipes": {
     "embedding": 1,
     "gated_mlp": 2,

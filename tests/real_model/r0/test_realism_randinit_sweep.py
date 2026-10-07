@@ -29,6 +29,7 @@ from tests.real_model.r0.expectations import (
     SHAPE_SPEC_OVERRIDES,
     WRONG_PAYLOAD_MANIFEST,
     WRONG_PAYLOAD_OWNER,
+    expected_n_ops,
     load_expectations,
 )
 from tests.real_model.r0.families import STRUCTURAL_FIXTURES, build_structural
@@ -185,9 +186,10 @@ def _deep_sweep(family, impl, r0_capture):
                 " re-derive the op-count golden CONSCIOUSLY, never let it ride"
                 " a stale key."
             )
-        assert len(cap.trace.ops) == expected["n_ops"], (
+        golden_n_ops = expected_n_ops(expected)
+        assert len(cap.trace.ops) == golden_n_ops, (
             f"{family}/{impl}: op count {len(cap.trace.ops)} != golden"
-            f" {expected['n_ops']} under an UNCHANGED resolved-config"
+            f" {golden_n_ops} under an UNCHANGED resolved-config"
             " fingerprint -- the captured graph moved with no config cause."
         )
 
