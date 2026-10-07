@@ -61,6 +61,10 @@ _ALLOWED_PRIVATE_TOUCHES: dict[str, frozenset[str]] = {
     # binding disappears, the escape route it guards disappears with it
     # (fail-neutral; nothing to patch means nothing can escape through it).
     "torchlens/backends/torch/_completeness_finalize.py": frozenset({"getattr(torch, '_C')"}),
+    # The torch.ops call classes patched for the wrapped epoch so a user's direct
+    # ``torch.ops.*`` call is recorded as an op; a missing class is skipped, which
+    # leaves those calls unrecorded and failing validation (fail-closed).
+    "torchlens/backends/torch/_torch_ops_calls.py": frozenset({"import torch._ops"}),
     # TorchDispatchMode base class (public-by-usage, import fails the module
     # loudly at import time) for the shared owned-mode marker and pause
     # bracket; the l3 aten wave 0 mode-pop unification MOVED the import here

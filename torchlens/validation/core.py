@@ -42,7 +42,6 @@ if TYPE_CHECKING:
     from ..data_classes.trace import Trace
 
 from ..utils.collections import assign_to_sequence_or_dict
-from ..utils.rng import execute_with_restored_rng_autocast
 from ..utils.tensor_utils import (
     _ACCUMULATING_REPLAY_ULP_HEADROOM,
     derive_float_tolerances,
@@ -51,6 +50,7 @@ from ..utils.tensor_utils import (
     tensor_all_nan,
     tensor_nanequal,
 )
+from ._autograd_grad_replay import execute_replay_func
 from ._edge_boundary import (
     _capture_payload_equal,
     _check_edge_intervention_boundary,
@@ -63,6 +63,7 @@ from ._index_domain import (
     layer_has_index_domain_parent,
 )
 from ._replay_device import align_output_to_saved_device, align_parent_to_slot_device
+from ._source_provenance import check_source_provenance
 from .exemptions import (
     CUSTOM_EXEMPTION_CHECKS,
     SKIP_PERTURBATION_ENTIRELY,
@@ -1146,7 +1147,8 @@ def validate_saved_outs(
                 reason="metadata_invariant_exception",
             )
             raise
-
+    # Source-less tensor args replay fine from saved args; a gap records a failure here.
+    check_source_provenance(self, decision_recorder, verbose)
     status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
     setattr(self, "_validation_replay_status", status)
     return status
@@ -2584,13 +2586,9 @@ def _execute_func_with_restored_state(
     layer_func = layer.func
 
     try:
-        recomputed_output = execute_with_restored_rng_autocast(
-            layer_func,
-            tuple(input_args["args"]),
-            dict(input_args["kwargs"]),
-            rng_states=layer.func_rng_states,
-            autocast_state=layer.func_autocast_state,
-        )
+        # An in-forward torch.autograd.grad re-derives its gradients from the
+        # recorded subgraph; every other op re-runs its func on the saved args.
+        recomputed_output = execute_replay_func(layer, input_args, layers_to_perturb)
     except Exception as e:
         # Broad catch: perturbed values can trigger any exception (shape
         # mismatch, index OOB, dtype error, etc.).  Returning None lets the

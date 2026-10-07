@@ -1520,6 +1520,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/backends/torch/_module_boundary_adoption.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "func_call_id",
   "file": "torchlens/backends/torch/_ops_arguments.py",
@@ -2028,7 +2036,7 @@
   "field": "modules",
   "file": "torchlens/backends/torch/model_prep.py",
   "has_default": false,
-  "sites": 7,
+  "sites": 6,
   "via_getattr": false
  },
  {
@@ -6809,6 +6817,14 @@
  },
  {
   "ambiguous": false,
+  "field": "unattributed_tensor_args",
+  "file": "torchlens/postprocess/graph_traversal.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
   "field": "module_stack",
   "file": "torchlens/postprocess/incremental.py",
   "has_default": false,
@@ -8313,6 +8329,22 @@
  },
  {
   "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/validation/_autograd_grad_replay.py",
+  "has_default": true,
+  "sites": 2,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/validation/_autograd_grad_replay.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
   "field": "func_call_id",
   "file": "torchlens/validation/_completeness_backstop.py",
   "has_default": false,
@@ -8782,6 +8814,14 @@
   "has_default": true,
   "sites": 2,
   "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "unattributed_tensor_args",
+  "file": "torchlens/validation/_source_provenance.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
  },
  {
   "ambiguous": true,

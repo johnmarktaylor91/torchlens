@@ -25,6 +25,7 @@ import torchlens._user_public_impls as user_public_impls
 # imports may be freely re-sorted.
 import torchlens.user_funcs as user_funcs
 from torchlens import Trace, trace as trace_fn
+from torchlens.backends.torch import rescue
 from torchlens.errors import (
     MetadataInvariantError,
     TorchLensCaptureGapWarning,
@@ -39,6 +40,7 @@ from torchlens.validation import (
     check_metadata_invariants,
     get_validation_diagnostics,
     get_validation_failure,
+    last_validation_failure,
     validate_forward_pass,
 )
 from torchlens.validation._completeness_backstop import completeness_backstop_counts
@@ -110,6 +112,26 @@ def _assert_validation_capture_is_clean(model: nn.Module, x: torch.Tensor) -> No
         warnings.simplefilter("always")
         assert validate_forward_pass(model, [x], input_kwargs={})
     assert not any(isinstance(item.message, TorchLensCaptureGapWarning) for item in caught)
+
+
+def _assert_validation_fails_only_on_adoption(model: nn.Module, x: torch.Tensor) -> None:
+    """Assert forward validation fails only because a module boundary adopted an output.
+
+    Parameters
+    ----------
+    model:
+        Module whose opaque output is adopted as an internal source.
+    x:
+        Tensor passed as the module's sole positional input.
+    """
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        assert validate_forward_pass(model, [x], input_kwargs={}) is False
+    assert not any(isinstance(item.message, TorchLensCaptureGapWarning) for item in caught)
+    failure = last_validation_failure()
+    assert failure is not None and failure.check == "source_provenance"
+    assert failure.extra["reasons"] == ["module_boundary_adoption"]
 
 
 class _StaleLabelConstantModel(nn.Module):
@@ -758,18 +780,24 @@ def test_trace_clears_forward_global_tensor_labels_between_sessions() -> None:
     try:
         model = GlobalTensorForwardModel()
 
-        tl.trace(
-            model,
-            x,
-            save=None,
-            capture=tl.options.CaptureOptions(layers_to_save=None, inference_only=True),
-        )
-        second_trace = tl.trace(
-            model,
-            x,
-            save=None,
-            capture=tl.options.CaptureOptions(layers_to_save=None, inference_only=True),
-        )
+        # The forward-global tensor the child module consumes has no graph/source
+        # provenance: each capture discloses its module-entry adoption (and forward
+        # validation would fail on source_provenance); the concern under test is
+        # stale-label clearing.
+        with pytest.warns(UserWarning, match="closure or forward-global tensor"):
+            tl.trace(
+                model,
+                x,
+                save=None,
+                capture=tl.options.CaptureOptions(layers_to_save=None, inference_only=True),
+            )
+        with pytest.warns(UserWarning, match="closure or forward-global tensor"):
+            second_trace = tl.trace(
+                model,
+                x,
+                save=None,
+                capture=tl.options.CaptureOptions(layers_to_save=None, inference_only=True),
+            )
 
         assert second_trace.num_ops > 0
     finally:
@@ -808,9 +836,12 @@ def test_trace_clears_forward_global_container_tensor_labels_between_sessions() 
 
         # The global-container tensor genuinely has no graph/source provenance,
         # so each capture correctly emits the unattributed-tensor-args warning
-        # (cert10 diagnostic); the concern under test is stale-label clearing.
+        # (cert10 diagnostic) and forward validation fails on source_provenance;
+        # the concern under test is stale-label clearing.
         with pytest.warns(UserWarning, match="no graph/source provenance"):
-            assert validate_forward_pass(model, x, validate_metadata=True) is True
+            assert validate_forward_pass(model, x, validate_metadata=True) is False
+        failure = last_validation_failure()
+        assert failure is not None and failure.check == "source_provenance"
         with pytest.warns(UserWarning, match="no graph/source provenance"):
             second_trace = tl.trace(
                 model,
@@ -2126,7 +2157,7 @@ def test_validation_direct_aten_dispatch_drop_fails_the_public_gate() -> None:
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             """Return ``-x + 1`` with the negate hidden from capture."""
 
-            return torch.ops.aten.neg.default(x) + 1
+            return torch._C._VariableFunctions.neg(x) + 1
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -2159,7 +2190,7 @@ def test_validation_same_shape_broadcast_tensors_validates() -> None:
 def _raw_scale_replacement_hook(module, inputs, output):  # type: ignore[no-untyped-def]
     """Genuine raw output-replacement hook built from untraceable aten calls."""
 
-    return torch.ops.aten.mul.Tensor(output, torch.tensor(0.5))
+    return torch._C._VariableFunctions.mul(output, torch.tensor(0.5))
 
 
 def test_validation_genuine_replacement_alone_validates() -> None:
@@ -2204,7 +2235,7 @@ def test_validation_genuine_replacement_plus_unrelated_drop_still_fails() -> Non
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             # Unrelated real capture drop (raw aten in the forward body, NOT in a hook).
-            hidden = torch.ops.aten.neg.default(self.fc1(x))
+            hidden = torch._C._VariableFunctions.neg(self.fc1(x))
             return self.relu(hidden)
 
     model = _MlpWithDrop().eval()
@@ -5604,10 +5635,10 @@ def _make_mid_forward_backward_log() -> Trace:
 
     model = _MidForwardGradModel()
     x = torch.randn(2, 5, requires_grad=True)
-    with pytest.warns(UserWarning, match="no graph/source provenance"):
-        return trace_fn(
-            model, x, capture=tl.options.CaptureOptions(save_grads="all", random_seed=42)
-        )
+    capture = tl.options.CaptureOptions(save_grads="all", random_seed=42)
+    with warnings.catch_warnings():  # the recorded autogradgrad op leaves no source-less arg
+        warnings.filterwarnings("error", message=".*no graph/source provenance")
+        return trace_fn(model, x, capture=capture)
 
 
 def test_clean_log_ops_all_invariants():
@@ -8074,7 +8105,7 @@ class _RawAtenReluModule(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Return an untraceable raw-ATen relu of the input."""
 
-        return torch.ops.aten.relu.default(x)
+        return torch._C._VariableFunctions.relu(x)
 
 
 class _RawAtenReluNet(nn.Module):
@@ -8114,7 +8145,7 @@ def test_genuine_raw_hook_untraceable_replacement_validates() -> None:
 
     def _untraceable_replacement_hook(module, inputs, output):  # type: ignore[no-untyped-def]
         # Bypasses TorchLens python-level wrapping -- a real opaque replacement.
-        return torch.ops.aten.mul.Tensor(output, torch.tensor(0.5))
+        return torch._C._VariableFunctions.mul(output, torch.tensor(0.5))
 
     model = _Mlp().eval()
     model.relu.register_forward_hook(_untraceable_replacement_hook)
@@ -8179,8 +8210,8 @@ def test_genuine_raw_hook_untraceable_replacement_validates_nested_depth() -> No
 
     def _substituting_hook(module, inputs, output):  # type: ignore[no-untyped-def]
         # Bypasses TorchLens's python-level wrapping -- a real opaque replacement.
-        fresh = torch.ops.aten.zeros.default([*output.shape], dtype=output.dtype)
-        return torch.ops.aten.add.Tensor(fresh, output)
+        fresh = torch._C._VariableFunctions.zeros([*output.shape], dtype=output.dtype)
+        return torch._C._VariableFunctions.add(fresh, output)
 
     model = _NestedNet().eval()
     model.block.norm.register_forward_hook(_substituting_hook)  # nested 2 levels deep
@@ -8220,8 +8251,8 @@ def test_genuine_raw_hook_untraceable_replacement_validates_depth_zero() -> None
 
     def _substituting_hook(module, inputs, output):  # type: ignore[no-untyped-def]
         # Bypasses TorchLens's python-level wrapping -- a real opaque replacement.
-        fresh = torch.ops.aten.zeros.default([*output.shape], dtype=output.dtype)
-        return torch.ops.aten.add.Tensor(fresh, output)
+        fresh = torch._C._VariableFunctions.zeros([*output.shape], dtype=output.dtype)
+        return torch._C._VariableFunctions.add(fresh, output)
 
     class _Mlp(nn.Module):
         def __init__(self) -> None:
@@ -8256,17 +8287,20 @@ def test_genuine_raw_hook_untraceable_replacement_validates_depth_zero() -> None
 _OPAQUE_EXIT_DISCLOSURE = r"adopted at module exit"
 
 
-def test_plain_trace_noop_hook_untraceable_exit_is_internal_source_nested_depth() -> None:
+def test_plain_trace_noop_hook_untraceable_exit_is_internal_source_nested_depth(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """TRIPWIRE at nesting depth >= 2: a plain-capture gap under a no-op
     observer hook, on a module nested 2+ address levels deep, must stay
     honest -- zero functionless ``intervention_replacement`` placeholders,
     zero ``intervention_replaced`` ops -- even after the depth-2 fix above.
     The fix must not make the tripwire pass silently on a genuine capture gap.
     """
+    monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)  # keep primary capture
 
     class _RawAtenGeluBlock(nn.Module):
         def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return torch.ops.aten.gelu.default(x)
+            return torch._C._nn.gelu(x)
 
     class _RawAtenGeluOuter(nn.Module):
         def __init__(self) -> None:
@@ -8305,10 +8339,12 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source_nested_depth(
         check_metadata_invariants(log)
     finally:
         log.cleanup()
-    _assert_validation_capture_is_clean(model, x)
+    _assert_validation_fails_only_on_adoption(model, x)
 
 
-def test_plain_trace_noop_hook_untraceable_exit_is_internal_source() -> None:
+def test_plain_trace_noop_hook_untraceable_exit_is_internal_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """TRIPWIRE: a plain-capture gap under a NO-OP observer hook stays honest.
 
     An untraceable raw-ATen module output combined with a purely observational
@@ -8318,6 +8354,7 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source() -> None:
     ``has _forward_hooks`` proxy mislabeled exactly this case (cert round 3
     coupled hazard); reintroducing it makes this fail loudly.
     """
+    monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)  # keep primary capture
 
     model = _RawAtenReluNet().eval()
     x = torch.randn(3, 4)
@@ -8332,11 +8369,12 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source() -> None:
         internal_sources = [op for op in log.ops if getattr(op, "is_internal_source", False)]
         assert internal_sources, "untraceable raw-ATen output must be an internal source"
         assert all(getattr(op, "func_name", None) == "none" for op in internal_sources)
-        # Validation passes legitimately (as a graph source, not via a hidden gap).
+        # Metadata invariants pass (a graph source, not a placeholder); forward
+        # validation fails only on the adopted output's missing origin.
         check_metadata_invariants(log)
     finally:
         log.cleanup()
-    _assert_validation_capture_is_clean(model, x)
+    _assert_validation_fails_only_on_adoption(model, x)
 
 
 def test_func_call_id_exemption_is_scoped_to_genuine_replacement() -> None:

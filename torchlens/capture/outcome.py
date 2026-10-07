@@ -861,6 +861,12 @@ _TRAMPOLINE_SOURCE_MARKER = "out_orig = func("
 # exception raised there is the user's op failing, exactly like the trampoline.
 _WITNESS_REDISPATCH_FILE = "completeness_witness.py"
 _WITNESS_REDISPATCH_MARKER = "result = func(*args, **(kwargs or {}))"
+# The ``torch.ops`` call-class recorder's pass-through to the original ``__call__``
+# (the census redispatch and unrecorded calls reach the operator through it).
+_TORCH_OPS_PASSTHROUGH_FILE = "_torch_ops_calls.py"
+_TORCH_OPS_PASSTHROUGH_MARKER = "return original(self, *args, **kwargs)"
+# Its in-place replay callable for a receiver-mutating operator (``mutates_args``).
+_TORCH_OPS_MUTATION_MARKER = "call_operator(*args, **kwargs)"
 
 
 def _frame_zone(filename: str) -> str:
@@ -938,9 +944,18 @@ def classify_failure_origin(exc: BaseException) -> FailureOrigin:
             return FailureOrigin.USER_OP
         if zone == "torchlens":
             line = frame.line or ""
-            if _TRAMPOLINE_SOURCE_MARKER in line or (
-                frame.filename.endswith(_WITNESS_REDISPATCH_FILE)
-                and _WITNESS_REDISPATCH_MARKER in line
+            if (
+                _TRAMPOLINE_SOURCE_MARKER in line
+                or (
+                    frame.filename.endswith(_WITNESS_REDISPATCH_FILE)
+                    and _WITNESS_REDISPATCH_MARKER in line
+                )
+                or (
+                    frame.filename.endswith(_TORCH_OPS_PASSTHROUGH_FILE)
+                    and (
+                        _TORCH_OPS_PASSTHROUGH_MARKER in line or _TORCH_OPS_MUTATION_MARKER in line
+                    )
+                )
             ):
                 return FailureOrigin.USER_OP
             return FailureOrigin.TORCHLENS

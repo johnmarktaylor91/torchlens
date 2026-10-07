@@ -44,6 +44,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.backends.torch import rescue
 from torchlens.errors import (
     PathDivergenceError,
     PoisonedRunError,
@@ -351,13 +352,13 @@ class TestHon23ParamDerivedContamination:
 
 class _RawMutation(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        torch.ops.aten.add_.Tensor(x, 1)
+        torch._C.TensorBase.add_(x, 1)
         return torch.relu(x)
 
 
 class _RawNonMutating(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        y = torch.ops.aten.mul.Tensor(x, 2)
+        y = torch._C._VariableFunctions.mul(x, 2)
         return torch.relu(y)
 
 
@@ -377,7 +378,9 @@ class TestCorr21EventLedgerExhaustive:
         assert verdict != "verified"
         assert attest == "not_applicable"
 
-    def test_raw_nonmutating_aten_is_incomplete_never_verified(self, tmp_path: Path) -> None:
+    def test_raw_nonmutating_aten_is_incomplete_never_verified(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Pre-closed adjacent: the non-mutating twin bakes an unlabelled constant.
 
         Fail-closed either way: the unattributed product feeding a traced call may be
@@ -385,6 +388,7 @@ class TestCorr21EventLedgerExhaustive:
         save, the ``unmodeled_tensor_return`` ledger fact must ceiling it INCOMPLETE
         and never VERIFIED.
         """
+        monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)  # keep primary capture
 
         from torchlens.backends.torch.completeness_witness import runnable_ledger_facts
 

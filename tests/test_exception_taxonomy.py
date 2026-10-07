@@ -1180,6 +1180,11 @@ _BUILTIN_EXCEPTION_ROOTS = frozenset(
 # current: a stale entry (class deleted or later registered) fails the gate
 # just like a missing one.
 _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
+    # autograd.grad boundary replay: raised only inside the subgraph replay and
+    # caught by the replay executor, which records a failed validation.
+    "torchlens.validation._autograd_grad_replay.AutogradGradReplayError": (
+        "internal replay carrier; surfaced as a failed forward_replay validation"
+    ),
     # L4 declared-state restore bracket: an INTERNAL carrier converted into
     # the typed run_state_restore_failed refusal at the transaction boundary
     # (never user-facing; parked by the L6 merge train post-merge repair).

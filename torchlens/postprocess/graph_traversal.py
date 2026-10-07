@@ -633,6 +633,8 @@ def _remove_orphan_nodes(self: "Trace") -> None:
         if isinstance(func_call_id, int)
     }
 
+    _record_pruned_source_less_witness(self, orphan_nodes)
+
     # Batch-remove orphaned nodes and rebuild the ordered layer dict/list.
     orphan_entries = [self._raw_graph_ws.raw_layer_dict[label] for label in orphan_nodes]
     self._batch_remove_log_entries(orphan_entries, remove_references=True)
@@ -806,6 +808,43 @@ def _record_pruned_rng_control_flow(self: "Trace", orphan_nodes: set[str]) -> No
             continue
         if _rng_orphan_drove_control_or_output(self, label, escape_sources):
             record_pruned_rng_control_source(self, label)
+
+
+def _record_pruned_source_less_witness(self: "Trace", orphan_nodes: set[str]) -> None:
+    """Keep the source-less-argument witness of pruned ops that steered control or output.
+
+    Removal strips the pruned ops' fields, and the provenance disclosure step
+    (``_warn_unattributed_tensor_args``) runs later, so a source-less tensor whose
+    only consumer is pruned (``x + G.sum().item()``, a branch predicate on a
+    closure tensor) would lose its ``unattributed_tensor_args`` witness with the op.
+    The witness is kept for exactly the pruned ops whose value reached a recorded
+    tensor->host escape or an output, through the same sanitized child walk the
+    pruned-RNG control-flow record uses; a genuinely dead op (its result feeds
+    nothing the outputs depend on) leaves no gap in the outputs' provenance.
+    ``keep_orphans`` leaves the ops, and their per-op witness, in the trace.
+    """
+
+    from ..backends.torch.completeness_witness import host_escape_source_labels
+
+    escape_sources: frozenset[str] | None = None
+    witness: list[str] = []
+    for label in self._raw_graph_ws.raw_layer_labels_list:
+        if label not in orphan_nodes:
+            continue
+        op = self._raw_graph_ws.raw_layer_dict[label]
+        positions = tuple(getattr(op, "unattributed_tensor_args", ()) or ())
+        if not positions:
+            continue
+        if escape_sources is None:
+            # Armed captures record escapes in the completeness witness; plain
+            # captures in the scalar-escape belt.
+            escape_sources = host_escape_source_labels(self) | frozenset(
+                self.__dict__.get("_plain_scalar_escape_labels", ())
+            )
+        if _rng_orphan_drove_control_or_output(self, label, escape_sources):
+            witness.append(f"{label} ({', '.join(positions)}, pruned)")
+    if witness:
+        self.__dict__["_orphan_unattributed_tensor_args"] = witness
 
 
 def _record_pruned_alias_mutation(self: "Trace", orphan_nodes: set[str]) -> None:

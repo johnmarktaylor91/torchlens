@@ -34,6 +34,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import TorchLensCaptureGapWarning
+from torchlens.backends.torch import rescue
 from torchlens.backends.torch._tl import is_decorated_function
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 
@@ -537,30 +538,36 @@ def test_module_returning_its_own_parameter_or_buffer_is_not_an_escape(kind: str
     assert trace.capture_verification_reason is None
 
 
-def test_opaque_module_return_is_disclosed_unrecovered_and_still_validates() -> None:
-    """Negative: a genuinely opaque producer (direct aten call) is not a stale ref.
+def test_opaque_module_return_is_disclosed_adopted_and_fails_validation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Negative: a genuinely opaque producer is adopted, disclosed, and fails validation.
 
-    The module-exit record discloses it (provenance warning; the rescue finds
-    nothing to recover and settles ``escape_rescue_unrecovered``), and the
-    validation contract for an opaque single-dispatch module output is
-    unchanged: the boundary credits the dispatch that built it.
+    The producer is an unpatchable C function (the stand-in for a pybind C++
+    extension; a direct ``torch.ops`` call is now recorded as an ordinary op). With
+    the rescue re-run held off, the primary capture adopts the output at module exit
+    and discloses it; the adopted output has no recorded origin (the graph misses the
+    ``x`` -> ``tanh`` edge), so forward validation fails on ``source_provenance``.
     """
 
     class Opaque(nn.Module):
         def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return torch.ops.aten.tanh.default(x)
+            return torch._C._VariableFunctions.tanh(x)
 
     wrap_torch()
     model = _Holder(Opaque())
     x = torch.randn(2, 4)
-    with pytest.warns(UserWarning, match=r"adopted at module exit act"):
-        trace = tl.trace(model, x)
+    with monkeypatch.context() as patch:
+        patch.setattr(rescue, "_escape_signal", lambda trace: None)
+        with pytest.warns(UserWarning, match=r"adopted at module exit act"):
+            trace = tl.trace(model, x)
 
     assert "tanh" not in [op.func_name for op in trace.ops]
-    assert trace.capture_verified is False
-    assert trace.capture_verification_reason == "escape_rescue_unrecovered"
     with pytest.warns(UserWarning, match=_PROVENANCE):
-        assert tl.validate(model, x, scope="forward")
+        assert tl.validate(model, x, scope="forward") is False
+    failure = tl.validation.last_validation_failure()
+    assert failure is not None and failure.check == "source_provenance"
+    assert failure.extra["reasons"] == ["module_boundary_adoption"]
 
 
 def test_model_preparation_allocates_no_func_call_ids(

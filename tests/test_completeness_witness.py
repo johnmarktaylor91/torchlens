@@ -18,7 +18,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import _state
 from torchlens._errors import TorchLensCaptureGapWarning
-from torchlens.backends.torch import completeness_witness as cw
+from torchlens.backends.torch import completeness_witness as cw, rescue
 from torchlens.backends.torch.completeness_witness import (
     AUDITED_COMPLETENESS_BOUNDARIES,
     MAX_AUDITED_COMPLETENESS_BOUNDARIES,
@@ -227,7 +227,7 @@ class _DirectAtenGapModel(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Bypass the Python wrapper namespace for the relu call."""
 
-        escaped = torch.ops.aten.relu.default(x)
+        escaped = torch._C._VariableFunctions.relu(x)
         return torch.sigmoid(escaped)
 
 
@@ -248,7 +248,7 @@ class _DirectAtenChild(nn.Module):
             Direct aten result.
         """
 
-        return torch.ops.aten.relu.default(x)
+        return torch._C._VariableFunctions.relu(x)
 
 
 class _DirectAtenSubmoduleGapModel(nn.Module):
@@ -283,7 +283,7 @@ class _DirectAtenIntermediateChild(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Return a traced sigmoid of an unwrapped relu intermediate."""
 
-        escaped = torch.ops.aten.relu.default(x)
+        escaped = torch._C._VariableFunctions.relu(x)
         return torch.sigmoid(escaped)
 
 
@@ -309,8 +309,8 @@ class _MutatingDirectAtenOutputChild(nn.Module):
         """Return raw relu output after an observable unwrapped in-place mutation."""
 
         y = x + 1
-        torch.ops.aten.mul_.Tensor(y, 2)
-        return torch.ops.aten.relu.default(y)
+        torch._C.TensorBase.mul_(y, 2)
+        return torch._C._VariableFunctions.relu(y)
 
 
 class _MutatingDirectAtenOutputSubmoduleModel(nn.Module):
@@ -628,8 +628,9 @@ def test_input_depth_limit_fails_closed_with_unresolved_path() -> None:
     assert input_gap["input_path"].startswith("input.nested.inner.inner")
 
 
-def test_direct_aten_call_trips_non_vacuous_witness() -> None:
+def test_direct_aten_call_trips_non_vacuous_witness(monkeypatch: pytest.MonkeyPatch) -> None:
     """A direct aten call is loudly and machine-readably unaccounted."""
+    monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)  # keep primary capture
 
     wrap_torch(completeness_witness=True)
     with pytest.warns(TorchLensCaptureGapWarning, match="unaccounted aten dispatch"):
@@ -669,7 +670,7 @@ def test_genuine_replacement_hook_dispatch_is_tagged_in_replacement_hook() -> No
             return self.relu(self.fc1(x))
 
     def _replacement_hook(module, inputs, output):  # type: ignore[no-untyped-def]
-        return torch.ops.aten.mul.Tensor(output, torch.tensor(0.5))
+        return torch._C._VariableFunctions.mul(output, torch.tensor(0.5))
 
     wrap_torch(completeness_witness=True)
     model = _Mlp().eval()
@@ -722,8 +723,11 @@ def test_direct_aten_submodule_output_is_owned_by_internal_source() -> None:
     assert any(op.func_name == "none" and op.is_internal_source for op in trace.ops)
 
 
-def test_direct_aten_child_intermediate_still_trips_witness() -> None:
+def test_direct_aten_child_intermediate_still_trips_witness(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A child raw dispatch not represented by its output boundary fails closed."""
+    monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)  # keep primary capture
 
     wrap_torch(completeness_witness=True)
     with pytest.warns(TorchLensCaptureGapWarning, match="unaccounted aten dispatch"):
@@ -742,8 +746,11 @@ def test_direct_aten_child_intermediate_still_trips_witness() -> None:
     assert report["function"] == "forward"
 
 
-def test_untraceable_child_output_does_not_mask_observable_mutation() -> None:
+def test_untraceable_child_output_does_not_mask_observable_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """ATTACK4 mutation remains unaccounted beside an owned output boundary."""
+    monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)  # keep primary capture
 
     wrap_torch(completeness_witness=True)
     with pytest.warns(TorchLensCaptureGapWarning, match="unaccounted aten dispatch"):
@@ -1185,8 +1192,12 @@ def test_mid_forward_autograd_grad_is_an_exact_backward_boundary() -> None:
     """Exclude only engine dispatches represented by the captured backward pass."""
 
     wrap_torch(completeness_witness=True)
-    with pytest.warns(UserWarning, match="no graph/source provenance"):
+    # The call is a recorded autogradgrad boundary op: its gradients carry
+    # provenance, so no source-provenance warning fires.
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         trace = tl.trace(_MidForwardAutogradGradModel(), torch.randn(2, 4))
+    assert not [w for w in caught if "no graph/source provenance" in str(w.message)]
 
     boundary_rows = [
         row for row in trace.completeness_decompositions if row["owner_wrapper"] == "autograd:grad"
@@ -1239,7 +1250,7 @@ class _DirectMutatingAtenModel(nn.Module):
         """Mutate a tensor in place through a direct (unwrapped) aten call."""
 
         y = x + 1
-        torch.ops.aten.mul_.Tensor(y, 2)
+        torch._C.TensorBase.mul_(y, 2)
         return torch.sigmoid(y)
 
 

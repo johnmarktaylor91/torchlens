@@ -101,6 +101,7 @@ from ._tl import (
     is_tensor_data_alias,
     session_meta_is_anchored,
 )
+from ._torch_ops_calls import enter_suppressed_region, exit_suppressed_region
 from .buffer_writes import peek_buffer_write_tracker, session_validated_buffer_address
 from .escape_detection import (
     ExpectedOriginalToken,
@@ -1381,6 +1382,9 @@ class _CompletenessDispatchMode(_TorchLensDispatchMode):
                         pre_dispatch_receiver_numel = None
         finally:
             self.state.callback_ns += time.perf_counter_ns() - started
+        # The observed operator re-executes through ``torch.ops`` machinery; it is a
+        # dispatch TorchLens already attributes, never a user ``torch.ops`` call.
+        enter_suppressed_region()
         try:
             result = func(*args, **(kwargs or {}))
         except BaseException as exc:
@@ -1397,6 +1401,8 @@ class _CompletenessDispatchMode(_TorchLensDispatchMode):
 
                 _finish_aten_call(self.state, aten_pending, exception=exc)
             raise
+        finally:
+            exit_suppressed_region()
         if event is not None:
             if _dispatch_result_holds_tensor(result):
                 event.outcome = "returned_tensor"
@@ -2016,6 +2022,9 @@ _first_scalar_escape_source = _rebind_function(
 )
 _record_bool_consumer_location = _rebind_function(
     _completeness_storage._record_bool_consumer_location, globals()
+)
+_record_plain_direct_escape = _rebind_function(
+    _completeness_storage._record_plain_direct_escape, globals()
 )
 _make_plain_scalar_escape_method = _rebind_function(
     _completeness_storage._make_plain_scalar_escape_method, globals()

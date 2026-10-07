@@ -441,9 +441,10 @@ attribution-target alias. See the [attribution reference](attribution.md).
 **Structural selectors**
 : `tl.func` / `tl.module` / `tl.in_module` select by callable or module context;
   `tl.head` selects one attention head; `tl.facet` selects a semantic facet view;
-  `tl.func_transform` selects `torch.func` transform boundary ops; `tl.output` selects
-  model outputs, and `tl.output_at` / `tl.input_at` select a nested output or model-input
-  path.
+  `tl.func_transform` selects `torch.func` and `torch.autograd` transform boundary ops
+  (including `autogradgrad`, an in-forward `torch.autograd.grad` call, with
+  `transform_kind="autograd.grad"`); `tl.output` selects model outputs, and
+  `tl.output_at` / `tl.input_at` select a nested output or model-input path.
 
 **Temporal composition**
 : `tl.followed_by` (retroactive successor) and `tl.preceded_by` (lookback predecessor)

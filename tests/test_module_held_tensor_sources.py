@@ -646,16 +646,18 @@ class _ReadPastObjectBound(nn.Module):
         (_ReadPastObjectBound, "cache[4096] (object bound 4096)"),
     ],
 )
-def test_missed_held_tensor_is_disclosed_and_forward_validation_does_not_catch_it(
+def test_missed_held_tensor_is_disclosed_and_fails_forward_validation(
     model_cls: type[nn.Module], cut_note: str
 ) -> None:
-    """Pin the real behaviour of a read held tensor the scan missed.
+    """A read held tensor the scan missed is disclosed AND fails forward validation.
 
     The coded scan warning names the cut and the generic no-provenance warning fires;
     the graph shows the read without the held tensor (no buffer source). Forward
-    validation returns True: a tripwire gap recorded as an open follow-up, pinned here
-    so the docs cannot drift back to claiming validation fails.
+    validation fails on the ``source_provenance`` check, naming both the source-less
+    argument and the persisted scan-cut advisory.
     """
+
+    from torchlens.validation import last_validation_failure
 
     torch.manual_seed(0)
     x = torch.randn(5)
@@ -673,7 +675,12 @@ def test_missed_held_tensor_is_disclosed_and_forward_validation_does_not_catch_i
     assert torch.equal(trace[trace.output_layers[0]].out, _eager(model, x))
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        assert tl.validate(copy.deepcopy(model), x, scope="forward") is True
+        assert tl.validate(copy.deepcopy(model), x, scope="forward") is False
+    failure = last_validation_failure()
+    assert failure is not None and failure.check == "source_provenance"
+    assert failure.op_label is not None and failure.op_label.startswith("add")
+    assert failure.extra["reasons"] == ["held_tensor_scan_truncated", "unattributed_tensor_args"]
+    assert cut_note in failure.message
 
 
 class _SharedPastDepth(nn.Module):

@@ -38,6 +38,7 @@ import torch.nn as nn
 from _validation_capture import _capture, _quiet_validate
 
 import torchlens as tl
+from torchlens.backends.torch import rescue
 from torchlens.options import CaptureOptions
 from torchlens.validation import validate_forward_pass
 from torchlens.validation.core import validate_saved_outs
@@ -199,7 +200,7 @@ def test_w32_genuine_raw_hook_replacement_still_validates() -> None:
     """
 
     def raw_hook(module, inputs, output):  # type: ignore[no-untyped-def]
-        return torch.ops.aten.mul.Tensor(output, torch.tensor(0.5))
+        return torch._C._VariableFunctions.mul(output, torch.tensor(0.5))
 
     model = _Tiny()
     model.lin.register_forward_hook(raw_hook)
@@ -490,11 +491,11 @@ class _RawAten(nn.Module):
     """A directly-dispatched aten op TorchLens silently fails to capture."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        h = torch.ops.aten.mul.Tensor(x, 2.0)
+        h = torch._C._VariableFunctions.mul(x, 2.0)
         return torch.relu(h)
 
 
-def test_w34_dropped_aten_op_trace_method_now_fails() -> None:
+def test_w34_dropped_aten_op_trace_method_now_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     """FAIL-AFTER-WHERE-PASSED-BEFORE: the Trace-method entrypoint is armed.
 
     Before this hardening ``Trace.validate_forward_pass`` returned True for
@@ -508,6 +509,8 @@ def test_w34_dropped_aten_op_trace_method_now_fails() -> None:
     model = _RawAten()
     x = torch.randn(3, 4)
     ground_truth = model(x)
+    # Keep the primary capture: the rescue re-run's aten recording recovers the stand-in.
+    monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         trace = tl.trace(
@@ -584,11 +587,12 @@ def test_w34_factory_internal_sources_keep_exemption() -> None:
     assert _quiet_validate(_Factories(), torch.randn(3, 4)) is True
 
 
-def test_w34_outside_tensor_consumer_with_traced_parent_still_validates() -> None:
-    """Control (no new FP): the locked global-payload pattern stays green.
+def test_w34_outside_tensor_consumer_with_traced_parent_fails_source_provenance() -> None:
+    """A genuinely outside tensor beside a traced input fails forward validation.
 
-    A model consuming a genuinely outside tensor alongside a traced input has
-    known partial provenance; it warns but validates (locked behavior).
+    The global-payload pattern warns (no graph/source provenance) and, since the
+    source-provenance check, fails on ``source_provenance`` rather than on the
+    graph_connectivity invariant: the traced parent keeps the consumer connected.
     """
 
     outside = torch.randn(3, 4)
@@ -597,7 +601,9 @@ def test_w34_outside_tensor_consumer_with_traced_parent_still_validates() -> Non
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             return x + outside
 
-    assert _quiet_validate(_GlobalTensor(), torch.randn(3, 4)) is True
+    assert _quiet_validate(_GlobalTensor(), torch.randn(3, 4)) is False
+    failure = tl.validation.last_validation_failure()
+    assert failure is not None and failure.check == "source_provenance"
 
 
 def test_w34_unused_input_model_still_validates() -> None:

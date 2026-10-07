@@ -64,6 +64,10 @@
     (`docs/reference/deprecations.md` has the honest capability statement).
 13. `torch.func` / functorch transforms are captured as boundary ops; do not expect their
     per-element internal eager operations to appear unless a future expand-inside mode exists.
+    `torch.autograd.grad` called inside forward is an `autogradgrad` boundary op
+    (`transform_kind="autograd.grad"`, one op per returned gradient, selected by
+    `tl.func_transform("autograd.grad")`); validation re-derives its gradients by replaying
+    the recorded subgraph from its `inputs` to its `outputs`, never by exemption.
 14. Public backend-neutral state (`Trace.backend`, `module_identity_mode`, `param_source`,
     `dtype_ref`, `device_ref`, `backend_address`, `resolver_status`) must stay in docs,
     glossary, FIELD_ORDER, and serialization compatibility gates together.

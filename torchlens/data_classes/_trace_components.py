@@ -529,6 +529,22 @@ TRACE_EXTERNAL_WRITE_EXEMPTIONS: dict[str, str] = {
         "torch model prep: module-boundary (entry and exit) adoption queue; popped by its postprocess step "
         "and scrub-declared"
     ),
+    "_plain_scalar_escape_labels": (
+        "torch plain scalar-escape belt: raw labels whose data escaped to Python; read by "
+        "orphan removal, popped by the provenance disclosure step and scrub-declared"
+    ),
+    "_plain_direct_escape_gaps": (
+        "torch plain escape belt: user-code data reads of source-less tensors (no op); "
+        "popped by the provenance disclosure step and scrub-declared"
+    ),
+    "_unrecorded_operator_mutations": (
+        "torch.ops recorder: mutating operator calls it could not record in place; popped by "
+        "the provenance disclosure step and scrub-declared"
+    ),
+    "_module_boundary_outside_sources": (
+        "torch model prep: module-boundary adoptions of closure/forward-global tensors (no "
+        "escape signal); popped by the same postprocess step and scrub-declared"
+    ),
     "_fastlog_grad_contexts": (
         "fastlog: predicate-pass grad RecordContexts keyed by public label; lives on the "
         "recorder's session trace only, never on a cooked to_trace() result"

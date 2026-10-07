@@ -4103,18 +4103,16 @@ def test_simple_egnn():
 def test_maml_inner_loop():
     model = example_models.MAMLInnerLoop()
     x = torch.rand(4, 8)
-    with pytest.warns(UserWarning, match="no graph/source provenance"):
-        assert validate_forward_pass(model, x)
-    with pytest.warns(UserWarning, match="no graph/source provenance"):
-        show_model_graph(
-            model,
-            x,
-            view="unrolled",
-            visualization=tl.options.VisualizationOptions(
-                save_only=True,
-                container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "maml_inner_loop"),
-            ),
-        )
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        view="unrolled",
+        visualization=tl.options.VisualizationOptions(
+            save_only=True,
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "maml_inner_loop"),
+        ),
+    )
 
 
 def test_tiny_nerf():

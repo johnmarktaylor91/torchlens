@@ -2163,3 +2163,27 @@ env: py3.11-torch2.13.0
 torch: 2.13.0+cpu
 source: 37315835f4e253800b6cd7bfb047ec4e637e6285 (dirty)
 recorded: 2026-10-06T08:08:40.914124+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: r8-sourceless: validation/_source_provenance.py reads Op.unattributed_tensor_args for the new source_provenance forward-validation check
+env: py3.11-torch2.13.0
+torch: 2.13.0+cpu
+source: 2340bd6031fc7c449fe65430df401a63f16a3163 (clean)
+recorded: 2026-10-06T10:14:54.116265+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: r9-sourceless review fixes: orphan removal now reads Op.unattributed_tensor_args before stripping pruned ops (source_provenance witness)
+env: py3.11-torch2.13.0
+torch: 2.13.0+cpu
+source: 86e56f4b9f2d79ad34c588b6419551ee034874a3 (clean)
+recorded: 2026-10-06T11:10:38.029745+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: r12: autograd.grad boundary replay reads op fields
+env: py3.11-torch2.13.0
+torch: 2.13.0+cpu
+source: 09678a53ce68647aca51a55bdec2e8848bc1973e (dirty)
+recorded: 2026-10-06T17:44:17.488574+00:00
