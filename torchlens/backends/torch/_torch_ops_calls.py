@@ -19,8 +19,9 @@ An operator whose schema writes its first argument and returns nothing (a
 ``torch.library.custom_op`` with ``mutates_args``) is recorded as an in-place op on that
 argument: the replay callable returns the mutated argument, so later reads of it come
 from the op. A mutating operator returning nothing that cannot be recorded that way
-(another argument written, a list receiver, an unreadable schema) is disclosed as a
-``source_provenance`` gap instead of vanishing from the graph.
+(another argument written, a list receiver, an unreadable schema, or a receiver write no
+logged op recorded) is disclosed as a ``source_provenance`` gap instead of vanishing from
+the graph.
 
 Calls that TorchLens or torch itself makes are never recorded: a ``torch.ops`` call inside
 a wrapped torch function's original (a decomposition, a custom op's body) is detected by a
@@ -42,6 +43,7 @@ import torch
 import torch._ops as _torch_ops
 
 from ... import _state
+from ._tl import get_tensor_label
 
 _CALL_CLASS_NAMES: tuple[str, ...] = ("OpOverloadPacket", "OpOverload")
 """``torch._ops`` classes whose ``__call__`` user ``torch.ops.*`` calls flow through.
@@ -256,11 +258,31 @@ def _returning_mutated_receiver(call_operator: Callable[..., Any]) -> Callable[.
     Callable[..., Any]
         Callable whose output is ``args[0]``, the tensor the operator wrote, so the
         wrapper records it as an in-place op and validation replays it the same way.
+
+    Notes
+    -----
+    The returned receiver already carries its pre-call label, so the wrapper records
+    the write only while the call stays bottom-level (``_output_should_be_logged``).
+    A wrapped call that logs nothing can still run inside the operator and clear the
+    wrapper's barcode: torch 2.7's Python ``check_aliasing_constraint`` reads
+    ``Tensor.untyped_storage()`` in every custom op's backend kernel, and a kernel body
+    may read tensor metadata. When no op was logged during the call, the enclosing
+    barcode is restored (the ``as_subclass`` transparency rule), so the write is still
+    recorded. A body whose own wrapped ops were logged keeps them as the record; when
+    none of them relabelled the receiver, ``_recording_call`` discloses the write.
     """
 
     def _call_returning_receiver(*args: Any, **kwargs: Any) -> Any:
         """Run the operator, then return the argument it mutated."""
+        trace, enabled = _state.active_capture()
+        if not enabled or trace is None:
+            call_operator(*args, **kwargs)
+            return args[0]
+        barcode = trace._wrapper_runtime_ws.current_func_barcode
+        layers_before = trace._raw_graph_ws.layer_counter
         call_operator(*args, **kwargs)
+        if trace._raw_graph_ws.layer_counter == layers_before:
+            trace._wrapper_runtime_ws.current_func_barcode = barcode
         return args[0]
 
     _call_returning_receiver.__name__ = call_operator.__name__
@@ -360,7 +382,12 @@ def _make_recording_call(original: Callable[..., Any]) -> Callable[..., Any]:
         if mutation == _MUTATION_NONE:
             return decorated(*args, **kwargs)
         if mutation == _MUTATION_RECEIVER and args and isinstance(args[0], torch.Tensor):
+            label_before = get_tensor_label(args[0])
             decorated(*args, **kwargs)
+            if get_tensor_label(args[0]) == label_before:
+                # No op relabelled the receiver: the write is not in the graph (the
+                # operator's body logged other ops, so the in-place record was skipped).
+                _disclose_unrecorded_mutation(trace, self)
             return None
         if mutation == _MUTATION_UNKNOWN:
             result = decorated(*args, **kwargs)
