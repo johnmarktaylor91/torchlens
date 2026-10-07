@@ -199,7 +199,12 @@ def test_replay_runs_under_each_ops_captured_grad_mode(
 
 
 class _LeafAndOpOutputModel(nn.Module):
-    """One multiply takes the grad-requiring model input (a leaf), one an op output."""
+    """One multiply takes an op output (a non-leaf) and an in-forward grad leaf.
+
+    TorchLens feeds the model clones of its inputs, so a grad-requiring model
+    input is a non-leaf by the time any op sees it; a factory tensor built
+    with ``requires_grad=True`` inside ``forward`` is a genuine leaf.
+    """
 
     def __init__(self) -> None:
         """Build the linear layer."""
@@ -208,9 +213,10 @@ class _LeafAndOpOutputModel(nn.Module):
         self.lin = nn.Linear(4, 4)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Feed the input leaf and a linear output into one multiply each."""
+        """Scale a linear output by a grad-requiring factory tensor."""
 
-        return torch.mul(x, 3.0) + torch.mul(self.lin(x), 2.0)
+        scale = torch.full((4,), 3.0, requires_grad=True)
+        return torch.mul(self.lin(x), scale)
 
 
 def test_replay_rebuilds_leaves_as_leaves_and_op_outputs_as_non_leaves(
@@ -219,15 +225,15 @@ def test_replay_rebuilds_leaves_as_leaves_and_op_outputs_as_non_leaves(
     """Leafness follows the producing op's recorded autograd node."""
 
     model = _LeafAndOpOutputModel()
-    trace, ground_truth = _capture_for_replay(model, torch.rand(3, 4, requires_grad=True))
+    trace, ground_truth = _capture_for_replay(model, torch.rand(3, 4))
     recorder = _ReplayRecorder(monkeypatch)
 
     assert bool(validate_saved_outs(trace, [ground_truth]))
 
-    by_scalar = {float(call["args"][1]): call["args"][0] for call in recorder.calls_to("mul")}
-    input_leaf, op_output = by_scalar[3.0], by_scalar[2.0]
-    assert input_leaf.requires_grad and input_leaf.is_leaf
-    assert op_output.requires_grad and not op_output.is_leaf
+    for call in recorder.calls_to("mul"):
+        op_output, factory_leaf = call["args"][0], call["args"][1]
+        assert op_output.requires_grad and not op_output.is_leaf
+        assert factory_leaf.requires_grad and factory_leaf.is_leaf
 
 
 def test_replay_tensors_do_not_outlive_the_check(monkeypatch: pytest.MonkeyPatch) -> None:
