@@ -12,6 +12,7 @@ import re
 import subprocess
 import warnings
 from collections import defaultdict
+from dataclasses import replace
 from pathlib import Path
 
 import example_models
@@ -22,6 +23,7 @@ import torchlens as tl
 from torchlens.errors._base import TorchLensWarning
 from torchlens.visualization import _render_ordering
 from torchlens.visualization._render_common import SiblingOrderChain
+from torchlens.visualization._render_flow import _inject_sibling_rank_groups
 
 _SUBGRAPH_OPEN = re.compile(r'^\s*subgraph\s+"?([^"{]+?)"?\s*\{\s*$')
 _NAME = r'(?:"(?:[^"\\]|\\.)*"|[A-Za-z0-9_.:]+)'
@@ -216,8 +218,8 @@ _GROUP_A_B = """\t// tl:sibling-order:start
 """
 
 
-def test_member_cluster_filter_keeps_only_enclosed_groups() -> None:
-    """Groups survive only when their cluster holds every member (top level holds no cluster)."""
+def test_cluster_fit_keeps_moves_or_drops_each_group() -> None:
+    """Groups stay when their cluster holds every member, move to the shared cluster, or drop."""
 
     baseline = _DUELING_SKELETON.replace("{INJECT}", "")
     cross = _chain(("a", "b"))
@@ -228,6 +230,8 @@ def test_member_cluster_filter_keeps_only_enclosed_groups() -> None:
     outer_member = _chain(("c", "e"), "l.inner:1")
     sibling_cluster = _chain(("a2", "b2"), "r")
     top_level = _chain(("top1", "top2"))
+    top_level_of_nested = _chain(("d", "e"))
+    unknown_target = _chain(("top1", "ghost"))
     chains = (
         cross,
         same_cluster,
@@ -237,38 +241,108 @@ def test_member_cluster_filter_keeps_only_enclosed_groups() -> None:
         outer_member,
         sibling_cluster,
         top_level,
+        top_level_of_nested,
+        unknown_target,
     )
 
-    kept = _render_ordering._filter_sibling_chains_to_member_cluster(chains, baseline)
+    fitted = _render_ordering._fit_sibling_chains_to_clusters(chains, baseline)
 
     # ``d`` is named in cluster_l and in the nested cluster, so it lives in the nested one.
-    assert kept == (same_cluster, nested_member, nested_cluster, top_level)
+    assert fitted == (
+        same_cluster,
+        replace(top_level_of_clustered, lca_key="l"),
+        nested_member,
+        nested_cluster,
+        replace(outer_member, lca_key="l"),
+        top_level,
+        replace(top_level_of_nested, lca_key="l.inner_pass1"),
+    )
+    injected = _inject_sibling_rank_groups(baseline, fitted)
+    assert injected.count("tl:sibling-order:start") == len(fitted)
+    assert _spanning_groups(injected) == []
 
 
-def test_member_cluster_filter_drops_everything_on_unbalanced_dot() -> None:
-    """An unparseable baseline conservatively disables sibling ordering (invariant 11)."""
+@pytest.mark.parametrize(
+    "breakage",
+    ["unbalanced", "multiline_label"],
+)
+def test_cluster_fit_drops_everything_on_unreadable_dot(breakage: str) -> None:
+    """DOT outside the one-statement-per-line shape disables sibling ordering (invariant 11)."""
 
-    baseline = _DUELING_SKELETON.replace("{INJECT}", "").rstrip().rstrip("}")
+    baseline = _DUELING_SKELETON.replace("{INJECT}", "")
+    if breakage == "unbalanced":
+        baseline = baseline.rstrip().rstrip("}")
+    else:
+        # A label spanning lines could hide a closing brace from the brace tracking.
+        baseline = baseline.replace("label=<r>", "label=<r\n}\n{\n>")
 
     assert (
-        _render_ordering._filter_sibling_chains_to_member_cluster(
-            (_chain(("top1", "top2")),), baseline
-        )
+        _render_ordering._fit_sibling_chains_to_clusters((_chain(("top1", "top2")),), baseline)
         == ()
     )
 
 
-def test_member_cluster_filter_marks_nodes_in_unrelated_clusters_ambiguous() -> None:
+def test_cluster_fit_drops_nodes_named_in_unrelated_clusters() -> None:
     """A node named from two unrelated clusters matches no group."""
 
     baseline = _DUELING_SKELETON.replace("{INJECT}", "").replace("b -> b2", "a -> b2")
 
     assert (
-        _render_ordering._filter_sibling_chains_to_member_cluster(
-            (_chain(("a", "a2"), "l"),), baseline
-        )
+        _render_ordering._fit_sibling_chains_to_clusters((_chain(("a", "a2"), "l"),), baseline)
         == ()
     )
+
+
+class _Branches(torch.nn.Module):
+    """Two parallel branches inside one parent module, like an inception block."""
+
+    def __init__(self) -> None:
+        """Build the branches."""
+
+        super().__init__()
+        self.left = torch.nn.Sequential(torch.nn.Linear(4, 4), torch.nn.ReLU())
+        self.right = torch.nn.Sequential(torch.nn.Linear(4, 4), torch.nn.Tanh())
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run both branches and merge them."""
+
+        return torch.cat([self.left(x), self.right(x)], dim=1)
+
+
+class _InceptionToy(torch.nn.Module):
+    """A top-level stem feeding a two-branch block."""
+
+    def __init__(self) -> None:
+        """Build the stem and block."""
+
+        super().__init__()
+        self.stem = torch.nn.Linear(4, 4)
+        self.block = _Branches()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the stem, then the block."""
+
+        return self.block(self.stem(x).relu())
+
+
+def test_root_level_chain_moves_into_the_branches_parent_cluster(tmp_path: Path) -> None:
+    """A fanout from outside a block into its branches is ordered inside the block's cluster."""
+
+    log = tl.trace(_InceptionToy(), torch.randn(2, 4))
+    try:
+        dot_source = str(
+            log.draw(
+                vis_outpath=str(tmp_path / "inception"), vis_save_only=True, vis_fileformat="pdf"
+            )
+        )
+        decision = log._last_sibling_ordering_decision
+    finally:
+        log.cleanup()
+
+    _, groups = _cluster_layout(dot_source)
+    assert decision.survivor_count == 1
+    assert [path for path, _ in groups] == [("cluster_block_pass1",)]
+    assert _spanning_groups(dot_source) == []
 
 
 class _Fanout(torch.nn.Module):
@@ -325,7 +399,7 @@ def test_failed_ordered_layout_falls_back_to_plain_layout(
     assert fallback == plain
     assert (tmp_path / "fallback.pdf").stat().st_size > 0
     codes = [w.message.fields["code"] for w in caught if isinstance(w.message, TorchLensWarning)]
-    assert codes == ["sibling_order_fallback"]
+    assert codes.count("sibling_order_fallback") == 1
 
 
 def test_empty_ordered_layout_falls_back_to_plain_layout(
@@ -360,3 +434,46 @@ def test_failed_ordered_layout_still_raises_under_strict_checks(
 
     with pytest.raises(subprocess.CalledProcessError):
         _draw(_Fanout(), torch.randn(1, 3), tmp_path, "strict")
+
+
+class _Distorter(torch.nn.Module):
+    """Two fanouts; the unequal-depth one stretches edges and is dropped by the ratio cap."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the distorter."""
+
+        parent = x + 1
+        source = parent.relu()
+        left = source + 1
+        right = source + 2
+        side = parent
+        for _ in range(5):
+            side = side.sigmoid() + 1
+        right = right + side
+        return (left + 1) + (right + 1)
+
+
+def test_empty_retry_layout_falls_back_to_plain_layout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An empty layout on a post-stretch retry also falls back instead of passing as unstretched."""
+
+    plain = _draw(_Distorter(), torch.randn(1, 3), tmp_path, "plain", order_siblings=False)
+    real_layout = _render_ordering._layout_dot_plain
+    ordered_calls: list[str] = []
+    monkeypatch.setenv("TORCHLENS_COLLAPSE_STRICT", "0")
+    monkeypatch.setattr(_render_ordering, "_SIBLING_ORDER_WARNING_EMITTED", False)
+
+    def layout(source: str, rankdir: str, captured_edges: list) -> object:
+        if "tl:sibling-order" in source:
+            ordered_calls.append(source)
+            if len(ordered_calls) > 1:
+                return _render_ordering.PlainLayout(nodes={}, edge_spans={})
+        return real_layout(source, rankdir, captured_edges)
+
+    monkeypatch.setattr(_render_ordering, "_layout_dot_plain", layout)
+    with pytest.warns(TorchLensWarning, match="produced no layout"):
+        fallback = _draw(_Distorter(), torch.randn(1, 3), tmp_path, "fallback")
+
+    assert len(ordered_calls) == 2
+    assert fallback == plain
