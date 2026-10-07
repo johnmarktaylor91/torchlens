@@ -50,6 +50,7 @@ from ..utils.tensor_utils import (
     tensor_all_nan,
     tensor_nanequal,
 )
+from . import _replay_grad_fidelity as _grad_fidelity
 from ._autograd_grad_replay import execute_replay_func
 from ._edge_boundary import (
     _capture_payload_equal,
@@ -63,6 +64,7 @@ from ._index_domain import (
     layer_has_index_domain_parent,
 )
 from ._replay_device import align_output_to_saved_device, align_parent_to_slot_device
+from ._replay_grad_fidelity import _copy_validation_args, _deep_clone_tensors  # noqa: F401
 from ._source_provenance import check_source_provenance
 from .exemptions import (
     CUSTOM_EXEMPTION_CHECKS,
@@ -3681,6 +3683,7 @@ def _write_nested_replay_arg_value(
     return assign_to_sequence_or_dict(container, key_path[0], child)
 
 
+@_grad_fidelity.built_outside_inference_mode
 def _prepare_input_args_for_validating_layer(
     self: "Trace",
     layer_to_validate_parents_for: Op,
@@ -3793,6 +3796,9 @@ def _prepare_input_args_for_validating_layer(
             parent_layer_func_values = align_parent_to_slot_device(
                 input_args, arg_type, key, parent_layer_func_values
             )
+            parent_layer_func_values = _grad_fidelity.with_slot_grad_flags(
+                layer_to_validate_parents_for, arg_type, key, parent_layer, parent_layer_func_values
+            )
             if not isinstance(key, tuple):
                 input_args[arg_type][key] = parent_layer_func_values
             else:
@@ -3802,6 +3808,7 @@ def _prepare_input_args_for_validating_layer(
                     parent_layer_func_values,
                 )
 
+    _grad_fidelity.restore_leaf_for_requires_grad_toggle(layer_to_validate_parents_for, input_args)
     return input_args, None
 
 
@@ -4979,48 +4986,6 @@ def _buffer_parent_source_equal(
     except Exception:
         return False
     return tensor_nanequal(saved_arg_value, parent_out, allow_tolerance=False)
-
-
-def _deep_clone_tensors(val: Any) -> Any:
-    """Recursively clone all tensors in a nested structure of lists/tuples/dicts.
-
-    Non-tensor leaves are returned as-is (shared reference).  Tensor leaves
-    are detached and cloned so that in-place ops during validation replay
-    don't corrupt the original saved data.
-
-    Preserves container types: a tuple input produces a tuple output, not a list.
-    """
-    if isinstance(val, torch.Tensor):
-        return val.detach().clone()
-    elif isinstance(val, (list, tuple)):
-        cloned = [_deep_clone_tensors(v) for v in val]
-        # Preserve the original container type (list vs tuple vs namedtuple).
-        if isinstance(val, tuple) and hasattr(val, "_fields"):
-            return type(val)(*cloned)
-        return type(val)(cloned)
-    elif isinstance(val, dict):
-        return {k: _deep_clone_tensors(v) for k, v in val.items()}
-    return val
-
-
-def _copy_validation_args(input_args: dict[str, Any]) -> dict[str, Any]:
-    """Deep-clone replay arguments to avoid in-place mutation during validation.
-
-    Parameters
-    ----------
-    input_args:
-        Dictionary with ``"args"`` and ``"kwargs"`` entries holding replay
-        inputs for a layer.
-
-    Returns
-    -------
-    dict[str, Any]
-        Structure-equivalent dictionary with tensor leaves detached and cloned.
-    """
-    return {
-        "args": [_deep_clone_tensors(v) for v in input_args["args"]],
-        "kwargs": {k: _deep_clone_tensors(v) for k, v in input_args["kwargs"].items()},
-    }
 
 
 def _perturb_layer_outs(parent_outs: torch.Tensor, output_outs: torch.Tensor) -> torch.Tensor:

@@ -475,11 +475,53 @@ def execute_replay_func(layer: Op, input_args: dict[str, Any], layers_to_perturb
     """
 
     if is_autograd_grad_recorder(layer.func):
-        return replay_autograd_grad_boundary(layer, input_args, layers_to_perturb)
-    return execute_with_restored_rng_autocast(
-        layer.func,
-        tuple(input_args["args"]),
-        dict(input_args["kwargs"]),
-        rng_states=layer.func_rng_states,
-        autocast_state=layer.func_autocast_state,
+        # An autograd.grad call cannot have run under inference_mode, and an
+        # ambient one would leave the rebuilt subgraph without autograd graph.
+        with torch.inference_mode(False):
+            return replay_autograd_grad_boundary(layer, input_args, layers_to_perturb)
+    grad_enabled, inference_mode = captured_grad_modes(layer)
+    with torch.inference_mode(inference_mode), torch.set_grad_enabled(grad_enabled):
+        return execute_with_restored_rng_autocast(
+            layer.func,
+            tuple(input_args["args"]),
+            dict(input_args["kwargs"]),
+            rng_states=layer.func_rng_states,
+            autocast_state=layer.func_autocast_state,
+        )
+
+
+def captured_grad_modes(layer: Op) -> tuple[bool, bool]:
+    """Return the ``(grad_enabled, inference_mode)`` the op's original call ran under.
+
+    Capture records both per op under the reserved ``"__execution__"`` key of
+    ``func_autocast_state``. Replay must run under them: ATen's backend choice
+    can depend on grad mode (on macOS arm64 a depthwise 3x3 conv picks
+    ``Slow2d`` with grad enabled and ``Winograd3x3Depthwise`` without), so
+    replaying under a different mode can call a different kernel than the
+    captured run did.
+
+    Parameters
+    ----------
+    layer:
+        Op being replayed.
+
+    Returns
+    -------
+    tuple[bool, bool]
+        The recorded modes; each falls back to the caller's current mode when
+        the op carries no execution record (source ops, synthesized records).
+    """
+
+    autocast_state = getattr(layer, "func_autocast_state", None)
+    execution = autocast_state.get("__execution__") if isinstance(autocast_state, dict) else None
+    record = execution if isinstance(execution, dict) else {}
+    grad_enabled = record.get("grad_enabled")
+    inference_mode = record.get("inference_mode")
+    return (
+        grad_enabled if isinstance(grad_enabled, bool) else bool(torch.is_grad_enabled()),
+        (
+            inference_mode
+            if isinstance(inference_mode, bool)
+            else bool(torch.is_inference_mode_enabled())
+        ),
     )
