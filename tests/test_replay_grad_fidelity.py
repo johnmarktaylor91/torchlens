@@ -236,6 +236,35 @@ def test_replay_rebuilds_leaves_as_leaves_and_op_outputs_as_non_leaves(
         assert factory_leaf.requires_grad and factory_leaf.is_leaf
 
 
+class _RequiresGradToggleModel(nn.Module):
+    """Re-grad a detached output, then turn grad off again (legal only on a leaf)."""
+
+    def __init__(self) -> None:
+        """Build the linear layer."""
+
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Toggle ``requires_grad`` on a detached sigmoid output."""
+
+        frozen = torch.sigmoid(self.lin(x)).detach()
+        frozen.requires_grad_(True)
+        frozen.requires_grad_(False)
+        return frozen * 2.0 + self.lin(x)
+
+
+def test_requires_grad_toggle_replays_on_a_leaf(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``requires_grad_(False)`` replays on a leaf, as its successful capture proves it had."""
+
+    recorder = _ReplayRecorder(monkeypatch)
+
+    assert validate_forward_pass(_RequiresGradToggleModel(), torch.rand(3, 4))
+
+    for call in recorder.calls_to("requires_grad_"):
+        assert call["args"][0].is_leaf
+
+
 def test_replay_tensors_do_not_outlive_the_check(monkeypatch: pytest.MonkeyPatch) -> None:
     """Grad-requiring replay copies, outputs and their graphs are freed while the trace lives."""
 

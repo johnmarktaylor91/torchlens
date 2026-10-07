@@ -475,7 +475,10 @@ def execute_replay_func(layer: Op, input_args: dict[str, Any], layers_to_perturb
     """
 
     if is_autograd_grad_recorder(layer.func):
-        return replay_autograd_grad_boundary(layer, input_args, layers_to_perturb)
+        # An autograd.grad call cannot have run under inference_mode, and an
+        # ambient one would leave the rebuilt subgraph without autograd graph.
+        with torch.inference_mode(False):
+            return replay_autograd_grad_boundary(layer, input_args, layers_to_perturb)
     grad_enabled, inference_mode = captured_grad_modes(layer)
     with torch.inference_mode(inference_mode), torch.set_grad_enabled(grad_enabled):
         return execute_with_restored_rng_autocast(

@@ -41,7 +41,6 @@ from ..ir.events import is_control_edge_use
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
 
-from ..utils._torch_compat import grad_copy_source_is_leaf
 from ..utils.collections import assign_to_sequence_or_dict
 from ..utils.tensor_utils import (
     _ACCUMULATING_REPLAY_ULP_HEADROOM,
@@ -3838,7 +3837,36 @@ def _build_replay_input_args(
                     parent_layer_func_values,
                 )
 
+    _restore_leaf_for_requires_grad_toggle(layer_to_validate_parents_for, input_args)
     return input_args, None
+
+
+def _restore_leaf_for_requires_grad_toggle(layer: Op, input_args: dict[str, Any]) -> None:
+    """Hand ``Tensor.requires_grad_`` the autograd leaf its captured call must have had.
+
+    ``requires_grad_(False)`` is legal only on a leaf, so a captured call proves
+    its receiver was a leaf (``requires_grad_(True)`` is legal on a leaf too).
+    The receiver's producer may be recorded against TorchLens's safe copy
+    (``CloneBackward0``), which would otherwise rebuild it as a non-leaf.
+
+    Parameters
+    ----------
+    layer:
+        Op being replayed.
+    input_args:
+        Prepared replay arguments, updated in place.
+
+    Returns
+    -------
+    None
+        ``input_args["args"][0]`` becomes a leaf with the same values and flag.
+    """
+
+    if getattr(layer, "func_name", None) != "requires_grad_" or not input_args["args"]:
+        return
+    receiver = input_args["args"][0]
+    if isinstance(receiver, torch.Tensor) and receiver.requires_grad and not receiver.is_leaf:
+        input_args["args"][0] = receiver.detach().requires_grad_(True)
 
 
 def _perturb_parent_values_for_layer(
@@ -5061,7 +5089,9 @@ def _mirror_captured_requires_grad(
         return grad_leaf if leaf else grad_leaf.clone()
 
 
-def _replay_copy_for_slot(layer: Op, arg_type: str, key: Any, value: torch.Tensor) -> torch.Tensor:
+def _replay_copy_for_slot(
+    trace: "Trace", layer: Op, arg_type: str, key: Any, value: torch.Tensor
+) -> torch.Tensor:
     """Return a private replay copy of ``value`` carrying the slot's captured grad flags.
 
     Used where a replay splices a stored tensor (an edge-substitution payload)
@@ -5069,6 +5099,8 @@ def _replay_copy_for_slot(layer: Op, arg_type: str, key: Any, value: torch.Tenso
 
     Parameters
     ----------
+    trace:
+        Trace that owns ``layer``, used to resolve the slot's parent op.
     layer:
         Op being replayed.
     arg_type:
@@ -5084,9 +5116,19 @@ def _replay_copy_for_slot(layer: Op, arg_type: str, key: Any, value: torch.Tenso
         A fresh copy that requires grad exactly when the captured argument did.
     """
 
+    parent_label = (getattr(layer, "parent_arg_positions", {}) or {}).get(arg_type, {}).get(key)
+    parent_layer = None
+    if parent_label is not None:
+        try:
+            parent_layer = _op_for_validation_label(trace, parent_label)
+        except (KeyError, ValueError):
+            # An unresolvable parent label gives no producer fact: keep the
+            # snapshot-only (non-leaf) reading.
+            parent_layer = None
     with torch.inference_mode(False):
         return _mirror_captured_requires_grad(
-            value.detach().clone(), *_captured_slot_grad_flags(layer, arg_type, key)
+            value.detach().clone(),
+            *_captured_slot_grad_flags(layer, arg_type, key, parent_layer),
         )
 
 
@@ -5094,8 +5136,10 @@ def _snapshot_grad_flags(snapshot: Any) -> tuple[bool, bool]:
     """Return the captured ``(requires_grad, is_leaf)`` of one saved argument snapshot.
 
     Snapshots are copies taken with grad attached, so ``snapshot.requires_grad``
-    is the captured argument's flag and the copy's autograd input tells whether
-    the captured argument was a leaf (``grad_copy_source_is_leaf``).
+    is the captured argument's flag. Snapshots are copies of copies, so their
+    autograd graph cannot tell a captured leaf from a captured user ``clone()``
+    of one; a slot without a producing op is therefore rebuilt as a non-leaf,
+    the direction in which every in-place op legal at capture stays legal.
 
     Parameters
     ----------
@@ -5110,7 +5154,7 @@ def _snapshot_grad_flags(snapshot: Any) -> tuple[bool, bool]:
 
     if not isinstance(snapshot, torch.Tensor) or not snapshot.requires_grad:
         return False, False
-    return True, grad_copy_source_is_leaf(snapshot)
+    return True, False
 
 
 def _captured_slot_grad_flags(

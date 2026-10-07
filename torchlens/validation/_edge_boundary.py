@@ -138,6 +138,7 @@ def _splice_edge_substitution_args(
                 from ..intervention.regions import _splice_occurrence
 
                 value = _replay_copy_for_slot(
+                    trace,
                     target_op,
                     "args" if arg_kind == "positional" else "kwargs",
                     arg_path[0] if len(tuple(arg_path)) == 1 else tuple(arg_path),
@@ -184,10 +185,12 @@ def _splice_edge_substitution_args(
             return None, failed
         if arg_kind == "positional":
             args[int(arg_path[0])] = _replay_copy_for_slot(
-                target_op, "args", int(arg_path[0]), value
+                trace, target_op, "args", int(arg_path[0]), value
             )
         else:
-            kwargs[arg_path[0]] = _replay_copy_for_slot(target_op, "kwargs", arg_path[0], value)
+            kwargs[arg_path[0]] = _replay_copy_for_slot(
+                trace, target_op, "kwargs", arg_path[0], value
+            )
     spliced = dict(input_args)
     spliced["args"] = tuple(args)
     spliced["kwargs"] = kwargs
