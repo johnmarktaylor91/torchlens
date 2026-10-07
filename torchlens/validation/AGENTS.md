@@ -85,7 +85,13 @@ bridge extras.
 
 - `validate_saved_outs()` is the main saved-forward replay entry point.
 - `validate_parents_of_saved_layer()` handles one layer's replay and perturbation.
-- `_execute_func_with_restored_state()` restores RNG/autocast state around replay.
+- `_execute_func_with_restored_state()` restores RNG/autocast state around replay, and
+  `execute_replay_func()` runs it under the op's recorded grad and inference mode
+  (`func_autocast_state["__execution__"]`).
+- Replay arguments mirror the captured arguments' `requires_grad` and leafness
+  (`_mirror_captured_requires_grad`): kernel choice can depend on both, e.g. macOS arm64
+  convs pick a different backend for a grad-requiring weight. Never hand replay detached
+  copies of grad-requiring arguments.
 - `_perturb_layer_outs()` is bounded by `MAX_PERTURB_ATTEMPTS`.
 - Validation requires saved function args for replay; check callers preserve
   `save_arg_values=True`.
