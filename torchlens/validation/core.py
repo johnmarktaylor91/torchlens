@@ -41,6 +41,7 @@ from ..ir.events import is_control_edge_use
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
 
+from ..utils._torch_compat import grad_copy_source_is_leaf
 from ..utils.collections import assign_to_sequence_or_dict
 from ..utils.tensor_utils import (
     _ACCUMULATING_REPLAY_ULP_HEADROOM,
@@ -3688,6 +3689,34 @@ def _prepare_input_args_for_validating_layer(
     perturb_strategy: str = "default",
     skip_parent_swap_labels: frozenset[str] = frozenset(),
 ) -> tuple[dict[str, Any] | None, str | None]:
+    """Build replay arguments outside any ambient ``torch.inference_mode``.
+
+    Replay tensors must be ordinary tensors whatever mode the caller validates
+    under: an inference tensor carries no autograd graph and refuses in-place
+    updates once the replay restores the op's captured (non-inference) mode.
+    The replay itself then runs under the op's recorded grad and inference
+    mode (``execute_replay_func``).
+
+    Parameters and returns are those of ``_build_replay_input_args``.
+    """
+
+    with torch.inference_mode(False):
+        return _build_replay_input_args(
+            self,
+            layer_to_validate_parents_for,
+            layers_to_perturb,
+            perturb_strategy,
+            skip_parent_swap_labels,
+        )
+
+
+def _build_replay_input_args(
+    self: "Trace",
+    layer_to_validate_parents_for: Op,
+    layers_to_perturb: list[str],
+    perturb_strategy: str = "default",
+    skip_parent_swap_labels: frozenset[str] = frozenset(),
+) -> tuple[dict[str, Any] | None, str | None]:
     """Build the input argument dict for replaying a layer's function.
 
     Starts from the layer's saved ``saved_args`` / ``saved_kwargs``,
@@ -3796,8 +3825,7 @@ def _prepare_input_args_for_validating_layer(
             if isinstance(parent_layer_func_values, torch.Tensor):
                 parent_layer_func_values = _mirror_captured_requires_grad(
                     parent_layer_func_values,
-                    requires_grad=_slot_captured_requires_grad(input_args, arg_type, key),
-                    leaf=_parent_output_is_leaf(parent_layer),
+                    *_captured_slot_grad_flags(layer_to_validate_parents_for, arg_type, key),
                 )
             if not isinstance(key, tuple):
                 input_args[arg_type][key] = parent_layer_func_values
@@ -4988,7 +5016,7 @@ def _buffer_parent_source_equal(
 
 
 def _mirror_captured_requires_grad(
-    value: torch.Tensor, *, requires_grad: bool, leaf: bool
+    value: torch.Tensor, requires_grad: bool, leaf: bool
 ) -> torch.Tensor:
     """Give a private replay tensor the ``requires_grad`` its captured argument had.
 
@@ -5031,17 +5059,66 @@ def _mirror_captured_requires_grad(
         return grad_leaf if leaf else grad_leaf.clone()
 
 
-def _slot_captured_requires_grad(input_args: dict[str, Any], arg_type: str, key: Any) -> bool:
-    """Return whether the captured argument at one replay slot required grad.
+def _replay_copy_for_slot(layer: Op, arg_type: str, key: Any, value: torch.Tensor) -> torch.Tensor:
+    """Return a private replay copy of ``value`` carrying the slot's captured grad flags.
 
-    The slot still holds the cloned saved-argument snapshot (its
-    ``requires_grad`` mirrored from the snapshot by ``_deep_clone_tensors``)
-    when this runs, before the parent payload overwrites it.
+    Used where a replay splices a stored tensor (an edge-substitution payload)
+    into an argument slot after ``_prepare_input_args_for_validating_layer``.
 
     Parameters
     ----------
-    input_args:
-        Replay argument mapping built from the saved args/kwargs.
+    layer:
+        Op being replayed.
+    arg_type:
+        Either ``"args"`` or ``"kwargs"``.
+    key:
+        Argument position key, possibly nested as a tuple.
+    value:
+        Stored tensor to splice; never mutated or handed to the replay itself.
+
+    Returns
+    -------
+    torch.Tensor
+        A fresh copy that requires grad exactly when the captured argument did.
+    """
+
+    with torch.inference_mode(False):
+        return _mirror_captured_requires_grad(
+            value.detach().clone(), *_captured_slot_grad_flags(layer, arg_type, key)
+        )
+
+
+def _snapshot_grad_flags(snapshot: Any) -> tuple[bool, bool]:
+    """Return the captured ``(requires_grad, is_leaf)`` of one saved argument snapshot.
+
+    Snapshots are copies taken with grad attached, so ``snapshot.requires_grad``
+    is the captured argument's flag and the copy's autograd input tells whether
+    the captured argument was a leaf (``grad_copy_source_is_leaf``).
+
+    Parameters
+    ----------
+    snapshot:
+        Saved argument value at one slot.
+
+    Returns
+    -------
+    tuple[bool, bool]
+        ``(False, False)`` for a non-tensor or a snapshot that needs no grad.
+    """
+
+    if not isinstance(snapshot, torch.Tensor) or not snapshot.requires_grad:
+        return False, False
+    return True, grad_copy_source_is_leaf(snapshot)
+
+
+def _captured_slot_grad_flags(layer: Op, arg_type: str, key: Any) -> tuple[bool, bool]:
+    """Return the captured ``(requires_grad, is_leaf)`` of the argument at one slot.
+
+    Parameters
+    ----------
+    layer:
+        Op being replayed; its ``saved_args`` / ``saved_kwargs`` hold the
+        snapshots of the arguments its original call received.
     arg_type:
         Either ``"args"`` or ``"kwargs"``.
     key:
@@ -5049,43 +5126,20 @@ def _slot_captured_requires_grad(input_args: dict[str, Any], arg_type: str, key:
 
     Returns
     -------
-    bool
-        The snapshot's ``requires_grad``; ``False`` (the detached-replay
-        behavior) when the slot holds no tensor snapshot.
+    tuple[bool, bool]
+        The snapshot's flags; ``(False, False)`` (the detached-replay behavior)
+        when no tensor snapshot sits at this position.
     """
 
     try:
-        value = _read_replay_arg_value(
-            tuple(input_args["args"]), input_args["kwargs"], arg_type, key
+        snapshot = _read_replay_arg_value(
+            tuple(layer.saved_args or ()), dict(layer.saved_kwargs or {}), arg_type, key
         )
     except (IndexError, KeyError, TypeError):
         # No snapshot at this position (the parent fills a slot the saved args
         # do not carry): there is no captured flag to mirror.
-        return False
-    return isinstance(value, torch.Tensor) and bool(value.requires_grad)
-
-
-def _parent_output_is_leaf(parent_layer: Op) -> bool:
-    """Return whether a parent's captured output was an autograd leaf.
-
-    Only a source op (no parents) whose output carried no ``grad_fn`` is a
-    leaf: model inputs and other graph sources. Every other op output that
-    required grad was produced under grad mode and so had a ``grad_fn``.
-
-    Parameters
-    ----------
-    parent_layer:
-        Parent op whose saved output fills a replay slot.
-
-    Returns
-    -------
-    bool
-        Whether the captured value was a leaf.
-    """
-
-    return getattr(parent_layer, "grad_fn_class_name", None) is None and not getattr(
-        parent_layer, "parents", None
-    )
+        return False, False
+    return _snapshot_grad_flags(snapshot)
 
 
 def _deep_clone_tensors(val: Any) -> Any:
@@ -5100,11 +5154,7 @@ def _deep_clone_tensors(val: Any) -> Any:
     Preserves container types: a tuple input produces a tuple output, not a list.
     """
     if isinstance(val, torch.Tensor):
-        return _mirror_captured_requires_grad(
-            val.detach().clone(),
-            requires_grad=bool(val.requires_grad),
-            leaf=val.grad_fn is None,
-        )
+        return _mirror_captured_requires_grad(val.detach().clone(), *_snapshot_grad_flags(val))
     elif isinstance(val, (list, tuple)):
         cloned = [_deep_clone_tensors(v) for v in val]
         # Preserve the original container type (list vs tuple vs namedtuple).

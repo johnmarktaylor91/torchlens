@@ -57,6 +57,7 @@ from ._torch_symbols import shadowed_torch_submodule, torch_attr
 __all__ = [
     "AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED",
     "HAS_ACCUMULATE_GRAD_CLASS",
+    "grad_copy_source_is_leaf",
     "HAS_C10D_ABORT_PG",
     "HAS_C10D_GROUP_REGISTRY",
     "HAS_C10D_GROUP_SEQ",
@@ -2539,6 +2540,38 @@ def get_accumulate_grad_class() -> Any:
         )
         return ()
     return accumulate_grad_cls
+
+
+def grad_copy_source_is_leaf(copy: torch.Tensor) -> bool:
+    """Return whether a grad-attached tensor copy was taken from an autograd leaf.
+
+    Saved argument snapshots are copies (``clone`` / ``to``) taken with grad
+    attached, so the copy itself is always a non-leaf. Its single autograd
+    input tells what the source was: an ``AccumulateGrad`` node means the
+    source was a leaf, any other node means it was an op output.
+
+    Parameters
+    ----------
+    copy:
+        Tensor snapshot that requires grad.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``copy`` is itself a leaf or its one autograd input is an
+        ``AccumulateGrad`` node; ``False`` otherwise.
+    """
+
+    grad_fn = copy.grad_fn
+    if grad_fn is None:
+        return True
+    sources = [node for node, _ in getattr(grad_fn, "next_functions", ()) if node is not None]
+    if len(sources) != 1:
+        return False
+    accumulate_grad_cls = get_accumulate_grad_class()
+    if accumulate_grad_cls:
+        return isinstance(sources[0], accumulate_grad_cls)
+    return type(sources[0]).__name__ == "AccumulateGrad"
 
 
 def get_current_graph_task_id_fn() -> Callable[[], Any] | None:

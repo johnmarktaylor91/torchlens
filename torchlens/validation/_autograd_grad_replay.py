@@ -476,7 +476,8 @@ def execute_replay_func(layer: Op, input_args: dict[str, Any], layers_to_perturb
 
     if is_autograd_grad_recorder(layer.func):
         return replay_autograd_grad_boundary(layer, input_args, layers_to_perturb)
-    with torch.set_grad_enabled(captured_grad_enabled(layer)):
+    grad_enabled, inference_mode = captured_grad_modes(layer)
+    with torch.inference_mode(inference_mode), torch.set_grad_enabled(grad_enabled):
         return execute_with_restored_rng_autocast(
             layer.func,
             tuple(input_args["args"]),
@@ -486,15 +487,15 @@ def execute_replay_func(layer: Op, input_args: dict[str, Any], layers_to_perturb
         )
 
 
-def captured_grad_enabled(layer: Op) -> bool:
-    """Return the grad mode the op's original call ran under.
+def captured_grad_modes(layer: Op) -> tuple[bool, bool]:
+    """Return the ``(grad_enabled, inference_mode)`` the op's original call ran under.
 
-    Capture records ``torch.is_grad_enabled()`` per op under the reserved
-    ``"__execution__"`` key of ``func_autocast_state``. Replay must run under
-    that mode: ATen's backend choice can depend on it (on macOS arm64 a
-    depthwise 3x3 conv picks ``Slow2d`` with grad enabled and
-    ``Winograd3x3Depthwise`` without), so replaying under a different mode can
-    call a different kernel than the captured run did.
+    Capture records both per op under the reserved ``"__execution__"`` key of
+    ``func_autocast_state``. Replay must run under them: ATen's backend choice
+    can depend on grad mode (on macOS arm64 a depthwise 3x3 conv picks
+    ``Slow2d`` with grad enabled and ``Winograd3x3Depthwise`` without), so
+    replaying under a different mode can call a different kernel than the
+    captured run did.
 
     Parameters
     ----------
@@ -503,14 +504,21 @@ def captured_grad_enabled(layer: Op) -> bool:
 
     Returns
     -------
-    bool
-        The recorded grad mode, or the caller's current grad mode when the op
-        carries no execution record (source ops and synthesized records).
+    tuple[bool, bool]
+        The recorded modes; each falls back to the caller's current mode when
+        the op carries no execution record (source ops, synthesized records).
     """
 
     autocast_state = getattr(layer, "func_autocast_state", None)
     execution = autocast_state.get("__execution__") if isinstance(autocast_state, dict) else None
-    recorded = execution.get("grad_enabled") if isinstance(execution, dict) else None
-    if isinstance(recorded, bool):
-        return recorded
-    return bool(torch.is_grad_enabled())
+    record = execution if isinstance(execution, dict) else {}
+    grad_enabled = record.get("grad_enabled")
+    inference_mode = record.get("inference_mode")
+    return (
+        grad_enabled if isinstance(grad_enabled, bool) else bool(torch.is_grad_enabled()),
+        (
+            inference_mode
+            if isinstance(inference_mode, bool)
+            else bool(torch.is_inference_mode_enabled())
+        ),
+    )
