@@ -184,11 +184,36 @@ def test_resnet18_incompatible_add_crash_trio() -> None:
     assert any(record.ctx.label == tail_labels[-1] for record in partial.records)
 
 
+def _distilgpt2_tokenizer_files_cached() -> bool:
+    """Return whether the local HF cache holds the distilgpt2 tokenizer files.
+
+    Tests that load only the distilgpt2 model (config and weights) leave a
+    partial cache entry behind. ``AutoTokenizer.from_pretrained(...,
+    local_files_only=True)`` then builds an empty-vocabulary tokenizer instead
+    of raising ``OSError``, and it encodes any prompt to zero tokens.
+
+    Returns
+    -------
+    bool
+        True when ``tokenizer.json``, or both ``vocab.json`` and
+        ``merges.txt``, are cached.
+    """
+
+    from huggingface_hub import try_to_load_from_cache
+
+    def cached(filename: str) -> bool:
+        return isinstance(try_to_load_from_cache("distilgpt2", filename), str)
+
+    return cached("tokenizer.json") or (cached("vocab.json") and cached("merges.txt"))
+
+
 @pytest.mark.heavy
 @pytest.mark.real_model
 def test_distilgpt2_real_checkpoint_scoped_narration() -> None:
     """Memo headline demo: scoped narration on the real distilgpt2 checkpoint."""
 
+    if not _distilgpt2_tokenizer_files_cached():
+        pytest.skip("distilgpt2 tokenizer files not in the local HF cache")
     try:
         tokenizer = transformers.AutoTokenizer.from_pretrained("distilgpt2", local_files_only=True)
         model = transformers.AutoModelForCausalLM.from_pretrained(
@@ -197,6 +222,7 @@ def test_distilgpt2_real_checkpoint_scoped_narration() -> None:
     except OSError:  # local_files_only miss
         pytest.skip("distilgpt2 checkpoint not in the local HF cache")
     inputs = tokenizer("The keys to the cabinet", return_tensors="pt")
+    assert inputs["input_ids"].numel() > 0, "the cached distilgpt2 tokenizer encoded nothing"
     sink = io.StringIO()
     tl.record(
         model,
