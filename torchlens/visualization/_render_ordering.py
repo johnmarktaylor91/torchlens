@@ -304,17 +304,22 @@ def _sibling_groups_fit(
     for cluster_path, line in statements:
         if "tl:sibling-order:start" in line:
             group_path = cluster_path
-            continue
-        if "tl:sibling-order:end" in line or group_path is None:
+        elif "tl:sibling-order:end" in line:
             group_path = None
-            continue
-        for node_name in _dot_statement_node_refs(line):
-            clusters = node_clusters.get(node_name)
-            if clusters is None or clusters[: len(group_path)] != group_path:
-                return False
-            if not group_path and clusters:
-                return False
+        elif group_path is not None and not all(
+            _group_holds_node(group_path, node_clusters.get(name))
+            for name in _dot_statement_node_refs(line)
+        ):
+            return False
     return True
+
+
+def _group_holds_node(group_path: tuple[str, ...], clusters: tuple[str, ...] | None) -> bool:
+    """Return whether a group at ``group_path`` may hold a node in ``clusters``."""
+
+    if clusters is None or clusters[: len(group_path)] != group_path:
+        return False
+    return bool(group_path) or not clusters
 
 
 def _dot_node_cluster_paths(source: str) -> dict[str, set[tuple[str, ...]]] | None:
@@ -342,12 +347,9 @@ def _dot_scoped_statements(source: str) -> list[tuple[tuple[str, ...], str]] | N
     for line in source.splitlines():
         if not _dot_line_is_complete(line):
             return None
-        subgraph_match = _DOT_SUBGRAPH_OPEN.match(line)
-        if subgraph_match is not None:
-            name = _unquote_dot_id(subgraph_match.group(1))
-            stack.append(name if name.startswith("cluster") else None)
-        elif _DOT_GRAPH_OPEN.match(line) or _DOT_ANONYMOUS_OPEN.match(line):
-            stack.append(None)
+        opened = _dot_opened_scope(line)
+        if opened is not None:
+            stack.append(opened[0])
         elif _DOT_CLOSE.match(line):
             if not stack:
                 return None
@@ -355,6 +357,18 @@ def _dot_scoped_statements(source: str) -> list[tuple[tuple[str, ...], str]] | N
         elif stack:
             statements.append((tuple(name for name in stack if name is not None), line))
     return None if stack else statements
+
+
+def _dot_opened_scope(line: str) -> tuple[str | None] | None:
+    """Return ``(cluster name,)`` when ``line`` opens a scope (``(None,)`` if not a cluster)."""
+
+    subgraph_match = _DOT_SUBGRAPH_OPEN.match(line)
+    if subgraph_match is not None:
+        name = _unquote_dot_id(subgraph_match.group(1))
+        return (name if name.startswith("cluster") else None,)
+    if _DOT_GRAPH_OPEN.match(line) or _DOT_ANONYMOUS_OPEN.match(line):
+        return (None,)
+    return None
 
 
 def _dot_line_is_complete(line: str) -> bool:
