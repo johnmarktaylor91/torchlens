@@ -118,7 +118,8 @@ def _splice_edge_substitution_args(
 ) -> tuple[dict[str, Any] | None, ValidationCheckResult | None]:
     """Splice tier-(ii) substituted values into the captured call arguments."""
 
-    from .core import ValidationCheckResult, _replay_copy_for_slot
+    from ._replay_grad_fidelity import replay_copy_for_slot
+    from .core import ValidationCheckResult
     from .diagnostics import CHECK_REPLAY, ValidationFailure, record_validation_failure
 
     args = list(input_args["args"])
@@ -137,7 +138,7 @@ def _splice_edge_substitution_args(
             if isinstance(value, torch.Tensor):
                 from ..intervention.regions import _splice_occurrence
 
-                value = _replay_copy_for_slot(
+                value = replay_copy_for_slot(
                     trace,
                     target_op,
                     "args" if arg_kind == "positional" else "kwargs",
@@ -184,11 +185,11 @@ def _splice_edge_substitution_args(
             failed = ValidationCheckResult.failed_result("edge_substitution_payload_invalid")
             return None, failed
         if arg_kind == "positional":
-            args[int(arg_path[0])] = _replay_copy_for_slot(
+            args[int(arg_path[0])] = replay_copy_for_slot(
                 trace, target_op, "args", int(arg_path[0]), value
             )
         else:
-            kwargs[arg_path[0]] = _replay_copy_for_slot(
+            kwargs[arg_path[0]] = replay_copy_for_slot(
                 trace, target_op, "kwargs", arg_path[0], value
             )
     spliced = dict(input_args)
