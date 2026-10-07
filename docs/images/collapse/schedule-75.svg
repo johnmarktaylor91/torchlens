@@ -24,13 +24,13 @@
 <text text-anchor="start" x="36" y="-2216.78" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">@layer4.0</text>
 <text text-anchor="start" x="36" y="-2202.78" font-family="Helvetica,sans-Serif" font-size="14.00">(BasicBlock)</text>
 </g>
-<g id="clust5" class="cluster">
+<g id="clust6" class="cluster">
 <title>cluster_layer4.0.downsample_pass1</title>
 <polygon fill="white" stroke="black" stroke-width="3" points="428,-1153.92 428,-1609.92 740,-1609.92 740,-1153.92 428,-1153.92"/>
 <text text-anchor="start" x="436" y="-1595.72" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">@layer4.0.downsample</text>
 <text text-anchor="start" x="436" y="-1581.72" font-family="Helvetica,sans-Serif" font-size="14.00">(Sequential)</text>
 </g>
-<g id="clust4" class="cluster">
+<g id="clust5" class="cluster">
 <title>cluster_layer4.1_pass1</title>
 <polygon fill="white" stroke="black" stroke-width="4" points="270,-2247.98 270,-3169.03 582,-3169.03 582,-2247.98 270,-2247.98"/>
 <text text-anchor="start" x="383.5" y="-2269.78" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">@layer4.1</text>
@@ -217,7 +217,7 @@
 </g>
 </g>
 <!-- conv2d_16_51pass1&#45;&gt;batchnorm_16_52pass1 -->
-<g id="edge16" class="edge">
+<g id="edge17" class="edge">
 <title>conv2d_16_51pass1&#45;&gt;batchnorm_16_52pass1</title>
 <path fill="none" stroke="black" d="M236.24,-1277.29C237.77,-1286.77 239.39,-1296.77 240.98,-1306.53"/>
 <polygon fill="black" stroke="black" points="238.58,-1307.07 242.12,-1313.59 243.42,-1306.29 238.58,-1307.07"/>
@@ -237,7 +237,7 @@
 </g>
 </g>
 <!-- conv2d_18_56pass1&#45;&gt;batchnorm_18_57pass1 -->
-<g id="edge29" class="edge">
+<g id="edge30" class="edge">
 <title>conv2d_18_56pass1&#45;&gt;batchnorm_18_57pass1</title>
 <path fill="none" stroke="black" d="M572.62,-1277.08C574.94,-1321.96 578.33,-1387.62 580.81,-1435.59"/>
 <polygon fill="black" stroke="black" points="578.37,-1435.97 581.18,-1442.83 583.27,-1435.71 578.37,-1435.97"/>
@@ -251,7 +251,7 @@
 <text text-anchor="start" x="283.5" y="-1627.22" font-family="Helvetica,sans-Serif" font-size="14.00">@layer4.0.relu:1</text>
 </g>
 <!-- batchnorm_16_52pass1&#45;&gt;relu_14_53pass1 -->
-<g id="edge17" class="edge">
+<g id="edge18" class="edge">
 <title>batchnorm_16_52pass1&#45;&gt;relu_14_53pass1</title>
 <path fill="none" stroke="black" d="M268.67,-1425.21C286.34,-1479.97 313.04,-1562.75 328.58,-1610.91"/>
 <polygon fill="black" stroke="black" points="326.3,-1611.85 330.79,-1617.76 330.97,-1610.35 326.3,-1611.85"/>
@@ -267,7 +267,7 @@
 <text text-anchor="start" x="330.5" y="-1729.22" font-family="Helvetica,sans-Serif" font-size="14.00">@layer4.0.conv2</text>
 </g>
 <!-- relu_14_53pass1&#45;&gt;conv2d_17_54pass1 -->
-<g id="edge18" class="edge">
+<g id="edge19" class="edge">
 <title>relu_14_53pass1&#45;&gt;conv2d_17_54pass1</title>
 <path fill="none" stroke="black" d="M353.74,-1683C357.47,-1692.26 361.68,-1702.7 365.85,-1713.04"/>
 <polygon fill="black" stroke="black" points="363.7,-1714.24 368.59,-1719.81 368.24,-1712.41 363.7,-1714.24"/>
@@ -287,7 +287,7 @@
 </g>
 </g>
 <!-- conv2d_17_54pass1&#45;&gt;batchnorm_17_55pass1 -->
-<g id="edge19" class="edge">
+<g id="edge20" class="edge">
 <title>conv2d_17_54pass1&#45;&gt;batchnorm_17_55pass1</title>
 <path fill="none" stroke="black" d="M399.03,-1823.29C400.9,-1832.77 402.87,-1842.77 404.8,-1852.53"/>
 <polygon fill="black" stroke="black" points="402.43,-1853.2 406.19,-1859.59 407.24,-1852.25 402.43,-1853.2"/>
@@ -300,14 +300,14 @@
 <text text-anchor="start" x="468" y="-2027.25" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 512, 2, 2), 8.0 KB</text>
 </g>
 <!-- batchnorm_17_55pass1&#45;&gt;iadd_7_58pass1 -->
-<g id="edge20" class="edge">
+<g id="edge21" class="edge">
 <title>batchnorm_17_55pass1&#45;&gt;iadd_7_58pass1</title>
 <path fill="none" stroke="black" d="M472.11,-1971.1C483.34,-1982.24 494.87,-1993.69 505.21,-2003.95"/>
 <polygon fill="black" stroke="black" points="503.49,-2005.69 510.19,-2008.88 506.94,-2002.21 503.49,-2005.69"/>
 <text text-anchor="start" x="482.19" y="-1995.98" font-family="Helvetica,sans-Serif" font-size="8.00">arg 0</text>
 </g>
 <!-- batchnorm_18_57pass1&#45;&gt;iadd_7_58pass1 -->
-<g id="edge21" class="edge">
+<g id="edge22" class="edge">
 <title>batchnorm_18_57pass1&#45;&gt;iadd_7_58pass1</title>
 <path fill="none" stroke="black" d="M583.58,-1554.16C583.31,-1594.68 583,-1651.25 583,-1700.92 583,-1700.92 583,-1700.92 583,-1916.42 583,-1946.13 571.9,-1977.81 561.11,-2001.59"/>
 <polygon fill="black" stroke="black" points="558.82,-2000.69 558.08,-2008.07 563.26,-2002.76 558.82,-2000.69"/>
@@ -322,7 +322,7 @@
 <text text-anchor="start" x="483.5" y="-2119.28" font-family="Helvetica,sans-Serif" font-size="14.00">@layer4.0.relu:2</text>
 </g>
 <!-- iadd_7_58pass1&#45;&gt;relu_15_59pass1 -->
-<g id="edge22" class="edge">
+<g id="edge23" class="edge">
 <title>iadd_7_58pass1&#45;&gt;relu_15_59pass1</title>
 <path fill="none" stroke="black" d="M541,-2073.1C541,-2082.5 541,-2092.9 541,-2102.69"/>
 <polygon fill="black" stroke="black" points="538.55,-2102.69 541,-2109.69 543.45,-2102.69 538.55,-2102.69"/>
@@ -372,7 +372,7 @@
 </g>
 </g>
 <!-- conv2d_19_60pass1&#45;&gt;batchnorm_19_61pass1 -->
-<g id="edge23" class="edge">
+<g id="edge24" class="edge">
 <title>conv2d_19_60pass1&#45;&gt;batchnorm_19_61pass1</title>
 <path fill="none" stroke="black" d="M427.93,-2407.34C427.73,-2416.82 427.51,-2426.82 427.31,-2436.58"/>
 <polygon fill="black" stroke="black" points="424.86,-2436.59 427.16,-2443.64 429.76,-2436.7 424.86,-2436.59"/>
@@ -386,7 +386,7 @@
 <text text-anchor="start" x="368.5" y="-2601.28" font-family="Helvetica,sans-Serif" font-size="14.00">@layer4.1.relu:1</text>
 </g>
 <!-- batchnorm_19_61pass1&#45;&gt;relu_16_62pass1 -->
-<g id="edge24" class="edge">
+<g id="edge25" class="edge">
 <title>batchnorm_19_61pass1&#45;&gt;relu_16_62pass1</title>
 <path fill="none" stroke="black" d="M426,-2555.14C426,-2565.16 426,-2575.43 426,-2584.86"/>
 <polygon fill="black" stroke="black" points="423.55,-2584.89 426,-2591.89 428.45,-2584.89 423.55,-2584.89"/>
@@ -402,7 +402,7 @@
 <text text-anchor="start" x="367.5" y="-2703.28" font-family="Helvetica,sans-Serif" font-size="14.00">@layer4.1.conv2</text>
 </g>
 <!-- relu_16_62pass1&#45;&gt;conv2d_20_63pass1 -->
-<g id="edge25" class="edge">
+<g id="edge26" class="edge">
 <title>relu_16_62pass1&#45;&gt;conv2d_20_63pass1</title>
 <path fill="none" stroke="black" d="M426,-2657.06C426,-2666.23 426,-2676.55 426,-2686.8"/>
 <polygon fill="black" stroke="black" points="423.55,-2686.87 426,-2693.87 428.45,-2686.87 423.55,-2686.87"/>
@@ -422,13 +422,13 @@
 </g>
 </g>
 <!-- conv2d_20_63pass1&#45;&gt;batchnorm_20_64pass1 -->
-<g id="edge26" class="edge">
+<g id="edge27" class="edge">
 <title>conv2d_20_63pass1&#45;&gt;batchnorm_20_64pass1</title>
 <path fill="none" stroke="black" d="M426,-2797.34C426,-2806.82 426,-2816.82 426,-2826.58"/>
 <polygon fill="black" stroke="black" points="423.55,-2826.64 426,-2833.64 428.45,-2826.64 423.55,-2826.64"/>
 </g>
 <!-- batchnorm_20_64pass1&#45;&gt;iadd_8_65pass1 -->
-<g id="edge27" class="edge">
+<g id="edge28" class="edge">
 <title>batchnorm_20_64pass1&#45;&gt;iadd_8_65pass1</title>
 <path fill="none" stroke="black" d="M431.78,-2945.16C432.84,-2955.18 433.92,-2965.45 434.92,-2974.88"/>
 <polygon fill="black" stroke="black" points="432.49,-2975.21 435.66,-2981.91 437.36,-2974.69 432.49,-2975.21"/>
@@ -443,7 +443,7 @@
 <text text-anchor="start" x="381.5" y="-3093.33" font-family="Helvetica,sans-Serif" font-size="14.00">@layer4.1.relu:2</text>
 </g>
 <!-- iadd_8_65pass1&#45;&gt;relu_17_66pass1 -->
-<g id="edge28" class="edge">
+<g id="edge29" class="edge">
 <title>iadd_8_65pass1&#45;&gt;relu_17_66pass1</title>
 <path fill="none" stroke="black" d="M439,-3047.15C439,-3056.55 439,-3066.95 439,-3076.74"/>
 <polygon fill="black" stroke="black" points="436.55,-3076.74 439,-3083.74 441.45,-3076.74 436.55,-3076.74"/>
