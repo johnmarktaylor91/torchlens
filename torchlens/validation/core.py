@@ -3793,6 +3793,12 @@ def _prepare_input_args_for_validating_layer(
             parent_layer_func_values = align_parent_to_slot_device(
                 input_args, arg_type, key, parent_layer_func_values
             )
+            if isinstance(parent_layer_func_values, torch.Tensor):
+                parent_layer_func_values = _mirror_captured_requires_grad(
+                    parent_layer_func_values,
+                    requires_grad=_slot_captured_requires_grad(input_args, arg_type, key),
+                    leaf=_parent_output_is_leaf(parent_layer),
+                )
             if not isinstance(key, tuple):
                 input_args[arg_type][key] = parent_layer_func_values
             else:
@@ -4981,17 +4987,124 @@ def _buffer_parent_source_equal(
     return tensor_nanequal(saved_arg_value, parent_out, allow_tolerance=False)
 
 
+def _mirror_captured_requires_grad(
+    value: torch.Tensor, *, requires_grad: bool, leaf: bool
+) -> torch.Tensor:
+    """Give a private replay tensor the ``requires_grad`` its captured argument had.
+
+    ATen's backend choice can depend on whether an input requires grad (on
+    macOS arm64 a depthwise 3x3 conv picks ``Slow2d`` for a grad-requiring
+    weight and ``Winograd3x3Depthwise`` otherwise; the two accumulate in a
+    different order). A replay that hands the op detached copies can therefore
+    call a different kernel than the captured run did, so each replay tensor
+    requires grad exactly when the captured argument did. This makes replay
+    more faithful; it widens no comparison.
+
+    A captured non-leaf (a weight derived from a parameter, any op output) is
+    rebuilt as a non-leaf with the same values and strides, so an in-place op
+    that was legal on the captured value stays legal on the replay value. The
+    autograd graph this creates is owned by the replay arguments and output
+    alone and is released when the check that built them returns.
+
+    Parameters
+    ----------
+    value:
+        Replay tensor owned by validation (a fresh clone, never a saved payload).
+    requires_grad:
+        Whether the captured argument at this slot required grad.
+    leaf:
+        Whether the captured argument was an autograd leaf.
+
+    Returns
+    -------
+    torch.Tensor
+        ``value`` unchanged when no grad is needed (or its dtype cannot require
+        grad), else a grad-requiring leaf or non-leaf with equal values.
+    """
+
+    if not requires_grad or value.requires_grad:
+        return value
+    if not (value.is_floating_point() or value.is_complex()):
+        return value
+    with torch.enable_grad():
+        grad_leaf = value.detach().requires_grad_(True)
+        return grad_leaf if leaf else grad_leaf.clone()
+
+
+def _slot_captured_requires_grad(input_args: dict[str, Any], arg_type: str, key: Any) -> bool:
+    """Return whether the captured argument at one replay slot required grad.
+
+    The slot still holds the cloned saved-argument snapshot (its
+    ``requires_grad`` mirrored from the snapshot by ``_deep_clone_tensors``)
+    when this runs, before the parent payload overwrites it.
+
+    Parameters
+    ----------
+    input_args:
+        Replay argument mapping built from the saved args/kwargs.
+    arg_type:
+        Either ``"args"`` or ``"kwargs"``.
+    key:
+        Parent-argument position key, possibly nested as a tuple.
+
+    Returns
+    -------
+    bool
+        The snapshot's ``requires_grad``; ``False`` (the detached-replay
+        behavior) when the slot holds no tensor snapshot.
+    """
+
+    try:
+        value = _read_replay_arg_value(
+            tuple(input_args["args"]), input_args["kwargs"], arg_type, key
+        )
+    except (IndexError, KeyError, TypeError):
+        # No snapshot at this position (the parent fills a slot the saved args
+        # do not carry): there is no captured flag to mirror.
+        return False
+    return isinstance(value, torch.Tensor) and bool(value.requires_grad)
+
+
+def _parent_output_is_leaf(parent_layer: Op) -> bool:
+    """Return whether a parent's captured output was an autograd leaf.
+
+    Only a source op (no parents) whose output carried no ``grad_fn`` is a
+    leaf: model inputs and other graph sources. Every other op output that
+    required grad was produced under grad mode and so had a ``grad_fn``.
+
+    Parameters
+    ----------
+    parent_layer:
+        Parent op whose saved output fills a replay slot.
+
+    Returns
+    -------
+    bool
+        Whether the captured value was a leaf.
+    """
+
+    return getattr(parent_layer, "grad_fn_class_name", None) is None and not getattr(
+        parent_layer, "parents", None
+    )
+
+
 def _deep_clone_tensors(val: Any) -> Any:
     """Recursively clone all tensors in a nested structure of lists/tuples/dicts.
 
     Non-tensor leaves are returned as-is (shared reference).  Tensor leaves
     are detached and cloned so that in-place ops during validation replay
-    don't corrupt the original saved data.
+    don't corrupt the original saved data, then given the snapshot's
+    ``requires_grad`` (see ``_mirror_captured_requires_grad``) so the replay
+    reaches the same kernel the captured call did.
 
     Preserves container types: a tuple input produces a tuple output, not a list.
     """
     if isinstance(val, torch.Tensor):
-        return val.detach().clone()
+        return _mirror_captured_requires_grad(
+            val.detach().clone(),
+            requires_grad=bool(val.requires_grad),
+            leaf=val.grad_fn is None,
+        )
     elif isinstance(val, (list, tuple)):
         cloned = [_deep_clone_tensors(v) for v in val]
         # Preserve the original container type (list vs tuple vs namedtuple).
@@ -5015,7 +5128,8 @@ def _copy_validation_args(input_args: dict[str, Any]) -> dict[str, Any]:
     Returns
     -------
     dict[str, Any]
-        Structure-equivalent dictionary with tensor leaves detached and cloned.
+        Structure-equivalent dictionary with tensor leaves detached, cloned and
+        given their snapshot's ``requires_grad``.
     """
     return {
         "args": [_deep_clone_tensors(v) for v in input_args["args"]],

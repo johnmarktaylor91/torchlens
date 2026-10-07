@@ -476,10 +476,41 @@ def execute_replay_func(layer: Op, input_args: dict[str, Any], layers_to_perturb
 
     if is_autograd_grad_recorder(layer.func):
         return replay_autograd_grad_boundary(layer, input_args, layers_to_perturb)
-    return execute_with_restored_rng_autocast(
-        layer.func,
-        tuple(input_args["args"]),
-        dict(input_args["kwargs"]),
-        rng_states=layer.func_rng_states,
-        autocast_state=layer.func_autocast_state,
-    )
+    with torch.set_grad_enabled(captured_grad_enabled(layer)):
+        return execute_with_restored_rng_autocast(
+            layer.func,
+            tuple(input_args["args"]),
+            dict(input_args["kwargs"]),
+            rng_states=layer.func_rng_states,
+            autocast_state=layer.func_autocast_state,
+        )
+
+
+def captured_grad_enabled(layer: Op) -> bool:
+    """Return the grad mode the op's original call ran under.
+
+    Capture records ``torch.is_grad_enabled()`` per op under the reserved
+    ``"__execution__"`` key of ``func_autocast_state``. Replay must run under
+    that mode: ATen's backend choice can depend on it (on macOS arm64 a
+    depthwise 3x3 conv picks ``Slow2d`` with grad enabled and
+    ``Winograd3x3Depthwise`` without), so replaying under a different mode can
+    call a different kernel than the captured run did.
+
+    Parameters
+    ----------
+    layer:
+        Op being replayed.
+
+    Returns
+    -------
+    bool
+        The recorded grad mode, or the caller's current grad mode when the op
+        carries no execution record (source ops and synthesized records).
+    """
+
+    autocast_state = getattr(layer, "func_autocast_state", None)
+    execution = autocast_state.get("__execution__") if isinstance(autocast_state, dict) else None
+    recorded = execution.get("grad_enabled") if isinstance(execution, dict) else None
+    if isinstance(recorded, bool):
+        return recorded
+    return bool(torch.is_grad_enabled())
