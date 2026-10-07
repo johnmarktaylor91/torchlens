@@ -2187,3 +2187,19 @@ env: py3.11-torch2.13.0
 torch: 2.13.0+cpu
 source: 09678a53ce68647aca51a55bdec2e8848bc1973e (dirty)
 recorded: 2026-10-06T17:44:17.488574+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: replay-grad adds one parent_arg_positions consumer site in validation/_replay_grad_fidelity.py (reviewed branch wip/replay-grad)
+env: py3.11-torch2.13.0
+torch: 2.13.0+cpu
+source: ddc82c177a8ed7969d8b4ed15ab62f34bf74dbdb (dirty)
+recorded: 2026-10-07T07:07:59.383541+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: replay-grad adds one parent_arg_positions consumer site in validation/_replay_grad_fidelity.py (reviewed branch wip/replay-grad)
+env: py3.11-torch2.13.0
+torch: 2.13.0+cpu
+source: ddc82c177a8ed7969d8b4ed15ab62f34bf74dbdb (dirty)
+recorded: 2026-10-07T07:08:03.698904+00:00

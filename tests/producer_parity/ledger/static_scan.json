@@ -8817,6 +8817,14 @@
  },
  {
   "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/validation/_replay_grad_fidelity.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
   "field": "unattributed_tensor_args",
   "file": "torchlens/validation/_source_provenance.py",
   "has_default": false,
