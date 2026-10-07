@@ -221,6 +221,11 @@ if _HAS_CUSTOM_OP:
     def _body_mul_(x: torch.Tensor) -> None:
         x.mul_(2.0)  # a wrapped in-place op: the body is captured op by op
 
+    @torch.library.custom_op("tltest_r15::stage_write", mutates_args=("x",))
+    def _stage_write(x: torch.Tensor) -> None:
+        staged = torch.mul(x, 2.0)  # a logged body op that does not write ``x``
+        torch._C.TensorBase.copy_(x, staged)  # the write itself is unpatchable
+
 
 class _MutatingCustomOpModel(nn.Module):
     def __init__(self, op_name: str) -> None:
@@ -238,6 +243,8 @@ class _MutatingCustomOpModel(nn.Module):
             _peek_scale_(y, 2.0)
         elif self.op_name == "body_mul_":
             _body_mul_(y)
+        elif self.op_name == "stage_write":
+            _stage_write(y)
         elif self.op_name == "foreach":
             torch.ops.aten._foreach_mul_.Scalar([y], 2.0)
         else:
@@ -305,6 +312,28 @@ def test_receiver_op_whose_body_logs_ops_keeps_the_body_record() -> None:
     add = next(op for op in trace.ops if op.func_name == "__add__")
     assert add.parents == (body_op.label.split(":")[0],), add.parents
     assert _validate(model, torch.randn(3, 4)), last_validation_failure()
+
+
+@pytest.mark.skipif(not _HAS_CUSTOM_OP, reason="torch.library.custom_op needs torch>=2.4")
+def test_receiver_write_no_logged_op_recorded_fails_validation() -> None:
+    """A body that logs other ops but writes the receiver unpatched is disclosed.
+
+    The logged body op takes the call's bottom-level status, so the in-place record is
+    skipped and the add reads the clone; validation passed that silently before.
+    """
+
+    model = _MutatingCustomOpModel("stage_write")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(model, torch.randn(3, 4))
+    rows = _unrecorded_mutation_rows(trace)
+    assert [row for row in rows if "stage_write" in str(row["message"])], rows
+    assert "unrecorded_operator_mutation" in {gap[0] for gap in source_provenance_gaps(trace)}
+    assert not _validate(model, torch.randn(3, 4))
+    failure = last_validation_failure()
+    assert failure is not None
+    assert failure.check == "source_provenance", failure
+    assert "unrecorded_operator_mutation" in failure.extra["reasons"], failure
 
 
 @pytest.mark.smoke_cells("test_unrecordable_mutating_operator_fails_validation[write_into]")
