@@ -256,11 +256,30 @@ def _returning_mutated_receiver(call_operator: Callable[..., Any]) -> Callable[.
     Callable[..., Any]
         Callable whose output is ``args[0]``, the tensor the operator wrote, so the
         wrapper records it as an in-place op and validation replays it the same way.
+
+    Notes
+    -----
+    The returned receiver already carries its pre-call label, so the wrapper records
+    the write only while the call stays bottom-level (``_output_should_be_logged``).
+    A wrapped call that logs nothing can still run inside the operator and clear the
+    wrapper's barcode: torch 2.7's Python ``check_aliasing_constraint`` reads
+    ``Tensor.untyped_storage()`` in every custom op's backend kernel, and a kernel body
+    may read tensor metadata. When no op was logged during the call, the enclosing
+    barcode is restored (the ``as_subclass`` transparency rule), so the write is still
+    recorded. A body whose own wrapped ops were logged keeps them as the record.
     """
 
     def _call_returning_receiver(*args: Any, **kwargs: Any) -> Any:
         """Run the operator, then return the argument it mutated."""
+        trace, enabled = _state.active_capture()
+        if not enabled or trace is None:
+            call_operator(*args, **kwargs)
+            return args[0]
+        barcode = trace._wrapper_runtime_ws.current_func_barcode
+        layers_before = trace._raw_graph_ws.layer_counter
         call_operator(*args, **kwargs)
+        if trace._raw_graph_ws.layer_counter == layers_before:
+            trace._wrapper_runtime_ws.current_func_barcode = barcode
         return args[0]
 
     _call_returning_receiver.__name__ = call_operator.__name__

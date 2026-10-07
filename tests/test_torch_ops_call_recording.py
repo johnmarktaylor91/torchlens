@@ -209,6 +209,17 @@ if _HAS_CUSTOM_OP:
     def _write_into(src: torch.Tensor, dst: torch.Tensor) -> None:
         torch._C.TensorBase.copy_(dst, src)
 
+    @torch.library.custom_op("tltest_r15::peek_scale_", mutates_args=("x",))
+    def _peek_scale_(x: torch.Tensor, scale: float) -> None:
+        # A wrapped metadata read that logs nothing, like torch 2.7's Python
+        # ``check_aliasing_constraint`` calling ``untyped_storage()`` in every kernel.
+        x.untyped_storage()
+        _VF_MUL_(x, scale)
+
+    @torch.library.custom_op("tltest_r15::body_mul_", mutates_args=("x",))
+    def _body_mul_(x: torch.Tensor) -> None:
+        x.mul_(2.0)  # a wrapped in-place op: the body is captured op by op
+
 
 class _MutatingCustomOpModel(nn.Module):
     def __init__(self, op_name: str) -> None:
@@ -222,6 +233,10 @@ class _MutatingCustomOpModel(nn.Module):
             _scale_(y, 2.0)
         elif self.op_name == "doubled":
             _doubled(y)
+        elif self.op_name == "peek_scale_":
+            _peek_scale_(y, 2.0)
+        elif self.op_name == "body_mul_":
+            _body_mul_(y)
         elif self.op_name == "foreach":
             torch.ops.aten._foreach_mul_.Scalar([y], 2.0)
         else:
@@ -252,6 +267,43 @@ def test_receiver_mutating_custom_op_is_recorded_in_place(op_name: str) -> None:
     mutation_layer = mutation.label.split(":")[0]
     assert add.parents == (mutation_layer,), (mutation_layer, add.parents)
     assert not _unrecorded_mutation_rows(trace)
+
+
+@pytest.mark.skipif(not _HAS_CUSTOM_OP, reason="torch.library.custom_op needs torch>=2.4")
+def test_receiver_op_reading_metadata_inside_is_still_recorded_in_place() -> None:
+    """A wrapped call that logs nothing inside the operator must not drop the write.
+
+    Torch 2.7's custom-op backend kernel reads ``untyped_storage()`` (a wrapped method)
+    after every call; that nested call cleared the bottom-level barcode, so the in-place
+    record of the already-labelled receiver was skipped and the add read the clone.
+    """
+
+    model = _MutatingCustomOpModel("peek_scale_")
+    _assert_recorded_and_valid(model, "peek_scale_")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(model, torch.randn(3, 4))
+    mutation = next(op for op in trace.ops if op.func_name == "peek_scale_")
+    add = next(op for op in trace.ops if op.func_name == "__add__")
+    assert add.parents == (mutation.label.split(":")[0],), add.parents
+    assert not _unrecorded_mutation_rows(trace)
+
+
+@pytest.mark.skipif(not _HAS_CUSTOM_OP, reason="torch.library.custom_op needs torch>=2.4")
+def test_receiver_op_whose_body_logs_ops_keeps_the_body_record() -> None:
+    """Narrowness: a body whose own wrapped ops were logged stays the record, once."""
+
+    model = _MutatingCustomOpModel("body_mul_")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(model, torch.randn(3, 4))
+    names = [op.func_name for op in trace.ops]
+    assert "mul_" in names, names
+    assert "body_mul_" not in names, names
+    body_op = next(op for op in trace.ops if op.func_name == "mul_")
+    add = next(op for op in trace.ops if op.func_name == "__add__")
+    assert add.parents == (body_op.label.split(":")[0],), add.parents
+    assert _validate(model, torch.randn(3, 4)), last_validation_failure()
 
 
 @pytest.mark.smoke_cells("test_unrecordable_mutating_operator_fails_validation[write_into]")
