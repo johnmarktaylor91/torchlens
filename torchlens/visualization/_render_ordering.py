@@ -95,15 +95,16 @@ def _verify_and_apply_sibling_ordering(
 
     baseline_source = _strip_sibling_rank_groups(source)
     baseline = _layout_dot_plain(baseline_source, rankdir, captured_edges)
-    rendered_chains = _filter_sibling_chains_to_rendered_nodes(
-        cast(tuple[SiblingOrderChain, ...], chains), baseline.nodes
+    candidates = cast(tuple[SiblingOrderChain, ...], chains)
+    node_clusters = _dot_node_clusters(baseline_source)
+    chains = _fit_sibling_chains_to_clusters(
+        _filter_sibling_chains_to_rendered_nodes(candidates, baseline.nodes), node_clusters
     )
-    chains = _fit_sibling_chains_to_clusters(rendered_chains, baseline_source)
-    if not chains:
-        return baseline_source, _sibling_order_decision((), (), {})
-    if chains != rendered_chains:
+    if chains != candidates:
         # ``source`` still holds dropped or moved groups; rebuild from the baseline.
         source = _inject_sibling_rank_groups(baseline_source, chains)
+    if not chains or not _sibling_groups_fit(source, node_clusters):
+        return baseline_source, _sibling_order_decision((), (), {})
     injected = _layout_ordered_dot_plain(source, rankdir, captured_edges, baseline)
     _assert_sibling_backstops(baseline, injected, chains, captured_edges)
 
@@ -200,7 +201,7 @@ def _layout_ordered_dot_plain(
 
 def _fit_sibling_chains_to_clusters(
     chains: tuple[SiblingOrderChain, ...],
-    baseline_source: str,
+    node_clusters: dict[str, tuple[str, ...] | None] | None,
 ) -> tuple[SiblingOrderChain, ...]:
     """Place each sibling chain's rank group in a cluster that holds all its targets.
 
@@ -218,8 +219,8 @@ def _fit_sibling_chains_to_clusters(
     ----------
     chains:
         Candidate sibling chains.
-    baseline_source:
-        DOT source with every sibling-order rank group stripped.
+    node_clusters:
+        :func:`_dot_node_clusters` of the baseline DOT, ``None`` when unreadable.
 
     Returns
     -------
@@ -227,9 +228,6 @@ def _fit_sibling_chains_to_clusters(
         Chains safe to emit, in input order, some with a moved ``lca_key``.
     """
 
-    if not chains:
-        return chains
-    node_clusters = _dot_node_clusters(baseline_source)
     if node_clusters is None:
         return ()
     placed = (_place_sibling_chain(chain, node_clusters) for chain in chains)
@@ -296,11 +294,58 @@ def _dot_node_clusters(source: str) -> dict[str, tuple[str, ...] | None] | None:
     return node_clusters
 
 
+def _sibling_groups_fit(
+    source: str, node_clusters: dict[str, tuple[str, ...] | None] | None
+) -> bool:
+    """Return whether every sibling-order group in ``source`` sits in a cluster holding its nodes.
+
+    Checks the DOT actually about to be laid out, so a group that string
+    insertion placed elsewhere than :func:`_place_sibling_chain` intended
+    disables the pass instead of reaching dot.
+    """
+
+    statements = _dot_scoped_statements(source)
+    if statements is None or node_clusters is None:
+        return False
+    group_path: tuple[str, ...] | None = None
+    for cluster_path, line in statements:
+        if "tl:sibling-order:start" in line:
+            group_path = cluster_path
+            continue
+        if "tl:sibling-order:end" in line or group_path is None:
+            group_path = None
+            continue
+        for node_name in _dot_statement_node_refs(line):
+            clusters = node_clusters.get(node_name)
+            if clusters is None or clusters[: len(group_path)] != group_path:
+                return False
+            if not group_path and clusters:
+                return False
+    return True
+
+
 def _dot_node_cluster_paths(source: str) -> dict[str, set[tuple[str, ...]]] | None:
     """Return the cluster paths at which each node is referenced in ``source``."""
 
-    stack: list[str | None] = []
+    statements = _dot_scoped_statements(source)
+    if statements is None:
+        return None
     paths: dict[str, set[tuple[str, ...]]] = defaultdict(set)
+    for cluster_path, line in statements:
+        for node_name in _dot_statement_node_refs(line):
+            paths[node_name].add(cluster_path)
+    return dict(paths)
+
+
+def _dot_scoped_statements(source: str) -> list[tuple[tuple[str, ...], str]] | None:
+    """Return each statement line of ``source`` with its enclosing cluster names.
+
+    Returns ``None`` when the braces do not balance or a quoted string or HTML
+    label spans lines.
+    """
+
+    stack: list[str | None] = []
+    statements: list[tuple[tuple[str, ...], str]] = []
     for line in source.splitlines():
         if not _dot_line_is_complete(line):
             return None
@@ -315,10 +360,8 @@ def _dot_node_cluster_paths(source: str) -> dict[str, set[tuple[str, ...]]] | No
                 return None
             stack.pop()
         elif stack:
-            cluster_path = tuple(name for name in stack if name is not None)
-            for node_name in _dot_statement_node_refs(line):
-                paths[node_name].add(cluster_path)
-    return None if stack else dict(paths)
+            statements.append((tuple(name for name in stack if name is not None), line))
+    return None if stack else statements
 
 
 def _dot_line_is_complete(line: str) -> bool:
@@ -480,6 +523,7 @@ def _strip_sibling_rank_groups(source: str) -> str:
 __all__ = [
     "_dot_node_clusters",
     "_fit_sibling_chains_to_clusters",
+    "_sibling_groups_fit",
     "_layout_dot_plain",
     "_queue_sibling_rank_group",
     "_should_order_siblings",

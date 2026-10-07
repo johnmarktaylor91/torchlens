@@ -218,6 +218,14 @@ _GROUP_A_B = """\t// tl:sibling-order:start
 """
 
 
+def _fit(chains: tuple[SiblingOrderChain, ...], baseline: str) -> tuple[SiblingOrderChain, ...]:
+    """Fit ``chains`` to the clusters of ``baseline``."""
+
+    return _render_ordering._fit_sibling_chains_to_clusters(
+        chains, _render_ordering._dot_node_clusters(baseline)
+    )
+
+
 def test_cluster_fit_keeps_moves_or_drops_each_group() -> None:
     """Groups stay when their cluster holds every member, move to the shared cluster, or drop."""
 
@@ -245,7 +253,7 @@ def test_cluster_fit_keeps_moves_or_drops_each_group() -> None:
         unknown_target,
     )
 
-    fitted = _render_ordering._fit_sibling_chains_to_clusters(chains, baseline)
+    fitted = _fit(chains, baseline)
 
     # ``d`` is named in cluster_l and in the nested cluster, so it lives in the nested one.
     assert fitted == (
@@ -276,10 +284,7 @@ def test_cluster_fit_drops_everything_on_unreadable_dot(breakage: str) -> None:
         # A label spanning lines could hide a closing brace from the brace tracking.
         baseline = baseline.replace("label=<r>", "label=<r\n}\n{\n>")
 
-    assert (
-        _render_ordering._fit_sibling_chains_to_clusters((_chain(("top1", "top2")),), baseline)
-        == ()
-    )
+    assert _fit((_chain(("top1", "top2")),), baseline) == ()
 
 
 def test_cluster_fit_drops_nodes_named_in_unrelated_clusters() -> None:
@@ -287,10 +292,46 @@ def test_cluster_fit_drops_nodes_named_in_unrelated_clusters() -> None:
 
     baseline = _DUELING_SKELETON.replace("{INJECT}", "").replace("b -> b2", "a -> b2")
 
-    assert (
-        _render_ordering._fit_sibling_chains_to_clusters((_chain(("a", "a2"), "l"),), baseline)
-        == ()
+    assert _fit((_chain(("a", "a2"), "l"),), baseline) == ()
+
+
+def test_group_scope_check_catches_insertion_into_a_label() -> None:
+    """A group that string insertion lands outside its intended cluster disables the pass."""
+
+    baseline = _DUELING_SKELETON.replace("{INJECT}", "").replace(
+        "\tsrc [label=<src>]", '\tsrc [label="subgraph cluster_l {"]'
     )
+    clusters = _render_ordering._dot_node_clusters(baseline)
+    fitted = _render_ordering._fit_sibling_chains_to_clusters((_chain(("a2", "c")),), clusters)
+    assert fitted == (replace(_chain(("a2", "c")), lca_key="l"),)
+
+    injected = _inject_sibling_rank_groups(baseline, fitted)
+
+    assert _spanning_groups(injected) != []
+    assert not _render_ordering._sibling_groups_fit(injected, clusters)
+    proper = _inject_sibling_rank_groups(_DUELING_SKELETON.replace("{INJECT}", ""), fitted)
+    assert _render_ordering._sibling_groups_fit(proper, clusters)
+
+
+def test_verify_rebuilds_when_a_chain_loses_a_rendered_node(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A chain dropped for a missing rendered node never stays in the laid-out source."""
+
+    baseline = _DUELING_SKELETON.replace("{INJECT}", "")
+    kept, ghost = _chain(("top1", "top2")), _chain(("top1", "ghost"))
+    source = _inject_sibling_rank_groups(baseline, (kept, ghost))
+    names = ("src", "a", "b", "a2", "b2", "c", "d", "e", "top1", "top2")
+    layout = _render_ordering.PlainLayout(nodes=dict.fromkeys(names, (0.0, 0.0)), edge_spans={})
+    monkeypatch.setattr(_render_ordering, "_layout_dot_plain", lambda *args: layout)
+
+    final, decision = _render_ordering._verify_and_apply_sibling_ordering(
+        source, (kept, ghost), [], "TB"
+    )
+
+    assert "ghost" not in final
+    assert final.count("tl:sibling-order:start") == 1
+    assert decision.surviving_keys == (("src", ("top1", "top2")),)
 
 
 class _Branches(torch.nn.Module):
