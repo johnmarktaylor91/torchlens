@@ -19,7 +19,10 @@ import torchlens as tl
 
 depyf = pytest.importorskip("depyf")
 
-pytestmark = [pytest.mark.optional]
+# heavy: the first torch.compile in a process pays the cold Inductor build (12.8 s
+# measured on the CI interop leg, Nightly 37562900768); warm calls take under 3 s, and
+# whichever test runs first pays the cold cost.
+pytestmark = [pytest.mark.optional, pytest.mark.heavy]
 
 _UUID = re.compile(r"[0-9a-f]{8}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{12}")
 _COUNTER = re.compile(r"(__compiled_fn|__transformed_code|_for_inner|full_code_for_inner)_(\d+)")
