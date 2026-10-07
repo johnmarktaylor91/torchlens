@@ -21,6 +21,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens import _state
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.validation import last_validation_failure
 from torchlens.validation._source_provenance import source_provenance_gaps
@@ -336,6 +337,10 @@ def test_unreadable_schema_none_return_fails_closed(monkeypatch: pytest.MonkeyPa
     from torchlens.backends.torch import _torch_ops_calls
 
     monkeypatch.setattr(_torch_ops_calls, "_DECORATED_BY_OP", {})
+    # A fabricated unreadable schema is not a real call shape: keep it out of the
+    # ArgSpec usage audit (test_arg_positions), which would see ``scale_`` counted but
+    # never extracted (nothing is logged for a disclosed None return).
+    monkeypatch.setattr(_state, "_collect_usage_stats", False)
     monkeypatch.setattr(_torch_ops_calls, "_overload_schemas", lambda op: None)
     model = _MutatingCustomOpModel("scale_")
     assert not _validate(model, torch.randn(3, 4))
