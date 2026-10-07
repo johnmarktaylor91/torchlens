@@ -842,7 +842,9 @@ def _finalize_forward_ir(
         request.vis_mode,
         work.module_clusters,
         overrides,
-        list(forward_render_ir.ordering_constraints),
+        # Cluster-scoped chains are already queued on their module cluster;
+        # re-emitting them at top level put clustered nodes in a root rankset.
+        [chain for chain in forward_render_ir.ordering_constraints if chain.lca_key == -1],
         forward_render_ir.regions,
     )
     return replace(forward_render_ir, dot_statements=tuple(work.builder.calls))

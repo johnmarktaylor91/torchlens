@@ -1,8 +1,9 @@
-"""Sibling-order rank groups never span Graphviz clusters, and a failed ordered layout falls back.
+"""Sibling-order rank groups sit in a cluster holding all members; failed ordered layouts fall back.
 
-Graphviz 16 fails ("trouble in init_rank") or segfaults on a ``rank=same`` set whose members sit
-in a different cluster than the set itself; Graphviz 2.43 only warns and pulls the node out of its
-cluster. The model tests assert on the emitted DOT, so they need no particular Graphviz version.
+Graphviz 16 fails ("trouble in init_rank"), crashes, or warns "already in a rankset, deleted from
+cluster" on a top-level ``rank=same`` set whose members sit inside clusters; a set emitted inside a
+cluster may span that cluster's nested clusters. The model tests assert on the emitted DOT, so they
+need no particular Graphviz version.
 """
 
 from __future__ import annotations
@@ -80,14 +81,21 @@ def _cluster_layout(dot_source: str) -> tuple[dict[str, set[tuple[str, ...]]], l
 
 
 def _spanning_groups(dot_source: str) -> list[tuple]:
-    """Return the sibling-order groups emitted outside their members' own cluster."""
+    """Return the sibling-order groups whose cluster does not hold every member.
+
+    A top-level group may only hold top-level nodes; a group inside a cluster may hold nodes of
+    that cluster and of its nested clusters.
+    """
 
     node_paths, groups = _cluster_layout(dot_source)
     bad = []
     for group_path, members in groups:
-        member_paths = {max(node_paths[member], key=len) for member in members}
-        if member_paths != {group_path}:
-            bad.append((group_path, members, sorted(member_paths)))
+        member_paths = sorted({max(node_paths[member], key=len) for member in members})
+        if not all(
+            path[: len(group_path)] == group_path and (group_path or not path)
+            for path in member_paths
+        ):
+            bad.append((group_path, members, member_paths))
     return bad
 
 
@@ -117,14 +125,31 @@ _FAILING_MODELS = {
 
 
 @pytest.mark.parametrize("name", sorted(_FAILING_MODELS))
-def test_sibling_rank_groups_stay_inside_member_cluster(name: str, tmp_path: Path) -> None:
-    """The four models that broke Graphviz 16 emit no cross-cluster rank group."""
+def test_sibling_rank_groups_stay_inside_member_cluster(
+    name: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The four models that broke Graphviz 16 emit each chain once and in a holding cluster."""
 
+    from torchlens.visualization import _render_dot
+
+    real_verify = _render_dot._verify_and_apply_sibling_ordering
+    emitted: list[tuple[str, int]] = []
+
+    def verify(source: str, chains: tuple, *args: object) -> object:
+        emitted.append((source, len(chains)))
+        return real_verify(source, chains, *args)
+
+    monkeypatch.setattr(_render_dot, "_verify_and_apply_sibling_ordering", verify)
     model_cls, make_input = _FAILING_MODELS[name]
     torch.manual_seed(0)
     dot_source = _draw(model_cls(), make_input(), tmp_path, name)
 
     assert _spanning_groups(dot_source) == []
+    # The renderer emits each candidate chain exactly once (a cluster chain used to be
+    # re-emitted at top level too, which put clustered nodes in a root rankset).
+    assert [source.count("tl:sibling-order:start") for source, _ in emitted] == [
+        count for _, count in emitted
+    ]
 
 
 def test_spanning_checker_flags_the_dueling_dqn_shape() -> None:
@@ -133,6 +158,14 @@ def test_spanning_checker_flags_the_dueling_dqn_shape() -> None:
     dot_source = _DUELING_SKELETON.replace("{INJECT}", _GROUP_A_B)
 
     assert _spanning_groups(dot_source) == [((), ("a", "b"), [("cluster_l",), ("cluster_r",)])]
+    nested_group = (
+        _GROUP_A_B.replace("\ta", "\tc").replace("\tb", "\te").replace("a -> b", "c -> e")
+    )
+    nested_source = _DUELING_SKELETON.replace(
+        "\t\tc -> d [style=solid]\n", "\t\tc -> d [style=solid]\n" + nested_group
+    ).replace("{INJECT}", "")
+    assert "tl:sibling-order" in nested_source
+    assert _spanning_groups(nested_source) == []
 
 
 def _chain(targets: tuple[str, ...], lca_key: str | int = -1) -> SiblingOrderChain:
@@ -183,8 +216,8 @@ _GROUP_A_B = """\t// tl:sibling-order:start
 """
 
 
-def test_member_cluster_filter_keeps_only_same_cluster_groups() -> None:
-    """Groups survive only when emitted into the innermost cluster of every member."""
+def test_member_cluster_filter_keeps_only_enclosed_groups() -> None:
+    """Groups survive only when their cluster holds every member (top level holds no cluster)."""
 
     baseline = _DUELING_SKELETON.replace("{INJECT}", "")
     cross = _chain(("a", "b"))
@@ -192,13 +225,24 @@ def test_member_cluster_filter_keeps_only_same_cluster_groups() -> None:
     top_level_of_clustered = _chain(("a2", "c"))
     nested_member = _chain(("c", "e"), "l")
     nested_cluster = _chain(("d", "e"), "l.inner:1")
+    outer_member = _chain(("c", "e"), "l.inner:1")
+    sibling_cluster = _chain(("a2", "b2"), "r")
     top_level = _chain(("top1", "top2"))
-    chains = (cross, same_cluster, top_level_of_clustered, nested_member, nested_cluster, top_level)
+    chains = (
+        cross,
+        same_cluster,
+        top_level_of_clustered,
+        nested_member,
+        nested_cluster,
+        outer_member,
+        sibling_cluster,
+        top_level,
+    )
 
     kept = _render_ordering._filter_sibling_chains_to_member_cluster(chains, baseline)
 
     # ``d`` is named in cluster_l and in the nested cluster, so it lives in the nested one.
-    assert kept == (same_cluster, nested_cluster, top_level)
+    assert kept == (same_cluster, nested_member, nested_cluster, top_level)
 
 
 def test_member_cluster_filter_drops_everything_on_unbalanced_dot() -> None:

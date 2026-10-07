@@ -177,23 +177,22 @@ _DOT_ANONYMOUS_OPEN = re.compile(r"^\s*(?:subgraph\s*)?\{\s*$")
 _DOT_CLOSE = re.compile(r"^\s*\}\s*$")
 _DOT_ID = re.compile(r'"(?:[^"\\]|\\.)*"|[^\s\[\];{}=]+')
 _DOT_KEYWORDS = frozenset({"graph", "node", "edge"})
-# Sentinel for a node referenced from two clusters where neither contains the other.
-_AMBIGUOUS_CLUSTER = "\0ambiguous"
 
 
 def _filter_sibling_chains_to_member_cluster(
     chains: tuple[SiblingOrderChain, ...],
     baseline_source: str,
 ) -> tuple[SiblingOrderChain, ...]:
-    """Keep sibling chains whose rank group sits in its members' own cluster.
+    """Keep sibling chains whose rank group can contain all of its members.
 
-    Graphviz does not support a ``rank=same`` set whose members live in a
-    different cluster than the set itself: dot 2.43 warns "already in a
-    rankset, deleted from cluster" and pulls the node out of its cluster, and
-    dot 16 fails with "trouble in init_rank" or crashes. A chain survives only
-    when every target's innermost cluster is the cluster its group is emitted
-    into (``lca_key``), or all targets and the group are top-level. When the
-    baseline DOT cannot be parsed, every chain is dropped (invariant 11).
+    dot does not support a top-level ``rank=same`` set over nodes that live in
+    a cluster: dot 2.43 may warn "already in a rankset, deleted from cluster"
+    and pull the node out of its cluster, and dot 16 fails with "trouble in
+    init_rank" or crashes. A set emitted inside a cluster may span that
+    cluster's nested clusters. So a chain survives when its group's cluster
+    (``lca_key``) encloses every target, or when the group and all targets are
+    top-level. When the baseline DOT cannot be parsed, every chain is dropped
+    (invariant 11).
 
     Parameters
     ----------
@@ -210,44 +209,48 @@ def _filter_sibling_chains_to_member_cluster(
 
     if not chains:
         return chains
-    innermost = _dot_innermost_clusters(baseline_source)
-    if innermost is None:
+    node_clusters = _dot_node_clusters(baseline_source)
+    if node_clusters is None:
         return ()
-    return tuple(
-        chain
-        for chain in chains
-        if all(innermost.get(target) == _sibling_group_cluster(chain) for target in chain.targets)
-    )
+    return tuple(chain for chain in chains if _sibling_group_encloses(chain, node_clusters))
 
 
-def _sibling_group_cluster(chain: SiblingOrderChain) -> str | None:
-    """Return the DOT cluster name a chain's rank group is emitted into."""
+def _sibling_group_encloses(
+    chain: SiblingOrderChain,
+    node_clusters: dict[str, tuple[str, ...] | None],
+) -> bool:
+    """Return whether ``chain``'s rank group sits in a cluster holding every target."""
 
-    if chain.lca_key == -1:
-        return None
-    return f"cluster_{cast(str, chain.lca_key).replace(':', '_pass')}"
+    for target in chain.targets:
+        clusters = node_clusters.get(target, ())
+        if clusters is None:
+            return False
+        if chain.lca_key == -1:
+            if clusters:
+                return False
+        elif f"cluster_{cast(str, chain.lca_key).replace(':', '_pass')}" not in clusters:
+            return False
+    return True
 
 
-def _dot_innermost_clusters(source: str) -> dict[str, str | None] | None:
-    """Map each DOT node to the innermost cluster that contains it.
+def _dot_node_clusters(source: str) -> dict[str, tuple[str, ...] | None] | None:
+    """Map each DOT node to the nested cluster names that contain it, outermost first.
 
-    A node belongs to every subgraph that names it, so its innermost cluster
-    is the deepest cluster path among its references. Top-level nodes map to
-    ``None``; nodes named from two unrelated clusters map to a sentinel that
-    matches no group. Returns ``None`` when the braces do not balance.
+    A node belongs to every subgraph that names it, so its clusters are the
+    deepest cluster path among its references. Top-level nodes map to ``()``;
+    nodes named from two unrelated clusters map to ``None``. Returns ``None``
+    when the braces do not balance.
     """
 
     paths = _dot_node_cluster_paths(source)
     if paths is None:
         return None
-    innermost: dict[str, str | None] = {}
+    node_clusters: dict[str, tuple[str, ...] | None] = {}
     for name, node_paths in paths.items():
         deepest = max(node_paths, key=len)
-        if any(path != deepest[: len(path)] for path in node_paths):
-            innermost[name] = _AMBIGUOUS_CLUSTER
-        else:
-            innermost[name] = deepest[-1] if deepest else None
-    return innermost
+        nested = all(path == deepest[: len(path)] for path in node_paths)
+        node_clusters[name] = deepest if nested else None
+    return node_clusters
 
 
 def _dot_node_cluster_paths(source: str) -> dict[str, set[tuple[str, ...]]] | None:
@@ -402,7 +405,7 @@ def _strip_sibling_rank_groups(source: str) -> str:
 
 
 __all__ = [
-    "_dot_innermost_clusters",
+    "_dot_node_clusters",
     "_filter_sibling_chains_to_member_cluster",
     "_layout_dot_plain",
     "_queue_sibling_rank_group",
