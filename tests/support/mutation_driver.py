@@ -242,6 +242,15 @@ SUITE = [
     "tests/test_conditional_invariants.py",
     "tests/test_loop_synthesis_ground_truth.py",
     "tests/test_r29_capval_hardening.py",
+    # V04 killer (r18, Weekly 37591108522): _check_unattributed_arg_slots has
+    # two arms. Its identity-witness arm (dropped_edge_tensor_args) is now
+    # also refused by check_source_provenance, because every dropped-edge
+    # position is stamped into unattributed_tensor_args too, so the r29 F3a/F3c
+    # plants above stopped killing V04. Its value-rooted sweep is still the
+    # ONLY check that fails a capture-witness-blind symmetric edge drop in a
+    # diamond (the producer keeps another child, so BFS completeness stays
+    # green); this W3-1 test pins exactly that arm by its decision reason.
+    "tests/test_validation_hardening.py::test_w31_dropped_parent_edge_now_fails_replay",
     # B01 killers (b9-opus R74-2): the oracle-independence tamper battery is
     # the file arming the edge-occurrence multiplicity witness; without it a
     # bare return planted before that block survived the rest of this suite.

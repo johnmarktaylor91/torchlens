@@ -38,7 +38,7 @@ import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens.errors import MetadataInvariantError
 from torchlens.validation import check_metadata_invariants
-from torchlens.validation.diagnostics import TRACE_FAILURE_ATTR
+from torchlens.validation.diagnostics import CHECK_ARG_LOGGING, TRACE_FAILURE_ATTR
 
 
 class _TwoStage(nn.Module):
@@ -321,6 +321,12 @@ def test_symmetric_edge_drop_is_caught_by_value_rooted_replay():
         )
         failure = getattr(log, TRACE_FAILURE_ATTR, None)
         assert failure is not None, "validation failed without recording a failure"
+        # The verdict must come from the value-rooted sweep itself: with that
+        # sweep disabled this chain plant still fails, but only later, through
+        # BFS completeness (the dropped producer's ancestors become unreached),
+        # which would leave the value-rooted half silently unpinned (r18 V04).
+        assert failure.check == CHECK_ARG_LOGGING, failure
+        assert "unattributed tensor arg" in failure.message, failure
     finally:
         log.cleanup()
 
