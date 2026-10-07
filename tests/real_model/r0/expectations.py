@@ -39,11 +39,12 @@ block's output ``linear`` reads the mutated weight through them.
   resolved-config fingerprint (memo D7 class 4).
 - ``n_ops_by_transformers``: optional per-impl list of ``{"min_version",
   "n_ops"}`` entries that replace ``n_ops`` when the installed transformers is
-  at least ``min_version`` (:func:`expected_n_ops`). Only llama carries one:
-  transformers 5.19 rewrote ``LlamaRotaryEmbedding.forward`` (``inv_freq``
-  ``__getitem__``/``expand``/``to``/``__matmul__``/``transpose`` became one
-  ``to`` and ``__mul__``), so llama is 180 (eager) / 144 (sdpa) there, against
-  183 / 147 on the pinned 5.18.0. The op diff was checked to be exactly that
+  at least ``min_version`` (:func:`expected_n_ops`). Only llama and qwen2
+  carry one: transformers 5.19 rewrote their rotary embedding ``forward``
+  (``inv_freq`` ``__getitem__``/``expand``/``__matmul__``/``transpose``, plus
+  llama's ``to`` and qwen2's three ``float`` casts, became one ``__mul__``), so
+  llama is 180 (eager) / 144 (sdpa) and qwen2 180 / 144 there, against 183 / 147
+  and 186 / 150 on the pinned 5.18.0. The op diff was checked to be exactly that
   rotary block on torch 2.7.1 and 2.14.1 (2026-10-07, next-release CI round).
 
 Ownership of the known-false rows (for the teaching message):
