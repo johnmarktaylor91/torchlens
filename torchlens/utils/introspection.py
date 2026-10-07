@@ -5,7 +5,6 @@ type) from arbitrarily nested model inputs/outputs, plus utilities for
 nested attribute traversal and call-stack capture.
 """
 
-import dis
 import os
 import sys
 import warnings
@@ -37,11 +36,12 @@ _ATTR_SKIP_SET = frozenset({"T", "mT", "real", "imag", "H", "grad", "_grad", "gr
 
 # Cached instruction-offset -> column-offset maps, keyed by ``id(code_obj)``.
 #
-# CPython code objects are immutable, so once we disassemble a code object
-# the mapping never changes. ``dis.get_instructions`` is one of the most
-# expensive calls on transformer-style hot paths (per profiling audit
-# 2026-04-27, ``dis.*`` self time ~16.5s on GPT-2). Re-using the parsed
-# offset map per code object reduces repeated work to a single dict lookup.
+# CPython code objects are immutable, so once we read a code object's
+# positions the mapping never changes. Building the map was one of the most
+# expensive steps on transformer-style hot paths (per profiling audit
+# 2026-04-27, ``dis.*`` self time ~16.5s on GPT-2, before the build moved to
+# ``co_positions``). Re-using the offset map per code object reduces repeated
+# work to a single dict lookup.
 #
 # The integer key alone is not sufficient because CPython may re-use object
 # addresses after the original code object dies. We therefore keep the code
@@ -94,30 +94,32 @@ def _build_col_offset_map(code: CodeType) -> dict[int, int | None]:
     INSIDE that cache region. Without spreading each instruction's column
     across its cache slots, every ``x.sum()``-style call site resolved to a
     missing key -- silently degrading branch attribution to line-only mode
-    for method-produced bools (round-24 condbranch seal, S2). Each column is
-    therefore assigned to every code unit from the instruction's offset up to
-    the next listed instruction (or the end of ``co_code``).
+    for method-produced bools (round-24 condbranch seal, S2). Every code unit
+    from the instruction's offset up to the next listed instruction (or the
+    end of ``co_code``) therefore maps to that instruction's column.
 
     Instructions whose ``positions`` are missing or whose ``col_offset`` is
     ``None`` are stored with ``None`` so callers can distinguish "not in map"
     (unknown offset) from "no column information available" (positions absent).
+
+    The map is read straight from ``code.co_positions()``, which yields one
+    ``(lineno, end_lineno, col_offset, end_col_offset)`` entry per 2-byte code
+    unit, cache slots included, each carrying its owning instruction's
+    position (the same per-unit stream ``dis`` consumes). It is a C iterator,
+    so the build enters no Python frame. That matters because the map is
+    often first built inside an ``intervention_ready`` capture, where the RNG
+    monitor's profile hook snapshots every Python frame entry: ``dis``-based
+    disassembly entered several helper frames per instruction there and made
+    one cold build cost seconds.
     """
     if not _torch_compat.HAS_CODE_POSITIONS:
         return {}
     offset_map: dict[int, int | None] = {}
     try:
-        instructions = list(dis.get_instructions(code))
-        code_end = len(code.co_code)
-        for index, instruction in enumerate(instructions):
-            positions = instruction.positions
-            col_offset = None if positions is None else positions.col_offset
-            next_offset = (
-                instructions[index + 1].offset if index + 1 < len(instructions) else code_end
-            )
-            # Bytecode units are 2 bytes; the half-open gap up to the next
-            # listed instruction is exactly this instruction's cache region.
-            for offset in range(instruction.offset, max(next_offset, instruction.offset + 2), 2):
-                offset_map[offset] = col_offset
+        offset = 0
+        for positions in code.co_positions():
+            offset_map[offset] = positions[2]
+            offset += 2
     except (TypeError, ValueError):
         return {}
     return offset_map

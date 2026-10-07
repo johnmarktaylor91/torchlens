@@ -20,6 +20,7 @@ provided behind ``@pytest.mark.slow`` for local sanity checking.
 
 from __future__ import annotations
 
+import dis
 import os
 import sys
 import types
@@ -93,21 +94,21 @@ class TestColOffsetCache:
         return types.SimpleNamespace(f_code=code, f_lasti=lasti)
 
     def test_repeated_calls_reuse_disassembly(self) -> None:
-        """Two lookups for the same code object disassemble it only once."""
+        """Two lookups for the same code object build its offset map only once."""
 
         code = (lambda x, y: x + y).__code__
 
         with mock.patch.object(
-            introspection.dis,
-            "get_instructions",
-            wraps=introspection.dis.get_instructions,
+            introspection,
+            "_build_col_offset_map",
+            wraps=introspection._build_col_offset_map,
         ) as wrapped:
             introspection._get_col_offset(self._make_frame_at_offset(code, 0))
             introspection._get_col_offset(self._make_frame_at_offset(code, 0))
             introspection._get_col_offset(self._make_frame_at_offset(code, 2))
 
         assert wrapped.call_count == 1, (
-            "Expected dis.get_instructions to run once per code object, "
+            "Expected the offset map to be built once per code object, "
             f"observed {wrapped.call_count} calls."
         )
 
@@ -118,9 +119,9 @@ class TestColOffsetCache:
         code_b = (lambda: 2).__code__
 
         with mock.patch.object(
-            introspection.dis,
-            "get_instructions",
-            wraps=introspection.dis.get_instructions,
+            introspection,
+            "_build_col_offset_map",
+            wraps=introspection._build_col_offset_map,
         ) as wrapped:
             introspection._get_col_offset(self._make_frame_at_offset(code_a, 0))
             introspection._get_col_offset(self._make_frame_at_offset(code_b, 0))
@@ -128,7 +129,7 @@ class TestColOffsetCache:
             introspection._get_col_offset(self._make_frame_at_offset(code_b, 0))
 
         assert wrapped.call_count == 2, (
-            "Expected dis.get_instructions to run once per unique code object, "
+            "Expected the offset map to be built once per unique code object, "
             f"observed {wrapped.call_count} calls."
         )
 
@@ -141,7 +142,7 @@ class TestColOffsetCache:
         code = sample.__code__
 
         # Pick a real instruction offset by walking the bytecode directly.
-        instructions = list(introspection.dis.get_instructions(code))
+        instructions = list(dis.get_instructions(code))
         assert instructions, "Sample function must compile to at least one instruction."
         first_offset = instructions[0].offset
         expected = (
