@@ -23,6 +23,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
+from torchlens.intervention.errors import ControlFlowDivergenceError, ControlFlowDivergenceWarning
 
 
 class _Net(nn.Module):
@@ -96,6 +97,21 @@ def _readout(trace: Any) -> torch.Tensor:
     return trace.find_sites(tl.module("fc2")).first().out
 
 
+def _run(trace: Any, model: nn.Module, x: torch.Tensor, *, diverges: bool, **kwargs: Any) -> None:
+    """Rerun ``trace``, asserting whether the rerun graph differs from the stored one.
+
+    The divergence disclosure fires exactly when a rerun changes the recorded
+    graph (an edit added or removed, or a chunk shape); a REPEATED rerun with
+    the same staged recipe must reproduce its own graph and stay silent.
+    """
+
+    if diverges:
+        with pytest.warns(ControlFlowDivergenceWarning, match="raw-event shape hash diverged"):
+            trace.run(model, x, **kwargs)
+    else:
+        trace.run(model, x, **kwargs)
+
+
 def _scale_fc1() -> Any:
     """Return the one-clause spec that doubles the fc1 output."""
 
@@ -124,8 +140,14 @@ def test_chunked_rerun_steers_every_row_once(net) -> None:
     model, x, expected = net
     trace = tl.trace(model, x, intervene=_scale_fc1())
     staged = _staged(trace)
-    for _ in range(2):
-        trace.run(model, x, replay=tl.options.ReplayOptions(chunk_size=2))
+    for repeat in range(2):
+        _run(
+            trace,
+            model,
+            x,
+            diverges=repeat == 0,
+            replay=tl.options.ReplayOptions(chunk_size=2),
+        )
         torch.testing.assert_close(_readout(trace), expected)
         assert _staged(trace) == staged, "a chunked rerun changed the staged spec"
 
@@ -140,17 +162,17 @@ def test_attach_rerun_then_detach_restores_baseline(net, exit_door: str) -> None
     baseline = _readout(trace).clone()
     if exit_door == "context":
         with trace.attach_hooks(tl.module("fc1"), tl.scale(2.0), confirm_mutation=True):
-            trace.run(model, x)
-            trace.run(model, x)
+            _run(trace, model, x, diverges=True)
+            _run(trace, model, x, diverges=False)
             torch.testing.assert_close(_readout(trace), expected)
     else:
         handle = trace.attach_hooks(tl.module("fc1"), tl.scale(2.0), confirm_mutation=True)
-        trace.run(model, x)
-        trace.run(model, x)
+        _run(trace, model, x, diverges=True)
+        _run(trace, model, x, diverges=False)
         torch.testing.assert_close(_readout(trace), expected)
         handle.remove()
     assert len(trace._intervention_spec.hook_specs) == 0, "detach left hook copies behind"
-    trace.run(model, x)
+    _run(trace, model, x, diverges=True)
     torch.testing.assert_close(_readout(trace), baseline)
 
 
@@ -213,8 +235,8 @@ def test_callable_set_rerun_repeat_equals_fresh(net) -> None:
     # set() only stages the replacement; each run applies it.
     trace.set(tl.module("fc1"), lambda out: out * 2.0, confirm_mutation=True)
     staged = _staged(trace)
-    for _ in range(3):
-        trace.run(model, x)
+    for repeat in range(3):
+        _run(trace, model, x, diverges=repeat == 0)
         torch.testing.assert_close(_readout(trace), expected)
         assert _staged(trace) == staged
 
@@ -245,7 +267,7 @@ def test_capture_time_func_selector_is_rerunnable(net) -> None:
     torch.testing.assert_close(_readout(trace), expected)
     staged = _staged(trace)
     for _ in range(2):
-        trace.run(model, x)
+        _run(trace, model, x, diverges=False)
         torch.testing.assert_close(_readout(trace), expected)
         assert _staged(trace) == staged
 
@@ -285,8 +307,12 @@ def test_entry_point_leaves_model_and_globals_pristine(net, door: str) -> None:
     elif door == "run":
         tl.trace(model, x, intervene=_scale_fc1()).run(model, x)
     elif door == "chunked":
-        tl.trace(model, x, intervene=_scale_fc1()).run(
-            model, x, replay=tl.options.ReplayOptions(chunk_size=2)
+        _run(
+            tl.trace(model, x, intervene=_scale_fc1()),
+            model,
+            x,
+            diverges=True,
+            replay=tl.options.ReplayOptions(chunk_size=2),
         )
     elif door == "record":
         tl.record(model, x, save=tl.func("relu"), intervene=_scale_fc1())
@@ -296,11 +322,11 @@ def test_entry_point_leaves_model_and_globals_pristine(net, door: str) -> None:
     elif door == "fork_do":
         fork = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True)).fork()
         fork.do(tl.module("fc1"), tl.scale(2.0))
-        fork.run(model, x)
+        _run(fork, model, x, diverges=True)
     elif door == "attach_detach":
         trace = tl.trace(model, x)
         handle = trace.attach_hooks(tl.module("fc1"), tl.scale(2.0), confirm_mutation=True)
-        trace.run(model, x)
+        _run(trace, model, x, diverges=True)
         handle.remove()
     elif door == "failing_capture":
 
@@ -310,4 +336,56 @@ def test_entry_point_leaves_model_and_globals_pristine(net, door: str) -> None:
         with pytest.raises(ValueError):
             tl.trace(model, x, intervene=tl.when(tl.module("fc1"), boom))
     assert _model_snapshot(model) == before
+    assert _capture_globals_released()
+
+
+class _TwoRelu(nn.Module):
+    """fc1 -> relu -> fc2 -> relu -> fc3."""
+
+    def __init__(self) -> None:
+        """Build the three linears."""
+
+        super().__init__()
+        self.fc1 = nn.Linear(8, 16)
+        self.fc2 = nn.Linear(16, 16)
+        self.fc3 = nn.Linear(16, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the MLP."""
+
+        return self.fc3(torch.relu(self.fc2(torch.relu(self.fc1(x)))))
+
+
+def test_func_selector_append_rerun_applies_the_edit_once(net) -> None:
+    """F7: append reruns of a ``tl.func`` capture re-arm the predicate exactly once."""
+
+    model, x, expected = net
+    trace = tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.scale(2.0)))
+    staged = _staged(trace)
+    batch = x.shape[0]
+    for _ in range(2):
+        trace.run(model, x, replay=tl.options.ReplayOptions(append=True))
+        torch.testing.assert_close(_readout(trace)[-batch:], expected)
+        assert _staged(trace) == staged
+
+
+def test_func_selector_rerun_refuses_a_partially_detached_recipe() -> None:
+    """F7: a rerun that cannot reproduce the staged per-op entries refuses typed."""
+
+    torch.manual_seed(0)
+    model = _TwoRelu().eval()
+    x = torch.randn(4, 8)
+    trace = tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.scale(2.0)))
+    door_labels = sorted(
+        hook_spec.site_target.selector_value for hook_spec in trace._intervention_spec.hook_specs
+    )
+    assert len(door_labels) == 2
+    trace.detach_hooks(tl.label(door_labels[0]), confirm_mutation=True)
+    staged = _staged(trace)
+    readout = trace.find_sites(tl.module("fc3")).first().out.clone()
+    with pytest.raises(ControlFlowDivergenceError) as excinfo:
+        trace.run(model, x)
+    assert excinfo.value.fields["code"] == "rerun_predicate_restage_mismatch"
+    assert _staged(trace) == staged
+    assert torch.equal(trace.find_sites(tl.module("fc3")).first().out, readout)
     assert _capture_globals_released()
