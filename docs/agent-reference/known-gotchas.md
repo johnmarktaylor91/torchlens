@@ -119,3 +119,13 @@
   the MRO dicts, never the slot pointer) is left uncaptured with a `TorchLensWarning` (code
   `legacy_constructor_uncaptured`; `skipped_legacy_constructor_classes()`); once that patch is
   removed, the next wrap re-patches the class from the recorded C constructor.
+- A trace's staged intervention spec (`Trace._intervention_spec`) is read-only to every engine:
+  reruns, append and chunked reruns, failed or interrupted reruns, and `fork()` leave it exactly
+  as staged (`tests/test_state_hygiene_oracles.py`, `tests/test_rerun_hook_staging.py`). Validation
+  cannot see a violation (each rerun is self-consistent with the plan it ran), so the oracles
+  compare reruns against an independent expectation. A capture-time `intervene=` predicate that is
+  not lowered to module hooks stages per-op entries on FINAL labels, which the live matcher refuses;
+  reruns re-arm the retained predicate (`_predicate_save_options.intervene`) through the capture
+  door and refuse `rerun_predicate_restage_mismatch` if it re-stages a different op set. The spec is
+  `FieldPolicy.DROP`: `tl.save` warns when it drops a non-empty one, and a loaded intervened trace's
+  legacy `run(model, x)` refuses `run_intervention_spec_not_persisted`.
