@@ -573,14 +573,20 @@ def test_fast_door_applies_staged_spec_while_plain_run_inputs_still_refuses() ->
 def test_default_save_fallback_replays_stochastic_forward_and_keeps_readiness(
     intervention_ready: bool,
 ) -> None:
-    """A default-save trace reruns through capture, RNG-exact, inheriting readiness."""
+    """A default-save trace reruns through capture, RNG-exact, inheriting readiness.
+
+    The rerun replays the capture's recorded ``random_seed`` (the behavior main
+    ships), so the fallback's random draws reproduce the CAPTURE's output, not
+    the caller's ambient seed; a stochastic model pins exactly that, and that
+    the readiness setting is inherited rather than forced on.
+    """
 
     torch.manual_seed(0)
     model = _StochasticModel().train()
     x = torch.randn(2, 8)
     torch.manual_seed(7)
     with torch.no_grad():
-        ref = model(x)
+        plain = model(x)
 
     torch.manual_seed(123)
     if intervention_ready:
@@ -589,12 +595,15 @@ def test_default_save_fallback_replays_stochastic_forward_and_keeps_readiness(
         trace = tl.trace(model, x)
     source_ready = trace.intervention_ready
     assert source_ready is intervention_ready
+    captured = _output(trace).detach().clone()
+    # The model is genuinely stochastic: an unseeded-equivalent forward differs.
+    assert not torch.equal(captured, plain)
 
     torch.manual_seed(7)
     trace.run(model, x)
 
     assert trace.last_run["engine"] == "rerun"
-    assert torch.equal(_output(trace), ref)
+    assert torch.equal(_output(trace), captured)
     assert trace.intervention_ready == source_ready
 
 

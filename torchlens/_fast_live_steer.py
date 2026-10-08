@@ -32,12 +32,9 @@ from typing import Any
 import torch
 from torch import nn
 
+from . import _runnable_execution as _execution
 from ._errors import TorchLensWarning
-from ._runnable_execution import (
-    _INPUT_CHECK_UNAVAILABLE,
-    _contract_check,
-    _live_runtime_input_leaves,
-)
+from ._runnable_execution import _INPUT_CHECK_UNAVAILABLE, _contract_check
 from .errors import RunCapabilityUnavailableError
 from .runnable import ContractCheck, RunnableErrorCode
 
@@ -48,8 +45,6 @@ _UNREFRESHED_SHAPE_FIELDS: tuple[str, ...] = (
     "transformed_out_shape",
     "activation_memory",
     "transformed_activation_memory",
-    "input_shapes",
-    "input_memory",
 )
 
 
@@ -79,11 +74,30 @@ def fast_live_input_admission(
         and whether any admitted input size differs from the capture.
     """
 
+    try:
+        return _input_admission_checks(
+            trace, input_args, input_kwargs, allow_shape_change=allow_shape_change
+        )
+    except Exception:  # noqa: BLE001 -- a broken guard must refuse, never fail open
+        return _INPUT_CHECK_UNAVAILABLE, False
+
+
+def _input_admission_checks(
+    trace: Any,
+    input_args: Any,
+    input_kwargs: Any,
+    *,
+    allow_shape_change: bool,
+) -> tuple[ContractCheck | None | Any, bool]:
+    """Run the admission checks; exceptions surface to the caller's sentinel arm."""
+
     input_labels = list(getattr(trace, "input_layers", ()) or ())
     if not input_labels:
         return None, False
     layer_dict = getattr(trace, "layer_dict_all_keys", None) or {}
-    leaves = _live_runtime_input_leaves(input_args, input_kwargs)
+    # Module attribute, not a bound name: the guard-failure fault injection
+    # patches ``_runnable_execution._live_runtime_input_leaves``.
+    leaves = _execution._live_runtime_input_leaves(input_args, input_kwargs)
     if leaves is None:
         return _INPUT_CHECK_UNAVAILABLE, False
     if len(leaves) != len(input_labels):

@@ -36,6 +36,7 @@ from ._runnable_execution import (
     _decode_literal,
     _descriptor_has_seeded_rng,
     _finalize_provider_run,
+    _first_failed_live_input_check,
     _host_rng_unreproduced,
     _input_alias_topology_checks,
     _input_derived_layout_stale,
@@ -1417,12 +1418,20 @@ class _FastLiveSession:
             args, kwargs = _split_mixed_inputs(inputs)
             input_args = list(args)
             input_kwargs = dict(kwargs)
-        failed_input, input_size_changed = fast_live_input_admission(
-            self.trace,
-            input_args,
-            input_kwargs,
-            allow_shape_change=self.allow_size_change and self.fingerprint_reference is not None,
-        )
+        failed_input = _first_failed_live_input_check(self.trace, input_args, input_kwargs)
+        input_size_changed = False
+        if (
+            isinstance(failed_input, ContractCheck)
+            and failed_input.name.startswith("input_shape:")
+            and self.allow_size_change
+            and self.fingerprint_reference is not None
+        ):
+            # Size equality is not the guard when the capture sealed a call
+            # fingerprint: re-admit on rank, dtype, device and arity, and let
+            # the fingerprint settle the structure after the forward.
+            failed_input, input_size_changed = fast_live_input_admission(
+                self.trace, input_args, input_kwargs, allow_shape_change=True
+            )
         if failed_input is _INPUT_CHECK_UNAVAILABLE:
             # This consultation has ADMISSION power (it runs BEFORE the
             # forward), so a broken guard must refuse, never read as
@@ -1660,7 +1669,10 @@ class _FastLiveSession:
                     affected_op_labels=(label,),
                 )
                 self._poison_and_raise(failed)
-            if isinstance(value, torch.Tensor) and bool(getattr(op, "has_saved_activation", False)):
+            # The model output is the run's result and the legacy door returns
+            # only the Trace, so the output boundary op is always refreshed
+            # (saved or not); inputs refresh only where the capture saved them.
+            if isinstance(value, torch.Tensor):
                 op.save_activation(value, (), {}, False)
 
 
@@ -1760,21 +1772,21 @@ def try_guarded_fast_rerun(trace: Any, model: nn.Module, inputs: Any) -> tuple[b
         because the fallback replaces its state.
     """
 
+    # The legacy door leaves no TorchLens hook on the user's model between
+    # calls (the rerun hook-staging contract), so the session is built for the
+    # run and closed after it; the explicit fast=True door keeps its cached
+    # session as before.
+    close_fast_run_session(trace)
+    session: _FastLiveSession | None = None
     try:
-        session = trace.__dict__.get("_fast_run_session")
-        if not isinstance(session, _FastLiveSession) or session.model_ref() is not model:
-            if hasattr(session, "close"):
-                session.close()
-            session = _FastLiveSession(trace, model)
-            trace.__dict__["_fast_run_session"] = session
+        session = _FastLiveSession(trace, model)
         session.poison_on_divergence = False
-        try:
-            session.run(inputs, seed=None)
-        finally:
-            session.poison_on_divergence = True
+        session.run(inputs, seed=None)
     except _FAST_RERUN_REFUSALS as exc:
-        close_fast_run_session(trace)
         return False, refusal_code(exc)
+    finally:
+        if session is not None:
+            session.close()
     return True, None
 
 
