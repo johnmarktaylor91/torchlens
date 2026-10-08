@@ -109,6 +109,25 @@ def _staged_hook_count(trace: Any) -> int:
     return 0 if spec is None else len(spec.hook_specs)
 
 
+def _stored_spec(trace: Any) -> tuple[int, Any]:
+    """Return the stored spec's identity and its frozen staged content.
+
+    Fire records are excluded: they are run evidence, not staged content.
+    """
+
+    spec = trace._intervention_spec
+    frozen = spec.freeze()
+    return id(spec), (
+        frozen.targets,
+        frozen.helper,
+        frozen.value,
+        frozen.hook,
+        frozen.target_value_specs,
+        frozen.hook_specs,
+        frozen.metadata,
+    )
+
+
 @pytest.fixture
 def steered() -> dict[str, Any]:
     """A fresh steered capture plus its plain counterpart and hook baseline."""
@@ -139,11 +158,13 @@ def test_legacy_rerun_after_intervene_capture_does_not_restage_hooks(
     model, x = steered["model"], steered["x"]
     trace = tl.trace(model, x, save=_save(), intervene=_spec())
     staged = _staged_hook_count(trace)
+    stored = _stored_spec(trace)
     assert staged == 1
     assert _torch_hook_count(model) == steered["baseline"]
     for _ in range(_REPEATS):
         trace.run(model, x)
         assert _staged_hook_count(trace) == staged
+        assert _stored_spec(trace) == stored
         assert trace.last_run["hooks"] == staged
         assert torch.equal(_site_out(trace), steered["site"])
         assert torch.equal(_readout(trace), steered["out"])
@@ -159,10 +180,12 @@ def test_legacy_rerun_after_attach_hooks_does_not_restage_hooks(
     trace = tl.trace(model, x, save=_save())
     trace.attach_hooks(tl.module(_SITE), _steer(), confirm_mutation=True)
     staged = _staged_hook_count(trace)
+    stored = _stored_spec(trace)
     assert staged == 1
     for _ in range(_REPEATS):
         trace.run(model, x)
         assert _staged_hook_count(trace) == staged
+        assert _stored_spec(trace) == stored
         assert trace.last_run["hooks"] == staged
         assert torch.equal(_readout(trace), steered["out"])
         assert _torch_hook_count(model) == steered["baseline"]
@@ -174,10 +197,12 @@ def test_append_rerun_does_not_restage_hooks(steered: dict[str, Any]) -> None:
     model, x = steered["model"], steered["x"]
     trace = tl.trace(model, x, intervene=_spec())
     staged = _staged_hook_count(trace)
+    stored = _stored_spec(trace)
     batch = x.shape[0]
     for _ in range(_REPEATS):
         trace.run(model, x, replay=tl.options.ReplayOptions(append=True))
         assert _staged_hook_count(trace) == staged
+        assert _stored_spec(trace) == stored
         assert trace.last_run["hooks"] == staged
         assert torch.equal(_readout(trace)[-batch:], steered["out"])
         assert _torch_hook_count(model) == steered["baseline"]
@@ -199,13 +224,16 @@ def test_transactional_run_inputs_refusal_leaves_staging_untouched(
     model, x = steered["model"], steered["x"]
     trace = tl.trace(model, x, save=_save(), intervene=_spec())
     staged = _staged_hook_count(trace)
+    stored = _stored_spec(trace)
     for _ in range(_REPEATS):
         with pytest.raises(EngineDispatchError, match="does NOT apply"):
             trace.run(inputs=x)
         assert _staged_hook_count(trace) == staged
+        assert _stored_spec(trace) == stored
         assert _torch_hook_count(model) == steered["baseline"]
     trace.run(model, x)
     assert _staged_hook_count(trace) == staged
+    assert _stored_spec(trace) == stored
     assert torch.equal(_readout(trace), steered["out"])
 
 
@@ -218,9 +246,11 @@ def test_fork_do_then_rerun_does_not_restage_hooks(steered: dict[str, Any]) -> N
     fork.do(tl.module(_SITE), _steer())
     assert torch.equal(_readout(fork), steered["out"])
     staged = _staged_hook_count(fork)
+    stored = _stored_spec(fork)
     for _ in range(_REPEATS):
         fork.run(model, x)
         assert _staged_hook_count(fork) == staged
+        assert _stored_spec(fork) == stored
         assert torch.equal(_readout(fork), steered["out"])
         assert _torch_hook_count(model) == steered["baseline"]
 
