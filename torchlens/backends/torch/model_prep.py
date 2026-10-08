@@ -2399,6 +2399,10 @@ def module_forward_decorator(
             return orig_forward(*args, **kwargs)
 
         trace = _state._active_trace
+        # Module-entry fingerprint token, before any of this module's ops; the
+        # native twin is ``_call_fingerprint.install_module_token_hooks``. The
+        # address is read per call because role swaps re-address modules.
+        _state.note_fingerprint_token(_state.module_token(_module_address(module)))
 
         if trace.capture_mode == "predicate":
             from ...capture.predicates import (

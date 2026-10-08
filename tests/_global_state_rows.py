@@ -49,6 +49,12 @@ _SCOPED_CAPTURE_STATE = frozenset(
         # a never-rebound ContextVar holding an immutable tuple, so it is no
         # longer process-global mutable state at all.
         ("torchlens/_state.py", "_active_trace"),
+        # Ordered call fingerprint slot and its pause depth: installed by
+        # active_logging()/call_fingerprinting() and restored in their finally;
+        # the depth moves only for pauses that counted against a live
+        # fingerprint, each restoring its own increment on exit.
+        ("torchlens/_state.py", "_call_fingerprint"),
+        ("torchlens/_state.py", "_pause_depth"),
         ("torchlens/_state.py", "_capture_replay_templates"),
         # Pre-admission reservation: claimed before any capture-global side
         # effect, released in run_and_log's outermost finally (refused-loser

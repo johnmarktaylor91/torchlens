@@ -39,9 +39,11 @@ Access policy (disputed-r2 b5/R45, exempt-by-declaration):
 """
 
 import contextvars
+import functools
 import itertools
 import threading
 import weakref
+import zlib
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
@@ -112,6 +114,25 @@ _active_fast_run_collector: Any | None = None
 The slot stays import-free so decorated torch wrappers can cheaply offer selected
 functional-op collection without importing the fast-run implementation. It is non-``None``
 only inside ``Trace.run(inputs=..., fast=True)`` and is restored in ``finally``.
+"""
+
+_pause_depth: int = 0
+"""Open effective ``pause_logging()`` windows on the active fingerprint's thread.
+
+Incremented by ``_PauseLogging.__enter__`` and decremented by its ``__exit__``
+only when the pause takes effect (owner-thread rule) AND a ``CallFingerprint``
+owned by the pausing thread is active; each pause instance remembers whether it
+counted, so cross-thread pauses and a fingerprint that starts or ends inside an
+open pause can never leave the depth stuck. Zero means "a call the user's code
+made", the condition ``CallFingerprint.note`` counts under.
+"""
+
+_call_fingerprint: "CallFingerprint | None" = None
+"""Ordered torch-call/module-entry fingerprint being accumulated, or ``None``.
+
+Set by ``active_logging()`` for every capture and by ``call_fingerprinting()``
+around a native forward. Decorated torch wrappers read it first on every call:
+one global read and a ``None`` compare in the steady state.
 """
 
 _rf_probe_depth: int = 0
@@ -1003,6 +1024,76 @@ def publish_backward_capture(
     return publication
 
 
+class CallFingerprint:
+    """Ordered structural fingerprint of the torch calls and module entries of one run.
+
+    ``add`` folds one token into an FNV-style ordered rolling hash (order
+    matters; deterministic across processes because tokens are CRC32s of
+    names, never ``hash()``). Only the owner thread's unpaused calls count:
+    ``note`` is the guarded entry the wrappers and module-entry sites use.
+
+    Parameters
+    ----------
+    owner_thread_id:
+        ``threading.get_ident()`` of the thread whose calls are fingerprinted.
+    """
+
+    __slots__ = ("owner_thread_id", "count", "digest")
+
+    def __init__(self, owner_thread_id: int) -> None:
+        self.owner_thread_id = owner_thread_id
+        self.count = 0
+        self.digest = 0
+
+    def add(self, token: int) -> None:
+        """Fold ``token`` into the ordered digest unconditionally."""
+        self.count += 1
+        self.digest = (self.digest * 1099511628211 + token) & 0xFFFFFFFFFFFFFFFF
+
+    def note(self, token: int) -> None:
+        """Fold ``token`` only for an unpaused call on the owner thread."""
+        if _pause_depth == 0 and self.owner_thread_id == threading.get_ident():
+            self.count += 1
+            self.digest = (self.digest * 1099511628211 + token) & 0xFFFFFFFFFFFFFFFF
+
+    @property
+    def value(self) -> tuple[int, int]:
+        """Return ``(count, digest)``."""
+        return (self.count, self.digest)
+
+
+@functools.cache
+def call_token(func_name: str) -> int:
+    """Return the deterministic fingerprint token of a decorated torch callable."""
+    return zlib.crc32(("call:" + func_name).encode())
+
+
+@functools.cache
+def module_token(address: str) -> int:
+    """Return the deterministic fingerprint token of a module entry at ``address``."""
+    return zlib.crc32(("module:" + address).encode())
+
+
+def note_fingerprint_token(token: int) -> None:
+    """Fold ``token`` into the active fingerprint under its owner/pause guard."""
+    fp = _call_fingerprint
+    if fp is not None:
+        fp.note(token)
+
+
+@contextmanager
+def call_fingerprinting() -> Iterator[CallFingerprint]:
+    """Install a fresh ``CallFingerprint`` for the current thread; restore on exit."""
+    global _call_fingerprint
+    previous = _call_fingerprint
+    fp = CallFingerprint(threading.get_ident())
+    _call_fingerprint = fp
+    try:
+        yield fp
+    finally:
+        _call_fingerprint = previous
+
+
 @contextmanager
 def active_logging(trace: "Trace") -> Iterator[None]:
     """Activate logging for the duration of a forward pass.
@@ -1023,7 +1114,7 @@ def active_logging(trace: "Trace") -> Iterator[None]:
     """
     global _logging_enabled, _active_trace, _functorch_warning_emitted, _func_call_id_iter
     global _dynamo_warning_emitted
-    global _active_owner_thread_id
+    global _active_owner_thread_id, _call_fingerprint
     # Admission is atomic: the refusal check and the publication of the three
     # owner globals happen under one lock, so two threads entering together
     # cannot both be admitted (see ``_capture_admission_lock``).
@@ -1037,6 +1128,9 @@ def active_logging(trace: "Trace") -> Iterator[None]:
         _functorch_warning_emitted = False
         _dynamo_warning_emitted = False
         _func_call_id_iter = itertools.count(1)
+        previous_fingerprint = _call_fingerprint
+        fingerprint = CallFingerprint(_active_owner_thread_id)
+        _call_fingerprint = fingerprint
         _logging_enabled = True
     try:
         yield
@@ -1046,6 +1140,10 @@ def active_logging(trace: "Trace") -> Iterator[None]:
             _logging_enabled = False
             _active_trace = None
             _active_owner_thread_id = None
+            _call_fingerprint = previous_fingerprint
+        # Runtime-only (FieldPolicy.DROP): the ordered torch-call structure the
+        # guarded fast re-run compares against (see ``CallFingerprint``).
+        trace._raw_call_fingerprint = fingerprint.value
 
 
 class _PauseLogging:
@@ -1071,26 +1169,37 @@ class _PauseLogging:
     transform) while another thread captures.
     """
 
-    __slots__ = ("_prev", "_owns_toggle")
+    __slots__ = ("_prev", "_owns_toggle", "_counted")
 
     def __enter__(self) -> None:
-        global _logging_enabled
+        global _logging_enabled, _pause_depth
         owner = _active_owner_thread_id
-        if owner is not None and owner != threading.get_ident():
-            # Live capture owned by a different thread: do not touch the global.
-            self._owns_toggle = False
-            self._prev = False
-            return
+        fp = _call_fingerprint
+        counted = False
+        if owner is not None or fp is not None:
+            ident = threading.get_ident()
+            if owner is not None and owner != ident:
+                # Live capture owned by a different thread: do not touch the global.
+                self._owns_toggle = False
+                self._counted = False
+                self._prev = False
+                return
+            counted = fp is not None and fp.owner_thread_id == ident
+        if counted:
+            _pause_depth += 1
+        self._counted = counted
         self._owns_toggle = True
         self._prev = _logging_enabled  # save current state (True or False)
         _logging_enabled = False
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        global _logging_enabled
+        global _logging_enabled, _pause_depth
         if not self._owns_toggle:
             # Symmetric no-op: a stale restore from a non-owner thread could
             # re-enable logging after the owner's capture already finished.
             return
+        if self._counted:
+            _pause_depth -= 1
         # b2:A2 remnant (r5 fable R54): re-check ownership at RESTORE time.
         # This thread can have read owner=None an instant before another
         # thread's locked capture publication; restoring the stale pre-pause

@@ -1443,6 +1443,7 @@ class Trace(
         "_raw_transform_escape_detected": FieldPolicy.DROP,
         "_raw_dynamo_region_detected": FieldPolicy.DROP,
         "_raw_event_shape_hash": FieldPolicy.DROP,
+        "_raw_call_fingerprint": FieldPolicy.DROP,
         "_replay_arg_version_data_complete": FieldPolicy.KEEP,
         "state": FieldPolicy.KEEP,
         "is_appended": FieldPolicy.KEEP,
@@ -1948,6 +1949,7 @@ class Trace(
         self._warned_once: set[str] = set()
         self._raw_transform_escape_detected = False
         self._raw_dynamo_region_detected = False
+        self._raw_call_fingerprint: tuple[int, int] | None = None
         self._spec_revision = 0
         self._out_recipe_revision = 0
         self._append_sequence_id = 0
@@ -3723,6 +3725,7 @@ class Trace(
             "input_signature_hash",
             "graph_shape_hash",
             "_raw_event_shape_hash",
+            "_raw_call_fingerprint",
             "num_saved_ops",
             "saved_activation_memory",
             "total_activation_memory",
