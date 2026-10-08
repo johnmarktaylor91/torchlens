@@ -165,9 +165,11 @@ def test_module_save_matches_full_trace_values(name: str):
 
     model, x = _model_and_input()
     selector = SELECTORS[name]()
-    full = _saved(tl.trace(model, x))
-    sparse = _saved(tl.trace(model, x, save=selector))
-    for label, op in sparse.items():
+    # Keep both traces alive: an op's payload lives in its trace's store.
+    full_log = tl.trace(model, x)
+    sparse_log = tl.trace(model, x, save=selector)
+    full = _saved(full_log)
+    for label, op in _saved(sparse_log).items():
         assert torch.equal(op.out, full[label].out), f"{name}: {label} payload differs"
 
 
@@ -237,7 +239,8 @@ def test_forced_spill_writes_only_selected_outputs(monkeypatch):
     with _counting(monkeypatch) as counts:
         log = tl.trace(model, x, save=selector)
     assert counts["spills"] == 2, counts
-    full = _saved(tl.trace(model, x))
+    full_log = tl.trace(model, x)
+    full = _saved(full_log)
     for label, op in _saved(log).items():
         assert torch.equal(op.out, full[label].out)
 
