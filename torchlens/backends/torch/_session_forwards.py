@@ -22,12 +22,6 @@ from ._tl import is_forward_call_decorated, mark_forward_call_decorated
 if TYPE_CHECKING:
     from ...data_classes.trace import Trace
 
-__all__ = [
-    "install_session_forward_wrappers",
-    "restore_session_forward_wrappers",
-    "restore_undecorated_forward",
-]
-
 
 def restore_undecorated_forward(module: nn.Module) -> None:
     """Undo a TorchLens ``forward`` decoration left on ``module``.

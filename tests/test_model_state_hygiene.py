@@ -188,10 +188,22 @@ def _model_fingerprint(model: nn.Module) -> dict[str, Any]:
     }
 
 
-def _assert_fingerprints_equal(before: dict[str, Any], after: dict[str, Any]) -> None:
-    """Assert two fingerprints match, naming the first differing component."""
+def _assert_fingerprints_equal(
+    before: dict[str, Any], after: dict[str, Any], *, skip: frozenset[str] = frozenset()
+) -> None:
+    """Assert two fingerprints match, naming the first differing component.
+
+    Parameters
+    ----------
+    before, after:
+        Fingerprints from :func:`_model_fingerprint`.
+    skip:
+        Components a door documents as changed (never model state).
+    """
 
     for key in before:
+        if key in skip:
+            continue
         if key == "modules":
             for name, entries in before[key].items():
                 assert after[key].get(name) == entries, (
@@ -306,6 +318,13 @@ _DOORS: dict[str, Callable[[_Model], None]] = {
     "validate": _door_validate,
 }
 
+# tl.validate documents that it seeds the global RNGs for its ground-truth and
+# replay runs and does not restore them; every other component, and every
+# component of every other door, must come back unchanged.
+_DOCUMENTED_CHANGES: dict[str, frozenset[str]] = {
+    "validate": frozenset({"torch_rng", "python_rng"}),
+}
+
 _FAILURES: dict[str, type[BaseException] | None] = {
     "normal": None,
     "runtime_error": RuntimeError,
@@ -334,7 +353,9 @@ def test_entry_point_returns_the_model_unchanged(door: str, failure: str) -> Non
         else:
             with pytest.raises(exc_type, match="injected model failure"):
                 _DOORS[door](model)
-    _assert_fingerprints_equal(before, _model_fingerprint(model))
+    _assert_fingerprints_equal(
+        before, _model_fingerprint(model), skip=_DOCUMENTED_CHANGES.get(door, frozenset())
+    )
 
     model.gate.exc = None
     with warnings.catch_warnings():

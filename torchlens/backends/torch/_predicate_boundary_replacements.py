@@ -14,8 +14,6 @@ from ._tl import get_tensor_label, set_tensor_label
 if TYPE_CHECKING:
     from ...data_classes.trace import Trace
 
-__all__ = ["log_predicate_boundary_replacements"]
-
 
 def log_predicate_boundary_replacements(trace: Trace, state: Any, out: Any) -> None:
     """Mint one sparse replacement op per module-boundary-replaced output leaf.
