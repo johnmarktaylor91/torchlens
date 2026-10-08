@@ -72,10 +72,11 @@ class RetentionProfile:
         bound explicitly.
     activation_module_exit_addresses
         Module addresses (optionally pass-qualified) of a deferred selector
-        built only from ``tl.module`` terms joined by ``|``. When set, no
-        per-op candidate is escrowed: the session retains exactly the outputs
-        of matching module passes at module exit, the only ops such a selector
-        can resolve to. ``None`` keeps per-op candidate escrow.
+        built only from ``tl.module`` terms joined by ``|``. When set, only
+        ops that run inside a matching module pass are escrowed, and the ones
+        that did not become a matching pass's output are released when the
+        outermost matching pass exits: module outputs are the only ops such a
+        selector can resolve to. ``None`` keeps per-op candidate escrow.
     """
 
     activation_kind: RetentionKind = RetentionKind.NONE
