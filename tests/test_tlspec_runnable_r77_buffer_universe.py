@@ -25,6 +25,8 @@ silent under-declaration, never a wrong bind.
 from __future__ import annotations
 
 import gc
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -199,3 +201,67 @@ def test_r77_unknown_universe_refuses_loudly(tmp_path: Path) -> None:
     gc.collect()
     with pytest.raises(TorchLensIOError, match="persistent-buffer state universe"):
         trace.save(tmp_path / "unknown.tlspec", level="runnable", include_weights=False)
+
+
+_PARK_SECONDS = 30.0
+
+
+def _wait_until_parked(event: threading.Event) -> None:
+    """Spin until some thread is blocked inside ``event.wait`` (bounded)."""
+
+    deadline = time.monotonic() + _PARK_SECONDS
+    while not event._cond._waiters:  # type: ignore[attr-defined]
+        if time.monotonic() > deadline:
+            raise AssertionError("the helper thread never parked in its wait")
+        time.sleep(0.001)
+
+
+def _park_after(go: threading.Event, hold: threading.Event) -> None:
+    """Wait for ``go``, then park on ``hold`` (entered inside the capture window)."""
+
+    go.wait(_PARK_SECONDS)
+    hold.wait(_PARK_SECONDS)
+
+
+class NonMappingWakesParkedThread(NonMappingStateDict):
+    """The unknowable-universe model, releasing a pre-existing thread into a patched wait."""
+
+    def __init__(self, go: threading.Event, hold: threading.Event) -> None:
+        super().__init__()
+        self._go = go
+        self._hold = hold
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Wake the helper and return only once it is parked on ``hold``."""
+
+        self._go.set()
+        _wait_until_parked(self._hold)
+        return self.bn(x)
+
+
+def test_r77_unknown_universe_refuses_with_a_thread_parked_in_window(tmp_path: Path) -> None:
+    """The dead-model refusal still fires when a background thread is parked in-window.
+
+    An intervention-ready capture arms the host-RNG monitor, whose wait patches are
+    process-wide; a thread an earlier test left behind that enters a patched wait in the
+    window keeps the monitor reachable until the wait returns. The monitor must not pin
+    the source model past teardown, or this save finds a live model and declares instead
+    of refusing (main Nightly 37611347240, fixed by the r15-b monitor release).
+    """
+
+    go, hold = threading.Event(), threading.Event()
+    helper = threading.Thread(target=_park_after, args=(go, hold), daemon=True)
+    helper.start()
+    _wait_until_parked(go)  # blocked BEFORE the window, in the unpatched wait
+    try:
+        model = NonMappingWakesParkedThread(go, hold).eval()
+        trace = tl.trace(model, _x(), capture=_CAPTURE)
+        parked = hold._cond._waiters  # type: ignore[attr-defined]
+        assert parked, "the helper must still be parked in its in-window wait"
+        del model
+        gc.collect()
+        with pytest.raises(TorchLensIOError, match="persistent-buffer state universe"):
+            trace.save(tmp_path / "unknown.tlspec", level="runnable", include_weights=False)
+    finally:
+        hold.set()
+        helper.join(_PARK_SECONDS)
