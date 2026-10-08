@@ -114,8 +114,8 @@ def _snapshot(log: Any) -> list[tuple[Any, ...]]:
         (
             op.layer_label,
             op.has_saved_activation,
-            tuple(op.tensor_shape or ()),
-            str(op.tensor_dtype),
+            tuple(op.shape or ()),
+            str(op.dtype),
             tuple(op.output_of_module_calls or ()),
             tuple(op.parents),
             tuple(op.children),
