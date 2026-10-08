@@ -1251,12 +1251,14 @@ def _warn_once_train_mode_running_stats(model: nn.Module) -> None:
 def _release_preparation_after_failed_capture(model: nn.Module) -> None:
     """Strip TorchLens preparation from a model whose capture failed.
 
-    A FAILED capture must leave the model clean (pollution-free instance
-    forwards, picklable) regardless of the success-path lifecycle: the
-    persistent forward decorations exist to make the NEXT capture cheap, and
-    after a failure the honest baseline is "as if never traced". State the
-    partial forward already mutated (e.g. norm running statistics) is NOT
-    rolled back; that boundary is documented at the failure warning.
+    A FAILED capture must leave the model and TorchLens's preparation
+    bookkeeping "as if never traced", whatever ended it: the session cleanup
+    already put every submodule ``forward`` back, and this also evicts the
+    module metadata and prepared-model registry entries so the next capture
+    prepares from scratch. Every ``BaseException`` (``KeyboardInterrupt``,
+    ``SystemExit``) takes this path, exactly like an ordinary ``Exception``.
+    State the partial forward already mutated (e.g. norm running statistics)
+    is NOT rolled back; that boundary is documented at the failure warning.
 
     Parameters
     ----------
@@ -1309,10 +1311,11 @@ def _warn_failed_capture_release_incomplete(release_exc: BaseException) -> None:
 
     warnings.warn(
         _TorchLensWarning(
-            "TorchLens could not fully remove its instrumentation from "
+            "TorchLens could not fully release its preparation of "
             f"the model after the failed capture "
-            f"({type(release_exc).__name__}: {release_exc}); the model may "
-            "keep instance-level forward wrappers and fail to pickle. "
+            f"({type(release_exc).__name__}: {release_exc}); its module "
+            "metadata and prepared-model bookkeeping may stay registered and "
+            "plain attributes holding torch functions may stay unnormalized. "
             "Remedy: call tl.release_model(model) once the underlying "
             "condition is resolved",
             code="failed_capture_release_incomplete",
@@ -4076,7 +4079,9 @@ def _trace_torch_model(
             pending_admission(meta_admission),
         ):
             trace = capture_with_rescue(capture_callable, eligible=rescue_eligible, model=model)
-    except Exception as capture_exc:
+    except BaseException as capture_exc:
+        # One settlement path for every escape: a KeyboardInterrupt or
+        # SystemExit mid-capture is released exactly like a RuntimeError.
         if episode_resolved is not None:
             # Best-effort: the FAILED partial product carries the episode
             # declaration; attach the derived ledger disclosure without ever
