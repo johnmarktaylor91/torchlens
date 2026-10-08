@@ -665,7 +665,15 @@ class TraceValidationMixin(_TraceMixinBase):
                 if not (getattr(hook_spec, "metadata", None) or {}).get("selection_do_engine_owned")
             ]
             staged_value_specs = getattr(staged_spec, "target_value_specs", ())
-            if staged_user_hooks or staged_value_specs:
+            # The guarded fast LIVE engine applies the staged spec at real
+            # module boundaries (``_fast_live_steer``), so the gate's reason
+            # does not hold there; loaded providers and the ordinary live
+            # provider still never install it and keep refusing.
+            fast_live_applies_spec = fast and loaded_provider not in {
+                RunProvider.LOADED_SPARSE,
+                RunProvider.LOADED_ANALYSIS,
+            }
+            if (staged_user_hooks or staged_value_specs) and not fast_live_applies_spec:
                 from ..intervention.errors import EngineDispatchError
 
                 staged_hooks = len(staged_user_hooks)
@@ -924,6 +932,19 @@ class TraceValidationMixin(_TraceMixinBase):
         from ..intervention.rerun import run as _impl
 
         resolved_output_transform = self._resolve_rerun_output_transform(output_transform)
+        # Guarded fast engine first: a native forward with the staged spec
+        # applied at real module boundaries, saving the saved sites and the
+        # boundary ops, guarded by the sealed call fingerprint. Any typed
+        # refusal (ineligible save scope or target, a real divergence) falls
+        # back to the capture rerun below, with the code in ``last_run``.
+        fast_refused: str | None = None
+        if chunk_paths is None and not replay_options.append and replay_options.chunk_size is None:
+            from .._fast_run import try_guarded_fast_rerun
+
+            fast_done, fast_refused = try_guarded_fast_rerun(self, run_model, transformed_input)
+            if fast_done:
+                self.raw_input = user_input
+                return self
         result = _impl(
             self,
             run_model,
@@ -931,6 +952,7 @@ class TraceValidationMixin(_TraceMixinBase):
             replay=replay_options,
             chunk_paths=chunk_paths,
             output_transform=resolved_output_transform,
+            fast_refused=fast_refused,
         )
         # Atomic swap rebuilds Trace state; restore raw_input to the new
         # user-supplied value so visualization / save-load report the

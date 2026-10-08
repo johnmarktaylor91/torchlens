@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 import weakref
 from collections.abc import Callable, Mapping
 from contextlib import contextmanager, nullcontext
@@ -13,6 +14,14 @@ import torch
 from torch import nn
 
 from . import _state
+from ._call_fingerprint import fingerprinting, install_module_token_hooks
+from ._fast_live_steer import (
+    SteerPlan,
+    clear_unrefreshed_shape_metadata,
+    fast_live_input_admission,
+    install_steer_hooks,
+    refusal_code,
+)
 from ._runnable_execution import (
     _HOST_RNG_SOURCE_KIND,
     _INPUT_CHECK_UNAVAILABLE,
@@ -27,7 +36,6 @@ from ._runnable_execution import (
     _decode_literal,
     _descriptor_has_seeded_rng,
     _finalize_provider_run,
-    _first_failed_live_input_check,
     _host_rng_unreproduced,
     _input_alias_topology_checks,
     _input_derived_layout_stale,
@@ -64,7 +72,7 @@ from ._runnable_execution import (
     run_loaded_sparse_trace,
 )
 from ._runnable_state import PreparedRunnableState, RunResourceCeiling, prepare_runnable_state
-from .errors import RunCapabilityUnavailableError, RuntimeSignatureDriftError
+from .errors import PathDivergenceError, RunCapabilityUnavailableError, RuntimeSignatureDriftError
 from .ir.container import ContainerSpec, rebuild_container_from_spec
 from .runnable import (
     ContractCheck,
@@ -1054,10 +1062,28 @@ class _FastLiveSession:
                 op._internal_set("transformed_out", None)
                 op._internal_set("has_saved_activation", False)
         self.function_names = frozenset(plan.address_or_name for plan in self.function_plans)
+        # Steered reruns: the staged spec lowers to module-boundary hooks that
+        # must run BEFORE the collection hooks below (torch fires forward hooks
+        # in registration order), so the collected site value is the
+        # post-intervention value, exactly as capture saves it. The plan
+        # refuses typed (fast_rerun_target_unsupported) before any hook or wipe.
+        self.steer_plan = SteerPlan(trace, model)
+        # The ordered call fingerprint sealed at capture time is the structure
+        # guard that admits a different-size input; ``None`` on a trace that
+        # never captured keeps the exact-size guard.
+        self.fingerprint_reference = getattr(trace, "_raw_call_fingerprint", None)
+        self.shape_varied = False
+        self.shape_metadata_cleared = False
+        self.allow_size_change = True
+        self.poison_on_divergence = True
+        self.last_fingerprint: tuple[int, int] | None = None
+        self.refreshed_labels: frozenset[str] = frozenset(supported_labels)
         self.handles: list[Any] = []
         self._hook_finalizer = weakref.finalize(self, _remove_fast_live_hooks, self.handles)
         session_ref = weakref.ref(self)
         try:
+            self.handles.extend(install_steer_hooks(self.steer_plan, session_ref))
+            self.handles.extend(install_module_token_hooks(model))
             for address in plan_addresses:
                 module = modules["" if address == "self" else address]
 
@@ -1171,6 +1197,20 @@ class _FastLiveSession:
 
         self._hook_finalizer()
 
+    def _admits_size_change(self, expected_shape: tuple[int, ...], value: torch.Tensor) -> bool:
+        """Return whether a same-rank size difference is admitted on this run.
+
+        Size changes are admitted only when the capture sealed a call
+        fingerprint (the structure guard that replaces size equality) and the
+        rank is unchanged; dtype is checked by the caller as before.
+        """
+
+        return (
+            self.allow_size_change
+            and self.fingerprint_reference is not None
+            and value.ndim == len(expected_shape)
+        )
+
     def _poison_and_raise(self, failed: ContractCheck) -> None:
         """Poison the half-refreshed user Trace, then raise the typed divergence.
 
@@ -1183,7 +1223,8 @@ class _FastLiveSession:
         on divergence" posture plus an honest mark on the user-owned object.
         """
 
-        mark_trace_path_status(self.trace, PathFaithfulness.DIVERGED, failed.diagnostic)
+        if self.poison_on_divergence:
+            mark_trace_path_status(self.trace, PathFaithfulness.DIVERGED, failed.diagnostic)
         _raise_failed_contract_as_divergence(failed, fork=None)
 
     def wants_function(self, func_name: str) -> bool:
@@ -1223,15 +1264,17 @@ class _FastLiveSession:
                 )
                 return
             if expected_shape is not None and tuple(value.shape) != expected_shape:
-                self.failure = _contract_check(
-                    f"fast_live_output_shape:{label}",
-                    False,
-                    RunnableErrorCode.OUTPUT_SHAPE_MISMATCH,
-                    f"Fast live site {label!r} shape changed from {expected_shape} to "
-                    f"{tuple(value.shape)}.",
-                    affected_op_labels=(label,),
-                )
-                return
+                if not self._admits_size_change(expected_shape, value):
+                    self.failure = _contract_check(
+                        f"fast_live_output_shape:{label}",
+                        False,
+                        RunnableErrorCode.OUTPUT_SHAPE_MISMATCH,
+                        f"Fast live site {label!r} shape changed from {expected_shape} to "
+                        f"{tuple(value.shape)}.",
+                        affected_op_labels=(label,),
+                    )
+                    return
+                self.shape_varied = True
             if expected_dtype is not None and str(value.dtype) != expected_dtype:
                 self.failure = _contract_check(
                     f"fast_live_output_dtype:{label}",
@@ -1321,6 +1364,8 @@ class _FastLiveSession:
         self.function_index = 0
         self.last_function_output = None
         self.failure = None
+        self.shape_varied = False
+        self.steer_plan.reset()
         self.active = True
         _state._active_fast_run_collector = self
         try:
@@ -1333,6 +1378,7 @@ class _FastLiveSession:
     def run(self, inputs: Any, *, seed: int | None) -> RunResult:
         """Execute one native forward and enforce the cached static graph guard."""
 
+        self.run_started_at = time.monotonic()
         model = self.model_ref()
         if model is None:
             raise RunCapabilityUnavailableError(
@@ -1350,7 +1396,12 @@ class _FastLiveSession:
             args, kwargs = _split_mixed_inputs(inputs)
             input_args = list(args)
             input_kwargs = dict(kwargs)
-        failed_input = _first_failed_live_input_check(self.trace, input_args, input_kwargs)
+        failed_input, input_size_changed = fast_live_input_admission(
+            self.trace,
+            input_args,
+            input_kwargs,
+            allow_shape_change=self.allow_size_change and self.fingerprint_reference is not None,
+        )
         if failed_input is _INPUT_CHECK_UNAVAILABLE:
             # This consultation has ADMISSION power (it runs BEFORE the
             # forward), so a broken guard must refuse, never read as
@@ -1366,13 +1417,31 @@ class _FastLiveSession:
             _raise_failed_contract_as_divergence(failed_input, fork=None)
         if seed is not None:
             set_random_seed(seed)
-        with self.activated():
+        with self.activated(), self.steer_plan.context(), fingerprinting() as fingerprint:
             if isinstance(input_args, list):
                 output = model(*input_args, **dict(input_kwargs))
             else:
                 output = model(input_args, **dict(input_kwargs))
+        self.shape_varied = self.shape_varied or input_size_changed
+        self.last_fingerprint = fingerprint.value
         if self.failure is not None:
             self._poison_and_raise(self.failure)
+        if self.fingerprint_reference is not None and self.last_fingerprint != tuple(
+            self.fingerprint_reference
+        ):
+            # The ordered call fingerprint is the structure guard: the same
+            # module-entry and torch-call sequence as the capture, independent
+            # of tensor sizes. A mismatch is a different taken path (another
+            # branch arm, a size-dependent loop count), refused typed.
+            failed = _contract_check(
+                "fast_live_call_fingerprint",
+                False,
+                RunnableErrorCode.CONDITIONAL_ARM_DIVERGENCE,
+                "Live forward executed a different op structure than the capture: "
+                f"call fingerprint {self.last_fingerprint} against recorded "
+                f"{tuple(self.fingerprint_reference)}.",
+            )
+            self._poison_and_raise(failed)
         if self.module_index != len(self.module_plans):
             failed = _contract_check(
                 "fast_live_module_missing",
@@ -1392,6 +1461,15 @@ class _FastLiveSession:
             )
             self._poison_and_raise(failed)
         self._refresh_boundary_payloads(input_args, input_kwargs, output)
+        if self.shape_varied and not self.shape_metadata_cleared:
+            # Honesty rule: a native forward refreshes only the saved sites and
+            # the boundary ops. Every other op's shape and size metadata would
+            # otherwise read capture-time numbers as if they were this run's,
+            # so they take the not-available spelling (None) once and for all.
+            clear_unrefreshed_shape_metadata(self.trace, self.refreshed_labels)
+            self.shape_metadata_cleared = True
+        unfired = self.steer_plan.warn_unfired()
+        self._record_fast_run(seed=seed, unfired=unfired)
         readiness = ReadinessReport(
             status=ReadinessStatus.READY,
             provider=RunProvider.LIVE,
@@ -1442,6 +1520,49 @@ class _FastLiveSession:
             # divergence must raise without evicting it from the registry.
             unregister_fork_on_divergence=False,
         )
+
+    def _record_fast_run(self, *, seed: int | None, unfired: tuple[str, ...]) -> None:
+        """Stamp ``last_run``, the operation ledger and the state for one fast run."""
+
+        from ._trace_state import TraceState
+
+        trace = self.trace
+        hook_count = len(self.steer_plan.hook_plan)
+        record = {
+            "op": "rerun",
+            "engine": "guarded_fast",
+            "started_at": self.run_started_at,
+            "strict": True,
+            "append": False,
+            "hook_count": hook_count,
+            "hook_fire_count": self.steer_plan.fire_count,
+            "unfired_hook_count": len(unfired),
+            "divergence_count": 0,
+            "fast_refresh": True,
+            "shape_varied": self.shape_varied,
+            "call_fingerprint": self.last_fingerprint,
+        }
+        trace.last_run = {
+            "engine": "guarded_fast",
+            "timestamp": time.monotonic(),
+            "started_at": self.run_started_at,
+            "duration_s": time.monotonic() - self.run_started_at,
+            "spec_revision": getattr(trace, "_spec_revision", 0),
+            "strict": True,
+            "append": False,
+            "seed": seed,
+            "hooks": hook_count,
+            "hooks_fired": self.steer_plan.fire_count,
+            "hooks_unfired": len(unfired),
+            "divergence_count": 0,
+            "fast_refresh": True,
+            "fast_refused": None,
+            "shape_varied": self.shape_varied,
+            "call_fingerprint": self.last_fingerprint,
+            "refreshed_labels": tuple(sorted(self.refreshed_labels)),
+        }
+        trace._record_operation(**record)
+        trace.state = TraceState.RERUN_PROPAGATED
 
     def _refresh_boundary_payloads(
         self,
@@ -1497,15 +1618,17 @@ class _FastLiveSession:
                 )
                 self._poison_and_raise(failed)
             if expected_shape is not None and tuple(value.shape) != expected_shape:
-                failed = _contract_check(
-                    f"fast_live_model_output_shape:{label}",
-                    False,
-                    RunnableErrorCode.OUTPUT_SHAPE_MISMATCH,
-                    f"Native model output {label!r} shape changed from {expected_shape} to "
-                    f"{tuple(value.shape)}.",
-                    affected_op_labels=(label,),
-                )
-                self._poison_and_raise(failed)
+                if not self._admits_size_change(expected_shape, value):
+                    failed = _contract_check(
+                        f"fast_live_model_output_shape:{label}",
+                        False,
+                        RunnableErrorCode.OUTPUT_SHAPE_MISMATCH,
+                        f"Native model output {label!r} shape changed from {expected_shape} "
+                        f"to {tuple(value.shape)}.",
+                        affected_op_labels=(label,),
+                    )
+                    self._poison_and_raise(failed)
+                self.shape_varied = True
             if expected_dtype is not None and str(value.dtype) != expected_dtype:
                 failed = _contract_check(
                     f"fast_live_model_output_dtype:{label}",
@@ -1584,6 +1707,54 @@ def run_fast_live_trace(trace: Any, inputs: Any, *, seed: int | None) -> RunResu
         session = _FastLiveSession(trace, model)
         trace.__dict__["_fast_run_session"] = session
     return session.run(inputs, seed=seed)
+
+
+#: Typed refusals that send the legacy rerun door back to the capture engine.
+_FAST_RERUN_REFUSALS: tuple[type[BaseException], ...] = (
+    RunCapabilityUnavailableError,
+    PathDivergenceError,
+    RuntimeSignatureDriftError,
+)
+
+
+def try_guarded_fast_rerun(trace: Any, model: nn.Module, inputs: Any) -> tuple[bool, str | None]:
+    """Run the legacy intervened rerun through the guarded fast engine when eligible.
+
+    Parameters
+    ----------
+    trace:
+        Live trace carrying the staged spec; refreshed in place on success.
+    model:
+        The model the caller passed (or the trace's retained live model).
+    inputs:
+        Transformed forward input.
+
+    Returns
+    -------
+    tuple[bool, str | None]
+        ``(True, None)`` when the fast engine ran; ``(False, code)`` with the
+        typed refusal code when the caller must fall back to the capture
+        engine. A refused session is closed so the fallback's rebuilt trace
+        starts a fresh plan next time; the trace is never poisoned here
+        because the fallback replaces its state.
+    """
+
+    try:
+        session = trace.__dict__.get("_fast_run_session")
+        if not isinstance(session, _FastLiveSession) or session.model_ref() is not model:
+            if hasattr(session, "close"):
+                session.close()
+            session = _FastLiveSession(trace, model)
+            trace.__dict__["_fast_run_session"] = session
+        session.poison_on_divergence = False
+        try:
+            session.run(inputs, seed=None)
+        finally:
+            session.poison_on_divergence = True
+    except _FAST_RERUN_REFUSALS as exc:
+        close_fast_run_session(trace)
+        return False, refusal_code(exc)
+    return True, None
 
 
 def close_fast_run_session(trace: Any) -> None:
