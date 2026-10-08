@@ -3,6 +3,12 @@
 This page documents the public v2 intervention API that shipped in the current
 branch. It avoids proposed naming changes from separate design workstreams.
 
+To apply one intervention to many forwards or a `generate()` loop, use `spec.bind(model)`
+(capture-free, about the cost of a plain hook) or `tl.record(..., intervene=spec,
+return_output=True)` when you need activations too; trace-then-rerun is not a fast path
+today. Recipe: "Steering many forwards / generation" in
+[agent-reference/common-patterns.md](agent-reference/common-patterns.md).
+
 ## Selectors
 
 Selectors resolve against completed `Trace.layers` records.

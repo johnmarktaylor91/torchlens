@@ -104,3 +104,55 @@ Before debugging wrapper-specific failures, run:
 ```python
 print(tl.compat.report(model, x).to_markdown())
 ```
+
+### Steering many forwards / generation
+
+To apply one intervention to many forwards (greedy decoding, `generate()`, a sweep over
+prompts), pick the path by what you need back. Build the spec once; every path takes it.
+
+- Steering only: `spec.bind(model)`. A capture-free executor that runs at about the cost of
+  a plain forward hook. Call it like the model, or call `.generate(...)` on it (KV cache on or
+  off); `.last_report` counts the firings. `torchlens.intervention.steer_generate` is one-call
+  sugar for `spec.bind(model).generate(...)`.
+- Steering plus activations as evidence: `tl.record(model, x, save=..., intervene=spec,
+  return_output=True)` once per forward. It returns the model output and a sparse `Recording`
+  and is the cheapest path that also captures.
+- A correctness oracle: one full `tl.trace(model, x, intervene=spec)`, run once and compared
+  against the fast path. It is several times slower per op than `tl.record`, so never run it
+  per generation step.
+
+Trace-then-rerun is not a fast path today. `trace.run(inputs=...)` refuses a staged
+intervention, `trace.run(fast=True)` refuses a change in input length, and the legacy
+`trace.run(model, x)` rebuilds the whole trace and is slower than a fresh one.
+
+```python
+import torch
+import transformers
+
+torch.manual_seed(0)
+lm = transformers.LlamaForCausalLM(  # a tiny random decoder stands in for your model
+    transformers.LlamaConfig(vocab_size=128, hidden_size=32, intermediate_size=64,
+                             num_hidden_layers=2, num_attention_heads=4,
+                             num_key_value_heads=2)
+).eval()
+ids = torch.tensor([[1, 5, 9, 2]])
+direction = torch.randn(32)
+site = tl.module("model.layers.1.mlp")
+spec = tl.when(site, tl.steer(direction, magnitude=4.0, feature_axis=-1))
+
+# Steering only: bind once, then call or generate as often as needed.
+steered = spec.bind(lm)
+logits = steered(ids).logits
+tokens = steered.generate(ids, max_new_tokens=5, do_sample=False, use_cache=True)
+assert steered.last_report.fire_count == 5  # one firing per generated token
+
+# Steering plus evidence: one tl.record per forward returns the output and the recording.
+out, rec = tl.record(lm, ids, save=site, intervene=spec, return_output=True)
+steered_mlp = rec.to_trace().find_sites(site).first().out  # the steered site output
+assert torch.equal(out.logits, logits)
+
+# Correctness oracle, once: a full trace with the same spec agrees exactly.
+oracle = tl.trace(lm, ids, save=site | tl.module("lm_head"), intervene=spec)
+assert torch.equal(oracle.find_sites(tl.module("lm_head")).first().out, logits)
+assert torch.equal(oracle.find_sites(site).first().out, steered_mlp)
+```

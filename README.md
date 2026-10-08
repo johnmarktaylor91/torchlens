@@ -392,6 +392,10 @@ For post-hoc DAG replay and isolated experiments, capture with
 `log.find_sites(...)`. See [docs/intervention_api.md](docs/intervention_api.md)
 for the full reference.
 
+To steer many forwards or a `generate()` loop, use `spec.bind(model)` (about the cost of a
+plain hook) rather than tracing or rerunning per step; see the steering recipe in
+[docs/agent-reference/common-patterns.md](docs/agent-reference/common-patterns.md).
+
 Compare multiple runs side by side with `tl.bundle`:
 
 ```python
