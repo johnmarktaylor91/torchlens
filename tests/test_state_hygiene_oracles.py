@@ -210,8 +210,8 @@ def test_callable_set_rerun_repeat_equals_fresh(net) -> None:
 
     model, x, expected = net
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    # set() only stages the replacement; each run applies it.
     trace.set(tl.module("fc1"), lambda out: out * 2.0, confirm_mutation=True)
-    torch.testing.assert_close(_readout(trace), expected)
     staged = _staged(trace)
     for _ in range(3):
         trace.run(model, x)
@@ -254,15 +254,20 @@ def test_capture_time_func_selector_is_rerunnable(net) -> None:
 def test_fork_leaves_parent_spec_untouched(net) -> None:
     """F8: ``fork()`` never creates or changes the parent's staged spec."""
 
-    model, x, _ = net
+    model, x, expected = net
     parent = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    parent_spec = parent.__dict__.get("_intervention_spec")
+    parent_spec = parent._intervention_spec
     staged = _staged(parent)
     fork = parent.fork()
     fork.do(tl.module("fc1"), tl.scale(2.0))
-    assert parent.__dict__.get("_intervention_spec") is parent_spec
+    torch.testing.assert_close(_readout(fork), expected)
+    assert parent._intervention_spec is parent_spec
     assert _staged(parent) == staged
     assert fork._intervention_spec is not parent_spec
+    # A parent with no spec object at all stays without one.
+    parent._intervention_spec = None
+    parent.fork()
+    assert parent._intervention_spec is None
 
 
 @pytest.mark.parametrize(
