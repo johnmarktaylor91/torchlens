@@ -1747,11 +1747,12 @@ def _run_model_and_save_specified_outs(
         save_grads: If True, register backward hooks to capture grads.
         grads_to_save: Which layer grads to save.
         random_seed: Fixed RNG seed for reproducibility (important for stochastic models).
-            Process-global side effect: the capture reseeds all four global RNG engines
-            (random/NumPy/torch CPU/all CUDA devices) at entry and never restores them;
-            when None the seed is drawn from the entropy-seeded global ``random`` stream,
-            so an outer ``torch.manual_seed`` does not make an unseeded capture
-            reproducible. The seed used is recorded on ``trace.random_seed``.
+            The capture snapshots the global RNG states (random/NumPy/torch CPU, plus
+            CUDA when live), reseeds them for its forward, and restores the snapshot on
+            every exit path, so code after the capture continues its own streams. When
+            None the seed is drawn from a private entropy-seeded stream, so an outer
+            ``torch.manual_seed`` does not make an unseeded capture reproducible. The
+            seed used is recorded on ``trace.random_seed``.
         num_context_lines: Number of source-code context lines stored per function call.
         optimizer: Optional optimizer - used to tag which parameters have optimizers attached.
         recurrence_detection: If True (default), run full isomorphic subgraph expansion to

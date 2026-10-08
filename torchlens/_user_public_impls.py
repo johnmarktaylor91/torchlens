@@ -573,8 +573,9 @@ def show_model_graph(
         Repeat-fold policy. ``None`` preserves the default policy. ``True`` folds
         every eligible repeated run. ``False`` disables run folding.
     random_seed:
-        Fixed RNG seed for stochastic models. Reseeds the process-global RNG
-        engines without restoring them; see ``capture.random_seed`` on ``tl.trace``.
+        Fixed RNG seed for stochastic models. The capture reseeds the global
+        RNG engines for its forward and restores their prior states afterwards;
+        see ``CaptureOptions.random_seed``.
     recurrence_detection:
         If True, run full isomorphic subgraph expansion. Set this to False when
         the forward pass has more than about 1M operations and postprocessing
