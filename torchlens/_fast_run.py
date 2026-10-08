@@ -1108,38 +1108,59 @@ class _FastLiveSession:
 
     @staticmethod
     def _build_module_plans(trace: Any) -> tuple[_FastOutputPlan, ...]:
-        """Derive the exact atomic-module call sequence from the captured trace."""
+        """Derive the module-call exit sequence whose outputs the capture saved.
 
-        seen: set[str] = set()
-        plans: list[_FastOutputPlan] = []
-        for op in trace.layer_list:
-            call_label = getattr(op, "atomic_module_call", None)
-            if not call_label or call_label in seen:
+        Every module call (leaf or container) whose output ops carry a saved
+        activation gets a plan, including the ``interventionreplacement`` op a
+        module-boundary intervention leaves as the module's output. Plans are
+        ordered as torch fires forward hooks: by module EXIT, i.e. the raw
+        index of the module's output op, with the deeper module first when a
+        nested call hands the same tensor to its parent. The root module is
+        the input/output boundary and is refreshed separately.
+        """
+
+        keyed: list[tuple[int, int, _FastOutputPlan]] = []
+        module_calls = trace.module_calls
+        for call_label in list(module_calls.keys()):
+            module_call = module_calls[call_label]
+            address = call_label.rsplit(":", 1)[0]
+            if address == "self":
                 continue
-            seen.add(call_label)
-            module_call = trace.module_calls[call_label]
-            resolved = tuple(trace.layer_dict_all_keys[label] for label in module_call.output_ops)
-            if not any(bool(getattr(item, "has_saved_activation", False)) for item in resolved):
+            resolved = tuple(
+                trace.layer_dict_all_keys[label]
+                for label in module_call.output_ops
+                if label in trace.layer_dict_all_keys
+            )
+            if not resolved or not any(
+                bool(getattr(item, "has_saved_activation", False)) for item in resolved
+            ):
                 continue
             labels = tuple(item.label for item in resolved)
-            plans.append(
-                _FastOutputPlan(
-                    address_or_name=call_label.rsplit(":", 1)[0],
-                    op_labels=labels,
-                    shapes=tuple(
-                        tuple(item.shape) if item.shape is not None else None for item in resolved
-                    ),
-                    dtypes=tuple(
-                        str(item.dtype) if item.dtype is not None else None for item in resolved
-                    ),
-                    save_labels=frozenset(
-                        label
-                        for label, item in zip(labels, resolved)
-                        if bool(getattr(item, "has_saved_activation", False))
+            exit_index = min(int(getattr(item, "raw_index", 0) or 0) for item in resolved)
+            keyed.append(
+                (
+                    exit_index,
+                    -address.count("."),
+                    _FastOutputPlan(
+                        address_or_name=address,
+                        op_labels=labels,
+                        shapes=tuple(
+                            tuple(item.shape) if item.shape is not None else None
+                            for item in resolved
+                        ),
+                        dtypes=tuple(
+                            str(item.dtype) if item.dtype is not None else None for item in resolved
+                        ),
+                        save_labels=frozenset(
+                            label
+                            for label, item in zip(labels, resolved)
+                            if bool(getattr(item, "has_saved_activation", False))
+                        ),
                     ),
                 )
             )
-        return tuple(plans)
+        keyed.sort(key=lambda item: (item[0], item[1]))
+        return tuple(plan for _, _, plan in keyed)
 
     @staticmethod
     def _build_function_plans(trace: Any) -> tuple[_FastOutputPlan, ...]:
