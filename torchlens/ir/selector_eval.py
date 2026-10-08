@@ -323,7 +323,9 @@ def module_address_matches(module_pass: Any, address: str) -> bool:
     module_pass:
         Pass-qualified label, ``(address, call_index)`` tuple, or tuple repr.
     address:
-        Module address with or without pass qualification.
+        Module address with or without pass qualification. A bare address
+        matches every call of the module; a pass label (``"block:2"``) matches
+        only that call, whichever spelling the candidate uses.
 
     Returns
     -------
@@ -332,9 +334,17 @@ def module_address_matches(module_pass: Any, address: str) -> bool:
     """
 
     if isinstance(module_pass, tuple) and module_pass and isinstance(module_pass[0], str):
-        return module_pass[0] == address
+        if module_pass[0] == address:
+            return True
+        # Live boundary sites carry ``(address, call_index)`` tuples; a pass
+        # label must compare against the same "address:call" spelling the
+        # string branch below (and bind's boundary hook) uses.
+        return len(module_pass) > 1 and f"{module_pass[0]}:{module_pass[1]}" == address
     module_label = str(module_pass)
     if module_label.startswith("("):
+        base, sep, call = address.rpartition(":")
+        if sep and call.isdigit():
+            return f"'{base}', {call})" in module_label or f'"{base}", {call})' in module_label
         return f"'{address}'" in module_label or f'"{address}"' in module_label
     module_address = module_label.rsplit(":", 1)[0]
     return module_label == address or module_address == address

@@ -250,7 +250,12 @@
   "features:1",
   "relu_1_3_raw"
  ],
- "live/conv/in_module_pass": [],
+ "live/conv/in_module_pass": [
+  "conv2d_1_2_raw",
+  "conv2d_2_4_raw",
+  "features:1",
+  "relu_1_3_raw"
+ ],
  "live/conv/input_at_0": "ERROR:SelectorCapabilityError",
  "live/conv/label_final": "ERROR:LiveModeLabelError",
  "live/conv/label_raw": [
@@ -318,13 +323,18 @@
   "linear_1_2_raw",
   "linear_2_4_raw"
  ],
- "live/loop/loop_in_module_pass2": [],
+ "live/loop/loop_in_module_pass2": [
+  "block:2",
+  "linear_2_4_raw"
+ ],
  "live/loop/loop_label_recurrent": "ERROR:LiveModeLabelError",
  "live/loop/loop_module_block": [
   "block:1",
   "block:2"
  ],
- "live/loop/loop_module_pass2": [],
+ "live/loop/loop_module_pass2": [
+  "block:2"
+ ],
  "live/ntout/nt_output_at_extra": [],
  "live/ntout/nt_output_at_main": [],
  "live/split/split_contains_mul": [
