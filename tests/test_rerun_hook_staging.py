@@ -11,6 +11,7 @@ leave no torch hook behind on the model.
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
 import pytest
@@ -18,6 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.intervention.errors import ControlFlowDivergenceWarning
 
 _SITE = "fc1"
 _REPEATS = 3
@@ -109,6 +111,34 @@ def _staged_hook_count(trace: Any) -> int:
     return 0 if spec is None else len(spec.hook_specs)
 
 
+def _rerun(
+    trace: Any, model: nn.Module, x: torch.Tensor, *, first_from_plain_capture: bool
+) -> None:
+    """Run one legacy rerun, filtering only the known plain-capture divergence warning.
+
+    Known false positive: the rerun divergence check compares the rerun's
+    raw-event hash with the trace's last capture, not with that capture plus
+    its staged edits. The first rerun of a trace captured WITHOUT the edit
+    therefore always warns ``ControlFlowDivergenceWarning``, even when the
+    rerun is exactly right. Only that rerun and that message are filtered;
+    remove this carve-out once the check compares against the capture plus
+    its staged edits. Every later rerun runs under the project's
+    warnings-as-errors filters, and callers pin each rerun's graph to a
+    fresh steered capture's, so a real divergence still fails.
+    """
+
+    if not first_from_plain_capture:
+        trace.run(model, x)
+        return
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="rerun raw-event shape hash diverged",
+            category=ControlFlowDivergenceWarning,
+        )
+        trace.run(model, x)
+
+
 def _stored_spec(trace: Any) -> tuple[int, Any]:
     """Return the stored spec's identity and its frozen staged content.
 
@@ -143,6 +173,7 @@ def steered() -> dict[str, Any]:
         "baseline": baseline,
         "site": _site_out(fresh).detach().clone(),
         "out": _readout(fresh).detach().clone(),
+        "raw_hash": fresh._raw_event_shape_hash,
     }
     # The steer must move the output, or exactness below proves nothing.
     assert not torch.equal(reference["out"], plain)
@@ -163,6 +194,7 @@ def test_legacy_rerun_after_intervene_capture_does_not_restage_hooks(
     assert _torch_hook_count(model) == steered["baseline"]
     for _ in range(_REPEATS):
         trace.run(model, x)
+        assert trace._raw_event_shape_hash == steered["raw_hash"]
         assert _staged_hook_count(trace) == staged
         assert _stored_spec(trace) == stored
         assert trace.last_run["hooks"] == staged
@@ -182,8 +214,9 @@ def test_legacy_rerun_after_attach_hooks_does_not_restage_hooks(
     staged = _staged_hook_count(trace)
     stored = _stored_spec(trace)
     assert staged == 1
-    for _ in range(_REPEATS):
-        trace.run(model, x)
+    for index in range(_REPEATS):
+        _rerun(trace, model, x, first_from_plain_capture=index == 0)
+        assert trace._raw_event_shape_hash == steered["raw_hash"]
         assert _staged_hook_count(trace) == staged
         assert _stored_spec(trace) == stored
         assert trace.last_run["hooks"] == staged
@@ -247,8 +280,9 @@ def test_fork_do_then_rerun_does_not_restage_hooks(steered: dict[str, Any]) -> N
     assert torch.equal(_readout(fork), steered["out"])
     staged = _staged_hook_count(fork)
     stored = _stored_spec(fork)
-    for _ in range(_REPEATS):
-        fork.run(model, x)
+    for index in range(_REPEATS):
+        _rerun(fork, model, x, first_from_plain_capture=index == 0)
+        assert fork._raw_event_shape_hash == steered["raw_hash"]
         assert _staged_hook_count(fork) == staged
         assert _stored_spec(fork) == stored
         assert torch.equal(_readout(fork), steered["out"])
