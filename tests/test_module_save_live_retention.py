@@ -1,12 +1,14 @@
-"""``save=tl.module(...)`` retains module outputs at module exit, not by per-op escrow.
+"""``save=tl.module(...)`` escrows only ops inside matching module passes.
 
 A deferred selector made only of ``tl.module`` terms joined by ``|`` resolves to
 module-output ops and nothing else. Escrowing every op's output for it (and
 spilling the escrow to temporary files past the 64 MiB RAM budget) cost a
-sparse trace more than saving everything. These tests pin three things:
+sparse trace more than saving everything. The copy point stays the op-time copy
+the per-op escrow takes, because a module output can be mutated before its
+module exits. These tests pin three things:
 
-1. the module-exit path copies exactly the selected module outputs and writes
-   nothing to disk;
+1. only ops that run inside a matching module pass are copied, and nothing is
+   written to disk;
 2. it saves the same ops, values and metadata as the per-op escrow path it
    replaces, and as an independent save-everything trace;
 3. selectors that cannot settle at module exit keep the per-op escrow.
@@ -136,25 +138,39 @@ SELECTORS = {
 }
 
 
+# Ops that run inside the matching module passes of ``_Model``: the only escrow copies.
+# block.inner: linear, relu. block: those plus linear, add. shared: one linear per pass.
+# tup: mul, add. dct: tanh, sum. head: linear.
+EXPECTED_COPIES = {
+    "nested": 2,
+    "outer_with_nested_output": 4,
+    "called_twice": 2,
+    "second_pass_only": 1,
+    "tuple_output": 2,
+    "dict_output": 2,
+    "union_with_model_output_parent": 3,
+    "union_three": 6,
+}
+
+
 @pytest.mark.parametrize("name", sorted(SELECTORS))
-def test_module_save_copies_only_selected_outputs(name: str, monkeypatch: pytest.MonkeyPatch):
-    """The selected module outputs are the only escrow copies; nothing spills."""
+def test_module_save_copies_only_ops_inside_matching_passes(
+    name: str, monkeypatch: pytest.MonkeyPatch
+):
+    """Only ops that run inside a matching module pass are copied; nothing spills."""
 
     model, x = _model_and_input()
     selector = SELECTORS[name]()
-    rows = list(tl.trace(model, x).find_sites(selector))  # one row per layer pass
-    expected = {site.layer_label for site in rows}
+    full_log = tl.trace(model, x)
+    expected = {site.layer_label for site in full_log.find_sites(selector)}
     assert expected, f"{name}: selector matched nothing on the full trace"
-    # The model-output op is served from the live output tensor, never escrowed.
-    model_output_rows = sum(site.layer_label.startswith("output") for site in rows)
 
     with _counting(monkeypatch) as counts:
         log = tl.trace(model, x, save=selector)
 
     assert set(_saved(log)) == expected
-    assert len(rows) - model_output_rows <= counts["copies"] <= len(rows), (
-        f"{name}: {counts['copies']} escrow copies for {len(rows)} selected layer passes "
-        f"({len(log.layer_list)} ops in the trace)"
+    assert counts["copies"] == EXPECTED_COPIES[name], (
+        f"{name}: {counts['copies']} escrow copies ({len(log.layer_list)} ops in the trace)"
     )
     assert counts["spills"] == 0
 
@@ -212,11 +228,17 @@ def test_module_save_with_module_intervention_keeps_replacement(monkeypatch):
         assert torch.equal(saved[label].out, full[label].out)
         assert saved[label].intervention_replaced
     assert counts["spills"] == 0
-    assert counts["copies"] <= len(saved)
+    # The per-op escrow copies about every op; this copies the ops inside block and head.
+    assert counts["copies"] < len(log.layer_list) - 2
 
 
-def test_forced_spill_writes_only_selected_outputs(monkeypatch):
-    """Past the RAM budget only the selected module outputs reach temporary files."""
+@pytest.mark.parametrize(("address", "spills"), [("shared", 2), ("block", 4)])
+def test_forced_spill_writes_only_ops_inside_matching_passes(address, spills, monkeypatch):
+    """Past the RAM budget only ops inside matching passes reach temporary files.
+
+    ``block`` spills its two interior ops too; they are released (and their files
+    removed) at its exit, and the saved outputs still load exactly.
+    """
 
     from torchlens.capture.plan import CapturePlan
 
@@ -235,10 +257,13 @@ def test_forced_spill_writes_only_selected_outputs(monkeypatch):
 
     monkeypatch.setattr(CapturePlan, "compile", classmethod(tiny_budget_compile))
     model, x = _model_and_input()
-    selector = tl.module("shared")
+    selector = tl.module(address)
     with _counting(monkeypatch) as counts:
         log = tl.trace(model, x, save=selector)
-    assert counts["spills"] == 2, counts
+    assert counts["spills"] == spills, counts
+    assert set(_saved(log)) == {
+        site.layer_label for site in tl.trace(model, x).find_sites(selector)
+    }
     full_log = tl.trace(model, x)
     full = _saved(full_log)
     for label, op in _saved(log).items():

@@ -1278,6 +1278,11 @@ def _record_module_entry_metadata(
         kwargs,
     )
     module_call_label_str = f"{module_address}:{module_call_index}"
+    from ...capture.session import capture_session_for
+
+    capture_session = capture_session_for(trace)
+    if capture_session is not None:
+        capture_session.enter_module_pass(module_call_label_str)
     _register_module_input_container_snapshots(
         trace,
         args,
