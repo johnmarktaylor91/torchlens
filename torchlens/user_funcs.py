@@ -1782,6 +1782,8 @@ def _run_model_and_save_specified_outs(
             ``Trace.attach_hooks`` and executes during this capture when supplied.
         intervention_spec: Active intervention spec to expose in runtime context.
         normalized_hook_plan: Optional pre-normalized hook entries for internal engines.
+            When ``intervention_spec`` is also supplied they must be its normalization:
+            they drive live dispatch and are never merged back into that spec.
         verbose: If True, print timed progress messages at each major pipeline stage.
         backward_ready: If True, keep saved outs attached to autograd for training.
         inference_only: If True, wrap the user forward in ``torch.no_grad()``.
@@ -1939,13 +1941,18 @@ def _run_model_and_save_specified_outs(
         # payload the loader's injected-op anchor (W051-BIND 2.3c) vouches by.
         lowered_intervene_spec = intervene_predicate
         intervene_predicate = None
+    hook_plan = list(normalized_hook_plan) if normalized_hook_plan is not None else []
+    # A plan an internal engine pre-normalized FROM the caller's spec (rerun)
+    # is already staged on that spec. Folding it back in re-appended the
+    # spec's own hooks to the live spec object on every rerun, so the staged
+    # plan doubled per call (1, 2, 4, 8) and each rerun fired it that often.
+    spec_derived_count = len(hook_plan) if intervention_spec is not None else 0
     if intervention_spec is None:
         intervention_spec = _backward_intervention_spec_from_predicate(intervene_predicate)
-    hook_plan = list(normalized_hook_plan) if normalized_hook_plan is not None else []
     if hook_plan == [] and hooks:
         hook_plan = normalize_hook_plan(hooks)
     hook_plan.extend(module_intervene_entries)
-    hook_plan_spec = _intervention_spec_from_hook_plan(hook_plan)
+    hook_plan_spec = _intervention_spec_from_hook_plan(hook_plan[spec_derived_count:])
     if intervention_spec is None:
         intervention_spec = hook_plan_spec
     elif hook_plan_spec is not None:
