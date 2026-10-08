@@ -90,6 +90,22 @@ def _torch_hook_count(model: nn.Module) -> int:
     return count
 
 
+def _rerun(trace: Any, model: nn.Module, x: torch.Tensor, *, first: bool) -> None:
+    """Rerun ``trace``; only the first rerun after an edit changes the recorded graph.
+
+    The edit was staged after a plain capture, so the first rerun records a
+    different graph and discloses it; every repeat must reproduce its own graph.
+    """
+
+    from torchlens.intervention.errors import ControlFlowDivergenceWarning
+
+    if first:
+        with pytest.warns(ControlFlowDivergenceWarning, match="raw-event shape hash diverged"):
+            trace.run(model, x)
+    else:
+        trace.run(model, x)
+
+
 def _site_out(trace: Any) -> torch.Tensor:
     """Return the saved site activation."""
 
@@ -182,8 +198,8 @@ def test_legacy_rerun_after_attach_hooks_does_not_restage_hooks(
     staged = _staged_hook_count(trace)
     stored = _stored_spec(trace)
     assert staged == 1
-    for _ in range(_REPEATS):
-        trace.run(model, x)
+    for repeat in range(_REPEATS):
+        _rerun(trace, model, x, first=repeat == 0)
         assert _staged_hook_count(trace) == staged
         assert _stored_spec(trace) == stored
         assert trace.last_run["hooks"] == staged
@@ -247,8 +263,8 @@ def test_fork_do_then_rerun_does_not_restage_hooks(steered: dict[str, Any]) -> N
     assert torch.equal(_readout(fork), steered["out"])
     staged = _staged_hook_count(fork)
     stored = _stored_spec(fork)
-    for _ in range(_REPEATS):
-        fork.run(model, x)
+    for repeat in range(_REPEATS):
+        _rerun(fork, model, x, first=repeat == 0)
         assert _staged_hook_count(fork) == staged
         assert _stored_spec(fork) == stored
         assert torch.equal(_readout(fork), steered["out"])
