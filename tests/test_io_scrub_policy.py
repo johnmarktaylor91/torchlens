@@ -784,8 +784,10 @@ def test_r69_sparse_runnable_save_always_drops_raw_fields(tmp_path: Path, raw_po
             cache=False,
             save_raw_input=raw_policy,
             save_raw_output=raw_policy,
+            output_transform=lambda output: output,
         ),
     )
+    assert trace.raw_output is not None
     path = tmp_path / f"sparse_raw_{raw_policy}.tlspec"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")

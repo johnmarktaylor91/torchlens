@@ -163,7 +163,7 @@ from .postprocess._selective_save import (
 )
 from .types import ActivationPostfunc, GradientPostfunc
 from .utils._torch_compat import is_dynamo_compiled_callable
-from .utils.display import _vprint, ensure_trace_visualizer_dir, warn_parallel
+from .utils.display import _vprint, ensure_trace_visualizer_dir, user_stacklevel, warn_parallel
 from .utils.env_flags import closed_bool_env
 from .utils.introspection import _get_code_context
 from .utils.tensor_utils import SaveMode
@@ -2880,6 +2880,49 @@ def _refuse_non_torch_episode(public_trace_kwargs: dict[str, Any], resolved_spec
             )
 
 
+def _warn_if_save_raw_output_inert(capture_options: CaptureOptions) -> None:
+    """Warn when an explicit ``save_raw_output`` has no ``output_transform`` to save.
+
+    ``Trace.raw_output`` is the output of ``output_transform``;
+    ``save_raw_output`` only sets how that value is written into portable
+    bundles. Without a transform there is nothing to save, so an explicit
+    truthy policy is inert and ``raw_output`` stays ``None``.
+
+    Parameters
+    ----------
+    capture_options:
+        Resolved capture options for this trace.
+
+    Returns
+    -------
+    None
+        Warns with code ``save_raw_output_without_output_transform`` when the
+        policy is explicit and truthy and ``output_transform`` is unset.
+    """
+
+    if (
+        not capture_options.is_field_explicit("save_raw_output")
+        or capture_options.save_raw_output is False
+        or capture_options.output_transform is not None
+    ):
+        return
+    from .errors import TorchLensWarning as _TorchLensWarning
+
+    warnings.warn(
+        _TorchLensWarning(
+            f"save_raw_output={capture_options.save_raw_output!r} has no effect without "
+            "output_transform: trace.raw_output holds the output of output_transform, "
+            "and save_raw_output only sets how that value is written into saved "
+            "bundles, so raw_output stays None. "
+            "Remedy: pass CaptureOptions(output_transform=lambda out: out) to keep the "
+            "model output on trace.raw_output, or read saved sites with "
+            "trace.find_sites(...); drop save_raw_output to silence this",
+            code="save_raw_output_without_output_transform",
+        ),
+        stacklevel=user_stacklevel(),
+    )
+
+
 def _trace_torch_model(
     model: nn.Module | Callable[..., Any],
     input_args: str | torch.Tensor | list[Any] | tuple[Any, ...],
@@ -3406,6 +3449,7 @@ def _trace_torch_model(
         )
         save_raw_input_policy = False
         save_raw_output_policy = False
+    _warn_if_save_raw_output_inert(capture_options)
     train_mode_explicit = capture_options.is_field_explicit("backward_ready")
     train_mode_value = capture_options.backward_ready
     inference_only_conflicts: list[str] = []

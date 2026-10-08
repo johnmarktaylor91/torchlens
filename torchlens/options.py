@@ -429,15 +429,19 @@ class CaptureOptions:
         ``"auto"``, ``"all"``, ``"first"``, ``"first_n:<N>"``, and
         ``"shape_only"``.
     output_transform:
-        Optional callable applied once to the model output after ``model.forward``.
+        Optional callable applied once to the model output after ``model.forward``;
+        its result is stored as ``Trace.raw_output``.
     output_style:
         Optional semantic output decode style.
     output_head:
         Optional live-output head to decode.
     save_raw_output:
-        Raw model-output save policy for portable bundles. ``"small"`` stores a
-        bounded representation, ``True`` stores the full object, and ``False``
-        drops it when saving.
+        Save policy for ``Trace.raw_output`` in portable bundles. ``"small"``
+        stores a bounded representation, ``True`` stores the full object, and
+        ``False`` drops it when saving. It does not populate ``raw_output``:
+        that value is the result of ``output_transform`` and stays ``None``
+        without one (pass ``output_transform=lambda out: out`` to keep the model
+        output). An explicit policy with no ``output_transform`` warns.
     layer_visualizers:
         Optional mapping from site selectors to per-layer thumbnail callables.
     save_visualizations:
