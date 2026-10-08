@@ -61,6 +61,11 @@ ablated = tl.trace(
     save=tl.func("relu"),
     intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
 )
+# Reruns re-arm the capture predicate and apply the edit exactly once; the
+# staged spec never grows. tl.save keeps the ablated values but not the recipe
+# (it warns): a loaded copy refuses run(model, x) with
+# run_intervention_spec_not_persisted, so save the recipe with save_intervention.
+ablated.run(model, x)
 
 disk_log = tl.trace(model, x, save=tl.in_module("encoder"), storage=tl.to_disk("run.tlspec"))
 recording = tl.record(model, x, save=tl.func("relu"))
