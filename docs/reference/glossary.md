@@ -487,6 +487,31 @@ attribution-target alias. See the [attribution reference](attribution.md).
   accepted). Replay disclosures (`last_run` origins/cone, `replay_frontier` keys) spell
   multi-pass ops pass-qualified and keep bare labels for single-pass layers.
 
+**Guarded fast rerun** *(spellings documented-unstable)*
+: The engine a steered rerun takes when the trace's staged intervention spec targets only
+  plain module selectors (`tl.module(...)` / module-address hooks, no `set()` value
+  replacements): a native forward with the staged hooks fired at each targeted module's exit
+  and forward hooks refreshing the saved sites, so the rerun costs close to a plain hooked
+  forward instead of a full capture. Both doors use it: the legacy `trace.run(model, x)` tries
+  it first and falls back to the capture engine on any typed refusal, and
+  `trace.run(inputs=..., fast=True)` on a live or loaded-activation trace applies the staged
+  spec through it (so the `run_staged_spec_unapplied` gate does not fire there). `last_run`
+  discloses the outcome: `engine` is `guarded_fast` when it ran and `rerun` after a fallback,
+  where `fast_refused` names the refusing guard as `<code>:<stage>` (for example
+  `run_capability_unavailable:fast_rerun_target_unsupported` for a value replacement or a
+  non-module target, or `<divergence code>:fast_live_call_fingerprint` for a structural
+  change); `hooks_fired` / `hooks_unfired` count the staged plans that fired, and a plan that
+  never fired warns `rerun_zero_fire`. Input sizes may differ from the capture (generation)
+  when rank, dtype, device and input tree match and the capture sealed a call fingerprint
+  (`trace._raw_call_fingerprint`, an ordered rolling hash of every wrapped torch call and
+  module entry, compared against `last_run["call_fingerprint"]`); such a run sets
+  `last_run["shape_varied"]` and resets `shape`, `transformed_out_shape`, `activation_memory`
+  and `transformed_activation_memory` to `None` on every op the run did not refresh, so no
+  capture-time number is presented as current. The save scope never widens: unsaved ops stay
+  unsaved, `raw_output` follows the capture's output-transform rule, and the stored spec is
+  unchanged. A real structural divergence still refuses (`PathDivergenceError` from the
+  explicit door; the legacy door falls back and records why).
+
 ## Extraction, observers, and admin
 
 **Extraction helpers**

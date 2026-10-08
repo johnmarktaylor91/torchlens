@@ -12,6 +12,16 @@ log.draw(collapse="auto", show_containers=False)  # readability-targeted module 
 print(log.module_collapse_order[:10])
 tl.release_model(model)  # restore whole-model pickle / torch.save serializability
 
+# Steered rerun: a module-targeted staged spec reruns through the guarded fast engine
+# (native forward + hooks, close to plain-forward cost); any typed refusal falls back
+# to the capture engine and says why.
+steered = tl.trace(model, ids, save=tl.module("blocks.1"),
+                   intervene=tl.when(tl.module("blocks.1"), tl.add(direction * 4)))
+steered.run(model, longer_ids)          # generation-length input, same graph structure
+steered.last_run["engine"]              # "guarded_fast", or "rerun" after a fallback
+steered.last_run["fast_refused"]        # None, or "<code>:<stage>" naming the guard
+steered.last_run["shape_varied"]        # True when the input size differed from capture
+
 # Influence geometry is lazy: the first property access solves the captured DAG.
 op = log["relu_1_2"]
 rf = op.receptive_field

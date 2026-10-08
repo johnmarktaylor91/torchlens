@@ -153,7 +153,14 @@
   RSS) — tens of steps, never hundreds; guarded-fast (`trace.run(fast=True)`, which needs a
   functional `save=tl.func(...)` on the capture -- the default capture re-runs through
   `trace.run(inputs=...)`) is the engine for episode-scale re-runs and must reproduce wrapped
-  tokens bit-exactly (pinned). ATTESTED COUPLING
+  tokens bit-exactly (pinned). The same engine serves a STEERED rerun: `trace.run(model, x)`
+  on a module-targeted staged spec fires the staged hooks at module exit inside a native
+  forward (`last_run["engine"] == "guarded_fast"`), admits a changed input length under the
+  sealed ordered call fingerprint (`last_run["shape_varied"]`, unrefreshed shape/memory
+  metadata reset to `None`), and falls back to the capture engine with
+  `last_run["fast_refused"] == "<code>:<stage>"` on any typed refusal (value replacements,
+  non-module targets, structural divergence); `fast=True` on a live or loaded-activation
+  trace applies the staged spec the same way. Glossary: "Guarded fast rerun". ATTESTED COUPLING
   (F42, the foldA D5 flip; spellings DOCUMENTED-UNSTABLE): `episode=` x `intervene=`
   runs COUPLED — a fire-attribution session attributes every live FireRecord to its
   step (root-loop fires bucket outside-step, disclosed in the digest, never guessed

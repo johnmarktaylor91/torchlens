@@ -139,7 +139,12 @@
     binders, and one result Trace; live traces use native forward plus targeted module hooks and
     only explicitly requested functional collection. Per-call input, path, output structure/shape/
     dtype, and control-witness guards remain mandatory; divergence always raises. `fast=False`
-    preserves the full transaction and attestation contract. The session handle
+    preserves the full transaction and attestation contract. The live session also fires a
+    module-targeted staged intervention spec at module exit (the steered rerun engine behind
+    `trace.run(model, x)`, which falls back to capture on a typed refusal and records it in
+    `last_run["fast_refused"]`); a size-only input change is admitted only when the capture
+    sealed a call fingerprint and the rerun's fingerprint matches, and the op metadata the run
+    did not refresh is reset to `None`, never left at capture-time values. The session handle
     `Trace._fast_run_session` is a session-time `FieldPolicy.DROP` field (ordered under a private
     name, never persisted), ledgered in
     `tests/test_schema_lockstep.py::PRIVATE_ORDERED_DROP_FIELDS`.
