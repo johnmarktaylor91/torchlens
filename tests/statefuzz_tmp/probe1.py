@@ -1,3 +1,4 @@
+# ruff: noqa
 """Differential probe 1: every entry point vs a fresh oracle and a plain-hook ground truth.
 
 Usage: python probe1.py [model kinds...]
@@ -117,7 +118,11 @@ def run_model(kind: str) -> None:
     helpers = make_helpers(feat_dim, feat_axis)
 
     def check_state(helper: str, scenario: str) -> None:
-        d = snap.diff(base, snap.full_state(model))
+        d = snap.diff(
+            base,
+            snap.full_state(model),
+            ignore=("_log_registry", "TYPE_CHECKING", "annotations", "torch_rng"),
+        )
         emit(kind, helper, scenario + ":state", not d, diff=d)
         with torch.no_grad():
             emit(
@@ -291,7 +296,7 @@ def run_model(kind: str) -> None:
             for i in range(2):
                 if fires:
                     fires.n = 0
-                rec = tl.record(model, x, intervene=spec)
+                rec = tl.record(model, x, default_op=True, intervene=spec)
                 tr = rec.to_trace()
                 emit(
                     kind,

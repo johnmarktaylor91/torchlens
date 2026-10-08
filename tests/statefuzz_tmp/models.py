@@ -1,3 +1,4 @@
+# ruff: noqa
 """Small CPU architectures for state-leak probes."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# ruff: noqa
 """Model and process state snapshots for differential state-leak probes."""
 
 from __future__ import annotations
