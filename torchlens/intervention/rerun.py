@@ -16,6 +16,7 @@ from .._errors import InvalidArgumentError, TorchLensWarning
 from .._input_coerce import _coerce_input_args
 from .._trace_state import TraceState
 from ..options import ReplayOptions, merge_replay_options
+from ._rerun_predicate import plan_rerun_spec, settle_predicate_rerun
 from .errors import (
     AppendBatchDependenceError,
     AppendMismatchError,
@@ -97,20 +98,23 @@ def run(
     _warn_if_direct_writes_will_be_overlaid(log)
 
     spec = getattr(log, "_intervention_spec", None)
-    hook_plan = _assign_unique_plan_ids(normalize_hooks_from_spec(spec))
+    spec_plan = plan_rerun_spec(log, spec)
+    hook_plan = _assign_unique_plan_ids(normalize_hooks_from_spec(spec_plan.capture_spec))
     started_at = time.monotonic()
     old_hash = getattr(log, "graph_shape_hash", None)
     old_raw_hash = getattr(log, "_raw_event_shape_hash", None)
 
-    with active_intervention_context(intervention_spec=spec, hook_plan=hook_plan):
+    with active_intervention_context(intervention_spec=spec_plan.capture_spec, hook_plan=hook_plan):
         new_log = _capture_with_active_spec(
             log,
             model,
             x,
-            intervention_spec=spec,
+            intervention_spec=spec_plan.capture_spec,
             hook_plan=hook_plan,
             output_transform=output_transform,
+            intervene_predicate=spec_plan.intervene_predicate,
         )
+    settle_predicate_rerun(spec_plan, spec, new_log)
     new_log.facet_registry_snapshot = getattr(log, "facet_registry_snapshot", None)
     hook_fire_count, unfired_hook_ids = _reconcile_rerun_hook_fires(new_log, hook_plan)
 
@@ -298,20 +302,25 @@ def _append_rerun(
     _warn_if_batch_sensitive_train_modules(model)
 
     spec = getattr(log, "_intervention_spec", None)
-    hook_plan = _assign_unique_plan_ids(normalize_hooks_from_spec(spec))
-    _validate_append_hook_plan(log, hook_plan)
+    # Every staged helper must be batch-independent, including the
+    # predicate-door entries the capture below re-arms instead of planning.
+    _validate_append_hook_plan(log, normalize_hooks_from_spec(spec))
+    spec_plan = plan_rerun_spec(log, spec)
+    hook_plan = _assign_unique_plan_ids(normalize_hooks_from_spec(spec_plan.capture_spec))
     started_at = time.monotonic()
     old_hash = getattr(log, "graph_shape_hash", None)
 
-    with active_intervention_context(intervention_spec=spec, hook_plan=hook_plan):
+    with active_intervention_context(intervention_spec=spec_plan.capture_spec, hook_plan=hook_plan):
         new_log = _capture_with_active_spec(
             log,
             model,
             x,
-            intervention_spec=spec,
+            intervention_spec=spec_plan.capture_spec,
             hook_plan=hook_plan,
             output_transform=getattr(log, "_output_transform", None),
+            intervene_predicate=spec_plan.intervene_predicate,
         )
+    settle_predicate_rerun(spec_plan, spec, new_log)
     new_log.facet_registry_snapshot = getattr(log, "facet_registry_snapshot", None)
     hook_fire_count, unfired_hook_ids = _reconcile_rerun_hook_fires(new_log, hook_plan)
 
@@ -840,6 +849,7 @@ def _capture_with_active_spec(
     intervention_spec: Any | None,
     hook_plan: list[NormalizedHookEntry],
     output_transform: Any | None,
+    intervene_predicate: Any | None = None,
 ) -> Trace:
     """Build a fresh rerun ``Trace`` with active hooks installed.
 
@@ -858,6 +868,10 @@ def _capture_with_active_spec(
     output_transform:
         Optional callable applied to the fresh model output for raw-output
         metadata storage.
+    intervene_predicate:
+        The trace's retained capture-time ``intervene=`` predicate, re-armed
+        through the capture door when its staged per-op entries were left out
+        of ``intervention_spec`` and ``hook_plan``.
 
     Returns
     -------
@@ -912,6 +926,7 @@ def _capture_with_active_spec(
         output_transform=output_transform,
         save_raw_output=getattr(log, "save_raw_output", "small"),
         save_predicate=save_predicate,
+        intervene_predicate=intervene_predicate,
         lookback=lookback,
         lookback_payload_policy=lookback_payload_policy,
         retain_output_parents_for_layers_to_save=getattr(
