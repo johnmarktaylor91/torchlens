@@ -285,6 +285,14 @@ attribution-target alias. See the [attribution reference](attribution.md).
 : A value or gradient edit performed at a selected live site. `tl.when(predicate, helper)` binds a
   selector to helpers such as `tl.zero_ablate()` or `tl.scale(...)`.
 
+**Bound intervention executor** *(spelling documented-unstable)*
+: `spec.bind(model)` pairs an `InterventionSpec` with a base model as a capture-free callable.
+  It runs the model with the spec's edits held live, returns the model's own output, records
+  only a firing report (`.last_report`), and supports HF `generate` with the KV cache on or off.
+  It is not an `nn.Module` and bindings never nest; zero firings fail closed unless
+  `on_zero_fire="disclose"`. `torchlens.intervention.steer_generate` is one-call sugar for
+  `spec.bind(model).generate(...)`.
+
 **Bundle**
 : A named collection of aligned Traces, constructed with `tl.bundle(...)` or `tl.Bundle(...)`, for
   cross-run comparison.
