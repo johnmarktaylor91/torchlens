@@ -149,11 +149,13 @@ def _model_fingerprint(model: nn.Module) -> dict[str, Any]:
         name: tuple((key, _value_fingerprint(value)) for key, value in sorted(vars(module).items()))
         for name, module in model.named_modules(remove_duplicate=False)
     }
+    # Values, not the version counter: tl.validate snapshots and restores
+    # parameter storage in place, which bumps ``_version`` with equal bytes.
     params = {
         name: (
             id(param),
             param.data_ptr(),
-            param._version,
+            param.detach().clone(),
             param.requires_grad,
             param.grad is None,
             param.is_leaf,
@@ -198,6 +200,15 @@ def _assert_fingerprints_equal(before: dict[str, Any], after: dict[str, Any]) ->
                     f"after keys {[entry[0] for entry in after[key].get(name, ())]}"
                 )
             assert set(after[key]) == set(before[key]), "module tree changed"
+        elif key == "params":
+            assert set(after[key]) == set(before[key]), "parameter set changed"
+            for name, (*ident, value) in (
+                (name, (*entry[:2], *entry[3:], entry[2])) for name, entry in before[key].items()
+            ):
+                after_entry = after[key][name]
+                after_ident = (*after_entry[:2], *after_entry[3:])
+                assert after_ident == tuple(ident), f"parameter {name!r} identity/flags changed"
+                assert torch.equal(after_entry[2], value), f"parameter {name!r} value changed"
         else:
             assert after[key] == before[key], f"{key} changed across the call"
 
@@ -410,6 +421,11 @@ def test_captured_model_called_inside_another_capture() -> None:
 
             return self.helpers[0](x) * 3.0
 
-    outer_trace = tl.trace(_Outer(), _X)
+    with warnings.catch_warnings():
+        # The helper's weights are not registered on _Outer, so the capture
+        # discloses them as sourceless tensors; that is the documented
+        # behavior for outside tensors, not this test's subject.
+        warnings.simplefilter("ignore")
+        outer_trace = tl.trace(_Outer(), _X)
     expected = _eager_out(helper) * 3.0
     assert torch.equal(outer_trace[outer_trace.output_layers[0]].out.detach(), expected)
