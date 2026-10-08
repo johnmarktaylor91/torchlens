@@ -392,11 +392,11 @@ def _module_hook_count(model: nn.Module) -> int:
 
 
 def _assert_matches_hook(trace: Any, reference: dict[str, Any], *, fast: bool) -> None:
-    """Assert the trace's saved site and head (and, fast, output) equal the hook reference.
+    """Assert the trace's saved site and head equal the hook reference.
 
-    An explicit ``save=`` capture, and the capture fallback rerun, leave the model
-    output op unsaved; the guarded fast engine saves the input/output boundary ops,
-    so its output op is compared too.
+    An explicit ``save=`` capture leaves the model output op unsaved, and both
+    rerun engines preserve that save scope (the output lives in the saved head
+    site here), so only the saved sites are compared.
 
     Parameters
     ----------
@@ -405,13 +405,13 @@ def _assert_matches_hook(trace: Any, reference: dict[str, Any], *, fast: bool) -
     reference:
         Output of :func:`_hooked` on the same input.
     fast:
-        Whether the run took the guarded fast engine.
+        Whether the run took the guarded fast engine (kept for call-site
+        readability; both engines are held to the same exactness).
     """
 
+    del fast
     assert _max_abs_diff(_site_op(trace, _SITE).out, reference["site"]) == 0.0
     assert _max_abs_diff(_site_op(trace, _HEAD).out, reference["head"]) == 0.0
-    if fast:
-        assert _max_abs_diff(_output(trace), reference["output"]) == 0.0
 
 
 @pytest.mark.smoke
@@ -620,7 +620,9 @@ def test_full_sequence_output_reruns_shape_varied_exactly() -> None:
 
     assert trace.last_run["engine"] == "guarded_fast"
     assert trace.last_run["shape_varied"] is True
-    output = _output(trace)
+    # The head module's output IS the model output for this decoder.
+    output = _site_op(trace, _HEAD).out
     assert output.ndim == 3
     assert tuple(output.shape) == (1, _CAPTURE_LEN + 2, _VOCAB)
+    assert _max_abs_diff(output, reference["output"]) == 0.0
     _assert_matches_hook(trace, reference, fast=True)

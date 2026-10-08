@@ -1077,6 +1077,7 @@ class _FastLiveSession:
         self.shape_metadata_cleared = False
         self.allow_size_change = True
         self.poison_on_divergence = True
+        self.output_transform: Any = None
         self.last_fingerprint: tuple[int, int] | None = None
         self.refreshed_labels: frozenset[str] = frozenset(supported_labels)
         self.handles: list[Any] = []
@@ -1669,11 +1670,13 @@ class _FastLiveSession:
                     affected_op_labels=(label,),
                 )
                 self._poison_and_raise(failed)
-            # The model output is the run's result and the legacy door returns
-            # only the Trace, so the output boundary op is always refreshed
-            # (saved or not); inputs refresh only where the capture saved them.
-            if isinstance(value, torch.Tensor):
+            if isinstance(value, torch.Tensor) and bool(getattr(op, "has_saved_activation", False)):
                 op.save_activation(value, (), {}, False)
+        # Same rule as capture (capture/trace.py): the transformed raw output
+        # is stored when an output transform exists; the save scope is
+        # otherwise untouched, so a sparse save stays sparse on a rerun.
+        output_transform = self.output_transform
+        self.trace.raw_output = output_transform(output) if output_transform is not None else None
 
 
 def run_fast_loaded_trace(trace: Any, inputs: Any, *, seed: int | None) -> RunResult:
@@ -1750,7 +1753,9 @@ _FAST_RERUN_REFUSALS: tuple[type[BaseException], ...] = (
 )
 
 
-def try_guarded_fast_rerun(trace: Any, model: nn.Module, inputs: Any) -> tuple[bool, str | None]:
+def try_guarded_fast_rerun(
+    trace: Any, model: nn.Module, inputs: Any, *, output_transform: Any = None
+) -> tuple[bool, str | None]:
     """Run the legacy intervened rerun through the guarded fast engine when eligible.
 
     Parameters
@@ -1761,6 +1766,9 @@ def try_guarded_fast_rerun(trace: Any, model: nn.Module, inputs: Any) -> tuple[b
         The model the caller passed (or the trace's retained live model).
     inputs:
         Transformed forward input.
+    output_transform:
+        The resolved rerun output transform, applied to the native output for
+        ``trace.raw_output`` exactly as the capture engine does.
 
     Returns
     -------
@@ -1781,6 +1789,7 @@ def try_guarded_fast_rerun(trace: Any, model: nn.Module, inputs: Any) -> tuple[b
     try:
         session = _FastLiveSession(trace, model)
         session.poison_on_divergence = False
+        session.output_transform = output_transform
         session.run(inputs, seed=None)
     except _FAST_RERUN_REFUSALS as exc:
         return False, refusal_code(exc)

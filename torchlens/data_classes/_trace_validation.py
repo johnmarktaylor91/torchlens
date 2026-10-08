@@ -941,7 +941,9 @@ class TraceValidationMixin(_TraceMixinBase):
         if chunk_paths is None and not replay_options.append and replay_options.chunk_size is None:
             from .._fast_run import try_guarded_fast_rerun
 
-            fast_done, fast_refused = try_guarded_fast_rerun(self, run_model, transformed_input)
+            fast_done, fast_refused = try_guarded_fast_rerun(
+                self, run_model, transformed_input, output_transform=resolved_output_transform
+            )
             if fast_done:
                 self.raw_input = user_input
                 return self

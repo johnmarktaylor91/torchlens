@@ -185,8 +185,8 @@ def module_boundary_plan(trace: Any) -> tuple[list[Any], tuple[str, ...]]:
         raise RunCapabilityUnavailableError(
             "The guarded fast engine applies module-boundary hooks only; this trace "
             f"stages {len(spec.target_value_specs)} value replacement(s).",
-            code="fast_rerun_target_unsupported",
-            detection_stage="fast_live_steer_plan",
+            code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+            detection_stage="fast_rerun_target_unsupported",
         )
     hook_plan = _assign_unique_plan_ids(normalize_hooks_from_spec(spec))
     addresses: list[str] = []
@@ -200,8 +200,8 @@ def module_boundary_plan(trace: Any) -> tuple[list[Any], tuple[str, ...]]:
             raise RunCapabilityUnavailableError(
                 "The guarded fast engine applies plain tl.module(address) boundary "
                 f"targets only; staged target {target!r} needs the capture engine.",
-                code="fast_rerun_target_unsupported",
-                detection_stage="fast_live_steer_plan",
+                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+                detection_stage="fast_rerun_target_unsupported",
             )
         addresses.append(str(target.selector_value).rsplit(":", 1)[0])
     return hook_plan, tuple(dict.fromkeys(addresses))
@@ -220,8 +220,8 @@ class SteerPlan:
             if modules.get(address) is None:
                 raise RunCapabilityUnavailableError(
                     f"Staged intervention target {address!r} is absent from the live model.",
-                    code="fast_rerun_target_unsupported",
-                    detection_stage="fast_live_steer_plan",
+                    code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+                    detection_stage="fast_rerun_target_unsupported",
                 )
         self.modules = {address: modules[address] for address in self.addresses}
         self.pass_counts: Counter[str] = Counter()
@@ -353,16 +353,23 @@ def clear_unrefreshed_shape_metadata(trace: Any, refreshed_labels: frozenset[str
 
 
 def refusal_code(exc: BaseException) -> str:
-    """Return the typed code of a fast-engine refusal for the rerun ledger."""
+    """Return the typed code of a fast-engine refusal for the rerun ledger.
 
-    code = getattr(exc, "code", None)
-    if not code:
-        fields = getattr(exc, "fields", None)
-        if isinstance(fields, Mapping):
-            code = fields.get("code")
-    if isinstance(code, str) and code:
-        return code
-    return type(exc).__name__
+    The code is the error's stable code, followed by ``:<stage>`` when the
+    error names a detection stage or a failed contract check, so the ledger
+    says WHICH guard sent the run back to the capture engine.
+    """
+
+    fields = getattr(exc, "fields", None)
+    fields = fields if isinstance(fields, Mapping) else {}
+    code = getattr(exc, "code", None) or fields.get("code")
+    if not isinstance(code, str) or not code:
+        code = type(exc).__name__
+    stage = getattr(exc, "detection_stage", None) or fields.get("detection_stage")
+    if not stage:
+        check = getattr(exc, "contract_check", None) or fields.get("contract_check")
+        stage = getattr(check, "name", None)
+    return f"{code}:{stage}" if isinstance(stage, str) and stage else code
 
 
 def output_dtype_and_rank(value: Any) -> tuple[str | None, int | None]:
