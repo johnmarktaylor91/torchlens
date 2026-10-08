@@ -57,7 +57,7 @@ def warn_staged_spec_not_persisted(trace: Any) -> None:
         "trace.save_intervention(path, level=...) and re-apply it with "
         "tl.trace(model, x, intervene=...).",
         TorchLensInterventionWarning,
-        stacklevel=4,
+        stacklevel=3,
     )
 
 
