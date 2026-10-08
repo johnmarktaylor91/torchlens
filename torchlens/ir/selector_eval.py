@@ -178,6 +178,37 @@ def selector_contains_kind(selector: Any, kind: str, *, unwrap: bool = False) ->
     )
 
 
+def module_union_addresses(selector: Any) -> tuple[str, ...] | None:
+    """Return the addresses of a selector built only from ``tl.module`` and ``|``.
+
+    Such a selector resolves exactly to the outputs of the matching module
+    passes, so it can be settled at module exit. Any other node (``&``,
+    ``~``, an empty union, or a non-module kind) returns ``None``.
+
+    Parameters
+    ----------
+    selector:
+        Selector tree to inspect.
+
+    Returns
+    -------
+    tuple[str, ...] | None
+        Module addresses in tree order, or ``None`` when some node is not a
+        module term or a non-empty union.
+    """
+
+    addresses: list[str] = []
+    for node in walk_selector(selector):
+        if isinstance(node, CompositeSelector):
+            if node.operator != "or" or not node.selectors:
+                return None
+            continue
+        if not isinstance(node, BaseSelector) or node.selector_kind != "module":
+            return None
+        addresses.append(str(node.selector_value))
+    return tuple(addresses) if addresses else None
+
+
 def contains_followed_by(selector: Any, *, unwrap: bool = False) -> bool:
     """Return whether a selector tree contains a ``followed_by`` selector.
 
