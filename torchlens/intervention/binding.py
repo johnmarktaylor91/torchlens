@@ -940,7 +940,7 @@ class _ArmedLazyOutput(Generator[Any, Any, Any]):
             )
         return self._step(lambda: sender(value))
 
-    def throw(self, typ: Any, val: Any = None, tb: Any = None) -> Any:  # type: ignore[override]
+    def throw(self, typ: Any, val: Any = None, tb: Any = None) -> Any:
         """Raise an exception inside the model's generator for one armed step."""
 
         exc = typ if val is None and tb is None else typ(val).with_traceback(tb)
