@@ -1,10 +1,10 @@
-"""A plain capture must not need graphviz.
+"""A plain capture must not need the drawing dependencies.
 
-graphviz is a base dependency, but only the drawing surface uses it. A
-``pip install --no-deps torchlens`` (or any environment without graphviz) must
-still be able to run a capture-only ``tl.trace``; drawing then fails at call
-time, never at capture time. The subprocess blocks graphviz with a
-``sys.modules`` ``None`` entry, so any import of it raises
+graphviz and Pillow are base dependencies, but only the drawing and image
+surfaces use them. A ``pip install --no-deps torchlens`` (or any environment
+without them) must still be able to run a capture-only ``tl.trace``; drawing
+then fails at call time, never at capture time. The subprocess blocks both
+with ``sys.modules`` ``None`` entries, so any import of either raises
 ``ModuleNotFoundError`` exactly as on a host where it is not installed.
 """
 
@@ -23,6 +23,7 @@ _CAPTURE_WITHOUT_GRAPHVIZ = textwrap.dedent(
     import sys
 
     sys.modules["graphviz"] = None
+    sys.modules["PIL"] = None
 
     import torch
     from torch import nn
@@ -52,8 +53,8 @@ _CAPTURE_WITHOUT_GRAPHVIZ = textwrap.dedent(
 )
 
 
-def test_plain_capture_runs_with_graphviz_blocked() -> None:
-    """A capture-only trace succeeds when graphviz cannot be imported."""
+def test_plain_capture_runs_with_drawing_dependencies_blocked() -> None:
+    """A capture-only trace succeeds when graphviz and Pillow cannot be imported."""
 
     env = {**os.environ, "PYTHONPATH": str(_REPO_ROOT)}
     result = subprocess.run(

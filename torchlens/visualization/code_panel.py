@@ -11,15 +11,19 @@ import weakref
 from collections.abc import Callable
 from pathlib import PurePath
 from types import SimpleNamespace
-from typing import Any, Literal, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 
-import graphviz
 from torch import nn
 
 from .._errors import ArgumentTypeError, InvalidArgumentError, RecordBindingError
 from .._source_links import file_line_text
-from . import _render_utils
-from ._render_utils import RENDER_TIMEOUT_SECONDS
+
+if TYPE_CHECKING:
+    import graphviz
+
+# graphviz (and ``_render_utils``, which imports it) load at render time only:
+# every capture imports this module for ``capture_model_source_code`` /
+# ``make_weak_model_ref``, and a capture must run without graphviz installed.
 
 CodePanelMode: TypeAlias = Literal["forward", "class", "init+forward"]
 CodePanelOption: TypeAlias = bool | CodePanelMode | Callable[[nn.Module], str]
@@ -343,6 +347,10 @@ def render_code_panel_svg(source_text: str) -> str:
         SVG document for the code panel.
     """
 
+    import graphviz
+
+    from . import _render_utils
+
     panel = graphviz.Digraph()
     # "#FFFFFF00" (alpha 0), not "transparent": dot 2.43 does not know the
     # keyword and warns on every code-panel render -- a warning the D24
@@ -370,7 +378,7 @@ def render_code_panel_svg(source_text: str) -> str:
     completed = _render_utils.run_bounded_subprocess(
         [panel.engine, "-Tsvg"],
         input=panel.source.encode("utf-8"),
-        timeout=RENDER_TIMEOUT_SECONDS,
+        timeout=_render_utils.RENDER_TIMEOUT_SECONDS,
     )
     return completed.stdout.decode("utf-8")
 
