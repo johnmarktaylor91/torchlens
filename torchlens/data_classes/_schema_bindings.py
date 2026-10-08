@@ -287,6 +287,7 @@ STORAGE_BINDINGS: dict[str, dict[str, StorageBinding]] = {
         "_raw_transform_escape_detected": StorageBinding(StorageKind.RUNTIME),
         "_raw_dynamo_region_detected": StorageBinding(StorageKind.RUNTIME),
         "_raw_event_shape_hash": StorageBinding(StorageKind.RUNTIME),
+        "_raw_call_fingerprint": StorageBinding(StorageKind.RUNTIME),
         "_output_container_specs_by_raw_label": StorageBinding(StorageKind.RUNTIME),
         "_buffer_accessor": StorageBinding(StorageKind.RUNTIME),
         "_buffer_write_tracker": StorageBinding(StorageKind.RUNTIME),

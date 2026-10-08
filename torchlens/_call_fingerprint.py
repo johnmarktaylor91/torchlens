@@ -32,13 +32,6 @@ from torch.utils.hooks import RemovableHandle
 from . import _state
 from .backends.torch._tl import get_module_meta
 
-__all__ = [
-    "fingerprint_native_forward",
-    "fingerprinting",
-    "install_module_token_hooks",
-    "module_fingerprint_address",
-]
-
 
 def module_fingerprint_address(module: nn.Module, fallback: str) -> str:
     """Return the address capture uses for ``module``'s fingerprint token.
