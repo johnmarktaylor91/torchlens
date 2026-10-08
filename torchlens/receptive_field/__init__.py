@@ -43,7 +43,6 @@ from ._types import (
 )
 from ._validation import cross_validate
 from ._view import ReceptiveFieldView
-from ._viz import node_spec
 
 # Importing the package executes built-in rule decorators once, before any public
 # descriptor, projective, or validation path can reach the geometry engines.
@@ -55,6 +54,37 @@ rules = _registered_rules
 if TYPE_CHECKING:
     from ..data_classes.op import Op
     from ..data_classes.trace import Trace
+    from ._viz import node_spec
+
+
+def __getattr__(name: str) -> object:
+    """Resolve the Pillow-backed drawing helper ``node_spec`` on first access.
+
+    ``_viz`` imports Pillow at module level, and forward validation imports
+    this package for its error types, so an eager import would make
+    ``tl.validate`` fail where Pillow is not installed.
+
+    Parameters
+    ----------
+    name:
+        Attribute requested from the package.
+
+    Returns
+    -------
+    object
+        The resolved attribute.
+
+    Raises
+    ------
+    AttributeError
+        If ``name`` is not a lazily resolved attribute.
+    """
+
+    if name == "node_spec":
+        from ._viz import node_spec
+
+        return node_spec
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 @dataclass(frozen=True)
