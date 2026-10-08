@@ -192,7 +192,7 @@ def test_legacy_rerun_repeats_exactly(mlp: Any, door: str) -> None:
 
 
 @pytest.mark.xfail(
-    strict=True, reason="B0 family: do(engine='rerun') re-applies earlier edits (1x, 3x, 7x)"
+    strict=True, reason="F5 (B0 family): do(engine='rerun') re-applies earlier edits (1x, 3x, 7x)"
 )
 def test_rerun_engine_do_composes_once_per_call(mlp: Any) -> None:
     model, x, _ = mlp
@@ -237,7 +237,7 @@ def _all_doors(
 
 
 @pytest.mark.xfail(
-    strict=True, reason="F5: post-hoc tl.module() also matches the synthetic output node"
+    strict=True, reason="F3: post-hoc tl.module() also matches the synthetic output node"
 )
 def test_last_module_edit_applies_once_on_every_door(mlp: Any) -> None:
     model, x, _ = mlp
