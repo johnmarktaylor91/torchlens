@@ -526,8 +526,11 @@ attribution-target alias. See the [attribution reference](attribution.md).
   `torchlens.validation.validate_forward_pass` accepts the same two keywords.
 
 **Session admin**
-: `tl.release_model` releases a traced model from persistent TorchLens preparation
-  (restoring whole-model pickle / `torch.save` serializability); `tl.clear_capture_cache`
+: `tl.release_model` evicts TorchLens's module metadata and preparation bookkeeping for a
+  traced model and normalizes plain attributes holding torch functions from the other wrap
+  epoch, so whole-model pickle / `torch.save` survive later wrap-state changes (a capture
+  itself leaves no TorchLens callable on the model: submodule `forward` wrappers are
+  session-scoped); `tl.clear_capture_cache`
   empties the capture cache; `tl.io.list_logs` / `tl.io.reset_naming_counter` manage log
   bookkeeping.
 

@@ -282,7 +282,7 @@ def _door_bind(model: _Model) -> None:
 def _door_validate(model: _Model) -> None:
     """``tl.validate`` (deep-copies and captures internally)."""
 
-    tl.validate(model, _X)
+    tl.validate(model, _X, scope="forward")
 
 
 _DOORS: dict[str, Callable[[_Model], None]] = {

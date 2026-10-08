@@ -102,6 +102,10 @@ class ModuleCaptureWorkspace:
     module_build_data: dict[str, Any] = field(default_factory=dict)
     module_metadata: dict[Any, Any] = field(default_factory=dict)
     module_forward_args: dict[Any, Any] = field(default_factory=dict)
+    # (module, prior instance ``forward`` or the absent sentinel, installed
+    # wrapper) per decorated submodule; installed at session start, emptied by
+    # the session cleanup that puts every prior forward back.
+    session_forward_wrappers: list[tuple[Any, Any, Any]] = field(default_factory=list)
 
 
 def _init_module_hierarchy_data() -> dict[str, Any]:
