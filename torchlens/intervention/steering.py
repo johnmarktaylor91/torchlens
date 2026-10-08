@@ -16,7 +16,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .binding import BindReport
+from .binding import BindReport, _ArmedLazyOutput
+from .errors import BindingRuntimeError
 from .spec import InterventionSpec
 
 
@@ -72,10 +73,27 @@ def steer_generate(
     SteerResult
         ``outputs`` (the model's own return value) and ``report`` (the
         binding's ledger). Never a Trace.
+
+    Raises
+    ------
+    BindingRuntimeError
+        ``bind_lazy_output`` when the model's ``generate`` returns a lazy
+        output (a generator or other iterator), whose report cannot settle
+        before this wrapper returns; the lazy output is closed unrun.
     """
 
     binding = spec.bind(model, on_zero_fire=on_zero_fire)
     outputs = binding.generate(inputs, **generate_kwargs)
+    if isinstance(outputs, _ArmedLazyOutput):
+        outputs._close(refuse_zero_fire=False)
+        raise BindingRuntimeError(
+            f"{type(model).__name__}.generate returned a lazy output; steer_generate "
+            "pairs the outputs with a settled report at return, and a lazy "
+            "generation has not run yet (it was closed unrun)",
+            code="bind_lazy_output",
+            remedy="use spec.bind(model).generate(...) and iterate it; the report "
+            "settles on .last_report when the iteration is exhausted or closed",
+        )
     report = binding.last_report
     if report is None:
         # unreachable in practice: generate() always settles a report

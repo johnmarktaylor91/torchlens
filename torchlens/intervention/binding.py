@@ -32,6 +32,7 @@ from __future__ import annotations
 import threading
 import time
 from collections import defaultdict
+from collections.abc import Callable, Generator, Iterator
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -841,13 +842,199 @@ def _lower_rules(
     return boundary_plans, op_level_plans, resolved
 
 
+def _is_lazy_output(output: Any, *, door: str) -> bool:
+    """Whether a bound call's output defers forwards until the caller iterates.
+
+    Parameters
+    ----------
+    output:
+        The value the bound target returned.
+    door:
+        The bound door (``"call"`` / ``"generate"``), named in the refusal.
+
+    Returns
+    -------
+    bool
+        ``True`` for a synchronous lazy iterator (a generator or any other
+        ``Iterator``); ``False`` for an eager value.
+
+    Raises
+    ------
+    BindingRuntimeError
+        ``bind_lazy_output`` for an async generator, async iterator,
+        coroutine, or other awaitable: its body runs inside an event loop,
+        where an armed runtime would leak into every other task scheduled
+        between its steps, so it is refused rather than run unsteered.
+    """
+
+    import inspect
+    from collections.abc import AsyncIterator, Awaitable
+
+    if isinstance(output, (AsyncIterator, Awaitable)) or inspect.isasyncgen(output):
+        if inspect.iscoroutine(output):
+            output.close()  # never awaited: release it without a runtime warning
+        raise BindingRuntimeError(
+            f"the bound {door} returned an async lazy output "
+            f"({type(output).__name__}); its forwards would run inside an event "
+            "loop after the call returned, where the binding cannot keep its "
+            "edits scoped to them, so it refuses rather than run them unsteered",
+            code="bind_lazy_output",
+            remedy="return a synchronous generator or an eager value from the "
+            "model's generate/forward, or drive your async loop around bound(x) "
+            "calls yourself",
+        )
+    return isinstance(output, Iterator)
+
+
+class _ArmedLazyOutput(Generator[Any, Any, Any]):
+    """A lazy bound output whose every step runs with the runtime armed.
+
+    Holds the call's session and the binding lock from the moment the bound
+    target returns until the iteration ends. Each ``send``/``throw``/``close``
+    arms the runtime, advances the model's iterator one step, and disarms
+    again, so the edits apply to the model's own forwards and never to
+    caller code that runs between steps. The report settles exactly once, on
+    exhaustion, ``close()``, an exception, or garbage collection of an
+    unfinished output; exhaustion and explicit ``close()`` apply the
+    zero-fire policy.
+    """
+
+    def __init__(
+        self, binding: BoundInterventionExecutor, session: _BindSession, inner: Iterator[Any]
+    ) -> None:
+        """Adopt one open call: its session, its held lock, its lazy output."""
+
+        self._binding = binding
+        self._session = session
+        self._inner = inner
+        self._finished = False
+        self._stepping = threading.Lock()
+
+    def __iter__(self) -> _ArmedLazyOutput:
+        """Return this output."""
+
+        return self
+
+    def __next__(self) -> Any:
+        """Advance one step with the runtime armed."""
+
+        return self.send(None)
+
+    def send(self, value: Any) -> Any:
+        """Send ``value`` into the model's generator for one armed step.
+
+        Raises
+        ------
+        TypeError
+            When a non-``None`` value is sent to a plain (non-generator)
+            iterator, which cannot receive it.
+        """
+
+        inner = self._inner
+        if value is None:
+            return self._step(lambda: next(inner))
+        sender = getattr(inner, "send", None)
+        if sender is None:
+            raise TypeError(
+                f"cannot send a value into a plain lazy iterator ({type(inner).__name__})"
+            )
+        return self._step(lambda: sender(value))
+
+    def throw(self, typ: Any, val: Any = None, tb: Any = None) -> Any:  # type: ignore[override]
+        """Raise an exception inside the model's generator for one armed step."""
+
+        exc = typ if val is None and tb is None else typ(val).with_traceback(tb)
+        thrower = getattr(self._inner, "throw", None)
+        if thrower is None:
+
+            def _raise() -> Any:
+                """Raise in place of a plain iterator, which cannot receive it."""
+
+                raise exc
+
+            return self._step(_raise)
+        return self._step(lambda: thrower(exc))
+
+    def close(self) -> None:
+        """Close the model's iterator (armed), settle, apply the zero-fire policy."""
+
+        self._close(refuse_zero_fire=True)
+
+    def __del__(self) -> None:
+        """Settle an unfinished output when it is dropped (no zero-fire raise)."""
+
+        if not getattr(self, "_finished", True):
+            self._close(refuse_zero_fire=False)
+
+    def _close(self, *, refuse_zero_fire: bool) -> None:
+        """Close the inner iterator under the armed runtime, then settle once."""
+
+        closer = getattr(self._inner, "close", None)
+        self._acquire_step()
+        try:
+            if self._finished:
+                return
+            try:
+                if closer is not None:
+                    with _ArmedRuntime(self._binding, self._session):
+                        closer()
+            except BaseException as exc:
+                self._settle(error=exc)
+                raise
+            report = self._settle(error=None)
+        finally:
+            self._stepping.release()
+        if refuse_zero_fire:
+            self._binding._refuse_zero_fire(report)
+
+    def _step(self, advance: Callable[[], Any]) -> Any:
+        """Run one step of the model's iterator with the runtime armed."""
+
+        self._acquire_step()
+        try:
+            if self._finished:
+                raise StopIteration
+            try:
+                with _ArmedRuntime(self._binding, self._session):
+                    return advance()
+            except StopIteration:
+                report = self._settle(error=None)
+                self._binding._refuse_zero_fire(report)
+                raise
+            except BaseException as exc:
+                self._settle(error=exc)
+                raise
+        finally:
+            self._stepping.release()
+
+    def _acquire_step(self) -> None:
+        """Refuse a concurrent or re-entrant step (Python generator semantics).
+
+        Raises
+        ------
+        ValueError
+            When another step of this output is already running.
+        """
+
+        if not self._stepping.acquire(blocking=False):
+            raise ValueError("bound lazy output already executing")
+
+    def _settle(self, *, error: BaseException | None) -> BindReport:
+        """Settle the report once and release the binding lock."""
+
+        self._finished = True
+        message = None if error is None else f"{type(error).__name__}: {error}"
+        return self._binding._finish(self._session, error=message)
+
+
 class BoundInterventionExecutor:
     """The bound intervention executor: one spec, one model, changing neither.
 
     Serial, non-reentrant, capture-free, and never an ``nn.Module``. The call
     is transparent (``bound(x)`` returns exactly the model's own output);
     ``generate()`` holds the runtime across the whole generation with
-    pass-qualified rule semantics; the ledger is out-of-band on
+    pass-qualified rule semantics, including a lazy generation whose
+    forwards run while the caller iterates; the ledger is out-of-band on
     ``.last_report``; ``.spec``/``.base_model`` are read-only; runtime state
     installs and removes atomically on success or exception; zero-fire rules
     fail closed after the call by default (FOLD-A3); there is no binding
@@ -885,7 +1072,12 @@ class BoundInterventionExecutor:
 
     @property
     def last_report(self) -> BindReport | None:
-        """The most recent call's out-of-band ledger (``None`` before any call)."""
+        """The most recent call's out-of-band ledger.
+
+        ``None`` before any call, and while a lazy output (a generator
+        returned by ``generate``) is still open: its report settles when the
+        iteration is exhausted, closed, or raises.
+        """
 
         return self._last_report
 
@@ -1031,34 +1223,73 @@ class BoundInterventionExecutor:
         return self._run(target, args, kwargs, door="generate")
 
     def _run(self, target: Any, args: tuple, kwargs: dict, *, door: str) -> Any:
-        """One serial bound call: arm, execute, settle, report."""
+        """One serial bound call: arm, execute, settle, report.
+
+        A lazy output (a generator or other iterator) runs its forwards while
+        the caller iterates, after ``target`` has returned. It is handed back
+        wrapped in :class:`_ArmedLazyOutput`, which keeps this call's session
+        and binding lock, re-arms the runtime around every step, and settles
+        the report when the iteration ends. Async lazy outputs refuse typed
+        (``bind_lazy_output``).
+        """
 
         if not self._lock.acquire(blocking=False):
             raise BindingRuntimeError(
                 "this binding is already executing; v1 bindings are serial and "
-                "non-reentrant (one call at a time, never from inside a hook)",
+                "non-reentrant (one call at a time, never from inside a hook; a "
+                "lazy generate output holds the binding until it is exhausted "
+                "or closed)",
                 code="binding_reentrant_call",
-                remedy="wait for the active call to return, or make separate "
-                "bindings from the same immutable spec for concurrent workers",
+                remedy="wait for the active call to return (exhaust or close() "
+                "an open lazy output), or make separate bindings from the same "
+                "immutable spec for concurrent workers",
             )
         session = _BindSession(self, door)
         error: str | None = None
-        output: Any = None
+        report: BindReport
+        handed_off = False
         try:
             try:
                 with _ArmedRuntime(self, session):
                     output = target(*args, **kwargs)
+                if _is_lazy_output(output, door=door):
+                    lazy = _ArmedLazyOutput(self, session, output)
+                    object.__setattr__(self, "_last_report", None)
+                    handed_off = True
+                    return lazy
             except BaseException as exc:
                 error = f"{type(exc).__name__}: {exc}"
                 raise
         finally:
-            report = self._settle(session, door=door, error=error)
+            if not handed_off:
+                report = self._finish(session, error=error)
+        self._refuse_zero_fire(report)
+        return output
+
+    def _finish(self, session: _BindSession, *, error: str | None) -> BindReport:
+        """Settle one call's report, publish it, and release the binding lock."""
+
+        try:
+            report = self._settle(session, door=session.door, error=error)
             object.__setattr__(self, "_last_report", report)
+        finally:
             self._lock.release()
+        return report
+
+    def _refuse_zero_fire(self, report: BindReport) -> None:
+        """Apply the fail-closed zero-fire policy to one settled report.
+
+        Raises
+        ------
+        BindingRuntimeError
+            ``bind_zero_fire`` when a rule never fired and the policy is
+            ``"error"``.
+        """
+
         if self._on_zero_fire == "error" and report.zero_fire_rule_ids:
             names = ", ".join(report.zero_fire_rule_ids)
             raise BindingRuntimeError(
-                f"rule(s) [{names}] never fired during this bound {door}; "
+                f"rule(s) [{names}] never fired during this bound {report.door}; "
                 "zero-fire rules fail closed after the call (the model's side "
                 "effects may already have occurred; the full report is retained "
                 "on .last_report)",
@@ -1067,7 +1298,6 @@ class BoundInterventionExecutor:
                 "disclosure-only settlement with "
                 "spec.bind(model, on_zero_fire='disclose')",
             )
-        return output
 
     def _settle(self, session: _BindSession, *, door: str, error: str | None) -> BindReport:
         """Build the out-of-band ledger for one finished (or failed) call."""
