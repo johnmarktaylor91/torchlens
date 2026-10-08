@@ -661,6 +661,11 @@ _PROCESS_CACHES = frozenset(
         ("torchlens/transforms/_projection.py", "_BASIS_STORE"),
         ("torchlens/transforms/_projection.py", "_STORE_BYTES"),
         ("torchlens/transforms/_srp.py", "_EXTENT_BINDINGS"),
+        # Rule-identity content tokens: bounded (256) FIFO memo keyed by
+        # id(tensor), each entry weakly referencing its tensor and pinned to
+        # the version counter it was hashed at, so a dead or edited tensor
+        # never hits.
+        ("torchlens/intervention/_content_identity.py", "_TENSOR_TOKEN_MEMO"),
         # Weightsfree (F33) process-lifetime memos: the per-code-object
         # decomposition-frame classification (bounded by loaded code) and the
         # one-per-process D20 meta identity self-test verdict.
