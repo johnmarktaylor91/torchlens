@@ -5,6 +5,11 @@
 2. `pause_logging()` must wrap internal torch ops during logging (`safe_copy`,
    `activation_transform`). `get_memory_amount()` deliberately does NOT toggle it:
    it resolves the unwrapped size methods once instead (hot-path perf, `08dca260`).
+   The pause also keeps an internal call out of `Trace._raw_call_fingerprint`, the
+   ordered call/module-entry fingerprint the guarded fast re-run compares against a
+   native forward (`torchlens/_call_fingerprint.py`): an unpaused internal torch call,
+   even one that logs no op (`register_hook`, `element_size`), breaks that equality,
+   and `tests/test_call_fingerprint.py` pins it.
 3. Wrappers are persistent after lazy installation; `_logging_enabled` gates behavior.
 4. FIELD_ORDER constants and class definitions must stay in sync.
 5. Module suffixes are appended to `equivalence_class` at op creation before loop detection.
