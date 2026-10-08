@@ -13,14 +13,14 @@
 # Regenerate (and re-review the diff) with:
 #   uv pip compile --generate-hashes --python-version 3.11 \
 #     --python-platform x86_64-unknown-linux-gnu \
-#     <(echo 'python-semantic-release==10.7.0'; echo 'build==1.5.0'; \
+#     <(echo 'python-semantic-release==10.7.0'; echo 'build==1.6.1'; \
 #        echo 'setuptools>=83') \
 #     -o .github/workflows/release-requirements.txt
 annotated-types==0.8.0 \
     --hash=sha256:13b2beaad985e05e2d6407ee4c4f35590b11f8d693a258a561055cac8f64cab7 \
     --hash=sha256:f072f4d804ea359e4eaf198b1af7a8b0943881a87f31bb764f8bf219bb9419e0
     # via pydantic
-build==1.5.0 \
+build==1.6.1 \
     --hash=sha256:13f3eecb844759ab66efec90ca17639bbf14dc06cb2fdf37a9010322d9c50a6f \
     --hash=sha256:302c22c3ba2a0fd5f3911918651341ebb3896176cbdec15bd421f80b1afc7647
     # via -r /dev/fd/63
