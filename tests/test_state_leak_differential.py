@@ -32,6 +32,17 @@ from torch import nn
 import torchlens as tl
 from torchlens import _state
 
+# The guard asserts VALUES against an eager oracle; disclosure warnings that a
+# correct staged rerun or fan-out also emits must not decide the outcome.
+pytestmark = [
+    pytest.mark.filterwarnings(
+        "ignore::torchlens.intervention.errors.ControlFlowDivergenceWarning"
+    ),
+    pytest.mark.filterwarnings("ignore::torchlens.intervention.errors.MultiMatchWarning"),
+    pytest.mark.filterwarnings("ignore:Capture-time intervention selector:UserWarning"),
+    pytest.mark.filterwarnings("ignore:Rerun hook plan entries fired at zero sites"),
+]
+
 _HOOK_DICTS = (
     "_forward_hooks",
     "_forward_pre_hooks",
