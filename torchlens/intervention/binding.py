@@ -277,7 +277,11 @@ class _BindSession:
         self.rule_scratch: defaultdict[str, dict[str, Any]] = defaultdict(dict)
         self.fires: list[dict[str, Any]] = []
         self.fire_records: list[Any] = []
-        self.rule_fire_counts: dict[str, int] = {rule.rule_id: 0 for rule in binding.spec.rules}
+        # Rule ids are content-derived and read live (a staged tensor can be
+        # edited in place between calls), so one call keys every ledger by
+        # the identity its rules had when the call started.
+        self.rule_ids: dict[int, str] = {id(rule): rule.rule_id for rule in binding.spec.rules}
+        self.rule_fire_counts: dict[str, int] = dict.fromkeys(self.rule_ids.values(), 0)
         self.start = time.monotonic()
 
     def record_fire(
@@ -316,10 +320,11 @@ class _BindSession:
             replaced=replaced,
         )
         self.fire_records.append(record)
-        self.rule_fire_counts[plan.rule.rule_id] += 1
+        rule_id = self.rule_ids[id(plan.rule)]
+        self.rule_fire_counts[rule_id] += 1
         self.fires.append(
             {
-                "rule_id": plan.rule.rule_id,
+                "rule_id": rule_id,
                 "target": site.target_label,
                 "site_key": site.site_key,
                 "container_path": tuple(site.container_path),
@@ -443,7 +448,7 @@ def _consider_op(
     if not outputs:
         return out_orig
     binding = session.binding
-    plans_by_rule = {plan.rule.rule_id: plan for plan in plans}
+    plans_by_rule = {id(plan.rule): plan for plan in plans}
     replacements: dict[tuple[Any, ...], Any] = {}
     module_frame = session.module_stack[-1] if session.module_stack else None
     output_ordinal = 0
@@ -494,7 +499,7 @@ def _consider_op(
             ) from exc
         if rule is None:
             continue
-        plan = plans_by_rule.get(rule.rule_id)
+        plan = plans_by_rule.get(id(rule))
         if plan is None:
             # A module-boundary rule can never match an op context (boundary
             # rules apply at real module hooks); nothing to fire here.
@@ -511,7 +516,7 @@ def _consider_op(
                 "site_key": site_key,
                 "pass_index": max(session.root_passes, 1),
             },
-            ctx=session.rule_scratch[rule.rule_id],
+            ctx=session.rule_scratch[session.rule_ids[id(rule)]],
             run_ctx=session.run_ctx,
         )
         hooked = _execute_hook(plan.hook_callable, out, hook_ctx)
@@ -721,7 +726,7 @@ def _make_boundary_hook(
                     "module_address": address,
                     "pass_index": pass_index,
                 },
-                ctx=session.rule_scratch[plan.rule.rule_id],
+                ctx=session.rule_scratch[session.rule_ids[id(plan.rule)]],
                 run_ctx=session.run_ctx,
             )
             hooked = _execute_hook(plan.hook_callable, out, hook_ctx)
@@ -780,10 +785,11 @@ def _lower_rules(
     spec: InterventionSpec,
     modules_by_address: dict[str, Any],
     aliases: dict[str, str] | None = None,
-) -> tuple[list[_RulePlan], list[_RulePlan], dict[str, tuple[str, ...]]]:
+) -> tuple[list[_RulePlan], list[_RulePlan], dict[int, tuple[str, ...]]]:
     """Lower every rule and resolve its static anchors before ANY forward.
 
-    Returns (boundary plans, op-level plans, per-rule resolved targets).
+    Returns (boundary plans, op-level plans, resolved targets keyed by
+    ``id(rule)``; each call's report re-keys them by that call's rule ids).
 
     Raises
     ------
@@ -795,7 +801,7 @@ def _lower_rules(
     aliases = aliases or {}
     boundary_plans: list[_RulePlan] = []
     op_level_plans: list[_RulePlan] = []
-    resolved: dict[str, tuple[str, ...]] = {}
+    resolved: dict[int, tuple[str, ...]] = {}
     unresolved: list[str] = []
     for rule in spec.rules:
         plan = _RulePlan(rule)
@@ -828,7 +834,7 @@ def _lower_rules(
             boundary_plans.append(plan)
         else:
             op_level_plans.append(plan)
-        resolved[rule.rule_id] = tuple(dict.fromkeys(hits)) or ("op-level",)
+        resolved[id(rule)] = tuple(dict.fromkeys(hits)) or ("op-level",)
     if unresolved:
         raise BindingPreflightError(
             "static anchors did not resolve against the base model before "
@@ -1322,7 +1328,10 @@ class BoundInterventionExecutor:
             model_class=type(self._base_model).__qualname__,
             model_training=bool(getattr(self._base_model, "training", False)),
             grad_enabled=torch.is_grad_enabled(),
-            resolved_static_targets=dict(self._resolved_static_targets),
+            resolved_static_targets={
+                session.rule_ids[key]: targets
+                for key, targets in self._resolved_static_targets.items()
+            },
             fire_count=fire_count,
             rule_fire_counts=dict(session.rule_fire_counts),
             fires=tuple(session.fires),
