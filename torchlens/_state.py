@@ -1143,7 +1143,9 @@ def active_logging(trace: "Trace") -> Iterator[None]:
             _call_fingerprint = previous_fingerprint
         # Runtime-only (FieldPolicy.DROP): the ordered torch-call structure the
         # guarded fast re-run compares against (see ``CallFingerprint``).
-        trace._raw_call_fingerprint = fingerprint.value
+        # Admission tests drive this with stateless ``object()`` sentinels.
+        if hasattr(trace, "__dict__"):
+            trace._raw_call_fingerprint = fingerprint.value
 
 
 class _PauseLogging:
