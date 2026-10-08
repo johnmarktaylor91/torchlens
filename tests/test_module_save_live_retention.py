@@ -285,3 +285,74 @@ def test_module_union_addresses_classification(selector, expected):
     """Only pure ``tl.module`` unions settle at module exit."""
 
     assert selector_eval.module_union_addresses(selector) == expected
+
+
+class _ViewMutate(nn.Module):
+    """The output op's tensor is mutated through a view before the module returns."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        a = self.lin(x)
+        a[0].zero_()
+        return a
+
+
+class _DataMutate(nn.Module):
+    """The output tensor is mutated through ``.data``, outside autograd tracking."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        a = torch.relu(self.lin(x))
+        a.data.mul_(3.0)
+        return a
+
+
+class _SetItem(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        a = self.lin(x)
+        a[1] = 5.0
+        return a
+
+
+class _Mutators(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.view_mut = _ViewMutate()
+        self.data_mut = _DataMutate()
+        self.set_item = _SetItem()
+        self.head = nn.Linear(4, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.head(self.set_item(self.data_mut(self.view_mut(x))) + 1)
+
+
+@pytest.mark.parametrize("address", ["view_mut", "data_mut", "set_item"])
+def test_module_output_mutated_before_exit_matches_per_op_escrow(address, monkeypatch):
+    """A tensor mutated between its op and the module exit saves what the op-time copy saw."""
+
+    torch.manual_seed(0)
+    model, x = _Mutators().eval(), torch.randn(3, 4)
+    selector = tl.module(address)
+    full_log = tl.trace(model, x)
+    live = tl.trace(model, x, save=selector)
+    with monkeypatch.context() as patch:
+        patch.setattr(selector_eval, "module_union_addresses", lambda _selector: None)
+        escrowed = tl.trace(model, x, save=selector)
+
+    full = _saved(full_log)
+    escrowed_saved = _saved(escrowed)
+    live_saved = _saved(live)
+    assert set(live_saved) == set(escrowed_saved)
+    for label, op in live_saved.items():
+        assert torch.equal(op.out, escrowed_saved[label].out), f"{address}: {label} vs escrow"
+        assert torch.equal(op.out, full[label].out), f"{address}: {label} vs full trace"
