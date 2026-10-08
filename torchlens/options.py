@@ -419,11 +419,14 @@ class CaptureOptions:
     layers_to_save:
         Activation layer selector to capture.
     transform:
-        Optional callable applied once to the user input before ``model.forward``.
+        Optional callable applied once to the user input before ``model.forward``;
+        the untransformed input is kept as ``Trace.raw_input``.
     save_raw_input:
-        Raw user-input save policy for portable bundles. ``"small"`` stores a
-        bounded representation, ``True`` stores the full object, and ``False``
-        drops it when saving.
+        Save policy for ``Trace.raw_input`` in portable bundles. ``"small"``
+        stores a bounded representation, ``True`` stores the full object, and
+        ``False`` drops it when saving. It does not populate ``raw_input``:
+        that value is kept only with ``transform`` or for auto-coerced inputs
+        (text, images, arrays). An explicit policy that saved nothing warns.
     batch_render:
         Raw-input batch rendering policy for visualization. Supported values are
         ``"auto"``, ``"all"``, ``"first"``, ``"first_n:<N>"``, and

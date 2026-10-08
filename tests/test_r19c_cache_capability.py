@@ -14,6 +14,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens.errors import TorchLensWarning
 
 
 def _tiny_model() -> nn.Module:
@@ -131,11 +132,13 @@ def test_cache_key_distinguishes_save_raw_input(tmp_path):
     )
     assert first.capture_cache_hit is False
 
-    second = tl.trace(
-        model,
-        x,
-        capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir, save_raw_input=True),
-    )
+    # No transform= here, so the explicit policy has nothing to save and warns.
+    with pytest.warns(TorchLensWarning, match="save_raw_input"):
+        second = tl.trace(
+            model,
+            x,
+            capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir, save_raw_input=True),
+        )
     assert second.capture_cache_hit is False
 
 

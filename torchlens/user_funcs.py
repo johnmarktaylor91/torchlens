@@ -2864,7 +2864,9 @@ def trace(
     _filter_trace_kwargs_for_backend(public_trace_kwargs, resolved_spec)
     _enforce_capability_option_gates(public_trace_kwargs, resolved_spec)
     _refuse_non_torch_episode(public_trace_kwargs, resolved_spec)
-    return cast("Trace", resolved_spec.capture_trace(**public_trace_kwargs))
+    captured = cast("Trace", resolved_spec.capture_trace(**public_trace_kwargs))
+    _warn_on_inert_raw_io_policies(capture, captured)
+    return captured
 
 
 def _refuse_non_torch_episode(public_trace_kwargs: dict[str, Any], resolved_spec: Any) -> None:
@@ -2880,47 +2882,119 @@ def _refuse_non_torch_episode(public_trace_kwargs: dict[str, Any], resolved_spec
             )
 
 
-def _warn_if_save_raw_output_inert(capture_options: CaptureOptions) -> None:
-    """Warn when an explicit ``save_raw_output`` has no ``output_transform`` to save.
-
-    ``Trace.raw_output`` is the output of ``output_transform``;
-    ``save_raw_output`` only sets how that value is written into portable
-    bundles. Without a transform there is nothing to save, so an explicit
-    truthy policy is inert and ``raw_output`` stays ``None``.
+def _inert_raw_io_policy(
+    capture: CaptureOptions, trace: object, policy_field: str, transform_field: str, value: str
+) -> bool:
+    """Return whether an explicit raw-I/O save policy left its Trace field empty.
 
     Parameters
     ----------
-    capture_options:
-        Resolved capture options for this trace.
+    capture:
+        The ``capture=`` options the caller passed.
+    trace:
+        Capture product returned by the backend.
+    policy_field:
+        ``"save_raw_input"`` or ``"save_raw_output"``.
+    transform_field:
+        The transform that produces the saved value.
+    value:
+        The Trace field the policy saves.
+
+    Returns
+    -------
+    bool
+        ``True`` when the policy is explicit and truthy, the transform is unset,
+        and the Trace field is ``None``.
+    """
+
+    return (
+        capture.is_field_explicit(policy_field)
+        and getattr(capture, policy_field) is not False
+        and getattr(capture, transform_field) is None
+        and getattr(trace, value, None) is None
+    )
+
+
+def _inert_raw_io_message(
+    policy: object, policy_field: str, transform_field: str, value: str
+) -> str:
+    """Build the teaching message for an inert raw-I/O save policy.
+
+    Parameters
+    ----------
+    policy:
+        The policy value the caller passed.
+    policy_field:
+        ``"save_raw_input"`` or ``"save_raw_output"``.
+    transform_field:
+        The transform that produces the saved value.
+    value:
+        The Trace field the policy saves.
+
+    Returns
+    -------
+    str
+        Message ending in the ``Remedy:`` tail the warning base parses.
+    """
+
+    return (
+        f"{policy_field}={policy!r} has no effect without {transform_field}: "
+        f"trace.{value} is filled by {transform_field}, and {policy_field} only "
+        f"sets how that value is written into saved bundles, so {value} stays None. "
+        f"Remedy: pass CaptureOptions({transform_field}=lambda value: value) to keep "
+        f"the value on trace.{value}; drop {policy_field} to silence this"
+    )
+
+
+def _warn_on_inert_raw_io_policies(capture: CaptureOptions | None, trace: object) -> None:
+    """Warn once per capture for each explicit raw-I/O save policy that saved nothing.
+
+    ``Trace.raw_input`` / ``Trace.raw_output`` hold the original input before
+    ``transform`` / the output of ``output_transform``; ``save_raw_input`` /
+    ``save_raw_output`` only set how those values are written into portable
+    bundles. Without the transform the value stays ``None`` (``raw_input`` is
+    also kept for auto-coerced ergonomic inputs), so an explicit truthy policy
+    saved nothing. Checked on the returned trace, so the warning matches what
+    the capture actually kept.
+
+    Parameters
+    ----------
+    capture:
+        The ``capture=`` options the caller passed, if any.
+    trace:
+        Capture product returned by the backend.
 
     Returns
     -------
     None
-        Warns with code ``save_raw_output_without_output_transform`` when the
-        policy is explicit and truthy and ``output_transform`` is unset.
+        Warns with code ``save_raw_input_without_transform`` and/or
+        ``save_raw_output_without_output_transform``.
     """
 
-    if (
-        not capture_options.is_field_explicit("save_raw_output")
-        or capture_options.save_raw_output is False
-        or capture_options.output_transform is not None
-    ):
+    if capture is None:
         return
     from .errors import TorchLensWarning as _TorchLensWarning
 
-    warnings.warn(
-        _TorchLensWarning(
-            f"save_raw_output={capture_options.save_raw_output!r} has no effect without "
-            "output_transform: trace.raw_output holds the output of output_transform, "
-            "and save_raw_output only sets how that value is written into saved "
-            "bundles, so raw_output stays None. "
-            "Remedy: pass CaptureOptions(output_transform=lambda out: out) to keep the "
-            "model output on trace.raw_output, or read saved sites with "
-            "trace.find_sites(...); drop save_raw_output to silence this",
-            code="save_raw_output_without_output_transform",
-        ),
-        stacklevel=user_stacklevel(),
-    )
+    if _inert_raw_io_policy(capture, trace, "save_raw_input", "transform", "raw_input"):
+        warnings.warn(
+            _TorchLensWarning(
+                _inert_raw_io_message(
+                    capture.save_raw_input, "save_raw_input", "transform", "raw_input"
+                ),
+                code="save_raw_input_without_transform",
+            ),
+            stacklevel=user_stacklevel(),
+        )
+    if _inert_raw_io_policy(capture, trace, "save_raw_output", "output_transform", "raw_output"):
+        warnings.warn(
+            _TorchLensWarning(
+                _inert_raw_io_message(
+                    capture.save_raw_output, "save_raw_output", "output_transform", "raw_output"
+                ),
+                code="save_raw_output_without_output_transform",
+            ),
+            stacklevel=user_stacklevel(),
+        )
 
 
 def _trace_torch_model(
@@ -3449,7 +3523,6 @@ def _trace_torch_model(
         )
         save_raw_input_policy = False
         save_raw_output_policy = False
-    _warn_if_save_raw_output_inert(capture_options)
     train_mode_explicit = capture_options.is_field_explicit("backward_ready")
     train_mode_value = capture_options.backward_ready
     inference_only_conflicts: list[str] = []
