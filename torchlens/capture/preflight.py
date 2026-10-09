@@ -4,8 +4,9 @@ The selector compiler already knows which ``layers_to_save`` spellings
 resolve LIVE during the forward (module paths, bare type names, negative
 ordinals, ``save=`` predicates — one site at near save-nothing cost) and
 which need FINAL graph numbering (labels like ``conv2d_5_15``, positive
-integer ordinals, ``output``/``identity`` prefixes — every candidate payload
-escrows until postprocess, the whole-graph candidate-class escrow). This
+integer ordinals, ``output``/``identity`` prefixes) or mix ``tl.module`` with
+other selector terms (every candidate payload escrows until postprocess, the
+whole-graph candidate-class escrow). This
 module publishes that verdict as a user-facing preflight, and — given a
 finished trace of the same model — NAMES the equivalent live-resolvable
 spelling for each deferred component ("``conv2d_5_15`` costs a whole-graph
@@ -31,8 +32,9 @@ class AddressVerdict:
     """One selection component's resolvability verdict.
 
     ``resolution`` is ``"live"`` (resolves during the forward; near
-    save-nothing cost) or ``"deferred"`` (needs final graph numbering; enters
-    the candidate-class escrow). ``equivalent_spelling`` names a
+    save-nothing cost) or ``"deferred"`` (needs final graph numbering, or
+    mixes ``tl.module`` with other selector terms; enters the candidate-class
+    escrow). ``equivalent_spelling`` names a
     live-resolvable module-path spelling for the SAME site where a trace was
     supplied and the component matched exactly one module-owned site;
     ``matched_labels`` is the trace-side disclosure of what the component
@@ -84,6 +86,17 @@ def _classify(component: Any) -> tuple[str, str]:
         return "live", "module paths and bare type names resolve during the forward"
     if isinstance(component, int):
         return "live", "negative ordinals resolve through a bounded rolling window"
+    from ..intervention.selectors import BaseSelector
+    from ..ir.selector_eval import module_union_addresses, selector_contains_kind
+
+    if isinstance(component, BaseSelector) and selector_contains_kind(component, "module"):
+        # Any selector naming a module resolves post hoc; only a pure ``|``
+        # union of module terms limits its escrow to matching module passes.
+        if module_union_addresses(component) is None:
+            verdict = ("deferred", "selectors mixing tl.module with other terms escrow every op")
+        else:
+            verdict = ("live", "tl.module unions escrow only the ops inside matching module passes")
+        return verdict
     return "live", "predicate selectors resolve per-op during the forward"
 
 

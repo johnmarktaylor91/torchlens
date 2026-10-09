@@ -161,6 +161,9 @@ class CaptureSession:
         default=None, init=False, repr=False
     )
     _gradient_warning_emitted: bool = field(default=False, init=False, repr=False)
+    _module_exit_open_passes: list[str] = field(default_factory=list, init=False, repr=False)
+    _module_exit_pending: list[int] = field(default_factory=list, init=False, repr=False)
+    _module_exit_kept: set[int] = field(default_factory=set, init=False, repr=False)
 
     def bind_event_spine(self, events: list[OpEvent]) -> None:
         """Bind the session to the active ``CaptureEvents`` operation list.
@@ -232,6 +235,9 @@ class CaptureSession:
             finally:
                 self._activation_spill_dir = None
         self._gradient_warning_emitted = False
+        self._module_exit_open_passes.clear()
+        self._module_exit_pending.clear()
+        self._module_exit_kept.clear()
         self.backend_token = None
         if self.outcome is not None:
             self.outcome = RunOutcome(
@@ -260,25 +266,13 @@ class CaptureSession:
 
         profile = self.plan.retention_profile
         if profile.activation_kind is RetentionKind.ACTIVATION and retain_activation:
-            with _state.pause_logging():
-                payload = safe_copy(tensor, detach_tensor=True)
-                nbytes = int(payload.nelement() * payload.element_size())
-            self.activation_escrow[raw_index] = ActivationEscrowPayload(payload, nbytes)
-            self.activation_escrow_ram_bytes += nbytes
-            self.activation_escrow_peak_ram_bytes = max(
-                self.activation_escrow_peak_ram_bytes,
-                self.activation_escrow_ram_bytes,
-            )
-            window = profile.activation_window
-            if window is not None:
-                while len(self.activation_escrow) > window:
-                    evicted = self.activation_escrow.pop(next(iter(self.activation_escrow)))
-                    if evicted.tensor is not None:
-                        self.activation_escrow_ram_bytes -= evicted.nbytes
-                    elif evicted.spill_path is not None:
-                        evicted.spill_path.unlink(missing_ok=True)
-                        self.activation_escrow_spilled_bytes -= evicted.nbytes
-            self._spill_activation_escrow_to_budget()
+            if profile.activation_module_exit_addresses is None:
+                self._retain_activation(raw_index, tensor)
+            elif self._module_exit_open_passes:
+                # Op-time copy, as the per-op escrow takes it: a module output can
+                # be mutated (through a view or ``.data``) before its module exits.
+                self._retain_activation(raw_index, tensor)
+                self._module_exit_pending.append(raw_index)
         if profile.gradient_kind is RetentionKind.GRADIENT_REFERENCE:
             self.gradient_reference_escrow[raw_index] = tensor
             with _state.pause_logging():
@@ -295,6 +289,136 @@ class CaptureSession:
                     oldest_index = next(iter(self.gradient_reference_escrow))
                     self.gradient_reference_escrow.pop(oldest_index)
             self._warn_for_extreme_gradient_retention()
+
+    def _matches_module_exit_selector(self, module_call_label: str) -> bool:
+        """Return whether a module pass matches the pure ``tl.module`` save selector.
+
+        Parameters
+        ----------
+        module_call_label
+            Pass-qualified module call label (``"address:call_index"``).
+
+        Returns
+        -------
+        bool
+            False when the capture has no module-exit addresses or does not
+            escrow activations.
+        """
+
+        profile = self.plan.retention_profile
+        addresses = profile.activation_module_exit_addresses
+        if addresses is None or profile.activation_kind is not RetentionKind.ACTIVATION:
+            return False
+        from ..ir.selector_eval import module_address_matches
+
+        return any(module_address_matches(module_call_label, address) for address in addresses)
+
+    def enter_module_pass(self, module_call_label: str) -> None:
+        """Open escrow for one module pass a pure ``tl.module`` selector matches.
+
+        A deferred selector built only from ``tl.module`` terms joined by
+        ``|`` resolves to module-output ops, and a module pass's outputs are
+        produced while it runs. Escrowing only the ops that run inside a
+        matching pass, and dropping the ones that did not become its outputs
+        when it exits, replaces escrowing every op's output.
+
+        Parameters
+        ----------
+        module_call_label
+            Pass-qualified module call label (``"address:call_index"``).
+        """
+
+        if self._matches_module_exit_selector(module_call_label):
+            self._module_exit_open_passes.append(module_call_label)
+
+    def escrow_module_exit_outputs(
+        self,
+        module_call_label: str,
+        outputs: tuple[tuple[int, Any], ...],
+    ) -> None:
+        """Keep the outputs of one matching module pass; release the rest at last exit.
+
+        Outputs escrowed at op time keep that copy. An output with no escrow
+        entry (a tensor produced before the pass opened and returned by it,
+        or the model output served live) is copied here. When the outermost
+        open matching pass exits, every op-time copy that did not become a
+        matching pass's output is released.
+
+        Parameters
+        ----------
+        module_call_label
+            Pass-qualified module call label (``"address:call_index"``).
+        outputs
+            ``(raw_index, tensor)`` for each labeled output of the module pass.
+        """
+
+        if not self._matches_module_exit_selector(module_call_label):
+            return
+        for raw_index, tensor in outputs:
+            self._module_exit_kept.add(raw_index)
+            if raw_index not in self.activation_escrow:
+                self._retain_activation(raw_index, tensor)
+        open_passes = self._module_exit_open_passes
+        if module_call_label in open_passes:
+            # Passes opened after this one and never closed (a submodule call
+            # whose exception the model caught) close with it.
+            del open_passes[open_passes.index(module_call_label) :]
+        if open_passes:
+            return
+        for raw_index in self._module_exit_pending:
+            if raw_index not in self._module_exit_kept:
+                self._release_activation(raw_index)
+        self._module_exit_pending.clear()
+
+    def _release_activation(self, raw_index: int) -> None:
+        """Drop one escrow entry and give back its RAM bytes or spill file.
+
+        Parameters
+        ----------
+        raw_index
+            Raw operation index that keys the escrow; absent entries are ignored.
+        """
+
+        released = self.activation_escrow.pop(raw_index, None)
+        if released is None:
+            return
+        if released.tensor is not None:
+            self.activation_escrow_ram_bytes -= released.nbytes
+        elif released.spill_path is not None:
+            released.spill_path.unlink(missing_ok=True)
+            self.activation_escrow_spilled_bytes -= released.nbytes
+
+    def _retain_activation(self, raw_index: int, tensor: Any) -> None:
+        """Copy one detached activation into escrow, windowed and spilled to budget.
+
+        Parameters
+        ----------
+        raw_index
+            Raw operation index that keys the escrow.
+        tensor
+            Live backend tensor to copy.
+        """
+
+        profile = self.plan.retention_profile
+        with _state.pause_logging():
+            payload = safe_copy(tensor, detach_tensor=True)
+            nbytes = int(payload.nelement() * payload.element_size())
+        self.activation_escrow[raw_index] = ActivationEscrowPayload(payload, nbytes)
+        self.activation_escrow_ram_bytes += nbytes
+        self.activation_escrow_peak_ram_bytes = max(
+            self.activation_escrow_peak_ram_bytes,
+            self.activation_escrow_ram_bytes,
+        )
+        window = profile.activation_window
+        if window is not None:
+            while len(self.activation_escrow) > window:
+                evicted = self.activation_escrow.pop(next(iter(self.activation_escrow)))
+                if evicted.tensor is not None:
+                    self.activation_escrow_ram_bytes -= evicted.nbytes
+                elif evicted.spill_path is not None:
+                    evicted.spill_path.unlink(missing_ok=True)
+                    self.activation_escrow_spilled_bytes -= evicted.nbytes
+        self._spill_activation_escrow_to_budget()
 
     def _spill_activation_escrow_to_budget(self) -> None:
         """Move oldest detached payloads to temporary files until RAM is within budget.
@@ -327,13 +451,19 @@ class CaptureSession:
                     "Deferred-selector escrow spill crossed its declared bound: "
                     f"{format_bytes(self.activation_escrow_spilled_bytes)} already "
                     f"spilled to temporary disk plus {format_bytes(candidate.nbytes)} "
-                    f"pending exceeds the {format_bytes(budget)} budget. The "
-                    "selector needs FINAL graph numbering (a label, positive "
-                    "ordinal, or output spelling), so every candidate payload is "
-                    "escrowed until postprocess. Address the same sites with a "
-                    "live-resolvable spelling instead — a module path, bare type "
-                    "name, or `save=` predicate saves one site at near "
-                    "save-nothing cost (see torchlens.capture.preflight."
+                    f"pending exceeds the {format_bytes(budget)} budget. Escrow "
+                    "holds candidate payloads until postprocess resolves the "
+                    "selector. A selector that needs FINAL graph numbering (an "
+                    "op label, a positive ordinal, or an output spelling) or "
+                    "that mixes `tl.module(...)` with other terms escrows every "
+                    "op's output. A selector made only of `tl.module(...)` terms "
+                    "joined by `|` escrows only the ops that run inside a "
+                    "matching module pass and keeps only its outputs, so "
+                    "reaching this bound with one means one pass's internals "
+                    "or the kept outputs exceed it. Address the same sites with a live spelling "
+                    "instead -- `tl.module(path)` on its own or unioned with "
+                    "other module paths, `tl.func(name)`, a bare op-type name, "
+                    "or a `save=` predicate (see torchlens.capture.preflight."
                     "address_preflight for the equivalent spelling).",
                     code="escrow_budget_exceeded",
                     spilled_bytes=self.activation_escrow_spilled_bytes,
@@ -785,7 +915,8 @@ def compile_legacy_capture_plan(
         EnrichmentLevel.METADATA if capture_mode == "exhaustive" else EnrichmentLevel.SHELL
     )
     options = getattr(trace, "_predicate_save_options", None)
-    deferred_activation = bool(getattr(trace, "_deferred_retention_selector", None))
+    deferred_selector = getattr(trace, "_deferred_retention_selector", None)
+    deferred_activation = bool(deferred_selector)
     deferred_gradients = bool(getattr(trace, "_deferred_gradient_selector", None))
     graph_connected = bool(getattr(trace, "backward_ready", False))
     from .._trace_selector_helpers import _selector_requires_unwindowed_escrow
@@ -802,6 +933,11 @@ def compile_legacy_capture_plan(
         activation_window = None
     if _selector_requires_unwindowed_escrow(grad_layers_to_save):
         gradient_window = None
+    from ..ir.selector_eval import module_union_addresses
+
+    # A pure ``tl.module`` union resolves only to module-output ops, so the
+    # session retains those at module exit instead of escrowing every op.
+    module_exit_addresses = module_union_addresses(deferred_selector)
     retention_profile = RetentionProfile(
         activation_kind=(
             RetentionKind.ACTIVATION
@@ -817,6 +953,7 @@ def compile_legacy_capture_plan(
         ),
         gradient_window=gradient_window if deferred_gradients else 0,
         spillable=deferred_activation and not graph_connected,
+        activation_module_exit_addresses=module_exit_addresses,
     )
     return CapturePlan.compile(
         projection_target=projection_target,

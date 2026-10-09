@@ -70,6 +70,13 @@ class RetentionProfile:
         not a capability). Crossing it refuses typed, naming the committed
         bytes and the cheap live-resolvable remedy; ``None`` disables the
         bound explicitly.
+    activation_module_exit_addresses
+        Module addresses (optionally pass-qualified) of a deferred selector
+        built only from ``tl.module`` terms joined by ``|``. When set, only
+        ops that run inside a matching module pass are escrowed, and the ones
+        that did not become a matching pass's output are released when the
+        outermost matching pass exits: module outputs are the only ops such a
+        selector can resolve to. ``None`` keeps per-op candidate escrow.
     """
 
     activation_kind: RetentionKind = RetentionKind.NONE
@@ -80,6 +87,7 @@ class RetentionProfile:
     activation_ram_budget_bytes: int = 64 * 1024 * 1024
     gradient_warning_threshold_bytes: int = 512 * 1024 * 1024
     escrow_spill_budget_bytes: int | None = DEFAULT_ESCROW_SPILL_BUDGET_BYTES
+    activation_module_exit_addresses: tuple[str, ...] | None = None
 
 
 def _freeze_intent(value: Any) -> Any:

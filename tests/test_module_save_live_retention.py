@@ -1,0 +1,391 @@
+"""``save=tl.module(...)`` escrows only ops inside matching module passes.
+
+A deferred selector made only of ``tl.module`` terms joined by ``|`` resolves to
+module-output ops and nothing else. Escrowing every op's output for it (and
+spilling the escrow to temporary files past the 64 MiB RAM budget) cost a
+sparse trace more than saving everything. The copy point stays the op-time copy
+the per-op escrow takes, because a module output can be mutated before its
+module exits. These tests pin three things:
+
+1. only ops that run inside a matching module pass are copied, and nothing is
+   written to disk;
+2. it saves the same ops, values and metadata as the per-op escrow path it
+   replaces, and as an independent save-everything trace;
+3. selectors that cannot settle at module exit keep the per-op escrow.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterator
+from contextlib import contextmanager
+from typing import Any
+
+import pytest
+import torch
+from torch import nn
+
+import torchlens as tl
+import torchlens.capture.session as session_mod
+import torchlens.ir.selector_eval as selector_eval
+
+
+class _Inner(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.relu(self.lin(x))
+
+
+class _Block(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.inner = _Inner()
+        self.lin2 = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.lin2(self.inner(x)) + x
+
+
+class _TupleOut(nn.Module):
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        return x * 2, x + 1
+
+
+class _DictOut(nn.Module):
+    def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
+        return {"a": torch.tanh(x), "b": x.sum(-1)}
+
+
+class _Model(nn.Module):
+    """Nested module, a module called twice, tuple and dict outputs."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.block = _Block()
+        self.shared = nn.Linear(4, 4)
+        self.tup = _TupleOut()
+        self.dct = _DictOut()
+        self.head = nn.Linear(4, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        h = self.block(x)
+        h = self.shared(h)
+        h = self.shared(torch.sigmoid(h))
+        a, b = self.tup(h)
+        d = self.dct(a * b)
+        return self.head(d["a"] + d["b"].unsqueeze(-1))
+
+
+def _model_and_input() -> tuple[nn.Module, torch.Tensor]:
+    torch.manual_seed(0)
+    return _Model().eval(), torch.randn(3, 4)
+
+
+@contextmanager
+def _counting(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, int]]:
+    """Count escrow copies and escrow spill writes during one capture."""
+
+    counts = {"copies": 0, "spills": 0}
+    real_copy = session_mod.safe_copy
+    real_save = torch.save
+
+    def counting_copy(*args: Any, **kwargs: Any) -> Any:
+        counts["copies"] += 1
+        return real_copy(*args, **kwargs)
+
+    def counting_save(*args: Any, **kwargs: Any) -> Any:
+        counts["spills"] += 1
+        return real_save(*args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(session_mod, "safe_copy", counting_copy)
+        patch.setattr(torch, "save", counting_save)
+        yield counts
+
+
+def _saved(log: Any) -> dict[str, Any]:
+    return {op.layer_label: op for op in log.layer_list if op.has_saved_activation}
+
+
+def _snapshot(log: Any) -> list[tuple[Any, ...]]:
+    """Per-op metadata that a selective save must not change."""
+
+    return [
+        (
+            op.layer_label,
+            op.has_saved_activation,
+            tuple(op.shape or ()),
+            str(op.dtype),
+            tuple(op.output_of_module_calls or ()),
+            tuple(op.parents),
+            tuple(op.children),
+        )
+        for op in log.layer_list
+    ]
+
+
+SELECTORS = {
+    "nested": lambda: tl.module("block.inner"),
+    "outer_with_nested_output": lambda: tl.module("block"),
+    "called_twice": lambda: tl.module("shared"),
+    "second_pass_only": lambda: tl.module("shared:2"),
+    "tuple_output": lambda: tl.module("tup"),
+    "dict_output": lambda: tl.module("dct"),
+    "union_with_model_output_parent": lambda: tl.module("block.inner") | tl.module("head"),
+    "union_three": lambda: tl.module("shared") | tl.module("dct") | tl.module("tup"),
+}
+
+
+# Ops that run inside the matching module passes of ``_Model``: the only escrow copies.
+# block.inner: linear, relu. block: those plus linear, add. shared: one linear per pass.
+# tup: mul, add. dct: tanh, sum. head: linear.
+EXPECTED_COPIES = {
+    "nested": 2,
+    "outer_with_nested_output": 4,
+    "called_twice": 2,
+    "second_pass_only": 1,
+    "tuple_output": 2,
+    "dict_output": 2,
+    "union_with_model_output_parent": 3,
+    "union_three": 6,
+}
+
+
+@pytest.mark.parametrize("name", sorted(SELECTORS))
+def test_module_save_copies_only_ops_inside_matching_passes(
+    name: str, monkeypatch: pytest.MonkeyPatch
+):
+    """Only ops that run inside a matching module pass are copied; nothing spills."""
+
+    model, x = _model_and_input()
+    selector = SELECTORS[name]()
+    full_log = tl.trace(model, x)
+    expected = {site.layer_label for site in full_log.find_sites(selector)}
+    assert expected, f"{name}: selector matched nothing on the full trace"
+    # The selector resolves to producing ops; retention also keeps the output_N
+    # alias of a selected producer the model returns. The alias rides its
+    # producer's payload, so it adds no escrow copy.
+    expected |= {
+        op.layer_label
+        for op in full_log.layer_list
+        if op.layer_type == "output" and any(parent in expected for parent in op.parents)
+    }
+
+    with _counting(monkeypatch) as counts:
+        log = tl.trace(model, x, save=selector)
+
+    assert set(_saved(log)) == expected
+    assert counts["copies"] == EXPECTED_COPIES[name], (
+        f"{name}: {counts['copies']} escrow copies ({len(log.layer_list)} ops in the trace)"
+    )
+    assert counts["spills"] == 0
+
+
+@pytest.mark.parametrize("name", sorted(SELECTORS))
+def test_module_save_matches_full_trace_values(name: str):
+    """Independent oracle: every saved payload equals the save-everything trace's."""
+
+    model, x = _model_and_input()
+    selector = SELECTORS[name]()
+    # Keep both traces alive: an op's payload lives in its trace's store.
+    full_log = tl.trace(model, x)
+    sparse_log = tl.trace(model, x, save=selector)
+    full = _saved(full_log)
+    for label, op in _saved(sparse_log).items():
+        assert torch.equal(op.out, full[label].out), f"{name}: {label} payload differs"
+
+
+@pytest.mark.parametrize("name", sorted(SELECTORS))
+def test_module_exit_path_equals_per_op_escrow_path(name: str, monkeypatch: pytest.MonkeyPatch):
+    """The module-exit path is a pure cost change over the per-op escrow it replaces."""
+
+    model, x = _model_and_input()
+    selector = SELECTORS[name]()
+    live = tl.trace(model, x, save=selector)
+    with monkeypatch.context() as patch:
+        patch.setattr(selector_eval, "module_union_addresses", lambda _selector: None)
+        escrowed = tl.trace(model, x, save=selector)
+
+    assert _snapshot(live) == _snapshot(escrowed)
+    assert getattr(live, "_tl_save_selector_fire_count", None) == getattr(
+        escrowed, "_tl_save_selector_fire_count", None
+    )
+    escrowed_saved = _saved(escrowed)
+    for label, op in _saved(live).items():
+        assert torch.equal(op.out, escrowed_saved[label].out), f"{name}: {label} differs"
+
+
+@pytest.mark.smoke
+def test_module_save_with_module_intervention_keeps_replacement(monkeypatch):
+    """The elicit spelling: save and steer the same module; the replacement is saved."""
+
+    model, x = _model_and_input()
+    site = tl.module("block")
+    spec = tl.when(site, tl.scale(2.0))
+    full = tl.trace(model, x, intervene=spec)
+    expected = {s.layer_label: s for s in full.find_sites(site)}
+
+    with _counting(monkeypatch) as counts:
+        log = tl.trace(model, x, save=site | tl.module("head"), intervene=spec)
+
+    saved = _saved(log)
+    assert set(expected) <= set(saved)
+    for label in expected:
+        assert torch.equal(saved[label].out, full[label].out)
+        assert saved[label].intervention_replaced
+    assert counts["spills"] == 0
+    # The per-op escrow copies about every op; this copies the ops inside block and head.
+    assert counts["copies"] < len(log.layer_list) - 2
+
+
+@pytest.mark.parametrize(("address", "spills"), [("shared", 2), ("block", 4)])
+def test_forced_spill_writes_only_ops_inside_matching_passes(address, spills, monkeypatch):
+    """Past the RAM budget only ops inside matching passes reach temporary files.
+
+    ``block`` spills its two interior ops too; they are released (and their files
+    removed) at its exit, and the saved outputs still load exactly.
+    """
+
+    from torchlens.capture.plan import CapturePlan
+
+    real_compile = CapturePlan.compile.__func__
+
+    def tiny_budget_compile(cls: Any, **kwargs: Any) -> Any:
+        import dataclasses
+
+        plan = real_compile(cls, **kwargs)
+        return dataclasses.replace(
+            plan,
+            retention_profile=dataclasses.replace(
+                plan.retention_profile, activation_ram_budget_bytes=1
+            ),
+        )
+
+    monkeypatch.setattr(CapturePlan, "compile", classmethod(tiny_budget_compile))
+    model, x = _model_and_input()
+    selector = tl.module(address)
+    with _counting(monkeypatch) as counts:
+        log = tl.trace(model, x, save=selector)
+    assert counts["spills"] == spills, counts
+    assert set(_saved(log)) == {
+        site.layer_label for site in tl.trace(model, x).find_sites(selector)
+    }
+    full_log = tl.trace(model, x)
+    full = _saved(full_log)
+    for label, op in _saved(log).items():
+        assert torch.equal(op.out, full[label].out)
+
+
+@pytest.mark.parametrize(
+    "selector_factory",
+    [
+        pytest.param(lambda: tl.module("block") | tl.func("tanh"), id="module_or_func"),
+        pytest.param(lambda: tl.module("block") & tl.func("add"), id="module_and_func"),
+    ],
+)
+def test_mixed_module_selectors_keep_per_op_escrow(selector_factory, monkeypatch):
+    """Selectors mixing tl.module with other terms still escrow every op, and stay exact."""
+
+    model, x = _model_and_input()
+    selector = selector_factory()
+    full_log = tl.trace(model, x)
+    expected = {site.layer_label for site in full_log.find_sites(selector)}
+    with _counting(monkeypatch) as counts:
+        log = tl.trace(model, x, save=selector)
+    saved = _saved(log)
+    assert set(saved) == expected
+    assert counts["copies"] >= len(log.layer_list) - 2
+    full = _saved(full_log)
+    for label, op in saved.items():
+        assert torch.equal(op.out, full[label].out)
+
+
+@pytest.mark.parametrize(
+    ("selector", "expected"),
+    [
+        (tl.module("a"), ("a",)),
+        (tl.module("a") | tl.module("b:2"), ("a", "b:2")),
+        (tl.module("a") | tl.func("relu"), None),
+        (tl.module("a") & tl.module("b"), None),
+        (~tl.module("a"), None),
+        (tl.func("relu"), None),
+        (None, None),
+    ],
+)
+def test_module_union_addresses_classification(selector, expected):
+    """Only pure ``tl.module`` unions settle at module exit."""
+
+    assert selector_eval.module_union_addresses(selector) == expected
+
+
+class _ViewMutate(nn.Module):
+    """The output op's tensor is mutated through a view before the module returns."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        a = self.lin(x)
+        a[0].zero_()
+        return a
+
+
+class _DataMutate(nn.Module):
+    """The output tensor is mutated through ``.data``, outside autograd tracking."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        a = torch.relu(self.lin(x))
+        a.data.mul_(3.0)
+        return a
+
+
+class _SetItem(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        a = self.lin(x)
+        a[1] = 5.0
+        return a
+
+
+class _Mutators(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.view_mut = _ViewMutate()
+        self.data_mut = _DataMutate()
+        self.set_item = _SetItem()
+        self.head = nn.Linear(4, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.head(self.set_item(self.data_mut(self.view_mut(x))) + 1)
+
+
+@pytest.mark.parametrize("address", ["view_mut", "data_mut", "set_item"])
+def test_module_output_mutated_before_exit_matches_per_op_escrow(address, monkeypatch):
+    """A tensor mutated between its op and the module exit saves what the op-time copy saw."""
+
+    torch.manual_seed(0)
+    model, x = _Mutators().eval(), torch.randn(3, 4)
+    selector = tl.module(address)
+    full_log = tl.trace(model, x)
+    live = tl.trace(model, x, save=selector)
+    with monkeypatch.context() as patch:
+        patch.setattr(selector_eval, "module_union_addresses", lambda _selector: None)
+        escrowed = tl.trace(model, x, save=selector)
+
+    full = _saved(full_log)
+    escrowed_saved = _saved(escrowed)
+    live_saved = _saved(live)
+    assert set(live_saved) == set(escrowed_saved)
+    for label, op in live_saved.items():
+        assert torch.equal(op.out, escrowed_saved[label].out), f"{address}: {label} vs escrow"
+        assert torch.equal(op.out, full[label].out), f"{address}: {label} vs full trace"

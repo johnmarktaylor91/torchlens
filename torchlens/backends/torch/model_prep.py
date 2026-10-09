@@ -1278,6 +1278,11 @@ def _record_module_entry_metadata(
         kwargs,
     )
     module_call_label_str = f"{module_address}:{module_call_index}"
+    from ...capture.session import capture_session_for
+
+    capture_session = capture_session_for(trace)
+    if capture_session is not None:
+        capture_session.enter_module_pass(module_call_label_str)
     _register_module_input_container_snapshots(
         trace,
         args,
@@ -2129,6 +2134,7 @@ def _record_module_exit_metadata(
     per_output_atomic: list[tuple[str, tuple[ModuleFrame, ...], bool, tuple[str, int] | None]] = []
     output_names: list[str | None] = []
     untraceable_output_boundaries: list[tuple[torch.Tensor, str]] = []
+    exit_outputs: list[tuple[int, torch.Tensor]] = []
     for output_index, (t, container_path, _container_spec) in enumerate(output_entries):
         # nn.Identity modules and pass-through tensors (output is same object
         # as input) need _decorated_identity() to create a distinct log entry
@@ -2209,6 +2215,7 @@ def _record_module_exit_metadata(
         output_tensor_labels_raw.append(tensor_label)
         output_paths.append(tuple(container_path))
         event = trace.capture_events.live_index.require_event(tensor_label)
+        exit_outputs.append((event.raw_index, t))
         per_output_atomic.append(
             (
                 tensor_label,
@@ -2240,6 +2247,11 @@ def _record_module_exit_metadata(
             output_tensor_leaf_count=len(output_entries),
         )
     )
+    from ...capture.session import capture_session_for
+
+    capture_session = capture_session_for(trace)
+    if capture_session is not None:
+        capture_session.escrow_module_exit_outputs(module_call_label, tuple(exit_outputs))
     return tuple(untraceable_output_boundaries)
 
 
