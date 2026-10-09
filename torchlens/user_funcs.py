@@ -1884,6 +1884,16 @@ def _run_model_and_save_specified_outs(
     weight_fingerprint = _fingerprint_model_weights(model)
     input_object_id = _input_id_for_relationship_evidence(input_args)
     input_signature_hash = _hash_input_signatures(input_args, input_kwargs)
+    # A rerun replays the REQUEST on its new graph: a staged edit's inserted op
+    # shifts every later raw index, so the resolved save set does not transfer.
+    rerun_save_request = {
+        "layers_to_save": copy.copy(layers_to_save),
+        "save_predicate": save_predicate,
+        "lookback": lookback,
+        "lookback_payload_policy": lookback_payload_policy,
+        "retain_output_parents_for_layers_to_save": retain_output_parents_for_layers_to_save,
+        "_deferred_retention_selector": _deferred_retention_selector,
+    }
     module_save_selector = (
         save_predicate
         if isinstance(save_predicate, BaseSelector)
@@ -2040,6 +2050,8 @@ def _run_model_and_save_specified_outs(
         )
         if _resolved_layer_nums_to_save is not None:
             trace._refresh_resolved_layer_nums_to_save = list(_resolved_layer_nums_to_save)
+        else:
+            trace._rerun_save_request = rerun_save_request
         if _resolved_grad_layer_nums_to_save is not None:
             trace._refresh_resolved_grad_layer_nums_to_save = _resolved_grad_layer_nums_to_save
         if _deferred_retention_selector is not None:

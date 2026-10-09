@@ -68,6 +68,7 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "_last_validation_failure": "session",
     "_validation_diagnostics": "session",
     "_retain_layers_to_save_output_parents": "session",
+    "_rerun_save_request": "session",
     "_tl_predicate_intervention_spec_keys": "session",
     "_tl_predicate_intervention_target_keys": "session",
     # F01 log_injections stage 0-1: one consolidated session transient

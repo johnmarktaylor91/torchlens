@@ -111,6 +111,7 @@ def run(
             hook_plan=hook_plan,
             output_transform=output_transform,
         )
+    _refuse_shifted_raw_index_resave(log, new_log)
     new_log.facet_registry_snapshot = getattr(log, "facet_registry_snapshot", None)
     hook_fire_count, unfired_hook_ids = _reconcile_rerun_hook_fires(new_log, hook_plan)
 
@@ -876,12 +877,10 @@ def _capture_with_active_spec(
     check_model_and_input_variants(model, x, {})
     save_grads_policy = getattr(log, "save_grads", None)
     grads_to_save = "all" if save_grads_policy is True else save_grads_policy
-    layers_to_save, save_predicate, lookback, lookback_payload_policy = _rerun_save_scope(log)
     return _run_model_and_save_specified_outs(
         model=model,
         input_args=x,
         input_kwargs={},
-        layers_to_save=layers_to_save,
         output_device=getattr(log, "output_device", "same"),
         activation_transform=getattr(log, "activation_transform", None),
         grad_transform=getattr(log, "grad_transform", None),
@@ -911,15 +910,46 @@ def _capture_with_active_spec(
         save_budget=getattr(log, "save_budget", "auto"),
         output_transform=output_transform,
         save_raw_output=getattr(log, "save_raw_output", "small"),
-        save_predicate=save_predicate,
-        lookback=lookback,
-        lookback_payload_policy=lookback_payload_policy,
-        retain_output_parents_for_layers_to_save=getattr(
-            log,
-            "_retain_layers_to_save_output_parents",
-            False,
-        ),
+        **_rerun_save_kwargs(log),
     )
+
+
+def _rerun_save_kwargs(log: Trace) -> dict[str, Any]:
+    """Return the capture save kwargs a rerun of ``log`` must use.
+
+    The capture's recorded save request is replayed against the rerun's own
+    graph, so the rerun saves what a fresh capture with the same ``save=``
+    saves. The resolved raw-index save set must not be reused: a staged edit
+    inserts an ``intervention_replacement`` op that shifts every later raw
+    index, and the old indices then name the wrong ops. ``tl.record`` keep-op
+    scopes keep their precedence; a trace with no recorded request (restored
+    from pickle) falls back to the resolved scope.
+
+    Parameters
+    ----------
+    log:
+        Existing trace whose save request should be honored during rerun.
+
+    Returns
+    -------
+    dict[str, Any]
+        Save keyword arguments for ``_run_model_and_save_specified_outs``.
+    """
+
+    options = getattr(log, "_predicate_save_options", None)
+    request = getattr(log, "_rerun_save_request", None)
+    if request is not None and getattr(options, "keep_op", None) is None:
+        return dict(request)
+    layers_to_save, save_predicate, lookback, lookback_payload_policy = _rerun_save_scope(log)
+    return {
+        "layers_to_save": layers_to_save,
+        "save_predicate": save_predicate,
+        "lookback": lookback,
+        "lookback_payload_policy": lookback_payload_policy,
+        "retain_output_parents_for_layers_to_save": getattr(
+            log, "_retain_layers_to_save_output_parents", False
+        ),
+    }
 
 
 def _validate_rerun_result(new_log: Trace, old_log: Trace, *, strict: bool) -> int:
@@ -996,6 +1026,60 @@ def _rerun_save_scope(log: Trace) -> tuple[str | list[int | str] | None, Any | N
         return "all", None, 0, "metadata_only"
     selected_indices = {int(raw_index) for raw_index in layer_nums}
     return "all", _make_raw_index_save_predicate(selected_indices), 0, "metadata_only"
+
+
+def _refuse_shifted_raw_index_resave(old_log: Trace, new_log: Trace) -> None:
+    """Refuse a raw-index re-save whose indices no longer name the same ops.
+
+    A trace with no recorded save request (restored from pickle) re-saves by
+    the capture's raw op indices. Those indices are exact only when the rerun
+    graph matches the capture op for op; an inserted or removed op (a staged
+    edit's ``intervention_replacement``, or a cleared one) shifts every later
+    index, and the rerun would silently save the wrong ops.
+
+    Parameters
+    ----------
+    old_log:
+        Existing trace being rerun (its state is not yet replaced).
+    new_log:
+        Freshly captured candidate trace.
+
+    Raises
+    ------
+    ControlFlowDivergenceError
+        With code ``rerun_resave_ops_shifted`` when the op sequences differ.
+    """
+
+    options = getattr(old_log, "_predicate_save_options", None)
+    if (
+        getattr(old_log, "_rerun_save_request", None) is not None
+        or getattr(options, "keep_op", None) is not None
+        or getattr(old_log, "num_saved_ops", 0) == 0
+        or getattr(old_log, "_layer_nums_to_save", "all") == "all"
+    ):
+        return
+    old_labels = [layer._layer_label_raw for layer in old_log.layer_list]
+    new_labels = [layer._layer_label_raw for layer in new_log.layer_list]
+    if old_labels == new_labels:
+        return
+    first = next(
+        (index for index, pair in enumerate(zip(old_labels, new_labels)) if pair[0] != pair[1]),
+        min(len(old_labels), len(new_labels)),
+    )
+    remedy = (
+        "re-capture with tl.trace(model, x, save=..., intervene=...) on the live "
+        "trace instead of rerunning a restored one; the rerun has no save= of its own"
+    )
+    raise ControlFlowDivergenceError(
+        "this trace carries no recorded save request (it was restored from pickle), "
+        "so the rerun would re-save by the capture's raw op indices, and the rerun "
+        f"graph has {len(new_labels)} ops against the capture's {len(old_labels)}, "
+        f"first differing at position {first}; the old indices would save the wrong "
+        f"ops. Remedy: {remedy}.",
+        code="rerun_resave_ops_shifted",
+        remedy=remedy,
+        first_differing_position=first,
+    )
 
 
 def _make_raw_index_save_predicate(selected_indices: set[int]) -> Callable[[Any], bool]:

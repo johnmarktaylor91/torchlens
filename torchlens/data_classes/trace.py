@@ -1636,6 +1636,7 @@ class Trace(
         "_source_bundle_manifest_sha256": FieldPolicy.DROP,
         # Two-pass selective-save retention flag (DEFERRED_RETENTION axis).
         "_retain_layers_to_save_output_parents": FieldPolicy.DROP,
+        "_rerun_save_request": FieldPolicy.DROP,  # rerun replays the save request
         # Validation side-channel state (B1-04). `validate_forward_pass` is
         # a public method on a user-held Trace, and
         # validation ENTRY unconditionally sets `_last_validation_failure`
@@ -2976,6 +2977,8 @@ class Trace(
         # tl.save succeeded on the same trace (the R10-7 raw-callable class).
         # Runtime-only either way; it rebuilds on the next draw.
         state.pop("_last_encoding_state", None)
+        # The recorded save request can hold a raw user save callable.
+        state.pop("_rerun_save_request", None)
         # Same runtime-only class: the last draw's layout-execution geometry
         # record (vizmech D24) rebuilds on the next draw and never serializes.
         state.pop("_last_render_geometry", None)
