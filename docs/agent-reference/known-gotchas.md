@@ -83,6 +83,9 @@
   path, where `data_ptr()` on a FakeTensor is a torch-flagged bug.
 - `__wrapped__` is removed from built-in function wrappers to avoid `inspect.unwrap`
   failures.
+- `backends/torch/ops.py` rebinds the split `_ops_*` functions onto its own globals
+  (`_rebind_function`), so any new module-level name used inside a rebound function must also be
+  bound in `ops.py` (and a test patches such a name on `ops`, not on the split module).
 - Fast-path module decoration skips `_record_module_entry_metadata`; alignment state must be
   replicated manually.
 - `get_memory_amount()` deliberately avoids `pause_logging()`: it resolves the
