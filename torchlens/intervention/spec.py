@@ -393,7 +393,10 @@ class InterventionSpec:
         serial, non-reentrant, capture-free callable (never an ``nn.Module``)
         that transparently returns the base model's own output, supports real
         HF ``generate``, retains ``.last_report``, and atomically installs and
-        removes its runtime state on success or exception.
+        removes its runtime state on success or exception. A bound executor
+        reads the helper's tensor at each call; in-place changes apply to the
+        next call, and ``.last_report.helper_tensor_versions`` records each
+        tensor's version counter.
 
         Parameters
         ----------

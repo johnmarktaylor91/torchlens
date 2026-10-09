@@ -1,12 +1,12 @@
-"""F9: helpers alias the caller's tensor; doors that re-read it refuse a changed value.
+"""F9: helpers alias the caller's tensor; doors that re-read a staged one refuse a change.
 
 ``tl.steer`` and the other tensor-carrying helpers keep the caller's tensor by
-reference. Each staged entry and each bound rule records a full-content digest
-when it is staged or bound; a rerun, a bound call and ``save_intervention``
-refuse ``helper_tensor_changed_since_capture`` when the tensor moved since then
-(including ``.data`` writes, which leave the version counter alone). An
-unchanged tensor runs silently and exactly, and a loop that re-stages or rebinds
-after each update keeps working.
+reference. Each staged entry records a full-content digest when it is staged; a
+rerun and ``save_intervention`` refuse ``helper_tensor_changed_since_capture``
+when the tensor moved since then (including ``.data`` writes, which leave the
+version counter alone). An unchanged tensor runs silently and exactly, and a
+loop that re-stages after each update keeps working. A bound executor is live:
+each call reads the tensor, and its report records the version counter.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention.errors import BindingRuntimeError, SpecMutationError
+from torchlens.intervention.errors import SpecMutationError
 
 _CODE = "helper_tensor_changed_since_capture"
 
@@ -143,21 +143,27 @@ def test_learning_loop_that_restages_each_step_keeps_working(setup) -> None:
         torch.testing.assert_close(trace.output_ops[0].out, _truth(model, x, direction))
 
 
-def test_bound_call_refuses_a_changed_helper_tensor_and_rebind_works(setup) -> None:
-    """A bound executor checks its helpers on every call; rebinding takes the new value."""
+def test_bound_executor_reads_an_in_place_update_on_the_next_call(setup) -> None:
+    """A bound executor is live: an in-place update applies to the next call, exactly.
+
+    The report records each helper tensor's version counter at call start, so
+    the update is visible after the fact; nothing refuses.
+    """
 
     model, x, direction = setup
     spec = tl.when(tl.module("fc1"), _steer(direction))
     bound = spec.bind(model)
-    for _ in range(2):
+    rule_id = spec.rules[0].rule_id
+    versions = []
+    for step in range(3):
+        if step:
+            direction.add_(0.5)
         with torch.no_grad():
-            torch.testing.assert_close(bound(x), _truth(model, x, direction))
-    direction.data[3] += 1.0
-    with pytest.raises(BindingRuntimeError) as excinfo, torch.no_grad():
-        bound(x)
-    assert excinfo.value.fields["code"] == _CODE
-    with torch.no_grad():
-        torch.testing.assert_close(spec.bind(model)(x), _truth(model, x, direction))
+            out = bound(x)
+        assert torch.equal(out, _truth(model, x, direction))
+        versions.append(bound.last_report.helper_tensor_versions[rule_id])
+    assert versions[1][0] == versions[0][0] + 1
+    assert versions[2][0] == versions[1][0] + 1
 
 
 def test_save_intervention_refuses_a_changed_helper_tensor(setup, tmp_path) -> None:

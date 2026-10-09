@@ -36,7 +36,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from .._errors import InvalidArgumentError
-from ._helper_fingerprint import changed_helpers, changed_message, helper_digests
+from ._helper_fingerprint import helper_versions
 from .audit import EXECUTION_EFFECTS, build_fire_record, rules_payload
 from .errors import BindingPreflightError, BindingRuntimeError
 from .model_door import resolve_model_operand
@@ -112,6 +112,12 @@ class BindReport:
     #: anchored on the canonical name fires at EVERY call site of the shared
     #: module; alias spellings never resolve (bind_static_anchor_unresolved).
     module_aliases: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    #: Rule id -> the ``_version`` counter of each tensor its helper holds,
+    #: read when the call started (no copy, no sync). Helpers read their
+    #: tensor live, so a version that moved between two reports means an
+    #: in-place change applied from the later call on (``.data`` writes
+    #: leave the counter alone).
+    helper_tensor_versions: dict[str, tuple[int, ...]] = field(default_factory=dict)
     execution_effect: str = _BIND_EXECUTION_EFFECT
     error: str | None = None
     cleanup: str = "removed"
@@ -203,7 +209,6 @@ class _RulePlan:
         "helper_spec",
         "display_name",
         "boundary_targets",
-        "tensor_digests",
     )
 
     def __init__(self, rule: Any) -> None:
@@ -238,9 +243,6 @@ class _RulePlan:
             else getattr(decision.hook, "__qualname__", type(decision.hook).__name__)
         )
         self.boundary_targets: tuple[str, ...] = ()
-        # Helpers alias the caller's tensors (F9): every call checks them
-        # against their value at bind time.
-        self.tensor_digests = helper_digests(self.helper_spec)
 
 
 @dataclass(frozen=True)
@@ -288,6 +290,7 @@ class _BindSession:
         self.fires: list[dict[str, Any]] = []
         self.fire_records: list[Any] = []
         self.rule_fire_counts: dict[str, int] = {rule.rule_id: 0 for rule in binding.spec.rules}
+        self.helper_tensor_versions = binding._helper_tensor_versions()
         self.start = time.monotonic()
 
     def record_fire(
@@ -862,7 +865,9 @@ class BoundInterventionExecutor:
     ``.last_report``; ``.spec``/``.base_model`` are read-only; runtime state
     installs and removes atomically on success or exception; zero-fire rules
     fail closed after the call by default (FOLD-A3); there is no binding
-    serialization.
+    serialization. A bound executor reads the helper's tensor at each call;
+    in-place changes apply to the next call (``.last_report`` records each
+    helper tensor's version counter).
     """
 
     def __init__(self, spec: InterventionSpec, model: Any, *, on_zero_fire: str) -> None:
@@ -1041,30 +1046,19 @@ class BoundInterventionExecutor:
             )
         return self._run(target, args, kwargs, door="generate")
 
-    def _refuse_changed_helper_tensors(self) -> None:
-        """Refuse a call when a bound helper's tensor changed since bind time.
+    def _helper_tensor_versions(self) -> dict[str, tuple[int, ...]]:
+        """Return each helper rule's tensor version counters (no copy, no sync)."""
 
-        Raises
-        ------
-        BindingRuntimeError
-            ``helper_tensor_changed_since_capture`` naming each changed rule.
-        """
-
-        plans = (*self._boundary_plans, *self._op_level_plans)
-        changed = changed_helpers(
-            (plan.helper_spec, plan.tensor_digests, plan.rule.where_repr) for plan in plans
-        )
-        if changed:
-            raise BindingRuntimeError(
-                changed_message("This bound call", changed),
-                code="helper_tensor_changed_since_capture",
-                changed_helpers=tuple(changed),
-            )
+        versions: dict[str, tuple[int, ...]] = {}
+        for plan in (*self._boundary_plans, *self._op_level_plans):
+            counters = helper_versions(plan.helper_spec)
+            if counters is not None:
+                versions[plan.rule.rule_id] = counters
+        return versions
 
     def _run(self, target: Any, args: tuple, kwargs: dict, *, door: str) -> Any:
         """One serial bound call: arm, execute, settle, report."""
 
-        self._refuse_changed_helper_tensors()
         if not self._lock.acquire(blocking=False):
             raise BindingRuntimeError(
                 "this binding is already executing; v1 bindings are serial and "
@@ -1131,6 +1125,7 @@ class BoundInterventionExecutor:
             fire_records=tuple(session.fire_records),
             zero_fire_rule_ids=zero_fire,
             module_aliases=dict(self._module_aliases),
+            helper_tensor_versions=dict(session.helper_tensor_versions),
             error=error,
             cleanup=self._cleanup_verdict,
             duration_s=time.monotonic() - session.start,
