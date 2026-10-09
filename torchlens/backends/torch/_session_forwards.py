@@ -11,9 +11,13 @@ model TorchLens never touched.
 
 from __future__ import annotations
 
+import copy
+import functools
 import inspect
+import operator
+from collections.abc import Callable
 from types import MethodType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from torch import nn
 
@@ -27,7 +31,7 @@ def restore_undecorated_forward(module: nn.Module) -> None:
     """Undo a TorchLens ``forward`` decoration left on ``module``.
 
     Session wrappers are normally removed by the session cleanup, so this only
-    acts on a leftover: a cleanup cut short, or a deepcopy taken while a
+    acts on a leftover: a cleanup cut short, or a shallow copy taken while a
     capture held the source module's wrappers. A root's ``forward`` must be
     UNDECORATED (``trace`` frames the root itself; the wrapper would call
     ``push_frame`` for a module the session never registered, raising
@@ -56,8 +60,8 @@ def restore_undecorated_forward(module: nn.Module) -> None:
     if original_forward is None:
         module.__dict__.pop("forward", None)
         return
-    # A wrapper copied from ANOTHER module instance (a deepcopy taken while a
-    # capture held the source's wrappers) wraps the source's bound method;
+    # A wrapper copied from ANOTHER module instance (a shallow copy taken while
+    # a capture held the source's wrappers) wraps the source's bound method;
     # pinning it here would make this module run the source's weights. Rebind
     # the underlying function to this module, as deepcopy rebinds methods.
     bound_self = getattr(original_forward, "__self__", module)
@@ -81,6 +85,92 @@ def restore_undecorated_forward(module: nn.Module) -> None:
 
 # Marks a module that had no instance-level ``forward`` before the session.
 _NO_INSTANCE_FORWARD = object()
+
+
+class _SessionForward:
+    """The ``forward`` a capture session installs on one non-root submodule.
+
+    Calls delegate to the toggle-gated wrapper built by
+    :func:`torchlens.backends.torch.model_prep.module_forward_decorator`. The
+    object exists so that a ``copy.deepcopy`` or ``pickle`` of the module taken
+    WHILE the session runs (from the model's own ``forward`` or a hook) never
+    carries TorchLens along: ``copy.deepcopy`` treats a bare function closure
+    as atomic, so a copy used to keep a wrapper closing over the ORIGINAL
+    module and ran the original's weights forever after, and ``pickle`` failed.
+    Both protocols now yield what the copy would hold had TorchLens never
+    touched the module: its prior instance ``forward``, or none at all.
+
+    ``functools.update_wrapper`` gives it the original's ``__name__``,
+    ``__qualname__``, ``__doc__``, ``__module__`` and ``__wrapped__`` (the
+    original bound ``forward``), which ``inspect.signature`` and the restore
+    paths read; the ``_tl`` decoration tag marks it as TorchLens's own.
+
+    Parameters
+    ----------
+    wrapper:
+        The toggle-gated closure to delegate calls to.
+    module:
+        Module whose ``forward`` this object replaces.
+    original:
+        The module's ``forward`` when the session started (the bound class
+        method or the user's instance ``forward``).
+    prior:
+        The module's prior instance ``forward``, or ``_NO_INSTANCE_FORWARD``.
+    """
+
+    def __init__(
+        self,
+        wrapper: Callable[..., Any],
+        module: nn.Module,
+        original: Callable[..., Any],
+        prior: Any,
+    ) -> None:
+        """Hold the delegate and what a copy or pickle reduces to."""
+
+        functools.update_wrapper(self, original)
+        self._delegate = wrapper
+        self._module = module
+        self._prior = prior
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Run the module forward through the session wrapper."""
+
+        return self._delegate(*args, **kwargs)
+
+    def __copy__(self) -> _SessionForward:
+        """Return ``self``: a shallow copy of a callable shares it, as for functions."""
+
+        return self
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> Any:
+        """Return the copied module's own ``forward``, never a TorchLens object.
+
+        A user instance ``forward`` is deep-copied (a bound method rebinds to
+        the copied module). With none, the copied module's class ``forward``
+        is bound to it: ``memo`` maps the module to its copy while the module
+        state is copied, and a pinned bound class method behaves exactly like
+        the class lookup.
+        """
+
+        if self._prior is not _NO_INSTANCE_FORWARD:
+            return copy.deepcopy(self._prior, memo)
+        module_copy = memo.get(id(self._module))
+        if module_copy is None:
+            module_copy = copy.deepcopy(self._module, memo)
+        module_type = type(module_copy)
+        return inspect.getattr_static(module_type, "forward").__get__(module_copy, module_type)
+
+    def __reduce_ex__(self, protocol: Any) -> tuple[Any, ...]:
+        """Pickle as the prior ``forward`` through stdlib callables only.
+
+        With no prior instance ``forward``, unpickling reads ``forward`` off the
+        half-built module, whose instance dict is still empty, so it yields the
+        class ``forward``; the pickle never references TorchLens.
+        """
+
+        if self._prior is _NO_INSTANCE_FORWARD:
+            return (getattr, (self._module, "forward"))
+        return (operator.getitem, ((self._prior,), 0))
 
 
 def install_session_forward_wrappers(trace: Trace, model: nn.Module) -> None:
@@ -118,12 +208,15 @@ def install_session_forward_wrappers(trace: Trace, model: nn.Module) -> None:
     for module in model.modules():
         if module is model:
             continue
-        # Heal a decoration a cut-short cleanup or a mid-session deepcopy left.
+        # Heal a decoration a cut-short cleanup or a mid-session shallow copy left.
         restore_undecorated_forward(module)
         if not hasattr(module, "forward"):
             continue
         prior = module.__dict__.get("forward", _NO_INSTANCE_FORWARD)
-        wrapper = module_forward_decorator(module.forward, module)
+        original = module.forward
+        wrapper = _SessionForward(
+            module_forward_decorator(original, module), module, original, prior
+        )
         mark_forward_call_decorated(wrapper)
         module.__dict__["forward"] = wrapper
         installed.append((module, prior, wrapper))

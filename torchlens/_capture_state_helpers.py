@@ -1325,9 +1325,9 @@ def _strip_copied_forward_decorations(model: nn.Module) -> None:
     Parameters
     ----------
     model:
-        Deep-copied validation model. Captures leave no forward wrapper behind,
-        so this only acts on a copy taken while a capture held the source's
-        session wrappers (which close over the source modules).
+        Deep-copied validation model. Captures leave no forward wrapper behind
+        and a deepcopy never carries one, so this only acts on a wrapper that a
+        shallow copy taken mid-capture shares with its source module.
     """
 
     from .backends.torch._tl import is_forward_call_decorated

@@ -2320,16 +2320,17 @@ def module_forward_decorator(
 ) -> Callable[..., Any]:
     """Toggle-gated forward wrapper for an nn.Module's ``forward`` method.
 
-    **Closure design**: Closes over ``module`` (a stable instance reference) but
-    reads ``trace`` from ``_state._active_trace`` at call time. This is
-    necessary because the same wrapper persists across multiple ``trace``
-    calls with different Trace instances.
+    **Closure design**: Closes over ``module`` but reads ``trace`` from
+    ``_state._active_trace`` at call time. The session installs it inside a
+    ``_SessionForward`` (``_session_forwards.py``), which keeps deepcopies and
+    pickles of the module TorchLens-free, and removes it at session cleanup;
+    a reference the user kept can still be called later, in another session.
 
     **Execution modes**:
 
-    1. **Logging off** (``_state._logging_enabled is False``): Pass through to
-       ``orig_forward`` with zero overhead beyond one bool check. This is the
-       normal production path.
+    1. **Logging off** (``_state._logging_enabled is False``), or ``module``
+       not registered in the active session (a wrapper that outlived its own
+       session): pass through to ``orig_forward`` unrecorded.
 
     2. **Exhaustive mode**: Full entry/exit bookkeeping via
        ``_record_module_entry_metadata`` and ``_record_module_exit_metadata``.
@@ -2353,6 +2354,11 @@ def module_forward_decorator(
             return orig_forward(*args, **kwargs)
 
         trace = _state._active_trace
+        # A wrapper that outlived its own session (a stashed ``module.forward``,
+        # a shallow module copy) reaching an UNRELATED capture: the module is not
+        # registered there, so it runs unrecorded, like any helper function.
+        if id(module) not in trace._module_capture_ws.mod_call_index:
+            return orig_forward(*args, **kwargs)
 
         if trace.capture_mode == "predicate":
             from ...capture.predicates import (
