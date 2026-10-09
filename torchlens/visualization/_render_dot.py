@@ -1344,7 +1344,7 @@ def _warn_render_omission(message: str) -> None:
     warnings.warn(message, TorchLensWarning, stacklevel=user_stacklevel())
 
 
-def _orphan_island_logs(trace: "Trace") -> tuple[Any, ...]:
+def _orphan_island_logs(self: "Trace") -> tuple[Any, ...]:
     """Return the orphan ops a ``show_orphans=True`` render draws.
 
     Warns when the capture kept only dropped orphan husks, which have nothing to
@@ -1352,7 +1352,7 @@ def _orphan_island_logs(trace: "Trace") -> tuple[Any, ...]:
 
     Parameters
     ----------
-    trace:
+    self:
         Trace whose ``_orphan_logs`` are inspected.
 
     Returns
@@ -1361,13 +1361,13 @@ def _orphan_island_logs(trace: "Trace") -> tuple[Any, ...]:
         Labelled orphan ops, in capture order.
     """
 
+    orphan_husks = getattr(self, "_orphan_logs", ())
     orphan_logs = tuple(
         op
-        for op in getattr(trace, "_orphan_logs", ())
+        for op in orphan_husks
         if bool(getattr(op, "is_orphan", False))
         and bool(getattr(op, "label", "") or getattr(op, "_label_raw", ""))
     )
-    orphan_husks = getattr(trace, "_orphan_logs", ())
     if not orphan_logs and orphan_husks:
         _warn_render_omission(
             "orphans were dropped from this capture; re-trace with keep_orphans=True"
