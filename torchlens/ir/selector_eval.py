@@ -625,6 +625,46 @@ def _maybe_guard_label(kind: str, value: str, subject: Any, lifecycle: str) -> N
             _raise_for_finalized_live_label(kind, value)
 
 
+def _is_module_scope_alias(kind: str, subject: Any, lifecycle: str) -> bool:
+    """Return whether a module-scoped selector must skip ``subject`` as an alias.
+
+    ``tl.module`` / ``tl.in_module`` address the ops a module call produces or
+    contains. Two kinds of subject carry that module stamp without being such
+    an op, and matching them would apply a value edit twice:
+
+    - post hoc, the synthetic ``output_N`` node (``is_output``). Postprocess
+      mints one per returned value; it executes nothing and re-carries its
+      producer's module calls in ``output_of_module_calls`` for display only,
+      and replay recomputes it from the producer;
+    - live, for ``tl.in_module`` only, a module-boundary leaf whose tensor an
+      op INSIDE that call produced (``_tl_boundary_inner_alias``): that op
+      already matched at the op door. ``tl.module`` keeps firing at the
+      boundary, where op doors never match it.
+
+    Parameters
+    ----------
+    kind:
+        Selector kind (``module`` or ``in_module``).
+    subject:
+        Site candidate.
+    lifecycle:
+        Active lifecycle key.
+
+    Returns
+    -------
+    bool
+        Whether the module-scoped selector must not match ``subject``.
+    """
+
+    if lifecycle == "site":
+        return bool(getattr(subject, "is_output", False))
+    if lifecycle == "live" and kind == "in_module":
+        return bool(getattr(subject, "_tl_module_boundary", False)) and bool(
+            getattr(subject, "_tl_boundary_inner_alias", False)
+        )
+    return False
+
+
 def _module_output_candidates(subject: Any, lifecycle: str) -> tuple[Any, ...]:
     """Return module-output-boundary candidates for ``tl.module``.
 
@@ -982,6 +1022,8 @@ def _evaluate_subject(selector: BaseSelector, subject: Any, lifecycle: str) -> b
         if transform_kind is None:
             return False
         return sanitize_transform_kind(transform_kind) == sanitize_transform_kind(value)
+    if kind in {"module", "in_module"} and _is_module_scope_alias(kind, subject, lifecycle):
+        return False
     if kind == "module":
         target = str(value)
         return any(

@@ -81,6 +81,43 @@ def _resolve_boundary_predicate(trace: Any) -> tuple[Any, Any] | None:
     return predicate_options, predicate_selector
 
 
+def _produced_inside_call(out: torch.Tensor, trace: Any, module_call: tuple[str, int]) -> bool:
+    """Return whether an op that ran inside ``module_call`` produced ``out``.
+
+    Such a boundary leaf aliases that op's output, which already met every
+    op-door ``tl.in_module`` rule for the call. Unknown provenance (no active
+    trace, an unlabeled tensor, or an event outside the live window) answers
+    ``False`` so the boundary keeps its prior matching.
+
+    Parameters
+    ----------
+    out:
+        Module output tensor leaf.
+    trace:
+        Active trace, or ``None``.
+    module_call:
+        ``(address, call_index)`` of the exiting module call.
+
+    Returns
+    -------
+    bool
+        Whether the producing op's module calls include ``module_call``.
+    """
+
+    if trace is None:
+        return False
+    label = get_tensor_label(out)
+    if label is None:
+        return False
+    from ..ir.live_index import LiveIndexWindowError
+
+    try:
+        event = trace.capture_events.live_index.require_event(label)
+    except (AttributeError, LiveIndexWindowError):
+        return False
+    return any(tuple(call) == module_call for call in getattr(event, "modules", ()) or ())
+
+
 def _make_boundary_site(
     out: torch.Tensor,
     container_path: tuple[Any, ...],
@@ -88,8 +125,14 @@ def _make_boundary_site(
     module_address: str,
     module_call_index: int,
     module_type: str,
+    trace: Any = None,
 ) -> Any:
-    """Mint the live site proxy for one tensor leaf of a module output."""
+    """Mint the live site proxy for one tensor leaf of a module output.
+
+    ``_tl_boundary_inner_alias`` marks a leaf an op inside the call produced;
+    the selector evaluator then keeps ``tl.in_module`` from firing a second
+    time at the boundary (see ``_is_module_scope_alias``).
+    """
 
     module_call = (module_address, module_call_index)
     site = make_live_site_proxy(
@@ -108,6 +151,7 @@ def _make_boundary_site(
         },
     )
     setattr(site, "_tl_module_boundary", True)
+    setattr(site, "_tl_boundary_inner_alias", _produced_inside_call(out, trace, module_call))
     return site
 
 
@@ -244,6 +288,7 @@ def _apply_module_boundary_live_hooks(
             module_address=module_address,
             module_call_index=module_call_index,
             module_type=module_type,
+            trace=trace,
         )
         hooked, plan_fire_results = _apply_live_hooks(
             out,

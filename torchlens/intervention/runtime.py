@@ -432,7 +432,10 @@ def _apply_live_hooks(
                 "Use tl.module(...)/tl.in_module(...) alone for one module-call splice, or use "
                 "an op selector without tl.in_module(...) for op-level splicing."
             )
-        if not live_selector_matches_site(normalized_entry.site_target, site):
+        if not live_selector_matches_site(
+            normalized_entry.site_target,
+            _whole_call_site_view(site) if module_scope is not None else site,
+        ):
             continue
 
         hook_args, hook_kwargs = _hook_call_inputs_for_site(
@@ -1102,6 +1105,30 @@ def _module_scope_address(site_target: Any) -> str | None:
     if selector is not None:
         return _module_scope_address(selector)
     return None
+
+
+def _whole_call_site_view(site: Any) -> Any:
+    """Return ``site`` as a whole-module-call site for input-splice matching.
+
+    ``splice_module(input="in")`` replaces a module call as a whole, so its
+    ``tl.in_module`` target fires at the boundary even when an op inside the
+    call produced the output; drop the boundary's inner-alias mark (which
+    otherwise keeps ``tl.in_module`` from re-firing there) for that match.
+
+    Parameters
+    ----------
+    site:
+        Live site proxy.
+
+    Returns
+    -------
+    Any
+        ``site`` itself, or a shallow copy without the inner-alias mark.
+    """
+
+    if not getattr(site, "_tl_boundary_inner_alias", False):
+        return site
+    return SimpleNamespace(**{**vars(site), "_tl_boundary_inner_alias": False})
 
 
 def _is_plain_module_selector(site_target: Any) -> bool:

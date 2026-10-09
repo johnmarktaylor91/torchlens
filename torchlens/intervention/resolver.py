@@ -1013,11 +1013,50 @@ def resolve_sites(
         )
     if len(matched) > 1:
         warnings.warn(
-            f"selector {query!r} matched {len(matched)} sites and will fan out.",
+            _multi_match_message(query, matched),
             MultiMatchWarning,
             stacklevel=2,
         )
     return SiteTable(matched, query=query)
+
+
+def _multi_match_message(query: SelectorInput, matched: Sequence[Site]) -> str:
+    """Return the multi-match warning text for a resolved site set.
+
+    A set holding a synthetic model-output alias (``output_N``) together with
+    the op it aliases does not fan out: a value edit applied at both sites
+    compounds on the one returned value, so the warning says so.
+
+    Parameters
+    ----------
+    query:
+        Selector input as the caller spelled it.
+    matched:
+        Resolved sites, in execution order.
+
+    Returns
+    -------
+    str
+        Warning message.
+    """
+
+    matched_labels = {getattr(site, "layer_label", None) for site in matched}
+    pairs = [
+        (str(site.layer_label), str(parent))
+        for site in matched
+        if getattr(site, "is_output", False)
+        for parent in (getattr(site, "parents", ()) or ())
+        if parent in matched_labels
+    ]
+    if not pairs:
+        return f"selector {query!r} matched {len(matched)} sites and will fan out."
+    named = ", ".join(f"{alias!r} aliases {producer!r}" for alias, producer in pairs)
+    return (
+        f"selector {query!r} matched {len(matched)} sites, including a model-output alias "
+        f"and the op it aliases ({named}); a value edit applied at both compounds on the "
+        "same returned value instead of reaching independent sites. Narrow the selector to "
+        "the producing op."
+    )
 
 
 def find_sites(
