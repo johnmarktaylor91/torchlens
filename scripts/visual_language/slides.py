@@ -1467,7 +1467,7 @@ ALPHABET: Mapping[str, tuple[tuple[str, str, str, Selector], ...]] = MappingProx
             ("named pattern", "fold-patterns", "a", "node(text~PATTERN)"),
             ("+N more repeats", "fold-repeats", "a", "node(shape=plaintext, text~more)"),
             ("orphan", "orphans", "a", "node(text~sin)"),
-            ("data enters a focused module", "focus", "a", "node(fillcolor={input_color})"),
+            ("focused module's input", "focus", "a", "node(fillcolor={input_color})"),
             ("grad_fn (backward)", "backward", "a", "node(fillcolor=#F2F3FF)"),
             ("grad_fn of order 2+", "grad-of-grad", "a", "node(fillcolor=#FFF4D6)"),
             ("edited site", "interventions", "a", "node(color={site_color})"),
