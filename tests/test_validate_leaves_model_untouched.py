@@ -26,14 +26,14 @@ import torchlens as tl
 
 _X = torch.tensor([[1.0, -2.0, 0.5, 0.25], [0.5, 1.5, -1.0, 2.0], [-0.5, 0.0, 1.0, -1.5]])
 
-# Every scope runs on the model with an eval BatchNorm (buffers) except
-# receptive_field, which runs on the LayerNorm twin: its reference-mode capture
-# refuses the BatchNorm buffers for an unrelated reason (see the xfail below).
+# Every scope runs on the model with an eval BatchNorm (buffers); receptive_field
+# also runs on the buffer-free LayerNorm twin.
 _CASES = (
     ("forward", "batch"),
     ("saved", "batch"),
     ("intervention", "batch"),
     ("backward", "batch"),
+    ("receptive_field", "batch"),
     ("receptive_field", "layer"),
 )
 
@@ -198,17 +198,15 @@ def test_validate_keeps_accumulated_grads(scope: str, norm: str) -> None:
     _assert_grads_equal(model, _oracle_grads(norm), scale=2.0)
 
 
-@pytest.mark.xfail(
-    raises=tl.errors.MutatedReferenceError,
-    strict=True,
-    reason=(
-        "receptive_field's reference-mode capture of an eval BatchNorm model fails its "
-        "own metadata invariants: a buffer op's saved reference out reads a different "
-        "version counter than the one stamped at capture (saved 2, current 0)"
-    ),
-)
 def test_receptive_field_scope_on_a_batchnorm_model() -> None:
-    """Receptive-field validation of an eval BatchNorm model (known capture bug)."""
+    """Receptive-field validation of an eval BatchNorm model passes untouched.
+
+    Regression pin: the scope's reference-mode capture used to fail its own
+    metadata check on the BatchNorm's buffer version nodes (``saved
+    _version=2, current _version=0``). Materialization swapped each node's
+    payload for the write journal's private copy but kept the version stamped
+    from the live buffer it replaced.
+    """
 
     model = _fresh("batch")
     before = _tensor_state(model)
