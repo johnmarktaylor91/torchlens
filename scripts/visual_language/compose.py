@@ -287,6 +287,9 @@ class Canvas:
         for mark in matches:
             occurrence = edge_occurrence(placed.render.dot, mark) if mark.kind == "edge" else 0
             box = mark_box(placed.render.svg, mark, occurrence)
+            if at and mark.kind == "graph":
+                # The caption may sit at either end; search the whole picture for the words.
+                box = placed.render.svg.view
             if box is None or not box.overlaps(placed.crop):
                 continue
             kind = mark.kind
@@ -333,11 +336,20 @@ class Canvas:
         return False
 
     def _free_spot(self, spot: Box, kind: str) -> tuple[float, float]:
-        """The first badge position beside ``spot`` that covers no text and no badge."""
+        """The first badge position beside ``spot`` covering the fewest texts, swatches and badges.
+
+        A swatch is a small filled shape (a legend's sample of a fill or outline); covering
+        one hides what the key describes.
+        """
 
         taken = [
             box for el in self.root.iter(f"{{{SVG_NS}}}text") if (box := bounds(points(el)))
         ] + [Box(x - BADGE_R, y - BADGE_R, x + BADGE_R, y + BADGE_R) for x, y in self.badges]
+        for tag in ("rect", "polygon"):
+            for el in self.root.iter(f"{{{SVG_NS}}}{tag}"):
+                box = bounds(points(el))
+                if box is not None and 0 < box.w < 2.5 * BADGE_R and 0 < box.h < 2.5 * BADGE_R:
+                    taken.append(box)
         best: tuple[int, float, float] | None = None
         for cx, cy in _badge_spots(spot, kind):
             if not (BADGE_R < cx < self.width - BADGE_R and BADGE_R < cy < self.height - BADGE_R):
@@ -371,7 +383,7 @@ def _badge_spots(box: Box, kind: str) -> list[tuple[float, float]]:
     first = {
         "edge": (mx, my - r),
         "cluster": (box.x0 + r * 0.4, box.y0 + r * 0.4),
-        "text": (box.x0 - r - 2, my),
+        "text": (box.x0 - r - 6, my),
     }.get(kind, (box.x0 + r * 0.2, box.y0 + r * 0.2))
     return [
         first,

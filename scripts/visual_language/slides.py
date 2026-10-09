@@ -406,7 +406,7 @@ SLIDES: tuple[Slide, ...] = (
         ),
         keys=(
             Key("(x3): ran three times", "node(text~x3)", at="(x3)"),
-            Key("In 2-3 on the back edge", 'edge(text~"In 2-3")'),
+            Key("In 2-3 on the back edge", 'edge(text~"In 2-3")', at="In 2-3"),
             Key("A self-loop appears only when the loop carries state", None),
         ),
         rows=("VL01", "VE04", "VE05", "VR04"),
@@ -820,7 +820,7 @@ SLIDES: tuple[Slide, ...] = (
                 "Sizes",
                 kwargs={"color_by": f"@bytes_{transform}", **QUIET},
                 label=transform,
-                crop=("node(text~input_1)", "node(text~linear_1)", "node(text~linear_2)"),
+                crop=("node(text~input_1)", "node(text~linear_1)"),
             )
             for name, transform in zip("abc", ("linear", "rank", "log"), strict=True)
         ),
@@ -1043,7 +1043,7 @@ SLIDES: tuple[Slide, ...] = (
             ),
         ),
         keys=(
-            Key("Order two or more: cream", "node(fillcolor=#FFF4D6)"),
+            Key("Order two or more: cream", "node(fillcolor=#FFF4D6)", at="order 2"),
             Key("[i]: no forward op", "node(text~[i])", at="[i]"),
             Key("One group per backward pass", 'cluster(label~"backward pass 2")'),
         ),
