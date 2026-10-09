@@ -6,8 +6,8 @@ every later op shifts by one: after ``attach_hooks`` on a plain capture saved
 with ``tl.module("blocks.1") | tl.module("head")``, the rerun saved the op
 before the head (an ``add``) instead of the head, and left the steered site
 output unsaved. Every rerun door here must save exactly what a fresh steered
-capture with the same ``save=`` saves, compared site by site through the
-save selectors (never by positional label).
+capture with the same ``save=`` saves (``set`` on a module site included),
+compared site by site through the save selectors (never by positional label).
 """
 
 from __future__ import annotations
@@ -203,3 +203,21 @@ def test_chunked_rerun_resaves_the_requested_sites(fresh: dict[str, Any]) -> Non
     trace.attach_hooks(tl.module(_SITE), _steer(), confirm_mutation=True)
     _rerun(trace, model, x, replay=tl.options.ReplayOptions(chunk_size=1))
     _assert_matches_fresh(trace, fresh)
+
+
+def test_rerun_after_set_resaves_the_requested_sites(fresh: dict[str, Any]) -> None:
+    """``set(module_site, value)``, then a rerun, saves the set site and the head."""
+
+    model, x = fresh["model"], fresh["x"]
+    trace = tl.trace(model, x, save=_save())
+    value = torch.full_like(fresh["outs"][_SITE], 0.5)
+    trace.set(tl.module(_SITE), value, confirm_mutation=True)
+    _rerun(trace, model, x)
+    # Same graph shape as the steered capture: one replacement op at the site.
+    assert _saved_labels(trace) == fresh["saved"]
+    outs = _site_outs(trace)
+    assert torch.equal(outs[_SITE], value)
+    rest = value
+    for block in model.blocks[2:]:
+        rest = block(rest)
+    assert torch.equal(outs[_HEAD], model.head(rest).detach())
