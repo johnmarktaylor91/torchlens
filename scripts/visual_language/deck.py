@@ -28,6 +28,7 @@ from scripts.visual_language.slides import (
     CHEAT_GROUPS,
     OTHER_PICTURES,
     SLIDES,
+    UNENCODED,
     Slide,
     constants,
     fill,
@@ -174,14 +175,16 @@ def _table_slide(slide: Slide, height: float, env: dict[str, Any], probe: dict[s
 
     params = inspect.signature(TraceVisualizationMixin.draw).parameters
     footer = f"TorchLens {env['torchlens']}, commit {env['commit'][:10]}, built {env['built']}"
-    if slide.id == "cheat-sheet":
-        rows = [[see, how, ", ".join(names)] for see, how, names in CHEAT_GROUPS]
+    half = (len(CHEAT_GROUPS) + 1) // 2
+    groups = CHEAT_GROUPS[half:] if slide.id.endswith("-2") else CHEAT_GROUPS[:half]
+    if slide.id.startswith("cheat-sheet"):
+        rows = [[see, how, ", ".join(names)] for see, how, names in groups]
         return compose.compose_table(
             rows, ["To see", "Pass", "All parameters in this group"], [0.25, 0.32, 0.43], height
         )
-    if slide.id == "draw-parameters":
+    if slide.id.startswith("draw-parameters"):
         items = []
-        for _see, _how, names in CHEAT_GROUPS:
+        for _see, _how, names in groups:
             for name in names:
                 default = params[name].default
                 shown = (
@@ -195,6 +198,11 @@ def _table_slide(slide: Slide, height: float, env: dict[str, Any], probe: dict[s
         rows = [[col[r] if r < len(col) else "" for col in cols] for r in range(per_col)]
         return compose.compose_table(
             rows, ["Parameter=default", "", ""], [0.34, 0.33, 0.33], height, footer
+        )
+    if slide.id == "unencoded":
+        rows = [list(line) for line in UNENCODED]
+        return compose.compose_table(
+            rows, ["Legend line", "When TorchLens writes it"], [0.52, 0.48], height
         )
     if slide.id == "other-pictures":
         rows = [list(row[:3]) for row in OTHER_PICTURES]
@@ -227,7 +235,7 @@ def compose_slide(
         canvas = compose.compose_grid(
             Slide(slide.id, slide.title, slide.rule), {"a": compose.Render.load(raw, stem)}, height
         )
-    elif slide.layout == "table" and slide.id != "export" or slide.layout == "table":
+    elif slide.layout == "table":
         canvas = _table_slide(slide, height, env, probe)
     else:
         renders = {}
@@ -236,16 +244,14 @@ def compose_slide(
             if not (raw / f"{stem}.json").exists():
                 problems.append(f"panel {panel.name} did not render")
                 continue
-            renders[panel.name] = compose.Render.load(raw, stem, fill(panel.label))
+            renders[panel.name] = compose.Render.load(raw, stem, panel.label, panel.crop)
         if problems:
             record.update(status="failed", problems=problems)
             return record
         if slide.layout == "grid":
             canvas = compose.compose_grid(slide, renders, height)
-        elif slide.layout == "text":
-            canvas = compose.compose_wide(slide, list(renders.values()), height)
         else:
-            canvas = compose.compose_key(slide, list(renders.values()), height)
+            canvas = compose.compose_auto(slide, list(renders.values()), height)
     problems.extend(canvas.problems)
     picture = out / f"S{number:02d}-{slide.id}.svg"
     canvas.write(picture)

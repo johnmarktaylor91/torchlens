@@ -38,6 +38,9 @@ ROOM_W = DESIGN_W - 2 * PAD
 CARD_SCALE = 720.0 / ROOM_W
 MIN_CSS_PX = 9.0
 MAX_ASPECT_MISMATCH = 2.2
+#: Largest enlargement of a render: a three-node graph is not blown up to poster type.
+MAX_SCALE = 1.45
+CROP_PAD = 10.0
 KEY_PX, LABEL_PX, NOTE_PX, BADGE_R = 15.0, 13.0, 13.0, 11.0
 CHAR_EM = 0.55
 INK, FAINT, BADGE_FILL = "#222222", "#555555", "#222222"
@@ -116,18 +119,56 @@ def text_block(
 
 @dataclass
 class Render:
-    """One rendered panel: its DOT marks, SVG geometry and raw SVG text."""
+    """One rendered panel: its DOT marks, SVG geometry, and the part of it shown."""
 
     stem: str
     dot: PanelDot
     svg: SvgPanel
     label: str = ""
+    view: Box | None = None
+    problems: list[str] = field(default_factory=list)
 
     @classmethod
-    def load(cls, folder: Path, stem: str, label: str = "") -> Render:
+    def load(cls, folder: Path, stem: str, label: str = "", crop: tuple[str, ...] = ()) -> Render:
+        """Load a panel; ``crop`` selectors narrow the shown part to their marks' union."""
+
         dot = parse_json((folder / f"{stem}.json").read_text())
         svg = parse_svg((folder / f"{stem}.svg").read_text())
-        return cls(stem, dot, svg, label)
+        render = cls(stem, dot, svg, label)
+        if crop:
+            render.view = render.region(crop)
+        return render
+
+    @property
+    def shown(self) -> Box:
+        return self.view or self.svg.view
+
+    def region(self, selectors: tuple[str, ...]) -> Box | None:
+        """The padded union of every mark the selectors find, clipped to the viewBox."""
+
+        boxes = []
+        for selector in selectors:
+            found = [
+                mark_box(self.svg, m, edge_occurrence(self.dot, m) if m.kind == "edge" else 0)
+                for m in select(self.dot, fill(selector))
+            ]
+            found = [b for b in found if b is not None]
+            if not found:
+                self.problems.append(f"crop {selector} found no mark on {self.stem}")
+            boxes.extend(found)
+        if not boxes:
+            return None
+        union = boxes[0]
+        for box in boxes[1:]:
+            union = union.union(box)
+        view = self.svg.view
+        union = union.pad(CROP_PAD)
+        return Box(
+            max(union.x0, view.x0),
+            max(union.y0, view.y0),
+            min(union.x1, view.x1),
+            min(union.y1, view.y1),
+        )
 
 
 @dataclass
@@ -162,6 +203,7 @@ class Canvas:
     min_css_px: float = 99.0
     witnesses: dict[str, list[str]] = field(default_factory=dict)
     badges: list[tuple[float, float]] = field(default_factory=list)
+    defs: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.root = _el(
@@ -189,32 +231,42 @@ class Canvas:
         self.note_text(px, "slide text")
         return text_block(self.root, lines, x, y, px, **kw)
 
-    def embed(self, render: Render, area: Box, crop: Box | None = None, prefix: str = "") -> Placed:
-        """Fit a render (or a crop of its viewBox) into ``area``, centred, aspect kept."""
+    def embed(
+        self, render: Render, area: Box, crop: Box | None = None, shared: bool = False
+    ) -> Placed:
+        """Fit a render (or a crop of it) into ``area``, centred, aspect kept.
 
-        view = crop or render.svg.view
-        scale = min(area.w / view.w, area.h / view.h)
+        ``shared`` writes the render's content once into ``<defs>`` and places it with
+        ``<use>``, so several crops of one render cost one copy.
+        """
+
+        view = crop or render.shown
+        scale = min(area.w / view.w, area.h / view.h, MAX_SCALE)
         w, h = view.w * scale, view.h * scale
         x, y = area.x0 + (area.w - w) / 2, area.y0 + (area.h - h) / 2
-        nested = copy.deepcopy(render.svg.root)
-        _strip_metadata(nested)
-        _prefix_ids(nested, prefix or render.stem)
-        nested.attrib.update(
-            {
-                "x": f"{x:.2f}",
-                "y": f"{y:.2f}",
-                "width": f"{w:.2f}",
-                "height": f"{h:.2f}",
-                "viewBox": f"{view.x0:.2f} {view.y0:.2f} {view.w:.2f} {view.h:.2f}",
-                "preserveAspectRatio": "xMidYMid meet",
-                "overflow": "hidden",
-            }
-        )
+        frame = {
+            "x": f"{x:.2f}",
+            "y": f"{y:.2f}",
+            "width": f"{w:.2f}",
+            "height": f"{h:.2f}",
+            "viewBox": f"{view.x0:.2f} {view.y0:.2f} {view.w:.2f} {view.h:.2f}",
+            "preserveAspectRatio": "xMidYMid meet",
+            "overflow": "hidden",
+        }
+        if shared:
+            nested = _el("svg", frame)
+            nested.append(_el("use", {"href": f"#{self._define(render)}"}))
+        else:
+            nested = copy.deepcopy(render.svg.root)
+            _strip_metadata(nested)
+            _prefix_ids(nested, render.stem)
+            nested.attrib.update(frame)
         self.root.append(nested)
         placed = Placed(render, x, y, scale, view)
         self.placed.append(placed)
-        if render.svg.font_sizes:
-            self.note_text(min(render.svg.font_sizes) * scale, f"render {render.stem}")
+        sizes = render.svg.font_sizes_in(view)
+        if sizes:
+            self.note_text(min(sizes) * scale, f"render {render.stem}")
         mismatch = (view.w / view.h) / (area.w / area.h)
         if max(mismatch, 1 / mismatch) > MAX_ASPECT_MISMATCH:
             self.problems.append(
@@ -222,6 +274,25 @@ class Canvas:
                 f"{area.w / area.h:.2f} (over {MAX_ASPECT_MISMATCH}x)"
             )
         return placed
+
+    def _define(self, render: Render) -> str:
+        """Write the render's drawing once into ``<defs>``; return its id."""
+
+        if render.stem in self.defs:
+            return self.defs[render.stem]
+        source = copy.deepcopy(render.svg.root)
+        _strip_metadata(source)
+        _prefix_ids(source, render.stem)
+        ident = re.sub(r"[^A-Za-z0-9_-]", "_", f"def-{render.stem}")
+        group = _el("g", {"id": ident})
+        group.extend(list(source))
+        defs = self.root.find(f"{{{SVG_NS}}}defs")
+        if defs is None:
+            defs = _el("defs")
+            self.root.insert(0, defs)
+        defs.append(group)
+        self.defs[render.stem] = ident
+        return ident
 
     def badge(self, number: int, placed: Placed, selector: str, kind_hint: str) -> bool:
         """Place badge ``number`` beside the first mark the selector finds; False if none."""
@@ -231,7 +302,7 @@ class Canvas:
         for mark in matches:
             occurrence = edge_occurrence(placed.render.dot, mark) if mark.kind == "edge" else 0
             box = mark_box(placed.render.svg, mark, occurrence)
-            if box is None:
+            if box is None or not box.overlaps(placed.crop):
                 continue
             spot = placed.point(box)
             cx, cy = _badge_spot(spot, mark.kind)
@@ -320,30 +391,46 @@ def _prefix_ids(root: ET.Element, prefix: str) -> None:
 # ------------------------------------------------------------------ layouts
 
 
+def _need(render: Render) -> float:
+    """The smallest scale at which every text shown in ``render`` stays legible."""
+
+    sizes = render.svg.font_sizes_in(render.shown)
+    return MIN_CSS_PX / CARD_SCALE / min(sizes) if sizes else 0.1
+
+
 def _split_area(area: Box, renders: list[Render], label_h: float) -> list[Box]:
-    """Areas for 1 to 3 renders: side by side or stacked, whichever shows text larger."""
+    """Areas for 1 to 3 renders, side by side or stacked, sized by what each needs.
+
+    Each render's share of the width (side by side) or height (stacked) is proportional
+    to its extent times the scale its smallest text needs; the arrangement whose worst
+    render keeps the larger legibility margin wins.
+    """
 
     n = len(renders)
     if n == 1:
         return [Box(area.x0, area.y0 + label_h, area.x1, area.y1)]
 
-    def scale(boxes: list[Box]) -> float:
+    def margin(boxes: list[Box]) -> float:
         return min(
-            min(b.w / r.svg.view.w, b.h / r.svg.view.h) for b, r in zip(boxes, renders, strict=True)
+            min(b.w / r.shown.w, b.h / r.shown.h, MAX_SCALE) / _need(r)
+            for b, r in zip(boxes, renders, strict=True)
         )
 
     gap = 10.0
-    w = (area.w - gap * (n - 1)) / n
-    side = [
-        Box(area.x0 + i * (w + gap), area.y0 + label_h, area.x0 + i * (w + gap) + w, area.y1)
-        for i in range(n)
-    ]
-    h = (area.h - gap * (n - 1)) / n
-    stack = [
-        Box(area.x0, area.y0 + i * (h + gap) + label_h, area.x1, area.y0 + i * (h + gap) + h)
-        for i in range(n)
-    ]
-    return side if scale(side) >= scale(stack) else stack
+    side, stack = [], []
+    weights = [r.shown.w * _need(r) for r in renders]
+    x = area.x0
+    for weight in weights:
+        w = (area.w - gap * (n - 1)) * weight / sum(weights)
+        side.append(Box(x, area.y0 + label_h, x + w, area.y1))
+        x += w + gap
+    weights = [r.shown.h * _need(r) + label_h for r in renders]
+    y = area.y0
+    for weight in weights:
+        h = (area.h - gap * (n - 1)) * weight / sum(weights)
+        stack.append(Box(area.x0, y + label_h, area.x1, y + h))
+        y += h + gap
+    return side if margin(side) >= margin(stack) else stack
 
 
 def _panel_labels(canvas: Canvas, areas: list[Box], renders: list[Render], label_h: float) -> None:
@@ -392,6 +479,21 @@ def _draw_key_entry(canvas: Canvas, number: int, lines: list[str], x: float, y: 
         )
     )
     return canvas.text(lines, x + 2.6 * BADGE_R, y, KEY_PX)
+
+
+def compose_auto(slide: Slide, renders: list[Render], height: float) -> Canvas:
+    """Key beside or key below, whichever shows the smallest text larger with no failure."""
+
+    tries = [compose_wide(slide, renders, height)]
+    if slide.keys:
+        tries.append(compose_key(slide, renders, height))
+
+    def rank(canvas: Canvas) -> tuple[int, float]:
+        return (-len(canvas.problems), canvas.min_css_px)
+
+    best = max(tries, key=rank)
+    best.problems.extend(p for r in renders for p in r.problems)
+    return best
 
 
 def compose_key(slide: Slide, renders: list[Render], height: float) -> Canvas:
@@ -469,22 +571,23 @@ def compose_grid(slide: Slide, renders: dict[str, Render], height: float) -> Can
         items = [(renders[c.panel], c.select, c.label) for c in slide.cells]
     else:
         items = [(r, None, r.label) for r in renders.values()]
-    n = len(items)
-    cols = n if n <= 3 else math.ceil(n / 2)
-    rows = math.ceil(n / cols)
+    crops = [
+        _crop(render, selector, canvas) if selector else render.shown
+        for render, selector, _ in items
+    ]
+    shown = [(item, crop) for item, crop in zip(items, crops, strict=True) if crop is not None]
+    cols = _grid_columns([(item[0], crop) for item, crop in shown], ROOM_W, height - bottom)
+    rows = max(1, math.ceil(len(shown) / cols))
     cell_w = ROOM_W / cols
     cell_h = (height - bottom) / rows
     placed: dict[str, Placed] = {}
-    for i, (render, selector, label) in enumerate(items):
+    for i, ((render, _selector, label), crop) in enumerate(shown):
         r, c = divmod(i, cols)
         box = Box(
             c * cell_w + 4, r * cell_h + 4, (c + 1) * cell_w - 4, (r + 1) * cell_h - LABEL_PX - 8
         )
-        crop = _crop(render, selector, canvas) if selector else None
-        if selector and crop is None:
-            continue
         placed[render.stem.rsplit("-", 1)[-1]] = canvas.embed(
-            render, box, crop, f"{render.stem}-{i}"
+            render, box, crop, shared=bool(slide.cells)
         )
         canvas.text([label], box.x0 + box.w / 2, box.y1 + LABEL_PX + 2, LABEL_PX, anchor="middle")
     y = height - bottom + KEY_PX
@@ -493,19 +596,35 @@ def compose_grid(slide: Slide, renders: dict[str, Render], height: float) -> Can
     if note_lines:
         canvas.text(note_lines, 0, y, NOTE_PX, color=FAINT)
     canvas.problems.extend(_place_badges(canvas, slide, placed))
+    canvas.problems.extend(p for r in renders.values() for p in r.problems)
     return canvas
+
+
+def _grid_columns(items: list[tuple[Render, Box]], width: float, height: float) -> int:
+    """The column count whose worst cell keeps the largest legibility margin."""
+
+    def margin(cols: int) -> float:
+        rows = math.ceil(len(items) / cols)
+        cw, ch = width / cols - 8, height / rows - LABEL_PX - 12
+        worst = 99.0
+        for render, view in items:
+            sizes = render.svg.font_sizes_in(view)
+            need = MIN_CSS_PX / CARD_SCALE / min(sizes) if sizes else 0.1
+            worst = min(worst, min(cw / view.w, ch / view.h, MAX_SCALE) / need)
+        return worst
+
+    return max(range(1, len(items) + 1), key=margin) if items else 1
 
 
 def _crop(render: Render, selector: str, canvas: Canvas) -> Box | None:
     from scripts.visual_language.dot import mark_box as _mark_box
 
-    matches = select(render.dot, selector)
+    matches = select(render.dot, fill(selector))
     canvas.witnesses[selector] = [m.name for m in matches]
     for mark in matches:
         box = _mark_box(render.svg, mark)
         if box is not None:
-            pad = 12.0
-            return Box(box.x0 - pad, box.y0 - pad, box.x1 + pad, box.y1 + pad)
+            return box.pad(12.0)
     canvas.problems.append(f"cell {selector} found no mark")
     return None
 

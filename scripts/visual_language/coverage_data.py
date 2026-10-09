@@ -209,7 +209,7 @@ ROWS: Mapping[str, Row] = {
     ),
     "VE03": _R(
         "edge.label.multiplicity",
-        "arrow-words",
+        "arrows-as-one",
         P,
         "_edge_multiplicity:_html_multiplicity_edge_label",
     ),
@@ -344,8 +344,8 @@ ROWS: Mapping[str, Row] = {
     ),
     "VK03": _R(
         "channel.unencoded_reasons",
-        "color-transforms",
-        P,
+        "unencoded",
+        C,
         "_encoding:_varying_marker",
         caption_variants=(
             "reconciled_aggregate",
@@ -421,7 +421,7 @@ ROWS: Mapping[str, Row] = {
     ),
     "VI03": _R("legend.backward_key", "backward", P, "_legend:backward_key_sections"),
     "VI04": _R(
-        "legend.rank_engine", "direction-layout", P, "_legend:legend_table_lines_for_rank_path"
+        "legend.rank_engine", "layout-engine", P, "_legend:legend_table_lines_for_rank_path"
     ),
     "VI05": _R("legend.bundle_diff", "other-pictures", C, "bundle_diff:bundle_diff"),
     "VT01": _R(
@@ -442,7 +442,7 @@ ROWS: Mapping[str, Row] = {
     ),
     "VY02": _R(
         "layout.engine",
-        "direction-layout",
+        "layout-engine",
         P,
         "torchlens.visualization._rank_layout_internal.layout:RANK_LAYOUT_COST_THRESHOLD",
         variants=("auto", "dot", "rank"),
@@ -600,14 +600,6 @@ LEGEND_ROW_WITNESS: Mapping[str, str] = {
     "eligible nodes": "color-by",
     "linear min-max": "color-by",
     "n/a = unencoded": "color-by",
-    "rank mapping (ordinal, not ratio)": "color-transforms",
-    "log scale (scale-invariant; values <= 0 unencoded)": "color-transforms",
-    "values <= 0 -- unencoded under the log transform": "color-transforms",
-    "value from user callable": "color-transforms",
-    "varies across passes -- unencoded": "color-transforms",
-    "per-pass field -- unencoded on rolled nodes": "color-transforms",
-    "first-pass-only field -- unencoded on rolled nodes": "color-transforms",
-    "constant value -- unencoded (degenerate domain)": "color-transforms",
     "size_by:": "size-by",
     "size ~": "size-by",
     "min": "size-by",

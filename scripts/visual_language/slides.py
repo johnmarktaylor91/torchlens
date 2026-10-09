@@ -8,7 +8,8 @@ constants by :func:`constants`, so a changed constant changes the caption.
 
 Render conventions (applied by the renderer unless a panel sets ``conventions=False`` or
 overrides a key): SVG output, save only, left to right, ``font_size=16``, no legend, the
-graph caption hidden, ``collapse="none"``.
+graph caption hidden, ``collapse="none"``, and two label rows (label and shape) so a picture
+fits a deck card at a legible size; slides that teach rows restore the defaults (``FULL``).
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ CONVENTIONS: Mapping[str, Any] = MappingProxyType(
         "show_legend": False,
         "vis_graph_overrides": {"label": ""},
         "collapse": "none",
+        "node_label_fields": ["label", "shape"],
     }
 )
 
@@ -60,6 +62,9 @@ class Panel:
     prep: str | None = None
     label: str = ""
     conventions: bool = True
+    #: Selectors whose marks bound the part of the render shown (a detail crop, for
+    #: marks whose fixed-size text is only legible enlarged); empty shows it all.
+    crop: tuple[Selector, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -81,7 +86,7 @@ class Slide:
     panels: tuple[Panel, ...] = ()
     keys: tuple[Key, ...] = ()
     rows: tuple[str, ...] = ()
-    layout: str = "key"
+    layout: str = "auto"
     text: str = ""
     footnote: str = ""
     cells: tuple[Cell, ...] = ()
@@ -146,16 +151,21 @@ def fill(template: str) -> str:
     return template.format(**constants()) if "{" in template else template
 
 
-LR = {"direction": "leftright"}
-TRIM = {"node_label_fields": ["label", "shape"]}
+#: Draw arguments that restore TorchLens's own default label rows (title, shape and
+#: memory, arguments, parameters, module path) on slides that teach them.
+FULL = {"node_label_fields": None}
+#: Label plus module path, for slides that point at the call a node belongs to.
+CALLS = {"node_label_fields": ["label", "module"]}
 CAP = {"vis_graph_overrides": {}}
+QUIET = {"show_legend": False}
+LEGEND = "node(text~TorchLens)"
 
 SLIDES: tuple[Slide, ...] = (
     Slide(
         id="alphabet-nodes",
-        title="The TorchLens visual language at a glance: nodes",
-        rule="Shape names the kind; fill, border and rows add independent facts. "
-        "Each mark is copied from the slide that teaches it.",
+        title="At a glance: nodes",
+        rule="Shape names the kind; fill, border and rows add facts. Each mark is copied from "
+        "the slide that teaches it.",
         layout="sheet",
         rows=(
             "VN01",
@@ -181,8 +191,9 @@ SLIDES: tuple[Slide, ...] = (
     ),
     Slide(
         id="alphabet-lines",
-        title="The TorchLens visual language at a glance: lines and boxes",
-        rule="Line style and words on arrows add facts about the data flow; boxes group calls.",
+        title="At a glance: lines and boxes",
+        rule="Line style and arrow words describe the data flow; boxes group the calls of one "
+        "module.",
         layout="sheet",
         rows=(
             "VE01",
@@ -202,22 +213,22 @@ SLIDES: tuple[Slide, ...] = (
     ),
     Slide(
         id="start-here",
-        title="Start here: caption, input, output, which way it reads",
-        rule="Arrows run from the op that made a tensor to the op that used it, "
-        "so the default graph reads bottom to top.",
+        title="Start here: how a graph reads",
+        rule="Arrows run from the op that made a tensor to the op that used it, so the default "
+        "graph reads bottom to top.",
         panels=(
             Panel(
                 "a",
-                "Flow",
-                kwargs={"direction": "bottomup", "vis_graph_overrides": {}},
+                "Tiny",
+                kwargs={"direction": "bottomup", "vis_graph_overrides": {}, **FULL},
                 label="draw()",
             ),
         ),
         keys=(
-            Key("Caption: model class, tensor count and memory, parameters", "graph(label~Flow)"),
+            Key("Caption: model, tensor count, memory, parameters", "graph(label~Tiny)"),
             Key("Green: the input, named @input.<argument>", "node(fillcolor={input_color})"),
             Key("Arrows point from producer to consumer", "edge(style=solid)"),
-            Key("Red: the output, pinned to the top", "node(fillcolor={output_color})"),
+            Key("Red: the output, at the top", "node(fillcolor={output_color})"),
         ),
         footnote="Bold warning lines join the caption when a capture was poisoned or unverified.",
         caption_kept=True,
@@ -225,13 +236,13 @@ SLIDES: tuple[Slide, ...] = (
     ),
     Slide(
         id="ovals-boxes",
-        title="Ovals are function calls; boxes are calls to a leaf module",
-        rule="A module with no submodules that ran one op is drawn as that op in a box; "
-        "the same matmul called as a function is an oval.",
+        title="Ovals are calls, boxes are modules",
+        rule="A leaf module that ran one op is drawn as that op in a box; the same matmul called "
+        "as a function is an oval.",
         panels=(Panel("a", "TwoWays"),),
         keys=(
-            Key("Box: nn.Linear called as a module, @fc", "node(shape=box, text~@fc)"),
-            Key("Oval: F.linear called as a function", "node(shape=oval, text~linear_2)"),
+            Key("Box: nn.Linear called as a module", "node(shape=box)"),
+            Key("Oval: F.linear called as a function", "node(shape=oval, text~linear)"),
             Key("Grey: the op uses parameters", "node(fillcolor={trainable})"),
             Key("White: no parameters", "node(fillcolor=white, shape=oval)"),
         ),
@@ -240,12 +251,16 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="node-rows",
         title="What a node says, row by row",
-        rule="Bold title, then shape and memory, constructor arguments the shapes do not "
-        "already prove, parameters, and the module path.",
+        rule="Bold title, shape and memory, the arguments the shapes do not prove, parameters, "
+        "then the module path.",
         panels=(
-            Panel("a", "Anatomy", label="draw()"),
+            Panel("a", "Anatomy", kwargs=FULL, label="draw()", crop=("node(text~conv2d)",)),
             Panel(
-                "b", "Anatomy", kwargs={"show_redundant_args": True}, label="show_redundant_args"
+                "b",
+                "Anatomy",
+                kwargs={"show_redundant_args": True, **FULL},
+                label="show_redundant_args=True",
+                crop=("node(text~conv2d)",),
             ),
         ),
         keys=(
@@ -259,12 +274,13 @@ SLIDES: tuple[Slide, ...] = (
     ),
     Slide(
         id="grey-params",
-        title="Grey means parameters: light trains, dark is frozen, two-tone is both",
-        rule="Fill precedence is input, output, boolean, then parameters.",
-        panels=(Panel("a", "Params", kwargs=CAP),),
+        title="Grey means parameters",
+        rule="Light grey trains, dark grey is frozen, two-tone is both. Fill precedence: input, "
+        "output, boolean, then parameters.",
+        panels=(Panel("a", "Params", kwargs={**CAP, **FULL}),),
         keys=(
             Key("Light grey {trainable}: all trainable", "node(fillcolor={trainable})"),
-            Key("Dark grey {frozen}: all frozen, shapes in brackets", "node(fillcolor={frozen})"),
+            Key("Dark grey {frozen}: frozen, shapes in brackets", "node(fillcolor={frozen})"),
             Key("Two-tone: some of each", "node(fillcolor~:)"),
             Key("Caption counts trainable parameters", "graph(label~trainable)"),
         ),
@@ -275,101 +291,156 @@ SLIDES: tuple[Slide, ...] = (
     ),
     Slide(
         id="dashed",
-        title="Dashed means not computed from the input",
-        rule="A node, edge or module box computed only from parameters, buffers, constants "
-        "or random draws is dashed until it meets the input.",
+        title="Dashed: not from the input",
+        rule="Anything computed only from parameters, buffers, constants or random draws is "
+        "dashed until it meets the input.",
         panels=(Panel("a", "Gate"),),
         keys=(
             Key("Dashed sigmoid: made from a parameter only", "node(style^dashed, text~sigmoid)"),
-            Key("Its arrow is dashed too", "edge(style=dashed)"),
+            Key("Its arrows are dashed too", "edge(style=dashed)"),
             Key("The module box around it is dashed", "cluster(style^dashed)"),
-            Key("mul meets the input: solid again", "node(style^solid, text~mul)"),
+            Key("The input arrives: solid again", "node(text~mul_2)"),
         ),
         rows=("VN06", "VE01", "VR01"),
     ),
     Slide(
         id="module-boxes",
-        title="Module boxes: name, class, depth, repeated calls",
-        rule="Each module call is a box titled @path over (Class); the border thins with "
-        "depth, {pen_max} pt outermost to {pen_min} pt deepest.",
-        panels=(Panel("a", "Nested"),),
+        title="Module boxes: path, class, depth",
+        rule="Each call is a box titled @path over (Class); the border thins with depth, "
+        "{pen_max} pt outside to {pen_min} pt at the deepest.",
+        panels=(Panel("a", "Nested", kwargs=CALLS),),
         keys=(
-            Key("Title @block:1 over (Sequential)", "cluster(label~@block:1)"),
-            Key("Thick outer border, thin inner", "cluster(penwidth={pen_max})"),
-            Key("Second call: @block:2", "cluster(label~@block:2)"),
-            Key("Leaf rows show the call: @block.0:2", "node(text~@block.0:2)"),
+            Key("@block:1 over (Sequential): the first call", "cluster(label~@block:1)"),
+            Key("Thick outer border, thinner inside", "cluster(penwidth={pen_max})"),
+            Key("Second call of the same module: @block:2", "cluster(label~@block:2)"),
+            Key("Rows name the call: @block.0.fc:2", "node(text~@block.0.fc:2)"),
         ),
         footnote="Empty modules are never drawn.",
         rows=("VR01", "VR02", "VR03", "VR04", "VL07"),
     ),
     Slide(
         id="arrow-words",
-        title="Words on arrows: which argument, and how many",
-        rule="Argument slots are named when order matters; {fan_in} or more inputs move the "
-        "labels to the middle; xN is N edges drawn as one.",
-        layout="text",
+        title="Words on arrows: argument slots",
+        rule="When argument order matters, each arrow names its slot.",
         panels=(
-            Panel("a", "ArgOrder", kwargs=TRIM, label="ArgOrder"),
-            Panel("b", "FanIn", kwargs=TRIM, label="FanIn"),
+            Panel(
+                "a",
+                "SubXY",
+                label="torch.sub(x, y)",
+                crop=("node(text~input_1)", "node(text~input_2)", "node(text~sub)"),
+            ),
         ),
         keys=(
-            Key("arg 0 and arg 1 into sub", 'edge(text~"arg 1")'),
-            Key("No labels into {commute}", None),
-            Key("cat([a, a]): two arrows from one op", 'edge(text~"arg 0", head~cat)'),
-            Key("At fan-in {fan_in}, labels sit mid-arrow", "edge(label~arg)", panel="b"),
+            Key("arg 0: the first argument", 'edge(text~"arg 0")'),
+            Key("arg 1: the second", 'edge(text~"arg 1")'),
+            Key("Arrows into {commute} carry no slot", None),
         ),
-        rows=("VE02", "VE03"),
+        rows=("VE02",),
+    ),
+    Slide(
+        id="fan-in",
+        title="Many inputs: labels mid-arrow",
+        rule="At {fan_in} or more inputs the slot labels move to the middle of each arrow.",
+        panels=(
+            Panel(
+                "a",
+                "FanIn",
+                kwargs={"direction": "topdown"},
+                label="torch.stack of four",
+                crop=("node(text~linear_1_1)", "node(text~linear_4_4)", "node(text~stack)"),
+            ),
+        ),
+        keys=(
+            Key("arg (0, k): position k in the list", "edge(text~arg)"),
+            Key("cat([a, a]) draws two arrows from one op", None),
+        ),
+        rows=("VE02",),
+    ),
+    Slide(
+        id="arrows-as-one",
+        title="Arrows drawn as one: xN",
+        rule="xN on an arrow means N edges between the same two nodes, drawn as one.",
+        panels=(
+            Panel(
+                "a",
+                "NestedRes",
+                kwargs={"depth": 1},
+                label="depth=1",
+                crop=("node(text~input_1)", "node(shape=box3d)"),
+            ),
+        ),
+        keys=(
+            Key("x2: the input feeds two ops inside the box", "edge(text~x2)"),
+            Key("The box hides which ops they were", "node(shape=box3d)"),
+        ),
+        rows=("VE03",),
     ),
     Slide(
         id="loop-unrolled",
-        title="Loops, unrolled: one node per pass",
+        title="Loops, unrolled: a node per pass",
         rule=':2 is the pass number, and the exact key trace["linear_1_1:2"] accepts.',
-        panels=(Panel("a", "Loop", kwargs={"view": "unrolled"}),),
+        panels=(Panel("a", "Loop", kwargs={"view": "unrolled", **CALLS}),),
         keys=(
             Key("linear_1_1:2: second pass of the same layer", "node(text~linear_1_1:2)"),
-            Key("One box per call: @cell:1 to @cell:3", "node(text~@cell:3)"),
+            Key("One call per pass: @cell:1 to @cell:3", "node(text~@cell:3)"),
             Key("Passes run left to right", "edge(head~relu_1_2pass2)"),
         ),
         rows=("VL01", "VR04", "VV01"),
     ),
     Slide(
         id="loop-rolled",
-        title="Loops, rolled: one node per layer, with pass counts",
-        rule="(x3) means one node ran three times with the same weights; In and Out say "
-        "which passes used each edge.",
-        layout="text",
-        panels=(Panel("a", "Loop", kwargs={"view": "rolled", **TRIM}),),
+        title="Loops, rolled: pass counts",
+        rule="(x3) means one node ran three times with the same weights; In and Out say which "
+        "passes used each edge.",
+        panels=(
+            Panel(
+                "a",
+                "Loop",
+                kwargs={"view": "rolled", **FULL},
+                crop=("node(text~linear)", "node(text~relu)", "edge(text~In)"),
+            ),
+        ),
         keys=(
             Key("(x3): ran three times", "node(text~x3)"),
             Key("In 2-3 on the back edge", "edge(text~In)"),
-            Key("Out 1-2 at the tail", "edge(text~Out)"),
             Key("A self-loop appears only when the loop carries state", None),
         ),
         rows=("VL01", "VE04", "VE05", "VR04"),
     ),
     Slide(
         id="reuse-shapes",
-        title="Reuse, recurrence and changing shapes differ",
-        rule="Separate call groups print as :1-2,3-4; shapes that change across calls "
-        "print as 2->4.",
+        title="Reuse versus changing shapes",
+        rule="Separate call groups print as :1-2,3-4; a shape that changes across passes prints "
+        "with an arrow.",
         panels=(
-            Panel("a", "LoopGroups", kwargs={"view": "rolled"}, label="two call groups"),
-            Panel("b", "LoopShapes", kwargs={"view": "rolled"}, label="two shapes"),
+            Panel(
+                "a",
+                "LoopGroups",
+                kwargs={"view": "rolled", **CALLS},
+                label="two call groups",
+                crop=("node(text~linear)",),
+            ),
+            Panel(
+                "b",
+                "LoopShapes",
+                kwargs={"view": "rolled", **FULL},
+                label="two shapes",
+                crop=("node(text~relu)",),
+            ),
         ),
         keys=(
-            Key("Call-group suffix on the module", 'node(text~",")'),
-            Key("Shape row changes across calls", "node(text~->)", panel="b"),
+            Key("Call groups 1-2 and 3-4", 'node(text~"1-2,3-4")'),
+            Key("The shape row changes across passes", "node(text~->)", panel="b"),
             Key("Compare (xN): one weight-tied loop", None),
         ),
         rows=("VL01", "VL03"),
     ),
     Slide(
         id="branches",
-        title="Branches: the boolean that decided, and which arm ran",
-        rule="Yellow TRUE is the comparison that chose the arm; it has no outgoing arrow "
-        "because it steered Python, not tensors.",
-        layout="text",
-        panels=(Panel("a", "Branch", kwargs=TRIM),),
+        title="Branches: which arm ran",
+        rule="Yellow TRUE is the comparison that chose the arm; it has no outgoing arrow because "
+        "it steered Python, not tensors.",
+        panels=(Panel("a", "Branch"),),
         keys=(
             Key("Yellow boolean, a dead end", "node(fillcolor={bool_color})"),
             Key("IF where the condition's computation starts", "edge(text~IF)"),
@@ -381,36 +452,37 @@ SLIDES: tuple[Slide, ...] = (
     ),
     Slide(
         id="buffers",
-        title="Buffers: cylinders, and a double border when hidden",
-        rule='"meaningful" hides {noise_buffers}; the consumer gets a double outline and a '
-        'tooltip; "never" hides every buffer.',
-        panels=(
-            Panel("a", "Stateful", label='show_buffer_layers="meaningful"'),
-            Panel("b", "Stateful", kwargs={"show_buffer_layers": "always"}, label='"always"'),
-        ),
+        title="Buffers: cylinders",
+        rule='"meaningful" hides {noise_buffers}; the op that reads them gets a double outline.',
+        panels=(Panel("a", "Stateful", kwargs=FULL, label='show_buffer_layers="meaningful"'),),
         keys=(
             Key("@scale: a buffer drawn as a cylinder", "node(shape=cylinder, text~@scale)"),
             Key("Double outline: hidden buffers feed this op", "node(peripheries=2)"),
-            Key('"always" shows the hidden statistics', "node(text~running_mean)", panel="b"),
+            Key('"always" draws the hidden statistics too; "never" hides every buffer', None),
         ),
-        footnote='show_buffer_layers="never" hides every buffer.',
         rows=("VN07", "VN08"),
     ),
     Slide(
         id="mutated-param",
         title="A parameter changed in place",
-        rule="A dashed grey cylinder stands for the Parameter itself when an in-place op "
-        "changed it during forward; dashed edges run to its earlier readers.",
+        rule="A dashed cylinder stands for the Parameter itself when an in-place op changed it "
+        "during forward.",
         panels=(
-            Panel("a", "Clamp", kwargs={"show_legend": True}, label="trainable"),
-            Panel("b", "MutFrozen", label="frozen"),
+            Panel("a", "Clamp", kwargs=FULL),
+            Panel(
+                "b",
+                "Clamp",
+                kwargs={"show_legend": True, **FULL},
+                label="show_legend=True",
+                crop=(LEGEND,),
+            ),
         ),
         keys=(
             Key("parameter temp (1,)", "node(shape=cylinder, text~parameter)"),
-            Key("Dashed black edges to pre-mutation readers", "edge(style=dashed)"),
-            Key("The legend gains this row only now", 'node(text~"mutated parameter")'),
-            Key("A frozen Parameter takes the dark grey", "node(shape=cylinder)", panel="b"),
+            Key("Dashed black edges to its earlier readers", "edge(style=dashed)"),
+            Key("The legend gains this row only now", 'node(text~"mutated parameter")', "b"),
         ),
+        footnote="A frozen Parameter takes the dark grey fill.",
         rows=("VN09", "VE11", "VI01"),
     ),
     Slide(
@@ -427,17 +499,17 @@ SLIDES: tuple[Slide, ...] = (
             ),
         ),
         keys=(
-            Key("The orphans group title", "cluster(label~orphans)"),
-            Key("exp ran, but nothing used it", "node(text~exp, style^dashed)"),
+            Key("The orphans group", "cluster(label~orphans)"),
+            Key("sin ran on a constant, and nothing used it", "node(text~sin)"),
             Key("Without keep_orphans at capture, the draw warns", None),
         ),
         rows=("VN14", "VR13"),
     ),
     Slide(
         id="containers",
-        title="Inputs and outputs that are dicts, tuples, lists",
-        rule='"labels" names keys on arrows; "cluster" draws a dotted group; "collapsed" '
-        'folds more than {container_max_inline} same-shape leaves; "nodes" adds a record box.',
+        title="Dicts, tuples and lists",
+        rule='"labels" names keys on arrows; "collapsed" folds more than {container_max_inline} '
+        'same-shape leaves; "nodes" adds a record box.',
         panels=(
             Panel(
                 "a",
@@ -445,6 +517,7 @@ SLIDES: tuple[Slide, ...] = (
                 capture={"capture_container_structure": True},
                 kwargs={"show_containers": "nodes"},
                 label='"nodes"',
+                crop=("node(text~dict)", "node(text~output_1)", "node(text~output_2)"),
             ),
             Panel(
                 "b",
@@ -452,12 +525,13 @@ SLIDES: tuple[Slide, ...] = (
                 capture={"capture_container_structure": True},
                 kwargs={"show_containers": "collapsed"},
                 label='"collapsed"',
+                crop=("node(text~x14)",),
             ),
         ),
         keys=(
             Key("Dashed record box for the returned dict", "node(text~dict)"),
             Key("Arrow words name the keys", "edge(text~logits)"),
-            Key("Arrowless dashed ties mark membership", "edge(arrowhead=none)"),
+            Key("Arrowless ties mark membership", "edge(arrowhead=none)"),
             Key("14 same-shape leaves folded into one", "node(text~x14)", panel="b"),
         ),
         footnote='"auto" behaves as "collapsed" today; "cluster" draws a dotted group.',
@@ -465,7 +539,7 @@ SLIDES: tuple[Slide, ...] = (
     ),
     Slide(
         id="depth",
-        title="Whole modules as one node: depth and collapse_fn",
+        title="Whole modules as one node",
         rule="The 3D box names the module and counts the ops, buffers and parameters inside.",
         panels=(Panel("a", "Nested", kwargs={"depth": 1}),),
         keys=(
@@ -474,111 +548,125 @@ SLIDES: tuple[Slide, ...] = (
             Key("Ops and parameters inside", "node(shape=box3d, text~params)"),
         ),
         footnote="collapse_fn(module) chooses the modules to fold instead of a depth.",
-        rows=("VN10", "VR05", "VE03"),
+        rows=("VN10", "VR05"),
     ),
     Slide(
         id="collapse-max",
-        title='collapse="max" and the float ladder',
-        rule="A dashed rounded chip stands for a run of ops or blocks and names an address "
-        "range; a float in [0, 1] walks a monotone ladder.",
+        title='collapse="max": runs as chips',
+        rule="A rounded chip stands for a run of ops and names its address range; a float in "
+        "[0, 1] walks a monotone ladder.",
         panels=(
-            Panel("a", "Stack", kwargs={"collapse": "max", **CAP}, label='collapse="max"'),
-            Panel("b", "Stack", kwargs={"collapse": 0.5}, label="collapse=0.5"),
+            Panel(
+                "a",
+                "Stack",
+                kwargs={"collapse": "max", "direction": "topdown"},
+                label='collapse="max"',
+            ),
         ),
         keys=(
             Key("Chip: a run of ops and the modules it spans", "node(style^rounded)"),
-            Key("Caption discloses the collapse", "graph(label~collapse)"),
-            Key("A float picks a point on the ladder", "node(style^rounded)", panel="b"),
+            Key("collapse=0.5 picks a point between none and max", None),
         ),
         footnote="A floor fallback prints bold in the caption; an orange dashed edge is a "
         "projection artifact, not a cycle.",
-        caption_kept=True,
         rows=("VN11", "VR06", "VR07", "VE13"),
     ),
     Slide(
         id="collapse-auto",
-        title='collapse="auto" on a graph that needs it',
+        title='collapse="auto" on a big graph',
         rule='"auto" picks the first readable schedule point; on a small graph it changes nothing.',
         panels=(Panel("a", "BigStack", kwargs={"collapse": "auto"}, label='collapse="auto"'),),
         keys=(
-            Key("36 ops become a few chips", "node(style^rounded)"),
+            Key("45 ops become a few nodes", "node(style^rounded)"),
             Key("Below the readable band, auto leaves the graph alone", None),
         ),
         rows=("VR06",),
     ),
     Slide(
         id="fold-repeats",
-        title="Repeated blocks: one shown, +N more",
-        rule="One representative and an honest count of separate blocks with their own "
-        "weights; compare (xN), the same weights applied N times.",
+        title="Repeated blocks: one, +N more",
+        rule="One representative and an honest count of separate blocks with their own weights; "
+        "compare (xN), one block run N times.",
         panels=(Panel("a", "Stack", kwargs={"fold_repeats": True}),),
         keys=(
-            Key("The representative, scoped @blocks.0 only", "node(text~only)"),
+            Key("The representative, @blocks.0", "node(shape=box3d, text~@blocks.0)"),
             Key("... +3 more Block", "node(shape=plaintext, text~more)"),
-            Key("Arrows route through the ellipsis", "edge(head~ellipsis)"),
+            Key("Arrows route through the ellipsis", "edge(head~more)"),
         ),
         rows=("VN13", "VE16", "VR06"),
     ),
     Slide(
         id="fold-patterns",
         title="Named patterns: fold_patterns",
-        rule="PATTERN chips replace runs that match a named idiom; a mapping declares your "
-        'own; patterns refuse to combine with collapse other than "none".',
+        rule="PATTERN chips replace runs that match a named idiom; patterns refuse collapse other "
+        'than "none".',
         panels=(
-            Panel("a", "ConvBnRelu2", kwargs={"fold_patterns": "idiomatic"}, label="idiomatic"),
             Panel(
-                "b",
-                "AddRelu",
-                kwargs={"fold_patterns": {"AddRelu": "add > relu"}},
-                label='{"AddRelu": "add > relu"}',
+                "a",
+                "ConvBnRelu2",
+                kwargs={"fold_patterns": "idiomatic", "direction": "topdown"},
+                label='fold_patterns="idiomatic"',
             ),
         ),
         keys=(
-            Key("First ConvBnRelu chip", "node(text~PATTERN)"),
-            Key("Your own pattern from a mapping", "node(text~AddRelu)", panel="b"),
+            Key("A ConvBnRelu chip: three ops, one name", "node(text~PATTERN)"),
+            Key("Two instances, different weights, same name", None),
             Key('With collapse other than "none", the draw refuses', None),
         ),
         rows=("VN12",),
     ),
     Slide(
+        id="own-patterns",
+        title="Your own patterns",
+        rule="A mapping declares a pattern: a name and a path of op or module names joined by >.",
+        panels=(
+            Panel(
+                "a",
+                "Flow",
+                kwargs={"fold_patterns": {"LinearTanh": "Linear > tanh"}},
+                label='fold_patterns={"LinearTanh": "Linear > tanh"}',
+            ),
+        ),
+        keys=(Key("Your pattern's chip", "node(text~LinearTanh)"),),
+        rows=("VN12",),
+    ),
+    Slide(
         id="focus",
         title="Focus on one module: module=",
-        rule="Only the module's own ops; green and red ext: ovals stand for the outside; "
-        'trace.modules["head"].draw() is the same.',
-        panels=(Panel("a", "Nested", kwargs={"module": "head"}),),
+        rule="Only the module's own ops; green and red ovals stand for the outside. "
+        'trace.modules["blocks.0"].draw() is the same.',
+        panels=(Panel("a", "Stack", kwargs={"module": "blocks.0"}),),
         keys=(
-            Key("Green ext: where data enters", "node(fillcolor={input_color}, text~ext)"),
+            Key("Green: where data enters", "node(fillcolor={input_color})"),
             Key("Red: where data leaves", "node(fillcolor={output_color})"),
-            Key("Only the module's own ops", "node(text~@head)"),
+            Key("Only the module's own ops", "node(text~relu)"),
         ),
         rows=("VN15", "VR08"),
     ),
     Slide(
         id="skip",
-        title="Hiding ops: skip_fn and the lens filter",
-        rule="A dashed bridge labelled via N hidden means reachable through omitted work, "
-        "not adjacent; a lens adds a bridge key and counts.",
-        layout="text",
+        title="Hiding ops: skip_fn, lens filter",
+        rule="A dashed bridge labelled via N hidden means reachable through omitted work, not "
+        "adjacent.",
         panels=(
-            Panel("a", "FlowReshape", kwargs={"skip_fn": "@skip_reshape", **TRIM}, label="skip_fn"),
+            Panel("a", "FlowReshape", kwargs={"skip_fn": "@skip_reshape"}, label="skip_fn"),
             Panel(
                 "b",
                 "FlowReshape",
                 call="lens",
-                kwargs={"lens": "overview", "display_filter": "@exclude_reshapes", **TRIM},
-                label="lens filter",
+                kwargs={"lens": "overview", "display_filter": "@exclude_reshapes"},
+                label="a lens with a display filter",
             ),
         ),
         keys=(
-            Key("The reshape is gone", None),
-            Key("via 1 hidden on a dashed bridge", "edge(text~hidden)"),
-            Key("The lens filter adds its own disclosure", "edge(text~hidden)", panel="b"),
+            Key("The reshape is gone: via 1 hidden", "edge(text~hidden)"),
+            Key("The lens filter bridges the same way", "edge(text~hidden)", panel="b"),
         ),
         rows=("VE07", "VK10"),
     ),
     Slide(
         id="interventions",
-        title="Interventions: site, cone, or a hook node",
+        title="Interventions: site and cone",
         rule="Magenta 3 pt border is the edited site; pink 1.75 pt is its downstream cone; "
         '"as_node" draws the hook as a diamond.',
         panels=(
@@ -602,16 +690,16 @@ SLIDES: tuple[Slide, ...] = (
         keys=(
             Key("Site: magenta border {site_color}", "node(color={site_color})"),
             Key("Cone: pink border downstream", "node(color={cone_color})"),
-            Key("Hook drawn as a diamond", "node(shape=diamond)", panel="b"),
+            Key("The hook as a diamond", "node(shape=diamond)", panel="b"),
             Key("vis_show_cone=False hides the cone", None),
         ),
         rows=("VN16", "VN17", "VN18"),
     ),
     Slide(
         id="surgery",
-        title="What an edit actually did: the surgery lens",
-        rule="Solid magenta cites a recorded fire; dashed is a declared target with no fire "
-        "here; the caption census says which replacement lane ran.",
+        title="What an edit did: surgery lens",
+        rule="Solid magenta cites a recorded fire; dashed marks a declared target that did not "
+        "fire here.",
         panels=(
             Panel(
                 "a",
@@ -623,20 +711,20 @@ SLIDES: tuple[Slide, ...] = (
             ),
         ),
         keys=(
-            Key("Fact: a recorded fire, solid", "node(text~spliced)"),
-            Key("Heuristic: declared target, dashed", "node(text~declared)"),
+            Key("A recorded fire: the edited row", "node(text~edited)"),
             Key("Census lines in the caption", "graph(label~census)"),
         ),
-        footnote="Up to {surgery_cap} citation rows per node. An intervention replay with "
-        "direct writes adds the caption line Direct writes detected.",
+        footnote="The caption census names the replacement lane that ran. Up to {surgery_cap} "
+        "citation rows per node. A replay with direct writes adds the caption line Direct "
+        "writes detected.",
         caption_kept=True,
         rows=("VN19", "VC02", "VC05"),
     ),
     Slide(
         id="surgery-diff",
-        title="Two captures need honest joins",
-        rule="Solid joins use site identity; dashed joins are heuristic; a missing record "
-        "does not prove missing execution.",
+        title="Two captures, honest joins",
+        rule="Solid joins use site identity; dashed joins are heuristic; a missing record does "
+        "not prove missing execution.",
         panels=(
             Panel(
                 "a",
@@ -649,86 +737,102 @@ SLIDES: tuple[Slide, ...] = (
         keys=(
             Key("Solid grey join: same site", "edge(style=solid, dir=none)"),
             Key("Dashed join: matched by label or position", None),
-            Key("not recorded: one side has no record", None),
         ),
         rows=("VE15",),
     ),
     Slide(
         id="color-by",
         title="Colour a measurement: color_by",
-        rule="Fill ramps light to blue by value; the legend appears by itself and states "
-        "source, coverage, scale and min, mid and max; a channel forces dot.",
-        panels=(Panel("a", "SmallCnn", kwargs={"color_by": "flops", "show_legend": None}),),
-        keys=(
-            Key("Ramp: light is low, blue is high", "node(fillcolor~#0072B2)"),
-            Key("The encoding legend appears by itself", "node(text~color_by)"),
-            Key("Unencoded nodes stay white and are counted", "node(text~encoded)"),
+        rule="Fill ramps light to blue by value; the legend appears by itself and states source, "
+        "coverage, scale and range.",
+        panels=(
+            Panel("a", "Sizes", kwargs={"color_by": "flops", **QUIET}, label='color_by="flops"'),
+            Panel(
+                "b",
+                "Sizes",
+                kwargs={"color_by": "flops", "show_legend": None},
+                label="its legend",
+                crop=("node(text~color_by)",),
+            ),
         ),
-        rows=("VK01", "VK06", "VI02"),
+        keys=(
+            Key("Most FLOPs: the darkest fill", "node(text~linear_2)"),
+            Key("The encoding legend appears by itself", "node(text~color_by)", panel="b"),
+            Key("Unencoded nodes stay white and are counted", "node(text~encoded)", panel="b"),
+        ),
+        rows=("VK01", "VK03", "VK06", "VI02"),
     ),
     Slide(
         id="color-transforms",
-        title="Rank, linear and log are different comparisons; unencoded is not zero",
-        rule="Rank shows order, linear shows position in the range, log leaves nonpositive "
-        "values unencoded; varying and missing values stay unencoded with the reason.",
-        layout="grid",
-        panels=(
+        title="Linear, rank and log differ",
+        rule="Rank shows order, linear shows the position in the range, log leaves nonpositive "
+        "values unencoded.",
+        panels=tuple(
             Panel(
-                "a",
-                "Shapes",
-                kwargs={"color_by": "@bytes_linear", "show_legend": None},
-                label="linear",
-            ),
-            Panel(
-                "b", "Shapes", kwargs={"color_by": "@bytes_rank", "show_legend": None}, label="rank"
-            ),
-            Panel(
-                "c", "Shapes", kwargs={"color_by": "@bytes_log", "show_legend": None}, label="log"
-            ),
-            Panel(
-                "d",
-                "LoopShapes",
-                kwargs={"view": "rolled", "color_by": "step_index", "show_legend": None},
-                label="rolled",
-            ),
+                name,
+                "Sizes",
+                kwargs={"color_by": f"@bytes_{transform}", **QUIET},
+                label=transform,
+            )
+            for name, transform in zip("abc", ("linear", "rank", "log"), strict=True)
         ),
-        keys=(
-            Key("rank mapping is ordinal, not a ratio", "node(text~rank)", panel="b"),
-            Key("Rolled nodes whose value varies stay unencoded", "node(text~varies)", panel="d"),
-        ),
-        rows=("VK02", "VK03"),
+        footnote="Rank is ordinal, not a ratio. Rolled nodes whose value varies stay unencoded "
+        "with the reason.",
+        rows=("VK02",),
+    ),
+    Slide(
+        id="unencoded",
+        title="Unencoded is not zero",
+        rule="A node left white carries no value for the channel; the legend says why, in these "
+        "words.",
+        layout="table",
+        rows=("VK03",),
     ),
     Slide(
         id="size-by",
-        title="Size a measurement: size_by and scale",
+        title="Size a measurement: size_by",
         rule="Area, not side, follows the non-batch element count, clamped at {size_max_area}x; "
         "labels never shrink.",
         panels=(
+            Panel("a", "Sizes", kwargs={"size_by": "dims", "scale": "sqrt", **QUIET}),
             Panel(
-                "a",
-                "SmallCnn",
+                "b",
+                "Sizes",
                 kwargs={"size_by": "dims", "scale": "sqrt", "show_legend": None},
+                label="its legend",
+                crop=("node(text~size_by)",),
             ),
         ),
         keys=(
-            Key("Bigger tensor, bigger node", "node(fixedsize=false)"),
-            Key("sqrt by default; linear grows faster", None),
-            Key("The legend states the size rule", "node(text~size)"),
+            Key("Bigger tensor, bigger node", "node(text~linear_1)"),
+            Key("The legend states the size rule", "node(text~size_by)", panel="b"),
+            Key('scale="sqrt" by default; "linear" grows faster', None),
         ),
         rows=("VK04", "VK06"),
     ),
     Slide(
         id="stack-by",
         title="Line passes up: stack_by",
-        rule="Nodes sharing a pass index pin to one rank; same rank means the same "
-        "annotation, not parallel execution; rolled views refuse.",
+        rule="Nodes sharing a pass index share a rank: the same annotation, not parallel "
+        "execution. Rolled views refuse.",
         panels=(
-            Panel("a", "LockstepDecoder", kwargs={"stack_by": True, "show_legend": None, **CAP}),
+            Panel(
+                "a",
+                "Loop",
+                kwargs={"view": "unrolled", "stack_by": True, **QUIET, **CAP},
+                label="stack_by=True",
+            ),
+            Panel(
+                "b",
+                "Loop",
+                kwargs={"view": "unrolled", "stack_by": True, "show_legend": None},
+                label="its legend",
+                crop=("node(text~stack_by)",),
+            ),
         ),
         keys=(
-            Key("Each column is one pass", None),
             Key("Caption: stacked by pass_index", "graph(label~stacked)"),
-            Key("The legend explains the rank rule", "node(text~stack_by)"),
+            Key("The legend explains the rank rule", "node(text~stack_by)", panel="b"),
             Key("Sibling ordering is off while stacking", None),
         ),
         caption_kept=True,
@@ -736,9 +840,9 @@ SLIDES: tuple[Slide, ...] = (
     ),
     Slide(
         id="overlays",
-        title="Overlays: one more row, and a border that flags",
-        rule="nan: yes adds an orange 3 pt border; n/a means not checkable; any nonzero "
-        "numeric overlay thickens the border.",
+        title="Overlays: a row and a border",
+        rule="nan: yes adds an orange 3 pt border; n/a means not checkable; a nonzero numeric "
+        "overlay thickens the border.",
         panels=(
             Panel("a", "NanMaker", kwargs={"node_overlay": "nan"}, label='node_overlay="nan"'),
             Panel("b", "Flow", kwargs={"node_overlay": "@score_map"}, label="a mapping"),
@@ -753,26 +857,30 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="more-rows",
         title="More rows on demand",
-        rule="Profiling appends time, storage and call site; saved for backward measures "
-        "retained tensors; explicit fields replace the default rows.",
+        rule="Profiling adds time, storage and call site; listed fields replace the default rows.",
         panels=(
             Panel(
                 "a",
                 "Grad",
-                kwargs={"node_style": "profiling", "show_saved_for_backward": True},
+                kwargs={
+                    "node_style": "profiling",
+                    "show_saved_for_backward": True,
+                    **FULL,
+                },
                 label='node_style="profiling"',
+                crop=("node(text~square)",),
             ),
             Panel(
                 "b",
                 "Flow",
-                kwargs={"node_label_fields": ["label", "shape", "time"]},
-                label="node_label_fields",
+                kwargs={"node_label_fields": ["label", "time"]},
+                label='node_label_fields=["label", "time"]',
             ),
         ),
         keys=(
             Key("t= time and out= storage", "node(text~t=)"),
             Key("call= and fn= name the source line", "node(text~call=)"),
-            Key("saved for backward: N tensors", "node(text~saved)"),
+            Key("show_saved_for_backward: retained tensors", "node(text~saved)"),
             Key("Fields you list replace the defaults", "node(text~tanh)", panel="b"),
         ),
         footnote="Vision and attention rows exist only as experimental node_spec_fn "
@@ -781,22 +889,28 @@ SLIDES: tuple[Slide, ...] = (
     ),
     Slide(
         id="lenses",
-        title="Lenses: presets that answer one question",
-        rule="A lens chooses sources, detail and disclosures; a skin changes the ink; anything "
-        "you pass wins; a lens may refuse when evidence is missing.",
+        title="Lenses: presets for one question",
+        rule="A lens chooses sources, detail and disclosures; anything you pass wins; a lens may "
+        "refuse when evidence is missing.",
         layout="grid",
         panels=(
-            Panel("a", "SmallCnn", call="lens", kwargs={"lens": "overview"}, label="overview"),
-            Panel("b", "SmallCnn", call="lens", kwargs={"lens": "speed"}, label="speed"),
-            Panel("c", "SmallCnn", call="lens", kwargs={"lens": "dims"}, label="dims"),
+            Panel("a", "Flow", call="lens", kwargs={"lens": "overview"}, label="overview"),
+            Panel("b", "Flow", call="lens", kwargs={"lens": "speed"}, label="speed"),
+            Panel("c", "Flow", call="lens", kwargs={"lens": "dims"}, label="dims"),
         ),
+        cells=(
+            Cell("a", "node(text~tanh)", "overview"),
+            Cell("b", "node(text~tanh)", "speed"),
+            Cell("c", "node(text~tanh)", "dims"),
+        ),
+        footnote="The same tanh node under three lenses.",
         rows=("VK09",),
     ),
     Slide(
         id="nonfinite",
-        title="Not checked is different from finite",
-        rule="Nonfinite states use stripes, wedges or a border; grey dashed means not "
-        "checked, never finite.",
+        title="Not checked is not finite",
+        rule="Nonfinite states use stripes, wedges or a border; grey dashed means not checked, "
+        "never finite.",
         layout="grid",
         panels=(Panel("a", "Nonfinite", call="lens", kwargs={"lens": "debug"}),),
         cells=(
@@ -813,7 +927,7 @@ SLIDES: tuple[Slide, ...] = (
         id="backward",
         title="The backward graph",
         rule="Lavender ovals are grad_fns named by their forward op; dotted accum edges feed "
-        "leaves; cream is order two or more; the key lists only styles painted.",
+        "leaves.",
         panels=(
             Panel(
                 "a",
@@ -821,8 +935,8 @@ SLIDES: tuple[Slide, ...] = (
                 call="draw_backward",
                 capture={"save_grads": "all"},
                 prep="log_backward",
-                kwargs={"show_legend": True},
-                label="draw_backward",
+                kwargs=QUIET,
+                label="draw_backward()",
             ),
             Panel(
                 "b",
@@ -831,22 +945,44 @@ SLIDES: tuple[Slide, ...] = (
                 capture={"save_grads": "all"},
                 prep="higher_order",
                 kwargs={"vis_mode": "unrolled", "show_legend": True},
-                label="grad of grad",
+                label="the backward key, with every style painted",
+                crop=('node(text~"backward key")',),
             ),
         ),
         keys=(
             Key("grad_fn node", "node(fillcolor=#F2F3FF)"),
             Key("Dotted accum edge to a leaf", "edge(style=dotted)"),
-            Key("Order two or more: cream", "node(fillcolor=#FFF4D6)", panel="b"),
-            Key("The backward key", "node(text~grad_fn)"),
+            Key("The backward key lists only the styles painted", "node(text~grad_fn)", "b"),
         ),
         rows=("VN26", "VE09", "VR11", "VI03", "VC04", "VV02"),
     ),
     Slide(
+        id="grad-of-grad",
+        title="Gradients of gradients",
+        rule="A grad_fn of order two or more is cream; [i] marks a grad_fn with no forward op; "
+        "[custom] a custom autograd Function.",
+        panels=(
+            Panel(
+                "a",
+                "HigherOrder",
+                call="draw_backward",
+                capture={"save_grads": "all"},
+                prep="higher_order",
+                kwargs={"vis_mode": "unrolled", **QUIET},
+                crop=("node(fillcolor=#FFF4D6)",),
+            ),
+        ),
+        keys=(
+            Key("Order two or more: cream", "node(fillcolor=#FFF4D6)"),
+            Key("[i]: no forward op", "node(text~[i])"),
+        ),
+        rows=("VN26",),
+    ),
+    Slide(
         id="combined",
         title="Forward and backward together",
-        rule="Dashed lavender ties join each forward op to its grad_fn; on a forward graph, "
-        "purple reverse arrows are captured gradients.",
+        rule="Dashed ties join each forward op to its grad_fn; purple reverse arrows are "
+        "captured gradients.",
         panels=(
             Panel(
                 "a",
@@ -854,7 +990,8 @@ SLIDES: tuple[Slide, ...] = (
                 call="draw_combined",
                 capture={"save_grads": "all"},
                 prep="log_backward",
-                label="draw_combined",
+                label="draw_combined()",
+                crop=("node(text~mul_1_1)", "node(text~mul_back)"),
             ),
             Panel(
                 "b",
@@ -876,60 +1013,83 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="skins",
         title="Five skins",
-        rule='Meaning stays, ink changes; for_paper=True forces "paper"; "colorblind" '
-        "changes borders, not the palette.",
+        rule='Meaning stays, ink changes; for_paper=True forces "paper".',
         layout="grid",
         panels=tuple(
-            Panel(name, "Flow", kwargs={"vis_theme": skin}, label=skin)
+            Panel(name, "Tiny", kwargs={"vis_theme": skin}, label=skin)
             for name, skin in zip(
                 "abcde", ("torchlens", "paper", "dark", "colorblind", "high_contrast"), strict=True
             )
         ),
-        footnote="Orphans, container nodes, backward nodes and overlay borders ignore the skin.",
+        footnote='"colorblind" changes borders, not the palette. Orphans, container nodes, '
+        "backward nodes and overlay borders ignore the skin.",
         rows=("VT01", "VT02"),
     ),
     Slide(
         id="direction-layout",
-        title="Direction, layout engine, sibling order",
-        rule='Direction rotates the layout, not the computation; "auto" switches to the rank '
-        "engine above {rank_cost} cost units, losing orphans and sibling ordering.",
+        title="Direction and sibling order",
+        rule="Direction rotates the layout, not the computation.",
         layout="grid",
         panels=(
-            Panel("a", "Flow", kwargs={"direction": "bottomup"}, label="bottomup (default)"),
-            Panel("b", "Flow", kwargs={"direction": "topdown"}, label="topdown"),
-            Panel("c", "Flow", kwargs={"direction": "leftright"}, label="leftright"),
+            Panel("a", "Tiny", kwargs={"direction": "bottomup"}, label="bottomup (default)"),
+            Panel("b", "Tiny", kwargs={"direction": "topdown"}, label="topdown"),
+            Panel("c", "Tiny", kwargs={"direction": "leftright"}, label="leftright"),
+        ),
+        footnote="order_siblings=True keeps fan-outs in call order using invisible ordering edges.",
+        rows=("VY01", "VR10", "VE14"),
+    ),
+    Slide(
+        id="layout-engine",
+        title='Layout engines: layout="rank"',
+        rule='layout="dot" is the default; "auto" switches to the rank engine above {rank_cost} '
+        "cost units.",
+        panels=(
+            Panel("a", "Flow", kwargs={"layout": "rank", **QUIET}, label='layout="rank"'),
             Panel(
-                "d",
-                "FanIn",
-                kwargs={"layout": "rank", "show_legend": True, "direction": "topdown"},
-                label='layout="rank"',
+                "b",
+                "Flow",
+                kwargs={"layout": "rank", "show_legend": True},
+                label="the rank engine's legend, pinned left",
+                crop=(LEGEND,),
             ),
         ),
-        footnote="order_siblings=True keeps fan-outs in call order using invisible ordering "
-        "edges; the rank engine pins its legend at the left.",
-        rows=("VY01", "VY02", "VR10", "VE14", "VI04"),
+        keys=(Key("The rank engine pins its legend at the left", LEGEND, panel="b"),),
+        footnote="The rank engine draws no orphans and does not order siblings.",
+        rows=("VY02", "VI04"),
     ),
     Slide(
         id="text-size",
-        title="Text size and role are separate controls",
-        rule="font_size grows node rows; edge labels ({annotation_pt} pt), legend text "
-        "({secondary_pt} pt) and branch labels ({emphasis_pt} pt) are fixed roles.",
+        title="Text size and role differ",
+        rule="font_size grows node rows; arrow words stay {annotation_pt} pt.",
         panels=(
-            Panel("a", "ArgOrder", kwargs={"font_size": 14, **TRIM}, label="font_size=14"),
-            Panel("b", "ArgOrder", kwargs={"font_size": 22, **TRIM}, label="font_size=22"),
+            Panel(
+                "a",
+                "SubXY",
+                kwargs={"font_size": 12},
+                label="font_size=12",
+                crop=("node(text~sub)", 'edge(text~"arg 0")', 'edge(text~"arg 1")'),
+            ),
+            Panel(
+                "b",
+                "SubXY",
+                kwargs={"font_size": 22},
+                label="font_size=22",
+                crop=("node(text~sub)", 'edge(text~"arg 0")', 'edge(text~"arg 1")'),
+            ),
         ),
         keys=(
             Key("Node text grew", "node(text~sub)", panel="b"),
             Key("arg 0 did not", "edge(text~arg)", panel="b"),
-            Key("dpi changes raster pixels only", None),
         ),
+        footnote="Legend text is {secondary_pt} pt and branch labels {emphasis_pt} pt; dpi "
+        "changes raster pixels only.",
         rows=("VT03",),
     ),
     Slide(
         id="code-panel",
-        title="Source beside the graph: code_panel",
-        rule="Captured source in Courier on the right with an Open source link, up to "
-        "{max_code_lines} lines; class, init+forward or a function choose the text.",
+        title="Source beside the graph",
+        rule="code_panel adds the captured source in Courier with an Open source link, up to "
+        "{max_code_lines} lines.",
         panels=(Panel("a", "Flow", kwargs={"code_panel": "forward"}),),
         keys=(
             Key("The forward source", None),
@@ -940,20 +1100,29 @@ SLIDES: tuple[Slide, ...] = (
     ),
     Slide(
         id="builtin-legend",
-        title="The legend TorchLens draws, and what it leaves out",
-        rule="show_legend=True adds seven fill roles and nothing else; None shows only an "
-        "active channel's section; False hides even that.",
-        panels=(Panel("a", "Stateful", kwargs={"show_legend": True}),),
+        title="The legend TorchLens draws",
+        rule="show_legend=True adds seven fill roles and nothing else; None shows only an active "
+        "channel's section.",
+        panels=(
+            Panel(
+                "a",
+                "Stateful",
+                kwargs={"show_legend": True},
+                label="show_legend=True",
+                crop=(LEGEND,),
+            ),
+        ),
         keys=(
             Key("The built-in legend table", 'node(text~"TorchLens legend")'),
             Key("No shapes, dashes, double borders, box weights or arrow words", None),
             Key("Channel and backward sections join when they apply", None),
+            Key("show_legend=False hides even those", None),
         ),
         rows=("VN27", "VI01", "VI02"),
     ),
     Slide(
         id="custom",
-        title="Custom styling is explicitly custom",
+        title="Custom styling is custom",
         rule="Callbacks and overrides change appearance; these marks are your choices, not "
         "built-in meaning.",
         panels=(
@@ -985,29 +1154,36 @@ SLIDES: tuple[Slide, ...] = (
     ),
     Slide(
         id="export",
-        title="Export choices create no new facts",
-        rule="DPI changes raster pixels; vector geometry, save behaviour and the returned "
-        "object are separate controls; closed vocabularies refuse before any render.",
+        title="Export choices add no facts",
+        rule="DPI changes raster pixels only; closed vocabularies refuse before any render.",
         layout="table",
         rows=("VO01", "VO02", "VO05", "VV01"),
     ),
     Slide(
         id="data-previews",
-        title="Inputs and outputs shown as data",
-        rule="A picture node replaces the outline; the transform row names the preprocessing "
-        "and whether it was verified; output rows can show decoded labels and scores.",
+        title="Inputs and outputs as data",
+        rule="A picture replaces the input outline with its transform named; output rows can "
+        "decode labels and scores.",
         panels=(
             Panel(
                 "a",
                 "ImageNet",
                 capture={"transform": "@to_tensor", "output_style": "classification"},
                 kwargs={"show_input_transform_summary": True},
+                crop=("node(text~preprocess)",),
+            ),
+            Panel(
+                "b",
+                "ImageNet",
+                capture={"transform": "@to_tensor", "output_style": "classification"},
+                kwargs={"show_input_transform_summary": True},
+                crop=("node(text~output)",),
             ),
         ),
         keys=(
             Key("The input images as a montage", "node(shape=none)"),
             Key("preprocess names the transform, UNVERIFIED here", "node(text~preprocess)"),
-            Key("Decoded output rows", "node(text~output)"),
+            Key("Decoded output rows", "node(text~output)", panel="b"),
         ),
         footnote="Batch policy auto shows 4 examples, all 16, or first, first_n:N, shape_only.",
         rows=("VN21", "VN22", "VN23", "VL12"),
@@ -1015,23 +1191,36 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="other-pictures",
         title="Other TorchLens pictures",
-        rule="Bundle graph and diff, fastlog preview, summary, tviz, Model Explorer, treescope "
-        "cards and the offline report have their own keys; red delta is not an intervention.",
+        rule="Bundle graph and diff, fastlog preview, summary, tviz and more have their own keys; "
+        "red delta is not an intervention.",
         layout="table",
         rows=("VS01", "VS02", "VS03", "VS04", "VI05", "VY03"),
     ),
     Slide(
         id="cheat-sheet",
         title="Cheat sheet: to see X, pass Y",
-        rule="Every draw() parameter once, grouped by what it shows, with its default.",
+        rule="Every draw() parameter once, grouped by what it shows (part 1 of 2).",
         layout="table",
         rows=("VO06",),
     ),
     Slide(
+        id="cheat-sheet-2",
+        title="Cheat sheet, continued",
+        rule="Every draw() parameter once, grouped by what it shows (part 2 of 2).",
+        layout="table",
+    ),
+    Slide(
         id="draw-parameters",
-        title="Every draw() parameter and its default",
-        rule="Short spellings (view, depth, layout, renderer, node_style) win over their "
-        "long twins when both are given.",
+        title="Every draw() parameter",
+        rule="Short spellings (view, depth, layout, renderer, node_style) win over their long "
+        "twins when both are given.",
+        layout="table",
+    ),
+    Slide(
+        id="draw-parameters-2",
+        title="Every draw() parameter, continued",
+        rule="Pictures in this deck use font_size=16, left to right, label and shape rows unless "
+        "a slide says otherwise.",
         layout="table",
     ),
 )
@@ -1105,6 +1294,22 @@ CHEAT_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ),
 )
 
+#: Unencoded reasons: the exact legend line and when TorchLens writes it.
+UNENCODED: tuple[tuple[str, str], ...] = (
+    ("n/a = unencoded", "a node has no value for the source; the legend counts them"),
+    ("rank mapping (ordinal, not ratio)", 'transform="rank": the fill shows order only'),
+    ("log scale (scale-invariant; values <= 0 unencoded)", 'transform="log"'),
+    ("values <= 0 -- unencoded under the log transform", "a value at or below zero under log"),
+    ("constant value -- unencoded (degenerate domain)", "every value is equal: no ramp is painted"),
+    ("varies across passes -- unencoded", "a rolled node whose passes disagree"),
+    ("per-pass field -- unencoded on rolled nodes", "a per-pass field on a rolled node"),
+    (
+        "first-pass-only field -- unencoded on rolled nodes",
+        "a field recorded for the first pass only, on a rolled node",
+    ),
+    ("value from user callable", "the source is your function; TorchLens did not measure it"),
+)
+
 #: Side pictures for the other-pictures slide: name, what it shows, how to call it, doc.
 OTHER_PICTURES: tuple[tuple[str, str, str, str], ...] = (
     (
@@ -1152,7 +1357,7 @@ ALPHABET: Mapping[str, tuple[tuple[str, str, str, Selector], ...]] = MappingProx
             ("input", "start-here", "a", "node(fillcolor={input_color})"),
             ("output", "start-here", "a", "node(fillcolor={output_color})"),
             ("function call", "ovals-boxes", "a", "node(shape=oval, fillcolor=white)"),
-            ("leaf module call", "ovals-boxes", "a", "node(shape=box, text~@fc)"),
+            ("leaf module call", "ovals-boxes", "a", "node(shape=box)"),
             ("trainable parameters", "grey-params", "a", "node(fillcolor={trainable})"),
             ("frozen parameters", "grey-params", "a", "node(fillcolor={frozen})"),
             ("trainable and frozen", "grey-params", "a", "node(fillcolor~:)"),
@@ -1165,14 +1370,14 @@ ALPHABET: Mapping[str, tuple[tuple[str, str, str, Selector], ...]] = MappingProx
             ("run of ops (segment)", "collapse-max", "a", "node(style^rounded)"),
             ("named pattern", "fold-patterns", "a", "node(text~PATTERN)"),
             ("+N more repeats", "fold-repeats", "a", "node(shape=plaintext, text~more)"),
-            ("orphan", "orphans", "a", "node(text~exp, style^dashed)"),
-            ("outside a focused module", "focus", "a", "node(text~ext)"),
+            ("orphan", "orphans", "a", "node(text~sin)"),
+            ("outside a focused module", "focus", "a", "node(fillcolor={input_color})"),
             ("edited site", "interventions", "a", "node(color={site_color})"),
             ("downstream of an edit", "interventions", "a", "node(color={cone_color})"),
             ("hook drawn as a node", "interventions", "b", "node(shape=diamond)"),
-            ("recorded edit (surgery)", "surgery", "a", "node(text~spliced)"),
+            ("recorded edit (surgery)", "surgery", "a", "node(text~edited)"),
             ("grad_fn (backward)", "backward", "a", "node(fillcolor=#F2F3FF)"),
-            ("grad_fn of order 2+", "backward", "b", "node(fillcolor=#FFF4D6)"),
+            ("grad_fn of order 2+", "grad-of-grad", "a", "node(fillcolor=#FFF4D6)"),
         ),
         "alphabet-lines": (
             ("data flows here", "start-here", "a", "edge(style=solid)"),
@@ -1182,14 +1387,14 @@ ALPHABET: Mapping[str, tuple[tuple[str, str, str, Selector], ...]] = MappingProx
             ("condition starts here", "branches", "a", "edge(text~IF)"),
             ("branch taken", "branches", "a", "edge(text~THEN)"),
             ("passes using this edge", "loop-rolled", "a", "edge(text~In)"),
-            ("N edges drawn as one", "depth", "a", "edge(text~x2)"),
-            ("gradient flow", "backward", "a", "edge(color={grad_color})"),
+            ("N edges drawn as one", "arrows-as-one", "a", "edge(text~x2)"),
+            ("gradient flow", "combined", "b", "edge(color={grad_color})"),
             ("accumulates into a leaf", "backward", "a", "edge(style=dotted)"),
             ("forward op to its grad_fn", "combined", "a", "edge(constraint=false)"),
             ("reader of a changed parameter", "mutated-param", "a", "edge(style=dashed)"),
             ("member of a container", "containers", "a", "edge(arrowhead=none)"),
             ("module call (outermost)", "module-boxes", "a", "cluster(penwidth={pen_max})"),
-            ("module call (deepest)", "module-boxes", "a", "cluster(penwidth={pen_min})"),
+            ("module call (deeper)", "module-boxes", "a", "cluster(label~@block.0:1)"),
             ("module not from the input", "dashed", "a", "cluster(style^dashed)"),
             ("orphans group", "orphans", "a", "cluster(label~orphans)"),
             ("one backward pass", "backward", "a", "cluster(label~backward)"),
@@ -1227,4 +1432,6 @@ def deck_text() -> str:
         parts.extend((group[0], group[1], " ".join(group[2])))
     for row in OTHER_PICTURES:
         parts.extend(row)
+    for line in UNENCODED:
+        parts.extend(line)
     return "\n".join(parts)

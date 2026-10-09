@@ -8,20 +8,26 @@ table in ``slides.py`` refers to fixtures by name only, so it imports without to
 
 from __future__ import annotations
 
-import sys
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any
 
 import torch
 import torch.nn.functional as F
 from torch import nn
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
 
-from scripts.render_encoding_reference import LockstepDecoder  # noqa: E402
+class Tiny(nn.Module):
+    """Input, one op, output: the smallest graph."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x * 2
+
+
+class SubXY(nn.Module):
+    """One order-sensitive op on two inputs."""
+
+    def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        return torch.sub(x, y)
 
 
 class Flow(nn.Module):
@@ -71,12 +77,12 @@ class Anatomy(nn.Module):
 
 
 class Params(nn.Module):
-    """Trainable, frozen and mixed parameter fills in one chain."""
+    """Trainable, frozen and mixed parameter fills in one chain (short rows: no bias on two)."""
 
     def __init__(self) -> None:
         super().__init__()
-        self.a = nn.Linear(3, 3)
-        self.b = nn.Linear(3, 3)
+        self.a = nn.Linear(3, 3, bias=False)
+        self.b = nn.Linear(3, 3, bias=False)
         self.c = nn.Linear(3, 3)
         self.b.requires_grad_(False)
         self.c.weight.requires_grad_(False)
@@ -97,14 +103,25 @@ class Gate(nn.Module):
 
 
 class GateValue(nn.Module):
-    """Returns ``sigmoid(g)`` without touching the input."""
+    """Returns ``2 * sigmoid(g)`` without touching the input (two ops, so a module box)."""
 
     def __init__(self) -> None:
         super().__init__()
         self.g = nn.Parameter(torch.zeros(3))
 
     def forward(self) -> torch.Tensor:
-        return torch.sigmoid(self.g)
+        return torch.sigmoid(self.g) * 2
+
+
+class Inner(nn.Module):
+    """A two-op module: linear then relu."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc = nn.Linear(3, 3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.relu(self.fc(x))
 
 
 class Nested(nn.Module):
@@ -112,20 +129,32 @@ class Nested(nn.Module):
 
     def __init__(self) -> None:
         super().__init__()
-        self.block = nn.Sequential(nn.Linear(3, 3), nn.ReLU())
-        self.head = nn.Linear(3, 2)
+        self.block = nn.Sequential(Inner())
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.head(self.block(self.block(x)))
+        return self.block(self.block(x))
 
 
-class ArgOrder(nn.Module):
-    """Argument labels on ``sub``, none on the commutative ``add``, two arrows into ``cat``."""
+class InnerRes(nn.Module):
+    """A residual module: its input feeds two ops inside it."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc = nn.Linear(3, 3)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        a = torch.relu(x)
-        b = torch.sigmoid(x)
-        return torch.sub(a, b) + torch.cat([a, a], dim=0).sum(0)
+        return x + self.fc(x)
+
+
+class NestedRes(nn.Module):
+    """One residual block, so the collapsed box has a doubled input edge."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.block = nn.Sequential(InnerRes())
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.block(x)
 
 
 class FanIn(nn.Module):
@@ -170,16 +199,17 @@ class LoopGroups(nn.Module):
 
 
 class LoopShapes(nn.Module):
-    """A shape-polymorphic module called on two different shapes."""
+    """One loop body run on two different shapes: the rolled node's shape changes."""
 
     def __init__(self) -> None:
         super().__init__()
         self.act = nn.ReLU()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        wide = self.act(x)
-        narrow = self.act(x[:, :2])
-        return wide.sum() + narrow.sum()
+        total = x.sum() * 0
+        for h in (x, x[:, :2]):
+            total = total + self.act(h).sum()
+        return total
 
 
 class Branch(nn.Module):
@@ -252,11 +282,11 @@ class TriBlock(nn.Module):
 
 
 class BigStack(nn.Module):
-    """Twelve three-op blocks: above the readable band, so ``collapse="auto"`` acts."""
+    """Fifteen three-op blocks (45 ops): above the readable band, so ``collapse="auto"`` acts."""
 
     def __init__(self) -> None:
         super().__init__()
-        self.blocks = nn.Sequential(*[TriBlock() for _ in range(12)])
+        self.blocks = nn.Sequential(*[TriBlock() for _ in range(15)])
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.blocks(x)
@@ -274,28 +304,6 @@ class ConvBnRelu2(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return F.relu(self.b2(self.c2(F.relu(self.b1(self.c1(x))))))
-
-
-class AddRelu(nn.Module):
-    """Two ``add`` then ``relu`` runs for a user-declared pattern."""
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        h = torch.relu(x + 1)
-        return torch.relu(h + 1)
-
-
-class SmallCnn(nn.Module):
-    """Shapes and FLOPs that differ node to node."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.c1 = nn.Conv2d(1, 4, 3)
-        self.c2 = nn.Conv2d(4, 8, 3)
-        self.fc = nn.Linear(8, 2)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        h = F.relu(self.c2(F.relu(self.c1(x))))
-        return self.fc(F.adaptive_avg_pool2d(h, 1).flatten(1))
 
 
 class DictOut(nn.Module):
@@ -318,10 +326,10 @@ class ListOut(nn.Module):
 
 
 class Dead(nn.Module):
-    """One computed value nobody uses: an orphan."""
+    """A value computed from a constant that nobody uses: an orphan."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        _unused = torch.exp(x)
+        _unused = torch.ones(3).sin()
         return x * 2
 
 
@@ -344,6 +352,18 @@ class Nonfinite(nn.Module):
         return torch.stack([finite, nan, pos_inf, neg_inf, mixed])
 
 
+class Sizes(nn.Module):
+    """Tensors of 4, 16 and 2 elements: sizes and FLOPs that differ node to node."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.up = nn.Linear(4, 16)
+        self.down = nn.Linear(16, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.down(torch.relu(self.up(x)))
+
+
 class Grad(nn.Module):
     """A parameter scales the input; the loss is a sum of squares."""
 
@@ -353,13 +373,6 @@ class Grad(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return (x * self.p).square().sum()
-
-
-class HigherOrder(nn.Module):
-    """A nonlinear scalar whose first gradient is differentiated again."""
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return (torch.tanh(x) ** 3).sum()
 
 
 class _DoubleFn(torch.autograd.Function):
@@ -374,38 +387,11 @@ class _DoubleFn(torch.autograd.Function):
         return grad * 2
 
 
-class CustomGrad(nn.Module):
-    """A model whose backward runs a custom autograd Function."""
+class HigherOrder(nn.Module):
+    """A custom Function inside a cubic whose first gradient is differentiated again."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return _DoubleFn.apply(x).sum()
-
-
-class Shapes(nn.Module):
-    """Outputs with different shapes and byte counts, for colour transforms."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.fc = nn.Linear(4, 8)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        small = x[:, :1].clone()
-        wide = x.repeat(1, 4)
-        big = self.fc(wide[:, :4]).repeat(4, 1)
-        return small.sum() + wide.sum() + big.sum()
-
-
-class Mut(nn.Module):
-    """A Parameter shifted in place before it is read."""
-
-    def __init__(self, frozen: bool = False) -> None:
-        super().__init__()
-        self.p = nn.Parameter(torch.zeros(3), requires_grad=not frozen)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        with torch.no_grad():
-            self.p.add_(1)
-        return x * self.p
+        return (_DoubleFn.apply(x) ** 3).sum()
 
 
 class Shared(nn.Module):
@@ -450,6 +436,8 @@ def _images() -> list[Any]:
 
 
 FIXTURES: dict[str, Callable[[], tuple[nn.Module, Any]]] = {
+    "Tiny": _seeded(lambda: (Tiny(), torch.randn(1, 3))),
+    "SubXY": _seeded(lambda: (SubXY(), (torch.randn(1, 3), torch.randn(1, 3)))),
     "Flow": _seeded(lambda: (Flow(), torch.randn(1, 4))),
     "FlowReshape": _seeded(lambda: (FlowReshape(), torch.randn(1, 4))),
     "TwoWays": _seeded(lambda: (TwoWays(), torch.randn(1, 4))),
@@ -457,32 +445,25 @@ FIXTURES: dict[str, Callable[[], tuple[nn.Module, Any]]] = {
     "Params": _seeded(lambda: (Params(), torch.randn(1, 3))),
     "Gate": _seeded(lambda: (Gate(), torch.randn(1, 3))),
     "Nested": _seeded(lambda: (Nested(), torch.randn(1, 3))),
-    "ArgOrder": _seeded(lambda: (ArgOrder(), torch.randn(2, 3))),
+    "NestedRes": _seeded(lambda: (NestedRes(), torch.randn(1, 3))),
     "FanIn": _seeded(lambda: (FanIn(), torch.randn(1, 3))),
     "Loop": _seeded(lambda: (Loop(), torch.randn(1, 3))),
     "LoopGroups": _seeded(lambda: (LoopGroups(), torch.randn(1, 3))),
     "LoopShapes": _seeded(lambda: (LoopShapes(), torch.randn(1, 4))),
     "Branch": _seeded(lambda: (Branch(), torch.ones(1, 3))),
     "Stateful": _seeded(lambda: (Stateful().eval(), torch.randn(4, 3))),
-    "StatefulTrain": _seeded(lambda: (Stateful().train(), torch.randn(4, 3))),
     "Clamp": _seeded(lambda: (Clamp(), torch.randn(1, 3))),
     "Stack": _seeded(lambda: (Stack(), torch.randn(1, 3))),
     "BigStack": _seeded(lambda: (BigStack(), torch.randn(1, 3))),
     "ConvBnRelu2": _seeded(lambda: (ConvBnRelu2().eval(), torch.randn(1, 1, 6, 6))),
-    "AddRelu": _seeded(lambda: (AddRelu(), torch.randn(1, 3))),
-    "SmallCnn": _seeded(lambda: (SmallCnn(), torch.randn(1, 1, 8, 8))),
     "DictOut": _seeded(lambda: (DictOut(), torch.randn(1, 3))),
     "ListOut": _seeded(lambda: (ListOut(), torch.randn(1, 3))),
     "Dead": _seeded(lambda: (Dead(), torch.randn(1, 3))),
     "NanMaker": _seeded(lambda: (NanMaker(), torch.ones(1, 3))),
     "Nonfinite": _seeded(lambda: (Nonfinite(), torch.ones(3))),
-    "Grad": _seeded(lambda: (Grad(), torch.ones(2, 4, requires_grad=True))),
+    "Sizes": _seeded(lambda: (Sizes(), torch.randn(1, 4))),
+    "Grad": _seeded(lambda: (Grad(), torch.ones(2, 4))),
     "HigherOrder": _seeded(lambda: (HigherOrder(), torch.randn(3, requires_grad=True))),
-    "CustomGrad": _seeded(lambda: (CustomGrad(), torch.ones(3, requires_grad=True))),
-    "Shapes": _seeded(lambda: (Shapes(), torch.randn(1, 4))),
-    "Mut": _seeded(lambda: (Mut(), torch.randn(1, 3))),
-    "MutFrozen": _seeded(lambda: (Mut(frozen=True), torch.randn(1, 3))),
     "Shared": _seeded(lambda: (Shared(), torch.randn(1, 3))),
     "ImageNet": _seeded(lambda: (ImageNet(), _images())),
-    "LockstepDecoder": _seeded(lambda: (LockstepDecoder(), torch.randn(1, 8))),
 }

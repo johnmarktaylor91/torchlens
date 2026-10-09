@@ -40,6 +40,16 @@ def _boxbadge(module: Any, spec: Any) -> Any:
     return spec.replace(fillcolor="#FFE9A8")
 
 
+class _ToTensor:
+    """A named input transform (a plain lambda would print an address that changes per run)."""
+
+    def __call__(self, images: Any) -> torch.Tensor:
+        return torch.ones(len(images), 3, 8, 8)
+
+    def __repr__(self) -> str:
+        return "to_tensor"
+
+
 CALLABLES: Mapping[str, Callable[[], Any]] = {
     "@skip_reshape": lambda: lambda layer: layer.layer_type == "reshape",
     "@exclude_reshapes": lambda: lenses.DisplayFilter(exclude="reshapes"),
@@ -49,7 +59,7 @@ CALLABLES: Mapping[str, Callable[[], Any]] = {
     "@score_map": lambda: {"tanh_1_2": 0.8, "mul_1_3": 0.2},
     "@badge": lambda: _badge,
     "@boxbadge": lambda: _boxbadge,
-    "@to_tensor": lambda: lambda images: torch.ones(len(images), 3, 8, 8),
+    "@to_tensor": _ToTensor,
 }
 
 INTERVENTIONS: Mapping[str, Callable[[], Any]] = {
@@ -107,7 +117,11 @@ def draw_kwargs(panel: Panel) -> dict[str, Any]:
         merged.pop("direction", None)
         merged.pop("font_size", None)
         merged.pop("collapse", None)
+        merged.pop("node_label_fields", None)
         merged["vis_direction"] = "leftright"
+    if panel.call == "lens":
+        # A lens chooses its own rows; the deck's two-row convention would override it.
+        merged.pop("node_label_fields", None)
     if panel.call in ("surgery_diff",):
         merged = {}
     merged.update({k: _resolve(v) for k, v in panel.kwargs.items()})
@@ -138,10 +152,12 @@ def draw(panel: Panel, trace: Any, outpath: Path) -> str:
         from torchlens.visualization import surgery_diff
 
         fork = _fork_edit(trace)
+        from torchlens.visualization._surgery_diff import _build_diff_dot
+
         diff = surgery_diff(fork, trace)
-        path = diff.draw(str(outpath), vis_fileformat="svg", vis_save_only=True)
-        dot_path = Path(str(path)).with_suffix("")
-        return dot_path.read_text() if dot_path.exists() else ""
+        diff.draw(str(outpath), vis_fileformat="svg", vis_save_only=True)
+        # draw() writes only the SVG and the census; the DOT it rendered is rebuilt here.
+        return str(_build_diff_dot(diff, theme="torchlens").source)
     raise ValueError(f"unknown call {panel.call!r}")
 
 

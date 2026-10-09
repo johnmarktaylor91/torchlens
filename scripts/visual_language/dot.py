@@ -61,6 +61,14 @@ class Box:
             max(self.y1, other.y1),
         )
 
+    def overlaps(self, other: Box) -> bool:
+        return (
+            self.x0 < other.x1 and other.x0 < self.x1 and self.y0 < other.y1 and other.y0 < self.y1
+        )
+
+    def pad(self, by: float) -> Box:
+        return Box(self.x0 - by, self.y0 - by, self.x1 + by, self.y1 + by)
+
 
 @dataclass
 class Mark:
@@ -164,11 +172,21 @@ def _holds(mark: Mark, condition: tuple[str, str, str], panel: PanelDot) -> bool
     attr, op, expected = condition
     actual = _value(mark, attr, panel)
     if op == "=":
-        return actual.strip().lower() == expected.strip().lower()
+        return _same(actual, expected)
     if op == "~":
         return expected.lower() in strip_tags(actual).lower() or expected.lower() in actual.lower()
     tokens = [token.strip().lower() for token in actual.split(",")]
     return expected.strip().lower() in tokens
+
+
+def _same(actual: str, expected: str) -> bool:
+    """Exact, case-insensitive match; numbers compare by value (``5.0`` equals ``5``)."""
+
+    a, b = actual.strip().lower(), expected.strip().lower()
+    try:
+        return a == b or float(a) == float(b)
+    except ValueError:
+        return False
 
 
 def select(panel: PanelDot, selector: str) -> list[Mark]:
@@ -190,7 +208,18 @@ class SvgPanel:
     scale: float
     translate: tuple[float, float]
     geometry: dict[str, list[Box]]
-    font_sizes: list[float]
+    texts: list[tuple[float, Box]]
+
+    @property
+    def font_sizes(self) -> list[float]:
+        """Every non-empty text's font size, in viewBox units."""
+
+        return [size for size, _box in self.texts]
+
+    def font_sizes_in(self, region: Box) -> list[float]:
+        """Font sizes of the texts whose box overlaps ``region`` (viewBox coordinates)."""
+
+        return [size for size, box in self.texts if box.overlaps(region)]
 
 
 def _points(element: ET.Element) -> list[tuple[float, float]]:
@@ -235,7 +264,7 @@ def parse_svg(text: str) -> SvgPanel:
     view = Box(view_nums[0], view_nums[1], view_nums[0] + view_nums[2], view_nums[1] + view_nums[3])
     scale, translate = 1.0, (0.0, 0.0)
     geometry: dict[str, list[Box]] = {}
-    sizes: list[float] = []
+    texts: list[tuple[float, Box]] = []
     for group in root.iter(f"{{{SVG_NS}}}g"):
         if group.get("class") == "graph":
             transform = group.get("transform", "")
@@ -252,10 +281,18 @@ def parse_svg(text: str) -> SvgPanel:
         box = _box(points)
         if box is not None:
             geometry.setdefault(f"{group.get('class')}:{name}", []).append(box)
+    tx, ty = translate
     for element in root.iter(f"{{{SVG_NS}}}text"):
         if element.get("font-size") and "".join(element.itertext()).strip():
-            sizes.append(float(element.get("font-size", "14")))
-    return SvgPanel(root, view, scale, translate, geometry, sizes)
+            box = _box(_points(element)) or Box(0, 0, 0, 0)
+            placed = Box(
+                (box.x0 + tx) * scale,
+                (box.y0 + ty) * scale,
+                (box.x1 + tx) * scale,
+                (box.y1 + ty) * scale,
+            )
+            texts.append((float(element.get("font-size", "14")) * scale, placed))
+    return SvgPanel(root, view, scale, translate, geometry, texts)
 
 
 def to_view(svg: SvgPanel, box: Box) -> Box:
