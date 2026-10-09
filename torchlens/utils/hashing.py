@@ -262,7 +262,7 @@ def compute_graph_shape_hash(
     # graphs hash identically and defeating ``tl.hash.assert_unchanged``.
     order_by_label: dict[Any, int] = {}
     layer_by_label: dict[Any, Any] = {}
-    kept_layers = []
+    kept_layers: list[Any] = []
     for layer in trace.layer_list:
         reference_label = (
             layer.layer_label
@@ -375,7 +375,7 @@ def compute_raw_event_shape_hash(capture_events: Any) -> str:
     )
     events_by_raw_label = {event.label_raw: event for event in folded_events}
     order_by_raw_label: dict[Any, int] = {}
-    kept_events = []
+    kept_events: list[Any] = []
     for event in folded_events:
         folded_into = _replacement_fold_target(event, events_by_raw_label, order_by_raw_label)
         if folded_into is not None:
