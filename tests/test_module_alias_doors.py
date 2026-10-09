@@ -409,3 +409,35 @@ def test_find_sites_resolves_either_name_to_the_same_sites(
     alias_labels = _labels(alias_selector())
     assert alias_labels, "the alias spelling matched no sites"
     assert alias_labels == _labels(primary_selector())
+
+
+@pytest.mark.parametrize("model_name", sorted(_MODELS))
+@pytest.mark.parametrize(
+    ("alias_selector", "primary_selector"),
+    [
+        (lambda: tl.module("alias"), lambda: tl.module("block")),
+        (lambda: tl.in_module("alias:2"), lambda: tl.in_module("block:2")),
+    ],
+    ids=["module", "in_module_pass"],
+)
+def test_trace_save_selector_resolves_either_name_to_the_same_ops(
+    model_name: str,
+    alias_selector: Callable[[], Any],
+    primary_selector: Callable[[], Any],
+) -> None:
+    """``tl.trace(save=...)`` keeps the same activations for both names, without warning."""
+
+    def _saved(selector: Any) -> list[str]:
+        """Return the saved op labels of one selective capture."""
+
+        torch.manual_seed(0)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            trace = tl.trace(_MODELS[model_name]().eval(), _X, save=selector)
+        zero_match = [str(w.message) for w in caught if _ZERO_MATCH_TEXT in str(w.message)]
+        assert not zero_match, zero_match
+        return [str(op.label) for op in trace.saved_ops if not op.is_input and not op.is_output]
+
+    alias_saved = _saved(alias_selector())
+    assert alias_saved, "the alias spelling saved nothing"
+    assert alias_saved == _saved(primary_selector())
