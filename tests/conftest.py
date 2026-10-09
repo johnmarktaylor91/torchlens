@@ -1439,12 +1439,19 @@ def _reset_rng_state() -> Iterator[None]:
     cuda_states = torch.cuda.get_rng_state_all() if cuda_initialized else None
     deterministic = torch.are_deterministic_algorithms_enabled()
     deterministic_warn_only = torch.is_deterministic_algorithms_warn_only_enabled()
+    # MLX seeds its global key from the clock, so an MLX test's random init
+    # differed every run. Seed it only when a test module already imported
+    # it: importing the optional backend here would load it for every test.
+    mlx_random = getattr(sys.modules.get("mlx.core"), "random", None)
+    mlx_state = list(mlx_random.state) if mlx_random is not None else None
 
     random.seed(0)
     np.random.seed(0)
     torch.manual_seed(0)
     if cuda_initialized:
         torch.cuda.manual_seed_all(0)
+    if mlx_random is not None:
+        mlx_random.seed(0)
     torch.use_deterministic_algorithms(True)
 
     try:
@@ -1456,6 +1463,8 @@ def _reset_rng_state() -> Iterator[None]:
         if cuda_states is not None:
             torch.cuda.set_rng_state_all(cuda_states)
         torch.use_deterministic_algorithms(deterministic, warn_only=deterministic_warn_only)
+        if mlx_random is not None and mlx_state is not None:
+            mlx_random.state[:] = mlx_state
 
 
 #: ``(owner, method_name, default_basename)`` for every ``Trace`` draw
