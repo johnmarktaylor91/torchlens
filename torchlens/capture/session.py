@@ -440,6 +440,15 @@ class CaptureSession:
                     for op in trace.layer_list
                     if getattr(op, "layer_type", None) == "output"
                 )
+                for op in trace.layer_list:
+                    if (
+                        op.raw_index in selected_nums
+                        and getattr(op, "layer_type", None) == "output"
+                    ):
+                        selected_nums.update(
+                            trace.layer_dict_all_keys[parent_label].raw_index
+                            for parent_label in op.parents
+                        )
             else:
                 # A module selector resolves to the producing op only (the
                 # output_N alias carries its module stamp for display), but
@@ -455,15 +464,6 @@ class CaptureSession:
                         for parent_label in op.parents
                     )
                 )
-                for op in trace.layer_list:
-                    if (
-                        op.raw_index in selected_nums
-                        and getattr(op, "layer_type", None) == "output"
-                    ):
-                        selected_nums.update(
-                            trace.layer_dict_all_keys[parent_label].raw_index
-                            for parent_label in op.parents
-                        )
             for op in trace.layer_list:
                 if op.raw_index not in selected_nums:
                     continue
