@@ -507,8 +507,10 @@ attribution-target alias. See the [attribution reference](attribution.md).
   discloses the outcome: `engine` is `guarded_fast` when it ran and `rerun` after a fallback,
   where `fast_refused` names the refusing guard as `<code>:<stage>` (for example
   `run_capability_unavailable:fast_rerun_target_unsupported` for a value replacement or a
-  non-module target, or `<divergence code>:fast_live_call_fingerprint` for a structural
-  change); `hooks_fired` / `hooks_unfired` count the staged plans that fired, and a plan that
+  non-module target, `run_capability_unavailable:fast_rerun_graph_unsteered` when a staged
+  entry has never fired in the trace's recorded graph, as after `attach_hooks()` on a plain
+  capture, so the capture engine reruns once to record it, or
+  `<divergence code>:fast_live_call_fingerprint` for a structural change); `hooks_fired` / `hooks_unfired` count the staged plans that fired, and a plan that
   never fired warns `rerun_zero_fire`. Input sizes may differ from the capture (generation)
   when rank, dtype, device and input tree match and the capture sealed a call fingerprint
   (`trace._raw_call_fingerprint`, an ordered rolling hash of every wrapped torch call and

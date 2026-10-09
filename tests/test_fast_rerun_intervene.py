@@ -647,3 +647,38 @@ def test_cached_fast_door_session_does_not_pollute_a_later_capture() -> None:
     assert second.last_run["engine"] == "guarded_fast", second.last_run.get("fast_refused")
     assert second.last_run["shape_varied"] is True
     _assert_matches_hook(second, reference, fast=True)
+
+
+def test_hooks_attached_after_capture_rerun_through_capture_once() -> None:
+    """Hooks staged on a plain capture take the capture engine once, then the fast engine.
+
+    The fast engine leaves the recorded graph alone, so a trace whose graph has
+    never seen the staged hooks (``attach_hooks`` after a plain capture) must be
+    recaptured once so its ops show the intervention; the next rerun is fast,
+    and both agree with the plain hook.
+    """
+
+    model, direction = _build()
+    ids = _ids(_CAPTURE_LEN, seed=3)
+    reference = _hooked(model, direction, ids)
+    trace = tl.trace(model, ids, save=tl.module(_SITE) | tl.module(_HEAD))
+    trace.attach_hooks(
+        tl.module(_SITE),
+        tl.steer(direction, magnitude=_MAGNITUDE, feature_axis=-1),
+        confirm_mutation=True,
+    )
+
+    with warnings.catch_warnings():
+        # The capture engine's first rerun from a plain capture compares its graph
+        # against the un-steered capture and warns; that is the engine's known
+        # disclosure, not this test's subject.
+        warnings.simplefilter("ignore", ControlFlowDivergenceWarning)
+        trace.run(model, ids)
+    assert trace.last_run["engine"] == "rerun"
+    refused = trace.last_run["fast_refused"]
+    assert isinstance(refused, str) and refused.endswith(":fast_rerun_graph_unsteered")
+    _assert_matches_hook(trace, reference, fast=False)
+
+    trace.run(model, ids)
+    assert trace.last_run["engine"] == "guarded_fast"
+    _assert_matches_hook(trace, reference, fast=True)

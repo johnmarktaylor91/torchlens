@@ -207,6 +207,48 @@ def module_boundary_plan(trace: Any) -> tuple[list[Any], tuple[str, ...]]:
     return hook_plan, tuple(dict.fromkeys(addresses))
 
 
+def graph_plan_ids(trace: Any) -> frozenset[str]:
+    """Return the plan ids of every intervention fire recorded in the trace's graph."""
+
+    ids: set[str] = set()
+    for op in getattr(trace, "layer_list", ()):
+        for result in getattr(op, "fire_results", None) or ():
+            plan_id = getattr(result, "plan_id", None)
+            if plan_id is not None:
+                ids.add(str(plan_id))
+    return frozenset(ids)
+
+
+def require_graph_reflects_plan(trace: Any, hook_plan: list[Any]) -> None:
+    """Refuse the fast engine while the trace's graph does not show the staged plan.
+
+    The fast engine refreshes saved values and leaves the recorded graph alone,
+    so a staged entry that never fired in the graph (hooks attached after a
+    plain capture) would leave a trace whose values are steered but whose ops
+    show no intervention. The capture engine rewrites the graph on that first
+    rerun; every later rerun of the same trace is eligible here.
+
+    Raises
+    ------
+    RunCapabilityUnavailableError
+        ``fast_rerun_graph_unsteered`` naming the staged plan ids the graph lacks.
+    """
+
+    if not hook_plan:
+        return
+    from .intervention.rerun import _hook_plan_identifier
+
+    planned = {_hook_plan_identifier(entry) for entry in hook_plan}
+    missing = sorted(planned - graph_plan_ids(trace))
+    if missing:
+        raise RunCapabilityUnavailableError(
+            "Staged intervention entries have not fired in this trace's recorded graph "
+            f"({', '.join(missing)}); the capture engine reruns once to record them.",
+            code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+            detection_stage="fast_rerun_graph_unsteered",
+        )
+
+
 class SteerPlan:
     """Per-session steering state: the hook plan, its targets, and run counters."""
 
@@ -224,6 +266,7 @@ class SteerPlan:
                     detection_stage="fast_rerun_target_unsupported",
                 )
         self.modules = {address: modules[address] for address in self.addresses}
+        require_graph_reflects_plan(trace, self.hook_plan)
         self.pass_counts: Counter[str] = Counter()
         self.fired: Counter[str] = Counter()
         self.fire_count = 0
