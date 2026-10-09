@@ -770,6 +770,11 @@ _PROCESS_CACHES = frozenset(
         # one unreaped zombie per cleared entry until process exit — hygiene,
         # never correctness.
         ("torchlens/visualization/_render_utils.py", "_VIEWER_PROCS"),
+        # One-slot memo of the last save selector's plain tl.module address set:
+        # the selector is held through a weakref (never pinned) and selectors are
+        # immutable, so a stale slot is a miss, never a wrong answer; the strong
+        # part is a frozenset of address strings.
+        ("torchlens/capture/predicates.py", "_module_union_cache"),
     }
 )
 """Process-lifetime memos holding strong references.
