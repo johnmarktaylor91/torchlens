@@ -31,6 +31,7 @@ from ..data_classes._module_role_hints import (
 )
 from ..ir.workspaces import _init_module_hierarchy_data
 from ..utils import get_vars_of_type_from_obj, safe_copy
+from ..utils._torch_compat import tensor_version_or_none
 from ..utils._torch_symbols import torch_attr
 from ..utils.display import _record_phase_timing
 from ._ingest_contract import IngestInputs, JournalView, Step0Result
@@ -593,6 +594,7 @@ def _apply_join_cells(
         if transformed.payload is None:
             fields_dict["transformed_out"] = None
     fields_dict.update(buffer_write_fields)
+    _restamp_swapped_reference_out(fields_dict, buffer_write_fields)
     fields_dict.update(module_input_fields)
     fields_dict.update(module_output_fields)
     # r83 C2 / r85 (free FINDING-1): the registered-only backend-native address,
@@ -1640,6 +1642,43 @@ def _module_output_fields(
                 fields["is_atomic_module"] = True
                 fields["atomic_module_call"] = innermost_call
     return by_label
+
+
+def _restamp_swapped_reference_out(
+    fields_dict: dict[str, object], buffer_write_fields: Mapping[str, object]
+) -> None:
+    """Re-stamp a reference-mode version for a buffer version node's swapped payload.
+
+    At capture a buffer version node is logged like any source tensor, so in
+    ``save_mode="reference"`` its payload is the live buffer and its
+    ``saved_out_version`` stamp is that buffer's version counter.
+    :func:`_buffer_write_fields` then replaces the payload with the write
+    journal's private copy of the written value, a different tensor with its
+    own counter. Left alone, the stamp describes a tensor the op no longer
+    holds, and the reference tripwire
+    (``op._validate_reference_out_not_mutated``) misreads the mismatch as a
+    mutation (``saved _version=2, current _version=0`` on every eval
+    BatchNorm). The new stamp is the copy's counter at materialization, so the
+    tripwire still fires if the stored copy is written in place later.
+
+    Parameters
+    ----------
+    fields_dict
+        Op fields being materialized; ``annotations`` is replaced, never mutated.
+    buffer_write_fields
+        The buffer-write sibling fields just applied to ``fields_dict``.
+    """
+
+    out = buffer_write_fields.get("out")
+    annotations = fields_dict.get("annotations")
+    if not isinstance(out, torch.Tensor) or not isinstance(annotations, Mapping):
+        return
+    if annotations.get("save_mode") != "reference":
+        return
+    fields_dict["annotations"] = {
+        **annotations,
+        "saved_out_version": tensor_version_or_none(out),
+    }
 
 
 def _buffer_write_fields(
