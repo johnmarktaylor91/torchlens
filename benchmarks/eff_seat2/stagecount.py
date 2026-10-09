@@ -172,6 +172,8 @@ def _nograd(fn: Callable[[], Any]) -> Any:
 
 def n_ops_of(product: Any) -> int | None:
     obj = product[1] if isinstance(product, tuple) else product
+    if isinstance(getattr(obj, "n_ops", None), int):
+        return int(obj.n_ops)
     for attr in ("ops",):
         try:
             return len(getattr(obj, attr))

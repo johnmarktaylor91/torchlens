@@ -95,6 +95,12 @@ def first_tensor(out: Any) -> torch.Tensor:
     return out[0] if isinstance(out, tuple) else out
 
 
+def rec_site_out(rec: Any, addr: str) -> torch.Tensor:
+    """Last saved payload recorded at a module address in a ``Recording``."""
+    idx = rec.by_address[addr][-1]
+    return rec.records[idx].ram_payload
+
+
 def maxdiff(a: Any, b: Any) -> float:
     if isinstance(a, (list, tuple)):
         return max(maxdiff(x, y) for x, y in zip(a, b, strict=True))
@@ -118,6 +124,7 @@ class Cell:
         self.corrupt = torch.randint(0, 1000, (1, args.seq), generator=gen)
         self.mags = [MAG * (k + 1) / args.sweep for k in range(args.sweep)]
         self.last_ops: int | None = None
+        self.last_engine: Any = None
 
     # ------------------------------------------------------------------ plain hooks
     def _hook_cache(self, ids: torch.Tensor, grad: bool = False) -> list[torch.Tensor]:
@@ -160,6 +167,65 @@ class Cell:
         d = self.direction
         return lambda h: h + d.to(h.dtype) * mag
 
+    # ------------------------------------------------------------------ peers
+    def _peer(self, tool: str) -> Any:
+        cached = getattr(self, f"_peer_{tool}", None)
+        if cached is not None:
+            return cached
+        if tool == "tlens":
+            if self.args.model != "gpt2":
+                raise NotImplementedError("TransformerLens runs pretrained configs only (gpt2)")
+            from transformer_lens import HookedTransformer
+
+            obj = HookedTransformer.from_pretrained("gpt2", device="cpu")
+            obj.eval()
+        else:
+            from nnsight import NNsight
+
+            obj = NNsight(self.model)
+        setattr(self, f"_peer_{tool}", obj)
+        return obj
+
+    def _tlens_name(self, addr: str) -> str:
+        return f"blocks.{addr.rsplit('.', 1)[1]}.hook_resid_post"
+
+    def _nn_module(self, nm: Any, addr: str) -> Any:
+        obj = nm
+        for part in addr.split("."):
+            obj = obj[int(part)] if part.isdigit() else getattr(obj, part)
+        return obj
+
+    def peer_cache(self, tool: str, ids: torch.Tensor) -> list[torch.Tensor]:
+        peer = self._peer(tool)
+        if tool == "tlens":
+            names = {self._tlens_name(b) for b in self.blocks}
+            with torch.no_grad():
+                _, cache = peer.run_with_cache(ids, names_filter=lambda n: n in names)
+            return [cache[self._tlens_name(b)] for b in self.blocks]
+        saved = []
+        with torch.no_grad(), peer.trace(ids):
+            for b in self.blocks:
+                saved.append(self._nn_module(peer, b).output[0].save())
+        return [s if isinstance(s, torch.Tensor) else s.value for s in saved]
+
+    def peer_edit(
+        self, tool: str, ids: torch.Tensor, addr: str, edit: Callable[[torch.Tensor], Any]
+    ) -> torch.Tensor:
+        peer = self._peer(tool)
+        if tool == "tlens":
+
+            def fn(h: torch.Tensor, hook: Any) -> torch.Tensor:
+                return edit(h)
+
+            with torch.no_grad():
+                logits = peer.run_with_hooks(ids, fwd_hooks=[(self._tlens_name(addr), fn)])
+            return logits[:, -1, :]
+        with torch.no_grad(), peer.trace(ids):
+            mod = self._nn_module(peer, addr)
+            mod.output[0][:] = edit(mod.output[0])
+            out = peer.output.save()
+        return out if isinstance(out, torch.Tensor) else out.value
+
     # ------------------------------------------------------------------ workloads
     def run(self, workload: str, tool: str) -> Any:
         return getattr(self, f"w_{workload}")(tool)
@@ -185,7 +251,10 @@ class Cell:
             elif tool == "tl_record":
                 rec = tl.record(self.model, ids, save=sel)
                 self.last_ops = getattr(rec, "n_ops", None)
-                out.append([rec.find_sites(s).first().out for s in sites])
+                out.append([rec_site_out(rec, b) for b in self.blocks])
+                continue
+            elif tool in ("tlens", "nnsight"):
+                out.append(self.peer_cache(tool, ids))
                 continue
             else:
                 raise ValueError(tool)
@@ -206,6 +275,8 @@ class Cell:
             elif tool == "tl_record":
                 out = tl.record(self.model, self.ids, save=site, intervene=spec, return_output=True)
                 res.append(out[0])
+            elif tool in ("tlens", "nnsight"):
+                res.append(self.peer_edit(tool, self.ids, self.mid, self.steer_edit(mag)))
             elif tool == "tl_trace":
                 t = tl.trace(
                     self.model,
@@ -228,6 +299,9 @@ class Cell:
             if tool == "hook":
                 res.append(self._hook_edit(self.corrupt, addr, lambda h, v=value: v))
                 continue
+            if tool in ("tlens", "nnsight"):
+                res.append(self.peer_edit(tool, self.corrupt, addr, lambda h, v=value: v))
+                continue
             site = tl.module(addr)
             spec = tl.when(site, tl.replace_with(value))
             if tool == "tl_bind":
@@ -247,12 +321,30 @@ class Cell:
         site = tl.module(self.mid)
         spec = tl.when(site, tl.steer(self.direction, magnitude=MAG, feature_axis=-1))
         bound = spec.bind(self.model) if tool == "tl_bind" else None
+        seed: Any = None
+        logit_site = tl.module("logit_readout")
         for _ in range(8):
-            if tool == "hook":
+            if tool == "tl_fastrun":
+                # trace once, then the guarded fast steered rerun (wip/fast-rerun-intervene)
+                if seed is None:
+                    seed = tl.trace(
+                        self.model,
+                        ids,
+                        save=site | logit_site,
+                        intervene=spec,
+                        capture=CaptureOptions(inference_only=True),
+                    )
+                else:
+                    seed.run(self.model, ids)
+                    self.last_engine = seed.last_run.get("engine")
+                logits = seed.find_sites(logit_site).first().out
+            elif tool == "hook":
                 logits = self._hook_edit(ids, self.mid, self.steer_edit(MAG))
             elif tool == "tl_bind":
                 with torch.no_grad():
                     logits = bound(ids)
+            elif tool in ("tlens", "nnsight"):
+                logits = self.peer_edit(tool, ids, self.mid, self.steer_edit(MAG))
             elif tool == "tl_record":
                 logits = tl.record(self.model, ids, save=site, intervene=spec, return_output=True)[
                     0
@@ -342,6 +434,7 @@ def main() -> None:
             ops=cell.last_ops,
             peak_rss_growth_mb=rss_mb() - base_rss,
             maxdiff_vs_hook=maxdiff(result, reference),
+            engine=cell.last_engine,
         )
     except Exception as exc:  # report the refusal or failure as data
         rec.update(error=type(exc).__name__, msg=str(exc)[:500])

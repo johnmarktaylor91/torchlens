@@ -1,0 +1,34 @@
+benchmarks/eff_seat2/wl.py --model q3s --workload cache --tool hook --prompts 4 --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model q3s --workload cache --tool tl_trace_default --prompts 4 --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model q3s --workload cache --tool tl_trace_infer --prompts 4 --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model q3s --workload cache --tool tl_trace_sparse --prompts 4 --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model q3s --workload cache --tool tl_trace_sparse_infer --prompts 4 --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model q3s --workload cache --tool tl_record --prompts 4 --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model q3s --workload cache --tool tlens --prompts 4 --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model q3s --workload cache --tool nnsight --prompts 4 --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model q3s --workload steer --tool hook --sweep 4 --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model q3s --workload steer --tool tl_bind --sweep 4 --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model q3s --workload steer --tool tl_record --sweep 4 --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model q3s --workload steer --tool tl_trace --sweep 4 --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model q3s --workload steer --tool tlens --sweep 4 --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model q3s --workload steer --tool nnsight --sweep 4 --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model q3s --workload patch --tool hook --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model q3s --workload patch --tool tl_bind --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model q3s --workload patch --tool tl_record --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model q3s --workload patch --tool tlens --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model q3s --workload patch --tool nnsight --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model q3s --workload gen --tool hook --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model q3s --workload gen --tool tl_bind --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model q3s --workload gen --tool tl_record --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model q3s --workload gen --tool tl_trace --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model q3s --workload gen --tool tlens --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model q3s --workload gen --tool nnsight --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model q3s --workload grad --tool hook --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model q3s --workload grad --tool tl_trace_grad --out out/wl.jsonl
+benchmarks/eff_seat2/stagecount.py --model q3s --mode trace_default --out out/stage.jsonl --pstats out/q3s_trace_default.pstats
+benchmarks/eff_seat2/stagecount.py --model q3s --mode trace_infer --out out/stage.jsonl --pstats out/q3s_trace_infer.pstats
+benchmarks/eff_seat2/stagecount.py --model q3s --mode trace_sparse --out out/stage.jsonl --pstats out/q3s_trace_sparse.pstats
+benchmarks/eff_seat2/stagecount.py --model q3s --mode trace_elicit --out out/stage.jsonl --pstats out/q3s_trace_elicit.pstats
+benchmarks/eff_seat2/stagecount.py --model q3s --mode record_save --out out/stage.jsonl --pstats out/q3s_record_save.pstats
+benchmarks/eff_seat2/stagecount.py --model q3s --mode record_intervene --out out/stage.jsonl --pstats out/q3s_record_intervene.pstats
+benchmarks/eff_seat2/stagecount.py --model q3s --mode record_intervene_nograd --out out/stage.jsonl --pstats out/q3s_record_intervene_nograd.pstats
