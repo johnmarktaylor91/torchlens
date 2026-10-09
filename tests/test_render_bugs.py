@@ -709,6 +709,7 @@ def test_grad_edges_use_preserved_edge_cluster_key(
         module_edge_dict: dict[str, object],
         graphviz_graph: object,
         overrides: object,
+        **endpoint_names: str,
     ) -> None:
         """Capture grad-edge cluster keys before delegating to the real implementation."""
 
@@ -727,6 +728,7 @@ def test_grad_edges_use_preserved_edge_cluster_key(
             module_edge_dict,  # type: ignore[arg-type]
             graphviz_graph,  # type: ignore[arg-type]
             overrides,  # type: ignore[arg-type]
+            **endpoint_names,
         )
 
     # Patch in the CALLER's module namespace: _render_edges holds its own binding

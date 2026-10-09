@@ -286,7 +286,7 @@ def _render_node_name_for_occurrence(trace: "Trace", label: str | None) -> str |
         return None
     op = _op_for_occurrence_label(trace, label)
     if op is not None:
-        return op.label.replace(":", "pass")
+        return _render_node_name(op, "unrolled")
     return None
 
 
@@ -343,13 +343,13 @@ def _render_output_node_name_for_path(
         if getattr(op, "layer_label", None) not in output_labels:
             continue
         if tuple(getattr(op, "container_path", ()) or ()) == path:
-            return op.label.replace(":", "pass")
+            return _render_node_name(op, "unrolled")
     for output_label in getattr(trace, "output_layers", ()) or ():
         output_op = trace.layer_dict_all_keys.get(output_label)
         if output_op is None:
             continue
         if tuple(getattr(output_op, "container_path", ()) or ()) == path:
-            return output_op.label.replace(":", "pass")
+            return _render_node_name(output_op, "unrolled")
     return None
 
 
@@ -669,7 +669,7 @@ def _build_layer_node(
             raw_output_attrs = _render_raw_output(getattr(self, "raw_output", None))
         if raw_output_attrs is not None:
             node_args.update(raw_output_attrs)
-    node_args["name"] = _render_node_label(node, vis_mode).replace(":", "pass")
+    node_args["name"] = _render_node_name(node, vis_mode)
     # Map membership is the ONE collapse predicate (the map builder owns the
     # mode decision); the edge pass reroutes mapped leaves' edges to the
     # summary box, so drawing a mapped leaf would orphan it.
@@ -695,7 +695,7 @@ def _build_layer_node(
     if node.is_final_output:
         with graphviz_graph.subgraph() as s:
             s.attr(rank="sink")
-            s.node(_render_node_label(node, vis_mode).replace(":", "pass"))
+            s.node(_render_node_name(node, vis_mode))
 
     return node_color
 
