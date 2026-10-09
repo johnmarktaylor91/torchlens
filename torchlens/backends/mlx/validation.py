@@ -223,9 +223,20 @@ def _perturb_candidates(value: Any) -> tuple[Any, ...]:
 
     value_np = np.asarray(value)
     if value_np.dtype.kind == "f":
-        return (value + mx.array(0.5, dtype=value.dtype), value * 2)
+        # The magnitude shifts mirror the paddle/tf/tinygrad tripwires: a
+        # saturating call (ReLU over inputs all below -0.5) ignores the small
+        # shift and the doubling, so a healthy capture would read UNPROVED.
+        # A replay that ignores its argument stays UNPROVED under every one.
+        magnitude = float(np.max(np.abs(value_np))) + 1.0 if value_np.size else 1.0
+        shift = mx.array(magnitude, dtype=value.dtype)
+        return (
+            value + mx.array(0.5, dtype=value.dtype),
+            value * 2,
+            value + shift,
+            value - shift,
+        )
     if value_np.dtype.kind in ("i", "u"):
-        return (value + 1,)
+        return (value + 1, mx.zeros_like(value))
     if value_np.dtype.kind == "b":
         return (mx.logical_not(value),)
     return ()
