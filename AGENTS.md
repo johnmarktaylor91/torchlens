@@ -46,6 +46,7 @@ coverage-chosen sample of those classics as a test corpus in `tests/classics_cor
 ## Common Patterns
 
 Required reading for this area: [Common Patterns](docs/agent-reference/common-patterns.md).
+Before steering, patching or capturing in a loop, pick the path in [Performance: choosing a fast path](docs/guides/fast_paths.md).
 
 ## Current 2.x Surface
 

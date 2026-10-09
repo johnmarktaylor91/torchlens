@@ -45,6 +45,7 @@ from torch import nn
 DOC_FILE_GROUPS: dict[str, tuple[str, ...]] = {
     "guides": (
         "performance.md",
+        "guides/fast_paths.md",
         "for-ai-agents.md",
         # FW2 closure sweep: the 2026-08-28 pages whose fences are
         # self-contained programs (spelling-only sketches on them are tagged

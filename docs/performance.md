@@ -1,5 +1,9 @@
 # Performance guide
 
+Steering or patching over many forwards, or through generation? Read
+[Performance: choosing a fast path](guides/fast_paths.md) first: the capture-free
+`tl.when(site, action).bind(model)` runs at about the cost of a plain forward hook.
+
 TorchLens is fastest when it captures only the payloads you plan to inspect. A full
 `tl.trace(model, x)` records a complete operation graph and saves activations for the selected
 sites; `tl.record(model, x, save=...)` is the lighter path for tight loops where you only need
@@ -21,6 +25,7 @@ dygraph/eager replay and static-inventory audit costs; TensorFlow preview captur
 | A local window around a later op | `tl.trace(..., save=tl.followed_by(...), lookback=K)` | Retains bounded recent metadata, and optionally bounded recent payloads. |
 | Disk-backed selected payloads | `tl.trace(..., storage=tl.to_disk(path))` | Keeps selected payloads portable without retaining them all in RAM. |
 | Intervention during the forward pass | `tl.trace(..., intervene=tl.when(...), save=...)` | Live edits cost more than passive capture; use only when the model must execute edited values. |
+| Steering or patching over many forwards or through `generate()` | `tl.when(site, action).bind(model)` | Capture-free, about 1x a plain forward hook; see [choosing a fast path](guides/fast_paths.md). |
 | Final logits only | plain `model(x)` | TorchLens adds wrapper dispatch and metadata work; skip it when no intermediate data is needed. |
 
 ## Fast activation pull
