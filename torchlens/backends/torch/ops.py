@@ -748,6 +748,9 @@ _apply_predicate_mode_interventions_to_outputs = _rebind_function(
     _ops_interventions._apply_predicate_mode_interventions_to_outputs, globals()
 )
 _trace_intervene_options = _rebind_function(_ops_interventions._trace_intervene_options, globals())
+# Not rebound: the op-door memo and selector classes live in _ops_interventions' globals.
+_intervene_reaches_op_door = _ops_interventions._intervene_reaches_op_door
+_hook_plan_reaches_op_door = _ops_interventions._hook_plan_reaches_op_door
 _predicate_hook_metadata = _rebind_function(_ops_interventions._predicate_hook_metadata, globals())
 _record_predicate_intervention_spec = _rebind_function(
     _ops_interventions._record_predicate_intervention_spec, globals()
