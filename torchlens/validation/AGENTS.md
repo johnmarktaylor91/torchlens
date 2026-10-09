@@ -25,6 +25,7 @@ metadata invariants, intervention readiness, and unified `.tlspec` manifest sche
 | `_replay_device.py` | Replay device alignment when an `output_device` capture keeps saved payloads off the op's device: parent payloads move to the slot's saved-argument device, recomputed outputs to the saved output's device |
 | `_completeness_backstop.py` | `completeness_backstop_counts`: dispatcher-witness census vs captured ops, including the module-forward-owned drop rule |
 | `status.py` | Replay-validation status objects |
+| `_live_model_state.py` | Live-model restore that writes only when a validation run changed the state (bit-exact compare against the snapshot), and reattaches the caller's `.grad` objects, so parameter/buffer version counters and a graph held across `tl.validate` survive |
 | `diagnostics.py` | Structured replay-failure diagnostics (add-only relative to pass/fail) |
 | `_layer_grad_report.py`, `_stock_layer_grads.py`, `_output_walk.py` | Layer-grad oracle report, stock-autograd grad collection, output-tree walking |
 | `__init__.py` | Public validation exports plus `.tlspec` manifest schema validation |
