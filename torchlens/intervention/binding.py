@@ -108,9 +108,10 @@ class BindReport:
     fire_records: tuple[Any, ...] = ()
     zero_fire_rule_ids: tuple[str, ...] = ()
     #: Canonical address -> the OTHER addresses the same module object is
-    #: registered under (``named_modules(remove_duplicate=False)``). A rule
-    #: anchored on the canonical name fires at EVERY call site of the shared
-    #: module; alias spellings never resolve (bind_static_anchor_unresolved).
+    #: registered under (``named_modules(remove_duplicate=False)``). A
+    #: ``tl.module`` / ``tl.in_module`` rule anchored on ANY of them names the
+    #: one module object and fires at every call site of it, as a forward hook
+    #: on that object does; a pass label counts the object's calls.
     module_aliases: dict[str, tuple[str, ...]] = field(default_factory=dict)
     execution_effect: str = _BIND_EXECUTION_EFFECT
     error: str | None = None
@@ -155,19 +156,25 @@ def _selector_terms(selector: Any, *, negated: bool = False) -> list[tuple[str, 
     return [("predicate", selector, negated)]
 
 
-def _module_anchor_addresses(rule: Any) -> list[str]:
-    """Collect the non-negated module-address anchors of one rule's WHERE term."""
+def _module_anchor_addresses(rule: Any) -> list[tuple[str, bool]]:
+    """Collect the non-negated module-address anchors of one rule's WHERE term.
 
-    anchors: list[str] = []
+    Returns ``(anchor, alias_resolves)`` pairs: ``tl.module`` /
+    ``tl.in_module`` anchors resolve an alias spelling to the shared module's
+    canonical address (as every other door does); a ``tl.site`` module path
+    is matched against canonical site keys, so an alias there stays refused.
+    """
+
+    anchors: list[tuple[str, bool]] = []
     for kind, node, negated in _selector_terms(rule.where):
         if negated:
             continue
         if kind in {"module", "in_module"}:
-            anchors.append(str(node.selector_value))
+            anchors.append((str(node.selector_value), True))
         elif kind == "site":
             module_path = getattr(node, "module_path", None)
             if module_path:
-                anchors.append(str(module_path))
+                anchors.append((str(module_path), False))
     return anchors
 
 
@@ -571,10 +578,12 @@ class _ArmedRuntime:
     def __enter__(self) -> _ArmedRuntime:
         """Install the runtime atomically (teardown on partial failure)."""
 
+        from ..ir.selector_eval import _ACTIVE_MODULE_ALIASES
         from .site_keys import _ACTIVE_LIVE_MINTER
 
         try:
             self._minter_token = _ACTIVE_LIVE_MINTER.set(self.session.minter)
+            self._alias_token = _ACTIVE_MODULE_ALIASES.set(self.binding._alias_canonical)
             self._install_tracker_hooks()
             self._install_boundary_hooks()
             if self.binding._op_level_plans:
@@ -605,6 +614,7 @@ class _ArmedRuntime:
     def _teardown(self) -> BaseException | None:
         """Best-effort removal of everything installed; returns the first failure."""
 
+        from ..ir.selector_eval import _ACTIVE_MODULE_ALIASES
         from .site_keys import _ACTIVE_LIVE_MINTER
 
         first: BaseException | None = None
@@ -626,6 +636,12 @@ class _ArmedRuntime:
             except BaseException as exc:  # noqa: BLE001 -- teardown must continue
                 first = first or exc
             self._minter_token = None  # type: ignore[assignment]
+        if getattr(self, "_alias_token", None) is not None:
+            try:
+                _ACTIVE_MODULE_ALIASES.reset(self._alias_token)
+            except BaseException as exc:  # noqa: BLE001 -- teardown must continue
+                first = first or exc
+            self._alias_token = None  # type: ignore[assignment]
         return first
 
     def _install_tracker_hooks(self) -> None:
@@ -688,10 +704,14 @@ class _ArmedRuntime:
     def _install_boundary_hooks(self) -> None:
         """Install module-output substitution hooks for boundary rules."""
 
+        from ..ir.selector_eval import canonical_module_address
+
         session = self.session
         binding = self.binding
         for plan in binding._boundary_plans:
-            target_value = str(plan.rule.where.selector_value)
+            target_value = canonical_module_address(
+                str(plan.rule.where.selector_value), binding._alias_canonical
+            )
             for address in plan.boundary_targets:
                 module = binding._modules_by_address[address]
                 self._handles.append(
@@ -762,23 +782,25 @@ def _make_boundary_hook(
     return _boundary
 
 
-def _module_aliases(model: Any, modules_by_address: dict[str, Any]) -> dict[str, str]:
+def _module_aliases(model: Any) -> dict[str, str]:
     """Map every alias address to the canonical name of the shared module.
 
     ``named_modules()`` de-duplicates: a module object registered under two
     attributes (``self.dec = self.enc``) is reported ONCE, under the first
-    name. The other spellings are aliases -- no hook can distinguish the two
-    call sites, so an anchor on an alias cannot resolve, and an anchor on
-    the canonical name fires at every call site (AUD-CODE 3.7d).
+    name. The other spellings are aliases of the same object. Neither name can
+    tell the two call sites apart (a hook sits on the object), so a module
+    anchor on either name fires at every call site, exactly as capture does;
+    the report discloses the map. The walk is the one capture uses
+    (:func:`shared_module_addresses`), so both doors see the same aliases.
     """
 
-    canonical_by_id = {id(module): address for address, module in modules_by_address.items()}
-    aliases: dict[str, str] = {}
-    for address, module in model.named_modules(remove_duplicate=False):
-        canonical = canonical_by_id.get(id(module))
-        if canonical is not None and canonical != address:
-            aliases[address] = canonical
-    return aliases
+    from ..backends.torch.model_prep import shared_module_addresses
+
+    return {
+        alias: addresses[0]
+        for addresses in shared_module_addresses(model).values()
+        for alias in addresses[1:]
+    }
 
 
 def _alias_disclosure(aliases: dict[str, str]) -> dict[str, tuple[str, ...]]:
@@ -815,16 +837,17 @@ def _lower_rules(
     for rule in spec.rules:
         plan = _RulePlan(rule)
         hits: list[str] = []
-        for anchor in _module_anchor_addresses(rule):
+        for anchor, alias_resolves in _module_anchor_addresses(rule):
             bare = _bare_address(anchor)
             if bare in modules_by_address:
                 hits.append(bare)
+            elif bare in aliases and alias_resolves:
+                hits.append(aliases[bare])
             elif bare in aliases:
                 unresolved.append(
-                    f"{rule.rule_id}: {anchor!r} is an alias of {aliases[bare]!r} (the same "
-                    "module object registered under both names; named_modules() reports "
-                    f"only {aliases[bare]!r}, and a rule anchored there fires at EVERY call "
-                    "site of the shared module)"
+                    f"{rule.rule_id}: site module path {anchor!r} is an alias of "
+                    f"{aliases[bare]!r} (the same module object registered under both "
+                    f"names); site keys carry only {aliases[bare]!r}"
                 )
             else:
                 unresolved.append(f"{rule.rule_id}: {anchor!r}")
@@ -849,10 +872,10 @@ def _lower_rules(
             "static anchors did not resolve against the base model before "
             f"any forward: {', '.join(unresolved)}",
             code="bind_static_anchor_unresolved",
-            remedy="fix the module addresses to names in "
-            "model.named_modules() (an alias spelling resolves to its canonical "
-            "name, which fires at every call site), or drop the stale rules "
-            "from the spec",
+            remedy="fix the module addresses to names the base model registers "
+            "(any registered name of a shared module selects that module; a "
+            "tl.site module path takes its named_modules() name), or drop the "
+            "stale rules from the spec",
         )
     return boundary_plans, op_level_plans, resolved
 
@@ -1200,7 +1223,8 @@ class BoundInterventionExecutor:
             )
         modules_by_address = dict(model.named_modules())
         object.__setattr__(self, "_modules_by_address", modules_by_address)
-        aliases = _module_aliases(model, modules_by_address)
+        aliases = _module_aliases(model)
+        object.__setattr__(self, "_alias_canonical", aliases)
         object.__setattr__(self, "_module_aliases", _alias_disclosure(aliases))
         boundary_plans, op_level_plans, resolved = _lower_rules(spec, modules_by_address, aliases)
         object.__setattr__(self, "_boundary_plans", boundary_plans)

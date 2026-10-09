@@ -133,6 +133,39 @@ def _structure_only_forward_boundary(trace: "Trace") -> "contextlib.AbstractCont
     return contextlib.nullcontext()
 
 
+def _module_alias_scope(trace: "Trace") -> "contextlib.AbstractContextManager[None]":
+    """Publish the prepared model's alias addresses to capture-time selectors.
+
+    Model preparation records every registered name of a shared module in its
+    metadata's ``all_addresses`` (canonical first). Live intervention hooks and
+    capture-time ``save=`` predicates see only the canonical address on module
+    frames, so ``tl.module("alias")`` / ``tl.in_module("alias:2")`` resolve
+    through this map, exactly as ``trace.modules["alias"]`` does post hoc.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose per-session model preparation has run.
+
+    Returns
+    -------
+    contextlib.AbstractContextManager[None]
+        The selector alias scope for the forward.
+    """
+
+    from ..ir.selector_eval import module_alias_scope
+
+    workspace = getattr(trace, "_module_capture_ws", None)
+    metadata = getattr(workspace, "module_metadata", None) or {}
+    aliases = {
+        alias: primary
+        for primary, meta in metadata.items()
+        for alias in meta.get("all_addresses", ())
+        if alias != primary
+    }
+    return module_alias_scope(aliases)
+
+
 @contextlib.contextmanager
 def _weightsfree_and_belt_boundary(trace: "Trace") -> "Iterator[None]":
     """Compose the admitted-meta scope around the structure-only belt.
@@ -1852,7 +1885,7 @@ def run_and_log_inputs_through_model(
         # before invoking the model; all subsequent operations are captured
         # automatically by the decorated wrappers.
         _vprint(self, f"Running {self.capture_mode} forward pass...")
-        with backend.active_logging(self):
+        with backend.active_logging(self), _module_alias_scope(self):
             # Under an active ``force_eager`` stance (torch >= 2.6) the
             # inventoried compiled callables run their original eager Python and
             # their interiors ARE logged, so the capture keeps full verified

@@ -179,6 +179,70 @@ def _module_address(module: nn.Module) -> str:
     return "" if meta is None or meta.address is None else meta.address
 
 
+#: Ceiling on the alias addresses one enumeration collects. Every registration
+#: path is an address, so a model that shares a shared module's parent many
+#: times over grows the count multiplicatively; past the ceiling the remaining
+#: alias spellings simply do not resolve (they select nothing), never a wrong
+#: module.
+_MAX_ALIAS_ADDRESSES = 4096
+
+
+def shared_module_addresses(model: nn.Module) -> dict[int, tuple[str, ...]]:
+    """Return every registered address of each module registered more than once.
+
+    ``named_modules()`` reports a module object once, under its first
+    registration (the canonical address TorchLens labels its calls with). The
+    other registrations (``self.alias = self.block``, and every address beneath
+    them such as ``alias.fc``) are alias addresses of the same object, as
+    ``named_modules(remove_duplicate=False)`` reports them. Unlike that call,
+    this walk is bounded on cyclic registrations (a module registered inside
+    its own subtree), which it skips.
+
+    Parameters
+    ----------
+    model:
+        Root module; its own address is ``""``.
+
+    Returns
+    -------
+    dict[int, tuple[str, ...]]
+        ``id(module)`` -> ``(canonical, alias, ...)`` for modules with at least
+        one alias address; empty when no module is registered twice.
+    """
+
+    registrations = 0
+    distinct: set[int] = set()
+    for module in model.modules():
+        for child in module._modules.values():
+            if child is not None:
+                registrations += 1
+                distinct.add(id(child))
+    if registrations == len(distinct) and id(model) not in distinct:
+        return {}
+    canonical = {id(module): address for address, module in model.named_modules()}
+    max_depth = len(canonical)
+    aliases: dict[int, list[str]] = {}
+    collected = 0
+    stack: list[tuple[str, nn.Module, int]] = [("", model, 0)]
+    while stack and collected < _MAX_ALIAS_ADDRESSES:
+        prefix, module, depth = stack.pop()
+        if depth >= max_depth:
+            continue  # only a cyclic registration nests deeper than the module count
+        for name, child in reversed(module._modules.items()):
+            if child is None or child is model:
+                continue
+            address = f"{prefix}.{name}" if prefix else name
+            if address != canonical.get(id(child)):
+                aliases.setdefault(id(child), []).append(address)
+                collected += 1
+            stack.append((address, child, depth + 1))
+    return {
+        module_id: (canonical[module_id], *dict.fromkeys(names))
+        for module_id, names in aliases.items()
+        if module_id in canonical
+    }
+
+
 def _module_type(module: nn.Module) -> str:
     """Return a prepared module's TorchLens module type.
 
@@ -610,6 +674,9 @@ def _prepare_model_session(
 
     # Track seen module ids to detect shared modules (same module at multiple addresses).
     _seen_module_ids: dict[int, str] = {}
+    # model.modules() de-duplicates, so a module registered under a second name
+    # is visited once; its alias addresses come from this one bounded walk.
+    _alias_addresses = shared_module_addresses(model)
 
     # Use model.modules() + cached module addresses from phase 1, avoiding a
     # second full DFS with string concatenation and list(named_children()) calls.
@@ -627,6 +694,10 @@ def _prepare_model_session(
         )
         meta_address = "self" if is_root else address
         meta = trace._module_capture_ws.module_metadata.get(meta_address)
+        if meta is not None and id(module) in _alias_addresses:
+            for alias_address in _alias_addresses[id(module)]:
+                if alias_address != meta_address and alias_address not in meta["all_addresses"]:
+                    meta["all_addresses"].append(alias_address)
         if meta is not None:
             capture_events = getattr(trace, "capture_events", None)
             if capture_events is None:

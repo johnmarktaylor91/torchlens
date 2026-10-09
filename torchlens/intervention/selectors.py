@@ -1668,16 +1668,19 @@ def in_module(address_or_layer: Any, address: str | None = None) -> InModuleSele
     if address is None:
         return InModuleSelector(str(address_or_layer))
 
-    from ..ir.selector_eval import module_address_matches
+    from ..ir.selector_eval import module_address_matches, module_selector_target
 
     if getattr(address_or_layer, "is_output", False):
         # The synthetic output alias carries its producer's module stamp for
         # display only; it lies in no module (same rule as the selector form).
         return False
+    # A second registered name of a shared module tests as its canonical
+    # address, exactly as the selector form does.
+    target = module_selector_target(address, address_or_layer, "site")
     modules = getattr(address_or_layer, "modules", ())
     module_ops = getattr(address_or_layer, "output_of_module_calls", ())
     candidates = tuple(modules) + tuple(module_ops)
-    return any(module_address_matches(candidate, address) for candidate in candidates)
+    return any(module_address_matches(candidate, target) for candidate in candidates)
 
 
 def _classify_selector_direction(
