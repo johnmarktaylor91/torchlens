@@ -27,7 +27,6 @@ from ..capture.projections import (
 from ..capture.stop import StopDirective, stop_directive_for_trace
 from ..capture.trace import _extract_and_mark_outputs
 from ..data_classes.trace import Trace
-from ..intervention._module_alias_guard import refuse_model_alias_spellings
 from ..intervention.predicates import InterventionPredicate
 from ..ir import CaptureEvents
 from ..options import StreamingOptions
@@ -322,6 +321,9 @@ class Recorder:
         )
         # A shared module's alias spelling cannot select one call site; refuse
         # it before any forward, with the error every other door raises.
+        # Deferred: intervention sits above fastlog in the layer map.
+        from ..intervention._module_alias_guard import refuse_model_alias_spellings
+
         refuse_model_alias_spellings(
             self.model, self.options.keep_op, self.options.intervene, self.options.halt
         )
