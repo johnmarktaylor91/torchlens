@@ -928,7 +928,7 @@ SLIDES: tuple[Slide, ...] = (
         ),
         keys=(
             Key("t= time and out= storage", "node(text~t=)", at="t="),
-            Key("call= and fn= name the source line", "node(text~call=)", at="call="),
+            Key("call= is the source line; fn= the function", "node(text~call=)", at="call="),
             Key("show_saved_for_backward: retained tensors", "node(text~saved)", at="saved"),
             Key("Fields you list replace the defaults", "node(text~tanh)", panel="b", at="us"),
         ),

@@ -258,12 +258,13 @@ def probe_export(raw: Path) -> dict[str, str]:
     )
     facts["vis_outpath"] = f"default {defaults['vis_outpath'].default!r} (the file stem)"
     facts['view="none"'] = f"draws nothing and returns {trace.draw(view='none')!r}"
-    refused = 'view="sideways" (view is an alias of vis_mode)'
+    refused = 'view="sideways"'
     try:
         trace.draw(view="sideways", vis_outpath=str(raw / "export-refused"), **base)
         facts[refused] = "accepted (unexpected)"
     except Exception as exc:  # the refusal is the measurement
         # The message without its remedy sentence, which repeats the allowed values.
         first = str(exc).strip().splitlines()[0].split(" Remedy:")[0][:150]
-        facts[refused] = f"refused before any render: {type(exc).__name__}: {first}"
+        # view takes "none" or a vis_mode value; the error names the vis_mode it would set.
+        facts[refused] = f"refused before any render (view sets vis_mode): {first}"
     return facts
