@@ -484,6 +484,11 @@ def test_region_gpt2_block_module_aligned() -> None:
     if not (HF_HUB_CACHE / "models--distilgpt2").exists():
         pytest.skip("distilgpt2 snapshot not cached; fetch once online.")
     model = transformers.AutoModelForCausalLM.from_pretrained("distilgpt2").eval()
+    # No KV cache: with use_cache the block's present key/value feed the model's
+    # returned past_key_values directly, an exit into an output alias that the
+    # substitution cannot address (refused typed; pinned in
+    # tests/test_output_module_edit_once.py). This row gates the block region.
+    model.config.use_cache = False
     ids = torch.tensor([[464, 3139, 286, 4881, 318]])
     fork = tl.trace(model, ids, capture=_CAPTURE).fork()
     members = tl.in_module("transformer.h.2")

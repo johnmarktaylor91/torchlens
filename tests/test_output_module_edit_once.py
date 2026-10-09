@@ -463,3 +463,22 @@ def test_bind_applies_edits_to_every_leaf_of_a_multi_output_op() -> None:
     torch.testing.assert_close(bound, want)
     captured = tl.trace(_ChunkNet(), x, intervene=tl.when(tl.func("chunk"), tl.scale(0.5)))
     torch.testing.assert_close(captured.output_ops[0].out, want)
+
+
+def test_region_exiting_into_a_model_output_refuses_typed() -> None:
+    """A region whose exit is a returned value refuses instead of silently not editing it.
+
+    Before the alias exclusion, ``tl.in_module("fc2")`` pulled ``output_1`` into the
+    region interior, so the region had no exit and the edit never reached the model
+    output. The exit into the alias cannot be spliced, so it now refuses by name.
+    """
+
+    from torchlens.intervention.errors import RegionError
+
+    model, x, _x2 = _setup(_MLP)
+    fork = _ready_trace(model, x).fork()
+    target = fork.subgraph(tl.in_module("fc2")).as_region()
+    with pytest.raises(RegionError) as excinfo:
+        fork.do(target, tl.scale(0.5))
+    assert excinfo.value.fields["code"] == "region_exit_address_underivable"
+    assert "output_1" in str(excinfo.value)

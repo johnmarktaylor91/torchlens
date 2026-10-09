@@ -820,6 +820,23 @@ def _refuse_unaddressable_exits(region_target: RegionTarget) -> None:
     """
 
     unaddressable = [edge for edge in region_target.boundary.exits if not edge.addresses]
+    graph_ops = region_target.source_slice._graph.ops
+    into_output = [
+        edge.child
+        for edge in unaddressable
+        if bool(getattr(graph_ops.get(edge.child), "is_output", False))
+    ]
+    if into_output:
+        names = ", ".join(repr(label) for label in into_output)
+        raise RegionError(
+            f"region exit edge(s) into the model-output alias node(s) [{names}] cannot "
+            "be substituted: an output alias runs no function, so the exit "
+            "substitution has no argument occurrence to splice, and leaving it "
+            "would return the unedited value from the model",
+            code="region_exit_address_underivable",
+            remedy="end the region before the op whose value the model returns, "
+            "or edit that op directly with fork.do(tl.module(...), edit)",
+        )
     if unaddressable:
         names = ", ".join(f"{e.parent!r} -> {e.child!r}" for e in unaddressable)
         raise RegionError(
