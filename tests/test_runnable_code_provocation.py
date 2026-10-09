@@ -86,6 +86,12 @@ def _tamper_run_descriptor(path: Path, mutate: Callable[[dict[str, Any]], None])
     manifest_path.write_text(json.dumps(manifest))
 
 
+def _final_call_id(loaded: Any) -> str:
+    """Return the id of the last recorded call of a loaded trace (``call:<index>``)."""
+
+    return max(loaded._runnable.callables_by_call_id, key=lambda key: int(key.split(":")[1]))
+
+
 def _wrap_loaded_callable(
     loaded: Any, call_id: str, wrap: Callable[[Callable[..., Any]], Callable[..., Any]]
 ) -> None:
@@ -230,7 +236,7 @@ def test_slot_production_mismatch_on_unproduced_output_source(tmp_path: Path) ->
     loaded = tl.load(_save_branch_artifact(tmp_path, "produce.tlspec"))
     _wrap_loaded_callable(
         loaded,
-        "call:19",
+        _final_call_id(loaded),
         lambda orig: lambda *args, **kwargs: {"x": orig(*args, **kwargs)},
     )
     with pytest.raises(RunPreconditionError) as caught:

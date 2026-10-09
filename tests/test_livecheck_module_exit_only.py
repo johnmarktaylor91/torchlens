@@ -224,7 +224,7 @@ def _invariants_outcome(trace: Any) -> str:
 
     try:
         return f"ok:{bool(trace.check_metadata_invariants())}"
-    except Exception as exc:  # the verdict, not the exception object, is compared
+    except Exception as exc:  # noqa: BLE001 -- the verdict, not the exception object, is compared
         return f"raised:{type(exc).__name__}:{exc}"
 
 
@@ -243,7 +243,7 @@ def _trace_fingerprint(spec_name: str, *, force_legacy: bool) -> dict[str, Any]:
     for op in trace.ops:
         try:
             saved[str(op.label)] = _thash(op.out)
-        except Exception as exc:  # unsaved payloads refuse typed
+        except Exception as exc:  # noqa: BLE001 -- unsaved payloads refuse typed; the class is compared
             saved[str(op.label)] = f"<refused {type(exc).__name__}>"
     dump = json.dumps(_scrub(trace.to_agent_json(max_ops=None)), sort_keys=True, default=str)
     return {
@@ -541,9 +541,12 @@ def _record_counts(spec_name: str) -> dict[str, int]:
 # Per-op path counts, measured on the base before the skip (2.36.1 line). There the module-only
 # steer cost make_live_site_proxy 9, _build_shared_fields_dict 61 on tl.trace and
 # _evaluate_intervene_op 9 on tl.record; the controls keep the per-op path, call for call.
+# The functional control's 45 shared-field builds drop to 18 once the live-site proxy's
+# own nelement()/element_size() read runs paused: those internal calls no longer reach the
+# wrapper as candidate ops (one build per logged op plus one per proxy remain).
 _FUNC_STEER_TRACE_COUNTS = {
     "make_live_site_proxy": 9,
-    "_build_shared_fields_dict": 45,
+    "_build_shared_fields_dict": 18,
     "_evaluate_intervene_op": 9,
 }
 _FUNC_STEER_RECORD_COUNTS = {

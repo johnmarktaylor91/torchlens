@@ -464,7 +464,11 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # the landed T82d train (3200 alone) unions with the F28 echo module-seam
     # emits to 3212 on the merged tree; the F28-side 3250 ceiling already
     # clears the union and stays.
-    "torchlens/backends/torch/model_prep.py": 3250,
+    # 3250 -> 3300 (next-release integration): module-save escrow's entry and
+    # exit hand-offs (+11) union with the fast rerun's module-entry fingerprint
+    # token (+4) to 3255; each fit alone. Next 50-line step, conscious raise
+    # with both contributions named.
+    "torchlens/backends/torch/model_prep.py": 3300,
     # 2950 -> 2800 (2026-08-29 F11 T74b fix): the call-tree display + call-scope
     # resolution helper family split to data_classes/_call_tree.py after the
     # merged tree crossed the frozen 2950 (F10's Module lovely seam +10 atop
