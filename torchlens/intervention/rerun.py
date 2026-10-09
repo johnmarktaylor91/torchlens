@@ -876,12 +876,10 @@ def _capture_with_active_spec(
     check_model_and_input_variants(model, x, {})
     save_grads_policy = getattr(log, "save_grads", None)
     grads_to_save = "all" if save_grads_policy is True else save_grads_policy
-    layers_to_save, save_predicate, lookback, lookback_payload_policy = _rerun_save_scope(log)
     return _run_model_and_save_specified_outs(
         model=model,
         input_args=x,
         input_kwargs={},
-        layers_to_save=layers_to_save,
         output_device=getattr(log, "output_device", "same"),
         activation_transform=getattr(log, "activation_transform", None),
         grad_transform=getattr(log, "grad_transform", None),
@@ -911,15 +909,46 @@ def _capture_with_active_spec(
         save_budget=getattr(log, "save_budget", "auto"),
         output_transform=output_transform,
         save_raw_output=getattr(log, "save_raw_output", "small"),
-        save_predicate=save_predicate,
-        lookback=lookback,
-        lookback_payload_policy=lookback_payload_policy,
-        retain_output_parents_for_layers_to_save=getattr(
-            log,
-            "_retain_layers_to_save_output_parents",
-            False,
-        ),
+        **_rerun_save_kwargs(log),
     )
+
+
+def _rerun_save_kwargs(log: Trace) -> dict[str, Any]:
+    """Return the capture save kwargs a rerun of ``log`` must use.
+
+    The capture's recorded save request is replayed against the rerun's own
+    graph, so the rerun saves what a fresh capture with the same ``save=``
+    saves. The resolved raw-index save set must not be reused: a staged edit
+    inserts an ``intervention_replacement`` op that shifts every later raw
+    index, and the old indices then name the wrong ops. ``tl.record`` keep-op
+    scopes keep their precedence; a trace with no recorded request (restored
+    from pickle) falls back to the resolved scope.
+
+    Parameters
+    ----------
+    log:
+        Existing trace whose save request should be honored during rerun.
+
+    Returns
+    -------
+    dict[str, Any]
+        Save keyword arguments for ``_run_model_and_save_specified_outs``.
+    """
+
+    options = getattr(log, "_predicate_save_options", None)
+    request = getattr(log, "_rerun_save_request", None)
+    if request is not None and getattr(options, "keep_op", None) is None:
+        return dict(request)
+    layers_to_save, save_predicate, lookback, lookback_payload_policy = _rerun_save_scope(log)
+    return {
+        "layers_to_save": layers_to_save,
+        "save_predicate": save_predicate,
+        "lookback": lookback,
+        "lookback_payload_policy": lookback_payload_policy,
+        "retain_output_parents_for_layers_to_save": getattr(
+            log, "_retain_layers_to_save_output_parents", False
+        ),
+    }
 
 
 def _validate_rerun_result(new_log: Trace, old_log: Trace, *, strict: bool) -> int:
