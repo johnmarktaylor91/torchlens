@@ -123,6 +123,22 @@ def _seeded(model: nn.Module) -> nn.Module:
     return model.eval()
 
 
+class _BoolGateIdentity(nn.Module):
+    """A scalar-bool gate (TorchLens reads its value) plus an Identity module."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+        self.readout = nn.Identity()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Branch on a scalar bool, then pass through Identity."""
+        y = self.fc(x)
+        if (y.abs() >= 0).all():
+            y = y * 2
+        return self.readout(y)
+
+
 def _native(model: nn.Module, x: torch.Tensor) -> tuple[int, int]:
     """Return the native-forward fingerprint of ``model(x)``."""
     value, _ = fingerprint_native_forward(model, (x,), {})
@@ -130,7 +146,9 @@ def _native(model: nn.Module, x: torch.Tensor) -> tuple[int, int]:
 
 
 @pytest.mark.smoke
-@pytest.mark.parametrize("model_cls", [_NestedMLP, _SharedTwice, _InplaceFunctional])
+@pytest.mark.parametrize(
+    "model_cls", [_NestedMLP, _SharedTwice, _InplaceFunctional, _BoolGateIdentity]
+)
 def test_capture_fingerprint_equals_native_forward(model_cls: type[nn.Module]) -> None:
     """Capture and a plain forward fold the identical ordered token stream."""
     torch.manual_seed(0)

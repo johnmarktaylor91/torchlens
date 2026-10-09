@@ -40,6 +40,7 @@ from ...utils.introspection import (
 from ...utils.rng import log_current_rng_states, set_random_seed, set_rng_from_saved_states
 from ...utils.tensor_utils import _is_cuda_available, safe_copy
 from . import _tl
+from ._completeness_origins import internal_scalar_read
 from ._held_refs_capture import rebind_held_torch_refs, restore_held_torch_refs
 from .aliasing import detect_torch_alias_contract
 from .buffer_writes import reconcile_buffer_writes, uninstall_buffer_write_tracker
@@ -997,6 +998,14 @@ class TorchBackend:
 
         return attributable_output_tensors, attributable_output_tensor_addresses
 
+    @staticmethod
+    def _scalar_bool_value(tensor: torch.Tensor | None) -> bool | None:
+        """Read a scalar-bool output's value as a capture-internal read, else ``None``."""
+        if tensor is None or tensor.dtype != torch.bool or tensor.ndim != 0:
+            return None
+        with internal_scalar_read():
+            return bool(tensor.item())
+
     def build_record_context(
         self,
         session: object,
@@ -1039,12 +1048,10 @@ class TorchBackend:
             parent_labels_raw=(),
             is_output_parent=False,
             backend_requires_isolation=False,
-            is_scalar_bool=tensor.dtype == torch.bool and tensor.dim() == 0
+            is_scalar_bool=tensor.dtype == torch.bool and tensor.ndim == 0
             if tensor is not None
             else None,
-            bool_value=bool(tensor.item())
-            if tensor is not None and tensor.dtype == torch.bool and tensor.dim() == 0
-            else None,
+            bool_value=self._scalar_bool_value(tensor),
         )
 
     def detect_backend_semantics(

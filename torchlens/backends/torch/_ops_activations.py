@@ -323,7 +323,9 @@ def _log_output_tensor_info(
     else:
         fields_dict["multi_output_index"] = None
 
-    if (t.dtype == torch.bool) and (t.dim()) == 0:
+    # ``ndim`` is an unwrapped property: TorchLens's own metadata reads must not
+    # enter the call fingerprint (``_state.CallFingerprint``) as model calls.
+    if (t.dtype == torch.bool) and t.ndim == 0:
         fields_dict["is_scalar_bool"] = True
         try:
             # TorchLens's own scalar-bool value read is a capture-internal escape:

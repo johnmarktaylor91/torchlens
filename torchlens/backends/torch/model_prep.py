@@ -1881,7 +1881,7 @@ def _ensure_module_output_tensor_logged(
             "conditional_context_kind": None,
             "conditional_wrapper_kind": None,
             "terminal_conditional_id": None,
-            "is_scalar_bool": bool(tensor.dtype == torch.bool and tensor.dim() == 0),
+            "is_scalar_bool": bool(tensor.dtype == torch.bool and tensor.ndim == 0),
             "bool_value": None,
             "in_conditionals": [],
             "terminal_bool_for": None,
