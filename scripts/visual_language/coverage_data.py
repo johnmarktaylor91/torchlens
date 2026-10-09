@@ -290,7 +290,7 @@ ROWS: Mapping[str, Row] = {
     ),
     "VR11": _R(
         "region.backward_pass_cluster",
-        "backward",
+        "grad-of-grad",
         P,
         "_render_nodes:_add_unrolled_backward_pass_clusters",
     ),
@@ -419,7 +419,7 @@ ROWS: Mapping[str, Row] = {
     "VI02": _R(
         "legend.show_legend_tristate", "builtin-legend", P, "_render_dot:_emit_and_finish_forward"
     ),
-    "VI03": _R("legend.backward_key", "backward", P, "_legend:backward_key_sections"),
+    "VI03": _R("legend.backward_key", "backward-key", P, "_legend:backward_key_sections"),
     "VI04": _R(
         "legend.rank_engine", "layout-engine", P, "_legend:legend_table_lines_for_rank_path"
     ),
@@ -588,13 +588,13 @@ LEGEND_ROW_WITNESS: Mapping[str, str] = {
     "parameterized": "builtin-legend",
     "intervention/cone": "builtin-legend",
     "mutated parameter": "mutated-param",
-    "backward op (grad_fn)": "backward",
-    "order 2+: grad-of-grad (double backprop)": "backward",
-    "[i] = intervening grad_fn (no forward op)": "backward",
-    "[custom] = custom autograd function": "backward",
-    "accum = gradient accumulation into a leaf": "backward",
-    "bwd N = backward pass N; order N = derivative order": "backward",
-    "order N = derivative order": "backward",
+    "backward op (grad_fn)": "backward-key",
+    "order 2+: grad-of-grad (double backprop)": "backward-key",
+    "[i] = intervening grad_fn (no forward op)": "backward-key",
+    "[custom] = custom autograd function": "backward-key",
+    "accum = gradient accumulation into a leaf": "backward-key",
+    "bwd N = backward pass N; order N = derivative order": "backward-key",
+    "order N = derivative order": "backward-key",
     "TorchLens encoding": "color-by",
     "color_by:": "color-by",
     "eligible nodes": "color-by",
