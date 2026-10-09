@@ -22,7 +22,6 @@ import cProfile
 import gc
 import json
 import os
-import platform
 import pstats
 import statistics
 import sys
@@ -34,6 +33,7 @@ import torch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import wl  # noqa: E402
+from wl import benchmark_host_label  # noqa: E402
 
 import torchlens as tl  # noqa: E402
 from torchlens.options import CaptureOptions  # noqa: E402
@@ -265,7 +265,7 @@ def main() -> None:
         "mode": args.mode,
         "seq": args.seq,
         "commit": args.commit,
-        "host": platform.node(),
+        "host": benchmark_host_label(),
         "torch": torch.__version__,
         "loadavg_start": os.getloadavg()[0],
         "n_ops": n_ops,

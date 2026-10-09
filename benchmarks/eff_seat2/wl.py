@@ -24,7 +24,6 @@ import argparse
 import gc
 import json
 import os
-import platform
 import resource
 import statistics
 import sys
@@ -37,6 +36,9 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.options import CaptureOptions
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from benchmarks.host_label import benchmark_host_label  # noqa: E402
 
 MAG = 4.0
 
@@ -411,7 +413,7 @@ def main() -> None:
         "prompts": args.prompts,
         "sweep": args.sweep,
         "commit": args.commit,
-        "host": platform.node(),
+        "host": benchmark_host_label(),
         "threads": torch.get_num_threads(),
         "torch": torch.__version__,
         "loadavg_start": os.getloadavg()[0],
