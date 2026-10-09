@@ -33,6 +33,7 @@ from torchlens.intervention import runtime as intervention_runtime
 from torchlens.intervention.hooks import NormalizedHookEntry
 from torchlens.intervention.selectors import CompositeSelector
 from torchlens.intervention.spec import InterventionSpec
+from torchlens.utils._torch_compat import TorchCapabilityWarning
 
 _MAGNITUDE = 2.0
 _VOLATILE_KEYS = ("time", "duration", "elapsed", "_at", "timestamp", "memory", "pid", "id(")
@@ -238,6 +239,9 @@ def _trace_fingerprint(spec_name: str, *, force_legacy: bool) -> dict[str, Any]:
         warnings.catch_warnings(record=True) as caught,
     ):
         warnings.simplefilter("always")
+        # Process-once torch-capability disclosure: it lands on whichever door
+        # captures first on an older torch, so it says nothing about the path.
+        warnings.simplefilter("ignore", TorchCapabilityWarning)
         trace = tl.trace(_model(), _input(), intervene=spec)
     saved: dict[str, str] = {}
     for op in trace.ops:
@@ -272,6 +276,7 @@ def _record_fingerprint(spec_name: str, *, force_legacy: bool) -> dict[str, Any]
         warnings.catch_warnings(record=True) as caught,
     ):
         warnings.simplefilter("always")
+        warnings.simplefilter("ignore", TorchCapabilityWarning)
         output, recording = tl.record(
             _model(), _input(), save=lambda ctx: True, intervene=spec, return_output=True
         )
