@@ -145,7 +145,7 @@ def render_all(raw: Path, only: set[str] | None = None) -> dict[str, dict[str, A
             stem = f"{slide.id}-{panel.name}"
             try:
                 records[stem] = capture.render_panel(slide, panel, raw)
-            except Exception as exc:  # recorded per panel; the slide then fails
+            except Exception as exc:  # noqa: BLE001 -- recorded per panel; the slide then fails
                 records[stem] = {
                     "slide": slide.id,
                     "panel": panel.name,
@@ -359,7 +359,7 @@ def build(out: Path, only: set[str] | None = None) -> int:
             continue
         try:
             record = compose_slide(slide, raw, out, number, order, env, probe)
-        except Exception as exc:  # recorded; the slide fails
+        except Exception as exc:  # noqa: BLE001 -- recorded; the slide fails
             record = {
                 "id": slide.id,
                 "number": number,

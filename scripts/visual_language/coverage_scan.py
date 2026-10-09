@@ -296,11 +296,13 @@ def _render_common_constants(path: Path) -> Iterator[tuple[str, int]]:
     for node in _tree(path).body:
         if isinstance(node, ast.Assign) and len(node.targets) == 1:
             target = node.targets[0]
-            if isinstance(target, ast.Name) and target.id.isupper():
-                if not target.id.startswith("_") and isinstance(
-                    node.value, (ast.Constant, ast.List, ast.Tuple)
-                ):
-                    yield f"const:{target.id}", node.lineno
+            if (
+                isinstance(target, ast.Name)
+                and target.id.isupper()
+                and not target.id.startswith("_")
+                and isinstance(node.value, (ast.Constant, ast.List, ast.Tuple))
+            ):
+                yield f"const:{target.id}", node.lineno
 
 
 def _file_tokens(path: Path) -> Iterator[tuple[str, int]]:
@@ -471,9 +473,13 @@ def encoding_legend_texts() -> list[LegendText]:
     path = (PACKAGE_ROOT / "visualization" / "_encoding.py").resolve()
     out: list[LegendText] = []
     for node in _tree(path).body:
-        if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name):
-            if node.targets[0].id.startswith("NOTE_") and isinstance(node.value, ast.Constant):
-                out.append(LegendText("TorchLens encoding", str(node.value.value), "_encoding"))
+        if (
+            isinstance(node, ast.Assign)
+            and isinstance(node.targets[0], ast.Name)
+            and node.targets[0].id.startswith("NOTE_")
+            and isinstance(node.value, ast.Constant)
+        ):
+            out.append(LegendText("TorchLens encoding", str(node.value.value), "_encoding"))
     wanted = ("_color_legend_rows", "_non_color_legend_rows")
     for node, index in _walk(_tree(path)):
         if not isinstance(node, (ast.JoinedStr, ast.Constant)) or id(node) in index.fstring_parts:

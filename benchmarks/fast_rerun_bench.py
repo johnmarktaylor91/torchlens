@@ -266,7 +266,7 @@ def measure_generation(
         token = torch.randint(0, 1000, (1, 1), generator=generator).to(current.device)
         current = torch.cat([current, token], dim=1)
         reference = paths.hook(current)
-        hook_t, _ = timed(lambda: paths.hook(current), 1)
+        hook_t, _ = timed(lambda current=current: paths.hook(current), 1)
         sync()
         start = time.perf_counter()
         trace.run(paths.model, current)

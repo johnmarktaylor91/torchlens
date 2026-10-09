@@ -22,6 +22,7 @@ import torch
 import torchlens as tl
 from scripts.visual_language.models import FIXTURES
 from scripts.visual_language.slides import CONVENTIONS, Panel, Slide
+from torchlens.errors import InvalidArgumentError
 from torchlens.visualization import lenses
 from torchlens.visualization._encoding import EncodingChannelRequest
 
@@ -266,7 +267,7 @@ def probe_export(raw: Path) -> dict[str, str]:
     try:
         trace.draw(view="sideways", vis_outpath=str(raw / "export-refused"), **base)
         facts[refused] = "accepted (unexpected)"
-    except Exception as exc:  # the refusal is the measurement
+    except InvalidArgumentError as exc:  # the refusal is the measurement
         # The message without its remedy sentence, which repeats the allowed values.
         first = str(exc).strip().splitlines()[0].split(" Remedy:")[0][:150]
         # view takes "none" or a vis_mode value; the error names the vis_mode it would set.
