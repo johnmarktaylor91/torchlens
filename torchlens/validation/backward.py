@@ -22,6 +22,12 @@ from ..utils.arg_handling import normalize_input_args
 from ..utils.display import warn_parallel
 from ..utils.rng import set_random_seed
 from ..utils.tensor_utils import param_grad_tolerances_for_dtype
+from ._live_model_state import (
+    held_parameter_grads,
+    load_state_dict_restore,
+    reattach_parameter_grads,
+    restore_state_dict_if_changed,
+)
 
 _SUM_IN_PROGRESS = object()
 """Memo sentinel: this container is on the current descent chain (a cycle)."""
@@ -577,6 +583,9 @@ def validate_backward_pass(
         return False
     state_dict = _clone_state_dict_with_metadata(model)
     leaf_flags = _leaf_parameter_flags(model)
+    # The passes reset .grad; the caller's accumulated grads are reattached by
+    # reference at the end, never written into.
+    held_grads = held_parameter_grads(model)
     original_training = model.training
     trace = None
     stock_module_grads = None
@@ -627,7 +636,10 @@ def validate_backward_pass(
             return False
         expected_param_grads = _param_grads(model)
 
-        model.load_state_dict(state_dict)
+        # Restore only what the stock pass changed: an unconditional in-place
+        # restore moves every tensor's version counter and breaks a graph the
+        # caller holds across validation.
+        restore_state_dict_if_changed(model, state_dict, load_state_dict_restore)
         _restore_leaf_parameters(leaf_flags)
         _restore_training_mode(model, original_training)
         set_random_seed(random_seed)
@@ -759,9 +771,10 @@ def validate_backward_pass(
                 break
         return params_passed
     finally:
-        model.load_state_dict(state_dict)
+        restore_state_dict_if_changed(model, state_dict, load_state_dict_restore)
         _restore_leaf_parameters(leaf_flags)
         _restore_training_mode(model, original_training)
         model.zero_grad(set_to_none=True)
+        reattach_parameter_grads(held_grads)
         if trace is not None:
             trace.cleanup()
