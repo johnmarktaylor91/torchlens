@@ -162,6 +162,43 @@ class TensorMeta(TorchLensMeta):
     # immediately (``set_same_object_mutation`` / ``pop_same_object_mutation``).
     same_object_mutation: bool | None = None
 
+    def __deepcopy__(self, memo: dict[int, Any]) -> TensorMeta:
+        """Copy this metadata for a deep-copied tensor, minus the source's identity.
+
+        ``Tensor.__deepcopy__`` finishes with ``new.__dict__ =
+        deepcopy(self.__dict__, memo)``, so a tensor copied inside a captured
+        forward would inherit its source's current-session anchor; and because
+        the storage was deep-copied through the same ``memo``, even the
+        ``label_storage`` pin would map onto the copy's own storage. The copy
+        would then read as the source itself: the deepcopy call would look like
+        it returned its input, log no op, and wire every consumer to the source
+        node. The anchor, the pin and the alias/handoff flags describe one
+        object, so the copy starts without them; the inert raw history
+        (``label_raw``, ``address``, ``buffer_source``) is kept, which the
+        session gate already ignores during a capture and which reads as before
+        afterwards.
+
+        Parameters
+        ----------
+        memo:
+            ``copy.deepcopy`` memo table.
+
+        Returns
+        -------
+        TensorMeta
+            Metadata for the copy.
+        """
+
+        copied = dataclass_replace(
+            self,
+            label_session=None,
+            label_storage=None,
+            data_alias=False,
+            same_object_mutation=None,
+        )
+        memo[id(self)] = copied
+        return copied
+
 
 @dataclass
 class ParamMeta(TorchLensMeta):
