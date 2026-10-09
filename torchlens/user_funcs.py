@@ -36,6 +36,8 @@ from torch import nn
 from . import _state
 from ._capture_intervention import (
     _backward_intervention_spec_from_predicate,
+    _intervention_spec_from_hook_plan,
+    _merge_intervention_spec_hooks,
     _record_capture_intervention_event,
 )
 from ._capture_state_helpers import (
@@ -143,7 +145,7 @@ from .intervention.hooks import normalize_hook_plan
 from .intervention.predicates import InterventionPredicate
 from .intervention.resolver import _selector_resolution_direction, resolve_sites
 from .intervention.selectors import BaseSelector
-from .intervention.types import InterventionDecision, InterventionSpec, TargetSpec
+from .intervention.types import InterventionDecision
 from .ir import ParentEdge
 from .ir.op_record import amend_graph_edge_insertion
 from .ir.selector_eval import selector_contains_kind
@@ -1045,56 +1047,6 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
     )
 
 
-def _intervention_spec_from_hook_plan(hook_plan: Any) -> InterventionSpec | None:
-    """Build an intervention spec for live hook-plan capture.
-
-    Parameters
-    ----------
-    hook_plan:
-        Normalized live hook entries.
-
-    Returns
-    -------
-    InterventionSpec | None
-        Spec carrying hook entries, or ``None`` when no hook plan exists.
-    """
-
-    if not hook_plan:
-        return None
-    spec = InterventionSpec()
-    target_keys: set[Any] | None = set()
-    for entry in hook_plan:
-        site_target = entry.site_target
-        if isinstance(site_target, TargetSpec):
-            target = site_target
-        elif hasattr(site_target, "to_target_spec"):
-            target = site_target.to_target_spec()
-        else:
-            target = TargetSpec("label", site_target)
-        frozen_target = target.freeze()
-        if target_keys is not None:
-            try:
-                target_is_new = frozen_target not in target_keys
-            except TypeError:
-                target_keys = None
-                target_is_new = not any(
-                    existing.freeze() == frozen_target for existing in spec.targets
-                )
-        else:
-            target_is_new = not any(existing.freeze() == frozen_target for existing in spec.targets)
-        if target_is_new:
-            spec.targets.append(target)
-            if target_keys is not None:
-                target_keys.add(frozen_target)
-        spec.add_hook(
-            target,
-            entry.helper_spec if entry.helper_spec is not None else entry.normalized_callable,
-            helper=entry.helper_spec,
-            metadata=dict(entry.metadata),
-        )
-    return spec
-
-
 # Capture-cache key INVERSION (M(oracles) item 6; listA row 26). The key was a
 # hand-enumerated include-list, so semantic knobs added later (raise_on_nan,
 # track_nonfinite, save_budget, ...) silently fell outside it and a warm cache
@@ -1463,58 +1415,6 @@ def _warn_zero_match_capture_selectors(
         trace.__dict__.pop("_tl_save_selector_fire_count", None)
         if not defer_backward_intervention:
             trace.__dict__.pop("_tl_intervene_selector_fire_count", None)
-
-
-def _merge_intervention_spec_hooks(
-    destination: InterventionSpec,
-    source: InterventionSpec | None,
-) -> InterventionSpec:
-    """Return a spec holding an existing spec's entries plus hook-plan entries.
-
-    Parameters
-    ----------
-    destination:
-        Spec whose entries come first. Never mutated: it may be a spec a
-        Trace already stores.
-    source:
-        Spec created from normalized hook entries.
-
-    Returns
-    -------
-    InterventionSpec
-        ``destination`` itself when ``source`` is ``None``, else a new spec
-        holding ``destination``'s entries followed by ``source``'s.
-    """
-
-    if source is None:
-        return destination
-    targets = list(destination.targets)
-    try:
-        target_keys: set[Any] | None = {existing.freeze() for existing in targets}
-    except TypeError:
-        target_keys = None
-    for target in source.targets:
-        frozen_target = target.freeze()
-        if target_keys is not None:
-            try:
-                target_is_new = frozen_target not in target_keys
-            except TypeError:
-                target_keys = None
-                target_is_new = not any(existing.freeze() == frozen_target for existing in targets)
-        else:
-            target_is_new = not any(existing.freeze() == frozen_target for existing in targets)
-        if target_is_new:
-            targets.append(target)
-            if target_keys is not None:
-                target_keys.add(frozen_target)
-    return replace(
-        destination,
-        targets=targets,
-        target_value_specs=list(destination.target_value_specs),
-        hook_specs=[*destination.hook_specs, *source.hook_specs],
-        records=list(destination.records),
-        metadata=dict(destination.metadata),
-    )
 
 
 def record_kpi_in_graph(name: str, value: Any) -> None:

@@ -3,12 +3,15 @@
 Split out of ``user_funcs.py`` (C03 fix cycle): the backward sticky-spec
 builder for backward-only selectors and the capture-door fire-evidence
 envelope (ledger memo 3.1) are intervention machinery, not trace-entry
-resolution; ``user_funcs`` imports them from here.
+resolution; ``user_funcs`` imports them from here. The live hook-plan
+spec builder and its non-mutating merge into an existing spec followed
+for the same reason (2.36.1 integration).
 """
 
 from __future__ import annotations
 
 import warnings
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from .intervention.hooks import normalize_hook_plan
@@ -168,4 +171,106 @@ def _record_capture_intervention_event(trace: Trace, intervene_request: Any) -> 
         site_keys=site_keys_for_labels(trace, tuple(fired_labels)),
         rules=rules,
         zero_fire_rule_ids=zero_fire_rule_ids,
+    )
+
+
+def _intervention_spec_from_hook_plan(hook_plan: Any) -> InterventionSpec | None:
+    """Build an intervention spec for live hook-plan capture.
+
+    Parameters
+    ----------
+    hook_plan:
+        Normalized live hook entries.
+
+    Returns
+    -------
+    InterventionSpec | None
+        Spec carrying hook entries, or ``None`` when no hook plan exists.
+    """
+
+    if not hook_plan:
+        return None
+    spec = InterventionSpec()
+    target_keys: set[Any] | None = set()
+    for entry in hook_plan:
+        site_target = entry.site_target
+        if isinstance(site_target, TargetSpec):
+            target = site_target
+        elif hasattr(site_target, "to_target_spec"):
+            target = site_target.to_target_spec()
+        else:
+            target = TargetSpec("label", site_target)
+        frozen_target = target.freeze()
+        if target_keys is not None:
+            try:
+                target_is_new = frozen_target not in target_keys
+            except TypeError:
+                target_keys = None
+                target_is_new = not any(
+                    existing.freeze() == frozen_target for existing in spec.targets
+                )
+        else:
+            target_is_new = not any(existing.freeze() == frozen_target for existing in spec.targets)
+        if target_is_new:
+            spec.targets.append(target)
+            if target_keys is not None:
+                target_keys.add(frozen_target)
+        spec.add_hook(
+            target,
+            entry.helper_spec if entry.helper_spec is not None else entry.normalized_callable,
+            helper=entry.helper_spec,
+            metadata=dict(entry.metadata),
+        )
+    return spec
+
+
+def _merge_intervention_spec_hooks(
+    destination: InterventionSpec,
+    source: InterventionSpec | None,
+) -> InterventionSpec:
+    """Return a spec holding an existing spec's entries plus hook-plan entries.
+
+    Parameters
+    ----------
+    destination:
+        Spec whose entries come first. Never mutated: it may be a spec a
+        Trace already stores.
+    source:
+        Spec created from normalized hook entries.
+
+    Returns
+    -------
+    InterventionSpec
+        ``destination`` itself when ``source`` is ``None``, else a new spec
+        holding ``destination``'s entries followed by ``source``'s.
+    """
+
+    if source is None:
+        return destination
+    targets = list(destination.targets)
+    try:
+        target_keys: set[Any] | None = {existing.freeze() for existing in targets}
+    except TypeError:
+        target_keys = None
+    for target in source.targets:
+        frozen_target = target.freeze()
+        if target_keys is not None:
+            try:
+                target_is_new = frozen_target not in target_keys
+            except TypeError:
+                target_keys = None
+                target_is_new = not any(existing.freeze() == frozen_target for existing in targets)
+        else:
+            target_is_new = not any(existing.freeze() == frozen_target for existing in targets)
+        if target_is_new:
+            targets.append(target)
+            if target_keys is not None:
+                target_keys.add(frozen_target)
+    return replace(
+        destination,
+        targets=targets,
+        target_value_specs=list(destination.target_value_specs),
+        hook_specs=[*destination.hook_specs, *source.hook_specs],
+        records=list(destination.records),
+        metadata=dict(destination.metadata),
     )
