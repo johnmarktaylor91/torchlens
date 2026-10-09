@@ -346,10 +346,13 @@ def _add_combined_backward_edges(
 def _add_combined_correspondence_edges(
     trace: "Trace",
     graphviz_graph: graphviz.Digraph,
-    intervening_cluster: InterveningClusterMode,
     pass_filter: BackwardPassFilter,
 ) -> None:
     """Add dashed forward-to-backward correspondence edges.
+
+    Ties run node to node: the graph sets no ``compound=true``, and cluster
+    clipping (``ltail``/``lhead``) would end a tie at a box border instead of
+    at the grad_fn it names.
 
     Parameters
     ----------
@@ -357,8 +360,6 @@ def _add_combined_correspondence_edges(
         Trace containing paired forward and grad_fn_handle metadata.
     graphviz_graph:
         Graphviz graph being rendered.
-    intervening_cluster:
-        Placement mode used to infer optional cluster boundary attributes.
     pass_filter:
         Normalized backward-pass filter.
     """
@@ -375,11 +376,6 @@ def _add_combined_correspondence_edges(
             "constraint": "false",
             "arrowsize": ".6",
         }
-        module_key = _module_key_for_grad_fn(trace, grad_fn_handle, intervening_cluster)
-        if module_key is not None:
-            cluster_name = f"cluster_{module_key.replace(':', '_pass')}"
-            edge_attrs["ltail"] = cluster_name
-            edge_attrs["lhead"] = cluster_name
         forward_node_name = _forward_correspondence_node_name(grad_fn_handle.op)
         if forward_node_name is not None:
             graphviz_graph.edge(

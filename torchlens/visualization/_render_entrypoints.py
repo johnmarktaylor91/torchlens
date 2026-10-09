@@ -484,9 +484,7 @@ def render_combined_graph(
         pass_filter,
     )
     _add_combined_backward_edges(self, cast(graphviz.Digraph, ir_builder), pass_filter)
-    _add_combined_correspondence_edges(
-        self, cast(graphviz.Digraph, ir_builder), intervening_cluster, pass_filter
-    )
+    _add_combined_correspondence_edges(self, cast(graphviz.Digraph, ir_builder), pass_filter)
     # The combined view carries the same style vocabulary (item 17).
     _emit_backward_key(ir_builder, show_legend, compute_backward_style_inventory(self, pass_filter))
     forward_ir = finalize_forward_regions(
