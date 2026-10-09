@@ -1,0 +1,5 @@
+# Constraints for every CI leg that pins numpy 1.26.4 (`uv pip install -c`).
+# pyarrow 26.0.0 (2026-10-09, python>=3.11) needs numpy>=2 at import but
+# declares no numpy requirement, so the resolver pairs it with a numpy 1.x pin
+# and `import pyarrow` fails. pyarrow 25.x supports numpy 1.x.
+pyarrow<26

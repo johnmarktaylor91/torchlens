@@ -42,12 +42,14 @@ jobs:
             torch: "2.1.2+cpu"
             torchvision: "0.16.2+cpu"
             numpy: "numpy==1.26.4"
+            constraints: .github/workflows/numpy1-constraints.txt
             scope: smoke
           - track: floor
             python: "3.11"
             torch: "2.1.2+cpu"
             torchvision: "0.16.2+cpu"
             numpy: "numpy==1.26.4"
+            constraints: .github/workflows/numpy1-constraints.txt
             scope: smoke
           # r7 R85-1: pyproject declares THREE python-conditioned torch
           # floors (>=2.1 for py<3.12, >=2.2 for py3.12, >=2.6 for py3.13)
@@ -60,6 +62,7 @@ jobs:
             torch: "2.2.2+cpu"
             torchvision: "0.17.2+cpu"
             numpy: "numpy==1.26.4"
+            constraints: .github/workflows/numpy1-constraints.txt
             scope: smoke
           - track: floor
             python: "3.13"
@@ -168,11 +171,16 @@ jobs:
           TORCH_VERSION: ${{ matrix.torch }}
           TORCHVISION_VERSION: ${{ matrix.torchvision }}
           NUMPY_SPEC: ${{ matrix.numpy }}
+          CONSTRAINTS: ${{ matrix.constraints }}
         run: |
+          # Rows that pin numpy 1.x carry a constraints file for packages that
+          # need numpy 2 without declaring it (see the file's header).
+          constraint_args=()
+          if [ -n "${CONSTRAINTS}" ]; then constraint_args=(-c "${CONSTRAINTS}"); fi
           # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
           # The viz extra (matplotlib, torchshow, lovely-tensors) is installed
           # because tviz is shipped surface with smoke-marked render tests.
-          uv pip install --system \
+          uv pip install --system "${constraint_args[@]}" \
             --index-url https://download.pytorch.org/whl/cpu \
             --extra-index-url https://pypi.org/simple \
             --index-strategy unsafe-best-match \
