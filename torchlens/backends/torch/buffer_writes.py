@@ -5,7 +5,7 @@ from __future__ import annotations
 import weakref
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import torch
 from torch import nn
@@ -15,6 +15,7 @@ from ..._capture_state_helpers import _is_uninitialized_param
 from ...ir import BufferWriteEvent
 from ...utils._torch_compat import tensor_version_or_none
 from ...utils.tensor_utils import safe_copy
+from ._identity_cache import IdentityCache, identity_cached
 from ._tl import (
     clear_tensor_label,
     get_buffer_address,
@@ -683,20 +684,9 @@ class BufferWriteTracker:
         # record the count at pre-call time so an OUTER wrapped mutator can
         # tell a nested call already journaled the address in its window.
         self.address_write_counts: dict[str, int] = {}
-        # Per-tensor storage metadata, cleared at operation boundaries
-        # (``clear_storage_metadata_cache``). Entries are keyed by ``id()`` but carry a
-        # weak reference to the tensor they describe: a tensor freed mid-window hands
-        # its id to the next allocation, and serving that newcomer the dead tensor's
-        # storage identity would mis-root (or miss) a buffer alias. A hit counts only
-        # when the reference still resolves to the same object.
-        self._storage_key_cache: dict[
-            tuple[int, int | None],
-            tuple[weakref.ReferenceType[torch.Tensor], tuple[Any, ...] | None],
-        ] = {}
-        self._storage_range_cache: dict[
-            tuple[int, int | None],
-            tuple[weakref.ReferenceType[torch.Tensor], tuple[int, int]],
-        ] = {}
+        # Weakref-validated: an id reused within a window never inherits a dead entry.
+        self._storage_key_cache: IdentityCache[tuple[Any, ...] | None] = {}
+        self._storage_range_cache: IdentityCache[tuple[int, int]] = {}
         self._installed_classes: set[type[nn.Module]] = set()
         # F20 lazy-buffer completion: ids of buffers skipped at pre-forward
         # index time because they were still storage-less pending lazy slots.
@@ -1411,7 +1401,9 @@ class BufferWriteTracker:
             Storage identity key, or ``None`` when storage access fails.
         """
 
-        return _identity_cached(self._storage_key_cache, tensor, storage_key)
+        return identity_cached(
+            self._storage_key_cache, tensor, _tensor_version(tensor), storage_key
+        )
 
     def storage_range(self, tensor: torch.Tensor) -> tuple[int, int]:
         """Return a cached byte range for ``tensor`` within its storage.
@@ -1427,7 +1419,9 @@ class BufferWriteTracker:
             Half-open byte range occupied by the tensor.
         """
 
-        return _identity_cached(self._storage_range_cache, tensor, _storage_range)
+        return identity_cached(
+            self._storage_range_cache, tensor, _tensor_version(tensor), _storage_range
+        )
 
     def clear_storage_metadata_cache(self) -> None:
         """Clear cached tensor storage metadata for the current operation boundary."""
@@ -1904,44 +1898,6 @@ def _resolve_buffer_address(
         if tensor_start >= reg_start and tensor_end <= reg_end:
             return address
     return None
-
-
-_CachedT = TypeVar("_CachedT")
-
-
-def _identity_cached(
-    cache: dict[tuple[int, int | None], tuple[weakref.ReferenceType[torch.Tensor], _CachedT]],
-    tensor: torch.Tensor,
-    compute: Callable[[torch.Tensor], _CachedT],
-) -> _CachedT:
-    """Return ``compute(tensor)`` through an id-keyed cache that is safe under id reuse.
-
-    Parameters
-    ----------
-    cache:
-        ``(id, version) -> (weak reference, value)`` table owned by the tracker.
-    tensor:
-        Tensor whose metadata is requested.
-    compute:
-        Uncached metadata reader.
-
-    Returns
-    -------
-    _CachedT
-        The cached value when the entry was recorded for this very object, otherwise a
-        freshly computed one (cached when the tensor accepts a weak reference).
-    """
-
-    cache_key = (id(tensor), _tensor_version(tensor))
-    entry = cache.get(cache_key)
-    if entry is not None and entry[0]() is tensor:
-        return entry[1]
-    value = compute(tensor)
-    try:
-        cache[cache_key] = (weakref.ref(tensor), value)
-    except TypeError:
-        cache.pop(cache_key, None)
-    return value
 
 
 def _storage_range(tensor: torch.Tensor) -> tuple[int, int]:
