@@ -618,12 +618,16 @@ def test_stray_session_wrapper_never_breaks_a_later_capture(door: str) -> None:
     expected = _eager_out(later)
     entered: list[str] = []
 
-    def _save(ctx: Any) -> bool:
-        """Record every module entry the capture reports."""
+    def _watch(ctx: Any) -> bool:
+        """Note every module entry the capture reports; never halt.
+
+        Module boundaries reach the ``halt=`` predicate (``save=`` sees ops
+        only), so it is the public observer of what the capture registered.
+        """
 
         if ctx.kind == "module_enter":
             entered.append(str(ctx.address))
-        return True
+        return False
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -632,6 +636,8 @@ def test_stray_session_wrapper_never_breaks_a_later_capture(door: str) -> None:
             assert "lin" in later_trace.modules, "the registered child went unrecorded"
             out = later_trace[later_trace.output_layers[0]].out.detach()
         else:
-            out, _recording = tl.record(later, _X, save=_save, return_output=True)
+            out, _recording = tl.record(
+                later, _X, save=lambda ctx: True, halt=_watch, return_output=True
+            )
             assert "lin" in entered, "the registered child went unrecorded"
     assert torch.equal(out.detach(), expected)
