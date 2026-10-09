@@ -619,7 +619,7 @@
         }
       },
       "combined": {
-        "dot": "// Combined forward and backward graph\ndigraph OracleBranch_combined {\n\tgraph [label=<<B>OracleBranch combined forward/backward graph</B><br align='left'/>6 forward nodes, 15 grad_fn_handle nodes<br align='left'/>1 backward pass(es)<br align='left'/>> labeljust=left labelloc=t ordering=out rankdir=LR]\n\tnode [ordering=out]\n\tedge [ordering=out]\n\tinput_1pass1 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>input_1</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 4), 16 B</TD></TR><TR><TD ALIGN=\"CENTER\">@input.x</TD></TR></TABLE>> color=black fillcolor=\"#98FB98\" fontcolor=black ordering=out shape=oval style=\"filled,solid\"]\n\tinput_1pass1 -> linear_1_1pass1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]\n\tinput_1pass1 -> linear_2_2pass1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]\n\tlinear_1_1pass1 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>linear_1_1</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 4), 16 B</TD></TR><TR><TD ALIGN=\"CENTER\">params: weight (4, 4) \u00b7 bias (4,)</TD></TR><TR><TD ALIGN=\"CENTER\">@left</TD></TR></TABLE>> color=black fillcolor=\"#D9D9D9\" fontcolor=black ordering=out shape=box style=\"filled,solid\"]\n\tlinear_1_1pass1 -> add_1_3pass1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]\n\tadd_1_3 -> linear_1_1 [arrowsize=.7 color=\"#9197F6\" fontcolor=\"#9197F6\" labelfontsize=8 style=solid]\n\tlinear_2_2pass1 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>linear_2_2</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 4), 16 B</TD></TR><TR><TD ALIGN=\"CENTER\">params: weight (4, 4) \u00b7 bias (4,)</TD></TR><TR><TD ALIGN=\"CENTER\">@right</TD></TR></TABLE>> color=black fillcolor=\"#D9D9D9\" fontcolor=black ordering=out shape=box style=\"filled,solid\"]\n\tlinear_2_2pass1 -> add_1_3pass1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]\n\tadd_1_3 -> linear_2_2 [arrowsize=.7 color=\"#9197F6\" fontcolor=\"#9197F6\" labelfontsize=8 style=solid]\n\tadd_1_3pass1 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>add_1_3</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 4), 16 B</TD></TR></TABLE>> color=black fillcolor=white fontcolor=black ordering=out shape=oval style=\"filled,solid\"]\n\tadd_1_3pass1 -> linear_3_4pass1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]\n\tlinear_3_4 -> add_1_3 [arrowsize=.7 color=\"#9197F6\" fontcolor=\"#9197F6\" labelfontsize=8 style=solid]\n\tlinear_3_4pass1 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>linear_3_4</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 4), 16 B</TD></TR><TR><TD ALIGN=\"CENTER\">params: weight (4, 4) \u00b7 bias (4,)</TD></TR><TR><TD ALIGN=\"CENTER\">@merge</TD></TR></TABLE>> color=black fillcolor=\"#D9D9D9\" fontcolor=black ordering=out shape=box style=\"filled,solid\"]\n\tlinear_3_4pass1 -> output_1pass1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]\n\toutput_1 -> linear_3_4 [arrowsize=.7 color=\"#9197F6\" fontcolor=\"#9197F6\" labelfontsize=8 style=solid]\n\toutput_1pass1 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>output_1</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 4), 16 B</TD></TR><TR><TD ALIGN=\"CENTER\">@output</TD></TR></TABLE>> color=black fillcolor=\"#ff9999\" fontcolor=black ordering=out shape=oval style=\"filled,solid\"]\n\t{\n\t\trank=sink\n\t\toutput_1pass1\n\t}\n\tgrad_fn_3 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>[i] accumulategrad_back_1_4</B></TD></TR><TR><TD ALIGN=\"CENTER\">grad N/A</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\tgrad_fn_4 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>add_back_1_5</B></TD></TR><TR><TD ALIGN=\"CENTER\">@add_1_3</TD></TR><TR><TD ALIGN=\"CENTER\">grad (1, 4)</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\tgrad_fn_5 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>[i] t_back_1_6</B></TD></TR><TR><TD ALIGN=\"CENTER\">grad N/A</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\tgrad_fn_8 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>[i] accumulategrad_back_2_9</B></TD></TR><TR><TD ALIGN=\"CENTER\">grad N/A</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\tgrad_fn_9 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>[i] accumulategrad_back_3_10</B></TD></TR><TR><TD ALIGN=\"CENTER\">grad N/A</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\tgrad_fn_10 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>[i] t_back_2_11</B></TD></TR><TR><TD ALIGN=\"CENTER\">grad N/A</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\tgrad_fn_11 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>[i] accumulategrad_back_4_12</B></TD></TR><TR><TD ALIGN=\"CENTER\">grad N/A</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\tgrad_fn_12 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>[i] t_back_3_13</B></TD></TR><TR><TD ALIGN=\"CENTER\">grad N/A</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\tgrad_fn_13 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>[i] accumulategrad_back_5_14</B></TD></TR><TR><TD ALIGN=\"CENTER\">grad N/A</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\tgrad_fn_14 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>[i] accumulategrad_back_6_15</B></TD></TR><TR><TD ALIGN=\"CENTER\">grad N/A</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\tgrad_fn_0 -> grad_fn_1 [color=\"#9197F6\" fontcolor=\"#9197F6\"]\n\tgrad_fn_1 -> grad_fn_2 [color=\"#9197F6\" fontcolor=\"#9197F6\"]\n\tgrad_fn_2 -> grad_fn_3 [label=accum color=\"#9197F6\" fontcolor=\"#9197F6\" labelfontsize=8 style=dotted tooltip=\"accum -> accumulategrad_back_1_4\"]\n\tgrad_fn_2 -> grad_fn_4 [color=\"#9197F6\" fontcolor=\"#9197F6\"]\n\tgrad_fn_2 -> grad_fn_5 [color=\"#9197F6\" fontcolor=\"#9197F6\"]\n\tgrad_fn_4 -> grad_fn_6 [color=\"#9197F6\" fontcolor=\"#9197F6\"]\n\tgrad_fn_4 -> grad_fn_7 [color=\"#9197F6\" fontcolor=\"#9197F6\"]\n\tgrad_fn_5 -> grad_fn_8 [label=accum color=\"#9197F6\" fontcolor=\"#9197F6\" labelfontsize=8 style=dotted tooltip=\"accum -> accumulategrad_back_2_9\"]\n\tgrad_fn_6 -> grad_fn_9 [label=accum color=\"#9197F6\" fontcolor=\"#9197F6\" labelfontsize=8 style=dotted tooltip=\"accum -> accumulategrad_back_3_10\"]\n\tgrad_fn_6 -> grad_fn_10 [color=\"#9197F6\" fontcolor=\"#9197F6\"]\n\tgrad_fn_7 -> grad_fn_11 [label=accum color=\"#9197F6\" fontcolor=\"#9197F6\" labelfontsize=8 style=dotted tooltip=\"accum -> accumulategrad_back_4_12\"]\n\tgrad_fn_7 -> grad_fn_12 [color=\"#9197F6\" fontcolor=\"#9197F6\"]\n\tgrad_fn_10 -> grad_fn_13 [label=accum color=\"#9197F6\" fontcolor=\"#9197F6\" labelfontsize=8 style=dotted tooltip=\"accum -> accumulategrad_back_5_14\"]\n\tgrad_fn_12 -> grad_fn_14 [label=accum color=\"#9197F6\" fontcolor=\"#9197F6\" labelfontsize=8 style=dotted tooltip=\"accum -> accumulategrad_back_6_15\"]\n\tlinear_3_4 -> grad_fn_2 [arrowsize=.6 color=\"#9197F6\" constraint=false fontcolor=\"#9197F6\" lhead=cluster_merge_pass1 ltail=cluster_merge_pass1 style=dashed]\n\tadd_1_3 -> grad_fn_4 [arrowsize=.6 color=\"#9197F6\" constraint=false fontcolor=\"#9197F6\" style=dashed]\n\tlinear_1_1 -> grad_fn_6 [arrowsize=.6 color=\"#9197F6\" constraint=false fontcolor=\"#9197F6\" lhead=cluster_left_pass1 ltail=cluster_left_pass1 style=dashed]\n\tlinear_2_2 -> grad_fn_7 [arrowsize=.6 color=\"#9197F6\" constraint=false fontcolor=\"#9197F6\" lhead=cluster_right_pass1 ltail=cluster_right_pass1 style=dashed]\n\t{\n\t\trank=sink\n\t\ttl_legend [label=<<TABLE BORDER=\"1\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"3\" COLOR=\"black\"><TR><TD COLSPAN=\"2\" ALIGN=\"LEFT\"><FONT POINT-SIZE=\"10\" COLOR=\"black\"><B>backward key</B></FONT></TD></TR><TR><TD FIXEDSIZE=\"TRUE\" WIDTH=\"16\" HEIGHT=\"10\" BGCOLOR=\"#F2F3FF\" BORDER=\"1\" COLOR=\"black\"></TD><TD ALIGN=\"LEFT\"><FONT POINT-SIZE=\"10\" COLOR=\"black\">backward op (grad_fn)</FONT></TD></TR><TR><TD></TD><TD ALIGN=\"LEFT\"><FONT POINT-SIZE=\"10\" COLOR=\"black\">[i] = intervening grad_fn (no forward op)</FONT></TD></TR><TR><TD FIXEDSIZE=\"TRUE\" WIDTH=\"16\" HEIGHT=\"10\" BGCOLOR=\"#9197F6\" BORDER=\"1\" COLOR=\"black\"></TD><TD ALIGN=\"LEFT\"><FONT POINT-SIZE=\"10\" COLOR=\"black\">accum = gradient accumulation into a leaf (dotted edge)</FONT></TD></TR><TR><TD></TD><TD ALIGN=\"LEFT\"><FONT POINT-SIZE=\"10\" COLOR=\"black\">order N = derivative order</FONT></TD></TR></TABLE>> fontname=Helvetica margin=0 shape=plaintext]\n\t}\n\tsubgraph cluster_left_pass1 {\n\t\tfillcolor=white label=<<B>@left</B><br align='left'/>(Linear)<br align='left'/>> labeljust=c labelloc=b margin=20 penwidth=5.0 style=\"filled,solid\"\n\t\tgrad_fn_6 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>addmm_back_2_7</B></TD></TR><TR><TD ALIGN=\"CENTER\">@linear_1_1</TD></TR><TR><TD ALIGN=\"CENTER\">grad (1, 4)</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\t}\n\tsubgraph cluster_right_pass1 {\n\t\tfillcolor=white label=<<B>@right</B><br align='left'/>(Linear)<br align='left'/>> labeljust=c labelloc=b margin=20 penwidth=5.0 style=\"filled,solid\"\n\t\tgrad_fn_7 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>addmm_back_3_8</B></TD></TR><TR><TD ALIGN=\"CENTER\">@linear_2_2</TD></TR><TR><TD ALIGN=\"CENTER\">grad (1, 4)</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\t}\n\tsubgraph cluster_merge_pass1 {\n\t\tfillcolor=white label=<<B>@merge</B><br align='left'/>(Linear)<br align='left'/>> labeljust=c labelloc=b margin=20 penwidth=5.0 style=\"filled,solid\"\n\t\tgrad_fn_0 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>[i] sum_back_1_1</B></TD></TR><TR><TD ALIGN=\"CENTER\">grad N/A</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\t\tgrad_fn_1 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>[i] clone_back_1_2</B></TD></TR><TR><TD ALIGN=\"CENTER\">grad N/A</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\t\tgrad_fn_2 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>addmm_back_1_3</B></TD></TR><TR><TD ALIGN=\"CENTER\">@linear_3_4</TD></TR><TR><TD ALIGN=\"CENTER\">grad (1, 4)</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\t}\n}\n",
+        "dot": "// Combined forward and backward graph\ndigraph OracleBranch_combined {\n\tgraph [label=<<B>OracleBranch combined forward/backward graph</B><br align='left'/>6 forward nodes, 15 grad_fn_handle nodes<br align='left'/>1 backward pass(es)<br align='left'/>> labeljust=left labelloc=t ordering=out rankdir=LR]\n\tnode [ordering=out]\n\tedge [ordering=out]\n\tinput_1pass1 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>input_1</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 4), 16 B</TD></TR><TR><TD ALIGN=\"CENTER\">@input.x</TD></TR></TABLE>> color=black fillcolor=\"#98FB98\" fontcolor=black ordering=out shape=oval style=\"filled,solid\"]\n\tinput_1pass1 -> linear_1_1pass1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]\n\tinput_1pass1 -> linear_2_2pass1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]\n\tlinear_1_1pass1 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>linear_1_1</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 4), 16 B</TD></TR><TR><TD ALIGN=\"CENTER\">params: weight (4, 4) \u00b7 bias (4,)</TD></TR><TR><TD ALIGN=\"CENTER\">@left</TD></TR></TABLE>> color=black fillcolor=\"#D9D9D9\" fontcolor=black ordering=out shape=box style=\"filled,solid\"]\n\tlinear_1_1pass1 -> add_1_3pass1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]\n\tadd_1_3pass1 -> linear_1_1pass1 [arrowsize=.7 color=\"#9197F6\" fontcolor=\"#9197F6\" labelfontsize=8 style=solid]\n\tlinear_2_2pass1 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>linear_2_2</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 4), 16 B</TD></TR><TR><TD ALIGN=\"CENTER\">params: weight (4, 4) \u00b7 bias (4,)</TD></TR><TR><TD ALIGN=\"CENTER\">@right</TD></TR></TABLE>> color=black fillcolor=\"#D9D9D9\" fontcolor=black ordering=out shape=box style=\"filled,solid\"]\n\tlinear_2_2pass1 -> add_1_3pass1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]\n\tadd_1_3pass1 -> linear_2_2pass1 [arrowsize=.7 color=\"#9197F6\" fontcolor=\"#9197F6\" labelfontsize=8 style=solid]\n\tadd_1_3pass1 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>add_1_3</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 4), 16 B</TD></TR></TABLE>> color=black fillcolor=white fontcolor=black ordering=out shape=oval style=\"filled,solid\"]\n\tadd_1_3pass1 -> linear_3_4pass1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]\n\tlinear_3_4pass1 -> add_1_3pass1 [arrowsize=.7 color=\"#9197F6\" fontcolor=\"#9197F6\" labelfontsize=8 style=solid]\n\tlinear_3_4pass1 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>linear_3_4</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 4), 16 B</TD></TR><TR><TD ALIGN=\"CENTER\">params: weight (4, 4) \u00b7 bias (4,)</TD></TR><TR><TD ALIGN=\"CENTER\">@merge</TD></TR></TABLE>> color=black fillcolor=\"#D9D9D9\" fontcolor=black ordering=out shape=box style=\"filled,solid\"]\n\tlinear_3_4pass1 -> output_1pass1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]\n\toutput_1pass1 -> linear_3_4pass1 [arrowsize=.7 color=\"#9197F6\" fontcolor=\"#9197F6\" labelfontsize=8 style=solid]\n\toutput_1pass1 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>output_1</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 4), 16 B</TD></TR><TR><TD ALIGN=\"CENTER\">@output</TD></TR></TABLE>> color=black fillcolor=\"#ff9999\" fontcolor=black ordering=out shape=oval style=\"filled,solid\"]\n\t{\n\t\trank=sink\n\t\toutput_1pass1\n\t}\n\tgrad_fn_3 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>[i] accumulategrad_back_1_4</B></TD></TR><TR><TD ALIGN=\"CENTER\">grad N/A</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\tgrad_fn_4 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>add_back_1_5</B></TD></TR><TR><TD ALIGN=\"CENTER\">@add_1_3</TD></TR><TR><TD ALIGN=\"CENTER\">grad (1, 4)</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\tgrad_fn_5 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>[i] t_back_1_6</B></TD></TR><TR><TD ALIGN=\"CENTER\">grad N/A</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\tgrad_fn_8 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>[i] accumulategrad_back_2_9</B></TD></TR><TR><TD ALIGN=\"CENTER\">grad N/A</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\tgrad_fn_9 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>[i] accumulategrad_back_3_10</B></TD></TR><TR><TD ALIGN=\"CENTER\">grad N/A</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\tgrad_fn_10 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>[i] t_back_2_11</B></TD></TR><TR><TD ALIGN=\"CENTER\">grad N/A</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\tgrad_fn_11 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>[i] accumulategrad_back_4_12</B></TD></TR><TR><TD ALIGN=\"CENTER\">grad N/A</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\tgrad_fn_12 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>[i] t_back_3_13</B></TD></TR><TR><TD ALIGN=\"CENTER\">grad N/A</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\tgrad_fn_13 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>[i] accumulategrad_back_5_14</B></TD></TR><TR><TD ALIGN=\"CENTER\">grad N/A</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\tgrad_fn_14 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>[i] accumulategrad_back_6_15</B></TD></TR><TR><TD ALIGN=\"CENTER\">grad N/A</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\tgrad_fn_0 -> grad_fn_1 [color=\"#9197F6\" fontcolor=\"#9197F6\"]\n\tgrad_fn_1 -> grad_fn_2 [color=\"#9197F6\" fontcolor=\"#9197F6\"]\n\tgrad_fn_2 -> grad_fn_3 [label=accum color=\"#9197F6\" fontcolor=\"#9197F6\" labelfontsize=8 style=dotted tooltip=\"accum -> accumulategrad_back_1_4\"]\n\tgrad_fn_2 -> grad_fn_4 [color=\"#9197F6\" fontcolor=\"#9197F6\"]\n\tgrad_fn_2 -> grad_fn_5 [color=\"#9197F6\" fontcolor=\"#9197F6\"]\n\tgrad_fn_4 -> grad_fn_6 [color=\"#9197F6\" fontcolor=\"#9197F6\"]\n\tgrad_fn_4 -> grad_fn_7 [color=\"#9197F6\" fontcolor=\"#9197F6\"]\n\tgrad_fn_5 -> grad_fn_8 [label=accum color=\"#9197F6\" fontcolor=\"#9197F6\" labelfontsize=8 style=dotted tooltip=\"accum -> accumulategrad_back_2_9\"]\n\tgrad_fn_6 -> grad_fn_9 [label=accum color=\"#9197F6\" fontcolor=\"#9197F6\" labelfontsize=8 style=dotted tooltip=\"accum -> accumulategrad_back_3_10\"]\n\tgrad_fn_6 -> grad_fn_10 [color=\"#9197F6\" fontcolor=\"#9197F6\"]\n\tgrad_fn_7 -> grad_fn_11 [label=accum color=\"#9197F6\" fontcolor=\"#9197F6\" labelfontsize=8 style=dotted tooltip=\"accum -> accumulategrad_back_4_12\"]\n\tgrad_fn_7 -> grad_fn_12 [color=\"#9197F6\" fontcolor=\"#9197F6\"]\n\tgrad_fn_10 -> grad_fn_13 [label=accum color=\"#9197F6\" fontcolor=\"#9197F6\" labelfontsize=8 style=dotted tooltip=\"accum -> accumulategrad_back_5_14\"]\n\tgrad_fn_12 -> grad_fn_14 [label=accum color=\"#9197F6\" fontcolor=\"#9197F6\" labelfontsize=8 style=dotted tooltip=\"accum -> accumulategrad_back_6_15\"]\n\tlinear_3_4pass1 -> grad_fn_2 [arrowsize=.6 color=\"#9197F6\" constraint=false fontcolor=\"#9197F6\" lhead=cluster_merge_pass1 ltail=cluster_merge_pass1 style=dashed]\n\tadd_1_3pass1 -> grad_fn_4 [arrowsize=.6 color=\"#9197F6\" constraint=false fontcolor=\"#9197F6\" style=dashed]\n\tlinear_1_1pass1 -> grad_fn_6 [arrowsize=.6 color=\"#9197F6\" constraint=false fontcolor=\"#9197F6\" lhead=cluster_left_pass1 ltail=cluster_left_pass1 style=dashed]\n\tlinear_2_2pass1 -> grad_fn_7 [arrowsize=.6 color=\"#9197F6\" constraint=false fontcolor=\"#9197F6\" lhead=cluster_right_pass1 ltail=cluster_right_pass1 style=dashed]\n\t{\n\t\trank=sink\n\t\ttl_legend [label=<<TABLE BORDER=\"1\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"3\" COLOR=\"black\"><TR><TD COLSPAN=\"2\" ALIGN=\"LEFT\"><FONT POINT-SIZE=\"10\" COLOR=\"black\"><B>backward key</B></FONT></TD></TR><TR><TD FIXEDSIZE=\"TRUE\" WIDTH=\"16\" HEIGHT=\"10\" BGCOLOR=\"#F2F3FF\" BORDER=\"1\" COLOR=\"black\"></TD><TD ALIGN=\"LEFT\"><FONT POINT-SIZE=\"10\" COLOR=\"black\">backward op (grad_fn)</FONT></TD></TR><TR><TD></TD><TD ALIGN=\"LEFT\"><FONT POINT-SIZE=\"10\" COLOR=\"black\">[i] = intervening grad_fn (no forward op)</FONT></TD></TR><TR><TD FIXEDSIZE=\"TRUE\" WIDTH=\"16\" HEIGHT=\"10\" BGCOLOR=\"#9197F6\" BORDER=\"1\" COLOR=\"black\"></TD><TD ALIGN=\"LEFT\"><FONT POINT-SIZE=\"10\" COLOR=\"black\">accum = gradient accumulation into a leaf (dotted edge)</FONT></TD></TR><TR><TD></TD><TD ALIGN=\"LEFT\"><FONT POINT-SIZE=\"10\" COLOR=\"black\">order N = derivative order</FONT></TD></TR></TABLE>> fontname=Helvetica margin=0 shape=plaintext]\n\t}\n\tsubgraph cluster_left_pass1 {\n\t\tfillcolor=white label=<<B>@left</B><br align='left'/>(Linear)<br align='left'/>> labeljust=c labelloc=b margin=20 penwidth=5.0 style=\"filled,solid\"\n\t\tgrad_fn_6 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>addmm_back_2_7</B></TD></TR><TR><TD ALIGN=\"CENTER\">@linear_1_1</TD></TR><TR><TD ALIGN=\"CENTER\">grad (1, 4)</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\t}\n\tsubgraph cluster_right_pass1 {\n\t\tfillcolor=white label=<<B>@right</B><br align='left'/>(Linear)<br align='left'/>> labeljust=c labelloc=b margin=20 penwidth=5.0 style=\"filled,solid\"\n\t\tgrad_fn_7 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>addmm_back_3_8</B></TD></TR><TR><TD ALIGN=\"CENTER\">@linear_2_2</TD></TR><TR><TD ALIGN=\"CENTER\">grad (1, 4)</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\t}\n\tsubgraph cluster_merge_pass1 {\n\t\tfillcolor=white label=<<B>@merge</B><br align='left'/>(Linear)<br align='left'/>> labeljust=c labelloc=b margin=20 penwidth=5.0 style=\"filled,solid\"\n\t\tgrad_fn_0 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>[i] sum_back_1_1</B></TD></TR><TR><TD ALIGN=\"CENTER\">grad N/A</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\t\tgrad_fn_1 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>[i] clone_back_1_2</B></TD></TR><TR><TD ALIGN=\"CENTER\">grad N/A</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\t\tgrad_fn_2 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>addmm_back_1_3</B></TD></TR><TR><TD ALIGN=\"CENTER\">@linear_3_4</TD></TR><TR><TD ALIGN=\"CENTER\">grad (1, 4)</TD></TR></TABLE>> color=\"#9197F6\" fillcolor=\"#F2F3FF\" fontcolor=black ordering=out penwidth=1.8 shape=oval style=\"filled,solid\"]\n\t}\n}\n",
         "structural": {
           "edges": [
             {
@@ -697,14 +697,14 @@
                 "color": "#9197F6",
                 "style": "solid"
               },
-              "dst": -1,
-              "dst_name": "linear_1_1",
+              "dst": 1,
+              "dst_name": "linear_1_1pass1",
               "kind": "edge",
               "region": [
                 "OracleBranch_combined"
               ],
-              "src": -1,
-              "src_name": "add_1_3"
+              "src": 3,
+              "src_name": "add_1_3pass1"
             },
             {
               "attrs": {
@@ -739,14 +739,14 @@
                 "color": "#9197F6",
                 "style": "solid"
               },
-              "dst": -1,
-              "dst_name": "linear_2_2",
+              "dst": 2,
+              "dst_name": "linear_2_2pass1",
               "kind": "edge",
               "region": [
                 "OracleBranch_combined"
               ],
-              "src": -1,
-              "src_name": "add_1_3"
+              "src": 3,
+              "src_name": "add_1_3pass1"
             },
             {
               "attrs": {
@@ -781,14 +781,14 @@
                 "color": "#9197F6",
                 "style": "solid"
               },
-              "dst": -1,
-              "dst_name": "add_1_3",
+              "dst": 3,
+              "dst_name": "add_1_3pass1",
               "kind": "edge",
               "region": [
                 "OracleBranch_combined"
               ],
-              "src": -1,
-              "src_name": "linear_3_4"
+              "src": 4,
+              "src_name": "linear_3_4pass1"
             },
             {
               "attrs": {
@@ -823,14 +823,14 @@
                 "color": "#9197F6",
                 "style": "solid"
               },
-              "dst": -1,
-              "dst_name": "linear_3_4",
+              "dst": 4,
+              "dst_name": "linear_3_4pass1",
               "kind": "edge",
               "region": [
                 "OracleBranch_combined"
               ],
-              "src": -1,
-              "src_name": "output_1"
+              "src": 5,
+              "src_name": "output_1pass1"
             },
             {
               "attrs": {
@@ -1121,8 +1121,8 @@
               "region": [
                 "OracleBranch_combined"
               ],
-              "src": -1,
-              "src_name": "linear_3_4"
+              "src": 4,
+              "src_name": "linear_3_4pass1"
             },
             {
               "attrs": {
@@ -1143,8 +1143,8 @@
               "region": [
                 "OracleBranch_combined"
               ],
-              "src": -1,
-              "src_name": "add_1_3"
+              "src": 3,
+              "src_name": "add_1_3pass1"
             },
             {
               "attrs": {
@@ -1167,8 +1167,8 @@
               "region": [
                 "OracleBranch_combined"
               ],
-              "src": -1,
-              "src_name": "linear_1_1"
+              "src": 1,
+              "src_name": "linear_1_1pass1"
             },
             {
               "attrs": {
@@ -1191,8 +1191,8 @@
               "region": [
                 "OracleBranch_combined"
               ],
-              "src": -1,
-              "src_name": "linear_2_2"
+              "src": 2,
+              "src_name": "linear_2_2pass1"
             }
           ],
           "nodes": [
@@ -1644,8 +1644,8 @@
               "region": [
                 "OracleBranch_combined"
               ],
-              "src": -1,
-              "src_name": "linear_3_4"
+              "src": 4,
+              "src_name": "linear_3_4pass1"
             },
             {
               "attrs": {
@@ -1666,8 +1666,8 @@
               "region": [
                 "OracleBranch_combined"
               ],
-              "src": -1,
-              "src_name": "add_1_3"
+              "src": 3,
+              "src_name": "add_1_3pass1"
             },
             {
               "attrs": {
@@ -1690,8 +1690,8 @@
               "region": [
                 "OracleBranch_combined"
               ],
-              "src": -1,
-              "src_name": "linear_1_1"
+              "src": 1,
+              "src_name": "linear_1_1pass1"
             },
             {
               "attrs": {
@@ -1714,8 +1714,8 @@
               "region": [
                 "OracleBranch_combined"
               ],
-              "src": -1,
-              "src_name": "linear_2_2"
+              "src": 2,
+              "src_name": "linear_2_2pass1"
             }
           ],
           "regions": {
@@ -8812,13 +8812,13 @@
     "schema_version": 1
   },
   "sha256_chunks": [
-    "ea517ca4",
-    "b3111984",
-    "078902d0",
-    "c226a92d",
-    "4dfce2b3",
-    "8545e7e9",
-    "0b2435e0",
-    "faf535d4"
+    "e903ffff",
+    "f926355d",
+    "09d70bb3",
+    "3a3b8f0c",
+    "1901e3b6",
+    "ace8709a",
+    "661b56a5",
+    "d9e2a8bf"
   ]
 }

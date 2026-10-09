@@ -400,13 +400,11 @@ def _forward_correspondence_node_name(op: "Layer | None") -> str | None:
     emit that ambiguous aggregate endpoint. Omitting an unprovable correspondence
     is honest.
 
-    For a NON-recurrent op the historical aggregate ``layer_label`` emission is
-    preserved verbatim, so the locked render-identity oracle (which covers the
-    feedforward combined case) stays byte-identical. NOTE: that emission still
-    yields a bare ``layer_label`` vs the declared ``...pass1`` forward node, so
-    Graphviz auto-creates a phantom duplicate; killing that feedforward
-    phantom-correspondence cosmetic (finding F3) is a rendering change that
-    REQUIRES a captain-approved oracle-golden regeneration -- DEFERRED, see report.
+    For a NON-recurrent op the endpoint is the declared unrolled forward node
+    (the combined view always renders unrolled). A single-pass aggregate
+    ``Layer`` resolves to its one ``Op`` first, so the tie names the node the
+    forward pass declared instead of a bare ``layer_label`` that Graphviz would
+    draw as a stray oval.
 
     Parameters
     ----------
@@ -423,8 +421,10 @@ def _forward_correspondence_node_name(op: "Layer | None") -> str | None:
         return None
     if is_multipass_layer(op):
         return None
-    layer_label = getattr(op, "layer_label", None)
-    return layer_label if isinstance(layer_label, str) else None
+    passes = getattr(op, "ops", None)
+    if passes is not None and hasattr(passes, "values"):
+        op = next(iter(passes.values()), op)
+    return _render_node_name(op, "unrolled")
 
 
 def _module_key_for_grad_fn(
@@ -2192,6 +2192,9 @@ def _add_grad_edge(
     module_edge_dict: Dict[str, Any],
     graphviz_graph: graphviz.Digraph,
     overrides: VisualizationOverrides,
+    *,
+    forward_tail_name: str,
+    forward_head_name: str,
 ) -> None:
     """Add a backward (grad) edge if both layers have saved grads.
 
@@ -2208,12 +2211,17 @@ def _add_grad_edge(
         module_edge_dict: Dict mapping each module cluster to its edges.
         graphviz_graph: The graphviz Digraph object.
         overrides: Graphviz attribute overrides for grad edges.
+        forward_tail_name: DOT name the forward edge drew from (the rendered
+            parent endpoint, which may be a collapsed or folded box).
+        forward_head_name: DOT name the forward edge drew to. The grad edge
+            reuses both rendered endpoints reversed, so it always attaches to
+            declared nodes.
     """
     if _node_has_grad(parent_layer) and _node_has_grad(child_layer):
         grad_passes = _shared_gradient_passes(parent_layer, child_layer)
         edge_dict = {
-            "tail_name": _grad_node_name(child_layer),
-            "head_name": _grad_node_name(parent_layer),
+            "tail_name": forward_head_name,
+            "head_name": forward_tail_name,
             "color": GRADIENT_ARROW_COLOR,
             "fontcolor": GRADIENT_ARROW_COLOR,
             "style": edge_style,
@@ -2307,23 +2315,6 @@ def _shared_gradient_passes(parent_layer: GraphNode, child_layer: GraphNode) -> 
     return _node_gradient_passes(parent_layer) & _node_gradient_passes(child_layer)
 
 
-def _grad_node_name(layer: Any) -> str:
-    """Return the Graphviz node name for a grad edge endpoint.
-
-    Parameters
-    ----------
-    layer:
-        Rendered graph node.
-
-    Returns
-    -------
-    str
-        Graphviz-safe node name.
-    """
-
-    return str(layer.layer_label).replace(":", "pass")
-
-
 __all__ = [
     "BackwardStyleInventory",
     "_add_backward_node_to_graphviz",
@@ -2371,7 +2362,6 @@ __all__ = [
     "_get_conditional_reference_text",
     "_grad_fn_call_matches_backward_filter",
     "_grad_fn_matches_backward_filter",
-    "_grad_node_name",
     "_infer_intervening_module_bfs",
     "_infer_intervening_module_downstream",
     "_infer_intervening_module_upstream",

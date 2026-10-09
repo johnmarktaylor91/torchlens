@@ -172,11 +172,11 @@ def test_h7_forward_correspondence_node_name_scoped_to_multipass():
     # than emit an ambiguous aggregate endpoint.
     assert _forward_correspondence_node_name(log["tanh_1_2"]) is None
     assert _forward_correspondence_node_name(None) is None
-    # A NON-recurrent op preserves the historical aggregate layer_label emission
-    # verbatim (locked render-identity oracle stays byte-identical; the feedforward
-    # phantom-correspondence cosmetic fix is DEFERRED pending an approved golden).
+    # A NON-recurrent op names the declared unrolled forward node, never the bare
+    # layer_label (which Graphviz would draw as a stray oval beside the graph).
     name = _forward_correspondence_node_name(single["linear_1_1"])
-    assert name == single["linear_1_1"].layer_label
+    assert name == "linear_1_1pass1"
+    assert name != single["linear_1_1"].layer_label
 
 
 # --------------------------------------------------------------------------- #

@@ -241,7 +241,7 @@ def compute_stack_groups(state: EncodingState, trace: Trace, universe: Any) -> N
     if spec.source_kind == "auto":
         check_lockstep_license(trace)
 
-    from ._render_edges import _render_node_label
+    from ._render_common import _render_node_name
 
     groups: dict[Any, list[str]] = {}
     for unit in universe.units:
@@ -265,7 +265,7 @@ def compute_stack_groups(state: EncodingState, trace: Trace, universe: Any) -> N
                 remedy="return a hashable annotation value (int, str, tuple)",
                 argument="stack_by",
             ) from None
-        node_name = _render_node_label(node, "unrolled").replace(":", "pass")
+        node_name = _render_node_name(node, "unrolled")
         groups.setdefault(value, []).append(node_name)
 
     state.stack_groups = tuple(

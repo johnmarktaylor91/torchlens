@@ -296,6 +296,50 @@ SkipFn = Callable[["Layer"], bool]
 InterveningClusterMode = Literal["upstream", "outside", "downstream", "own"]
 BackwardPassFilter = set[int] | None
 
+
+def _render_node_label(node: GraphNode, vis_mode: str) -> str:
+    """Return the graph node label for the active visualization mode.
+
+    Parameters
+    ----------
+    node:
+        Render node.
+    vis_mode:
+        ``"unrolled"`` renders individual Ops, while ``"rolled"`` renders
+        aggregate Layers.
+
+    Returns
+    -------
+    str
+        Stable label used as the DOT node identifier before Graphviz escaping.
+    """
+    if vis_mode == "unrolled" and isinstance(node, Op):
+        return node.label
+    return node.layer_label
+
+
+def _render_node_name(node: GraphNode, vis_mode: str) -> str:
+    """Return the DOT node name the renderer declares for ``node``.
+
+    Every emitter that declares a node or names an edge endpoint for a plain
+    rendered node goes through this helper: Graphviz silently creates a stray
+    node for any endpoint name that drifts from the declared one.
+
+    Parameters
+    ----------
+    node:
+        Render node.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"``.
+
+    Returns
+    -------
+    str
+        DOT-safe node name (pass separators spelled ``pass``).
+    """
+    return _render_node_label(node, vis_mode).replace(":", "pass")
+
+
 # -- Color palette for node types --
 INPUT_COLOR = "#98FB98"  # Light green
 OUTPUT_COLOR = "#ff9999"  # Light red/salmon
@@ -878,6 +922,8 @@ __all__ = [
     "_SVG_ROOT_RE",
     "_SVG_VIEWBOX_RE",
     "_open_file_quietly",
+    "_render_node_label",
+    "_render_node_name",
     "relativize_visualizer_image",
     "_timed_phase",
     "_vprint",

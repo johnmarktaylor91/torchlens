@@ -67,27 +67,6 @@ def _build_segment_lookup(
     return _SegmentLookup(qualified_labels, base_labels, member_addresses)
 
 
-def _render_node_label(node: GraphNode, vis_mode: str) -> str:
-    """Return the graph node label for the active visualization mode.
-
-    Parameters
-    ----------
-    node:
-        Render node.
-    vis_mode:
-        ``"unrolled"`` renders individual Ops, while ``"rolled"`` renders
-        aggregate Layers.
-
-    Returns
-    -------
-    str
-        Stable label used as the DOT node identifier before Graphviz escaping.
-    """
-    if vis_mode == "unrolled" and isinstance(node, Op):
-        return node.label
-    return node.layer_label
-
-
 def _get_node_by_label(trace: "Trace", label: str, vis_mode: str) -> GraphNode:
     """Return a render node by label for the active visualization mode."""
 
@@ -361,8 +340,8 @@ def _intentional_parallel_edge_key(
     occurrence_kind = render_edge.occurrence_key[0] if render_edge.occurrence_key else None
     if occurrence_kind not in {"edge_use", "parent_arg_position"}:
         return None
-    original_tail = _render_node_label(parent_node, vis_mode).replace(":", "pass")
-    original_head = _render_node_label(child_node, vis_mode).replace(":", "pass")
+    original_tail = _render_node_name(parent_node, vis_mode)
+    original_head = _render_node_name(child_node, vis_mode)
     if tail_name != original_tail or head_name != original_head:
         return None
     return render_edge.occurrence_key
@@ -978,7 +957,7 @@ def _add_edges_for_node(
     for render_edge in render_edges:
         child_node = render_edge.target
         metadata_child = render_edge.metadata_child
-        child_render_name = _render_node_label(child_node, vis_mode).replace(":", "pass")
+        child_render_name = _render_node_name(child_node, vis_mode)
 
         if child_node.is_buffer and not _is_buffer_visible(child_node, show_buffer_layers):
             continue
@@ -1011,7 +990,7 @@ def _add_edges_for_node(
                 continue
             tail_name = _run_fold_graph_node_name(parent_module_name_w_pass, vis_mode, repeat_folds)
         else:
-            tail_name = _render_node_label(parent_node, vis_mode).replace(":", "pass")
+            tail_name = _render_node_name(parent_node, vis_mode)
 
         child_module_name_w_pass = _collapse_address_for_node(
             self,
@@ -1034,7 +1013,7 @@ def _add_edges_for_node(
                 continue
             head_name = _run_fold_graph_node_name(child_module_name_w_pass, vis_mode, repeat_folds)
         else:
-            head_name = _render_node_label(child_node, vis_mode).replace(":", "pass")
+            head_name = _render_node_name(child_node, vis_mode)
         if collapsed_head_name is not None:
             head_name = collapsed_head_name
             child_is_collapsed_module = False
@@ -1062,6 +1041,9 @@ def _add_edges_for_node(
             if child_modules[:vis_call_depth] == parent_modules[:vis_call_depth]:
                 continue
 
+        # The rendered parent endpoint before an intervention hook is spliced in;
+        # the gradient overlay attaches to it, not to the hook.
+        rendered_parent_name = tail_name
         # Edge deduplication: multiple layers mapping to the same collapsed
         # module node would produce duplicate edges without this check.
         if (
@@ -1142,6 +1124,7 @@ def _add_edges_for_node(
             )
             if parent_hidden_fold is not None:
                 tail_name = ellipsis_name
+                rendered_parent_name = ellipsis_name
             if child_hidden_fold is not None:
                 head_name = ellipsis_name
 
@@ -1415,6 +1398,8 @@ def _add_edges_for_node(
                 module_edge_dict,
                 graphviz_graph,
                 overrides,  # type: ignore[arg-type]
+                forward_tail_name=rendered_parent_name,
+                forward_head_name=head_name,
             )
 
 
@@ -2323,7 +2308,6 @@ __all__ = [
     "_projected_antiparallel_edge_attrs",
     "_queue_run_fold_ellipsis_node",
     "_raw_op_label",
-    "_render_node_label",
     "_rendered_edge_signature",
     "_rolled_pass_label_placement",
     "_run_fold_ancestor_for_node",

@@ -541,7 +541,7 @@ def _base_rendered_node_emission(
             collapse_address, repeat_folds
         ):
             return RenderedNodeEmission(
-                name=_render_node_label(node, vis_mode).replace(":", "pass"),
+                name=_render_node_name(node, vis_mode),
                 kind="hidden_run_member",
                 node=node,
                 module_address=collapse_address.rsplit(":", 1)[0],
@@ -558,7 +558,7 @@ def _base_rendered_node_emission(
             call=collapse_address,
             fold=_run_fold_for_address(address, repeat_folds),
         )
-    name = _render_node_label(node, vis_mode).replace(":", "pass")
+    name = _render_node_name(node, vis_mode)
     # Map membership is the ONE collapse predicate: _collapsed_container_leaf_nodes
     # owns the mode decision ({"collapsed", "auto", "nodes"}), and the edge pass
     # reroutes every mapped leaf's edges to the summary box. Re-checking the mode
@@ -637,14 +637,12 @@ def _enumerate_run_fold_ellipsis_emissions(
             collapse_fn=collapse_fn,
             repeat_folds=repeat_folds,
         )
-        parent_name = parent_endpoint or _render_node_label(parent_node, vis_mode).replace(
-            ":", "pass"
-        )
+        parent_name = parent_endpoint or _render_node_name(parent_node, vis_mode)
         for render_edge in edge_map.get(_render_node_label(parent_node, vis_mode), ()):
             child_node = render_edge.target
             if child_node.is_buffer and not _is_buffer_visible(child_node, show_buffer_layers):
                 continue
-            child_render_name = _render_node_label(child_node, vis_mode).replace(":", "pass")
+            child_render_name = _render_node_name(child_node, vis_mode)
             child_endpoint = _collapsed_endpoint_for_emission(
                 trace,
                 child_node,
@@ -787,7 +785,7 @@ def _collapsed_container_leaf_nodes(
         group_id = cast(str, _container_group_id(cast(BaseGraphNode, leaves[0])))
         summary_node = _collapsed_container_node_name(group_id)
         for leaf in leaves:
-            hidden[_render_node_label(leaf, vis_mode).replace(":", "pass")] = summary_node
+            hidden[_render_node_name(leaf, vis_mode)] = summary_node
         _add_collapsed_container_node(pending_nodes, leaves, vis_mode=vis_mode)
     return hidden
 
@@ -1154,9 +1152,7 @@ def _container_clusters_for_graphviz(
 
     clusters: list[ContainerClusterSpec] = []
     for group_id, leaves in _container_leaf_groups(entries_to_plot, vis_mode=vis_mode).items():
-        node_names = tuple(
-            _render_node_label(leaf, vis_mode).replace(":", "pass") for leaf in leaves
-        )
+        node_names = tuple(_render_node_name(leaf, vis_mode) for leaf in leaves)
         if any(node_name in collapsed_container_nodes for node_name in node_names):
             continue
         owner_key = _single_container_owner(
