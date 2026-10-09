@@ -109,7 +109,9 @@ Renders `GradFn` nodes and grad edges captured by `backends/torch/backward.py`.
 - `compute_default_node_lines()` builds default label rows.
 - `_apply_node_spec_fn()` applies mode presets and user callbacks.
 - `node_spec.py` owns `NodeSpec`, `render_lines_to_html()`, and intervention node specs.
-- `modes.py` owns default/profiling/vision/attention preset functions.
+- `modes.py` owns the default/profiling `node_style` presets and the vision/attention style
+  functions, which are not presets: use them through `node_spec_fn` via
+  `torchlens.experimental.node_styles`.
 
 ### Rank Layout
 `_rank_layout_internal/layout.py` exposes `render_rank_layout()`,

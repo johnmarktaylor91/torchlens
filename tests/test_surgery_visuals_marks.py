@@ -166,6 +166,46 @@ def test_cohort_mark_is_heuristic_and_dashed() -> None:
     assert "dashed" not in (fact_spec.style or "")
 
 
+def _dot_node_statement(source: str, node_name: str) -> str:
+    """Return one node's DOT statement (its attribute list) from ``source``."""
+
+    start = source.index(f"\t{node_name} [")
+    return source[start : source.index("]\n", start)]
+
+
+@pytest.mark.heavy
+def test_rendered_passes_carry_only_their_own_marks(tmp_path) -> None:
+    """Unrolled render: each pass node shows its OWN mark, never its sibling's.
+
+    The node-spec slot receives the aggregate Layer for unrolled nodes, so a
+    lookup keyed on the Layer handed both passes of a reused call both marks
+    (the pass-1 fact row and the pass-2 cohort row) with the solid border.
+    """
+
+    torch.manual_seed(0)
+    model = _SharedBlock().eval()
+    x = torch.randn(3, 4)
+    log = tl.trace(model, x, capture=_CAPTURE)
+    fork = log.fork()
+    fork.do(tl.units("linear_1_1:1", [(0, 0)]).resolve(fork), tl.zero_ablate())
+    source = render_surgery(
+        fork,
+        vis_mode="unrolled",
+        vis_outpath=str(tmp_path / "surgery_passes"),
+        vis_fileformat="svg",
+        vis_save_only=True,
+    )
+    edited = _dot_node_statement(source, "linear_1_1pass1")
+    cohort = _dot_node_statement(source, "linear_1_1pass2")
+    assert "edited:" in edited
+    assert "no fire recorded" not in edited
+    assert "dashed" not in edited
+    assert "no fire recorded" in cohort
+    assert "edited:" not in cohort
+    assert "dashed" in cohort
+    assert "penwidth=2.25" in cohort
+
+
 def test_mark_vocabularies_are_closed(chain_capture) -> None:
     """Every derived mark uses the closed kind and basis vocabularies."""
 

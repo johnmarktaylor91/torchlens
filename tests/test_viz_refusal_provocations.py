@@ -52,6 +52,24 @@ def test_vis_mode_refuses_typed(small_trace) -> None:
     assert exc_info.value.fields["code"] == "visualization_mode_invalid"
 
 
+@pytest.mark.parametrize("spelling", ["view", "vis_mode"])
+def test_vis_mode_refusal_names_the_spelling_passed(small_trace, spelling: str) -> None:
+    # The refusal names the keyword the caller actually used and lists every
+    # value draw() accepts, "none" included.
+    with pytest.raises(InvalidArgumentError) as exc_info:
+        small_trace.draw(**{spelling: "sideways"}, vis_save_only=True)
+    error = exc_info.value
+    assert error.fields["code"] == "visualization_mode_invalid"
+    assert error.fields["argument"] == spelling
+    message = str(error)
+    assert message.startswith(f"{spelling} must be")
+    for accepted in ("'none'", "'rolled'", "'unrolled'", "'sideways'"):
+        assert accepted in message
+    other = "vis_mode" if spelling == "view" else "view"
+    assert f"{other} " not in message
+    assert f"{other}=" not in error.fields["remedy"]
+
+
 def test_backward_graph_unavailable_refuses_typed(small_trace) -> None:
     with pytest.raises(Exception) as exc_info:
         small_trace.draw_backward(vis_save_only=True)

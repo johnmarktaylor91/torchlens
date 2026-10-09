@@ -129,7 +129,7 @@ Before/after (transformer block):
 ![before](../images/encoding/suppression_transformer_before.svg)
 ![after](../images/encoding/suppression_transformer_after.svg)
 
-Before/after (attention node_style):
+Before/after (attention style, `node_spec_fn=torchlens.experimental.node_styles.attention_node_mode`):
 
 ![before](../images/encoding/suppression_attention_style_before.svg)
 ![after](../images/encoding/suppression_attention_style_after.svg)

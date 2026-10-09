@@ -290,11 +290,12 @@ class CollapseTokens:
 
 
 def collapse_tokens(theme: VisualizationTheme) -> CollapseTokens:
-    """Return the theme-derived collapse tokens (fixes the hardcode bug).
+    """Return the theme-derived collapse tokens.
 
-    K3's ellipsis (#777777) and K4's fills (#f7f7f7 family) were hardcoded
-    and ignored dark themes (collapse memo section 2); both now derive from
-    the active theme.
+    Only the ``segment_*`` tokens are read today: K4's segment fills derive
+    from the active theme. The ``ellipsis_*``, ``reuse_glyph``, ``word_*``
+    and ``label_rows`` tokens are carried but unused; the run-fold ellipsis
+    still draws its fixed ``#777777`` font colour in every theme.
     """
 
     if theme.name == "dark":

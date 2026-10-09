@@ -201,7 +201,12 @@ def _op_labels_for_layer(layer: Any) -> tuple[str, ...]:
 def _layer_state(channel: NonfiniteChannel, layer: Any) -> str | None:
     """Return the layer's classified state, or ``None`` when unclassified."""
 
-    for candidate in _op_labels_for_layer(layer):
+    from .._render_nodes import _SPEC_SLOT_RENDERED_NODE
+
+    # The slot hands unrolled nodes their aggregate Layer, whose bare label
+    # keys the last pass's state; read the rendered per-pass node instead.
+    rendered = _SPEC_SLOT_RENDERED_NODE.get()
+    for candidate in _op_labels_for_layer(layer if rendered is None else rendered):
         state = channel.states.get(candidate)
         if state is not None:
             return state

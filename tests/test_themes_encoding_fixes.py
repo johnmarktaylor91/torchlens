@@ -61,6 +61,23 @@ def test_degenerate_domain_unencodes_never_midramp() -> None:
     assert len(rows) == 1
 
 
+def test_degenerate_size_domain_unencodes_never_grows() -> None:
+    """size_by over min == max leaves every node at its natural size.
+
+    The note says "unencoded"; growing every node to mid-area would claim a
+    difference from an unencoded node that the data cannot support.
+    """
+
+    from torchlens.visualization._encoding import _compute_size_geometry, resolve_size_by
+
+    state = EncodingState(size_spec=resolve_size_by("dims"))
+    state.size_values = {"a": 4.0, "b": 4.0, "c": 4.0}
+    _compute_size_geometry(state)
+    assert state.sizes == {}
+    assert NOTE_CONSTANT in state.size_notes
+    assert state.size_domain is None
+
+
 def test_rank_transform_is_ordinal_and_unit_invariant() -> None:
     """Rank fractions depend only on order: seconds vs milliseconds are
     IDENTICAL (the Stage-0 unit-invariance check, by construction)."""
@@ -104,6 +121,17 @@ def test_log_transform_discloses_the_floor() -> None:
     assert "a" not in state.colors
     assert {"b", "c"} <= set(state.colors)
     assert NOTE_LOG_NONPOSITIVE in state.notes
+
+
+def test_log_legend_labels_match_their_swatches() -> None:
+    """Under log the 0.5 swatch encodes the geometric mean of the encoded
+    (positive) domain, and the unencoded value <= 0 is not an endpoint."""
+
+    spec = resolve_color_by(EncodingChannelRequest(source=lambda node: 1.0, transform="log"))
+    state = EncodingState(spec=spec)
+    _normalize_color_values(state, {"a": -5.0, "b": 1.0, "c": 100.0})
+    labels = [row.lines[0] for row in _color_legend_rows(state)[1:]]
+    assert labels == ["min: 1", "mid: 10", "max: 100"]
 
 
 def test_per_pass_field_on_rolled_unencodes_with_its_own_note(tmp_path: Any) -> None:

@@ -279,6 +279,16 @@ class TraceVisualizationMixin(_TraceMixinBase):
             vis_node_placement = cast(VisNodePlacementLiteral, layout)
         if node_style is not MISSING:
             node_mode = cast(VisNodeModeLiteral, node_style)
+        if vis_mode not in ("none", "rolled", "unrolled"):
+            # Name the spelling the caller used and every accepted value; the
+            # renderer-level check downstream never sees "none" or "view".
+            mode_argument = "view" if view is not MISSING else "vis_mode"
+            raise InvalidArgumentError(
+                f"{mode_argument} must be 'none', 'rolled', or 'unrolled'; received {vis_mode!r}",
+                code="visualization_mode_invalid",
+                remedy=f"pass {mode_argument}='none', 'rolled', or 'unrolled'",
+                argument=mode_argument,
+            )
         if vis_mode == "none":
             return None
 

@@ -1511,15 +1511,15 @@ def _compute_size_geometry(state: EncodingState) -> None:
         transformed = dict(state.size_values)
     low = min(transformed.values())
     high = max(transformed.values())
+    if low == high:
+        # Degenerate domain: unencoded with the note, like the color channel.
+        state.size_note(NOTE_CONSTANT)
+        return
     state.size_domain = (min(state.size_values.values()), max(state.size_values.values()))
     default_area = DEFAULT_NODE_WIDTH_IN * DEFAULT_NODE_HEIGHT_IN
     aspect = DEFAULT_NODE_WIDTH_IN / DEFAULT_NODE_HEIGHT_IN
-    if low == high:
-        state.size_note(NOTE_CONSTANT)
-        fractions = dict.fromkeys(transformed, 0.5)
-    else:
-        span = high - low
-        fractions = {key: (value - low) / span for key, value in transformed.items()}
+    span = high - low
+    fractions = {key: (value - low) / span for key, value in transformed.items()}
     for key, fraction in fractions.items():
         area = default_area * (1.0 + fraction * (SIZE_BY_MAX_AREA_MULT - 1.0))
         width = math.sqrt(area * aspect)
@@ -1607,6 +1607,10 @@ def _normalize_color_values(state: EncodingState, raw_values: dict[str, float]) 
     fractions = _transform_fractions(state, raw_values)
     if not fractions:
         return
+    if state.spec is not None and state.spec.transform == "log":
+        # The ramp spans the encoded (positive) values; values <= 0 are unencoded.
+        encoded = [raw_values[key] for key in fractions]
+        state.domain = (min(encoded), max(encoded))
     state.colors = {key: state.ramp_color(fraction) for key, fraction in fractions.items()}
 
 
@@ -1674,7 +1678,9 @@ def _color_legend_rows(state: EncodingState) -> list[Any]:
     if state.domain is None or not state.colors:
         return rows
     low, high = state.domain
-    mid = (low + high) / 2.0
+    # The 0.5 swatch encodes the geometric mean under log and the midpoint
+    # under linear; under rank it encodes the middle rank, not this midpoint.
+    mid = math.sqrt(low * high) if state.spec.transform == "log" else (low + high) / 2.0
     for tag, fraction, value in (("min", 0.0, low), ("mid", 0.5, mid), ("max", 1.0, high)):
         rows.append(
             NodeSpec(
