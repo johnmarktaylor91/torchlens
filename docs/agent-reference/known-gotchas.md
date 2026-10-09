@@ -119,3 +119,20 @@
   the MRO dicts, never the slot pointer) is left uncaptured with a `TorchLensWarning` (code
   `legacy_constructor_uncaptured`; `skipped_legacy_constructor_classes()`); once that patch is
   removed, the next wrap re-patches the class from the recorded C constructor.
+- A trace's staged intervention spec (`Trace._intervention_spec`) is read-only to every engine:
+  reruns, append and chunked reruns, failed or interrupted reruns, and `fork()` leave it exactly
+  as staged (`tests/test_state_hygiene_oracles.py`, `tests/test_rerun_hook_staging.py`). Validation
+  cannot see a violation (each rerun is self-consistent with the plan it ran), so the oracles
+  compare reruns against an independent expectation. A capture-time `intervene=` predicate that is
+  not lowered to module hooks stages per-op entries on FINAL labels, which the live matcher refuses;
+  reruns re-arm the retained predicate (`_predicate_save_options.intervene`) through the capture
+  door and refuse `rerun_predicate_restage_mismatch` if it re-stages a different op set. The spec is
+  `FieldPolicy.DROP` (the recipe travels through `save_intervention`), so every legacy rerun door
+  of a loaded intervened trace refuses `run_intervention_spec_not_persisted`, including after a
+  new edit is staged on it. The rerun divergence hash folds value-only edit nodes
+  (`interventionreplacement` with unchanged shape and dtype) into their parent, so a correct
+  staged rerun is silent; never filter `ControlFlowDivergenceWarning` in a test of a correct graph.
+  Tensor-carrying helpers alias the caller's tensor; staged entries (`HookSpec.metadata`
+  `helper_tensor_digests`) and bound rules fingerprint it, so a loop that updates a steer in place
+  must re-stage or rebind each step or the next rerun, bound call or recipe save refuses
+  `helper_tensor_changed_since_capture`.

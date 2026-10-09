@@ -2203,3 +2203,35 @@ env: py3.11-torch2.13.0
 torch: 2.13.0+cpu
 source: ddc82c177a8ed7969d8b4ed15ab62f34bf74dbdb (dirty)
 recorded: 2026-10-07T07:08:03.698904+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: state-hygiene: rerun re-arms capture predicates; loaded intervened rerun refuses
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: d0fec01b2f28443386cb0d290236fc8e53dfec15 (clean)
+recorded: 2026-10-09T00:38:54.783852+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: state-hygiene: rerun re-arms capture predicates; loaded intervened rerun refuses
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: d0fec01b2f28443386cb0d290236fc8e53dfec15 (clean)
+recorded: 2026-10-09T00:39:00.232278+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: state-hygiene: loaded-refusal evidence reads and rerun signature hash
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c1f78f6ce7560c37c8f2b984eb2c35ed3a52c9bc (clean)
+recorded: 2026-10-09T02:17:58.394207+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: state-hygiene: loaded-refusal evidence reads and rerun signature hash
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c1f78f6ce7560c37c8f2b984eb2c35ed3a52c9bc (clean)
+recorded: 2026-10-09T02:18:03.866262+00:00

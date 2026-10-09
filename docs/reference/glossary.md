@@ -468,6 +468,12 @@ attribution-target alias. See the [attribution reference](attribution.md).
   `tl.project_off` (keep or remove the component along a direction), and
   `tl.splice_module` (call a module as a black-box forward splice). Availability outside
   the torch backend is narrower; see the per-backend rosters in the backends guide.
+  Tensor-carrying helpers (`tl.steer`, `tl.mean_ablate`, `tl.project_onto`, `tl.project_off`,
+  `tl.swap_with`) keep the caller's tensor by reference. Each staged entry records a
+  full-content digest of those tensors when it is staged, and a bound executor when it is
+  bound; a rerun, a bound call and `save_intervention` refuse
+  `helper_tensor_changed_since_capture` once the tensor changed (in place or through `.data`).
+  Re-stage the edit, or rebind, to use the new value.
 
 **Backward helpers**
 : `tl.bwd_hook` builds a live/rerun-only backward hook; `tl.grad_zero`, `tl.grad_scale`,
@@ -486,6 +492,20 @@ attribution-target alias. See the [attribution reference](attribution.md).
   layer refuses `multipass_bare_label_ambiguous` (single-pass bare labels stay
   accepted). Replay disclosures (`last_run` origins/cone, `replay_frontier` keys) spell
   multi-pass ops pass-qualified and keep bare labels for single-pass layers.
+  Engines treat the trace's staged spec as read-only: a rerun (plain, append, or
+  chunked), a failed or interrupted rerun, and a fork leave it exactly as staged.
+  A capture-time `intervene=` predicate that is not lowered to module hooks stages
+  one entry per fired op on its final label; `tl.run` re-arms the trace's retained
+  predicate through the capture door instead, and refuses
+  `rerun_predicate_restage_mismatch` (trace unchanged) when the predicate fires at
+  different ops than the staged entries name, or at the same ops with changed rule content
+  (a staged steer edited since capture). A staged edit addressed by a finalized label
+  (`Trace.set(label, ...)`, `attach_hooks(tl.label(...))`) can never fire during a live
+  forward, so a rerun refuses it up front with `rerun_staged_label_unmatchable` (trace
+  unchanged). The rerun divergence check (`ControlFlowDivergenceWarning`, or
+  `ControlFlowDivergenceError` with `strict=True`) compares raw op order, edges and shapes with
+  each value-only edit node folded into the op it replaces, so a staged edit is never
+  reported as control-flow divergence while a changed op, edge, shape or batch size still is.
 
 ## Extraction, observers, and admin
 
@@ -536,6 +556,12 @@ attribution-target alias. See the [attribution reference](attribution.md).
 **Save / load**
 : `tl.save` persists a `Trace` into a portable `.tlspec` directory bundle at a chosen
   level; `tl.load` loads a `.tlspec` object with eager tensor materialization.
+  The staged intervention spec is session-only: `tl.save` keeps the intervened
+  values and their per-op provenance, and every legacy rerun door of a loaded intervened trace
+  (`run(model, x)` plain, append or chunked, a fork's `run`, `do(engine="rerun")`, and an edit
+  staged after loading) refuses `run_intervention_spec_not_persisted` rather than rerun without
+  the recorded intervention (the recipe travels through `save_intervention`); the replay and
+  `run(inputs=...)` doors cannot run an analysis artifact at all.
   `tl.PayloadLoadHints` carries backend-specific payload materialization hints
   (`tl.JaxPayloadLoadHint` is the JAX-specific form).
 

@@ -886,6 +886,11 @@ class TraceValidationMixin(_TraceMixinBase):
                 argument="save",
             )
         _refuse_state_compromised_live_run(self)
+        from ..intervention._staged_spec_persistence import (
+            refuse_unpersisted_intervention_rerun,
+        )
+
+        refuse_unpersisted_intervention_rerun(self, loaded_provider)
 
         # N3/N5 (legacy live rerun surface): same live-provider rule.
         from ..capture.outcome import require_capture_capability

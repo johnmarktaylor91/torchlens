@@ -677,7 +677,9 @@ def build_fork(parent: Trace, *, name: str | None) -> Trace:
         fork.__dict__["_trace_core"] = fork_core
     fork.parent_run = weakref.ref(parent)
     fork.trace_label = name or parent._next_fork_name()
-    fork._intervention_spec = copy.deepcopy(parent._ensure_intervention_spec(), memo)
+    # Read the parent's spec, never create one: fork() must not mutate its parent.
+    # A spec-less parent gives a spec-less fork; staging on it creates one lazily.
+    fork._intervention_spec = copy.deepcopy(parent._intervention_spec, memo)
     fork.state_history = copy.deepcopy(parent.state_history, memo)
     fork.relationship_evidence = copy.deepcopy(parent.relationship_evidence, memo)
     fork._out_recipe_revision = parent._out_recipe_revision

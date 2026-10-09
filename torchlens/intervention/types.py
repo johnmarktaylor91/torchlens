@@ -635,12 +635,15 @@ class InterventionSpec:
             The added sticky hook spec.
         """
 
+        from ._helper_fingerprint import stamp_metadata
+
         hook_spec = HookSpec(
             site_target=site_target,
             hook=hook,
             helper=helper,
             handle=handle,
-            metadata=metadata or {},
+            # Record the helper's tensors as staged: helpers alias them (F9).
+            metadata=stamp_metadata(metadata, hook, helper),
         )
         if prepend:
             self.hook_specs.insert(0, hook_spec)
