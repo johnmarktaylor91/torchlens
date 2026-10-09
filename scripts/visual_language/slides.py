@@ -1089,16 +1089,15 @@ SLIDES: tuple[Slide, ...] = (
         rule='layout="dot" is the default; "auto" switches to the rank engine above {rank_cost} '
         "cost units.",
         panels=(
-            Panel("a", "Tiny", kwargs={"layout": "rank", **QUIET}, label='layout="rank"'),
             Panel(
-                "b",
+                "a",
                 "Tiny",
                 kwargs={"layout": "rank", "show_legend": True},
-                label="the rank engine's legend, pinned left",
-                crop=(LEGEND,),
+                label='layout="rank", show_legend=True',
+                crop=(LEGEND, "node(text~input_1)"),
             ),
         ),
-        keys=(Key("The rank engine pins its legend at the left", LEGEND, panel="b"),),
+        keys=(Key("The rank engine pins its legend at the left", LEGEND),),
         footnote="The rank engine draws no orphans and does not order siblings.",
         rows=("VY02", "VI04"),
     ),
@@ -1133,16 +1132,23 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="code-panel",
         title="Source beside the graph",
-        rule="code_panel adds the captured source in Courier with an Open source link, up to "
-        "{max_code_lines} lines.",
+        rule='code_panel="forward" adds the source, up to {max_code_lines} lines.',
         panels=(
-            Panel("a", "Tiny", kwargs={"code_panel": "forward"}, crop=("region:0,0,99999,150",)),
+            Panel(
+                "a",
+                "Tiny",
+                kwargs={"code_panel": "forward"},
+                crop=(
+                    "text:Source code",
+                    "text:def forward",
+                    "text:return x",
+                    "node(text~input_1)",
+                    "node(text~output_1)",
+                ),
+            ),
         ),
-        keys=(
-            Key("The forward source", None),
-            Key('"class" and "init+forward" show more', None),
-            Key("Missing source is stated in the panel", None),
-        ),
+        footnote='Courier, with an Open source link. "class" and "init+forward" show more; '
+        "missing source is stated. The panel has a fixed height, so a short graph sits halfway.",
         rows=("VO04",),
     ),
     Slide(

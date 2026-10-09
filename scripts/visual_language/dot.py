@@ -203,12 +203,10 @@ def select(panel: PanelDot, selector: str) -> list[Mark]:
 
 @dataclass
 class SvgPanel:
-    """A Graphviz SVG: its root element, viewBox and the graph-to-viewBox transform."""
+    """A Graphviz SVG: its root element, viewBox, mark boxes and texts, in viewBox units."""
 
     root: ET.Element
     view: Box
-    scale: float
-    translate: tuple[float, float]
     geometry: dict[str, list[Box]]
     texts: list[tuple[float, Box, str]]
 
@@ -229,118 +227,49 @@ class SvgPanel:
         return [box for _size, box, words in self.texts if needle in words]
 
 
-def _points(element: ET.Element) -> list[tuple[float, float]]:
-    tag = element.tag.split("}")[-1]
-    if tag == "ellipse":
-        cx, cy = float(element.get("cx", 0)), float(element.get("cy", 0))
-        rx, ry = float(element.get("rx", 0)), float(element.get("ry", 0))
-        return [(cx - rx, cy - ry), (cx + rx, cy + ry)]
-    if tag in ("polygon", "polyline"):
-        nums = [float(n) for n in _NUMBER_RE.findall(element.get("points", ""))]
-        return list(zip(nums[0::2], nums[1::2], strict=False))
-    if tag == "path":
-        nums = [float(n) for n in _NUMBER_RE.findall(element.get("d", ""))]
-        return list(zip(nums[0::2], nums[1::2], strict=False))
-    if tag == "text":
-        x, y = float(element.get("x", 0)), float(element.get("y", 0))
-        size = float(element.get("font-size", 14))
-        width = 0.55 * size * len("".join(element.itertext()))
-        anchor = element.get("text-anchor", "start")
-        left = x - width / 2 if anchor == "middle" else (x - width if anchor == "end" else x)
-        return [(left, y - size), (left + width, y + 0.25 * size)]
-    if tag == "image":
-        x, y = float(element.get("x", 0)), float(element.get("y", 0))
-        w = float(str(element.get("width", "0")).rstrip("ptx"))
-        h = float(str(element.get("height", "0")).rstrip("ptx"))
-        return [(x, y), (x + w, y + h)]
-    return []
-
-
-def _box(points: list[tuple[float, float]]) -> Box | None:
-    if not points:
-        return None
-    xs, ys = [p[0] for p in points], [p[1] for p in points]
-    return Box(min(xs), min(ys), max(xs), max(ys))
-
-
-def _graph_transform(group: ET.Element) -> tuple[float, tuple[float, float]]:
-    transform = group.get("transform", "")
-    sc = re.search(r"scale\(([-\d.]+)", transform)
-    tr = re.search(r"translate\(([-\d.]+)[ ,]+([-\d.]+)", transform)
-    scale = float(sc.group(1)) if sc else 1.0
-    return scale, ((float(tr.group(1)), float(tr.group(2))) if tr else (0.0, 0.0))
-
-
-def _walk_texts(
-    element: ET.Element, offset: tuple[float, float], frame: tuple[float, tuple[float, float]]
-) -> list[tuple[float, Box, str]]:
-    """Every non-empty text with its box in root viewBox units and its words.
-
-    Graphviz writes one ``graph`` group per graph, and a code panel arrives as a second
-    graph inside a nested ``<svg x= y=>``; each text is placed through its own graph's
-    transform and the nested offset, so a crop counts exactly the texts it shows.
-    """
-
-    found: list[tuple[float, Box, str]] = []
-    for child in element:
-        tag = child.tag.split("}")[-1] if isinstance(child.tag, str) else ""
-        if tag == "svg":
-            nested = (offset[0] + float(child.get("x", 0)), offset[1] + float(child.get("y", 0)))
-            found.extend(_walk_texts(child, nested, (1.0, (0.0, 0.0))))
-        elif tag == "g" and child.get("class") == "graph":
-            found.extend(_walk_texts(child, offset, _graph_transform(child)))
-        elif tag == "text":
-            words = "".join(child.itertext()).strip()
-            if child.get("font-size") and words:
-                scale, (tx, ty) = frame
-                box = _box(_points(child)) or Box(0, 0, 0, 0)
-                placed = Box(
-                    offset[0] + (box.x0 + tx) * scale,
-                    offset[1] + (box.y0 + ty) * scale,
-                    offset[0] + (box.x1 + tx) * scale,
-                    offset[1] + (box.y1 + ty) * scale,
-                )
-                found.append((float(child.get("font-size", "14")) * scale, placed, words))
-        else:
-            found.extend(_walk_texts(child, offset, frame))
-    return found
-
-
 def parse_svg(text: str) -> SvgPanel:
-    """Parse a Graphviz SVG: viewBox, the graph transform and each mark's box by title.
+    """Parse a Graphviz SVG: viewBox, each mark's box by title, and every text.
 
-    Mark geometry uses the first (main) graph's transform; marks of a nested second graph
-    (a code panel) are not selectable.
+    Every box is placed through the transforms and nested viewports above it (a code panel
+    arrives as two graphs in nested ``<svg>`` elements). Marks come from the first (main)
+    graph only; texts come from the whole file.
     """
+
+    # Imported here: svgflat builds on this module's Box.
+    from scripts.visual_language.svgflat import Affine, bounds, local, points, walk
 
     root = ET.fromstring(text)
     view_nums = [float(n) for n in _NUMBER_RE.findall(root.get("viewBox", "0 0 100 100"))]
     view = Box(view_nums[0], view_nums[1], view_nums[0] + view_nums[2], view_nums[1] + view_nums[3])
-    main = next((g for g in root.iter(f"{{{SVG_NS}}}g") if g.get("class") == "graph"), None)
-    scale, translate = _graph_transform(main) if main is not None else (1.0, (0.0, 0.0))
+    frames = {id(el): frame for el, frame in walk(root, Affine())}
+
+    def placed(elements: list[ET.Element]) -> Box | None:
+        boxes = [frames[id(el)].box(b) for el in elements if (b := bounds(points(el)))]
+        return bounds([(b.x0, b.y0) for b in boxes] + [(b.x1, b.y1) for b in boxes])
+
+    main = next((g for g in root.iter(f"{{{SVG_NS}}}g") if g.get("class") == "graph"), root)
     geometry: dict[str, list[Box]] = {}
-    for group in (main if main is not None else root).iter(f"{{{SVG_NS}}}g"):
+    for group in main.iter(f"{{{SVG_NS}}}g"):
         title = group.find(f"{{{SVG_NS}}}title")
         if title is None or group.get("class") not in ("node", "edge", "cluster"):
             continue
         name = html.unescape("".join(title.itertext())).replace("&#45;", "-")
-        points = [p for child in group.iter() for p in _points(child)]
-        box = _box(points)
+        kind = group.get("class")
+        box = placed(list(group.iter()))
         if box is not None:
-            geometry.setdefault(f"{group.get('class')}:{name}", []).append(box)
-        words = _box([p for child in group.iter(f"{{{SVG_NS}}}text") for p in _points(child)])
+            geometry.setdefault(f"{kind}:{name}", []).append(box)
+        words = placed(list(group.iter(f"{{{SVG_NS}}}text")))
         if words is not None:
-            geometry.setdefault(f"{group.get('class')}-words:{name}", []).append(words)
-    texts = _walk_texts(root, (0.0, 0.0), (1.0, (0.0, 0.0)))
-    return SvgPanel(root, view, scale, translate, geometry, texts)
-
-
-def to_view(svg: SvgPanel, box: Box) -> Box:
-    """Map a box from graph coordinates to the SVG's viewBox coordinates."""
-
-    tx, ty = svg.translate
-    s = svg.scale
-    return Box((box.x0 + tx) * s, (box.y0 + ty) * s, (box.x1 + tx) * s, (box.y1 + ty) * s)
+            geometry.setdefault(f"{kind}-words:{name}", []).append(words)
+    texts = []
+    for element, frame in walk(root, Affine()):
+        words_text = "".join(element.itertext()).strip()
+        if local(element) == "text" and element.get("font-size") and words_text:
+            box = bounds(points(element)) or Box(0, 0, 0, 0)
+            texts.append(
+                (float(element.get("font-size", "14")) * frame.s, frame.box(box), words_text)
+            )
+    return SvgPanel(root, view, geometry, texts)
 
 
 def mark_box(svg: SvgPanel, mark: Mark, occurrence: int = 0, words: bool = False) -> Box | None:
@@ -355,7 +284,7 @@ def mark_box(svg: SvgPanel, mark: Mark, occurrence: int = 0, words: bool = False
     boxes = svg.geometry.get(key, [])
     if not boxes:
         return None
-    return to_view(svg, boxes[min(occurrence, len(boxes) - 1)])
+    return boxes[min(occurrence, len(boxes) - 1)]
 
 
 def edge_occurrence(panel: PanelDot, mark: Mark) -> int:

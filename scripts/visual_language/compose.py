@@ -2,15 +2,14 @@
 
 Each slide picture is one SVG whose user units equal the deck card's design pixels (the
 card is 960 by 540 with 48 px padding), sized to the room the slide's text leaves, so the
-legibility check can compute the size every text is shown at. Renders are embedded as
-nested ``<svg>`` elements with their ids prefixed; nothing references outside the file and
-no scripts are written. Badges are near-black filled circles with white numerals, a mark
+legibility check can compute the size every text is shown at. Renders are flattened into
+the canvas's own coordinates (``svgflat``), clipped to the part shown; nothing references
+outside the file and no scripts are written. Badges are near-black filled circles with white numerals, a mark
 TorchLens never draws.
 """
 
 from __future__ import annotations
 
-import copy
 import math
 import re
 import xml.etree.ElementTree as ET
@@ -19,7 +18,6 @@ from pathlib import Path
 
 from scripts.visual_language.dot import (
     SVG_NS,
-    XLINK_NS,
     Box,
     PanelDot,
     SvgPanel,
@@ -30,6 +28,7 @@ from scripts.visual_language.dot import (
     select,
 )
 from scripts.visual_language.slides import Key, Slide, fill
+from scripts.visual_language.svgflat import Affine, bounds, flatten, points
 
 DESIGN_W, DESIGN_H, PAD, GAP = 960.0, 540.0, 48.0, 19.2
 TITLE_PX, BODY_PX = 46.0, 26.0
@@ -222,7 +221,6 @@ class Canvas:
     min_css_px: float = 99.0
     witnesses: dict[str, list[str]] = field(default_factory=dict)
     badges: list[tuple[float, float]] = field(default_factory=list)
-    defs: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.root = _el(
@@ -250,37 +248,20 @@ class Canvas:
         self.note_text(px, "slide text")
         return text_block(self.root, lines, x, y, px, **kw)
 
-    def embed(
-        self, render: Render, area: Box, crop: Box | None = None, shared: bool = False
-    ) -> Placed:
+    def embed(self, render: Render, area: Box, crop: Box | None = None) -> Placed:
         """Fit a render (or a crop of it) into ``area``, centred, aspect kept.
 
-        ``shared`` writes the render's content once into ``<defs>`` and places it with
-        ``<use>``, so several crops of one render cost one copy.
+        The render's drawing is flattened into canvas coordinates (see ``svgflat``), so the
+        file carries every text at the size and place it is shown, and none it hides.
         """
 
         view = crop or render.shown
         scale = min(area.w / view.w, area.h / view.h, MAX_SCALE)
         w, h = view.w * scale, view.h * scale
         x, y = area.x0 + (area.w - w) / 2, area.y0 + (area.h - h) / 2
-        frame = {
-            "x": f"{x:.2f}",
-            "y": f"{y:.2f}",
-            "width": f"{w:.2f}",
-            "height": f"{h:.2f}",
-            "viewBox": f"{view.x0:.2f} {view.y0:.2f} {view.w:.2f} {view.h:.2f}",
-            "preserveAspectRatio": "xMidYMid meet",
-            "overflow": "hidden",
-        }
-        if shared:
-            nested = _el("svg", frame)
-            nested.append(_el("use", {"href": f"#{self._define(render)}"}))
-        else:
-            nested = copy.deepcopy(render.svg.root)
-            _strip_metadata(nested)
-            _prefix_ids(nested, render.stem)
-            nested.attrib.update(frame)
-        self.root.append(nested)
+        frame = Affine(scale, x - view.x0 * scale, y - view.y0 * scale)
+        prefix = re.sub(r"[^A-Za-z0-9_-]", "_", f"{render.stem}-{len(self.placed)}")
+        self.root.append(flatten(render.svg.root, frame, Box(x, y, x + w, y + h), prefix))
         placed = Placed(render, x, y, scale, view)
         self.placed.append(placed)
         sizes = render.svg.font_sizes_in(view)
@@ -294,25 +275,6 @@ class Canvas:
             )
         return placed
 
-    def _define(self, render: Render) -> str:
-        """Write the render's drawing once into ``<defs>``; return its id."""
-
-        if render.stem in self.defs:
-            return self.defs[render.stem]
-        source = copy.deepcopy(render.svg.root)
-        _strip_metadata(source)
-        _prefix_ids(source, render.stem)
-        ident = re.sub(r"[^A-Za-z0-9_-]", "_", f"def-{render.stem}")
-        group = _el("g", {"id": ident})
-        group.extend(list(source))
-        defs = self.root.find(f"{{{SVG_NS}}}defs")
-        if defs is None:
-            defs = _el("defs")
-            self.root.insert(0, defs)
-        defs.append(group)
-        self.defs[render.stem] = ident
-        return ident
-
     def badge(self, number: int, placed: Placed, selector: str, kind_hint: str) -> bool:
         """Place badge ``number`` beside the first mark the selector finds; False if none."""
 
@@ -323,9 +285,7 @@ class Canvas:
             box = mark_box(placed.render.svg, mark, occurrence)
             if box is None or not box.overlaps(placed.crop):
                 continue
-            spot = placed.point(box)
-            cx, cy = _badge_spot(spot, mark.kind)
-            cx, cy = self._nudge(cx, cy)
+            cx, cy = self._free_spot(placed.point(box), mark.kind)
             self.badges.append((cx, cy))
             self.root.append(
                 _el(
@@ -358,6 +318,24 @@ class Canvas:
             return True
         return False
 
+    def _free_spot(self, spot: Box, kind: str) -> tuple[float, float]:
+        """The first badge position beside ``spot`` that covers no text and no badge."""
+
+        taken = [
+            box for el in self.root.iter(f"{{{SVG_NS}}}text") if (box := bounds(points(el)))
+        ] + [Box(x - BADGE_R, y - BADGE_R, x + BADGE_R, y + BADGE_R) for x, y in self.badges]
+        best: tuple[int, float, float] | None = None
+        for cx, cy in _badge_spots(spot, kind):
+            if not (BADGE_R < cx < self.width - BADGE_R and BADGE_R < cy < self.height - BADGE_R):
+                continue
+            circle = Box(cx - BADGE_R, cy - BADGE_R, cx + BADGE_R, cy + BADGE_R)
+            hits = sum(circle.overlaps(box) for box in taken)
+            if best is None or hits < best[0]:
+                best = (hits, cx, cy)
+        if best is None:
+            return self._nudge(*_badge_spots(spot, kind)[0])
+        return best[1], best[2]
+
     def _nudge(self, cx: float, cy: float) -> tuple[float, float]:
         cx = min(max(cx, BADGE_R + 1), self.width - BADGE_R - 1)
         cy = min(max(cy, BADGE_R + 1), self.height - BADGE_R - 1)
@@ -372,39 +350,24 @@ class Canvas:
         tree.write(path, encoding="unicode", xml_declaration=False)
 
 
-def _badge_spot(box: Box, kind: str) -> tuple[float, float]:
-    if kind == "edge":
-        return box.x0 + box.w / 2, box.y0 + box.h / 2 - BADGE_R
-    if kind == "cluster":
-        return box.x0 + BADGE_R * 0.4, box.y0 + BADGE_R * 0.4
-    return box.x0 + BADGE_R * 0.2, box.y0 + BADGE_R * 0.2
+def _badge_spots(box: Box, kind: str) -> list[tuple[float, float]]:
+    """Badge positions to try for a mark, preferred first: its corner, then just outside."""
 
-
-def _strip_metadata(root: ET.Element) -> None:
-    """Drop invisible metadata (titles, comments) that a viewer never draws."""
-
-    for parent in list(root.iter()):
-        for child in list(parent):
-            if child.tag == f"{{{SVG_NS}}}title" or not isinstance(child.tag, str):
-                parent.remove(child)
-
-
-_URL_RE = re.compile(r"url\(#([^)]+)\)")
-
-
-def _prefix_ids(root: ET.Element, prefix: str) -> None:
-    """Prefix every id and in-file reference so several renders share one file safely."""
-
-    clean = re.sub(r"[^A-Za-z0-9_-]", "_", prefix)
-    href = f"{{{XLINK_NS}}}href"
-    for element in root.iter():
-        if "id" in element.attrib:
-            element.attrib["id"] = f"{clean}-{element.attrib['id']}"
-        for attr, value in list(element.attrib.items()):
-            if "url(#" in value:
-                element.attrib[attr] = _URL_RE.sub(lambda m: f"url(#{clean}-{m.group(1)})", value)
-            if attr in (href, "href") and value.startswith("#"):
-                element.attrib[attr] = f"#{clean}-{value[1:]}"
+    r, mx, my = BADGE_R, box.x0 + box.w / 2, box.y0 + box.h / 2
+    first = {
+        "edge": (mx, my - r),
+        "cluster": (box.x0 + r * 0.4, box.y0 + r * 0.4),
+    }.get(kind, (box.x0 + r * 0.2, box.y0 + r * 0.2))
+    return [
+        first,
+        (box.x0 - r - 1, my),
+        (box.x0 - r - 1, box.y0 - r - 1),
+        (mx, box.y0 - r - 1),
+        (box.x1 + r + 1, my),
+        (box.x1 + r + 1, box.y0 - r - 1),
+        (mx, box.y1 + r + 1),
+        (box.x0 - r - 1, box.y1 + r + 1),
+    ]
 
 
 # ------------------------------------------------------------------ layouts
@@ -487,9 +450,9 @@ def _draw_key_entry(canvas: Canvas, number: int, lines: list[str], x: float, y: 
             "text",
             {
                 "x": x + BADGE_R,
-                "y": y - 0.6,
+                "y": y - 0.4,
                 "font-family": FONT,
-                "font-size": 12,
+                "font-size": LABEL_PX,
                 "font-weight": "bold",
                 "fill": "white",
                 "text-anchor": "middle",
@@ -615,9 +578,7 @@ def compose_grid(slide: Slide, renders: dict[str, Render], height: float) -> Can
         box = Box(
             c * cell_w + 4, r * cell_h + 4, (c + 1) * cell_w - 4, (r + 1) * cell_h - LABEL_PX - 8
         )
-        placed[render.stem.rsplit("-", 1)[-1]] = canvas.embed(
-            render, box, crop, shared=bool(slide.cells)
-        )
+        placed[render.stem.rsplit("-", 1)[-1]] = canvas.embed(render, box, crop)
         canvas.text([label], box.x0 + box.w / 2, box.y1 + LABEL_PX + 2, LABEL_PX, anchor="middle")
     y = height - bottom + KEY_PX
     for number, lines in enumerate(key_lines, start=1):
