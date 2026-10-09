@@ -1596,6 +1596,56 @@ class _FastLiveSession:
         trace._record_operation(**record)
         trace.state = TraceState.RERUN_PROPAGATED
 
+    def _match_native_output_leaves(self, output: Any, output_labels: tuple[str, ...]) -> list[Any]:
+        """Pair each captured output op with its leaf in the native output, by container path.
+
+        The walk is capture's own output walker, so a typed container capture
+        descended into (a Hugging Face ``ModelOutput`` carrying a ``DynamicCache``
+        of per-layer key/value tensors, a namedtuple, a dataclass) is seen the
+        same way here: every captured output path must resolve to exactly one
+        native tensor and the native output must carry no other tensor leaf.
+        A different leaf count, a missing path or an extra path is a structural
+        divergence and refuses exactly as before; a container the walker cannot
+        type (every leaf at the opaque root path, as capture recorded it) keeps
+        the positional pairing.
+        """
+
+        from .backends.torch._ops_containers import _walk_output_tensors_with_paths
+
+        native = [
+            (tuple(path), tensor) for tensor, path, _spec in _walk_output_tensors_with_paths(output)
+        ]
+        captured_paths = [
+            tuple(getattr(self.trace.layer_dict_all_keys[label], "container_path", None) or ())
+            for label in output_labels
+        ]
+        native_by_path = dict(native)
+        positional = len({path for path, _tensor in native}) != len(native) or any(
+            path == () for path in captured_paths
+        )
+        matched = len(native) == len(output_labels) and (
+            positional or all(path in native_by_path for path in captured_paths)
+        )
+        if not matched:
+            failed = _contract_check(
+                "fast_live_model_output_structure",
+                False,
+                RunnableErrorCode.OUTPUT_STRUCTURE_MISMATCH,
+                "Native model output tensor structure changed from the captured boundary: "
+                f"{len(native)} tensor leaves against {len(output_labels)} captured output ops"
+                + (
+                    ""
+                    if positional
+                    else f"; unmatched captured paths "
+                    f"{[p for p in captured_paths if p not in native_by_path]}"
+                ),
+                affected_op_labels=output_labels,
+            )
+            self._poison_and_raise(failed)
+        if positional:
+            return [tensor for _path, tensor in native]
+        return [native_by_path[path] for path in captured_paths]
+
     def _refresh_boundary_payloads(
         self,
         input_args: Any,
@@ -1624,19 +1674,9 @@ class _FastLiveSession:
                 op = self.trace.layer_dict_all_keys[label]
                 if bool(getattr(op, "has_saved_activation", False)):
                     op.save_activation(value, (), {}, False)
-        output_paths = _tensor_leaf_paths(output)
         output_labels = tuple(getattr(self.trace, "output_layers", ()))
-        if len(output_paths) != len(output_labels):
-            failed = _contract_check(
-                "fast_live_model_output_structure",
-                False,
-                RunnableErrorCode.OUTPUT_STRUCTURE_MISMATCH,
-                "Native model output tensor structure changed from the captured boundary.",
-                affected_op_labels=output_labels,
-            )
-            self._poison_and_raise(failed)
-        for label, path in zip(output_labels, output_paths):
-            value = _value_at_path(output, path)
+        output_values = self._match_native_output_leaves(output, output_labels)
+        for label, value in zip(output_labels, output_values, strict=True):
             op = self.trace.layer_dict_all_keys[label]
             expected_shape = tuple(op.shape) if op.shape is not None else None
             expected_dtype = str(op.dtype) if op.dtype is not None else None
