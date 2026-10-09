@@ -79,6 +79,8 @@ class _Runner:
         self.n_ops = 0
         self.bytes = 0
         self.seed_trace = None
+        self.seed_traces: dict[Any, Any] = {}
+        self.compiled = None
         self.bound = None
         self.latest = None
 
@@ -90,6 +92,8 @@ class _Runner:
         patch: torch.Tensor | None = None,
         grad: bool = False,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        # Essential complexity: this benchmark dispatches the same workload across capture contracts.
+        self.latest = None
         cache: dict[str, torch.Tensor] = {}
         handles = []
 
@@ -129,17 +133,39 @@ class _Runner:
         product = None
         try:
             with context:
-                if self.mode == "hooks":
+                if self.mode in ("selected", "tape_weak", "tape_strong"):
+                    from _eff_capture import _SelectedCapture, _Tape
+
+                    if grad or action != "none":
+                        raise ValueError("prototype supports forward-only selected capture")
+                    if self.compiled is None:
+                        self.compiled = _SelectedCapture(
+                            self.model, tuple(tl.module(s) for s in self.sites)
+                        )
+                    tape = (
+                        _Tape(strong=self.mode == "tape_strong")
+                        if self.mode != "selected"
+                        else None
+                    )
+                    with self.compiled, tape if tape is not None else contextlib.nullcontext():
+                        output = self.model(ids)
+                    cache = {s: value for s, count, value in self.compiled.records}
+                    self.n_ops = tape.count if tape is not None else 0
+                    self.latest = tape
+                elif self.mode == "hooks":
                     output = self.model(ids)
                 elif self.mode == "bind":
                     output = (spec.bind(self.model) if spec else self.model)(ids)
                 elif self.mode == "rerun":
                     if grad:
                         raise ValueError("rerun gradient capture not benchmarked")
+                    key = (action, strength)
+                    self.seed_trace = self.seed_traces.get(key)
                     if self.seed_trace is None:
                         self.seed_trace = tl.trace(
                             self.model, ids, save=self.selector, intervene=spec
                         )
+                        self.seed_traces[key] = self.seed_trace
                     self.seed_trace.run(self.model, ids)
                     product = self.seed_trace
                     output = product.find_sites(tl.module("readout")).first().out
@@ -158,7 +184,7 @@ class _Runner:
                         for site in self.sites:
                             if tl.module(site)(record.ctx) and record.ram_payload is not None:
                                 cache[site] = record.ram_payload
-                    self.n_ops = product.n_ops
+                    self.n_ops = product.n_ops_completed
                 else:
                     opts: dict[str, Any] = {"intervene": spec}
                     if self.mode != "default":
@@ -166,7 +192,7 @@ class _Runner:
                     if self.mode == "inference":
                         if grad:
                             raise ValueError("inference_only refuses gradients")
-                        opts["inference_only"] = True
+                        opts["capture"] = tl.options.CaptureOptions(inference_only=True)
                     if grad:
                         opts["capture"] = tl.options.CaptureOptions(
                             backward_ready=True, save_grads=True
@@ -181,12 +207,24 @@ class _Runner:
                         product.log_backward(output.sum())
                     else:
                         output.sum().backward()
-                    cache = {
-                        s: v.grad.detach().clone() for s, v in cache.items() if v.grad is not None
-                    }
+                    if product is not None:
+                        cooked = product.to_trace() if self.mode == "record" else product
+                        cache = {
+                            s: cooked.find_sites(tl.module(s)).first().grad_for(bwd=1)
+                            for s in self.sites
+                        }
+                    else:
+                        cache = {
+                            s: v.grad.detach().clone()
+                            for s, v in cache.items()
+                            if v.grad is not None
+                        }
+                    if len(cache) != len(self.sites):
+                        raise ValueError("requested gradients missing")
                 result = output.detach().clone(), {s: v.detach().clone() for s, v in cache.items()}
                 self.bytes = sum(v.numel() * v.element_size() for v in result[1].values())
-                self.latest = product
+                if product is not None:
+                    self.latest = product
                 return result
         finally:
             for handle in handles:
@@ -233,7 +271,14 @@ def _workload(
                     runner.model.net.lm_head(norm(v[:, -1])).flatten() for v in cache.values()
                 )
         elif name == "attribution":
-            outputs.extend((v * 0.01).sum().reshape(1) for v in cache.values())
+            oracle = _Runner(runner.model, runner.sites, hidden, "hooks")
+            _, clean = oracle.call((current + 1) % 1000)
+            _, corrupt = oracle.call(current)
+            outputs.extend(
+                ((clean[s] - corrupt[s]) * cache[s]).sum().reshape(1) for s in runner.sites
+            )
+        elif name in ("steer", "patch"):
+            outputs.append(out.flatten())
         else:
             outputs.append(out.flatten())
             outputs.extend(v.flatten() for v in cache.values())
