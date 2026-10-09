@@ -121,9 +121,13 @@ prompts), pick the path by what you need back. Build the spec once; every path t
   against the fast path. It is several times slower per op than `tl.record`, so never run it
   per generation step.
 
-Trace-then-rerun is not a fast path today. `trace.run(inputs=...)` refuses a staged
-intervention, `trace.run(fast=True)` refuses a change in input length, and the legacy
-`trace.run(model, x)` rebuilds the whole trace and is slower than a fresh one.
+Trace-then-rerun is a fast path when the staged spec targets modules: `trace.run(model, x)`
+runs the native forward with the staged hooks (the guarded fast engine, about 1.5x a plain hook,
+exact), admits a longer input when the model takes the same sequence of calls, and falls back to
+the capture engine with `last_run["fast_refused"]` naming the guard that refused;
+`trace.run(inputs=..., fast=True)` applies the staged spec the same way on a live trace. Value
+replacements and non-module targets still take the capture engine. Glossary: "Guarded fast
+rerun".
 
 ```python
 import torch

@@ -543,7 +543,6 @@ def test_staged_spec_object_is_stable_across_fast_reruns() -> None:
         assert len(spec.hook_specs) == staged
 
 
-@pytest.mark.smoke
 def test_fast_door_applies_staged_spec_while_plain_run_inputs_still_refuses() -> None:
     """``run(inputs=, fast=True)`` applies the steer; plain ``run(inputs=)`` refuses."""
 
@@ -566,7 +565,6 @@ def test_fast_door_applies_staged_spec_while_plain_run_inputs_still_refuses() ->
     assert refused_again.value.fields["code"] == "run_staged_spec_unapplied"
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("intervention_ready", [False, True], ids=["default", "ready"])
 def test_default_save_fallback_replays_stochastic_forward_and_keeps_readiness(
     intervention_ready: bool,

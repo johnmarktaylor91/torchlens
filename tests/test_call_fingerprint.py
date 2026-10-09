@@ -145,7 +145,6 @@ def _native(model: nn.Module, x: torch.Tensor) -> tuple[int, int]:
     return value
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "model_cls", [_NestedMLP, _SharedTwice, _InplaceFunctional, _BoolGateIdentity]
 )
@@ -196,7 +195,6 @@ def test_module_intervention_and_sparse_save_keep_the_fingerprint() -> None:
     assert sparse._raw_call_fingerprint == plain  # noqa: SLF001
 
 
-@pytest.mark.smoke
 def test_shape_dependent_branch_changes_the_fingerprint() -> None:
     """Two control-flow arms produce different fingerprints in both engines."""
     model = _ShapeBranch()
@@ -208,7 +206,6 @@ def test_shape_dependent_branch_changes_the_fingerprint() -> None:
     assert _native(model, narrow) == narrow_fp
 
 
-@pytest.mark.smoke
 def test_different_length_input_with_same_structure_matches() -> None:
     """A longer sequence through the same structure reproduces the capture's value."""
     torch.manual_seed(0)

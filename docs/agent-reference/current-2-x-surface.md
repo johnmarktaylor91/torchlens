@@ -21,9 +21,10 @@
 - Steering many forwards or a generation loop: `spec.bind(model)` (capture-free, about 1x a
   plain hook, works with HF `generate()` and the KV cache), `tl.record(..., intervene=spec,
   return_output=True)` per forward when activations are needed as evidence, and one full
-  `tl.trace(..., intervene=spec)` as the correctness oracle. Trace-then-rerun is not a fast
-  path today. Recipe: [Common Patterns](common-patterns.md), "Steering many forwards /
-  generation".
+  `tl.trace(..., intervene=spec)` as the correctness oracle. Trace-then-rerun
+  (`trace.run(model, x)` on a module-targeted staged spec) is a fast path too: the guarded
+  fast engine, about 1.5x a plain hook, with the trace's saved sites refreshed. Recipe:
+  [Common Patterns](common-patterns.md), "Steering many forwards / generation".
 - `tl.record(..., save=...)` is the sparse predicate recorder; it returns `Recording`.
   `Recording.to_trace()` cooks the event stream into a full-structure `Trace`, with unsaved
   payload reads rejected explicitly. `tl.record()`/fastlog is torch-only in the backend-v1
