@@ -508,7 +508,6 @@ def test_control_flow_divergence_refuses_fast_and_falls_back_exactly() -> None:
         explicit.run(inputs=long_ids, fast=True)
 
 
-@pytest.mark.smoke
 def test_fast_session_hooks_are_installed_once_and_closed() -> None:
     """Module hook count is constant across reruns and restored by closing the session."""
 
@@ -528,7 +527,6 @@ def test_fast_session_hooks_are_installed_once_and_closed() -> None:
     assert _module_hook_count(model) == before
 
 
-@pytest.mark.smoke
 def test_staged_spec_object_is_stable_across_fast_reruns() -> None:
     """The staged spec stays the same object with the same hook count after each rerun."""
 
@@ -607,7 +605,6 @@ def test_default_save_fallback_replays_stochastic_forward_and_keeps_readiness(
     assert trace.intervention_ready == source_ready
 
 
-@pytest.mark.smoke
 def test_full_sequence_output_reruns_shape_varied_exactly() -> None:
     """A ``(1, L, V)`` output keeps its rank and follows the new length exactly."""
 

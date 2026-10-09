@@ -142,7 +142,6 @@ def test_capture_fingerprint_equals_native_forward(model_cls: type[nn.Module]) -
     assert captured == _native(model, x)
 
 
-@pytest.mark.smoke
 def test_shared_module_tokens_count_every_call() -> None:
     """A module called twice contributes two entry tokens (order-sensitive)."""
     torch.manual_seed(0)
@@ -161,7 +160,6 @@ def test_shared_module_tokens_count_every_call() -> None:
     assert fp.count - ops_only.count == 2
 
 
-@pytest.mark.smoke
 def test_module_intervention_and_sparse_save_keep_the_fingerprint() -> None:
     """Hook arithmetic and save selection never enter the structural fingerprint."""
     torch.manual_seed(0)
@@ -203,7 +201,6 @@ def test_different_length_input_with_same_structure_matches() -> None:
     assert tl.trace(model, long)._raw_call_fingerprint == captured  # noqa: SLF001
 
 
-@pytest.mark.smoke
 def test_fingerprint_is_runtime_only(tmp_path: Path) -> None:
     """A loaded trace never claims a fingerprint (FieldPolicy.DROP)."""
     torch.manual_seed(0)
@@ -216,7 +213,6 @@ def test_fingerprint_is_runtime_only(tmp_path: Path) -> None:
     assert getattr(loaded, "_raw_call_fingerprint", None) is None
 
 
-@pytest.mark.smoke
 def test_legacy_rerun_refreshes_the_fingerprint() -> None:
     """``trace.run`` stores the rerun's own fingerprint on the trace."""
     torch.manual_seed(0)
@@ -230,7 +226,6 @@ def test_legacy_rerun_refreshes_the_fingerprint() -> None:
     assert trace._raw_call_fingerprint == original == _native(model, new_x)  # noqa: SLF001
 
 
-@pytest.mark.smoke
 def test_paused_and_foreign_thread_calls_are_excluded() -> None:
     """Only unpaused calls on the fingerprint's owner thread count."""
     tl.trace(_TwoLayer(), torch.randn(1, 4))  # make sure torch is wrapped
@@ -252,7 +247,6 @@ def test_paused_and_foreign_thread_calls_are_excluded() -> None:
     assert _state._call_fingerprint is None  # noqa: SLF001
 
 
-@pytest.mark.smoke
 def test_rolling_hash_is_ordered_and_deterministic() -> None:
     """Token order changes the digest; tokens are stable CRC32 values."""
     first = _state.CallFingerprint(threading.get_ident())
