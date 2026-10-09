@@ -189,7 +189,9 @@ def _warn_stateful_live_run_once(trace: Any, model: nn.Module) -> None:
     trace.__dict__["_stateful_run_warning_emitted"] = True
 
 
-def _warn_pending_value_edits_on_new_input_run(trace: Any) -> None:
+def _warn_pending_value_edits_on_new_input_run(
+    trace: Any, *, staged_spec_applies: bool = False
+) -> None:
     """Disclose that value-edits on this trace do not apply to a new-input run.
 
     There are two legitimate intervention paths: (1) edit a SAVED value and
@@ -206,21 +208,35 @@ def _warn_pending_value_edits_on_new_input_run(trace: Any) -> None:
     ----------
     trace:
         Live Trace about to be re-executed on new inputs.
+    staged_spec_applies:
+        True when this run is the guarded fast live engine applying the
+        trace's staged intervention spec. The capture-time or rerun firing
+        audit and the ``RERUN_PROPAGATED`` state are then that intervention's
+        own trail, not an inert value edit, so only ``do()``/``push``/direct
+        writes disclose.
     """
 
     from .._trace_state import TraceState
 
     state = getattr(trace, "state", None)
-    has_value_edits = (
-        state
-        in {
-            TraceState.REPLAY_PROPAGATED,
-            TraceState.RERUN_PROPAGATED,
-            TraceState.DIRECT_WRITE_DIRTY,
-        }
-        or bool(getattr(trace, "intervention_audit", None))
-        or bool(trace._has_direct_writes)
-    )
+    audit = getattr(trace, "intervention_audit", None) or ()
+    if staged_spec_applies:
+        has_value_edits = (
+            state in {TraceState.REPLAY_PROPAGATED, TraceState.DIRECT_WRITE_DIRTY}
+            or any(isinstance(row, dict) and row.get("door") == "do" for row in audit)
+            or bool(trace._has_direct_writes)
+        )
+    else:
+        has_value_edits = (
+            state
+            in {
+                TraceState.REPLAY_PROPAGATED,
+                TraceState.RERUN_PROPAGATED,
+                TraceState.DIRECT_WRITE_DIRTY,
+            }
+            or bool(audit)
+            or bool(trace._has_direct_writes)
+        )
     if not has_value_edits:
         return
     import warnings
@@ -842,7 +858,16 @@ class TraceValidationMixin(_TraceMixinBase):
             from .._runnable_execution import _LiveRunOptions, run_live_trace
 
             _refuse_state_compromised_live_run(self)
-            _warn_pending_value_edits_on_new_input_run(self)
+            staged_spec = getattr(self, "_intervention_spec", None)
+            _warn_pending_value_edits_on_new_input_run(
+                self,
+                staged_spec_applies=bool(fast)
+                and loaded_provider not in {RunProvider.LOADED_SPARSE, RunProvider.LOADED_ANALYSIS}
+                and bool(
+                    getattr(staged_spec, "hook_specs", ())
+                    or getattr(staged_spec, "target_value_specs", ())
+                ),
+            )
             source_ref = getattr(self, "_source_model_ref", None)
             live_model = source_ref() if source_ref is not None else None
             if live_model is not None:

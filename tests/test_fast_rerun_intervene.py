@@ -686,3 +686,23 @@ def test_hooks_attached_after_capture_rerun_through_capture_once() -> None:
     assert isinstance(refused, str) and refused.endswith(":fast_rerun_graph_unsteered")
     assert _SITE in graph_fired_addresses(trace)
     assert _module_hook_count(model) == baseline
+
+
+def test_fast_door_with_staged_spec_does_not_disclose_pending_value_edits() -> None:
+    """The fast door applies the staged spec, so its firing trail is not an inert value edit.
+
+    Before the fix every ``run(inputs=..., fast=True)`` on a trace captured with
+    ``intervene=`` warned ``PendingValueEditsWarning`` (the capture-time audit, then
+    the rerun-propagated state, read as ``do()`` edits) while the result was exact.
+    """
+
+    from torchlens.intervention.errors import PendingValueEditsWarning
+
+    model, direction = _build()
+    trace = _steered_trace(model, direction, _ids(_CAPTURE_LEN, seed=2))
+    for step in range(3):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            trace.run(inputs=_ids(_CAPTURE_LEN + 1 + step, seed=5 + step), fast=True)
+        assert trace.last_run["engine"] == "guarded_fast"
+        assert not [w for w in caught if issubclass(w.category, PendingValueEditsWarning)], step
