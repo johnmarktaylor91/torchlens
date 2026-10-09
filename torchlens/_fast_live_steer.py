@@ -158,6 +158,19 @@ def _staged_user_hook_specs(trace: Any) -> list[Any]:
     ]
 
 
+def _staged_entries(trace: Any) -> tuple[Any, ...]:
+    """Return the trace's staged spec object followed by its hook and value entries."""
+
+    spec = getattr(trace, "_intervention_spec", None)
+    if spec is None:
+        return ()
+    return (
+        spec,
+        *(getattr(spec, "hook_specs", None) or ()),
+        *(getattr(spec, "target_value_specs", None) or ()),
+    )
+
+
 def module_boundary_plan(trace: Any) -> tuple[list[Any], tuple[str, ...]]:
     """Normalize the staged spec into a module-boundary hook plan.
 
@@ -274,6 +287,7 @@ class SteerPlan:
 
         self.hook_plan, self.addresses = module_boundary_plan(trace)
         self.spec = getattr(trace, "_intervention_spec", None) if self.hook_plan else None
+        self.staged = _staged_entries(trace)
         modules = dict(model.named_modules())
         for address in self.addresses:
             if modules.get(address) is None:
@@ -287,6 +301,33 @@ class SteerPlan:
         self.pass_counts: Counter[str] = Counter()
         self.fired: Counter[str] = Counter()
         self.fire_count = 0
+
+    def follows(self, trace: Any) -> bool:
+        """Return whether ``trace`` still stages exactly the entries this plan lowered.
+
+        The staged spec is mutable (``attach_hooks``, ``clear_hooks``), so a
+        cached session compares the entry objects themselves; the plan holds
+        them, so an identity match cannot be a reused address.
+        """
+
+        current = _staged_entries(trace)
+        return len(current) == len(self.staged) and all(
+            left is right for left, right in zip(current, self.staged)
+        )
+
+    def refuse_changed_helpers(self) -> None:
+        """Refuse a run whose staged helper tensors changed since they were staged.
+
+        Raises
+        ------
+        SpecMutationError
+            ``helper_tensor_changed_since_capture``, as the capture rerun raises.
+        """
+
+        if self.spec is not None:
+            from .intervention._helper_fingerprint import refuse_changed_staged_helpers
+
+            refuse_changed_staged_helpers(self.spec, door="rerun")
 
     def reset(self) -> None:
         """Clear the per-run counters."""

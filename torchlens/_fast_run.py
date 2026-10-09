@@ -1537,6 +1537,7 @@ class _FastLiveSession:
             )
         if failed_input is not None:
             _raise_failed_contract_as_divergence(failed_input, fork=None)
+        self.steer_plan.refuse_changed_helpers()
         if seed is not None:
             set_random_seed(seed)
         with self.activated(), self.steer_plan.context(), fingerprinting() as fingerprint:
@@ -1844,7 +1845,11 @@ def run_fast_live_trace(trace: Any, inputs: Any, *, seed: int | None) -> RunResu
             provider=RunProvider.LIVE,
         )
     session = trace.__dict__.get("_fast_run_session")
-    if not isinstance(session, _FastLiveSession) or session.model_ref() is not model:
+    if (
+        not isinstance(session, _FastLiveSession)
+        or session.model_ref() is not model
+        or not session.steer_plan.follows(trace)
+    ):
         if hasattr(session, "close"):
             session.close()
         session = _FastLiveSession(trace, model)

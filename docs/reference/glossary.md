@@ -558,7 +558,10 @@ attribution-target alias. See the [attribution reference](attribution.md).
   capture-time number is presented as current. The save scope never widens: unsaved ops stay
   unsaved, `raw_output` follows the capture's output-transform rule, and the stored spec is
   unchanged. A real structural divergence still refuses (`PathDivergenceError` from the
-  explicit door; the legacy door falls back and records why).
+  explicit door; the legacy door falls back and records why). A staged helper tensor changed
+  since it was staged refuses `helper_tensor_changed_since_capture` on both doors, as the
+  capture rerun does, and the explicit door's cached session rebuilds whenever the staged spec
+  changes, so it always applies the spec staged at call time.
 
 ## Extraction, observers, and admin
 
