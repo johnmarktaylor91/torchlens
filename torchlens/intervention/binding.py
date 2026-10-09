@@ -36,6 +36,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from .._errors import InvalidArgumentError
+from ._helper_fingerprint import changed_helpers, changed_message, helper_digests
 from .audit import EXECUTION_EFFECTS, build_fire_record, rules_payload
 from .errors import BindingPreflightError, BindingRuntimeError
 from .model_door import resolve_model_operand
@@ -196,7 +197,14 @@ def _rule_contains_module_boundary(rule: Any) -> bool:
 class _RulePlan:
     """One rule's bind-time lowering: the normalized hook callable + stamps."""
 
-    __slots__ = ("rule", "hook_callable", "helper_spec", "display_name", "boundary_targets")
+    __slots__ = (
+        "rule",
+        "hook_callable",
+        "helper_spec",
+        "display_name",
+        "boundary_targets",
+        "tensor_digests",
+    )
 
     def __init__(self, rule: Any) -> None:
         """Lower one rule's action through the ONE hook normalizer.
@@ -230,6 +238,9 @@ class _RulePlan:
             else getattr(decision.hook, "__qualname__", type(decision.hook).__name__)
         )
         self.boundary_targets: tuple[str, ...] = ()
+        # Helpers alias the caller's tensors (F9): every call checks them
+        # against their value at bind time.
+        self.tensor_digests = helper_digests(self.helper_spec)
 
 
 @dataclass(frozen=True)
@@ -1030,6 +1041,26 @@ class BoundInterventionExecutor:
             )
         return self._run(target, args, kwargs, door="generate")
 
+    def _refuse_changed_helper_tensors(self) -> None:
+        """Refuse a call when a bound helper's tensor changed since bind time.
+
+        Raises
+        ------
+        BindingRuntimeError
+            ``helper_tensor_changed_since_capture`` naming each changed rule.
+        """
+
+        plans = (*self._boundary_plans, *self._op_level_plans)
+        changed = changed_helpers(
+            (plan.helper_spec, plan.tensor_digests, plan.rule.where_repr) for plan in plans
+        )
+        if changed:
+            raise BindingRuntimeError(
+                changed_message("This bound call", changed),
+                code="helper_tensor_changed_since_capture",
+                changed_helpers=tuple(changed),
+            )
+
     def _run(self, target: Any, args: tuple, kwargs: dict, *, door: str) -> Any:
         """One serial bound call: arm, execute, settle, report."""
 
@@ -1041,6 +1072,11 @@ class BoundInterventionExecutor:
                 remedy="wait for the active call to return, or make separate "
                 "bindings from the same immutable spec for concurrent workers",
             )
+        try:
+            self._refuse_changed_helper_tensors()
+        except BaseException:
+            self._lock.release()
+            raise
         session = _BindSession(self, door)
         error: str | None = None
         output: Any = None

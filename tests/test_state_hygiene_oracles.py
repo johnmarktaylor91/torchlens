@@ -273,7 +273,9 @@ def test_chunked_rerun_steers_every_row_once(net) -> None:
     with the capture (batch 4); under the detector's contract a batch-size
     change is a shape divergence (``test_append_semantics`` pins the same for a
     full rerun at a new batch size), so that one call discloses it. A repeat
-    reproduces the chunked graph and is silent.
+    reproduces the chunked graph and is silent. Follow-up AGT-2004 (with the
+    fast-rerun integration): validate the reassembled result against the
+    capture instead of chunk 0, then assert silence here.
     """
 
     model, x, expected = net

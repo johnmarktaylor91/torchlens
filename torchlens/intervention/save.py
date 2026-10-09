@@ -222,6 +222,12 @@ def save_intervention(
     refuse_poisoned_trace(log, "intervention export")
     save_level = _coerce_save_level(level)
     _enforce_direct_write_policy(log, save_level, allow_direct_writes=allow_direct_writes)
+    from ._helper_fingerprint import refuse_changed_staged_helpers
+
+    # The recipe must be the one that produced the trace, not a later in-place edit.
+    refuse_changed_staged_helpers(
+        getattr(log, "_intervention_spec", None), door="save_intervention"
+    )
     target_path = Path(path)
     _reject_symlink_path(target_path, context="intervention spec target")
     tmp_path = target_path.parent / f"tmp.{uuid.uuid4().hex}"

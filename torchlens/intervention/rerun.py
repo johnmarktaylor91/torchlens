@@ -17,6 +17,7 @@ from .._input_coerce import _coerce_input_args
 from .._trace_state import TraceState
 from ..options import ReplayOptions, merge_replay_options
 from ..utils.hashing import compute_graph_shape_hash
+from ._helper_fingerprint import refuse_changed_staged_helpers
 from ._rerun_predicate import (
     plan_rerun_spec,
     refuse_unmatchable_staged_labels,
@@ -103,6 +104,7 @@ def run(
     _warn_if_direct_writes_will_be_overlaid(log)
 
     spec = getattr(log, "_intervention_spec", None)
+    refuse_changed_staged_helpers(spec, door="rerun")
     spec_plan = plan_rerun_spec(log, spec)
     refuse_unmatchable_staged_labels(spec_plan.capture_spec)
     hook_plan = _assign_unique_plan_ids(normalize_hooks_from_spec(spec_plan.capture_spec))
@@ -308,6 +310,7 @@ def _append_rerun(
     _warn_if_batch_sensitive_train_modules(model)
 
     spec = getattr(log, "_intervention_spec", None)
+    refuse_changed_staged_helpers(spec, door="rerun")
     # Every staged helper must be batch-independent, including the
     # predicate-door entries the capture below re-arms instead of planning.
     _validate_append_hook_plan(log, normalize_hooks_from_spec(spec))
