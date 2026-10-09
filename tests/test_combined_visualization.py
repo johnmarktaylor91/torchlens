@@ -296,3 +296,23 @@ def test_forward_rolled_grad_overlay_labels_partial_passes(tmp_path: Path) -> No
     )
 
     assert "bwd 2" in dot
+
+
+def test_draw_combined_ties_carry_no_cluster_clipping(tmp_path: Path) -> None:
+    """Forward-to-grad_fn ties run node to node, with no ``ltail``/``lhead`` clipping.
+
+    The combined graph sets no ``compound=true``, so Graphviz ignored the
+    attributes; with it they either warned (both endpoints inside the cluster)
+    or clipped the tie at a cluster border, hiding which grad_fn it names.
+    """
+    trace = _log_backward_model(_SingleParamModel(), torch.randn(3, requires_grad=True))
+
+    dot = trace.draw_combined(
+        vis_outpath=str(tmp_path / "ties"),
+        vis_save_only=True,
+        vis_fileformat="dot",
+    )
+
+    tie_lines = [line for line in dot.splitlines() if "->" in line and "constraint=false" in line]
+    assert tie_lines
+    assert not any("ltail=" in line or "lhead=" in line for line in tie_lines)
