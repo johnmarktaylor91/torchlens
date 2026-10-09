@@ -83,6 +83,7 @@ def test_deepcopy_of_a_buffer_is_its_own_node_and_validates() -> None:
         (copy_parent,) = [trace[label] for label in mul_op.parents if label != "input_1"]
         assert copy_parent.func_name == "__deepcopy__"
         assert copy_parent.parents == (buffer_op.label,)
+        assert trace.capture_verified is not False, trace.capture_verification_reason
     finally:
         trace.cleanup()
     assert tl.validate(_DeepcopyBuffer(), x, scope="forward") is True
@@ -92,6 +93,21 @@ def test_deepcopy_snapshot_of_a_later_mutated_intermediate_validates() -> None:
     """A deep-copied snapshot keeps its pre-write value through replay."""
 
     assert tl.validate(_DeepcopyThenMutateSource(), torch.ones(4), scope="forward") is True
+
+
+def test_deepcopy_records_under_an_intervention_ready_capture() -> None:
+    """The recorded ``copy.deepcopy(self)`` call builds its replay template cleanly."""
+
+    trace = tl.trace(
+        _DeepcopyBuffer(),
+        torch.ones(4),
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+    )
+    try:
+        (copy_op,) = [op for op in trace.layer_list if op.func_name == "__deepcopy__"]
+        assert copy_op.parents
+    finally:
+        trace.cleanup()
 
 
 def test_deepcopied_tensor_meta_drops_only_the_session_identity() -> None:

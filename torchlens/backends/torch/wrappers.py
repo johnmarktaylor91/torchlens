@@ -4,6 +4,7 @@ Wrappers persist after first installation and branch on ``_state._logging_enable
 This module also patches detached torch references and torch transform boundaries.
 """
 
+import copy
 import inspect
 import os
 import sys
@@ -1630,7 +1631,10 @@ def torch_func_decorator(
     # the calls the allowlist check inside the helper would discard.
     is_detached_propagation_func = func_name in _DETACHED_ACTIVATION_PROPAGATION_FUNCS
     canonical_capture_callable = None
-    if func_name != "data" or property_accessor == "del":
+    if func_name == "__deepcopy__":
+        # Recorded as ``copy.deepcopy(self)``: replay needs a fresh memo per call.
+        canonical_capture_callable = (copy.deepcopy, func_name)
+    elif func_name != "data" or property_accessor == "del":
         canonical_capture_callable = (func, func_name)
     # See the barcode-transparency note inside ``wrapped_func`` (R16-5).
     is_barcode_transparent = func_name == "as_subclass"
@@ -2179,6 +2183,10 @@ def torch_func_decorator(
             log_kwargs = {}
             log_arg_copies = (arg_copies[1],) if len(arg_copies) >= 2 else log_args
             log_kwarg_copies = {}
+        elif func_name == "__deepcopy__" and args:
+            # The memo is copy-protocol bookkeeping that ends up holding the output.
+            log_args, log_kwargs, log_kwarg_copies = (args[0],), {}, {}
+            log_arg_copies = tuple(arg_copies[:1]) or log_args
         out_before_hooks = out_orig
         out_orig = apply_live_hooks_to_outputs(
             trace,
