@@ -59,6 +59,9 @@ def _default_fontnames(dot: str) -> dict[str, Any]:
     """
 
     graph = pydot.graph_from_dot_data(dot)[0]
+    graph_defaults: dict[str, Any] = dict(graph.get_attributes())
+    for attrs in graph.get_graph_defaults() or ():
+        graph_defaults.update(attrs)
     node_defaults: dict[str, Any] = {}
     for attrs in graph.get_node_defaults() or ():
         node_defaults.update(attrs)
@@ -66,7 +69,7 @@ def _default_fontnames(dot: str) -> dict[str, Any]:
     for attrs in graph.get_edge_defaults() or ():
         edge_defaults.update(attrs)
     return {
-        "graph": graph.get_attributes().get("fontname"),
+        "graph": graph_defaults.get("fontname"),
         "node": node_defaults.get("fontname"),
         "edge": edge_defaults.get("fontname"),
     }
