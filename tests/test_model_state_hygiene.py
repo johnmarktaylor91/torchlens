@@ -455,3 +455,183 @@ def test_captured_model_called_inside_another_capture() -> None:
         outer_trace = tl.trace(_Outer(), _X)
     expected = _eager_out(helper) * 3.0
     assert torch.equal(outer_trace[outer_trace.output_layers[0]].out.detach(), expected)
+
+
+class _MidCaptureCopier(_Model):
+    """``_Model`` that deep-copies ``block`` and ``alt`` while it runs.
+
+    ``where="forward"`` copies from the model's own ``forward``;
+    ``where="hook"`` copies from a forward hook on the ``gate`` submodule.
+    The copy is a fresh ``nn.Sequential(block, alt)``, so ``block`` covers
+    modules with no instance ``forward`` and ``alt`` a user-pinned bound
+    method. Copies land in ``self.sink`` (a plain list, never a submodule).
+    """
+
+    def __init__(self, where: str) -> None:
+        """Build the children and arm the copy point."""
+
+        super().__init__()
+        self.where = where
+        self.sink: list[nn.Module] = []
+        if where == "hook":
+            self.gate.register_forward_hook(self._snapshot_hook)
+
+    def _snapshot(self) -> None:
+        """Deep-copy ``block`` and ``alt`` into the sink."""
+
+        self.sink.append(copy.deepcopy(nn.Sequential(self.block, self.alt)))
+
+    def _snapshot_hook(self, module: nn.Module, args: Any, output: Any) -> None:
+        """Forward hook on ``gate``: take the snapshot."""
+
+        self._snapshot()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run ``_Model``'s forward, snapshotting from inside it when asked."""
+
+        hidden = self.block(x)
+        hidden = self.gate(self.alt(hidden)) + hidden
+        if self.where == "forward":
+            self._snapshot()
+        return self.head(hidden)
+
+
+def _never_captured_pair() -> nn.Sequential:
+    """The ``Sequential(block, alt)`` oracle from a model TorchLens never touched."""
+
+    fresh = _fresh()
+    return nn.Sequential(fresh.block, fresh.alt)
+
+
+@pytest.mark.parametrize("where", ["forward", "hook"])
+@pytest.mark.parametrize("door", ["trace", "record"])
+def test_deepcopy_taken_inside_a_capture_is_its_own_model(door: str, where: str) -> None:
+    """A deepcopy made mid-capture runs, trains and pickles on its own weights.
+
+    ``copy.deepcopy`` treats functions as atomic, so a copy taken while the
+    session wrappers were installed used to keep a wrapper closing over the
+    ORIGINAL submodule: it computed with the original's weights forever after,
+    sent its gradients there, and failed to pickle.
+    """
+
+    torch.manual_seed(7)
+    model = _MidCaptureCopier(where).eval()
+    before = _model_fingerprint(model)
+    reference = _eager_out(model)
+    model.sink.clear()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        _DOORS[door](model)  # type: ignore[arg-type]
+    assert len(model.sink) == 1, "the model should have snapshotted exactly once"
+    clone = model.sink.pop()
+    model.where = "never"
+    _assert_fingerprints_equal(before, _model_fingerprint(model))
+
+    for module in clone.modules():
+        instance_forward = module.__dict__.get("forward")
+        if instance_forward is None:
+            continue
+        assert not type(instance_forward).__module__.startswith("torchlens"), (
+            f"the copy holds a TorchLens forward object: {instance_forward!r}"
+        )
+        assert getattr(instance_forward, "__self__", module) is module, (
+            "the copy's instance forward is bound to another module"
+        )
+
+    expected = _eager_out(_filled(_never_captured_pair()))
+    _filled(clone)
+    assert torch.equal(_eager_out(clone), expected), "the copy ran the original's weights"
+    assert torch.equal(_eager_out(model), reference), "filling the copy changed the original"
+
+    clone(_X).sum().backward()
+    assert all(param.grad is not None for param in clone.parameters()), (
+        "backward through the copy left the copy's grads empty"
+    )
+    assert all(param.grad is None for param in model.parameters()), (
+        "backward through the copy filled the original's grads"
+    )
+    clone.zero_grad(set_to_none=True)
+
+    blob = pickle.dumps(clone)
+    assert b"torchlens" not in blob, "the copy's pickle references TorchLens objects"
+    assert torch.equal(_eager_out(pickle.loads(blob)), expected)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        copy_trace = tl.trace(clone, _X)
+    assert torch.equal(copy_trace[copy_trace.output_layers[0]].out.detach(), expected)
+    assert torch.equal(_eager_out(clone), expected)
+    assert torch.equal(_eager_out(model), reference)
+
+
+@pytest.mark.parametrize("door", ["trace", "record"])
+def test_stray_session_wrapper_never_breaks_a_later_capture(door: str) -> None:
+    """A session wrapper that escaped its capture passes through in another one.
+
+    A user can keep a session wrapper alive past its capture: stash
+    ``module.forward`` from inside the forward, or ``copy.copy`` a submodule
+    (a shallow copy shares the instance ``__dict__`` entries). Calling it
+    inside a LATER capture of a different model must neither raise nor hide
+    that model's own registered submodules.
+    """
+
+    donor = _fresh()
+    stash: list[Any] = []
+
+    class _Stasher(nn.Module):
+        """Stashes the donor's live ``block.forward`` and a shallow block copy."""
+
+        def __init__(self) -> None:
+            """Hold the donor as a child."""
+
+            super().__init__()
+            self.donor = donor
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run the donor and stash its session objects."""
+
+            stash.append(self.donor.block.forward)
+            stash.append(copy.copy(self.donor.block))
+            return self.donor(x)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        tl.trace(_Stasher(), _X)
+    stray_forward, shallow_block = stash
+
+    class _Later(nn.Module):
+        """Calls the stray objects next to its own registered child."""
+
+        def __init__(self) -> None:
+            """Build the registered child."""
+
+            super().__init__()
+            self.lin = nn.Linear(3, 3)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Mix the stray calls with the registered child."""
+
+            return self.lin(stray_forward(x)) + shallow_block(x)
+
+    torch.manual_seed(11)
+    later = _Later().eval()
+    expected = _eager_out(later)
+    entered: list[str] = []
+
+    def _save(ctx: Any) -> bool:
+        """Record every module entry the capture reports."""
+
+        if ctx.kind == "module_enter":
+            entered.append(str(ctx.address))
+        return True
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        if door == "trace":
+            later_trace = tl.trace(later, _X)
+            assert "lin" in later_trace.modules, "the registered child went unrecorded"
+            out = later_trace[later_trace.output_layers[0]].out.detach()
+        else:
+            out, _recording = tl.record(later, _X, save=_save, return_output=True)
+            assert "lin" in entered, "the registered child went unrecorded"
+    assert torch.equal(out.detach(), expected)
