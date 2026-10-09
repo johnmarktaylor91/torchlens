@@ -524,8 +524,8 @@ def test_deepcopy_taken_inside_a_capture_is_its_own_model(door: str, where: str)
         _DOORS[door](model)  # type: ignore[arg-type]
     assert len(model.sink) == 1, "the model should have snapshotted exactly once"
     clone = model.sink.pop()
-    model.where = "never"
     _assert_fingerprints_equal(before, _model_fingerprint(model))
+    model.where = "never"  # stop snapshotting on the eager oracle runs below
 
     for module in clone.modules():
         instance_forward = module.__dict__.get("forward")
