@@ -93,8 +93,10 @@ def _classify(component: Any) -> tuple[str, str]:
         # Any selector naming a module resolves post hoc; only a pure ``|``
         # union of module terms limits its escrow to matching module passes.
         if module_union_addresses(component) is None:
-            return "deferred", "selectors mixing tl.module with other terms escrow every op"
-        return "live", "tl.module unions escrow only the ops inside matching module passes"
+            verdict = ("deferred", "selectors mixing tl.module with other terms escrow every op")
+        else:
+            verdict = ("live", "tl.module unions escrow only the ops inside matching module passes")
+        return verdict
     return "live", "predicate selectors resolve per-op during the forward"
 
 
