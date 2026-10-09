@@ -1465,25 +1465,28 @@ def _merge_intervention_spec_hooks(
     destination: InterventionSpec,
     source: InterventionSpec | None,
 ) -> InterventionSpec:
-    """Merge hook-plan spec entries into an existing intervention spec.
+    """Return a spec holding an existing spec's entries plus hook-plan entries.
 
     Parameters
     ----------
     destination:
-        Spec receiving entries.
+        Spec whose entries come first. Never mutated: it may be a spec a
+        Trace already stores.
     source:
         Spec created from normalized hook entries.
 
     Returns
     -------
     InterventionSpec
-        The destination spec.
+        ``destination`` itself when ``source`` is ``None``, else a new spec
+        holding ``destination``'s entries followed by ``source``'s.
     """
 
     if source is None:
         return destination
+    targets = list(destination.targets)
     try:
-        target_keys: set[Any] | None = {existing.freeze() for existing in destination.targets}
+        target_keys: set[Any] | None = {existing.freeze() for existing in targets}
     except TypeError:
         target_keys = None
     for target in source.targets:
@@ -1493,19 +1496,21 @@ def _merge_intervention_spec_hooks(
                 target_is_new = frozen_target not in target_keys
             except TypeError:
                 target_keys = None
-                target_is_new = not any(
-                    existing.freeze() == frozen_target for existing in destination.targets
-                )
+                target_is_new = not any(existing.freeze() == frozen_target for existing in targets)
         else:
-            target_is_new = not any(
-                existing.freeze() == frozen_target for existing in destination.targets
-            )
+            target_is_new = not any(existing.freeze() == frozen_target for existing in targets)
         if target_is_new:
-            destination.targets.append(target)
+            targets.append(target)
             if target_keys is not None:
                 target_keys.add(frozen_target)
-    destination.hook_specs.extend(source.hook_specs)
-    return destination
+    return replace(
+        destination,
+        targets=targets,
+        target_value_specs=list(destination.target_value_specs),
+        hook_specs=[*destination.hook_specs, *source.hook_specs],
+        records=list(destination.records),
+        metadata=dict(destination.metadata),
+    )
 
 
 def record_kpi_in_graph(name: str, value: Any) -> None:
