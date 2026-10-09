@@ -1,20 +1,23 @@
-"""A second registered name for a module selects that module at every door.
+"""A shared module's alias spelling refuses at every door; its canonical name fires everywhere.
 
-``self.block = blk; self.alias = blk`` registers one module object under two
-addresses. ``named_modules()`` reports it once, and TorchLens records both
-spellings in ``Module.all_addresses`` (``trace.modules["alias"]`` is
-``trace.modules["block"]``). The selector spellings must agree: ``tl.trace``
-and ``tl.record`` used to warn "matched zero sites" for whichever spelling the
-capture did not label the calls with (leaving the output unsteered), while
-``spec.bind(model)`` refused the spelling ``named_modules()`` did not report.
+``self.enc = blk; self.dec = self.enc`` registers one module object under two
+addresses. ``named_modules()`` reports it once, under the first name, and
+TorchLens labels every call of it with that canonical name (``enc:1``,
+``enc:2``) while recording both names in ``Module.all_addresses``. No hook can
+tell which attribute a forward called the object through, so
+``tl.module("dec")`` cannot mean "the dec call": honoring it edits the ``enc``
+call too, a number the user did not ask for (AUD-CODE 3.7d).
 
-An address names a module object, and a pass label names one call of that
-object, whichever attribute the forward called it through. So
-``tl.module("alias")`` is ``tl.module("block")``, ``tl.module("alias:2")`` is
-the object's second call, and ``tl.in_module`` follows the same rule. Every
-door (``tl.trace``, ``tl.record``, post-hoc ``fork().do`` and
-``spec.bind(model)(x)``) is held to an eager oracle: a forward hook on the
-shared module for ``tl.module`` and a hand-written forward for
+So every door refuses an alias spelling (``tl.module("dec")``,
+``tl.module("dec:2")``, ``tl.in_module("dec")``, ``tl.in_module("dec:2")``)
+with ONE typed error: the same code and the same message, naming the
+canonical name, which fires at every call site of the shared module. The
+doors are ``tl.trace`` and ``tl.record`` (``intervene=``, ``save=`` and
+``halt=``), post-hoc ``find_sites`` and ``fork().do``, and
+``spec.bind(model)``. Capture and bind doors refuse before any forward runs.
+
+The canonical spelling is held to an eager oracle at every door: a forward
+hook on the shared module for ``tl.module`` and a hand-written forward for
 ``tl.in_module``. The action is an add, which is not idempotent, so an edit
 applied at the wrong call, at too many calls, or not at all changes the
 numbers.
@@ -35,7 +38,7 @@ from torchlens.intervention.errors import MultiMatchWarning
 
 _X = torch.tensor([[1.0, -2.0, 0.5]])
 _DELTA = 1.0
-_ZERO_MATCH_TEXT = "matched zero sites"
+_ALIAS_CODE = "bind_static_anchor_unresolved"
 
 
 class _Block(nn.Module):
@@ -58,18 +61,18 @@ class _Block(nn.Module):
         return torch.relu(x) * 2.0
 
 
-class _AliasAfter(nn.Module):
-    """``alias`` is registered after ``block``; the forward calls both names."""
+class _DecAfter(nn.Module):
+    """``dec`` is registered after ``enc``; the forward calls both names."""
 
     def __init__(self) -> None:
         """Register one block under two names."""
 
         super().__init__()
-        self.block = _Block()
-        self.alias = self.block
+        self.enc = _Block()
+        self.dec = self.enc
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Call the block through ``block``, then through ``alias``, then shift.
+        """Call the block through ``enc``, then through ``dec``, then shift.
 
         Parameters
         ----------
@@ -82,21 +85,21 @@ class _AliasAfter(nn.Module):
             The shifted second block output.
         """
 
-        return self.alias(self.block(x) - 0.5) + 0.25
+        return self.dec(self.enc(x) - 0.5) + 0.25
 
 
-class _AliasBefore(nn.Module):
-    """``alias`` is registered first, so ``named_modules()`` reports ``alias``."""
+class _DecBefore(nn.Module):
+    """``dec`` is registered first, so ``named_modules()`` reports ``dec``."""
 
     def __init__(self) -> None:
         """Register one block under two names."""
 
         super().__init__()
-        self.alias = _Block()
-        self.block = self.alias
+        self.dec = _Block()
+        self.enc = self.dec
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Call the block through ``block``, then through ``alias``, then shift.
+        """Call the block through ``enc``, then through ``dec``, then shift.
 
         Parameters
         ----------
@@ -109,18 +112,18 @@ class _AliasBefore(nn.Module):
             The shifted second block output.
         """
 
-        return self.alias(self.block(x) - 0.5) + 0.25
+        return self.dec(self.enc(x) - 0.5) + 0.25
 
 
-class _AliasTail(nn.Module):
-    """The second call's output (through ``alias``) IS the model output."""
+class _DecTail(nn.Module):
+    """The second call's output (through ``dec``) IS the model output."""
 
     def __init__(self) -> None:
         """Register one block under two names."""
 
         super().__init__()
-        self.block = _Block()
-        self.alias = self.block
+        self.enc = _Block()
+        self.dec = self.enc
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Call the block twice and return its second output directly.
@@ -136,36 +139,79 @@ class _AliasTail(nn.Module):
             The second block output.
         """
 
-        return self.alias(self.block(x) - 0.5)
+        return self.dec(self.enc(x) - 0.5)
 
 
-_MODELS: dict[str, type[nn.Module]] = {
-    "alias_after": _AliasAfter,
-    "alias_before": _AliasBefore,
-    "alias_tail": _AliasTail,
+# model name -> (class, canonical address, alias address)
+_MODELS: dict[str, tuple[type[nn.Module], str, str]] = {
+    "dec_after": (_DecAfter, "enc", "dec"),
+    "dec_before": (_DecBefore, "dec", "enc"),
+    "dec_tail": (_DecTail, "enc", "dec"),
 }
 
-# selector name -> (selector factory, block calls whose OUTPUT receives the add,
-# block calls whose INTERIOR ops each receive the add)
-_SELECTORS: dict[str, tuple[Callable[[], Any], frozenset[int], frozenset[int]]] = {
-    "module_block": (lambda: tl.module("block"), frozenset({1, 2}), frozenset()),
-    "module_alias": (lambda: tl.module("alias"), frozenset({1, 2}), frozenset()),
-    "module_block_pass_2": (lambda: tl.module("block:2"), frozenset({2}), frozenset()),
-    "module_alias_pass_1": (lambda: tl.module("alias:1"), frozenset({1}), frozenset()),
-    "module_alias_pass_2": (lambda: tl.module("alias:2"), frozenset({2}), frozenset()),
-    "in_module_block": (lambda: tl.in_module("block"), frozenset(), frozenset({1, 2})),
-    "in_module_alias": (lambda: tl.in_module("alias"), frozenset(), frozenset({1, 2})),
-    "in_module_alias_pass_2": (lambda: tl.in_module("alias:2"), frozenset(), frozenset({2})),
+# selector name -> (selector factory over an address, pass suffix, block calls
+# whose OUTPUT receives the add, block calls whose INTERIOR ops each receive it)
+_SELECTORS: dict[str, tuple[Callable[[str], Any], str, frozenset[int], frozenset[int]]] = {
+    "module": (tl.module, "", frozenset({1, 2}), frozenset()),
+    "module_pass_1": (tl.module, ":1", frozenset({1}), frozenset()),
+    "module_pass_2": (tl.module, ":2", frozenset({2}), frozenset()),
+    "in_module": (tl.in_module, "", frozenset(), frozenset({1, 2})),
+    "in_module_pass_2": (tl.in_module, ":2", frozenset(), frozenset({2})),
 }
 
+_ALIAS_SPELLINGS = ("module", "module_pass_2", "in_module", "in_module_pass_2")
 
-def _hook_oracle(model: nn.Module, module_calls: frozenset[int]) -> torch.Tensor:
+
+def _build(model_name: str) -> nn.Module:
+    """Return a fresh eval-mode instance of one model.
+
+    Parameters
+    ----------
+    model_name:
+        Key into ``_MODELS``.
+
+    Returns
+    -------
+    nn.Module
+        The model.
+    """
+
+    torch.manual_seed(0)
+    return _MODELS[model_name][0]().eval()
+
+
+def _selector(model_name: str, selector_name: str, *, alias: bool) -> Any:
+    """Build one selector spelled with the canonical or the alias address.
+
+    Parameters
+    ----------
+    model_name:
+        Key into ``_MODELS``.
+    selector_name:
+        Key into ``_SELECTORS``.
+    alias:
+        Whether to spell the address with the alias name.
+
+    Returns
+    -------
+    Any
+        The selector.
+    """
+
+    _cls, canonical, alias_name = _MODELS[model_name]
+    factory, suffix, _module_calls, _interior_calls = _SELECTORS[selector_name]
+    return factory((alias_name if alias else canonical) + suffix)
+
+
+def _hook_oracle(model: nn.Module, address: str, module_calls: frozenset[int]) -> torch.Tensor:
     """Run the model eagerly with a forward hook adding at the named block calls.
 
     Parameters
     ----------
     model:
-        Model whose ``block`` attribute is the shared module.
+        Model holding the shared module.
+    address:
+        Attribute name of the shared module (either name is the same object).
     module_calls:
         One-based calls of the shared module whose output receives the add.
 
@@ -184,7 +230,7 @@ def _hook_oracle(model: nn.Module, module_calls: frozenset[int]) -> torch.Tensor
         calls += 1
         return output + _DELTA if calls in module_calls else None
 
-    handle = model.block.register_forward_hook(_hook)
+    handle = getattr(model, address).register_forward_hook(_hook)
     try:
         with torch.no_grad():
             return model(_X)
@@ -224,11 +270,11 @@ def _interior_oracle(model_name: str, interior_calls: frozenset[int]) -> torch.T
         return result + _DELTA if interior else result
 
     output = block(block(_X) - 0.5)
-    return output if model_name == "alias_tail" else output + 0.25
+    return output if model_name == "dec_tail" else output + 0.25
 
 
 def _expected(model_name: str, selector_name: str) -> torch.Tensor:
-    """Return the eager oracle for one model and selector.
+    """Return the eager oracle for one model and canonical selector.
 
     Parameters
     ----------
@@ -243,20 +289,20 @@ def _expected(model_name: str, selector_name: str) -> torch.Tensor:
         The expected steered model output.
     """
 
-    _factory, module_calls, interior_calls = _SELECTORS[selector_name]
+    _factory, _suffix, module_calls, interior_calls = _SELECTORS[selector_name]
     if interior_calls:
         return _interior_oracle(model_name, interior_calls)
-    return _hook_oracle(_MODELS[model_name]().eval(), module_calls)
+    return _hook_oracle(_build(model_name), _MODELS[model_name][1], module_calls)
 
 
-def _door_trace(model: nn.Module, selector: Any) -> torch.Tensor:
+def _edit_trace(model: nn.Module, selector: Any) -> torch.Tensor:
     """Run the edit through ``tl.trace(intervene=)`` and read the model output."""
 
     trace = tl.trace(model, _X, intervene=tl.when(selector, tl.add(_DELTA)))
     return trace[trace.output_layers[0]].out
 
 
-def _door_record_callable(model: nn.Module, selector: Any) -> torch.Tensor:
+def _edit_record(model: nn.Module, selector: Any) -> torch.Tensor:
     """Run the edit through ``tl.record`` with an opaque callable ``save=``."""
 
     output, _recording = tl.record(
@@ -269,24 +315,16 @@ def _door_record_callable(model: nn.Module, selector: Any) -> torch.Tensor:
     return output
 
 
-def _door_record_alias_save(model: nn.Module, selector: Any) -> torch.Tensor:
-    """Run the edit through ``tl.record`` with an alias-spelled ``save=`` selector."""
+def _intervention_ready(model: nn.Module) -> Any:
+    """Capture an intervention-ready trace of the model."""
 
-    output, _recording = tl.record(
-        model,
-        _X,
-        save=tl.in_module("alias"),
-        intervene=tl.when(selector, tl.add(_DELTA)),
-        return_output=True,
-    )
-    return output
+    return tl.trace(model, _X, capture=tl.options.CaptureOptions(intervention_ready=True))
 
 
-def _door_post_hoc(model: nn.Module, selector: Any) -> torch.Tensor:
+def _edit_fork_do(model: nn.Module, selector: Any) -> torch.Tensor:
     """Apply the edit post hoc with ``fork().do`` on an intervention-ready trace."""
 
-    trace = tl.trace(model, _X, capture=tl.options.CaptureOptions(intervention_ready=True))
-    fork = trace.fork()
+    fork = _intervention_ready(model).fork()
     with warnings.catch_warnings():
         # In-module matches inside one call compound on purpose (an op and its successor).
         warnings.simplefilter("ignore", MultiMatchWarning)
@@ -294,172 +332,194 @@ def _door_post_hoc(model: nn.Module, selector: Any) -> torch.Tensor:
     return fork[fork.output_layers[0]].out
 
 
-def _door_bind(model: nn.Module, selector: Any) -> torch.Tensor:
+def _edit_bind(model: nn.Module, selector: Any) -> torch.Tensor:
     """Run the edit through ``spec.bind(model)(x)``."""
 
     with torch.no_grad():
         return tl.when(selector, tl.add(_DELTA)).bind(model)(_X)
 
 
-_DOORS: dict[str, Callable[[nn.Module, Any], torch.Tensor]] = {
-    "trace": _door_trace,
-    "record_callable_save": _door_record_callable,
-    "record_alias_save": _door_record_alias_save,
-    "post_hoc_fork_do": _door_post_hoc,
-    "bind": _door_bind,
+_EDIT_DOORS: dict[str, Callable[[nn.Module, Any], torch.Tensor]] = {
+    "trace": _edit_trace,
+    "record": _edit_record,
+    "post_hoc_fork_do": _edit_fork_do,
+    "bind": _edit_bind,
 }
 
 
-def _outcome(door: str, model_name: str, selector_name: str) -> tuple[str, Any]:
-    """Run one door and return ``("ok", tensor)`` or ``("refused", detail)``.
+def _find_sites(model: nn.Module, selector: Any) -> Any:
+    """Resolve the selector post hoc with ``find_sites``."""
+
+    return tl.trace(model, _X).find_sites(selector, max_fanout=100)
+
+
+def _trace_save(model: nn.Module, selector: Any) -> Any:
+    """Select saved activations with ``tl.trace(save=)``."""
+
+    return tl.trace(model, _X, save=selector)
+
+
+def _record_save(model: nn.Module, selector: Any) -> Any:
+    """Select retained records with ``tl.record(save=)``."""
+
+    return tl.record(model, _X, save=selector, return_output=True)
+
+
+def _trace_halt(model: nn.Module, selector: Any) -> Any:
+    """Halt the capture with ``tl.trace(halt=)``."""
+
+    return tl.trace(model, _X, halt=selector)
+
+
+def _record_halt(model: nn.Module, selector: Any) -> Any:
+    """Halt the recording with ``tl.record(halt=)``."""
+
+    return tl.record(model, _X, save=lambda ctx: True, halt=selector, return_output=True)
+
+
+#: Every door that reads a module selector. The first five carry an edit; the
+#: rest select what to keep or where to stop, and must agree with the edits.
+_ALL_DOORS: dict[str, Callable[[nn.Module, Any], Any]] = {
+    **_EDIT_DOORS,
+    "post_hoc_find_sites": _find_sites,
+    "trace_save": _trace_save,
+    "record_save": _record_save,
+    "trace_halt": _trace_halt,
+    "record_halt": _record_halt,
+}
+
+#: Doors that must refuse before the model's forward runs at all.
+_PRE_FORWARD_DOORS = frozenset(
+    {"trace", "record", "bind", "trace_save", "record_save", "trace_halt", "record_halt"}
+)
+
+
+def _refusal(door: str, model_name: str, selector: Any) -> tuple[type[BaseException], str, str]:
+    """Run one door on an alias spelling and return its refusal.
 
     Parameters
     ----------
     door:
-        Key into ``_DOORS``.
+        Key into ``_ALL_DOORS``.
     model_name:
         Key into ``_MODELS``.
-    selector_name:
-        Key into ``_SELECTORS``.
+    selector:
+        Alias-spelled selector.
 
     Returns
     -------
-    tuple[str, Any]
-        The outcome kind and the output tensor or the refusal detail. A
-        zero-match warning is reported as a refusal: it leaves the output
-        unsteered while the user asked for steering.
+    tuple[type[BaseException], str, str]
+        The refusal's type, typed code and message.
     """
 
-    torch.manual_seed(0)
-    model = _MODELS[model_name]().eval()
-    selector = _SELECTORS[selector_name][0]()
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        try:
-            value = _DOORS[door](model, selector)
-        except Exception as exc:  # noqa: BLE001 - a refusal of any type is a door outcome the table compares
-            return "refused", (type(exc).__name__, getattr(exc, "code", None), str(exc)[:240])
-    zero_match = [str(w.message)[:240] for w in caught if _ZERO_MATCH_TEXT in str(w.message)]
-    if zero_match:
-        return "refused", ("zero-match warning", None, zero_match)
-    return "ok", value.detach().clone()
+    model = _build(model_name)
+    forwards = 0
+
+    def _count(module: nn.Module, args: Any) -> None:
+        """Count forwards of the model."""
+
+        nonlocal forwards
+        forwards += 1
+
+    handle = model.register_forward_pre_hook(_count)
+    try:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            with pytest.raises(Exception) as excinfo:  # noqa: PT011 - the door's type is compared below
+                _ALL_DOORS[door](model, selector)
+    finally:
+        handle.remove()
+    zero_match = [str(w.message) for w in caught if "matched zero sites" in str(w.message)]
+    assert not zero_match, f"{door}: warned instead of refusing: {zero_match}"
+    if door in _PRE_FORWARD_DOORS:
+        assert forwards == 0, f"{door}: the model ran {forwards} forward(s) before the refusal"
+    exc = excinfo.value
+    fields = getattr(exc, "fields", {})
+    return type(exc), str(fields.get("code")), str(exc)
+
+
+@pytest.mark.parametrize("selector_name", _ALIAS_SPELLINGS)
+@pytest.mark.parametrize("model_name", sorted(_MODELS))
+def test_alias_spelling_refuses_with_one_code_and_message_at_every_door(
+    model_name: str, selector_name: str
+) -> None:
+    """trace, record, post hoc and bind refuse the alias with the same code and message."""
+
+    _cls, canonical, alias_name = _MODELS[model_name]
+    selector = _selector(model_name, selector_name, alias=True)
+    spelled = alias_name + _SELECTORS[selector_name][1]
+    refusals = {door: _refusal(door, model_name, selector) for door in _ALL_DOORS}
+    bind_type, bind_code, bind_message = refusals["bind"]
+    assert bind_code == _ALIAS_CODE
+    assert f"{spelled!r} is an alias of {canonical!r}" in bind_message
+    assert "EVERY call site" in bind_message
+    for door, (exc_type, code, message) in refusals.items():
+        assert (exc_type, code) == (bind_type, bind_code), f"{door}: {exc_type.__name__} {code}"
+        assert message == bind_message, f"{door}: {message!r} != {bind_message!r}"
+
+
+@pytest.mark.parametrize("door", ["trace", "post_hoc_find_sites", "bind", "trace_save"])
+@pytest.mark.parametrize(
+    "build",
+    [
+        lambda name: tl.func("relu") & tl.in_module(name),
+        lambda name: tl.func("relu") | tl.in_module(f"{name}:2"),
+        lambda name: ~tl.module(name),
+        lambda name: tl.site(module_path=name),
+    ],
+    ids=["and", "or_pass", "not", "site_module_path"],
+)
+def test_alias_inside_a_composite_refuses_the_same_way(
+    door: str, build: Callable[[str], Any]
+) -> None:
+    """An alias anywhere in the selector refuses, whatever the other terms would match."""
+
+    _exc_type, code, message = _refusal(door, "dec_after", build("dec"))
+    assert code == _ALIAS_CODE
+    assert "'dec' is an alias of 'enc'" in message or "'dec:2' is an alias of 'enc'" in message
 
 
 @pytest.mark.parametrize("selector_name", sorted(_SELECTORS))
 @pytest.mark.parametrize("model_name", sorted(_MODELS))
-def test_alias_spelling_steers_the_same_module_at_every_door(
-    model_name: str, selector_name: str
+@pytest.mark.parametrize("door", sorted(_EDIT_DOORS))
+def test_canonical_spelling_fires_at_every_call_site(
+    door: str, model_name: str, selector_name: str
 ) -> None:
-    """trace, record, post-hoc and bind all match the eager oracle for either name."""
+    """The canonical name edits every call the eager oracle edits, at every door."""
 
     expected = _expected(model_name, selector_name)
-    outcomes = {door: _outcome(door, model_name, selector_name) for door in _DOORS}
-    refused = {door: detail for door, (kind, detail) in outcomes.items() if kind == "refused"}
-    assert not refused, f"doors declined a registered module address: {refused}"
-    for door, (_kind, value) in outcomes.items():
-        assert torch.equal(value, expected), f"{door}: {value.tolist()} != {expected.tolist()}"
+    selector = _selector(model_name, selector_name, alias=False)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        value = _EDIT_DOORS[door](_build(model_name), selector)
+    zero_match = [str(w.message) for w in caught if "matched zero sites" in str(w.message)]
+    assert not zero_match, zero_match
+    assert torch.equal(value.detach(), expected), f"{value.tolist()} != {expected.tolist()}"
+
+
+@pytest.mark.parametrize("model_name", sorted(_MODELS))
+def test_the_alias_map_is_disclosed_at_trace_and_bind(model_name: str) -> None:
+    """``Module.all_addresses`` and ``BindReport.module_aliases`` name both addresses."""
+
+    _cls, canonical, alias_name = _MODELS[model_name]
+    trace = tl.trace(_build(model_name), _X)
+    assert trace.modules[alias_name] is trace.modules[canonical]
+    assert set(trace.modules[canonical].all_addresses) == {canonical, alias_name}
+
+    bound = tl.when(tl.module(canonical), tl.add(_DELTA)).bind(_build(model_name))
+    with torch.no_grad():
+        bound(_X)
+    report = bound.last_report
+    assert report.module_aliases == {canonical: (alias_name,)}
+    assert [fire["target"] for fire in report.fires] == [f"{canonical}:1", f"{canonical}:2"]
 
 
 def test_oracle_distinguishes_every_scope() -> None:
     """The oracles for whole-module, one-call and interior edits differ from each other."""
 
-    for model_name in _MODELS:
+    for model_name, (_cls, canonical, _alias) in _MODELS.items():
         values = {
             name: tuple(_expected(model_name, name).flatten().tolist()) for name in _SELECTORS
         }
-        unsteered = tuple(_hook_oracle(_MODELS[model_name]().eval(), frozenset()).tolist()[0])
-        distinct = {
-            values["module_block"],
-            values["module_alias_pass_1"],
-            values["module_alias_pass_2"],
-            values["in_module_block"],
-            values["in_module_alias_pass_2"],
-            unsteered,
-        }
-        assert len(distinct) == 6, model_name
-
-
-@pytest.mark.parametrize("model_name", sorted(_MODELS))
-@pytest.mark.parametrize(
-    ("alias_selector", "primary_selector"),
-    [
-        (lambda: tl.module("alias"), lambda: tl.module("block")),
-        (lambda: tl.module("alias:2"), lambda: tl.module("block:2")),
-        (lambda: tl.in_module("alias"), lambda: tl.in_module("block")),
-        (lambda: tl.in_module("alias:1"), lambda: tl.in_module("block:1")),
-    ],
-    ids=["module", "module_pass", "in_module", "in_module_pass"],
-)
-def test_find_sites_resolves_either_name_to_the_same_sites(
-    model_name: str,
-    alias_selector: Callable[[], Any],
-    primary_selector: Callable[[], Any],
-) -> None:
-    """Post-hoc ``find_sites`` returns the same non-empty sites for both names."""
-
-    torch.manual_seed(0)
-    trace = tl.trace(_MODELS[model_name]().eval(), _X)
-    assert trace.modules["alias"] is trace.modules["block"]
-
-    def _labels(selector: Any) -> list[str]:
-        """Return the matched op labels in order."""
-
-        return [site.layer_label for site in trace.find_sites(selector, max_fanout=100)]
-
-    alias_labels = _labels(alias_selector())
-    assert alias_labels, "the alias spelling matched no sites"
-    assert alias_labels == _labels(primary_selector())
-
-
-@pytest.mark.parametrize("model_name", sorted(_MODELS))
-@pytest.mark.parametrize(
-    ("alias_selector", "primary_selector"),
-    [
-        (lambda: tl.module("alias"), lambda: tl.module("block")),
-        (lambda: tl.in_module("alias:2"), lambda: tl.in_module("block:2")),
-    ],
-    ids=["module", "in_module_pass"],
-)
-def test_trace_save_selector_resolves_either_name_to_the_same_ops(
-    model_name: str,
-    alias_selector: Callable[[], Any],
-    primary_selector: Callable[[], Any],
-) -> None:
-    """``tl.trace(save=...)`` keeps the same activations for both names, without warning."""
-
-    def _saved(selector: Any) -> list[str]:
-        """Return the saved op labels of one selective capture."""
-
-        torch.manual_seed(0)
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            trace = tl.trace(_MODELS[model_name]().eval(), _X, save=selector)
-        zero_match = [str(w.message) for w in caught if _ZERO_MATCH_TEXT in str(w.message)]
-        assert not zero_match, zero_match
-        return [str(op.label) for op in trace.saved_ops if not op.is_input and not op.is_output]
-
-    alias_saved = _saved(alias_selector())
-    assert alias_saved, "the alias spelling saved nothing"
-    assert alias_saved == _saved(primary_selector())
-
-
-@pytest.mark.parametrize("model_name", sorted(_MODELS))
-def test_record_save_selector_resolves_either_name_to_the_same_records(model_name: str) -> None:
-    """``tl.record(save=tl.in_module(...))`` retains the same records for both names."""
-
-    def _retained(selector: Any) -> list[str]:
-        """Return the retained record labels of one recording."""
-
-        torch.manual_seed(0)
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            _output, recording = tl.record(
-                _MODELS[model_name]().eval(), _X, save=selector, return_output=True
-            )
-        zero_match = [str(w.message) for w in caught if _ZERO_MATCH_TEXT in str(w.message)]
-        assert not zero_match, zero_match
-        return [str(record.ctx.label) for record in recording.records]
-
-    alias_records = _retained(tl.in_module("alias"))
-    assert alias_records, "the alias spelling retained nothing"
-    assert alias_records == _retained(tl.in_module("block"))
+        unsteered = tuple(_hook_oracle(_build(model_name), canonical, frozenset()).tolist()[0])
+        assert len({*values.values(), unsteered}) == len(_SELECTORS) + 1, model_name

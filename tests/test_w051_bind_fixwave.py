@@ -6,9 +6,8 @@ persist under the spec rule id (2.3b), re-anchored/forged provenance refuses
 at load (2.3c), bind site keys are byte-parity with capture (2.3d), the bind
 fire record derives ``replaced`` from identity and discloses in-place targets
 (3.7a), NaN-producing honest injected ops attest (3.7b), region edits run the
-ONE payload gate (3.7c), and an aliased submodule's second name selects the
-one shared module, firing at every call site and disclosed in the report, as
-every capture door does (3.7d).
+ONE payload gate (3.7c), and aliased submodules are taught, never guessed
+(3.7d).
 """
 
 from __future__ import annotations
@@ -21,6 +20,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.intervention.errors import BindingPreflightError
 from torchlens.intervention.injection import attest_injected_ops, injected_ops
 
 _LOGGED = tl.options.CaptureOptions(log_injections=True)
@@ -477,29 +477,20 @@ def test_region_edit_same_shape_still_lowers(chain_fork) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 3.7d -- aliased submodules under bind: one module, disclosed
+# 3.7d -- aliased submodules under bind: taught, never guessed
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.smoke
-def test_bind_alias_address_selects_the_shared_module_at_every_call_site() -> None:
-    """tl.module('dec') on self.dec = self.enc is tl.module('enc'): both calls fire."""
+def test_bind_alias_address_refuses_teaching_canonical_name() -> None:
+    """tl.module('dec') on self.dec = self.enc names the alias and its canonical name."""
 
     model, x = _seeded(_Shared)
-    bound = tl.when(tl.module("dec"), tl.scale(0.0)).bind(model)
-    out = bound(x)
-    report = bound.last_report
-    assert list(report.resolved_static_targets.values()) == [("enc",)]
-    assert report.module_aliases == {"enc": ("dec",)}
-    assert [(fire["target"], fire["pass_index"]) for fire in report.fires] == [
-        ("enc:1", 1),
-        ("enc:2", 2),
-    ]
-    assert bool((out == 0).all())
-
-    second_call = tl.when(tl.module("dec:2"), tl.scale(0.0)).bind(model)
-    second_call(x)
-    assert [fire["target"] for fire in second_call.last_report.fires] == ["enc:2"]
+    with pytest.raises(BindingPreflightError) as excinfo:
+        tl.when(tl.module("dec"), tl.scale(0.0)).bind(model)
+    assert excinfo.value.fields["code"] == "bind_static_anchor_unresolved"
+    assert "'dec' is an alias of 'enc'" in str(excinfo.value)
+    assert "EVERY call site" in str(excinfo.value)
 
 
 def test_bind_canonical_address_discloses_aliases_and_fires_every_call_site() -> None:
