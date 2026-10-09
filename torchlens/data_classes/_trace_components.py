@@ -67,7 +67,6 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "_semantic_output_metadata": "session",
     "_last_validation_failure": "session",
     "_validation_diagnostics": "session",
-    "_retain_layers_to_save_output_parents": "session",
     "_rerun_save_request": "session",
     "_tl_predicate_intervention_spec_keys": "session",
     "_tl_predicate_intervention_target_keys": "session",

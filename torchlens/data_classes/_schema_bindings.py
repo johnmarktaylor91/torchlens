@@ -344,7 +344,6 @@ STORAGE_BINDINGS: dict[str, dict[str, StorageBinding]] = {
         "_tl_injection_state": StorageBinding(StorageKind.RUNTIME),
         "_source_bundle_path": StorageBinding(StorageKind.RUNTIME),
         "_source_bundle_manifest_sha256": StorageBinding(StorageKind.RUNTIME),
-        "_retain_layers_to_save_output_parents": StorageBinding(StorageKind.RUNTIME),
         "_rerun_save_request": StorageBinding(StorageKind.RUNTIME),
         "_last_validation_failure": StorageBinding(StorageKind.RUNTIME),
         "_validation_diagnostics": StorageBinding(StorageKind.RUNTIME),

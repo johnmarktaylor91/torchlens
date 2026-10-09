@@ -220,8 +220,9 @@ def _promote_layers_to_save_output_parent(
         schema preserves the documented legacy quirk of dropping it.
     """
 
+    save_request = getattr(trace, "_rerun_save_request", None) or {}
     if (
-        not getattr(trace, "_retain_layers_to_save_output_parents", False)
+        not save_request.get("retain_output_parents_for_layers_to_save", False)
         or getattr(trace, "_predicate_save_options", None) is None
         or event.output.has_saved_activation
     ):

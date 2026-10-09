@@ -63,6 +63,8 @@ def test_component_sizes_respect_the_design_bound() -> None:
         # refused streamed to_disk + intervene saves at the scrub). Named
         # consolidation target: fold the two fire counters into one dict
         # field the way _tl_injection_state folded five.
+        # Still 63: _rerun_save_request (the capture's save request) absorbed
+        # the _retain_layers_to_save_output_parents flag it already carried.
         assert size <= 63, f"component {component} holds {size} fields (> 63)"
 
 

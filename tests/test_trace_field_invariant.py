@@ -142,6 +142,11 @@ def test_trace_field_set_subset_of_user_facing() -> None:
         "_autograd_seen_saved_storages",
         "track_device_memory",
         "_tl_injection_state",
+        # The capture's save request (FieldPolicy.DROP, RUNTIME binding,
+        # session component): the backend reads its output-parent retention
+        # flag during the forward and a legacy rerun replays it; popped in
+        # ``__getstate__`` because it can hold a raw user save callable.
+        "_rerun_save_request",
     }
 
     actual = set(trace.__dict__.keys())

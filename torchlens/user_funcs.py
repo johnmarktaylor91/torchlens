@@ -1957,10 +1957,16 @@ def _run_model_and_save_specified_outs(
             save_visualizations=save_visualizations,
             facet_registry_snapshot=facets_mod.snapshot(recipes),
         )
+        # One session field carries the capture's save request: the torch
+        # backend reads its output-parent retention flag during the forward,
+        # and a legacy rerun replays it unless this is a refresh capture,
+        # whose resolved raw-index save set the projector rebinds instead.
+        trace._rerun_save_request = {
+            **rerun_save_request,
+            "replayable": _resolved_layer_nums_to_save is None,
+        }
         if _resolved_layer_nums_to_save is not None:
             trace._refresh_resolved_layer_nums_to_save = list(_resolved_layer_nums_to_save)
-        else:
-            trace._rerun_save_request = rerun_save_request
         if _resolved_grad_layer_nums_to_save is not None:
             trace._refresh_resolved_grad_layer_nums_to_save = _resolved_grad_layer_nums_to_save
         if _deferred_retention_selector is not None:
@@ -2024,8 +2030,6 @@ def _run_model_and_save_specified_outs(
             forward_error_mode="raise",
             inference_only=inference_only,
         )
-        if retain_output_parents_for_layers_to_save:
-            trace._retain_layers_to_save_output_parents = True
         if (
             save_predicate is not None
             or intervene_predicate is not None

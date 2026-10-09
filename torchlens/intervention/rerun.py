@@ -961,18 +961,19 @@ def _rerun_save_kwargs(log: Trace) -> dict[str, Any]:
         Save keyword arguments for ``_run_model_and_save_specified_outs``.
     """
 
-    options = getattr(log, "_predicate_save_options", None)
-    request = getattr(log, "_rerun_save_request", None)
-    if request is not None and getattr(options, "keep_op", None) is None:
-        return dict(request)
+    # Session-only fields: a trace restored from pickle carries neither.
+    options = log.__dict__.get("_predicate_save_options")
+    request = log.__dict__.get("_rerun_save_request") or {}
+    if request.get("replayable", False) and getattr(options, "keep_op", None) is None:
+        return {key: value for key, value in request.items() if key != "replayable"}
     layers_to_save, save_predicate, lookback, lookback_payload_policy = _rerun_save_scope(log)
     return {
         "layers_to_save": layers_to_save,
         "save_predicate": save_predicate,
         "lookback": lookback,
         "lookback_payload_policy": lookback_payload_policy,
-        "retain_output_parents_for_layers_to_save": getattr(
-            log, "_retain_layers_to_save_output_parents", False
+        "retain_output_parents_for_layers_to_save": request.get(
+            "retain_output_parents_for_layers_to_save", False
         ),
     }
 
@@ -1078,8 +1079,9 @@ def _refuse_shifted_raw_index_resave(old_log: Trace, new_log: Trace) -> None:
     """
 
     options = getattr(old_log, "_predicate_save_options", None)
+    request = old_log.__dict__.get("_rerun_save_request") or {}
     if (
-        getattr(old_log, "_rerun_save_request", None) is not None
+        request.get("replayable", False)
         or getattr(options, "keep_op", None) is not None
         or getattr(old_log, "num_saved_ops", 0) == 0
         or getattr(old_log, "_layer_nums_to_save", "all") == "all"

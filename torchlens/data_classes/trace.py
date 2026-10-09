@@ -1634,9 +1634,10 @@ class Trace(
         # existing behavior made declarative.
         "_source_bundle_path": FieldPolicy.DROP,
         "_source_bundle_manifest_sha256": FieldPolicy.DROP,
-        # Two-pass selective-save retention flag (DEFERRED_RETENTION axis).
-        "_retain_layers_to_save_output_parents": FieldPolicy.DROP,
-        "_rerun_save_request": FieldPolicy.DROP,  # rerun replays the save request
+        # The capture's save request: the backend reads its two-pass
+        # output-parent retention flag (DEFERRED_RETENTION axis) and a legacy
+        # rerun replays it.
+        "_rerun_save_request": FieldPolicy.DROP,
         # Validation side-channel state (B1-04). `validate_forward_pass` is
         # a public method on a user-held Trace, and
         # validation ENTRY unconditionally sets `_last_validation_failure`
