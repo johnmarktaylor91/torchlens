@@ -4344,6 +4344,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "capture_spec",
+  "file": "torchlens/intervention/_rerun_predicate.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": true,
   "field": "modules",
   "file": "torchlens/intervention/_super/super_logs.py",
@@ -4614,6 +4622,14 @@
   "has_default": true,
   "sites": 3,
   "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "capture_spec",
+  "file": "torchlens/intervention/rerun.py",
+  "has_default": false,
+  "sites": 6,
+  "via_getattr": false
  },
  {
   "ambiguous": false,
