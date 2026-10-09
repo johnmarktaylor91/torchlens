@@ -97,19 +97,19 @@ def _children(source: Any) -> list[Any]:
     if source is None or isinstance(source, str):
         return []
     if isinstance(source, CompositeSelector):
-        return list(source.selectors)
-    if isinstance(source, NotSelector):
-        return [source.selector]
-    if isinstance(source, (FollowedBySelector, PrecededBySelector)):
-        return [source.inner]
-    if isinstance(source, InterventionSpec):
-        return [rule.where for rule in source.rules]
-    if isinstance(source, Mapping):
-        return list(source)
-    if isinstance(source, (list, tuple)):
-        return list(source)
-    site_target = getattr(source, "site_target", None)
-    return [] if site_target is None else [site_target]
+        nested: tuple[Any, ...] = tuple(source.selectors)
+    elif isinstance(source, NotSelector):
+        nested = (source.selector,)
+    elif isinstance(source, (FollowedBySelector, PrecededBySelector)):
+        nested = (source.inner,)
+    elif isinstance(source, InterventionSpec):
+        nested = tuple(rule.where for rule in source.rules)
+    elif isinstance(source, (Mapping, list, tuple)):
+        nested = tuple(source)
+    else:
+        site_target = getattr(source, "site_target", None)
+        nested = () if site_target is None else (site_target,)
+    return list(nested)
 
 
 def model_module_aliases(model: Any) -> dict[str, str]:

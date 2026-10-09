@@ -34,6 +34,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.intervention import site
 from torchlens.intervention.errors import MultiMatchWarning
 
 _X = torch.tensor([[1.0, -2.0, 0.5]])
@@ -465,7 +466,7 @@ def test_alias_spelling_refuses_with_one_code_and_message_at_every_door(
         lambda name: tl.func("relu") & tl.in_module(name),
         lambda name: tl.func("relu") | tl.in_module(f"{name}:2"),
         lambda name: ~tl.module(name),
-        lambda name: tl.site(module_path=name),
+        lambda name: site(module_path=name),
     ],
     ids=["and", "or_pass", "not", "site_module_path"],
 )
