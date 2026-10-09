@@ -1,0 +1,4 @@
+benchmarks/eff_seat2/wl.py --model gpt2 --workload cache --tool tlens --prompts 4 --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model gpt2 --workload steer --tool tlens --sweep 4 --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model gpt2 --workload patch --tool tlens --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model gpt2 --workload gen --tool tlens --out out/wl.jsonl

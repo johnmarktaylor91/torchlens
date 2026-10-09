@@ -175,9 +175,11 @@ class Cell:
         if tool == "tlens":
             if self.args.model != "gpt2":
                 raise NotImplementedError("TransformerLens runs pretrained configs only (gpt2)")
-            from transformer_lens import HookedTransformer
+            from transformer_lens.model_bridge import TransformerBridge
 
-            obj = HookedTransformer.from_pretrained("gpt2", device="cpu")
+            # TransformerLens 4 wraps the HF module; no weight processing, so it runs the same
+            # eager numerics as the plain-hook reference.
+            obj = TransformerBridge.boot_transformers("gpt2", device="cpu")
             obj.eval()
         else:
             from nnsight import NNsight
@@ -187,7 +189,7 @@ class Cell:
         return obj
 
     def _tlens_name(self, addr: str) -> str:
-        return f"blocks.{addr.rsplit('.', 1)[1]}.hook_resid_post"
+        return f"blocks.{addr.rsplit('.', 1)[1]}.hook_out"
 
     def _nn_module(self, nm: Any, addr: str) -> Any:
         obj = nm
