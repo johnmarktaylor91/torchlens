@@ -1064,6 +1064,7 @@ class BoundInterventionExecutor:
     def _run(self, target: Any, args: tuple, kwargs: dict, *, door: str) -> Any:
         """One serial bound call: arm, execute, settle, report."""
 
+        self._refuse_changed_helper_tensors()
         if not self._lock.acquire(blocking=False):
             raise BindingRuntimeError(
                 "this binding is already executing; v1 bindings are serial and "
@@ -1072,11 +1073,6 @@ class BoundInterventionExecutor:
                 remedy="wait for the active call to return, or make separate "
                 "bindings from the same immutable spec for concurrent workers",
             )
-        try:
-            self._refuse_changed_helper_tensors()
-        except BaseException:
-            self._lock.release()
-            raise
         session = _BindSession(self, door)
         error: str | None = None
         output: Any = None
