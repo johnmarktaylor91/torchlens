@@ -348,3 +348,55 @@ def test_mlx_perturbation_scan_includes_kwargs() -> None:
         _perturbation_evidence(constant_capture, (no_tensor(),))
         == PERTURBATION_NO_PERTURBABLE_INPUT
     )
+
+
+class _DeadReluMLP(_TwoLayerMLP):
+    """``_TwoLayerMLP`` pinned so every ReLU input sits below -0.5.
+
+    About 1% of random ``_TwoLayerMLP`` inits land here; the healthy-trace
+    tests above then failed nondeterministically because ``x + 0.5`` and
+    ``2 * x`` both leave an all-negative ReLU output at zero.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        # Weights stay nonzero so l1's output still depends on its input
+        # (zero weights would make UNPROVED the correct verdict); the bias
+        # pushes every pre-activation to 4 * 0.1 - 2.0 = -1.6.
+        self.l1.weight = mx.full(self.l1.weight.shape, 0.1)
+        self.l1.bias = mx.full(self.l1.bias.shape, -2.0)
+
+
+def test_mlx_validation_dead_relu_init_passes() -> None:
+    """A healthy capture whose ReLU input is all strongly negative validates."""
+
+    trace = tl.trace(_DeadReluMLP(), mx.ones((1, 4)), backend="mlx")
+    assert MLXBackend().validate_trace(trace) is True
+
+
+def test_mlx_perturbation_proves_saturated_dependency_and_rejects_vacuous() -> None:
+    """Candidates must move a saturated call's output; a replay that ignores
+    its argument must still classify UNPROVED under every candidate."""
+
+    from torchlens.backends.mlx.validation import (
+        PERTURBATION_PROVED,
+        PERTURBATION_UNPROVED,
+        MLXOpCapture,
+        _perturbation_evidence,
+    )
+
+    for value in (mx.full((1, 3), -1.0), mx.zeros((1, 3)), mx.full((2,), -7.5)):
+        baseline = (nn.relu(value),)
+        mx.eval(*baseline)
+        saturated = MLXOpCapture(
+            labels_raw=("relu_1_raw",), op_name="relu", func=nn.relu, args=(value,)
+        )
+        assert _perturbation_evidence(saturated, baseline) == PERTURBATION_PROVED
+
+        def ignores_argument(x: mx.array) -> mx.array:
+            return mx.zeros((1, 3))
+
+        vacuous = MLXOpCapture(
+            labels_raw=("vacuous_1_raw",), op_name="vacuous", func=ignores_argument, args=(value,)
+        )
+        assert _perturbation_evidence(vacuous, (mx.zeros((1, 3)),)) == PERTURBATION_UNPROVED
