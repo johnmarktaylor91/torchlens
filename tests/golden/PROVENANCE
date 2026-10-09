@@ -77,7 +77,7 @@ recorded: 2026-10-09T14:36:47.200596+00:00
 ---
 generator: tests/test_viz_render_identity_oracle.py
 flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
-reason: next-release integration of the guarded fast rerun, module-save escrow, render fixes (F19 theme font on backward and combined graphs, F27 paper skin without colorscheme): render bytes for the theme font on backward/combined graphs and the paper skin without colorscheme
+reason: next-release integration: f7e4cf821 (F19) adds fontname=Helvetica to the backward and combined graph, node and edge defaults, and drops colorscheme=paired12 from the paper skin (F27); those insertions and that removal are the whole dot diff, checked token by token
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 5d479d095e720c44b25ad80039ce75fee783401c (dirty)

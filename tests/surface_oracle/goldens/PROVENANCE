@@ -510,7 +510,7 @@ recorded: 2026-10-06T04:21:55.190803+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: next-release integration of the guarded fast rerun, module-save escrow, render fixes (F19 theme font on backward and combined graphs, F27 paper skin without colorscheme): func_call_id shifts by the paused TorchLens-internal reads (grad-hook install, live-site size read); no other field changes
+reason: next-release integration: 8255fc571 (fast-rerun) pauses TorchLens's own per-output register_hook install, so it no longer takes a wrapped-call id; only func_call_id changes (184 lines), and the previous goldens pass exactly with 8255fc571 alone reverted
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 5d479d095e720c44b25ad80039ce75fee783401c (dirty)
@@ -518,7 +518,7 @@ recorded: 2026-10-09T18:48:53.493777+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: next-release integration of the guarded fast rerun, module-save escrow, render fixes (F19 theme font on backward and combined graphs, F27 paper skin without colorscheme): func_call_id shifts by the paused TorchLens-internal reads (grad-hook install, live-site size read); no other field changes
+reason: next-release integration: 8255fc571 (fast-rerun) pauses TorchLens's own per-output register_hook install, so it no longer takes a wrapped-call id; only func_call_id changes (184 lines), and the previous goldens pass exactly with 8255fc571 alone reverted
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 5d479d095e720c44b25ad80039ce75fee783401c (dirty)
@@ -526,7 +526,7 @@ recorded: 2026-10-09T18:48:53.540981+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: next-release integration of the guarded fast rerun, module-save escrow, render fixes (F19 theme font on backward and combined graphs, F27 paper skin without colorscheme): func_call_id shifts by the paused TorchLens-internal reads (grad-hook install, live-site size read); no other field changes
+reason: next-release integration: 8255fc571 (fast-rerun) pauses TorchLens's own per-output register_hook install, so it no longer takes a wrapped-call id; only func_call_id changes (184 lines), and the previous goldens pass exactly with 8255fc571 alone reverted
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 5d479d095e720c44b25ad80039ce75fee783401c (dirty)
@@ -534,7 +534,7 @@ recorded: 2026-10-09T18:48:53.574839+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: next-release integration of the guarded fast rerun, module-save escrow, render fixes (F19 theme font on backward and combined graphs, F27 paper skin without colorscheme): func_call_id shifts by the paused TorchLens-internal reads (grad-hook install, live-site size read); no other field changes
+reason: next-release integration: 8255fc571 (fast-rerun) pauses TorchLens's own per-output register_hook install, so it no longer takes a wrapped-call id; only func_call_id changes (184 lines), and the previous goldens pass exactly with 8255fc571 alone reverted
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 5d479d095e720c44b25ad80039ce75fee783401c (dirty)
@@ -542,7 +542,7 @@ recorded: 2026-10-09T18:48:53.612826+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: next-release integration of the guarded fast rerun, module-save escrow, render fixes (F19 theme font on backward and combined graphs, F27 paper skin without colorscheme): func_call_id shifts by the paused TorchLens-internal reads (grad-hook install, live-site size read); no other field changes
+reason: next-release integration: 8255fc571 (fast-rerun) pauses TorchLens's own per-output register_hook install, so it no longer takes a wrapped-call id; only func_call_id changes (184 lines), and the previous goldens pass exactly with 8255fc571 alone reverted
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 5d479d095e720c44b25ad80039ce75fee783401c (dirty)
@@ -550,7 +550,7 @@ recorded: 2026-10-09T18:48:53.652687+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: next-release integration of the guarded fast rerun, module-save escrow, render fixes (F19 theme font on backward and combined graphs, F27 paper skin without colorscheme): func_call_id shifts by the paused TorchLens-internal reads (grad-hook install, live-site size read); no other field changes
+reason: next-release integration: 8255fc571 (fast-rerun) pauses TorchLens's own per-output register_hook install, so it no longer takes a wrapped-call id; only func_call_id changes (184 lines), and the previous goldens pass exactly with 8255fc571 alone reverted
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 5d479d095e720c44b25ad80039ce75fee783401c (dirty)
