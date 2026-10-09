@@ -29,6 +29,7 @@ if TYPE_CHECKING:
         _SETTER_MUTATION_FUNC_NAMES,
         CaptureProducerMode,
         _apply_live_hooks_to_outputs_legacy,
+        _intervene_reaches_op_door,
         _is_inplace_augmented_assignment_dunder,
         _session_validated_parameter,
         _tensor_has_known_provenance,
@@ -447,9 +448,16 @@ def apply_live_hooks_to_outputs(
         Fired hook results are stored temporarily on the tensor being logged.
     """
 
-    predicate_intervene_active = _trace_intervene_options(self) is not None
-    intervention_active = bool(_st._active_hook_plan) or predicate_intervene_active
-    if not intervention_active or self.capture_mode not in {"exhaustive", "predicate"}:
+    intervene_options = _trace_intervene_options(self)
+    hook_plan_active = bool(_st._active_hook_plan)
+    if (not hook_plan_active and intervene_options is None) or self.capture_mode not in {
+        "exhaustive",
+        "predicate",
+    }:
+        return out_orig
+    if not hook_plan_active and not _intervene_reaches_op_door(intervene_options):
+        # Module-exit-only intervene= selectors fire at the module-boundary door; the
+        # per-op check would build a site context for every op output and never match.
         return out_orig
     return _apply_live_hooks_to_outputs_legacy(
         self,
