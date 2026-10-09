@@ -175,7 +175,10 @@ def _module_output_paths(
     paths = tuple(tuple(path) for path in (getattr(module_call, "output_paths", None) or ()))
     if len(paths) < 2 or len(paths) != len(resolved):
         return None
-    module = (getattr(trace, "modules", None) or {}).get(address)
+    try:
+        module = trace.modules[address]
+    except (KeyError, IndexError, TypeError, AttributeError):
+        module = None
     hints = role_hints_for_module_class(getattr(module, "cls", None))
     by_name: dict[str, tuple[Any, ...]] = {}
     for index, path in enumerate(paths):
