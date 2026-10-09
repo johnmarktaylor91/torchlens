@@ -1670,7 +1670,7 @@ class _FastLiveSession:
             "timestamp": time.monotonic(),
             "started_at": self.run_started_at,
             "duration_s": time.monotonic() - self.run_started_at,
-            "spec_revision": getattr(trace, "_spec_revision", 0),
+            "spec_revision": trace._spec_revision,
             "strict": True,
             "append": False,
             "seed": seed,

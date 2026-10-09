@@ -150,7 +150,7 @@ def _input_admission_checks(
 def _staged_user_hook_specs(trace: Any) -> list[Any]:
     """Return the staged hook specs a run must apply (engine-owned residue excluded)."""
 
-    spec = getattr(trace, "_intervention_spec", None)
+    spec = trace._intervention_spec
     return [
         hook_spec
         for hook_spec in getattr(spec, "hook_specs", ())
@@ -161,7 +161,7 @@ def _staged_user_hook_specs(trace: Any) -> list[Any]:
 def _staged_entries(trace: Any) -> tuple[Any, ...]:
     """Return the trace's staged spec object followed by its hook and value entries."""
 
-    spec = getattr(trace, "_intervention_spec", None)
+    spec = trace._intervention_spec
     if spec is None:
         return ()
     return (
@@ -191,7 +191,7 @@ def module_boundary_plan(trace: Any) -> tuple[list[Any], tuple[str, ...]]:
     from .intervention.rerun import _assign_unique_plan_ids
     from .intervention.runtime import _is_plain_module_selector
 
-    spec = getattr(trace, "_intervention_spec", None)
+    spec = trace._intervention_spec
     if spec is None or (not _staged_user_hook_specs(trace) and not spec.target_value_specs):
         return [], ()
     if spec.target_value_specs:
@@ -286,7 +286,7 @@ class SteerPlan:
         """Lower the staged spec and resolve its module targets against ``model``."""
 
         self.hook_plan, self.addresses = module_boundary_plan(trace)
-        self.spec = getattr(trace, "_intervention_spec", None) if self.hook_plan else None
+        self.spec = trace._intervention_spec if self.hook_plan else None
         self.staged = _staged_entries(trace)
         modules = dict(model.named_modules())
         for address in self.addresses:

@@ -93,7 +93,11 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # and _runnable_transaction.py (79607e17, declared-state snapshot-restore)
     # latches state_compromised onto the optional `_runnable` seam after a
     # failed live restore (absent = the trace never ran, nothing to latch).
-    "<root>": 19,
+    # 19 -> 20 (guarded fast steered rerun): _fast_run.py reads the optional
+    # DROP-gated `_raw_call_fingerprint` witness; absent on a loaded trace,
+    # so the None default is the correct "no sealed fingerprint" reading,
+    # which keeps the exact-size input guard.
+    "<root>": 20,
     # 24 -> 25 (2026-08-15 r3settle reconcile): bundle.py reads the optional
     # `_runnable` seam (absent on non-runnable traces; None default correct),
     # the same f2bc65a6 idiom already ledgered at <root>.

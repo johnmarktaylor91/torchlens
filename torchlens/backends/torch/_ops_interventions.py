@@ -24,15 +24,9 @@ from ...errors._base import CompatibilityError
 from ...fastlog.types import (
     RecordContext,
 )
-from ...intervention.hooks import NormalizedHookEntry, make_live_site_proxy, normalize_hook_plan
-from ...intervention.runtime import (
-    _input_splice_module_scope,
-    _is_plain_module_selector,
-    active_intervention_context,
-)
+from ...intervention.hooks import make_live_site_proxy, normalize_hook_plan
+from ...intervention.runtime import active_intervention_context
 from ...intervention.selectors import (
-    CompositeSelector,
-    ModuleSelector,
     label as make_label_selector,
 )
 from ...intervention.types import (
@@ -428,6 +422,10 @@ def _is_module_exit_only(selector: Any) -> bool:
         Whether the selector can never match an op-time context.
     """
 
+    # Deferred (layer lint): the backend must not eagerly import intervention vocabulary.
+    # Both modules are loaded by then, so this costs a sys.modules lookup and no Python call.
+    from ...intervention.selectors import CompositeSelector, ModuleSelector
+
     if type(selector) is ModuleSelector:
         return True
     if type(selector) is CompositeSelector and selector.operator in ("and", "or"):
@@ -499,6 +497,9 @@ def _hook_entry_reaches_op_door(entry: Any) -> bool:
 
     # Not memoized: entries are slotted (no weak references), a strong-reference memo would keep a
     # finished capture's hook callables alive, and this walk costs a few calls per op.
+    from ...intervention.hooks import NormalizedHookEntry
+    from ...intervention.runtime import _input_splice_module_scope, _is_plain_module_selector
+
     if type(entry) is not NormalizedHookEntry:
         return True
     if (

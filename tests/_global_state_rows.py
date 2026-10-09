@@ -781,6 +781,12 @@ _PROCESS_CACHES = frozenset(
         # immutable, so a stale slot is a miss, never a wrong answer; the strong
         # part is a frozenset of address strings.
         ("torchlens/capture/predicates.py", "_module_union_cache"),
+        # Bounded (64-entry) memo of whether an intervene= spec can fire at the
+        # per-op door, keyed by id(spec): each value holds the spec through a
+        # weakref plus a bool, and a hit requires the weakref to resolve to the
+        # same object, so a dead or reused id is a miss. Specs are frozen
+        # dataclasses; clearing it only costs one re-classification.
+        ("torchlens/backends/torch/_ops_interventions.py", "_OP_DOOR_MEMO"),
     }
 )
 """Process-lifetime memos holding strong references.
