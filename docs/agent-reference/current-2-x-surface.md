@@ -7,10 +7,13 @@
   about 1.0 to 1.2x a plain forward hook and exact, also through HF `generate()` with the KV
   cache (`bound.generate(...)`, or `torchlens.intervention.steer_generate(model, ids, spec, ...)`).
   `tl.record(..., intervene=spec, return_output=True)` is the lighter evidence path (about
-  1 ms per op against about 3 ms for `tl.trace` on the tested CPU decoders). In 2.36.0 a
-  `tl.module(...)` save selector can cost more than saving everything. Trace-then-rerun on a
-  module-targeted staged spec takes the guarded fast rerun (about 2x a plain hook per
-  generation step, exact; `last_run["fast_refused"]` names a fallback's reason).
+  1 ms per op against about 3 ms for `tl.trace` on the tested CPU decoders). A pure
+  `tl.module(...)` save selector (or a `|` union of them) is live-retained at about the cost of
+  saving everything; mixing it with other terms escrows every op and reports deferred in
+  `torchlens.capture.preflight.address_preflight`. Trace-then-rerun on a module-targeted staged
+  spec takes the guarded fast rerun (about 2x a plain hook per generation step, exact, including
+  a stock HF forward that returns its KV cache; `last_run["fast_refused"]` names a fallback's
+  reason).
 - Relation accessors on FINISHED traces return IMMUTABLE views (authorized public type
   break, decided 2026-08-12): label sequences (`op.parents`, `op.children`, `op.modules`,
   `op.module_call_stack`, conditional child lists, `Layer.parents`/`Layer.children`, ...)

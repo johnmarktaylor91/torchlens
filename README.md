@@ -668,7 +668,7 @@ saved activations are unaffected either way.
 | [docs/intervention_api.md](docs/intervention_api.md) | Full selector and helper reference |
 | [docs/backward.md](docs/backward.md) | Backward capture details and limitations |
 | [docs/facets.md](docs/facets.md) | Facets, patching, and SDPA reconstruction |
-| [docs/guides/fast_paths.md](docs/guides/fast_paths.md) | Choosing a fast path: capture-free steering (`bind`), `tl.record` against `tl.trace`, cheaper traces, rerun limits |
+| [docs/guides/fast_paths.md](docs/guides/fast_paths.md) | Choosing a fast path: capture-free steering (`bind`), `tl.record` against `tl.trace`, cheaper traces, the fast steered rerun |
 | [docs/performance.md](docs/performance.md) | Speed knobs and benchmark numbers |
 | [docs/reference/debug.md](docs/reference/debug.md) | Trace diagnostics: lineage, non-finites, costs, and gradients |
 | [docs/reference/export.md](docs/reference/export.md) | Static, profiling, tabular, and tracker exports (incl. the interactive HTML viewer) |

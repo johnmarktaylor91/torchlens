@@ -4,8 +4,7 @@ TorchLens has several ways to run a model, and they differ in cost by two orders
 A full `tl.trace(...)` records every operation and pays a few milliseconds of Python work per
 recorded op, so on a large decoder one trace takes tens of seconds. If you only need to steer
 or patch the model, you do not need a trace at all. This page says which path to use for which
-job, what each one costs, and what each one refuses. Everything here describes TorchLens 2.36.0,
-except the last section, which describes the guarded fast steered rerun that follows it.
+job, what each one costs, and what each one refuses.
 For the general speed knobs and benchmark tables, see the [performance guide](../performance.md).
 
 ## Pick a path
@@ -14,6 +13,7 @@ For the general speed knobs and benchmark tables, see the [performance guide](..
 | --- | --- | --- |
 | Steer or patch the model over many forwards, including generation | `tl.when(site, action).bind(model)`, or `steer_generate` for HF `generate()` | 1.0 to 1.2x a plain forward hook, exact |
 | Steer and also keep a few activations as evidence, every step | `tl.record(model, x, save=..., intervene=spec, return_output=True)` | about 1 ms per op (CPU decoders); 9 s per step on Qwen3.5-9B |
+| Steer and refresh a trace's saved activations on each new input, including generation | trace once with `intervene=`, then `trace.run(model, x)` per input | about 1.5 to 2x a plain forward hook per step, exact; see [Fast steered rerun](#fast-steered-rerun) |
 | Inspect the full graph, metadata and activations of one forward | `tl.trace(model, x, save=...)` | about 3 ms per op; 47 s for one Qwen3.5-9B trace |
 | Make one trace cheaper | a `tl.func(...)` save selector, `CaptureOptions(inference_only=True)`, and for Qwen3.5-class models flash-linear-attention | see [Cut the cost of a trace](#cut-the-cost-of-a-trace) |
 | Final outputs only | the plain model call | no TorchLens cost |
@@ -206,13 +206,14 @@ assert relu.out.shape == (2, 8)
 - **Save selectors.** A function selector such as `save=tl.func("linear")` keeps only matching
   payloads and was the cheapest spelling measured (9.5 s against 10.1 s for saving everything,
   Qwen3.5 16 layers, 128 tokens, CPU).
-- **Module save selectors cost more in 2.36.0.** A `tl.module(...)` save selector can cost more
-  than saving everything: during capture every op output is held as a candidate and, past a
-  64 MB in-memory budget, spilled to temporary files. In the same measurement
-  `save=tl.module(...)` took 11.6 s and wrote about 0.84 GB to temporary disk to keep one tensor,
-  and on Qwen3.5-9B a trace with a module selector took about 48 s against 34 s with a function
-  selector. If you need one module's output from a large model, steer and read it with a forward
-  hook, or select the op inside the module with `tl.func(...)`.
+- **Module save selectors are live-retained.** A `save=tl.module(...)` selector, alone or joined
+  with other module paths by `|`, copies only the ops that run inside a matching module pass and
+  keeps only that module's outputs, so it costs about what saving everything costs and writes
+  nothing to temporary disk (9.0 s against 9.7 s for saving everything, Qwen3.5 16 layers, 128
+  tokens, CPU, `inference_only=True`). A module that wraps most of the model still copies most
+  ops. A selector that mixes `tl.module(...)` with other terms (`&`, `~`, or `|` with
+  `tl.func(...)`) still holds every op output as a candidate and spills to temporary files past
+  a 64 MB budget; `torchlens.capture.preflight.address_preflight` reports it as deferred.
 - **`CaptureOptions(inference_only=True)`** runs the forward under `torch.no_grad()`. It saved
   about 5% per trace in the measurement above.
 - **Keep the wrappers installed.** `tl.trace` keeps torch wrapped between calls by default.
@@ -239,30 +240,31 @@ loops. If a trace of such a model records far more ops than you expect, check `t
 and whether the package imports in your environment. With the KV cache on, each decoding step
 processes one token, so the package matters much less for `bind` with `generate()`.
 
-## Trace once, then rerun: not a fast path for steered generation in 2.36.0
+## Trace once, then rerun
 
-Capturing one trace and re-running it for each new input looks like it should be cheap. In
-2.36.0 it is not, for steered generation: every reuse path either refuses a staged intervention,
-refuses a change in input length, or recaptures the whole forward.
+Capturing one trace and re-running it for each new input is cheap for steered generation when
+the staged intervention targets plain module selectors (`tl.module(...)`): both `run` doors
+below then take the [guarded fast steered rerun](#fast-steered-rerun). The other reuse paths
+refuse a staged intervention, refuse a change in input, or replay over the captured graph.
 
 | Reuse path | What it does | What it refuses or costs |
 | --- | --- | --- |
 | `trace.run(inputs=x)` | A fresh verified execution of the recorded program | Refuses `run_staged_spec_unapplied` when the trace carries a staged intervention, because it would not apply it |
-| `trace.run(inputs=x, fast=True)` | A guarded static-loop refresh: the model's native forward with targeted hooks | Same refusal for a staged intervention. Refuses any change in input shape (`PathDivergenceError`), so a growing sequence fails at the second step. Needs a function selector (`save=tl.func(...)`) on the capture. Unsteered and at a fixed shape it is fast: 0.41 s on Qwen3.5-9B against 47 s for a trace |
-| `trace.run(model, x)` on an intervened trace | Recaptures the whole forward with the stored intervention | About 7 to 9x the cost of a fresh trace (483 s for one step on Qwen3.5-9B). Repeated reruns of the same intervened trace also re-apply the staged edit more than once in 2.36.0, so later reruns are not exact. Do not use it for generation |
+| `trace.run(inputs=x, fast=True)` | A guarded static-loop refresh: the model's native forward with targeted hooks | Applies a staged module-selector intervention through the guarded fast engine and admits a growing input while the model's call structure is unchanged; any refusal raises (`PathDivergenceError` for a structural change) instead of falling back. Needs a selective `save=` on the capture (`tl.module(...)` or `tl.func(...)`); a save-everything capture refuses. Unsteered and at a fixed shape: 0.41 s on Qwen3.5-9B against 47 s for a trace |
+| `trace.run(model, x)` on an intervened trace | The guarded fast steered rerun: the native forward with the staged hooks, refreshing the saved sites | About 1.5 to 2x a plain hook per step, exact, and exact on every repeat. When a guard refuses it falls back to recapturing the whole forward with the stored intervention: still exact, at the cost of a trace, with the reason in `last_run["fast_refused"]` |
 | `trace.fork().do(site, action)` | Replays an edit over the captured graph | Same input only, by design. Needs a `CaptureOptions(intervention_ready=True)` capture (about 5 to 6x a default trace), and refuses typed (`ReplayPreconditionError`) on some decoder architectures |
 | `episode=` capture with `intervene=` | Captures a whole steered generation as one product | Exact, but diagnostic-tier cost (tens of steps, not hundreds), and `run()` refuses on the coupled product by design; see [episode capture](../reference/episode_capture.md) |
 
-For steering across many inputs or through generation, use [`bind`](#steering-and-patching-over-many-forwards-bind).
-When each step also needs recorded evidence, use [`tl.record`](#steering-with-evidence-tlrecord).
-Use `tl.trace` when you want the full record of one forward, then work with that trace.
+For steering alone, across many inputs or through generation, [`bind`](#steering-and-patching-over-many-forwards-bind)
+stays the cheapest path. When each step also needs recorded evidence, use
+[`tl.record`](#steering-with-evidence-tlrecord) or the fast steered rerun below. Use `tl.trace`
+when you want the full record of one forward, then work with that trace.
 
 ## Fast steered rerun
 
-Releases that include the guarded fast steered rerun change two rows of the table above. On a
-trace captured with an `intervene=` spec that targets plain module selectors (`tl.module(...)`),
-`trace.run(model, x)` and `trace.run(inputs=x, fast=True)` no longer recapture: they run the
-model's native forward with the staged hooks and refresh the saved sites. The input may grow
+On a trace captured with an `intervene=` spec that targets plain module selectors
+(`tl.module(...)`), `trace.run(model, x)` and `trace.run(inputs=x, fast=True)` do not recapture:
+they run the model's native forward with the staged hooks and refresh the saved sites. The input may grow
 from step to step, as in generation, as long as the model makes the same sequence of torch calls
 and module entries; a structural fingerprint sealed at capture checks that after every run.
 
@@ -271,17 +273,6 @@ import torch
 from torch import nn
 import torchlens as tl
 from transformers import LlamaConfig, LlamaForCausalLM
-
-
-class NextTokenLogits(nn.Module):
-    """Return next-token logits as a plain tensor, with the KV cache off."""
-
-    def __init__(self, lm):
-        super().__init__()
-        self.lm = lm
-
-    def forward(self, ids):
-        return self.lm(ids, use_cache=False).logits[:, -1]
 
 
 torch.manual_seed(0)
@@ -294,11 +285,11 @@ config = LlamaConfig(
     num_key_value_heads=2,
     max_position_embeddings=64,
 )
-model = NextTokenLogits(LlamaForCausalLM(config)).eval()
+model = LlamaForCausalLM(config).eval()  # the stock forward, KV cache returned
 ids = torch.randint(0, 128, (1, 6))
 direction = torch.randn(32)
-site = tl.module("lm.model.layers.1.mlp")
-head = tl.module("lm.lm_head")
+site = tl.module("model.layers.1.mlp")
+head = tl.module("lm_head")
 spec = tl.when(site, tl.steer(direction, magnitude=4.0, feature_axis=-1))
 
 trace = tl.trace(model, ids, save=site | head, intervene=spec)
@@ -308,21 +299,26 @@ for _ in range(3):
     assert trace.last_run["engine"] == "guarded_fast"
     assert trace.last_run["fast_refused"] is None
     logits = trace.find_sites(head).first().out[:, -1]
-    assert torch.equal(logits, bound(ids))
+    assert torch.equal(logits, bound(ids).logits[:, -1])
     ids = torch.cat([ids, logits.argmax(-1, keepdim=True)], dim=-1)
 ```
 
-Trace a module that returns tensors, as `NextTokenLogits` does here. An HF model's own output
-carries a cache object, which the fast engine does not admit
-(`output_structure_mismatch:fast_live_model_output_structure`), so every rerun of a trace of the
-bare HF model falls back to the capture engine: still exact, but at capture cost.
+The traced model can be the stock Hugging Face model, as here: its output is a `ModelOutput`
+carrying the KV cache, and the fast engine pairs every output tensor (the logits and each cached
+key and value) with the captured output ops by container path. A wrapper that returns a plain
+tensor, such as `lm(ids, use_cache=False).logits[:, -1]`, also reruns fast and records fewer
+output ops, but it is not required. A changed number of output tensors still refuses
+(`output_structure_mismatch:fast_live_model_output_structure`).
 
-- **Cost.** On Qwen3.5-9B a steered generation step cost about 2x a plain hook: 0.36 s against
-  0.18 s, and 0.15 s against 0.075 s with flash-linear-attention, exact at every step with no
-  fallback. On the small CPU decoders it cost 1.4 to 1.9x. `bind` stays the cheapest steering
-  path (1.07 to 1.17x on the same 9B runs); the rerun costs about one more forward and in
-  exchange refreshes the saved activations each step. `trace.run(inputs=x, fast=True)` keeps its
-  session between calls and was 15 to 20% cheaper than `trace.run(model, x)`.
+- **Cost.** On Qwen3.5-9B, tracing the stock forward with its KV cache returned, a steered
+  generation step cost about 2x a plain hook: 0.35 s against 0.17 to 0.18 s, and 0.09 s against
+  0.05 s with flash-linear-attention. All 56 measured steps took the fast engine, with greedy
+  tokens identical to the hook and a maximum absolute difference of 0.0. On the small CPU
+  decoders it cost 1.4 to 1.9x. `bind` stays the cheapest steering path (1.07 to 1.17x on the
+  9B); the rerun costs about one more forward and in exchange refreshes the saved activations
+  each step. `trace.run(inputs=x, fast=True)` keeps its session between calls and cost 1.5 to
+  1.6x the hook on the 9B without flash-linear-attention, about 20% less than
+  `trace.run(model, x)`.
 - **Fallback.** When a guard refuses, `trace.run(model, x)` falls back to the capture engine,
   which still gives the right answer, and records why. `last_run["engine"]` is `"guarded_fast"`
   when the fast engine ran and `"rerun"` after a fallback, and `last_run["fast_refused"]` names
@@ -335,3 +331,6 @@ bare HF model falls back to the capture engine: still exact, but at capture cost
 - **What a fast run does not change.** The save scope never widens, the stored spec is unchanged,
   and op metadata the run did not refresh (shapes and activation memory of unsaved ops) reads
   `None` after a run on a different input size, rather than showing capture-time values.
+- **Changed steering tensors refuse.** `tl.steer` keeps your tensor by reference. If you change
+  it in place after staging, both doors refuse `helper_tensor_changed_since_capture`, as the
+  capture rerun does; re-stage the steer after each update instead.
