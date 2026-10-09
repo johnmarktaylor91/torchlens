@@ -125,14 +125,8 @@ def _make_boundary_site(
     module_address: str,
     module_call_index: int,
     module_type: str,
-    trace: Any = None,
 ) -> Any:
-    """Mint the live site proxy for one tensor leaf of a module output.
-
-    ``_tl_boundary_inner_alias`` marks a leaf an op inside the call produced;
-    the selector evaluator then keeps ``tl.in_module`` from firing a second
-    time at the boundary (see ``_is_module_scope_alias``).
-    """
+    """Mint the live site proxy for one tensor leaf of a module output."""
 
     module_call = (module_address, module_call_index)
     site = make_live_site_proxy(
@@ -151,7 +145,6 @@ def _make_boundary_site(
         },
     )
     setattr(site, "_tl_module_boundary", True)
-    setattr(site, "_tl_boundary_inner_alias", _produced_inside_call(out, trace, module_call))
     return site
 
 
@@ -288,7 +281,14 @@ def _apply_module_boundary_live_hooks(
             module_address=module_address,
             module_call_index=module_call_index,
             module_type=module_type,
-            trace=trace,
+        )
+        # An op inside this call produced the leaf: the boundary aliases it, so
+        # the selector evaluator keeps tl.in_module from firing a second time
+        # here (see ``_is_module_scope_alias``).
+        setattr(
+            site,
+            "_tl_boundary_inner_alias",
+            _produced_inside_call(out, trace, (module_address, module_call_index)),
         )
         hooked, plan_fire_results = _apply_live_hooks(
             out,

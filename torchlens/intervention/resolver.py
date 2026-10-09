@@ -1042,7 +1042,7 @@ def _multi_match_message(query: SelectorInput, matched: Sequence[Site]) -> str:
 
     matched_labels = {getattr(site, "layer_label", None) for site in matched}
     pairs = [
-        (str(site.layer_label), str(parent))
+        (str(getattr(site, "layer_label", None)), str(parent))
         for site in matched
         if getattr(site, "is_output", False)
         for parent in (getattr(site, "parents", ()) or ())
