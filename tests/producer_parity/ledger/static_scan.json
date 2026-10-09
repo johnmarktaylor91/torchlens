@@ -1728,6 +1728,38 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "module_stack",
+  "file": "torchlens/backends/torch/_predicate_boundary_replacements.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/backends/torch/_predicate_boundary_replacements.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "step_index",
+  "file": "torchlens/backends/torch/_predicate_boundary_replacements.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/backends/torch/_session_forwards.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": true,
   "field": "label_raw",
   "file": "torchlens/backends/torch/_tl.py",
@@ -2036,7 +2068,7 @@
   "field": "modules",
   "file": "torchlens/backends/torch/model_prep.py",
   "has_default": false,
-  "sites": 6,
+  "sites": 7,
   "via_getattr": false
  },
  {
@@ -4344,6 +4376,22 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/intervention/_module_alias_guard.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/intervention/_module_boundary.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": false,
   "field": "capture_spec",
   "file": "torchlens/intervention/_rerun_predicate.py",
@@ -4666,6 +4714,14 @@
  {
   "ambiguous": true,
   "field": "modules",
+  "file": "torchlens/intervention/resolver.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
   "file": "torchlens/intervention/resolver.py",
   "has_default": true,
   "sites": 1,

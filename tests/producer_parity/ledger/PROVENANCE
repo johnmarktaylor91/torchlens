@@ -2235,3 +2235,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: c1f78f6ce7560c37c8f2b984eb2c35ed3a52c9bc (clean)
 recorded: 2026-10-09T02:18:03.866262+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: 2.36.1 integration: stale at 2.36.0 base plus the rerun, state-hygiene and model-hygiene lanes' new read sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: d9b4f26af87eb03a79d01dbae9d51789636c1912 (clean)
+recorded: 2026-10-09T04:02:04.417263+00:00
