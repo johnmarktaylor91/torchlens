@@ -1851,8 +1851,9 @@ def _is_only_non_buffer_in_module(
 def _get_node_bg_color(self: "Trace", node: GraphNode) -> str:
     """Returns the background color hex string for a graph node based on its type.
 
-    Maps node types to colors: input=green, output=red, boolean=orange,
-    parameterized layers=blue (trainable) or gray (frozen), default=white.
+    Maps node types to colors: input=green, output=red, boolean=yellow,
+    parameterized layers=light gray (trainable), dark gray (frozen) or a
+    two-tone split (both), default=white.
 
     Args:
         node: node to add
