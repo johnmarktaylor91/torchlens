@@ -164,6 +164,14 @@ def test_module_save_copies_only_ops_inside_matching_passes(
     full_log = tl.trace(model, x)
     expected = {site.layer_label for site in full_log.find_sites(selector)}
     assert expected, f"{name}: selector matched nothing on the full trace"
+    # The selector resolves to producing ops; retention also keeps the output_N
+    # alias of a selected producer the model returns. The alias rides its
+    # producer's payload, so it adds no escrow copy.
+    expected |= {
+        op.layer_label
+        for op in full_log.layer_list
+        if op.layer_type == "output" and any(parent in expected for parent in op.parents)
+    }
 
     with _counting(monkeypatch) as counts:
         log = tl.trace(model, x, save=selector)
