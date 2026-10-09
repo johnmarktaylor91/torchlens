@@ -12,6 +12,7 @@ compared site by site through the save selectors (never by positional label).
 
 from __future__ import annotations
 
+import pickle
 import warnings
 from typing import Any
 
@@ -20,7 +21,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention.errors import ControlFlowDivergenceWarning
+from torchlens.intervention.errors import (
+    ControlFlowDivergenceError,
+    ControlFlowDivergenceWarning,
+)
 
 _VOCAB = 32
 _DIM = 8
@@ -221,3 +225,37 @@ def test_rerun_after_set_resaves_the_requested_sites(fresh: dict[str, Any]) -> N
     for block in model.blocks[2:]:
         rest = block(rest)
     assert torch.equal(outs[_HEAD], model.head(rest).detach())
+
+
+def _restored(model: nn.Module, x: torch.Tensor) -> Any:
+    """Return a pickle-restored plain capture (it carries no save request)."""
+
+    trace = pickle.loads(pickle.dumps(tl.trace(model, x, save=_save())))
+    assert getattr(trace, "_rerun_save_request", None) is None
+    return trace
+
+
+def test_restored_trace_rerun_with_matching_graph_resaves_by_raw_index() -> None:
+    """Op for op the same graph: the capture's raw indices are still exact."""
+
+    model, x = _setup()
+    plain = tl.trace(model, x, save=_save())
+    trace = _restored(model, x)
+    trace.run(model, x)
+    assert _saved_labels(trace) == _saved_labels(plain)
+    for address, expected in _site_outs(plain).items():
+        assert torch.equal(_site_outs(trace)[address], expected), address
+
+
+def test_restored_trace_rerun_with_shifted_graph_refuses() -> None:
+    """A staged edit shifts the ops: the raw-index re-save refuses, state intact."""
+
+    model, x = _setup()
+    trace = _restored(model, x)
+    before = _saved_labels(trace)
+    trace.attach_hooks(tl.module(_SITE), _steer(), confirm_mutation=True)
+    with pytest.raises(ControlFlowDivergenceError) as excinfo:
+        trace.run(model, x)
+    assert excinfo.value.fields["code"] == "rerun_resave_ops_shifted"
+    assert excinfo.value.fields["remedy"]
+    assert _saved_labels(trace) == before
