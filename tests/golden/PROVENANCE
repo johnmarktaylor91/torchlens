@@ -82,3 +82,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 5d479d095e720c44b25ad80039ce75fee783401c (dirty)
 recorded: 2026-10-09T18:49:05.313129+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: combined forward-to-grad_fn ties drop the dead ltail/lhead attributes (the graph sets no compound=true, so Graphviz ignored them); those attribute removals are the whole dot diff
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 24e90ebfb3cb1ffff2b41f853857374742c86c36 (clean; run-on snapshot 7c0297a9e)
+recorded: 2026-10-09T20:31:28.613008+00:00
