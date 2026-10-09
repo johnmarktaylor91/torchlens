@@ -16,7 +16,9 @@ from collections import Counter
 from dataclasses import dataclass, replace
 from typing import Any
 
-from .errors import ControlFlowDivergenceError
+from .errors import ControlFlowDivergenceError, LiveModeLabelError
+
+_LABEL_SELECTOR_KINDS = frozenset({"label", "contains", "regex"})
 
 
 @dataclass(frozen=True)
@@ -95,6 +97,15 @@ def _hook_key(hook_spec: Any) -> tuple[Any, ...]:
         metadata.get("timing"),
         hook_identity,
     )
+
+
+def _without_rule_id(keys: Counter[tuple[Any, ...]]) -> Counter[tuple[Any, ...]]:
+    """Return ``keys`` with the originating rule identity dropped from each entry."""
+
+    stripped: Counter[tuple[Any, ...]] = Counter()
+    for key, count in keys.items():
+        stripped[key[:1] + key[2:]] += count
+    return stripped
 
 
 def plan_rerun_spec(log: Any, spec: Any) -> RerunSpecPlan:
@@ -178,10 +189,24 @@ def settle_predicate_rerun(plan: RerunSpecPlan, staged_spec: Any, new_log: Any) 
     if rerun_keys != plan.staged_keys:
         staged_labels = sorted({str(key[0]) for key in plan.staged_keys or ()})
         rerun_labels = sorted({str(key[0]) for key in rerun_keys})
+        if _without_rule_id(rerun_keys) == _without_rule_id(plan.staged_keys or Counter()):
+            # Same ops, same helpers: only the rule identity moved. Rule ids
+            # hash the rule's content, so the staged steer content (for
+            # example a steer tensor edited in place) changed since capture.
+            cause = (
+                "The re-armed intervene= predicate fired at the staged ops "
+                f"{staged_labels}, but its rule content no longer matches the "
+                "staged entries: the staged steer (for example a steer tensor "
+                "edited in place) changed since capture"
+            )
+        else:
+            cause = (
+                "This rerun re-armed the trace's capture-time intervene= predicate, "
+                f"which fired at {rerun_labels} while the trace stages it at "
+                f"{staged_labels}"
+            )
         raise ControlFlowDivergenceError(
-            "This rerun re-armed the trace's capture-time intervene= predicate, "
-            f"which fired at {rerun_labels} while the trace stages it at "
-            f"{staged_labels}; applying either set would not reproduce the staged "
+            f"{cause}; applying either set would not reproduce the staged "
             "intervention exactly, so the rerun is refused and the trace is unchanged. "
             "Remedy: capture fresh with tl.trace(model, x, intervene=...) for this "
             "input, or re-stage the intervention with a module or function selector "
@@ -191,3 +216,60 @@ def settle_predicate_rerun(plan: RerunSpecPlan, staged_spec: Any, new_log: Any) 
             rerun_sites=tuple(rerun_labels),
         )
     staged_spec.records.extend(plan.capture_spec.records[plan.staged_record_count :])
+
+
+def refuse_unmatchable_staged_labels(capture_spec: Any) -> None:
+    """Refuse a rerun whose staged edits are addressed by finalized labels.
+
+    A live rerun matches selectors while the forward runs, before postprocess
+    labels exist, so an entry staged on a final label (``Trace.set(label, ...)``,
+    ``attach_hooks(tl.label(...), ...)``, or a predicate-door entry whose
+    predicate the trace no longer carries) can never fire. The live matcher
+    would refuse it mid-capture with a remedy aimed at authoring selectors; this
+    refuses before the forward, names the staged entry, and keeps the trace
+    unchanged.
+
+    Parameters
+    ----------
+    capture_spec:
+        Spec the rerun capture would apply (predicate-door entries already
+        removed when the predicate is re-armed).
+
+    Raises
+    ------
+    LiveModeLabelError
+        ``rerun_staged_label_unmatchable`` when any staged value or hook entry
+        names a finalized label.
+    """
+
+    entries = [
+        *(getattr(capture_spec, "target_value_specs", None) or ()),
+        *(getattr(capture_spec, "hook_specs", None) or ()),
+    ]
+    from ..ir.selector_eval import looks_like_finalized_label
+
+    for entry in entries:
+        target = entry.site_target
+        value = target.selector_value
+        if target.selector_kind not in _LABEL_SELECTOR_KINDS or not isinstance(value, str):
+            continue
+        if not looks_like_finalized_label(value):
+            continue
+        metadata = getattr(entry, "metadata", None) or {}
+        origin = (
+            "a capture-time intervene= predicate this trace no longer carries"
+            if metadata.get("created_by") == "intervene_predicate"
+            else "Trace.set() or attach_hooks()"
+        )
+        raise LiveModeLabelError(
+            f"This trace stages an edit on tl.{target.selector_kind}({value!r}), staged by "
+            f"{origin}. That is a finalized postprocess label, and a rerun matches "
+            "selectors during the forward, before those labels exist, so the edit "
+            "could never fire; the rerun is refused and the trace is unchanged. "
+            "Remedy: re-stage the edit with a selector a live forward can match, "
+            "for example trace.set(tl.module('fc2'), value) or "
+            "trace.attach_hooks(tl.func('relu'), helper), or propagate the edit on "
+            "the captured input with tl.push",
+            code="rerun_staged_label_unmatchable",
+            staged_selector=f"{target.selector_kind}:{value}",
+        )

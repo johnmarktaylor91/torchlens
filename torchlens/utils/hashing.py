@@ -27,6 +27,10 @@ The graph hash family answers compatibility questions about captured structure:
 * ``compute_raw_event_shape_hash`` hashes raw capture events before
   postprocessing. It includes raw op order, function identity, parent topology,
   normalized module addresses, output container metadata, and output shape/dtype.
+  A shape- and dtype-preserving output-replacement node (an edit that fired or
+  a raw forward hook that swapped a module output) is folded into its parent:
+  it is a value edit, not a model operation, so a staged edit never reads as
+  control-flow divergence while any op, edge or shape change still does.
 
 Both graph hashes are deterministic within a TorchLens version for equivalent
 capture structure. They are not security hashes and are not guaranteed stable
@@ -319,9 +323,18 @@ def compute_raw_event_shape_hash(capture_events: Any) -> str:
         if hasattr(capture_events, "amended_op_records")
         else capture_events.op_events
     )
-    order_by_raw_label = {event.label_raw: index for index, event in enumerate(folded_events)}
+    events_by_raw_label = {event.label_raw: event for event in folded_events}
+    order_by_raw_label: dict[Any, int] = {}
+    kept_events = []
+    for event in folded_events:
+        folded_into = _replacement_fold_target(event, events_by_raw_label, order_by_raw_label)
+        if folded_into is not None:
+            order_by_raw_label[event.label_raw] = folded_into
+            continue
+        order_by_raw_label[event.label_raw] = len(kept_events)
+        kept_events.append(event)
     records = []
-    for index, event in enumerate(folded_events):
+    for index, event in enumerate(kept_events):
         function = event.function
         output = event.output
         tensor = output.tensor
@@ -359,3 +372,32 @@ def compute_raw_event_shape_hash(capture_events: Any) -> str:
         )
     payload = json.dumps(records, sort_keys=True, separators=(",", ":"), default=repr)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _replacement_fold_target(
+    event: Any, events_by_raw_label: dict[Any, Any], order_by_raw_label: dict[Any, int]
+) -> int | None:
+    """Return the parent index an output-replacement event folds into, if any.
+
+    Only a single-parent ``interventionreplacement`` event whose output keeps its
+    parent's shape and dtype folds: it swaps a value without changing the
+    model's operations. Anything else (internal sources, shape or dtype changes,
+    unresolved parents) stays in the hash.
+    """
+
+    if getattr(event, "layer_type", None) != "interventionreplacement":
+        return None
+    parents = list(getattr(event, "parents", ()) or ())
+    if len(parents) != 1:
+        return None
+    parent_label = parents[0].parent_label_raw
+    parent_event = events_by_raw_label.get(parent_label)
+    if parent_event is None or parent_label not in order_by_raw_label:
+        return None
+    tensor = getattr(event.output, "tensor", None)
+    parent_tensor = getattr(parent_event.output, "tensor", None)
+    if getattr(tensor, "shape", None) != getattr(parent_tensor, "shape", None):
+        return None
+    if getattr(tensor, "dtype", None) != getattr(parent_tensor, "dtype", None):
+        return None
+    return order_by_raw_label[parent_label]

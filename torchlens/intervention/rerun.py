@@ -16,7 +16,11 @@ from .._errors import InvalidArgumentError, TorchLensWarning
 from .._input_coerce import _coerce_input_args
 from .._trace_state import TraceState
 from ..options import ReplayOptions, merge_replay_options
-from ._rerun_predicate import plan_rerun_spec, settle_predicate_rerun
+from ._rerun_predicate import (
+    plan_rerun_spec,
+    refuse_unmatchable_staged_labels,
+    settle_predicate_rerun,
+)
 from .errors import (
     AppendBatchDependenceError,
     AppendMismatchError,
@@ -99,6 +103,7 @@ def run(
 
     spec = getattr(log, "_intervention_spec", None)
     spec_plan = plan_rerun_spec(log, spec)
+    refuse_unmatchable_staged_labels(spec_plan.capture_spec)
     hook_plan = _assign_unique_plan_ids(normalize_hooks_from_spec(spec_plan.capture_spec))
     started_at = time.monotonic()
     old_hash = getattr(log, "graph_shape_hash", None)
@@ -306,6 +311,7 @@ def _append_rerun(
     # predicate-door entries the capture below re-arms instead of planning.
     _validate_append_hook_plan(log, normalize_hooks_from_spec(spec))
     spec_plan = plan_rerun_spec(log, spec)
+    refuse_unmatchable_staged_labels(spec_plan.capture_spec)
     hook_plan = _assign_unique_plan_ids(normalize_hooks_from_spec(spec_plan.capture_spec))
     started_at = time.monotonic()
     old_hash = getattr(log, "graph_shape_hash", None)
