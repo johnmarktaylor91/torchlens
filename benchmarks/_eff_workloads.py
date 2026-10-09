@@ -294,7 +294,7 @@ def _workload(
             current = torch.cat((current, token), dim=-1)
             outputs.append(token.flatten())
         elif name == "sae":
-            outputs.extend(torch.relu(v @ encoder).flatten() for v in cache.values())
+            outputs.extend(torch.relu(cache[s] @ encoder).flatten() for s in runner.sites)
         elif name == "lens":
             norm = (
                 runner.model.net.transformer.ln_f
@@ -303,7 +303,7 @@ def _workload(
             )
             with torch.no_grad():
                 outputs.extend(
-                    runner.model.net.lm_head(norm(v[:, -1])).flatten() for v in cache.values()
+                    runner.model.net.lm_head(norm(cache[s][:, -1])).flatten() for s in runner.sites
                 )
         elif name == "attribution":
             oracle = _Runner(runner.model, runner.sites, hidden, "hooks")
@@ -316,7 +316,7 @@ def _workload(
             outputs.append(out.flatten())
         else:
             outputs.append(out.flatten())
-            outputs.extend(v.flatten() for v in cache.values())
+            outputs.extend(cache[s].flatten() for s in runner.sites)
         if name not in ("generate", "patch"):
             current = (ids + step + 1) % 1000
     return torch.cat(outputs)
