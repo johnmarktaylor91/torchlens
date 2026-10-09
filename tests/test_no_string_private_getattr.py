@@ -197,7 +197,10 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # injection.py/runtime.py/_module_boundary.py/_ops_interventions.py
     # (backends/torch) converted to the shared `peek_injection_state` seam
     # or a direct read guarded by try/except AttributeError.
-    "intervention": 41,
+    # 41 -> 40 (2.36.1 integration): rerun.py's fallback read of the retired
+    # _retain_layers_to_save_output_parents flag now reads it from the
+    # session-only _rerun_save_request through the instance dict.
+    "intervention": 40,
     "ir": 2,
     # 5 -> 8 (2026-08-16 l2/l3 merge-gate reconcile, 5f0a4f8d aten wave 0):
     # _primitive_profile.py reads the optional DROP-gated
