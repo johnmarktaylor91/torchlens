@@ -123,8 +123,25 @@ def _union(tl: Any, sites: list[str]) -> Any:
     return reduce(lambda a, b: a | b, (tl.module(s) for s in sites))
 
 
-def _site_out(trace: Any, tl: Any, site: str) -> torch.Tensor:
-    return first_tensor(trace.find_sites(tl.module(site)).first().out)
+def _pick_hidden(cands: list[Any], hidden: int) -> torch.Tensor:
+    """Among candidate outputs pick the tensor whose last dim is the hidden size (module exits of tuple outputs)."""
+
+    tensors = []
+    for c in cands:
+        try:
+            tensors.append(first_tensor(c))
+        except TypeError:
+            continue
+    for t in tensors:
+        if t.ndim == 3 and t.shape[-1] == hidden:
+            return t
+    if tensors:
+        return tensors[0]
+    raise RuntimeError("no tensor output at site")
+
+
+def _site_out(trace: Any, tl: Any, site: str, hidden: int) -> torch.Tensor:
+    return _pick_hidden([op.out for op in trace.find_sites(tl.module(site))], hidden)
 
 
 class TLTrace:
@@ -135,6 +152,7 @@ class TLTrace:
     def __init__(self, model: nn.Module, tok: Any, *, default_save: bool = False) -> None:
         self.model = model
         self.tok = tok
+        self.hidden = int(model.config.hidden_size)
         self.default_save = default_save
         self.tl = _tl()
         from torchlens.options import CaptureOptions
@@ -154,7 +172,7 @@ class TLTrace:
 
     def cache(self, ids: torch.Tensor, sites: list[str]) -> dict[str, torch.Tensor]:
         t = self._trace(ids, sites)
-        return {s: _site_out(t, self.tl, s) for s in sites}
+        return {s: _site_out(t, self.tl, s, self.hidden) for s in sites}
 
     def forward_add(self, ids: torch.Tensor, site: str, delta: torch.Tensor) -> torch.Tensor:
         tl = self.tl
@@ -170,19 +188,21 @@ class TLTrace:
 
     def grads(self, ids, sites, metric):
         tl = self.tl
+        sel = _union(tl, sites)
         t = tl.trace(
             self.model,
             ids,
-            save=_union(tl, sites + ["lm_head", "embed_out"]),
-            capture=self.CaptureOptions(backward_ready=True, unwrap_when_done=False),
-            save_mode="reference",
+            save=sel | tl.module("lm_head") | tl.module("embed_out"),
+            capture=self.CaptureOptions(save_grads=sel, unwrap_when_done=False),
         )
         logits = _logits_from_trace(t, tl)
         t.log_backward(metric(logits))
         res = {}
         for s in sites:
-            op = t.find_sites(tl.module(s)).first()
-            res[s] = (first_tensor(op.out).detach(), first_tensor(op.grad).detach())
+            ops = list(t.find_sites(tl.module(s)))
+            act = _pick_hidden([op.out for op in ops], self.hidden)
+            op = next(op for op in ops if first_tensor(op.out) is act)
+            res[s] = (act.detach(), first_tensor(op.grad).detach())
         self.model.zero_grad(set_to_none=True)
         return res
 
@@ -207,6 +227,7 @@ class TLRecord:
     def __init__(self, model: nn.Module, tok: Any) -> None:
         self.model = model
         self.tok = tok
+        self.hidden = int(model.config.hidden_size)
         self.tl = _tl()
 
     def _rec(self, ids: torch.Tensor, sites: list[str], **kw: Any) -> Any:
@@ -214,14 +235,20 @@ class TLRecord:
         return tl.record(self.model, ids, save=_union(tl, sites), return_output=True, **kw)
 
     def _get(self, rec: Any, site: str) -> torch.Tensor:
-        tl = self.tl
-        r = rec[0] if isinstance(rec, tuple) else rec
-        for getter in (lambda: r.find_sites(tl.module(site)).first().out, lambda: r[site].out):
-            try:
-                return first_tensor(getter())
-            except Exception:  # noqa: BLE001
-                continue
-        raise RuntimeError(f"record: cannot read {site}")
+        r = rec[1] if isinstance(rec, tuple) else rec
+        cands = []
+        for record in r:
+            ctx = record.ctx
+            calls = tuple(getattr(ctx, "output_of_module_calls", ()) or ())
+            if ctx.address == site or any(str(c).split(":")[0] == site for c in calls):
+                payload = (
+                    record.ram_payload if record.ram_payload is not None else record.disk_payload
+                )
+                if payload is not None:
+                    cands.append(payload)
+        if not cands:
+            raise RuntimeError(f"record: cannot read {site}")
+        return _pick_hidden(cands, self.hidden)
 
     def cache(self, ids, sites):
         rec = self._rec(ids, sites)
@@ -386,12 +413,26 @@ class NNsight:
     def _inp(self, ids: torch.Tensor) -> dict[str, torch.Tensor]:
         return {"input_ids": ids, "attention_mask": torch.ones_like(ids)}
 
+    @staticmethod
+    def _exec_order(sites: list[str]) -> list[str]:
+        import re
+
+        def key(s: str) -> tuple[int, int]:
+            m = re.search(r"\.(\d+)(\.|$)", s)
+            layer = int(m.group(1)) if m else 10**6
+            inner = (
+                0 if m and m.group(2) == "." else 1
+            )  # submodule (attn) fires before its block exits
+            return (layer, inner)
+
+        return sorted(sites, key=key)
+
     def cache(self, ids, sites):
         saved = {}
         with torch.no_grad(), self.lm.trace(self._inp(ids), use_cache=False):
-            for s in sites:
+            for s in self._exec_order(sites):
                 saved[s] = self._env(s).output.save()
-        return {s: first_tensor(v) for s, v in saved.items()}
+        return {s: first_tensor(saved[s]) for s in sites}
 
     def forward_add(self, ids, site, delta):
         with torch.no_grad(), self.lm.trace(self._inp(ids), use_cache=False):
@@ -407,16 +448,20 @@ class NNsight:
     def grads(self, ids, sites, metric):
         saved = {}
         with self.lm.trace(self._inp(ids), use_cache=False):
-            for s in sites:
+            for s in self._exec_order(sites):
                 env = self._env(s)
                 o = (
                     env.output
                     if isinstance(getattr(env.output, "shape", None), torch.Size)
                     else env.output[0]
                 )
-                saved[s] = (o.save(), o.grad.save())
+                saved[s] = [o.save(), o.grad.save()]
             metric(self.lm.output.logits).backward()
-        res = {s: (a.detach(), g.detach()) for s, (a, g) in saved.items()}
+        res = {}
+        for s, (a, g) in saved.items():
+            if g is None:
+                raise Skip("nnsight 0.7: .grad proxy resolved to None in this spelling")
+            res[s] = (a.detach(), g.detach())
         self.model.zero_grad(set_to_none=True)
         return res
 
@@ -431,10 +476,10 @@ class NNsight:
                 top_k=0 if sample else None,
                 temperature=1.0 if sample else None,
                 pad_token_id=self.tok.eos_token_id or 0,
-            ),
+            ) as tracer,
         ):
             env = self._env(site)
-            with env.all():
+            with tracer.all():
                 out = env.output
                 if isinstance(getattr(out, "shape", None), torch.Size):
                     env.output = out + delta
@@ -444,7 +489,6 @@ class NNsight:
         return tokens
 
 
-# ----------------------------------------------------------------------------- TransformerLens
 class TLens:
     """TransformerLens reimplements the model; speed and memory only, no bit equality."""
 
