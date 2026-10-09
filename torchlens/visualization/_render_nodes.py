@@ -3,6 +3,7 @@
 # ruff: noqa: F403, F405
 
 import re as _re
+from contextvars import ContextVar
 
 from .._errors import InvalidArgumentError
 from ._label_format import compute_selected_node_lines as _compute_selected_node_lines
@@ -17,6 +18,10 @@ from .modes import CollapsedModeScope
 from .node_spec import _annotation_image_path_for_node
 
 _TOOLTIP_ADDRESS_PATTERN = _re.compile(r"0x[0-9a-fA-F]+")
+
+#: The rendered node (per-pass Op on unrolled nodes, else the Layer) while a
+#: node-spec callback runs; the callback itself receives the aggregate Layer.
+_SPEC_SLOT_RENDERED_NODE: ContextVar[Any] = ContextVar("spec_slot_rendered_node", default=None)
 
 
 def _tooltip_repr(value: Any) -> str:
@@ -1926,7 +1931,13 @@ def _apply_node_spec_fn(
     mode_spec = default_spec if mode_result is None else mode_result
     if node_spec_fn is None:
         return mode_spec
-    result = node_spec_fn(layer_log, mode_spec)
+    # TorchLens-internal stages composed into this slot (lens marks) may need
+    # the per-pass node the callback's Layer argument stands for.
+    token = _SPEC_SLOT_RENDERED_NODE.set(mode_target)
+    try:
+        result = node_spec_fn(layer_log, mode_spec)
+    finally:
+        _SPEC_SLOT_RENDERED_NODE.reset(token)
     return mode_spec if result is None else result
 
 

@@ -44,7 +44,7 @@ from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
 from .._vocab.node_spec import INTERVENTION_SITE_COLOR, NodeSpec, NodeSpecFn
-from ..utils._multipass_access import get_multipass_attr
+from ..utils._multipass_access import get_multipass_attr, is_multipass_layer
 from .theme_registry import GRAPHVIZ_DRAW_SURFACE, LensPreset, register_lens
 
 if TYPE_CHECKING:
@@ -539,6 +539,8 @@ def make_surgery_mark_spec_fn(trace: Trace, facts: SurgeryFacts | None = None) -
     node label (capped, with an honest "+N more" fold).
     """
 
+    from ._render_nodes import _SPEC_SLOT_RENDERED_NODE
+
     resolved = surgery_facts(trace) if facts is None else facts
     by_call: dict[str, list[SurgeryMark]] = {}
     by_layer: dict[str, list[SurgeryMark]] = {}
@@ -550,12 +552,18 @@ def make_surgery_mark_spec_fn(trace: Trace, facts: SurgeryFacts | None = None) -
     def surgery_mark_spec_fn(layer_log: Layer, default_spec: NodeSpec) -> NodeSpec:
         """Apply the mark family to one rendered node (pre-user slot)."""
 
-        pass_label = get_multipass_attr(layer_log, "label", None, multipass=None)
+        # The slot hands unrolled nodes their aggregate Layer; key the lookup
+        # on the rendered per-pass node so one pass never shows another's marks.
+        rendered = _SPEC_SLOT_RENDERED_NODE.get()
+        target = layer_log if rendered is None else rendered
+        pass_label = get_multipass_attr(target, "label", None, multipass=None)
         node_marks: list[SurgeryMark] = []
         if isinstance(pass_label, str) and pass_label in by_call:
             node_marks = by_call[pass_label]
         else:
             node_marks = by_layer.get(str(getattr(layer_log, "layer_label", "")), [])
+            if target is not layer_log and is_multipass_layer(layer_log):
+                node_marks = [mark for mark in node_marks if mark.call_label is None]
         if not node_marks:
             return default_spec
         any_fact = any(mark.basis == "fact" for mark in node_marks)
