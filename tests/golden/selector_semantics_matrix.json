@@ -247,13 +247,11 @@
  "live/conv/in_module_container": [
   "conv2d_1_2_raw",
   "conv2d_2_4_raw",
-  "features:1",
   "relu_1_3_raw"
  ],
  "live/conv/in_module_pass": [
   "conv2d_1_2_raw",
   "conv2d_2_4_raw",
-  "features:1",
   "relu_1_3_raw"
  ],
  "live/conv/input_at_0": "ERROR:SelectorCapabilityError",
@@ -318,13 +316,10 @@
  "live/dictout/dict_output_at_logits": [],
  "live/dictout/dict_output_name": [],
  "live/loop/loop_in_module_block": [
-  "block:1",
-  "block:2",
   "linear_1_2_raw",
   "linear_2_4_raw"
  ],
  "live/loop/loop_in_module_pass2": [
-  "block:2",
   "linear_2_4_raw"
  ],
  "live/loop/loop_label_recurrent": "ERROR:LiveModeLabelError",
