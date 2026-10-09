@@ -34,8 +34,8 @@ VOLATILE = ("time", "duration", "elapsed", "_at", "timestamp", "memory", "pid", 
 def thash(t: Any) -> str | None:
     if not isinstance(t, torch.Tensor):
         return None
-    t = t.detach().contiguous().cpu()
-    return hashlib.sha256(t.view(torch.uint8).numpy().tobytes()).hexdigest()[:16] + str(
+    flat = t.detach().cpu().reshape(-1).clone()
+    return hashlib.sha256(flat.view(torch.uint8).numpy().tobytes()).hexdigest()[:16] + str(
         tuple(t.shape)
     )
 
