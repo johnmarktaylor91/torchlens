@@ -534,8 +534,9 @@ attribution-target alias. See the [attribution reference](attribution.md).
   plain module selectors (`tl.module(...)` / module-address hooks, no `set()` value
   replacements): a native forward with the staged hooks fired at each targeted module's exit
   and forward hooks refreshing the saved sites, so the rerun costs close to a plain hooked
-  forward instead of a full capture. Both doors use it: the legacy `trace.run(model, x)` tries
-  it first and falls back to the capture engine on any typed refusal, and
+  forward instead of a full capture. Both doors use it: the legacy `trace.run(model, x)` on a
+  trace with a staged intervention tries it first (a trace with nothing staged keeps the capture
+  rerun) and falls back to the capture engine on any typed refusal, and
   `trace.run(inputs=..., fast=True)` on a live or loaded-activation trace applies the staged
   spec through it (so the `run_staged_spec_unapplied` gate does not fire there). `last_run`
   discloses the outcome: `engine` is `guarded_fast` when it ran and `rerun` after a fallback,

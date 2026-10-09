@@ -656,7 +656,8 @@ def test_fast_door_session_follows_a_restaged_spec() -> None:
     steer and attaching another at the same site must apply the new steer on
     the next call. Clearing it entirely leaves replacement ops in the recorded
     graph that no staged entry accounts for, so the explicit door refuses
-    ``fast_rerun_graph_unsteered`` and the legacy door recaptures the plain graph.
+    ``fast_rerun_graph_unsteered``; the legacy door, with nothing staged, takes
+    the capture rerun and records the plain graph.
     """
 
     model, direction = _build()
@@ -682,7 +683,7 @@ def test_fast_door_session_follows_a_restaged_spec() -> None:
     assert refused.value.fields["detection_stage"] == "fast_rerun_graph_unsteered"
     trace.run(model, ids)
     assert trace.last_run["engine"] == "rerun"
-    assert str(trace.last_run["fast_refused"]).endswith(":fast_rerun_graph_unsteered")
+    assert trace.last_run["fast_refused"] is None
     assert not trace.injected_ops
     with torch.no_grad():
         plain = model(ids)

@@ -158,6 +158,18 @@ def _staged_user_hook_specs(trace: Any) -> list[Any]:
     ]
 
 
+def stages_user_entries(trace: Any) -> bool:
+    """Return whether ``trace`` stages a user intervention entry (hook or value replacement).
+
+    Only a steered rerun takes the guarded fast engine from the legacy door; a
+    trace with nothing staged keeps the capture rerun, whose refreshed graph and
+    ``last_run`` ledger callers already rely on.
+    """
+
+    spec = trace._intervention_spec
+    return bool(_staged_user_hook_specs(trace)) or bool(getattr(spec, "target_value_specs", None))
+
+
 def _staged_entries(trace: Any) -> tuple[Any, ...]:
     """Return the trace's staged spec object followed by its hook and value entries."""
 

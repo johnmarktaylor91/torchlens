@@ -962,13 +962,21 @@ class TraceValidationMixin(_TraceMixinBase):
         from ..intervention.rerun import run as _impl
 
         resolved_output_transform = self._resolve_rerun_output_transform(output_transform)
-        # Guarded fast engine first: a native forward with the staged spec
-        # applied at real module boundaries, saving the saved sites and the
-        # boundary ops, guarded by the sealed call fingerprint. Any typed
-        # refusal (ineligible save scope or target, a real divergence) falls
-        # back to the capture rerun below, with the code in ``last_run``.
+        # Guarded fast engine first for a steered rerun: a native forward with
+        # the staged spec applied at real module boundaries, saving the saved
+        # sites and the boundary ops, guarded by the sealed call fingerprint.
+        # Any typed refusal (ineligible save scope or target, a real
+        # divergence) falls back to the capture rerun below, with the code in
+        # ``last_run``. A trace with nothing staged keeps the capture rerun.
+        from .._fast_live_steer import stages_user_entries
+
         fast_refused: str | None = None
-        if chunk_paths is None and not replay_options.append and replay_options.chunk_size is None:
+        if (
+            chunk_paths is None
+            and not replay_options.append
+            and replay_options.chunk_size is None
+            and stages_user_entries(self)
+        ):
             from .._fast_run import try_guarded_fast_rerun
 
             fast_done, fast_refused = try_guarded_fast_rerun(
