@@ -232,7 +232,8 @@ class TLRecord:
 
     def _rec(self, ids: torch.Tensor, sites: list[str], **kw: Any) -> Any:
         tl = self.tl
-        return tl.record(self.model, ids, save=_union(tl, sites), return_output=True, **kw)
+        with torch.no_grad():
+            return tl.record(self.model, ids, save=_union(tl, sites), return_output=True, **kw)
 
     def _get(self, rec: Any, site: str) -> torch.Tensor:
         r = rec[1] if isinstance(rec, tuple) else rec
@@ -257,9 +258,10 @@ class TLRecord:
     def forward_add(self, ids, site, delta):
         tl = self.tl
         spec = tl.when(tl.module(site), tl.add(delta))
-        rec, out = tl.record(
-            self.model, ids, save=tl.module(site), intervene=spec, return_output=True
-        )
+        with torch.no_grad():
+            out, _rec = tl.record(
+                self.model, ids, save=tl.module(site), intervene=spec, return_output=True
+            )
         return first_tensor(out.logits if hasattr(out, "logits") else out)
 
     def grads(self, ids, sites, metric):
@@ -273,9 +275,10 @@ class TLRecord:
         torch.manual_seed(0)
         cur = ids
         for _ in range(n_new):
-            _rec, out = tl.record(
-                self.model, cur, save=tl.module(site), intervene=spec, return_output=True
-            )
+            with torch.no_grad():
+                out, _rec = tl.record(
+                    self.model, cur, save=tl.module(site), intervene=spec, return_output=True
+                )
             logits = (out.logits if hasattr(out, "logits") else first_tensor(out))[:, -1, :]
             nxt = (
                 torch.multinomial(torch.softmax(logits, -1), 1)

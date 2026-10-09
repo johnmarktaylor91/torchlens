@@ -227,6 +227,35 @@ WORKLOADS = {
 }
 
 
+def _write_profile_summary(path: str) -> None:
+    """Write a by-file and by-function aggregation of a pstats dump next to it."""
+
+    import pstats
+    from collections import defaultdict
+
+    st = pstats.Stats(path)
+    total = st.total_tt  # type: ignore[attr-defined]
+    by_file: dict[str, float] = defaultdict(float)
+    rows = []
+    for (fn, line, name), (_cc, nc, tt, ct, _callers) in st.stats.items():  # type: ignore[attr-defined]
+        key = fn.split("/site-packages/")[-1] if "/site-packages/" in fn else fn
+        if "/torchlens/" in fn:
+            key = "torchlens/" + fn.split("/torchlens/")[-1]
+        by_file[key] += tt
+        rows.append((tt, ct, nc, f"{key}:{line}({name})"))
+    with open(path + ".txt", "w") as fh:
+        fh.write(f"total tottime {total:.3f}s\n== by file (tottime)\n")
+        for key, tt in sorted(by_file.items(), key=lambda kv: -kv[1])[:40]:
+            fh.write(f"{tt:8.3f}s {100 * tt / total:5.1f}%  {key}\n")
+        fh.write("== by function (tottime)\n")
+        for tt, ct, nc, name in sorted(rows, reverse=True)[:60]:
+            fh.write(f"{tt:8.3f}s tot {ct:8.3f}s cum {nc:9d} calls  {name}\n")
+        fh.write("== by function (cumtime, torchlens only)\n")
+        tl_rows = [r for r in rows if r[3].startswith("torchlens/")]
+        for tt, ct, nc, name in sorted(tl_rows, key=lambda r: -r[1])[:60]:
+            fh.write(f"{ct:8.3f}s cum {tt:8.3f}s tot {nc:9d} calls  {name}\n")
+
+
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--model", required=True, choices=sorted(C.MODEL_IDS))
@@ -242,6 +271,9 @@ def main() -> None:
     p.add_argument("--new-tokens", type=int, default=16)
     p.add_argument("--reps", type=int, default=3)
     p.add_argument("--label", default="")
+    p.add_argument(
+        "--profile", default="", help="cProfile one rep of the workload into this .pstats path"
+    )
     a = p.parse_args()
     C.OUT_PATH = a.out
     C.REPS = a.reps
@@ -271,7 +303,19 @@ def main() -> None:
     rss_tool = C.rss_mib()
     C.emit(C.env_record(a.tool, {"model": a.model, "workload": a.workload, "load_s": load_s}))
     try:
-        r = WORKLOADS[a.workload](tool, model, fam, a)
+        if a.profile:
+            import cProfile
+
+            C.REPS, C.WARMUP = 1, 1
+            prof = cProfile.Profile()
+            WORKLOADS[a.workload](tool, model, fam, a)  # warm (module imports, lazy wrappers)
+            prof.enable()
+            r = WORKLOADS[a.workload](tool, model, fam, a)
+            prof.disable()
+            prof.dump_stats(a.profile)
+            _write_profile_summary(a.profile)
+        else:
+            r = WORKLOADS[a.workload](tool, model, fam, a)
     except Skip as e:
         C.emit({**base, "skip": str(e), "rss_model_mib": rss_model, "rss_tool_mib": rss_tool})
         return
