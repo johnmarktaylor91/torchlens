@@ -83,13 +83,13 @@ def internal_scalar_read() -> Iterator[None]:
     depth = getattr(_internal_read_state, "depth", 0)
     _internal_read_state.depth = depth + 1
     # An internal read is not a model call: keep it out of the ordered call
-    # fingerprint exactly as ``pause_logging()`` does (``_state._pause_depth``).
-    _state._pause_depth += 1
+    # fingerprint under the same owner-thread rule as ``pause_logging()``.
+    counted = _state.hold_fingerprint()
     try:
         try:
             yield
         finally:
-            _state._pause_depth -= 1
+            _state.release_fingerprint(counted)
     finally:
         _internal_read_state.depth = depth
 

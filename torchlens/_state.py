@@ -119,8 +119,8 @@ only inside ``Trace.run(inputs=..., fast=True)`` and is restored in ``finally``.
 _pause_depth: int = 0
 """Open effective ``pause_logging()`` windows on the active fingerprint's thread.
 
-Incremented by ``_PauseLogging.__enter__`` and decremented by its ``__exit__``
-only when the pause takes effect (owner-thread rule) AND a ``CallFingerprint``
+Incremented by ``_PauseLogging.__enter__`` (and :func:`hold_fingerprint`, for
+TorchLens-internal reads) and decremented by its ``__exit__`` only when the pause takes effect (owner-thread rule) AND a ``CallFingerprint``
 owned by the pausing thread is active; each pause instance remembers whether it
 counted, so cross-thread pauses and a fingerprint that starts or ends inside an
 open pause can never leave the depth stuck. Zero means "a call the user's code
@@ -1079,6 +1079,29 @@ def note_fingerprint_token(token: int) -> None:
     fp = _call_fingerprint
     if fp is not None:
         fp.note(token)
+
+
+def hold_fingerprint() -> bool:
+    """Open an internal-read window the active fingerprint does not count.
+
+    The same owner rule as ``pause_logging()``'s depth: only a ``CallFingerprint``
+    owned by the calling thread is held, so another thread's internal read never
+    hides the owner's calls. Returns whether the window counted; pass it to
+    :func:`release_fingerprint`.
+    """
+    global _pause_depth
+    fp = _call_fingerprint
+    counted = fp is not None and fp.owner_thread_id == threading.get_ident()
+    if counted:
+        _pause_depth += 1
+    return counted
+
+
+def release_fingerprint(counted: bool) -> None:
+    """Close a :func:`hold_fingerprint` window that ``counted``."""
+    global _pause_depth
+    if counted:
+        _pause_depth -= 1
 
 
 @contextmanager
