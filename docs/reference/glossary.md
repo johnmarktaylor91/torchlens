@@ -492,7 +492,14 @@ attribution-target alias. See the [attribution reference](attribution.md).
   one entry per fired op on its final label; `tl.run` re-arms the trace's retained
   predicate through the capture door instead, and refuses
   `rerun_predicate_restage_mismatch` (trace unchanged) when the predicate fires at
-  different ops than the staged entries name.
+  different ops than the staged entries name, or at the same ops with changed rule content
+  (a staged steer edited since capture). A staged edit addressed by a finalized label
+  (`Trace.set(label, ...)`, `attach_hooks(tl.label(...))`) can never fire during a live
+  forward, so a rerun refuses it up front with `rerun_staged_label_unmatchable` (trace
+  unchanged). The rerun divergence check (`ControlFlowDivergenceWarning`, or
+  `ControlFlowDivergenceError` with `strict=True`) compares raw op order, edges and shapes with
+  each value-only edit node folded into the op it replaces, so a staged edit is never
+  reported as control-flow divergence while a changed op, edge, shape or batch size still is.
 
 ## Extraction, observers, and admin
 
@@ -544,9 +551,11 @@ attribution-target alias. See the [attribution reference](attribution.md).
 : `tl.save` persists a `Trace` into a portable `.tlspec` directory bundle at a chosen
   level; `tl.load` loads a `.tlspec` object with eager tensor materialization.
   The staged intervention spec is session-only: `tl.save` keeps the intervened
-  values and their per-op provenance, and a loaded intervened trace's `run(model, x)` refuses
-  `run_intervention_spec_not_persisted` rather than rerun un-intervened (the recipe
-  travels through `save_intervention`).
+  values and their per-op provenance, and every legacy rerun door of a loaded intervened trace
+  (`run(model, x)` plain, append or chunked, a fork's `run`, `do(engine="rerun")`, and an edit
+  staged after loading) refuses `run_intervention_spec_not_persisted` rather than rerun without
+  the recorded intervention (the recipe travels through `save_intervention`); the replay and
+  `run(inputs=...)` doors cannot run an analysis artifact at all.
   `tl.PayloadLoadHints` carries backend-specific payload materialization hints
   (`tl.JaxPayloadLoadHint` is the JAX-specific form).
 
