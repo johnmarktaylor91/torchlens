@@ -1124,6 +1124,7 @@ class _FastLiveSession:
 
         keyed: list[tuple[int, int, _FastOutputPlan]] = []
         module_calls = trace.module_calls
+        boundary_labels = frozenset(getattr(trace, "output_layers", ()) or ())
         for call_label in list(module_calls.keys()):
             module_call = module_calls[call_label]
             address = call_label.rsplit(":", 1)[0]
@@ -1134,12 +1135,18 @@ class _FastLiveSession:
                 for label in module_call.output_ops
                 if label in trace.layer_dict_all_keys
             )
-            if not resolved or not any(
-                bool(getattr(item, "has_saved_activation", False)) for item in resolved
+            # The trace's own output ops belong to the input/output boundary,
+            # which pairs them with the native output by container path (a
+            # wrapper that returns a child's ``ModelOutput`` and cache as is
+            # makes that child's exit the boundary). A module whose saved
+            # outputs are all boundary ops therefore needs no plan of its own.
+            interior = tuple(item for item in resolved if item.label not in boundary_labels)
+            if not interior or not any(
+                bool(getattr(item, "has_saved_activation", False)) for item in interior
             ):
                 continue
             labels = tuple(item.label for item in resolved)
-            exit_index = min(int(getattr(item, "raw_index", 0) or 0) for item in resolved)
+            exit_index = min(int(getattr(item, "raw_index", 0) or 0) for item in interior)
             keyed.append(
                 (
                     exit_index,
