@@ -511,7 +511,11 @@ attribution-target alias. See the [attribution reference](attribution.md).
   entry has never fired in the trace's recorded graph, as after `attach_hooks()` on a plain
   capture, so the capture engine reruns once to record it, or
   `<divergence code>:fast_live_call_fingerprint` for a structural change); `hooks_fired` / `hooks_unfired` count the staged plans that fired, and a plan that
-  never fired warns `rerun_zero_fire`. Input sizes may differ from the capture (generation)
+  never fired warns `rerun_zero_fire`. Output leaves (the model's and each saved module's) are paired
+  with the captured output ops by container path through capture's own output walker, so a
+  stock Hugging Face forward returning a `DynamicCache` of per-layer key/value tensors reruns
+  fast; a changed leaf count or an unmatched path still refuses
+  (`output_structure_mismatch:fast_live_model_output_structure`). Input sizes may differ from the capture (generation)
   when rank, dtype, device and input tree match and the capture sealed a call fingerprint
   (`trace._raw_call_fingerprint`, an ordered rolling hash of every wrapped torch call and
   module entry, compared against `last_run["call_fingerprint"]`); such a run sets

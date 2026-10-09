@@ -8,10 +8,15 @@ leaves with those ops by path instead of by a generic leaf count; otherwise ever
 steered rerun of a stock forward fell back to the capture engine
 (``output_structure_mismatch:fast_live_model_output_structure``).
 
+The same pairing applies to a saved module below the root that returns the cache
+container (a wrapper around a stock model, or ``tl.module("model")`` on a causal LM):
+its output ops are tied to the live leaves through each op's ``multi_output_name``.
+
 Pinned here: eight generation steps on each model are exact to 0.0 against a plain
-forward hook with no fallback, the explicit ``fast=True`` door agrees, and a planted
-control-flow change (an extra torch call once the input grows past a length) still
-refuses the fast engine while the legacy door's fallback stays exact.
+forward hook with no fallback, the explicit ``fast=True`` door agrees, a wrapped stock
+model whose child returns the cache reruns fast and exact, and a planted control-flow
+change (an extra torch call once the input grows past a length) still refuses the fast
+engine while the legacy door's fallback stays exact.
 """
 
 from __future__ import annotations
@@ -171,7 +176,7 @@ class _LengthBranch(nn.Module):
 
 
 def test_planted_control_flow_change_still_refuses_fast_with_cached_output() -> None:
-    """A real structural change refuses the fast engine; the legacy fallback stays exact."""
+    """A wrapped stock model reruns fast below the branch; the planted branch refuses, exactly."""
 
     network, site, head, hidden = _gpt2()
     model = _LengthBranch(network, threshold=_PROMPT_LEN + 1).eval()
@@ -179,19 +184,6 @@ def test_planted_control_flow_change_still_refuses_fast_with_cached_output() -> 
     direction = torch.randn(hidden, generator=torch.Generator().manual_seed(1))
     ids = _ids(_PROMPT_LEN, seed=2)
     trace = _steered_trace(model, site, head, direction, ids)
-
-    short_ids = _ids(_PROMPT_LEN + 1, seed=5)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        trace.run(model, short_ids)
-    assert trace.last_run["engine"] == "guarded_fast", trace.last_run.get("fast_refused")
-
-    long_ids = _ids(_PROMPT_LEN + 2, seed=6)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        trace.run(model, long_ids)
-    assert trace.last_run["engine"] == "rerun"
-    assert str(trace.last_run["fast_refused"]).endswith(":fast_live_call_fingerprint")
 
     def hooked_head(ids: torch.Tensor) -> torch.Tensor:
         """The head module's output (before the planted tanh) under the plain steering hook."""
@@ -217,6 +209,20 @@ def test_planted_control_flow_change_still_refuses_fast_with_cached_output() -> 
             for handle in handles:
                 handle.remove()
         return seen[0]
+
+    short_ids = _ids(_PROMPT_LEN + 1, seed=5)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace.run(model, short_ids)
+    assert trace.last_run["engine"] == "guarded_fast", trace.last_run.get("fast_refused")
+    assert _max_abs_diff(_head_out(trace, head), hooked_head(short_ids)) == 0.0
+
+    long_ids = _ids(_PROMPT_LEN + 2, seed=6)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace.run(model, long_ids)
+    assert trace.last_run["engine"] == "rerun"
+    assert str(trace.last_run["fast_refused"]).endswith(":fast_live_call_fingerprint")
 
     assert _max_abs_diff(_head_out(trace, head), hooked_head(long_ids)) == 0.0
 

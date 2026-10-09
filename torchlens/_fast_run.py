@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 import time
 import weakref
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from typing import Any, cast
@@ -107,6 +107,91 @@ class _FastOutputPlan:
     shapes: tuple[tuple[int, ...] | None, ...]
     dtypes: tuple[str | None, ...]
     save_labels: frozenset[str]
+    # Each op's container path inside the call's output, when capture tied
+    # every op to exactly one path; ``None`` keeps the positional pairing.
+    paths: tuple[tuple[Any, ...], ...] | None = None
+
+
+def _pair_output_leaves(
+    output: Any, captured_paths: Sequence[tuple[Any, ...]] | None, count: int
+) -> tuple[list[Any] | None, str]:
+    """Pair ``count`` captured output ops with the tensor leaves of a live output.
+
+    The walk is capture's own output walker (plus its bare-attribute fallback),
+    so a typed container capture descended into (a Hugging Face ``ModelOutput``
+    carrying a ``DynamicCache`` of per-layer key/value tensors, a namedtuple, a
+    dataclass) is seen the same way here. With per-op paths every captured path
+    must resolve to exactly one leaf and the output must carry no other leaf;
+    without them (a single leaf, an opaque root, a role-hinted family) the
+    pairing is positional over the same walk. Returns the paired values, or
+    ``None`` with the reason when the structure differs from the capture.
+    """
+
+    from .backends.torch._ops_containers import _walk_output_tensors_with_paths
+    from .utils.introspection import get_vars_of_type_from_obj
+
+    native = [
+        (tuple(path), tensor) for tensor, path, _spec in _walk_output_tensors_with_paths(output)
+    ]
+    if not native:
+        native = [
+            ((), tensor)
+            for tensor in get_vars_of_type_from_obj(output, torch.Tensor, search_depth=4)
+        ]
+    if len(native) != count:
+        return None, f"{len(native)} tensor leaves against {count} captured output ops"
+    by_path = dict(native)
+    positional = (
+        captured_paths is None
+        or len(by_path) != len(native)
+        or any(path == () for path in captured_paths)
+    )
+    if positional:
+        return [tensor for _path, tensor in native], ""
+    assert captured_paths is not None
+    missing = [path for path in captured_paths if path not in by_path]
+    if missing:
+        return None, f"unmatched captured output paths {missing}"
+    return [by_path[path] for path in captured_paths], ""
+
+
+def _module_output_paths(
+    trace: Any, module_call: Any, address: str, resolved: Sequence[Any]
+) -> tuple[tuple[Any, ...], ...] | None:
+    """Return each output op's container path in a module call's output.
+
+    ``ModuleCall.output_paths`` is in capture traversal order while
+    ``output_ops`` is in op order; the documented tie between them is each
+    op's ``multi_output_name``, minted from its path (or a role hint) at
+    capture. ``None`` when the call has fewer than two leaves or any op lacks
+    a unique path, which keeps the positional pairing.
+    """
+
+    from .data_classes._module_role_hints import (
+        multi_output_role_from_path,
+        role_hints_for_module_class,
+    )
+
+    paths = tuple(tuple(path) for path in (getattr(module_call, "output_paths", None) or ()))
+    if len(paths) < 2 or len(paths) != len(resolved):
+        return None
+    module = (getattr(trace, "modules", None) or {}).get(address)
+    hints = role_hints_for_module_class(getattr(module, "cls", None))
+    by_name: dict[str, tuple[Any, ...]] = {}
+    for index, path in enumerate(paths):
+        name = multi_output_role_from_path(path, index, hints=hints)
+        if name is None or name in by_name:
+            return None
+        by_name[name] = path
+    matched: list[tuple[Any, ...]] = []
+    for item in resolved:
+        name = getattr(item, "multi_output_name", None)
+        if name not in by_name:
+            return None
+        matched.append(by_name[name])
+    if len(set(matched)) != len(matched):
+        return None
+    return tuple(matched)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1117,14 +1202,13 @@ class _FastLiveSession:
         activation gets a plan, including the ``interventionreplacement`` op a
         module-boundary intervention leaves as the module's output. Plans are
         ordered as torch fires forward hooks: by module EXIT, i.e. the raw
-        index of the module's output op, with the deeper module first when a
-        nested call hands the same tensor to its parent. The root module is
+        index of the module's last output op, with the deeper module first
+        when a nested call hands the same tensor to its parent. The root module is
         the input/output boundary and is refreshed separately.
         """
 
         keyed: list[tuple[int, int, _FastOutputPlan]] = []
         module_calls = trace.module_calls
-        boundary_labels = frozenset(getattr(trace, "output_layers", ()) or ())
         for call_label in list(module_calls.keys()):
             module_call = module_calls[call_label]
             address = call_label.rsplit(":", 1)[0]
@@ -1135,18 +1219,14 @@ class _FastLiveSession:
                 for label in module_call.output_ops
                 if label in trace.layer_dict_all_keys
             )
-            # The trace's own output ops belong to the input/output boundary,
-            # which pairs them with the native output by container path (a
-            # wrapper that returns a child's ``ModelOutput`` and cache as is
-            # makes that child's exit the boundary). A module whose saved
-            # outputs are all boundary ops therefore needs no plan of its own.
-            interior = tuple(item for item in resolved if item.label not in boundary_labels)
-            if not interior or not any(
-                bool(getattr(item, "has_saved_activation", False)) for item in interior
+            if not resolved or not any(
+                bool(getattr(item, "has_saved_activation", False)) for item in resolved
             ):
                 continue
             labels = tuple(item.label for item in resolved)
-            exit_index = min(int(getattr(item, "raw_index", 0) or 0) for item in interior)
+            # A module exits after its LAST output op: a returned KV cache
+            # carries tensors produced long before the module's final op.
+            exit_index = max(int(getattr(item, "raw_index", 0) or 0) for item in resolved)
             keyed.append(
                 (
                     exit_index,
@@ -1166,6 +1246,7 @@ class _FastLiveSession:
                             for label, item in zip(labels, resolved)
                             if bool(getattr(item, "has_saved_activation", False))
                         ),
+                        paths=_module_output_paths(trace, module_call, address, resolved),
                     ),
                 )
             )
@@ -1270,21 +1351,20 @@ class _FastLiveSession:
     def _capture_plan_output(self, plan: _FastOutputPlan, output: Any) -> None:
         """Check one runtime output tree and save only selected captured labels."""
 
-        paths = _tensor_leaf_paths(output)
-        if len(paths) != len(plan.op_labels):
+        values, reason = _pair_output_leaves(output, plan.paths, len(plan.op_labels))
+        if values is None:
             self.failure = _contract_check(
                 f"fast_live_output_count:{plan.address_or_name}",
                 False,
                 RunnableErrorCode.OUTPUT_STRUCTURE_MISMATCH,
-                f"Fast live site {plan.address_or_name!r} produced {len(paths)} tensor leaves; "
-                f"the capture recorded {len(plan.op_labels)}.",
+                f"Fast live site {plan.address_or_name!r} output structure changed from the "
+                f"capture: {reason}.",
                 affected_op_labels=plan.op_labels,
             )
             return
-        for label, expected_shape, expected_dtype, path in zip(
-            plan.op_labels, plan.shapes, plan.dtypes, paths
+        for label, expected_shape, expected_dtype, value in zip(
+            plan.op_labels, plan.shapes, plan.dtypes, values
         ):
-            value = _value_at_path(output, path)
             if not isinstance(value, torch.Tensor):
                 self.failure = _contract_check(
                     f"fast_live_output_type:{label}",
@@ -1606,52 +1686,28 @@ class _FastLiveSession:
     def _match_native_output_leaves(self, output: Any, output_labels: tuple[str, ...]) -> list[Any]:
         """Pair each captured output op with its leaf in the native output, by container path.
 
-        The walk is capture's own output walker, so a typed container capture
-        descended into (a Hugging Face ``ModelOutput`` carrying a ``DynamicCache``
-        of per-layer key/value tensors, a namedtuple, a dataclass) is seen the
-        same way here: every captured output path must resolve to exactly one
-        native tensor and the native output must carry no other tensor leaf.
-        A different leaf count, a missing path or an extra path is a structural
-        divergence and refuses exactly as before; a container the walker cannot
-        type (every leaf at the opaque root path, as capture recorded it) keeps
-        the positional pairing.
+        Output ops record their path in the model output (``container_path``);
+        an opaque root (every path empty) keeps the positional pairing. A
+        different leaf count, a missing path or an extra path is a structural
+        divergence and refuses exactly as before.
         """
 
-        from .backends.torch._ops_containers import _walk_output_tensors_with_paths
-
-        native = [
-            (tuple(path), tensor) for tensor, path, _spec in _walk_output_tensors_with_paths(output)
-        ]
         captured_paths = [
             tuple(getattr(self.trace.layer_dict_all_keys[label], "container_path", None) or ())
             for label in output_labels
         ]
-        native_by_path = dict(native)
-        positional = len({path for path, _tensor in native}) != len(native) or any(
-            path == () for path in captured_paths
-        )
-        matched = len(native) == len(output_labels) and (
-            positional or all(path in native_by_path for path in captured_paths)
-        )
-        if not matched:
+        values, reason = _pair_output_leaves(output, captured_paths, len(output_labels))
+        if values is None:
             failed = _contract_check(
                 "fast_live_model_output_structure",
                 False,
                 RunnableErrorCode.OUTPUT_STRUCTURE_MISMATCH,
-                "Native model output tensor structure changed from the captured boundary: "
-                f"{len(native)} tensor leaves against {len(output_labels)} captured output ops"
-                + (
-                    ""
-                    if positional
-                    else f"; unmatched captured paths "
-                    f"{[p for p in captured_paths if p not in native_by_path]}"
-                ),
+                f"Native model output tensor structure changed from the captured boundary: {reason}.",
                 affected_op_labels=output_labels,
             )
             self._poison_and_raise(failed)
-        if positional:
-            return [tensor for _path, tensor in native]
-        return [native_by_path[path] for path in captured_paths]
+        assert values is not None
+        return values
 
     def _refresh_boundary_payloads(
         self,
