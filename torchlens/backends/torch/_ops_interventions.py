@@ -1,5 +1,6 @@
 """Legacy and predicate-mode live interventions."""
 
+import os
 import weakref
 from collections.abc import Callable, Iterator
 from functools import partial
@@ -25,7 +26,7 @@ from ...fastlog.types import (
     RecordContext,
 )
 from ...intervention.hooks import make_live_site_proxy, normalize_hook_plan
-from ...intervention.runtime import active_intervention_context
+from ...intervention.runtime import _coerce_hook_entry, active_intervention_context
 from ...intervention.selectors import (
     label as make_label_selector,
 )
@@ -159,6 +160,49 @@ __all__ = (
 )
 
 
+_MODULE_EXIT_ONLY_PLAN_KEY = "_tl_module_exit_only_hook_plan"
+# Prototype A/B switch for the efficiency benchmark only; remove before release.
+_MODULE_PREFILTER_DISABLED = os.environ.get("TORCHLENS_BENCH_DISABLE_MODULE_PREFILTER") == "1"
+
+
+def _hook_plan_is_module_exit_only(trace: "Trace", hook_plan: Any) -> bool:
+    """Return whether every entry of ``hook_plan`` targets exactly ``tl.module(...)``.
+
+    Plain module selectors match a capture-time subject only through its
+    ``output_of_module_calls``; the exhaustive op path never populates that field
+    before module exit (``model_prep`` adds it at the boundary), so such entries
+    fire exclusively through the module-exit boundary door
+    (``intervention/_module_boundary.py``). The per-op live check is then provably
+    a no-op and may be skipped. The verdict is cached per plan object and length.
+
+    Parameters
+    ----------
+    trace:
+        Active trace (holds the cache slot).
+    hook_plan:
+        The active live hook plan.
+
+    Returns
+    -------
+    bool
+        ``True`` when every forward post-hook entry is exactly a module selector.
+    """
+
+    cached = trace.__dict__.get(_MODULE_EXIT_ONLY_PLAN_KEY)
+    if cached is not None and cached[0] is hook_plan and cached[1] == len(hook_plan):
+        return cached[2]
+    verdict = False
+    try:
+        verdict = bool(hook_plan) and all(
+            getattr(_coerce_hook_entry(entry).site_target, "selector_kind", None) == "module"
+            for entry in hook_plan
+        )
+    except Exception:  # noqa: BLE001 - any unusual entry keeps the full check
+        verdict = False
+    trace.__dict__[_MODULE_EXIT_ONLY_PLAN_KEY] = (hook_plan, len(hook_plan), verdict)
+    return verdict
+
+
 def _apply_live_hooks_to_outputs_legacy(
     self: "Trace",
     func: Callable[..., Any],
@@ -198,6 +242,14 @@ def _apply_live_hooks_to_outputs_legacy(
             record_is_inplace=record_is_inplace,
         )
 
+    if (
+        not _MODULE_PREFILTER_DISABLED
+        and not predicate_intervene_active
+        and _hook_plan_is_module_exit_only(self, _st._active_hook_plan)
+    ):
+        # Module-exit-only plans fire through the boundary door; building the
+        # shared fields and a site proxy here would only evaluate to "no match".
+        return out_orig
     from ...intervention.runtime import _apply_live_hooks
 
     shared_fields, _parent_layer_entries, _arg_tensors, _parent_param_ops = (
