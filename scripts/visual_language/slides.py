@@ -756,9 +756,7 @@ SLIDES: tuple[Slide, ...] = (
             ),
         ),
         footnote="Up to {surgery_cap} citation rows per node; a caption census names the "
-        "replacement lane that ran. "
-        # Known renderer defect; delete this line when the fix lands.
-        "Known defect (F32): both passes of linear_1_1 carry both rows and the solid border.",
+        "replacement lane that ran.",
         rows=("VN19", "VC02", "VC05"),
     ),
     Slide(
@@ -1080,9 +1078,7 @@ SLIDES: tuple[Slide, ...] = (
             Key("Gradient arrows on the forward graph", "edge(color={grad_color})", panel="b"),
         ),
         footnote="intervening_cluster places intervening grad_fns upstream (default), "
-        "outside, downstream or in their own dashed group. "
-        # Known renderer defect; delete this line when the fix lands.
-        "Known defect (F37): gradient arrows attach to stray copies of the forward nodes.",
+        "outside, downstream or in their own dashed group.",
         rows=("VE08", "VE10", "VR12", "VC04"),
     ),
     Slide(
