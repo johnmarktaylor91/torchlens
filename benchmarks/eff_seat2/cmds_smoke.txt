@@ -1,0 +1,8 @@
+benchmarks/eff_seat2/stagecount.py --model gpt2 --mode trace_default --reps 1 --out out/stage.jsonl --pstats out/gpt2_trace_default.pstats
+benchmarks/eff_seat2/wl.py --model gpt2 --workload cache --tool tl_record --prompts 1 --reps 1 --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model gpt2 --workload steer --tool tl_record --sweep 1 --reps 1 --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model gpt2 --workload steer --tool tl_bind --sweep 1 --reps 1 --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model gpt2 --workload patch --tool tl_bind --reps 1 --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model gpt2 --workload grad --tool tl_trace_grad --reps 1 --out out/wl.jsonl
+benchmarks/eff_seat2/wl.py --model gpt2 --workload cache --tool tl_trace_sparse --prompts 1 --reps 1 --out out/wl.jsonl
+benchmarks/eff_seat2/stagecount.py --model gpt2 --mode record_intervene --reps 1 --out out/stage.jsonl
