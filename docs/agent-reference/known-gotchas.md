@@ -113,6 +113,10 @@
   `tl.validate` fails it on completeness (pinned in `tests/test_parameter_inplace_mutation.py`).
 - `torchlens.__version__` and `pyproject.toml` are release-pipeline state; do not update them
   in feature/docs tasks unless release work explicitly asks for it.
+- `copy.deepcopy(t)` inside a forward is one op on `t`, recorded as `copy.deepcopy(self)` (the memo
+  is not logged: the call fills it with the output). `Tensor.__deepcopy__` copies `t.__dict__`, so
+  `TensorMeta.__deepcopy__` drops the session anchor, storage pin and alias flags; without that the
+  copy read as `t` itself and its consumers were wired to `t`'s node.
 - Legacy constructors (`torch.FloatTensor(...)` and siblings, `Variable(...)`) are captured by
   patching the class's `__new__` in place (`backends/torch/legacy_ctors.py`). While wrapped, a
   warning their C constructor raises (the `volatile=` removal, the `torch.cuda.*Tensor`
