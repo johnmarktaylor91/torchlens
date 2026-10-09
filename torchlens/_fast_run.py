@@ -1143,6 +1143,12 @@ class _FastLiveSession:
                     code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
                     detection_stage="fast_live_module_plan",
                 )
+        # Steered reruns: the staged spec lowers to module-boundary hooks that
+        # must run BEFORE the collection hooks below (torch fires forward hooks
+        # in registration order), so the collected site value is the
+        # post-intervention value, exactly as capture saves it. The plan
+        # refuses typed (fast_rerun_target_unsupported) before any hook or wipe.
+        self.steer_plan = SteerPlan(trace, model)
         for op in trace.layer_list:
             if (
                 bool(getattr(op, "has_saved_activation", False))
@@ -1152,12 +1158,6 @@ class _FastLiveSession:
                 op._internal_set("transformed_out", None)
                 op._internal_set("has_saved_activation", False)
         self.function_names = frozenset(plan.address_or_name for plan in self.function_plans)
-        # Steered reruns: the staged spec lowers to module-boundary hooks that
-        # must run BEFORE the collection hooks below (torch fires forward hooks
-        # in registration order), so the collected site value is the
-        # post-intervention value, exactly as capture saves it. The plan
-        # refuses typed (fast_rerun_target_unsupported) before any hook or wipe.
-        self.steer_plan = SteerPlan(trace, model)
         # The ordered call fingerprint sealed at capture time is the structure
         # guard that admits a different-size input; ``None`` on a trace that
         # never captured keeps the exact-size guard.
