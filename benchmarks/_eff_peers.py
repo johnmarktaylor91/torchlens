@@ -53,10 +53,12 @@ class _Peers:
                                 (changed, *raw[1:]) if isinstance(raw, tuple) else changed
                             )
                             value = changed
-                        cache[runner.sites[index]] = value.grad.save() if grad else value.save()
+                        cache[runner.sites[index]] = value if grad else value.save()
                     output = self.model.output.save()
                     if grad:
-                        self.model.output.sum().backward()
+                        with output.sum().backward():
+                            for site in reversed(runner.sites):
+                                cache[site] = cache[site].grad.save()
             else:
                 hooks = []
                 for index, name in enumerate(self.names):

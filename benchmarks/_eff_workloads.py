@@ -22,6 +22,7 @@ from torch import nn
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import torchlens as tl
+from benchmarks.host_label import benchmark_host_label
 
 
 class _Model(nn.Module):
@@ -332,7 +333,7 @@ def main() -> None:
         "torch": torch.__version__,
         "transformers": transformers.__version__,
         "threads": 1,
-        "host": platform.node(),
+        "host": benchmark_host_label(),
         "cores": os.cpu_count(),
         "cpu": platform.processor(),
         "load": os.getloadavg(),
