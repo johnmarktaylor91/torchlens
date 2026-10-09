@@ -187,12 +187,18 @@ class _ExpTwice(torch.nn.Module):
 
 
 class _Exp(torch.nn.Module):
-    """A parameter-free exp, so both calls group into one two-pass layer."""
+    """A scaled exp; the shared scale groups both calls into two-pass layers."""
+
+    def __init__(self) -> None:
+        """Build the shared unit scale."""
+
+        super().__init__()
+        self.scale = torch.nn.Parameter(torch.ones(2))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Elementwise exp."""
+        """Elementwise exp of the scaled input."""
 
-        return torch.exp(x)
+        return torch.exp(x * self.scale)
 
 
 @pytest.mark.heavy
@@ -206,6 +212,7 @@ def test_unrolled_passes_carry_their_own_motif(tmp_path: Any) -> None:
     log = tl.trace(_ExpTwice(), torch.zeros(1, 2))
     exp_ops = [op for op in log.ops if op.layer_label.startswith("exp")]
     assert len(exp_ops) == 2
+    assert exp_ops[0].layer_label == exp_ops[1].layer_label  # one two-pass layer
     resolution = lenses.resolve_lens(log, "debug")
     source = log.draw(
         **{**resolution.draw_kwargs, "vis_mode": "unrolled"},
