@@ -9,7 +9,11 @@
    ordered call/module-entry fingerprint the guarded fast re-run compares against a
    native forward (`torchlens/_call_fingerprint.py`): an unpaused internal torch call,
    even one that logs no op (`register_hook`, `element_size`), breaks that equality,
-   and `tests/test_call_fingerprint.py` pins it.
+   and `tests/test_call_fingerprint.py` pins it. The same rule covers TorchLens's own
+   metadata reads on op outputs: `internal_scalar_read()` pauses the fingerprint, unwrapped
+   properties (`ndim`) replace wrapped methods (`dim()`), the synthetic `identity` op never
+   notes a token, and a cached fast session's module token hooks are inert outside its own
+   run (a Qwen3 capture otherwise counted 7 extra tokens, or every module twice).
 3. Wrappers are persistent after lazy installation; `_logging_enabled` gates behavior.
 4. FIELD_ORDER constants and class definitions must stay in sync.
 5. Module suffixes are appended to `equivalence_class` at op creation before loop detection.
