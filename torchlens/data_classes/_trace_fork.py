@@ -50,7 +50,7 @@ from .. import _state
 from .._trace_core.op_store import _MISSING, DetachedOpStore, PooledCell, cow_copy_value
 from .._trace_core.record_rows import CORE_KEY, ROW_KEY
 from ..capture.outcome import stamp_forked
-from ..intervention.types import MODEL_LOG_FIELD_FORK_POLICY, ForkFieldPolicy, InterventionSpec
+from ..intervention.types import MODEL_LOG_FIELD_FORK_POLICY, ForkFieldPolicy
 from ..utils.env_flags import closed_bool_env
 from ._accessor_base import Accessor
 from ._state_adapter import state_items, state_new, state_restore
@@ -678,10 +678,8 @@ def build_fork(parent: Trace, *, name: str | None) -> Trace:
     fork.parent_run = weakref.ref(parent)
     fork.trace_label = name or parent._next_fork_name()
     # Read the parent's spec, never create one: fork() must not mutate its parent.
-    parent_spec = getattr(parent, "_intervention_spec", None)
-    fork._intervention_spec = (
-        copy.deepcopy(parent_spec, memo) if parent_spec is not None else InterventionSpec()
-    )
+    # A spec-less parent gives a spec-less fork; staging on it creates one lazily.
+    fork._intervention_spec = copy.deepcopy(parent._intervention_spec, memo)
     fork.state_history = copy.deepcopy(parent.state_history, memo)
     fork.relationship_evidence = copy.deepcopy(parent.relationship_evidence, memo)
     fork._out_recipe_revision = parent._out_recipe_revision

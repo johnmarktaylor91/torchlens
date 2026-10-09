@@ -117,7 +117,8 @@ def plan_rerun_spec(log: Any, spec: Any) -> RerunSpecPlan:
 
     hook_specs = list(getattr(spec, "hook_specs", None) or ())
     door_hooks = [hook_spec for hook_spec in hook_specs if is_predicate_door_hook(hook_spec)]
-    options = getattr(log, "_predicate_save_options", None)
+    # Session-only field, absent on traces that never armed a predicate.
+    options = log.__dict__.get("_predicate_save_options")
     predicate = getattr(options, "intervene", None)
     if not door_hooks or predicate is None:
         return RerunSpecPlan(capture_spec=spec)
@@ -168,7 +169,7 @@ def settle_predicate_rerun(plan: RerunSpecPlan, staged_spec: Any, new_log: Any) 
 
     if plan.intervene_predicate is None:
         return
-    rerun_spec = getattr(new_log, "_intervention_spec", None)
+    rerun_spec = new_log._intervention_spec
     rerun_keys = Counter(
         _hook_key(hook_spec)
         for hook_spec in getattr(rerun_spec, "hook_specs", None) or ()
