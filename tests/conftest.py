@@ -1458,6 +1458,61 @@ def _reset_rng_state() -> Iterator[None]:
         torch.use_deterministic_algorithms(deterministic, warn_only=deterministic_warn_only)
 
 
+def _global_hook_and_mode_depths() -> tuple[int, int, int]:
+    """Return the global module-hook counts and the torch-function mode depth."""
+
+    from torch.nn.modules import module as module_mod
+
+    return (
+        len(module_mod._global_forward_hooks),
+        len(module_mod._global_forward_pre_hooks),
+        torch._C._len_torch_function_stack(),
+    )
+
+
+def _leaked_capture_slots() -> list[str]:
+    """Return the names of TorchLens process-global capture slots still held."""
+
+    held = {
+        "_active_trace": _state._active_trace is not None,
+        "_active_hook_plan": _state._active_hook_plan is not None,
+        "_active_intervention_spec": _state._active_intervention_spec is not None,
+        "_capture_reserved_by": _state._capture_reserved_by is not None,
+        "_logging_enabled": bool(_state._logging_enabled),
+    }
+    return [name for name, is_held in held.items() if is_held]
+
+
+@pytest.fixture(autouse=True)
+def _capture_state_released_after_test() -> Iterator[None]:
+    """State-leak tripwire: every test must leave the capture globals as it found them.
+
+    A finished (or failed) TorchLens call must release every capture slot and
+    leave no global module hook or torch-function mode behind; a leak would
+    silently arm the next test's model. The slots are reset after reporting so
+    one leak fails one test instead of cascading.
+    """
+
+    before = _global_hook_and_mode_depths()
+    yield
+    leaked = _leaked_capture_slots()
+    after = _global_hook_and_mode_depths()
+    if leaked:
+        _state._active_trace = None
+        _state._active_hook_plan = None
+        _state._active_intervention_spec = None
+        _state._capture_reserved_by = None
+        _state._logging_enabled = False
+    problems = [f"capture slot still held: {name}" for name in leaked]
+    if after != before:
+        problems.append(
+            "global forward hooks / pre-hooks / torch-function modes changed "
+            f"from {before} to {after}"
+        )
+    if problems:
+        pytest.fail("; ".join(problems), pytrace=False)
+
+
 #: ``(owner, method_name, default_basename)`` for every ``Trace`` draw
 #: entrypoint whose ``vis_outpath``-equivalent parameter defaults to a bare
 #: relative basename. Graphviz resolves a relative ``vis_outpath`` against
