@@ -91,6 +91,21 @@ def test_identity_is_device_independent() -> None:
     assert _steer_spec(vector).spec_digest == _steer_spec(vector.cuda()).spec_digest
 
 
+def test_identity_strings_carry_no_device_tag() -> None:
+    """Rule identity renders dtype, shape and a content hash, never a device.
+
+    The CPU-executable half of device independence: torch's ``repr`` tags
+    non-CPU tensors with their device, so an identity built from it would differ
+    across devices. The rendered token must name only dtype, shape and hash.
+    """
+
+    rule = _steer_spec(torch.randn(_WIDTH)).rules[0]
+    assert "device" not in rule.action_repr
+    assert "cpu" not in rule.action_repr
+    assert f"shape=({_WIDTH},)" in rule.action_repr
+    assert "sha256=" in rule.action_repr
+
+
 def test_in_place_edit_after_staging_changes_digest_and_action_repr() -> None:
     """Records follow the current tensor content, matching a fresh spec over it."""
 
