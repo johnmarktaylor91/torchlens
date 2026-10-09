@@ -283,7 +283,13 @@ attribution-target alias. See the [attribution reference](attribution.md).
 
 **Intervention**
 : A value or gradient edit performed at a selected live site. `tl.when(predicate, helper)` binds a
-  selector to helpers such as `tl.zero_ablate()` or `tl.scale(...)`.
+  selector to helpers such as `tl.zero_ablate()` or `tl.scale(...)`. `spec.bind(model)` returns a
+  bound executor that applies a spec to live calls. A synchronous generator or iterator returned
+  by a bound call (for example `bound.generate(...)`) stays steered for every step, and its report
+  settles on `last_report` when the iteration is exhausted, closed or raises; an async lazy output
+  (async generator or iterator, coroutine, awaitable) refuses `bind_lazy_output`, as does a lazy
+  `generate` output under `torchlens.intervention.steer_generate`, whose report must settle
+  before it returns.
 
 **Bundle**
 : A named collection of aligned Traces, constructed with `tl.bundle(...)` or `tl.Bundle(...)`, for
@@ -571,6 +577,11 @@ attribution-target alias. See the [attribution reference](attribution.md).
   staged after loading) refuses `run_intervention_spec_not_persisted` rather than rerun without
   the recorded intervention (the recipe travels through `save_intervention`); the replay and
   `run(inputs=...)` doors cannot run an analysis artifact at all.
+  A rerun replays the capture's recorded `save=` request on its own graph, so it saves the same
+  sites a fresh capture would even after a staged edit inserts ops. A trace restored from pickle
+  carries no recorded request and re-saves by the capture's raw op indices, which is exact only
+  when the rerun graph matches op for op; otherwise the rerun refuses `rerun_resave_ops_shifted`
+  (trace unchanged).
   `tl.PayloadLoadHints` carries backend-specific payload materialization hints
   (`tl.JaxPayloadLoadHint` is the JAX-specific form).
 
