@@ -43,17 +43,15 @@ class _Peers:
             if runner.mode == "nnsight":
                 with self.model.trace(ids):
                     for index, target in enumerate(self.targets):
-                        value = target.output
-                        if hasattr(runner.model.net, "transformer"):
-                            value = value[0]
+                        raw = target.output
+                        value = raw[0] if isinstance(raw, tuple) else raw
                         if index == 1 and action != "none":
                             changed = (
                                 value + runner.direction * strength if action == "steer" else patch
                             )
-                            if hasattr(runner.model.net, "transformer"):
-                                target.output[0] = changed
-                            else:
-                                target.output = changed
+                            target.output = (
+                                (changed, *raw[1:]) if isinstance(raw, tuple) else changed
+                            )
                             value = changed
                         cache[runner.sites[index]] = value.grad.save() if grad else value.save()
                     output = self.model.output.save()
