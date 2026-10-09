@@ -61,8 +61,8 @@ def _op_marker_labels(func_name: str, func_call_id: int) -> tuple[str, str]:
 
     W0.2 (TN-D11/D13/D14): names carry identity -- twenty ``conv2d`` calls
     are twenty distinguishable ranges -- and TorchLens's OWN bookkeeping
-    calls (an explicit :func:`internal_scalar_read` marker is live, e.g. the
-    per-output ``register_hook`` install) are separated under
+    calls (an explicit :func:`internal_scalar_read` marker is live, e.g. a
+    scalar-bool value read) are separated under
     ``torchlens::internal::`` so half the ranges on a real capture stop
     masquerading as model work. The classification is allowlist-BY-
     CONSTRUCTION (the same marker discipline as the completeness witness),

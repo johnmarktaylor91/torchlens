@@ -48,7 +48,12 @@ def test_nvtx_names_carry_call_identity(nvtx_calls) -> None:
 
 
 def test_nvtx_internal_bookkeeping_separated(nvtx_calls) -> None:
-    """TN-D11: TorchLens's own register_hook installs are typed internal."""
+    """TN-D11: TorchLens's own register_hook installs never publish as model work.
+
+    The per-output gradient-hook install runs under ``pause_logging()`` like
+    every TorchLens-internal torch call (Critical Invariant 2), so it reaches
+    no wrapper and pushes no range at all, under torch's name or ours.
+    """
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU()).train()
     x = torch.randn(2, 4, requires_grad=True)
@@ -58,16 +63,32 @@ def test_nvtx_internal_bookkeeping_separated(nvtx_calls) -> None:
         capture=tl.options.CaptureOptions(emit_nvtx=True, backward_ready=True),
         save_mode="reference",
     )
+    has_grad_fn = all(
+        op.grad_fn_object_id is not None for op in log.ops if op.func_name == "linear"
+    )
     log.cleanup()
+    assert has_grad_fn, "backward_ready capture recorded no grad_fn on its linear ops"
     names = [c for c in nvtx_calls if c.startswith("torchlens::")]
-    hook_ranges = [n for n in names if "register_hook" in n]
-    assert hook_ranges, "expected TorchLens per-output register_hook installs on this capture"
-    assert all(n.startswith("torchlens::internal::") for n in hook_ranges), (
-        "TorchLens bookkeeping published under torch's name (TN-D11): "
-        f"{[n for n in hook_ranges if not n.startswith('torchlens::internal::')]}"
+    assert [n for n in names if "register_hook" in n] == [], (
+        "TorchLens's paused gradient-hook install reached the NVTX sink: "
+        f"{[n for n in names if 'register_hook' in n]}"
     )
     model_ranges = [n for n in names if not n.startswith("torchlens::internal::")]
     assert any("linear" in n for n in model_ranges)
+
+
+def test_internal_read_marker_names_are_typed_internal() -> None:
+    """A wrapped call made inside an internal read is named under ``torchlens::internal::``."""
+
+    from torchlens.backends.torch._op_markers import _op_marker_labels
+    from torchlens.backends.torch.completeness_witness import internal_scalar_read
+
+    assert _op_marker_labels("linear", 7) == ("torchlens::linear#7", "torchlens::op::7")
+    with internal_scalar_read():
+        assert _op_marker_labels("register_hook", 8) == (
+            "torchlens::internal::register_hook#8",
+            "torchlens::internal::8",
+        )
 
 
 def test_no_markers_without_a_sink(nvtx_calls) -> None:
