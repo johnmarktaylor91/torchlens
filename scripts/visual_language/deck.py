@@ -215,7 +215,7 @@ def _table_slide(slide: Slide, height: float, env: dict[str, Any], probe: dict[s
         )
     rows = [[k, str(v)] for k, v in probe.items()]
     return compose.compose_table(
-        rows, ["Export choice", "Measured on this build"], [0.4, 0.6], height
+        rows, ["Export choice", "What this build does"], [0.4, 0.6], height
     )
 
 

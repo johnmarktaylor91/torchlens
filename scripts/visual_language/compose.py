@@ -425,7 +425,8 @@ def _split_area(area: Box, renders: list[Render], label_h: float) -> list[Box]:
             for b, r in zip(boxes, renders, strict=True)
         )
 
-    gap = 10.0
+    # Wide enough that an edge stub at one render's edge never reads as joining the next.
+    gap = 24.0
     side, stack = [], []
     weights = [r.shown.w * _need(r) for r in renders]
     x = area.x0

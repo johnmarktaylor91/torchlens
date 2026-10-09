@@ -248,20 +248,22 @@ def probe_export(raw: Path) -> dict[str, str]:
     svg_file = svg_file or Path(f"{svg_path}.svg")
     view = re.search(r'viewBox="([^"]+)"', svg_file.read_text())
     facts['vis_fileformat="svg"'] = (
-        f"vector, viewBox {view.group(1) if view else '?'}; dpi has no effect"
+        f"vector, viewBox {view.group(1) if view else '?'} (pt); dpi has no effect"
     )
+    facts["vis_fileformat"] = f"default {defaults['vis_fileformat'].default!r}"
     graph = trace.draw(return_graph=True, vis_outpath=str(raw / "export-graph"), **base)
     facts["return_graph=True"] = f"returns a {type(graph).__module__}.{type(graph).__name__} object"
     facts["vis_save_only"] = (
-        f"default {defaults['vis_save_only'].default!r}: True writes without opening a viewer"
+        f"default {defaults['vis_save_only'].default!r}; True saves without opening a viewer"
     )
     facts["vis_outpath"] = f"default {defaults['vis_outpath'].default!r} (the file stem)"
-    facts["vis_fileformat"] = f"default {defaults['vis_fileformat'].default!r}"
     facts['view="none"'] = f"draws nothing and returns {trace.draw(view='none')!r}"
+    refused = 'view="sideways" (view is an alias of vis_mode)'
     try:
         trace.draw(view="sideways", vis_outpath=str(raw / "export-refused"), **base)
-        facts['view="sideways"'] = "accepted (unexpected)"
+        facts[refused] = "accepted (unexpected)"
     except Exception as exc:  # the refusal is the measurement
-        first = str(exc).strip().splitlines()[0][:150]
-        facts['view="sideways"'] = f"refused before any render: {type(exc).__name__}: {first}"
+        # The message without its remedy sentence, which repeats the allowed values.
+        first = str(exc).strip().splitlines()[0].split(" Remedy:")[0][:150]
+        facts[refused] = f"refused before any render: {type(exc).__name__}: {first}"
     return facts
