@@ -5,7 +5,7 @@ builder for backward-only selectors and the capture-door fire-evidence
 envelope (ledger memo 3.1) are intervention machinery, not trace-entry
 resolution; ``user_funcs`` imports them from here. The live hook-plan
 spec builder and its non-mutating merge into an existing spec followed
-for the same reason (2.36.1 integration).
+for the same reason.
 """
 
 from __future__ import annotations
