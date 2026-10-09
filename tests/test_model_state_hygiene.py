@@ -149,13 +149,12 @@ def _model_fingerprint(model: nn.Module) -> dict[str, Any]:
         name: tuple((key, _value_fingerprint(value)) for key, value in sorted(vars(module).items()))
         for name, module in model.named_modules(remove_duplicate=False)
     }
-    # Values, not the version counter: tl.validate snapshots and restores
-    # parameter storage in place, which bumps ``_version`` with equal bytes.
     params = {
         name: (
             id(param),
             param.data_ptr(),
             param.detach().clone(),
+            param._version,
             param.requires_grad,
             param.grad is None,
             param.is_leaf,
