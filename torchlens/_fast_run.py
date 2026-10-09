@@ -141,14 +141,12 @@ def _pair_output_leaves(
     if len(native) != count:
         return None, f"{len(native)} tensor leaves against {count} captured output ops"
     by_path = dict(native)
-    positional = (
+    if (
         captured_paths is None
         or len(by_path) != len(native)
         or any(path == () for path in captured_paths)
-    )
-    if positional:
+    ):
         return [tensor for _path, tensor in native], ""
-    assert captured_paths is not None
     missing = [path for path in captured_paths if path not in by_path]
     if missing:
         return None, f"unmatched captured output paths {missing}"
@@ -1489,17 +1487,16 @@ class _FastLiveSession:
             self.active = False
             self.owner_thread_id = None
 
-    def run(self, inputs: Any, *, seed: int | None) -> RunResult:
-        """Execute one native forward and enforce the cached static graph guard."""
+    def _admit_inputs(self, inputs: Any) -> tuple[Any, Mapping[str, Any], bool]:
+        """Split the runtime inputs and admit them against the captured input boundary.
 
-        self.run_started_at = time.monotonic()
-        model = self.model_ref()
-        if model is None:
-            raise RunCapabilityUnavailableError(
-                "The fast live session's source model is no longer available.",
-                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
-                provider=RunProvider.LIVE,
-            )
+        Returns
+        -------
+        tuple[Any, Mapping[str, Any], bool]
+            Positional inputs, keyword inputs, and whether a sealed call fingerprint
+            re-admitted a changed input size.
+        """
+
         input_args = inputs
         input_kwargs: Mapping[str, Any] = {}
         if (
@@ -1537,6 +1534,20 @@ class _FastLiveSession:
             )
         if failed_input is not None:
             _raise_failed_contract_as_divergence(failed_input, fork=None)
+        return input_args, input_kwargs, input_size_changed
+
+    def run(self, inputs: Any, *, seed: int | None) -> RunResult:
+        """Execute one native forward and enforce the cached static graph guard."""
+
+        self.run_started_at = time.monotonic()
+        model = self.model_ref()
+        if model is None:
+            raise RunCapabilityUnavailableError(
+                "The fast live session's source model is no longer available.",
+                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+                provider=RunProvider.LIVE,
+            )
+        input_args, input_kwargs, input_size_changed = self._admit_inputs(inputs)
         self.steer_plan.refuse_changed_helpers()
         if seed is not None:
             set_random_seed(seed)

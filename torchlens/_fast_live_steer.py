@@ -113,38 +113,54 @@ def _input_admission_checks(
         )
     shape_changed = False
     for label, value in zip(input_labels, leaves, strict=True):
-        op = layer_dict.get(label)
-        if op is None:
-            return _INPUT_CHECK_UNAVAILABLE, False
-        expected_shape = tuple(op.shape) if op.shape is not None else None
-        expected_dtype = str(op.dtype) if op.dtype is not None else None
-        actual_shape = tuple(value.shape)
-        if expected_dtype is not None and str(value.dtype) != expected_dtype:
-            return (
-                _contract_check(
-                    f"input_dtype:slot:{label}",
-                    False,
-                    RunnableErrorCode.INPUT_DTYPE_MISMATCH,
-                    f"Runtime input dtype {value.dtype} does not match {expected_dtype}.",
-                    affected_op_labels=(label,),
-                ),
-                False,
-            )
-        if expected_shape is None or actual_shape == expected_shape:
-            continue
-        if not allow_shape_change or len(actual_shape) != len(expected_shape):
-            return (
-                _contract_check(
-                    f"input_shape:slot:{label}",
-                    False,
-                    RunnableErrorCode.INPUT_SHAPE_MISMATCH,
-                    f"Runtime input shape {actual_shape} does not match {expected_shape}.",
-                    affected_op_labels=(label,),
-                ),
-                False,
-            )
-        shape_changed = True
+        failed, changed = _input_leaf_check(
+            label, layer_dict.get(label), value, allow_shape_change=allow_shape_change
+        )
+        if failed is not None:
+            return failed, False
+        shape_changed = shape_changed or changed
     return None, shape_changed
+
+
+def _input_leaf_check(
+    label: str, op: Any, value: Any, *, allow_shape_change: bool
+) -> tuple[ContractCheck | None | Any, bool]:
+    """Check one runtime input leaf against its captured input op.
+
+    Returns the failed check (or the unavailable sentinel when the op is
+    missing) and whether an admitted shape change occurred.
+    """
+
+    if op is None:
+        return _INPUT_CHECK_UNAVAILABLE, False
+    expected_shape = tuple(op.shape) if op.shape is not None else None
+    expected_dtype = str(op.dtype) if op.dtype is not None else None
+    actual_shape = tuple(value.shape)
+    if expected_dtype is not None and str(value.dtype) != expected_dtype:
+        return (
+            _contract_check(
+                f"input_dtype:slot:{label}",
+                False,
+                RunnableErrorCode.INPUT_DTYPE_MISMATCH,
+                f"Runtime input dtype {value.dtype} does not match {expected_dtype}.",
+                affected_op_labels=(label,),
+            ),
+            False,
+        )
+    if expected_shape is None or actual_shape == expected_shape:
+        return None, False
+    if not allow_shape_change or len(actual_shape) != len(expected_shape):
+        return (
+            _contract_check(
+                f"input_shape:slot:{label}",
+                False,
+                RunnableErrorCode.INPUT_SHAPE_MISMATCH,
+                f"Runtime input shape {actual_shape} does not match {expected_shape}.",
+                affected_op_labels=(label,),
+            ),
+            False,
+        )
+    return None, True
 
 
 def _staged_user_hook_specs(trace: Any) -> list[Any]:
@@ -338,7 +354,7 @@ class SteerPlan:
 
         current = _staged_entries(trace)
         return len(current) == len(self.staged) and all(
-            left is right for left, right in zip(current, self.staged)
+            left is right for left, right in zip(current, self.staged, strict=True)
         )
 
     def refuse_changed_helpers(self) -> None:
@@ -435,6 +451,7 @@ def session_is_active(session_ref: weakref.ReferenceType[Any]) -> Callable[[], b
     """
 
     def active() -> bool:
+        """Return whether the session is live, active, and on its owner thread."""
         session = session_ref()
         return (
             session is not None
