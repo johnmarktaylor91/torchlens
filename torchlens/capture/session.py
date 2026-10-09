@@ -291,6 +291,20 @@ class CaptureSession:
             self._warn_for_extreme_gradient_retention()
 
     def _matches_module_exit_selector(self, module_call_label: str) -> bool:
+        """Return whether a module pass matches the pure ``tl.module`` save selector.
+
+        Parameters
+        ----------
+        module_call_label
+            Pass-qualified module call label (``"address:call_index"``).
+
+        Returns
+        -------
+        bool
+            False when the capture has no module-exit addresses or does not
+            escrow activations.
+        """
+
         profile = self.plan.retention_profile
         addresses = profile.activation_module_exit_addresses
         if addresses is None or profile.activation_kind is not RetentionKind.ACTIVATION:
@@ -357,6 +371,14 @@ class CaptureSession:
         self._module_exit_pending.clear()
 
     def _release_activation(self, raw_index: int) -> None:
+        """Drop one escrow entry and give back its RAM bytes or spill file.
+
+        Parameters
+        ----------
+        raw_index
+            Raw operation index that keys the escrow; absent entries are ignored.
+        """
+
         released = self.activation_escrow.pop(raw_index, None)
         if released is None:
             return
