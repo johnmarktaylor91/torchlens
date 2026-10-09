@@ -8,9 +8,9 @@
   cache (`bound.generate(...)`, or `torchlens.intervention.steer_generate(model, ids, spec, ...)`).
   `tl.record(..., intervene=spec, return_output=True)` is the lighter evidence path (about
   1 ms per op against about 3 ms for `tl.trace` on the tested CPU decoders). In 2.36.0 a
-  `tl.module(...)` save selector can cost more than saving everything, and trace-then-rerun is
-  not a fast path for steered generation (`run(inputs=...)` refuses a staged spec,
-  `run(fast=True)` also refuses a length change, the legacy `trace.run(model, x)` recaptures).
+  `tl.module(...)` save selector can cost more than saving everything. Trace-then-rerun on a
+  module-targeted staged spec takes the guarded fast rerun (about 2x a plain hook per
+  generation step, exact; `last_run["fast_refused"]` names a fallback's reason).
 - Relation accessors on FINISHED traces return IMMUTABLE views (authorized public type
   break, decided 2026-08-12): label sequences (`op.parents`, `op.children`, `op.modules`,
   `op.module_call_stack`, conditional child lists, `Layer.parents`/`Layer.children`, ...)

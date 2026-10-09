@@ -4,7 +4,8 @@ TorchLens has several ways to run a model, and they differ in cost by two orders
 A full `tl.trace(...)` records every operation and pays a few milliseconds of Python work per
 recorded op, so on a large decoder one trace takes tens of seconds. If you only need to steer
 or patch the model, you do not need a trace at all. This page says which path to use for which
-job, what each one costs, and what each one refuses. Everything here describes TorchLens 2.36.0.
+job, what each one costs, and what each one refuses. Everything here describes TorchLens 2.36.0,
+except the last section, which describes the guarded fast steered rerun that follows it.
 For the general speed knobs and benchmark tables, see the [performance guide](../performance.md).
 
 ## Pick a path
@@ -255,3 +256,65 @@ refuses a change in input length, or recaptures the whole forward.
 For steering across many inputs or through generation, use [`bind`](#steering-and-patching-over-many-forwards-bind).
 When each step also needs recorded evidence, use [`tl.record`](#steering-with-evidence-tlrecord).
 Use `tl.trace` when you want the full record of one forward, then work with that trace.
+
+## Fast steered rerun
+
+Releases that include the guarded fast steered rerun change two rows of the table above. On a
+trace captured with an `intervene=` spec that targets plain module selectors (`tl.module(...)`),
+`trace.run(model, x)` and `trace.run(inputs=x, fast=True)` no longer recapture: they run the
+model's native forward with the staged hooks and refresh the saved sites. The input may grow
+from step to step, as in generation, as long as the model makes the same sequence of torch calls
+and module entries; a structural fingerprint sealed at capture checks that after every run.
+
+```python
+import torch
+import torchlens as tl
+from transformers import LlamaConfig, LlamaForCausalLM
+
+
+torch.manual_seed(0)
+config = LlamaConfig(
+    vocab_size=128,
+    hidden_size=32,
+    intermediate_size=64,
+    num_hidden_layers=2,
+    num_attention_heads=4,
+    num_key_value_heads=2,
+    max_position_embeddings=64,
+)
+lm = LlamaForCausalLM(config).eval()
+ids = torch.randint(0, 128, (1, 6))
+direction = torch.randn(32)
+site = tl.module("model.layers.1.mlp")
+head = tl.module("lm_head")
+spec = tl.when(site, tl.steer(direction, magnitude=4.0, feature_axis=-1))
+
+trace = tl.trace(lm, ids, save=site | head, intervene=spec)
+bound = spec.bind(lm)
+for _ in range(3):
+    trace.run(lm, ids)  # the steered forward on the longer input, saved sites refreshed
+    assert trace.last_run["engine"] == "guarded_fast"
+    assert trace.last_run["fast_refused"] is None
+    logits = trace.find_sites(head).first().out
+    assert torch.equal(logits, bound(ids).logits)
+    ids = torch.cat([ids, logits[:, -1].argmax(-1, keepdim=True)], dim=-1)
+```
+
+- **Cost.** On Qwen3.5-9B a steered generation step cost about 2x a plain hook: 0.36 s against
+  0.18 s, and 0.15 s against 0.075 s with flash-linear-attention, exact at every step with no
+  fallback. On the small CPU decoders it cost 1.4 to 1.9x. `bind` stays the cheapest steering
+  path (1.07 to 1.17x on the same 9B runs); the rerun costs about one more forward and in
+  exchange refreshes the saved activations each step. `trace.run(inputs=x, fast=True)` keeps its
+  session between calls and was 15 to 20% cheaper than `trace.run(model, x)`.
+- **Fallback.** When a guard refuses, `trace.run(model, x)` falls back to the capture engine,
+  which still gives the right answer, and records why. `last_run["engine"]` is `"guarded_fast"`
+  when the fast engine ran and `"rerun"` after a fallback, and `last_run["fast_refused"]` names
+  the refusing guard as `"<code>:<stage>"` (it is `None` on a fast run). The explicit
+  `trace.run(inputs=x, fast=True)` raises instead of falling back.
+- **What still takes the capture engine.** Value replacements (`set()`) and non-module targets
+  (`fast_rerun_target_unsupported`), hooks attached after a plain capture, which recapture once
+  to record their firing and are eligible afterwards (`fast_rerun_graph_unsteered`), and any
+  change in the model's call structure (`fast_live_call_fingerprint`).
+- **What a fast run does not change.** The save scope never widens, the stored spec is unchanged,
+  and op metadata the run did not refresh (shapes and activation memory of unsaved ops) reads
+  `None` after a run on a different input size, rather than showing capture-time values.
