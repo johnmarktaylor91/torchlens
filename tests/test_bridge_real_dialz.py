@@ -34,7 +34,9 @@ def stack() -> Iterator[dict[str, Any]]:
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
     os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
     skip_unless_hf_checkpoint_cached(_TINY)
+    # The tokenizer SteeringVector.train builds: pad id 0, default padding side.
     tok = transformers.AutoTokenizer.from_pretrained(_TINY)
+    tok.pad_token_id = 0
     steering_model = dialz.SteeringModel(_TINY, layer_ids=[1])
     model = steering_model.model.eval()
     model.config.use_cache = False
@@ -49,8 +51,11 @@ def stack() -> Iterator[dict[str, Any]]:
         dataset.add_entry(positive, negative)
 
     def trace(prompts: list[str]) -> Any:
-        ids = tok(prompts, return_tensors="pt").input_ids.to(model.device)
-        return tl.trace(model, ids, capture=tl.options.CaptureOptions(layers_to_save="all"))
+        # The exact call dialz makes per batch: the same encoding, mask included.
+        enc = tok(prompts, padding=True, return_tensors="pt").to(model.device)
+        kwargs = {"input_ids": enc.input_ids, "attention_mask": enc.attention_mask}
+        capture = tl.options.CaptureOptions(layers_to_save="all")
+        return tl.trace(model, (), input_kwargs=kwargs, capture=capture)
 
     stack = {
         "steering_model": steering_model,
@@ -63,6 +68,38 @@ def stack() -> Iterator[dict[str, Any]]:
     finally:
         stack["log_pos"].cleanup()
         stack["log_neg"].cleanup()
+
+
+@pytest.fixture
+def side_batched(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make ``SteeringVector.train`` run one forward per side, like the traces.
+
+    dialz batches its interleaved ``[pos, neg, pos, neg, ...]`` strings, so
+    with any ``batch_size`` its forwards differ in shape from the per-side
+    traces, and bitwise equality would then depend on the runner's GEMM
+    kernel choice. Here dialz's own ``batched_get_hiddens`` runs once over all
+    positives and once over all negatives (the traced batches, with dialz's
+    tokenizer and mask), and the rows are re-interleaved in dialz's order;
+    the direction math is dialz's unchanged ``read_representations``.
+    """
+
+    original = dialz.vector.batched_get_hiddens
+
+    def per_side(
+        model: Any, tokenizer: Any, inputs: list[str], hidden_layers: Any, batch_size: int
+    ) -> dict[int, np.ndarray]:
+        del batch_size  # one batch per side, whatever the caller asked for
+        positives, negatives = inputs[::2], inputs[1::2]
+        pos = original(model, tokenizer, positives, hidden_layers, len(positives))
+        neg = original(model, tokenizer, negatives, hidden_layers, len(negatives))
+        rows: dict[int, np.ndarray] = {}
+        for layer, pos_rows in pos.items():
+            merged = np.empty((2 * len(pos_rows), pos_rows.shape[1]), dtype=pos_rows.dtype)
+            merged[::2], merged[1::2] = pos_rows, neg[layer]
+            rows[layer] = merged
+        return rows
+
+    monkeypatch.setattr(dialz.vector, "batched_get_hiddens", per_side)
 
 
 def _assert_same(bridge: Any, direct: Any) -> None:
@@ -80,13 +117,14 @@ def _assert_same(bridge: Any, direct: Any) -> None:
     assert bridge == direct
 
 
+@pytest.mark.usefixtures("side_batched")
 @pytest.mark.parametrize("method", [None, "pca_center", "mean_diff"])
 def test_vector_matches_steering_vector_train(stack: dict[str, Any], method: str | None) -> None:
     """Decoder layer 0 output gives exactly SteeringVector.train(hidden_layers=[0])."""
 
     kwargs = {} if method is None else {"method": method}
     direct = dialz.SteeringVector.train(
-        stack["steering_model"], stack["dataset"], hidden_layers=[0], batch_size=1, **kwargs
+        stack["steering_model"], stack["dataset"], hidden_layers=[0], **kwargs
     )
     payload = tl.bridge.dialz.vector(
         stack["log_pos"], "model.layers.0", negative_log=stack["log_neg"], layer=0, method=method
@@ -94,10 +132,11 @@ def test_vector_matches_steering_vector_train(stack: dict[str, Any], method: str
     _assert_same(payload["steering_vector"], direct)
 
 
+@pytest.mark.usefixtures("side_batched")
 def test_default_last_layer_reads_final_norm(stack: dict[str, Any]) -> None:
     """dialz's default layer list reads the final-norm output at the last layer."""
 
-    direct = dialz.SteeringVector.train(stack["steering_model"], stack["dataset"], batch_size=1)
+    direct = dialz.SteeringVector.train(stack["steering_model"], stack["dataset"])
     assert list(direct.directions) == [1]
     payload = tl.bridge.dialz.vector(
         stack["log_pos"], "model.norm", negative_log=stack["log_neg"], layer=1
@@ -105,11 +144,12 @@ def test_default_last_layer_reads_final_norm(stack: dict[str, Any]) -> None:
     _assert_same(payload["steering_vector"], direct)
 
 
+@pytest.mark.usefixtures("side_batched")
 def test_layer_object_site_resolves_in_negative_log(stack: dict[str, Any]) -> None:
     """A Layer-object site reads the negative trace's layer, not the positive one."""
 
     direct = dialz.SteeringVector.train(
-        stack["steering_model"], stack["dataset"], hidden_layers=[0], batch_size=1
+        stack["steering_model"], stack["dataset"], hidden_layers=[0]
     )
     # dialz wraps each decoder layer; its output op is one pass of a two-pass layer.
     site = stack["log_pos"]["model.layers.0"]
@@ -120,6 +160,31 @@ def test_layer_object_site_resolves_in_negative_log(stack: dict[str, Any]) -> No
         layer=0,
     )
     _assert_same(payload["steering_vector"], direct)
+
+
+@pytest.mark.usefixtures("side_batched")
+@pytest.mark.parametrize(
+    ("positive_site", "negative_site"),
+    [("model.layers.1", None), ("model.layers.0", "model.layers.1")],
+    ids=["wrong_positive_site", "wrong_negative_site"],
+)
+def test_planted_wrong_site_fails_the_exact_comparison(
+    stack: dict[str, Any], positive_site: str, negative_site: str | None
+) -> None:
+    """Reading the wrong layer on either side breaks the bitwise match above."""
+
+    direct = dialz.SteeringVector.train(
+        stack["steering_model"], stack["dataset"], hidden_layers=[0]
+    )
+    payload = tl.bridge.dialz.vector(
+        stack["log_pos"],
+        positive_site,
+        negative_site,
+        negative_log=stack["log_neg"],
+        layer=0,
+    )
+    with pytest.raises(AssertionError, match=r"^\(0, "):
+        _assert_same(payload["steering_vector"], direct)
 
 
 def test_padded_unequal_prompts_match_batched_train(stack: dict[str, Any]) -> None:
