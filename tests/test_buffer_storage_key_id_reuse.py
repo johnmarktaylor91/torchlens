@@ -98,7 +98,7 @@ def test_id_reuse_never_reroots_a_newborn_tensor_as_a_buffer() -> None:
 def test_storage_metadata_cache_does_not_outlive_its_tensor() -> None:
     """A cached storage key/range is dropped when its tensor dies, not served to an id twin."""
 
-    model = _AliasChurn()
+    model = nn.Linear(4, 4)
     trace = tl.trace(model, torch.ones(4))
     tracker = BufferWriteTracker(trace, model)
 
