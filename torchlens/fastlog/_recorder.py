@@ -16,6 +16,7 @@ from .. import _state
 from .._deprecations import MISSING, MissingType
 from .._errors import CaptureContextError, KeywordConflictError
 from .._training_validation import TrainingModeConfigError, reject_compiled_model
+from ..capture._module_aliases import _capture_module_aliases
 from ..capture.config import InternalCaptureConfig
 from ..capture.outcome import safe_exception_repr, safe_exception_str
 from ..capture.predicates import validate_followed_by_capability
@@ -25,7 +26,7 @@ from ..capture.projections import (
     active_recording_state,
 )
 from ..capture.stop import StopDirective, stop_directive_for_trace
-from ..capture.trace import _capture_module_aliases, _extract_and_mark_outputs
+from ..capture.trace import _extract_and_mark_outputs
 from ..data_classes.trace import Trace
 from ..intervention.predicates import InterventionPredicate
 from ..ir import CaptureEvents

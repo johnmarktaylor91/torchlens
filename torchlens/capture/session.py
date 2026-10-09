@@ -398,7 +398,7 @@ class CaptureSession:
         module's second registered name selects it here as in the forward.
         """
 
-        from .trace import _module_alias_scope
+        from ._module_aliases import _module_alias_scope
 
         with _module_alias_scope(trace):
             self._resolve_deferred_retention(trace, output_tensors)
