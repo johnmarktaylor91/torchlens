@@ -5,6 +5,15 @@
 2. `pause_logging()` must wrap internal torch ops during logging (`safe_copy`,
    `activation_transform`). `get_memory_amount()` deliberately does NOT toggle it:
    it resolves the unwrapped size methods once instead (hot-path perf, `08dca260`).
+   The pause also keeps an internal call out of `Trace._raw_call_fingerprint`, the
+   ordered call/module-entry fingerprint the guarded fast re-run compares against a
+   native forward (`torchlens/_call_fingerprint.py`): an unpaused internal torch call,
+   even one that logs no op (`register_hook`, `element_size`), breaks that equality,
+   and `tests/test_call_fingerprint.py` pins it. The same rule covers TorchLens's own
+   metadata reads on op outputs: `internal_scalar_read()` pauses the fingerprint, unwrapped
+   properties (`ndim`) replace wrapped methods (`dim()`), the synthetic `identity` op never
+   notes a token, and a cached fast session's module token hooks are inert outside its own
+   run (a Qwen3 capture otherwise counted 7 extra tokens, or every module twice).
 3. Wrappers are persistent after lazy installation; `_logging_enabled` gates behavior.
 4. FIELD_ORDER constants and class definitions must stay in sync.
 5. Module suffixes are appended to `equivalence_class` at op creation before loop detection.
@@ -134,7 +143,12 @@
     binders, and one result Trace; live traces use native forward plus targeted module hooks and
     only explicitly requested functional collection. Per-call input, path, output structure/shape/
     dtype, and control-witness guards remain mandatory; divergence always raises. `fast=False`
-    preserves the full transaction and attestation contract. The session handle
+    preserves the full transaction and attestation contract. The live session also fires a
+    module-targeted staged intervention spec at module exit (the steered rerun engine behind
+    `trace.run(model, x)`, which falls back to capture on a typed refusal and records it in
+    `last_run["fast_refused"]`); a size-only input change is admitted only when the capture
+    sealed a call fingerprint and the rerun's fingerprint matches, and the op metadata the run
+    did not refresh is reset to `None`, never left at capture-time values. The session handle
     `Trace._fast_run_session` is a session-time `FieldPolicy.DROP` field (ordered under a private
     name, never persisted), ledgered in
     `tests/test_schema_lockstep.py::PRIVATE_ORDERED_DROP_FIELDS`.

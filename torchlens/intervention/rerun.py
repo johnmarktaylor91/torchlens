@@ -49,6 +49,7 @@ def run(
     chunk_paths: Any | None = None,
     replay: ReplayOptions | None = None,
     output_transform: Any | None = None,
+    fast_refused: str | None = None,
 ) -> Trace:
     """Full-forward run with the active intervention spec from ``log``.
 
@@ -75,6 +76,9 @@ def run(
     output_transform:
         Optional callable applied to the fresh model output for raw-output
         metadata storage.
+    fast_refused:
+        Typed code of the guarded fast engine's refusal when the legacy door
+        tried it first and fell back here; recorded in ``last_run``.
 
     Returns
     -------
@@ -165,6 +169,8 @@ def run(
         "hooks_unfired": len(unfired_hook_ids),
         "divergence_count": divergence_count,
         "fast_refresh": fast_refresh,
+        "fast_refused": fast_refused,
+        "shape_varied": False,
         "old_graph_shape_hash": old_hash,
         "new_graph_shape_hash": getattr(log, "graph_shape_hash", None),
         "old_raw_event_shape_hash": old_raw_hash,
@@ -923,7 +929,11 @@ def _capture_with_active_spec(
         save_code_context=getattr(log, "save_code_context", False),
         save_rng_states=getattr(log, "save_rng_states", False),
         recurrence_detection=getattr(log, "recurrence_detection", True),
-        intervention_ready=True,
+        # Inherit the source trace's readiness: forcing ``True`` armed the host
+        # RNG monitor (most of a rerun's cost) and minted replay templates the
+        # source never had. The rerun divergence detector
+        # (``_raw_event_shape_hash``) is computed for every capture regardless.
+        intervention_ready=bool(getattr(log, "intervention_ready", False)),
         intervention_spec=intervention_spec,
         normalized_hook_plan=hook_plan,
         verbose=getattr(log, "verbose", False),

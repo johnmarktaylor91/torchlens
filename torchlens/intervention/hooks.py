@@ -10,6 +10,7 @@ from typing import Any, Literal, TypeAlias, cast
 
 import torch
 
+from .._state import pause_logging
 from ..ir.selector_eval import (
     _UPFRONT_UNSUPPORTED_KINDS,
     _capability_error,
@@ -1454,6 +1455,9 @@ def make_live_site_proxy(
         Simple namespace with capture-time fields used by selectors and hooks.
     """
 
+    # TorchLens-internal size read: paused so it is never mistaken for a user call.
+    with pause_logging():
+        memory = tensor.nelement() * tensor.element_size()
     return SimpleNamespace(
         label=_layer_label_raw,
         raw_label=_layer_label_raw,
@@ -1468,7 +1472,7 @@ def make_live_site_proxy(
         shape=tuple(tensor.shape),
         dtype=tensor.dtype,
         tensor_device=tensor.device,
-        memory=tensor.nelement() * tensor.element_size(),
+        memory=memory,
         module=fields.get("module"),
         modules=fields.get("modules", []),
         output_of_module_calls=fields.get("output_of_module_calls", []),

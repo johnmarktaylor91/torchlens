@@ -37,7 +37,7 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `_layer_spec.py` | `_LAYER_MIRROR_SPEC` and the Layer mirror-field spec (split out of `layer.py`) |
 | `_layer_accessors.py` | `OpAccessor`/`LayerAccessor` dict-like lookup (split out of `layer.py`; re-exported there) |
 | `_schema_bindings.py` | GENERATED per-field `StorageBinding` axes — DO NOT EDIT; regenerate with `tools/generate_record_schema.py` |
-| `_trace_components.py` | Declared `TRACE_FIELD_OWNERSHIP` component map — 328 entries, pinned equal to the `FIELD_POLICY` key set (the 229-name `MODEL_LOG_FIELD_ORDER` is a strict subset) |
+| `_trace_components.py` | Declared `TRACE_FIELD_OWNERSHIP` component map — 329 entries, pinned equal to the `FIELD_POLICY` key set (the 229-name `MODEL_LOG_FIELD_ORDER` is a strict subset) |
 | `_trace_stack.py` | Order-aligned activation stacking for completed traces |
 | `_trace_rehydrate.py` | Load-side Trace rehydration |
 | `_backend_capability_guards.py` | Backend capability guard helpers |

@@ -1909,7 +1909,7 @@ def _ensure_module_output_tensor_logged(
             "conditional_context_kind": None,
             "conditional_wrapper_kind": None,
             "terminal_conditional_id": None,
-            "is_scalar_bool": bool(tensor.dtype == torch.bool and tensor.dim() == 0),
+            "is_scalar_bool": bool(tensor.dtype == torch.bool and tensor.ndim == 0),
             "bool_value": None,
             "in_conditionals": [],
             "terminal_bool_for": None,
@@ -2444,6 +2444,10 @@ def module_forward_decorator(
         # registered there, so it runs unrecorded, like any helper function.
         if id(module) not in trace._module_capture_ws.mod_call_index:
             return orig_forward(*args, **kwargs)
+        # Module-entry fingerprint token, before any of this module's ops; the
+        # native twin is ``_call_fingerprint.install_module_token_hooks``. The
+        # address is read per call because role swaps re-address modules.
+        _state.note_fingerprint_token(_state.module_token(_module_address(module)))
 
         if trace.capture_mode == "predicate":
             from ...capture.predicates import (

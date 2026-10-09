@@ -82,7 +82,12 @@ _PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "torchlens"
 # snapshot; the `_active_hook_plan` one stays raw (r43 class: no accessor
 # by design, the same single-field hot-path load `runtime.py` already keeps
 # unconverted at six sites), net +1 reviewed and ledgered here.
-_ACCESS_SITE_BASELINE = 290
+# 290 -> 291 (fast re-run call fingerprint): wrappers.py's per-call
+# `_call_fingerprint` load, the first statement of every decorated torch call
+# with and without a capture. A function-call accessor would tax every wrapped
+# torch call of every native forward; the module-entry and hook sites route
+# through the public `_state.note_fingerprint_token` instead.
+_ACCESS_SITE_BASELINE = 291
 
 
 def _state_access_sites() -> list[tuple[str, int]]:

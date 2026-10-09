@@ -374,9 +374,11 @@ def _add_tensor_backward_hook(
     # TorchLens bookkeeping: torch's ``register_hook`` reads ``self.grad_fn``
     # internally, and ``t`` can be the user's registered state receiver (an
     # in-place op output), so the read is marked internal (r65 unread-bit).
+    # Paused like every TorchLens-internal torch call (Critical Invariant 2):
+    # the user's forward never makes this call, so it must not count as one.
     from .completeness_witness import internal_scalar_read
 
-    with internal_scalar_read():
+    with pause_logging(), internal_scalar_read():
         handle = t.register_hook(log_grad_to_model_history)
     if owning_backward_only:
         _OWNED_STATE_GRAD_HOOK_HANDLES.setdefault(trace, []).append(handle)

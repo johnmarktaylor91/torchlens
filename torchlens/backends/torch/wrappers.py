@@ -1634,10 +1634,18 @@ def torch_func_decorator(
         canonical_capture_callable = (func, func_name)
     # See the barcode-transparency note inside ``wrapped_func`` (R16-5).
     is_barcode_transparent = func_name == "as_subclass"
+    # TorchLens's synthetic ``identity`` op (Identity modules, pass-through tensors)
+    # never occurs in a native forward, so it stays out of the call fingerprint.
+    fingerprint_token = None if func_name == "identity" else _state.call_token(func_name)
 
     @wraps(func)
     def wrapped_func(*args: Any, **kwargs: Any) -> Any:
         """Dispatch a decorated torch callable through the logging gate."""
+        # Ordered call fingerprint, counted identically with and without capture
+        # (unpaused owner-thread calls only; see ``_state.CallFingerprint``).
+        fingerprint = _state._call_fingerprint
+        if fingerprint is not None and fingerprint_token is not None:
+            fingerprint.note(fingerprint_token)
         # ---- Fast path ----
         # When logging is off, pass through with minimal overhead.
         # DeviceContext injection is still needed even when not logging,

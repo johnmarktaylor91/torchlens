@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import threading
+import time
 import weakref
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from typing import Any, cast
@@ -13,6 +14,15 @@ import torch
 from torch import nn
 
 from . import _state
+from ._call_fingerprint import fingerprinting, install_module_token_hooks
+from ._fast_live_steer import (
+    SteerPlan,
+    clear_unrefreshed_shape_metadata,
+    fast_live_input_admission,
+    install_steer_hooks,
+    refusal_code,
+    session_is_active,
+)
 from ._runnable_execution import (
     _HOST_RNG_SOURCE_KIND,
     _INPUT_CHECK_UNAVAILABLE,
@@ -64,7 +74,7 @@ from ._runnable_execution import (
     run_loaded_sparse_trace,
 )
 from ._runnable_state import PreparedRunnableState, RunResourceCeiling, prepare_runnable_state
-from .errors import RunCapabilityUnavailableError, RuntimeSignatureDriftError
+from .errors import PathDivergenceError, RunCapabilityUnavailableError, RuntimeSignatureDriftError
 from .ir.container import ContainerSpec, rebuild_container_from_spec
 from .runnable import (
     ContractCheck,
@@ -97,6 +107,94 @@ class _FastOutputPlan:
     shapes: tuple[tuple[int, ...] | None, ...]
     dtypes: tuple[str | None, ...]
     save_labels: frozenset[str]
+    # Each op's container path inside the call's output, when capture tied
+    # every op to exactly one path; ``None`` keeps the positional pairing.
+    paths: tuple[tuple[Any, ...], ...] | None = None
+
+
+def _pair_output_leaves(
+    output: Any, captured_paths: Sequence[tuple[Any, ...]] | None, count: int
+) -> tuple[list[Any] | None, str]:
+    """Pair ``count`` captured output ops with the tensor leaves of a live output.
+
+    The walk is capture's own output walker (plus its bare-attribute fallback),
+    so a typed container capture descended into (a Hugging Face ``ModelOutput``
+    carrying a ``DynamicCache`` of per-layer key/value tensors, a namedtuple, a
+    dataclass) is seen the same way here. With per-op paths every captured path
+    must resolve to exactly one leaf and the output must carry no other leaf;
+    without them (a single leaf, an opaque root, a role-hinted family) the
+    pairing is positional over the same walk. Returns the paired values, or
+    ``None`` with the reason when the structure differs from the capture.
+    """
+
+    from .backends.torch._ops_containers import _walk_output_tensors_with_paths
+    from .utils.introspection import get_vars_of_type_from_obj
+
+    native = [
+        (tuple(path), tensor) for tensor, path, _spec in _walk_output_tensors_with_paths(output)
+    ]
+    if not native:
+        native = [
+            ((), tensor)
+            for tensor in get_vars_of_type_from_obj(output, torch.Tensor, search_depth=4)
+        ]
+    if len(native) != count:
+        return None, f"{len(native)} tensor leaves against {count} captured output ops"
+    by_path = dict(native)
+    positional = (
+        captured_paths is None
+        or len(by_path) != len(native)
+        or any(path == () for path in captured_paths)
+    )
+    if positional:
+        return [tensor for _path, tensor in native], ""
+    assert captured_paths is not None
+    missing = [path for path in captured_paths if path not in by_path]
+    if missing:
+        return None, f"unmatched captured output paths {missing}"
+    return [by_path[path] for path in captured_paths], ""
+
+
+def _module_output_paths(
+    trace: Any, module_call: Any, address: str, resolved: Sequence[Any]
+) -> tuple[tuple[Any, ...], ...] | None:
+    """Return each output op's container path in a module call's output.
+
+    ``ModuleCall.output_paths`` is in capture traversal order while
+    ``output_ops`` is in op order; the documented tie between them is each
+    op's ``multi_output_name``, minted from its path (or a role hint) at
+    capture. ``None`` when the call has fewer than two leaves or any op lacks
+    a unique path, which keeps the positional pairing.
+    """
+
+    from .data_classes._module_role_hints import (
+        multi_output_role_from_path,
+        role_hints_for_module_class,
+    )
+
+    paths = tuple(tuple(path) for path in (getattr(module_call, "output_paths", None) or ()))
+    if len(paths) < 2 or len(paths) != len(resolved):
+        return None
+    try:
+        module = trace.modules[address]
+    except (KeyError, IndexError, TypeError, AttributeError):
+        module = None
+    hints = role_hints_for_module_class(getattr(module, "cls", None))
+    by_name: dict[str, tuple[Any, ...]] = {}
+    for index, path in enumerate(paths):
+        name = multi_output_role_from_path(path, index, hints=hints)
+        if name is None or name in by_name:
+            return None
+        by_name[name] = path
+    matched: list[tuple[Any, ...]] = []
+    for item in resolved:
+        name = getattr(item, "multi_output_name", None)
+        if name not in by_name:
+            return None
+        matched.append(by_name[name])
+    if len(set(matched)) != len(matched):
+        return None
+    return tuple(matched)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1054,10 +1152,29 @@ class _FastLiveSession:
                 op._internal_set("transformed_out", None)
                 op._internal_set("has_saved_activation", False)
         self.function_names = frozenset(plan.address_or_name for plan in self.function_plans)
+        # Steered reruns: the staged spec lowers to module-boundary hooks that
+        # must run BEFORE the collection hooks below (torch fires forward hooks
+        # in registration order), so the collected site value is the
+        # post-intervention value, exactly as capture saves it. The plan
+        # refuses typed (fast_rerun_target_unsupported) before any hook or wipe.
+        self.steer_plan = SteerPlan(trace, model)
+        # The ordered call fingerprint sealed at capture time is the structure
+        # guard that admits a different-size input; ``None`` on a trace that
+        # never captured keeps the exact-size guard.
+        self.fingerprint_reference = getattr(trace, "_raw_call_fingerprint", None)
+        self.shape_varied = False
+        self.shape_metadata_cleared = False
+        self.allow_size_change = True
+        self.poison_on_divergence = True
+        self.output_transform: Any = None
+        self.last_fingerprint: tuple[int, int] | None = None
+        self.refreshed_labels: frozenset[str] = frozenset(supported_labels)
         self.handles: list[Any] = []
         self._hook_finalizer = weakref.finalize(self, _remove_fast_live_hooks, self.handles)
         session_ref = weakref.ref(self)
         try:
+            self.handles.extend(install_steer_hooks(self.steer_plan, session_ref))
+            self.handles.extend(install_module_token_hooks(model, session_is_active(session_ref)))
             for address in plan_addresses:
                 module = modules["" if address == "self" else address]
 
@@ -1082,38 +1199,62 @@ class _FastLiveSession:
 
     @staticmethod
     def _build_module_plans(trace: Any) -> tuple[_FastOutputPlan, ...]:
-        """Derive the exact atomic-module call sequence from the captured trace."""
+        """Derive the module-call exit sequence whose outputs the capture saved.
 
-        seen: set[str] = set()
-        plans: list[_FastOutputPlan] = []
-        for op in trace.layer_list:
-            call_label = getattr(op, "atomic_module_call", None)
-            if not call_label or call_label in seen:
+        Every module call (leaf or container) whose output ops carry a saved
+        activation gets a plan, including the ``interventionreplacement`` op a
+        module-boundary intervention leaves as the module's output. Plans are
+        ordered as torch fires forward hooks: by module EXIT, i.e. the raw
+        index of the module's last output op, with the deeper module first
+        when a nested call hands the same tensor to its parent. The root module is
+        the input/output boundary and is refreshed separately.
+        """
+
+        keyed: list[tuple[int, int, _FastOutputPlan]] = []
+        module_calls = trace.module_calls
+        for call_label in list(module_calls.keys()):
+            module_call = module_calls[call_label]
+            address = call_label.rsplit(":", 1)[0]
+            if address == "self":
                 continue
-            seen.add(call_label)
-            module_call = trace.module_calls[call_label]
-            resolved = tuple(trace.layer_dict_all_keys[label] for label in module_call.output_ops)
-            if not any(bool(getattr(item, "has_saved_activation", False)) for item in resolved):
+            resolved = tuple(
+                trace.layer_dict_all_keys[label]
+                for label in module_call.output_ops
+                if label in trace.layer_dict_all_keys
+            )
+            if not resolved or not any(
+                bool(getattr(item, "has_saved_activation", False)) for item in resolved
+            ):
                 continue
             labels = tuple(item.label for item in resolved)
-            plans.append(
-                _FastOutputPlan(
-                    address_or_name=call_label.rsplit(":", 1)[0],
-                    op_labels=labels,
-                    shapes=tuple(
-                        tuple(item.shape) if item.shape is not None else None for item in resolved
-                    ),
-                    dtypes=tuple(
-                        str(item.dtype) if item.dtype is not None else None for item in resolved
-                    ),
-                    save_labels=frozenset(
-                        label
-                        for label, item in zip(labels, resolved)
-                        if bool(getattr(item, "has_saved_activation", False))
+            # A module exits after its LAST output op: a returned KV cache
+            # carries tensors produced long before the module's final op.
+            exit_index = max(int(getattr(item, "raw_index", 0) or 0) for item in resolved)
+            keyed.append(
+                (
+                    exit_index,
+                    -address.count("."),
+                    _FastOutputPlan(
+                        address_or_name=address,
+                        op_labels=labels,
+                        shapes=tuple(
+                            tuple(item.shape) if item.shape is not None else None
+                            for item in resolved
+                        ),
+                        dtypes=tuple(
+                            str(item.dtype) if item.dtype is not None else None for item in resolved
+                        ),
+                        save_labels=frozenset(
+                            label
+                            for label, item in zip(labels, resolved)
+                            if bool(getattr(item, "has_saved_activation", False))
+                        ),
+                        paths=_module_output_paths(trace, module_call, address, resolved),
                     ),
                 )
             )
-        return tuple(plans)
+        keyed.sort(key=lambda item: (item[0], item[1]))
+        return tuple(plan for _, _, plan in keyed)
 
     @staticmethod
     def _build_function_plans(trace: Any) -> tuple[_FastOutputPlan, ...]:
@@ -1171,6 +1312,20 @@ class _FastLiveSession:
 
         self._hook_finalizer()
 
+    def _admits_size_change(self, expected_shape: tuple[int, ...], value: torch.Tensor) -> bool:
+        """Return whether a same-rank size difference is admitted on this run.
+
+        Size changes are admitted only when the capture sealed a call
+        fingerprint (the structure guard that replaces size equality) and the
+        rank is unchanged; dtype is checked by the caller as before.
+        """
+
+        return (
+            self.allow_size_change
+            and self.fingerprint_reference is not None
+            and value.ndim == len(expected_shape)
+        )
+
     def _poison_and_raise(self, failed: ContractCheck) -> None:
         """Poison the half-refreshed user Trace, then raise the typed divergence.
 
@@ -1183,7 +1338,8 @@ class _FastLiveSession:
         on divergence" posture plus an honest mark on the user-owned object.
         """
 
-        mark_trace_path_status(self.trace, PathFaithfulness.DIVERGED, failed.diagnostic)
+        if self.poison_on_divergence:
+            mark_trace_path_status(self.trace, PathFaithfulness.DIVERGED, failed.diagnostic)
         _raise_failed_contract_as_divergence(failed, fork=None)
 
     def wants_function(self, func_name: str) -> bool:
@@ -1198,21 +1354,20 @@ class _FastLiveSession:
     def _capture_plan_output(self, plan: _FastOutputPlan, output: Any) -> None:
         """Check one runtime output tree and save only selected captured labels."""
 
-        paths = _tensor_leaf_paths(output)
-        if len(paths) != len(plan.op_labels):
+        values, reason = _pair_output_leaves(output, plan.paths, len(plan.op_labels))
+        if values is None:
             self.failure = _contract_check(
                 f"fast_live_output_count:{plan.address_or_name}",
                 False,
                 RunnableErrorCode.OUTPUT_STRUCTURE_MISMATCH,
-                f"Fast live site {plan.address_or_name!r} produced {len(paths)} tensor leaves; "
-                f"the capture recorded {len(plan.op_labels)}.",
+                f"Fast live site {plan.address_or_name!r} output structure changed from the "
+                f"capture: {reason}.",
                 affected_op_labels=plan.op_labels,
             )
             return
-        for label, expected_shape, expected_dtype, path in zip(
-            plan.op_labels, plan.shapes, plan.dtypes, paths
+        for label, expected_shape, expected_dtype, value in zip(
+            plan.op_labels, plan.shapes, plan.dtypes, values
         ):
-            value = _value_at_path(output, path)
             if not isinstance(value, torch.Tensor):
                 self.failure = _contract_check(
                     f"fast_live_output_type:{label}",
@@ -1223,15 +1378,17 @@ class _FastLiveSession:
                 )
                 return
             if expected_shape is not None and tuple(value.shape) != expected_shape:
-                self.failure = _contract_check(
-                    f"fast_live_output_shape:{label}",
-                    False,
-                    RunnableErrorCode.OUTPUT_SHAPE_MISMATCH,
-                    f"Fast live site {label!r} shape changed from {expected_shape} to "
-                    f"{tuple(value.shape)}.",
-                    affected_op_labels=(label,),
-                )
-                return
+                if not self._admits_size_change(expected_shape, value):
+                    self.failure = _contract_check(
+                        f"fast_live_output_shape:{label}",
+                        False,
+                        RunnableErrorCode.OUTPUT_SHAPE_MISMATCH,
+                        f"Fast live site {label!r} shape changed from {expected_shape} to "
+                        f"{tuple(value.shape)}.",
+                        affected_op_labels=(label,),
+                    )
+                    return
+                self.shape_varied = True
             if expected_dtype is not None and str(value.dtype) != expected_dtype:
                 self.failure = _contract_check(
                     f"fast_live_output_dtype:{label}",
@@ -1321,6 +1478,8 @@ class _FastLiveSession:
         self.function_index = 0
         self.last_function_output = None
         self.failure = None
+        self.shape_varied = False
+        self.steer_plan.reset()
         self.active = True
         _state._active_fast_run_collector = self
         try:
@@ -1333,6 +1492,7 @@ class _FastLiveSession:
     def run(self, inputs: Any, *, seed: int | None) -> RunResult:
         """Execute one native forward and enforce the cached static graph guard."""
 
+        self.run_started_at = time.monotonic()
         model = self.model_ref()
         if model is None:
             raise RunCapabilityUnavailableError(
@@ -1351,6 +1511,19 @@ class _FastLiveSession:
             input_args = list(args)
             input_kwargs = dict(kwargs)
         failed_input = _first_failed_live_input_check(self.trace, input_args, input_kwargs)
+        input_size_changed = False
+        if (
+            isinstance(failed_input, ContractCheck)
+            and failed_input.name.startswith("input_shape:")
+            and self.allow_size_change
+            and self.fingerprint_reference is not None
+        ):
+            # Size equality is not the guard when the capture sealed a call
+            # fingerprint: re-admit on rank, dtype, device and arity, and let
+            # the fingerprint settle the structure after the forward.
+            failed_input, input_size_changed = fast_live_input_admission(
+                self.trace, input_args, input_kwargs, allow_shape_change=True
+            )
         if failed_input is _INPUT_CHECK_UNAVAILABLE:
             # This consultation has ADMISSION power (it runs BEFORE the
             # forward), so a broken guard must refuse, never read as
@@ -1366,13 +1539,31 @@ class _FastLiveSession:
             _raise_failed_contract_as_divergence(failed_input, fork=None)
         if seed is not None:
             set_random_seed(seed)
-        with self.activated():
+        with self.activated(), self.steer_plan.context(), fingerprinting() as fingerprint:
             if isinstance(input_args, list):
                 output = model(*input_args, **dict(input_kwargs))
             else:
                 output = model(input_args, **dict(input_kwargs))
+        self.shape_varied = self.shape_varied or input_size_changed
+        self.last_fingerprint = fingerprint.value
         if self.failure is not None:
             self._poison_and_raise(self.failure)
+        if self.fingerprint_reference is not None and self.last_fingerprint != tuple(
+            self.fingerprint_reference
+        ):
+            # The ordered call fingerprint is the structure guard: the same
+            # module-entry and torch-call sequence as the capture, independent
+            # of tensor sizes. A mismatch is a different taken path (another
+            # branch arm, a size-dependent loop count), refused typed.
+            failed = _contract_check(
+                "fast_live_call_fingerprint",
+                False,
+                RunnableErrorCode.CONDITIONAL_ARM_DIVERGENCE,
+                "Live forward executed a different op structure than the capture: "
+                f"call fingerprint {self.last_fingerprint} against recorded "
+                f"{tuple(self.fingerprint_reference)}.",
+            )
+            self._poison_and_raise(failed)
         if self.module_index != len(self.module_plans):
             failed = _contract_check(
                 "fast_live_module_missing",
@@ -1392,6 +1583,15 @@ class _FastLiveSession:
             )
             self._poison_and_raise(failed)
         self._refresh_boundary_payloads(input_args, input_kwargs, output)
+        if self.shape_varied and not self.shape_metadata_cleared:
+            # Honesty rule: a native forward refreshes only the saved sites and
+            # the boundary ops. Every other op's shape and size metadata would
+            # otherwise read capture-time numbers as if they were this run's,
+            # so they take the not-available spelling (None) once and for all.
+            clear_unrefreshed_shape_metadata(self.trace, self.refreshed_labels)
+            self.shape_metadata_cleared = True
+        unfired = self.steer_plan.warn_unfired()
+        self._record_fast_run(seed=seed, unfired=unfired)
         readiness = ReadinessReport(
             status=ReadinessStatus.READY,
             provider=RunProvider.LIVE,
@@ -1443,6 +1643,75 @@ class _FastLiveSession:
             unregister_fork_on_divergence=False,
         )
 
+    def _record_fast_run(self, *, seed: int | None, unfired: tuple[str, ...]) -> None:
+        """Stamp ``last_run``, the operation ledger and the state for one fast run."""
+
+        from ._trace_state import TraceState
+
+        trace = self.trace
+        hook_count = len(self.steer_plan.hook_plan)
+        record = {
+            "op": "rerun",
+            "engine": "guarded_fast",
+            "started_at": self.run_started_at,
+            "strict": True,
+            "append": False,
+            "hook_count": hook_count,
+            "hook_fire_count": self.steer_plan.fire_count,
+            "unfired_hook_count": len(unfired),
+            "divergence_count": 0,
+            "fast_refresh": True,
+            "shape_varied": self.shape_varied,
+            "call_fingerprint": self.last_fingerprint,
+        }
+        trace.last_run = {
+            "engine": "guarded_fast",
+            "timestamp": time.monotonic(),
+            "started_at": self.run_started_at,
+            "duration_s": time.monotonic() - self.run_started_at,
+            "spec_revision": getattr(trace, "_spec_revision", 0),
+            "strict": True,
+            "append": False,
+            "seed": seed,
+            "hooks": hook_count,
+            "hooks_fired": self.steer_plan.fire_count,
+            "hooks_unfired": len(unfired),
+            "divergence_count": 0,
+            "fast_refresh": True,
+            "fast_refused": None,
+            "shape_varied": self.shape_varied,
+            "call_fingerprint": self.last_fingerprint,
+            "refreshed_labels": tuple(sorted(self.refreshed_labels)),
+        }
+        trace._record_operation(**record)
+        trace.state = TraceState.RERUN_PROPAGATED
+
+    def _match_native_output_leaves(self, output: Any, output_labels: tuple[str, ...]) -> list[Any]:
+        """Pair each captured output op with its leaf in the native output, by container path.
+
+        Output ops record their path in the model output (``container_path``);
+        an opaque root (every path empty) keeps the positional pairing. A
+        different leaf count, a missing path or an extra path is a structural
+        divergence and refuses exactly as before.
+        """
+
+        captured_paths = [
+            tuple(getattr(self.trace.layer_dict_all_keys[label], "container_path", None) or ())
+            for label in output_labels
+        ]
+        values, reason = _pair_output_leaves(output, captured_paths, len(output_labels))
+        if values is None:
+            failed = _contract_check(
+                "fast_live_model_output_structure",
+                False,
+                RunnableErrorCode.OUTPUT_STRUCTURE_MISMATCH,
+                f"Native model output tensor structure changed from the captured boundary: {reason}.",
+                affected_op_labels=output_labels,
+            )
+            self._poison_and_raise(failed)
+        assert values is not None
+        return values
+
     def _refresh_boundary_payloads(
         self,
         input_args: Any,
@@ -1471,19 +1740,9 @@ class _FastLiveSession:
                 op = self.trace.layer_dict_all_keys[label]
                 if bool(getattr(op, "has_saved_activation", False)):
                     op.save_activation(value, (), {}, False)
-        output_paths = _tensor_leaf_paths(output)
         output_labels = tuple(getattr(self.trace, "output_layers", ()))
-        if len(output_paths) != len(output_labels):
-            failed = _contract_check(
-                "fast_live_model_output_structure",
-                False,
-                RunnableErrorCode.OUTPUT_STRUCTURE_MISMATCH,
-                "Native model output tensor structure changed from the captured boundary.",
-                affected_op_labels=output_labels,
-            )
-            self._poison_and_raise(failed)
-        for label, path in zip(output_labels, output_paths):
-            value = _value_at_path(output, path)
+        output_values = self._match_native_output_leaves(output, output_labels)
+        for label, value in zip(output_labels, output_values, strict=True):
             op = self.trace.layer_dict_all_keys[label]
             expected_shape = tuple(op.shape) if op.shape is not None else None
             expected_dtype = str(op.dtype) if op.dtype is not None else None
@@ -1497,15 +1756,17 @@ class _FastLiveSession:
                 )
                 self._poison_and_raise(failed)
             if expected_shape is not None and tuple(value.shape) != expected_shape:
-                failed = _contract_check(
-                    f"fast_live_model_output_shape:{label}",
-                    False,
-                    RunnableErrorCode.OUTPUT_SHAPE_MISMATCH,
-                    f"Native model output {label!r} shape changed from {expected_shape} to "
-                    f"{tuple(value.shape)}.",
-                    affected_op_labels=(label,),
-                )
-                self._poison_and_raise(failed)
+                if not self._admits_size_change(expected_shape, value):
+                    failed = _contract_check(
+                        f"fast_live_model_output_shape:{label}",
+                        False,
+                        RunnableErrorCode.OUTPUT_SHAPE_MISMATCH,
+                        f"Native model output {label!r} shape changed from {expected_shape} "
+                        f"to {tuple(value.shape)}.",
+                        affected_op_labels=(label,),
+                    )
+                    self._poison_and_raise(failed)
+                self.shape_varied = True
             if expected_dtype is not None and str(value.dtype) != expected_dtype:
                 failed = _contract_check(
                     f"fast_live_model_output_dtype:{label}",
@@ -1518,6 +1779,11 @@ class _FastLiveSession:
                 self._poison_and_raise(failed)
             if isinstance(value, torch.Tensor) and bool(getattr(op, "has_saved_activation", False)):
                 op.save_activation(value, (), {}, False)
+        # Same rule as capture (capture/trace.py): the transformed raw output
+        # is stored when an output transform exists; the save scope is
+        # otherwise untouched, so a sparse save stays sparse on a rerun.
+        output_transform = self.output_transform
+        self.trace.raw_output = output_transform(output) if output_transform is not None else None
 
 
 def run_fast_loaded_trace(trace: Any, inputs: Any, *, seed: int | None) -> RunResult:
@@ -1584,6 +1850,60 @@ def run_fast_live_trace(trace: Any, inputs: Any, *, seed: int | None) -> RunResu
         session = _FastLiveSession(trace, model)
         trace.__dict__["_fast_run_session"] = session
     return session.run(inputs, seed=seed)
+
+
+#: Typed refusals that send the legacy rerun door back to the capture engine.
+_FAST_RERUN_REFUSALS: tuple[type[BaseException], ...] = (
+    RunCapabilityUnavailableError,
+    PathDivergenceError,
+    RuntimeSignatureDriftError,
+)
+
+
+def try_guarded_fast_rerun(
+    trace: Any, model: nn.Module, inputs: Any, *, output_transform: Any = None
+) -> tuple[bool, str | None]:
+    """Run the legacy intervened rerun through the guarded fast engine when eligible.
+
+    Parameters
+    ----------
+    trace:
+        Live trace carrying the staged spec; refreshed in place on success.
+    model:
+        The model the caller passed (or the trace's retained live model).
+    inputs:
+        Transformed forward input.
+    output_transform:
+        The resolved rerun output transform, applied to the native output for
+        ``trace.raw_output`` exactly as the capture engine does.
+
+    Returns
+    -------
+    tuple[bool, str | None]
+        ``(True, None)`` when the fast engine ran; ``(False, code)`` with the
+        typed refusal code when the caller must fall back to the capture
+        engine. A refused session is closed so the fallback's rebuilt trace
+        starts a fresh plan next time; the trace is never poisoned here
+        because the fallback replaces its state.
+    """
+
+    # The legacy door leaves no TorchLens hook on the user's model between
+    # calls (the rerun hook-staging contract), so the session is built for the
+    # run and closed after it; the explicit fast=True door keeps its cached
+    # session as before.
+    close_fast_run_session(trace)
+    session: _FastLiveSession | None = None
+    try:
+        session = _FastLiveSession(trace, model)
+        session.poison_on_divergence = False
+        session.output_transform = output_transform
+        session.run(inputs, seed=None)
+    except _FAST_RERUN_REFUSALS as exc:
+        return False, refusal_code(exc)
+    finally:
+        if session is not None:
+            session.close()
+    return True, None
 
 
 def close_fast_run_session(trace: Any) -> None:

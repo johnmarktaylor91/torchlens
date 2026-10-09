@@ -358,6 +358,7 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "_raw_transform_escape_detected": "witness",
     "_raw_dynamo_region_detected": "witness",
     "_raw_event_shape_hash": "witness",
+    "_raw_call_fingerprint": "witness",
     "_output_container_specs_by_raw_label": "graph",
     "_buffer_accessor": "graph",
     "_buffer_write_tracker": "graph",

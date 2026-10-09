@@ -18,6 +18,13 @@
   of a group reads THE one cached immutable view (O(1), identity-stable), removal
   scrub rebinds the group row once for all members, and caller mutation is
   impossible — this supersedes the historical fresh-mutable-copy-per-read barrier.
+- Steering many forwards or a generation loop: `spec.bind(model)` (capture-free, about 1x a
+  plain hook, works with HF `generate()` and the KV cache), `tl.record(..., intervene=spec,
+  return_output=True)` per forward when activations are needed as evidence, and one full
+  `tl.trace(..., intervene=spec)` as the correctness oracle. Trace-then-rerun
+  (`trace.run(model, x)` on a module-targeted staged spec) is a fast path too: the guarded
+  fast engine, about 1.5x a plain hook, with the trace's saved sites refreshed. Recipe:
+  [Common Patterns](common-patterns.md), "Steering many forwards / generation".
 - `tl.record(..., save=...)` is the sparse predicate recorder; it returns `Recording`.
   `Recording.to_trace()` cooks the event stream into a full-structure `Trace`, with unsaved
   payload reads rejected explicitly. `tl.record()`/fastlog is torch-only in the backend-v1
@@ -153,7 +160,14 @@
   RSS) — tens of steps, never hundreds; guarded-fast (`trace.run(fast=True)`, which needs a
   functional `save=tl.func(...)` on the capture -- the default capture re-runs through
   `trace.run(inputs=...)`) is the engine for episode-scale re-runs and must reproduce wrapped
-  tokens bit-exactly (pinned). ATTESTED COUPLING
+  tokens bit-exactly (pinned). The same engine serves a STEERED rerun: `trace.run(model, x)`
+  on a module-targeted staged spec fires the staged hooks at module exit inside a native
+  forward (`last_run["engine"] == "guarded_fast"`), admits a changed input length under the
+  sealed ordered call fingerprint (`last_run["shape_varied"]`, unrefreshed shape/memory
+  metadata reset to `None`), and falls back to the capture engine with
+  `last_run["fast_refused"] == "<code>:<stage>"` on any typed refusal (value replacements,
+  non-module targets, structural divergence); `fast=True` on a live or loaded-activation
+  trace applies the staged spec the same way. Glossary: "Guarded fast rerun". ATTESTED COUPLING
   (F42, the foldA D5 flip; spellings DOCUMENTED-UNSTABLE): `episode=` x `intervene=`
   runs COUPLED — a fire-attribution session attributes every live FireRecord to its
   step (root-loop fires bucket outside-step, disclosed in the digest, never guessed

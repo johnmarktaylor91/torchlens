@@ -189,7 +189,9 @@ def _warn_stateful_live_run_once(trace: Any, model: nn.Module) -> None:
     trace.__dict__["_stateful_run_warning_emitted"] = True
 
 
-def _warn_pending_value_edits_on_new_input_run(trace: Any) -> None:
+def _warn_pending_value_edits_on_new_input_run(
+    trace: Any, *, staged_spec_applies: bool = False
+) -> None:
     """Disclose that value-edits on this trace do not apply to a new-input run.
 
     There are two legitimate intervention paths: (1) edit a SAVED value and
@@ -206,21 +208,35 @@ def _warn_pending_value_edits_on_new_input_run(trace: Any) -> None:
     ----------
     trace:
         Live Trace about to be re-executed on new inputs.
+    staged_spec_applies:
+        True when this run is the guarded fast live engine applying the
+        trace's staged intervention spec. The capture-time or rerun firing
+        audit and the ``RERUN_PROPAGATED`` state are then that intervention's
+        own trail, not an inert value edit, so only ``do()``/``push``/direct
+        writes disclose.
     """
 
     from .._trace_state import TraceState
 
     state = getattr(trace, "state", None)
-    has_value_edits = (
-        state
-        in {
-            TraceState.REPLAY_PROPAGATED,
-            TraceState.RERUN_PROPAGATED,
-            TraceState.DIRECT_WRITE_DIRTY,
-        }
-        or bool(getattr(trace, "intervention_audit", None))
-        or bool(trace._has_direct_writes)
-    )
+    audit = getattr(trace, "intervention_audit", None) or ()
+    if staged_spec_applies:
+        has_value_edits = (
+            state in {TraceState.REPLAY_PROPAGATED, TraceState.DIRECT_WRITE_DIRTY}
+            or any(isinstance(row, dict) and row.get("door") == "do" for row in audit)
+            or bool(trace._has_direct_writes)
+        )
+    else:
+        has_value_edits = (
+            state
+            in {
+                TraceState.REPLAY_PROPAGATED,
+                TraceState.RERUN_PROPAGATED,
+                TraceState.DIRECT_WRITE_DIRTY,
+            }
+            or bool(audit)
+            or bool(trace._has_direct_writes)
+        )
     if not has_value_edits:
         return
     import warnings
@@ -665,7 +681,15 @@ class TraceValidationMixin(_TraceMixinBase):
                 if not (getattr(hook_spec, "metadata", None) or {}).get("selection_do_engine_owned")
             ]
             staged_value_specs = getattr(staged_spec, "target_value_specs", ())
-            if staged_user_hooks or staged_value_specs:
+            # The guarded fast LIVE engine applies the staged spec at real
+            # module boundaries (``_fast_live_steer``), so the gate's reason
+            # does not hold there; loaded providers and the ordinary live
+            # provider still never install it and keep refusing.
+            fast_live_applies_spec = fast and loaded_provider not in {
+                RunProvider.LOADED_SPARSE,
+                RunProvider.LOADED_ANALYSIS,
+            }
+            if (staged_user_hooks or staged_value_specs) and not fast_live_applies_spec:
                 from ..intervention.errors import EngineDispatchError
 
                 staged_hooks = len(staged_user_hooks)
@@ -834,7 +858,16 @@ class TraceValidationMixin(_TraceMixinBase):
             from .._runnable_execution import _LiveRunOptions, run_live_trace
 
             _refuse_state_compromised_live_run(self)
-            _warn_pending_value_edits_on_new_input_run(self)
+            staged_spec = getattr(self, "_intervention_spec", None)
+            _warn_pending_value_edits_on_new_input_run(
+                self,
+                staged_spec_applies=bool(fast)
+                and loaded_provider not in {RunProvider.LOADED_SPARSE, RunProvider.LOADED_ANALYSIS}
+                and bool(
+                    getattr(staged_spec, "hook_specs", ())
+                    or getattr(staged_spec, "target_value_specs", ())
+                ),
+            )
             source_ref = getattr(self, "_source_model_ref", None)
             live_model = source_ref() if source_ref is not None else None
             if live_model is not None:
@@ -929,6 +962,21 @@ class TraceValidationMixin(_TraceMixinBase):
         from ..intervention.rerun import run as _impl
 
         resolved_output_transform = self._resolve_rerun_output_transform(output_transform)
+        # Guarded fast engine first: a native forward with the staged spec
+        # applied at real module boundaries, saving the saved sites and the
+        # boundary ops, guarded by the sealed call fingerprint. Any typed
+        # refusal (ineligible save scope or target, a real divergence) falls
+        # back to the capture rerun below, with the code in ``last_run``.
+        fast_refused: str | None = None
+        if chunk_paths is None and not replay_options.append and replay_options.chunk_size is None:
+            from .._fast_run import try_guarded_fast_rerun
+
+            fast_done, fast_refused = try_guarded_fast_rerun(
+                self, run_model, transformed_input, output_transform=resolved_output_transform
+            )
+            if fast_done:
+                self.raw_input = user_input
+                return self
         result = _impl(
             self,
             run_model,
@@ -936,6 +984,7 @@ class TraceValidationMixin(_TraceMixinBase):
             replay=replay_options,
             chunk_paths=chunk_paths,
             output_transform=resolved_output_transform,
+            fast_refused=fast_refused,
         )
         # Atomic swap rebuilds Trace state; restore raw_input to the new
         # user-supplied value so visualization / save-load report the
