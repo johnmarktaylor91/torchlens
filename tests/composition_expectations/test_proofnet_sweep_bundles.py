@@ -126,24 +126,33 @@ def test_trace_preserves_torch_global_state_and_model_behavior() -> None:
         tl.release_model(model)
 
 
-def test_post_trace_pickle_gap_is_pinned_and_the_remedy_works() -> None:
-    """LEDGERED CELL SG#33 (live, measured): after tl.trace the user's model
-    cannot be pickled (instance-level forward attrs). Both halves executed:
-    the gap is pinned AND the documented remedy (release_model) is verified
-    to actually restore picklability -- remedy efficacy, never prose."""
+def test_post_trace_model_pickles_and_round_trips() -> None:
+    """REGRESSION NODE SG#33 (closed): after tl.trace the user's model pickles.
+
+    The gap was instance-level forward wrappers left on the model after a
+    capture; they are session-scoped now, so a captured model pickles with no
+    TorchLens reference in its bytes and the round trip computes what the
+    original computes. ``tl.release_model`` (the former remedy) must keep that
+    true -- remedy efficacy, never prose.
+    """
 
     import torchlens as tl
 
     model = _model()
     trace = tl.trace(model, _x())
     trace.cleanup()
-    with pytest.raises(pickle.PicklingError):
-        pickle.dumps(model)
-    tl.release_model(model)
-    restored = pickle.loads(pickle.dumps(model))
+    blob = pickle.dumps(model)
+    assert b"torchlens" not in blob, "the post-trace pickle references TorchLens objects"
+    restored = pickle.loads(blob)
     with torch.no_grad():
         assert torch.equal(restored(_x()), model(_x())), (
-            "release_model restored picklability but the round-tripped model computes differently"
+            "the post-trace pickle round trip computes differently from the original"
+        )
+    tl.release_model(model)
+    released = pickle.loads(pickle.dumps(model))
+    with torch.no_grad():
+        assert torch.equal(released(_x()), model(_x())), (
+            "release_model broke picklability or changed what the round trip computes"
         )
 
 

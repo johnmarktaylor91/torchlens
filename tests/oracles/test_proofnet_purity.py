@@ -8,9 +8,9 @@ exception-stage arm injects a mid-forward failure and re-checks the same
 postconditions (read-after-failure).
 
 Instance-``__dict__`` contamination (the tl_* forward attrs) is FORK-A
-territory (state contract UNSET) and is pinned separately by the compo
-sweep's SG#33 cell -- this harness asserts the contracts all three FORK-A
-branches share.
+territory (state contract UNSET); its post-trace pickle symptom is the compo
+sweep's SG#33 regression cell -- this harness asserts the contracts all three
+FORK-A branches share.
 """
 
 from __future__ import annotations

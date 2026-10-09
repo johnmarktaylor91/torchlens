@@ -47,8 +47,10 @@ only the default state relation of a SUCCESSFUL `tl.trace` on a stateful
 
 Neither branch makes "your model can no longer be saved" an honest outcome
 -- the unpicklable-model residue is a bug under both (the FAILED-call release
-above fixes the failure half; the success half is `release_model` today and
-List-B dissolve-on-teardown later).
+above fixes the failure half; the success half is fixed by dissolve-on-teardown:
+submodule `forward` wrappers are session-scoped, so a successful capture leaves
+the model picklable, and `release_model` remains only for torch-function
+attributes held across a later wrap-state change).
 
 ### Restoration inventory (what a PURE implementation must snapshot)
 
