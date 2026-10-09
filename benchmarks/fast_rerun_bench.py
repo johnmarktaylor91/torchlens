@@ -11,6 +11,9 @@ engine must admit. Every TorchLens path is checked bit-exact against the plain h
 Usage::
 
     python benchmarks/fast_rerun_bench.py --model q3s --seqs 16 64 --reps 5 --gen 8
+    # Cluster (one GPU): the released model in bf16, eager attention, KV cache off.
+    python benchmarks/fast_rerun_bench.py --pretrained Qwen/Qwen3.5-9B --revision c202236 \
+        --device cuda --dtype bfloat16 --seqs 22 --reps 3 --gen 8 --out numbers-9b.jsonl
 """
 
 from __future__ import annotations
@@ -39,6 +42,7 @@ from torchlens.intervention.rerun import run as capture_rerun  # noqa: E402
 
 MAGNITUDE = 4.0
 LOGIT_SITE = "logit_readout"
+DEVICE = "cpu"
 
 
 class LastLogits(nn.Module):
@@ -97,18 +101,50 @@ def build(name: str) -> tuple[nn.Module, str, int]:
         net = Qwen3ForCausalLM(cfg)
     else:
         raise ValueError(f"unknown model config {name!r}")
-    return LastLogits(net).eval(), f"network.model.layers.{layers // 2}", hidden
+    return LastLogits(net).eval().to(DEVICE), f"network.model.layers.{layers // 2}", hidden
+
+
+def build_pretrained(
+    model_id: str, revision: str | None, dtype: torch.dtype
+) -> tuple[nn.Module, str, int]:
+    """Load a released causal LM (eager attention, local files only) in the same wrapper."""
+
+    from transformers import AutoModelForCausalLM
+
+    net = AutoModelForCausalLM.from_pretrained(
+        model_id,
+        revision=revision,
+        dtype=dtype,
+        attn_implementation="eager",
+        local_files_only=True,
+        device_map=DEVICE,
+    )
+    text_config = net.config.get_text_config()
+    layers = int(text_config.num_hidden_layers)
+    return (
+        LastLogits(net).eval(),
+        f"network.model.layers.{layers // 2}",
+        int(text_config.hidden_size),
+    )
+
+
+def sync() -> None:
+    if DEVICE.startswith("cuda"):
+        torch.cuda.synchronize()
 
 
 def timed(fn: Callable[[], Any], reps: int) -> tuple[list[float], Any]:
     """Time ``fn`` ``reps`` times after one warm-up call; return the times and last result."""
 
     out = fn()
+    sync()
     gc.collect()
     times: list[float] = []
     for _ in range(reps):
+        sync()
         start = time.perf_counter()
         out = fn()
+        sync()
         times.append(time.perf_counter() - start)
         gc.collect()
     return times, out
@@ -124,7 +160,7 @@ class Paths:
     def __init__(self, model: nn.Module, site_addr: str, hidden: int) -> None:
         self.model = model
         self.layer = model.get_submodule(site_addr)
-        self.direction = torch.randn(hidden, generator=torch.Generator().manual_seed(1))
+        self.direction = torch.randn(hidden, generator=torch.Generator().manual_seed(1)).to(DEVICE)
         self.save = tl.module(site_addr) | tl.module(LOGIT_SITE)
         self.spec = tl.when(
             tl.module(site_addr), tl.steer(self.direction, magnitude=MAGNITUDE, feature_axis=-1)
@@ -139,7 +175,7 @@ class Paths:
 
         def steer(_module: nn.Module, _args: Any, out: Any) -> Any:
             hidden = out[0] if isinstance(out, tuple) else out
-            changed = hidden + direction.to(hidden.dtype) * MAGNITUDE
+            changed = hidden + direction.to(hidden.device, hidden.dtype) * MAGNITUDE
             return (changed, *out[1:]) if isinstance(out, tuple) else changed
 
         handle = self.layer.register_forward_hook(steer)
@@ -227,12 +263,14 @@ def measure_generation(
     generator = torch.Generator().manual_seed(99)
     current = ids
     for step in range(1, steps + 1):
-        token = torch.randint(0, 1000, (1, 1), generator=generator)
+        token = torch.randint(0, 1000, (1, 1), generator=generator).to(current.device)
         current = torch.cat([current, token], dim=1)
         reference = paths.hook(current)
         hook_t, _ = timed(lambda: paths.hook(current), 1)
+        sync()
         start = time.perf_counter()
         trace.run(paths.model, current)
+        sync()
         elapsed = time.perf_counter() - start
         emit(
             {
@@ -276,27 +314,47 @@ def table(records: list[dict[str, Any]]) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--model", action="append", default=None, help="q3s, q3m, q35s or q35m")
+    parser.add_argument(
+        "--pretrained", default=None, help="Hugging Face model id (local files only)"
+    )
+    parser.add_argument("--revision", default=None, help="revision for --pretrained")
+    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--dtype", default="float32", help="torch dtype name for --pretrained")
     parser.add_argument("--seqs", type=int, nargs="+", default=[16, 64])
     parser.add_argument("--reps", type=int, default=5)
     parser.add_argument("--gen", type=int, default=8, help="generation steps after the first seq")
     parser.add_argument("--threads", type=int, default=1)
     parser.add_argument("--out", default=None, help="JSON lines file (appended)")
     args = parser.parse_args()
+    global DEVICE
+    DEVICE = args.device
     torch.set_num_threads(args.threads)
+    if DEVICE.startswith("cuda"):
+        torch.backends.cuda.matmul.allow_tf32 = False
     emit(
         {
             "kind": "env",
             "host": benchmark_host_label(),
             "torch": torch.__version__,
             "torchlens": getattr(tl, "__version__", "?"),
+            "device": DEVICE,
+            "gpu": torch.cuda.get_device_name(0) if DEVICE.startswith("cuda") else None,
             "threads": torch.get_num_threads(),
             "loadavg": os.getloadavg(),
         },
         args.out,
     )
     records: list[dict[str, Any]] = []
-    for name in args.model or ["q3s"]:
-        model, site_addr, hidden = build(name)
+    configs = list(args.model or ([] if args.pretrained else ["q3s"]))
+    if args.pretrained:
+        configs.append(args.pretrained)
+    for name in configs:
+        if name == args.pretrained:
+            model, site_addr, hidden = build_pretrained(
+                name, args.revision, getattr(torch, args.dtype)
+            )
+        else:
+            model, site_addr, hidden = build(name)
         paths = Paths(model, site_addr, hidden)
         emit(
             {
@@ -308,12 +366,12 @@ def main() -> None:
             args.out,
         )
         for seq in args.seqs:
-            ids = torch.randint(0, 1000, (1, seq), generator=torch.Generator().manual_seed(seq))
+            seed = torch.Generator().manual_seed(seq)
+            ids = torch.randint(0, 1000, (1, seq), generator=seed).to(DEVICE)
             records.extend(measure_paths(paths, name, ids, args.reps, args.out))
         if args.gen:
-            ids = torch.randint(
-                0, 1000, (1, args.seqs[0]), generator=torch.Generator().manual_seed(args.seqs[0])
-            )
+            seed = torch.Generator().manual_seed(args.seqs[0])
+            ids = torch.randint(0, 1000, (1, args.seqs[0]), generator=seed).to(DEVICE)
             measure_generation(paths, name, ids, args.gen, args.out)
         tl.release_model(model)
     print()
