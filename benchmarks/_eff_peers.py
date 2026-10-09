@@ -15,7 +15,12 @@ class _Peers:
             from nnsight import NNsight
 
             self.model = NNsight(runner.model)
-            self.targets = [self.model.get_submodule(s) for s in runner.sites]
+            self.targets = []
+            for site in runner.sites:
+                target = self.model
+                for part in site.split("."):
+                    target = target[int(part)] if part.isdigit() else getattr(target, part)
+                self.targets.append(target)
         else:
             from transformer_lens import TransformerBridge
             from transformers import AutoTokenizer

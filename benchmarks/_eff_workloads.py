@@ -44,6 +44,15 @@ def _build(name: str) -> tuple[_Model, list[str], int]:
         )
         sites = [f"net.transformer.h.{i}" for i in (0, 5, 11)]
         hidden = 768
+    elif name == "qwen06":
+        net = transformers.AutoModelForCausalLM.from_pretrained(
+            "Qwen/Qwen3-0.6B",
+            attn_implementation="eager",
+            local_files_only=True,
+            dtype=torch.float32,
+        )
+        sites = [f"net.model.layers.{i}" for i in (0, 13, 27)]
+        hidden = net.config.hidden_size
     else:
         cfg = transformers.Qwen3Config(
             vocab_size=32768,
@@ -82,6 +91,8 @@ class _Runner:
         self.seed_traces: dict[Any, Any] = {}
         self.compiled = None
         self.bound = None
+        self.bound_plans: dict[Any, Any] = {}
+        self.engines: list[Any] = []
         self.latest = None
         self.peer = None
 
@@ -162,7 +173,10 @@ class _Runner:
                 elif self.mode == "hooks":
                     output = self.model(ids)
                 elif self.mode == "bind":
-                    output = (spec.bind(self.model) if spec else self.model)(ids)
+                    key = (action, strength)
+                    if spec is not None and key not in self.bound_plans:
+                        self.bound_plans[key] = spec.bind(self.model)
+                    output = self.bound_plans.get(key, self.model)(ids)
                 elif self.mode == "rerun":
                     if grad:
                         raise ValueError("rerun gradient capture not benchmarked")
@@ -174,6 +188,9 @@ class _Runner:
                         )
                         self.seed_traces[key] = self.seed_trace
                     self.seed_trace.run(self.model, ids)
+                    self.engines.append(
+                        {k: self.seed_trace.last_run.get(k) for k in ("engine", "fast_refused")}
+                    )
                     product = self.seed_trace
                     output = product.find_sites(tl.module("readout")).first().out
                 elif self.mode == "record":
@@ -360,6 +377,7 @@ def main() -> None:
                     "peak_rss_kib": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
                     "n_ops": runner.n_ops,
                     "selected_bytes_last_batch": runner.bytes,
+                    "rerun_engines": runner.engines,
                 }
             ),
             flush=True,
