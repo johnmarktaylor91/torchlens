@@ -2243,3 +2243,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: d9b4f26af87eb03a79d01dbae9d51789636c1912 (clean)
 recorded: 2026-10-09T04:02:04.417263+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: 2.36.1 integration: _rerun_save_request absorbs the retired _retain_layers_to_save_output_parents drop field; merged tree read sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 40e8e3ef903a25cadf1b564c6dbeb9ca6e04d4d3 (dirty)
+recorded: 2026-10-09T08:50:11.724731+00:00
