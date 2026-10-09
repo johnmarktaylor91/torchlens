@@ -45,6 +45,17 @@ class _Layer(nn.Module):
         return torch.relu(self.lin(x))
 
 
+class _Wrap(nn.Module):
+    """Returns its child's output unchanged, so one op is the output of both."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.inner = nn.Linear(_WIDTH, _WIDTH)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.inner(x)
+
+
 class _TupleOut(nn.Module):
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         return x * 2, x + 1
@@ -56,12 +67,13 @@ class _DictOut(nn.Module):
 
 
 class _Stack(nn.Module):
-    """24 nested layers, a module called twice, tuple and dict outputs."""
+    """24 nested layers, a module called twice, a pass-through wrapper, tuple and dict outputs."""
 
     def __init__(self) -> None:
         super().__init__()
         self.layers = nn.ModuleList(_Layer() for _ in range(_DEPTH))
         self.shared = nn.Linear(_WIDTH, _WIDTH)
+        self.wrap = _Wrap()
         self.tup = _TupleOut()
         self.dct = _DictOut()
         self.head = nn.Linear(_WIDTH, 2)
@@ -70,7 +82,7 @@ class _Stack(nn.Module):
         for layer in self.layers:
             x = layer(x)
         x = self.shared(x)
-        x = self.shared(torch.sigmoid(x))
+        x = self.wrap(self.shared(torch.sigmoid(x)))
         a, b = self.tup(x)
         d = self.dct(a * b)
         return self.head(d["a"] + d["b"].unsqueeze(-1))
@@ -98,12 +110,13 @@ UNIONS: dict[str, Callable[[], Any]] = {
     "called_twice": lambda: _union("shared"),
     "second_pass_only": lambda: _union("shared:2"),
     "tuple_and_dict": lambda: _union("tup", "dct"),
+    "pass_through_wrapper": lambda: _union("wrap", "wrap.inner"),
     "everything_kind": lambda: _union("layers.2", "shared", "tup", "dct", "head"),
 }
 
 CONTROLS: dict[str, Callable[[], Any]] = {
     "module_or_func": lambda: tl.module("layers.3") | tl.func("linear"),
-    "module_and_module": lambda: tl.module("layers.3") & tl.module("layers.3.lin"),
+    "module_and_module": lambda: tl.module("wrap") & tl.module("wrap.inner"),
     "not_module": lambda: ~tl.module("layers.3"),
     "module_or_label": lambda: tl.module("layers.3") | tl.label("relu_2"),
     "callable": lambda: lambda ctx: ctx.kind == "op" and ctx.func_name == "relu",
