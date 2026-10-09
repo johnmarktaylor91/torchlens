@@ -27,6 +27,8 @@ from ...fastlog.types import (
 from ...intervention.hooks import make_live_site_proxy, normalize_hook_plan
 from ...intervention.runtime import active_intervention_context
 from ...intervention.selectors import (
+    CompositeSelector,
+    ModuleSelector,
     label as make_label_selector,
 )
 from ...intervention.types import (
@@ -392,6 +394,76 @@ def _trace_intervene_options(trace: "Trace") -> Any | None:
     if options is None or options.intervene is None:
         return None
     return options
+
+
+# Identity-guarded memo for ``_intervene_reaches_op_door``: the intervene operand is fixed for a
+# whole capture, so the selector walk runs once per operand instead of once per op output.
+_OP_DOOR_MEMO: dict[int, tuple[Any, bool]] = {}
+_OP_DOOR_MEMO_LIMIT = 64
+
+
+def _is_module_exit_only(selector: Any) -> bool:
+    """Return whether ``selector`` can only match at a module-exit boundary.
+
+    True only for a pure ``tl.module(...)`` selector or an ``|`` / ``&`` composite whose leaves are
+    all pure ``tl.module(...)`` selectors. On the torch backend an op-time context never carries
+    ``output_of_module_calls`` (that field is joined at module exit), so such a selector evaluates
+    False at every op door and only the module-boundary door can fire it. Any other node kind
+    (negation, callables, value producers, subclasses) is treated as op-capable.
+
+    Parameters
+    ----------
+    selector:
+        WHERE term of one intervention rule.
+
+    Returns
+    -------
+    bool
+        Whether the selector can never match an op-time context.
+    """
+
+    if type(selector) is ModuleSelector:
+        return True
+    if type(selector) is CompositeSelector and selector.operator in ("and", "or"):
+        return bool(selector.selectors) and all(
+            _is_module_exit_only(child) for child in selector.selectors
+        )
+    return False
+
+
+def _intervene_reaches_op_door(options: Any) -> bool:
+    """Return whether the ``intervene=`` operand can fire at a per-op output door.
+
+    Conservative: only an ``InterventionSpec`` whose every rule's WHERE term is module-exit-only
+    (see ``_is_module_exit_only``) returns False; every other operand returns True so the per-op
+    check keeps running exactly as before.
+
+    Parameters
+    ----------
+    options:
+        Trace predicate options carrying the ``intervene`` operand.
+
+    Returns
+    -------
+    bool
+        Whether the per-op intervention check can ever match.
+    """
+
+    intervene = options.intervene
+    memo = _OP_DOOR_MEMO.get(id(intervene))
+    if memo is not None and memo[0] is intervene:
+        return memo[1]
+    from ...intervention.spec import InterventionSpec
+
+    reaches = not (
+        isinstance(intervene, InterventionSpec)
+        and bool(intervene.rules)
+        and all(_is_module_exit_only(rule.where) for rule in intervene.rules)
+    )
+    if len(_OP_DOOR_MEMO) >= _OP_DOOR_MEMO_LIMIT:
+        _OP_DOOR_MEMO.clear()
+    _OP_DOOR_MEMO[id(intervene)] = (intervene, reaches)
+    return reaches
 
 
 def _predicate_hook_metadata(entry: Any, decision: InterventionDecision) -> dict[str, Any]:
