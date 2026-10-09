@@ -18,8 +18,8 @@ jobs:
   perf-gate:
     name: Same-run performance regression gate
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    # Scheduled/manual only: two smoke-suite runs cost several minutes and must
+    timeout-minutes: 45
+    # Scheduled/manual only: the interleaved A/B gate costs 10-15 minutes and must
     # not extend the PR-blocking path. Comparing adjacent commits on the same
     # runner avoids treating developer-machine absolute baselines as portable.
     steps:
@@ -67,42 +67,24 @@ jobs:
           echo "release anchor: $anchor"
           git worktree add --detach "${{ runner.temp }}/perf-anchor" "$anchor"
 
-      - name: Measure baseline and current commit on the same runner
+      - name: Interleaved A/B gate against the parent and the release anchor
+        # perf_ab alternates parent, anchor and current per cell and per
+        # round (arm order rotates), pools 5 rounds so every cold-start row
+        # has 5 samples, treats drift in the no-TorchLens control rows as
+        # INCONCLUSIVE (warned, not failed), re-measures a flagged row before
+        # failing it, and fails a row confirmed at >=1.5x even on a noisy
+        # runner. Both comparisons always run: 10% per commit, 25% cumulative
+        # against the release tag. Doc: benchmarks/perf_ab.py.
         env:
           PERF_PYTHON: ${{ runner.temp }}/perf-venv/bin/python
         run: |
-          cd "${{ runner.temp }}/perf-base"
-          PYTHONPATH=. "$PERF_PYTHON" -m benchmarks.perf_suite \
-            --smoke --samples 10 --timeout 180 \
-            --out-json "${{ runner.temp }}/perf-base.json" \
-            --out-md "${{ runner.temp }}/perf-base.md"
-          cd "${{ runner.temp }}/perf-anchor"
-          PYTHONPATH=. "$PERF_PYTHON" -m benchmarks.perf_suite \
-            --smoke --samples 10 --timeout 180 \
-            --out-json "${{ runner.temp }}/perf-anchor.json" \
-            --out-md "${{ runner.temp }}/perf-anchor.md"
-          cd "$GITHUB_WORKSPACE"
-          PYTHONPATH=. "$PERF_PYTHON" -m benchmarks.perf_suite \
-            --smoke --samples 10 --timeout 180 \
-            --out-json "${{ runner.temp }}/perf-current.json" \
-            --out-md "${{ runner.temp }}/perf-current.md"
-
-      - name: Fail on a measured regression
-        env:
-          PERF_PYTHON: ${{ runner.temp }}/perf-venv/bin/python
-        run: |
-          PYTHONPATH=. "$PERF_PYTHON" -m benchmarks.perf_gate \
-            --baseline "${{ runner.temp }}/perf-base.json" \
-            --current "${{ runner.temp }}/perf-current.json" \
-            --out "${{ runner.temp }}/perf-comparison.json"
-          # Cumulative ceiling vs the release anchor: 25% tolerance -- wide
-          # enough for a release cycle's reviewed growth, tight enough that
-          # compounding "9% per commit" drift goes red before it doubles.
-          PYTHONPATH=. "$PERF_PYTHON" -m benchmarks.perf_gate \
-            --baseline "${{ runner.temp }}/perf-anchor.json" \
-            --current "${{ runner.temp }}/perf-current.json" \
-            --rel-tolerance 0.25 \
-            --out "${{ runner.temp }}/perf-anchor-comparison.json"
+          PYTHONPATH=. "$PERF_PYTHON" -m benchmarks.perf_ab \
+            --base "${{ runner.temp }}/perf-base" \
+            --anchor "${{ runner.temp }}/perf-anchor" \
+            --current "$GITHUB_WORKSPACE" \
+            --rounds 5 --samples 4 --timeout 180 \
+            --workdir "${{ runner.temp }}/perf-ab-cells" \
+            --out "${{ runner.temp }}/perf-ab.json"
 
       - name: Upload performance evidence
         if: always()
@@ -110,11 +92,7 @@ jobs:
         with:
           name: nightly-perf-gate
           path: |
-            ${{ runner.temp }}/perf-base.json
-            ${{ runner.temp }}/perf-anchor.json
-            ${{ runner.temp }}/perf-current.json
-            ${{ runner.temp }}/perf-anchor-comparison.json
-            ${{ runner.temp }}/perf-comparison.json
+            ${{ runner.temp }}/perf-ab.json
 
   fast-tier:
     name: Full fast tier
