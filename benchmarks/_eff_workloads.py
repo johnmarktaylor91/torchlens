@@ -83,6 +83,7 @@ class _Runner:
         self.compiled = None
         self.bound = None
         self.latest = None
+        self.peer = None
 
     def call(
         self,
@@ -94,6 +95,12 @@ class _Runner:
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         # Essential complexity: this benchmark dispatches the same workload across capture contracts.
         self.latest = None
+        if self.mode in ("nnsight", "tlens"):
+            from _eff_peers import _Peers
+
+            if self.peer is None:
+                self.peer = _Peers(self)
+            return self.peer.call(ids, action, strength, patch, grad)
         cache: dict[str, torch.Tensor] = {}
         handles = []
 

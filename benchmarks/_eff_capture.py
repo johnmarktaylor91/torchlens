@@ -87,7 +87,7 @@ class _SelectedCapture:
                     raise _TierRefusal("module_identity_changed")
                 self.handles.append(module.register_forward_hook(self._hook(address)))
         except BaseException:
-            self.__exit__(None, None, None)
+            self.__exit__(BaseException, None, None)
             raise
         return self
 
