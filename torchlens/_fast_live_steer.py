@@ -26,7 +26,7 @@ import threading
 import warnings
 import weakref
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any
 
 import torch
@@ -300,6 +300,24 @@ class SteerPlan:
         return unfired
 
 
+def session_is_active(session_ref: weakref.ReferenceType[Any]) -> Callable[[], bool]:
+    """Return the activity test of a session's persistent hooks.
+
+    True only while the session runs on its owner thread, so hooks left on the
+    model by a cached session stay inert for captures and other sessions.
+    """
+
+    def active() -> bool:
+        session = session_ref()
+        return (
+            session is not None
+            and bool(session.active)
+            and threading.get_ident() == session.owner_thread_id
+        )
+
+    return active
+
+
 def install_steer_hooks(plan: SteerPlan, session_ref: weakref.ReferenceType[Any]) -> list[Any]:
     """Register one persistent forward hook per steered module.
 
@@ -310,6 +328,7 @@ def install_steer_hooks(plan: SteerPlan, session_ref: weakref.ReferenceType[Any]
     """
 
     handles: list[Any] = []
+    active = session_is_active(session_ref)
     for address, module in plan.modules.items():
 
         def hook(
@@ -322,13 +341,9 @@ def install_steer_hooks(plan: SteerPlan, session_ref: weakref.ReferenceType[Any]
         ) -> Any:
             """Apply the staged boundary hooks for this address during an active run."""
 
-            session = ref()
-            if (
-                session is None
-                or not session.active
-                or threading.get_ident() != session.owner_thread_id
-            ):
+            if not active():
                 return None
+            session = ref()
             return session.steer_plan.apply(address, module, args, output)
 
         handles.append(module.register_forward_hook(hook))

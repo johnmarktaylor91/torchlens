@@ -21,6 +21,7 @@ from ._fast_live_steer import (
     fast_live_input_admission,
     install_steer_hooks,
     refusal_code,
+    session_is_active,
 )
 from ._runnable_execution import (
     _HOST_RNG_SOURCE_KIND,
@@ -1085,7 +1086,7 @@ class _FastLiveSession:
         session_ref = weakref.ref(self)
         try:
             self.handles.extend(install_steer_hooks(self.steer_plan, session_ref))
-            self.handles.extend(install_module_token_hooks(model))
+            self.handles.extend(install_module_token_hooks(model, session_is_active(session_ref)))
             for address in plan_addresses:
                 module = modules["" if address == "self" else address]
 

@@ -22,7 +22,7 @@ Contract shared with capture:
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import Any
 
@@ -55,13 +55,17 @@ def module_fingerprint_address(module: nn.Module, fallback: str) -> str:
     return meta.address
 
 
-def _token_pre_hook(token: int) -> Any:
+def _token_pre_hook(token: int, active: Callable[[], bool] | None) -> Any:
     """Build a forward pre-hook that notes one module-entry token.
 
     Parameters
     ----------
     token:
         Precomputed ``_state.module_token`` of the module's address.
+    active:
+        Optional gate; when it returns ``False`` the hook notes nothing. A
+        persistent session's hooks pass their activity test here so a cached
+        session never folds tokens into another run's fingerprint.
 
     Returns
     -------
@@ -71,12 +75,16 @@ def _token_pre_hook(token: int) -> Any:
 
     def hook(_module: nn.Module, _args: Any) -> None:
         """Fold this module's entry token into the active fingerprint."""
+        if active is not None and not active():
+            return
         _state.note_fingerprint_token(token)
 
     return hook
 
 
-def install_module_token_hooks(model: nn.Module) -> list[RemovableHandle]:
+def install_module_token_hooks(
+    model: nn.Module, active: Callable[[], bool] | None = None
+) -> list[RemovableHandle]:
     """Register a module-entry token pre-hook on every non-root module.
 
     Parameters
@@ -96,7 +104,7 @@ def install_module_token_hooks(model: nn.Module) -> list[RemovableHandle]:
             if module is model:
                 continue
             token = _state.module_token(module_fingerprint_address(module, name))
-            handles.append(module.register_forward_pre_hook(_token_pre_hook(token)))
+            handles.append(module.register_forward_pre_hook(_token_pre_hook(token, active)))
     except BaseException:
         for handle in handles:
             handle.remove()

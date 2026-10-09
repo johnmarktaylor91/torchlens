@@ -623,3 +623,29 @@ def test_full_sequence_output_reruns_shape_varied_exactly() -> None:
     assert tuple(output.shape) == (1, _CAPTURE_LEN + 2, _VOCAB)
     assert _max_abs_diff(output, reference["output"]) == 0.0
     _assert_matches_hook(trace, reference, fast=True)
+
+
+def test_cached_fast_door_session_does_not_pollute_a_later_capture() -> None:
+    """Hooks a cached ``fast=True`` session leaves on the model stay inert elsewhere.
+
+    The explicit door keeps its session, with its module-entry token hooks, on
+    the model between calls. A second steered capture of the same model must
+    seal the fingerprint a clean capture seals (not one with every module
+    counted twice), so its longer-input rerun still takes the fast engine.
+    """
+
+    model, direction = _build()
+    short_ids = _ids(_CAPTURE_LEN, seed=1)
+    first = _steered_trace(model, direction, short_ids)
+    first.run(inputs=short_ids, fast=True)
+    assert first.last_run["engine"] == "guarded_fast"
+    assert _module_hook_count(model) > 0, "the explicit door keeps its session hooks"
+
+    second = _steered_trace(model, direction, short_ids)
+    long_ids = _ids(_CAPTURE_LEN + 2, seed=2)
+    reference = _hooked(model, direction, long_ids)
+    second.run(model, long_ids)
+
+    assert second.last_run["engine"] == "guarded_fast", second.last_run.get("fast_refused")
+    assert second.last_run["shape_varied"] is True
+    _assert_matches_hook(second, reference, fast=True)
