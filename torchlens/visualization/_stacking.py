@@ -241,7 +241,7 @@ def compute_stack_groups(state: EncodingState, trace: Trace, universe: Any) -> N
     if spec.source_kind == "auto":
         check_lockstep_license(trace)
 
-    from ._render_edges import _render_node_name
+    from ._render_common import _render_node_name
 
     groups: dict[Any, list[str]] = {}
     for unit in universe.units:

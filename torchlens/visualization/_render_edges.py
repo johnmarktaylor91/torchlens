@@ -67,49 +67,6 @@ def _build_segment_lookup(
     return _SegmentLookup(qualified_labels, base_labels, member_addresses)
 
 
-def _render_node_label(node: GraphNode, vis_mode: str) -> str:
-    """Return the graph node label for the active visualization mode.
-
-    Parameters
-    ----------
-    node:
-        Render node.
-    vis_mode:
-        ``"unrolled"`` renders individual Ops, while ``"rolled"`` renders
-        aggregate Layers.
-
-    Returns
-    -------
-    str
-        Stable label used as the DOT node identifier before Graphviz escaping.
-    """
-    if vis_mode == "unrolled" and isinstance(node, Op):
-        return node.label
-    return node.layer_label
-
-
-def _render_node_name(node: GraphNode, vis_mode: str) -> str:
-    """Return the DOT node name the renderer declares for ``node``.
-
-    Every emitter that declares a node or names an edge endpoint for a plain
-    rendered node goes through this helper: Graphviz silently creates a stray
-    node for any endpoint name that drifts from the declared one.
-
-    Parameters
-    ----------
-    node:
-        Render node.
-    vis_mode:
-        ``"unrolled"`` or ``"rolled"``.
-
-    Returns
-    -------
-    str
-        DOT-safe node name (pass separators spelled ``pass``).
-    """
-    return _render_node_label(node, vis_mode).replace(":", "pass")
-
-
 def _get_node_by_label(trace: "Trace", label: str, vis_mode: str) -> GraphNode:
     """Return a render node by label for the active visualization mode."""
 
@@ -2351,8 +2308,6 @@ __all__ = [
     "_projected_antiparallel_edge_attrs",
     "_queue_run_fold_ellipsis_node",
     "_raw_op_label",
-    "_render_node_label",
-    "_render_node_name",
     "_rendered_edge_signature",
     "_rolled_pass_label_placement",
     "_run_fold_ancestor_for_node",

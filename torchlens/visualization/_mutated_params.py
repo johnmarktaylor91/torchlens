@@ -249,8 +249,7 @@ def _render_label_index(entries_to_plot: Mapping[str, Any], vis_mode: str) -> di
         Natural label to render label; focus boundary nodes are omitted.
     """
 
-    from ._render_common import BoundaryNode, FocusNode
-    from ._render_edges import _render_node_label
+    from ._render_common import BoundaryNode, FocusNode, _render_node_label
 
     index: dict[str, str] = {}
     for node in entries_to_plot.values():
@@ -662,7 +661,7 @@ def add_mutated_parameter_nodes(
     sources = find_mutated_parameter_sources(trace)
     if not sources:
         return ()
-    from ._render_edges import _render_node_label
+    from ._render_common import _render_node_label
 
     universe = context.node_universe
     vis_mode = context.request.vis_mode

@@ -417,9 +417,6 @@ def _forward_correspondence_node_name(op: "Layer | None") -> str | None:
         Forward endpoint dot name, or ``None`` to skip the edge (recurrent aggregate).
     """
 
-    # Lazy: ``_render_edges`` star-imports this module.
-    from ._render_edges import _render_node_name
-
     if op is None:
         return None
     if is_multipass_layer(op):
