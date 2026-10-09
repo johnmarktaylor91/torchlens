@@ -870,6 +870,7 @@ def _emit_and_finish_forward(
     if context.engine == "rank":
         from ._rank_layout_internal.layout import render_rank_layout
 
+        _disclose_rank_layout_omissions(trace, context)
         resolved_graph_overrides = {
             key: str(val(trace)) if callable(val) else str(val)
             for key, val in overrides.graph.items()  # type: ignore[union-attr]
@@ -1331,6 +1332,80 @@ def draw(
     return _emit_and_finish_forward(self, context, work, forward_render_ir)
 
 
+def _warn_render_omission(message: str) -> None:
+    """Disclose that a requested render element is not in the output.
+
+    Parameters
+    ----------
+    message:
+        What was left out and how to get it back.
+    """
+
+    warnings.warn(message, TorchLensWarning, stacklevel=user_stacklevel())
+
+
+def _orphan_island_logs(trace: "Trace") -> tuple[Any, ...]:
+    """Return the orphan ops a ``show_orphans=True`` render draws.
+
+    Warns when the capture kept only dropped orphan husks, which have nothing to
+    draw (re-trace with ``keep_orphans=True``).
+
+    Parameters
+    ----------
+    trace:
+        Trace whose ``_orphan_logs`` are inspected.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Labelled orphan ops, in capture order.
+    """
+
+    orphan_logs = tuple(
+        op
+        for op in getattr(trace, "_orphan_logs", ())
+        if bool(getattr(op, "is_orphan", False))
+        and bool(getattr(op, "label", "") or getattr(op, "_label_raw", ""))
+    )
+    if not orphan_logs and getattr(trace, "_orphan_logs", ()):
+        _warn_render_omission(
+            "orphans were dropped from this capture; re-trace with keep_orphans=True"
+        )
+    return orphan_logs
+
+
+def _disclose_rank_layout_omissions(trace: "Trace", context: _ForwardRenderContext) -> None:
+    """Warn about requested elements the rank engine does not draw (F14).
+
+    The rank engine positions IR units and the mutated-Parameter overlays only.
+    Orphan islands and ``as_node`` intervention hook nodes are emitted by the dot
+    path alone, so a rank render that was asked for them says they are missing
+    instead of dropping them silently.
+
+    Parameters
+    ----------
+    trace:
+        Trace being rendered.
+    context:
+        Resolved forward render state.
+    """
+
+    request = context.request
+    omitted: list[str] = []
+    if request.show_orphans:
+        orphan_count = len(_orphan_island_logs(trace))
+        if orphan_count:
+            omitted.append(f"{orphan_count} orphan node{'s' if orphan_count != 1 else ''}")
+    if request.intervention_mode == "as_node" and context.site_labels:
+        hook_count = len(context.site_labels)
+        omitted.append(f"{hook_count} intervention hook node{'s' if hook_count != 1 else ''}")
+    if omitted:
+        _warn_render_omission(
+            f"The rank layout does not draw {' or '.join(omitted)}; they are omitted from "
+            "this render. Remedy: force Graphviz dot with vis_node_placement='dot'."
+        )
+
+
 def _add_orphan_island_nodes(
     self: "Trace",
     dot: graphviz.Digraph,
@@ -1359,19 +1434,8 @@ def _add_orphan_island_nodes(
     theme:
         Active visualization theme (currently unused; reserved for themed orphan styling).
     """
-    orphan_logs = tuple(
-        op
-        for op in getattr(self, "_orphan_logs", ())
-        if bool(getattr(op, "is_orphan", False))
-        and bool(getattr(op, "label", "") or getattr(op, "_label_raw", ""))
-    )
+    orphan_logs = _orphan_island_logs(self)
     if not orphan_logs:
-        if getattr(self, "_orphan_logs", ()):
-            warnings.warn(
-                "orphans were dropped from this capture; re-trace with keep_orphans=True",
-                TorchLensWarning,
-                stacklevel=user_stacklevel(),
-            )
         return
 
     with dot.subgraph(name="cluster_orphans") as orphan_cluster:
