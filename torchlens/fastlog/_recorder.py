@@ -25,7 +25,7 @@ from ..capture.projections import (
     active_recording_state,
 )
 from ..capture.stop import StopDirective, stop_directive_for_trace
-from ..capture.trace import _extract_and_mark_outputs
+from ..capture.trace import _capture_module_aliases, _extract_and_mark_outputs
 from ..data_classes.trace import Trace
 from ..intervention.predicates import InterventionPredicate
 from ..ir import CaptureEvents
@@ -325,6 +325,10 @@ class Recorder:
         self._output_tensors: list[torch.Tensor] = []
         self._output_tensor_addresses: list[str] = []
         self._captured_run_cores: list[Any] = []
+        # Alias address -> canonical address of the recorded model's shared
+        # modules, kept from each pass so the post-recording zero-match check
+        # resolves a selector's alias spelling as the forward did.
+        self._module_aliases: dict[str, str] = {}
         self._entered = False
         self._exited = False
         self._failed = False
@@ -401,7 +405,10 @@ class Recorder:
             if self._echo_session is not None:
                 recording = self._state.recording
                 self._echo_session.finish("halted" if recording.halted else "complete")
-            _warn_zero_match_capture_selectors(self._state)
+            from ..ir.selector_eval import module_alias_scope
+
+            with module_alias_scope(self._module_aliases):
+                _warn_zero_match_capture_selectors(self._state)
             self._state.raise_accumulated_predicate_error()
         elif self._echo_session is not None:
             # Interrupts and with-body failures get a best-effort flush; the
@@ -558,6 +565,7 @@ class Recorder:
             return None
         finally:
             self._state.recording.end_times.append(time.time())
+            self._module_aliases.update(_capture_module_aliases(trace) or {})
         # Output tensors are extracted+marked inside _run_and_log_inputs_through_model
         # (postprocess=False branch) BEFORE it cleans up model session metadata, so
         # buffer-output attribution isn't racing the label wipe. Read the stashed
