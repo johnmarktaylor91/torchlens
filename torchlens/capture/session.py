@@ -915,7 +915,8 @@ def compile_legacy_capture_plan(
         EnrichmentLevel.METADATA if capture_mode == "exhaustive" else EnrichmentLevel.SHELL
     )
     options = getattr(trace, "_predicate_save_options", None)
-    deferred_activation = bool(getattr(trace, "_deferred_retention_selector", None))
+    deferred_selector = getattr(trace, "_deferred_retention_selector", None)
+    deferred_activation = bool(deferred_selector)
     deferred_gradients = bool(getattr(trace, "_deferred_gradient_selector", None))
     graph_connected = bool(getattr(trace, "backward_ready", False))
     from .._trace_selector_helpers import _selector_requires_unwindowed_escrow
@@ -936,9 +937,7 @@ def compile_legacy_capture_plan(
 
     # A pure ``tl.module`` union resolves only to module-output ops, so the
     # session retains those at module exit instead of escrowing every op.
-    module_exit_addresses = module_union_addresses(
-        getattr(trace, "_deferred_retention_selector", None)
-    )
+    module_exit_addresses = module_union_addresses(deferred_selector)
     retention_profile = RetentionProfile(
         activation_kind=(
             RetentionKind.ACTIVATION
