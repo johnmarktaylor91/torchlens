@@ -360,8 +360,11 @@ class _DeadReluMLP(_TwoLayerMLP):
 
     def __init__(self) -> None:
         super().__init__()
-        self.l1.weight = mx.zeros_like(self.l1.weight)
-        self.l1.bias = mx.full(self.l1.bias.shape, -1.0)
+        # Weights stay nonzero so l1's output still depends on its input
+        # (zero weights would make UNPROVED the correct verdict); the bias
+        # pushes every pre-activation to 4 * 0.1 - 2.0 = -1.6.
+        self.l1.weight = mx.full(self.l1.weight.shape, 0.1)
+        self.l1.bias = mx.full(self.l1.bias.shape, -2.0)
 
 
 def test_mlx_validation_dead_relu_init_passes() -> None:
