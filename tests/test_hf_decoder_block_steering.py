@@ -247,7 +247,11 @@ def test_record_intervene_matches_hook(name: str, helper: Callable, edit: Callab
 
     model, address = _tiny_causal_lm()
     output, _recording = tl.record(
-        model, _IDS, intervene=tl.when(tl.module(address), helper()), return_output=True
+        model,
+        _IDS,
+        save=tl.module(address),
+        intervene=tl.when(tl.module(address), helper()),
+        return_output=True,
     )
     _assert_steered(output.logits, model, address, edit)
 

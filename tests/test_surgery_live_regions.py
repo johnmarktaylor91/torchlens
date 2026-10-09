@@ -541,7 +541,10 @@ def test_region_gpt2_block_with_kv_cache_refuses_output_alias_exit() -> None:
 
     fork, target = _distilgpt2_block_fork(use_cache=True)
     output_labels = {op.layer_label for op in fork.output_ops}
-    alias_exits = {edge.child for edge in target.boundary.exits if edge.child in output_labels}
+    # Exit edges name pass-qualified children (``output_6:1``); output ops carry bare labels.
+    alias_exits = {
+        edge.child for edge in target.boundary.exits if edge.child.split(":")[0] in output_labels
+    }
     assert alias_exits, "with the cache on the block must exit into a returned value"
     before = [op.out.clone() for op in fork.output_ops]
     with pytest.raises(RegionError) as excinfo:
