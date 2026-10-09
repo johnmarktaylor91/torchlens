@@ -249,22 +249,36 @@ def require_graph_reflects_plan(trace: Any, hook_plan: list[Any]) -> None:
     """Refuse the fast engine while the trace's graph does not show the staged plan.
 
     The fast engine refreshes saved values and leaves the recorded graph alone,
-    so a staged entry whose module never fired in the graph (hooks attached
-    after a plain capture) would leave a trace whose values are steered but
-    whose ops show no intervention. The capture engine rewrites the graph on
-    that first rerun; every later rerun of the same trace is eligible here.
+    so the graph must already show exactly the staged plan. A staged entry whose
+    module never fired in the graph (hooks attached after a plain capture) would
+    leave a trace whose values are steered but whose ops show no intervention,
+    and a fire the graph records for an entry no longer staged (hooks cleared or
+    detached after a steered capture) would leave replacement ops on a plain
+    run. The capture engine rewrites the graph on that first rerun; every later
+    rerun of the same trace is eligible here.
 
     Raises
     ------
     RunCapabilityUnavailableError
-        ``fast_rerun_graph_unsteered`` naming the staged entries the graph lacks.
+        ``fast_rerun_graph_unsteered`` naming the staged entries the graph lacks,
+        or the recorded fires no staged entry accounts for.
     """
 
+    fired = graph_fired_addresses(trace)
+    planned = {str(entry.site_target.selector_value).rsplit(":", 1)[0] for entry in hook_plan}
+    unstaged = sorted(fired - planned)
+    if unstaged:
+        raise RunCapabilityUnavailableError(
+            "This trace's recorded graph carries intervention fires that no staged entry "
+            f"accounts for ({', '.join(unstaged)}); the capture engine reruns once to record "
+            "the current plan.",
+            code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+            detection_stage="fast_rerun_graph_unsteered",
+        )
     if not hook_plan:
         return
     from .intervention.rerun import _hook_plan_identifier
 
-    fired = graph_fired_addresses(trace)
     missing = []
     for entry in hook_plan:
         address = str(entry.site_target.selector_value).rsplit(":", 1)[0]

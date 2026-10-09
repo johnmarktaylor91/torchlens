@@ -325,8 +325,9 @@ output ops, but it is not required. A changed number of output tensors still ref
   the refusing guard as `"<code>:<stage>"` (it is `None` on a fast run). The explicit
   `trace.run(inputs=x, fast=True)` raises instead of falling back.
 - **What still takes the capture engine.** Value replacements (`set()`) and non-module targets
-  (`fast_rerun_target_unsupported`), hooks attached after a plain capture, which recapture once
-  to record their firing and are eligible afterwards (`fast_rerun_graph_unsteered`), and any
+  (`fast_rerun_target_unsupported`), hooks attached after a plain capture or cleared after a
+  steered one, which recapture once to record the current plan and are eligible afterwards
+  (`fast_rerun_graph_unsteered`), and any
   change in the model's call structure (`fast_live_call_fingerprint`).
 - **What a fast run does not change.** The save scope never widens, the stored spec is unchanged,
   and op metadata the run did not refresh (shapes and activation memory of unsaved ops) reads

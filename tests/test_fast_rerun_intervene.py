@@ -25,7 +25,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._fast_run import close_fast_run_session
-from torchlens.errors import PathDivergenceError
+from torchlens.errors import PathDivergenceError, RunCapabilityUnavailableError
 from torchlens.intervention.errors import ControlFlowDivergenceWarning, EngineDispatchError
 from torchlens.runnable import RunResult
 
@@ -654,7 +654,9 @@ def test_fast_door_session_follows_a_restaged_spec() -> None:
 
     The explicit door keeps its session between calls. Clearing the staged
     steer and attaching another at the same site must apply the new steer on
-    the next call, and clearing it entirely must run the plain forward.
+    the next call. Clearing it entirely leaves replacement ops in the recorded
+    graph that no staged entry accounts for, so the explicit door refuses
+    ``fast_rerun_graph_unsteered`` and the legacy door recaptures the plain graph.
     """
 
     model, direction = _build()
@@ -675,10 +677,16 @@ def test_fast_door_session_follows_a_restaged_spec() -> None:
     assert _max_abs_diff(restaged.output, _hooked(model, other, ids)["output"]) == 0.0
 
     trace.clear_hooks(confirm_mutation=True)
-    cleared = trace.run(inputs=ids, fast=True)
+    with pytest.raises(RunCapabilityUnavailableError) as refused:
+        trace.run(inputs=ids, fast=True)
+    assert refused.value.fields["detection_stage"] == "fast_rerun_graph_unsteered"
+    trace.run(model, ids)
+    assert trace.last_run["engine"] == "rerun"
+    assert str(trace.last_run["fast_refused"]).endswith(":fast_rerun_graph_unsteered")
+    assert not trace.injected_ops
     with torch.no_grad():
         plain = model(ids)
-    assert _max_abs_diff(cleared.output, plain) == 0.0
+    assert _max_abs_diff(_site_op(trace, _HEAD).out[:, -1, :], plain) == 0.0
 
 
 def test_hooks_attached_after_capture_rerun_through_capture_once() -> None:
