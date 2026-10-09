@@ -741,6 +741,9 @@ _unattributed_tensor_arg_positions = _rebind_function(
 log_function_output_tensors = _rebind_function(_ops_emission.log_function_output_tensors, globals())
 _emit_operation_events = _rebind_function(_ops_emission._emit_operation_events, globals())
 apply_live_hooks_to_outputs = _rebind_function(_ops_emission.apply_live_hooks_to_outputs, globals())
+# The rebound live-hook function reads these two names from THIS module's globals.
+_MODULE_PREFILTER_DISABLED = _ops_interventions._MODULE_PREFILTER_DISABLED
+_hook_plan_is_module_exit_only = _ops_interventions._hook_plan_is_module_exit_only
 _apply_live_hooks_to_outputs_legacy = _rebind_function(
     _ops_interventions._apply_live_hooks_to_outputs_legacy, globals()
 )
