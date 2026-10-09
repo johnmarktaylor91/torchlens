@@ -2,6 +2,15 @@
 
 - Top-level `torchlens.__all__` has 115 names: capture, save/load, intervention,
   selectors, helper transforms, observers, validation, and the three main log classes.
+- Fast paths (doc of record [docs/guides/fast_paths.md](../guides/fast_paths.md)):
+  `spec.bind(model)` (`tl.when(site, action).bind(model)`) is the capture-free bound executor,
+  about 1.0 to 1.2x a plain forward hook and exact, also through HF `generate()` with the KV
+  cache (`bound.generate(...)`, or `torchlens.intervention.steer_generate(model, ids, spec, ...)`).
+  `tl.record(..., intervene=spec, return_output=True)` is the lighter evidence path (about
+  1 ms per op against about 3 ms for `tl.trace` on the tested CPU decoders). In 2.36.0 a
+  `tl.module(...)` save selector can cost more than saving everything, and trace-then-rerun is
+  not a fast path for steered generation (`run(inputs=...)` refuses a staged spec,
+  `run(fast=True)` also refuses a length change, the legacy `trace.run(model, x)` recaptures).
 - Relation accessors on FINISHED traces return IMMUTABLE views (authorized public type
   break, decided 2026-08-12): label sequences (`op.parents`, `op.children`, `op.modules`,
   `op.module_call_stack`, conditional child lists, `Layer.parents`/`Layer.children`, ...)
@@ -18,15 +27,6 @@
   of a group reads THE one cached immutable view (O(1), identity-stable), removal
   scrub rebinds the group row once for all members, and caller mutation is
   impossible — this supersedes the historical fresh-mutable-copy-per-read barrier.
-- Fast paths (doc of record [docs/guides/fast_paths.md](../guides/fast_paths.md)):
-  `spec.bind(model)` (`tl.when(site, action).bind(model)`) is the capture-free bound executor,
-  about 1.0 to 1.2x a plain forward hook and exact, also through HF `generate()` with the KV
-  cache (`bound.generate(...)`, or `torchlens.intervention.steer_generate(model, ids, spec, ...)`).
-  `tl.record(..., intervene=spec, return_output=True)` is the lighter evidence path (about
-  1 ms per op against about 3 ms for `tl.trace` on the tested CPU decoders). In 2.36.0 a
-  `tl.module(...)` save selector can cost more than saving everything, and trace-then-rerun is
-  not a fast path for steered generation (`run(inputs=...)` refuses a staged spec,
-  `run(fast=True)` also refuses a length change, the legacy `trace.run(model, x)` recaptures).
 - `tl.record(..., save=...)` is the sparse predicate recorder; it returns `Recording`.
   `Recording.to_trace()` cooks the event stream into a full-structure `Trace`, with unsaved
   payload reads rejected explicitly. `tl.record()`/fastlog is torch-only in the backend-v1
