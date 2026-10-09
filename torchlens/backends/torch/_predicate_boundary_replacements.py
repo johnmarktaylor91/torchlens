@@ -123,7 +123,8 @@ def log_predicate_boundary_replacements(trace: Trace, state: Any, out: Any) -> N
             predicate_matched=spec.save_out or spec.save_metadata,
         )
         state.append_context(ctx)
-        if _live_intervention_machinery_armed() or (
-            getattr(getattr(trace, "_predicate_save_options", None), "intervene", None) is not None
+        if (
+            _live_intervention_machinery_armed()
+            or trace._predicate_save_options.intervene is not None
         ):
             _note_replacement_event(trace, raw_label, origin="live_fire")

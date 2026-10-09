@@ -429,7 +429,13 @@ def _site_module_aliases(subject: Any) -> Mapping[str, str]:
 
     ref = getattr(subject, "_source_trace_ref", None)
     trace = ref() if callable(ref) else None
-    accessor = getattr(trace, "_module_logs", None)
+    if trace is None:
+        return _AliasAddresses({})
+    try:
+        accessor = trace._module_logs
+    except AttributeError:
+        # A cleaned-up Trace drops its module accessor: no alias map to read.
+        return _AliasAddresses({})
     return _AliasAddresses(getattr(accessor, "_alias_dict", None) or {})
 
 

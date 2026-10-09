@@ -34,8 +34,13 @@ def _capture_module_aliases(trace: Trace) -> dict[str, str] | None:
         evaluation reads the alias map there).
     """
 
-    workspace = getattr(trace, "_module_capture_ws", None)
-    metadata = getattr(workspace, "module_metadata", None)
+    try:
+        workspace = trace._module_capture_ws
+    except AttributeError:
+        # Finalization pops the session workspace once ``trace.modules`` owns
+        # the metadata; post-hoc evaluation reads the alias map there.
+        return None
+    metadata = workspace.module_metadata
     if not metadata:
         return None
     return {
