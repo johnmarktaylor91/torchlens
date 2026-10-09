@@ -376,23 +376,29 @@ def test_clean_composites_and_descriptor_wrappers_do_not_convict() -> None:
         ),
     ],
 )
-@pytest.mark.parametrize("return_indices", [False, True], ids=["values", "indices"])
 def test_boolean_dispatch_pooling_family_does_not_convict(
     function_name: str,
     input_shape: tuple[int, ...],
     kwargs: dict[str, Any],
-    return_indices: bool,
 ) -> None:
-    """Pre-wrap boolean-dispatch closure branches are audited clean composites."""
+    """Pre-wrap boolean-dispatch closure branches are audited clean composites.
+
+    One capture drives BOTH branches of the dispatcher (``return_indices``
+    False and True): the per-cell cost is the wrapper re-arm around each
+    capture, so a cell per branch doubled the family's cost for no extra
+    coverage.
+    """
 
     class Model(nn.Module):
-        """Invoke one live functional pooling dispatcher."""
+        """Invoke one live functional pooling dispatcher through both branches."""
 
         def forward(self, x: torch.Tensor) -> Any:
-            """Run the selected boolean-dispatch branch."""
+            """Run the values branch, then the indices branch."""
 
             pool = getattr(torch.nn.functional, function_name)
-            return pool(x, return_indices=return_indices, **kwargs)
+            values = pool(x, return_indices=False, **kwargs)
+            pooled, indices = pool(x, return_indices=True, **kwargs)
+            return values, pooled, indices
 
     wrap_torch(escape_detector="shadow")
     with warnings.catch_warnings(record=True) as caught:
@@ -400,6 +406,8 @@ def test_boolean_dispatch_pooling_family_does_not_convict(
         trace = tl.trace(Model(), torch.randn(input_shape))
     assert trace.escape_diagnostics == []
     assert _gap_warnings(caught) == []
+    compute_ops = [op for op in trace.layer_list if op.layer_type not in {"input", "output"}]
+    assert len(compute_ops) >= 2, "both dispatcher branches must be captured"
 
 
 def test_pause_logging_excludes_raw_internal_work() -> None:
