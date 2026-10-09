@@ -250,8 +250,7 @@ def test_loaded_intervened_trace_refuses_unintervened_rerun(net, tmp_path) -> No
     model, x, _ = net
     trace = tl.trace(model, x, intervene=_scale_fc1())
     path = tmp_path / "t.tlspec"
-    with pytest.warns(tl.errors.TorchLensWarning, match="save_intervention"):
-        trace.save(path)
+    trace.save(path)
     loaded = tl.load(path)
     with pytest.raises(EngineDispatchError) as excinfo:
         loaded.run(model, x)

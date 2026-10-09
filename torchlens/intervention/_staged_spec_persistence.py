@@ -4,18 +4,18 @@
 ordinary save keeps the INTERVENED activations and their per-op provenance
 (``intervention_replaced``, fire records, ``intervention_audit``) but not the
 recipe that produced them. The recipe travels separately through
-``save_intervention``. Two guards keep that split honest: the save warns when it
-leaves a staged recipe behind, and the legacy rerun of a loaded artifact whose
-recorded values were intervened refuses instead of silently re-executing the
-un-intervened model.
+``save_intervention``; the runnable save already refuses intervened captures
+(``user_intervention_not_replayable``) and names the analysis save as the door
+for them. The one place the split could mislead is the legacy rerun of a loaded
+artifact whose recorded values were intervened: with no spec staged it would
+silently re-execute the un-intervened model, so it refuses instead.
 """
 
 from __future__ import annotations
 
-import warnings
 from typing import Any
 
-from .errors import EngineDispatchError, TorchLensInterventionWarning
+from .errors import EngineDispatchError
 
 _LOADED_PROVIDERS = frozenset({"loaded_sparse", "loaded_analysis"})
 
@@ -23,41 +23,10 @@ _LOADED_PROVIDERS = frozenset({"loaded_sparse", "loaded_analysis"})
 def _staged_entry_counts(trace: Any) -> tuple[int, int]:
     """Return the staged hook and value-replacement counts of a trace."""
 
-    spec = getattr(trace, "_intervention_spec", None)
+    spec = trace._intervention_spec
     return (
         len(getattr(spec, "hook_specs", None) or ()),
         len(getattr(spec, "target_value_specs", None) or ()),
-    )
-
-
-def warn_staged_spec_not_persisted(trace: Any) -> None:
-    """Warn when a save drops a non-empty staged intervention spec.
-
-    Parameters
-    ----------
-    trace:
-        Trace being saved.
-
-    Returns
-    -------
-    None
-        Emits one ``TorchLensInterventionWarning`` when the staged spec holds
-        hooks or value replacements.
-    """
-
-    staged_hooks, staged_values = _staged_entry_counts(trace)
-    if not staged_hooks and not staged_values:
-        return
-    warnings.warn(
-        "This trace stages an intervention spec "
-        f"({staged_hooks} hook(s), {staged_values} value replacement(s)) that "
-        "tl.save() does not persist: the artifact keeps the intervened values, "
-        "and a loaded copy refuses run(model, x) rather than rerun without the "
-        "intervention. Save the recipe too with "
-        "trace.save_intervention(path, level=...) and re-apply it with "
-        "tl.trace(model, x, intervene=...).",
-        TorchLensInterventionWarning,
-        stacklevel=3,
     )
 
 

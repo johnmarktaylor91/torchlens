@@ -544,8 +544,7 @@ attribution-target alias. See the [attribution reference](attribution.md).
 : `tl.save` persists a `Trace` into a portable `.tlspec` directory bundle at a chosen
   level; `tl.load` loads a `.tlspec` object with eager tensor materialization.
   The staged intervention spec is session-only: `tl.save` keeps the intervened
-  values and their per-op provenance, warns when it leaves a non-empty staged spec
-  behind, and a loaded intervened trace's `run(model, x)` refuses
+  values and their per-op provenance, and a loaded intervened trace's `run(model, x)` refuses
   `run_intervention_spec_not_persisted` rather than rerun un-intervened (the recipe
   travels through `save_intervention`).
   `tl.PayloadLoadHints` carries backend-specific payload materialization hints
