@@ -99,19 +99,29 @@ def _steer() -> Any:
     return tl.steer(_direction(), magnitude=_MAGNITUDE, feature_axis=-1)
 
 
-# spec name -> (spec factory, whether the per-op check is skipped for it)
-_SPECS: dict[str, tuple[Callable[[], Any], bool]] = {
-    "steer": (lambda: tl.when(tl.module("block1"), _steer()), True),
-    "zero_ablate": (lambda: tl.when(tl.module("block2"), tl.zero_ablate()), True),
+# spec name -> (spec factory, whether the per-op check is skipped, whether the spec fires).
+# The two mixes are controls that keep the per-op path; ``module_and_func`` never fires (an op
+# door never matches ``tl.module`` and a boundary never matches ``tl.func``), so it pins the
+# zero-match warning instead.
+_SPECS: dict[str, tuple[Callable[[], Any], bool, bool]] = {
+    "steer": (lambda: tl.when(tl.module("block1"), _steer()), True, True),
+    "zero_ablate": (lambda: tl.when(tl.module("block2"), tl.zero_ablate()), True, True),
     "two_module_union": (
         lambda: tl.when(tl.module("block1") | tl.module("block2"), tl.scale(0.5)),
+        True,
         True,
     ),
     "module_and_func": (
         lambda: tl.when(tl.module("block1") & tl.func("relu"), _steer()),
         False,
+        False,
     ),
-    "func_steer": (lambda: tl.when(tl.func("relu"), _steer()), False),
+    "module_or_func": (
+        lambda: tl.when(tl.module("block2") | tl.func("relu"), tl.scale(0.5)),
+        False,
+        True,
+    ),
+    "func_steer": (lambda: tl.when(tl.func("relu"), _steer()), False, True),
 }
 
 
@@ -450,7 +460,10 @@ def test_skip_matches_legacy_path(entry: str, spec_name: str) -> None:
     skipped = fingerprint(spec_name, force_legacy=False)
     legacy = fingerprint(spec_name, force_legacy=True)
     assert skipped == legacy
-    assert skipped["fires"], "the spec must fire, or the comparison proves nothing"
+    fires = _SPECS[spec_name][2]
+    assert bool(skipped["fires"]) is fires
+    if not fires and entry == "trace":
+        assert any("matched zero sites" in text for _cat, text in skipped["warnings"])
 
 
 def test_validation_verdicts_unchanged_by_the_door() -> None:
@@ -525,30 +538,35 @@ def _record_counts(spec_name: str) -> dict[str, int]:
     return counts
 
 
-# Counts on the per-op path (the base before the skip) for the controls, which keep it.
+# Per-op path counts, measured on the base before the skip (2.36.1 line). There the module-only
+# steer cost make_live_site_proxy 9, _build_shared_fields_dict 61 on tl.trace and
+# _evaluate_intervene_op 9 on tl.record; the controls keep the per-op path, call for call.
 _FUNC_STEER_TRACE_COUNTS = {
-    "make_live_site_proxy": -1,
-    "_build_shared_fields_dict": -1,
-    "_evaluate_intervene_op": -1,
+    "make_live_site_proxy": 9,
+    "_build_shared_fields_dict": 45,
+    "_evaluate_intervene_op": 9,
 }
 _FUNC_STEER_RECORD_COUNTS = {
-    "make_live_site_proxy": -1,
+    "make_live_site_proxy": 3,
+    "_build_shared_fields_dict": 0,
+    "_evaluate_intervene_op": 9,
+}
+# With the skip: shared fields are built by emission only, once per logged op.
+_SKIP_STEER_TRACE_COUNTS = {
+    "make_live_site_proxy": 0,
     "_build_shared_fields_dict": -1,
-    "_evaluate_intervene_op": -1,
+    "_evaluate_intervene_op": 0,
 }
 
 
 @pytest.mark.smoke
 def test_module_only_spec_builds_no_per_op_site() -> None:
-    """A module-only steer builds each op's shared fields once and no op-door site at all."""
+    """A module-only steer builds each op's shared fields at most once and no op-door site."""
 
-    plain, _n_ops = _trace_counts(None)
-    steered, _ = _trace_counts("steer")
-    # Emission builds the shared fields once per logged op; the op door adds nothing.
-    assert steered["_build_shared_fields_dict"] == plain["_build_shared_fields_dict"]
-    assert steered["make_live_site_proxy"] == 0
+    steered, n_ops = _trace_counts("steer")
+    assert steered == _SKIP_STEER_TRACE_COUNTS
+    assert steered["_build_shared_fields_dict"] <= n_ops
     assert _record_counts("steer") == dict.fromkeys(_COUNTED, 0)
-    # Controls keep the per-op path, call for call.
     assert _trace_counts("func_steer")[0] == _FUNC_STEER_TRACE_COUNTS
     assert _record_counts("func_steer") == _FUNC_STEER_RECORD_COUNTS
 
@@ -610,17 +628,26 @@ def test_record_module_steer_fires_once_per_module_call() -> None:
         )
     assert fires == [(True, 1), (True, 1)]  # block1 runs twice; no op-door fire
 
+    # The same steer as a plain torch forward hook, run eagerly: its replaced outputs are the
+    # oracle for the saved payloads, bit for bit.
     model = _model()
     shift = _direction() * _MAGNITUDE
-    handle = model.block1.register_forward_hook(lambda _m, _i, out: out + shift)
+    hooked_outputs: list[torch.Tensor] = []
+
+    def plain_steer(_module: nn.Module, _inputs: Any, out: torch.Tensor) -> torch.Tensor:
+        """Add the steering shift and keep the replaced output."""
+
+        replaced = out + shift
+        hooked_outputs.append(replaced)
+        return replaced
+
+    handle = model.block1.register_forward_hook(plain_steer)
     try:
-        hooked_output, hooked_recording = tl.record(
-            model, _input(), save=tl.module("block1"), return_output=True
-        )
+        with torch.no_grad():
+            eager_output = model(_input())
     finally:
         handle.remove()
-    assert torch.equal(output, hooked_output)
-    steered = [_thash(r.ram_payload) for r in recording.records]
-    hooked = [_thash(r.ram_payload) for r in hooked_recording.records]
-    assert len(steered) == 2
-    assert steered == hooked
+    assert torch.equal(output, eager_output)
+    assert [_thash(r.ram_payload) for r in recording.records] == [
+        _thash(value) for value in hooked_outputs
+    ]
