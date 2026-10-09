@@ -127,5 +127,5 @@
   not lowered to module hooks stages per-op entries on FINAL labels, which the live matcher refuses;
   reruns re-arm the retained predicate (`_predicate_save_options.intervene`) through the capture
   door and refuse `rerun_predicate_restage_mismatch` if it re-stages a different op set. The spec is
-  `FieldPolicy.DROP`: `tl.save` warns when it drops a non-empty one, and a loaded intervened trace's
-  legacy `run(model, x)` refuses `run_intervention_spec_not_persisted`.
+  `FieldPolicy.DROP` (the recipe travels through `save_intervention`), so a loaded intervened
+  trace's legacy `run(model, x)` refuses `run_intervention_spec_not_persisted`.

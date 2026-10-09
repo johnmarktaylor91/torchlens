@@ -62,8 +62,8 @@ ablated = tl.trace(
     intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
 )
 # Reruns re-arm the capture predicate and apply the edit exactly once; the
-# staged spec never grows. tl.save keeps the ablated values but not the recipe
-# (it warns): a loaded copy refuses run(model, x) with
+# staged spec never grows. tl.save keeps the ablated values but not the recipe:
+# a loaded copy refuses run(model, x) with
 # run_intervention_spec_not_persisted, so save the recipe with save_intervention.
 ablated.run(model, x)
 

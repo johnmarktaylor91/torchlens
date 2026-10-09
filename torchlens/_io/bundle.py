@@ -661,11 +661,6 @@ def save(
         include_saved_args=include_saved_args,
         include_rng_states=include_rng_states,
     )
-    # The staged intervention spec is session-only (FieldPolicy.DROP); say so
-    # once every refusal above has passed, never ahead of a typed refusal.
-    from ..intervention._staged_spec_persistence import warn_staged_spec_not_persisted
-
-    warn_staged_spec_not_persisted(trace)
 
     bundle_path = Path(path)
     _reject_symlink_path(bundle_path, context="save target")
