@@ -66,3 +66,11 @@ env: py3.11-torch2.7.1
 torch: 2.7.1+cpu
 source: 3f5d1560f4957c56b71826303df7c6a42b66adb0 (clean; run-on snapshot c59613bfd)
 recorded: 2026-10-09T00:21:07.979526+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: gradient edges and combined forward-to-grad_fn ties now name the declared forward nodes instead of bare layer_label phantoms (F37)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 41fc07dd78b22ea98f7752e472ab35e121cbab3c (dirty)
+recorded: 2026-10-09T14:36:47.200596+00:00
