@@ -182,8 +182,8 @@ def _module_address(module: nn.Module) -> str:
 #: Ceiling on the alias addresses one enumeration collects. Every registration
 #: path is an address, so a model that shares a shared module's parent many
 #: times over grows the count multiplicatively; past the ceiling the remaining
-#: alias spellings simply do not resolve (they select nothing), never a wrong
-#: module.
+#: alias spellings go unrecorded (no door can refuse them, and a selector spelled
+#: with one matches nothing), never a wrong module.
 _MAX_ALIAS_ADDRESSES = 4096
 
 

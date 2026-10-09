@@ -392,18 +392,6 @@ class CaptureSession:
         )
 
     def resolve_deferred_retention(self, trace: Any, output_tensors: list[Any]) -> None:
-        """Resolve final selectors, project activation winners, and install grad hooks.
-
-        Selectors resolve under the model's module alias map, so a shared
-        module's second registered name selects it here as in the forward.
-        """
-
-        from ._module_aliases import _module_alias_scope
-
-        with _module_alias_scope(trace):
-            self._resolve_deferred_retention(trace, output_tensors)
-
-    def _resolve_deferred_retention(self, trace: Any, output_tensors: list[Any]) -> None:
         """Resolve final selectors, project activation winners, and install grad hooks."""
 
         from ..backends.torch.tensor_tracking import _add_tensor_backward_hook

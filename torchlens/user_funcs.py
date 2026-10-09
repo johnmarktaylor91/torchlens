@@ -137,6 +137,7 @@ from .fastlog.exceptions import PredicateError
 from .fastlog.options import HaltPredicateFn, PredicateFn, RecordingOptions
 from .fastlog.types import CaptureSpec
 from .intervention import injection as _injection, model_door as _model_door
+from .intervention._module_alias_guard import refuse_model_alias_spellings
 from .intervention.errors import ChunkedForwardConfigError
 from .intervention.hooks import normalize_hook_plan
 from .intervention.predicates import InterventionPredicate
@@ -1858,6 +1859,10 @@ def _run_model_and_save_specified_outs(
     -------
         Fully-populated Trace.
     """
+    # A shared module's alias spelling cannot select one call site: refuse before the forward.
+    alias_sources = (save_predicate, intervene_predicate, halt_predicate, hooks, intervention_spec)
+    deferred = (normalized_hook_plan, _deferred_retention_selector, _deferred_gradient_selector)
+    refuse_model_alias_spellings(model, *alias_sources, *deferred)
     # Auto-detect model device from its first parameter and move inputs to match.
     # This prevents silent device-mismatch errors when the model is on CUDA but
     # the user ops CPU tensors (a common mistake). A META first parameter is

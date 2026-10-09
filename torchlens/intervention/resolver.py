@@ -31,6 +31,7 @@ from ..utils._callable_safety import (
 )
 from ..utils._torch_compat import resolve_runnable_torch_alias
 from ..utils._torch_symbols import torch_attr
+from ._module_alias_guard import refuse_trace_alias_spellings
 from .errors import (
     MultiMatchWarning,
     ReplayPreconditionError,
@@ -998,6 +999,7 @@ def resolve_sites(
 
     selector = _normalize_query(query)
     _guard_episode_step_query(log, selector)
+    refuse_trace_alias_spellings(log, selector)
     direction = _selector_resolution_direction(selector)
     sites = tuple(_iter_sites(log, direction))
     matched = _resolve_unchecked(sites, selector, strict=strict)
@@ -1097,6 +1099,7 @@ def find_sites(
 
     selector = _normalize_query(query)
     _guard_episode_step_query(log, selector)
+    refuse_trace_alias_spellings(log, selector)
     direction = _selector_resolution_direction(selector)
     sites = tuple(_iter_sites(log, direction))
     matched = _resolve_unchecked(sites, selector, strict=strict)

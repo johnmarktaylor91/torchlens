@@ -48,7 +48,6 @@ from ..backends import (
 from ..fastlog._halt import HaltSignal
 from ..ir.container_registry import ModelSite, Phase, Role, walk_container
 from ..quantities import Bytes, Duration
-from ._module_aliases import _module_alias_scope
 from .config import InternalCaptureConfig
 from .outcome import (
     CapturePhase,
@@ -1853,7 +1852,7 @@ def run_and_log_inputs_through_model(
         # before invoking the model; all subsequent operations are captured
         # automatically by the decorated wrappers.
         _vprint(self, f"Running {self.capture_mode} forward pass...")
-        with backend.active_logging(self), _module_alias_scope(self):
+        with backend.active_logging(self):
             # Under an active ``force_eager`` stance (torch >= 2.6) the
             # inventoried compiled callables run their original eager Python and
             # their interiors ARE logged, so the capture keeps full verified

@@ -44,9 +44,7 @@ of the package init avoids an import cycle with ``ir.container``.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator, Mapping, Sequence
-from contextlib import contextmanager
-from contextvars import ContextVar
+from collections.abc import Iterator, Sequence
 from typing import Any, Literal, cast
 
 from ..backends import TORCH_BACKEND_NAME
@@ -67,17 +65,6 @@ from ..intervention.types import FrozenTargetSpec, TargetSpec
 from .container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
 
 Lifecycle = Literal["capture", "site", "live"]
-
-#: Alias address -> canonical address for the model the active door runs.
-#: A module object registered under several names (``self.alias = self.block``)
-#: is labeled under its canonical (first-registered) address; every door that
-#: evaluates live or capture subjects publishes its model's map here so a
-#: ``tl.module`` / ``tl.in_module`` target spelled with any registered name
-#: selects the same module. Post-hoc subjects carry their Trace, which records
-#: the map in ``Module.all_addresses``.
-_ACTIVE_MODULE_ALIASES: ContextVar[Mapping[str, str] | None] = ContextVar(
-    "torchlens_active_module_aliases", default=None
-)
 
 _LIFECYCLE_DESC: dict[str, str] = {
     "capture": "capture-time predicate evaluation",
@@ -361,147 +348,6 @@ def module_address_matches(module_pass: Any, address: str) -> bool:
         return f"'{address}'" in module_label or f'"{address}"' in module_label
     module_address = module_label.rsplit(":", 1)[0]
     return module_label == address or module_address == address
-
-
-@contextmanager
-def module_alias_scope(aliases: Mapping[str, str]) -> Iterator[None]:
-    """Publish one model's alias map to module-selector evaluation.
-
-    Parameters
-    ----------
-    aliases:
-        Alias address -> canonical address (empty when no module is shared).
-
-    Yields
-    ------
-    None
-        Control while the map is active; the previous map is restored on exit.
-    """
-
-    token = _ACTIVE_MODULE_ALIASES.set(dict(aliases))
-    try:
-        yield
-    finally:
-        _ACTIVE_MODULE_ALIASES.reset(token)
-
-
-def canonical_module_address(address: str, aliases: Mapping[str, str]) -> str:
-    """Rewrite an alias spelling of a module address to its canonical address.
-
-    Parameters
-    ----------
-    address:
-        Module address, bare (``"alias"``) or pass-qualified (``"alias:2"``).
-    aliases:
-        Alias address -> canonical address.
-
-    Returns
-    -------
-    str
-        The canonical spelling with any pass qualifier kept (``"block:2"``), or
-        ``address`` unchanged when it is not an alias. A pass qualifier counts
-        calls of the module object, whichever registered name the forward
-        called it through.
-    """
-
-    canonical = aliases.get(address)
-    if canonical is not None:
-        return canonical
-    base, sep, call = address.rpartition(":")
-    if sep and call.isdigit() and base in aliases:
-        return f"{aliases[base]}:{call}"
-    return address
-
-
-def _site_module_aliases(subject: Any) -> Mapping[str, str]:
-    """Return the alias map recorded on a post-hoc subject's Trace.
-
-    Parameters
-    ----------
-    subject:
-        Finalized site carrying a ``_source_trace_ref`` weakref.
-
-    Returns
-    -------
-    Mapping[str, str]
-        Alias address -> canonical address (empty when unavailable).
-    """
-
-    ref = getattr(subject, "_source_trace_ref", None)
-    trace = ref() if callable(ref) else None
-    if trace is None:
-        return _AliasAddresses({})
-    try:
-        accessor = trace._module_logs
-    except AttributeError:
-        # A cleaned-up Trace drops its module accessor: no alias map to read.
-        return _AliasAddresses({})
-    return _AliasAddresses(getattr(accessor, "_alias_dict", None) or {})
-
-
-class _AliasAddresses(Mapping[str, str]):
-    """Read-only alias -> canonical-address view over ``ModuleAccessor._alias_dict``.
-
-    ``trace.modules["alias"]`` resolves through that dict (built from
-    ``Module.all_addresses``); this view lets post-hoc selectors resolve the
-    same spelling to the same module without copying the map per evaluation.
-    """
-
-    __slots__ = ("_modules",)
-
-    def __init__(self, modules_by_alias: Mapping[str, Any]) -> None:
-        """Wrap an alias -> ``Module`` mapping.
-
-        Parameters
-        ----------
-        modules_by_alias:
-            Alias address -> the ``Module`` it names.
-        """
-
-        self._modules = modules_by_alias
-
-    def __getitem__(self, alias: str) -> str:
-        """Return the canonical address of the module ``alias`` names."""
-
-        return str(self._modules[alias].address)
-
-    def __iter__(self) -> Iterator[str]:
-        """Iterate alias addresses."""
-
-        return iter(self._modules)
-
-    def __len__(self) -> int:
-        """Return the number of alias addresses."""
-
-        return len(self._modules)
-
-
-def module_selector_target(value: Any, subject: Any, lifecycle: str) -> str:
-    """Return the canonical module address a module-scoped selector names.
-
-    Parameters
-    ----------
-    value:
-        ``tl.module`` / ``tl.in_module`` selector value.
-    subject:
-        Lifecycle subject.
-    lifecycle:
-        Active lifecycle key.
-
-    Returns
-    -------
-    str
-        The target with a registered alias rewritten to the canonical address
-        the subject's module candidates carry.
-    """
-
-    target = str(value)
-    aliases = _ACTIVE_MODULE_ALIASES.get()
-    if aliases is None and lifecycle == "site":
-        aliases = _site_module_aliases(subject)
-    if not aliases:
-        return target
-    return canonical_module_address(target, aliases)
 
 
 def output_path_matches(saved_path: tuple[Any, ...], requested_path: tuple[Any, ...]) -> bool:
@@ -1179,13 +1025,13 @@ def _evaluate_subject(selector: BaseSelector, subject: Any, lifecycle: str) -> b
     if kind in {"module", "in_module"} and _is_module_scope_alias(kind, subject, lifecycle):
         return False
     if kind == "module":
-        target = module_selector_target(value, subject, lifecycle)
+        target = str(value)
         return any(
             module_address_matches(candidate, target)
             for candidate in _module_output_candidates(subject, lifecycle)
         )
     if kind == "in_module":
-        target = module_selector_target(value, subject, lifecycle)
+        target = str(value)
         return any(
             module_address_matches(candidate, target)
             for candidate in _module_containment_candidates(subject, lifecycle)

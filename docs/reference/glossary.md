@@ -440,10 +440,12 @@ attribution-target alias. See the [attribution reference](attribution.md).
 
 **Structural selectors**
 : `tl.func` / `tl.module` / `tl.in_module` select by callable or module context;
-  a module registered under several names (`self.alias = self.block`, recorded in
-  `Module.all_addresses`) is selected by any of them at every door (capture, record, post hoc,
-  `spec.bind`), and a pass label (`"alias:2"`) counts calls of that one module object whichever
-  name the forward called it through;
+  a module registered under several names (`self.dec = self.enc`, all recorded in
+  `Module.all_addresses`) is selected by its canonical `named_modules()` name, which fires at
+  every call site of it (pass labels such as `"enc:2"` count calls of that one object); an
+  alias spelling (`"dec"`, `"dec:2"`) refuses with `bind_static_anchor_unresolved` and one
+  message at every door (capture, record, post hoc, `spec.bind`), since no hook can tell which
+  name a forward called the object through;
   `tl.head` selects one attention head; `tl.facet` selects a semantic facet view;
   `tl.func_transform` selects `torch.func` and `torch.autograd` transform boundary ops
   (including `autogradgrad`, an in-forward `torch.autograd.grad` call, with
