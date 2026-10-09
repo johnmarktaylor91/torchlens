@@ -24,8 +24,12 @@ from ...errors._base import CompatibilityError
 from ...fastlog.types import (
     RecordContext,
 )
-from ...intervention.hooks import make_live_site_proxy, normalize_hook_plan
-from ...intervention.runtime import active_intervention_context
+from ...intervention.hooks import NormalizedHookEntry, make_live_site_proxy, normalize_hook_plan
+from ...intervention.runtime import (
+    _input_splice_module_scope,
+    _is_plain_module_selector,
+    active_intervention_context,
+)
 from ...intervention.selectors import (
     CompositeSelector,
     ModuleSelector,
@@ -397,8 +401,10 @@ def _trace_intervene_options(trace: "Trace") -> Any | None:
 
 
 # Identity-guarded memo for ``_intervene_reaches_op_door``: the intervene operand is fixed for a
-# whole capture, so the selector walk runs once per operand instead of once per op output.
-_OP_DOOR_MEMO: dict[int, tuple[Any, bool]] = {}
+# whole capture, so the selector walk runs once per operand instead of once per op output. It
+# holds weak references, so the memo never keeps a finished capture's spec (or the tensors its
+# helpers close over) alive.
+_OP_DOOR_MEMO: dict[int, tuple["weakref.ref[Any]", bool]] = {}
 _OP_DOOR_MEMO_LIMIT = 64
 
 
@@ -451,7 +457,7 @@ def _intervene_reaches_op_door(options: Any) -> bool:
 
     intervene = options.intervene
     memo = _OP_DOOR_MEMO.get(id(intervene))
-    if memo is not None and memo[0] is intervene:
+    if memo is not None and memo[0]() is intervene:
         return memo[1]
     from ...intervention.spec import InterventionSpec
 
@@ -460,13 +466,15 @@ def _intervene_reaches_op_door(options: Any) -> bool:
         and bool(intervene.rules)
         and all(_is_module_exit_only(rule.where) for rule in intervene.rules)
     )
+    try:
+        intervene_ref = weakref.ref(intervene)
+    except TypeError:
+        # Not weak-referenceable (an InterventionSpec always is): answer without memoizing.
+        return reaches
     if len(_OP_DOOR_MEMO) >= _OP_DOOR_MEMO_LIMIT:
         _OP_DOOR_MEMO.clear()
-    _OP_DOOR_MEMO[id(intervene)] = (intervene, reaches)
+    _OP_DOOR_MEMO[id(intervene)] = (intervene_ref, reaches)
     return reaches
-
-
-_HOOK_DOOR_MEMO: dict[int, tuple[Any, bool]] = {}
 
 
 def _hook_entry_reaches_op_door(entry: Any) -> bool:
@@ -489,27 +497,18 @@ def _hook_entry_reaches_op_door(entry: Any) -> bool:
         Whether the op-door hook loop could fire or raise for this entry.
     """
 
-    memo = _HOOK_DOOR_MEMO.get(id(entry))
-    if memo is not None and memo[0] is entry:
-        return memo[1]
-    from ...intervention.hooks import NormalizedHookEntry
-    from ...intervention.runtime import _input_splice_module_scope, _is_plain_module_selector
-
+    # Not memoized: entries are slotted (no weak references), a strong-reference memo would keep a
+    # finished capture's hook callables alive, and this walk costs a few calls per op.
     if type(entry) is not NormalizedHookEntry:
-        reaches = True
-    elif (
+        return True
+    if (
         entry.metadata.get("direction", "forward") != "forward"
         or entry.metadata.get("timing", "post") != "post"
     ):
-        reaches = False
-    elif _input_splice_module_scope(entry.site_target, entry) is not None:
-        reaches = not _is_plain_module_selector(entry.site_target)
-    else:
-        reaches = not _is_module_exit_only(entry.site_target)
-    if len(_HOOK_DOOR_MEMO) >= _OP_DOOR_MEMO_LIMIT:
-        _HOOK_DOOR_MEMO.clear()
-    _HOOK_DOOR_MEMO[id(entry)] = (entry, reaches)
-    return reaches
+        return False
+    if _input_splice_module_scope(entry.site_target, entry) is not None:
+        return not _is_plain_module_selector(entry.site_target)
+    return not _is_module_exit_only(entry.site_target)
 
 
 def _hook_plan_reaches_op_door(hook_plan: Any) -> bool:
