@@ -6,7 +6,7 @@ import random
 import warnings
 from collections import OrderedDict
 from collections.abc import Callable
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 from torch import nn
@@ -28,6 +28,9 @@ from ._live_model_state import (
     reattach_parameter_grads,
     restore_state_dict_if_changed,
 )
+
+if TYPE_CHECKING:
+    from ._layer_grad_report import LayerGradReport
 
 _SUM_IN_PROGRESS = object()
 """Memo sentinel: this container is on the current descent chain (a cycle)."""
@@ -495,6 +498,44 @@ def _warn_and_skip_appended_trace_validation(trace: Any) -> bool:
     return False
 
 
+def _warn_if_no_module_output_evidence(layer_report: LayerGradReport) -> None:
+    """Disclose a module-output check that failed only for lack of evidence.
+
+    The root module call is excluded by design (its output gradient is the
+    loss gradient itself), so a model whose forward calls no child module has
+    zero eligible module outputs. The exact acceptance rule then fails closed
+    on ``covered_count > 0`` with no gap or mismatch recorded; without this
+    warning that unverifiable verdict reads as a capture failure.
+
+    Parameters
+    ----------
+    layer_report:
+        Failed module-output gradient report.
+    """
+
+    failure_counts = (
+        layer_report.mismatched_count,
+        layer_report.skipped_no_grad_count,
+        layer_report.unresolved_output_label_count,
+        layer_report.uncaptured_module_output_count,
+        layer_report.missing_module_call_count,
+        layer_report.unexpected_count,
+    )
+    if layer_report.covered_count or any(failure_counts):
+        return
+    warnings.warn(
+        "validate_backward_pass found no module-output gradient to compare: "
+        f"all {len(layer_report.coverage)} module call(s) are proven exclusions "
+        "(the root module call always is), so the module-output gradient check "
+        "has zero detection power and the backward capture is unverifiable "
+        "rather than passed. A model whose forward calls no child module has "
+        "no such evidence; validate_layer_grads=False checks parameter "
+        "gradients alone.",
+        RuntimeWarning,
+        stacklevel=3,
+    )
+
+
 def validate_backward_pass(
     model: nn.Module,
     input_args: Any,
@@ -541,7 +582,10 @@ def validate_backward_pass(
     validate_layer_grads:
         If True (default), validate captured per-module-output gradients in
         addition to parameter gradients. False preserves the legacy
-        parameter-only validation path as an explicit opt-out.
+        parameter-only validation path as an explicit opt-out. The root
+        module call is never compared, so a model whose forward calls no child
+        module has no module-output gradient to compare and returns False with
+        a ``RuntimeWarning``.
     layer_grad_atol:
         Optional absolute tolerance for per-module-output gradients. ``None``
         derives per gradient dtype via
@@ -705,6 +749,7 @@ def validate_backward_pass(
                 rtol=layer_grad_rtol,
             )
             if not bool(layer_report):
+                _warn_if_no_module_output_evidence(layer_report)
                 return False
         # An empty stock parameter-gradient census is UNVERIFIABLE, and that verdict
         # cannot depend on ``validate_layer_grads``. This block used to be duplicated

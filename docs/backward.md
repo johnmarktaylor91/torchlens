@@ -182,6 +182,12 @@ separate stock run with minimal tensor hooks, flow consistency for non-intervene
 structural invariants. Invariants include dense pass indices, local-dense call ordinals, one
 record per retained autograd object, resolved order chains, label grammar, and containment flags.
 
+The module-output check never compares the root module call, because its output gradient is the
+loss gradient itself. A model whose forward calls no child module therefore has no module-output
+gradient to compare. Validation then returns `False` with a `RuntimeWarning` saying so: the check
+has no detection power, so the result is unverifiable rather than passed.
+`validate_layer_grads=False` checks parameter gradients alone.
+
 ## Dataframes And Serialization
 
 `trace.to_pandas()` never reads loud gradient properties. Ambiguous op gradients appear as

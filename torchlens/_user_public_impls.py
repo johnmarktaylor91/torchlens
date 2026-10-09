@@ -1824,6 +1824,8 @@ def validate_backward_pass(
         gradient dtype, matching ``torchlens.validation.backward``.
     validate_layer_grads:
         If True (default), also validate captured per-module-output gradients.
+        The root module call is never compared, so a model whose forward calls
+        no child module returns False with a ``RuntimeWarning``.
     layer_grad_atol:
         Optional layer-gradient absolute tolerance.
     layer_grad_rtol:

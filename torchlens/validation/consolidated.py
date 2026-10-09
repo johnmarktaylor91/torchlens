@@ -450,7 +450,9 @@ def validate(
         likewise.
     validate_layer_grads:
         Backward-only layer-gradient validation flag. Omission enables honest
-        captured-gradient validation by default for backward scope.
+        captured-gradient validation by default for backward scope. The root
+        module call is never compared, so a model whose forward calls no child
+        module returns False with a ``RuntimeWarning``.
     layer_grad_atol:
         Backward-only layer-gradient absolute tolerance.
     layer_grad_rtol:
