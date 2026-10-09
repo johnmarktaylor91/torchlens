@@ -441,3 +441,25 @@ def test_trace_save_selector_resolves_either_name_to_the_same_ops(
     alias_saved = _saved(alias_selector())
     assert alias_saved, "the alias spelling saved nothing"
     assert alias_saved == _saved(primary_selector())
+
+
+@pytest.mark.parametrize("model_name", sorted(_MODELS))
+def test_record_save_selector_resolves_either_name_to_the_same_records(model_name: str) -> None:
+    """``tl.record(save=tl.in_module(...))`` retains the same records for both names."""
+
+    def _retained(selector: Any) -> list[str]:
+        """Return the retained record labels of one recording."""
+
+        torch.manual_seed(0)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            _output, recording = tl.record(
+                _MODELS[model_name]().eval(), _X, save=selector, return_output=True
+            )
+        zero_match = [str(w.message) for w in caught if _ZERO_MATCH_TEXT in str(w.message)]
+        assert not zero_match, zero_match
+        return [str(record.ctx.label) for record in recording.records]
+
+    alias_records = _retained(tl.in_module("alias"))
+    assert alias_records, "the alias spelling retained nothing"
+    assert alias_records == _retained(tl.in_module("block"))
