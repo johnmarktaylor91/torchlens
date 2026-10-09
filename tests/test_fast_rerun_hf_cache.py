@@ -181,8 +181,10 @@ def test_planted_control_flow_change_still_refuses_fast_with_cached_output() -> 
     trace = _steered_trace(model, site, head, direction, ids)
 
     short_ids = _ids(_PROMPT_LEN + 1, seed=5)
-    trace.run(model, short_ids)
-    assert trace.last_run["engine"] == "guarded_fast"
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace.run(model, short_ids)
+    assert trace.last_run["engine"] == "guarded_fast", trace.last_run.get("fast_refused")
 
     long_ids = _ids(_PROMPT_LEN + 2, seed=6)
     with warnings.catch_warnings():
