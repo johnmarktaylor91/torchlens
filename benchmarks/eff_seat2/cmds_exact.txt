@@ -1,0 +1,2 @@
+benchmarks/eff_seat2/exact.py --model gpt2 --out out/exact.jsonl
+benchmarks/eff_seat2/exact.py --model q3s --out out/exact.jsonl

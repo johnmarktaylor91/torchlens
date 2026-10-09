@@ -1,0 +1,8 @@
+benchmarks/eff_seat2/stagecount.py --model gpt2 --mode trace_elicit --out out/stage.jsonl
+benchmarks/eff_seat2/stagecount.py --model gpt2 --mode record_intervene --out out/stage.jsonl
+benchmarks/eff_seat2/stagecount.py --model gpt2 --mode trace_default --out out/stage.jsonl
+benchmarks/eff_seat2/stagecount.py --model gpt2 --mode record_save --out out/stage.jsonl
+benchmarks/eff_seat2/stagecount.py --model q3s --mode trace_elicit --out out/stage.jsonl
+benchmarks/eff_seat2/stagecount.py --model q3s --mode record_intervene --out out/stage.jsonl
+benchmarks/eff_seat2/stagecount.py --model q3s --mode trace_default --out out/stage.jsonl
+benchmarks/eff_seat2/stagecount.py --model q3s --mode record_save --out out/stage.jsonl
