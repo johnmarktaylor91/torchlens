@@ -29,6 +29,7 @@ if TYPE_CHECKING:
         _SETTER_MUTATION_FUNC_NAMES,
         CaptureProducerMode,
         _apply_live_hooks_to_outputs_legacy,
+        _hook_plan_reaches_op_door,
         _intervene_reaches_op_door,
         _is_inplace_augmented_assignment_dunder,
         _session_validated_parameter,
@@ -449,15 +450,18 @@ def apply_live_hooks_to_outputs(
     """
 
     intervene_options = _trace_intervene_options(self)
-    hook_plan_active = bool(_st._active_hook_plan)
-    if (not hook_plan_active and intervene_options is None) or self.capture_mode not in {
+    hook_plan = _st._active_hook_plan
+    if (not hook_plan and intervene_options is None) or self.capture_mode not in {
         "exhaustive",
         "predicate",
     }:
         return out_orig
-    if not hook_plan_active and not _intervene_reaches_op_door(intervene_options):
-        # Module-exit-only intervene= selectors fire at the module-boundary door; the
-        # per-op check would build a site context for every op output and never match.
+    if (intervene_options is None or not _intervene_reaches_op_door(intervene_options)) and (
+        not hook_plan or not _hook_plan_reaches_op_door(hook_plan)
+    ):
+        # Module-exit-only selectors (the intervene= spec, or the hook plan tl.trace lowers a
+        # tl.module(...) spec into) fire at the module-boundary door; the per-op check would
+        # build a site context for every op output and never match.
         return out_orig
     return _apply_live_hooks_to_outputs_legacy(
         self,

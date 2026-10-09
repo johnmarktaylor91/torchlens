@@ -466,6 +466,69 @@ def _intervene_reaches_op_door(options: Any) -> bool:
     return reaches
 
 
+_HOOK_DOOR_MEMO: dict[int, tuple[Any, bool]] = {}
+
+
+def _hook_entry_reaches_op_door(entry: Any) -> bool:
+    """Return whether one active hook-plan entry can fire at a per-op output door.
+
+    Mirrors the skip rules of ``intervention.runtime._apply_live_hooks``: entries that are not
+    forward post-hooks never fire there, a plain ``tl.module(...)`` input splice is skipped
+    there, and a module-exit-only WHERE term never matches an op-time site (it fires at the
+    module-boundary door). Anything else, including an entry whose op-door visit would raise,
+    is treated as reaching the op door.
+
+    Parameters
+    ----------
+    entry:
+        Hook-plan entry from ``_state._active_hook_plan``.
+
+    Returns
+    -------
+    bool
+        Whether the op-door hook loop could fire or raise for this entry.
+    """
+
+    memo = _HOOK_DOOR_MEMO.get(id(entry))
+    if memo is not None and memo[0] is entry:
+        return memo[1]
+    from ...intervention.hooks import NormalizedHookEntry
+    from ...intervention.runtime import _input_splice_module_scope, _is_plain_module_selector
+
+    if type(entry) is not NormalizedHookEntry:
+        reaches = True
+    elif (
+        entry.metadata.get("direction", "forward") != "forward"
+        or entry.metadata.get("timing", "post") != "post"
+    ):
+        reaches = False
+    elif _input_splice_module_scope(entry.site_target, entry) is not None:
+        reaches = not _is_plain_module_selector(entry.site_target)
+    else:
+        reaches = not _is_module_exit_only(entry.site_target)
+    if len(_HOOK_DOOR_MEMO) >= _OP_DOOR_MEMO_LIMIT:
+        _HOOK_DOOR_MEMO.clear()
+    _HOOK_DOOR_MEMO[id(entry)] = (entry, reaches)
+    return reaches
+
+
+def _hook_plan_reaches_op_door(hook_plan: Any) -> bool:
+    """Return whether any active hook-plan entry can fire at a per-op output door.
+
+    Parameters
+    ----------
+    hook_plan:
+        The active hook plan (``_state._active_hook_plan``).
+
+    Returns
+    -------
+    bool
+        Whether the op-door hook loop has any entry that could fire or raise.
+    """
+
+    return any(_hook_entry_reaches_op_door(entry) for entry in hook_plan)
+
+
 def _predicate_hook_metadata(entry: Any, decision: InterventionDecision) -> dict[str, Any]:
     """Build one predicate-door hook's persisted metadata dict.
 
