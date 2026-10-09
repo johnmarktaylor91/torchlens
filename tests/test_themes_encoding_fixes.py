@@ -61,6 +61,23 @@ def test_degenerate_domain_unencodes_never_midramp() -> None:
     assert len(rows) == 1
 
 
+def test_degenerate_size_domain_unencodes_never_grows() -> None:
+    """size_by over min == max leaves every node at its natural size.
+
+    The note says "unencoded"; growing every node to mid-area would claim a
+    difference from an unencoded node that the data cannot support.
+    """
+
+    from torchlens.visualization._encoding import _compute_size_geometry, resolve_size_by
+
+    state = EncodingState(size_spec=resolve_size_by("dims"))
+    state.size_values = {"a": 4.0, "b": 4.0, "c": 4.0}
+    _compute_size_geometry(state)
+    assert state.sizes == {}
+    assert NOTE_CONSTANT in state.size_notes
+    assert state.size_domain is None
+
+
 def test_rank_transform_is_ordinal_and_unit_invariant() -> None:
     """Rank fractions depend only on order: seconds vs milliseconds are
     IDENTICAL (the Stage-0 unit-invariance check, by construction)."""
