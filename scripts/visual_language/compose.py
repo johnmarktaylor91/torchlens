@@ -275,8 +275,12 @@ class Canvas:
             )
         return placed
 
-    def badge(self, number: int, placed: Placed, selector: str, kind_hint: str) -> bool:
-        """Place badge ``number`` beside the first mark the selector finds; False if none."""
+    def badge(self, number: int, placed: Placed, selector: str, at: str = "") -> bool:
+        """Place badge ``number`` beside the first mark the selector finds; False if none.
+
+        With ``at``, the badge goes beside the first text inside that mark containing those
+        words (still shown in the crop); a mark with no such text is skipped.
+        """
 
         matches = select(placed.render.dot, fill(selector))
         self.witnesses[selector] = [m.name for m in matches]
@@ -285,7 +289,17 @@ class Canvas:
             box = mark_box(placed.render.svg, mark, occurrence)
             if box is None or not box.overlaps(placed.crop):
                 continue
-            cx, cy = self._free_spot(placed.point(box), mark.kind)
+            kind = mark.kind
+            if at:
+                inside = [
+                    b
+                    for b in placed.render.svg.text_boxes(at)
+                    if b.overlaps(box) and b.overlaps(placed.crop)
+                ]
+                if not inside:
+                    continue
+                box, kind = inside[0], "text"
+            cx, cy = self._free_spot(placed.point(box), kind)
             self.badges.append((cx, cy))
             self.root.append(
                 _el(
@@ -357,6 +371,7 @@ def _badge_spots(box: Box, kind: str) -> list[tuple[float, float]]:
     first = {
         "edge": (mx, my - r),
         "cluster": (box.x0 + r * 0.4, box.y0 + r * 0.4),
+        "text": (box.x0 - r - 2, my),
     }.get(kind, (box.x0 + r * 0.2, box.y0 + r * 0.2))
     return [
         first,
@@ -433,7 +448,7 @@ def _place_badges(canvas: Canvas, slide: Slide, placed: dict[str, Placed]) -> li
         if key.select is None:
             continue
         target = placed.get(key.panel)
-        if target is None or not canvas.badge(number, target, key.select, ""):
+        if target is None or not canvas.badge(number, target, key.select, key.at):
             missing.append(f"key {number} ({key.select}) found no mark on panel {key.panel}")
     return missing
 
@@ -521,7 +536,7 @@ def compose_wide(slide: Slide, renders: list[Render], height: float) -> Canvas:
     col_w = ROOM_W / 2 - 12
     key_lines = _key_lines(slide.keys, col_w)
     rows = [max(len(a), len(b)) for a, b in _pairs(key_lines)]
-    key_h = sum(r * KEY_PX * 1.25 + 6 for r in rows) + 8
+    key_h = sum(r * KEY_PX * 1.25 + 6 for r in rows) + 12
     note = fill(slide.footnote)
     if not slide.caption_kept and any(r.dot.graph for r in renders):
         note = f"{note} Caption hidden on this slide.".strip()
@@ -559,6 +574,7 @@ def compose_grid(slide: Slide, renders: dict[str, Render], height: float) -> Can
     note_lines = wrap(note, NOTE_PX, ROOM_W) if note else []
     key_lines = _key_lines(slide.keys, ROOM_W)
     bottom = len(note_lines) * NOTE_PX * 1.25 + sum(len(k) * KEY_PX * 1.25 + 4 for k in key_lines)
+    bottom += 6 if note_lines or key_lines else 0
     if slide.cells:
         items = [(renders[c.panel], c.select, c.label) for c in slide.cells]
     else:

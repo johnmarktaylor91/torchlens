@@ -47,6 +47,9 @@ class Key:
     text: str
     select: Selector | None = None
     panel: str = "a"
+    #: Words inside the selected mark to point at (a row of a node, say); the badge goes
+    #: beside them instead of the mark's corner. Empty points at the mark.
+    at: str = ""
 
 
 @dataclass(frozen=True)
@@ -257,9 +260,14 @@ SLIDES: tuple[Slide, ...] = (
         ),
         keys=(
             Key("Title: type, count of that type, execution index", "node(text~conv2d_1_1)"),
-            Key("Output shape and memory", 'node(text~"(1, 2, 3, 3)")'),
-            Key("stride and padding kept; in_channels dropped", "node(text~stride)"),
-            Key("show_redundant_args=True restores it", "node(text~in_channels)", panel="b"),
+            Key("Output shape and memory", 'node(text~"(1, 2, 3, 3)")', at="(1, 2, 3, 3)"),
+            Key("stride and padding kept; in_channels dropped", "node(text~stride)", at="stride"),
+            Key(
+                "show_redundant_args=True restores it",
+                "node(text~in_channels)",
+                panel="b",
+                at="in_channels",
+            ),
         ),
         footnote="Rows are {font} {base_pt} pt by default (16 here); the first row is bold.",
         rows=("VL01", "VL02", "VL05", "VL06", "VL07", "VT03"),
@@ -274,7 +282,7 @@ SLIDES: tuple[Slide, ...] = (
             Key("Light grey {trainable}: all trainable", "node(fillcolor={trainable})"),
             Key("Dark grey {frozen}: frozen, shapes in brackets", "node(fillcolor={frozen})"),
             Key("Two-tone: some of each", "node(fillcolor~:)"),
-            Key("Caption counts trainable parameters", "graph(label~trainable)"),
+            Key("Caption counts trainable parameters", "graph(label~trainable)", at="trainable"),
         ),
         footnote="A pale {generic_params} fill marks an op that used parameters with no "
         "Param record; no small model produces it.",
@@ -378,7 +386,7 @@ SLIDES: tuple[Slide, ...] = (
         panels=(Panel("a", "Loop2", kwargs={"view": "unrolled", **FULL}),),
         keys=(
             Key("linear_1_1:2: second pass of the same layer", "node(text~linear_1_1:2)"),
-            Key("One call per pass: @cell:1, then @cell:2", "node(text~@cell:2)"),
+            Key("One call per pass: @cell:1, then @cell:2", "node(text~@cell:2)", at="@cell:2"),
             Key("Passes run left to right", "edge(head~relu_1_2pass2)"),
         ),
         rows=("VL01", "VR04", "VV01"),
@@ -397,8 +405,8 @@ SLIDES: tuple[Slide, ...] = (
             ),
         ),
         keys=(
-            Key("(x3): ran three times", "node(text~x3)"),
-            Key("In 2-3 on the back edge", "edge(text~In)"),
+            Key("(x3): ran three times", "node(text~x3)", at="(x3)"),
+            Key("In 2-3 on the back edge", 'edge(text~"In 2-3")'),
             Key("A self-loop appears only when the loop carries state", None),
         ),
         rows=("VL01", "VE04", "VE05", "VR04"),
@@ -476,7 +484,12 @@ SLIDES: tuple[Slide, ...] = (
         keys=(
             Key("parameter temp (1,)", "node(shape=cylinder, text~parameter)"),
             Key("Dashed black edges to its earlier readers", "edge(style=dashed)"),
-            Key("The legend gains this row only now", 'node(text~"mutated parameter")', "b"),
+            Key(
+                "The legend gains this row only now",
+                'node(text~"mutated parameter")',
+                "b",
+                at="mutated parameter",
+            ),
         ),
         footnote="A frozen Parameter takes the dark grey fill.",
         rows=("VN09", "VE11", "VI01"),
@@ -555,8 +568,12 @@ SLIDES: tuple[Slide, ...] = (
         panels=(Panel("a", "Nested", kwargs={"depth": 1}),),
         keys=(
             Key("@block:1 as a 3D box", "node(shape=box3d, text~@block:1)"),
-            Key("Class, output shape and memory", "node(shape=box3d, text~Sequential)"),
-            Key("Ops and parameters inside", "node(shape=box3d, text~params)"),
+            Key(
+                "Class, output shape and memory",
+                "node(shape=box3d, text~Sequential)",
+                at="Sequential",
+            ),
+            Key("Ops and parameters inside", "node(shape=box3d, text~params)", at="ops"),
         ),
         footnote="collapse_fn(module) chooses the modules to fold instead of a depth.",
         rows=("VN10", "VR05"),
@@ -731,11 +748,17 @@ SLIDES: tuple[Slide, ...] = (
             ),
         ),
         keys=(
-            Key("The edit: zero_ablate, replay engine", "node(text~edited)"),
-            Key("The declared target: no fire recorded here", 'node(text~"no fire")'),
+            Key("The edit: zero_ablate, replay engine", "node(text~edited)", at="edited"),
+            Key(
+                "The target's site cohort: no fire recorded at this instance",
+                'node(text~"no fire")',
+                at="cohort",
+            ),
         ),
-        footnote="A caption census names the replacement lane that ran, and a replay with "
-        "direct writes adds Direct writes detected. Up to {surgery_cap} citation rows per node.",
+        footnote="Up to {surgery_cap} citation rows per node; a caption census names the "
+        "replacement lane that ran. "
+        # Known renderer defect; delete this line when the fix lands.
+        "Known defect (F32): both passes of linear_1_1 carry both rows and the solid border.",
         rows=("VN19", "VC02", "VC05"),
     ),
     Slide(
@@ -775,9 +798,14 @@ SLIDES: tuple[Slide, ...] = (
             ),
         ),
         keys=(
-            Key("Most FLOPs: the darkest fill", "node(text~linear_2)"),
+            Key("Most FLOPs: the darkest fill", "node(text~linear_1_1)"),
             Key("The encoding legend appears by itself", "node(text~color_by)", panel="b"),
-            Key("Unencoded nodes stay white and are counted", "node(text~encoded)", panel="b"),
+            Key(
+                "Unencoded nodes stay white and are counted",
+                "node(text~encoded)",
+                panel="b",
+                at="encoded",
+            ),
         ),
         rows=("VK01", "VK03", "VK06", "VI02"),
     ),
@@ -792,7 +820,7 @@ SLIDES: tuple[Slide, ...] = (
                 "Sizes",
                 kwargs={"color_by": f"@bytes_{transform}", **QUIET},
                 label=transform,
-                crop=("node(text~linear_1)", "node(text~linear_2)"),
+                crop=("node(text~input_1)", "node(text~linear_1)", "node(text~linear_2)"),
             )
             for name, transform in zip("abc", ("linear", "rank", "log"), strict=True)
         ),
@@ -899,9 +927,9 @@ SLIDES: tuple[Slide, ...] = (
             ),
         ),
         keys=(
-            Key("t= time and out= storage", "node(text~t=)"),
-            Key("call= and fn= name the source line", "node(text~call=)"),
-            Key("show_saved_for_backward: retained tensors", "node(text~saved)"),
+            Key("t= time and out= storage", "node(text~t=)", at="t="),
+            Key("call= and fn= name the source line", "node(text~call=)", at="call="),
+            Key("show_saved_for_backward: retained tensors", "node(text~saved)", at="saved"),
             Key("Fields you list replace the defaults", "node(text~tanh)", panel="b"),
         ),
         footnote="Vision and attention rows exist only as experimental node_spec_fn "
@@ -1016,7 +1044,7 @@ SLIDES: tuple[Slide, ...] = (
         ),
         keys=(
             Key("Order two or more: cream", "node(fillcolor=#FFF4D6)"),
-            Key("[i]: no forward op", "node(text~[i])"),
+            Key("[i]: no forward op", "node(text~[i])", at="[i]"),
             Key("One group per backward pass", 'cluster(label~"backward pass 2")'),
         ),
         footnote="[custom] marks the custom Function's grad_fn elsewhere in this graph.",
@@ -1052,8 +1080,9 @@ SLIDES: tuple[Slide, ...] = (
             Key("Gradient arrows on the forward graph", "edge(color={grad_color})", panel="b"),
         ),
         footnote="intervening_cluster places intervening grad_fns upstream (default), "
-        "outside, downstream or in their own dashed group. Known defect in this build: gradient "
-        "arrows and ties attach to plain copies of the forward nodes drawn above them.",
+        "outside, downstream or in their own dashed group. "
+        # Known renderer defect; delete this line when the fix lands.
+        "Known defect (F37): gradient arrows attach to stray copies of the forward nodes.",
         rows=("VE08", "VE10", "VR12", "VC04"),
     ),
     Slide(
@@ -1228,7 +1257,11 @@ SLIDES: tuple[Slide, ...] = (
         ),
         keys=(
             Key("The input images as a montage", "node(shape=none)"),
-            Key("preprocess names the transform, UNVERIFIED here", "node(text~preprocess)"),
+            Key(
+                "preprocess names the transform, UNVERIFIED here",
+                "node(text~preprocess)",
+                at="preprocess",
+            ),
         ),
         footnote="Batch policy auto shows 4 examples, all 16, or first, first_n:N, shape_only.",
         rows=("VN21", "VN22", "VL12"),

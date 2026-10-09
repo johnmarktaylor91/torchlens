@@ -53,8 +53,11 @@ def alphabet_dot(slide_id: str, raw: Path, order: dict[str, int]) -> tuple[str, 
     """A DOT sheet whose cells copy each exemplar's exact attributes from its slide."""
 
     entries = ALPHABET[slide_id]
-    cols = 4
-    cell_w, cell_h = 216.0, 54.0
+    # A sheet of lines needs room for a short line, its words and a left-aligned meaning;
+    # a sheet of nodes fits four across.
+    has_lines = any("edge(" in selector for _m, _s, _p, selector in entries)
+    cols = 3 if has_lines else 4
+    cell_w, cell_h = (330.0, 50.0) if has_lines else (250.0, 54.0)
     lines = [
         "digraph alphabet {",
         'graph [bgcolor=white fontname=Helvetica splines=true outputorder=edgesfirst pad="0.1"]',
@@ -65,6 +68,7 @@ def alphabet_dot(slide_id: str, raw: Path, order: dict[str, int]) -> tuple[str, 
     for i, (meaning, source, panel, selector) in enumerate(entries):
         r, c = divmod(i, cols)
         x, y = c * cell_w + cell_w / 2, -r * cell_h
+        left = x - cell_w / 2
         stem = raw / f"{source}-{panel}.json"
         matches = select(parse_json(stem.read_text()), fill(selector)) if stem.exists() else []
         if not matches:
@@ -87,11 +91,15 @@ def alphabet_dot(slide_id: str, raw: Path, order: dict[str, int]) -> tuple[str, 
                     attrs[key] = strip_tags(mark.attrs[key])
                     attrs.update(fontsize="13", labelfontsize="13")
             a, b = f"a{i}", f"b{i}"
-            lines.append(f'{a} [shape=point width=0.06 pos="{x - 100:.1f},{y:.1f}!"]')
-            lines.append(f'{b} [shape=point width=0.06 pos="{x - 20:.1f},{y:.1f}!"]')
+            lines.append(f'{a} [shape=point width=0.06 pos="{left + 4:.1f},{y:.1f}!"]')
+            lines.append(f'{b} [shape=point width=0.06 pos="{left + 76:.1f},{y:.1f}!"]')
             lines.append(f"{a} -> {b} [{_attrs(attrs)}]")
+            # Plaintext nodes are centred on pos: shift by half the estimated width so the
+            # meaning starts just right of the line.
+            mid = left + 88 + 0.55 * 13 * len(label) / 2
             lines.append(
-                f'm{i} [shape=plaintext label="{label}" pos="{x + 40:.1f},{y:.1f}!" fontsize=13]'
+                f'm{i} [shape=plaintext label="{label}" pos="{mid:.1f},{y:.1f}!" fontsize=13 '
+                'margin="0,0"]'
             )
         else:
             attrs = {k: mark.attrs[k] for k in _CLUSTER_KEYS if mark.attrs.get(k)}
@@ -170,7 +178,7 @@ def _table_slide(slide: Slide, height: float, env: dict[str, Any], probe: dict[s
     from torchlens.data_classes._trace_viz import TraceVisualizationMixin
 
     params = inspect.signature(TraceVisualizationMixin.draw).parameters
-    footer = f"TorchLens {env['torchlens']}, commit {env['commit'][:10]}, built {env['built']}"
+    footer = f"TorchLens {env['torchlens']}, commit {env['commit'][:10]}, built {env['built'][:10]}"
     half = (len(CHEAT_GROUPS) + 1) // 2
     groups = CHEAT_GROUPS[half:] if slide.id.endswith("-2") else CHEAT_GROUPS[:half]
     if slide.id.startswith("cheat-sheet"):
