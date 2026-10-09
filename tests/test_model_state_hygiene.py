@@ -333,6 +333,10 @@ _FAILURES: dict[str, type[BaseException] | None] = {
 }
 
 
+@pytest.mark.smoke_cells(
+    "test_entry_point_returns_the_model_unchanged[trace-normal]",
+    "test_entry_point_returns_the_model_unchanged[trace-keyboard_interrupt]",
+)
 @pytest.mark.parametrize("failure", list(_FAILURES))
 @pytest.mark.parametrize("door", list(_DOORS))
 def test_entry_point_returns_the_model_unchanged(door: str, failure: str) -> None:
@@ -363,6 +367,7 @@ def test_entry_point_returns_the_model_unchanged(door: str, failure: str) -> Non
         _assert_copy_independent(model)
 
 
+@pytest.mark.smoke_cells("test_captured_model_pickles_like_a_never_captured_model[trace]")
 @pytest.mark.parametrize("door", ["trace", "record"])
 def test_captured_model_pickles_like_a_never_captured_model(door: str) -> None:
     """Whole-model pickle and torch.save work after a capture, TorchLens-free.
