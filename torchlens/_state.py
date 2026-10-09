@@ -567,8 +567,8 @@ _stale_prepared_roots: "weakref.WeakSet[Any]" = weakref.WeakSet()
 
 A root lands here when some module in its subtree is later re-prepared under a
 DIFFERENT root (role swap). ``_prepare_model_once`` treats a stale root as
-un-prepared for the fast-path check and re-establishes its tree's addresses and
-forward decorations before clearing the staleness flag.
+un-prepared for the fast-path check and re-establishes its tree's addresses
+before clearing the staleness flag.
 """
 
 
@@ -652,7 +652,7 @@ def release_model_prep(root: Any, modules: tuple[Any, ...]) -> None:
     -----
     A current descendant may have last been prepared beneath another root after
     a role swap. Those displaced roots are evicted too: releasing the shared
-    descendant removes its forward wrapper, so their next capture must rebuild
+    descendant removes its module metadata, so their next capture must rebuild
     the full role-dependent preparation state.
     """
     released_modules = set(modules)

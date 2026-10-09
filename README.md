@@ -639,11 +639,12 @@ detached references. The optional `escape_detector="shadow"` diagnoses raw calla
 [detached-reference handling](docs/migration/scoped_detached_patching.md) and the
 [limitations catalog](docs/reference/limitations.md).
 
-A traced model keeps TorchLens wrapper state attached afterwards, so pickling
-the WHOLE module (`pickle.dumps(model)` or `torch.save(model)`) can fail with a
-`PicklingError` after tracing. Call `tl.release_model(model)` to restore
-whole-model serializability; `state_dict()` saves, traces, and saved
-activations are unaffected either way.
+A capture leaves no TorchLens callable on the model, so pickling the WHOLE
+module (`pickle.dumps(model)` or `torch.save(model)`) works after tracing. The
+one exception is a plain attribute holding a torch function (`self.act = F.relu`)
+across a later wrap-state change: call `tl.release_model(model)` right before
+whole-model serialization to normalize it; `state_dict()` saves, traces, and
+saved activations are unaffected either way.
 
 
 ## Tutorials and Docs

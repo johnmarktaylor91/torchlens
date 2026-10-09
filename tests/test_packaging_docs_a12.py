@@ -146,7 +146,7 @@ def test_readme_renders_on_pypi() -> None:
                 f"relative README markdown image: {target}"
             )
     assert "release_model" in text, (
-        "README must mention tl.release_model (post-trace PicklingError remedy; "
+        "README must mention tl.release_model (whole-model pickle remedy; "
         "listA row 29 doc-now portion)"
     )
 

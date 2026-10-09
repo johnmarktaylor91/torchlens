@@ -38,7 +38,7 @@ SG#29	ledgered-open		A09	TraceSlice.summary launders honesty banners
 SG#30	ledgered-open		A09	episode capture invisible on report surfaces
 SG#31	regression-node	tests/test_capopts_truth_stop_after.py	A06	stop_after= universal silent no-op
 SG#32	ledgered-open		A06	dataclasses.replace marks all 49 fields explicit
-SG#33	ledgered-open	tests/composition_expectations/test_proofnet_sweep_bundles.py::test_post_trace_pickle_gap_is_pinned_and_the_remedy_works	D01	post-trace model unpicklable with no fingerprint
+SG#33	regression-node	tests/composition_expectations/test_proofnet_sweep_bundles.py::test_post_trace_model_pickles_and_round_trips	D01	post-trace model unpicklable with no fingerprint
 SG#34	regression-node	tests/test_capopts_truth_batchnorm_warn.py	A06	train-mode BN stats mutate silently
 SG#35	ledgered-open		F32	preview draw color_by silently unencodes all nodes
 SG#36	ledgered-open		F32	legacy entry layer backend-blind (aggregate/xarray/tap)

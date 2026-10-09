@@ -35,7 +35,15 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+import torch
+
 from .._errors import ArgumentTypeError, InvalidArgumentError
+from ._content_identity import (
+    collect_tensors,
+    render_helper,
+    render_value,
+    tensor_version,
+)
 from .predicates import as_intervention_decision
 from .types import HelperDirection, HelperSpec, InterventionDecision
 
@@ -106,21 +114,37 @@ def classify_where(where: Any) -> AddressClass:
     return "value_dependent"
 
 
-def _canonical_repr(value: Any) -> str:
+def _canonical_repr(value: Any, *, exact: bool = False) -> str:
     """Render a WHERE/action term canonically for rule identity.
 
     ``HelperSpec`` renders as its portable ``(name, args, kwargs)`` identity
     -- two helpers differing only by an argument (``noise(std=0.1)`` vs
     ``noise(std=0.9)``) render differently BY CONSTRUCTION, which is what
-    makes rule ids distinguishable (ledger memo D1d). Opaque callables render
-    as their qualified name with an ``@opaque`` marker: the payload is
+    makes rule ids distinguishable (ledger memo D1d). Tensor arguments render
+    by their FULL current content (dtype, shape, hash of every element), so
+    two large vectors differing in one element are distinct rules and an
+    in-place edit is visible on the next read. Opaque callables render as
+    their qualified name with an ``@opaque`` marker: the payload is
     undeclarable, and the record says so rather than guessing.
+
+    Parameters
+    ----------
+    value:
+        WHERE or action term.
+    exact:
+        Re-hash tensor bytes even when their version counters are unchanged.
+
+    Returns
+    -------
+    str
+        Canonical rendering.
     """
 
     if isinstance(value, HelperSpec):
-        return f"helper:{value.helper_name}:{value.args!r}:{value.kwargs!r}"
+        return render_helper(value, exact=exact)
     if isinstance(value, InterventionDecision):
-        return f"decision:{value.action}:{_canonical_repr(value.hook)}:direction={value.direction}"
+        hook_repr = _canonical_repr(value.hook, exact=exact)
+        return f"decision:{value.action}:{hook_repr}:direction={value.direction}"
     from .selectors import BaseSelector
 
     if isinstance(value, BaseSelector):
@@ -128,7 +152,7 @@ def _canonical_repr(value: Any) -> str:
     if callable(value):
         qualname = getattr(value, "__qualname__", type(value).__name__)
         return f"callable:{qualname}@opaque"
-    return f"value:{value!r}"
+    return f"value:{render_value(value, exact=exact)}"
 
 
 @dataclass(frozen=True)
@@ -149,11 +173,15 @@ class InterventionRule:
     where: Any
     action: Any
     direction: HelperDirection | None = None
-    rule_id: str = field(default="", compare=False)
     address_class: AddressClass = field(default="value_dependent", compare=False)
     decision: InterventionDecision | None = field(default=None, compare=False, repr=False)
     where_repr: str = field(default="", compare=False, repr=False)
-    action_repr: str = field(default="", compare=False, repr=False)
+    _action_tensors: tuple[torch.Tensor, ...] = field(
+        default=(), init=False, compare=False, repr=False
+    )
+    _identity_memo: tuple[tuple[int | None, ...], tuple[str, str]] | None = field(
+        default=None, init=False, compare=False, repr=False
+    )
 
     def __post_init__(self) -> None:
         """Validate the clause and derive its identity facts.
@@ -176,16 +204,66 @@ class InterventionRule:
                 argument="where",
             )
         decision = as_intervention_decision(self.action, direction=self.direction)
-        where_repr = _canonical_repr(self.where)
-        action_repr = _canonical_repr(self.action)
-        digest = hashlib.sha256(
-            f"{where_repr}||{action_repr}||{self.direction}".encode()
-        ).hexdigest()[:10]
+        action_tensors: list[torch.Tensor] = []
+        collect_tensors(self.action, action_tensors)
         object.__setattr__(self, "decision", decision)
-        object.__setattr__(self, "where_repr", where_repr)
-        object.__setattr__(self, "action_repr", action_repr)
-        object.__setattr__(self, "rule_id", f"r-{digest}")
+        object.__setattr__(self, "where_repr", _canonical_repr(self.where))
+        object.__setattr__(self, "_action_tensors", tuple(action_tensors))
         object.__setattr__(self, "address_class", classify_where(self.where))
+
+    def _identity(self, *, exact: bool = False) -> tuple[str, str]:
+        """Return ``(action_repr, rule_id)`` for the action's CURRENT content.
+
+        The helper keeps a live reference to the user's tensors, so identity
+        is derived on read. The result is cached against the tensors' version
+        counters: an in-place torch edit (``v.add_(...)``) bumps the counter
+        and re-derives on the next read, while repeated reads on the per-op
+        hot path cost one counter comparison per tensor argument.
+
+        Parameters
+        ----------
+        exact:
+            Re-hash every tensor even when no counter moved (catches writes
+            through ``.data`` or a NumPy view); refreshes the cache.
+
+        Returns
+        -------
+        tuple[str, str]
+            The canonical action rendering and the ``r-...`` rule id.
+        """
+
+        versions = tuple(tensor_version(tensor) for tensor in self._action_tensors)
+        memo = self._identity_memo
+        if not exact and memo is not None and memo[0] == versions and None not in versions:
+            return memo[1]
+        action_repr = _canonical_repr(self.action, exact=exact)
+        digest = hashlib.sha256(
+            f"{self.where_repr}||{action_repr}||{self.direction}".encode()
+        ).hexdigest()[:10]
+        identity = (action_repr, f"r-{digest}")
+        object.__setattr__(self, "_identity_memo", (versions, identity))
+        return identity
+
+    @property
+    def rule_id(self) -> str:
+        """Content-derived rule identity over WHERE, current action, direction."""
+
+        return self._identity()[1]
+
+    @property
+    def action_repr(self) -> str:
+        """Canonical rendering of the action over its current tensor content."""
+
+        return self._identity()[0]
+
+    def __repr__(self) -> str:
+        """Render the clause with its current rule identity."""
+
+        return (
+            f"InterventionRule(where={self.where!r}, action={self.action!r}, "
+            f"direction={self.direction!r}, rule_id={self.rule_id!r}, "
+            f"address_class={self.address_class!r})"
+        )
 
     @property
     def payload_fidelity(self) -> Literal["declared", "opaque"]:
@@ -341,9 +419,14 @@ class InterventionSpec:
 
     @property
     def spec_digest(self) -> str:
-        """Stable content digest over the ordered rule identities."""
+        """Content digest over the ordered rule identities, read NOW.
 
-        payload = "|".join(rule.rule_id for rule in self.rules)
+        Every read re-hashes tensor arguments (once each), so the digest
+        names the content a run would use at this moment, including edits
+        that bypass the version counter.
+        """
+
+        payload = "|".join(rule._identity(exact=True)[1] for rule in self.rules)
         return "spec-" + hashlib.sha256(payload.encode()).hexdigest()[:16]
 
     @property

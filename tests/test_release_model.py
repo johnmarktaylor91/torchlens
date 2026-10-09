@@ -34,25 +34,15 @@ def _new_model() -> _ReleaseModel:
     return _ReleaseModel().eval()
 
 
-def test_whole_model_pickle_and_torch_save_require_release() -> None:
-    """Persistent child wrappers fail whole-model serialization until release."""
+def test_whole_model_pickle_and_torch_save_work_after_trace_and_release() -> None:
+    """A capture leaves no child wrapper, so serialization needs no release."""
     model = _new_model()
     inputs = torch.randn(2, 3)
     tl.trace(model, inputs)
 
-    expected = (
-        "Can't pickle <function Linear.forward at ",
-        "it's not the same object as torch.nn.modules.linear.Linear.forward",
-    )
-    for serializer in (
-        lambda: pickle.dumps(model),
-        lambda: torch.save(model, io.BytesIO()),
-    ):
-        with pytest.raises(pickle.PicklingError) as exc_info:
-            serializer()
-        message = str(exc_info.value)
-        assert message.startswith(expected[0])
-        assert message.endswith(expected[1])
+    assert "forward" not in model.linear.__dict__
+    assert pickle.loads(pickle.dumps(model))(inputs).shape == (2, 2)
+    torch.save(model, io.BytesIO())
 
     tl.release_model(model)
 
@@ -72,7 +62,8 @@ def test_release_is_idempotent_and_never_traced_model_is_a_noop() -> None:
     assert torch.equal(model(inputs), expected)
 
     tl.trace(model, inputs)
-    assert is_forward_call_decorated(model.linear.forward)
+    assert not is_forward_call_decorated(model.linear.forward)
+    assert get_module_meta(model.linear) is not None
     tl.release_model(model)
     tl.release_model(model)
 
@@ -101,7 +92,7 @@ def test_retrace_after_release_matches_fresh_model() -> None:
 
 
 def test_releasing_one_model_preserves_an_independent_prepared_model() -> None:
-    """Release does not disturb persistent preparation for another model tree."""
+    """Release does not disturb the preparation metadata of another model tree."""
     first = _new_model()
     second = _new_model()
     inputs = torch.randn(2, 3)
@@ -111,7 +102,8 @@ def test_releasing_one_model_preserves_an_independent_prepared_model() -> None:
     tl.release_model(first)
     repeated_second = tl.trace(second, inputs)
 
-    assert is_forward_call_decorated(second.linear.forward)
+    assert get_module_meta(second.linear) is not None
+    assert not is_forward_call_decorated(second.linear.forward)
     assert [op.layer_label for op in repeated_second.layer_list] == [
         op.layer_label for op in initial_second.layer_list
     ]

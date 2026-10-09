@@ -1043,6 +1043,13 @@ DEVICE_GATED_SKIPIF_LEDGER: dict[str, str] = {
         "claim; dark on CPU-only CI, executed on the Fellows-cluster CUDA leg"
     ),
     "test_robustness_pr2.py::test_cuda_forward_pass_still_logs": _CUDA_DARK,
+    "test_spec_identity_content.py::test_identity_is_device_independent": (
+        "[2026-10-08] F4 content identity: a CUDA copy of a steer vector must name "
+        "the same rule as the CPU original; no CPU-available device carries real "
+        "values (a meta tensor hashes as 'meta'), so the cross-device half is dark "
+        "until a device leg exists. The device-tag half executes on every leg in "
+        "test_identity_strings_carry_no_device_tag"
+    ),
     "test_runnable_r36_regressions.py::TestCudaStagingAndReadiness": _CUDA_DARK,
     "test_tlspec_runnable_r35_attestation_lattice.py::test_r35_device_diverged_run_is_never_attested": _CUDA_DARK,
     "test_tlspec_runnable_r35_exact_semantics.py::test_r35_seeded_run_restores_produced_only_cuda_rng": _CUDA_DARK,

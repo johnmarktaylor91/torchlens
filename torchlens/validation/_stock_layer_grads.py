@@ -363,6 +363,7 @@ def _stock_layer_grads(
     """
 
     from ..utils.rng import set_random_seed
+    from ._live_model_state import load_state_dict_restore, restore_state_dict_if_changed
 
     collector = _StockModuleGradCollector()
     collector.install(model)
@@ -375,4 +376,4 @@ def _stock_layer_grads(
         return dict(collector.stock_module_output_grads), set(collector.identity_output_addresses)
     finally:
         collector.cleanup()
-        model.load_state_dict(state_dict_snapshot)
+        restore_state_dict_if_changed(model, state_dict_snapshot, load_state_dict_restore)

@@ -779,12 +779,16 @@ def _helper_identity(helper: HelperSpec | None) -> tuple[Any, ...] | None:
 
     if helper is None:
         return None
+    # Tensor arguments by full content: torch's repr elides large tensors, so
+    # two fires of different large vectors would otherwise de-duplicate.
+    from ._content_identity import render_value
+
     return (
         helper.name,
         helper.kind,
         helper.portability,
-        tuple(repr(arg) for arg in helper.args),
-        tuple((key, repr(value)) for key, value in helper.kwargs),
+        tuple(render_value(arg) for arg in helper.args),
+        tuple((key, render_value(value)) for key, value in helper.kwargs),
         tuple(helper.metadata),
     )
 

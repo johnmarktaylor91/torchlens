@@ -137,6 +137,7 @@ from .fastlog.exceptions import PredicateError
 from .fastlog.options import HaltPredicateFn, PredicateFn, RecordingOptions
 from .fastlog.types import CaptureSpec
 from .intervention import injection as _injection, model_door as _model_door
+from .intervention._module_alias_guard import refuse_model_alias_spellings
 from .intervention.errors import ChunkedForwardConfigError
 from .intervention.hooks import normalize_hook_plan
 from .intervention.predicates import InterventionPredicate
@@ -1251,12 +1252,14 @@ def _warn_once_train_mode_running_stats(model: nn.Module) -> None:
 def _release_preparation_after_failed_capture(model: nn.Module) -> None:
     """Strip TorchLens preparation from a model whose capture failed.
 
-    A FAILED capture must leave the model clean (pollution-free instance
-    forwards, picklable) regardless of the success-path lifecycle: the
-    persistent forward decorations exist to make the NEXT capture cheap, and
-    after a failure the honest baseline is "as if never traced". State the
-    partial forward already mutated (e.g. norm running statistics) is NOT
-    rolled back; that boundary is documented at the failure warning.
+    A FAILED capture must leave the model and TorchLens's preparation
+    bookkeeping "as if never traced", whatever ended it: the session cleanup
+    already put every submodule ``forward`` back, and this also evicts the
+    module metadata and prepared-model registry entries so the next capture
+    prepares from scratch. Every ``BaseException`` (``KeyboardInterrupt``,
+    ``SystemExit``) takes this path, exactly like an ordinary ``Exception``.
+    State the partial forward already mutated (e.g. norm running statistics)
+    is NOT rolled back; that boundary is documented at the failure warning.
 
     Parameters
     ----------
@@ -1309,10 +1312,11 @@ def _warn_failed_capture_release_incomplete(release_exc: BaseException) -> None:
 
     warnings.warn(
         _TorchLensWarning(
-            "TorchLens could not fully remove its instrumentation from "
+            "TorchLens could not fully release its preparation of "
             f"the model after the failed capture "
-            f"({type(release_exc).__name__}: {release_exc}); the model may "
-            "keep instance-level forward wrappers and fail to pickle. "
+            f"({type(release_exc).__name__}: {release_exc}); its module "
+            "metadata and prepared-model bookkeeping may stay registered and "
+            "plain attributes holding torch functions may stay unnormalized. "
             "Remedy: call tl.release_model(model) once the underlying "
             "condition is resolved",
             code="failed_capture_release_incomplete",
@@ -1747,11 +1751,12 @@ def _run_model_and_save_specified_outs(
         save_grads: If True, register backward hooks to capture grads.
         grads_to_save: Which layer grads to save.
         random_seed: Fixed RNG seed for reproducibility (important for stochastic models).
-            Process-global side effect: the capture reseeds all four global RNG engines
-            (random/NumPy/torch CPU/all CUDA devices) at entry and never restores them;
-            when None the seed is drawn from the entropy-seeded global ``random`` stream,
-            so an outer ``torch.manual_seed`` does not make an unseeded capture
-            reproducible. The seed used is recorded on ``trace.random_seed``.
+            The capture snapshots the global RNG states (random/NumPy/torch CPU, plus
+            CUDA when live), reseeds them for its forward, and restores the snapshot on
+            every exit path, so code after the capture continues its own streams. When
+            None the seed is drawn from a private entropy-seeded stream, so an outer
+            ``torch.manual_seed`` does not make an unseeded capture reproducible. The
+            seed used is recorded on ``trace.random_seed``.
         num_context_lines: Number of source-code context lines stored per function call.
         optimizer: Optional optimizer - used to tag which parameters have optimizers attached.
         recurrence_detection: If True (default), run full isomorphic subgraph expansion to
@@ -1854,6 +1859,10 @@ def _run_model_and_save_specified_outs(
     -------
         Fully-populated Trace.
     """
+    # A shared module's alias spelling cannot select one call site: refuse before the forward.
+    alias_sources = (save_predicate, intervene_predicate, halt_predicate, hooks, intervention_spec)
+    deferred = (normalized_hook_plan, _deferred_retention_selector, _deferred_gradient_selector)
+    refuse_model_alias_spellings(model, *alias_sources, *deferred)
     # Auto-detect model device from its first parameter and move inputs to match.
     # This prevents silent device-mismatch errors when the model is on CUDA but
     # the user ops CPU tensors (a common mistake). A META first parameter is
@@ -4087,7 +4096,9 @@ def _trace_torch_model(
             pending_admission(meta_admission),
         ):
             trace = capture_with_rescue(capture_callable, eligible=rescue_eligible, model=model)
-    except Exception as capture_exc:
+    except BaseException as capture_exc:
+        # One settlement path for every escape: a KeyboardInterrupt or
+        # SystemExit mid-capture is released exactly like a RuntimeError.
         if episode_resolved is not None:
             # Best-effort: the FAILED partial product carries the episode
             # declaration; attach the derived ledger disclosure without ever

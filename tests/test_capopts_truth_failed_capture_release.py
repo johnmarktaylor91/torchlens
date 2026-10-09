@@ -132,16 +132,16 @@ def test_secondary_release_failure_warns_coded_and_never_masks(
     assert "failed_capture_release_incomplete" in codes, codes
 
 
-def test_successful_capture_lifecycle_is_unchanged() -> None:
-    """Success keeps the persistent wrappers until tl.release_model."""
+def test_successful_capture_leaves_no_instance_forward() -> None:
+    """Success also puts every child forward back; release stays a no-op on it."""
 
     model = SmallNet()
     tl.trace(model, torch.randn(2, 4))
-    assert "forward" in model.fc.__dict__, (
-        "the failure-path release must not leak onto the success path; the "
-        "persistent-preparation lifecycle is deliberate (re-capture speed) "
-        "and its dissolution is List-B feature work, not this fix"
+    assert "forward" not in model.fc.__dict__, (
+        "the forward wrappers are session-scoped: the success path must put "
+        "every child forward back, exactly like the failure path"
     )
+    pickle.dumps(model)
     tl.release_model(model)
     assert "forward" not in model.fc.__dict__
     pickle.dumps(model)

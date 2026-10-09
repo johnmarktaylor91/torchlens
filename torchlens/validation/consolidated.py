@@ -430,7 +430,10 @@ def validate(
         Keyword model input.
     scope:
         Validation scope: ``"forward"``, ``"backward"``, ``"saved"``,
-        ``"intervention"``, or ``"receptive_field"``.
+        ``"intervention"``, or ``"receptive_field"``. ``"receptive_field"``
+        captures with ``save_mode="reference"``, so a model whose forward
+        writes its own buffers in place (a train-mode BatchNorm's running
+        statistics) raises ``MutatedReferenceError``; validate it in eval mode.
     random_seed:
         Optional random seed for forward-like validation.
     verbose:

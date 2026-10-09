@@ -475,21 +475,43 @@ def test_region_engine_and_trace_refusals(chain_fork) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.heavy
-@pytest.mark.real_model
-def test_region_gpt2_block_module_aligned() -> None:
-    """GATE row: a module-aligned distilgpt2 transformer-block region."""
+def _distilgpt2_block_fork(*, use_cache: bool) -> tuple[object, object]:
+    """Capture the cached distilgpt2 snapshot and select its ``transformer.h.2`` block region.
+
+    Parameters
+    ----------
+    use_cache:
+        Value for ``model.config.use_cache`` before capture.
+
+    Returns
+    -------
+    tuple[object, object]
+        The intervention-ready fork and the block's region target.
+    """
 
     transformers = pytest.importorskip("transformers")
     if not (HF_HUB_CACHE / "models--distilgpt2").exists():
         pytest.skip("distilgpt2 snapshot not cached; fetch once online.")
     model = transformers.AutoModelForCausalLM.from_pretrained("distilgpt2").eval()
+    model.config.use_cache = use_cache
     ids = torch.tensor([[464, 3139, 286, 4881, 318]])
     fork = tl.trace(model, ids, capture=_CAPTURE).fork()
-    members = tl.in_module("transformer.h.2")
-    slice_ = fork.subgraph(members)
+    slice_ = fork.subgraph(tl.in_module("transformer.h.2"))
     assert len(slice_) > 10  # a real block, not a single op
-    target = slice_.as_region()
+    return fork, slice_.as_region()
+
+
+@pytest.mark.heavy
+@pytest.mark.real_model
+def test_region_gpt2_block_module_aligned() -> None:
+    """GATE row: a module-aligned distilgpt2 transformer-block region (KV cache off).
+
+    With the cache off, every exit of the block feeds a later op, so the block region
+    applies. The cache-on form, whose exits feed the returned ``past_key_values``, is
+    the refusal row below.
+    """
+
+    fork, target = _distilgpt2_block_fork(use_cache=False)
     assert len(target.instances) >= 1
     total_exit_edges = len(target.boundary.exits)
     assert total_exit_edges >= 1
@@ -501,6 +523,44 @@ def test_region_gpt2_block_module_aligned() -> None:
     )
     (fact,) = _region_fact_rows(fork)
     assert fact["execution_effect"] == "exits_substituted_interior_not_replayed"
+
+
+@pytest.mark.heavy
+@pytest.mark.real_model
+def test_region_gpt2_block_with_kv_cache_refuses_output_alias_exit() -> None:
+    """GATE row, cache on: the block's exits into returned cache tensors refuse by name.
+
+    With ``use_cache`` the block's present key/value are returned in
+    ``past_key_values``: exits into model-output aliases, which run no function and so
+    have no argument occurrence to splice. The edit must refuse
+    ``region_exit_address_underivable`` naming the alias, and leave the fork untouched
+    (no region fact row, every output value unchanged) rather than drop the edit.
+    """
+
+    import re
+
+    fork, target = _distilgpt2_block_fork(use_cache=True)
+    output_labels = {op.layer_label for op in fork.output_ops}
+    # Exit edges name pass-qualified children (``output_6:1``); output ops carry bare labels.
+    alias_exits = {
+        edge.child for edge in target.boundary.exits if edge.child.split(":")[0] in output_labels
+    }
+    assert alias_exits, "with the cache on the block must exit into a returned value"
+    before = [op.out.clone() for op in fork.output_ops]
+    with pytest.raises(RegionError) as excinfo:
+        fork.do(target, tl.scale(0.0))
+    assert excinfo.value.fields["code"] == "region_exit_address_underivable"
+    message = str(excinfo.value)
+    assert "model-output alias" in message
+    named = re.search(r"alias node\(s\) \[([^\]]*)\]", message)
+    assert named is not None, message
+    named_labels = {label.strip().strip("'\"") for label in named.group(1).split(",")}
+    assert named_labels == alias_exits
+    # Nothing was silently applied: no region transaction, outputs bit-identical.
+    assert _region_fact_rows(fork) == []
+    after = [op.out for op in fork.output_ops]
+    assert len(after) == len(before)
+    assert all(torch.equal(a, b) for a, b in zip(after, before, strict=True))
 
 
 @pytest.mark.heavy

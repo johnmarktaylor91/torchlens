@@ -32,11 +32,17 @@ from __future__ import annotations
 import threading
 import time
 from collections import defaultdict
+from collections.abc import Callable, Generator, Iterator
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from .._errors import InvalidArgumentError
 from ._helper_fingerprint import changed_helpers, changed_message, helper_digests
+from ._module_alias_guard import (
+    bare_module_address,
+    model_module_aliases,
+    refuse_module_alias_spellings,
+)
 from .audit import EXECUTION_EFFECTS, build_fire_record, rules_payload
 from .errors import BindingPreflightError, BindingRuntimeError
 from .model_door import resolve_model_operand
@@ -110,7 +116,8 @@ class BindReport:
     #: Canonical address -> the OTHER addresses the same module object is
     #: registered under (``named_modules(remove_duplicate=False)``). A rule
     #: anchored on the canonical name fires at EVERY call site of the shared
-    #: module; alias spellings never resolve (bind_static_anchor_unresolved).
+    #: module; an alias spelling refuses at every door, bind included
+    #: (``bind_static_anchor_unresolved``).
     module_aliases: dict[str, tuple[str, ...]] = field(default_factory=dict)
     execution_effect: str = _BIND_EXECUTION_EFFECT
     error: str | None = None
@@ -169,15 +176,6 @@ def _module_anchor_addresses(rule: Any) -> list[str]:
             if module_path:
                 anchors.append(str(module_path))
     return anchors
-
-
-def _bare_address(anchor: str) -> str:
-    """Strip a trailing ``:pass`` qualifier from a module-address anchor."""
-
-    base, sep, tail = anchor.rpartition(":")
-    if sep and tail.isdigit():
-        return base
-    return anchor
 
 
 def _is_boundary_rule(rule: Any) -> bool:
@@ -287,7 +285,11 @@ class _BindSession:
         self.rule_scratch: defaultdict[str, dict[str, Any]] = defaultdict(dict)
         self.fires: list[dict[str, Any]] = []
         self.fire_records: list[Any] = []
-        self.rule_fire_counts: dict[str, int] = {rule.rule_id: 0 for rule in binding.spec.rules}
+        # Rule ids are content-derived and read live (a staged tensor can be
+        # edited in place between calls), so one call keys every ledger by
+        # the identity its rules had when the call started.
+        self.rule_ids: dict[int, str] = {id(rule): rule.rule_id for rule in binding.spec.rules}
+        self.rule_fire_counts: dict[str, int] = dict.fromkeys(self.rule_ids.values(), 0)
         self.start = time.monotonic()
 
     def record_fire(
@@ -326,10 +328,11 @@ class _BindSession:
             replaced=replaced,
         )
         self.fire_records.append(record)
-        self.rule_fire_counts[plan.rule.rule_id] += 1
+        rule_id = self.rule_ids[id(plan.rule)]
+        self.rule_fire_counts[rule_id] += 1
         self.fires.append(
             {
-                "rule_id": plan.rule.rule_id,
+                "rule_id": rule_id,
                 "target": site.target_label,
                 "site_key": site.site_key,
                 "container_path": tuple(site.container_path),
@@ -443,17 +446,20 @@ def _consider_op(
     agree with what a capture of the same forward would evaluate.
     """
 
-    from ..backends.torch._ops_interventions import _iter_loggable_live_outputs
+    from ..backends.torch._ops_interventions import (
+        _iter_loggable_live_outputs,
+        _replace_output_tensors_by_path,
+    )
     from ..capture.predicates import build_op_record_context
     from .hooks import make_hook_context
-    from .runtime import _execute_hook, _replace_tensor_outputs
+    from .runtime import _execute_hook
 
     layer_type, func_name, out_orig = call
     outputs = list(_iter_loggable_live_outputs(out_orig, True))
     if not outputs:
         return out_orig
     binding = session.binding
-    plans_by_rule = {plan.rule.rule_id: plan for plan in plans}
+    plans_by_rule = {id(plan.rule): plan for plan in plans}
     replacements: dict[tuple[Any, ...], Any] = {}
     module_frame = session.module_stack[-1] if session.module_stack else None
     output_ordinal = 0
@@ -504,7 +510,7 @@ def _consider_op(
             ) from exc
         if rule is None:
             continue
-        plan = plans_by_rule.get(rule.rule_id)
+        plan = plans_by_rule.get(id(rule))
         if plan is None:
             # A module-boundary rule can never match an op context (boundary
             # rules apply at real module hooks); nothing to fire here.
@@ -521,7 +527,7 @@ def _consider_op(
                 "site_key": site_key,
                 "pass_index": max(session.root_passes, 1),
             },
-            ctx=session.rule_scratch[rule.rule_id],
+            ctx=session.rule_scratch[session.rule_ids[id(rule)]],
             run_ctx=session.run_ctx,
         )
         hooked = _execute_hook(plan.hook_callable, out, hook_ctx)
@@ -547,7 +553,9 @@ def _consider_op(
 
     if isinstance(out_orig, torch.Tensor):
         return replacements.get((), out_orig)
-    return _replace_tensor_outputs(out_orig, replacements)
+    # Keys are the walker's typed paths (TupleIndex, ...), so rebuild with
+    # the matching replacer; the raw-path one silently dropped every edit.
+    return _replace_output_tensors_by_path(out_orig, replacements)
 
 
 class _ArmedRuntime:
@@ -709,10 +717,13 @@ def _make_boundary_hook(
     def _boundary(module: Any, args: Any, output: Any) -> Any:
         """Replace the module's output leaves when the pass qualifier matches."""
 
-        from ..backends.torch._ops_interventions import _iter_loggable_live_outputs
+        from ..backends.torch._ops_interventions import (
+            _iter_loggable_live_outputs,
+            _replace_output_tensors_by_path,
+        )
         from ..ir.selector_eval import module_address_matches
         from .hooks import make_hook_context
-        from .runtime import _execute_hook, _replace_tensor_outputs
+        from .runtime import _execute_hook
 
         pass_index = session.module_pass_counts[address]
         # A bare target address matches every pass; a pass-qualified target
@@ -731,7 +742,7 @@ def _make_boundary_hook(
                     "module_address": address,
                     "pass_index": pass_index,
                 },
-                ctx=session.rule_scratch[plan.rule.rule_id],
+                ctx=session.rule_scratch[session.rule_ids[id(plan.rule)]],
                 run_ctx=session.run_ctx,
             )
             hooked = _execute_hook(plan.hook_callable, out, hook_ctx)
@@ -753,28 +764,10 @@ def _make_boundary_hook(
 
         if isinstance(output, torch.Tensor):
             return replacements.get(())
-        return _replace_tensor_outputs(output, replacements)
+        # Same typed-path keys as the op door above.
+        return _replace_output_tensors_by_path(output, replacements)
 
     return _boundary
-
-
-def _module_aliases(model: Any, modules_by_address: dict[str, Any]) -> dict[str, str]:
-    """Map every alias address to the canonical name of the shared module.
-
-    ``named_modules()`` de-duplicates: a module object registered under two
-    attributes (``self.dec = self.enc``) is reported ONCE, under the first
-    name. The other spellings are aliases -- no hook can distinguish the two
-    call sites, so an anchor on an alias cannot resolve, and an anchor on
-    the canonical name fires at every call site (AUD-CODE 3.7d).
-    """
-
-    canonical_by_id = {id(module): address for address, module in modules_by_address.items()}
-    aliases: dict[str, str] = {}
-    for address, module in model.named_modules(remove_duplicate=False):
-        canonical = canonical_by_id.get(id(module))
-        if canonical is not None and canonical != address:
-            aliases[address] = canonical
-    return aliases
 
 
 def _alias_disclosure(aliases: dict[str, str]) -> dict[str, tuple[str, ...]]:
@@ -789,11 +782,11 @@ def _alias_disclosure(aliases: dict[str, str]) -> dict[str, tuple[str, ...]]:
 def _lower_rules(
     spec: InterventionSpec,
     modules_by_address: dict[str, Any],
-    aliases: dict[str, str] | None = None,
-) -> tuple[list[_RulePlan], list[_RulePlan], dict[str, tuple[str, ...]]]:
+) -> tuple[list[_RulePlan], list[_RulePlan], dict[int, tuple[str, ...]]]:
     """Lower every rule and resolve its static anchors before ANY forward.
 
-    Returns (boundary plans, op-level plans, per-rule resolved targets).
+    Returns (boundary plans, op-level plans, resolved targets keyed by
+    ``id(rule)``; each call's report re-keys them by that call's rule ids).
 
     Raises
     ------
@@ -802,25 +795,17 @@ def _lower_rules(
         ``bind_static_anchor_unresolved`` for stale module addresses.
     """
 
-    aliases = aliases or {}
     boundary_plans: list[_RulePlan] = []
     op_level_plans: list[_RulePlan] = []
-    resolved: dict[str, tuple[str, ...]] = {}
+    resolved: dict[int, tuple[str, ...]] = {}
     unresolved: list[str] = []
     for rule in spec.rules:
         plan = _RulePlan(rule)
         hits: list[str] = []
         for anchor in _module_anchor_addresses(rule):
-            bare = _bare_address(anchor)
+            bare = bare_module_address(anchor)
             if bare in modules_by_address:
                 hits.append(bare)
-            elif bare in aliases:
-                unresolved.append(
-                    f"{rule.rule_id}: {anchor!r} is an alias of {aliases[bare]!r} (the same "
-                    "module object registered under both names; named_modules() reports "
-                    f"only {aliases[bare]!r}, and a rule anchored there fires at EVERY call "
-                    "site of the shared module)"
-                )
             else:
                 unresolved.append(f"{rule.rule_id}: {anchor!r}")
         if _rule_contains_module_boundary(rule):
@@ -838,7 +823,7 @@ def _lower_rules(
             boundary_plans.append(plan)
         else:
             op_level_plans.append(plan)
-        resolved[rule.rule_id] = tuple(dict.fromkeys(hits)) or ("op-level",)
+        resolved[id(rule)] = tuple(dict.fromkeys(hits)) or ("op-level",)
     if unresolved:
         raise BindingPreflightError(
             "static anchors did not resolve against the base model before "
@@ -852,13 +837,199 @@ def _lower_rules(
     return boundary_plans, op_level_plans, resolved
 
 
+def _is_lazy_output(output: Any, *, door: str) -> bool:
+    """Whether a bound call's output defers forwards until the caller iterates.
+
+    Parameters
+    ----------
+    output:
+        The value the bound target returned.
+    door:
+        The bound door (``"call"`` / ``"generate"``), named in the refusal.
+
+    Returns
+    -------
+    bool
+        ``True`` for a synchronous lazy iterator (a generator or any other
+        ``Iterator``); ``False`` for an eager value.
+
+    Raises
+    ------
+    BindingRuntimeError
+        ``bind_lazy_output`` for an async generator, async iterator,
+        coroutine, or other awaitable: its body runs inside an event loop,
+        where an armed runtime would leak into every other task scheduled
+        between its steps, so it is refused rather than run unsteered.
+    """
+
+    import inspect
+    from collections.abc import AsyncIterator, Awaitable
+
+    if isinstance(output, (AsyncIterator, Awaitable)) or inspect.isasyncgen(output):
+        if inspect.iscoroutine(output):
+            output.close()  # never awaited: release it without a runtime warning
+        raise BindingRuntimeError(
+            f"the bound {door} returned an async lazy output "
+            f"({type(output).__name__}); its forwards would run inside an event "
+            "loop after the call returned, where the binding cannot keep its "
+            "edits scoped to them, so it refuses rather than run them unsteered",
+            code="bind_lazy_output",
+            remedy="return a synchronous generator or an eager value from the "
+            "model's generate/forward, or drive your async loop around bound(x) "
+            "calls yourself",
+        )
+    return isinstance(output, Iterator)
+
+
+class _ArmedLazyOutput(Generator[Any, Any, Any]):
+    """A lazy bound output whose every step runs with the runtime armed.
+
+    Holds the call's session and the binding lock from the moment the bound
+    target returns until the iteration ends. Each ``send``/``throw``/``close``
+    arms the runtime, advances the model's iterator one step, and disarms
+    again, so the edits apply to the model's own forwards and never to
+    caller code that runs between steps. The report settles exactly once, on
+    exhaustion, ``close()``, an exception, or garbage collection of an
+    unfinished output; exhaustion and explicit ``close()`` apply the
+    zero-fire policy.
+    """
+
+    def __init__(
+        self, binding: BoundInterventionExecutor, session: _BindSession, inner: Iterator[Any]
+    ) -> None:
+        """Adopt one open call: its session, its held lock, its lazy output."""
+
+        self._binding = binding
+        self._session = session
+        self._inner = inner
+        self._finished = False
+        self._stepping = threading.Lock()
+
+    def __iter__(self) -> _ArmedLazyOutput:
+        """Return this output."""
+
+        return self
+
+    def __next__(self) -> Any:
+        """Advance one step with the runtime armed."""
+
+        return self.send(None)
+
+    def send(self, value: Any) -> Any:
+        """Send ``value`` into the model's generator for one armed step.
+
+        Raises
+        ------
+        TypeError
+            When a non-``None`` value is sent to a plain (non-generator)
+            iterator, which cannot receive it.
+        """
+
+        inner = self._inner
+        if value is None:
+            return self._step(lambda: next(inner))
+        sender = getattr(inner, "send", None)
+        if sender is None:
+            raise TypeError(
+                f"cannot send a value into a plain lazy iterator ({type(inner).__name__})"
+            )
+        return self._step(lambda: sender(value))
+
+    def throw(self, typ: Any, val: Any = None, tb: Any = None) -> Any:
+        """Raise an exception inside the model's generator for one armed step."""
+
+        exc = typ if val is None and tb is None else typ(val).with_traceback(tb)
+        thrower = getattr(self._inner, "throw", None)
+        if thrower is None:
+
+            def _raise() -> Any:
+                """Raise in place of a plain iterator, which cannot receive it."""
+
+                raise exc
+
+            return self._step(_raise)
+        return self._step(lambda: thrower(exc))
+
+    def close(self) -> None:
+        """Close the model's iterator (armed), settle, apply the zero-fire policy."""
+
+        self._close(refuse_zero_fire=True)
+
+    def __del__(self) -> None:
+        """Settle an unfinished output when it is dropped (no zero-fire raise)."""
+
+        if not getattr(self, "_finished", True):
+            self._close(refuse_zero_fire=False)
+
+    def _close(self, *, refuse_zero_fire: bool) -> None:
+        """Close the inner iterator under the armed runtime, then settle once."""
+
+        closer = getattr(self._inner, "close", None)
+        self._acquire_step()
+        try:
+            if self._finished:
+                return
+            try:
+                if closer is not None:
+                    with _ArmedRuntime(self._binding, self._session):
+                        closer()
+            except BaseException as exc:
+                self._settle(error=exc)
+                raise
+            report = self._settle(error=None)
+        finally:
+            self._stepping.release()
+        if refuse_zero_fire:
+            self._binding._refuse_zero_fire(report)
+
+    def _step(self, advance: Callable[[], Any]) -> Any:
+        """Run one step of the model's iterator with the runtime armed."""
+
+        self._acquire_step()
+        try:
+            if self._finished:
+                raise StopIteration
+            try:
+                with _ArmedRuntime(self._binding, self._session):
+                    return advance()
+            except StopIteration:
+                report = self._settle(error=None)
+                self._binding._refuse_zero_fire(report)
+                raise
+            except BaseException as exc:
+                self._settle(error=exc)
+                raise
+        finally:
+            self._stepping.release()
+
+    def _acquire_step(self) -> None:
+        """Refuse a concurrent or re-entrant step (Python generator semantics).
+
+        Raises
+        ------
+        ValueError
+            When another step of this output is already running.
+        """
+
+        if not self._stepping.acquire(blocking=False):
+            raise ValueError("bound lazy output already executing")
+
+    def _settle(self, *, error: BaseException | None) -> BindReport:
+        """Settle the report once and release the binding lock."""
+
+        self._finished = True
+        message = None if error is None else f"{type(error).__name__}: {error}"
+        return self._binding._finish(self._session, error=message)
+
+
 class BoundInterventionExecutor:
     """The bound intervention executor: one spec, one model, changing neither.
 
     Serial, non-reentrant, capture-free, and never an ``nn.Module``. The call
     is transparent (``bound(x)`` returns exactly the model's own output);
     ``generate()`` holds the runtime across the whole generation with
-    pass-qualified rule semantics; the ledger is out-of-band on
+    pass-qualified rule semantics, including a lazy generation whose
+    forwards run while the caller iterates; the ledger is out-of-band on
     ``.last_report``; ``.spec``/``.base_model`` are read-only; runtime state
     installs and removes atomically on success or exception; zero-fire rules
     fail closed after the call by default (FOLD-A3); there is no binding
@@ -896,7 +1067,12 @@ class BoundInterventionExecutor:
 
     @property
     def last_report(self) -> BindReport | None:
-        """The most recent call's out-of-band ledger (``None`` before any call)."""
+        """The most recent call's out-of-band ledger.
+
+        ``None`` before any call, and while a lazy output (a generator
+        returned by ``generate``) is still open: its report settles when the
+        iteration is exhausted, closed, or raises.
+        """
 
         return self._last_report
 
@@ -1004,9 +1180,13 @@ class BoundInterventionExecutor:
             )
         modules_by_address = dict(model.named_modules())
         object.__setattr__(self, "_modules_by_address", modules_by_address)
-        aliases = _module_aliases(model, modules_by_address)
+        aliases = model_module_aliases(model)
         object.__setattr__(self, "_module_aliases", _alias_disclosure(aliases))
-        boundary_plans, op_level_plans, resolved = _lower_rules(spec, modules_by_address, aliases)
+        # An alias spelling of a shared module refuses here exactly as at every
+        # capture and post-hoc door (AUD-CODE 3.7d); the canonical name fires
+        # at every call site of the shared module and the report discloses the map.
+        refuse_module_alias_spellings(aliases, spec)
+        boundary_plans, op_level_plans, resolved = _lower_rules(spec, modules_by_address)
         object.__setattr__(self, "_boundary_plans", boundary_plans)
         object.__setattr__(self, "_op_level_plans", op_level_plans)
         object.__setattr__(self, "_resolved_static_targets", resolved)
@@ -1062,35 +1242,74 @@ class BoundInterventionExecutor:
             )
 
     def _run(self, target: Any, args: tuple, kwargs: dict, *, door: str) -> Any:
-        """One serial bound call: arm, execute, settle, report."""
+        """One serial bound call: arm, execute, settle, report.
+
+        A lazy output (a generator or other iterator) runs its forwards while
+        the caller iterates, after ``target`` has returned. It is handed back
+        wrapped in :class:`_ArmedLazyOutput`, which keeps this call's session
+        and binding lock, re-arms the runtime around every step, and settles
+        the report when the iteration ends. Async lazy outputs refuse typed
+        (``bind_lazy_output``).
+        """
 
         self._refuse_changed_helper_tensors()
         if not self._lock.acquire(blocking=False):
             raise BindingRuntimeError(
                 "this binding is already executing; v1 bindings are serial and "
-                "non-reentrant (one call at a time, never from inside a hook)",
+                "non-reentrant (one call at a time, never from inside a hook; a "
+                "lazy generate output holds the binding until it is exhausted "
+                "or closed)",
                 code="binding_reentrant_call",
-                remedy="wait for the active call to return, or make separate "
-                "bindings from the same immutable spec for concurrent workers",
+                remedy="wait for the active call to return (exhaust or close() "
+                "an open lazy output), or make separate bindings from the same "
+                "immutable spec for concurrent workers",
             )
         session = _BindSession(self, door)
         error: str | None = None
-        output: Any = None
+        report: BindReport
+        handed_off = False
         try:
             try:
                 with _ArmedRuntime(self, session):
                     output = target(*args, **kwargs)
+                if _is_lazy_output(output, door=door):
+                    lazy = _ArmedLazyOutput(self, session, output)
+                    object.__setattr__(self, "_last_report", None)
+                    handed_off = True
+                    return lazy
             except BaseException as exc:
                 error = f"{type(exc).__name__}: {exc}"
                 raise
         finally:
-            report = self._settle(session, door=door, error=error)
+            if not handed_off:
+                report = self._finish(session, error=error)
+        self._refuse_zero_fire(report)
+        return output
+
+    def _finish(self, session: _BindSession, *, error: str | None) -> BindReport:
+        """Settle one call's report, publish it, and release the binding lock."""
+
+        try:
+            report = self._settle(session, door=session.door, error=error)
             object.__setattr__(self, "_last_report", report)
+        finally:
             self._lock.release()
+        return report
+
+    def _refuse_zero_fire(self, report: BindReport) -> None:
+        """Apply the fail-closed zero-fire policy to one settled report.
+
+        Raises
+        ------
+        BindingRuntimeError
+            ``bind_zero_fire`` when a rule never fired and the policy is
+            ``"error"``.
+        """
+
         if self._on_zero_fire == "error" and report.zero_fire_rule_ids:
             names = ", ".join(report.zero_fire_rule_ids)
             raise BindingRuntimeError(
-                f"rule(s) [{names}] never fired during this bound {door}; "
+                f"rule(s) [{names}] never fired during this bound {report.door}; "
                 "zero-fire rules fail closed after the call (the model's side "
                 "effects may already have occurred; the full report is retained "
                 "on .last_report)",
@@ -1099,7 +1318,6 @@ class BoundInterventionExecutor:
                 "disclosure-only settlement with "
                 "spec.bind(model, on_zero_fire='disclose')",
             )
-        return output
 
     def _settle(self, session: _BindSession, *, door: str, error: str | None) -> BindReport:
         """Build the out-of-band ledger for one finished (or failed) call."""
@@ -1124,7 +1342,10 @@ class BoundInterventionExecutor:
             model_class=type(self._base_model).__qualname__,
             model_training=bool(getattr(self._base_model, "training", False)),
             grad_enabled=torch.is_grad_enabled(),
-            resolved_static_targets=dict(self._resolved_static_targets),
+            resolved_static_targets={
+                session.rule_ids[key]: targets
+                for key, targets in self._resolved_static_targets.items()
+            },
             fire_count=fire_count,
             rule_fire_counts=dict(session.rule_fire_counts),
             fires=tuple(session.fires),

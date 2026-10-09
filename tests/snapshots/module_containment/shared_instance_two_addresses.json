@@ -189,6 +189,7 @@
     {
       "address": "shared",
       "all_addresses": [
+        "alias",
         "shared"
       ],
       "buffer_layers": [],

@@ -573,8 +573,9 @@ def show_model_graph(
         Repeat-fold policy. ``None`` preserves the default policy. ``True`` folds
         every eligible repeated run. ``False`` disables run folding.
     random_seed:
-        Fixed RNG seed for stochastic models. Reseeds the process-global RNG
-        engines without restoring them; see ``capture.random_seed`` on ``tl.trace``.
+        Fixed RNG seed for stochastic models. The capture reseeds the global
+        RNG engines for its forward and restores their prior states afterwards;
+        see ``CaptureOptions.random_seed``.
     recurrence_detection:
         If True, run full isomorphic subgraph expansion. Set this to False when
         the forward pass has more than about 1M operations and postprocessing
@@ -985,6 +986,8 @@ def _restore_validation_replay_state(
         Optional snapshot of plain Python attributes to restore.
     """
 
+    from .validation._live_model_state import restore_state_dict_if_changed
+
     # R07: both restores always run; a raising load_state_dict must not skip
     # the plain-attribute restore (first failure re-raises, later ones chain).
     with contextlib.ExitStack() as restores:
@@ -993,7 +996,9 @@ def _restore_validation_replay_state(
         # Wrapped-parameter modules (bitsandbytes) refuse their OWN state
         # dict through load_state_dict on CPU; the resilient restore falls
         # back to proven in-place restoration (lane F37).
-        restores.callback(restore_state_dict_resilient, model, state_dict)
+        restores.callback(
+            restore_state_dict_if_changed, model, state_dict, restore_state_dict_resilient
+        )
 
 
 def _first_reproducibility_divergence(left: Trace, right: Trace) -> str | None:
@@ -1351,6 +1356,7 @@ def _validate_forward_pass_torch(
         True if all validation checks pass, False otherwise.
     """
     warn_parallel()
+    from .validation._live_model_state import restore_state_dict_if_changed
     from .validation.diagnostics import reset_validation_failure
 
     # Clear any stale precondition-refusal failure from a prior call on this
@@ -1584,7 +1590,11 @@ def _validate_forward_pass_torch(
                 ground_truth_snapshot = ground_truth_snapshot.to(output_device)
             ground_truth_output_tensors.append(ground_truth_snapshot)
             addresses_used.append(entry[1])
-        restore_state_dict_resilient(model, state_dict)
+        # Restore only if the ground-truth run changed the live model (it runs on
+        # a deepcopy when one can be made): an unconditional in-place restore
+        # moves every tensor's version counter and breaks a graph the caller
+        # holds across validate.
+        restore_state_dict_if_changed(model, state_dict, restore_state_dict_resilient)
         if plain_attr_snapshot is not None:
             plain_attr_snapshot.restore_changed_attrs()
 
@@ -1758,7 +1768,9 @@ def _validate_forward_pass_torch(
                 teardown.callback(trace.cleanup)
             if "plain_attr_snapshot" in locals() and plain_attr_snapshot is not None:
                 teardown.callback(plain_attr_snapshot.restore_changed_attrs)
-            teardown.callback(restore_state_dict_resilient, model, state_dict)
+            teardown.callback(
+                restore_state_dict_if_changed, model, state_dict, restore_state_dict_resilient
+            )
             if num_threads is not None:
                 teardown.callback(torch.set_num_threads, prior_num_threads)
             teardown.callback(

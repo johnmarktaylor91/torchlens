@@ -3,10 +3,9 @@
 One harness, several consumers (observe memo item 3): ``bisect_precision``,
 ``check_determinism``, and any future tool that must run the SAME forward more
 than once under controlled state. Every run executes on a FRESH deep copy of
-the model that is explicitly released from TorchLens preparation first --
-``copy.deepcopy`` of an already-traced model carries stale instance-level
-forward wrappers on the copy's children, and tracing such a copy died with a
-bare ``KeyError`` before this harness existed. Caller-visible RNG state
+the model that is explicitly released from TorchLens preparation first (a
+no-op on a never-traced copy; a capture leaves no forward wrapper behind, so
+the release only normalizes plain attributes holding torch functions). Caller-visible RNG state
 (Python, NumPy, torch CPU, initialized CUDA devices) is preserved around every
 run, so diagnostics never perturb the experiment that called them. Every
 spelling here is DOCUMENTED-UNSTABLE pending naming-session ratification.
@@ -171,9 +170,8 @@ def isolated_capture(
     from ..user_funcs import release_model, trace
 
     run_model = copy.deepcopy(model)
-    # The copy of an already-traced model carries stale instance-level forward
-    # wrappers pointing at the ORIGINAL's session state; releasing the copy
-    # restores clean forwards (and is a no-op on never-traced models).
+    # Releasing the copy starts its preparation from scratch (a no-op on
+    # never-traced models; captures leave no forward wrapper to strip).
     release_model(run_model)
     if prepare is not None:
         prepared = prepare(run_model)

@@ -29,7 +29,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 #: that lands a node flips its row to regression-node and LOWERS this
 #: number in the same commit. Raising it requires a new DIGEST-AUDIT row,
 #: which means a new SG id, not a bigger ceiling.
-LEDGERED_OPEN_CEILING = 32
+#: 32 -> 31 (2026-10-08): SG#33 closed by session-scoped forward wrappers.
+LEDGERED_OPEN_CEILING = 31
 
 EXPECTED_SG_IDS = tuple(f"SG#{n}" for n in range(1, 51))
 DISPOSITIONS = {"regression-node", "ledgered-open"}

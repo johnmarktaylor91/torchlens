@@ -63,6 +63,12 @@ from ._module_boundary_adoption import (
     collect_pre_forward_tensor_ids,
     record_module_boundary_adoption,
 )
+from ._predicate_boundary_replacements import log_predicate_boundary_replacements
+from ._session_forwards import (
+    install_session_forward_wrappers as _install_session_forward_wrappers,
+    restore_session_forward_wrappers as _restore_session_forward_wrappers,
+    restore_undecorated_forward as _restore_undecorated_forward,
+)
 from ._tl import (
     begin_label_session,
     clear_meta,
@@ -73,7 +79,6 @@ from ._tl import (
     get_module_meta,
     get_tensor_label,
     is_forward_call_decorated,
-    mark_forward_call_decorated,
     mark_tensor_replacement_wrapped,
     promote_label_to_buffer_source_and_clear_label,
     restore_param_requires_grad,
@@ -172,6 +177,70 @@ def _module_address(module: nn.Module) -> str:
     """
     meta = get_module_meta(module)
     return "" if meta is None or meta.address is None else meta.address
+
+
+#: Ceiling on the alias addresses one enumeration collects. Every registration
+#: path is an address, so a model that shares a shared module's parent many
+#: times over grows the count multiplicatively; past the ceiling the remaining
+#: alias spellings go unrecorded (no door can refuse them, and a selector spelled
+#: with one matches nothing), never a wrong module.
+_MAX_ALIAS_ADDRESSES = 4096
+
+
+def shared_module_addresses(model: nn.Module) -> dict[int, tuple[str, ...]]:
+    """Return every registered address of each module registered more than once.
+
+    ``named_modules()`` reports a module object once, under its first
+    registration (the canonical address TorchLens labels its calls with). The
+    other registrations (``self.alias = self.block``, and every address beneath
+    them such as ``alias.fc``) are alias addresses of the same object, as
+    ``named_modules(remove_duplicate=False)`` reports them. Unlike that call,
+    this walk is bounded on cyclic registrations (a module registered inside
+    its own subtree), which it skips.
+
+    Parameters
+    ----------
+    model:
+        Root module; its own address is ``""``.
+
+    Returns
+    -------
+    dict[int, tuple[str, ...]]
+        ``id(module)`` -> ``(canonical, alias, ...)`` for modules with at least
+        one alias address; empty when no module is registered twice.
+    """
+
+    registrations = 0
+    distinct: set[int] = set()
+    for module in model.modules():
+        for child in module._modules.values():
+            if child is not None:
+                registrations += 1
+                distinct.add(id(child))
+    if registrations == len(distinct) and id(model) not in distinct:
+        return {}
+    canonical = {id(module): address for address, module in model.named_modules()}
+    max_depth = len(canonical)
+    aliases: dict[int, list[str]] = {}
+    collected = 0
+    stack: list[tuple[str, nn.Module, int]] = [("", model, 0)]
+    while stack and collected < _MAX_ALIAS_ADDRESSES:
+        prefix, module, depth = stack.pop()
+        if depth >= max_depth:
+            continue  # only a cyclic registration nests deeper than the module count
+        for name, child in reversed(module._modules.items()):
+            if child is None or child is model:
+                continue
+            address = f"{prefix}.{name}" if prefix else name
+            if address != canonical.get(id(child)):
+                aliases.setdefault(id(child), []).append(address)
+                collected += 1
+            stack.append((address, child, depth + 1))
+    return {
+        module_id: (canonical[module_id], *dict.fromkeys(names))
+        for module_id, names in aliases.items()
+        if module_id in canonical
+    }
 
 
 def _module_type(module: nn.Module) -> str:
@@ -353,53 +422,6 @@ def _traverse_model_modules(
 # ---------------------------------------------------------------------------
 
 
-def _restore_undecorated_forward(module: nn.Module) -> None:
-    """Undo a stale non-root ``forward`` decoration so ``module`` can be root.
-
-    A module that was prepared as a NON-root submodule in an earlier trace has a
-    toggle-gated ``module_forward_decorator`` wrapper installed on its
-    ``forward``. If that same module is later traced as its OWN top-level root,
-    the wrapper must be removed: ``trace`` invokes and frames the root itself, so
-    the root's ``forward`` must be UNDECORATED (the wrapper would otherwise call
-    ``push_frame`` for a module that is never registered in the per-session
-    module-call dicts, raising ``KeyError``). The original ``forward`` is
-    recovered from ``functools.wraps``' ``__wrapped__`` reference; if it is
-    absent, the instance-level override is dropped so lookup falls back to the
-    (undecorated) class ``forward``.
-
-    Parameters
-    ----------
-    module:
-        Module about to be prepared as a root.
-
-    Returns
-    -------
-    None
-        The module's ``forward`` is restored in place when it was decorated;
-        otherwise this is a no-op.
-    """
-    current_forward = module.__dict__.get("forward", None)
-    if current_forward is None or not is_forward_call_decorated(current_forward):
-        return
-    original_forward = getattr(current_forward, "__wrapped__", None)
-    if original_forward is None:
-        module.__dict__.pop("forward", None)
-        return
-    # When the recovered forward is just the module's own class method, drop
-    # the instance override instead of pinning the bound method as an instance
-    # attribute: an instance-level forward churns the implementation
-    # fingerprint (`_fingerprint_model_implementation` folds it), so the
-    # documented trace -> release_model -> trace(cache=True) workflow missed
-    # the cache on every released model.
-    original_func = getattr(original_forward, "__func__", None)
-    if original_func is not None and original_func is inspect.getattr_static(
-        type(module), "forward", None
-    ):
-        module.__dict__.pop("forward", None)
-    else:
-        module.forward = original_forward
-
-
 def _refuse_release_during_active_capture() -> None:
     """Refuse model release while a capture owns the logging globals.
 
@@ -435,7 +457,7 @@ def _refuse_release_during_active_capture() -> None:
 
 
 def release_model(model: nn.Module) -> None:
-    """Remove persistent TorchLens preparation from a PyTorch module tree.
+    """Remove TorchLens preparation bookkeeping from a PyTorch module tree.
 
     Parameters
     ----------
@@ -457,9 +479,10 @@ def release_model(model: nn.Module) -> None:
 
     Notes
     -----
-    Persistent non-root ``forward`` wrappers make whole-model pickling fail.
-    This operation restores those forwards, clears TorchLens-owned module
-    metadata and legacy ``tl_*`` instance attributes, and evicts all related
+    A capture leaves no ``forward`` wrapper on the model (they are
+    session-scoped); this operation still undoes any leftover decoration,
+    clears TorchLens-owned module metadata and legacy ``tl_*`` instance
+    attributes, and evicts all related
     preparation bookkeeping so a later trace prepares the tree from scratch.
     It also normalizes plain module attributes holding epoch-mismatched torch
     function references (``self.act = F.relu`` captured in the other wrap
@@ -502,34 +525,33 @@ def _prepare_model_once(model: nn.Module) -> None:
 
     Fast-path cached via ``_state._prepared_models`` (WeakSet) for the common
     case: a model traced repeatedly in a fixed role, or independent models
-    traced in any interleaving. Performs three tasks for each submodule:
+    traced in any interleaving. **Assigns permanent metadata** to each
+    submodule: ``_tl.address`` (dotted path like
+    ``"encoder.layer.0.attention"``) and ``_tl.module_type`` (class name), held
+    in TorchLens's identity-keyed registry (never on the module object), so they
+    survive across sessions without changing the module.
 
-    1. **Assigns permanent metadata** — ``_tl.address`` (dotted path
-       like ``"encoder.layer.0.attention"``) and ``_tl.module_type`` (class
-       name). These survive across sessions.
+    The ``forward`` wrappers are NOT installed here: they are session-scoped
+    (:func:`_install_session_forward_wrappers` at session start,
+    :func:`_restore_session_forward_wrappers` at session cleanup), so a model
+    between captures carries no TorchLens callable and deep-copies, pickles and
+    saves exactly like a model TorchLens never touched. The root module is
+    skipped for type annotation because its forward is called directly by
+    ``trace`` with its own entry/exit handling.
 
-    2. **Wraps ``forward``** — Replaces ``module.forward`` with
-       ``module_forward_decorator(module.forward, module)``. The wrapper is
-       toggle-gated: no-op when logging is off, full entry/exit tracking when on.
-       The ``_tl.forward_call_is_decorated`` sentinel prevents double-wrapping.
-
-    The root module is skipped for type annotation and forward wrapping because
-    its forward is called directly by ``trace`` with its own entry/exit handling
-    — the root's ``forward`` is deliberately left UNDECORATED.
-
-    **Role swaps.** The address (root-relative) and forward decoration are
-    role-DEPENDENT: they differ depending on whether a module is *this* trace's
+    **Role swaps.** The address (root-relative) is role-DEPENDENT: they differ depending on whether a module is *this* trace's
     root or a non-root submodule. The same module can legitimately be traced in
     both roles across separate traces (e.g. ``trace(outer, ...)`` then
     ``trace(outer.inner, ...)``). When that happens the metadata cached for the
     old role is stale for the new one, so this function re-establishes it:
 
-    * A root that carried a stale non-root ``forward`` decoration is undecorated
-      (see :func:`_restore_undecorated_forward`).
+    * A root that still carries a TorchLens ``forward`` decoration (only
+      possible when a cleanup was cut short) is undecorated (see
+      :func:`_restore_undecorated_forward`).
     * Re-rooting a descendant under a new model marks the old ancestor root
       stale (via :func:`_state.record_module_root_prep`); the stale root is then
-      treated as un-prepared here so its addresses and decorations are refreshed
-      for the current root on its next trace.
+      treated as un-prepared here so its addresses are refreshed for the
+      current root on its next trace.
     """
     if model in _state._prepared_models and not _state.root_prep_is_stale(model):
         return
@@ -564,13 +586,6 @@ def _prepare_model_once(model: nn.Module) -> None:
             return
 
         set_module_meta(module, address=address, module_type=str(type(module).__name__))
-
-        # Wrap forward with toggle-gated decorator (idempotent via sentinel).
-        # A module re-prepared as non-root after having been a root simply gets
-        # (re)decorated here, since a root's forward is left undecorated.
-        if hasattr(module, "forward") and not is_forward_call_decorated(module.forward):
-            module.forward = module_forward_decorator(module.forward, module)
-            mark_forward_call_decorated(module.forward)
 
     _traverse_model_modules(model, _visit_once)
     _state._prepared_models.add(model)
@@ -610,6 +625,7 @@ def _prepare_model_session(
     begin_label_session()
     _state._dir_cache.clear()
     trace._module_capture_ws.exhaustive_module_stack = []
+    _install_session_forward_wrappers(trace, model)
     # F41 bound-method roots: the synthetic TL-authored root's identity reads
     # the OWNER (type(owner).__name__, the owner's class/source metadata) and
     # the bound METHOD as the entry callable -- never the wrapper class name
@@ -658,6 +674,9 @@ def _prepare_model_session(
 
     # Track seen module ids to detect shared modules (same module at multiple addresses).
     _seen_module_ids: dict[int, str] = {}
+    # model.modules() de-duplicates, so a module registered under a second name
+    # is visited once; its alias addresses come from this one bounded walk.
+    _alias_addresses = shared_module_addresses(model)
 
     # Use model.modules() + cached module addresses from phase 1, avoiding a
     # second full DFS with string concatenation and list(named_children()) calls.
@@ -675,6 +694,10 @@ def _prepare_model_session(
         )
         meta_address = "self" if is_root else address
         meta = trace._module_capture_ws.module_metadata.get(meta_address)
+        if meta is not None and id(module) in _alias_addresses:
+            for alias_address in _alias_addresses[id(module)]:
+                if alias_address != meta_address and alias_address not in meta["all_addresses"]:
+                    meta["all_addresses"].append(alias_address)
         if meta is not None:
             capture_events = getattr(trace, "capture_events", None)
             if capture_events is None:
@@ -2228,7 +2251,7 @@ def _record_predicate_module_boundary_outputs(
     module_address: str,
     module_call_index: int,
 ) -> None:
-    """Retain sparse output-op records selected by ``tl.module`` at module exit.
+    """Log boundary replacements, then retain ``tl.module``-selected outputs.
 
     Parameters
     ----------
@@ -2246,7 +2269,8 @@ def _record_predicate_module_boundary_outputs(
     Returns
     -------
     None
-        Matching output ops are added to the sparse recording once.
+        Boundary-replaced leaves become sparse replacement ops; matching output
+        ops are added to the sparse recording once.
     """
 
     from ...capture.predicates import _evaluate_keep_op
@@ -2258,6 +2282,7 @@ def _record_predicate_module_boundary_outputs(
     from ...ir.selector_eval import selector_contains_kind
     from .ops import _walk_output_tensors_with_paths
 
+    log_predicate_boundary_replacements(trace, state, out)
     predicate = state.options.keep_op
     if not isinstance(predicate, BaseSelector) or not selector_contains_kind(predicate, "module"):
         return
@@ -2366,16 +2391,17 @@ def module_forward_decorator(
 ) -> Callable[..., Any]:
     """Toggle-gated forward wrapper for an nn.Module's ``forward`` method.
 
-    **Closure design**: Closes over ``module`` (a stable instance reference) but
-    reads ``trace`` from ``_state._active_trace`` at call time. This is
-    necessary because the same wrapper persists across multiple ``trace``
-    calls with different Trace instances.
+    **Closure design**: Closes over ``module`` but reads ``trace`` from
+    ``_state._active_trace`` at call time. The session installs it inside a
+    ``_SessionForward`` (``_session_forwards.py``), which keeps deepcopies and
+    pickles of the module TorchLens-free, and removes it at session cleanup;
+    a reference the user kept can still be called later, in another session.
 
     **Execution modes**:
 
-    1. **Logging off** (``_state._logging_enabled is False``): Pass through to
-       ``orig_forward`` with zero overhead beyond one bool check. This is the
-       normal production path.
+    1. **Logging off** (``_state._logging_enabled is False``), or ``module``
+       not registered in the active session (a wrapper that outlived its own
+       session): pass through to ``orig_forward`` unrecorded.
 
     2. **Exhaustive mode**: Full entry/exit bookkeeping via
        ``_record_module_entry_metadata`` and ``_record_module_exit_metadata``.
@@ -2399,6 +2425,11 @@ def module_forward_decorator(
             return orig_forward(*args, **kwargs)
 
         trace = _state._active_trace
+        # A wrapper that outlived its own session (a stashed ``module.forward``,
+        # a shallow module copy) reaching an UNRELATED capture: the module is not
+        # registered there, so it runs unrecorded, like any helper function.
+        if id(module) not in trace._module_capture_ws.mod_call_index:
+            return orig_forward(*args, **kwargs)
 
         if trace.capture_mode == "predicate":
             from ...capture.predicates import (
@@ -2782,12 +2813,15 @@ def _cleanup_model_session(
     removes all session-scoped parameter metadata, and strips session-scoped
     tensor metadata.
 
-    **Does NOT** remove permanent module metadata or unwrap ``module.forward`` — those persist for
-    the lifetime of the model instance.
+    Puts every submodule ``forward`` back FIRST (plain dict writes that cannot
+    fail), so no later cleanup fault can leave a session wrapper on the model.
+    **Does NOT** remove the permanent module metadata, which lives in
+    TorchLens's identity-keyed registry, never on the module object.
     """
     from .offload_hooks import uninstall_offload_hook_shims
     from .prehook_provenance import rollback_prehook_provenance
 
+    _restore_session_forward_wrappers(trace)
     try:
         uninstall_offload_hook_shims(trace)
         rollback_prehook_provenance(trace)

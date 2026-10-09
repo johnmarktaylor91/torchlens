@@ -1670,6 +1670,10 @@ def in_module(address_or_layer: Any, address: str | None = None) -> InModuleSele
 
     from ..ir.selector_eval import module_address_matches
 
+    if getattr(address_or_layer, "is_output", False):
+        # The synthetic output alias carries its producer's module stamp for
+        # display only; it lies in no module (same rule as the selector form).
+        return False
     modules = getattr(address_or_layer, "modules", ())
     module_ops = getattr(address_or_layer, "output_of_module_calls", ())
     candidates = tuple(modules) + tuple(module_ops)
