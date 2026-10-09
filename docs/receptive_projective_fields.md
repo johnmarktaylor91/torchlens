@@ -177,6 +177,11 @@ The `tl.validate(..., scope="receptive_field")` scope is the sampled validator e
 is useful in model integration checks; use `cross_validate()` or `verify()` when choosing the
 operations, endpoints, or units yourself.
 
+The scope captures with `save_mode="reference"` and checks its metadata, so a model whose
+forward writes its own buffers in place is refused with `MutatedReferenceError`: the saved
+buffer references no longer hold the values the operations read. A train-mode BatchNorm, which
+updates its running statistics during the forward, is the common case; validate it in eval mode.
+
 ## Visual audit: cone, box, and heatmap
 
 ```python
