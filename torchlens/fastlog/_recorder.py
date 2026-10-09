@@ -18,7 +18,7 @@ from .._errors import CaptureContextError, KeywordConflictError
 from .._training_validation import TrainingModeConfigError, reject_compiled_model
 from ..capture.config import InternalCaptureConfig
 from ..capture.outcome import safe_exception_repr, safe_exception_str
-from ..capture.predicates import validate_followed_by_capability
+from ..capture.predicates import _save_selector_matches, validate_followed_by_capability
 from ..capture.projections import (
     RecordingState,
     _empty_recording,
@@ -102,7 +102,9 @@ def _warn_zero_match_capture_selectors(state: RecordingState) -> None:
 
     save_selector = state.options.keep_op
     if isinstance(save_selector, BaseSelector):
-        save_matched = any(bool(save_selector(record.ctx)) for record in state.recording.records)
+        save_matched = any(
+            _save_selector_matches(save_selector, record.ctx) for record in state.recording.records
+        )
         if not save_matched:
             warnings.warn(
                 f"Capture-time save selector {save_selector!r} matched zero sites; "
