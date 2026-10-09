@@ -178,6 +178,37 @@ def selector_contains_kind(selector: Any, kind: str, *, unwrap: bool = False) ->
     )
 
 
+def module_union_addresses(selector: Any) -> tuple[str, ...] | None:
+    """Return the addresses of a selector built only from ``tl.module`` and ``|``.
+
+    Such a selector resolves exactly to the outputs of the matching module
+    passes, so it can be settled at module exit. Any other node (``&``,
+    ``~``, an empty union, or a non-module kind) returns ``None``.
+
+    Parameters
+    ----------
+    selector:
+        Selector tree to inspect.
+
+    Returns
+    -------
+    tuple[str, ...] | None
+        Module addresses in tree order, or ``None`` when some node is not a
+        module term or a non-empty union.
+    """
+
+    addresses: list[str] = []
+    for node in walk_selector(selector):
+        if isinstance(node, CompositeSelector):
+            if node.operator != "or" or not node.selectors:
+                return None
+            continue
+        if not isinstance(node, BaseSelector) or node.selector_kind != "module":
+            return None
+        addresses.append(str(node.selector_value))
+    return tuple(addresses) if addresses else None
+
+
 def contains_followed_by(selector: Any, *, unwrap: bool = False) -> bool:
     """Return whether a selector tree contains a ``followed_by`` selector.
 
@@ -689,6 +720,38 @@ def _module_output_candidates(subject: Any, lifecycle: str) -> tuple[Any, ...]:
             if module_candidate is not None:
                 module_outputs = (module_candidate,)
     return module_outputs
+
+
+def module_union_matches(subject: Any, addresses: frozenset[str]) -> bool:
+    """Return whether a capture subject matches a union of ``tl.module`` addresses.
+
+    Gives the answer :func:`evaluate` gives on the capture lane for a selector
+    that :func:`module_union_addresses` maps to ``addresses``: ``tl.module``
+    there reads only the subject's module-output candidates, so a plain label
+    candidate matches by set membership of the label or its address part (the
+    string branch of :func:`module_address_matches`), and any other candidate
+    spelling is compared address by address.
+
+    Parameters
+    ----------
+    subject:
+        Capture-time record context.
+    addresses:
+        Module addresses, optionally pass-qualified (``"block:2"``).
+
+    Returns
+    -------
+    bool
+        Whether any module-output candidate of ``subject`` matches an address.
+    """
+
+    for candidate in _module_output_candidates(subject, "capture"):
+        if type(candidate) is str and not candidate.startswith("("):
+            if candidate in addresses or candidate.rsplit(":", 1)[0] in addresses:
+                return True
+        elif any(module_address_matches(candidate, address) for address in addresses):
+            return True
+    return False
 
 
 def _module_containment_candidates(subject: Any, lifecycle: str) -> tuple[Any, ...]:

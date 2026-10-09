@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import time
 import warnings
+import weakref
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
@@ -18,6 +19,8 @@ from ..intervention.types import InterventionDecision
 from ..ir.predicate import RetroactiveCaptureDecision
 from ..ir.selector_eval import (
     contains_followed_by,
+    module_union_addresses,
+    module_union_matches,
     selector_contains_kind,
     split_followed_by_conjunction,
 )
@@ -101,8 +104,13 @@ def _evaluate_keep_op(
     """Evaluate the operation/source predicate slot for one event."""
 
     result: bool | CaptureSpec | RetroactiveCaptureDecision | None
+    module_union = _plain_module_union(options.keep_op)
     if options.keep_op is None:
         result = None
+    elif module_union is not None:
+        # A pure ``tl.module`` union has no followed_by term and no label-universe
+        # kind, so the branch below would evaluate it once with no alias retry.
+        result = module_union_matches(ctx, module_union)
     else:
         uses_supported_followed_by = _is_supported_followed_by_predicate(options.keep_op)
         result = _evaluate_retroactive_followed_by(ctx, options)
@@ -121,6 +129,67 @@ def _evaluate_keep_op(
             if result is not False:
                 ctx = alias_ctx
     return _normalize_capture_decision(result, ctx, options.default_op)
+
+
+#: The last save selector seen and its plain-module address set (``None`` when it
+#: is not a pure ``tl.module`` union). One slot, weakly held: a capture evaluates
+#: one save selector for every event, and a finished capture's selector is never
+#: kept alive by this cache.
+_module_union_cache: list[Any] = [None, None]
+
+
+def _plain_module_union(predicate: object | None) -> frozenset[str] | None:
+    """Return the address set of a save selector built only from ``tl.module`` and ``|``.
+
+    Parameters
+    ----------
+    predicate
+        Configured keep-op predicate.
+
+    Returns
+    -------
+    frozenset[str] | None
+        The module addresses (optionally pass-qualified) when ``predicate`` is a
+        pure ``tl.module`` union, else ``None``. Selectors are immutable, so the
+        answer is computed once per selector object.
+    """
+
+    if not isinstance(predicate, BaseSelector):
+        return None
+    cached_ref, cached_addresses = _module_union_cache
+    if cached_ref is not None and cached_ref() is predicate:
+        return cast("frozenset[str] | None", cached_addresses)
+    try:
+        predicate_ref = weakref.ref(predicate)
+    except TypeError:
+        # An unreferenceable selector subclass cannot be cached; it keeps the walker.
+        return None
+    found = module_union_addresses(predicate)
+    addresses = None if found is None else frozenset(found)
+    _module_union_cache[:] = [predicate_ref, addresses]
+    return addresses
+
+
+def _save_selector_matches(selector: BaseSelector, ctx: RecordContext) -> bool:
+    """Return whether a capture-time save selector matches one record context.
+
+    Parameters
+    ----------
+    selector
+        Save selector.
+    ctx
+        Capture-time record context.
+
+    Returns
+    -------
+    bool
+        ``selector(ctx)``, answered by one set lookup for a pure ``tl.module`` union.
+    """
+
+    module_union = _plain_module_union(selector)
+    if module_union is not None:
+        return module_union_matches(ctx, module_union)
+    return bool(selector(ctx))
 
 
 #: Capture-time selector kinds whose short/friendly ``{layer_type}_{type_index}``

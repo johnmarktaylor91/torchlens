@@ -2273,7 +2273,7 @@ def _record_predicate_module_boundary_outputs(
         ops are added to the sparse recording once.
     """
 
-    from ...capture.predicates import _evaluate_keep_op
+    from ...capture.predicates import _evaluate_keep_op, _plain_module_union
     from ...capture.projections import _record_from_record_context
     from ...fastlog.types import ActivationRecord
     from ...intervention.runtime import _peek_module_intervention_parent_labels
@@ -2284,7 +2284,9 @@ def _record_predicate_module_boundary_outputs(
 
     log_predicate_boundary_replacements(trace, state, out)
     predicate = state.options.keep_op
-    if not isinstance(predicate, BaseSelector) or not selector_contains_kind(predicate, "module"):
+    if not isinstance(predicate, BaseSelector) or (
+        _plain_module_union(predicate) is None and not selector_contains_kind(predicate, "module")
+    ):
         return
     contexts_by_label = {
         ctx.raw_label: ctx
