@@ -560,7 +560,7 @@ def test_region_gpt2_block_with_kv_cache_refuses_output_alias_exit() -> None:
     assert _region_fact_rows(fork) == []
     after = [op.out for op in fork.output_ops]
     assert len(after) == len(before)
-    assert all(torch.equal(a, b) for a, b in zip(after, before))
+    assert all(torch.equal(a, b) for a, b in zip(after, before, strict=True))
 
 
 @pytest.mark.heavy

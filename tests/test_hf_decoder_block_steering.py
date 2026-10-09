@@ -278,8 +278,8 @@ def test_bind_generate_matches_hook_steered_generate(
     got = _generate(tl.when(tl.module(address), helper()).bind(model).generate)
     assert torch.equal(got.sequences, want.sequences), (got.sequences, want.sequences)
     assert len(got.logits) == len(want.logits) == _NEW_TOKENS
-    for step, (got_step, want_step) in enumerate(zip(got.logits, want.logits)):
+    for step, (got_step, want_step) in enumerate(zip(got.logits, want.logits, strict=True)):
         assert torch.equal(got_step, want_step), f"{name}: step {step} logits differ"
-    assert not all(torch.equal(a, b) for a, b in zip(want.logits, plain.logits)), (
+    assert not all(torch.equal(a, b) for a, b in zip(want.logits, plain.logits, strict=True)), (
         "the oracle edit must change the generation logits"
     )

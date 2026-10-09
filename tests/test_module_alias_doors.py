@@ -337,7 +337,7 @@ def _outcome(door: str, model_name: str, selector_name: str) -> tuple[str, Any]:
         warnings.simplefilter("always")
         try:
             value = _DOORS[door](model, selector)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - a refusal of any type is a door outcome the table compares
             return "refused", (type(exc).__name__, getattr(exc, "code", None), str(exc)[:240])
     zero_match = [str(w.message)[:240] for w in caught if _ZERO_MATCH_TEXT in str(w.message)]
     if zero_match:

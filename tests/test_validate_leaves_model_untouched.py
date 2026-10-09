@@ -112,7 +112,7 @@ def _assert_state_unchanged(before: dict[str, tuple[Any, ...]], model: nn.Module
     assert set(after) == set(before), "the parameter/buffer set changed"
     labels = ("identity", "data_ptr", "_version", "requires_grad", "is_leaf")
     for name, entry in before.items():
-        for label, old, new in zip(labels, entry[:5], after[name][:5]):
+        for label, old, new in zip(labels, entry[:5], after[name][:5], strict=True):
             assert new == old, f"{name}: {label} changed from {old!r} to {new!r}"
         assert torch.equal(after[name][5], entry[5]), f"{name}: value changed"
 
