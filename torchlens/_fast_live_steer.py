@@ -341,9 +341,9 @@ def install_steer_hooks(plan: SteerPlan, session_ref: weakref.ReferenceType[Any]
         ) -> Any:
             """Apply the staged boundary hooks for this address during an active run."""
 
-            if not active():
-                return None
             session = ref()
+            if session is None or not active():
+                return None
             return session.steer_plan.apply(address, module, args, output)
 
         handles.append(module.register_forward_hook(hook))
