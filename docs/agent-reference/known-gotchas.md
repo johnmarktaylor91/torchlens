@@ -133,6 +133,7 @@
   (`interventionreplacement` with unchanged shape and dtype) into their parent, so a correct
   staged rerun is silent; never filter `ControlFlowDivergenceWarning` in a test of a correct graph.
   Tensor-carrying helpers alias the caller's tensor; staged entries (`HookSpec.metadata`
-  `helper_tensor_digests`) and bound rules fingerprint it, so a loop that updates a steer in place
-  must re-stage or rebind each step or the next rerun, bound call or recipe save refuses
-  `helper_tensor_changed_since_capture`.
+  `helper_tensor_digests`) fingerprint it, so a loop that updates a steer in place must re-stage
+  each step or the next rerun or recipe save refuses `helper_tensor_changed_since_capture`. A
+  bound executor is live instead: each call reads the tensor, an in-place change applies to the
+  next call, and `BindReport.helper_tensor_versions` shows the version counter moving.

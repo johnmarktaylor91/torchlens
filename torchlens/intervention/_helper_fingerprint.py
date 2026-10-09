@@ -3,13 +3,17 @@
 ``tl.steer``, ``tl.mean_ablate``, ``tl.project_onto``, ``tl.project_off`` and
 ``tl.swap_with`` keep the caller's tensor by reference (no copy, so a large
 steering bank costs nothing and a loop can update a direction in place). The
-reference also means a later rerun, bind call or recipe save would silently use
-whatever the tensor holds THEN. Each staged entry and each bound rule therefore
-records a full-content digest of those tensors when it is staged or bound
+reference also means a later rerun or recipe save would silently use whatever
+the tensor holds THEN, which is not what produced the trace. Each staged entry
+therefore records a full-content digest of those tensors when it is staged
 (``tl.hash.content``: every byte, so ``.data`` and NumPy-view writes that leave
-the version counter alone are seen too), and the doors that read the tensor
-again refuse ``helper_tensor_changed_since_capture`` when it moved. Re-staging
-(or rebinding) takes the new value deliberately.
+the version counter alone are seen too), and reruns and ``save_intervention``
+refuse ``helper_tensor_changed_since_capture`` when it moved. Re-staging takes
+the new value deliberately.
+
+A bound executor has no recorded artifact, so it stays live: it reads the
+tensor at each call, and its report records the tensors' version counters
+(``helper_versions``) so an in-place change is visible after the fact.
 """
 
 from __future__ import annotations
@@ -28,7 +32,7 @@ DIGEST_KEY = "helper_tensor_digests"
 _REMEDY = (
     "Remedy: re-stage the edit so it takes the tensor's new value on purpose "
     "(detach and attach_hooks() again, or capture fresh with tl.trace(model, x, "
-    "intervene=...); for a bound executor call spec.bind(model) again), or "
+    "intervene=...)), or "
     "restore the tensor's captured value"
 )
 
@@ -95,6 +99,30 @@ def helper_digests(helper: HelperSpec | None) -> tuple[str, ...] | None:
     # the digest's copy ops are TorchLens-internal and must not be logged.
     with pause_logging():
         return tuple(content(tensor) for tensor in tensors)
+
+
+def helper_versions(helper: HelperSpec | None) -> tuple[int, ...] | None:
+    """Return the version counters of the tensors a helper closes over.
+
+    Parameters
+    ----------
+    helper:
+        Helper spec, or ``None``.
+
+    Returns
+    -------
+    tuple[int, ...] | None
+        One ``_version`` per tensor in the helper's args and kwargs, in order;
+        ``None`` when the helper holds no tensor. Reading the counter copies
+        nothing and never synchronizes a device.
+    """
+
+    if helper is None:
+        return None
+    tensors: list[torch.Tensor] = []
+    _collect(helper.args, tensors)
+    _collect(helper.kwargs, tensors)
+    return tuple(tensor._version for tensor in tensors) if tensors else None
 
 
 def stamp_metadata(

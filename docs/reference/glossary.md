@@ -482,10 +482,11 @@ attribution-target alias. See the [attribution reference](attribution.md).
   the torch backend is narrower; see the per-backend rosters in the backends guide.
   Tensor-carrying helpers (`tl.steer`, `tl.mean_ablate`, `tl.project_onto`, `tl.project_off`,
   `tl.swap_with`) keep the caller's tensor by reference. Each staged entry records a
-  full-content digest of those tensors when it is staged, and a bound executor when it is
-  bound; a rerun, a bound call and `save_intervention` refuse
-  `helper_tensor_changed_since_capture` once the tensor changed (in place or through `.data`).
-  Re-stage the edit, or rebind, to use the new value.
+  full-content digest of those tensors when it is staged; a rerun and `save_intervention`
+  refuse `helper_tensor_changed_since_capture` once the tensor changed (in place or through
+  `.data`). Re-stage the edit to use the new value. A bound executor (`spec.bind(model)`) reads
+  the helper's tensor at each call; in-place changes apply to the next call, and
+  `BindReport.helper_tensor_versions` (on `.last_report`) records each tensor's version counter.
 
 **Backward helpers**
 : `tl.bwd_hook` builds a live/rerun-only backward hook; `tl.grad_zero`, `tl.grad_scale`,
