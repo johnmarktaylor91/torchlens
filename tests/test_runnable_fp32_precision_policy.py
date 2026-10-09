@@ -122,7 +122,6 @@ def test_unrepresentable_policy_captures_and_refuses_runnable_save(
     tl.save(trace, str(tmp_path / f"{scenario}-analysis.tlspec"))
 
 
-@pytest.mark.smoke
 def test_legacy_set_policy_stays_representable_and_verified(tmp_path: Path) -> None:
     torch.backends.cudnn.allow_tf32 = False
     torch.set_float32_matmul_precision("high")

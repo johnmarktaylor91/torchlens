@@ -281,7 +281,6 @@ def test_include_activations_default_is_absent_and_requires_runnable_level(
         trace.save(tmp_path / "portable.tlspec", include_activations=True)
 
 
-@pytest.mark.smoke
 def test_archived_activations_are_inspectable_but_never_execution_inputs(
     tmp_path: Path,
 ) -> None:

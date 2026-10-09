@@ -414,7 +414,6 @@ def test_record_write_opwrite_stamp_cleared() -> None:
     assert _meta_clear(ext)
 
 
-@pytest.mark.smoke
 def test_stale_reassign_stamp_launder_ceils(tmp_path: Path) -> None:
     """RED-now-fixed (F1a): the reuse launder twin must ceiling, never VERIFY.
 
@@ -434,7 +433,6 @@ def test_stale_reassign_stamp_launder_ceils(tmp_path: Path) -> None:
     assert result.report.poisoned
 
 
-@pytest.mark.smoke
 def test_stale_opwrite_stamp_launder_ceils(tmp_path: Path) -> None:
     """RED-now-fixed (F1b): the op-write-stamped external's launder twin ceilings."""
 
@@ -513,7 +511,6 @@ def test_forged_stamp_address_collision_ceils(tmp_path: Path) -> None:
     assert result.report.poisoned
 
 
-@pytest.mark.smoke
 def test_forged_stale_label_launder_ceils(tmp_path: Path) -> None:
     """White-box: a bare stale ``label_raw`` no longer satisfies the rung.
 
@@ -577,7 +574,6 @@ def test_underscore_attr_rebind_stays_ceiled(tmp_path: Path) -> None:
     assert result.report.poisoned
 
 
-@pytest.mark.smoke
 def test_registered_buffer_rebind_stays_ceiled(tmp_path: Path) -> None:
     """Control (F2/M4): the registered-buffer spelling keeps ceiling.
 
@@ -618,7 +614,6 @@ def test_plain_attr_state_layout_branch_stays_verified(tmp_path: Path) -> None:
     assert not twin.report.poisoned
 
 
-@pytest.mark.smoke
 def test_registered_buffer_layout_branch_stays_verified(tmp_path: Path) -> None:
     """Zero collateral: a registered-buffer layout read verifies both ways."""
 

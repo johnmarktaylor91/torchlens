@@ -360,7 +360,6 @@ def honesty_artifact(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]
         trace.cleanup()
 
 
-@pytest.mark.smoke
 def test_loaded_sparse_run_with_user_state_matches_live_values_and_is_transactional(
     runnable_execution_artifact: tuple[Path, RunnableExecutionModel, tl.Trace],
 ) -> None:
