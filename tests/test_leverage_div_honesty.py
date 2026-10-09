@@ -199,6 +199,42 @@ def test_address_preflight_output_and_ordinal_deferred():
     assert report.escrowing
 
 
+@pytest.mark.parametrize(
+    "selector",
+    [
+        lambda: tl.module("conv1") & tl.func("relu"),
+        lambda: ~tl.module("conv1"),
+        lambda: tl.module("conv1") | tl.func("relu"),
+    ],
+    ids=["module_and_func", "not_module", "module_or_func"],
+)
+def test_address_preflight_mixed_module_selector_deferred(selector):
+    """A selector mixing ``tl.module`` with other terms escrows every op."""
+
+    report = address_preflight(selector())
+    (verdict,) = report.verdicts
+    assert verdict.resolution == "deferred"
+    assert report.escrowing
+
+
+@pytest.mark.parametrize(
+    "selector",
+    [
+        lambda: tl.module("conv1"),
+        lambda: tl.module("conv1") | tl.module("conv2"),
+        lambda: tl.func("relu"),
+    ],
+    ids=["module", "module_union", "func"],
+)
+def test_address_preflight_pure_module_union_and_func_live(selector):
+    """A pure ``tl.module`` union and a selector without module terms stay live."""
+
+    report = address_preflight(selector())
+    (verdict,) = report.verdicts
+    assert verdict.resolution == "live"
+    assert not report.escrowing
+
+
 class _NoSitesModel(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x * 2.0
