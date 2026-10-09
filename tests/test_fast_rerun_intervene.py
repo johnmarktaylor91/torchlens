@@ -649,16 +649,48 @@ def test_cached_fast_door_session_does_not_pollute_a_later_capture() -> None:
     _assert_matches_hook(second, reference, fast=True)
 
 
+def test_fast_door_session_follows_a_restaged_spec() -> None:
+    """A cached ``fast=True`` session applies the spec staged NOW, never a stale plan.
+
+    The explicit door keeps its session between calls. Clearing the staged
+    steer and attaching another at the same site must apply the new steer on
+    the next call, and clearing it entirely must run the plain forward.
+    """
+
+    model, direction = _build()
+    ids = _ids(_CAPTURE_LEN, seed=11)
+    trace = _steered_trace(model, direction, ids)
+    first = trace.run(inputs=ids, fast=True)
+    assert _max_abs_diff(first.output, _hooked(model, direction, ids)["output"]) == 0.0
+
+    other = torch.randn(_DIM, generator=torch.Generator().manual_seed(12))
+    trace.clear_hooks(confirm_mutation=True)
+    trace.attach_hooks(
+        tl.module(_SITE),
+        tl.steer(other, magnitude=_MAGNITUDE, feature_axis=-1),
+        confirm_mutation=True,
+    )
+    restaged = trace.run(inputs=ids, fast=True)
+    assert trace.last_run["engine"] == "guarded_fast"
+    assert _max_abs_diff(restaged.output, _hooked(model, other, ids)["output"]) == 0.0
+
+    trace.clear_hooks(confirm_mutation=True)
+    cleared = trace.run(inputs=ids, fast=True)
+    with torch.no_grad():
+        plain = model(ids)
+    assert _max_abs_diff(cleared.output, plain) == 0.0
+
+
 def test_hooks_attached_after_capture_rerun_through_capture_once() -> None:
     """Hooks staged on a plain capture send the first rerun through the capture engine.
 
     The fast engine leaves the recorded graph alone, so a trace whose graph has
     never seen the staged hooks (``attach_hooks`` after a plain capture) is
     refused with ``fast_rerun_graph_unsteered`` and recaptured once, after which
-    the graph records the fire at the staged module. Values are not compared
-    here: the capture engine re-saves the recapture by op LABEL, and the
-    inserted replacement op shifts those labels (a pre-existing capture-engine
-    rerun behaviour, reported with this lane).
+    the graph records the fire at the staged module. The recapture replays the
+    capture's save request, so it saves the same sites, exactly, and a correct
+    staged rerun is silent (no divergence warning); the next rerun is then
+    eligible for the fast engine.
     """
 
     from torchlens._fast_live_steer import graph_fired_addresses
@@ -674,17 +706,19 @@ def test_hooks_attached_after_capture_rerun_through_capture_once() -> None:
     )
     assert _SITE not in graph_fired_addresses(trace)
 
-    with warnings.catch_warnings():
-        # The capture engine's first rerun from a plain capture compares its graph
-        # against the un-steered capture and warns; that is the engine's known
-        # disclosure, not this test's subject.
-        warnings.simplefilter("ignore", ControlFlowDivergenceWarning)
-        trace.run(model, ids)
+    reference = _hooked(model, direction, ids)
+    trace.run(model, ids)
 
     assert trace.last_run["engine"] == "rerun"
     refused = trace.last_run["fast_refused"]
     assert isinstance(refused, str) and refused.endswith(":fast_rerun_graph_unsteered")
     assert _SITE in graph_fired_addresses(trace)
+    assert _module_hook_count(model) == baseline
+    _assert_matches_hook(trace, reference, fast=False)
+
+    trace.run(model, ids)
+    assert trace.last_run["engine"] == "guarded_fast"
+    _assert_matches_hook(trace, reference, fast=True)
     assert _module_hook_count(model) == baseline
 
 
