@@ -207,19 +207,45 @@ def module_boundary_plan(trace: Any) -> tuple[list[Any], tuple[str, ...]]:
     return hook_plan, tuple(dict.fromkeys(addresses))
 
 
-def graph_plan_ids(trace: Any) -> frozenset[str]:
-    """Return the plan ids of every intervention fire recorded in the trace's graph."""
+def _strip_pass(label: Any) -> str:
+    """Return an op label without its ``:<pass>`` suffix."""
 
-    ids: set[str] = set()
+    text = str(label)
+    head, sep, tail = text.rpartition(":")
+    return head if sep and tail.isdigit() else text
+
+
+def graph_fired_site_labels(trace: Any) -> frozenset[str]:
+    """Return the raw site labels of every intervention fire recorded in the trace's graph."""
+
+    fired: set[str] = set()
     for op in getattr(trace, "layer_list", ()):
-        for result in getattr(op, "fire_results", None) or ():
-            plan_id = getattr(result, "plan_id", None)
-            if plan_id is not None:
-                ids.add(str(plan_id))
-    return frozenset(ids)
+        for record in getattr(op, "interventions", None) or ():
+            for attr in ("site_label", "target_label"):
+                label = getattr(record, attr, None)
+                if isinstance(label, str) and label:
+                    fired.add(_strip_pass(label))
+    return frozenset(fired)
 
 
-def require_graph_reflects_plan(trace: Any, hook_plan: list[Any]) -> None:
+def module_output_site_labels(trace: Any) -> dict[str, set[str]]:
+    """Map each module address to the raw labels of its output ops across every call."""
+
+    layer_dict = getattr(trace, "layer_dict_all_keys", None) or {}
+    module_calls = trace.module_calls
+    outputs: dict[str, set[str]] = {}
+    for call_label in list(module_calls.keys()):
+        address = call_label.rsplit(":", 1)[0]
+        for label in module_calls[call_label].output_ops:
+            op = layer_dict.get(label)
+            raw = getattr(op, "label_raw", None) or label
+            outputs.setdefault(address, set()).add(_strip_pass(raw))
+    return outputs
+
+
+def require_graph_reflects_plan(
+    trace: Any, hook_plan: list[Any], addresses: tuple[str, ...]
+) -> None:
     """Refuse the fast engine while the trace's graph does not show the staged plan.
 
     The fast engine refreshes saved values and leaves the recorded graph alone,
@@ -231,15 +257,21 @@ def require_graph_reflects_plan(trace: Any, hook_plan: list[Any]) -> None:
     Raises
     ------
     RunCapabilityUnavailableError
-        ``fast_rerun_graph_unsteered`` naming the staged plan ids the graph lacks.
+        ``fast_rerun_graph_unsteered`` naming the staged entries the graph lacks.
     """
 
     if not hook_plan:
         return
     from .intervention.rerun import _hook_plan_identifier
 
-    planned = {_hook_plan_identifier(entry) for entry in hook_plan}
-    missing = sorted(planned - graph_plan_ids(trace))
+    fired = graph_fired_site_labels(trace)
+    outputs = module_output_site_labels(trace)
+    del addresses  # deduplicated; each entry names its own target below
+    missing = []
+    for entry in hook_plan:
+        address = str(entry.site_target.selector_value).rsplit(":", 1)[0]
+        if not (outputs.get(address, set()) & fired):
+            missing.append(f"{_hook_plan_identifier(entry)}@{address}")
     if missing:
         raise RunCapabilityUnavailableError(
             "Staged intervention entries have not fired in this trace's recorded graph "
@@ -266,7 +298,7 @@ class SteerPlan:
                     detection_stage="fast_rerun_target_unsupported",
                 )
         self.modules = {address: modules[address] for address in self.addresses}
-        require_graph_reflects_plan(trace, self.hook_plan)
+        require_graph_reflects_plan(trace, self.hook_plan, self.addresses)
         self.pass_counts: Counter[str] = Counter()
         self.fired: Counter[str] = Counter()
         self.fire_count = 0
