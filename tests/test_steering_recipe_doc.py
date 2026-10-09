@@ -16,6 +16,8 @@ from typing import Any
 import pytest
 import torch
 
+import torchlens as tl
+
 PAGE = Path(__file__).resolve().parents[1] / "docs" / "agent-reference" / "common-patterns.md"
 HEADING = "### Steering many forwards / generation"
 FENCE_RE = re.compile(r"```python\n(?P<code>.*?)\n```", re.DOTALL)
@@ -32,7 +34,7 @@ def _recipe_code() -> str:
 @pytest.fixture(scope="module")
 def recipe() -> dict[str, Any]:
     pytest.importorskip("transformers")
-    namespace: dict[str, Any] = {"tl": pytest.importorskip("torchlens")}
+    namespace: dict[str, Any] = {"tl": tl}
     exec(compile(_recipe_code(), f"{PAGE.name}:steering-recipe", "exec"), namespace)
     return namespace
 
