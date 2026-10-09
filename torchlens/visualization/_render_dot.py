@@ -1367,11 +1367,11 @@ def _orphan_island_logs(trace: "Trace") -> tuple[Any, ...]:
         if bool(getattr(op, "is_orphan", False))
         and bool(getattr(op, "label", "") or getattr(op, "_label_raw", ""))
     )
-    if not orphan_logs:
-        if getattr(trace, "_orphan_logs", ()):
-            _warn_render_omission(
-                "orphans were dropped from this capture; re-trace with keep_orphans=True"
-            )
+    orphan_husks = getattr(trace, "_orphan_logs", ())
+    if not orphan_logs and orphan_husks:
+        _warn_render_omission(
+            "orphans were dropped from this capture; re-trace with keep_orphans=True"
+        )
     return orphan_logs
 
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import gc
 import warnings
+from itertools import pairwise
 
 import torch
 from torch import nn
@@ -71,7 +72,7 @@ def _reused_across_kinds(alias_ids: list[tuple[str, int]]) -> int:
 
     return sum(
         1
-        for (kind_a, id_a), (kind_b, id_b) in zip(alias_ids, alias_ids[1:])
+        for (kind_a, id_a), (kind_b, id_b) in pairwise(alias_ids)
         if kind_a != kind_b and id_a == id_b
     )
 
