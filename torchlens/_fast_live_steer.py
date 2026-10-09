@@ -208,15 +208,19 @@ def module_boundary_plan(trace: Any) -> tuple[list[Any], tuple[str, ...]]:
 
 
 def _strip_pass(label: Any) -> str:
-    """Return an op label without its ``:<pass>`` suffix."""
+    """Return a call or op label without its ``:<index>`` suffix."""
 
     text = str(label)
     head, sep, tail = text.rpartition(":")
     return head if sep and tail.isdigit() else text
 
 
-def graph_fired_site_labels(trace: Any) -> frozenset[str]:
-    """Return the raw site labels of every intervention fire recorded in the trace's graph."""
+def graph_fired_addresses(trace: Any) -> frozenset[str]:
+    """Return the module addresses whose boundary fired an intervention in the recorded graph.
+
+    A module-boundary fire record names the module call (``address:index``) as
+    its site, so the address is the call label without its index.
+    """
 
     fired: set[str] = set()
     for op in getattr(trace, "layer_list", ()):
@@ -228,31 +232,14 @@ def graph_fired_site_labels(trace: Any) -> frozenset[str]:
     return frozenset(fired)
 
 
-def module_output_site_labels(trace: Any) -> dict[str, set[str]]:
-    """Map each module address to the raw labels of its output ops across every call."""
-
-    layer_dict = getattr(trace, "layer_dict_all_keys", None) or {}
-    module_calls = trace.module_calls
-    outputs: dict[str, set[str]] = {}
-    for call_label in list(module_calls.keys()):
-        address = call_label.rsplit(":", 1)[0]
-        for label in module_calls[call_label].output_ops:
-            op = layer_dict.get(label)
-            raw = getattr(op, "label_raw", None) or label
-            outputs.setdefault(address, set()).add(_strip_pass(raw))
-    return outputs
-
-
-def require_graph_reflects_plan(
-    trace: Any, hook_plan: list[Any], addresses: tuple[str, ...]
-) -> None:
+def require_graph_reflects_plan(trace: Any, hook_plan: list[Any]) -> None:
     """Refuse the fast engine while the trace's graph does not show the staged plan.
 
     The fast engine refreshes saved values and leaves the recorded graph alone,
-    so a staged entry that never fired in the graph (hooks attached after a
-    plain capture) would leave a trace whose values are steered but whose ops
-    show no intervention. The capture engine rewrites the graph on that first
-    rerun; every later rerun of the same trace is eligible here.
+    so a staged entry whose module never fired in the graph (hooks attached
+    after a plain capture) would leave a trace whose values are steered but
+    whose ops show no intervention. The capture engine rewrites the graph on
+    that first rerun; every later rerun of the same trace is eligible here.
 
     Raises
     ------
@@ -264,13 +251,11 @@ def require_graph_reflects_plan(
         return
     from .intervention.rerun import _hook_plan_identifier
 
-    fired = graph_fired_site_labels(trace)
-    outputs = module_output_site_labels(trace)
-    del addresses  # deduplicated; each entry names its own target below
+    fired = graph_fired_addresses(trace)
     missing = []
     for entry in hook_plan:
         address = str(entry.site_target.selector_value).rsplit(":", 1)[0]
-        if not (outputs.get(address, set()) & fired):
+        if address not in fired:
             missing.append(f"{_hook_plan_identifier(entry)}@{address}")
     if missing:
         raise RunCapabilityUnavailableError(
@@ -298,7 +283,7 @@ class SteerPlan:
                     detection_stage="fast_rerun_target_unsupported",
                 )
         self.modules = {address: modules[address] for address in self.addresses}
-        require_graph_reflects_plan(trace, self.hook_plan, self.addresses)
+        require_graph_reflects_plan(trace, self.hook_plan)
         self.pass_counts: Counter[str] = Counter()
         self.fired: Counter[str] = Counter()
         self.fire_count = 0
