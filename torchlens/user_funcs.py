@@ -2550,6 +2550,9 @@ def trace(
     afterward.  Pass ``capture=CaptureOptions(unwrap_when_done=True)`` to restore
     the original torch callables after logging completes.
 
+    Faster paths (capture-free ``spec.bind(model)`` steering, ``tl.record``): see
+    ``docs/guides/fast_paths.md``.
+
     **Layer selection** (``save=``, the canonical spelling):
 
     - ``'all'`` (default) - save outs for every layer.

@@ -60,7 +60,8 @@ log = tl.trace(lm, "The quick brown fox")            # HF models: a string is a 
   [Facets tutorial](notebooks/facets_tutorial.ipynb) |
   [5-minute gallery](examples/5min/README.md) |
   [50-minute gallery](examples/50min/README.md)
-- [Performance guide](docs/performance.md) |
+- [Choosing a fast path](docs/guides/fast_paths.md) |
+  [Performance guide](docs/performance.md) |
   [Receptive & projective fields](docs/receptive_projective_fields.md) |
   [AI-agent quick reference](docs/for-ai-agents.md) |
   [Limitations and remedies](docs/reference/limitations.md) |
@@ -216,7 +217,10 @@ tl.extract_dataset(model, dataset, layers=['relu_1_2', 'conv2d_3_7'],
 than the raw forward pass* -- measured at 0.84x raw on ResNet-18 and 0.83x on
 GPT-2 (HookedTransformer) at 25% depth. Full exhaustive capture runs at
 roughly 14x the raw forward and amortizes on large models. See
-[docs/performance.md](docs/performance.md) for the full benchmark table.
+[docs/performance.md](docs/performance.md) for the full benchmark table. To steer or patch a
+model over many forwards or through `generate()`, skip capture entirely with
+`tl.when(site, action).bind(model)`; see
+[choosing a fast path](docs/guides/fast_paths.md).
 
 Save and load traces portably:
 
@@ -664,6 +668,7 @@ saved activations are unaffected either way.
 | [docs/intervention_api.md](docs/intervention_api.md) | Full selector and helper reference |
 | [docs/backward.md](docs/backward.md) | Backward capture details and limitations |
 | [docs/facets.md](docs/facets.md) | Facets, patching, and SDPA reconstruction |
+| [docs/guides/fast_paths.md](docs/guides/fast_paths.md) | Choosing a fast path: capture-free steering (`bind`), `tl.record` against `tl.trace`, cheaper traces, rerun limits |
 | [docs/performance.md](docs/performance.md) | Speed knobs and benchmark numbers |
 | [docs/reference/debug.md](docs/reference/debug.md) | Trace diagnostics: lineage, non-finites, costs, and gradients |
 | [docs/reference/export.md](docs/reference/export.md) | Static, profiling, tabular, and tracker exports (incl. the interactive HTML viewer) |

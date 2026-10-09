@@ -5,6 +5,10 @@ v2 spelling: `tl.trace(..., backend=None)`, predicate `save=...`, `intervene=...
 `storage=...`, and grouped `capture=tl.options.CaptureOptions(save_grads=...)` (the flat
 flat `save_grads=` kwarg is removed).
 
+Speed: to steer or patch over many forwards or through `generate()`, use the capture-free
+`tl.when(site, action).bind(model)` rather than a `tl.trace` per step. The costs of every path
+are in [Performance: choosing a fast path](guides/fast_paths.md).
+
 Backend note: `backend=None` preserves the torch eager default, and EVERY preview backend
 auto-routes genuine framework models (MLX, JAX, tinygrad, Paddle, TensorFlow).
 `tl.record()`/fastlog and true backward capture are torch-only in backend v1. Backend-neutral
@@ -121,6 +125,24 @@ trace = tl.trace(model, x, save=tl.func("relu"))
 relu_out = trace.find_sites(tl.func("relu")).first().out
 
 assert relu_out.shape == (2, 4)
+```
+
+Steer many forwards without capture (about 1x a plain forward hook):
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+
+model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
+direction = torch.ones(4)
+
+bound = tl.when(tl.module("1"), tl.steer(direction, magnitude=2.0, feature_axis=-1)).bind(model)
+outputs = [bound(torch.randn(2, 4)) for _ in range(3)]
+
+assert outputs[0].shape == (2, 2)
+assert bound.last_report.fire_count == 1
 ```
 
 Run a capture-time intervention:
@@ -311,6 +333,9 @@ has one) and a disclosure naming the levers.
 
 ## Anti-patterns
 
+- Do not run a fresh `tl.trace(..., intervene=...)` per generation step just to steer; it costs
+  milliseconds per op. Use `spec.bind(model)` or `steer_generate`, and `tl.record` when each step
+  needs evidence ([choosing a fast path](guides/fast_paths.md)).
 - Do not trace `torch.compile`, `torch.jit`, or `torch.export` artifacts. Trace the original
   Python `nn.Module`.
 - Do not expect per-element eager ops inside `torch.func` / functorch transforms; TorchLens records
