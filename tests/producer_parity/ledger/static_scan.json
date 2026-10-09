@@ -80,12 +80,36 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_fast_live_steer.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_fast_run.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "raw_index",
   "file": "torchlens/_fast_run.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "raw_index",
+  "file": "torchlens/_fast_run.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
  },
  {
   "ambiguous": true,

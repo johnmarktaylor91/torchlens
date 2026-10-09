@@ -2259,3 +2259,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 00fda6b87a12ddd18b1bfe7d3a276d3857a133f4 (clean)
 recorded: 2026-10-09T16:52:08.969167+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: next-release integration of the guarded fast rerun, module-save escrow, render fixes (F19 theme font on backward and combined graphs, F27 paper skin without colorscheme): producer ledger static scan for the merged producer sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 5d479d095e720c44b25ad80039ce75fee783401c (dirty)
+recorded: 2026-10-09T18:48:12.003187+00:00
