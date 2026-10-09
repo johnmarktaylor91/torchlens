@@ -3715,6 +3715,7 @@ package-docstrings	torchlens/postprocess/__init__.py	20.
 package-docstrings	torchlens/postprocess/__init__.py	23
 package-docstrings	torchlens/postprocess/__init__.py	256
 package-docstrings	torchlens/postprocess/__init__.py	47
+package-docstrings	torchlens/postprocess/_buffer_addresses.py	83
 package-docstrings	torchlens/postprocess/_contracts.py	10
 package-docstrings	torchlens/postprocess/_contracts.py	16
 package-docstrings	torchlens/postprocess/_contracts.py	17
@@ -3754,7 +3755,6 @@ package-docstrings	torchlens/postprocess/_ingest_contract.py	9.1
 package-docstrings	torchlens/postprocess/_ingest_contract.py	9.3.
 package-docstrings	torchlens/postprocess/_lazy_param_geometry.py	15
 package-docstrings	torchlens/postprocess/_lazy_param_geometry.py	43
-package-docstrings	torchlens/postprocess/_materialize.py	83
 package-docstrings	torchlens/postprocess/_materialize.py	9.1
 package-docstrings	torchlens/postprocess/_site_join.py	1,3
 package-docstrings	torchlens/postprocess/_site_join.py	3,1

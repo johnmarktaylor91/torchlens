@@ -27,7 +27,7 @@ from ..utils.tensor_utils import (
     safe_to,
     tensor_nanequal,
 )
-from ._materialize import _recorded_buffer_address
+from ._buffer_addresses import _recorded_buffer_address
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
