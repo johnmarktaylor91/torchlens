@@ -10,6 +10,7 @@ re-rooted as a buffer source (or a real buffer alias missed).
 from __future__ import annotations
 
 import gc
+import warnings
 
 import torch
 from torch import nn
@@ -21,22 +22,25 @@ _ITERATIONS = 32
 
 
 class _AliasChurn(nn.Module):
-    """Alternate an unlabeled buffer alias with an unlabeled input alias.
+    """Alternate a labeled buffer view with an unlabeled newborn tensor.
 
-    ``.data`` returns a fresh tensor object with no TorchLens label and a fresh
-    version counter, so consecutive aliases are freed and reallocated inside one
-    capture and CPython hands the next one the freed object's ``id``.
+    Every wrapped call resolves each tensor argument against the registered
+    buffers, so the buffer view's storage key is cached. The view is then freed
+    and ``Generator.get_state()`` -- a tensor born outside any wrapped torch
+    function, hence unlabeled -- is allocated in its place, typically on the
+    same ``id`` and with the same (zero) version counter.
     """
 
     def __init__(self) -> None:
-        """Register the buffer and the id log."""
+        """Register the buffer, the generator, and the id log."""
 
         super().__init__()
         self.register_buffer("buf", torch.full((4,), 7.0))
+        self.generator = torch.Generator()
         self.alias_ids: list[tuple[str, int]] = []
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Mix buffer aliases (via ``add``) and input aliases (via ``mul``).
+        """Consume buffer views and generator-state tensors in turn.
 
         Parameters
         ----------
@@ -51,19 +55,19 @@ class _AliasChurn(nn.Module):
 
         out = x * 1.0
         for _ in range(_ITERATIONS):
-            buffer_alias = self.buf.data
-            self.alias_ids.append(("buffer", id(buffer_alias)))
-            out = torch.add(out, buffer_alias)
-            del buffer_alias
-            input_alias = x.data
-            self.alias_ids.append(("input", id(input_alias)))
-            out = torch.mul(out, input_alias)
-            del input_alias
+            buffer_view = self.buf.view(4)
+            self.alias_ids.append(("buffer", id(buffer_view)))
+            out = out + buffer_view
+            del buffer_view
+            state = self.generator.get_state()
+            self.alias_ids.append(("state", id(state)))
+            out = out + state[:4].float()
+            del state
         return out
 
 
 def _reused_across_kinds(alias_ids: list[tuple[str, int]]) -> int:
-    """Count consecutive aliases of different kinds that shared an ``id``."""
+    """Count consecutive tensors of different kinds that shared an ``id``."""
 
     return sum(
         1
@@ -72,22 +76,23 @@ def _reused_across_kinds(alias_ids: list[tuple[str, int]]) -> int:
     )
 
 
-def test_id_reuse_never_reroots_an_input_alias_as_a_buffer() -> None:
-    """An input alias that reuses a buffer alias's id gets no buffer parent, and vice versa."""
+def test_id_reuse_never_reroots_a_newborn_tensor_as_a_buffer() -> None:
+    """A tensor that inherits a dead buffer view's id is not logged as the buffer."""
 
     model = _AliasChurn()
-    trace = tl.trace(model, torch.ones(4))
+    with warnings.catch_warnings():
+        # The generator state is a genuinely provenance-free argument; its disclosure
+        # warning is expected and not what this test is about.
+        warnings.filterwarnings("ignore", message=".*no graph/source provenance.*")
+        trace = tl.trace(model, torch.ones(4))
 
     # The scenario must actually happen, or this test proves nothing.
     assert _reused_across_kinds(model.alias_ids) > 0, model.alias_ids[:8]
 
-    adds = [op for op in trace.layer_list if op.func_name == "add"]
-    muls = [op for op in trace.layer_list if op.func_name == "mul" and op.parents]
-    assert len(adds) == _ITERATIONS
-    for op in adds:
-        assert any(trace[parent].is_buffer for parent in op.parents), (op.label, op.parents)
-    for op in muls:
-        assert not any(trace[parent].is_buffer for parent in op.parents), (op.label, op.parents)
+    buffer_ops = [op for op in trace.layer_list if op.is_buffer]
+    assert buffer_ops
+    consumer_types = {trace[child].func_name for op in buffer_ops for child in op.children}
+    assert consumer_types == {"view"}, consumer_types
 
 
 def test_storage_metadata_cache_does_not_outlive_its_tensor() -> None:
@@ -114,8 +119,11 @@ def test_storage_metadata_cache_does_not_outlive_its_tensor() -> None:
             break
         keep.append(candidate)
     if twin is None:
-        # No reuse on this allocator: the cache must still not hold the dead entry.
-        assert all(key[0] != first_id for key in tracker._storage_key_cache)
+        # No reuse on this allocator: whatever the cache kept for the dead id must not
+        # still claim to describe a live object.
+        for cache in (tracker._storage_key_cache, tracker._storage_range_cache):
+            for (cached_id, _), (ref, _) in cache.items():
+                assert cached_id != first_id or ref() is None
         return
     assert tracker.storage_key(twin) != first_key
     assert tracker.storage_range(twin) == (0, 32)
