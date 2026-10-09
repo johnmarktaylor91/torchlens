@@ -2097,6 +2097,14 @@
  },
  {
   "ambiguous": false,
+  "field": "raw_index",
+  "file": "torchlens/backends/torch/model_prep.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
   "field": "root_ancestors",
   "file": "torchlens/backends/torch/model_prep.py",
   "has_default": false,
