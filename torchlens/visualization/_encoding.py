@@ -1511,15 +1511,15 @@ def _compute_size_geometry(state: EncodingState) -> None:
         transformed = dict(state.size_values)
     low = min(transformed.values())
     high = max(transformed.values())
+    if low == high:
+        # Degenerate domain: unencoded with the note, like the color channel.
+        state.size_note(NOTE_CONSTANT)
+        return
     state.size_domain = (min(state.size_values.values()), max(state.size_values.values()))
     default_area = DEFAULT_NODE_WIDTH_IN * DEFAULT_NODE_HEIGHT_IN
     aspect = DEFAULT_NODE_WIDTH_IN / DEFAULT_NODE_HEIGHT_IN
-    if low == high:
-        state.size_note(NOTE_CONSTANT)
-        fractions = dict.fromkeys(transformed, 0.5)
-    else:
-        span = high - low
-        fractions = {key: (value - low) / span for key, value in transformed.items()}
+    span = high - low
+    fractions = {key: (value - low) / span for key, value in transformed.items()}
     for key, fraction in fractions.items():
         area = default_area * (1.0 + fraction * (SIZE_BY_MAX_AREA_MULT - 1.0))
         width = math.sqrt(area * aspect)
