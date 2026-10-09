@@ -30,7 +30,7 @@ from torch import nn
 from torch.utils.hooks import RemovableHandle
 
 from . import _state
-from .backends.torch._tl import get_module_meta
+from .backends.torch import _tl as _tl_meta
 
 
 def module_fingerprint_address(module: nn.Module, fallback: str) -> str:
@@ -49,7 +49,7 @@ def module_fingerprint_address(module: nn.Module, fallback: str) -> str:
         The prepared ``_tl.address`` when present, else ``fallback``.
     """
 
-    meta = get_module_meta(module)
+    meta = _tl_meta.get_module_meta(module)
     if meta is None or meta.address is None:
         return fallback
     return meta.address
