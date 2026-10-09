@@ -176,7 +176,7 @@ THEME_PRESETS: dict[str, VisualizationTheme] = {
     ),
     "paper": VisualizationTheme(
         name="paper",
-        graph={"bgcolor": "white", "colorscheme": "paired12", "fontname": "Helvetica"},
+        graph={"bgcolor": "white", "fontname": "Helvetica"},
         node={"fontname": "Helvetica"},
         edge={"fontname": "Helvetica"},
         default_fill="#F7F7F7",

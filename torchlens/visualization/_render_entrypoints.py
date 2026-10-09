@@ -12,10 +12,16 @@ from ._render_flow import *
 from ._render_leaf import *
 from ._render_nodes import *
 from ._render_utils import html_escape
+from ._typography import DEFAULT_TYPOGRAPHY
 from .render_ir import build_backward_render_ir, build_combined_render_ir
 from .renderers.graphviz import GraphvizRenderer
 from .request import RenderContext, RenderTarget
 from .source_graph import build_source_graph
+
+#: The default skin's font family. Forward ``draw`` reaches it through the theme
+#: attribute helpers; the backward and combined entrypoints take no theme, so
+#: they name it directly instead of leaving Graphviz to its serif default.
+_DEFAULT_FONT_FAMILY = DEFAULT_TYPOGRAPHY.family
 
 
 def _emit_backward_key(
@@ -152,6 +158,7 @@ def render_backward_graph(
         "labeljust": "left",
         "ordering": "out",
         "compound": "true",
+        "fontname": _DEFAULT_FONT_FAMILY,
     }
     for arg_name, arg_val in (vis_graph_overrides or {}).items():
         if callable(arg_val):
@@ -159,7 +166,11 @@ def render_backward_graph(
         else:
             graph_args[arg_name] = str(arg_val)
 
-    edge_args = {"color": GRADIENT_ARROW_COLOR, "fontcolor": GRADIENT_ARROW_COLOR}
+    edge_args = {
+        "color": GRADIENT_ARROW_COLOR,
+        "fontcolor": GRADIENT_ARROW_COLOR,
+        "fontname": _DEFAULT_FONT_FAMILY,
+    }
     for arg_name, arg_val in (vis_edge_overrides or {}).items():
         if callable(arg_val):
             edge_args[arg_name] = str(arg_val(self))
@@ -168,7 +179,7 @@ def render_backward_graph(
 
     ir_builder = _RenderIRDecisionBuilder()
     ir_builder.attr("graph", **graph_args)
-    ir_builder.attr("node", ordering="out")
+    ir_builder.attr("node", ordering="out", fontname=_DEFAULT_FONT_FAMILY)
     ir_builder.attr("edge", **edge_args)
 
     inventory = compute_backward_style_inventory(self, pass_filter)
@@ -404,13 +415,14 @@ def render_combined_graph(
         "labelloc": "t",
         "labeljust": "left",
         "ordering": "out",
+        "fontname": _DEFAULT_FONT_FAMILY,
     }
     for arg_name, arg_val in overrides.graph.items():  # type: ignore[union-attr]
         graph_args[arg_name] = str(arg_val(self) if callable(arg_val) else arg_val)
     ir_builder = _RenderIRDecisionBuilder()
     ir_builder.attr("graph", **graph_args)
-    ir_builder.attr("node", ordering="out")
-    ir_builder.attr("edge", ordering="out")
+    ir_builder.attr("node", ordering="out", fontname=_DEFAULT_FONT_FAMILY)
+    ir_builder.attr("edge", ordering="out", fontname=_DEFAULT_FONT_FAMILY)
 
     module_cluster_dict: Dict[str, Any] = defaultdict(
         lambda: {"edges": [], "nodes": [], "has_input_ancestor": False}
