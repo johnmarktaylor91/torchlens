@@ -167,6 +167,9 @@ def _scaled(value: str, s: float) -> str:
 def _place(element: ET.Element, frame: Affine, prefix: str) -> ET.Element:
     """A copy of one drawable leaf (or gradient) with its placement baked in."""
 
+    # Essential complexity: one branch per SVG element kind Graphviz writes, each with its
+    # own coordinate attributes; splitting them apart would only scatter one mapping.
+
     out = copy.deepcopy(element)
     out.attrib.pop("transform", None)
     if local(out) not in _GRADIENTS:

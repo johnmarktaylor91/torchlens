@@ -52,6 +52,9 @@ def _attrs(attrs: dict[str, str]) -> str:
 def alphabet_dot(slide_id: str, raw: Path, order: dict[str, int]) -> tuple[str, list[str]]:
     """A DOT sheet whose cells copy each exemplar's exact attributes from its slide."""
 
+    # Essential complexity: one branch per mark kind (node, edge, cluster), each copying a
+    # different attribute set into a pinned cell.
+
     entries = ALPHABET[slide_id]
     # A sheet of lines needs room for a short line, its words and a left-aligned meaning;
     # a sheet of nodes fits four across.
