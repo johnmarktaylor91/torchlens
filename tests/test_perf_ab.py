@@ -48,10 +48,16 @@ def _runner(slowdown: Slowdown, *, jitter: float = 0.03, seed: int = 0) -> perf_
         calls[(arm, operation)] = call + 1
         count = 1 if operation in COLD else samples
         scale = slowdown(arm, operation, call)
-        values = [BASE_MS[operation] * scale * (1 + rng.uniform(-jitter, jitter))
-                  for _ in range(count)]  # fmt: skip
-        return {"operation": operation, "model": cell[1], "device": cell[2], "status": "ok",
-                "timing": {"samples_ms": values, "cpu_samples_ms": values}}  # fmt: skip
+        values = [
+            BASE_MS[operation] * scale * (1 + rng.uniform(-jitter, jitter)) for _ in range(count)
+        ]
+        return {
+            "operation": operation,
+            "model": cell[1],
+            "device": cell[2],
+            "status": "ok",
+            "timing": {"samples_ms": values, "cpu_samples_ms": values},
+        }
 
     return run
 
@@ -92,8 +98,14 @@ def test_arm_order_rotates_per_round(tmp_path: Path) -> None:
             order.append(tree.name)
         return _runner(_none)(tree, cell, samples, out)
 
-    perf_ab.measure({"base": tmp_path / "base", "current": tmp_path / "current"}, CELLS,
-                    record, rounds=4, samples=2, workdir=tmp_path / "w")  # fmt: skip
+    perf_ab.measure(
+        {"base": tmp_path / "base", "current": tmp_path / "current"},
+        CELLS,
+        record,
+        rounds=4,
+        samples=2,
+        workdir=tmp_path / "w",
+    )
     assert order == ["base", "current", "current", "base"] * 2
 
 

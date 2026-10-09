@@ -122,8 +122,13 @@ def _error_payload(cell: Cell, error: str) -> dict[str, Any]:
     """Return a failed cell payload that the gate reports as a status failure."""
 
     operation, model, device = cell
-    return {"operation": operation, "model": model, "device": device, "status": "error",
-            "error": error}  # fmt: skip
+    return {
+        "operation": operation,
+        "model": model,
+        "device": device,
+        "status": "error",
+        "error": error,
+    }
 
 
 def measure(
@@ -207,8 +212,12 @@ def pool_row(cell: Cell, payloads: list[dict[str, Any]]) -> dict[str, Any]:
 
     operation, model, device = cell
     bad = [p for p in payloads if p.get("status", "ok") != "ok"]
-    row: dict[str, Any] = {"model": model, "device": device, "operation": operation,
-                           "status": bad[0].get("status", "error") if bad else "ok"}  # fmt: skip
+    row: dict[str, Any] = {
+        "model": model,
+        "device": device,
+        "operation": operation,
+        "status": bad[0].get("status", "error") if bad else "ok",
+    }
     if bad:
         row["error"] = bad[0].get("error") or bad[0].get("skip_reason")
         return row
@@ -393,8 +402,9 @@ def run_gate(
     def payloads(results: dict[str, dict[Cell, list[dict[str, Any]]]]) -> dict[str, Any]:
         return {arm: build_payload(res, env, shas.get(arm, "")) for arm, res in results.items()}
 
-    primary_payloads = payloads(measure(trees, cells, runner, rounds=rounds, samples=samples,
-                                        workdir=workdir / "primary"))  # fmt: skip
+    primary_payloads = payloads(
+        measure(trees, cells, runner, rounds=rounds, samples=samples, workdir=workdir / "primary")
+    )
     primary = {
         ref: _compare(primary_payloads[ref], primary_payloads["current"], tolerances[ref])
         for ref in refs
@@ -404,8 +414,16 @@ def run_gate(
     confirm_payloads: dict[str, Any] = {}
     if flagged:
         controls = [cell for cell in cells if not is_torchlens_operation(cell[0])]
-        confirm_payloads = payloads(measure(trees, flagged + controls, runner, rounds=rounds,
-                                            samples=samples, workdir=workdir / "confirm"))  # fmt: skip
+        confirm_payloads = payloads(
+            measure(
+                trees,
+                flagged + controls,
+                runner,
+                rounds=rounds,
+                samples=samples,
+                workdir=workdir / "confirm",
+            )
+        )
         confirmation = {
             ref: _compare(confirm_payloads[ref], confirm_payloads["current"], tolerances[ref])
             for ref in refs
@@ -423,7 +441,7 @@ def run_gate(
             "samples_per_round": samples,
             "gross_ratio": gross_ratio,
             "tolerances": {ref: tolerances[ref] for ref in refs},
-        },  # fmt: skip
+        },
         "primary_comparisons": primary,
         "confirmation_comparisons": confirmation,
         "primary_payloads": primary_payloads,
