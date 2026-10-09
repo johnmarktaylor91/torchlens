@@ -554,7 +554,7 @@ _FUNC_STEER_RECORD_COUNTS = {
 # With the skip: shared fields are built by emission only, once per logged op.
 _SKIP_STEER_TRACE_COUNTS = {
     "make_live_site_proxy": 0,
-    "_build_shared_fields_dict": -1,
+    "_build_shared_fields_dict": 9,
     "_evaluate_intervene_op": 0,
 }
 
