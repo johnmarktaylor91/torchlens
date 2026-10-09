@@ -1004,8 +1004,8 @@ SLIDES: tuple[Slide, ...] = (
         rows=("VN26", "VE09", "VC04", "VV02"),
     ),
     Slide(
-        id="backward-key",
-        title="The backward key",
+        id="backward-legend",
+        title="The backward legend",
         rule="show_legend=True on draw_backward lists only the styles this graph painted.",
         panels=(
             Panel(

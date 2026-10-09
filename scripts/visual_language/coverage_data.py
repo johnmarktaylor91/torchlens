@@ -419,7 +419,7 @@ ROWS: Mapping[str, Row] = {
     "VI02": _R(
         "legend.show_legend_tristate", "builtin-legend", P, "_render_dot:_emit_and_finish_forward"
     ),
-    "VI03": _R("legend.backward_key", "backward-key", P, "_legend:backward_key_sections"),
+    "VI03": _R("legend.backward_key", "backward-legend", P, "_legend:backward_key_sections"),
     "VI04": _R(
         "legend.rank_engine", "layout-engine", P, "_legend:legend_table_lines_for_rank_path"
     ),
@@ -588,13 +588,13 @@ LEGEND_ROW_WITNESS: Mapping[str, str] = {
     "parameterized": "builtin-legend",
     "intervention/cone": "builtin-legend",
     "mutated parameter": "mutated-param",
-    "backward op (grad_fn)": "backward-key",
-    "order 2+: grad-of-grad (double backprop)": "backward-key",
-    "[i] = intervening grad_fn (no forward op)": "backward-key",
-    "[custom] = custom autograd function": "backward-key",
-    "accum = gradient accumulation into a leaf": "backward-key",
-    "bwd N = backward pass N; order N = derivative order": "backward-key",
-    "order N = derivative order": "backward-key",
+    "backward op (grad_fn)": "backward-legend",
+    "order 2+: grad-of-grad (double backprop)": "backward-legend",
+    "[i] = intervening grad_fn (no forward op)": "backward-legend",
+    "[custom] = custom autograd function": "backward-legend",
+    "accum = gradient accumulation into a leaf": "backward-legend",
+    "bwd N = backward pass N; order N = derivative order": "backward-legend",
+    "order N = derivative order": "backward-legend",
     "TorchLens encoding": "color-by",
     "color_by:": "color-by",
     "eligible nodes": "color-by",

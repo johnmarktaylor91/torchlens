@@ -35,6 +35,9 @@ from scripts.visual_language.slides import (
 )
 
 DECK_NAME = "visual-language.deck.md"
+#: Words a deck viewer's file server refuses in any path part, as names that may hold a
+#: credential; it also refuses hidden parts, ``.pem`` files, ``id_`` prefixes and ``state``.
+_REFUSED_WORDS = ("key", "secret", "token")
 _NODE_KEYS = ("shape", "style", "fillcolor", "color", "penwidth", "peripheries", "fontcolor")
 _EDGE_KEYS = ("style", "color", "arrowhead", "arrowsize", "dir", "penwidth", "fontcolor")
 _EDGE_LABEL_KEYS = ("label", "headlabel", "taillabel", "xlabel")
@@ -311,6 +314,35 @@ def receipt(records: list[dict[str, Any]]) -> dict[str, Any]:
     return {"counts": counts, "rows": rows}
 
 
+def name_problem(part: str) -> str | None:
+    """Why a deck viewer would refuse to serve a path part with this name, or None."""
+
+    lower = part.lower()
+    if part.startswith("."):
+        return "hidden name"
+    if part == "state":
+        return "named state"
+    if any(word in lower for word in _REFUSED_WORDS) or lower.endswith(".pem"):
+        return "may name a credential"
+    if lower.startswith("id_"):
+        return "may name a credential"
+    return None
+
+
+def generated_names() -> list[str]:
+    """Every file and folder name a full build writes into its output folder."""
+
+    names = [DECK_NAME, "slides.json", "coverage-receipt.json", "environment.json", "raw"]
+    for number, slide in enumerate(SLIDES, start=1):
+        names.append(f"S{number:02d}-{slide.id}.svg")
+        stems = [f"{slide.id}-{panel.name}" for panel in slide.panels]
+        if slide.id in ALPHABET:
+            stems.append(f"{slide.id}-a")
+        names += [f"{stem}.{ext}" for stem in stems for ext in ("svg", "dot", "json")]
+    names += [f"{stem}.{ext}" for stem in capture.EXPORT_STEMS for ext in ("png", "svg", "pdf")]
+    return names
+
+
 def build(out: Path, only: set[str] | None = None) -> int:
     """Render, compose and write the deck into ``out``; return the number of failed slides."""
 
@@ -345,8 +377,10 @@ def build(out: Path, only: set[str] | None = None) -> int:
         json.dumps({**env, "constants": constants()}, indent=1, default=str)
     )
     failed = [r["id"] for r in records if r["status"] == "failed"]
-    print(json.dumps({"slides": len(records), "failed": failed}), flush=True)
-    return len(failed)
+    # Fail closed on any written name a deck viewer would refuse to serve.
+    refused = sorted(str(p.relative_to(out)) for p in out.rglob("*") if name_problem(p.name))
+    print(json.dumps({"slides": len(records), "failed": failed, "refused_names": refused}))
+    return len(failed) + len(refused)
 
 
 def visible_text(panel_json: Path) -> str:

@@ -36,6 +36,17 @@ from scripts.visual_language.coverage_scan import (
 )
 
 
+def test_generated_names_are_servable() -> None:
+    """No file or folder the build writes carries a name a deck viewer refuses to serve."""
+
+    from scripts.visual_language import deck
+
+    refused = {name: deck.name_problem(name) for name in deck.generated_names()}
+    assert not {k: v for k, v in refused.items() if v}
+    for bad in ("S42-backward-key.svg", "token.json", ".hidden", "state", "id_rsa", "a.pem"):
+        assert deck.name_problem(bad), bad
+
+
 @pytest.mark.smoke
 def test_deck_covers_every_renderer_item() -> None:
     """Every draw option, vocabulary value, legend row, token, template and site is taught."""

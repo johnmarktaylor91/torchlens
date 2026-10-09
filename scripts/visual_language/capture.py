@@ -223,6 +223,10 @@ def _png_size(path: Path) -> tuple[int, int]:
     return int.from_bytes(data[:4], "big"), int.from_bytes(data[4:], "big")
 
 
+#: File stems ``probe_export`` writes into ``raw/`` (checked by ``deck.generated_names``).
+EXPORT_STEMS = ("export-png-96", "export-png-192", "export-svg", "export-graph", "export-refused")
+
+
 def probe_export(raw: Path) -> dict[str, str]:
     """Measure the export controls on ``Flow``: raster sizes, the returned object, refusals."""
 
