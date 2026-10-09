@@ -150,6 +150,9 @@ def capture_fn(cell: wl.Cell, mode: str) -> Callable[[], Any]:
     table: dict[str, Callable[[], Any]] = {
         "trace_default": lambda: tl.trace(m, ids),
         "trace_infer": lambda: tl.trace(m, ids, capture=CaptureOptions(inference_only=True)),
+        "trace_nohooks": lambda: tl.trace(
+            m, ids, capture=CaptureOptions(capture_tensor_grad_hooks=False)
+        ),
         "trace_sparse": lambda: tl.trace(m, ids, save=site | logit),
         "trace_elicit": lambda: tl.trace(
             m, ids, save=site | logit, intervene=spec, capture=CaptureOptions(inference_only=True)

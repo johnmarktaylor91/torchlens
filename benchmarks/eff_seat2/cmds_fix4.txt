@@ -1,0 +1,6 @@
+benchmarks/eff_seat2/stagecount.py --model gpt2 --mode trace_default --reps 5 --out out/stage.jsonl
+benchmarks/eff_seat2/stagecount.py --model gpt2 --mode trace_nohooks --reps 5 --out out/stage.jsonl
+benchmarks/eff_seat2/stagecount.py --model gpt2 --mode record_save --reps 5 --out out/stage.jsonl
+benchmarks/eff_seat2/stagecount.py --model q3s --mode trace_default --reps 5 --out out/stage.jsonl
+benchmarks/eff_seat2/stagecount.py --model q3s --mode trace_nohooks --reps 5 --out out/stage.jsonl
+benchmarks/eff_seat2/stagecount.py --model q3s --mode record_save --reps 5 --out out/stage.jsonl
