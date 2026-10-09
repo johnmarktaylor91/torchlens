@@ -232,10 +232,20 @@ class _Runner:
                         product.log_backward(output.sum())
                     else:
                         output.sum().backward()
-                    if product is not None:
-                        cooked = product.to_trace() if self.mode == "record" else product
+                    if product is not None and self.mode == "record":
                         cache = {
-                            s: cooked.find_sites(tl.module(s)).first().grad_for(bwd=1)
+                            record.ctx.module_stack[-1].address: record.ram_payload
+                            for record in product.grad_records
+                            if record.ctx.module_stack
+                            and record.ctx.module_stack[-1].address in self.sites
+                            and record.ctx.grad_kind == "grad_output"
+                            and record.ctx.grad_output_index == 0
+                            and record.ctx.backward_call_index == 1
+                            and record.ram_payload is not None
+                        }
+                    elif product is not None:
+                        cache = {
+                            s: product.find_sites(tl.module(s)).first().grad_for(bwd=1)
                             for s in self.sites
                         }
                     else:
