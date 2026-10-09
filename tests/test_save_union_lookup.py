@@ -17,6 +17,7 @@ pin that the lookup is a pure cost change:
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import Any
@@ -342,9 +343,14 @@ def test_mixed_selectors_keep_the_walker(monkeypatch: pytest.MonkeyPatch) -> Non
         selector = make_selector()
         assert selector_eval.module_union_addresses(selector) is None, name
         assert predicates_mod._plain_module_union(selector) is None, name
-        (fast, fast_decisions), (walker, walker_decisions) = _record_both_ways(
-            make_selector, monkeypatch
-        )
+        with warnings.catch_warnings():
+            if name == "module_and_module":
+                # tl.record settles each module exit on its own event, so no event
+                # carries both calls and this control matches nothing on either path.
+                warnings.filterwarnings("ignore", "Capture-time save selector", UserWarning)
+            (fast, fast_decisions), (walker, walker_decisions) = _record_both_ways(
+                make_selector, monkeypatch
+            )
         assert fast_decisions == walker_decisions, name
         assert fast == walker, name
 
@@ -354,9 +360,11 @@ def test_mixed_selectors_keep_the_walker(monkeypatch: pytest.MonkeyPatch) -> Non
 # ---------------------------------------------------------------------------
 
 #: Upper bounds on selector-tree walks and selector evaluations for one whole
-#: ``tl.record`` of the 24-site union with the lookup on. They are per capture,
-#: not per op: the capture makes about 70 save decisions.
-_MAX_WALKS_PER_CAPTURE = 64
+#: ``tl.record`` of the 24-site union with the lookup on (measured: 2 walks, the
+#: one-time union check and the capture-entry module check, and no evaluations).
+#: They are per capture, not per op: the capture makes 117 save decisions, and
+#: the walker makes 520 walks and 2,651 evaluations for the same capture.
+_MAX_WALKS_PER_CAPTURE = 4
 _MAX_EVALUATIONS_PER_CAPTURE = 0
 
 
