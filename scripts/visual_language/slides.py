@@ -168,7 +168,7 @@ SLIDES: tuple[Slide, ...] = (
         id="alphabet-nodes",
         title="At a glance: nodes",
         rule="Shape names the kind; fill, border and rows add facts. Each mark is copied from "
-        "the slide that teaches it.",
+        "the slide numbered after it.",
         layout="sheet",
         rows=(
             "VN01",
@@ -195,8 +195,8 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="alphabet-lines",
         title="At a glance: lines and boxes",
-        rule="Line style and arrow words describe the data flow; boxes group the calls of one "
-        "module.",
+        rule="Line style and arrow words describe the flow; boxes group a module's calls. "
+        "Numbers name the teaching slide.",
         layout="sheet",
         rows=(
             "VE01",
