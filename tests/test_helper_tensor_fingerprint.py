@@ -153,14 +153,17 @@ def test_bound_executor_reads_an_in_place_update_on_the_next_call(setup) -> None
     model, x, direction = setup
     spec = tl.when(tl.module("fc1"), _steer(direction))
     bound = spec.bind(model)
-    rule_id = spec.rules[0].rule_id
     versions = []
     for step in range(3):
         if step:
             direction.add_(0.5)
+        # Rule ids follow the helper tensor's current content, and every report
+        # ledger keys by the identity the call started with: read it per call.
+        rule_id = spec.rules[0].rule_id
         with torch.no_grad():
             out = bound(x)
         assert torch.equal(out, _truth(model, x, direction))
+        assert set(bound.last_report.helper_tensor_versions) == {rule_id}
         versions.append(bound.last_report.helper_tensor_versions[rule_id])
     assert versions[1][0] == versions[0][0] + 1
     assert versions[2][0] == versions[1][0] + 1

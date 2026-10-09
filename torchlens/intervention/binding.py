@@ -120,10 +120,12 @@ class BindReport:
     #: (``bind_static_anchor_unresolved``).
     module_aliases: dict[str, tuple[str, ...]] = field(default_factory=dict)
     #: Rule id -> the ``_version`` counter of each tensor its helper holds,
-    #: read when the call started (no copy, no sync). Helpers read their
-    #: tensor live, so a version that moved between two reports means an
-    #: in-place change applied from the later call on (``.data`` writes
-    #: leave the counter alone).
+    #: read when the call started (no copy, no sync). Keys are the rule ids
+    #: the call started with, like every ledger here, and a rule id follows
+    #: its helper tensor's content, so an edited rule reports under a new id.
+    #: Helpers read their tensor live, so a version that moved between two
+    #: reports means an in-place change applied from the later call on
+    #: (``.data`` writes leave the counter alone).
     helper_tensor_versions: dict[str, tuple[int, ...]] = field(default_factory=dict)
     execution_effect: str = _BIND_EXECUTION_EFFECT
     error: str | None = None

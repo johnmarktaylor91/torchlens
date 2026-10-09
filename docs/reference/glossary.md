@@ -486,7 +486,8 @@ attribution-target alias. See the [attribution reference](attribution.md).
   refuse `helper_tensor_changed_since_capture` once the tensor changed (in place or through
   `.data`). Re-stage the edit to use the new value. A bound executor (`spec.bind(model)`) reads
   the helper's tensor at each call; in-place changes apply to the next call, and
-  `BindReport.helper_tensor_versions` (on `.last_report`) records each tensor's version counter.
+  `BindReport.helper_tensor_versions` (on `.last_report`) records each tensor's version counter,
+  keyed by the rule id the call started with (a rule id follows its tensor's content).
 
 **Backward helpers**
 : `tl.bwd_hook` builds a live/rerun-only backward hook; `tl.grad_zero`, `tl.grad_scale`,
