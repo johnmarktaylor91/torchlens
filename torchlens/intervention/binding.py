@@ -438,10 +438,13 @@ def _consider_op(
     agree with what a capture of the same forward would evaluate.
     """
 
-    from ..backends.torch._ops_interventions import _iter_loggable_live_outputs
+    from ..backends.torch._ops_interventions import (
+        _iter_loggable_live_outputs,
+        _replace_output_tensors_by_path,
+    )
     from ..capture.predicates import build_op_record_context
     from .hooks import make_hook_context
-    from .runtime import _execute_hook, _replace_tensor_outputs
+    from .runtime import _execute_hook
 
     layer_type, func_name, out_orig = call
     outputs = list(_iter_loggable_live_outputs(out_orig, True))
@@ -542,7 +545,9 @@ def _consider_op(
 
     if isinstance(out_orig, torch.Tensor):
         return replacements.get((), out_orig)
-    return _replace_tensor_outputs(out_orig, replacements)
+    # Keys are the walker's typed paths (TupleIndex, ...), so rebuild with
+    # the matching replacer; the raw-path one silently dropped every edit.
+    return _replace_output_tensors_by_path(out_orig, replacements)
 
 
 class _ArmedRuntime:
@@ -704,10 +709,13 @@ def _make_boundary_hook(
     def _boundary(module: Any, args: Any, output: Any) -> Any:
         """Replace the module's output leaves when the pass qualifier matches."""
 
-        from ..backends.torch._ops_interventions import _iter_loggable_live_outputs
+        from ..backends.torch._ops_interventions import (
+            _iter_loggable_live_outputs,
+            _replace_output_tensors_by_path,
+        )
         from ..ir.selector_eval import module_address_matches
         from .hooks import make_hook_context
-        from .runtime import _execute_hook, _replace_tensor_outputs
+        from .runtime import _execute_hook
 
         pass_index = session.module_pass_counts[address]
         # A bare target address matches every pass; a pass-qualified target
@@ -748,7 +756,8 @@ def _make_boundary_hook(
 
         if isinstance(output, torch.Tensor):
             return replacements.get(())
-        return _replace_tensor_outputs(output, replacements)
+        # Same typed-path keys as the op door above.
+        return _replace_output_tensors_by_path(output, replacements)
 
     return _boundary
 

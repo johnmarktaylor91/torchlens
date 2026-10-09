@@ -428,3 +428,38 @@ def test_multimatch_warning_keeps_fan_out_for_independent_sites() -> None:
     trace = _ready_trace(model, x)
     with pytest.warns(MultiMatchWarning, match="will fan out"):
         trace.resolve_sites(tl.module("head"))
+
+
+class _ChunkNet(nn.Module):
+    """A multi-output op (``torch.chunk``) whose two leaves feed a product."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Split ``x`` in two and multiply the halves.
+
+        Parameters
+        ----------
+        x:
+            Input batch with an even feature count.
+
+        Returns
+        -------
+        torch.Tensor
+            Product of the two halves.
+        """
+
+        a, b = torch.chunk(x, 2, dim=1)
+        return a * b
+
+
+def test_bind_applies_edits_to_every_leaf_of_a_multi_output_op() -> None:
+    """``bind`` rebuilds a tuple-valued op output with its edited leaves."""
+
+    torch.manual_seed(0)
+    x = torch.randn(3, 8)
+    a, b = torch.chunk(x, 2, dim=1)
+    want = (a * 0.5) * (b * 0.5)
+    with torch.no_grad():
+        bound = tl.when(tl.func("chunk"), tl.scale(0.5)).bind(_ChunkNet())(x)
+    torch.testing.assert_close(bound, want)
+    captured = tl.trace(_ChunkNet(), x, intervene=tl.when(tl.func("chunk"), tl.scale(0.5)))
+    torch.testing.assert_close(captured.output_ops[0].out, want)
