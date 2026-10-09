@@ -12,6 +12,7 @@ version node's own stored copy.
 
 from __future__ import annotations
 
+import re
 import warnings
 
 import pytest
@@ -90,20 +91,36 @@ def _validate_rf(model: nn.Module) -> object:
         return tl.validate(model, _X, scope="receptive_field")
 
 
+def _assert_genuine_mutation(excinfo: pytest.ExceptionInfo[BaseException]) -> None:
+    """Assert the tripwire saw a version counter move forward.
+
+    A real in-place write only ever advances ``_version``; the false positive
+    this file guards against read a different, younger tensor (current below
+    saved).
+    """
+
+    match = re.search(r"saved _version=(\d+), current _version=(\d+)", str(excinfo.value))
+    assert match is not None, str(excinfo.value)
+    saved, current = (int(group) for group in match.groups())
+    assert current > saved, str(excinfo.value)
+
+
 def test_mutated_saved_activation_raises_in_receptive_field_scope() -> None:
     """An in-place write to a saved activation fails receptive-field validation."""
 
     torch.manual_seed(3)
-    with pytest.raises(tl.errors.MutatedReferenceError, match="mutated after capture"):
+    with pytest.raises(tl.errors.MutatedReferenceError, match="mutated after capture") as excinfo:
         _validate_rf(_MutatesSavedActivation().eval())
+    _assert_genuine_mutation(excinfo)
 
 
 def test_buffer_written_in_place_raises_in_receptive_field_scope() -> None:
     """A forward that writes a buffer it read fails receptive-field validation."""
 
     torch.manual_seed(3)
-    with pytest.raises(tl.errors.MutatedReferenceError, match="mutated after capture"):
+    with pytest.raises(tl.errors.MutatedReferenceError, match="mutated after capture") as excinfo:
         _validate_rf(_WritesItsBuffer().eval())
+    _assert_genuine_mutation(excinfo)
 
 
 def test_train_mode_batchnorm_is_refused_in_receptive_field_scope() -> None:
@@ -117,8 +134,9 @@ def test_train_mode_batchnorm_is_refused_in_receptive_field_scope() -> None:
     """
 
     torch.manual_seed(3)
-    with pytest.raises(tl.errors.MutatedReferenceError, match="mutated after capture"):
+    with pytest.raises(tl.errors.MutatedReferenceError, match="mutated after capture") as excinfo:
         _validate_rf(_BatchNormModel().train())
+    _assert_genuine_mutation(excinfo)
 
 
 def test_buffer_version_node_copy_is_still_guarded(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -138,5 +156,6 @@ def test_buffer_version_node_copy_is_still_guarded(monkeypatch: pytest.MonkeyPat
         assert isinstance(node.out, torch.Tensor)
 
     version_nodes[0]._slot("out").add_(1.0)
-    with pytest.raises(tl.errors.MutatedReferenceError, match="mutated after capture"):
+    with pytest.raises(tl.errors.MutatedReferenceError, match="mutated after capture") as excinfo:
         _ = version_nodes[0].out
+    _assert_genuine_mutation(excinfo)
