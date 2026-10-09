@@ -268,8 +268,20 @@ and module entries; a structural fingerprint sealed at capture checks that after
 
 ```python
 import torch
+from torch import nn
 import torchlens as tl
 from transformers import LlamaConfig, LlamaForCausalLM
+
+
+class NextTokenLogits(nn.Module):
+    """Return next-token logits as a plain tensor, with the KV cache off."""
+
+    def __init__(self, lm):
+        super().__init__()
+        self.lm = lm
+
+    def forward(self, ids):
+        return self.lm(ids, use_cache=False).logits[:, -1]
 
 
 torch.manual_seed(0)
@@ -282,23 +294,28 @@ config = LlamaConfig(
     num_key_value_heads=2,
     max_position_embeddings=64,
 )
-lm = LlamaForCausalLM(config).eval()
+model = NextTokenLogits(LlamaForCausalLM(config)).eval()
 ids = torch.randint(0, 128, (1, 6))
 direction = torch.randn(32)
-site = tl.module("model.layers.1.mlp")
-head = tl.module("lm_head")
+site = tl.module("lm.model.layers.1.mlp")
+head = tl.module("lm.lm_head")
 spec = tl.when(site, tl.steer(direction, magnitude=4.0, feature_axis=-1))
 
-trace = tl.trace(lm, ids, save=site | head, intervene=spec)
-bound = spec.bind(lm)
+trace = tl.trace(model, ids, save=site | head, intervene=spec)
+bound = spec.bind(model)
 for _ in range(3):
-    trace.run(lm, ids)  # the steered forward on the longer input, saved sites refreshed
+    trace.run(model, ids)  # the steered forward on the longer input, saved sites refreshed
     assert trace.last_run["engine"] == "guarded_fast"
     assert trace.last_run["fast_refused"] is None
-    logits = trace.find_sites(head).first().out
-    assert torch.equal(logits, bound(ids).logits)
-    ids = torch.cat([ids, logits[:, -1].argmax(-1, keepdim=True)], dim=-1)
+    logits = trace.find_sites(head).first().out[:, -1]
+    assert torch.equal(logits, bound(ids))
+    ids = torch.cat([ids, logits.argmax(-1, keepdim=True)], dim=-1)
 ```
+
+Trace a module that returns tensors, as `NextTokenLogits` does here. An HF model's own output
+carries a cache object, which the fast engine does not admit
+(`output_structure_mismatch:fast_live_model_output_structure`), so every rerun of a trace of the
+bare HF model falls back to the capture engine: still exact, but at capture cost.
 
 - **Cost.** On Qwen3.5-9B a steered generation step cost about 2x a plain hook: 0.36 s against
   0.18 s, and 0.15 s against 0.075 s with flash-linear-attention, exact at every step with no
