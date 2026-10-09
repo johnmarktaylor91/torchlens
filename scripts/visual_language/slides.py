@@ -216,23 +216,15 @@ SLIDES: tuple[Slide, ...] = (
         title="Start here: how a graph reads",
         rule="Arrows run from the op that made a tensor to the op that used it, so the default "
         "graph reads bottom to top.",
-        panels=(
-            Panel(
-                "a",
-                "Tiny",
-                kwargs={"direction": "bottomup", "vis_graph_overrides": {}, **FULL},
-                label="draw()",
-            ),
-        ),
+        panels=(Panel("a", "Tiny", kwargs={"direction": "bottomup", **FULL}),),
         keys=(
-            Key("Caption: model, tensor count, memory, parameters", "graph(label~Tiny)"),
             Key("Green: the input, named @input.<argument>", "node(fillcolor={input_color})"),
             Key("Arrows point from producer to consumer", "edge(style=solid)"),
             Key("Red: the output, at the top", "node(fillcolor={output_color})"),
         ),
-        footnote="Bold warning lines join the caption when a capture was poisoned or unverified.",
-        caption_kept=True,
-        rows=("VN03", "VE01", "VC01", "VC03", "VY01"),
+        footnote="A caption under the graph names the model and counts tensors, memory and "
+        "parameters; bold warning lines join it when a capture was poisoned or unverified.",
+        rows=("VN03", "VE01", "VC03", "VY01"),
     ),
     Slide(
         id="ovals-boxes",
@@ -340,14 +332,18 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="fan-in",
         title="Many inputs: labels mid-arrow",
-        rule="At {fan_in} or more inputs the slot labels move to the middle of each arrow.",
+        rule="From {fan_in} inputs up, slot labels sit mid-arrow.",
         panels=(
             Panel(
                 "a",
                 "FanIn",
                 kwargs={"direction": "topdown"},
                 label="torch.stack of four",
-                crop=("node(text~linear_1_1)", "node(text~linear_4_4)", "node(text~stack)"),
+                crop=(
+                    "node(text~stack)",
+                    'words:edge(text~"arg (0, 0)")',
+                    'words:edge(text~"arg (0, 3)")',
+                ),
             ),
         ),
         keys=(
@@ -379,10 +375,10 @@ SLIDES: tuple[Slide, ...] = (
         id="loop-unrolled",
         title="Loops, unrolled: a node per pass",
         rule=':2 is the pass number, and the exact key trace["linear_1_1:2"] accepts.',
-        panels=(Panel("a", "Loop", kwargs={"view": "unrolled", **CALLS}),),
+        panels=(Panel("a", "Loop2", kwargs={"view": "unrolled", **FULL}),),
         keys=(
             Key("linear_1_1:2: second pass of the same layer", "node(text~linear_1_1:2)"),
-            Key("One call per pass: @cell:1 to @cell:3", "node(text~@cell:3)"),
+            Key("One call per pass: @cell:1, then @cell:2", "node(text~@cell:2)"),
             Key("Passes run left to right", "edge(head~relu_1_2pass2)"),
         ),
         rows=("VL01", "VR04", "VV01"),
@@ -423,14 +419,14 @@ SLIDES: tuple[Slide, ...] = (
             Panel(
                 "b",
                 "LoopShapes",
-                kwargs={"view": "rolled", **FULL},
-                label="two shapes",
-                crop=("node(text~relu)",),
+                kwargs={"view": "rolled", "depth": 1, **FULL},
+                label="two shapes, depth=1",
+                crop=("node(shape=box3d)",),
             ),
         ),
         keys=(
             Key("Call groups 1-2 and 3-4", 'node(text~"1-2,3-4")'),
-            Key("The shape row changes across passes", "node(text~->)", panel="b"),
+            Key("The shape row changes across calls", "node(text~shapes)", panel="b"),
             Key("Compare (xN): one weight-tied loop", None),
         ),
         rows=("VL01", "VL03"),
@@ -496,6 +492,7 @@ SLIDES: tuple[Slide, ...] = (
                 "Dead",
                 capture={"keep_orphans": True},
                 kwargs={"show_orphans": True},
+                crop=("cluster(label~orphans)", "node(text~mul)"),
             ),
         ),
         keys=(
@@ -507,35 +504,49 @@ SLIDES: tuple[Slide, ...] = (
     ),
     Slide(
         id="containers",
-        title="Dicts, tuples and lists",
-        rule='"labels" names keys on arrows; "collapsed" folds more than {container_max_inline} '
-        'same-shape leaves; "nodes" adds a record box.',
+        title="Dicts and tuples",
+        rule='show_containers="nodes" adds a record box for a returned container; "labels" '
+        "names its keys on the arrows.",
         panels=(
             Panel(
                 "a",
                 "DictOut",
                 capture={"capture_container_structure": True},
-                kwargs={"show_containers": "nodes"},
-                label='"nodes"',
+                kwargs={"show_containers": "nodes", "direction": "topdown"},
+                label='show_containers="nodes"',
                 crop=("node(text~dict)", "node(text~output_1)", "node(text~output_2)"),
-            ),
-            Panel(
-                "b",
-                "ListOut",
-                capture={"capture_container_structure": True},
-                kwargs={"show_containers": "collapsed"},
-                label='"collapsed"',
-                crop=("node(text~x14)",),
             ),
         ),
         keys=(
             Key("Dashed record box for the returned dict", "node(text~dict)"),
             Key("Arrow words name the keys", "edge(text~logits)"),
             Key("Arrowless ties mark membership", "edge(arrowhead=none)"),
-            Key("14 same-shape leaves folded into one", "node(text~x14)", panel="b"),
         ),
-        footnote='"auto" behaves as "collapsed" today; "cluster" draws a dotted group.',
-        rows=("VN24", "VN25", "VE12", "VR09"),
+        footnote='"cluster" draws a dotted group instead.',
+        rows=("VN25", "VE12", "VR09"),
+    ),
+    Slide(
+        id="container-lists",
+        title="Long lists fold",
+        rule='"collapsed" folds more than container_max_inline ({container_max_inline} by '
+        "default) same-shape leaves into one node.",
+        panels=(
+            Panel(
+                "a",
+                "ListOut",
+                capture={"capture_container_structure": True},
+                kwargs={
+                    "show_containers": "collapsed",
+                    "container_max_inline": 2,
+                    "direction": "topdown",
+                },
+                label='"collapsed", container_max_inline=2',
+                crop=("node(text~mul_1_1)", "node(text~mul_3_3)", "node(text~x3)"),
+            ),
+        ),
+        keys=(Key("Three same-shape leaves folded into one", "node(text~x3)"),),
+        footnote='"auto" behaves as "collapsed" today.',
+        rows=("VN24", "VR09"),
     ),
     Slide(
         id="depth",
@@ -574,11 +585,20 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="collapse-auto",
         title='collapse="auto" on a big graph',
-        rule='"auto" picks the first readable schedule point; on a small graph it changes nothing.',
-        panels=(Panel("a", "BigStack", kwargs={"collapse": "auto"}, label='collapse="auto"'),),
+        rule='"auto" folds just enough to reach the readable band; on a small graph it changes '
+        "nothing.",
+        panels=(
+            Panel(
+                "a",
+                "BigStack",
+                kwargs={"collapse": "auto"},
+                label='collapse="auto", part of 45 ops',
+                crop=("node(name=blocks.1pass1)", "node(text~linear_3_7)"),
+            ),
+        ),
         keys=(
-            Key("45 ops become a few nodes", "node(style^rounded)"),
-            Key("Below the readable band, auto leaves the graph alone", None),
+            Key("Folded by auto: a whole block", "node(name=blocks.1pass1)"),
+            Key("The rest stay expanded", "node(text~linear_3_7)"),
         ),
         rows=("VR06",),
     ),
@@ -707,17 +727,15 @@ SLIDES: tuple[Slide, ...] = (
                 call="surgery",
                 capture={"intervention_ready": True, "save_arg_values": True},
                 prep="fork_edit",
-                kwargs=CAP,
+                crop=("node(name=linear_1_1pass2)",),
             ),
         ),
         keys=(
-            Key("A recorded fire: the edited row", "node(text~edited)"),
-            Key("Census lines in the caption", "graph(label~census)"),
+            Key("The edit: zero_ablate, replay engine", "node(text~edited)"),
+            Key("The declared target: no fire recorded here", 'node(text~"no fire")'),
         ),
-        footnote="The caption census names the replacement lane that ran. Up to {surgery_cap} "
-        "citation rows per node. A replay with direct writes adds the caption line Direct "
-        "writes detected.",
-        caption_kept=True,
+        footnote="A caption census names the replacement lane that ran, and a replay with "
+        "direct writes adds Direct writes detected. Up to {surgery_cap} citation rows per node.",
         rows=("VN19", "VC02", "VC05"),
     ),
     Slide(
@@ -732,6 +750,7 @@ SLIDES: tuple[Slide, ...] = (
                 call="surgery_diff",
                 capture={"intervention_ready": True, "save_arg_values": True},
                 prep="fork_edit",
+                crop=('node(text~"linear_1_1:1")', 'node(text~"linear_1_1:2")'),
             ),
         ),
         keys=(
@@ -773,6 +792,7 @@ SLIDES: tuple[Slide, ...] = (
                 "Sizes",
                 kwargs={"color_by": f"@bytes_{transform}", **QUIET},
                 label=transform,
+                crop=("node(text~linear_1)", "node(text~linear_2)"),
             )
             for name, transform in zip("abc", ("linear", "rank", "log"), strict=True)
         ),
@@ -818,24 +838,24 @@ SLIDES: tuple[Slide, ...] = (
         panels=(
             Panel(
                 "a",
-                "Loop",
-                kwargs={"view": "unrolled", "stack_by": True, **QUIET, **CAP},
+                "Loop2",
+                kwargs={"view": "unrolled", "stack_by": True, **QUIET},
                 label="stack_by=True",
             ),
             Panel(
                 "b",
-                "Loop",
+                "Loop2",
                 kwargs={"view": "unrolled", "stack_by": True, "show_legend": None},
                 label="its legend",
                 crop=("node(text~stack_by)",),
             ),
         ),
         keys=(
-            Key("Caption: stacked by pass_index", "graph(label~stacked)"),
+            Key("Each pass shares a rank", "node(text~linear_1_1:2)"),
             Key("The legend explains the rank rule", "node(text~stack_by)", panel="b"),
             Key("Sibling ordering is off while stacking", None),
         ),
-        caption_kept=True,
+        footnote="The caption adds the line stacked by pass_index.",
         rows=("VK05", "VR14", "VK06"),
     ),
     Slide(
@@ -845,7 +865,7 @@ SLIDES: tuple[Slide, ...] = (
         "overlay thickens the border.",
         panels=(
             Panel("a", "NanMaker", kwargs={"node_overlay": "nan"}, label='node_overlay="nan"'),
-            Panel("b", "Flow", kwargs={"node_overlay": "@score_map"}, label="a mapping"),
+            Panel("b", "Tiny", kwargs={"node_overlay": "@score_map"}, label="a mapping"),
         ),
         keys=(
             Key("nan: yes row", 'node(text~"nan: yes")'),
@@ -868,7 +888,7 @@ SLIDES: tuple[Slide, ...] = (
                     **FULL,
                 },
                 label='node_style="profiling"',
-                crop=("node(text~square)",),
+                crop=("node(text~mul)",),
             ),
             Panel(
                 "b",
@@ -912,14 +932,22 @@ SLIDES: tuple[Slide, ...] = (
         rule="Nonfinite states use stripes, wedges or a border; grey dashed means not checked, "
         "never finite.",
         layout="grid",
-        panels=(Panel("a", "Nonfinite", call="lens", kwargs={"lens": "debug"}),),
+        panels=(
+            Panel(
+                "a",
+                "Nonfinite",
+                call="lens",
+                capture={"module_filter": "@unsaved_abs"},
+                kwargs={"lens": "debug", "node_label_fields": ["label"]},
+            ),
+        ),
         cells=(
             Cell("a", "node(text~add)", "finite"),
             Cell("a", "node(text~log_1)", "nan"),
             Cell("a", "node(text~truediv_1)", "pos_inf"),
             Cell("a", "node(text~truediv_2)", "neg_inf"),
             Cell("a", "node(text~log_2)", "mixed"),
-            Cell("a", "node(text~stack)", "not_checked"),
+            Cell("a", "node(text~abs)", "not_checked (payload not saved)"),
         ),
         rows=("VN29",),
     ),
@@ -969,13 +997,14 @@ SLIDES: tuple[Slide, ...] = (
                 capture={"save_grads": "all"},
                 prep="higher_order",
                 kwargs={"vis_mode": "unrolled", **QUIET},
-                crop=("node(fillcolor=#FFF4D6)",),
+                crop=("node(text~sum_back_2_11)", "node(text~mul_back_1_7)"),
             ),
         ),
         keys=(
             Key("Order two or more: cream", "node(fillcolor=#FFF4D6)"),
             Key("[i]: no forward op", "node(text~[i])"),
         ),
+        footnote="[custom] marks the custom Function's grad_fn elsewhere in this graph.",
         rows=("VN26",),
     ),
     Slide(
@@ -1029,7 +1058,6 @@ SLIDES: tuple[Slide, ...] = (
         id="direction-layout",
         title="Direction and sibling order",
         rule="Direction rotates the layout, not the computation.",
-        layout="grid",
         panels=(
             Panel("a", "Tiny", kwargs={"direction": "bottomup"}, label="bottomup (default)"),
             Panel("b", "Tiny", kwargs={"direction": "topdown"}, label="topdown"),
@@ -1044,10 +1072,10 @@ SLIDES: tuple[Slide, ...] = (
         rule='layout="dot" is the default; "auto" switches to the rank engine above {rank_cost} '
         "cost units.",
         panels=(
-            Panel("a", "Flow", kwargs={"layout": "rank", **QUIET}, label='layout="rank"'),
+            Panel("a", "Tiny", kwargs={"layout": "rank", **QUIET}, label='layout="rank"'),
             Panel(
                 "b",
-                "Flow",
+                "Tiny",
                 kwargs={"layout": "rank", "show_legend": True},
                 label="the rank engine's legend, pinned left",
                 crop=(LEGEND,),
@@ -1090,7 +1118,9 @@ SLIDES: tuple[Slide, ...] = (
         title="Source beside the graph",
         rule="code_panel adds the captured source in Courier with an Open source link, up to "
         "{max_code_lines} lines.",
-        panels=(Panel("a", "Flow", kwargs={"code_panel": "forward"}),),
+        panels=(
+            Panel("a", "Tiny", kwargs={"code_panel": "forward"}, crop=("region:0,0,99999,150",)),
+        ),
         keys=(
             Key("The forward source", None),
             Key('"class" and "init+forward" show more', None),
@@ -1161,32 +1191,40 @@ SLIDES: tuple[Slide, ...] = (
     ),
     Slide(
         id="data-previews",
-        title="Inputs and outputs as data",
-        rule="A picture replaces the input outline with its transform named; output rows can "
-        "decode labels and scores.",
+        title="Inputs as pictures",
+        rule="A picture replaces the input outline; show_input_transform_summary names the "
+        "transform.",
         panels=(
             Panel(
                 "a",
                 "ImageNet",
-                capture={"transform": "@to_tensor", "output_style": "classification"},
+                capture={"transform": "@to_tensor"},
                 kwargs={"show_input_transform_summary": True},
                 crop=("node(text~preprocess)",),
-            ),
-            Panel(
-                "b",
-                "ImageNet",
-                capture={"transform": "@to_tensor", "output_style": "classification"},
-                kwargs={"show_input_transform_summary": True},
-                crop=("node(text~output)",),
             ),
         ),
         keys=(
             Key("The input images as a montage", "node(shape=none)"),
             Key("preprocess names the transform, UNVERIFIED here", "node(text~preprocess)"),
-            Key("Decoded output rows", "node(text~output)", panel="b"),
         ),
         footnote="Batch policy auto shows 4 examples, all 16, or first, first_n:N, shape_only.",
-        rows=("VN21", "VN22", "VN23", "VL12"),
+        rows=("VN21", "VN22", "VL12"),
+    ),
+    Slide(
+        id="data-outputs",
+        title="Outputs as decoded rows",
+        rule="output_transform turns the output into label and score rows; output_style decodes "
+        "a model that carries its labels.",
+        panels=(
+            Panel(
+                "a",
+                "ImageNet",
+                capture={"transform": "@to_tensor", "output_transform": "@decode"},
+                crop=("node(text~green)",),
+            ),
+        ),
+        keys=(Key("Decoded rows replace the output's shape", "node(text~green)"),),
+        rows=("VN23",),
     ),
     Slide(
         id="other-pictures",
@@ -1206,7 +1244,7 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="cheat-sheet-2",
         title="Cheat sheet, continued",
-        rule="Every draw() parameter once, grouped by what it shows (part 2 of 2).",
+        rule="The rest of draw(), grouped by what it shows.",
         layout="table",
     ),
     Slide(

@@ -152,9 +152,9 @@ ROWS: Mapping[str, Row] = {
     "VN20": _R("node.border.overlay_flag", "overlays", P, "overlays:overlay_border_attrs"),
     "VN21": _R("node.image", "data-previews", P, "_render_nodes:_render_raw_input_image_batch"),
     "VN22": _R("node.raw_input_preview", "data-previews", P, "_render_nodes:_render_raw_input"),
-    "VN23": _R("node.raw_output_decode", "data-previews", P, "_render_nodes:_render_raw_output"),
+    "VN23": _R("node.raw_output_decode", "data-outputs", P, "_render_nodes:_render_raw_output"),
     "VN24": _R(
-        "node.container.summary", "containers", P, "_render_leaf:_add_collapsed_container_node"
+        "node.container.summary", "container-lists", P, "_render_leaf:_add_collapsed_container_node"
     ),
     "VN25": _R(
         "node.container.record", "containers", P, "_render_flow:_container_record_node_args"
@@ -304,7 +304,7 @@ ROWS: Mapping[str, Row] = {
     "VR13": _R("region.orphan_cluster", "orphans", P, "_render_dot:_add_orphan_island_nodes"),
     "VR14": _R("region.stack_groups", "stack-by", P, "_stacking:compute_stack_groups"),
     # Caption, views
-    "VC01": _R("caption.graph", "start-here", P, "_render_dot:_graph_caption_body"),
+    "VC01": _R("caption.graph", "grey-params", P, "_render_dot:_graph_caption_body"),
     "VC02": _R("caption.direct_writes", "surgery", C, "_render_dot:_graph_caption_body"),
     "VC03": _R(
         "caption.honesty_banner",
@@ -315,7 +315,7 @@ ROWS: Mapping[str, Row] = {
     "VC04": _R(
         "caption.backward_combined", "backward", P, "_render_entrypoints:render_backward_graph"
     ),
-    "VC05": _R("caption.surgery_census", "surgery", P, "surgery_visuals:surgery_census"),
+    "VC05": _R("caption.surgery_census", "surgery", C, "surgery_visuals:surgery_census"),
     "VV01": _R(
         "view.unrolled_rolled",
         "loop-unrolled",

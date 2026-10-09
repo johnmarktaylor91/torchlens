@@ -159,6 +159,8 @@ def _split_conditions(body: str) -> list[str]:
 
 
 def _value(mark: Mark, attr: str, panel: PanelDot) -> str:
+    if attr == "name":
+        return mark.name
     if attr == "text":
         return mark.text()
     if attr in ("head", "tail"):
@@ -208,18 +210,23 @@ class SvgPanel:
     scale: float
     translate: tuple[float, float]
     geometry: dict[str, list[Box]]
-    texts: list[tuple[float, Box]]
+    texts: list[tuple[float, Box, str]]
 
     @property
     def font_sizes(self) -> list[float]:
         """Every non-empty text's font size, in viewBox units."""
 
-        return [size for size, _box in self.texts]
+        return [size for size, _box, _words in self.texts]
 
     def font_sizes_in(self, region: Box) -> list[float]:
         """Font sizes of the texts whose box overlaps ``region`` (viewBox coordinates)."""
 
-        return [size for size, box in self.texts if box.overlaps(region)]
+        return [size for size, box, _words in self.texts if box.overlaps(region)]
+
+    def text_boxes(self, needle: str) -> list[Box]:
+        """Boxes of the texts containing ``needle`` (viewBox coordinates)."""
+
+        return [box for _size, box, words in self.texts if needle in words]
 
 
 def _points(element: ET.Element) -> list[tuple[float, float]]:
@@ -256,23 +263,63 @@ def _box(points: list[tuple[float, float]]) -> Box | None:
     return Box(min(xs), min(ys), max(xs), max(ys))
 
 
+def _graph_transform(group: ET.Element) -> tuple[float, tuple[float, float]]:
+    transform = group.get("transform", "")
+    sc = re.search(r"scale\(([-\d.]+)", transform)
+    tr = re.search(r"translate\(([-\d.]+)[ ,]+([-\d.]+)", transform)
+    scale = float(sc.group(1)) if sc else 1.0
+    return scale, ((float(tr.group(1)), float(tr.group(2))) if tr else (0.0, 0.0))
+
+
+def _walk_texts(
+    element: ET.Element, offset: tuple[float, float], frame: tuple[float, tuple[float, float]]
+) -> list[tuple[float, Box, str]]:
+    """Every non-empty text with its box in root viewBox units and its words.
+
+    Graphviz writes one ``graph`` group per graph, and a code panel arrives as a second
+    graph inside a nested ``<svg x= y=>``; each text is placed through its own graph's
+    transform and the nested offset, so a crop counts exactly the texts it shows.
+    """
+
+    found: list[tuple[float, Box, str]] = []
+    for child in element:
+        tag = child.tag.split("}")[-1] if isinstance(child.tag, str) else ""
+        if tag == "svg":
+            nested = (offset[0] + float(child.get("x", 0)), offset[1] + float(child.get("y", 0)))
+            found.extend(_walk_texts(child, nested, (1.0, (0.0, 0.0))))
+        elif tag == "g" and child.get("class") == "graph":
+            found.extend(_walk_texts(child, offset, _graph_transform(child)))
+        elif tag == "text":
+            words = "".join(child.itertext()).strip()
+            if child.get("font-size") and words:
+                scale, (tx, ty) = frame
+                box = _box(_points(child)) or Box(0, 0, 0, 0)
+                placed = Box(
+                    offset[0] + (box.x0 + tx) * scale,
+                    offset[1] + (box.y0 + ty) * scale,
+                    offset[0] + (box.x1 + tx) * scale,
+                    offset[1] + (box.y1 + ty) * scale,
+                )
+                found.append((float(child.get("font-size", "14")) * scale, placed, words))
+        else:
+            found.extend(_walk_texts(child, offset, frame))
+    return found
+
+
 def parse_svg(text: str) -> SvgPanel:
-    """Parse a Graphviz SVG: viewBox, the graph transform and each mark's box by title."""
+    """Parse a Graphviz SVG: viewBox, the graph transform and each mark's box by title.
+
+    Mark geometry uses the first (main) graph's transform; marks of a nested second graph
+    (a code panel) are not selectable.
+    """
 
     root = ET.fromstring(text)
     view_nums = [float(n) for n in _NUMBER_RE.findall(root.get("viewBox", "0 0 100 100"))]
     view = Box(view_nums[0], view_nums[1], view_nums[0] + view_nums[2], view_nums[1] + view_nums[3])
-    scale, translate = 1.0, (0.0, 0.0)
+    main = next((g for g in root.iter(f"{{{SVG_NS}}}g") if g.get("class") == "graph"), None)
+    scale, translate = _graph_transform(main) if main is not None else (1.0, (0.0, 0.0))
     geometry: dict[str, list[Box]] = {}
-    texts: list[tuple[float, Box]] = []
-    for group in root.iter(f"{{{SVG_NS}}}g"):
-        if group.get("class") == "graph":
-            transform = group.get("transform", "")
-            sc = re.search(r"scale\(([-\d.]+)", transform)
-            tr = re.search(r"translate\(([-\d.]+)[ ,]+([-\d.]+)", transform)
-            scale = float(sc.group(1)) if sc else 1.0
-            translate = (float(tr.group(1)), float(tr.group(2))) if tr else (0.0, 0.0)
-            continue
+    for group in (main if main is not None else root).iter(f"{{{SVG_NS}}}g"):
         title = group.find(f"{{{SVG_NS}}}title")
         if title is None or group.get("class") not in ("node", "edge", "cluster"):
             continue
@@ -281,17 +328,10 @@ def parse_svg(text: str) -> SvgPanel:
         box = _box(points)
         if box is not None:
             geometry.setdefault(f"{group.get('class')}:{name}", []).append(box)
-    tx, ty = translate
-    for element in root.iter(f"{{{SVG_NS}}}text"):
-        if element.get("font-size") and "".join(element.itertext()).strip():
-            box = _box(_points(element)) or Box(0, 0, 0, 0)
-            placed = Box(
-                (box.x0 + tx) * scale,
-                (box.y0 + ty) * scale,
-                (box.x1 + tx) * scale,
-                (box.y1 + ty) * scale,
-            )
-            texts.append((float(element.get("font-size", "14")) * scale, placed))
+        words = _box([p for child in group.iter(f"{{{SVG_NS}}}text") for p in _points(child)])
+        if words is not None:
+            geometry.setdefault(f"{group.get('class')}-words:{name}", []).append(words)
+    texts = _walk_texts(root, (0.0, 0.0), (1.0, (0.0, 0.0)))
     return SvgPanel(root, view, scale, translate, geometry, texts)
 
 
@@ -303,12 +343,15 @@ def to_view(svg: SvgPanel, box: Box) -> Box:
     return Box((box.x0 + tx) * s, (box.y0 + ty) * s, (box.x1 + tx) * s, (box.y1 + ty) * s)
 
 
-def mark_box(svg: SvgPanel, mark: Mark, occurrence: int = 0) -> Box | None:
-    """The viewBox-space box of a selected mark, or None when the SVG has no such title."""
+def mark_box(svg: SvgPanel, mark: Mark, occurrence: int = 0, words: bool = False) -> Box | None:
+    """The viewBox-space box of a selected mark, or None when the SVG has no such title.
+
+    ``words`` bounds only the mark's text (an edge's label without its whole path).
+    """
 
     if mark.kind == "graph":
         return Box(svg.view.x0, svg.view.y0, svg.view.x0 + svg.view.w, svg.view.y0 + 30)
-    key = f"{mark.kind}:{mark.name}"
+    key = f"{mark.kind}{'-words' if words else ''}:{mark.name}"
     boxes = svg.geometry.get(key, [])
     if not boxes:
         return None

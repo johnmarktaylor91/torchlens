@@ -144,12 +144,30 @@ class Render:
         return self.view or self.svg.view
 
     def region(self, selectors: tuple[str, ...]) -> Box | None:
-        """The padded union of every mark the selectors find, clipped to the viewBox."""
+        """The padded union of every mark the selectors find, clipped to the viewBox.
+
+        A ``words:`` prefix bounds only a mark's text; ``text:words`` bounds every SVG text
+        containing those words (a row inside a table node); ``region:x0,y0,x1,y1`` is a raw box.
+        """
 
         boxes = []
         for selector in selectors:
+            if selector.startswith("region:"):
+                x0, y0, x1, y1 = (float(v) for v in selector[7:].split(","))
+                boxes.append(Box(x0, y0, x1, y1).pad(-CROP_PAD))
+                continue
+            if selector.startswith("text:"):
+                hits = self.svg.text_boxes(selector[5:])
+                if not hits:
+                    self.problems.append(f"crop {selector} found no text on {self.stem}")
+                boxes.extend(hits)
+                continue
+            words = selector.startswith("words:")
+            selector = selector.removeprefix("words:")
             found = [
-                mark_box(self.svg, m, edge_occurrence(self.dot, m) if m.kind == "edge" else 0)
+                mark_box(
+                    self.svg, m, edge_occurrence(self.dot, m) if m.kind == "edge" else 0, words
+                )
                 for m in select(self.dot, fill(selector))
             ]
             found = [b for b in found if b is not None]
@@ -200,6 +218,7 @@ class Canvas:
     root: ET.Element = field(init=False)
     placed: list[Placed] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
     min_css_px: float = 99.0
     witnesses: dict[str, list[str]] = field(default_factory=dict)
     badges: list[tuple[float, float]] = field(default_factory=list)
@@ -269,7 +288,7 @@ class Canvas:
             self.note_text(min(sizes) * scale, f"render {render.stem}")
         mismatch = (view.w / view.h) / (area.w / area.h)
         if max(mismatch, 1 / mismatch) > MAX_ASPECT_MISMATCH:
-            self.problems.append(
+            self.warnings.append(
                 f"render {render.stem}: aspect {view.w / view.h:.2f} against room "
                 f"{area.w / area.h:.2f} (over {MAX_ASPECT_MISMATCH}x)"
             )
@@ -486,25 +505,29 @@ def compose_auto(slide: Slide, renders: list[Render], height: float) -> Canvas:
 
     tries = [compose_wide(slide, renders, height)]
     if slide.keys:
-        tries.append(compose_key(slide, renders, height))
+        tries.extend(compose_key(slide, renders, height, share) for share in KEY_RIGHT_SHARES)
 
-    def rank(canvas: Canvas) -> tuple[int, float]:
-        return (-len(canvas.problems), canvas.min_css_px)
+    def rank(canvas: Canvas) -> tuple[int, int, float]:
+        return (-len(canvas.problems), -len(canvas.warnings), canvas.min_css_px)
 
     best = max(tries, key=rank)
     best.problems.extend(p for r in renders for p in r.problems)
     return best
 
 
-def compose_key(slide: Slide, renders: list[Render], height: float) -> Canvas:
-    """Render left (about 68 percent), numbered key column right."""
+#: Picture shares of the width tried for the key-beside layout.
+KEY_RIGHT_SHARES = (0.45, 0.56, 0.68)
+
+
+def compose_key(slide: Slide, renders: list[Render], height: float, share: float) -> Canvas:
+    """Render left (``share`` of the width), numbered key column right."""
 
     canvas = Canvas(ROOM_W, height)
-    key_x = ROOM_W * 0.70
+    key_x = ROOM_W * (share + 0.02)
     note = fill(slide.footnote)
-    note_lines = wrap(note, NOTE_PX, ROOM_W * 0.30) if note else []
+    note_lines = wrap(note, NOTE_PX, ROOM_W - key_x) if note else []
     label_h = LABEL_PX + 6 if len(renders) > 1 or renders[0].label else 0.0
-    area = Box(0, 0, ROOM_W * 0.68, height)
+    area = Box(0, 0, ROOM_W * share, height)
     areas = _split_area(area, renders, label_h)
     _panel_labels(canvas, areas, renders, label_h)
     placed = {}
@@ -517,9 +540,13 @@ def compose_key(slide: Slide, renders: list[Render], height: float) -> Canvas:
     if not slide.caption_kept and any(p.render.dot.graph for p in canvas.placed):
         tail.append("Caption hidden on this slide.")
     if tail:
-        canvas.text(
-            tail, key_x, max(y + 6, height - len(tail) * NOTE_PX * 1.25), NOTE_PX, color=FAINT
-        )
+        tail_lines = [line for text in tail for line in wrap(text, NOTE_PX, ROOM_W - key_x)]
+        top = max(y + 6, height - len(tail_lines) * NOTE_PX * 1.25)
+        end = canvas.text(tail_lines, key_x, top, NOTE_PX, color=FAINT)
+        if end - NOTE_PX * 1.25 > height:
+            canvas.problems.append(f"key column runs to {end:.0f} px in a {height:.0f} px room")
+    elif y > height:
+        canvas.problems.append(f"key column runs to {y:.0f} px in a {height:.0f} px room")
     canvas.problems.extend(_place_badges(canvas, slide, placed))
     return canvas
 
@@ -533,9 +560,11 @@ def compose_wide(slide: Slide, renders: list[Render], height: float) -> Canvas:
     rows = [max(len(a), len(b)) for a, b in _pairs(key_lines)]
     key_h = sum(r * KEY_PX * 1.25 + 6 for r in rows) + 8
     note = fill(slide.footnote)
+    if not slide.caption_kept and any(r.dot.graph for r in renders):
+        note = f"{note} Caption hidden on this slide.".strip()
     note_lines = wrap(note, NOTE_PX, ROOM_W) if note else []
     key_h += len(note_lines) * NOTE_PX * 1.25
-    label_h = LABEL_PX + 6 if len(renders) > 1 else 0.0
+    label_h = LABEL_PX + 6 if len(renders) > 1 or renders[0].label else 0.0
     area = Box(0, 0, ROOM_W, height - key_h)
     areas = _split_area(area, renders, label_h)
     _panel_labels(canvas, areas, renders, label_h)

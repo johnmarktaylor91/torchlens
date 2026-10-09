@@ -50,16 +50,29 @@ class _ToTensor:
         return "to_tensor"
 
 
+class _Decode:
+    """Label and score rows for the first image (named, like ``_ToTensor``)."""
+
+    def __call__(self, logits: torch.Tensor) -> list[tuple[str, float]]:
+        probs = logits.softmax(-1)[0]
+        return [(name, round(float(p), 2)) for name, p in zip(("red", "green", "blue"), probs)]
+
+    def __repr__(self) -> str:
+        return "decode"
+
+
 CALLABLES: Mapping[str, Callable[[], Any]] = {
     "@skip_reshape": lambda: lambda layer: layer.layer_type == "reshape",
     "@exclude_reshapes": lambda: lenses.DisplayFilter(exclude="reshapes"),
     "@bytes_linear": lambda: EncodingChannelRequest(source="bytes", transform="linear"),
     "@bytes_rank": lambda: EncodingChannelRequest(source="bytes", transform="rank"),
     "@bytes_log": lambda: EncodingChannelRequest(source="bytes", transform="log"),
-    "@score_map": lambda: {"tanh_1_2": 0.8, "mul_1_3": 0.2},
+    "@score_map": lambda: {"mul_1_1": 0.8},
+    "@unsaved_abs": lambda: lambda op: "abs" not in str(op.func_name),
     "@badge": lambda: _badge,
     "@boxbadge": lambda: _boxbadge,
     "@to_tensor": _ToTensor,
+    "@decode": _Decode,
 }
 
 INTERVENTIONS: Mapping[str, Callable[[], Any]] = {
@@ -87,7 +100,8 @@ def _log_backward(trace: Any) -> Any:
 def _higher_order(trace: Any, inputs: Any) -> Any:
     loss = trace[trace.output_layers[0]].out
     first = torch.autograd.grad(loss, inputs, create_graph=True, retain_graph=True)[0]
-    torch.autograd.grad(first.sum(), inputs, retain_graph=True)
+    # backward(), not grad(): the second pass accumulates into the leaf, so accum is drawn.
+    first.sum().backward(retain_graph=True)
     return trace
 
 

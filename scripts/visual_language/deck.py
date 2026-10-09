@@ -42,9 +42,6 @@ _CLUSTER_KEYS = ("style", "color", "pencolor", "penwidth", "fillcolor")
 
 
 def _quote(value: str) -> str:
-    if value.startswith("<") and value.endswith(">") or ("<" in value and "</" in value):
-        inner = value[1:-1] if value.startswith("<") and value.endswith(">") else value
-        return f"<{inner}>"
     return '"' + value.replace('"', '\\"') + '"'
 
 
@@ -86,10 +83,9 @@ def alphabet_dot(slide_id: str, raw: Path, order: dict[str, int]) -> tuple[str, 
             attrs = {k: mark.attrs[k] for k in _EDGE_KEYS if mark.attrs.get(k)}
             for key in _EDGE_LABEL_KEYS:
                 if mark.attrs.get(key):
-                    attrs[key] = mark.attrs[key]
-                    for size in ("fontsize", "labelfontsize"):
-                        if mark.attrs.get(size):
-                            attrs[size] = mark.attrs[size]
+                    # The words, not their 8 pt annotation size: the sheet shows the line.
+                    attrs[key] = strip_tags(mark.attrs[key])
+                    attrs.update(fontsize="13", labelfontsize="13")
             a, b = f"a{i}", f"b{i}"
             lines.append(f'{a} [shape=point width=0.06 pos="{x - 100:.1f},{y:.1f}!"]')
             lines.append(f'{b} [shape=point width=0.06 pos="{x - 20:.1f},{y:.1f}!"]')
@@ -264,6 +260,7 @@ def compose_slide(
         picture=picture.name,
         bytes=size,
         min_css_px=round(canvas.min_css_px, 2),
+        warnings=getattr(canvas, "warnings", []),
         witnesses=canvas.witnesses,
     )
     return record

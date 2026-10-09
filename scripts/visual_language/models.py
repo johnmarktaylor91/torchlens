@@ -172,15 +172,16 @@ class FanIn(nn.Module):
 
 
 class Loop(nn.Module):
-    """One weight-tied cell applied three times."""
+    """One weight-tied cell (no bias, so its rows stay short) applied ``steps`` times."""
 
-    def __init__(self) -> None:
+    def __init__(self, steps: int = 3) -> None:
         super().__init__()
-        self.cell = nn.Linear(3, 3)
+        self.cell = nn.Linear(3, 3, bias=False)
+        self.steps = steps
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         h = x
-        for _ in range(3):
+        for _ in range(self.steps):
             h = torch.relu(self.cell(h))
         return h
 
@@ -198,18 +199,22 @@ class LoopGroups(nn.Module):
         return a + b
 
 
+class Pair(nn.Module):
+    """A two-op module, so a collapsed call of it is a 3D box."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.relu(x) * 2
+
+
 class LoopShapes(nn.Module):
-    """One loop body run on two different shapes: the rolled node's shape changes."""
+    """One module called on two different shapes: the rolled box's shape changes."""
 
     def __init__(self) -> None:
         super().__init__()
-        self.act = nn.ReLU()
+        self.pair = Pair()
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        total = x.sum() * 0
-        for h in (x, x[:, :2]):
-            total = total + self.act(h).sum()
-        return total
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.pair(x), self.pair(x[:, :2])
 
 
 class Branch(nn.Module):
@@ -243,7 +248,7 @@ class Clamp(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         with torch.no_grad():
             self.temp.clamp_(0.1, 10.0)
-        return x / self.temp
+        return x * self.temp
 
 
 class Block(nn.Module):
@@ -319,10 +324,10 @@ class DictOut(nn.Module):
 
 
 class ListOut(nn.Module):
-    """Fourteen same-shape outputs in a list: more than the inline limit."""
+    """Three same-shape outputs in a list: more than an inline limit of two."""
 
     def forward(self, x: torch.Tensor) -> list[torch.Tensor]:
-        return [x * float(k) for k in range(1, 15)]
+        return [x * float(k) for k in range(1, 4)]
 
 
 class Dead(nn.Module):
@@ -337,19 +342,19 @@ class NanMaker(nn.Module):
     """Produces a NaN: ``log(1 - 2)``."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.log(x - 2) + 1
+        return torch.log(x - 2)
 
 
 class Nonfinite(nn.Module):
-    """One branch per nonfinite state, joined so every branch reaches the output."""
+    """One output per nonfinite state; ``abs`` is left unsaved, so it is not checked."""
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, ...]:
         finite = x + 1
         nan = torch.log(x - 2)
-        pos_inf = x / torch.zeros_like(x)
-        neg_inf = -x / torch.zeros_like(x)
-        mixed = torch.log(x - torch.tensor([0.0, 2.0, 0.0]))
-        return torch.stack([finite, nan, pos_inf, neg_inf, mixed])
+        pos_inf = x / 0
+        neg_inf = -x / 0
+        mixed = torch.log(x - torch.tensor([0.0, 2.0, 1.0]))
+        return finite, nan, pos_inf, neg_inf, mixed, x.abs()
 
 
 class Sizes(nn.Module):
@@ -365,14 +370,14 @@ class Sizes(nn.Module):
 
 
 class Grad(nn.Module):
-    """A parameter scales the input; the loss is a sum of squares."""
+    """A parameter scales the input; the loss is the sum."""
 
     def __init__(self) -> None:
         super().__init__()
         self.p = nn.Parameter(torch.ones(4))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return (x * self.p).square().sum()
+        return (x * self.p).sum()
 
 
 class _DoubleFn(torch.autograd.Function):
@@ -448,6 +453,7 @@ FIXTURES: dict[str, Callable[[], tuple[nn.Module, Any]]] = {
     "NestedRes": _seeded(lambda: (NestedRes(), torch.randn(1, 3))),
     "FanIn": _seeded(lambda: (FanIn(), torch.randn(1, 3))),
     "Loop": _seeded(lambda: (Loop(), torch.randn(1, 3))),
+    "Loop2": _seeded(lambda: (Loop(steps=2), torch.randn(1, 3))),
     "LoopGroups": _seeded(lambda: (LoopGroups(), torch.randn(1, 3))),
     "LoopShapes": _seeded(lambda: (LoopShapes(), torch.randn(1, 4))),
     "Branch": _seeded(lambda: (Branch(), torch.ones(1, 3))),
