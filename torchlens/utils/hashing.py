@@ -219,7 +219,12 @@ def populate_normalized_layer_addresses(trace: Any) -> None:
         layer._address_normalized = normalize_address_for_hash(getattr(layer, "module", None))
 
 
-def compute_graph_shape_hash(trace: Any, *, include_module_address: bool = True) -> str:
+def compute_graph_shape_hash(
+    trace: Any,
+    *,
+    include_module_address: bool = True,
+    rerun_signature: bool = False,
+) -> str:
     """Compute a deterministic shape hash for a postprocessed graph.
 
     The hash intentionally excludes run-specific out values and raw/final
@@ -234,6 +239,11 @@ def compute_graph_shape_hash(trace: Any, *, include_module_address: bool = True)
     include_module_address:
         Whether normalized module addresses contribute to the digest. The
         default preserves the historical address-sensitive hash.
+    rerun_signature:
+        Rerun-divergence form, used when a trace carries no raw-event hash (a
+        loaded trace): layer output shapes and dtypes join the payload and a
+        value-only replacement layer folds into its parent, mirroring
+        ``compute_raw_event_shape_hash``. The default payload is unchanged.
 
     Returns
     -------
@@ -250,16 +260,28 @@ def compute_graph_shape_hash(trace: Any, *, include_module_address: bool = True)
     # pass-qualified reference never matched) and collapsed all passes of a
     # recurrent layer onto one index, letting structurally different recurrent
     # graphs hash identically and defeating ``tl.hash.assert_unchanged``.
-    order_by_label = {}
-    for index, layer in enumerate(trace.layer_list):
+    order_by_label: dict[Any, int] = {}
+    layer_by_label: dict[Any, Any] = {}
+    kept_layers = []
+    for layer in trace.layer_list:
         reference_label = (
             layer.layer_label
             if getattr(layer, "num_passes", 1) == 1
             else getattr(layer, "label", None) or layer.layer_label
         )
-        order_by_label[reference_label] = index
+        folded_into = (
+            _replacement_layer_fold_target(layer, layer_by_label, order_by_label)
+            if rerun_signature
+            else None
+        )
+        layer_by_label[reference_label] = layer
+        if folded_into is not None:
+            order_by_label[reference_label] = folded_into
+            continue
+        order_by_label[reference_label] = len(kept_layers)
+        kept_layers.append(layer)
     records = []
-    for index, layer in enumerate(trace.layer_list):
+    for index, layer in enumerate(kept_layers):
         address = normalize_address_for_hash(getattr(layer, "module", None))
         hash_address = address if include_module_address else None
         # Preserve parent EDGE ORDER: ``layer.parents`` is an ordered list whose
@@ -295,8 +317,36 @@ def compute_graph_shape_hash(trace: Any, *, include_module_address: bool = True)
                 "is_buffer": bool(getattr(layer, "is_buffer", False)),
             }
         )
+        if rerun_signature:
+            # Normalized so a live and a loaded layer render alike.
+            shape = getattr(layer, "shape", None)
+            records[-1]["shape"] = None if shape is None else [int(dim) for dim in shape]
+            records[-1]["dtype"] = str(getattr(layer, "dtype", None))
     payload = json.dumps(records, sort_keys=True, separators=(",", ":"), default=repr)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _replacement_layer_fold_target(
+    layer: Any, layer_by_label: dict[Any, Any], order_by_label: dict[Any, int]
+) -> int | None:
+    """Return the parent index a value-only replacement layer folds into, if any.
+
+    The postprocessed-graph twin of ``_replacement_fold_target``: only a
+    single-parent ``interventionreplacement`` layer whose output keeps its
+    parent's shape and dtype folds.
+    """
+
+    if getattr(layer, "layer_type", None) != "interventionreplacement":
+        return None
+    parents = list(getattr(layer, "parents", ()) or ())
+    if len(parents) != 1 or parents[0] not in order_by_label:
+        return None
+    parent = layer_by_label[parents[0]]
+    if getattr(layer, "shape", None) != getattr(parent, "shape", None):
+        return None
+    if getattr(layer, "dtype", None) != getattr(parent, "dtype", None):
+        return None
+    return order_by_label[parents[0]]
 
 
 def compute_raw_event_shape_hash(capture_events: Any) -> str:

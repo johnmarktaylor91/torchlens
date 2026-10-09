@@ -783,6 +783,29 @@ def test_planted_divergence_still_warns_and_raises_when_strict(staged_edit: bool
         strict.run(model, negative, replay=tl.options.ReplayOptions(strict=True))
 
 
+def test_loaded_trace_divergence_check_compares_like_with_like(tmp_path) -> None:
+    """Seat 3 F3: a loaded trace has no raw-event hash, so its graph is compared graph to graph.
+
+    Comparing the rerun's raw-event hash with the loaded graph hash never
+    matched, so every rerun of a loaded trace blamed control flow. A loaded
+    rerun of the same graph is now silent and a real branch change still warns.
+    """
+
+    torch.manual_seed(0)
+    model = _BranchNet().eval()
+    positive, negative = torch.ones(2, 8), -torch.ones(2, 8)
+    path = tmp_path / "t.tlspec"
+    tl.trace(model, positive).save(path)
+    loaded = tl.load(path)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", ControlFlowDivergenceWarning)
+        loaded.run(model, positive)
+    assert loaded.last_run["divergence_count"] == 0
+    reloaded = tl.load(path)
+    with pytest.warns(ControlFlowDivergenceWarning, match="raw-event shape hash diverged"):
+        reloaded.run(model, negative)
+
+
 def _raw_event(
     label: str,
     layer_type: str,

@@ -16,6 +16,7 @@ from .._errors import InvalidArgumentError, TorchLensWarning
 from .._input_coerce import _coerce_input_args
 from .._trace_state import TraceState
 from ..options import ReplayOptions, merge_replay_options
+from ..utils.hashing import compute_graph_shape_hash
 from ._rerun_predicate import (
     plan_rerun_spec,
     refuse_unmatchable_staged_labels,
@@ -961,12 +962,14 @@ def _validate_rerun_result(new_log: Trace, old_log: Trace, *, strict: bool) -> i
         Number of graph-shape divergence events detected by rerun validation.
     """
 
-    old_hash = getattr(old_log, "_raw_event_shape_hash", None) or getattr(
-        old_log, "graph_shape_hash", None
-    )
-    new_hash = getattr(new_log, "_raw_event_shape_hash", None) or getattr(
-        new_log, "graph_shape_hash", None
-    )
+    old_hash = getattr(old_log, "_raw_event_shape_hash", None)
+    new_hash = getattr(new_log, "_raw_event_shape_hash", None)
+    if old_hash is None or new_hash is None:
+        # The raw-event hash is session-only, so a loaded trace has none. Compare
+        # both postprocessed graphs the same way instead of a raw hash against a
+        # graph hash, which never match and would always report divergence.
+        old_hash = compute_graph_shape_hash(old_log, rerun_signature=True)
+        new_hash = compute_graph_shape_hash(new_log, rerun_signature=True)
     if old_hash == new_hash:
         return 0
 
