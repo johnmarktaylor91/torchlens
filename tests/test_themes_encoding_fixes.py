@@ -123,6 +123,17 @@ def test_log_transform_discloses_the_floor() -> None:
     assert NOTE_LOG_NONPOSITIVE in state.notes
 
 
+def test_log_legend_labels_match_their_swatches() -> None:
+    """Under log the 0.5 swatch encodes the geometric mean of the encoded
+    (positive) domain, and the unencoded value <= 0 is not an endpoint."""
+
+    spec = resolve_color_by(EncodingChannelRequest(source=lambda node: 1.0, transform="log"))
+    state = EncodingState(spec=spec)
+    _normalize_color_values(state, {"a": -5.0, "b": 1.0, "c": 100.0})
+    labels = [row.lines[0] for row in _color_legend_rows(state)[1:]]
+    assert labels == ["min: 1", "mid: 10", "max: 100"]
+
+
 def test_per_pass_field_on_rolled_unencodes_with_its_own_note(tmp_path: Any) -> None:
     """The measured min:1/max:1 uniform mid-ramp defect is dead: rolled
     multi-pass nodes unencode per-pass fields (composition row 16)."""
