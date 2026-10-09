@@ -535,7 +535,6 @@ def test_forged_stale_label_launder_ceils(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_plain_attr_data_rebind_launder_ceils(tmp_path: Path) -> None:
     """RED-now-fixed (F2/M3): the direct plain-attr rebind twin must ceiling.
 
@@ -671,7 +670,6 @@ def test_plain_attr_value_read_keeps_typed_refusal(tmp_path: Path) -> None:
         trace.save(tmp_path / "value_read.tlspec", level="runnable", include_weights=True)
 
 
-@pytest.mark.smoke
 def test_sequential_captures_registry_idempotent(tmp_path: Path) -> None:
     """Zero collateral: back-to-back captures reset and re-clean the registry.
 
