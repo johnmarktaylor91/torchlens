@@ -35,6 +35,10 @@ def stack() -> Iterator[dict[str, Any]]:
     os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
     skip_unless_hf_checkpoint_cached(_TINY)
     tok = transformers.AutoTokenizer.from_pretrained(_TINY)
+    # train_steering_vector sets this itself (fix_pad_token); set it first so
+    # the traced and direct encodings come from one tokenizer state.
+    if tok.pad_token_id is None:
+        tok.pad_token = tok.eos_token
     model = transformers.AutoModelForCausalLM.from_pretrained(_TINY).eval()
     # With use_cache on, "model.layers.1" also names the layer's KV-cache outputs.
     model.config.use_cache = False
@@ -46,8 +50,11 @@ def stack() -> Iterator[dict[str, Any]]:
     assert len(pairs) >= 3
 
     def trace(prompts: list[str]) -> Any:
-        ids = tok(prompts, return_tensors="pt").input_ids
-        return tl.trace(model, ids, capture=tl.options.CaptureOptions(layers_to_save="all"))
+        # The exact call the package makes per side: same encoding, mask included.
+        enc = tok(prompts, return_tensors="pt", padding=True)
+        kwargs = {"input_ids": enc.input_ids, "attention_mask": enc.attention_mask}
+        capture = tl.options.CaptureOptions(layers_to_save="all")
+        return tl.trace(model, (), input_kwargs=kwargs, capture=capture)
 
     stack = {
         "model": model,
@@ -64,7 +71,12 @@ def stack() -> Iterator[dict[str, Any]]:
 
 
 def _direct(stack: dict[str, Any], **kwargs: Any) -> Any:
-    """Train with the package directly, one prompt per forward pass."""
+    """Train with the package directly, at the traced batch shape.
+
+    The package runs one forward per side per batch; with every pair in one
+    batch it runs exactly the two traced forwards (same prompts, encoding and
+    mask), so bitwise equality does not depend on the runner's GEMM kernels.
+    """
 
     return sv.train_steering_vector(
         stack["model"],
@@ -72,7 +84,7 @@ def _direct(stack: dict[str, Any], **kwargs: Any) -> Any:
         stack["pairs"],
         layers=[1],
         read_token_index=-1,
-        batch_size=1,
+        batch_size=len(stack["pairs"]),
         **kwargs,
     )
 
@@ -134,6 +146,24 @@ def test_layer_object_site_resolves_in_negative_log(stack: dict[str, Any]) -> No
     )
     assert torch.equal(payload["vector"], direct)
     assert not torch.equal(payload["positive"], payload["negative"])
+
+
+@pytest.mark.parametrize(
+    ("positive_site", "negative_site"),
+    [("model.layers.0", None), ("model.layers.1", "model.layers.0")],
+    ids=["wrong_positive_site", "wrong_negative_site"],
+)
+def test_planted_wrong_site_fails_the_exact_comparison(
+    stack: dict[str, Any], positive_site: str, negative_site: str | None
+) -> None:
+    """Reading the wrong layer on either side breaks the bitwise match above."""
+
+    direct = _direct(stack).layer_activations[1]
+    payload = tl.bridge.steering_vectors.vector(
+        stack["log_pos"], positive_site, negative_site, negative_log=stack["log_neg"]
+    )
+    assert payload["vector"].shape == direct.shape
+    assert not torch.equal(payload["vector"], direct)
 
 
 def test_identical_rows_are_refused(stack: dict[str, Any]) -> None:
