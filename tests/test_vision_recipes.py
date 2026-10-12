@@ -12,6 +12,7 @@ Both families are built from their vendored published configs, shrunk
 from __future__ import annotations
 
 import warnings
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -27,6 +28,16 @@ from torchlens.semantic.coverage import facet_coverage  # noqa: E402
 pytestmark = pytest.mark.real_model
 
 _CAPTURES: dict[tuple[str, str], tuple[Any, Any]] = {}
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _release_cached_captures() -> Iterator[None]:
+    """Release every model this module cached once its tests finish."""
+
+    yield
+    for model, _trace in _CAPTURES.values():
+        tl.release_model(model)
+    _CAPTURES.clear()
 
 
 def _capture(family: str, impl: str, **trace_kwargs: Any) -> tuple[Any, Any]:
@@ -124,6 +135,7 @@ def test_qwen2_eager_attention_facets_equal_an_independent_computation() -> None
     for head in range(n_heads):
         own = torch.einsum("bsd,ed->bse", z[:, head], blocks[:, head, :])
         assert torch.allclose(result[:, :, head], own, atol=1e-6), head
+    tl.release_model(model)
 
 
 @pytest.mark.parametrize("family", ["llama", "qwen2"])
@@ -185,6 +197,7 @@ def test_gated_mlp_refuses_a_non_silu_gate() -> None:
     assert "hidden_act='gelu'" in str(menu["gated_out"].detail)
     assert menu["intermediate"].status == "structurally_absent"
     assert view.has("up_out") and view.has("down_out")
+    tl.release_model(model)
 
 
 def _clip_vision_reference(attn: Any, hidden: torch.Tensor) -> dict[str, torch.Tensor]:
@@ -257,9 +270,10 @@ def test_clip_sdpa_serves_projections_and_reconstructs_on_request() -> None:
     for facet in ("q", "k", "v", "attn_out"):
         assert menu[facet].status == "available_now", facet
     assert menu["pattern"].status == "needs_capture"
-    _model, ready = _capture("clip", "sdpa", reconstruction_ready=True)
+    ready_model, ready = _capture("clip", "sdpa", reconstruction_ready=True)
     ready_view = ready.modules[address].facets
-    attn = _model.vision_model.encoder.layers[0].self_attn
+    attn = ready_model.vision_model.encoder.layers[0].self_attn
     reference = _clip_vision_reference(attn, ready_view["input"].value)
     assert torch.allclose(ready_view["pattern"].value, reference["pattern"], atol=1e-5)
-    del model
+    assert model is not ready_model
+    tl.release_model(ready_model)

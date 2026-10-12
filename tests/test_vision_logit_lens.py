@@ -16,6 +16,7 @@ a fixed seed, zero network:
 from __future__ import annotations
 
 import warnings
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -54,7 +55,7 @@ def _quiet_trace(model: Any, *args: Any, **kwargs: Any) -> Any:
 
 
 @pytest.fixture(scope="module")
-def vit_classifier() -> tuple[Any, Any, Any]:
+def vit_classifier() -> Iterator[tuple[Any, Any, Any]]:
     """A shrunk ViTForImageClassification, its pixels, and its trace."""
 
     from transformers import ViTConfig, ViTForImageClassification
@@ -73,11 +74,12 @@ def vit_classifier() -> tuple[Any, Any, Any]:
     model = ViTForImageClassification(_hf_config("vit", ViTConfig, shrink, "eager")).eval()
     pixels = torch.randn(2, 3, 32, 32, generator=torch.Generator().manual_seed(SEED))
     trace = _quiet_trace(model, (), {"pixel_values": pixels})
-    return model, pixels, trace
+    yield model, pixels, trace
+    tl.release_model(model)
 
 
 @pytest.fixture(scope="module")
-def clip_capture() -> tuple[Any, Any, Any]:
+def clip_capture() -> Iterator[tuple[Any, Any, Any]]:
     """A shrunk CLIPModel run on two images and three label prompts."""
 
     model = build_clip("eager")
@@ -87,17 +89,19 @@ def clip_capture() -> tuple[Any, Any, Any]:
         "pixel_values": torch.randn(2, 3, 32, 32, generator=generator),
     }
     trace = _quiet_trace(model, (), inputs)
-    return model, inputs, trace
+    yield model, inputs, trace
+    tl.release_model(model)
 
 
 @pytest.fixture(scope="module")
-def llama_capture() -> tuple[Any, Any]:
+def llama_capture() -> Iterator[tuple[Any, Any]]:
     """The R0 tiny Llama and its trace (a language-model head)."""
 
     spec = FAMILY_BY_NAME["llama"]
     model = spec.build("eager")
     trace = _quiet_trace(model, spec.input_args(), spec.input_kwargs())
-    return model, trace
+    yield model, trace
+    tl.release_model(model)
 
 
 def test_vit_classifier_default_lens_is_validated_and_ends_at_the_logits(
@@ -166,6 +170,7 @@ def test_trace_with_neither_head_still_refuses_typed() -> None:
     with pytest.raises(LogitLensError) as excinfo:
         logit_lens(trace)
     assert excinfo.value.fields["code"] == "logit_lens_head_unavailable"
+    tl.release_model(model)
 
 
 def test_clip_decodes_vision_blocks_against_label_prompt_features(
@@ -199,6 +204,17 @@ def test_clip_head_lens_refuses_text_tower_layers(clip_capture: tuple[Any, Any, 
     with pytest.raises(LogitLensError) as excinfo:
         logit_lens(trace, layers=["text_model.encoder.layers.1"])
     assert excinfo.value.fields["code"] == "logit_lens_layer_outside_head"
+
+
+def test_vision_head_lens_refuses_a_non_sequence_hidden_state(
+    clip_capture: tuple[Any, Any, Any],
+) -> None:
+    """The head reads one token of [batch, sequence, hidden]; a pooled facet refuses typed."""
+
+    _model, _inputs, trace = clip_capture
+    with pytest.raises(LogitLensError) as excinfo:
+        logit_lens(trace, facet="normalized", layers=["vision_model.post_layernorm"])
+    assert excinfo.value.fields["code"] == "logit_lens_hidden_rank_invalid"
 
 
 def _own_head_lens(model: Any) -> Any:
