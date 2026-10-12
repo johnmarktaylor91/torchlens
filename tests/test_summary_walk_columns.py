@@ -11,7 +11,6 @@ state footer (U06.2).
 
 from __future__ import annotations
 
-import pytest
 import torch
 from torch import nn
 from torch.nn.utils import prune
@@ -98,7 +97,6 @@ def test_tuple_output_row_prints_every_member_shape() -> None:
     assert "(2, 5, 6), (1, 2, 6), (1, 2, 6)" in _body_line(str(report), "lstm (LSTM)")
 
 
-@pytest.mark.smoke
 def test_optional_columns_render_their_facts() -> None:
     """U01.4/U02.3/U03.5/U04.3: input, kernel, groups, trainable, mode, flops_pct."""
 
