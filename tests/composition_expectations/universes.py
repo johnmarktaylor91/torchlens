@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from tests.composition_expectations import _censuses
+from tests.composition_expectations._keyed_tsv import parse_keyed_tsv
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -340,11 +341,7 @@ def derived_cardinalities() -> dict[str, int | str]:
 def baseline_cardinalities() -> dict[str, str]:
     """The committed cardinality baseline (universe id -> count or OPEN)."""
 
-    rows: dict[str, str] = {}
     path = DATA_DIR / "universe_cardinalities.tsv"
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip() or line.startswith("#") or line.startswith("universe_id\t"):
-            continue
-        universe_id, _, count = line.partition("\t")
-        rows[universe_id.strip()] = count.strip()
-    return rows
+    return parse_keyed_tsv(
+        path.read_text(encoding="utf-8"), filename=path.name, header_key="universe_id"
+    )

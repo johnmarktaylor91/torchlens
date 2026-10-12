@@ -26,6 +26,7 @@ spellings DOCUMENTED-UNSTABLE pending naming-session ratification.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
@@ -529,37 +530,47 @@ def _add_unexecuted_modules(
         )
 
 
+def _self_and_ancestors(address: str) -> Iterator[str]:
+    """Yield ``address`` and each enclosing module address, innermost first."""
+
+    while address:
+        yield address
+        address = address.rsplit(".", 1)[0] if "." in address else ""
+
+
+def _credit_display_param(owner: _ModuleFact, fact: _ParamFact, *, tied: bool) -> None:
+    """Add one param to a module's display totals and its tied/pruned flags."""
+
+    owner.subtree_params_display += fact.numel
+    if fact.trainable:
+        owner.subtree_trainable_display += fact.numel
+    if tied:
+        owner.tied = True
+    if fact.pruned:
+        owner.pruned = True
+
+
 def _attach_param_rollups(facts: dict[str, _ModuleFact], params: list[_ParamFact]) -> None:
     """Roll one param fact set up into display totals, ties, and ownership."""
 
     for fact in params:
-        owner_module = _module_path_of(fact.owner_path)
         tied = len(fact.all_paths) > 1
-        display_modules: set[str] = set()
-        for path in fact.all_paths:
-            address = _module_path_of(path)
-            while address:
-                display_modules.add(address)
-                address = address.rsplit(".", 1)[0] if "." in address else ""
+        display_modules = {
+            address
+            for path in fact.all_paths
+            for address in _self_and_ancestors(_module_path_of(path))
+        }
         for address in display_modules:
             owner = facts.get(address)
-            if owner is None:
-                continue
-            owner.subtree_params_display += fact.numel
-            if fact.trainable:
-                owner.subtree_trainable_display += fact.numel
-            if tied:
-                owner.tied = True
-            if fact.pruned:
-                owner.pruned = True
-        address = owner_module
-        if address in facts:
-            facts[address].owned_params.append(fact)
-        while address:
+            if owner is not None:
+                _credit_display_param(owner, fact, tied=tied)
+        owner_module = _module_path_of(fact.owner_path)
+        if owner_module in facts:
+            facts[owner_module].owned_params.append(fact)
+        for address in _self_and_ancestors(owner_module):
             owner = facts.get(address)
             if owner is not None:
                 owner.subtree_owned_params.append(fact)
-            address = address.rsplit(".", 1)[0] if "." in address else ""
 
 
 def _attach_subtrees(
