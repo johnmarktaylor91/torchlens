@@ -93,7 +93,8 @@ leftright + `color_by="flops"`), `debug_edge_shapes`.
   (min == max) render UNENCODED with a note, never mid-ramp.
 - **Skins are live (N4).** Semantic role colours resolve through the
   active skin's palette at the one theme seam; the Okabe-Ito set ships as
-  data with its CVD evidence attached (the default flip is a pending decision, FORK-2).
+  data with its CVD evidence attached; the default `torchlens` skin renders it since R2-29
+  (FORK-2 branch A), the other skins keep their historical palettes.
   Each skin carries a 3-anchor ramp and the N17 neutral "aggregate, not
   encoded" fill for collapsed boxes under an active channel.
 

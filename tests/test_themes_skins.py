@@ -1,9 +1,9 @@
 """F12 pins: live skin palettes (N4), ramps, the N17 neutral fill, and the
 CVD accessibility gates.
 
-FORK-2 discipline: the machinery is LIVE but every shipped skin keeps
-pixel-identical palettes (the render-identity golden pins them); the
-Okabe-Ito set ships as data with its accessibility evidence attached, and
+FORK-2 is resolved (R2-29): the default skin renders the Okabe-Ito set and
+the other shipped skins keep their historical palettes; the Okabe-Ito set
+keeps its accessibility evidence attached, and
 the legacy set's deuteranopia failure is pinned here as the fork's
 evidence.
 """
@@ -93,13 +93,28 @@ def test_neutral_fill_collides_with_no_semantic_meaning() -> None:
         assert theme.neutral_aggregate_fill.lower() not in semantic, theme.name
 
 
-def test_default_skin_palette_is_pixel_identical() -> None:
-    """FORK-2 pending: the default skin translates every constant to itself."""
+def test_default_skin_renders_okabe_ito() -> None:
+    """R2-29: the default skin translates the historical role constants to Okabe-Ito."""
 
     theme = resolve_theme("torchlens")
-    for constant in ("#98FB98", "#ff9999", "#D9D9D9", "#F7D460"):
+    assert theme.semantic_palette is OKABE_ITO_SEMANTIC_PALETTE
+    for role, constant in (
+        ("input", "#98FB98"),
+        ("output", "#ff9999"),
+        ("params_trainable", "#D9D9D9"),
+        ("boolean", "#F7D460"),
+    ):
         spec = apply_theme_to_spec(NodeSpec(lines=["x"], fillcolor=constant), theme)
-        assert spec.fillcolor == constant
+        assert spec.fillcolor == OKABE_ITO_SEMANTIC_PALETTE[role]
+
+
+def test_non_default_skins_keep_their_historical_palettes() -> None:
+    """Only the default skin flipped: paper, colorblind and high_contrast keep history."""
+
+    for name in ("paper", "colorblind", "high_contrast"):
+        theme = resolve_theme(name)
+        spec = apply_theme_to_spec(NodeSpec(lines=["x"], fillcolor="#98FB98"), theme)
+        assert spec.fillcolor == "#98FB98", name
 
 
 def test_dark_skin_param_remap_is_byte_identical_to_history() -> None:
