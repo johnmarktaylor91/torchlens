@@ -889,7 +889,13 @@
   `preset=`, `fields=`, `show_ops=`, `count_fma_as_two=`, ...) are removed and
   refuse typed naming their successor (see MIGRATIONS.md); nothing is
   accepted-and-ignored (`fma1` refuses
-  `flop_convention_unavailable` when underivable). One-call door: input
+  `flop_convention_unavailable` when underivable). Optional columns
+  `input`/`kernel_size`/`groups`/`params_trainable`/`mode`/`flops_pct`
+  (`+name` deltas insert at registry position); `output` prints every member
+  shape of a tuple output in return order; FLOP cells counting SDPA end in
+  `^` (full query x key square, masks/`is_causal` not discounted); the Params
+  footer adds `size`, a `pruned:` raw/effective note, and the optimizer
+  state (capture given `optimizer=`). One-call door: input
   precedence args XOR `input_size=` XOR zero-input (reuses
   `infer_input_shape`'s verified trace; synthesis disclosed);
   `execution_mode`/`grad_mode`/`input_size`

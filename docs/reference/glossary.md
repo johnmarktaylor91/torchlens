@@ -1342,3 +1342,41 @@ deprecation shim owed*
   logits before use and refuses `LogitLensError` when the head cannot be
   represented; pass `lens=` for a tuned lens or `validate=False` to trust
   the reconstruction explicitly. See [facets](../facets.md).
+
+**Summary columns (`summary(columns=...)`)** — *unstable — no deprecation shim owed*
+: The column registry of `tl.summary` / `trace.summary`: `name`, `input`,
+  `output`, `kernel_size`, `groups`, `params`, `params_pct`,
+  `params_trainable`, `flops`, `flops_pct`, `macs`, `train`, `mode`,
+  `passes`, `evidence`. `input` lists the shapes of the distinct tensors
+  entering a row; `output` lists every member shape of the row's output in
+  return order; `kernel_size` / `groups` read the row's own conv or
+  pooling op; `params_trainable` is the per-path trainable count (`train`
+  stays the yes/no/partial `requires_grad` tri-state); `mode` is
+  `module.training` as captured (`train` / `eval` / `mixed`); `flops_pct`
+  is the row's share of the known forward FLOPs. A `+name` delta inserts
+  at the column's registry position. A FLOP cell whose count includes a
+  full-square attention op ends in `^` with a footer note. See
+  [summary](summary.md).
+
+**Summary Params footer extras** — *unstable — no deprecation shim owed*
+: The Params footer line carries `size` (unique parameter storage, dtype
+  true), a `pruned:` note with raw and effective nonzero counts on models
+  reparametrized by `torch.nn.utils.prune` (`<name>_orig` + `<name>_mask`),
+  and `optimizer state N params, X MB` when the capture was given
+  `CaptureOptions(optimizer=...)` (read from the optimizer's live state;
+  omitted on a loaded trace). The raw values ride `SummaryTotals.params_bytes`,
+  `.params_effective`, `.optimizer_state_params`, and
+  `.optimizer_state_bytes`.
+
+**ParamFacts.bytes / ParamFacts.pruned (`tl.report.PrunedParamFacts`)** — *unstable — no deprecation shim owed*
+: FactCore parameter facts (schema version 2): `bytes` is the unique
+  parameters' storage; `pruned` is `None` unless prune reparametrizations
+  exist, else a `PrunedParamFacts(paths, raw, masked)` naming the pruned
+  tensors, their raw element count, and the mask zeros (`masked=None` when
+  the capture retained no mask values).
+
+**FlopsReport.attention_full_square_ops** — *unstable — no deprecation shim owed*
+: The count of `scaled_dot_product_attention` ops in a `flops_report`
+  forward total; when non-zero the report prints that attention FLOPs
+  count the full query x key square and masks / `is_causal` are not
+  discounted.
