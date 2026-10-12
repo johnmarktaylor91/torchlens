@@ -94,7 +94,7 @@ def test_qwen2_eager_attention_facets_equal_an_independent_computation() -> None
     config = model.config
     n_heads, n_kv = config.num_attention_heads, config.num_key_value_heads
     d_head = config.hidden_size // n_heads
-    hidden = view["input"].value
+    hidden = trace.modules["model.layers.0.input_layernorm"].out
     q = torch.nn.functional.linear(hidden, attn.q_proj.weight, attn.q_proj.bias)
     k = torch.nn.functional.linear(hidden, attn.k_proj.weight, attn.k_proj.bias)
     assert attn.q_proj.bias is not None and bool(attn.q_proj.bias.abs().sum() > 0)
@@ -111,6 +111,23 @@ def test_qwen2_eager_attention_facets_equal_an_independent_computation() -> None
     for head in range(n_heads):
         own = torch.einsum("bsd,ed->bse", z[:, head], blocks[:, head, :])
         assert torch.allclose(result[:, :, head], own, atol=1e-6), head
+
+
+@pytest.mark.parametrize("family", ["llama", "qwen2"])
+def test_attention_input_is_the_hidden_state_the_query_projection_reads(family: str) -> None:
+    """``input`` is the normalized residual stream, not rotary cos/sin or a mask.
+
+    Llama-class attention receives several tensors; its call's first input op
+    is the first in creation order. The served ``input`` is the value
+    ``q_proj`` reads, which is the block's ``input_layernorm`` output.
+    """
+
+    _model, trace = _capture(family, "eager")
+    view = trace.modules["model.layers.0.self_attn"].facets
+    served = view["input"].value
+    expected = trace.modules["model.layers.0.input_layernorm"].out
+    assert served.dtype == expected.dtype
+    assert torch.equal(served, expected)
 
 
 def test_qwen2_gated_mlp_recomputes_from_its_children() -> None:

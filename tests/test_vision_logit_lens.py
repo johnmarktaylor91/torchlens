@@ -66,7 +66,8 @@ def vit_classifier() -> tuple[Any, Any, Any]:
         "intermediate_size": 128,
         "image_size": 32,
         "patch_size": 16,
-        "num_labels": N_LABELS,
+        "id2label": {str(index): f"label_{index}" for index in range(N_LABELS)},
+        "label2id": {f"label_{index}": index for index in range(N_LABELS)},
     }
     torch.manual_seed(SEED)
     model = ViTForImageClassification(_hf_config("vit", ViTConfig, shrink, "eager")).eval()
@@ -108,10 +109,9 @@ def test_vit_classifier_default_lens_is_validated_and_ends_at_the_logits(
     result = logit_lens(trace)
     assert result.lens_source == "classifier_head"
     assert result.validated is True
-    assert [entry.address for entry in result.entries] == [
-        "vit.encoder.layer.0",
-        "vit.encoder.layer.1",
-    ]
+    blocks = [str(m.address) for m in trace.modules if m.class_name == "ViTLayer"]
+    assert len(blocks) == 2
+    assert [entry.address for entry in result.entries] == blocks
     with torch.no_grad():
         expected = model(pixel_values=pixels).logits
     for entry in result.entries:
