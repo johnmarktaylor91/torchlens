@@ -972,12 +972,12 @@ def test_multiarg_refusals_survive_pickle_and_deepcopy() -> None:
             assert restored.fields == original.fields, label
 
 
-def test_save_argument_door_is_typed_and_redirects_save_all() -> None:
-    """The ``save=`` type door refuses typed and names the `'all'` remedy.
+def test_save_argument_door_is_typed_and_names_runnable_spellings() -> None:
+    """The ``save=`` type door refuses typed and its remedy names spellings that run.
 
-    ``save='all'`` was documented as a valid spelling while the door raised a
-    raw ``TypeError`` with no code or remedy; only ``layers_to_save`` accepts
-    ``'all'``. Historical ``TypeError`` lineage is preserved.
+    ``save='all'`` and the ``save=[...]`` list form are documented ``tl.trace``
+    spellings and run (U26.3-fix bug 6); an unsupported type still refuses with a
+    code and a remedy. Historical ``TypeError`` lineage is preserved.
     """
 
     import torch
@@ -986,12 +986,18 @@ def test_save_argument_door_is_typed_and_redirects_save_all() -> None:
     import torchlens as tl
 
     with pytest.raises(errors.ArgumentTypeError) as exc_info:
-        tl.trace(nn.Identity(), torch.randn(2), save="all")
+        tl.trace(nn.Identity(), torch.randn(2), save=3)
 
     assert exc_info.value.fields["code"] == "save_predicate_type_invalid"
     assert isinstance(exc_info.value, TypeError)
-    assert "layers_to_save='all'" in exc_info.value.fields["remedy"]
+    assert "save='all'" in exc_info.value.fields["remedy"]
     assert "Remedy:" in str(exc_info.value)
+    x = torch.randn(2)
+    saved_all = tl.trace(nn.Identity(), x, save="all")
+    default = tl.trace(nn.Identity(), x)
+    assert [op.label for op in saved_all.layer_list if op.has_saved_activation] == [
+        op.label for op in default.layer_list if op.has_saved_activation
+    ]
 
 
 def test_collapse_order_mode_door_names_its_narrower_domain() -> None:

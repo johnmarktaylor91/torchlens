@@ -542,6 +542,9 @@ def _validated_until_tokens(until: Any) -> list[Any]:
 def _resolve_until_site(trace: Any, token: str) -> tuple[list[Any], list[str], list[str]]:
     """Resolve ONE until= token to (layers, requested names, layer labels)."""
 
+    from ._trace_selector_helpers import canonical_module_site_key
+
+    token = canonical_module_site_key(trace, token) or token
     from ._errors import InvalidArgumentError
 
     if token == "saved":
