@@ -211,9 +211,11 @@ a `lightning_summary_skipped` warning and training continues.
 
 ```python
 import lightning.pytorch as pl
-from torchlens.callbacks.lightning import SummaryCallback
+from torchlens.callbacks import lightning as tl_lightning
 
-trainer = pl.Trainer(callbacks=[SummaryCallback(depth=2)], enable_model_summary=False)
+trainer = pl.Trainer(
+    callbacks=[tl_lightning.SummaryCallback(depth=2)], enable_model_summary=False
+)
 ```
 
 ## Writing your own sink
