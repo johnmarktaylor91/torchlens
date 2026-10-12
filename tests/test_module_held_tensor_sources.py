@@ -187,7 +187,7 @@ def test_dict_held_tensor_mutated_in_place_matches_eager_and_validates() -> None
         eager_out = eager_model(x)
 
     traced_model = copy.deepcopy(model)
-    trace = tl.trace(traced_model, x, capture=tl.options.CaptureOptions(carry_state=True))
+    trace = tl.trace(traced_model, x)
     assert "state['count']" in _buffer_addresses(trace)
     add_ = next(op for op in trace.layer_list if op.type == "add" and op.parents)
     assert trace.layer_dict_all_keys[add_.parents[0]].type == "buffer"

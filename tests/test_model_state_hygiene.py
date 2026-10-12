@@ -520,12 +520,7 @@ def test_deepcopy_taken_inside_a_capture_is_its_own_model(door: str, where: str)
     model.sink.clear()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        if door == "trace":
-            # carry_state=True keeps the forward's ``sink`` append (a default
-            # capture is a pure observer and restores plain attributes).
-            tl.trace(model, _X, capture=tl.options.CaptureOptions(carry_state=True))
-        else:
-            _DOORS[door](model)  # type: ignore[arg-type]
+        _DOORS[door](model)  # type: ignore[arg-type]
     assert len(model.sink) == 1, "the model should have snapshotted exactly once"
     clone = model.sink.pop()
     _assert_fingerprints_equal(before, _model_fingerprint(model))

@@ -519,9 +519,9 @@ class CaptureOptions:
         modes and plain attributes advance exactly as one direct ``model(x)``
         would, the spelling ``trace.run(carry_state=True)`` uses; no capture
         advances the caller's random streams under either setting). The default
-        ``False`` makes the capture a pure observer: buffers, random state,
-        training modes and plain module attributes are restored afterwards,
-        on success and on failure. A cache hit runs no forward, so nothing
+        ``False`` makes the capture a pure observer: buffers, random state and
+        training modes are restored afterwards, on success and on failure
+        (plain attributes the forward writes are kept for now). A cache hit runs no forward, so nothing
         advances (DOCUMENTED-UNSTABLE).
     name:
         Optional user-facing name for the returned log.

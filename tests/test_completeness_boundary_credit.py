@@ -384,9 +384,7 @@ def test_attribute_held_originals_are_rebound_and_validate(
     model = CountedRoot(build()).eval()
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        trace = tl.trace(
-            model, torch.randn(3, 4), capture=tl.options.CaptureOptions(carry_state=True)
-        )
+        trace = tl.trace(model, torch.randn(3, 4))
     func_names = [op.func_name for op in trace.ops]
     assert "relu" in func_names
     assert model.calls == [1]

@@ -292,11 +292,7 @@ def test_patches_installed_while_armed_and_restored_after() -> None:
             return self.lin(x).relu()
 
     model = _ProbeModel()
-    tl.trace(
-        model,
-        torch.randn(2, 4),
-        capture=CaptureOptions(random_seed=1, carry_state=True, **_CAP),
-    )
+    tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(random_seed=1, **_CAP))
 
     assert model.during["count"] == len(originals)
     assert model.during["all_patched"] is True, "not every torch._ops call class was patched"

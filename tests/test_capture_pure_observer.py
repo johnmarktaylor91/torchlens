@@ -5,9 +5,11 @@ buffers, random state, modes and attributes; an explicit opt-in gives
 forward-equivalent behavior for people who train through a trace."
 
 - After a default ``tl.trace``, buffers (persistent and non-persistent), the
-  torch / CUDA (when present) / Python / NumPy random states, every module's
-  ``training`` flag and plain module attributes are bit-identical to before,
-  on success and when the forward raises.
+  torch / CUDA (when present) / Python / NumPy random states and every module's
+  ``training`` flag are bit-identical to before, on success and when the
+  forward raises. Plain-attribute restore is built but opt-in for now (it
+  collides with the stale-reference holder contract); attributes the forward
+  writes stay as it leaves them.
 - ``CaptureOptions(carry_state=True)`` is forward-equivalent: buffers, modes
   and attributes advance exactly as one direct ``model(x)`` would (train-mode
   running statistics bit-exact); no capture ever advances the caller's random
@@ -80,6 +82,22 @@ def _assert_rng_equal(before: tuple, after: tuple) -> None:
     assert before[3][2:] == after[3][2:]
 
 
+def _restored_state(model: nn.Module) -> dict:
+    """Buffers and modes: what a default capture restores."""
+
+    return {
+        "buffers": {name: buf.detach().clone() for name, buf in model.named_buffers()},
+        "modes": {name: module.training for name, module in model.named_modules()},
+    }
+
+
+def _assert_restored_equal(before: dict, after: dict) -> None:
+    assert before["buffers"].keys() == after["buffers"].keys()
+    for name, value in before["buffers"].items():
+        assert torch.equal(value, after["buffers"][name]), name
+    assert before["modes"] == after["modes"]
+
+
 def _observed_state(model: nn.Module) -> dict:
     return {
         "buffers": {name: buf.detach().clone() for name, buf in model.named_buffers()},
@@ -103,17 +121,18 @@ def _assert_state_equal(before: dict, after: dict) -> None:
     assert before["attrs"] == after["attrs"]
 
 
-def test_default_trace_restores_buffers_rng_modes_and_attrs():
-    """A default capture of a train-mode stateful model leaves everything as it was."""
+def test_default_trace_restores_buffers_rng_and_modes():
+    """A default capture of a train-mode stateful model restores buffers, RNG and modes."""
 
     torch.manual_seed(0)
     model = _Stateful().train()
     x = torch.randn(2, 3, 8, 8)
-    before, rng_before = _observed_state(model), _rng_state()
+    before, rng_before = _restored_state(model), _rng_state()
     tl.trace(model, x)
-    _assert_state_equal(before, _observed_state(model))
+    _assert_restored_equal(before, _restored_state(model))
     _assert_rng_equal(rng_before, _rng_state())
-    assert not hasattr(model, "last_batch")
+    # Plain attributes the forward wrote stay (attribute restore is opt-in).
+    assert model.calls == 1 and model.last_batch == 2
 
 
 def test_default_trace_restores_state_on_the_exception_path():
@@ -122,11 +141,30 @@ def test_default_trace_restores_state_on_the_exception_path():
     torch.manual_seed(0)
     model = _Boom().train()
     x = torch.randn(2, 3, 8, 8)
-    before, rng_before = _observed_state(model), _rng_state()
+    before, rng_before = _restored_state(model), _rng_state()
     with pytest.raises(RuntimeError, match="boom after the state writes"):
         tl.trace(model, x)
-    _assert_state_equal(before, _observed_state(model))
+    _assert_restored_equal(before, _restored_state(model))
     _assert_rng_equal(rng_before, _rng_state())
+
+
+def test_plain_attribute_restore_is_built_but_opt_in():
+    """The bracket restores plain attributes only when asked (a one-line default flip)."""
+
+    from torchlens._runnable_state_live import (
+        RESTORE_PLAIN_ATTRIBUTES_BY_DEFAULT,
+        capture_observer_bracket,
+    )
+
+    assert RESTORE_PLAIN_ATTRIBUTES_BY_DEFAULT is False
+    torch.manual_seed(0)
+    model = _Stateful().train()
+    x = torch.randn(2, 3, 8, 8)
+    before = _observed_state(model)
+    with capture_observer_bracket(model, carry_state=False, restore_attributes=True):
+        model(x)
+    _assert_state_equal(before, _observed_state(model))
+    assert not hasattr(model, "last_batch")
 
 
 def test_carry_state_is_forward_equivalent_bit_exact():

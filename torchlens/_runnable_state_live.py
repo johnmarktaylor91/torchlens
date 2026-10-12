@@ -3,8 +3,8 @@
 The default live ``run()`` snapshots the model's declared state (parameters and
 buffers) before executing and restores it afterwards (``_runnable_state``
 takes the snapshot; this module restores it). A default ``tl.trace`` is a pure
-observer (U40.1): ``capture_observer_bracket`` snapshots buffers, random state,
-training modes and plain attributes and restores them after the capture;
+observer (U40.1): ``capture_observer_bracket`` snapshots buffers, random state and
+training modes (plain attributes on request) and restores them after the capture;
 ``CaptureOptions(carry_state=True)`` opts into forward-equivalent state.
 """
 
@@ -229,7 +229,16 @@ def _observer_attr_snapshot(module: Any, name: str, attr_path: str) -> Any:
         return _PlainAttrIdentitySnapshot(value=value, value_type_name=type(value).__name__)
 
 
-def snapshot_capture_observer_state(model: Any) -> CaptureObserverSnapshot:
+#: Plain-attribute restore is built but off by default: restoring attributes the
+#: forward wrote collides with the stale-reference holder contract and with the
+#: idiom of reading values a forward stores on the module, so it stays opt-in
+#: until that is reconciled; flipping this default is the whole change.
+RESTORE_PLAIN_ATTRIBUTES_BY_DEFAULT = False
+
+
+def snapshot_capture_observer_state(
+    model: Any, *, restore_attributes: bool = RESTORE_PLAIN_ATTRIBUTES_BY_DEFAULT
+) -> CaptureObserverSnapshot:
     """Snapshot the state a default (pure-observer) capture restores afterwards."""
 
     from .utils.rng import log_current_rng_states
@@ -249,6 +258,8 @@ def snapshot_capture_observer_state(model: Any) -> CaptureObserverSnapshot:
                 if id(value) not in clones:
                     clones[id(value)] = value.detach().clone()
                     versions.update(declared_state_versions((value,)))
+            if not restore_attributes:
+                continue
             names = _observer_attr_names(module)
             attr_names.append((module, type(module), names))
             for name in sorted(names):
@@ -374,14 +385,20 @@ class CaptureObserverHandle:
 
 
 @contextmanager
-def capture_observer_bracket(model: Any, *, carry_state: bool) -> Iterator[CaptureObserverHandle]:
+def capture_observer_bracket(
+    model: Any,
+    *,
+    carry_state: bool,
+    restore_attributes: bool = RESTORE_PLAIN_ATTRIBUTES_BY_DEFAULT,
+) -> Iterator[CaptureObserverHandle]:
     """Run a capture as a pure observer unless ``carry_state`` opts out (U40.1).
 
     The default snapshots buffers (persistent and non-persistent), every
-    module's ``training`` flag, the global random states and plain instance
-    attributes before the capture, and restores them afterwards on every path,
-    success or exception. ``carry_state=True`` skips the bracket: state
-    advances exactly as one direct ``model(x)`` would. The caller sets
+    module's ``training`` flag and the global random states before the capture,
+    and restores them afterwards on every path, success or exception;
+    ``restore_attributes=True`` also restores plain instance attributes (off by
+    default, see ``RESTORE_PLAIN_ATTRIBUTES_BY_DEFAULT``). ``carry_state=True``
+    skips the bracket: state advances exactly as one direct ``model(x)`` would. The caller sets
     ``handle.trace`` to the captured trace (a failure's ``partial_log`` is
     picked up from the exception), so payloads that alias a restored buffer keep
     their forward-time values.
@@ -391,7 +408,7 @@ def capture_observer_bracket(model: Any, *, carry_state: bool) -> Iterator[Captu
     if carry_state:
         yield handle
         return
-    snapshot = snapshot_capture_observer_state(model)
+    snapshot = snapshot_capture_observer_state(model, restore_attributes=restore_attributes)
     try:
         yield handle
     except BaseException as exc:

@@ -184,7 +184,7 @@ def test_repr_of_tensor_during_active_logging_does_not_log_detach() -> None:
     model = _ReprInForwardModel()
     x = torch.randn(2, 4)
 
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(carry_state=True))
+    trace = tl.trace(model, x)
 
     assert model.last_repr is not None
     assert "tensor(" in model.last_repr

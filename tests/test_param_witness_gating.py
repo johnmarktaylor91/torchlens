@@ -74,7 +74,7 @@ class _ParamWritingModel(nn.Module):
 
 def test_plain_trace_skips_param_snapshot_and_stamps_fail_closed():
     model = _TrackerProbeModel()
-    trace = tl.trace(model, torch.randn(2, 4), capture=tl.options.CaptureOptions(carry_state=True))
+    trace = tl.trace(model, torch.randn(2, 4))
     # The fail-closed stamp: state-writeback coverage is UNKNOWABLE, never "no writeback".
     assert param_byte_witness_not_armed(trace) is True
     # No whole-storage byte baseline was built for any param (the RAM win).
@@ -106,9 +106,7 @@ def test_armed_baseline_coalesces_onto_capture_state_clone():
     # equal the pre-forward param bytes.
     model = _TrackerProbeModel()
     pre_forward_weight = model.lin.weight.detach().clone()
-    trace = tl.trace(
-        model, torch.randn(2, 4), capture=CaptureOptions(carry_state=True, **_RUNNABLE_CAP)
-    )
+    trace = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(**_RUNNABLE_CAP))
     capture_state = trace._runnable.capture_state
     assert capture_state is not None
     tracker = model.probe

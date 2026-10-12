@@ -45,7 +45,7 @@ _RUNNABLE_CAP = {
 
 def test_plain_trace_does_not_arm_monitor_and_stamps_fail_closed():
     model = _ProfileProbeModel()
-    trace = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(carry_state=True))
+    trace = tl.trace(model, torch.randn(2, 4))
     # No profile hook was installed for the user forward.
     assert model.profile_hook_during_forward is None
     # The fail-closed stamp: channel coverage is UNKNOWABLE, never "no consumption".

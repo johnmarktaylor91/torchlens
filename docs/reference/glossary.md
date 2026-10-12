@@ -47,13 +47,13 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 
 **carry_state (CaptureOptions) / pure-observer capture** — *unstable — no deprecation shim owed*
 : A default `tl.trace` is a pure observer: it snapshots buffers (persistent and non-persistent),
-  every module's `training` flag, the global random states (torch, live CUDA devices, Python,
-  NumPy) and plain module attributes before the forward and restores them afterwards, on success
-  and on failure, so a train-mode BatchNorm's running statistics do not advance. A buffer the
-  forward changed is written back only where its bytes changed. Plain attributes restore by value
-  (scalars, strings, small tensors and containers) or by identity (any other object: a rebinding is
-  undone, its interior state is not); lazy modules are left as their materializing forward leaves
-  them. `CaptureOptions(carry_state=True)` opts into forward-equivalent state: buffers, modes and
+  every module's `training` flag and the global random states (torch, live CUDA devices, Python,
+  NumPy) before the forward and restores them afterwards, on success and on failure, so a
+  train-mode BatchNorm's running statistics do not advance. A buffer the forward changed is written
+  back only where its bytes changed, and trace payloads that alias it keep their forward-time
+  values. Plain module attributes the forward writes are not restored yet (the restore is built
+  but opt-in until it is reconciled with the stale-reference holder contract); lazy modules are
+  left as their materializing forward leaves them. `CaptureOptions(carry_state=True)` opts into forward-equivalent state: buffers, modes and
   plain attributes advance exactly as one direct `model(x)` would, the same spelling as
   `trace.run(inputs=..., carry_state=True)`. No capture advances the caller's random streams
   under either setting (each capture draws from its own seed and restores the global engines). A capture-cache hit runs no forward, so nothing advances. An item that

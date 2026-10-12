@@ -142,14 +142,12 @@ def test_live_intervention_retention_contract(entrypoint: str) -> None:
             x,
             intervene=tl.when(tl.func("linear"), add_marker),
             save=tl.func("linear"),
-            capture=tl.options.CaptureOptions(carry_state=True),
         )
         rerun = tl.trace(
             LinearRelu(),
             x,
             intervene=tl.when(tl.func("linear"), add_marker),
             save=tl.func("linear"),
-            capture=tl.options.CaptureOptions(carry_state=True),
         )
         assert torch.equal(_linear_op(log).out, captured[0])
         assert torch.equal(_linear_op(log).out, _linear_op(rerun).out)
@@ -160,7 +158,6 @@ def test_live_intervention_retention_contract(entrypoint: str) -> None:
             model,
             torch.randn(2, 3),
             capture=CaptureOptions(
-                carry_state=True,
                 intervention_ready=True,
                 hooks={tl.func("relu"): _zero_hook},
             ),

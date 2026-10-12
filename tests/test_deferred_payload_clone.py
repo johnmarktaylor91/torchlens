@@ -83,14 +83,10 @@ def _zoo_trace(defer: bool, seed: int = 7, grad: bool = False, grad_defer: bool 
         torch.manual_seed(seed)
         x = torch.randn(2, 8)
         if grad:
-            log = tl.trace(
-                model, x, capture=tl.options.CaptureOptions(random_seed=99, carry_state=True)
-            )
+            log = tl.trace(model, x, capture=tl.options.CaptureOptions(random_seed=99))
         else:
             with torch.no_grad():
-                log = tl.trace(
-                    model, x, capture=tl.options.CaptureOptions(random_seed=99, carry_state=True)
-                )
+                log = tl.trace(model, x, capture=tl.options.CaptureOptions(random_seed=99))
     return model, log
 
 
@@ -550,9 +546,7 @@ def _positional_inplace_trace(defer: bool, seed: int = 3):
         torch.manual_seed(seed)
         x = torch.randn(2, 8)
         with torch.no_grad():
-            log = tl.trace(
-                model, x, capture=tl.options.CaptureOptions(random_seed=99, carry_state=True)
-            )
+            log = tl.trace(model, x, capture=tl.options.CaptureOptions(random_seed=99))
     return log
 
 

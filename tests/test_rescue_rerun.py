@@ -1050,7 +1050,7 @@ def test_closure_held_original_is_rebound_without_rescue() -> None:
     raw = torch.cos
     wrap_torch()
     model = CountedRoot(_stale_closure_model(raw))
-    trace = tl.trace(model, torch.tensor([0.25, 0.5]), capture=CaptureOptions(carry_state=True))
+    trace = tl.trace(model, torch.tensor([0.25, 0.5]))
 
     assert model.calls == [1]
     assert trace.rescue_rerun is None
