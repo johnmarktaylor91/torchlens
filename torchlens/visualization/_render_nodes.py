@@ -13,9 +13,6 @@ from ._render_leaf import *
 from ._typography import DEFAULT_TYPOGRAPHY
 from .modes import CollapsedModeScope
 
-if TYPE_CHECKING:
-    from ._backward_rows import BackwardRowOptions
-
 # Home moved to node_spec (S5 territory) at the L5 wave-1 merge to keep this
 # file under its ratchet ceiling; re-exported here for existing importers.
 from .node_spec import _annotation_image_path_for_node
@@ -134,7 +131,6 @@ def _add_unrolled_backward_pass_clusters(
     graphviz_graph: graphviz.Digraph,
     node_spec_fn: BackwardNodeSpecFn | None,
     pass_filter: BackwardPassFilter,
-    rows: "BackwardRowOptions | None" = None,
 ) -> None:
     """Render GradFnCall nodes grouped by backward pass.
 
@@ -148,8 +144,6 @@ def _add_unrolled_backward_pass_clusters(
         Optional callback receiving ``(grad_fn_handle, default_spec)``.
     pass_filter:
         Normalized backward-pass filter.
-    rows:
-        Opt-in extra label rows (``None`` adds none).
     """
 
     calls_by_pass = _visible_backward_calls_by_pass(trace, pass_filter)
@@ -164,7 +158,7 @@ def _add_unrolled_backward_pass_clusters(
             )
             for grad_fn_handle, call in grad_fn_calls:
                 node_args = _backward_node_graphviz_args(
-                    grad_fn_handle, node_spec_fn, call=call, inventory=inventory, rows=rows
+                    grad_fn_handle, node_spec_fn, call=call, inventory=inventory
                 )
                 subgraph.node(**node_args)
 

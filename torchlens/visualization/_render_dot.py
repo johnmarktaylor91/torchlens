@@ -470,7 +470,59 @@ def _graph_caption_body(trace: "Trace", request: ResolvedRenderRequest) -> str:
             "<B>collapse overview: top-level modules only (trace past the smart-collapse "
             "ceiling); see the expansion manifest</B><br align='left'/>"
         )
+    reuse_note = _module_reuse_note(trace, request)
+    if reuse_note is not None:
+        caption_body += f"{html_escape(reuse_note)}<br align='left'/>"
     return caption_body
+
+
+def _module_reuse_note(trace: "Trace", request: ResolvedRenderRequest) -> str | None:
+    """Disclose module reuse on an unrolled overview, never switching modes (collapse 5).
+
+    The collapse panel ratified "disclose, don't switch" for weight-shared
+    models: the default ``vis_mode`` stays, and an overview render (a smart
+    collapse mode) says how many modules ran more than once and that rolled
+    mode draws the loop. Nested modules of a reused module are not counted
+    again.
+
+    Parameters
+    ----------
+    trace:
+        Trace being rendered.
+    request:
+        Resolved request (its ``vis_mode`` and ``collapse`` gate the note).
+
+    Returns
+    -------
+    str | None
+        The note, or ``None`` when the render is rolled, not an overview, or
+        no module ran more than once.
+    """
+
+    overview = request.collapse in ("auto", "max") or (
+        isinstance(request.collapse, float) and request.collapse > 0.0
+    )
+    if request.vis_mode != "unrolled" or not overview:
+        return None
+    reused = {
+        str(module.address): int(module.num_calls)
+        for module in trace.modules
+        if str(getattr(module, "address", "")) not in ("", "self")
+        and int(getattr(module, "num_calls", 1) or 1) > 1
+    }
+    outermost = {
+        address: calls
+        for address, calls in reused.items()
+        if not any(address.startswith(f"{other}.") for other in reused)
+    }
+    if not outermost:
+        return None
+    count = len(outermost)
+    calls = sum(outermost.values())
+    noun = "module" if count == 1 else "modules"
+    return (
+        f"this model reuses {count} {noun} across {calls} calls; vis_mode='rolled' shows the loop"
+    )
 
 
 def _build_graphviz_shell(
@@ -1089,9 +1141,7 @@ def _emit_and_finish_forward(
     # relative image refs instead of a per-run mkdtemp path that dies with
     # the trace.
     try:
-        return _publish_forward_render(
-            trace, dot, context, target, final_source, compose_code_panel, speculative
-        )
+        return _publish_forward_render(trace, context, target, final_source, speculative)
     finally:
         if speculative is not None:
             shutil.rmtree(speculative.scratch_dir, ignore_errors=True)
@@ -1135,23 +1185,19 @@ def _speculative_render_for(
 
 def _publish_forward_render(
     trace: "Trace",
-    dot: Any,
     context: _ForwardRenderContext,
     target: RenderTarget,
     final_source: str,
-    compose_code_panel: bool,
     speculative: SpeculativeRender | None,
 ) -> Any:
     """Write the DOT source and publish the rendered artifact atomically.
 
     Parameters
     ----------
-    trace, dot, context, target:
-        Render state.
+    trace, context, target:
+        Render state (``context.dot`` is the Graphviz graph).
     final_source:
         The DOT text to publish.
-    compose_code_panel:
-        Whether a code panel is composed beside the graph.
     speculative:
         Verifier layouts that may already hold the artifact for ``final_source``.
 
@@ -1162,6 +1208,10 @@ def _publish_forward_render(
     """
 
     request = context.request
+    dot = context.dot
+    compose_code_panel = context.source_text is not None and _code_panel_composition_available(
+        target.fileformat, context.engine
+    )
     render_timeout = 120
     late_visualizer_dir = getattr(trace, "_visualizer_dir", None)
     source_path = dot.save(target.outpath)
@@ -1471,9 +1521,9 @@ def _write_overview_expansion_manifest(
 ) -> None:
     """Write the FK4 expansion manifest beside an over-ceiling overview.
 
-    Fires for the two residual shapes: a floor-fallback plan still above the
-    readable band, and the top-level overview served past the pathological
-    pre-gate. Ordinary renders write nothing extra.
+    Fires for the residual shapes: a coarse fallback plan (floor or linear
+    tier) still above the readable band, and the top-level overview served
+    past the pathological pre-gate. Ordinary renders write nothing extra.
 
     Parameters
     ----------
@@ -1498,10 +1548,10 @@ def _write_overview_expansion_manifest(
         planner, reason = "overview_fallback", overview_reason
     elif (
         result is not None
-        and getattr(result, "planner", "") == "floor_fallback"
+        and getattr(result, "planner", "") in ("floor_fallback", "linear_fallback")
         and count(result.plan) > band_high
     ):
-        plan, planner, reason = result.plan, "floor_fallback", result.reason
+        plan, planner, reason = result.plan, str(result.planner), result.reason
     else:
         return
     manifest = build_expansion_manifest(plan, planner=planner, reason=reason, band_high=band_high)

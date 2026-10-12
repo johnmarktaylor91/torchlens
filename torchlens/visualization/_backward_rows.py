@@ -18,7 +18,7 @@ from ._render_leaf import _first_tensor_in_obj, _module_key_for_forward_op
 if TYPE_CHECKING:
     from ..data_classes.grad_fn import GradFn
 
-__all__ = ["BackwardRowOptions", "backward_opt_in_rows"]
+__all__ = ["BackwardRowOptions", "backward_opt_in_rows", "backward_rows_for"]
 
 
 @dataclass(frozen=True)
@@ -38,6 +38,36 @@ class BackwardRowOptions:
     trace: Any
     module_paths: bool = False
     grad_values: bool = False
+
+
+def backward_rows_for(
+    trace: Any, show_module_paths: object, show_grad_values: object
+) -> BackwardRowOptions | None:
+    """Validate the two ``draw_backward`` row flags and return the row options.
+
+    Parameters
+    ----------
+    trace:
+        Trace being rendered.
+    show_module_paths, show_grad_values:
+        The opt-in flags as the caller passed them (real bools only).
+
+    Returns
+    -------
+    BackwardRowOptions | None
+        The requested rows, or ``None`` when neither row was requested.
+    """
+
+    from ._draw_validation import _validate_draw_flag_options
+
+    _validate_draw_flag_options(
+        False, show_module_paths=show_module_paths, show_grad_values=show_grad_values
+    )
+    if not (show_module_paths or show_grad_values):
+        return None
+    return BackwardRowOptions(
+        trace=trace, module_paths=bool(show_module_paths), grad_values=bool(show_grad_values)
+    )
 
 
 def backward_opt_in_rows(

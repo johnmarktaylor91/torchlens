@@ -5,7 +5,7 @@
 from dataclasses import replace
 
 from .._errors import InvalidArgumentError, PayloadUnavailableError
-from ._backward_rows import BackwardRowOptions
+from ._backward_rows import backward_rows_for
 from ._render_common import *
 from ._render_dot import *
 from ._render_edges import *
@@ -196,52 +196,45 @@ def render_backward_graph(
     ir_builder.attr("edge", **edge_args)
 
     inventory = compute_backward_style_inventory(self, pass_filter)
-    from ._draw_validation import _validate_draw_flag_options
+    rows_token = _BACKWARD_ROWS.set(backward_rows_for(self, show_module_paths, show_grad_values))
+    try:
+        if vis_mode == "rolled":
+            visible_ids = {
+                grad_fn_handle.grad_fn_object_id
+                for grad_fn_handle in self.grad_fns
+                if _grad_fn_matches_backward_filter(grad_fn_handle, pass_filter)
+            }
+            for grad_fn_handle in self.grad_fns:
+                if grad_fn_handle.grad_fn_object_id in visible_ids:
+                    _add_backward_node_to_graphviz(
+                        grad_fn_handle,
+                        cast(graphviz.Digraph, ir_builder),
+                        node_spec_fn,
+                        pass_filter=pass_filter,
+                        inventory=inventory,
+                    )
 
-    _validate_draw_flag_options(
-        False, show_module_paths=show_module_paths, show_grad_values=show_grad_values
-    )
-    rows = (
-        BackwardRowOptions(trace=self, module_paths=show_module_paths, grad_values=show_grad_values)
-        if (show_module_paths or show_grad_values)
-        else None
-    )
-    if vis_mode == "rolled":
-        visible_ids = {
-            grad_fn_handle.grad_fn_object_id
-            for grad_fn_handle in self.grad_fns
-            if _grad_fn_matches_backward_filter(grad_fn_handle, pass_filter)
-        }
-        for grad_fn_handle in self.grad_fns:
-            if grad_fn_handle.grad_fn_object_id in visible_ids:
-                _add_backward_node_to_graphviz(
-                    grad_fn_handle,
-                    cast(graphviz.Digraph, ir_builder),
-                    node_spec_fn,
-                    pass_filter=pass_filter,
-                    inventory=inventory,
-                    rows=rows,
-                )
-
-        for grad_fn_handle in self.grad_fns:
-            if grad_fn_handle.grad_fn_object_id not in visible_ids:
-                continue
-            tail_name = _backward_dot_node_name(grad_fn_handle)
-            for next_grad_fn_id in grad_fn_handle.next_grad_fn_ids:
-                if next_grad_fn_id not in visible_ids:
+            for grad_fn_handle in self.grad_fns:
+                if grad_fn_handle.grad_fn_object_id not in visible_ids:
                     continue
-                head_name = _backward_dot_node_name(self.grad_fn_logs[next_grad_fn_id])
-                ir_builder.edge(
-                    tail_name,
-                    head_name,
-                    **_backward_edge_attrs(
-                        grad_fn_handle, self.grad_fn_logs[next_grad_fn_id], trace=self
-                    ),
-                )
-    else:
-        _add_unrolled_backward_pass_clusters(
-            self, cast(graphviz.Digraph, ir_builder), node_spec_fn, pass_filter, rows=rows
-        )
+                tail_name = _backward_dot_node_name(grad_fn_handle)
+                for next_grad_fn_id in grad_fn_handle.next_grad_fn_ids:
+                    if next_grad_fn_id not in visible_ids:
+                        continue
+                    head_name = _backward_dot_node_name(self.grad_fn_logs[next_grad_fn_id])
+                    ir_builder.edge(
+                        tail_name,
+                        head_name,
+                        **_backward_edge_attrs(
+                            grad_fn_handle, self.grad_fn_logs[next_grad_fn_id], trace=self
+                        ),
+                    )
+        else:
+            _add_unrolled_backward_pass_clusters(
+                self, cast(graphviz.Digraph, ir_builder), node_spec_fn, pass_filter
+            )
+    finally:
+        _BACKWARD_ROWS.reset(rows_token)
     _emit_backward_key(ir_builder, show_legend, inventory)
 
     source_text = resolve_code_panel_source(

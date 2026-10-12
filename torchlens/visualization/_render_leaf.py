@@ -20,6 +20,10 @@ from ._typography import DEFAULT_TYPOGRAPHY
 # malformed/huge conditional subgraph can never turn edge labelling into a hot loop.
 _BRANCH_KIND_SEARCH_LIMIT = 256
 
+# U08.5: the opt-in backward rows of the ``draw_backward`` call being rendered
+# (a ``_backward_rows.BackwardRowOptions``; ``None`` adds no rows).
+_BACKWARD_ROWS: ContextVar[Any] = ContextVar("torchlens_backward_rows", default=None)
+
 
 def _backward_dot_node_name(grad_fn_handle: "GradFn") -> str:
     """Return a DOT-safe node name for a grad_fn_handle log.
@@ -42,7 +46,6 @@ if TYPE_CHECKING:
     from ..data_classes.grad_fn import GradFn
     from ..data_classes.module import Module
     from ..data_classes.trace import Trace
-    from ._backward_rows import BackwardRowOptions
     from .auto_collapse import ModuleRepeatFold
 
 
@@ -120,7 +123,6 @@ def _add_backward_node_to_graphviz(
     node_spec_fn: BackwardNodeSpecFn | None,
     pass_filter: BackwardPassFilter = None,
     inventory: "BackwardStyleInventory | None" = None,
-    rows: "BackwardRowOptions | None" = None,
 ) -> None:
     """Add one backward grad_fn_handle node to a Graphviz graph.
 
@@ -137,12 +139,13 @@ def _add_backward_node_to_graphviz(
     inventory:
         Per-render backward style inventory driving uniform-row suppression
         (``None`` keeps every row).
-    rows:
-        Opt-in extra label rows (``None`` adds none).
     """
 
     node_args = _backward_node_graphviz_args(
-        grad_fn_handle, node_spec_fn, pass_filter=pass_filter, inventory=inventory, rows=rows
+        grad_fn_handle,
+        node_spec_fn,
+        pass_filter=pass_filter,
+        inventory=inventory,
     )
     graphviz_graph.node(**node_args)
 
@@ -153,7 +156,6 @@ def _backward_node_graphviz_args(
     call: Any | None = None,
     pass_filter: BackwardPassFilter = None,
     inventory: "BackwardStyleInventory | None" = None,
-    rows: "BackwardRowOptions | None" = None,
 ) -> dict[str, Any]:
     """Build Graphviz node arguments for one backward grad_fn_handle.
 
@@ -170,8 +172,6 @@ def _backward_node_graphviz_args(
     inventory:
         Per-render backward style inventory driving uniform-row suppression
         (``None`` keeps every row).
-    rows:
-        Opt-in extra label rows (``None`` adds none).
 
     Returns
     -------
@@ -185,7 +185,6 @@ def _backward_node_graphviz_args(
             call=call,
             pass_filter=pass_filter,
             inventory=inventory,
-            rows=rows,
         ),
         shape="oval",
         fillcolor=_backward_node_fillcolor(grad_fn_handle),
@@ -672,7 +671,6 @@ def _compute_backward_node_lines(
     call: Any | None = None,
     pass_filter: BackwardPassFilter = None,
     inventory: "BackwardStyleInventory | None" = None,
-    rows: "BackwardRowOptions | None" = None,
 ) -> list[str]:
     """Build default label rows for a backward grad_fn_handle node.
 
@@ -687,8 +685,6 @@ def _compute_backward_node_lines(
     inventory:
         Per-render backward style inventory driving uniform-row suppression
         (``None`` keeps every row).
-    rows:
-        Opt-in extra label rows (``None`` adds none).
 
     Returns
     -------
@@ -718,6 +714,7 @@ def _compute_backward_node_lines(
         # Suppressed only when EVERY visible node would print "grad N/A"
         # (the memo's x36 uniform row); a mixed render keeps its N/A rows.
         lines.append(f"grad {_format_backward_output_shape(grad_fn_handle)}")
+    rows = _BACKWARD_ROWS.get()
     if rows is not None:
         from ._backward_rows import backward_opt_in_rows
 
@@ -2325,6 +2322,7 @@ def _shared_gradient_passes(parent_layer: GraphNode, child_layer: GraphNode) -> 
 
 __all__ = [
     "BackwardStyleInventory",
+    "_BACKWARD_ROWS",
     "_add_backward_node_to_graphviz",
     "_add_collapsed_container_node",
     "_add_combined_backward_edges",

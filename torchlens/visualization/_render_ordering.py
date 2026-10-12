@@ -15,6 +15,7 @@ import subprocess
 import tempfile
 import warnings
 from collections import defaultdict
+from contextvars import ContextVar
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, cast
 
@@ -85,6 +86,14 @@ class SpeculativeRender:
         if self.last_source == source and self.last_path and os.path.exists(self.last_path):
             return self.last_path
         return None
+
+
+#: The speculative render active for the ORDERED layout in progress (U07.5);
+#: the baseline layout runs without one. A context variable keeps the
+#: ``_layout_dot_plain(source, rankdir, captured_edges)`` seam unchanged.
+_SPECULATIVE_RENDER: ContextVar[SpeculativeRender | None] = ContextVar(
+    "torchlens_speculative_render", default=None
+)
 
 
 def _should_order_siblings(
@@ -231,7 +240,11 @@ def _layout_ordered_dot_plain(
     harmless; raising routes it to the plain-layout fallback instead.
     """
 
-    layout = _layout_dot_plain(source, rankdir, captured_edges, speculative)
+    token = _SPECULATIVE_RENDER.set(speculative)
+    try:
+        layout = _layout_dot_plain(source, rankdir, captured_edges)
+    finally:
+        _SPECULATIVE_RENDER.reset(token)
     if baseline.nodes and not layout.nodes:
         raise subprocess.SubprocessError("dot -Tplain produced no layout for the ordered graph")
     return layout
@@ -429,9 +442,8 @@ def _dot_line_is_complete(line: str) -> bool:
     so such DOT is refused rather than misread. Inside an HTML label ``"`` is
     plain text; outside, the ``>`` of an ``->`` edge operator opens nothing.
 
-    Only ``"``, ``\\``, ``<`` and ``>`` change the scan state, so the loop
-    visits those positions alone; a backslash escapes the character directly
-    after it, which the scan checks by position.
+    Only ``"``, backslash, ``<`` and ``>`` change the scan state, so the loop
+    visits those positions alone (U07.5).
     """
 
     in_quote = False
@@ -441,26 +453,48 @@ def _dot_line_is_complete(line: str) -> bool:
         index = match.start()
         char = line[index]
         if in_quote:
-            escaped = escape_at == index - 1
-            if char == "\\":
-                escape_at = -2 if escaped else index
-            elif char == '"' and not escaped:
-                in_quote = False
-            else:
-                escape_at = -2
+            in_quote, escape_at = _quoted_scan_step(char, index, escape_at)
         elif html_depth:
-            if char == "<":
-                html_depth += 1
-            elif char == ">":
-                html_depth -= 1
+            html_depth += _HTML_DEPTH_STEP.get(char, 0)
         elif char == '"':
-            in_quote = True
-            escape_at = -2
+            in_quote, escape_at = True, -2
         elif char == "<":
             html_depth = 1
-        elif char == ">" and (index == 0 or line[index - 1] != "-"):
+        elif char == ">" and line[index - 1 : index] != "-":
             return False
     return not in_quote and html_depth == 0
+
+
+#: HTML-label depth change per state character.
+_HTML_DEPTH_STEP = {"<": 1, ">": -1}
+
+
+def _quoted_scan_step(char: str, index: int, escape_at: int) -> tuple[bool, int]:
+    """Advance the in-quote scan by one state character.
+
+    Parameters
+    ----------
+    char:
+        State character at ``index`` (``"``, backslash, ``<`` or ``>``).
+    index:
+        Its position in the line.
+    escape_at:
+        Position of the last escaping backslash (``-2`` for none).
+
+    Returns
+    -------
+    tuple[bool, int]
+        Whether the scan is still inside the quoted string, and the new
+        escaping-backslash position. A backslash escapes only the character
+        directly after it.
+    """
+
+    escaped = escape_at == index - 1
+    if char == "\\":
+        return True, (-2 if escaped else index)
+    if char == '"' and not escaped:
+        return False, -2
+    return True, -2
 
 
 def _dot_statement_node_refs(line: str) -> tuple[str, ...]:
@@ -514,14 +548,15 @@ def _layout_dot_plain(
     source: str,
     rankdir: str,
     captured_edges: list[CapturedForwardEdge],
-    speculative: SpeculativeRender | None = None,
 ) -> PlainLayout:
     """Run ``dot -Tplain`` and parse coordinates and real-edge spans.
 
-    With ``speculative`` the same Graphviz process also writes the final
+    Inside an ordered layout with an active :class:`SpeculativeRender`
+    (``_SPECULATIVE_RENDER``), the same Graphviz process also writes the final
     format from this one layout (``-Tplain -o<plain> -T<fmt> -o<artifact>``).
     """
 
+    speculative = _SPECULATIVE_RENDER.get()
     real_edges = {(edge.tail_name, edge.head_name) for edge in captured_edges}
     with tempfile.NamedTemporaryFile("w", suffix=".dot", delete=False) as source_file:
         source_file.write(source)

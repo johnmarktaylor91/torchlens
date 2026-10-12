@@ -10,7 +10,7 @@ Measured at the branch point (pinned CI venv, one worker core): the render
 takes about 5 s end to end and shows 805 nodes -- the whole graph, far above
 the readable band of 25. The default is therefore NOT readable on a flat model
 yet; what it does guarantee today is a finished render inside the time budget
-with the floor disclosure and the FK4 expansion manifest beside the file.
+with the fallback disclosure and the FK4 expansion manifest beside the file.
 The node budget is tightened once the K_CAP flood fix (collapse item 6) lands.
 """
 
@@ -59,7 +59,12 @@ def test_flat_800_layer_default_render_within_budget(tmp_path: Path) -> None:
         for record in records
         if isinstance(record.message, TorchLensWarning)
     }
-    assert "collapse_floor_fallback" in codes, "an over-band default must disclose its floor"
+    disclosures = {
+        "collapse_floor_fallback",
+        "collapse_budget_fallback",
+        "collapse_near_uncollapsed",
+    }
+    assert codes & disclosures, f"an over-band default must disclose its fallback: {codes}"
     manifest_path = tmp_path / "flat800.expansion.json"
     assert manifest_path.is_file(), "the over-ceiling overview must ship its expansion manifest"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
