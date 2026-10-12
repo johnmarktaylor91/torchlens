@@ -80,10 +80,9 @@ class CallbackSettings:
         return "\n".join(lines)
 
 
-def _raw(name: str) -> str | None:
+def _clean(raw: str | None) -> str | None:
     """A set, nonempty variable's stripped value, else ``None``."""
 
-    raw = os.environ.get(name)
     if raw is None or not raw.strip():
         return None
     return raw.strip()
@@ -102,10 +101,10 @@ def _refuse(name: str, raw: str, expected: str) -> NoReturn:
     )
 
 
-def _env_list(name: str) -> tuple[str, ...] | None:
-    """Parse a comma list variable (``None`` when unset)."""
+def _env_list(name: str, value: str | None) -> tuple[str, ...] | None:
+    """Parse a comma list variable's ``value`` (``None`` when unset)."""
 
-    raw = _raw(name)
+    raw = _clean(value)
     if raw is None:
         return None
     items = tuple(item.strip() for item in raw.split(",") if item.strip())
@@ -114,10 +113,10 @@ def _env_list(name: str) -> tuple[str, ...] | None:
     return items
 
 
-def _env_positive_int(name: str, *, allow_none: bool) -> tuple[bool, int | None]:
-    """Parse a positive-int variable: ``(was_set, value)``; ``none`` when allowed."""
+def _env_positive_int(name: str, value: str | None, *, allow_none: bool) -> tuple[bool, int | None]:
+    """Parse a positive-int variable's ``value``: ``(was_set, int)``; ``none`` when allowed."""
 
-    raw = _raw(name)
+    raw = _clean(value)
     if raw is None:
         return (False, None)
     if allow_none and raw.lower() in ("none", "off"):
@@ -135,7 +134,7 @@ def _env_positive_int(name: str, *, allow_none: bool) -> tuple[bool, int | None]
 def _env_signals() -> tuple[str, ...] | None:
     """Read ``TORCHLENS_WATCH_SIGNALS`` against the closed signal vocabulary."""
 
-    signals = _env_list(WATCH_SIGNALS_ENV)
+    signals = _env_list(WATCH_SIGNALS_ENV, os.environ.get(WATCH_SIGNALS_ENV))
     if signals is not None and any(signal not in SIGNALS for signal in signals):
         _refuse(WATCH_SIGNALS_ENV, ",".join(signals), f"a comma list from {SIGNALS}")
     return signals
@@ -157,7 +156,7 @@ def _resolve_select(select: Any) -> tuple[tuple[str, ...] | None, str]:
 
     if select is not None:
         return (tuple(select), "argument")
-    env_select = _env_list(WATCH_SELECT_ENV)
+    env_select = _env_list(WATCH_SELECT_ENV, os.environ.get(WATCH_SELECT_ENV))
     if env_select is not None:
         return (env_select, f"env {WATCH_SELECT_ENV}")
     return (None, "default")
@@ -168,7 +167,9 @@ def _resolve_every(every: int | None) -> tuple[int | None, str]:
 
     if every is not None:
         return (every, "argument")
-    was_set, env_every = _env_positive_int(WATCH_EVERY_ENV, allow_none=False)
+    was_set, env_every = _env_positive_int(
+        WATCH_EVERY_ENV, os.environ.get(WATCH_EVERY_ENV), allow_none=False
+    )
     if was_set:
         return (env_every, f"env {WATCH_EVERY_ENV}")
     return (None, "default")
@@ -179,7 +180,9 @@ def _resolve_hist_every(hist_every: Any) -> tuple[int | None, str]:
 
     if hist_every is not UNSET:
         return (hist_every, "argument")
-    was_set, env_hist = _env_positive_int(WATCH_HIST_EVERY_ENV, allow_none=True)
+    was_set, env_hist = _env_positive_int(
+        WATCH_HIST_EVERY_ENV, os.environ.get(WATCH_HIST_EVERY_ENV), allow_none=True
+    )
     return (env_hist, f"env {WATCH_HIST_EVERY_ENV}" if was_set else "default")
 
 

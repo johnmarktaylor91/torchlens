@@ -99,6 +99,7 @@ def test_skip_and_record_inside_a_real_fit(tmp_path: Path) -> None:
     # The second batch has no "x" entry, so the default guess hands the whole
     # mapping to the forward, which cannot take it.
     batches = [{"x": torch.ones(2, 4)}, {"inputs": torch.ones(2, 4)}]
+    loader = torch.utils.data.DataLoader(batches, batch_size=None)
     path = tmp_path / "fit.jsonl"
     callback = LayerProfilerCallback(path)
     trainer = L.Trainer(
@@ -113,7 +114,7 @@ def test_skip_and_record_inside_a_real_fit(tmp_path: Path) -> None:
     )
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        trainer.fit(_Module(), train_dataloaders=batches)
+        trainer.fit(_Module(), train_dataloaders=loader)
     codes = [getattr(w.message, "fields", {}).get("code") for w in caught]
     assert codes.count("lightning_profile_skipped") == 1
     assert trainer.global_step == 2
