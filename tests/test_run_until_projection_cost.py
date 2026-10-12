@@ -31,14 +31,14 @@ _BASE_WRITES_PER_EXECUTED_OP = 295
 
 
 def _stack() -> nn.Module:
+    """Three conv-ReLU blocks (no BatchNorm, so ``until=`` also runs on the base)."""
+
     torch.manual_seed(0)
     return nn.Sequential(
         OrderedDict(
             (
                 f"block{index}",
-                nn.Sequential(
-                    nn.Conv2d(3 if index == 0 else 4, 4, 3, padding=1), nn.BatchNorm2d(4), nn.ReLU()
-                ),
+                nn.Sequential(nn.Conv2d(3 if index == 0 else 4, 4, 3, padding=1), nn.ReLU()),
             )
             for index in range(3)
         )
