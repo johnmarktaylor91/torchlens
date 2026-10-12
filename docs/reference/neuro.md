@@ -135,7 +135,7 @@ benchmark's authority.
 
 | Function | Estimator | Precision | Inputs | Degenerate case |
 |---|---|---|---|---|
-| `tl.stats.cka(a, b)` | Linear CKA, BIASED estimator (Kornblith et al. 2019 gram-matrix form; no unbiased-HSIC correction) | CPU `float64` | matched `[n_obs x n_features]` pairs (rows are observations; mismatched row counts refuse) | zero-variance input returns `NaN` |
+| `tl.stats.cka(a, b)` | Linear CKA, BIASED estimator (Kornblith et al. 2019 gram-matrix form; no unbiased-HSIC correction) | CPU `float64` | matched `[n_obs x n_features]` pairs (rows are observations; mismatched row counts refuse; NaN/Inf input refuses `cka_input_nonfinite`, as `tl.repgeom.rdm` does) | zero-variance input returns `NaN` with a `cka_zero_variance` warning |
 
 Reference values are pinned in `tests/test_neuro_pkg_geometry.py`; an
 estimator change fails the literals. RBF/debiased estimators are
