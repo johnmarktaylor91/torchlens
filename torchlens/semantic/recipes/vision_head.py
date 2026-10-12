@@ -336,21 +336,49 @@ def classification_head(module: Any) -> dict[str, Any]:
     return result
 
 
-def _output_leaf_spec(module: Any, role: str) -> FacetSpec | AbsenceReason:
-    """Return the op-anchored spec of one named leaf of a module's output."""
+def _container_role(op: Any) -> str | None:
+    """Return the last component of an output op's recorded container path."""
 
+    components = tuple(getattr(op, "container_path", ()) or ())
+    if not components:
+        return None
+    last = components[-1]
+    for attr_name in ("key", "name", "index"):
+        if hasattr(last, attr_name):
+            return str(getattr(last, attr_name))
+    return str(last)
+
+
+def _output_leaf_spec(module: Any, role: str) -> FacetSpec | AbsenceReason:
+    """Return the op-anchored spec of one named leaf of a module's output.
+
+    A root module's output leaves are the trace's output ops, keyed by their
+    recorded model-output container path (``CLIPOutput.logits_per_image``);
+    a submodule's are its call's output ops, keyed by ``multi_output_name``.
+    """
+
+    trace = getattr(module, "trace", None)
+    if trace is None:
+        return structural("module trace is unavailable")
     try:
-        call = module._single_call_or_error()
-        matches = [
-            label
-            for label in call.output_ops
-            if getattr(module.trace.ops[label], "multi_output_name", None) == role
-        ]
+        if str(getattr(module, "address", "")) == "self":
+            candidates = [
+                item if hasattr(item, "container_path") else trace.ops[item]
+                for item in tuple(getattr(trace, "output_ops", ()) or ())
+            ]
+            matches = [op for op in candidates if _container_role(op) == role]
+        else:
+            call = module._single_call_or_error()
+            matches = [
+                trace.ops[label]
+                for label in call.output_ops
+                if getattr(trace.ops[label], "multi_output_name", None) == role
+            ]
     except (AttributeError, KeyError, IndexError, RuntimeError, ValueError):
         return structural(f"module output leaf {role!r} is unavailable")
     if len(matches) != 1:
         return structural(f"module output leaf {role!r} did not resolve to exactly one op")
-    op = module.trace.ops[matches[0]]
+    op = matches[0]
     if not op_output_readable(op):
         return needs_capture(
             f"module output leaf {role!r} op {getattr(op, 'label', '<unknown>')!r} was not saved",

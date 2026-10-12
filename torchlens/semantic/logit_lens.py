@@ -681,6 +681,22 @@ def _row_positions(
     return tuple(normalized)
 
 
+def _facet_views(trace: Any) -> list[tuple[str, Any]]:
+    """Return ``(address, facet view)`` for every single-call module.
+
+    A module called more than once (a dropout reused inside a block, a
+    weight-shared layer) serves facets per call only, and its ``facets``
+    view refuses; it can be neither a projected block nor a head here.
+    """
+
+    views: list[tuple[str, Any]] = []
+    for module in trace.modules:
+        if len(tuple(getattr(module, "calls", ()) or ())) > 1:
+            continue
+        views.append((str(getattr(module, "address", "")), module.facets))
+    return views
+
+
 def _in_tower(address: str, tower: str | None) -> bool:
     """Return whether a module address lies inside a head's tower."""
 
@@ -701,9 +717,7 @@ def _resolve_layer_addresses(
     """
 
     available = [
-        str(module.address)
-        for module in trace.modules
-        if getattr(module, "address", None) != "self" and module.facets.has(facet)
+        address for address, view in _facet_views(trace) if address != "self" and view.has(facet)
     ]
     if layers is None:
         in_tower = [address for address in available if _in_tower(address, tower)]
@@ -752,33 +766,17 @@ _VISION_HEAD_KEYS = (
 def _find_default_head(trace: Any) -> _DefaultHead | None:
     """Return the language-model head, else the first vision head, else ``None``."""
 
-    view = _find_head_view(trace)
-    if view is not None:
-        address = next(
-            (str(m.address) for m in trace.modules if m.facets.has("unembed_weight")), None
-        )
-        return _DefaultHead(LENS_SOURCE_MODEL_HEAD, view, address, None)
-    for key, kind in _VISION_HEAD_KEYS:
-        for module in trace.modules:
-            candidate = module.facets
-            if candidate.has(key):
-                tower = candidate.get("tower_address")
-                return _DefaultHead(
-                    kind,
-                    candidate,
-                    str(getattr(module, "address", "")) or None,
-                    tower if isinstance(tower, str) else None,
-                )
-    return None
-
-
-def _find_head_view(trace: Any) -> Any | None:
-    """Return the first module facet view exposing the unembedding facets."""
-
-    for module in trace.modules:
-        view = module.facets
+    views = _facet_views(trace)
+    for address, view in views:
         if view.has("unembed_weight"):
-            return view
+            return _DefaultHead(LENS_SOURCE_MODEL_HEAD, view, address or None, None)
+    for key, kind in _VISION_HEAD_KEYS:
+        for address, view in views:
+            if view.has(key):
+                tower = view.get("tower_address")
+                return _DefaultHead(
+                    kind, view, address or None, tower if isinstance(tower, str) else None
+                )
     return None
 
 
@@ -938,11 +936,9 @@ def _last_block_address(trace: Any, tower: str | None) -> str | None:
     """Return the last block exposing ``resid_post`` inside the head's tower."""
 
     resid_addresses = [
-        str(module.address)
-        for module in trace.modules
-        if getattr(module, "address", None) != "self"
-        and module.facets.has("resid_post")
-        and _in_tower(str(module.address), tower)
+        address
+        for address, view in _facet_views(trace)
+        if address != "self" and view.has("resid_post") and _in_tower(address, tower)
     ]
     return resid_addresses[-1] if resid_addresses else None
 
