@@ -2,7 +2,7 @@
 
 TransformerLens's daily-driver analysis tools rebuilt on torchlens: residual
 decomposition, direct logit attribution, per-head results, patching grids,
-head-taxonomy scores, QK/OV circuits (``FactoredMatrix``,
+head-taxonomy scores, per-neuron MLP rows, QK/OV circuits (``FactoredMatrix``,
 vendored from TransformerLens with credit), prompt utilities, an alias layer, and
 retention plans
 -- derived from the captured graph on ANY architecture with a certifiable
@@ -27,6 +27,7 @@ from ._factored import FactoredMatrix
 from ._grids import PatchGrid, grid, patch_heads_grid, patch_residual_grid
 from ._heads import attention_head_contributions
 from ._lowered import LoweredResult, lowered_counterfactual
+from ._neurons import mlp_neuron_contributions
 from ._params import HeadWeightViews, ProjectionSource, head_weight_views, ov_circuit, qk_circuit
 from ._prompts import PromptInspection, inspect_prompt, test_prompt
 from ._records import ComponentRow, ComponentStack, ContributionScores, Coordinate
@@ -59,6 +60,7 @@ __all__ = [
     "head_weight_views",
     "inspect_prompt",
     "lowered_counterfactual",
+    "mlp_neuron_contributions",
     "ov_circuit",
     "patch_heads_grid",
     "patch_residual_grid",
