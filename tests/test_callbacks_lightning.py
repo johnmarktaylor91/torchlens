@@ -1,4 +1,4 @@
-"""Regression tests for the Lightning ``LayerProfilerCallback`` teardown."""
+"""Tests for the Lightning callbacks: ``LayerProfilerCallback`` teardown and ``SummaryCallback``."""
 
 from __future__ import annotations
 
@@ -173,3 +173,178 @@ def test_maybe_profile_restores_every_submodule_training_flag(
 
     after = {name: module.training for name, module in model.named_modules()}
     assert after == before
+
+
+# --- SummaryCallback (walk U03.4) -------------------------------------------
+
+
+class _SummaryTrainer:
+    """Minimal trainer stand-in for the fit-start summary callback."""
+
+    is_global_zero = True
+
+
+def _summary_callback(**kwargs: Any) -> tuple[Any, list[str]]:
+    """Return a SummaryCallback whose printed text is collected."""
+
+    from torchlens.callbacks.lightning import SummaryCallback
+
+    printed: list[str] = []
+    return SummaryCallback(print_fn=printed.append, **kwargs), printed
+
+
+def test_summary_callback_prints_once_from_first_training_batch() -> None:
+    """The first training batch is the sample; later batches print nothing."""
+
+    callback, printed = _summary_callback()
+    model = _TinyModel()
+    trainer = _SummaryTrainer()
+
+    callback.on_fit_start(trainer, model)
+    assert printed == [], "no example_input_array: nothing runs at fit start"
+    callback.on_train_batch_start(trainer, model, (torch.ones(2, 4), torch.tensor([0, 1])), 0)
+    callback.on_train_batch_start(trainer, model, (torch.ones(2, 4), torch.tensor([0, 1])), 1)
+
+    assert len(printed) == 1
+    header, _, body = printed[0].partition("\n")
+    assert "sample: first training batch" in header
+    assert "one extra forward in eval mode under no_grad" in header
+    assert "restored" in header
+    assert body == str(callback.report)
+    assert "linear" in body
+
+
+def test_summary_callback_reprints_on_the_next_fit() -> None:
+    """Each fit start re-arms the callback, matching Lightning's ModelSummary."""
+
+    callback, printed = _summary_callback()
+    model = _TinyModel()
+    trainer = _SummaryTrainer()
+    for _ in range(2):
+        callback.on_fit_start(trainer, model)
+        callback.on_train_batch_start(trainer, model, {"x": torch.ones(2, 4)}, 0)
+    assert len(printed) == 2
+
+
+def test_summary_callback_uses_example_input_array_at_fit_start() -> None:
+    """A declared example_input_array is summarized in on_fit_start."""
+
+    callback, printed = _summary_callback()
+    model = _TinyModel()
+    model.example_input_array = torch.ones(3, 4)  # type: ignore[assignment]
+    trainer = _SummaryTrainer()
+
+    callback.on_fit_start(trainer, model)
+    callback.on_train_batch_start(trainer, model, torch.ones(2, 4), 0)
+
+    assert len(printed) == 1
+    assert "sample: example_input_array" in printed[0]
+
+
+def test_summary_callback_restores_modes_and_rng_exactly() -> None:
+    """The extra forward leaves every module flag and the RNG stream untouched."""
+
+    callback, _printed = _summary_callback()
+    model = _FrozenBackboneModel()
+    model.train()
+    model.backbone.eval()
+    before = {name: module.training for name, module in model.named_modules()}
+    running_mean = model.backbone[1].running_mean.clone()
+    rng_before = torch.random.get_rng_state()
+
+    callback.on_train_batch_start(_SummaryTrainer(), model, torch.randn(4, 4), 0)
+
+    assert {name: module.training for name, module in model.named_modules()} == before
+    assert torch.equal(model.backbone[1].running_mean, running_mean)
+    assert torch.equal(torch.random.get_rng_state(), rng_before)
+    assert callback.report is not None
+
+
+def test_summary_callback_skips_with_warning_on_unguessable_batch() -> None:
+    """A batch the forward cannot take warns typed and never kills the fit."""
+
+    from torchlens.errors import TorchLensWarning
+
+    callback, printed = _summary_callback()
+    model = _TinyModel()
+    batch = {"features": torch.ones(2, 4), "labels": torch.tensor([0, 1])}
+
+    with pytest.warns(TorchLensWarning) as record:
+        callback.on_train_batch_start(_SummaryTrainer(), model, batch, 0)
+
+    assert printed == []
+    assert callback.report is None
+    codes = [getattr(item.message, "fields", {}).get("code") for item in record]
+    assert "lightning_summary_skipped" in codes
+    # Disarmed after the attempt: the next batch does not retry.
+    callback.on_train_batch_start(_SummaryTrainer(), model, batch, 1)
+
+
+def test_summary_callback_input_getter_and_rank_zero_only() -> None:
+    """input_getter picks the sample; non-zero ranks never run the forward."""
+
+    callback, printed = _summary_callback(input_getter=lambda batch: batch["features"])
+    model = _TinyModel()
+    batch = {"features": torch.ones(2, 4)}
+
+    class _OtherRank:
+        is_global_zero = False
+
+    callback.on_train_batch_start(_OtherRank(), model, batch, 0)
+    assert printed == []
+    callback.on_fit_start(_SummaryTrainer(), model)
+    callback.on_train_batch_start(_SummaryTrainer(), model, batch, 0)
+    assert len(printed) == 1
+
+
+def test_summary_callback_validates_summary_options_at_construction() -> None:
+    """A bad summary option fails when the callback is built, not mid-fit."""
+
+    from torchlens.errors import TorchLensError
+
+    with pytest.raises(TorchLensError) as excinfo:
+        _summary_callback(no_such_option=True)
+    assert excinfo.value.fields["code"] == "summary_option_invalid"
+
+
+@pytest.mark.heavy
+def test_summary_callback_in_a_real_fit() -> None:
+    """A real Trainer.fit prints the summary once and trains normally."""
+
+    import lightning.pytorch as pl
+
+    class _Module(pl.LightningModule):
+        def __init__(self) -> None:
+            super().__init__()
+            self.net = _FrozenBackboneModel()
+            self.net.backbone.eval()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.net(x)
+
+        def training_step(self, batch: Any, batch_idx: int) -> torch.Tensor:
+            x, y = batch
+            return nn.functional.mse_loss(self(x), y)
+
+        def configure_optimizers(self) -> Any:
+            return torch.optim.SGD(self.parameters(), lr=0.01)
+
+    data = torch.utils.data.TensorDataset(torch.randn(8, 4), torch.randn(8, 4))
+    loader = torch.utils.data.DataLoader(data, batch_size=4)
+    callback, printed = _summary_callback()
+    trainer = pl.Trainer(
+        max_steps=2,
+        callbacks=[callback],
+        logger=False,
+        enable_checkpointing=False,
+        enable_progress_bar=False,
+        enable_model_summary=False,
+        accelerator="cpu",
+        devices=1,
+    )
+    module = _Module()
+    trainer.fit(module, loader)
+
+    assert len(printed) == 1
+    assert "sample: first training batch" in printed[0]
+    assert trainer.global_step == 2

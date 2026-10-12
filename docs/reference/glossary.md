@@ -1267,6 +1267,15 @@ shim owed*
   opted-in capture's `input_preprocessor` keeps `source="imagenet_default"`,
   `verified=False`, status `unverified_fallback`: never an authority.
 
+**SummaryCallback (torchlens.callbacks.lightning)** — *unstable — no deprecation shim owed*
+: Lightning callback printing `tl.summary` once per fit. Sample: the
+  module's `example_input_array` (at fit start) else the first training batch
+  (before its training step), whose forward input is `input_getter(batch)`,
+  else `batch["x"]`, else `batch[0]`, else the batch (a mapping as keyword
+  arguments). One extra forward in eval mode under no_grad; every module's
+  training flag and the RNG state are restored. Rank zero only; the report
+  stays on `.report`; a rejected sample warns `lightning_summary_skipped`.
+
 **show_legend=None AUTO value** — *unstable — no deprecation shim owed*
 : The tri-state AUTO value on the stable `show_legend` kwarg: no legend unless
   an encoding channel is active, then a channel-only disclosure legend.

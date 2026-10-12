@@ -958,6 +958,15 @@
   WandbSink, JSONLSink, MemorySink), `HFTrainerWatchCallback` /
   `LightningWatchCallback`, TB GraphDef with real StepStats. CHANGED:
   `tl.export.tensorboard` requires keyword `step` (default removed).
+- LIGHTNING FIT-START SUMMARY (walk U03.4; DOCUMENTED-UNSTABLE):
+  `torchlens.callbacks.lightning.SummaryCallback(input_getter=None, print_fn=print,
+  **summary_kwargs)` prints `tl.summary` once per fit: sample = the module's
+  `example_input_array` (in `on_fit_start`) else the first training batch (in
+  `on_train_batch_start`; `"x"` entry, else first element, else the batch, a mapping
+  as kwargs). ONE extra forward in eval mode under no_grad, every module flag and RNG
+  restored; rank zero only; a sample the forward rejects warns
+  `lightning_summary_skipped` and the fit continues; summary options validate at
+  construction. Both callbacks resolve on `lightning` or standalone `pytorch_lightning`.
 - OBSERVABILITY HOME (C06 + F24/F25/F27; DOCUMENTED-UNSTABLE):
   `torchlens.observability` (~100 names) carries the L5 record schema,
   summary transforms, `HistoryView` (bounded exactly-mergeable training
