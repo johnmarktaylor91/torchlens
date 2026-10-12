@@ -1198,6 +1198,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/mechinterp/__init__.py", "__all__"),
         ("torchlens/mechinterp/_aliases.py", "__all__"),
         ("torchlens/mechinterp/_anchors.py", "__all__"),
+        ("torchlens/mechinterp/_appliance.py", "__all__"),
         ("torchlens/mechinterp/_compose.py", "__all__"),
         ("torchlens/mechinterp/_dla.py", "__all__"),
         ("torchlens/mechinterp/_errors.py", "__all__"),
