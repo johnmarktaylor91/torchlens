@@ -313,3 +313,23 @@ def test_carry_state_does_not_change_the_trace():
     for left, right in zip(pure.layer_list, carried.layer_list, strict=True):
         if isinstance(left.out, torch.Tensor):
             assert torch.equal(left.out, right.out), left.layer_label
+
+
+def test_unrestorable_state_warns_capture_state_restore_incomplete(monkeypatch):
+    """A restore step that fails is named in one coded warning, never raised."""
+
+    import torchlens.utils.rng as rng
+    from torchlens.errors import TorchLensWarning
+
+    def _broken(_states):
+        raise RuntimeError("generator unavailable")
+
+    model = _Stateful().train()
+    x = torch.randn(2, 3, 8, 8)
+    monkeypatch.setattr(rng, "set_rng_from_saved_states", _broken)
+    with pytest.warns(TorchLensWarning) as caught:
+        tl.trace(model, x)
+    codes = [
+        w.message.fields.get("code") for w in caught if isinstance(w.message, TorchLensWarning)
+    ]
+    assert "capture_state_restore_incomplete" in codes
