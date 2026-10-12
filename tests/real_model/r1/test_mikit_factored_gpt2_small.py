@@ -59,9 +59,12 @@ def test_qk_ov_circuits_equal_explicit_products_gpt2_small(r1_loader):
             w_o = block.c_proj.weight.detach().reshape(n_heads, d_head, d_model)
             torch.testing.assert_close(qk.AB, w_q @ w_k.transpose(-2, -1), rtol=1e-5, atol=1e-5)
             torch.testing.assert_close(ov.AB, w_v @ w_o, rtol=1e-5, atol=1e-5)
-            # The factored norm matches the dense Frobenius norm per head.
+            # The factored (SVD-based) norm matches the dense Frobenius norm per
+            # head; compared in float64 so the check measures the algebra, not
+            # fp32 SVD rounding.
+            ov64 = mi.FactoredMatrix(views.w_v.double(), views.w_o.double())
             torch.testing.assert_close(
-                ov.norm(), torch.linalg.matrix_norm(w_v @ w_o), rtol=1e-4, atol=1e-4
+                ov64.norm(), torch.linalg.matrix_norm(w_v.double() @ w_o.double())
             )
     finally:
         trace.cleanup()
