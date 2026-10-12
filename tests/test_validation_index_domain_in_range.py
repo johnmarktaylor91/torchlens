@@ -75,14 +75,18 @@ class IndexAdd(nn.Module):
 
 
 class IndexCopy(nn.Module):
-    """index_copy of the input rows into projected rows, by a computed permutation."""
+    """index_copy of two input rows into projected rows at computed positions.
+
+    Two of the rows only: a full permutation would overwrite the whole
+    destination, an edge validation rightly reports as non-influential.
+    """
 
     def __init__(self) -> None:
         super().__init__()
         self.proj = nn.Linear(4, 4)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.proj(x).index_copy(0, torch.argsort(x.sum(-1)), x)
+        return self.proj(x).index_copy(0, torch.argsort(x.sum(-1))[:2], x[:2])
 
 
 class IndexFill(nn.Module):
