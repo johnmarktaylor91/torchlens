@@ -850,9 +850,24 @@ class MissingFacetError(KeyError):
             detail = self.reason.detail or "declared by a matching recipe but not produced"
             hint = self.reason.save_hint or "inspect facets.menu() for the full declaration status"
             return f"Facet {name!r} is unavailable: {detail}. Unknown cause; {hint}."
+        if self.reason.status == "structurally_absent":
+            detail = self.reason.detail or "this record has no such facet"
+            hint = self.reason.save_hint or "inspect facets.menu() for the facets it declares"
+            return f"Facet {name!r} is not available here: {detail}. To add it, {hint}."
         hint = self.reason.save_hint or "re-run with save=... including the required activation"
         detail = self.reason.detail or "required payload was not captured"
         return f"Facet {name!r} is unavailable: {detail}. Re-run with {hint}."
+
+
+def _owning_module_class_name(record: Any) -> str:
+    """Return the module class name behind a ModuleCall-like record, else its type name."""
+
+    try:
+        owner = getattr(record, "module", None)
+    except Exception:  # noqa: BLE001 -- a refusal message must not raise a second error
+        owner = None
+    owner_class = getattr(owner, "class_name", None) if not isinstance(owner, str) else None
+    return str(owner_class) if owner_class else type(record).__name__
 
 
 class MissingGradient:
@@ -1134,12 +1149,29 @@ class FacetView(Mapping[FacetKey, Any]):
             reason = self._missing.get(name)
             if reason is not None and reason.status != "structurally_absent":
                 raise MissingFacetError(name, reason)
-            raise KeyError(name)
+            raise MissingFacetError(name, self._absent_reason(name, reason))
         value = self._cache[name]
         if isinstance(value, FacetSpec):
             value = Facet(value)
             self._cache[name] = value
         return value
+
+    def _absent_reason(self, name: FacetKey, reason: AbsenceReason | None) -> AbsenceReason:
+        """Describe a facet this record does not have, naming what it does have (U36.1)."""
+
+        record = self._record
+        owner = getattr(record, "address", None) or getattr(record, "label", None) or "record"
+        class_name = getattr(record, "class_name", None) or _owning_module_class_name(record)
+        available = sorted(str(key) for key in self._cache)
+        detail = (reason.detail if reason is not None else None) or (
+            f"no registered recipe for {owner!r} ({class_name}) produces it; available facets: "
+            f"{available if available else 'none'}"
+        )
+        hint = (
+            f"register a recipe with @torchlens.semantic.register(class_name={class_name!r}) "
+            f"on a function returning {{{str(name)!r}: ...}}"
+        )
+        return AbsenceReason(status="structurally_absent", save_hint=hint, detail=detail)
 
     def __getattr__(self, name: str) -> Any:
         """Return a facet value by attribute name."""
@@ -1156,7 +1188,10 @@ class FacetView(Mapping[FacetKey, Any]):
             raise AttributeError(name)
         try:
             return self[name]
-        except MissingFacetError:
+        except MissingFacetError as exc:
+            if exc.reason.status == "structurally_absent":
+                # Attribute spelling keeps attribute semantics so hasattr() stays safe.
+                raise AttributeError(str(exc)) from exc
             raise
         except KeyError as exc:
             raise AttributeError(name) from exc
