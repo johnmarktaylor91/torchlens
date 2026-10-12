@@ -96,7 +96,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         node_style: VisNodeModeLiteral | MissingType = MISSING,
         vis_mode: VisModeLiteral = "unrolled",
         vis_call_depth: int = 1000,
-        vis_outpath: str = "modelgraph",
+        vis_outpath: str | None = None,
         vis_graph_overrides: dict[str, Any] | None = None,
         module: "Module | str | None" = None,
         node_mode: VisNodeModeLiteral = "default",
@@ -156,7 +156,14 @@ class TraceVisualizationMixin(_TraceMixinBase):
             instead of omitting them. Orphans must have been retained at capture time
             (capture with ``keep_orphans=True``).
             ``show_buffer_layers`` accepts ``"never"``, ``"meaningful"``, or
-            ``"always"``.
+            ``"always"``. ``direction`` accepts ``"bottomup"``, ``"topdown"``,
+            ``"leftright"``, or ``"rightleft"``.
+            ``vis_outpath=None`` (the default) writes a collision-safe file in
+            the current directory -- ``modelgraph.<format>``, then
+            ``modelgraph-2.<format>``, ``modelgraph-3.<format>`` -- and always
+            prints its path, so a bare ``draw()`` never overwrites an earlier
+            picture. An explicit path is written exactly (overwriting) and is
+            printed only when the trace is verbose.
         collapse:
             Smart module-collapse mode. ``"none"`` preserves the full graph,
             ``"auto"`` uses the v2 readability-targeted engine, and ``"max"``
@@ -557,6 +564,9 @@ class TraceVisualizationMixin(_TraceMixinBase):
         vis_mode: VisModeLiteral = "rolled",
         bwd: int | Iterable[int] | None = None,
         show_legend: bool | None = None,
+        *,
+        show_module_paths: bool = False,
+        show_grad_values: bool = False,
     ) -> str:
         """Render the captured backward grad_fn_handle graph.
 
@@ -570,6 +580,14 @@ class TraceVisualizationMixin(_TraceMixinBase):
             ``collapsed_node_spec_fn`` and ``vis_node_mode`` are accepted for
             forward-visualization API symmetry but are not applied because
             backward graphs do not render collapsed module nodes.
+        show_module_paths:
+            UNSTABLE (keyword-only). Opt-in row naming the module that owns
+            each backward node (``module <address>``; AccumulateGrad nodes
+            read ``param <address>``). Nodes no module owns get no row.
+        show_grad_values:
+            UNSTABLE (keyword-only). Opt-in row summarizing each node's
+            captured output gradient (``grad norm <x>, absmax <y>``; ``grad
+            values not captured`` when the capture kept no tensor).
 
         Returns
         -------
@@ -593,6 +611,8 @@ class TraceVisualizationMixin(_TraceMixinBase):
             vis_mode=vis_mode,
             bwd=bwd,
             show_legend=show_legend,
+            show_module_paths=show_module_paths,
+            show_grad_values=show_grad_values,
         )
 
     def draw_combined(

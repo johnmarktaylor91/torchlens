@@ -69,6 +69,9 @@ def render_backward_graph(
     vis_mode: VisModeLiteral = "rolled",
     bwd: int | Iterable[int] | None = None,
     show_legend: bool | None = None,
+    *,
+    show_module_paths: bool = False,
+    show_grad_values: bool = False,
 ) -> str:
     """Render the captured backward grad_fn_handle DAG as a Graphviz graph.
 
@@ -98,7 +101,8 @@ def render_backward_graph(
     vis_fileformat:
         Output format.
     direction:
-        Layout direction: ``'bottomup'``, ``'topdown'``, or ``'leftright'``.
+        Layout direction: ``'bottomup'``, ``'topdown'``, ``'leftright'``, or
+        ``'rightleft'``.
     code_panel:
         Optional source-code panel mode.
     vis_mode:
@@ -112,6 +116,14 @@ def render_backward_graph(
         ``accum``, ...; vizmech item 17/D30, the WGAN-GP acceptance
         contract's "every active style has an automatic legend row").
         ``False`` suppresses it.
+    show_module_paths:
+        Opt-in row naming the module that owns each node (``module
+        <address>``; AccumulateGrad nodes read ``param <address>``). Nodes no
+        module owns get no row.
+    show_grad_values:
+        Opt-in row summarizing each node's captured output gradient
+        (``grad norm <x>, absmax <y>``; ``grad values not captured`` when the
+        capture kept no tensor).
 
     Returns
     -------
@@ -183,6 +195,16 @@ def render_backward_graph(
     ir_builder.attr("edge", **edge_args)
 
     inventory = compute_backward_style_inventory(self, pass_filter)
+    from ._draw_validation import _validate_draw_flag_options
+
+    _validate_draw_flag_options(
+        False, show_module_paths=show_module_paths, show_grad_values=show_grad_values
+    )
+    rows = (
+        BackwardRowOptions(trace=self, module_paths=show_module_paths, grad_values=show_grad_values)
+        if (show_module_paths or show_grad_values)
+        else None
+    )
     if vis_mode == "rolled":
         visible_ids = {
             grad_fn_handle.grad_fn_object_id
@@ -197,6 +219,7 @@ def render_backward_graph(
                     node_spec_fn,
                     pass_filter=pass_filter,
                     inventory=inventory,
+                    rows=rows,
                 )
 
         for grad_fn_handle in self.grad_fns:
@@ -216,7 +239,7 @@ def render_backward_graph(
                 )
     else:
         _add_unrolled_backward_pass_clusters(
-            self, cast(graphviz.Digraph, ir_builder), node_spec_fn, pass_filter
+            self, cast(graphviz.Digraph, ir_builder), node_spec_fn, pass_filter, rows=rows
         )
     _emit_backward_key(ir_builder, show_legend, inventory)
 
