@@ -38,7 +38,7 @@ __all__ = [
 ]
 
 #: Schema id stamped on every written manifest.
-EXPANSION_MANIFEST_SCHEMA = "torchlens.expansion_manifest.v1"
+EXPANSION_MANIFEST_SCHEMA = "torchlens_expansion_manifest_v1"
 
 
 @dataclass(frozen=True)

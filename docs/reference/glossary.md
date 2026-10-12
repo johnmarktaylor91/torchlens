@@ -1291,7 +1291,7 @@ shim owed*
   depend on which face a machine has installed. The emitted DOT keeps `fontname="Helvetica"`.
 
 **Expansion manifest** — *unstable — no deprecation shim owed*
-: The JSON file `<outpath>.expansion.json` (schema `torchlens.expansion_manifest.v1`) a `draw`
+: The JSON file `<outpath>.expansion.json` (schema `torchlens_expansion_manifest_v1`) a `draw`
   render writes beside an over-ceiling overview: a floor-fallback plan still above the readable
   band, or the bounded top-level module overview served past the pathological pre-gate. One entry
   per collapsed unit: a stable `expansion_id`, `kind`, `module`, `members`, and the `draw()`

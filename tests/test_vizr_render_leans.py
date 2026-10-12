@@ -217,7 +217,7 @@ def test_fk4_pathological_trace_renders_bounded_overview_with_manifest(
     assert (tmp_path / "ov.svg").stat().st_size > 0
     assert "collapse overview: top-level modules only" in dot
     manifest = _manifest(tmp_path / "ov.expansion.json")
-    assert manifest["schema"] == "torchlens.expansion_manifest.v1"
+    assert manifest["schema"] == "torchlens_expansion_manifest_v1"
     assert manifest["planner"] == "overview_fallback"
     expandable = {entry["module"] for entry in manifest["entries"]}
     assert "blocks" in expandable or {"blocks.0", "blocks.1", "blocks.2"} <= expandable

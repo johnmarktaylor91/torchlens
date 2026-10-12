@@ -118,7 +118,7 @@ quality planner is admitted when `U <= 2000` AND the predicted cost fits the bud
 - Over-ceiling residuals (forks.11 FK4, DOCUMENTED-UNSTABLE): when the served
   overview is still above the readable band -- a floor-fallback plan, or the
   pathological top-level overview -- `draw` writes `<outpath>.expansion.json` beside
-  the picture (schema `torchlens.expansion_manifest.v1`: one entry per collapsed unit
+  the picture (schema `torchlens_expansion_manifest_v1`: one entry per collapsed unit
   with a stable `expansion_id` and the `draw()` keywords that open it) and warns
   `collapse_expansion_manifest` with its path.
 - A generous wall-clock watchdog (off in CI and under `TORCHLENS_DETERMINISTIC`;
