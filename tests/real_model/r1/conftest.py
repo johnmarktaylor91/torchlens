@@ -42,6 +42,16 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             item.add_marker(marker)
 
 
+#: Rows whose task head the generic AutoModel heuristic would miss.
+_HEAD_CLASS_BY_ARTIFACT = {
+    "r1-mamba-130m-hf": "AutoModelForCausalLM",
+    "r1-switch-base-8": "AutoModelForSeq2SeqLM",
+    "r1-videomae-small-kinetics": "VideoMAEForVideoClassification",
+}
+#: Rows with no tokenizer (pixel or video inputs); the loader returns ``None``.
+_NO_TOKENIZER = frozenset({"r1-videomae-small-kinetics"})
+
+
 @pytest.fixture(scope="session")
 def r1_loader(artifact_registry: Registry):
     """Factory: load a pinned R1 checkpoint through its registry row.
@@ -57,16 +67,23 @@ def r1_loader(artifact_registry: Registry):
             return cache[artifact_id]
         row = artifact_registry.checkpoint_evidence(artifact_id)
         if row.kind == "hf_hub":
+            import transformers
             from transformers import AutoModel, AutoModelForCausalLM, AutoTokenizer
 
             loader = (
-                AutoModelForCausalLM
+                getattr(transformers, _HEAD_CLASS_BY_ARTIFACT[artifact_id])
+                if artifact_id in _HEAD_CLASS_BY_ARTIFACT
+                else AutoModelForCausalLM
                 if any("lm" in g.lower() or g in ("RG04", "RG05") for g in row.gallery_ids)
                 or "gpt" in row.model_id
                 else AutoModel
             )
             model = loader.from_pretrained(row.model_id, revision=row.revision).eval()
-            tokenizer = AutoTokenizer.from_pretrained(row.model_id, revision=row.revision)
+            tokenizer = (
+                None
+                if artifact_id in _NO_TOKENIZER
+                else AutoTokenizer.from_pretrained(row.model_id, revision=row.revision)
+            )
             result = {"row": row, "model": model, "tokenizer": tokenizer}
         elif row.kind == "torchvision_weights":
             import torchvision.models as tv_models
