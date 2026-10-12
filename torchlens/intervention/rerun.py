@@ -1437,7 +1437,7 @@ def _refuse_source_matched_zero_fire(
         try:
             matched = len(source_log.resolve_sites(entry.site_target, max_fanout=fanout))
         except Exception:  # noqa: BLE001 - an unresolvable target keeps the warning path
-            continue
+            matched = 0
         if not matched:
             continue
         raise LiveModeLabelError(
