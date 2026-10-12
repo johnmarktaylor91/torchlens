@@ -13,7 +13,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-pytestmark = [pytest.mark.heavy, pytest.mark.real_model, pytest.mark.real_checkpoint]
+pytestmark = [pytest.mark.real_model, pytest.mark.real_checkpoint]
 
 
 def test_qk_ov_circuits_equal_explicit_products_gpt2_small(r1_loader):
