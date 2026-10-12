@@ -93,6 +93,7 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "verbose",
     "backward_ready",
     "inference_only",
+    "carry_state",
     "name",
     "cache",
     "cache_dir",
@@ -209,6 +210,7 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "verbose": "verbose",
     "backward_ready": "backward_ready",
     "inference_only": "inference_only",
+    "carry_state": "carry_state",
     "name": "name",
     "cache": "cache",
     "cache_dir": "cache_dir",
@@ -511,6 +513,15 @@ class CaptureOptions:
         Trace reports the effective value. The implied value is cleared when
         the forward re-enables grad (``torch.enable_grad()`` inside it) and an
         output carries autograd history.
+    carry_state:
+        Whether the capture keeps the model state its forward changed
+        (forward-equivalent: norm running statistics, buffer writes, random
+        draws and plain attributes advance exactly as one direct ``model(x)``
+        would, the spelling ``trace.run(carry_state=True)`` uses). The default
+        ``False`` makes the capture a pure observer: buffers, random state,
+        training modes and plain module attributes are restored afterwards,
+        on success and on failure. A cache hit runs no forward, so nothing
+        advances (DOCUMENTED-UNSTABLE).
     name:
         Optional user-facing name for the returned log.
     cache:
@@ -678,6 +689,7 @@ class CaptureOptions:
     verbose: bool = False
     backward_ready: bool = False
     inference_only: bool = False
+    carry_state: bool = False
     name: str | None = None
     cache: bool = False
     cache_dir: str | Path | None = None
@@ -731,6 +743,7 @@ class CaptureOptions:
         verbose: bool | MissingType = MISSING,
         backward_ready: bool | MissingType = MISSING,
         inference_only: bool | MissingType = MISSING,
+        carry_state: bool | MissingType = MISSING,
         name: str | None | MissingType = MISSING,
         cache: bool | MissingType = MISSING,
         cache_dir: str | Path | None | MissingType = MISSING,
@@ -844,6 +857,9 @@ class CaptureOptions:
             ),
             "inference_only": _resolve_option_value(
                 "inference_only", inference_only, False, specified_fields
+            ),
+            "carry_state": _resolve_option_value(
+                "carry_state", carry_state, False, specified_fields
             ),
             "name": _resolve_option_value("name", name, None, specified_fields),
             "cache": _resolve_option_value("cache", cache, False, specified_fields),

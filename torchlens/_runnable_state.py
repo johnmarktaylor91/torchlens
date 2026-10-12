@@ -32,7 +32,7 @@ from .runnable import (
     TensorSlotDescriptor,
     TensorSlotRole,
 )
-from .utils._torch_compat import tensor_has_named_dims
+from .utils._torch_compat import tensor_has_named_dims, tensor_version_or_none
 from .utils._torch_symbols import torch_attr
 from .utils.lazy_state import raise_if_pending_state_slots
 
@@ -833,6 +833,8 @@ class LiveDeclaredStateSnapshot:
     bindings: tuple[tuple[Any, str, str, str, torch.Tensor], ...]
     #: id(original_object) -> value clone
     clones: dict[int, torch.Tensor]
+    #: id(original_object) -> version counter at snapshot time (None if unreadable)
+    versions: dict[int, int | None]
 
 
 def _snapshot_refusal(reason: str, **payload: Any) -> Exception:
@@ -915,7 +917,8 @@ def snapshot_live_declared_state(model: object) -> LiveDeclaredStateSnapshot:
                     f"cloning state entry {canonical!r} failed ({exc!r})",
                     state_dict_name=canonical,
                 ) from exc
-    return LiveDeclaredStateSnapshot(bindings=tuple(bindings), clones=clones)
+    versions = {id(value): tensor_version_or_none(value) for *_rest, value in bindings}
+    return LiveDeclaredStateSnapshot(bindings=tuple(bindings), clones=clones, versions=versions)
 
 
 def load_trace_state_dict(trace: Any, sd: Mapping[str, Any]) -> None:

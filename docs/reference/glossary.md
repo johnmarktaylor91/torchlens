@@ -45,6 +45,20 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   `outcome.inference_only` report the effective value; a later `log_backward()` refuses and names
   the cause (`recording_backward_inference_only` on a `Recording`).
 
+**carry_state (CaptureOptions) / pure-observer capture** — *unstable — no deprecation shim owed*
+: A default `tl.trace` is a pure observer: it snapshots buffers (persistent and non-persistent),
+  every module's `training` flag, the global random states (torch, live CUDA devices, Python,
+  NumPy) and plain module attributes before the forward and restores them afterwards, on success
+  and on failure, so a train-mode BatchNorm's running statistics do not advance. A buffer the
+  forward changed is written back only where its bytes changed. Plain attributes restore by value
+  (scalars, strings, small tensors and containers) or by identity (any other object: a rebinding is
+  undone, its interior state is not); lazy modules are left as their materializing forward leaves
+  them. `CaptureOptions(carry_state=True)` opts into forward-equivalent state: state advances
+  exactly as one direct `model(x)` would, the same spelling as `trace.run(inputs=...,
+  carry_state=True)`. A capture-cache hit runs no forward, so nothing advances. An item that
+  cannot be restored is named in one `capture_state_restore_incomplete` warning. Transient: an
+  option only, never persisted.
+
 **Bound-method root**
 : The ruled `tl.trace` root contract: an `nn.Module` OR a bound method of one, e.g.
   `tl.trace(model.generate, ids, ...)` (also accepted by `tl.validate`). The owner resolves via

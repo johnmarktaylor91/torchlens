@@ -3,9 +3,12 @@
 WALKTHROUGH list-A row 30: train-mode tracing silently mutated BatchNorm
 running statistics -- the forward REALLY runs, so ``running_mean`` /
 ``running_var`` advance under momentum (even inside ``torch.no_grad`` or
-``inference_only=True``) with no disclosure anywhere. The capture entry now
-warns ONCE PER PROCESS with code ``batchnorm_train_stats_mutated`` when a
-train-mode norm layer tracking running statistics is about to run.
+``inference_only=True``) with no disclosure anywhere. A default capture is
+now a pure observer (U40.1) that restores the statistics afterwards, so the
+mutation happens only under the forward-equivalent opt-in
+``CaptureOptions(carry_state=True)``; there the capture entry warns ONCE PER
+PROCESS with code ``batchnorm_train_stats_mutated`` when a train-mode norm
+layer tracking running statistics is about to run.
 
 The latch is deliberately process-global; every test here saves and restores
 it via monkeypatch (capability-probe test-pollution lesson).
@@ -60,6 +63,20 @@ def _capture_batchnorm_warnings(model: nn.Module, x: torch.Tensor, **fields: Any
     ]
 
 
+def test_default_train_mode_capture_restores_stats_and_stays_silent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The pure-observer default leaves the statistics alone, so nothing is disclosed."""
+
+    _arm(monkeypatch)
+    model = BNNet().train()
+    mean_before = _running_mean(model)
+    hits = _capture_batchnorm_warnings(model, torch.randn(2, 3, 8, 8))
+    assert hits == []
+    assert torch.equal(mean_before, _running_mean(model))
+    assert user_funcs._BATCHNORM_TRAIN_STATS_WARNED is False
+
+
 def test_train_mode_bn_warns_coded_and_stats_really_mutate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -69,7 +86,7 @@ def test_train_mode_bn_warns_coded_and_stats_really_mutate(
     model = BNNet().train()
     mean_before = _running_mean(model)
     x = torch.randn(2, 3, 8, 8)
-    hits = _capture_batchnorm_warnings(model, x)
+    hits = _capture_batchnorm_warnings(model, x, carry_state=True)
     assert len(hits) == 1, "train-mode BN capture must warn coded exactly once"
     assert "running statistics" in str(hits[0].message)
     assert not torch.equal(mean_before, _running_mean(model)), (
@@ -82,8 +99,8 @@ def test_warn_is_once_per_process(monkeypatch: pytest.MonkeyPatch) -> None:
 
     _arm(monkeypatch)
     x = torch.randn(2, 3, 8, 8)
-    assert len(_capture_batchnorm_warnings(BNNet().train(), x)) == 1
-    assert len(_capture_batchnorm_warnings(BNNet().train(), x)) == 0
+    assert len(_capture_batchnorm_warnings(BNNet().train(), x, carry_state=True)) == 1
+    assert len(_capture_batchnorm_warnings(BNNet().train(), x, carry_state=True)) == 0
     assert user_funcs._BATCHNORM_TRAIN_STATS_WARNED is True
 
 
@@ -110,7 +127,9 @@ def test_inference_only_still_warns(monkeypatch: pytest.MonkeyPatch) -> None:
     _arm(monkeypatch)
     model = BNNet().train()
     mean_before = _running_mean(model)
-    hits = _capture_batchnorm_warnings(model, torch.randn(2, 3, 8, 8), inference_only=True)
+    hits = _capture_batchnorm_warnings(
+        model, torch.randn(2, 3, 8, 8), inference_only=True, carry_state=True
+    )
     assert len(hits) == 1
     assert not torch.equal(mean_before, _running_mean(model))
 
@@ -121,13 +140,13 @@ def test_track_running_stats_false_never_warns(monkeypatch: pytest.MonkeyPatch) 
     _arm(monkeypatch)
     model = BNNet().train()
     model.bn = nn.BatchNorm2d(4, track_running_stats=False).train()
-    hits = _capture_batchnorm_warnings(model, torch.randn(2, 3, 8, 8))
+    hits = _capture_batchnorm_warnings(model, torch.randn(2, 3, 8, 8), carry_state=True)
     assert hits == []
 
 
 @pytest.mark.real_model
 def test_realism_train_bn_fixture_warns(monkeypatch: pytest.MonkeyPatch) -> None:
-    """R0 realism: the registry train-bn structural fixture discloses."""
+    """R0 realism: the registry train-bn structural fixture discloses under carry_state."""
 
     from tests.real_model.r0.families import build_structural
 
@@ -135,7 +154,7 @@ def test_realism_train_bn_fixture_warns(monkeypatch: pytest.MonkeyPatch) -> None
     model, args, kwargs = build_structural("train-bn")
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        tl.trace(model, *args, **kwargs)
+        tl.trace(model, *args, capture=CaptureOptions(carry_state=True), **kwargs)
     hits = [
         w
         for w in caught

@@ -466,12 +466,17 @@ class RefreshProjector:
     ) -> None:
         """Enforce the D18 mode-aware buffer-sink routing contract (typed).
 
-        Refuse iff any buffer sink carries ``buffer_value_changed is not False``
-        (``True`` = a write happened; ``None`` = unproven, fail closed), a
-        recorded mode claim contradicts the write evidence, the refreshed
-        rerun's own journal recorded a value-changing buffer write (O1), or the
-        target-vs-refreshed evidence tuples diverge (O2). Eval-mode BatchNorm
-        (all sinks ``False`` with agreeing eval claims) passes.
+        Refuse iff any buffer sink carries unproven evidence
+        (``buffer_value_changed is None``, fail closed), a value-changing write
+        (``True``) that is not a proven train-mode norm writer, a recorded mode
+        claim contradicting the write evidence, the refreshed rerun's own
+        journal recording a value-changing write the target does not prove
+        (O1), or diverging target-vs-refreshed evidence (O2). Eval-mode
+        BatchNorm (``False`` with agreeing eval claims) and train-mode BatchNorm
+        (``True`` from a mode-sensitive norm call whose every recorded mode
+        claim says train) pass: a default run restores the declared state it
+        changed and a capture is a pure observer (U40.1), so every run starts
+        from the state the target was captured from.
 
         ``executed_raw_labels`` scopes the check to a truncated run's executed
         prefix: in-prefix sinks are compared at FULL strength including the O2
@@ -494,12 +499,16 @@ class RefreshProjector:
         )
         # Belt: recorded mode claims must agree with the write evidence where
         # both exist; a contradiction refuses typed, never resolved permissively.
+        train_mode_writers: set[str] = set()
         for sink_layer, (raw_label, value_changed, _) in zip(
             target_sinks, target_rows, strict=True
         ):
             if value_changed is None:
                 continue
-            for authority, claim in self._buffer_sink_mode_claims(self.target, sink_layer):
+            claims = self._buffer_sink_mode_claims(self.target, sink_layer)
+            if value_changed is True and claims:
+                train_mode_writers.add(raw_label)
+            for authority, claim in claims:
                 if claim is not bool(value_changed):
                     raise self._buffer_sink_routing_error(
                         refreshed,
@@ -508,28 +517,36 @@ class RefreshProjector:
                         f"capture-time write evidence records buffer_value_changed="
                         f"{value_changed!r} -- a tampered or incoherent mode claim",
                     )
-        # Primary key: capture-time write evidence. True = train-mode writer;
-        # None = unproven, fail closed. Eval-mode sinks (False) pass.
-        written = [row for row in target_rows if row[1] is not False]
+        # Primary key: capture-time write evidence. None = unproven, fail closed;
+        # True passes only for a proven train-mode norm writer (any other
+        # value-changing write, e.g. a counter, refuses). Eval-mode sinks pass.
+        written = [
+            row for row in target_rows if row[1] is not False and row[0] not in train_mode_writers
+        ]
         if written:
             names = ", ".join(repr(label) for label, _, _ in written)
             unproven = all(value_changed is None for _, value_changed, _ in written)
             reason = (
                 "carries unproven buffer write evidence (buffer_value_changed=None, fail closed)"
                 if unproven
-                else "recorded value-changing buffer writes (train-mode buffer writers)"
+                else "recorded value-changing buffer writes that are not proven train-mode "
+                "norm writers (counters, caches or other stateful buffers)"
             )
             raise self._buffer_sink_routing_error(
                 refreshed,
                 f"refresh target {reason} on buffer sink op(s) {names}, "
                 "whose live routing can change across reruns",
             )
-        # O1 refresh write tripwire: on the newly-allowed no-write path the
-        # refreshed rerun's OWN journal must also record no value-changing
-        # buffer write -- independent fresh evidence a tampered stored bit
-        # cannot buy a pass against.
+        # O1 refresh write tripwire: the refreshed rerun's OWN journal must
+        # record no value-changing buffer write beyond the target's proven
+        # train-mode norm writers -- independent fresh evidence a tampered
+        # stored bit cannot buy a pass against.
         refreshed_rows = self._buffer_sink_evidence(refreshed)
-        refreshed_written = [row for row in refreshed_rows if row[1] is not False]
+        refreshed_written = [
+            row
+            for row in refreshed_rows
+            if row[1] is not False and not (row[1] is True and row[0] in train_mode_writers)
+        ]
         if refreshed_written:
             names = ", ".join(repr(label) for label, _, _ in refreshed_written)
             raise self._buffer_sink_routing_error(
