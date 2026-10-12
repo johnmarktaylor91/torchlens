@@ -58,10 +58,11 @@ buffer-sink refusal is TRAINING-MODE AWARE (D18, by design): eval-mode BatchNorm
 (every buffer sink carries derived write evidence `buffer_value_changed=False` with agreeing
 mode claims) and train-mode BatchNorm (`buffer_value_changed=True` from a mode-sensitive norm
 call whose every recorded mode claim says train, plus the in-place `num_batches_tracked` counter
-advanced in that same module call) are refresh-eligible and runnable on the
-DEFAULT path and under `until=`: a default capture is a pure observer and a default run restores
-the declared state it changed (U40.1), so every run starts from the state the trace was captured
-from. Unproven (`None`) evidence, a value-changing write by anything else (counters, caches), a
+advanced in that same module call) are refresh-eligible and runnable through
+`trace.run(inputs=...)`, on the DEFAULT path and under `until=`: a default capture is a pure
+observer and a default run restores the declared state it changed (U40.1), so every run starts
+from the state the trace was captured from. The legacy `save_new_outs` refresh restores nothing
+and keeps refusing train-mode writers. Unproven (`None`) evidence, a value-changing write by anything else (counters, caches), a
 mode claim contradicting the evidence, a refreshed rerun's own journal recording a
 value-changing write the target does not prove, or diverging target-vs-refreshed evidence
 (compared per sink label) refuses with the typed `BufferSinkRoutingError` carrying

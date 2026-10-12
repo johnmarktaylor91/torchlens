@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import warnings
 import weakref
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 from weakref import WeakKeyDictionary
@@ -139,6 +141,26 @@ def _cloned_core_events(core: CapturedRunCore) -> tuple[OpEvent, ...]:
     """
 
     return tuple(_clone_op_event_for_replay(event) for event in core.events)
+
+
+#: Set only while ``trace.run()`` refreshes a live model: that door restores the
+#: declared state it changed (or the caller opted into ``carry_state=True``), so a
+#: proven train-mode norm writer is eligible there. Every other refresh door
+#: (``save_new_outs``) keeps refusing it.
+_TRAIN_MODE_NORM_WRITERS_ELIGIBLE: ContextVar[bool] = ContextVar(
+    "torchlens_train_mode_norm_writers_eligible", default=False
+)
+
+
+@contextmanager
+def train_mode_norm_writers_eligible() -> Iterator[None]:
+    """Admit proven train-mode norm writers for the refreshes inside this block."""
+
+    token = _TRAIN_MODE_NORM_WRITERS_ELIGIBLE.set(True)
+    try:
+        yield
+    finally:
+        _TRAIN_MODE_NORM_WRITERS_ELIGIBLE.reset(token)
 
 
 #: Fields ``Trace._refresh_rerun_op_from`` never copies from a rerun, and the
@@ -574,7 +596,9 @@ class RefreshProjector:
         claim says train, plus its in-place counter in the same module call)
         pass: a default run restores the declared state it
         changed and a capture is a pure observer (U40.1), so every run starts
-        from the state the target was captured from.
+        from the state the target was captured from. Only ``trace.run()``
+        admits them (``train_mode_norm_writers_eligible``); the legacy
+        ``save_new_outs`` refresh restores nothing and keeps refusing.
 
         ``executed_raw_labels`` scopes the check to a truncated run's executed
         prefix: in-prefix sinks are compared at FULL strength including the O2
@@ -616,6 +640,8 @@ class RefreshProjector:
                         f"{value_changed!r} -- a tampered or incoherent mode claim",
                     )
         train_mode_writers |= self._norm_counter_sinks(target_sinks, train_mode_writers)
+        if not _TRAIN_MODE_NORM_WRITERS_ELIGIBLE.get():
+            train_mode_writers.clear()
         # Primary key: capture-time write evidence. None = unproven, fail closed;
         # True passes only for a proven train-mode norm writer (any other
         # value-changing write, e.g. a counter, refuses). Eval-mode sinks pass.

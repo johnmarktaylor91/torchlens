@@ -795,14 +795,17 @@ def _attempt_live_forward(
         # input divergence, so the native error re-raises raw -- the old
         # ``None`` behavior, now explicit (R22-2).
         first_failed = None
+    from .capture.projectors import train_mode_norm_writers_eligible
+
     try:
-        fork.save_new_outs(
-            model,
-            input_args,
-            input_kwargs=input_kwargs,
-            random_seed=ctx.seed,
-            _run_until_plan=until_plan,
-        )
+        with train_mode_norm_writers_eligible():
+            fork.save_new_outs(
+                model,
+                input_args,
+                input_kwargs=input_kwargs,
+                random_seed=ctx.seed,
+                _run_until_plan=until_plan,
+            )
     except Exception as exc:  # not BaseException: KeyboardInterrupt/SystemExit stay raw
         if first_failed is not None:
             # An admitted-but-inexecutable DIVERGENT input surfaces as the typed
