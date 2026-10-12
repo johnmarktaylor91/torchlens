@@ -22,8 +22,12 @@ optional dependency.
   call.
 
 ## Adapter files and main entry points
-- `captum.py`: `attribute()`, `layer()` (extra: `torchlens[captum]`;
-  `layer()` is `_utils.module_for_site`).
+- `captum.py`: `attribute(log, method, target=None, *, inputs=None, **kwargs)`,
+  `layer()` (extra: `torchlens[captum]`; `layer()` is `_utils.module_for_site`).
+  `target=` is forwarded only when given (LayerActivation and most Neuron*
+  classes reject it); without `inputs=` every logged input is forwarded (the
+  tensor, or the positional tuple in `forward` order); a keyword-only, nested
+  or unsaved input refuses `bridge_captum_inputs_unresolved`.
 - `shap.py`: `explain(log, *, background, inputs=None, ...)` (default
   `shap.DeepExplainer`; extra `torchlens[shap]`, `shap>=0.45.1,<1`).
   `background` is REQUIRED keyword-only: the old default made the explained
@@ -44,7 +48,12 @@ optional dependency.
   `autoroute/_builtin_input.py` and imported eagerly by `user_funcs.py`, so it
   must import cleanly without `transformers` installed (gating stays inside
   the functions).
-- `huggingface.py`: `push_to_hub()` for artifacts (extra: `torchlens[hf]`).
+- `huggingface.py`: `push_to_hub()` uploads a `Trace`/`Bundle` as a gzipped
+  tar of its portable `.tlspec` bundle (never a pickle; anything else refuses
+  `hub_push_artifact_unsupported`); `from_hub()` downloads it, checks every tar
+  member (`hub_artifact_unsafe`) and loads eagerly through `tl.load`'s
+  default-deny loader. Tests use an `api=` fake exposing `upload_file` /
+  `hf_hub_download` (extra: `torchlens[hf]`).
 - `profiler.py`: `execution_trace()`, `join()` correlate a Kineto/Chrome trace
   with captured layers; stdlib-only, no import gate. `join()` (schema
   `torchlens.profiler_join.v2`) assigns each complete event to at most one
@@ -61,7 +70,9 @@ optional dependency.
 - `gradcam.py`: `cam()`, `layer()` (extra: `torchlens[gradcam]`). `cam()`
   splits `**kwargs` by name: keywords the CAM constructor declares
   (`reshape_transform`, ...) go to the constructor, the rest (`aug_smooth`,
-  `eigen_smooth`) to the CAM call. `layer()` is `_utils.module_for_site`.
+  `eigen_smooth`) to the CAM call; `call_kwargs=` is the explicit spelling
+  for call options (a key given both ways refuses
+  `bridge_gradcam_call_option_conflict`). `layer()` is `_utils.module_for_site`.
 - `brain_score.py`: `per_layer()` takes a CALLABLE offline benchmark (no
   import gate; raises `TypeError` on non-callables). `get_activations_fn()`
   builds the `get_activations(images, layer_names) -> OrderedDict[str,
@@ -131,8 +142,12 @@ optional dependency.
   inseq 0.7 (`load_model(model, attribution_method)`,
   `AttributionModel.attribute(input_texts, generated_texts=...)`); inseq
   swallows unknown keywords with only a warning, so a wrong spelling is
-  silently ignored -- verify keywords against inseq's signatures (extra:
-  `torchlens[inseq]`).
+  silently ignored -- verify keywords against inseq's signatures. `method`
+  may be the TorchLens spelling (`input_x_grad` maps to `input_x_gradient`);
+  an unknown name refuses `bridge_inseq_method_unknown`. With
+  `generated_texts=` the bridge compares `result.info["generated_texts"]`
+  with the request and refuses `bridge_inseq_forced_decoding_ignored` on a
+  difference (extra: `torchlens[inseq]`).
 - `depyf.py`: `dump(model, x, path, **prepare_debug_kwargs) -> list[Path]`
   runs `with depyf.prepare_debug(path): torch.compile(model)(*x)` and
   returns the files written; `path` is required; a cached compile that

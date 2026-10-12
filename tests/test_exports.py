@@ -343,7 +343,7 @@ class _FakeHubApi:
         # cleaned up as soon as this call returns, so content must be
         # captured now rather than by re-reading the path later.
         self.uploaded_bytes.append(Path(kwargs["path_or_fileobj"]).read_bytes())
-        return "https://huggingface.co/example/repo/blob/main/torchlens_artifact.pkl"
+        return "https://huggingface.co/example/repo/blob/main/torchlens_artifact.tar.gz"
 
 
 @pytest.fixture
