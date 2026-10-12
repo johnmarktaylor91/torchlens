@@ -35,8 +35,8 @@ for name, model in models.items():
 
 | Model | Rows | Non-pass rows |
 | --- | ---: | --- |
-| `linear_mlp` | 25 | `Runtime capability snapshot` |
-| `conv_pool` | 25 | `Runtime capability snapshot` |
+| `linear_mlp` | 28 | `Runtime capability snapshot` |
+| `conv_pool` | 28 | `Runtime capability snapshot` |
 
 Non-pass rows above name the checks that did not report `pass`; every other check
 reported `pass`. The full check list:
@@ -45,6 +45,9 @@ reported `pass`. The full check list:
 - Accelerate device_map='auto'
 - Accelerate CPU/disk offload
 - bitsandbytes 8-bit/4-bit
+- GPTQ/AWQ quantization
+- CUDA graphs
+- Serving engines (vLLM/SGLang)
 - PEFT/LoRA adapters
 - Tied/shared parameters
 - Multi-GPU RNG
