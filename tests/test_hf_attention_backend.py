@@ -147,7 +147,7 @@ def test_probs_match_independent_reference(family: str, mask_case: str, spy: _Sp
     """Per-head probabilities equal the independent masked QK-softmax."""
 
     model = _build(family, "sdpa")
-    tl_hf.register_attention(model)
+    model.set_attn_implementation(BACKEND_KEY)  # the spy holds the key
     batch = _inputs(mask_case)
     with torch.no_grad(), tl_hf.record_attention(model) as recording:
         model(**batch)
@@ -301,7 +301,7 @@ def test_generate_with_cache_records_every_decode_step(spy: _Spy) -> None:
     model = _build("llama_gqa", "sdpa")
     model.config.use_cache = True
     model.generation_config.pad_token_id = 0
-    tl_hf.register_attention(model)
+    model.set_attn_implementation(BACKEND_KEY)  # the spy holds the key
     batch = _inputs("left_pad")
     new_tokens = 3
     with torch.no_grad(), tl_hf.record_attention(model) as recording:
@@ -343,7 +343,7 @@ def test_t5_position_bias_and_cross_attention(spy: _Spy) -> None:
     """T5: relative position bias, causal decoder and cross attention."""
 
     model = FAMILY_BY_NAME["t5"].build("sdpa")
-    tl_hf.register_attention(model)
+    model.set_attn_implementation(BACKEND_KEY)  # the spy holds the key
     batch = _inputs("right_pad")
     decoder_ids = torch.randint(0, VOCAB, (2, 5))
     with torch.no_grad(), tl_hf.record_attention(model, check_sdpa=True) as recording:

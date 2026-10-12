@@ -96,7 +96,20 @@ def test_device_map_cpu_leg(checkpoint: Path) -> None:
 
     reference = _load(checkpoint, "sdpa")
     model = _load(checkpoint, BACKEND_KEY, device_map="cpu")
-    assert getattr(model, "hf_device_map", None) is not None
+    assert {p.device.type for p in model.parameters()} == {"cpu"}
+    _check_leg(reference, model)
+
+
+def test_accelerate_cpu_offload_leg(checkpoint: Path) -> None:
+    """accelerate.cpu_offload: weights stream in through hooks on every forward."""
+
+    import accelerate
+
+    reference = _load(checkpoint, "sdpa")
+    model = accelerate.cpu_offload(
+        _load(checkpoint, BACKEND_KEY), execution_device=torch.device("cpu")
+    )
+    assert hasattr(model.model.layers[0].self_attn.q_proj, "_hf_hook")
     _check_leg(reference, model)
 
 
