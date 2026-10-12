@@ -147,7 +147,7 @@ def test_old_style_pickle_without_io_format_version_refuses_typed(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Forged pre-sprint pickles refuse at the 2.33 rehydration floor."""
+    """Forged pre-sprint pickles refuse at the tlspec-6 rehydration floor."""
 
     trace = _build_trace()
     pickle_path = tmp_path / "old_style_trace.pkl"
@@ -177,7 +177,7 @@ def test_old_style_pickle_without_io_format_version_refuses_typed(
 
     from torchlens._io import ArtifactVersionBelowFloorError
 
-    with pytest.raises(ArtifactVersionBelowFloorError, match="torchlens 2.33"):
+    with pytest.raises(ArtifactVersionBelowFloorError, match="torchlens 2.31.0"):
         with pickle_path.open("rb") as handle:
             pickle.load(handle)
 
@@ -381,7 +381,7 @@ def test_op_setstate_absent_container_fields_restore_typed() -> None:
 def test_backend_address_none_is_preserved_and_pre_floor_refuses() -> None:
     """Explicit ``None`` survives restore; pre-floor states refuse typed.
 
-    The v5 ``backend_address`` repair ladder is deleted: the 2.33 floor
+    The v5 ``backend_address`` repair ladder is deleted: the tlspec-6 floor
     guarantees every loadable state already carries the field, so an explicit
     ``None`` must never be overwritten from ``address``, and a v4 state must
     refuse instead of triggering the migration.

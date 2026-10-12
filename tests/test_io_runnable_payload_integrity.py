@@ -372,7 +372,7 @@ def test_bfloat16_payload_round_trips_through_the_real_routing(tmp_path: Path) -
 def test_older_version_refuses_at_rehydration_floor(tmp_path: Path) -> None:
     """A sub-floor tlspec_version refuses typed instead of warning.
 
-    Since the v7 schema bump the current ``TLSPEC_VERSION`` sits above the 2.33
+    Since the v7 schema bump the current ``TLSPEC_VERSION`` sits above the tlspec-6
     rehydration floor (``MIN_TLSPEC_VERSION``), so the refusal boundary is the
     floor, not the current version: a between-floor-and-current artifact loads
     with the advisory ``DeprecationWarning``, while anything below the floor
@@ -386,7 +386,7 @@ def test_older_version_refuses_at_rehydration_floor(tmp_path: Path) -> None:
     manifest_dict = _manifest(path)
     manifest_dict["tlspec_version"] = MIN_TLSPEC_VERSION - 1
 
-    with pytest.raises(ArtifactVersionBelowFloorError, match="torchlens 2.33"):
+    with pytest.raises(ArtifactVersionBelowFloorError, match="torchlens 2.31.0"):
         Manifest.from_dict(manifest_dict)
 
 

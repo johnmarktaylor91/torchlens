@@ -981,9 +981,9 @@ def test_current_artifact_is_distinguishable_from_v7(tmp_path) -> None:
 
 
 def test_newer_than_runtime_version_refuses_typed() -> None:
-    """A claimed tlspec_version=10 state refuses as newer-than-runtime."""
+    """A claimed tlspec_version=11 state refuses as newer-than-runtime."""
 
     from torchlens._io import read_tlspec_version
 
-    with pytest.raises(TorchLensIOError, match="only supports up to 9"):
-        read_tlspec_version({"tlspec_version": 10}, cls_name="Trace")
+    with pytest.raises(TorchLensIOError, match="only supports up to 10"):
+        read_tlspec_version({"tlspec_version": 11}, cls_name="Trace")

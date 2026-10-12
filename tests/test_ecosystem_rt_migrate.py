@@ -225,7 +225,7 @@ def test_every_v1_step_declares_manifest_level() -> None:
     for step in _plan_steps(6):
         assert step.level == "manifest"
         assert step.target_contract_digest is None
-    assert set(_ABSENT_FAMILIES_BY_TARGET) == {7, 8, 9}
+    assert set(_ABSENT_FAMILIES_BY_TARGET) == {7, 8, 9, 10}
 
 
 def test_migrate_source_has_no_execution_imports() -> None:
