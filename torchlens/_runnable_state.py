@@ -935,6 +935,26 @@ class LiveStateRestoreFailure(RuntimeError):
         self.groups_restored = groups_restored
 
 
+def _declared_slot_unchanged(original: torch.Tensor, clone: torch.Tensor) -> bool:
+    """Return whether a live declared-state slot still holds its snapshot bytes.
+
+    Byte-exact and NaN-safe (the shared state-write audit compare). Any compare
+    failure answers ``False`` so the caller restores rather than trusts.
+    """
+
+    from .backends.torch.rescue import _state_bytes_equal
+
+    try:
+        return (
+            original.shape == clone.shape
+            and original.dtype == clone.dtype
+            and original.device == clone.device
+            and _state_bytes_equal(original, clone)
+        )
+    except Exception:
+        return False
+
+
 def restore_live_declared_state(snapshot: LiveDeclaredStateSnapshot) -> None:
     """Restore a declared-state snapshot onto the live model (finally bracket).
 
@@ -945,6 +965,13 @@ def restore_live_declared_state(snapshot: LiveDeclaredStateSnapshot) -> None:
     Raises :class:`LiveStateRestoreFailure` (original exception chained) on the
     first failed restore; the caller owns the state-compromised consequence
     (L4 5.4).
+
+    Only a slot whose bytes differ from its snapshot is written back. An
+    unconditional ``copy_`` bumps the version counter of every parameter and
+    buffer the forward left untouched, and autograd saved those tensors (conv
+    weights, eval-mode BatchNorm running statistics) at their old version, so a
+    later ``backward()`` through the run's graph-attached activations failed
+    with torch's in-place modification error.
     """
 
     restored: set[int] = set()
@@ -954,7 +981,9 @@ def restore_live_declared_state(snapshot: LiveDeclaredStateSnapshot) -> None:
             if key in restored:
                 continue
             try:
-                original.copy_(snapshot.clones[key])
+                clone = snapshot.clones[key]
+                if not _declared_slot_unchanged(original, clone):
+                    original.copy_(clone)
             except Exception as exc:
                 raise LiveStateRestoreFailure(canonical, len(restored)) from exc
             restored.add(key)
