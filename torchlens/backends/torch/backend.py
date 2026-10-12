@@ -273,6 +273,7 @@ def _promote_layers_to_save_output_parent(
         save_raw_activations=getattr(trace, "save_raw_activations", True),
         ctx=ctx,
         kind="activation",
+        detach_saved_activations=bool(getattr(trace, "detach_saved_activations", True)),
     )
     if budget is not None and reservation is not None:
         budget.commit(reservation, (ram_payload, transformed_ram_payload))
