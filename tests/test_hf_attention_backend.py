@@ -23,7 +23,9 @@ import torch
 transformers = pytest.importorskip("transformers")
 
 from transformers import AttentionInterface  # noqa: E402
-from transformers.masking_utils import AttentionMaskInterface  # noqa: E402
+
+# The mask registry arrived in transformers 4.53; older legs of the band skip.
+AttentionMaskInterface = pytest.importorskip("transformers.masking_utils").AttentionMaskInterface
 
 from tests.real_model.r0.families import FAMILY_BY_NAME, VOCAB  # noqa: E402
 from torchlens._errors import InvalidArgumentError, MissingDependencyError  # noqa: E402

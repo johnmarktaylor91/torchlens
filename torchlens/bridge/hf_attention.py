@@ -379,7 +379,7 @@ def _check_against_sdpa(
 def _key_taken(interface: Any) -> bool:
     """Return whether ``BACKEND_KEY`` is registered to a foreign function."""
 
-    mapping = interface._global_mapping
+    mapping = interface()
     return BACKEND_KEY in mapping and mapping[BACKEND_KEY] not in (
         torchlens_attention_forward,
         torchlens_mask,

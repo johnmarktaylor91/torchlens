@@ -21,7 +21,9 @@ transformers = pytest.importorskip("transformers")
 pytest.importorskip("accelerate")
 
 from transformers import AttentionInterface, AutoModelForCausalLM  # noqa: E402
-from transformers.masking_utils import AttentionMaskInterface  # noqa: E402
+
+# The mask registry arrived in transformers 4.53; older legs of the band skip.
+AttentionMaskInterface = pytest.importorskip("transformers.masking_utils").AttentionMaskInterface
 
 from tests.real_model.r0.families import FAMILY_BY_NAME  # noqa: E402
 from tests.test_hf_attention_backend import (  # noqa: E402
