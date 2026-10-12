@@ -38,6 +38,7 @@ Every spelling here is DOCUMENTED-UNSTABLE pending the naming session.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -632,7 +633,15 @@ def render_surgery(trace: Trace, **user_kwargs: Any) -> Any:
 
     result = draw_with_lens(trace, "surgery", **user_kwargs)
     if not user_kwargs.get("return_graph", False):
-        outpath = str(user_kwargs.get("vis_outpath", "modelgraph"))
+        outpath = user_kwargs.get("vis_outpath")
+        if outpath is None:
+            # A bare draw chose a collision-safe name (forks.12): the census
+            # rides beside the file that was actually written.
+            from ._render_utils import DEFAULT_DRAW_STEM
+
+            geometry = getattr(trace, "_last_render_geometry", None)
+            written = getattr(geometry, "output_path", None)
+            outpath = os.path.splitext(written)[0] if written else DEFAULT_DRAW_STEM
         census_path = f"{outpath}.census.txt"
         with open(census_path, "w", encoding="ascii", errors="replace") as census_file:
             census_file.write(surgery_census(trace).to_text())

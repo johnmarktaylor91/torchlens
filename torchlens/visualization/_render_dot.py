@@ -34,7 +34,12 @@ from ._render_regions import (
     _setup_subgraphs,
     _setup_subgraphs_recurse,
 )
-from ._render_utils import html_escape
+from ._render_utils import (
+    DEFAULT_DRAW_STEM,
+    announce_written_graph,
+    collision_safe_outpath,
+    html_escape,
+)
 from ._svg_compose import (
     _inline_svg_file_local_images,
     _inline_svg_local_images,
@@ -129,6 +134,24 @@ def _strip_render_extension(vis_outpath: str) -> str:
     from ._render_utils import strip_known_extension
 
     return strip_known_extension(vis_outpath)
+
+
+def _report_saved_graph(trace: "Trace", target: RenderTarget) -> None:
+    """Report the written graph path: always for a bare draw, else only when verbose.
+
+    Parameters
+    ----------
+    trace:
+        Trace that was rendered (its ``verbose`` flag gates the quiet case).
+    target:
+        Resolved render target.
+    """
+
+    rendered_path = f"{target.outpath}.{target.fileformat}"
+    if target.announce_path:
+        announce_written_graph(rendered_path)
+    else:
+        _vprint(trace, f"Graph saved to {rendered_path}")
 
 
 def _validate_rendered_output(rendered_path: str, source_path: str, graph_kind: str) -> None:
@@ -924,7 +947,7 @@ def _emit_and_finish_forward(
             output_path=f"{target.outpath}.{target.fileformat}",
             stderr_text=rank_execution.get("stderr_text", ""),
         )
-        _vprint(trace, f"Graph saved to {target.outpath}.{target.fileformat}")
+        _report_saved_graph(trace, target)
         return result
 
     dot = context.dot
@@ -1107,7 +1130,7 @@ def _emit_and_finish_forward(
             )
             if not target.save_only:
                 _view_rendered_file(rendered_path)
-            _vprint(trace, f"Graph saved to {target.outpath}.{target.fileformat}")
+            _report_saved_graph(trace, target)
             if os.path.exists(source_path):
                 os.remove(source_path)
         except subprocess.TimeoutExpired as error:
@@ -1130,7 +1153,7 @@ def draw(
     self: "Trace",
     vis_mode: VisModeLiteral = "unrolled",
     vis_call_depth: int = 1000,
-    vis_outpath: str = "modelgraph",
+    vis_outpath: str | None = None,
     vis_graph_overrides: Optional[Dict[str, Any]] = None,
     module: "Module | str | None" = None,
     node_mode: VisNodeModeLiteral = "default",
@@ -1286,6 +1309,14 @@ def draw(
         from ._encoding import raise_encoding_dagua_refusal
 
         raise_encoding_dagua_refusal(request.encoding.active_channels())
+    # forks.12: a bare draw (no vis_outpath) writes a collision-safe file and
+    # always prints where; an explicit path is written exactly, as before.
+    announce_path = vis_outpath is None
+    resolved_outpath = (
+        collision_safe_outpath(DEFAULT_DRAW_STEM, vis_fileformat)
+        if vis_outpath is None
+        else _strip_render_extension(vis_outpath)
+    )
     if vis_renderer == "dagua":
         opted_in_module = sys.modules.get("torchlens.experimental.dagua")
         if not getattr(opted_in_module, "__torchlens_dagua_opted_in__", False):
@@ -1300,7 +1331,7 @@ def draw(
             self,
             vis_mode=vis_mode,
             vis_call_depth=vis_call_depth,
-            vis_outpath=vis_outpath,
+            vis_outpath=resolved_outpath,
             vis_save_only=vis_save_only,
             vis_fileformat=vis_fileformat,
             vis_buffers=show_buffer_layers == "always",
@@ -1310,11 +1341,12 @@ def draw(
     request, repeat_folds, segments, segment_lookup = _resolve_collapse_request(self, request)
 
     target = RenderTarget(
-        outpath=_strip_render_extension(vis_outpath),
+        outpath=resolved_outpath,
         fileformat=vis_fileformat,
         save_only=vis_save_only,
         viewer=not vis_save_only,
         renderer_name=vis_renderer,
+        announce_path=announce_path,
     )
     context = _resolve_forward_context(
         self,

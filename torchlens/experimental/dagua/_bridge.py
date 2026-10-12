@@ -244,7 +244,7 @@ def _to_dagua_direction(direction: str) -> str:
         Dagua direction code, or the original value if already Dagua-like.
     """
 
-    mapping = {"bottomup": "BT", "topdown": "TB", "leftright": "LR"}
+    mapping = {"bottomup": "BT", "topdown": "TB", "leftright": "LR", "rightleft": "RL"}
     return mapping.get(direction, direction)
 
 

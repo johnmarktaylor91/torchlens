@@ -960,7 +960,7 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `visualization_show_containers_invalid` | `show_containers` is outside its closed vocabulary | Pass False or one of `labels`, `cluster`, `collapsed`, `auto`, `nodes` |
 | `visualization_intervention_mode_invalid` | Intervention rendering mode is unknown | Choose `node_mark` or `as_node` |
 | `visualization_layout_invalid` | Visualization layout is unknown | Choose `auto`, `dot`, or `rank` |
-| `visualization_direction_invalid` | Render direction is unknown | Choose `bottomup`, `topdown`, or `leftright` |
+| `visualization_direction_invalid` | Render direction is unknown | Choose `bottomup`, `topdown`, `leftright`, or `rightleft` |
 | `visualization_renderer_invalid` | Visualization renderer is unknown | Choose `graphviz` or `dagua` |
 | `visualization_theme_invalid` | Visualization theme is unknown | Choose a supported theme |
 | `visualization_mode_invalid` | Backend visualization mode is unsupported | Choose a backend-supported mode |

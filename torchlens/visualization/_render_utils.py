@@ -251,6 +251,52 @@ def relativize_visualizer_image(path: str) -> str:
     return path[separator_index + 1 :]
 
 
+#: Stem a bare ``Trace.draw()`` (no ``vis_outpath``) writes under (forks.12).
+DEFAULT_DRAW_STEM = "modelgraph"
+
+
+def collision_safe_outpath(stem: str, fileformat: str) -> str:
+    """Return a fresh output stem for a draw call that named no path.
+
+    A bare ``draw()`` must never overwrite an earlier picture (forks.12): the
+    first call in a directory writes ``<stem>.<format>``, later calls write
+    ``<stem>-2.<format>``, ``<stem>-3.<format>`` and so on. A candidate is
+    taken when either the rendered file or the bare DOT source path (Graphviz
+    writes the source at the stem itself before rendering) already exists.
+
+    Parameters
+    ----------
+    stem:
+        Base file name, relative to the current working directory.
+    fileformat:
+        Graphviz output format; the extension checked for collisions.
+
+    Returns
+    -------
+    str
+        Output path WITHOUT the extension, as ``RenderTarget.outpath`` takes it.
+    """
+
+    candidate = stem
+    counter = 2
+    while os.path.exists(f"{candidate}.{fileformat}") or os.path.exists(candidate):
+        candidate = f"{stem}-{counter}"
+        counter += 1
+    return candidate
+
+
+def announce_written_graph(path: str) -> None:
+    """Print where a bare draw wrote its picture (forks.12: always, verbose or not).
+
+    Parameters
+    ----------
+    path:
+        Rendered file path, extension included.
+    """
+
+    print(f"TorchLens graph written to {path}")
+
+
 def strip_known_extension(outpath: str) -> str:
     """Strip a recognised image extension off ``outpath`` if present.
 
@@ -266,24 +312,32 @@ def strip_known_extension(outpath: str) -> str:
     return outpath
 
 
+#: TorchLens vis-direction literal -> Graphviz ``rankdir``.
+_DIRECTION_TO_RANKDIR: dict[str, str] = {
+    "bottomup": "BT",
+    "topdown": "TB",
+    "leftright": "LR",
+    "rightleft": "RL",
+}
+
+
 def direction_to_rankdir(direction: str) -> str:
     """Translate a TorchLens vis-direction literal into a Graphviz ``rankdir``.
 
-    Accepted inputs: ``'bottomup'``, ``'topdown'``, ``'leftright'``.  Raises
-    ``ValueError`` on anything else so callers don't silently render with the
-    Graphviz default when a typo'd direction sneaks through.
+    Accepted inputs: ``'bottomup'``, ``'topdown'``, ``'leftright'``,
+    ``'rightleft'``.  Raises ``InvalidArgumentError`` on anything else so
+    callers don't silently render with the Graphviz default when a typo'd
+    direction sneaks through.
     """
 
-    if direction == "bottomup":
-        return "BT"
-    if direction == "leftright":
-        return "LR"
-    if direction == "topdown":
-        return "TB"
+    rankdir = _DIRECTION_TO_RANKDIR.get(direction)
+    if rankdir is not None:
+        return rankdir
     raise InvalidArgumentError(
-        f"direction must be one of 'bottomup', 'topdown', or 'leftright'; got {direction!r}",
+        "direction must be one of 'bottomup', 'topdown', 'leftright', or 'rightleft'; "
+        f"got {direction!r}",
         code="visualization_direction_invalid",
-        remedy="pass direction='bottomup', 'topdown', or 'leftright'",
+        remedy="pass direction='bottomup', 'topdown', 'leftright', or 'rightleft'",
         argument="direction",
     )
 
