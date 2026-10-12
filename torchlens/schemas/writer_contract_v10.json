@@ -1104,6 +1104,7 @@
     "param_logs": "keep",
     "param_source": "keep",
     "parent_run": "drop",
+    "pinned_autograd_memory": "drop",
     "profile_enabled": "keep",
     "raise_on_nan": "keep",
     "random_seed": "keep",
@@ -3616,6 +3617,7 @@
      "param_logs": "keep",
      "param_source": "keep",
      "parent_run": "drop",
+     "pinned_autograd_memory": "drop",
      "profile_enabled": "keep",
      "raise_on_nan": "keep",
      "random_seed": "keep",
@@ -4069,5 +4071,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "fa5acc09af5a7f5161420a685ac825e289cd32a22752416190d456ad7b1005d7"
+ "writer_contract_digest": "bf5407227d5a7eff18ce1fbf195272919287c66542022b48b682daccc0ac4b8f"
 }
