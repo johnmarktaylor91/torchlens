@@ -98,7 +98,12 @@ def _write_back_slot(
 
     if _declared_slot_unchanged(original, clone):
         return
-    if snapshot_version is not None and tensor_version_or_none(original) == snapshot_version:
+    if original.is_inference():
+        # An inference tensor is writable only inside inference mode (and keeps no
+        # version counter to preserve).
+        with torch.inference_mode():
+            original.copy_(clone)
+    elif snapshot_version is not None and tensor_version_or_none(original) == snapshot_version:
         original.data.copy_(clone)
     else:
         original.copy_(clone)
@@ -303,8 +308,8 @@ def _restore_observer_attrs(snapshot: CaptureObserverSnapshot) -> list[str]:
             current = _observer_attr_snapshot(module, name, attr_path)
             if _plain_attr_values_equal(current, saved, attr_path):
                 continue
-        except (AttributeError, KeyError):
-            pass  # deleted by the forward: restore it
+        except _RESTORE_ERRORS:
+            pass  # deleted by the forward, or no longer comparable: restore it
         try:
             value = _plain_attr_restore_value(saved)
             if isinstance(value, torch.nn.Parameter) and name not in module._parameters:
