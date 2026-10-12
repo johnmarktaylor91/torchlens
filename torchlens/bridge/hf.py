@@ -292,10 +292,12 @@ def trace_text(
     transform, transform_state = _make_text_transform(
         tok, chat_template=chat_template, structure_only=structure_only
     )
+    # Structure-only captures hold no output values to decode as text.
+    style = {} if structure_only else {"output_style": "hf_text"}
     capture = tl.options.merge_capture_options(
         capture=kwargs.pop("capture", None),
         transform=transform,
-        output_style="hf_text",
+        **style,
     )
     had_tokenizer = hasattr(model, "_torchlens_output_tokenizer")
     previous_tokenizer = getattr(model, "_torchlens_output_tokenizer", None)
@@ -433,7 +435,7 @@ def _trace_text_capture(
             'model with attn_implementation="eager", or call '
             "tl.bridge.hf.register_attention(model)"
         )
-        fields = {**exc.fields, "remedy": remedy}
+        fields = cast(dict[str, Any], {**exc.fields, "remedy": remedy})
         raise ValueDependentBranchError(
             f"{exc}\nRemedy for text input: {remedy}.", **fields
         ) from exc

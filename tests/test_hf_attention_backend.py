@@ -32,8 +32,8 @@ from torchlens._errors import InvalidArgumentError, MissingDependencyError  # no
 from torchlens.bridge import hf as tl_hf  # noqa: E402
 from torchlens.bridge.hf_attention import (  # noqa: E402
     BACKEND_KEY,
+    _CallFacts,
     _check_against_sdpa,
-    full_matrix_bytes,
     torchlens_attention_forward,
 )
 from torchlens.errors import ValidationError  # noqa: E402
@@ -283,18 +283,11 @@ def test_nbytes_matches_the_disclosed_formula() -> None:
     with torch.no_grad(), tl_hf.record_attention(model) as recording:
         model(**batch)
     cfg = model.config
-    expected = full_matrix_bytes(
-        batch=2, heads=cfg.num_attention_heads, q_len=SEQ, kv_len=SEQ,
-        layers=cfg.num_hidden_layers, dtype=torch.float32,
-    )  # fmt: skip
+    float32_bytes = 4
+    expected = 2 * cfg.num_attention_heads * SEQ * SEQ * float32_bytes * cfg.num_hidden_layers
     assert recording.nbytes == expected
     # The disclosed 7B example: 32 layers x 32 heads at 4096 tokens in bf16.
-    assert (
-        full_matrix_bytes(
-            batch=1, heads=32, q_len=4096, kv_len=4096, layers=32, dtype=torch.bfloat16
-        )
-        == 32 * 2**30
-    )
+    assert 32 * 32 * 4096 * 4096 * 2 == 32 * 2**30
 
 
 def test_generate_with_cache_records_every_decode_step(spy: _Spy) -> None:
@@ -310,7 +303,8 @@ def test_generate_with_cache_records_every_decode_step(spy: _Spy) -> None:
         model.generate(**batch, max_new_tokens=new_tokens, min_new_tokens=new_tokens,
                        do_sample=False)  # fmt: skip
     layers = model.config.num_hidden_layers
-    assert len(recording.calls) == layers * (1 + new_tokens)
+    # One prefill forward plus one forward per further token: new_tokens forwards.
+    assert len(recording.calls) == layers * new_tokens
     full_pad = torch.cat([batch["attention_mask"], torch.ones(2, new_tokens, dtype=torch.long)], 1)
     for recorded_call, call in zip(recording.calls, spy.calls, strict=True):
         q_len, kv_len = call["q"].shape[-2], call["k"].shape[-2]
@@ -334,10 +328,17 @@ def test_sdpa_check_is_live_on_a_corrupted_output() -> None:
     q = torch.randn(1, 2, 4, 8)
     probs = torch.softmax(q @ q.transpose(-1, -2), dim=-1)
     out = probs @ q
-    facts = {"attention_mask": None, "mask_kind": "none", "scale": 1.0, "position_bias": None}
-    _check_against_sdpa("m", q, q, q, out, probs, facts)
+
+    def facts(heads_out: torch.Tensor) -> _CallFacts:
+        return _CallFacts(
+            query=q, key_states=q, value_states=q, heads_out=heads_out, probs=probs,
+            attention_mask=None, position_bias=None, scale=1.0, mask_kind="none",
+            plain=True, kv_heads=2,
+        )  # fmt: skip
+
+    _check_against_sdpa("m", facts(out))
     with pytest.raises(ValidationError) as excinfo:
-        _check_against_sdpa("m", q, q, q, -out, probs, facts)
+        _check_against_sdpa("m", facts(-out))
     assert excinfo.value.fields["code"] == "hf_attention_sdpa_mismatch"
 
 

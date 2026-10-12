@@ -31,7 +31,6 @@ ratification; no deprecation shim is owed on rename.
 from __future__ import annotations
 
 import contextlib
-import math
 from collections.abc import Iterator, Mapping
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -229,7 +228,7 @@ def _check_unsupported(kwargs: Mapping[str, Any]) -> None:
             )
 
 
-def torchlens_attention_forward(
+def torchlens_attention_forward(  # noqa: PLR0913 -- the transformers attention-function contract
     module: torch.nn.Module,
     query: torch.Tensor,
     key: torch.Tensor,
@@ -271,57 +270,72 @@ def torchlens_attention_forward(
     heads_out = torch.matmul(probs, value_states)
     recording = _ACTIVE_RECORDING.get()
     if recording is not None:
-        _record_call(recording, module, query, key_states, value_states, heads_out, probs,
-                     attention_mask=attention_mask, scale=scale, mask_kind=mask_kind,
-                     plain=dropout == 0.0 and softcap is None and kwargs.get("s_aux") is None,
-                     kv_heads=key.shape[1], position_bias=position_bias)  # fmt: skip
+        facts = _CallFacts(
+            query=query,
+            key_states=key_states,
+            value_states=value_states,
+            heads_out=heads_out,
+            probs=probs,
+            attention_mask=attention_mask,
+            position_bias=position_bias,
+            scale=scale,
+            mask_kind=mask_kind,
+            plain=dropout == 0.0 and softcap is None and kwargs.get("s_aux") is None,
+            kv_heads=key.shape[1],
+        )
+        _record_call(recording, module, facts)
     return heads_out.transpose(1, 2).contiguous(), probs
 
 
-def _record_call(
-    recording: AttentionRecording,
-    module: torch.nn.Module,
-    query: torch.Tensor,
-    key_states: torch.Tensor,
-    value_states: torch.Tensor,
-    heads_out: torch.Tensor,
-    probs: torch.Tensor,
-    **facts: Any,
-) -> None:
+@dataclass(frozen=True)
+class _CallFacts:
+    """Tensors and facts of one attention call, for recording and the SDPA check."""
+
+    query: torch.Tensor
+    key_states: torch.Tensor
+    value_states: torch.Tensor
+    heads_out: torch.Tensor
+    probs: torch.Tensor
+    attention_mask: torch.Tensor | None
+    position_bias: torch.Tensor | None
+    scale: float
+    mask_kind: str
+    plain: bool
+    kv_heads: int
+
+
+def _record_call(recording: AttentionRecording, module: torch.nn.Module, facts: _CallFacts) -> None:
     """Append one call to the active recording, checking SDPA when asked."""
 
     name = recording._module_name(module)
-    checked = False
-    if recording.check_sdpa and facts["plain"]:
-        _check_against_sdpa(name, query, key_states, value_states, heads_out, probs, facts)
-        checked = True
+    checked = recording.check_sdpa and facts.plain
+    if checked:
+        _check_against_sdpa(name, facts)
     recording.calls.append(
         AttentionCall(
             module_name=name,
-            probs=probs.detach(),
-            num_key_value_heads=int(facts["kv_heads"]),
-            mask_kind=str(facts["mask_kind"]),
+            probs=facts.probs.detach(),
+            num_key_value_heads=int(facts.kv_heads),
+            mask_kind=facts.mask_kind,
             sdpa_checked=checked,
         )
     )
 
 
-def _sdpa_reference_mask(
-    facts: Mapping[str, Any], q_len: int, kv_len: int
-) -> tuple[torch.Tensor | None, bool]:
+def _sdpa_reference_mask(facts: _CallFacts) -> tuple[torch.Tensor | None, bool]:
     """Return the SDPA ``attn_mask`` and ``is_causal`` matching one call.
 
     A position bias folds into a float mask, as transformers' own SDPA
     function does (``create_position_bias_mask``).
     """
 
-    mask = facts["attention_mask"]
-    is_causal = mask is None and facts["mask_kind"] == "causal"
-    bias = facts["position_bias"]
-    if bias is None:
+    mask = facts.attention_mask
+    is_causal = mask is None and facts.mask_kind == "causal"
+    if facts.position_bias is None:
         return mask, is_causal
-    bias = bias.float()
+    bias = facts.position_bias.float()
     if is_causal:
+        q_len, kv_len = facts.query.shape[-2], facts.key_states.shape[-2]
         mask = torch.ones(q_len, kv_len, dtype=torch.bool, device=bias.device).tril()
     if mask is None:
         return bias, False
@@ -330,15 +344,7 @@ def _sdpa_reference_mask(
     return bias + mask.float(), False
 
 
-def _check_against_sdpa(
-    name: str,
-    query: torch.Tensor,
-    key_states: torch.Tensor,
-    value_states: torch.Tensor,
-    heads_out: torch.Tensor,
-    probs: torch.Tensor,
-    facts: Mapping[str, Any],
-) -> None:
+def _check_against_sdpa(name: str, facts: _CallFacts) -> None:
     """Check one call's output against SDPA at the reconstruction tolerance.
 
     Uses the same cancellation-aware budget as the semantic SDPA ``z``
@@ -347,25 +353,27 @@ def _check_against_sdpa(
 
     from torchlens.semantic.tolerances import within_reconstruction_tolerance
 
-    mask = facts["attention_mask"]
-    attn_mask, is_causal = _sdpa_reference_mask(facts, query.shape[-2], key_states.shape[-2])
+    attn_mask, is_causal = _sdpa_reference_mask(facts)
     if attn_mask is not None and attn_mask.is_floating_point():
-        attn_mask = attn_mask.to(query.dtype)
+        attn_mask = attn_mask.to(facts.query.dtype)
     with torch.no_grad():
         reference = torch.nn.functional.scaled_dot_product_attention(
-            query, key_states, value_states, attn_mask=attn_mask, scale=facts["scale"],
-            is_causal=is_causal,
+            facts.query, facts.key_states, facts.value_states, attn_mask=attn_mask,
+            scale=facts.scale, is_causal=is_causal,
         )  # fmt: skip
-        magnitude = torch.matmul(probs.float(), value_states.float().abs())
-        if facts["mask_kind"] == "boolean":
+        magnitude = torch.matmul(facts.probs.float(), facts.value_states.float().abs())
+        if facts.mask_kind == "boolean" and facts.attention_mask is not None:
             # SDPA leaves fully masked query rows undefined across versions.
-            defined = mask.any(dim=-1, keepdim=True).expand_as(reference)
-            reference = torch.where(defined, reference, heads_out)
+            defined = facts.attention_mask.any(dim=-1, keepdim=True).expand_as(reference)
+            reference = torch.where(defined, reference, facts.heads_out)
         ok = within_reconstruction_tolerance(
-            heads_out, reference, magnitude=magnitude, reduction_length=value_states.shape[-2]
+            facts.heads_out,
+            reference,
+            magnitude=magnitude,
+            reduction_length=facts.value_states.shape[-2],
         )
     if not ok:
-        diff = float((heads_out.float() - reference.float()).abs().max())
+        diff = float((facts.heads_out.float() - reference.float()).abs().max())
         raise ValidationError(
             f"TorchLens attention output for {name!r} disagrees with SDPA "
             f"(max abs difference {diff:.3g}). Remedy: report this model; "
@@ -483,23 +491,10 @@ def record_attention(model: Any, *, check_sdpa: bool = False) -> Iterator[Attent
         _ACTIVE_RECORDING.reset(token)
 
 
-def full_matrix_bytes(
-    *, batch: int, heads: int, q_len: int, kv_len: int, layers: int, dtype: torch.dtype
-) -> int:
-    """Return the bytes one recorded forward pass holds, for capacity planning.
-
-    ``batch * heads * q_len * kv_len * itemsize * layers``.
-    """
-
-    itemsize = torch.empty((), dtype=dtype).element_size()
-    return math.prod((batch, heads, q_len, kv_len, itemsize, layers))
-
-
 __all__ = [
     "BACKEND_KEY",
     "AttentionCall",
     "AttentionRecording",
-    "full_matrix_bytes",
     "record_attention",
     "register_attention",
     "torchlens_attention_forward",
