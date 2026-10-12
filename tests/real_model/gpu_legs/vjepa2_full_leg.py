@@ -175,12 +175,18 @@ def stage_a(model: Any, inputs: dict[str, Any]) -> dict[str, Any]:
 def stage_b(model: Any, inputs: dict[str, Any]) -> dict[str, Any]:
     """Forward replay validation on the same clip."""
 
+    import torch
+
     import torchlens as tl
 
+    # Inference-mode validation: the capture records grad mode off and replay
+    # honors it, so no autograd graph of the reference forward stays alive.
     start = time.monotonic()
-    ok = tl.validate(model, (), dict(inputs), scope="forward", output_device="cpu")
+    with torch.no_grad():
+        ok = tl.validate(model, (), dict(inputs), scope="forward", output_device="cpu")
     return {
         "validate_forward": bool(ok),
+        "grad_mode": "no_grad",
         "validate_seconds": round(time.monotonic() - start, 1),
         **_peaks(),
     }
