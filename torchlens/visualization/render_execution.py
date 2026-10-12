@@ -37,18 +37,26 @@ from ..utils.display import user_stacklevel
 
 __all__ = [
     "CAIRO_RASTER_PIXEL_CEILING",
+    "VECTOR_PAGE_CEILING_POINTS",
     "RenderGeometryRecord",
     "atomic_render_target",
     "build_render_geometry_record",
     "is_raster_format",
     "parse_layout_scale",
     "surface_layout_stderr",
+    "warn_oversize_vector",
 ]
 
 # cairo (graphviz's default raster backend) clamps any output dimension to
 # this many pixels; a raster whose declared geometry exceeds it is silently
 # scaled or cropped, which is exactly the case the stderr warning discloses.
 CAIRO_RASTER_PIXEL_CEILING = 32767
+
+# Vector page ceiling (points per side): the PDF implementation limit of
+# 14,400 user units (200 in; PDF 1.7 Annex C) that common viewers enforce.
+# SVG has no format limit, but a page past it is unusable in the same viewers,
+# so FK1 applies one ceiling to both vector formats.
+VECTOR_PAGE_CEILING_POINTS = 14400.0
 
 _RASTER_FORMATS = frozenset({"png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "webp"})
 
@@ -187,6 +195,38 @@ def surface_layout_stderr(stderr: str | bytes | None, *, engine: str) -> str:
             stacklevel=user_stacklevel(),
         )
     return text
+
+
+def warn_oversize_vector(record: RenderGeometryRecord) -> None:
+    """Warn, and keep the file, when a vector page exceeds the page ceiling (FK1).
+
+    forks.11 FK1 rules warn-and-obey over a typed refusal: an explicit
+    full-graph request in SVG or PDF is rendered exactly as asked, and the
+    warning gives the page size, the ceiling, and the ways to a readable
+    picture. Rasters are covered by the cairo clamp disclosure instead.
+
+    Parameters
+    ----------
+    record:
+        Geometry record of the published artifact.
+    """
+
+    if is_raster_format(record.fileformat) or record.declared_size_points is None:
+        return
+    width, height = record.declared_size_points
+    if max(width, height) <= VECTOR_PAGE_CEILING_POINTS:
+        return
+    warnings.warn(
+        TorchLensWarning(
+            f"The rendered {record.fileformat.upper()} page is {width:.0f} x {height:.0f} "
+            f"pt, past the {VECTOR_PAGE_CEILING_POINTS:.0f} pt per-side page limit many "
+            f"viewers enforce; it was written as requested to {record.output_path}. "
+            "Remedy: for a readable picture draw with collapse='auto', focus one "
+            "subtree with module=, or limit vis_call_depth",
+            code="render_vector_oversize",
+        ),
+        stacklevel=user_stacklevel(),
+    )
 
 
 def parse_layout_scale(stderr_text: str) -> float | None:
