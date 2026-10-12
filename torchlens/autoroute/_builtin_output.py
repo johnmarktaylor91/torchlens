@@ -121,15 +121,18 @@ def _decode_outputs_for_trace_unguarded(
 
     meta = _build_output_meta(trace, output_style=output_style, output_head=output_head)
     resolved, detector_name = _resolve_postprocessor_named(outputs, meta)
-    if output_style is not None and output_style not in BUILTIN_OUTPUT_STYLES:
-        if detector_name is None or detector_name in _BUILTIN_DETECTOR_NAMES:
-            # No custom detector claimed the style: decode nothing and leave a
-            # durable record; the capture entry raises the typed refusal once
-            # the session has closed (refuse_unresolved_output_style).
-            annotations = getattr(trace, "annotations", None)
-            if isinstance(annotations, dict):
-                annotations[OUTPUT_STYLE_UNRESOLVED_KEY] = {"output_style": str(output_style)}
-            return
+    if (
+        output_style is not None
+        and output_style not in BUILTIN_OUTPUT_STYLES
+        and (detector_name is None or detector_name in _BUILTIN_DETECTOR_NAMES)
+    ):
+        # No custom detector claimed the style: decode nothing and leave a
+        # durable record; the capture entry raises the typed refusal once
+        # the session has closed (refuse_unresolved_output_style).
+        annotations = getattr(trace, "annotations", None)
+        if isinstance(annotations, dict):
+            annotations[OUTPUT_STYLE_UNRESOLVED_KEY] = {"output_style": str(output_style)}
+        return
     if resolved is None:
         return
 

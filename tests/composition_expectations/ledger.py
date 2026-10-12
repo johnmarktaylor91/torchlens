@@ -187,16 +187,17 @@ LEDGER: tuple[CompositionRow, ...] = (
         generator_kind="hand",
         operation_ids=("trace_option:intervene:torch", "fork.do"),
         axis_values=("selector=postprocess-label", "engine=rerun"),
-        expected_state="KNOWN-GAP",
+        expected_state="REFUSES-TYPED-TEACHING",
         risk_tags=("silent_noop", "lane_asymmetry"),
-        oracle_kind="DIFFERENTIAL",
+        oracle_kind="REFUSAL",
+        evidence_node="tests/test_rerun_push_head_ablation_parity.py",
+        refusal_code="rerun_selector_unmatchable_live",
         source_gap="M(compo) 5.4 worked example",
-        gap_owner="A04",
-        gap_issue="memo 5.4: taught spelling completes, warns, returns un-ablated trace",
-        gap_deadline="PB1",
-        gap_reproducer="M(compo) 5.4 six-line chain (12-layer MLP)",
-        gap_auto_probe="S-18 rerun_zero_fire contracted warning (this wave)",
-        notes=("the founding defect class live on the front door",),
+        notes=(
+            "U40.6: same-graph same-input rerun of a source-matched, live-unmatchable "
+            "selector refuses typed (trace unchanged); the push engine ablates it; "
+            "new-input reruns keep the rerun_zero_fire warning",
+        ),
     ),
     CompositionRow(
         row_id="CELL-SAVE-ALL-REMEDY-CURRENCY",
