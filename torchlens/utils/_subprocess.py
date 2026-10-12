@@ -13,6 +13,7 @@ import contextlib
 import os
 import signal
 import subprocess
+from collections.abc import Mapping
 from typing import Any
 
 # Grace period between SIGTERM and SIGKILL when a timed-out render's whole
@@ -153,6 +154,7 @@ def run_bounded_subprocess(
     input: bytes | str | None = None,
     cwd: str | os.PathLike[str] | None = None,
     text: bool = False,
+    env: Mapping[str, str] | None = None,
 ) -> subprocess.CompletedProcess[Any]:
     """Run ``cmd`` bounded by ``timeout``, killing its whole process group.
 
@@ -164,7 +166,8 @@ def run_bounded_subprocess(
     exception the entire process group is terminated via
     :func:`_terminate_process_group`, not just the direct child, and the
     child is armed to die with its parent (Linux ``PR_SET_PDEATHSIG``).
-    Tests monkeypatch this function to simulate Graphviz outcomes.
+    Tests monkeypatch this function to simulate Graphviz outcomes. ``env``
+    (default: inherit) replaces the child's environment, as in ``Popen``.
     """
 
     stdin = subprocess.PIPE if input is not None else None
@@ -176,6 +179,7 @@ def run_bounded_subprocess(
         stderr=pipe,
         cwd=cwd,
         text=text,
+        env=env,
         start_new_session=_HAS_PROCESS_GROUPS,
         preexec_fn=_arm_parent_death_signal if _PRCTL is not None else None,
     )

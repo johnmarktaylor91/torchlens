@@ -188,8 +188,11 @@ def run_bounded_subprocess(
     ``FileNotFoundError: 'dot'`` naming neither Graphviz nor the remedy
     (b8 R65). The doctor ``dot`` probe, by contrast, wants the raw signal
     and calls the shared seam directly. Tests monkeypatch this function to
-    simulate Graphviz outcomes.
+    simulate Graphviz outcomes. Every Graphviz child renders with the bundled
+    font (forks.11 FK3; :func:`torchlens.visualization._fonts.graphviz_font_env`).
     """
+
+    from ._fonts import graphviz_font_env
 
     try:
         return _run_bounded_subprocess_shared(
@@ -200,6 +203,7 @@ def run_bounded_subprocess(
             input=input,
             cwd=cwd,
             text=text,
+            env=graphviz_font_env(),
         )
     except FileNotFoundError as exc:
         # Lazy import: _render_common top-imports this module, so the typed

@@ -305,12 +305,16 @@ def run_layout_json(dot_source: str, engine: str = "dot", timeout: int = 300) ->
         cmd = ["neato", "-n", "-Tjson"]
     else:
         raise ValueError(f"unknown layout engine {engine!r}; pass 'dot' or 'rank'")
+    from ._fonts import graphviz_font_env
+
+    # Measure with the same bundled font the renders draw with (FK3).
     proc = subprocess.run(
         cmd,
         input=dot_source.encode(),
         capture_output=True,
         timeout=timeout,
         check=True,
+        env=graphviz_font_env(),
     )
     # Bounded parse (the repo-wide guarded-reader law): dot's JSON nests one
     # level per draw-op array, but the reader still refuses adversarial or
