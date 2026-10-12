@@ -8,7 +8,9 @@ receipt. Usage::
 
     python tests/real_model/gpu_legs/vjepa2_full_leg.py OUT_DIR [--frames 64] [--job-id ID]
 
-The weights must already be in the Hugging Face cache (the leg runs offline).
+The checkpoint comes from the registry row ``r2-vjepa2-vitl-fpc64-256`` (model
+id, pinned revision, weight digest); the weights must already be in the
+Hugging Face cache, because the leg runs offline.
 Each stage writes ``stage<A|B>.json``; a rerun skips a stage whose receipt
 exists, so a timeout loses at most one stage.
 """
@@ -27,12 +29,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-MODEL_ID = "facebook/vjepa2-vitl-fpc64-256"
-REVISION = "b3c1679b7c34d3255ef3547f27c7b226aefab26f"  # pragma: allowlist secret
+ARTIFACT_ID = "r2-vjepa2-vitl-fpc64-256"
 WEIGHT_FILE = "model.safetensors"
-WEIGHT_SHA256 = (
-    "25466aef85727d16546c6cf8c99f12fcfad9cbca8225d45f23685e2e025b786b"  # pragma: allowlist secret
-)
 IMAGE_MEAN = (0.485, 0.456, 0.406)
 IMAGE_STD = (0.229, 0.224, 0.225)
 CROP = 256
@@ -60,6 +58,12 @@ def _driver() -> str:
         return "unknown"
 
 
+def _row() -> Any:
+    from tests.real_model.registry import load_registry
+
+    return load_registry().checkpoint_evidence(ARTIFACT_ID)
+
+
 def fingerprint(job_id: str) -> dict[str, Any]:
     """Return the GPU environment fingerprint the receipt carries."""
 
@@ -83,8 +87,9 @@ def fingerprint(job_id: str) -> dict[str, Any]:
         "transformers": transformers.__version__,
         "torchlens": getattr(torchlens, "__version__", "unknown"),
         "torchlens_commit": os.environ.get("TORCHLENS_COMMIT", "unknown"),
-        "model_id": MODEL_ID,
-        "revision": REVISION,
+        "artifact_id": ARTIFACT_ID,
+        "model_id": _row().model_id,
+        "revision": _row().revision,
     }
 
 
@@ -103,12 +108,16 @@ def _load(device: str) -> Any:
     from huggingface_hub import hf_hub_download
     from transformers import AutoModel
 
-    weights = hf_hub_download(MODEL_ID, WEIGHT_FILE, revision=REVISION, local_files_only=True)
+    row = _row()
+    pinned = next(blob.sha256 for blob in row.blobs if blob.filename == WEIGHT_FILE)
+    weights = hf_hub_download(
+        row.model_id, WEIGHT_FILE, revision=row.revision, local_files_only=True
+    )
     actual = _sha256(weights)
-    if actual != WEIGHT_SHA256:
-        raise SystemExit(f"weight sha256 {actual} != pinned {WEIGHT_SHA256}")
+    if actual != pinned:
+        raise SystemExit(f"weight sha256 {actual} != the registry's {pinned}")
     model = AutoModel.from_pretrained(
-        MODEL_ID, revision=REVISION, dtype=torch.float32, attn_implementation="sdpa"
+        row.model_id, revision=row.revision, dtype=torch.float32, attn_implementation="sdpa"
     )
     return model.to(device).eval()
 
