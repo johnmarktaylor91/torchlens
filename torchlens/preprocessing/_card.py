@@ -123,7 +123,7 @@ def declared_from_record(record: ResolvedPreprocessing | None) -> DeclaredPrepro
     config = getattr(record, "config", None)
     if not isinstance(config, dict):
         return None
-    fields = {
+    fields: dict[str, Any] = {
         name: tuple(value) if isinstance(value, list) else value
         for name, value in config.items()
         if name in COMPARABLE_FIELDS and value is not None

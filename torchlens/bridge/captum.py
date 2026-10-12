@@ -98,6 +98,22 @@ def _logged_inputs(log: Any) -> Any:
         parameter between two logged inputs has no tensor.
     """
 
+    tensors, problem = _positional_inputs(log)
+    if problem is not None:
+        raise InvalidArgumentError(
+            f"Captum bridge cannot forward the logged inputs: {problem}.",
+            code="bridge_captum_inputs_unresolved",
+            remedy=(
+                "pass inputs= explicitly (a tensor or a tuple of the positional "
+                "tensors) and the rest through additional_forward_args="
+            ),
+        )
+    return tensors[0] if len(tensors) == 1 else tensors
+
+
+def _positional_inputs(log: Any) -> tuple[tuple[torch.Tensor, ...], str | None]:
+    """Collect the logged inputs in ``forward`` order, or say why they cannot be."""
+
     by_name: dict[str, torch.Tensor] = {}
     for layer in getattr(log, "layer_list", []):
         if not getattr(layer, "is_input", False):
@@ -106,19 +122,18 @@ def _logged_inputs(log: Any) -> Any:
         parts = role.split(".")
         out = getattr(layer, "out", None)
         if len(parts) != 2 or parts[0] != "input" or not isinstance(out, torch.Tensor):
-            raise _inputs_unresolved(f"input {role or layer.layer_label!r} is nested or unsaved")
+            return (), f"input {role or layer.layer_label!r} is nested or unsaved"
         by_name[parts[1]] = out
     if not by_name:
-        raise _inputs_unresolved("the trace holds no saved input tensor")
+        return (), "the trace holds no saved input tensor"
     positional = _positional_names(source_model(log))
     order = [name for name in positional if name in by_name]
     if set(order) != set(by_name) or order != positional[: len(order)]:
-        raise _inputs_unresolved(
+        return (), (
             f"logged inputs {sorted(by_name)} are not the leading positional "
             f"parameters {positional}"
         )
-    tensors = tuple(by_name[name] for name in order)
-    return tensors[0] if len(tensors) == 1 else tensors
+    return tuple(by_name[name] for name in order), None
 
 
 def _positional_names(model: nn.Module) -> list[str]:
@@ -130,19 +145,6 @@ def _positional_names(model: nn.Module) -> list[str]:
     except (TypeError, ValueError):
         return []
     return [param.name for param in parameters if param.kind in kinds]
-
-
-def _inputs_unresolved(problem: str) -> InvalidArgumentError:
-    """Build the typed refusal for logged inputs Captum cannot replay."""
-
-    return InvalidArgumentError(
-        f"Captum bridge cannot forward the logged inputs: {problem}.",
-        code="bridge_captum_inputs_unresolved",
-        remedy=(
-            "pass inputs= explicitly (a tensor or a tuple of the positional "
-            "tensors) and the rest through additional_forward_args="
-        ),
-    )
 
 
 def layer(log: Any, site: Any) -> nn.Module:

@@ -195,21 +195,6 @@ def _hf_api(token: str | None) -> Any:
     return HfApi(token=token)
 
 
-def _unsafe_artifact(problem: str, archive: Path) -> Exception:
-    """Build the typed refusal for a downloaded artifact that fails the checks."""
-
-    from .._io import TorchLensIOError
-
-    return TorchLensIOError(
-        f"from_hub refused {archive.name}: {problem}. Only the gzipped `.tlspec` "
-        "tar written by push_to_hub is loaded. Remedy: point path_in_repo at an "
-        "artifact uploaded with torchlens.bridge.huggingface.push_to_hub, or "
-        "download the file yourself and inspect it before loading it with "
-        "torchlens.load.",
-        code="hub_artifact_unsafe",
-    )
-
-
 def _extract_bundle(archive: Path, destination: Path) -> Path:
     """Extract a pushed ``.tlspec`` tar after checking every member.
 
@@ -233,42 +218,67 @@ def _extract_bundle(archive: Path, destination: Path) -> Path:
         entry, or a member count or total size over the bounds.
     """
 
+    from .._io import TorchLensIOError
+
+    root, problem = _checked_extract(archive, destination)
+    if problem is not None:
+        raise TorchLensIOError(
+            f"from_hub refused {archive.name}: {problem}. Only the gzipped `.tlspec` "
+            "tar written by push_to_hub is loaded. Remedy: point path_in_repo at an "
+            "artifact uploaded with torchlens.bridge.huggingface.push_to_hub, or "
+            "download the file yourself and inspect it before loading it with "
+            "torchlens.load.",
+            code="hub_artifact_unsafe",
+            remedy=(
+                "point path_in_repo at an artifact uploaded with push_to_hub, or "
+                "download and inspect the file before loading it with torchlens.load"
+            ),
+        )
+    return destination / root
+
+
+def _checked_extract(archive: Path, destination: Path) -> tuple[str, str | None]:
+    """Check every member, then extract; return ``(root, problem)``."""
+
     unreadable = (tarfile.TarError, OSError, EOFError)
     try:
         tar = tarfile.open(archive, mode="r:gz")
     except unreadable as exc:
-        raise _unsafe_artifact(f"not a readable gzipped tar ({exc})", archive) from exc
+        return "", f"not a readable gzipped tar ({exc})"
     with tar:
         try:
             members = tar.getmembers()
         except unreadable as exc:
-            raise _unsafe_artifact(f"not a readable gzipped tar ({exc})", archive) from exc
-        roots = {_checked_root(member, archive) for member in members}
+            return "", f"not a readable gzipped tar ({exc})"
+        problem = next((p for p in map(_member_problem, members) if p is not None), None)
+        if problem is not None:
+            return "", problem
+        roots = {PurePosixPath(member.name).parts[0] for member in members}
         if len(roots) != 1:
-            raise _unsafe_artifact(f"expected one top-level bundle, found {len(roots)}", archive)
+            return "", f"expected one top-level bundle, found {len(roots)}"
         if len(members) > _MAX_TAR_MEMBERS:
-            raise _unsafe_artifact(f"{len(members)} members exceed the bound", archive)
+            return "", f"{len(members)} members exceed the bound"
         if sum(member.size for member in members) > _MAX_TAR_BYTES:
-            raise _unsafe_artifact("total size exceeds the bound", archive)
+            return "", "total size exceeds the bound"
         if hasattr(tarfile, "data_filter"):
             tar.extractall(destination, filter="data")
         else:  # pragma: no cover - interpreters without PEP 706
             tar.extractall(destination)  # noqa: S202 -- every member checked above
-    bundle_dir = destination / roots.pop()
-    if not bundle_dir.is_dir():
-        raise _unsafe_artifact("the top-level entry is not a bundle directory", archive)
-    return bundle_dir
+    root = roots.pop()
+    if not (destination / root).is_dir():
+        return "", "the top-level entry is not a bundle directory"
+    return root, None
 
 
-def _checked_root(member: tarfile.TarInfo, archive: Path) -> str:
-    """Return a member's top-level name, refusing unsafe member kinds or names."""
+def _member_problem(member: tarfile.TarInfo) -> str | None:
+    """Return why one tar member is unsafe to extract, or ``None``."""
 
     if not (member.isfile() or member.isdir()):
-        raise _unsafe_artifact(f"member {member.name!r} is a link or special file", archive)
+        return f"member {member.name!r} is a link or special file"
     parts = PurePosixPath(member.name).parts
     if not parts or member.name.startswith("/") or ".." in parts or "\\" in member.name:
-        raise _unsafe_artifact(f"member name {member.name!r} escapes the bundle", archive)
-    return parts[0]
+        return f"member name {member.name!r} escapes the bundle"
+    return None
 
 
 def _artifact_bytes(log_or_bundle_or_spec: Any, *, save_level: str = "portable") -> bytes:
