@@ -439,7 +439,7 @@ def test_device_context_factory_injection_during_active_logging() -> None:
     """Factory functions honor ``torch.device`` contexts while TorchLens is logging."""
 
     model = DeviceContextFactoryModel()
-    tl.trace(model, torch.randn(1), capture=CaptureOptions(layers_to_save="none"))
+    tl.trace(model, torch.randn(1), capture=CaptureOptions(carry_state=True, layers_to_save="none"))
 
     assert model.factory_device_type == "meta"
 

@@ -420,7 +420,7 @@ def test_unlogged_buffer_before_reassigned_buffer_output() -> None:
 
     model = UnloggedPlusReassignedBufferModel()
     x = torch.rand(3)
-    log = trace_fn(model, x, capture=CaptureOptions(layers_to_save="all"))
+    log = trace_fn(model, x, capture=CaptureOptions(carry_state=True, layers_to_save="all"))
     try:
         assert log.output_layers == ["output_1", "output_2"]
 

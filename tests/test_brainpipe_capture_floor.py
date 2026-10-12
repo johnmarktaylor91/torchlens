@@ -78,7 +78,7 @@ def test_save_all_releases_live_sources_at_emission() -> None:
 
     model = _MidForwardCounter().eval()
     x = torch.randn(2, 16, 8, 8)
-    tl.trace(model, x, capture=tl.options.CaptureOptions(inference_only=True))
+    tl.trace(model, x, capture=tl.options.CaptureOptions(carry_state=True, inference_only=True))
     assert model.mid_forward_live is not None
     ops_done = 2 * (N_CONVS - 1)
     # Retained copies for completed ops, plus a small live working set
@@ -106,7 +106,7 @@ def test_selective_save_holds_no_live_population_mid_forward() -> None:
         model,
         x,
         save=tl.func("mean"),
-        capture=tl.options.CaptureOptions(inference_only=True),
+        capture=tl.options.CaptureOptions(carry_state=True, inference_only=True),
     )
     assert model.mid_forward_live is not None
     ops_done = 2 * (N_CONVS - 1)

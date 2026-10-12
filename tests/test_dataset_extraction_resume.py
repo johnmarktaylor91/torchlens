@@ -14,6 +14,7 @@ import os
 import subprocess
 import sys
 import textwrap
+import types
 from pathlib import Path
 
 import pytest
@@ -69,7 +70,16 @@ class _CountingModel(nn.Module):
         self.fc = nn.Linear(3, 4)
         self.relu = nn.ReLU()
         self.head = nn.Linear(4, 2)
-        self.n_forward_calls = 0
+        # A counter object, not a plain int: a default capture is a pure observer
+        # and restores plain attributes (U40.1), while an opaque object is tracked
+        # by identity, so its count survives the extraction's captures.
+        self.counter = types.SimpleNamespace(calls=0)
+
+    @property
+    def n_forward_calls(self) -> int:
+        """Forward calls so far, captured or eager."""
+
+        return self.counter.calls
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         """Run the affine stack and count the call.
@@ -85,7 +95,7 @@ class _CountingModel(nn.Module):
             Model logits.
         """
 
-        self.n_forward_calls += 1
+        self.counter.calls += 1
         return self.head(self.relu(self.fc(inputs)))
 
 

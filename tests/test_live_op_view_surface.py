@@ -221,7 +221,7 @@ def test_every_live_field_reads_mid_forward() -> None:
     """Functional smoke: all 111 live fields project on a real capture event."""
 
     model = _MidForwardReader()
-    tl.trace(model, torch.randn(2, 4))
+    tl.trace(model, torch.randn(2, 4), capture=tl.options.CaptureOptions(carry_state=True))
     assert set(model.read) == set(_LIVE_FIELD_GETTERS)
     assert model.read["_tracing_finished"] is False
     assert model.mutable_fresh is True

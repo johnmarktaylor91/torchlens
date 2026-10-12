@@ -994,7 +994,7 @@ class TestInPlaceOps:
         """Active logging must not replace PyTorch same-object returns with clones."""
 
         model = SameObjectReturnModel()
-        trace_fn(model, torch.randn(2, 3))
+        trace_fn(model, torch.randn(2, 3), capture=tl.options.CaptureOptions(carry_state=True))
         assert model.contiguous_returned_input is True
         assert model.inplace_returned_input is True
 
