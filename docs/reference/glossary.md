@@ -1380,7 +1380,17 @@ deprecation shim owed*
   `top_tokens()`). The reconstructed lens is validated against the captured
   logits before use and refuses `LogitLensError` when the head cannot be
   represented; pass `lens=` for a tuned lens or `validate=False` to trust
-  the reconstruction explicitly. See [facets](../facets.md).
+  the reconstruction explicitly. With no language-model head, the default
+  lens falls back to a vision head recipe, validated the same way:
+  `classification_head` (final norm plus `classifier` over the `[CLS]`
+  token; `lens_source="classifier_head"`) or CLIP's
+  `contrastive_image_head` (per-layer scores against the captured text
+  features of the label prompts; `lens_source="contrastive_head"`). A user
+  lens may carry `model_identity` (an extraction manifest's identity
+  record): a differing measured identity refuses
+  `logit_lens_identity_mismatch` unless `validate=False`; a lens with no
+  comparable identity warns `logit_lens_identity_unrecorded` when its
+  last-layer decode misses the captured logits. See [facets](../facets.md).
 
 **Summary columns (`summary(columns=...)`)** — *unstable — no deprecation shim owed*
 : The column registry of `tl.summary` / `trace.summary`: `name`, `input`,

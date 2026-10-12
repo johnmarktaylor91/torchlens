@@ -427,6 +427,60 @@ through final norm/head"`. On a `logits_to_keep`-sliced capture the native
 row covers only the positions the capture kept, and requested positions
 outside a row's covered range are dropped from that row rather than invented.
 
+### Vision heads (DOCUMENTED-UNSTABLE)
+
+A vision model has no language-model head. When a trace has none, the
+default lens falls back to a vision head recipe, and it is validated the same
+way (the last block's captured `resid_post` must reproduce the captured
+logits):
+
+- `classification_head` matches a module with a linear `classifier` child,
+  such as `ViTForImageClassification`: the final norm plus the classifier
+  applied to the one token the head reads (`[CLS]`). `result.lens_source` is
+  `"classifier_head"` and each layer's logits are `[batch, num_labels]`, so
+  `result.top_tokens()` answers "what does this layer already classify the
+  image as?".
+- `contrastive_image_head` matches `CLIPModel`. Capture the model on images
+  AND the label prompts you want to score (`input_ids` of "a photo of a
+  cat", "a photo of a dog", ...): each vision-tower block's `[CLS]` state goes
+  through `post_layernorm`, `visual_projection` and L2 normalization, and is
+  scored against the captured text features with CLIP's own `logit_scale`.
+  `result.lens_source` is `"contrastive_head"`, each layer's logits are
+  `[n_images, n_prompts]`, and the last layer equals CLIP's
+  `logits_per_image`. Only vision-tower blocks are projected; passing a
+  text-tower block in `layers=` refuses `logit_lens_layer_outside_head`.
+
+```text
+classification_head facets          contrastive_image_head facets
+logits                              logits (logits_per_image)
+classifier_weight / classifier_bias image_projection_weight
+pooled_position (token read)        text_features (text_projection output)
+tower_address (blocks feeding it)   logit_scale
+final_norm_* (as above)             pooled_position, tower_address, final_norm_*
+```
+
+Only a single-token read is reconstructed. A head that mean-pools, uses an
+attention pooler, or runs a pooler MLP leaves the final norm unanchored, and
+the lens refuses `logit_lens_head_unavailable` instead of guessing.
+
+### User lens identity (DOCUMENTED-UNSTABLE)
+
+A user lens may record which model it was built for: set `model_identity` on
+the callable (or on the mapping, or on each per-layer callable) to the
+model-identity record an extraction artifact carries
+(`manifest["signature"]["model_identity"]`). With the default
+`validate=True`:
+
+- a measured identity that differs from the traced model (compared against
+  the trace's live source model) refuses with `logit_lens_identity_mismatch`;
+  `validate=False` runs the lens anyway;
+- a matching identity runs silently;
+- a lens with no identity, or one that cannot be compared (an asserted
+  record, or the source model is gone), gets a last-layer agreement check:
+  when the lens applied to the last block's `resid_post` does not reproduce
+  the captured logits, the coded warning `logit_lens_identity_unrecorded`
+  reports the largest difference and the top-1 agreement.
+
 ## Fallback
 
 Every module has structural facets even with no semantic recipe. This gives a
