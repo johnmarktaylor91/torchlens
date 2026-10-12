@@ -237,8 +237,11 @@ def _check_trace_liveness(trace: Any) -> None:
         _refuse_trace(
             trace,
             "inference_only",
-            "inference-only captures discard the autograd graph.",
-            "re-capture without inference_only=True",
+            "inference-only captures discard the autograd graph. inference_only is "
+            "either passed explicitly or implied when the capture runs under "
+            "torch.no_grad() or torch.inference_mode().",
+            "re-capture with gradients enabled (outside torch.no_grad() and "
+            "torch.inference_mode()) and without inference_only=True",
         )
     if getattr(trace, "chunked_forward", False):
         _refuse_trace(

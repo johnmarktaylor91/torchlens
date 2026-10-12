@@ -66,6 +66,20 @@ class TestLivenessGate:
         )
 
     @_requires_gradient_edge
+    def test_implied_inference_only_refusal_names_no_grad_and_a_working_remedy(self) -> None:
+        with torch.no_grad():
+            trace = _trace()
+        assert trace.inference_only is True
+        error = _read_error(
+            lambda: ob.read_edge_index(trace),
+            "read_addressing_unavailable",
+            reason="inference_only",
+        )
+        message = str(error)
+        assert "implied when the capture runs under torch.no_grad()" in message
+        assert "re-capture with gradients enabled" in error.fields["remedy"]
+
+    @_requires_gradient_edge
     def test_structure_only_refuses(self) -> None:
         trace = _trace(capture=tl.options.CaptureOptions(structure_only=True))
         _read_error(
