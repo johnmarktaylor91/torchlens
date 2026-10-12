@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 from weakref import WeakKeyDictionary
 
+from ..constants import LAYER_PASS_LOG_FIELD_ORDER
 from ..ir.capture_events import _clone_op_event_for_replay
 from ..ir.events import OpEvent
 from .session import CapturedRunCore
@@ -138,6 +139,38 @@ def _cloned_core_events(core: CapturedRunCore) -> tuple[OpEvent, ...]:
     """
 
     return tuple(_clone_op_event_for_replay(event) for event in core.events)
+
+
+#: Fields ``Trace._refresh_rerun_op_from`` never copies from a rerun, and the
+#: extra non-ordered fields it does copy; the until= prefix projection mirrors both
+#: (``tests/test_run_until_projection_cost.py`` pins the equivalence).
+_RERUN_KEPT_OP_FIELDS = frozenset(
+    {
+        "source_trace",
+        "_source_trace_ref",
+        "input_ops",
+        "input_activations",
+        "input_shapes",
+        "input_dtypes",
+        "input_memory",
+        "num_inputs",
+        "is_in_conditional_body",
+    }
+)
+_RERUN_EXTRA_OP_FIELDS = (
+    "out_ref",
+    "grad_ref",
+    "_pending_blob_id",
+    "_pending_transformed_out_blob_id",
+    "_pending_grad_blob_id",
+    "_pending_transformed_grad_blob_id",
+    "annotations",
+    "interventions",
+    "container_spec",
+    "args_template",
+    "kwargs_template",
+    "_edge_uses",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -325,15 +358,8 @@ class RefreshProjector:
                 f"got {len(refreshed_signature)}; first divergence at "
                 f"{next((expected[0] for expected, actual in zip(target_signature, refreshed_signature, strict=False) if expected != actual), 'op count')!r})",
             )
-        from ..data_classes._state_adapter import state_items
-
-        preserved_states = [dict(state_items(layer)) for layer in target_prefix]
         for layer, new_layer in zip(target_prefix, refreshed_prefix, strict=True):
-            self.target._refresh_rerun_op_from(layer, new_layer)
-        for layer, preserved in zip(target_prefix, preserved_states, strict=True):
-            for field_name, value in preserved.items():
-                if field_name not in self._DYNAMIC_OP_FIELDS:
-                    layer._internal_set(field_name, value)
+            self._project_prefix_op(layer, new_layer)
         # 3.3.3 sanitation: skipped records are retained structure-only; value
         # payloads are cleared at fork-finalization so omission never reads as
         # a fresh value.
@@ -344,6 +370,42 @@ class RefreshProjector:
         self.target._layer_nums_to_save = self.layer_nums_to_save
         self.target._grad_op_nums_to_save = self.grad_layer_nums_to_save
         self._rebind_backward_hooks(raw_labels=executed)
+
+    def _project_prefix_op(self, layer: Any, new_layer: Any) -> None:
+        """Copy one executed op's refreshed per-call fields onto its target op.
+
+        The net effect of ``Trace._refresh_rerun_op_from`` followed by restoring
+        every non-dynamic field the target op already holds (the full
+        ``project`` sequence), computed directly: only the dynamic per-call
+        fields, and fields the target op does not hold yet, are copied. Copying
+        every recorded field and then writing the static ones back cost a deep
+        copy of each op's static metadata on every truncated run.
+        ``tests/test_run_until_projection_cost.py`` pins the equivalence.
+        """
+
+        from ..data_classes._state_adapter import state_items
+
+        held = {name for name, _value in state_items(layer)}
+        new_state = dict(state_items(new_layer))
+        dynamic = self._DYNAMIC_OP_FIELDS
+        copy_value = self.target._copy_rerun_value
+        for field_name in LAYER_PASS_LOG_FIELD_ORDER:
+            if field_name in _RERUN_KEPT_OP_FIELDS:
+                continue
+            if field_name in dynamic or field_name not in held:
+                self._set_refreshed_field(layer, field_name, copy_value(new_state.get(field_name)))
+        for field_name in _RERUN_EXTRA_OP_FIELDS:
+            if hasattr(new_layer, field_name) and (field_name in dynamic or field_name not in held):
+                self._set_refreshed_field(layer, field_name, copy_value(new_state.get(field_name)))
+        layer.source_trace = self.target
+
+    def _set_refreshed_field(self, layer: Any, field_name: str, value: Any) -> None:
+        """Write one refreshed field, keeping user annotations like the full refresh."""
+
+        if field_name == "annotations":
+            preserved = self.target._copy_user_annotations(getattr(layer, "annotations", None))
+            value = self.target._merge_user_annotations(value, preserved)
+        layer._internal_set(field_name, value)
 
     @staticmethod
     def _graph_change_error(refreshed: Any, detail: str | None = None) -> ValueError:
