@@ -88,26 +88,51 @@ def test_mlflow_logs_prefixed_metrics_and_returns_them() -> None:
     class _Client:
         def __init__(self) -> None:
             self.logged: dict[str, float] = {}
+            self.tables: dict[str, Any] = {}
+            self.texts: dict[str, str] = {}
+            self.tags: dict[str, str] = {}
 
         def log_metric(self, key: str, value: float) -> None:
             self.logged[key] = value
 
+        def log_table(self, data: Any, artifact_file: str) -> None:
+            self.tables[artifact_file] = data
+
+        def log_text(self, text: str, artifact_file: str) -> None:
+            self.texts[artifact_file] = text
+
+        def set_tag(self, key: str, value: str) -> None:
+            self.tags[key] = value
+
     client = _Client()
     metrics = tl.export.mlflow(log, client=client, prefix="tlm")
 
-    # capture_honesty is RETURNED, never logged (log_metric takes numerics).
+    # Honesty facts reach MLflow as STRING tags, never as numeric metrics.
     assert set(metrics) == {
         "num_layers",
         "num_saved_ops",
         "total_activation_memory",
+        "table",
+        "report",
+        "tags",
+        "artifacts",
         "capture_honesty",
     }
     assert metrics["capture_honesty"]["capture_status"] == "complete"
     assert metrics["num_layers"] == len(log.layer_list)
-    numeric_metrics = {key: value for key, value in metrics.items() if key != "capture_honesty"}
-    assert client.logged == {f"tlm.{key}": value for key, value in numeric_metrics.items()}
-    # Without a client the metrics are still prepared and returned.
-    assert tl.export.mlflow(log, client=None) == metrics
+    numeric = {
+        key: metrics[key] for key in ("num_layers", "num_saved_ops", "total_activation_memory")
+    }
+    assert client.logged == {f"tlm.{key}": value for key, value in numeric.items()}
+    assert client.tables["tlm/layers.json"] is metrics["table"]
+    assert client.texts["tlm/report.txt"] == metrics["report"]
+    assert client.tags == metrics["tags"]
+    assert all(isinstance(value, str) for value in client.tags.values())
+    assert client.tags["tlm.capture_honesty.capture_status"] == "complete"
+    # Without a client the pieces are still prepared and returned, but nothing is logged.
+    bare = tl.export.mlflow(log, client=None)
+    assert bare["artifacts"] == []
+    assert {key: bare[key] for key in numeric} == numeric
 
 
 def test_aim_tracks_prefixed_metrics_on_run_object() -> None:
@@ -118,17 +143,41 @@ def test_aim_tracks_prefixed_metrics_on_run_object() -> None:
     class _Run:
         def __init__(self) -> None:
             self.tracked: dict[str, float] = {}
+            self.series: list[tuple[str, int, Any]] = []
+            self.params: dict[str, Any] = {}
+            self.tags: list[str] = []
 
-        def track(self, value: float, name: str) -> None:
-            self.tracked[name] = value
+        def track(
+            self, value: float, name: str, step: int | None = None, context: Any = None
+        ) -> None:
+            if context is None:
+                self.tracked[name] = value
+            else:
+                self.series.append((name, step, context))
+
+        def add_tag(self, value: str) -> None:
+            self.tags.append(value)
+
+        def __setitem__(self, key: str, value: Any) -> None:
+            self.params[key] = value
 
     run = _Run()
     metrics = tl.export.aim(log, run=run, prefix="tla")
 
-    numeric_metrics = {key: value for key, value in metrics.items() if key != "capture_honesty"}
-    assert run.tracked == {f"tla.{key}": value for key, value in numeric_metrics.items()}
+    numeric = {
+        key: metrics[key] for key in ("num_layers", "num_saved_ops", "total_activation_memory")
+    }
+    assert run.tracked == {f"tla.{key}": value for key, value in numeric.items()}
     assert metrics["capture_honesty"]["capture_status"] == "complete"
-    assert tl.export.aim(log, run=None) == metrics
+    assert run.params["tla.capture_honesty"] == metrics["capture_honesty"]
+    assert run.params["tla.report"] == metrics["report"]
+    assert len(run.params["tla.layers"]) == len(metrics["table"])
+    assert {name for name, _step, _context in run.series} <= {
+        f"tla.layers.{column}" for column in metrics["table"].columns
+    }
+    assert "tla.capture_honesty.capture_status=complete" in run.tags
+    bare = tl.export.aim(log, run=None)
+    assert {key: bare[key] for key in numeric} == numeric
 
 
 def test_wandb_builds_scalar_safe_table_and_logs_to_run(

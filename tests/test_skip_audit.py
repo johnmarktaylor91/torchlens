@@ -74,6 +74,16 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
     "depyf": (OPTIONAL_PREVIEW, "depyf extra; real-package bridge leg in nightly.yml bridges-real"),
     "dialz": (OPTIONAL_PREVIEW, "dialz extra; real-package bridge leg in nightly.yml bridges-real"),
     "inseq": (OPTIONAL_PREVIEW, "inseq extra; real-package bridge leg in nightly.yml bridges-real"),
+    "aim": (
+        OPTIONAL_PREVIEW,
+        "Aim tracker export (no declared extra); real-package tracker leg, "
+        "tests/test_track_export_parity_real.py",
+    ),
+    "comet_ml": (
+        OPTIONAL_PREVIEW,
+        "Comet offline experiment for CometSink (no declared extra); real-package tracker leg, "
+        "tests/test_track_sinks_mlflow_comet_real.py",
+    ),
     "mlflow": (
         OPTIONAL_PREVIEW,
         "MLflow tracker export (no declared extra); nightly.yml bridges-real track leg",

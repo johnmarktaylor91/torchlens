@@ -41,6 +41,7 @@ from ._amp import (
     unscale_stage,
 )
 from ._callbacks import HFTrainerWatchCallback, LightningWatchCallback, derived_cadence
+from ._comet import CometSink
 from ._errors import (
     SinkDeliveryError,
     SinkProtocolError,
@@ -57,6 +58,7 @@ from ._graph import (
     graph_ir_to_tensorboard,
     node_name_for,
 )
+from ._mlflow import MLflowSink
 from ._protocol import (
     CAPABILITIES,
     DELIVERY_STATES,
@@ -108,12 +110,14 @@ __all__ = [
     "WANDB_SAFE_DESCRIPTOR",
     "WATCH_DISABLE_ENV",
     "CloseReport",
+    "CometSink",
     "GraphIR",
     "GraphNodeIR",
     "HFTrainerWatchCallback",
     "HistogramPoint",
     "JSONLSink",
     "LightningWatchCallback",
+    "MLflowSink",
     "MemorySink",
     "ScalarPoint",
     "Sink",

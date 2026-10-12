@@ -205,6 +205,15 @@ def test_tracker_exports_return_fact_block(export_trace: tl.Trace) -> None:
         def log_metric(self, key: str, value: object) -> None:
             self.logged.append((key, value))
 
+        def log_table(self, data: object, artifact_file: str) -> None:
+            del data, artifact_file
+
+        def log_text(self, text: str, artifact_file: str) -> None:
+            del text, artifact_file
+
+        def set_tag(self, key: str, value: str) -> None:
+            del key, value
+
     client = _Client()
     mlflow_result = tl.export.mlflow(export_trace, client)
     assert mlflow_result["capture_honesty"]["capture_status"] == "complete"
@@ -215,8 +224,15 @@ def test_tracker_exports_return_fact_block(export_trace: tl.Trace) -> None:
         def __init__(self) -> None:
             self.tracked: list[tuple[object, str]] = []
 
-        def track(self, value: object, name: str) -> None:
+        def track(self, value: object, name: str, **kwargs: object) -> None:
+            del kwargs
             self.tracked.append((value, name))
+
+        def add_tag(self, value: str) -> None:
+            del value
+
+        def __setitem__(self, key: str, value: object) -> None:
+            del key, value
 
     run = _Run()
     aim_result = tl.export.aim(export_trace, run)

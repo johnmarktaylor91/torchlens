@@ -289,7 +289,7 @@ class _Tracker:
 
         self.metrics.append((name, value))
 
-    def track(self, value: int, name: str) -> None:
+    def track(self, value: int, name: str, **kwargs: Any) -> None:
         """Record an Aim-like track call.
 
         Parameters
@@ -298,9 +298,27 @@ class _Tracker:
             Metric value.
         name:
             Metric name.
+        **kwargs:
+            Ignored ``step=``/``context=`` of the per-layer series.
         """
 
+        del kwargs
         self.metrics.append((name, value))
+
+    def log_table(self, data: Any, artifact_file: str) -> None:
+        """Accept an MLflow-like table artifact."""
+
+    def log_text(self, text: str, artifact_file: str) -> None:
+        """Accept an MLflow-like text artifact."""
+
+    def set_tag(self, key: str, value: str) -> None:
+        """Accept an MLflow-like run tag."""
+
+    def add_tag(self, value: str) -> None:
+        """Accept an Aim-like run tag."""
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        """Accept an Aim-like run param."""
 
 
 class _FakeHubApi:
@@ -453,12 +471,30 @@ def test_mlflow_export_routes_run_id_by_client_shape(export_log: Any) -> None:
         def log_metric(self, run_id: str, key: str, value: float, step: int | None = None) -> None:
             self.calls.append((run_id, key, value))
 
+        def log_table(self, run_id: str, data: Any, artifact_file: str) -> None:
+            del run_id, data, artifact_file
+
+        def log_text(self, run_id: str, text: str, artifact_file: str) -> None:
+            del run_id, text, artifact_file
+
+        def set_tag(self, run_id: str, key: str, value: str) -> None:
+            del run_id, key, value
+
     class _Fluent:
         def __init__(self) -> None:
             self.calls: list[tuple[Any, ...]] = []
 
         def log_metric(self, key: str, value: float, step: int | None = None, run_id: Any = None):
             self.calls.append((key, value, run_id))
+
+        def log_table(self, data: Any, artifact_file: str, run_id: Any = None) -> None:
+            del data, artifact_file, run_id
+
+        def log_text(self, text: str, artifact_file: str, run_id: Any = None) -> None:
+            del text, artifact_file, run_id
+
+        def set_tag(self, key: str, value: str, run_id: Any = None) -> None:
+            del key, value, run_id
 
     class _Bare:
         def log_metric(self, key: str, value: float) -> None:

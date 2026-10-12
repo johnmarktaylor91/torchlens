@@ -135,12 +135,28 @@ class TestExporterUnification:
             def log_metric(self, key, value):  # noqa: ANN001
                 self.metrics[key.split(".", 1)[1]] = value
 
+            def log_table(self, data, artifact_file):  # noqa: ANN001
+                pass
+
+            def log_text(self, text, artifact_file):  # noqa: ANN001
+                pass
+
+            def set_tag(self, key, value):  # noqa: ANN001
+                pass
+
         class _Run:
             def __init__(self) -> None:
                 self.tracked: dict[str, float] = {}
 
-            def track(self, value, name):  # noqa: ANN001
-                self.tracked[name.split(".", 1)[1]] = value
+            def track(self, value, name, **kwargs):  # noqa: ANN001, ANN003
+                if "context" not in kwargs:
+                    self.tracked[name.split(".", 1)[1]] = value
+
+            def add_tag(self, value):  # noqa: ANN001
+                pass
+
+            def __setitem__(self, key, value):  # noqa: ANN001
+                pass
 
         fake_wandb = types.ModuleType("wandb")
 
