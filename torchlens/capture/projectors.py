@@ -540,12 +540,20 @@ class RefreshProjector:
                 "write-evidence claim was tampered",
             )
         # O2 signature widening, evaluated in the typed arm: any
-        # target-vs-refreshed buffer-sink evidence asymmetry refuses typed.
-        if target_rows != refreshed_rows:
+        # target-vs-refreshed buffer-sink evidence asymmetry refuses typed. Rows
+        # are keyed by their unique raw label: ``internal_sink_ops`` lists sinks
+        # in graph-discovery order, which starts from the run's terminal ops, so
+        # a halted (until=) refresh discovers the SAME sinks in a different order
+        # than the full-graph target. The label set and every row's evidence are
+        # still compared in full.
+        target_by_label = sorted(target_rows, key=lambda row: row[0])
+        refreshed_by_label = sorted(refreshed_rows, key=lambda row: row[0])
+        if target_by_label != refreshed_by_label:
             raise self._buffer_sink_routing_error(
                 refreshed,
                 "buffer-sink evidence diverged between the refresh target "
-                f"{target_rows!r} and the refreshed rerun {refreshed_rows!r}",
+                f"{tuple(target_by_label)!r} and the refreshed rerun "
+                f"{tuple(refreshed_by_label)!r}",
             )
 
     def _graph_signature_mismatch_detail(self, refreshed: Any) -> str:
