@@ -496,6 +496,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_trace_selector_helpers.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "pass_index",
   "file": "torchlens/_trace_selector_helpers.py",
@@ -4548,7 +4556,7 @@
   "field": "modules",
   "file": "torchlens/intervention/hooks.py",
   "has_default": true,
-  "sites": 1,
+  "sites": 3,
   "via_getattr": true
  },
  {

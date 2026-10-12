@@ -2275,3 +2275,11 @@ env: py3.12-torch2.14.1
 torch: 2.14.1
 source: df071247a6db33b699bde3064aedeee2af6a9ee8 (clean)
 recorded: 2026-10-12T20:47:37.603548+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: U26.1/U27.2 (batch-2 lane SEL): new getattr reads in _trace_selector_helpers and captured_run
+env: py3.12-torch2.14.1
+torch: 2.14.1
+source: 8e6482af469de2ef7bb938b9faae9c8cdd6c1d21 (dirty)
+recorded: 2026-10-12T22:42:12.266417+00:00
