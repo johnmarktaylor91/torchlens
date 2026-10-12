@@ -225,6 +225,20 @@ def test_mlx_list_container_and_parameterless_modules_are_discovered() -> None:
 
 
 @pytest.mark.optional
+def test_mlx_summary_rows_follow_execution_order() -> None:
+    """MLX summary rows read in execution order, never reversed (walk U06.1)."""
+
+    trace = tl.trace(MLXSimpleMLP(), _input(), backend="mlx")
+    report = trace.summary()
+    executed = [f"op:{op.layer_label}" for op in trace.layer_list]
+    row_ids = [row.row_id for row in report.rows if row.row_id in executed]
+    assert len(row_ids) == len(executed) >= 4
+    assert row_ids == executed
+    rendered = str(report)
+    assert rendered.index("l1 (Linear)") < rendered.index("l2 (Linear)")
+
+
+@pytest.mark.optional
 def test_mlx_object_module_public_surface_matrix(tmp_path: Path) -> None:
     """Assert public surfaces on a real MLX object-module trace."""
 

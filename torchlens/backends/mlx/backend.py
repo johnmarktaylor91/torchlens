@@ -211,6 +211,54 @@ class _MLXIntermediateCandidate:
     grad: Any | None = None
 
 
+class _MLXReplayModuleFrames:
+    """Mirror capture's module-call frames during an MLX AD replay.
+
+    Capture stamps each op with the ``"address:call_index"`` frames of the
+    discovered modules it ran inside (``op.modules``). The replay observers
+    must build the SAME frames, or every op of a module-shaped model fails
+    its 1:1 signature match and its intermediate gradient is silently absent.
+    """
+
+    def __init__(self) -> None:
+        """Start with no frames and zeroed per-address call counts."""
+
+        self.call_counts: dict[str, int] = {}
+        self.stack: list[str] = []
+
+    def push(self, address: str | None) -> bool:
+        """Enter one module call; return whether a frame was pushed.
+
+        Parameters
+        ----------
+        address
+            Primary module address of the called module, or ``None`` for a
+            call that is not a discovered module.
+
+        Returns
+        -------
+        bool
+            ``True`` when a frame was pushed (the caller must ``pop`` it).
+        """
+
+        if address is None:
+            return False
+        call_index = self.call_counts.get(address, 0) + 1
+        self.call_counts[address] = call_index
+        self.stack.append(f"{address}:{call_index}")
+        return True
+
+    def pop(self) -> None:
+        """Leave the innermost module call."""
+
+        self.stack.pop()
+
+    def current(self) -> tuple[str, ...]:
+        """Return the active frames, outermost first."""
+
+        return tuple(self.stack)
+
+
 class _MLXIntermediateTapObserver:
     """Observe wrapped MLX calls and inject custom-VJP identity taps."""
 
@@ -233,6 +281,7 @@ class _MLXIntermediateTapObserver:
         self.depth = 0
         self.labels_by_id: dict[int, str] = {}
         self.candidates: list[_MLXIntermediateCandidate] = []
+        self.module_frames = _MLXReplayModuleFrames()
         self._label_trace_inputs(trace)
 
     def _label_trace_inputs(self, trace: Trace) -> None:
@@ -273,6 +322,7 @@ class _MLXIntermediateTapObserver:
         op_name: str | None,
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
+        module_address: str | None = None,
     ) -> Any:
         """Run a wrapped MLX callable and tap eligible outputs.
 
@@ -286,6 +336,8 @@ class _MLXIntermediateTapObserver:
             Positional call arguments.
         kwargs
             Keyword call arguments.
+        module_address
+            Primary address when the call is a discovered module call.
 
         Returns
         -------
@@ -293,14 +345,19 @@ class _MLXIntermediateTapObserver:
             Original output with eligible array leaves replaced by identity taps.
         """
 
-        if op_name is None or self.depth > 0:
-            return original(*args, **kwargs)
-        self.depth += 1
+        pushed = self.module_frames.push(module_address)
         try:
-            output = original(*args, **kwargs)
+            if op_name is None or self.depth > 0:
+                return original(*args, **kwargs)
+            self.depth += 1
+            try:
+                output = original(*args, **kwargs)
+            finally:
+                self.depth -= 1
+            return self._tap_output(op_name, args, kwargs, output)
         finally:
-            self.depth -= 1
-        return self._tap_output(op_name, args, kwargs, output)
+            if pushed:
+                self.module_frames.pop()
 
     def _tap_output(
         self,
@@ -347,7 +404,7 @@ class _MLXIntermediateTapObserver:
                     parent_labels=parent_labels,
                     shape=tuple(getattr(leaf, "shape", ())),
                     dtype=str(getattr(leaf, "dtype", "")),
-                    module_calls=(),
+                    module_calls=self.module_frames.current(),
                 )
                 candidate = _MLXIntermediateCandidate(
                     raw_label=raw_label,
@@ -395,6 +452,7 @@ class _MLXBoundaryReplacementObserver:
         self.target_signature = target_signature
         self.replacement = replacement
         self.replaced = False
+        self.module_frames = _MLXReplayModuleFrames()
 
     def label_call_inputs(self, args: Sequence[Any], kwargs: Mapping[Any, Any]) -> None:
         """Label top-level replay model inputs with stable source labels.
@@ -420,6 +478,7 @@ class _MLXBoundaryReplacementObserver:
         op_name: str | None,
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
+        module_address: str | None = None,
     ) -> Any:
         """Run a wrapped callable and replace the target boundary.
 
@@ -433,6 +492,8 @@ class _MLXBoundaryReplacementObserver:
             Positional call arguments.
         kwargs
             Keyword call arguments.
+        module_address
+            Primary address when the call is a discovered module call.
 
         Returns
         -------
@@ -440,14 +501,19 @@ class _MLXBoundaryReplacementObserver:
             Output tree with the target boundary replaced when matched.
         """
 
-        if op_name is None or self.depth > 0:
-            return original(*args, **kwargs)
-        self.depth += 1
+        pushed = self.module_frames.push(module_address)
         try:
-            output = original(*args, **kwargs)
+            if op_name is None or self.depth > 0:
+                return original(*args, **kwargs)
+            self.depth += 1
+            try:
+                output = original(*args, **kwargs)
+            finally:
+                self.depth -= 1
+            return self._replace_output(op_name, args, kwargs, output)
         finally:
-            self.depth -= 1
-        return self._replace_output(op_name, args, kwargs, output)
+            if pushed:
+                self.module_frames.pop()
 
     def _replace_output(
         self,
@@ -492,7 +558,7 @@ class _MLXBoundaryReplacementObserver:
                 parent_labels=parent_labels,
                 shape=tuple(getattr(leaf, "shape", ())),
                 dtype=str(getattr(leaf, "dtype", "")),
-                module_calls=(),
+                module_calls=self.module_frames.current(),
             )
             replacement = self.replacement if signature == self.target_signature else leaf
             if signature == self.target_signature:
