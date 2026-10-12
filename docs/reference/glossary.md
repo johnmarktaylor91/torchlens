@@ -265,7 +265,11 @@ attribution-target alias. See the [attribution reference](attribution.md).
 **Predicate**
 : A site selector built with `tl.func`, `tl.module`, `tl.in_module`, `tl.label`, and boolean or
   temporal composition. `save=` is the only selective sparse-capture spelling; removed
-  `keep_op=` and `keep_module=` arguments raise `TypeError`.
+  `keep_op=` and `keep_module=` arguments raise `TypeError`. On `tl.trace`, `save=` also takes
+  the list form (layer names, pass-qualified labels, module addresses, integer indexes,
+  substrings, `'all'`, `'none'`), which selects exactly what
+  `capture=CaptureOptions(layers_to_save=[...])` selects; passing both refuses
+  `save_selection_conflict`.
 
 **Lookback**
 : A bounded window of earlier metadata or detached payloads retained so a later temporal predicate
@@ -474,7 +478,10 @@ attribution-target alias. See the [attribution reference](attribution.md).
   alias spelling (`"dec"`, `"dec:2"`) refuses with `bind_static_anchor_unresolved` and one
   message at every door (capture, record, post hoc, `spec.bind`), since no hook can tell which
   name a forward called the object through;
-  `tl.head` selects one attention head; `tl.facet` selects a semantic facet view;
+  `tl.head` selects one attention head; `tl.facet` selects a semantic facet view; an unscoped
+  `tl.head(i)` writes head `i` of every matching facet in every module and says how many sites
+  it writes (a `MultiMatchWarning`, for example 36 on a 12-layer GPT-2: q, k and v in each
+  layer); `.in_module(address)` scopes it to one module;
   `tl.func_transform` selects `torch.func` and `torch.autograd` transform boundary ops
   (including `autogradgrad`, an in-forward `torch.autograd.grad` call, with
   `transform_kind="autograd.grad"`); `tl.output` selects model outputs, and
@@ -595,6 +602,17 @@ attribution-target alias. See the [attribution reference](attribution.md).
   check; `torchlens.dataset_extraction.load_extraction` reads the artifact back with
   its metadata as a `LoadedExtraction`.
 
+**Module and stage names** *(rule documented-unstable)*
+: A module name resolves to that module's output at every selector door: `tl.extract`,
+  `tl.pluck`, `trace[...]`, `tl.trace(save=[...])` and `trace.run(until=...)`. Three spellings
+  name a module: its address (`"fc"`, `"layer1.0"`); a name relative to a wrapped inner model
+  (timm `FeatureGetterNet` reports `"blocks.9"` for the module at `"model.blocks.9"`); and a
+  dotted name whose module was registered with dots flattened to underscores (timm
+  `FeatureListNet` registers stage `"stages.0"` as `"stages_0"`). A module whose output is also
+  a model output resolves to its own output op, not the model-output alias. A relative name
+  that ends several module addresses refuses `ambiguous_op_lookup` and lists them; a
+  `":<call>"` suffix selects one call of a reused module.
+
 **Observers**
 : `tl.tap` creates a tap observer for a site; `tl.span` records a named observer span
   around captures or hook execution (the former `record_span` alias is removed);
@@ -669,6 +687,19 @@ attribution-target alias. See the [attribution reference](attribution.md).
   `tl.facets` is the semantic facet namespace (canonical home `torchlens.semantic`);
   `tl.export` holds static export helpers; `tl.bundle(...)` / `tl.Bundle` build aligned
   Trace collections and `tl.show_bundle_graph` renders a bundle's graph.
+
+**Appliance door (`Trace.using`)** *(spelling documented-unstable)*
+: `trace.using(name)` returns the appliance registered as `name`, bound to that trace (for
+  example `trace.using("mi").head_scores(...)` once the `"mi"` appliance is registered).
+  Appliances hang off this one door instead of adding methods to `Trace`; TorchLens's own and
+  outside packages register the same way, with
+  `torchlens.accessors.register_appliance(name, factory, summary="", replace=False)`, where
+  `factory` is a callable taking the trace or a lazily imported `"module:attribute"` path.
+  `torchlens.accessors.registered_appliances()` lists the names with their summaries. An
+  unknown name refuses `appliance_unknown` and lists the registered names; re-registering a
+  name without `replace=True` refuses `appliance_name_taken`; a malformed name or factory
+  refuses `appliance_registration_invalid`. The word clashes with `tl.semantic.using(*recipes)`
+  (a recipe scope); the naming review settles both.
 
 **Streaming statistics**
 : `tl.stats` is the streaming-statistics namespace: constant-memory accumulators
