@@ -18,6 +18,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens.backends.torch import _op_markers
 
 
 @pytest.fixture()
@@ -25,6 +26,9 @@ def nvtx_calls(monkeypatch) -> list[str]:
     """Capture NVTX range names without CUDA."""
 
     calls: list[str] = []
+    # Simulate an NVTX-capable host: on a CUDA-less host emit_nvtx=True now
+    # refuses typed (emit_nvtx_unavailable), matching torch's emit_nvtx.
+    monkeypatch.setattr(_op_markers, "_nvtx_host_available", lambda: True)
     monkeypatch.setattr(torch.cuda.nvtx, "range_push", lambda name: calls.append(str(name)))
     monkeypatch.setattr(torch.cuda.nvtx, "range_pop", lambda: None)
     return calls

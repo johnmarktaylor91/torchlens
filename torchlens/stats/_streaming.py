@@ -5,10 +5,14 @@ from __future__ import annotations
 import heapq
 import math
 import random
+import warnings
 from collections.abc import Iterable
 from typing import Any, Protocol, cast
 
 import torch
+
+from .._errors import InvalidArgumentError
+from ..errors import TorchLensWarning
 
 __tl_layer__ = "L5"
 
@@ -529,6 +533,51 @@ class CrossCovariance:
         return self._m2 / (self._count - 1)
 
 
+def _refuse_nonfinite_cka_input(matrix: torch.Tensor, argument: str) -> None:
+    """Refuse NaN/Inf CKA input typed, matching ``tl.repgeom.rdm`` (U25.2).
+
+    Parameters
+    ----------
+    matrix:
+        Feature matrix about to enter the CKA reduction.
+    argument:
+        Which representation (``"a"`` or ``"b"``) the matrix came from.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``cka_input_nonfinite`` when any entry is NaN or infinite.
+    """
+
+    if bool(torch.isfinite(matrix).all()):
+        return
+    raise InvalidArgumentError(
+        f"CKA input {argument!r} contains NaN or infinite values; CKA would "
+        "silently return NaN or a meaningless score",
+        code="cka_input_nonfinite",
+        remedy=(
+            "clean or mask the non-finite entries first (for example "
+            "torch.nan_to_num(x) or drop the affected rows), as tl.repgeom.rdm requires"
+        ),
+        argument=argument,
+    )
+
+
+def _warn_zero_variance_cka() -> float:
+    """Warn that a zero-variance representation makes CKA undefined; return NaN."""
+
+    warnings.warn(
+        TorchLensWarning(
+            "CKA is undefined because a representation has zero variance (every row "
+            "is identical after centering); returning NaN. Remedy: check the site "
+            "selection and the inputs, a constant activation carries no geometry",
+            code="cka_zero_variance",
+        ),
+        stacklevel=3,
+    )
+    return math.nan
+
+
 class CKA:
     r"""Streaming linear centered kernel alignment accumulator.
 
@@ -541,8 +590,9 @@ class CKA:
         {\lVert C_{AA}\rVert_F\,\lVert C_{BB}\rVert_F}.
 
     Only feature-sized covariance terms are retained. If either input has
-    zero variance, ``result()`` returns NaN because the alignment denominator
-    is zero. This follows the linear CKA formulation of Kornblith et al. (2019).
+    zero variance, ``result()`` returns NaN (warning ``cka_zero_variance``)
+    because the alignment denominator is zero; a NaN or infinite batch refuses
+    ``cka_input_nonfinite`` at ``update()``. This follows the linear CKA formulation of Kornblith et al. (2019).
     """
 
     def __init__(
@@ -584,6 +634,8 @@ class CKA:
 
         matrix_a = _as_feature_matrix(a)
         matrix_b = _as_feature_matrix(b)
+        _refuse_nonfinite_cka_input(matrix_a, "a")
+        _refuse_nonfinite_cka_input(matrix_b, "b")
         self._cross.update(matrix_a, matrix_b)
         self._covariance_a.update(matrix_a)
         self._covariance_b.update(matrix_b)
@@ -594,7 +646,8 @@ class CKA:
         Returns
         -------
         float
-            Linear CKA, or NaN when either representation has zero variance.
+            Linear CKA, or NaN (with a ``cka_zero_variance`` warning) when either
+            representation has zero variance.
         """
 
         cross = self._cross.result()
@@ -605,7 +658,7 @@ class CKA:
             covariance_b, ord="fro"
         )
         if denominator.item() == 0.0:
-            return math.nan
+            return _warn_zero_variance_cka()
         return float((numerator / denominator).item())
 
 
@@ -623,7 +676,9 @@ def cka(a: Any, b: Any, *, device: Any = None, dtype: Any = None) -> float:
     This is the linear CKA measure described by Kornblith et al. (2019).
     Inputs are treated as ``(n_observations, n_features)`` matrices; the
     default computes on CPU ``float64`` (bit-identical to the historical
-    behavior). A zero-variance input produces NaN.
+    behavior). A zero-variance input produces NaN with a ``cka_zero_variance``
+    warning; NaN or infinite input refuses ``cka_input_nonfinite``, as
+    ``tl.repgeom.rdm`` does.
 
     Parameters
     ----------
@@ -641,6 +696,11 @@ def cka(a: Any, b: Any, *, device: Any = None, dtype: Any = None) -> float:
     -------
     float
         Linear CKA value, or NaN for a degenerate zero-variance input.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``cka_input_nonfinite`` when either input holds NaN or Inf.
     """
 
     resolved_device, resolved_dtype = _resolve_placement(device, dtype)
@@ -650,6 +710,8 @@ def cka(a: Any, b: Any, *, device: Any = None, dtype: Any = None) -> float:
         raise ValueError(
             f"CKA requires matched row counts; got {matrix_a.shape[0]} and {matrix_b.shape[0]}."
         )
+    _refuse_nonfinite_cka_input(matrix_a, "a")
+    _refuse_nonfinite_cka_input(matrix_b, "b")
 
     centered_a = matrix_a - matrix_a.mean(dim=0, keepdim=True)
     centered_b = matrix_b - matrix_b.mean(dim=0, keepdim=True)
@@ -659,7 +721,7 @@ def cka(a: Any, b: Any, *, device: Any = None, dtype: Any = None) -> float:
         gram_b, ord="fro"
     )
     if denominator.item() == 0.0:
-        return math.nan
+        return _warn_zero_variance_cka()
     numerator = torch.sum(gram_a * gram_b)
     return float((numerator / denominator).item())
 
