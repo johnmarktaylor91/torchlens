@@ -59,7 +59,13 @@ V9_CONTRACT_SHA256 = (
 #: adds the admission here. Removals and retypes of v9 fields are registered
 #: in ``V10_FIELD_RETYPES`` (removals stay alias-or-fail, see
 #: ``tests/test_tlspec_envelope_contract.py``).
-V10_FIELD_ADMISSIONS: dict[str, dict[str, str]] = {}
+V10_FIELD_ADMISSIONS: dict[str, dict[str, str]] = {
+    # SCHEMA-REQUESTS row 2 (RUN-B, R2-37): the byte disclosure for the
+    # autograd graph the attached saved activations keep alive. DROP: a loaded
+    # or unpickled trace pins nothing, so a persisted capture-time number
+    # would read as current; it loads as None ("not measured").
+    "trace": {"pinned_autograd_memory": "drop"},
+}
 
 #: Registered retypes of existing v9 persisted fields: record key -> {field
 #: name -> one-line description of the old and new type}. A retype keeps the
@@ -94,19 +100,27 @@ def _record_contracts(path: Path) -> dict:
 
 @pytest.mark.smoke
 def test_v9_to_v10_additions_are_all_registered() -> None:
-    """Every persisted-name addition over v9 is admitted, under its registered policy."""
+    """Every field added over v9 (persisted or DROP) is admitted, under its registered policy.
+
+    DROP fields never enter ``persisted_field_names`` but do enter the policy
+    table, so the gate reads both.
+    """
 
     old = _record_contracts(V9_CONTRACT)
     new = _record_contracts(V10_CONTRACT)
     assert set(old) == set(new), "no record contract may appear or disappear at v10"
     assert set(V10_FIELD_ADMISSIONS) <= set(new), "admissions name unknown record contracts"
     for record_key in sorted(new):
-        new_names = set(new[record_key]["persisted_field_names"])
-        old_names = set(old[record_key]["persisted_field_names"])
+        new_names = set(new[record_key]["persisted_field_names"]) | set(
+            new[record_key]["field_policies"]
+        )
+        old_names = set(old[record_key]["persisted_field_names"]) | set(
+            old[record_key]["field_policies"]
+        )
         admitted = V10_FIELD_ADMISSIONS.get(record_key, {})
         unregistered = new_names - old_names - set(admitted)
         assert unregistered == set(), (
-            f"{record_key}: persisted field(s) {sorted(unregistered)} reach the v10 "
+            f"{record_key}: field(s) {sorted(unregistered)} reach the v10 "
             "contract without a registration; request them in SCHEMA-REQUESTS and "
             "add the admission to V10_FIELD_ADMISSIONS in the same change"
         )
@@ -122,8 +136,11 @@ def test_admissions_are_new_names_and_retypes_are_existing_names() -> None:
     old = _record_contracts(V9_CONTRACT)
     policy_values = {"keep", "blob", "blob_recursive", "drop", "stringify", "weakref_strip"}
     for record_key, admitted in V10_FIELD_ADMISSIONS.items():
-        clash = set(admitted) & set(old[record_key]["persisted_field_names"])
-        assert clash == set(), f"{record_key}: {sorted(clash)} already persist in v9"
+        v9_names = set(old[record_key]["persisted_field_names"]) | set(
+            old[record_key]["field_policies"]
+        )
+        clash = set(admitted) & v9_names
+        assert clash == set(), f"{record_key}: {sorted(clash)} are already v9 fields"
         assert set(admitted.values()) <= policy_values
     for record_key, retyped in V10_FIELD_RETYPES.items():
         missing = set(retyped) - set(old[record_key]["persisted_field_names"])
