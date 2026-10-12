@@ -55,7 +55,25 @@ _INDEX_DOMAIN_ARG_SPECS: dict[str, tuple[int, frozenset[str]]] = {
     "scatteradd": (2, frozenset({"index"})),
     # cross_entropy(input, target, ...) -- domain = the class dimension.
     "cross_entropy": (1, frozenset({"target"})),
+    # nll_loss(input, target, ...) -- domain = the class dimension.
+    "nll_loss": (1, frozenset({"target"})),
+    # take_along_dim(input, indices, dim) -- domain = input.shape[dim], or
+    # input.numel() when dim is None (indices into the flattened input).
+    "take_along_dim": (1, frozenset({"indices"})),
+    # index_add/index_copy/index_fill(input, dim, index, ...) and their in-place
+    # forms -- domain = input.shape[dim], as for index_select. No exemption
+    # applies to them: the scatter overwrite proof matches overwriting scatters
+    # by name (``_destination_coverage._OVERWRITE_SCATTER_FUNC_NAMES``).
+    "index_add": (2, frozenset({"index"})),
+    "index_add_": (2, frozenset({"index"})),
+    "index_copy": (2, frozenset({"index"})),
+    "index_copy_": (2, frozenset({"index"})),
+    "index_fill": (2, frozenset({"index"})),
+    "index_fill_": (2, frozenset({"index"})),
 }
+
+#: Class-target ops whose ``ignore_index`` marks targets that contribute nothing.
+_IGNORE_INDEX_OPS = frozenset({"cross_entropy", "nll_loss"})
 
 
 def _parent_is_index_domain_arg(layer: Op, parent_label: str) -> bool:
@@ -134,7 +152,9 @@ def _index_domain_size(layer: Op) -> int | None:
         if isinstance(weight, torch.Tensor) and weight.ndim >= 1:
             return int(weight.shape[0])
         return None
-    if func_name == "cross_entropy":
+    if func_name == "take_along_dim":
+        return _take_along_dim_domain_size(args, kwargs)
+    if func_name in _IGNORE_INDEX_OPS:
         logits = kwargs.get("input", args[0] if args else None)
         if not isinstance(logits, torch.Tensor) or logits.ndim < 1:
             return None
@@ -148,6 +168,87 @@ def _index_domain_size(layer: Op) -> int | None:
     if dim < 0 or dim >= source.ndim:
         return None
     return int(source.shape[dim])
+
+
+def _take_along_dim_domain_size(args: tuple[Any, ...], kwargs: dict[str, Any]) -> int | None:
+    """Return ``take_along_dim``'s index domain from its saved call.
+
+    Parameters
+    ----------
+    args, kwargs:
+        Saved positional and keyword arguments ``(input, indices, dim)``.
+
+    Returns
+    -------
+    int or None
+        ``input.shape[dim]``, ``input.numel()`` when ``dim`` is ``None``, or
+        ``None`` when the shape cannot prove a bound.
+    """
+
+    source = kwargs.get("input", args[0] if args else None)
+    dim = kwargs.get("dim", args[2] if len(args) > 2 else None)
+    if not isinstance(source, torch.Tensor):
+        return None
+    if dim is None:
+        return int(source.numel())
+    if not isinstance(dim, int) or not -source.ndim <= dim < source.ndim:
+        return None
+    return int(source.shape[dim])
+
+
+def _in_domain_ignore_index(layer: Op, domain_size: int) -> int | None:
+    """Return a class-target op's ``ignore_index`` when it lies inside the domain.
+
+    Parameters
+    ----------
+    layer:
+        Captured op.
+    domain_size:
+        Exclusive upper bound of the index domain.
+
+    Returns
+    -------
+    int or None
+        The ignore value when the op is ``cross_entropy``/``nll_loss`` and its
+        ``ignore_index`` is in ``[0, domain_size)``; else ``None``. A target is
+        never rotated onto or off that value: doing so would change which
+        targets count, not just which class a counted target names.
+    """
+
+    if getattr(layer, "func_name", None) not in _IGNORE_INDEX_OPS:
+        return None
+    kwargs = getattr(layer, "saved_kwargs", None) or {}
+    args: tuple[Any, ...] = getattr(layer, "saved_args", None) or ()
+    # nll_loss(input, target, weight, size_average, ignore_index, ...);
+    # cross_entropy shares the slot order.
+    ignore = kwargs.get("ignore_index", args[4] if len(args) > 4 else -100)
+    if isinstance(ignore, int) and 0 <= ignore < domain_size:
+        return ignore
+    return None
+
+
+def _rotate_skipping(values: torch.Tensor, domain_size: int, skip: int | None) -> torch.Tensor:
+    """Rotate indices by one position in ``[0, domain_size)``, never onto ``skip``.
+
+    Parameters
+    ----------
+    values:
+        In-domain integer indices (none equal to ``skip``).
+    domain_size:
+        Domain size, at least 2 (at least 3 when ``skip`` is set).
+    skip:
+        A value no rotated entry may take, or ``None``.
+
+    Returns
+    -------
+    torch.Tensor
+        ``(v + 1) % n``, stepping once more past ``skip``.
+    """
+
+    rotated = (values + 1).remainder(domain_size)
+    if skip is None:
+        return rotated
+    return torch.where(rotated == skip, (rotated + 1).remainder(domain_size), rotated)
 
 
 def _saved_index_domain_arg_value(layer: Op) -> Any:
@@ -218,9 +319,14 @@ def index_domain_rotation_values(
     if domain_size is None or domain_size < 2:
         return None
     in_domain = (parent_values >= 0) & (parent_values < domain_size)
+    ignore = _in_domain_ignore_index(layer, domain_size)
+    if ignore is not None:
+        if domain_size < 3:
+            return None
+        in_domain = in_domain & (parent_values != ignore)
     if not bool(in_domain.any()):
         return None
-    rotated = (parent_values + 1).remainder(domain_size)
+    rotated = _rotate_skipping(parent_values, domain_size, ignore)
     return torch.where(in_domain, rotated, parent_values)
 
 
@@ -264,8 +370,11 @@ def index_domain_single_entry_values(
         return None
     flat = parent_values.reshape(-1).clone()
     in_domain = (flat >= 0) & (flat < domain_size)
+    ignore = _in_domain_ignore_index(layer, domain_size)
+    if ignore is not None:
+        in_domain = in_domain & (flat != ignore)
     first = int(torch.nonzero(in_domain)[0, 0])
-    flat[first] = (flat[first] + 1).remainder(domain_size)
+    flat[first : first + 1] = _rotate_skipping(flat[first : first + 1], domain_size, ignore)
     return flat.reshape(parent_values.shape)
 
 
