@@ -13,6 +13,7 @@ output against the sdpa backend at the existing SDPA ``z`` tolerance
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Iterator
 from typing import Any
 
@@ -25,7 +26,7 @@ from transformers import AttentionInterface  # noqa: E402
 from transformers.masking_utils import AttentionMaskInterface  # noqa: E402
 
 from tests.real_model.r0.families import FAMILY_BY_NAME, VOCAB  # noqa: E402
-from torchlens._errors import InvalidArgumentError  # noqa: E402
+from torchlens._errors import InvalidArgumentError, MissingDependencyError  # noqa: E402
 from torchlens.bridge import hf as tl_hf  # noqa: E402
 from torchlens.bridge.hf_attention import (  # noqa: E402
     BACKEND_KEY,
@@ -220,6 +221,15 @@ def test_register_refuses_a_foreign_key() -> None:
     with pytest.raises(InvalidArgumentError) as excinfo:
         tl_hf.register_attention()
     assert excinfo.value.fields["code"] == "hf_attention_key_taken"
+
+
+def test_register_refuses_without_the_mask_registry(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No mask registry means no paired registration: refuse, never half-register."""
+
+    monkeypatch.setitem(sys.modules, "transformers.masking_utils", None)
+    with pytest.raises(MissingDependencyError) as excinfo:
+        tl_hf.register_attention()
+    assert excinfo.value.fields["code"] == "hf_attention_registry_unavailable"
 
 
 def test_record_refuses_a_model_on_another_backend() -> None:
