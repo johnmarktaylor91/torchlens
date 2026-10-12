@@ -1,4 +1,4 @@
-"""Typed refusal codes of the contrastive, depyf, nnsight and MLflow bridges.
+"""Typed refusal codes of the contrastive, depyf and MLflow bridges.
 
 Every refusal these bridges added raises a ``TorchLensError`` subclass that
 keeps its historical built-in lineage (``ValueError``/``TypeError``/

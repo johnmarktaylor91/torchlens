@@ -233,12 +233,16 @@ def _extract_bundle(archive: Path, destination: Path) -> Path:
         entry, or a member count or total size over the bounds.
     """
 
+    unreadable = (tarfile.TarError, OSError, EOFError)
     try:
         tar = tarfile.open(archive, mode="r:gz")
-    except (tarfile.TarError, OSError) as exc:
+    except unreadable as exc:
         raise _unsafe_artifact(f"not a readable gzipped tar ({exc})", archive) from exc
     with tar:
-        members = tar.getmembers()
+        try:
+            members = tar.getmembers()
+        except unreadable as exc:
+            raise _unsafe_artifact(f"not a readable gzipped tar ({exc})", archive) from exc
         roots = {_checked_root(member, archive) for member in members}
         if len(roots) != 1:
             raise _unsafe_artifact(f"expected one top-level bundle, found {len(roots)}", archive)
