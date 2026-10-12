@@ -322,6 +322,25 @@ def test_truncation_is_explicit_and_disclosed() -> None:
     assert any("truncation" in line for line in result.footer_lines())
 
 
+def test_input_beyond_the_position_limit_refuses_and_max_length_runs() -> None:
+    """U23.3: no max_length and too long refuses typed; the named remedy runs."""
+
+    model = _TinyForCausalLM()
+    model.config.max_position_embeddings = 4
+    tokenizer = _FakeTokenizer()
+    text = "the eiffel tower is in paris"
+    with pytest.raises(AttributionError) as info:
+        attribution.text(model, tokenizer, text, n_steps=8)
+    assert info.value.fields["code"] == "text_input_exceeds_position_limit"
+    assert "max_length=4" in str(info.value)
+
+    with pytest.warns(AttributionWarning):
+        result = attribution.text(model, tokenizer, text, max_length=4, n_steps=8)
+    assert result.truncation is not None and result.truncation["retained_length"] == 4
+    within = attribution.text(model, tokenizer, "the eiffel tower is", n_steps=8)
+    assert len(within.scores) == 4
+
+
 @pytest.mark.smoke
 def test_payload_escapes_hostile_tokens() -> None:
     """The fallback table escapes token text (D28 escaping rule)."""

@@ -497,9 +497,20 @@ def test_tracker_exports_reject_paths_with_clear_type_errors(
         tl.export.aim(export_log, run=tmp_path / "aim")
 
 
-def test_emit_nvtx_capture_option_does_not_change_capture() -> None:
-    """emit_nvtx should be accepted and should not alter normal logging output."""
+def test_emit_nvtx_capture_option_does_not_change_capture(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """emit_nvtx should be accepted and should not alter normal logging output.
 
+    The host is simulated as NVTX-capable: a CUDA-less host refuses
+    ``emit_nvtx=True`` typed (``emit_nvtx_unavailable``, U35.3).
+    """
+
+    from torchlens.backends.torch import _op_markers
+
+    monkeypatch.setattr(_op_markers, "_nvtx_host_available", lambda: True)
+    monkeypatch.setattr(torch.cuda.nvtx, "range_push", lambda name: None)
+    monkeypatch.setattr(torch.cuda.nvtx, "range_pop", lambda: None)
     log = tl.trace(
         nn.Linear(2, 2),
         torch.randn(1, 2),

@@ -141,16 +141,15 @@ def _resolve_output_parent_labels(
                 # same guard as the backend.py twin, which also discloses the
                 # output address this site does not hold).
                 shape_text = "<unavailable>"
+            from ..backends.torch.backend import output_attribution_remedy
+
             raise OutputAttributionError(
                 "TorchLens could not attribute a model output tensor to any traced op "
                 f"(shape={shape_text}, dtype={output_tensor.dtype}). "
                 "This may indicate an opaque execution boundary or a pre-bound torch "
                 "function that escaped wrapping.",
                 code="output_attribution_failed",
-                remedy=(
-                    "use ordinary torch module attributes during forward, or "
-                    "bind/import torch functions after TorchLens has wrapped torch"
-                ),
+                remedy=output_attribution_remedy(self),
             )
 
         # The tensor IS a registered buffer with no live label. Session

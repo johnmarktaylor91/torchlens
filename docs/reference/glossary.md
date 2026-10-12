@@ -812,7 +812,9 @@ shims, by declared contract. Each carries the same tag at its definition.
   the stop-and-throw and is independent); device flags are drained in one
   batch after the forward, never a per-op CUDA synchronization.
   `structure_only=True` refuses the combination typed. Load restores the
-  default `False`; loaded traces serve the saved-payload basis.
+  default `False`; loaded traces serve the saved-payload basis. The default
+  stays `False` (no overhead); the `print(trace)` NOT-CHECKED health line
+  names this option.
 
 **grouping= (trace kwarg) / trace.grouping** — *unstable — no deprecation
 shim owed; S2-gated vocabulary*
