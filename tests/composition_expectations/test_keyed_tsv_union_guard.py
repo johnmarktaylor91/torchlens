@@ -8,6 +8,8 @@ import pytest
 
 from tests.composition_expectations._keyed_tsv import parse_keyed_tsv
 
+pytestmark = pytest.mark.compo
+
 DATA_DIR = Path(__file__).resolve().parent / "data"
 
 KEYED_UNION_FILES = (
