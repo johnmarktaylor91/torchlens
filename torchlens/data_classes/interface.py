@@ -249,7 +249,12 @@ def _honesty_header_lines(self: "Trace") -> list[str]:
     if verdict == "found":
         lines.append("\tHealth: NaN/Inf FOUND (see .nonfinite_ops)")
     elif verdict == "not_checked":
-        lines.append("\tHealth: NOT-CHECKED (payloads unexamined)")
+        # forks.7: track_nonfinite stays False by default (no overhead); the
+        # not-checked footer names the option that would check every op.
+        lines.append(
+            "\tHealth: NOT-CHECKED (payloads unexamined; capture with "
+            "CaptureOptions(track_nonfinite=True) to check every op)"
+        )
     if getattr(self, "capture_verified", True) is False:
         reason = getattr(self, "capture_verification_reason", None)
         lines.append(f"\tCapture verified: NO ({reason})")
@@ -290,11 +295,17 @@ def _str_after_pass(self: "Trace") -> str:
     s += f"\n\tRandom seed: {self.random_seed}"
     s += f"\n\tTime elapsed: {self.capture_duration} ({self.overhead_duration} spent logging)"
 
-    # Overall model structure
+    # Overall model structure. U35.1: an unverified capture (severed
+    # provenance) may have missed ops, so it never claims "purely
+    # feedforward" and its op and parameter counts read as lower bounds.
+    unverified = getattr(self, "capture_verified", True) is False
+    bound = "at least " if unverified else ""
 
     s += "\n\tStructure:"
     if self.is_recurrent:
         s += f"\n\t\t- recurrent (at most {self.max_layer_op_count} loops)"
+    elif unverified:
+        s += "\n\t\t- structure unverified (capture not verified; see the header)"
     else:
         s += "\n\t\t- purely feedforward, no recurrence"
 
@@ -317,8 +328,8 @@ def _str_after_pass(self: "Trace") -> str:
 
     s += "\n\tTensor info:"
     s += (
-        f"\n\t\t- {self.num_tensors} total tensors ({self.total_activation_memory}) "
-        f"computed in forward pass."
+        f"\n\t\t- {bound}{self.num_tensors} total tensors ({self.total_activation_memory}) "
+        f"computed in forward pass{' (lower bound: capture unverified)' if unverified else ''}."
     )
     s += f"\n\t\t- {self.num_saved_ops} tensors ({self.saved_activation_memory}) with saved outs."
     nonfinite = self.first_nonfinite()
@@ -328,9 +339,11 @@ def _str_after_pass(self: "Trace") -> str:
     # Model parameters:
 
     s += (
-        f"\n\tParameters: {self.num_layers_with_params} parameter operations ({self.num_params} params total; "
-        f"{self.total_param_memory})"
+        f"\n\tParameters: {bound}{self.num_layers_with_params} parameter operations "
+        f"({bound}{self.num_params} params total; {self.total_param_memory})"
     )
+    if unverified:
+        s += " (lower bounds: capture unverified)"
     s += "\n\tFLOP convention: MACs are reported as FLOPs // 2."
 
     # Print the module hierarchy (bounded, exact remainder).
