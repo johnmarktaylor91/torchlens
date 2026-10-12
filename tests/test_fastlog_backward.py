@@ -60,6 +60,9 @@ def test_recording_log_backward_intervening_grad_fn() -> None:
         TinyRelu(),
         _input(),
         save=lambda ctx: ctx.label == "relu_1",
+        # A record-time predicate opts in to gradient hooks; the per-backward
+        # predicate below overrides it.
+        save_grads=lambda _ctx: False,
         return_output=True,
     )
 
@@ -81,6 +84,7 @@ def test_recording_log_backward_disk_only_rejects_save_grads(tmp_path: Path) -> 
         _input(),
         save=lambda ctx: ctx.label == "relu_1",
         storage=tl.to_disk(tmp_path / "grad.tlfast"),
+        save_grads=lambda _ctx: False,  # opts in to gradient hooks
         return_output=True,
     )
 
@@ -97,6 +101,7 @@ def test_recording_log_backward_disk_only_dynamic_save_grads_resolves(tmp_path: 
         _input(),
         save=lambda ctx: ctx.label == "relu_1",
         storage=tl.to_disk(tmp_path / "grad.tlfast"),
+        save_grads=lambda _ctx: False,  # opts in to gradient hooks
         return_output=True,
     )
 

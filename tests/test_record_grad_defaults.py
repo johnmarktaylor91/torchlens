@@ -188,7 +188,9 @@ def test_record_keeps_saved_payload_values() -> None:
     model, x = _model_and_input()
     plain = tl.record(model, x, save=_keep_relu)
     hooked = tl.record(model, x, save=_keep_relu, backward_ready=True)
-    assert torch.equal(plain["relu_1"][0].out, hooked["relu_1"][0].out.detach())
+    (plain_record,) = list(plain)
+    (hooked_record,) = list(hooked)
+    assert torch.equal(plain_record.out, hooked_record.out.detach())
 
 
 @pytest.mark.smoke
