@@ -396,23 +396,32 @@ def test_user_annotation_keys_stay_open(source_bundle: Path, tmp_path: Path) -> 
 # --- (e) root_entry_point on tlspec v9+ ---------------------------------------
 
 
-def test_absent_root_entry_point_within_v9_is_entry_dark(
+def test_absent_root_entry_point_loads_on_v9_and_refuses_from_v10(
     source_bundle: Path, tmp_path: Path
 ) -> None:
-    """tlspec 9 carries pre-C07X writers without the fact, so absence LOADS.
+    """tlspec 9 carries pre-C07X writers without the fact, so absence LOADS there.
 
     Evidence: ``tests/agent_surface_goldens/clean.tlspec`` (tlspec 9, torchlens
-    2.34.1) has no ``root_entry_point``; the fail-closed rule is armed from the
-    next coordinated bump (``_ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC``).
+    2.34.1) has no ``root_entry_point``. The fail-closed rule was armed for the
+    next coordinated bump (``_ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC``), and the
+    v10 write is that bump: a current-stamp artifact with the fact deleted refuses.
     """
 
     from torchlens._io._forgery_identity_facts import _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC
 
-    assert _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC == tl._io.TLSPEC_VERSION + 1
+    assert _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC == tl._io.TLSPEC_VERSION == 10
+    legacy = tmp_path / "clean_v9.tlspec"
+    shutil.copytree(Path(__file__).parent / "agent_surface_goldens" / "clean.tlspec", legacy)
+    with pytest.warns(Warning):
+        loaded = tl.load(legacy)
+    assert loaded.tlspec_version == 9
+    assert loaded.root_entry_point is None
     path = _tampered(
         source_bundle, tmp_path / "rep.tlspec", lambda st: st.__setitem__("root_entry_point", None)
     )
-    assert tl.load(path).root_entry_point is None
+    with pytest.raises(TorchLensIOError) as excinfo:
+        tl.load(path)
+    assert excinfo.value.fields["code"] == "artifact_root_entry_point_invalid"
 
 
 def test_absent_root_entry_point_refuses_from_the_armed_stamp(
