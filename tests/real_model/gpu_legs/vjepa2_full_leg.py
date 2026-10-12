@@ -12,12 +12,17 @@ The checkpoint comes from the registry row ``r2-vjepa2-vitl-fpc64-256`` (model
 id, pinned revision, weight digest); the weights must already be in the
 Hugging Face cache, because the leg runs offline.
 Each stage writes ``stage<A|B>.json``; a rerun skips a stage whose receipt
-exists, so a timeout loses at most one stage.
+exists, so a timeout loses at most one stage. Run stage B in a fresh process
+(rerun after stage A): the caching allocator keeps stage A's GPU memory, and
+the save budget is a fraction of what is free. ``--validate-frames N`` splits
+validation onto a shorter clip when the full clip does not fit; the receipt
+then says the full leg did NOT pass.
 """
 
 from __future__ import annotations
 
 import argparse
+import gc
 import hashlib
 import json
 import os
@@ -185,6 +190,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("out_dir", type=Path)
     parser.add_argument("--frames", type=int, default=64)
+    parser.add_argument("--validate-frames", type=int, default=None)
     parser.add_argument("--job-id", default="unknown")
     args = parser.parse_args(argv)
 
@@ -198,23 +204,30 @@ def main(argv: list[str] | None = None) -> int:
         return 3
     torch.manual_seed(SEED)
     model = _load("cuda")
-    inputs = {"pixel_values_videos": _clip(args.frames).to("cuda")}
+    validate_frames = args.validate_frames or args.frames
     receipt: dict[str, Any] = {
         "fingerprint": env,
         "frames": args.frames,
         "crop": CROP,
         "seed": SEED,
     }
-    for name, stage in (("A", stage_a), ("B", stage_b)):
+    for name, stage, frames in (("A", stage_a, args.frames), ("B", stage_b, validate_frames)):
         path = args.out_dir / f"stage{name}.json"
         if not path.exists():
+            gc.collect()
+            torch.cuda.empty_cache()
             torch.cuda.reset_peak_memory_stats()
-            path.write_text(json.dumps(stage(model, inputs), indent=1))
+            inputs = {"pixel_values_videos": _clip(frames).to("cuda")}
+            facts = {"frames": frames, "job_id": args.job_id, **stage(model, inputs)}
+            path.write_text(json.dumps(facts, indent=1))
         receipt[f"stage{name}"] = json.loads(path.read_text())
     stage_a_ok = (
         receipt["stageA"]["status"] == "COMPLETE" and receipt["stageA"]["traced_equals_direct"]
     )
-    receipt["passed"] = bool(stage_a_ok and receipt["stageB"]["validate_forward"])
+    stage_b_ok = receipt["stageB"]["validate_forward"]
+    full_clip = receipt["stageB"].get("frames", args.frames) == args.frames
+    receipt["passed"] = bool(stage_a_ok and stage_b_ok and full_clip)
+    receipt["split_validation"] = None if full_clip else receipt["stageB"].get("frames")
     (args.out_dir / "receipt.json").write_text(json.dumps(receipt, indent=1))
     print(json.dumps({"passed": receipt["passed"], "job_id": args.job_id}))
     return 0 if receipt["passed"] else 1
