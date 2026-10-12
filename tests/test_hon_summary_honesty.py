@@ -81,14 +81,23 @@ def test_not_checked_footer_names_track_nonfinite_and_the_default_stays_false() 
     ]
 
 
-def test_the_named_option_checks_every_op() -> None:
-    """The footer's remedy runs: the opt-in capture is checked, with no NOT-CHECKED line."""
+def test_the_named_option_records_every_op_and_drops_the_hint() -> None:
+    """The footer's remedy runs: the opt-in capture checks each op at capture time.
 
+    With the option on, the verdict basis is the capture-time record and the
+    hint is gone (it only teaches the option while it is off).
+    """
+
+    model, x = _Tiny(), torch.randn(2, 4)
     trace = tl.trace(
-        _Tiny(),
-        torch.randn(2, 4),
+        model,
+        x,
         save=tl.func("relu"),
         capture=tl.options.CaptureOptions(track_nonfinite=True),
     )
-    assert trace.nonfinite_verdict == "checked_and_clean"
-    assert "NOT-CHECKED" not in _summary(trace)
+    coverage = trace.nonfinite_coverage
+    assert coverage.basis == "capture"
+    assert coverage.checked > 0 and coverage.nonfinite == 0
+    untracked = tl.trace(model, x, save=tl.func("relu")).nonfinite_coverage
+    assert untracked.basis == "saved_payloads"
+    assert "track_nonfinite=True" not in _summary(trace)

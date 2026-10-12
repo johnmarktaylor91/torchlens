@@ -250,11 +250,13 @@ def _honesty_header_lines(self: "Trace") -> list[str]:
         lines.append("\tHealth: NaN/Inf FOUND (see .nonfinite_ops)")
     elif verdict == "not_checked":
         # forks.7: track_nonfinite stays False by default (no overhead); the
-        # not-checked footer names the option that would check every op.
-        lines.append(
-            "\tHealth: NOT-CHECKED (payloads unexamined; capture with "
-            "CaptureOptions(track_nonfinite=True) to check every op)"
+        # not-checked footer names the option while it is off.
+        hint = (
+            ""
+            if getattr(self, "track_nonfinite", False)
+            else "; capture with CaptureOptions(track_nonfinite=True) to check every op"
         )
+        lines.append(f"\tHealth: NOT-CHECKED (payloads unexamined{hint})")
     if getattr(self, "capture_verified", True) is False:
         reason = getattr(self, "capture_verification_reason", None)
         lines.append(f"\tCapture verified: NO ({reason})")
