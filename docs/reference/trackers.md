@@ -200,6 +200,24 @@ gradients, and pays an extra forward per profile. For training-time
 watching, use `LightningWatchCallback`; keep `LayerProfilerCallback` only
 for structure snapshots.
 
+`torchlens.callbacks.lightning.SummaryCallback()` prints the `tl.summary`
+table once at the start of each fit, where Lightning prints its own
+ModelSummary. It summarizes the module's `example_input_array` when one is
+set, otherwise the first training batch, and costs one extra forward in eval
+mode under `no_grad` with every module's mode and the RNG state restored. Pass
+`input_getter=` when the batch is not `(x, ...)`, `{"x": ...}` or a mapping of
+forward keyword arguments; a batch the forward rejects skips the summary with
+a `lightning_summary_skipped` warning and training continues.
+
+```python
+import lightning.pytorch as pl
+from torchlens.callbacks import lightning as tl_lightning
+
+trainer = pl.Trainer(
+    callbacks=[tl_lightning.SummaryCallback(depth=2)], enable_model_summary=False
+)
+```
+
 ## Writing your own sink
 
 The sink protocol is documented and closed over capability words

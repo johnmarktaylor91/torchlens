@@ -16,7 +16,7 @@ import html
 
 from ._summary_config import SummaryConfig
 from ._summary_ladder import ResolvedView, ViewRow
-from ._summary_render import SummaryFacts, _cell
+from ._summary_render import CellTotals, SummaryFacts, _cell, cell_totals
 
 _CSS = """
 <style>
@@ -43,12 +43,12 @@ _CSS = """
 """
 
 
-def _row_html(row: ViewRow, config: SummaryConfig, columns: tuple, params_total: int) -> str:
+def _row_html(row: ViewRow, config: SummaryConfig, columns: tuple, totals: CellTotals) -> str:
     """One escaped <tr> with data-* metadata for the deferred interactivity."""
 
     cells = []
     for column in columns:
-        text = html.escape(_cell(row, column, config, params_total))
+        text = html.escape(_cell(row, column, config, totals))
         css = ' class="num"' if column.align == "right" else ""
         cells.append(f"<td{css}>{text}</td>")
     attributes = (
@@ -75,13 +75,13 @@ def render_html(  # noqa: PLR0913 - the four presentation slices are distinct re
 
     rows = visible_rows if visible_rows is not None else view.rows
     columns = config.resolved_columns(view.mixed_trainability)
-    params_total = facts.params_total or 0
+    totals = cell_totals(facts)
     numeric_class = ' class="num"'
     head_cells = "".join(
         f"<th{numeric_class if column.align == 'right' else ''}>{html.escape(column.header)}</th>"
         for column in columns
     )
-    body = "".join(_row_html(row, config, columns, params_total) for row in rows)
+    body = "".join(_row_html(row, config, columns, totals) for row in rows)
     banner = "".join(f'<div class="tl-banner">{html.escape(line)}</div>' for line in banner_lines)
     footer = "".join(f'<div class="tl-footer">{html.escape(line)}</div>' for line in footer_lines)
     return (
