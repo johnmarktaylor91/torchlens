@@ -35815,6 +35815,7 @@
     "__ref__": "Trace",
     "label": null
    },
+   "pinned_autograd_memory": "<measured>",
    "profile_enabled": false,
    "raise_on_nan": false,
    "random_seed": 20260812,
@@ -71737,6 +71738,7 @@
    "params": "<torchlens.data_classes.param.ParamAccessor>",
    "parent_run": null,
    "parent_trace": null,
+   "pinned_autograd_memory": "<measured>",
    "profile_enabled": false,
    "raise_on_nan": false,
    "random_seed": 20260812,
@@ -107667,6 +107669,7 @@
     "__ref__": "Trace",
     "label": null
    },
+   "pinned_autograd_memory": "<measured>",
    "profile_enabled": false,
    "raise_on_nan": false,
    "random_seed": 20260812,
@@ -142324,6 +142327,7 @@
    "params": "<torchlens.data_classes.param.ParamAccessor>",
    "parent_run": null,
    "parent_trace": null,
+   "pinned_autograd_memory": "<measured>",
    "profile_enabled": false,
    "raise_on_nan": false,
    "random_seed": 20260812,
