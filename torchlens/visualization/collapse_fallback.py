@@ -81,6 +81,37 @@ def _fallback_collapse_fn(selected: frozenset[str]) -> Callable[[Module], bool]:
     return collapse_fn
 
 
+def pathological_overview_fn(trace: Trace, reason: str | None) -> Callable[[Module], bool] | None:
+    """Return the top-level overview predicate for a pathological trace (FK4).
+
+    One O(modules) pass selects every direct child module of the root that
+    hides more than one operation; the renderer then builds one plan from it.
+    The predicate carries ``_torchlens_overview_reason`` so the draw path
+    skips run folding (the raw-op ceiling already refuses it), captions the
+    overview, and writes the expansion manifest.
+
+    Parameters
+    ----------
+    trace:
+        Trace past the pathological pre-gate.
+    reason:
+        The optimizer's typed decline reason.
+
+    Returns
+    -------
+    Callable[[Module], bool] | None
+        The overview predicate, or ``None`` when the root has no child module
+        to box (the residual then renders as captured).
+    """
+
+    selected = frozenset(_top_level_fallback_addresses(trace))
+    if not selected:
+        return None
+    overview_fn = _fallback_collapse_fn(selected)
+    setattr(overview_fn, "_torchlens_overview_reason", reason or "collapse_ops_ceiling")
+    return overview_fn
+
+
 def _greedy_box_selection(trace: Trace, band_high: int, universe_count: int) -> frozenset[str]:
     """Return the significance-greedy module-box selection.
 

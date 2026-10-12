@@ -5,6 +5,7 @@
 from dataclasses import replace
 
 from .._errors import InvalidArgumentError, PayloadUnavailableError
+from ._backward_rows import BackwardRowOptions
 from ._render_common import *
 from ._render_dot import *
 from ._render_edges import *
