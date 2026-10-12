@@ -360,7 +360,8 @@ def test_mlx_intermediate_derived_grads_on_module_shaped_model() -> None:
         for op in trace.layer_list
         if op.has_saved_activation and not op.is_input and not op.is_output
     }
-    assert saved and saved <= set(trace.intermediate_derived_grads)
+    assert saved
+    assert all(label in trace.intermediate_derived_grads for label in saved), saved
 
     def suffix(boundary: mx.array) -> mx.array:
         """Return the scalar loss from the relu boundary onward."""
