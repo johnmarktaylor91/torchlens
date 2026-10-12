@@ -897,7 +897,13 @@
   `preset=`, `fields=`, `show_ops=`, `count_fma_as_two=`, ...) are removed and
   refuse typed naming their successor (see MIGRATIONS.md); nothing is
   accepted-and-ignored (`fma1` refuses
-  `flop_convention_unavailable` when underivable). One-call door: input
+  `flop_convention_unavailable` when underivable). Optional columns
+  `input`/`kernel_size`/`groups`/`params_trainable`/`mode`/`flops_pct`
+  (`+name` deltas insert at registry position); `output` prints every member
+  shape of a tuple output in return order; FLOP cells counting SDPA end in
+  `^` (full query x key square, masks/`is_causal` not discounted); the Params
+  footer adds `size`, a `pruned:` raw/effective note, and the optimizer
+  state (capture given `optimizer=`). One-call door: input
   precedence args XOR `input_size=` XOR zero-input (reuses
   `infer_input_shape`'s verified trace; synthesis disclosed);
   `execution_mode`/`grad_mode`/`input_size`
@@ -966,6 +972,15 @@
   WandbSink, JSONLSink, MemorySink), `HFTrainerWatchCallback` /
   `LightningWatchCallback`, TB GraphDef with real StepStats. CHANGED:
   `tl.export.tensorboard` requires keyword `step` (default removed).
+- LIGHTNING FIT-START SUMMARY (walk U03.4; DOCUMENTED-UNSTABLE):
+  `torchlens.callbacks.lightning.SummaryCallback(input_getter=None, print_fn=print,
+  **summary_kwargs)` prints `tl.summary` once per fit: sample = the module's
+  `example_input_array` (in `on_fit_start`) else the first training batch (in
+  `on_train_batch_start`; `"x"` entry, else first element, else the batch, a mapping
+  as kwargs). ONE extra forward in eval mode under no_grad, every module flag and RNG
+  restored; rank zero only; a sample the forward rejects warns
+  `lightning_summary_skipped` and the fit continues; summary options validate at
+  construction. Both callbacks resolve on `lightning` or standalone `pytorch_lightning`.
 - OBSERVABILITY HOME (C06 + F24/F25/F27; DOCUMENTED-UNSTABLE):
   `torchlens.observability` (~100 names) carries the L5 record schema,
   summary transforms, `HistoryView` (bounded exactly-mergeable training
@@ -1059,7 +1074,10 @@
   antialias/channel-order/value-range/mean/std; strict mode refuses mismatch AND
   unknown with distinct codes `preprocessing_audit_mismatch`/`_unknown`; opaque
   callables and partial metadata never become match; the demoted `imagenet_default`
-  fallback never anchors `verified`); `diagnose()` is the opt-in tensor arm whose
+  recipe never anchors `verified`); a PIL image whose model resolves no authority
+  refuses `preprocessing_unresolved` (the ImageNet recipe is never applied
+  silently; its explicit opt-in is
+  `CaptureOptions(transform=tl.preprocessing.imagenet_default())`); `diagnose()` is the opt-in tensor arm whose
   outcome vocabulary HAS NO match member. `ResolvedPreprocessing.status` derives the
   closed authority standing (authoritative/unverified_fallback/unknown); plain
   `tl.trace(transform=)` captures stamp honest `user_transform` provenance.

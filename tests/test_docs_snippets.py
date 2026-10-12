@@ -535,8 +535,9 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     ),
     "reference/trackers.md": (
         "an ambient AMP training loop (build_model_and_optimizer/loader/scaler) against a "
-        "TensorBoard sink (tensorboard not in the core env); the sinks execute in "
-        "tests/test_trackers_sinks_*.py"
+        "TensorBoard sink (tensorboard not in the core env), and a Lightning Trainer "
+        "(lightning not in the core env); the sinks execute in "
+        "tests/test_trackers_sinks_*.py and SummaryCallback in tests/test_callbacks_lightning.py"
     ),
     "reference/transforms.md": (
         "an extraction to disk over an ambient model/stimuli; the transform chain "

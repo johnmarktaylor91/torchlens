@@ -167,6 +167,30 @@ def format_shape(shape: Any) -> str:
     return f"({', '.join(str(dim) for dim in dims)})"
 
 
+def format_dtype(dtype: Any) -> str | None:
+    """Format an output dtype for a node label row.
+
+    Parameters
+    ----------
+    dtype:
+        Backend dtype object or string (``torch.float16``,
+        ``mlx.core.float32``), or ``None``.
+
+    Returns
+    -------
+    str | None
+        The dtype name without its framework namespace (``"float16"``), or
+        ``None`` when there is no dtype to show.
+    """
+
+    if dtype is None:
+        return None
+    text = str(dtype).strip()
+    if not text:
+        return None
+    return text.rsplit(".", 1)[-1]
+
+
 def _shape_with_trainability(shape: Any, trainable: bool | None) -> str:
     """Render a shape with frozen params marked by square brackets.
 
@@ -437,6 +461,12 @@ def compute_selected_node_lines(
             summary = getattr(layer_log, "shape_summary", None)
             if isinstance(summary, str) and summary:
                 rows.append(summary)
+        elif field_name == "dtype":
+            # Output dtype, framework prefix dropped ("float16", Keras
+            # show_dtype style); skipped when the node has no tensor dtype.
+            dtype_text = format_dtype(getattr(layer_log, "dtype", None))
+            if dtype_text is not None:
+                rows.append(dtype_text)
         elif field_name in {"memory", "bytes"}:
             rows.append(str(getattr(layer_log, "activation_memory", "")))
         elif field_name == "module":

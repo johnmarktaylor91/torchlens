@@ -19,8 +19,6 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = pytest.mark.heavy
-
 _TOOLS = str(Path(__file__).resolve().parent.parent / "tools")
 if _TOOLS not in sys.path:
     sys.path.insert(0, _TOOLS)
@@ -47,6 +45,7 @@ def test_gpt2_flagship_pins() -> None:
     assert pins["default_folds"] >= 1  # h.0..11 folds
 
 
+@pytest.mark.heavy
 def test_vgg_budget_anchors() -> None:
     """vgg16 hybrid 42 rows / vgg19 hybrid 48 = the budget, exactly."""
 
@@ -62,6 +61,7 @@ def test_vgg_budget_anchors() -> None:
     assert vgg19["default_rows"] == 48
 
 
+@pytest.mark.heavy
 def test_resnet50_ladder_pins() -> None:
     """resnet50: 25,557,032 params; ladder 10/18/78/86; default d2 = 18."""
 
@@ -96,6 +96,7 @@ def test_inception_v3_declared_executed_split() -> None:
     assert pins["params_unexecuted"] == 3_326_696
 
 
+@pytest.mark.heavy
 def test_bert_base_exact_macs() -> None:
     """bert-base at 12 tokens: exact MACs (never the killed flops//2).
 

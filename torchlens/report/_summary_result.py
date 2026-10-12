@@ -82,11 +82,9 @@ def collect_summary_facts(
     )
     unknown_groups = unknown_op_ledger(trace)
     unknown_names = tuple(group.func_name or "?" for group in unknown_groups)
-    param_bytes = None
-    try:
-        param_bytes = sum(int(getattr(param, "num_params", 0) or 0) * 4 for param in trace.params)
-    except Exception:  # noqa: BLE001 - fact gathering degrades to unknown, never breaks summary()
-        param_bytes = None
+    from ._summary_columns import optimizer_state_facts
+
+    pruned = core.params.pruned
     buffer_count = None
     try:
         buffer_count = len(list(getattr(trace, "buffer_layers", ()) or ()))
@@ -112,7 +110,7 @@ def collect_summary_facts(
         params_unexecuted=core.params.unexecuted,
         unexecuted_names=unexecuted_names,
         tied_groups=core.params.tied_groups,
-        param_bytes=param_bytes,
+        param_bytes=core.params.bytes,
         buffer_count=buffer_count,
         flops_forward_fma2=int(core.compute.partition_total),
         macs_forward=int(core.compute.macs_total),
@@ -130,6 +128,10 @@ def collect_summary_facts(
         execution_note=execution_note,
         input_synthesis=input_synthesis,
         honesty_lines=tuple(honesty_banner_lines(trace)),
+        params_pruned=pruned.paths if pruned is not None else (),
+        params_pruned_raw=pruned.raw if pruned is not None else 0,
+        params_masked=pruned.masked if pruned is not None else None,
+        optimizer=optimizer_state_facts(trace),
     )
 
 
@@ -246,8 +248,8 @@ def render_result_html(payload: RebuiltPayload) -> str:
         header += f" | {facts.execution_note}"
     footer_lines = tuple(
         line
-        for line in payload.ascii_text.rsplit("\n", 8)[-8:]
-        if line.startswith(("Params", "Compute", "Memory", "Graph", "Capture", "More:", "*"))
+        for line in payload.ascii_text.rsplit("\n", 10)[-10:]
+        if line.startswith(("Params", "Compute", "Memory", "Graph", "Capture", "More:", "*", "^"))
     )
     return render_html(
         payload.view,
@@ -281,21 +283,37 @@ def result_to_pandas(report: SummaryReport, scope: str = "display") -> Any:
                 "class_name": row.class_name,
                 "address": row.address,
                 "depth": row.depth,
+                "input_shapes": row.input_shapes,
                 "output_shape": row.output_shape,
+                "output_shapes": row.output_shapes,
+                "kernel_size": row.kernel_size,
+                "groups": row.groups,
                 "passes": row.passes,
                 "params": row.params_display,
                 "params_owned": row.params_owned,
+                "params_trainable": row.params_trainable,
                 "flops": row.flops_display,
                 "flops_owned": row.flops_owned,
                 "macs_owned": row.macs_owned,
                 "trainable": row.trainable,
+                "mode": row.mode,
                 "fold_count": row.fold_count,
                 "evidence": row.evidence,
+                "attention_full_square": row.attention_full_square,
+                "pruned": row.pruned,
             }
             for row in payload.visible_rows
         ]
         frame = pandas.DataFrame.from_records(records)
-        for column in ("params", "params_owned", "flops", "flops_owned", "macs_owned"):
+        for column in (
+            "groups",
+            "params",
+            "params_owned",
+            "params_trainable",
+            "flops",
+            "flops_owned",
+            "macs_owned",
+        ):
             frame[column] = frame[column].astype("Int64")
         return frame
     records = [dict(row.__dict__) for row in report.rows]
@@ -313,18 +331,17 @@ def result_to_markdown(report: SummaryReport) -> str:
             code="summary_result_legacy",
             remedy="call summary() with the rebuilt grammar (bare call, level=, view=, ...)",
         )
-    from ._summary_render import _cell
+    from ._summary_render import _cell, cell_totals
 
     columns = payload.config.resolved_columns(payload.view.mixed_trainability)
-    params_total = payload.facts.params_total or 0
+    totals = cell_totals(payload.facts)
     lines = [
         "| " + " | ".join(column.header for column in columns) + " |",
         "| " + " | ".join("---:" if c.align == "right" else ":--" for c in columns) + " |",
     ]
     for row in payload.visible_rows:
         cells = [
-            _cell(row, column, payload.config, params_total).replace("|", "\\|")
-            for column in columns
+            _cell(row, column, payload.config, totals).replace("|", "\\|") for column in columns
         ]
         lines.append("| " + " | ".join(cells) + " |")
     return "\n".join(lines)

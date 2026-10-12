@@ -104,7 +104,11 @@ from ._training_validation import (
     autograd_disabled_at_entry,
     validate_training_compatibility,
 )
-from .autoroute._builtin_output import semantic_output_cache_key
+from .autoroute._builtin_output import (
+    check_output_style,
+    refuse_unresolved_output_style,
+    semantic_output_cache_key,
+)
 from .backends import (
     BackendName,
     BackendSpec,
@@ -1772,6 +1776,8 @@ def _run_model_and_save_specified_outs(
     alias_sources = (save_predicate, intervene_predicate, halt_predicate, hooks, intervention_spec)
     deferred = (normalized_hook_plan, _deferred_retention_selector, _deferred_gradient_selector)
     refuse_model_alias_spellings(model, *alias_sources, *deferred)
+    # An output_style no detector can resolve refuses before the forward (walk U06.5).
+    check_output_style(output_style)
     # Auto-detect model device from its first parameter and move inputs to match.
     # This prevents silent device-mismatch errors when the model is on CUDA but
     # the user ops CPU tensors (a common mistake). A META first parameter is
@@ -2171,6 +2177,7 @@ def _run_model_and_save_specified_outs(
         _release_capture_slot()
         if hasattr(trace, "_capture_container_structure"):
             delattr(trace, "_capture_container_structure")
+    refuse_unresolved_output_style(trace)
     if isinstance(model, TLBoundMethodRoot):
         # F41 TL-authored-root disclosure (tlspec v9 entry-dark slot, C07X
         # item (iv)): the marker lands on the root op record -- the
