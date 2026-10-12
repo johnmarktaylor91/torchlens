@@ -590,7 +590,7 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `mi_stack_not_admissible` | DLA was fed a diagnostic (`strict=False`) or CLOSED-UNRESOLVED stack, or a stack with no target value; such stacks are diagnosis, not attribution (mikit D7) | Fix the capture so strict decomposition closes, or decompose a different target |
 | `mi_dla_identity_failed` | The in-API DLA identity `sum(rows) + constant == captured native logits` missed beyond the cancellation-aware tolerance -- a kit or capture defect, never served as a table | Report with `tl.compat.report(model, x)` |
 | `mi_norm_scale_mode_invalid` | `apply_norm_scale(scale=...)` received an unknown mode | Pass `scale="frozen"` (additive) or `scale="component"` (non-additive diagnostic) |
-| `mi_translation_generation_unknown` | `alias_report(generation=...)` names a TLens generation with no translation rows | Pass `generation="2.x"` or `"3.x-bridge"` |
+| `mi_translation_generation_unknown` | `alias_report(generation=...)` names a TLens generation with no translation rows | Pass `generation="2.x"`, `"3.x-bridge"` or `"4.x"` |
 | `mi_analysis_unknown` | `retention_plan(analyses=...)` names an unknown analysis | Choose among accumulation / decomposition / dla / heads / head_scores / prompts |
 | `mi_token_ids_unavailable` | Token-equality head-score masks found no captured integer input matching the pattern's sequence length | Trace the model on token ids with the input op saved |
 | `mi_head_score_kind_invalid` | `head_scores(kind=/measure=)` received an unknown taxonomy kind or measure | Choose kinds previous_token / duplicate_token / induction; measures mul / abs |
