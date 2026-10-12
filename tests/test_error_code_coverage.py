@@ -81,13 +81,11 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         # F05 mechinterp rows needing a BROKEN substrate to provoke (each is a
         # fail-closed guard on evidence no healthy capture can lack): a spine
         # whose execution-order accumulation misses bitwise (mi_spine_open), an
-        # undecidable additive join (mi_spine_ambiguous), a fused QKV weight
-        # with no split evidence (mi_qkv_slicing_unprovable), and a derived
-        # head view failing payload verification (mi_weight_view_unverified).
+        # undecidable additive join (mi_spine_ambiguous), and a fused QKV weight
+        # with no split evidence (mi_qkv_slicing_unprovable).
         "mi_qkv_slicing_unprovable",
         "mi_spine_ambiguous",
         "mi_spine_open",
-        "mi_weight_view_unverified",
         "annotation_backend_unsupported",
         "annotation_namespace_invalid",
         "annotation_tensor_not_portable",
