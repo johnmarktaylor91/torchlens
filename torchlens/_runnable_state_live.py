@@ -32,6 +32,18 @@ __all__ = (
 )
 
 
+#: Failures a compare or restore step may raise (never ``BaseException``): each
+#: is reported to the caller instead of being masked.
+_RESTORE_ERRORS = (
+    RuntimeError,
+    TypeError,
+    ValueError,
+    AttributeError,
+    KeyError,
+    NotImplementedError,
+)
+
+
 class LiveStateRestoreFailure(RuntimeError):
     """Internal carrier for a declared-state restore that failed mid-bracket.
 
@@ -65,7 +77,7 @@ def _declared_slot_unchanged(original: torch.Tensor, clone: torch.Tensor) -> boo
             and original.device == clone.device
             and _state_bytes_equal(original, clone)
         )
-    except Exception:
+    except _RESTORE_ERRORS:
         return False
 
 
@@ -284,7 +296,7 @@ def _restore_observer_attrs(snapshot: CaptureObserverSnapshot) -> list[str]:
         for name in sorted(_observer_attr_names(module) - names):
             try:
                 delattr(module, name)
-            except Exception:
+            except _RESTORE_ERRORS:
                 failed.append(f"{type(module).__name__}.{name}")
     for module, name, attr_path, saved in snapshot.attrs:
         try:
@@ -299,7 +311,7 @@ def _restore_observer_attrs(snapshot: CaptureObserverSnapshot) -> list[str]:
                 module.__dict__[name] = value
             else:
                 setattr(module, name, value)
-        except Exception:
+        except _RESTORE_ERRORS:
             failed.append(attr_path)
     return failed
 
@@ -320,7 +332,7 @@ def restore_capture_observer_state(snapshot: CaptureObserverSnapshot) -> None:
     with _state.pause_logging(), torch.no_grad():
         try:
             _restore_observer_buffers(snapshot)
-        except Exception as exc:
+        except _RESTORE_ERRORS as exc:
             failed.append(f"buffers ({exc!r})")
         for module, training in snapshot.modes:
             if module.training is not training:
@@ -328,7 +340,7 @@ def restore_capture_observer_state(snapshot: CaptureObserverSnapshot) -> None:
         failed.extend(_restore_observer_attrs(snapshot))
     try:
         set_rng_from_saved_states(snapshot.rng)
-    except Exception as exc:
+    except _RESTORE_ERRORS as exc:
         failed.append(f"random state ({exc!r})")
     if failed:
         warnings.warn(
