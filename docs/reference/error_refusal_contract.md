@@ -865,6 +865,7 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `stack_output_not_tensor` | Stacked op's saved primary out is not one tensor | Select single-tensor-output ops |
 | `stack_selector_no_match` | `trace.stack` selector matched no sites | Pass a selector matching saved ops |
 | `stack_shape_mismatch` | Stacked outputs have different shapes | Select ops with identical output shapes |
+| `lightning_summary_skipped` | WARNING (S-18 contract, not a refusal): `SummaryCallback` could not run the module's forward on its sample (`example_input_array` or the first training batch), so the fit-start summary was skipped and training continued | Pass `input_getter=` mapping a batch to the forward input, or set `example_input_array` on the module |
 | `module_filter_zero_saved` | WARNING (S-18 contract, not a refusal): the `module_filter` third save gate suppressed every payload the save selection picked; the trace has metadata but zero saved activations | Write the filter against op-record fields (its argument is an op-record namespace, never an `nn.Module`), or drop `module_filter` |
 | `stop_after_chunked_conflict` | `stop_after=` with `chunk_size`: the chunk fan-out runs several captures and one stop frontier is ambiguous across them | Drop `chunk_size` or drop `stop_after` |
 | `stop_after_halt_conflict` | `stop_after=` and `halt=` were both configured; they compile into one stop-directive slot | Pass one stop directive: keep `halt=` (compose predicates with `&`/`|`) or keep `stop_after=` |
