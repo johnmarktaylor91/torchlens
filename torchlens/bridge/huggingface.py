@@ -128,14 +128,13 @@ def from_hub(
     revision: str | None = None,
     token: str | None = None,
     api: Any | None = None,
-    map_location: str = "cpu",
 ) -> Any:
     """Download a TorchLens artifact from the Hub and load it safely.
 
     The file must be the gzipped ``.tlspec`` tar that :func:`push_to_hub`
     writes. Its members are checked before extraction (regular files and
     directories under one top-level bundle directory only: no links, devices,
-    absolute paths or ``..``), and the bundle is loaded eagerly through
+    absolute paths or ``..``), and the bundle is loaded eagerly onto the CPU through
     ``torchlens.load``, whose metadata unpickler is default-deny and never
     imports foreign custom callables. The extracted copy is deleted after the
     load.
@@ -153,9 +152,6 @@ def from_hub(
     api:
         Optional ``HfApi``-compatible object exposing ``hf_hub_download``,
         for tests, mirrors or advanced callers.
-    map_location:
-        Device for the loaded tensors.
-
     Returns
     -------
     Trace | Bundle | InterventionSpec
@@ -180,7 +176,7 @@ def from_hub(
     )
     with tempfile.TemporaryDirectory() as tmpdir:
         bundle_dir = _extract_bundle(downloaded, Path(tmpdir))
-        return _load(bundle_dir, lazy=False, map_location=map_location)
+        return _load(bundle_dir, lazy=False, map_location="cpu")
 
 
 def _hf_api(token: str | None) -> Any:
@@ -240,34 +236,39 @@ def _extract_bundle(archive: Path, destination: Path) -> Path:
 def _checked_extract(archive: Path, destination: Path) -> tuple[str, str | None]:
     """Check every member, then extract; return ``(root, problem)``."""
 
-    unreadable = (tarfile.TarError, OSError, EOFError)
     try:
-        tar = tarfile.open(archive, mode="r:gz")
-    except unreadable as exc:
-        return "", f"not a readable gzipped tar ({exc})"
-    with tar:
-        try:
+        with tarfile.open(archive, mode="r:gz") as tar:
             members = tar.getmembers()
-        except unreadable as exc:
-            return "", f"not a readable gzipped tar ({exc})"
-        problem = next((p for p in map(_member_problem, members) if p is not None), None)
-        if problem is not None:
-            return "", problem
-        roots = {PurePosixPath(member.name).parts[0] for member in members}
-        if len(roots) != 1:
-            return "", f"expected one top-level bundle, found {len(roots)}"
-        if len(members) > _MAX_TAR_MEMBERS:
-            return "", f"{len(members)} members exceed the bound"
-        if sum(member.size for member in members) > _MAX_TAR_BYTES:
-            return "", "total size exceeds the bound"
-        if hasattr(tarfile, "data_filter"):
-            tar.extractall(destination, filter="data")
-        else:  # pragma: no cover - interpreters without PEP 706
-            tar.extractall(destination)  # noqa: S202 -- every member checked above
-    root = roots.pop()
+            problem = _members_problem(members)
+            if problem is None:
+                if hasattr(tarfile, "data_filter"):
+                    tar.extractall(destination, filter="data")
+                else:  # pragma: no cover - interpreters without PEP 706
+                    tar.extractall(destination)  # noqa: S202 -- every member checked above
+    except (tarfile.TarError, OSError, EOFError) as exc:
+        return "", f"not a readable gzipped tar ({exc})"
+    if problem is not None:
+        return "", problem
+    root = PurePosixPath(members[0].name).parts[0]
     if not (destination / root).is_dir():
         return "", "the top-level entry is not a bundle directory"
     return root, None
+
+
+def _members_problem(members: list[tarfile.TarInfo]) -> str | None:
+    """Return why a member list is unsafe to extract, or ``None``."""
+
+    problem = next((p for p in map(_member_problem, members) if p is not None), None)
+    if problem is not None:
+        return problem
+    roots = {PurePosixPath(member.name).parts[0] for member in members}
+    if len(roots) != 1:
+        return f"expected one top-level bundle, found {len(roots)}"
+    if len(members) > _MAX_TAR_MEMBERS:
+        return f"{len(members)} members exceed the bound"
+    if sum(member.size for member in members) > _MAX_TAR_BYTES:
+        return "total size exceeds the bound"
+    return None
 
 
 def _member_problem(member: tarfile.TarInfo) -> str | None:

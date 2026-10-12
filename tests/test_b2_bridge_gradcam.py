@@ -6,6 +6,7 @@ package called directly; an option given twice refuses typed.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 import numpy as np
@@ -42,11 +43,15 @@ def _targets() -> list[Any]:
 
 
 @pytest.fixture(scope="module")
-def cnn() -> tuple[nn.Module, torch.Tensor, Any]:
+def cnn() -> Iterator[tuple[nn.Module, torch.Tensor, Any]]:
     torch.manual_seed(0)
     model = _SmallCnn().eval()
     x = torch.randn(2, 3, 16, 16)
-    return model, x, tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    try:
+        yield model, x, log
+    finally:
+        log.cleanup()
 
 
 @pytest.mark.parametrize(

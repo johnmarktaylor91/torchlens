@@ -12,7 +12,7 @@ from .._errors import KeywordConflictError
 from ._utils import first_input_tensor, module_for_site, source_model
 
 
-def cam(
+def cam(  # noqa: PLR0913 -- bridge door mirroring pytorch-grad-cam's constructor and call options
     log: Any,
     site: Any,
     *,

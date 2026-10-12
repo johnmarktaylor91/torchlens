@@ -93,7 +93,7 @@ def test_from_hub_round_trips_a_trace_through_the_safe_loader(trace: Any, tmp_pa
     assert [op.layer_label for op in loaded.layer_list] == [
         op.layer_label for op in trace.layer_list
     ]
-    for original, restored in zip(trace.layer_list, loaded.layer_list):
+    for original, restored in zip(trace.layer_list, loaded.layer_list, strict=True):
         assert torch.equal(restored.out, original.out)
 
 

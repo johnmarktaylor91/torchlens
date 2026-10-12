@@ -1300,10 +1300,10 @@ shim owed*
   `preprocessing_card_mismatch` when a field disagrees. Nothing runs it
   automatically. An opaque record compares as unknown, never as a match.
 
-**torchlens.bridge.huggingface.from_hub(repo_id, *, path_in_repo, revision, token, api, map_location)** — *unstable — no deprecation shim owed*
+**torchlens.bridge.huggingface.from_hub(repo_id, *, path_in_repo, revision, token, api)** — *unstable — no deprecation shim owed*
 : Downloads the gzipped `.tlspec` tar that `push_to_hub` uploads, checks
   every tar member (no links, absolute or parent-escaping names, one
-  top-level bundle), and loads it eagerly through `tl.load`'s default-deny
+  top-level bundle), and loads it eagerly onto the CPU through `tl.load`'s default-deny
   loader. `push_to_hub` accepts only a `Trace` or `Bundle` and never uploads
   a pickle (`hub_push_artifact_unsupported`); its default `path_in_repo` is
   `torchlens_artifact.tar.gz`.

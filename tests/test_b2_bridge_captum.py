@@ -49,7 +49,7 @@ def _setup(out_dim: int | None = 3) -> tuple[nn.Module, tuple[torch.Tensor, ...]
 def _assert_same(bridged: Any, direct: Any) -> None:
     if isinstance(direct, tuple):
         assert isinstance(bridged, tuple) and len(bridged) == len(direct) == 2
-        for got, want in zip(bridged, direct):
+        for got, want in zip(bridged, direct, strict=True):
             assert torch.equal(got, want)
     else:
         assert torch.equal(bridged, direct)
