@@ -288,9 +288,8 @@ class Recorder:
             backward_ready=backward_ready,
         )
         self.model = unwrapped_model
-        # Gradient hooks cost 12 to 20% of a record, so they are installed only
-        # when the caller asks for a backward up front; ``log_backward`` refuses
-        # otherwise (AGT-2132).
+        # Gradient hooks are installed only when the caller asks for a backward
+        # up front; ``log_backward`` refuses otherwise (AGT-2132).
         self._backward_requested = (
             backward_ready
             or not (save_grads is MISSING or save_grads is None or save_grads is False)
