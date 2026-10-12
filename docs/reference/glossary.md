@@ -538,7 +538,10 @@ attribution-target alias. See the [attribution reference](attribution.md).
   (a staged steer edited since capture). A staged edit addressed by a finalized label
   (`Trace.set(label, ...)`, `attach_hooks(tl.label(...))`) can never fire during a live
   forward, so a rerun refuses it up front with `rerun_staged_label_unmatchable` (trace
-  unchanged). The rerun divergence check (`ControlFlowDivergenceWarning`, or
+  unchanged). A staged edit whose selector matches sites on the trace but fires at none
+  during a rerun of the same graph on the same inputs (a `tl.where` predicate on
+  `p.layer_label`) refuses with `rerun_selector_unmatchable_live` (trace unchanged); on new
+  inputs it still warns `rerun_zero_fire`. The rerun divergence check (`ControlFlowDivergenceWarning`, or
   `ControlFlowDivergenceError` with `strict=True`) compares raw op order, edges and shapes with
   each value-only edit node folded into the op it replaces, so a staged edit is never
   reported as control-flow divergence while a changed op, edge, shape or batch size still is.
