@@ -11,25 +11,40 @@ from ._helpers import (
     add_if_present,
     child_output_spec,
     computed_product,
+    config_object_value,
     first_input_spec,
     module_output_spec,
+    structural,
 )
 
 _MLP_FACETS = ("gated_out", "up_out", "down_out", "intermediate", "input", "output")
 
+#: ``hidden_act`` names that the transformers activation table maps to SiLU.
+_SILU_ACTIVATION_NAMES = frozenset({"silu", "swish"})
+
 
 @register(
-    class_name=("LlamaMLP", "MistralMLP", "MixtralMLP"),
+    class_name=("LlamaMLP", "MistralMLP", "MixtralMLP", "Qwen2MLP"),
     target_scope="module",
     facets=_MLP_FACETS,
 )
 def gated_mlp(module: Any) -> dict[str, Any]:
-    """Return facets for gated Llama/Mistral/Mixtral MLP modules."""
+    """Return facets for gated Llama/Mistral/Mixtral/Qwen2 MLP modules."""
 
     result: dict[str, Any] = {}
     gate_raw = child_output_spec(module, "gate_proj", "gated_mlp")
     up_out = child_output_spec(module, "up_proj", "gated_mlp")
-    gated_out = activation_silu(gate_raw)
+    hidden_act = config_object_value(module, "hidden_act")
+    gated_out: Any
+    if isinstance(hidden_act, str) and hidden_act not in _SILU_ACTIVATION_NAMES:
+        # The gate is recomputed as SiLU; any other declared activation would
+        # make gated_out and intermediate silently wrong, so they are absent.
+        gated_out = structural(
+            f"the config declares hidden_act={hidden_act!r}; gated_out is only "
+            "reconstructed for SiLU-gated MLPs"
+        )
+    else:
+        gated_out = activation_silu(gate_raw)
     if gated_out is not None and up_out is not None:
         add_if_present(result, "intermediate", computed_product(gated_out, up_out, "gated_mlp"))
     add_if_present(result, "gated_out", gated_out)
