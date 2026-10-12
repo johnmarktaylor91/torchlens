@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from tests.composition_expectations import _censuses
+from tests.composition_expectations._keyed_tsv import parse_keyed_tsv
 
 pytestmark = pytest.mark.compo
 
@@ -44,14 +45,11 @@ def _classification_rows() -> dict[str, tuple[str, str, str]]:
 def _ratchets() -> dict[str, int]:
     """metric -> committed baseline count."""
 
-    rows: dict[str, int] = {}
     path = DATA_DIR / "diagnostic_ratchets.tsv"
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip() or line.startswith("#") or line.startswith("metric\t"):
-            continue
-        metric, _, count = line.partition("\t")
-        rows[metric.strip()] = int(count.strip())
-    return rows
+    rows = parse_keyed_tsv(
+        path.read_text(encoding="utf-8"), filename=path.name, header_key="metric"
+    )
+    return {metric: int(count) for metric, count in rows.items()}
 
 
 def test_classification_rows_are_well_formed_and_resolve() -> None:
