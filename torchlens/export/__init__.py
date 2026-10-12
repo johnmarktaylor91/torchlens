@@ -571,6 +571,15 @@ _XARRAY_SITE_REMEDY = (
 )
 
 
+def _presentation_by_neuroid(values: Any) -> Any:
+    """Flatten one out to (presentation, neuroid); a 0-d or 1-d out is one presentation."""
+    if values.ndim == 0:
+        return values.reshape(1, 1)
+    if values.ndim == 1:
+        return values.reshape(1, -1)
+    return values.reshape(values.shape[0], -1)
+
+
 def xarray(log: Any) -> Any:
     """Return a NeuroidAssembly-shaped xarray DataArray of saved outs.
 
@@ -646,13 +655,7 @@ def xarray(log: Any) -> Any:
                 argument="log",
                 layer=label,
             )
-        values = out.detach().cpu().numpy()
-        if values.ndim == 0:
-            flat = values.reshape(1, 1)
-        elif values.ndim == 1:
-            flat = values.reshape(1, -1)
-        else:
-            flat = values.reshape(values.shape[0], -1)
+        flat = _presentation_by_neuroid(out.detach().cpu().numpy())
         if presentation_count is None:
             presentation_count = int(flat.shape[0])
         elif flat.shape[0] != presentation_count:

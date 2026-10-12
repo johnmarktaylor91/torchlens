@@ -303,28 +303,7 @@ def _str_after_pass(self: "Trace") -> str:
     unverified = getattr(self, "capture_verified", True) is False
     bound = "at least " if unverified else ""
 
-    s += "\n\tStructure:"
-    if self.is_recurrent:
-        s += f"\n\t\t- recurrent (at most {self.max_layer_op_count} loops)"
-    elif unverified:
-        s += "\n\t\t- structure unverified (capture not verified; see the header)"
-    else:
-        s += "\n\t\t- purely feedforward, no recurrence"
-
-    if self.is_branching:
-        s += "\n\t\t- with branching"
-    else:
-        s += "\n\t\t- no branching"
-
-    if self.has_conditional_branching:
-        s += "\n\t\t- with conditional (if-then) branching"
-    else:
-        s += "\n\t\t- no conditional (if-then) branching"
-
-    if len(self.buffer_layers) > 0:
-        s += f"\n\t\t- contains {len(self.buffer_layers)} buffer layers"
-
-    s += f"\n\t\t- {max(0, len(self.modules) - 1)} total modules"  # -1 to exclude root "self"
+    s += _structure_section(self, unverified)
 
     # Model tensors:
 
@@ -365,6 +344,33 @@ def _str_after_pass(self: "Trace") -> str:
     for row in _bounded_layer_roster(self):
         s += f"\n{row}"
 
+    return s
+
+
+def _structure_section(self: "Trace", unverified: bool) -> str:
+    """The summary's Structure block (an unverified capture never claims feedforward)."""
+    s = "\n\tStructure:"
+    if self.is_recurrent:
+        s += f"\n\t\t- recurrent (at most {self.max_layer_op_count} loops)"
+    elif unverified:
+        s += "\n\t\t- structure unverified (capture not verified; see the header)"
+    else:
+        s += "\n\t\t- purely feedforward, no recurrence"
+
+    if self.is_branching:
+        s += "\n\t\t- with branching"
+    else:
+        s += "\n\t\t- no branching"
+
+    if self.has_conditional_branching:
+        s += "\n\t\t- with conditional (if-then) branching"
+    else:
+        s += "\n\t\t- no conditional (if-then) branching"
+
+    if len(self.buffer_layers) > 0:
+        s += f"\n\t\t- contains {len(self.buffer_layers)} buffer layers"
+
+    s += f"\n\t\t- {max(0, len(self.modules) - 1)} total modules"  # -1 to exclude root "self"
     return s
 
 
