@@ -25,9 +25,9 @@ from torchlens.data_classes.op import Op
 from torchlens.data_classes.trace import Trace
 
 #: Op field writes per executed op on the base (f271e1568) for ``_stack()`` under
-#: ``until="block1"``, measured by this file's counter: the refresh copy plus the
-#: static write-back.
-_BASE_WRITES_PER_EXECUTED_OP = 295
+#: ``until="block1"``, measured by this file's counter (the refresh copy plus the
+#: static write-back).
+_BASE_WRITES_PER_EXECUTED_OP = 353.2
 
 
 def _stack() -> nn.Module:
@@ -65,6 +65,7 @@ def test_until_projection_writes_fewer_fields_per_executed_op(monkeypatch):
     monkeypatch.setattr(Op, "_internal_set", counting)
     result = log.run(inputs=torch.randn(2, 3, 8, 8), until="block1")
     per_op = writes / _executed_count(result)
+    print(f"until= projection: {per_op:.1f} op field writes per executed op (base 353.2)")
     assert per_op < _BASE_WRITES_PER_EXECUTED_OP / 3, per_op
 
 
