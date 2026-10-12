@@ -388,7 +388,7 @@ class _SummaryCallbackMixin:
         """
 
         import torchlens as tl
-        from torchlens.errors import TorchLensWarning
+        from torchlens.errors import TorchLensError, TorchLensWarning
 
         self._summarized = True
         if not getattr(trainer, "is_global_zero", True):
@@ -399,7 +399,17 @@ class _SummaryCallbackMixin:
             input_args, input_kwargs = None, dict(model_input)
         try:
             report = tl.summary(pl_module, input_args, input_kwargs, **self.summary_kwargs)
-        except Exception as exc:  # a fit must never die for a summary; disclosed below
+        # A fit must never die for a summary (disclosed below). These are what a
+        # forward fed a guessed sample raises (wrong arity or keys, shape or dtype
+        # mismatch, missing attribute) plus every TorchLens refusal.
+        except (
+            TorchLensError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+            LookupError,
+            AttributeError,
+        ) as exc:
             warnings.warn(
                 TorchLensWarning(
                     f"SummaryCallback skipped the fit-start summary: running "
