@@ -121,9 +121,10 @@ def test_default_trace_restores_state_on_the_exception_path():
 
     torch.manual_seed(0)
     model = _Boom().train()
+    x = torch.randn(2, 3, 8, 8)
     before, rng_before = _observed_state(model), _rng_state()
     with pytest.raises(RuntimeError, match="boom after the state writes"):
-        tl.trace(model, torch.randn(2, 3, 8, 8))
+        tl.trace(model, x)
     _assert_state_equal(before, _observed_state(model))
     _assert_rng_equal(rng_before, _rng_state())
 
