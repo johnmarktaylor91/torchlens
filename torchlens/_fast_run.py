@@ -30,6 +30,12 @@ from ._fast_live_steer import (
     refusal_code,
     session_is_active,
 )
+from ._fast_live_until import (
+    FastUntilReached,
+    function_prefix_count,
+    resolve_fast_until,
+    truncate_after,
+)
 from ._runnable_execution import (
     _HOST_RNG_SOURCE_KIND,
     _INPUT_CHECK_UNAVAILABLE,
@@ -1029,6 +1035,7 @@ class _FastLiveSession:
             trace, frozenset(self.planned_module_calls)
         )
         self.module_call_counts: dict[str, int] = {}
+        self.stop_at: tuple[str, int] | None = None
         boundary_layer_labels = set(getattr(trace, "input_layers", ())) | set(
             getattr(trace, "output_layers", ())
         )
@@ -1262,6 +1269,8 @@ class _FastLiveSession:
             return
         self.module_index += 1
         self._capture_plan_output(plan, output)
+        if self.stop_at == ("module", self.module_index - 1) and self.failure is None:
+            raise FastUntilReached
 
     def capture_function(self, func_name: str, output: Any) -> None:
         """Collect and guard one explicitly requested functional-op event."""
@@ -1293,6 +1302,8 @@ class _FastLiveSession:
             return
         self.function_index += 1
         self._capture_plan_output(plan, output)
+        if self.stop_at == ("function", self.function_index - 1) and self.failure is None:
+            raise FastUntilReached
 
     @contextmanager
     def activated(self) -> Any:
@@ -1367,8 +1378,14 @@ class _FastLiveSession:
             _raise_failed_contract_as_divergence(failed_input, fork=None)
         return input_args, input_kwargs, input_size_changed
 
-    def run(self, inputs: Any, *, seed: int | None) -> RunResult:
-        """Execute one native forward and enforce the cached static graph guard."""
+    def run(self, inputs: Any, *, seed: int | None, until: Any = None) -> RunResult:
+        """Execute one native forward and enforce the cached static graph guard.
+
+        ``until`` names a saved module the forward stops after (U26.3): the
+        prefix keeps every per-call guard, the cut is disclosed as a
+        ``RunTruncation``, and the call fingerprint (a whole-forward guard)
+        cannot be compared, so the verdict is ``unverifiable``.
+        """
 
         self.run_started_at = time.monotonic()
         model = self.model_ref()
@@ -1379,18 +1396,48 @@ class _FastLiveSession:
                 provider=RunProvider.LIVE,
             )
         input_args, input_kwargs, input_size_changed = self._admit_inputs(inputs)
+        self.stop_at = (
+            None
+            if until is None
+            else resolve_fast_until(self.trace, self.module_plans, self.function_plans, until)
+        )
         self.steer_plan.refuse_changed_helpers()
         if seed is not None:
             set_random_seed(seed)
+        truncation = None
         with self.activated(), self.steer_plan.context(), fingerprinting() as fingerprint:
-            if isinstance(input_args, list):
-                output = model(*input_args, **dict(input_kwargs))
-            else:
-                output = model(input_args, **dict(input_kwargs))
+            try:
+                if isinstance(input_args, list):
+                    output = model(*input_args, **dict(input_kwargs))
+                else:
+                    output = model(input_args, **dict(input_kwargs))
+            except FastUntilReached:
+                output = None
+                truncation = until
         self.shape_varied = self.shape_varied or input_size_changed
-        self.last_fingerprint = fingerprint.value
+        self.last_fingerprint = None if truncation is not None else fingerprint.value
         if self.failure is not None:
             self._poison_and_raise(self.failure)
+        if truncation is not None:
+            truncation = self._settle_truncated_prefix(until, input_args, input_kwargs)
+        else:
+            self._check_full_path()
+            self._refresh_boundary_payloads(input_args, input_kwargs, output)
+        if self.shape_varied and not self.shape_metadata_cleared:
+            # Honesty rule: a native forward refreshes only the saved sites and
+            # the boundary ops. Every other op's shape and size metadata would
+            # otherwise read capture-time numbers as if they were this run's,
+            # so they take the not-available spelling (None) once and for all.
+            clear_unrefreshed_shape_metadata(self.trace, self.refreshed_labels)
+            self.shape_metadata_cleared = True
+        # A cut forward leaves downstream staged hooks unfired by design.
+        unfired = self.steer_plan.warn_unfired() if truncation is None else ()
+        self._record_fast_run(seed=seed, unfired=unfired, until=until)
+        return self._finalize_run(output, seed=seed, truncation=truncation)
+
+    def _check_full_path(self) -> None:
+        """Enforce the whole-forward guards: call fingerprint and every planned call."""
+
         if self.fingerprint_reference is not None and self.last_fingerprint != tuple(
             self.fingerprint_reference
         ):
@@ -1428,16 +1475,31 @@ class _FastLiveSession:
                 f"{len(self.function_plans)} requested calls.",
             )
             self._poison_and_raise(failed)
-        self._refresh_boundary_payloads(input_args, input_kwargs, output)
-        if self.shape_varied and not self.shape_metadata_cleared:
-            # Honesty rule: a native forward refreshes only the saved sites and
-            # the boundary ops. Every other op's shape and size metadata would
-            # otherwise read capture-time numbers as if they were this run's,
-            # so they take the not-available spelling (None) once and for all.
-            clear_unrefreshed_shape_metadata(self.trace, self.refreshed_labels)
-            self.shape_metadata_cleared = True
-        unfired = self.steer_plan.warn_unfired()
-        self._record_fast_run(seed=seed, unfired=unfired)
+
+    def _settle_truncated_prefix(
+        self, until: Any, input_args: Any, input_kwargs: Mapping[str, Any]
+    ) -> Any:
+        """Check the executed prefix of a cut forward, then clear what did not run."""
+
+        kind, index = cast(tuple[str, int], self.stop_at)
+        stop_plan = (self.module_plans if kind == "module" else self.function_plans)[index]
+        expected_functions = function_prefix_count(self.trace, stop_plan, self.function_plans)
+        if self.function_index != expected_functions:
+            self._poison_and_raise(
+                _contract_check(
+                    "fast_until_prefix",
+                    False,
+                    RunnableErrorCode.CONDITIONAL_ARM_DIVERGENCE,
+                    f"Live forward reached until={until!r} after {self.function_index} of the "
+                    f"{expected_functions} functional calls the capture ran before it.",
+                )
+            )
+        self._refresh_boundary_payloads(input_args, input_kwargs, None, inputs_only=True)
+        return truncate_after(self.trace, stop_plan, until)
+
+    def _finalize_run(self, output: Any, *, seed: int | None, truncation: Any) -> RunResult:
+        """Settle one fast run's report through the shared provider finalizer."""
+
         readiness = ReadinessReport(
             status=ReadinessStatus.READY,
             provider=RunProvider.LIVE,
@@ -1460,7 +1522,11 @@ class _FastLiveSession:
         # container at UNVERIFIABLE. fast=True must never improve the verdict the
         # ordinary provider would settle on the same trace.
         lossy = _container_spec_reconstruction_lossy(_output_container_spec(self.trace))
-        provisional = PathFaithfulness.UNVERIFIABLE if lossy else PathFaithfulness.VERIFIED
+        provisional = (
+            PathFaithfulness.UNVERIFIABLE
+            if lossy or truncation is not None
+            else PathFaithfulness.VERIFIED
+        )
         # Same declaration contract as the ordinary live provider (deephunt
         # F2): a host-RNG capture's fast report must not read as a
         # deterministic-looking empty tuple next to VERIFIED.
@@ -1487,9 +1553,12 @@ class _FastLiveSession:
             # The fast-live "fork" IS the user's live Trace: an inherited
             # divergence must raise without evicting it from the registry.
             unregister_fork_on_divergence=False,
+            truncation=truncation,
         )
 
-    def _record_fast_run(self, *, seed: int | None, unfired: tuple[str, ...]) -> None:
+    def _record_fast_run(
+        self, *, seed: int | None, unfired: tuple[str, ...], until: Any = None
+    ) -> None:
         """Stamp ``last_run``, the operation ledger and the state for one fast run."""
 
         from ._trace_state import TraceState
@@ -1528,6 +1597,7 @@ class _FastLiveSession:
             "shape_varied": self.shape_varied,
             "call_fingerprint": self.last_fingerprint,
             "refreshed_labels": tuple(sorted(self.refreshed_labels)),
+            "until": until,
         }
         trace._record_operation(**record)
         trace.state = TraceState.RERUN_PROPAGATED
@@ -1563,6 +1633,8 @@ class _FastLiveSession:
         input_args: Any,
         input_kwargs: Mapping[str, Any],
         output: Any,
+        *,
+        inputs_only: bool = False,
     ) -> None:
         """Refresh saved model-input/output payloads from the native call boundaries."""
 
@@ -1586,6 +1658,8 @@ class _FastLiveSession:
                 op = self.trace.layer_dict_all_keys[label]
                 if bool(getattr(op, "has_saved_activation", False)):
                     op.save_activation(value, (), {}, False)
+        if inputs_only:
+            return
         output_labels = tuple(getattr(self.trace, "output_layers", ()))
         output_values = self._match_native_output_leaves(output, output_labels)
         for label, value in zip(output_labels, output_values, strict=True):
@@ -1674,7 +1748,9 @@ def run_fast_loaded_trace(trace: Any, inputs: Any, *, seed: int | None) -> RunRe
     return result
 
 
-def run_fast_live_trace(trace: Any, inputs: Any, *, seed: int | None) -> RunResult:
+def run_fast_live_trace(
+    trace: Any, inputs: Any, *, seed: int | None, until: Any = None
+) -> RunResult:
     """Run the explicit native-forward targeted-collection live fast path."""
 
     source_ref = getattr(trace, "_source_model_ref", None)
@@ -1699,7 +1775,7 @@ def run_fast_live_trace(trace: Any, inputs: Any, *, seed: int | None) -> RunResu
             session.close()
         session = _FastLiveSession(trace, model)
         trace.__dict__["_fast_run_session"] = session
-    return session.run(inputs, seed=seed)
+    return session.run(inputs, seed=seed, until=until)
 
 
 #: Typed refusals that send the legacy rerun door back to the capture engine.

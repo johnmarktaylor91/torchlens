@@ -523,7 +523,8 @@ class TraceValidationMixin(_TraceMixinBase):
             with targeted module/function collection and a per-call path/shape guard. The
             loaded provider performs one ordinary verified run, then reuses staged state
             and compiled argument binders. Unlike the default transactional provider, later
-            fast iterations reuse one result Trace in place.
+            fast iterations reuse one result Trace in place. With ``until=`` a live fast
+            run cuts the native forward right after that saved site (U26.3).
         carry_state:
             PROVISIONAL spelling (documented-unstable). Default ``False``: the
             live provider snapshot-restores the model's declared state (named
@@ -747,12 +748,19 @@ class TraceValidationMixin(_TraceMixinBase):
                     "forbids mutating) or drop fast=",
                     argument="carry_state",
                 )
-            if fast and until is not None:
+            if (
+                fast
+                and until is not None
+                and loaded_provider in {RunProvider.LOADED_SPARSE, RunProvider.LOADED_ANALYSIS}
+            ):
+                # The live fast tier stops its native forward at a saved
+                # module (U26.3); a loaded artifact's fast tier compiles the
+                # full recorded path.
                 raise InvalidArgumentError(
-                    "until= cannot combine with fast=True this release (the fast "
-                    "tier compiles the full recorded path)",
+                    "until= combines with fast=True only on a live trace; a loaded "
+                    "artifact's fast tier compiles the full recorded path",
                     code="run_fast_until_unsupported",
-                    remedy="drop until= or drop fast=",
+                    remedy="drop until= or drop fast=, or run the live trace",
                     argument="until",
                 )
             if fast and save is not None:
@@ -863,9 +871,15 @@ class TraceValidationMixin(_TraceMixinBase):
                 self,
                 staged_spec_applies=bool(fast)
                 and loaded_provider not in {RunProvider.LOADED_SPARSE, RunProvider.LOADED_ANALYSIS}
-                and bool(
-                    getattr(staged_spec, "hook_specs", ())
-                    or getattr(staged_spec, "target_value_specs", ())
+                and (
+                    bool(
+                        getattr(staged_spec, "hook_specs", ())
+                        or getattr(staged_spec, "target_value_specs", ())
+                    )
+                    # A previous fast run's own RERUN_PROPAGATED trail is a
+                    # fresh execution, not a value edit (repeated training
+                    # steps through run(inputs=..., fast=True)).
+                    or (getattr(self, "last_run", None) or {}).get("engine") == "guarded_fast"
                 ),
             )
             source_ref = getattr(self, "_source_model_ref", None)
@@ -876,7 +890,7 @@ class TraceValidationMixin(_TraceMixinBase):
             if fast:
                 from .._fast_run import run_fast_live_trace
 
-                return run_fast_live_trace(self, run_inputs, seed=seed)
+                return run_fast_live_trace(self, run_inputs, seed=seed, until=until)
 
             return _apply_run_save_selection(
                 run_live_trace(
