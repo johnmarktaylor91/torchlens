@@ -32,13 +32,37 @@ print(watch.close().format())
 |---|---|---|---|---|
 | P (default) | parameters, gradients, updates | optimizer-boundary hooks; NO forward is wrapped or run | cheap (whole-step numbers publish only after the quiet-GPU gate) | shipped |
 | M | module-output activations | ordinary forward hooks; one real discovery forward at attach (`example_input=`), run in the model's CURRENT mode | ~1.1x class (forward-only ratio) | shipped |
-| O | op-grain activations | scheduled fastlog capture | ~34x class on CUDA, WRAP-dominated | deferred: typed refusal |
+| O | op-grain (and facet) activations | the root `forward` is WRAPPED: sampled steps run inside one fastlog capture, other steps run plain | calibrated at attach and disclosed; op capture is WRAP-dominated | shipped behind consent |
 
-The tier-O refusal carries the sentence no user could guess: narrowing
-`save=` will NOT reduce op-capture time (op wrapping dominates the bill);
-**`halt=` is the lever that does** (10.4x vs 35.0x on the repo's own gpt2
-CUDA rows). Until the tier ships, `tl.record(model, inputs,
-save=<predicate>)` on the steps you care about is the explicit spelling.
+Tier O needs explicit consent because it is the one tier that wraps your
+model's forward:
+
+```python
+session = watch(
+    model, to=sink, signals=("activations",), grain="op",
+    select=tl.func("softmax"),          # or module path prefixes
+    example_input=x, allow_forward_wrap=True,
+    facets={"softmax_3_12": split_heads(12, dim=1)},  # optional per-head series
+)
+print(session.plan_report())            # names the wrap and the calibrated cost
+```
+
+Without `allow_forward_wrap=True` the call refuses
+`watch_forward_wrap_consent_required`. With it, attach runs one
+metadata-only discovery pass and a short interleaved A/B calibration (the
+plain forward against the wrapped pass on `example_input`, under `no_grad`;
+the RNG state and every buffer are restored), then discloses the measured
+ratio in `plan_report()`, in the `torchlens/meta/op_grain_calibration` text
+row and the `torchlens/run/op_grain_overhead_median_x` scalar, and in one
+`watch_op_grain_cost_disclosed` warning. The calibration is a disclosure
+from a few pairs on your machine, not a published number. Narrowing
+`select=` moves only part of the bill (op wrapping dominates); `every=` is
+the time lever, because unsampled steps run the plain forward. Only the first
+forward of a sampled step is observed (a second forward in the same step is a
+named skip), the root module's own hooks fire twice on observed steps, op
+grain watches activations only (parameter streams go in a second session
+with a distinct `name=`), and facet series land under `<op label>/<facet>`.
+`close()` removes the wrap.
 
 ## AMP truth: observed, derived, or unknown -- never asserted
 
@@ -192,13 +216,29 @@ environment variable ever activates instrumentation; the off-only kill
 switch `TORCHLENS_WATCH_DISABLE=1` disables collection and still writes a
 `torchlens/run/disabled` row saying so.
 
+Once constructed, a callback may take its configuration from the
+environment: `TORCHLENS_WATCH_SIGNALS` (comma list), `TORCHLENS_WATCH_SELECT`
+(comma list of prefixes), `TORCHLENS_WATCH_EVERY` and
+`TORCHLENS_WATCH_HIST_EVERY` (positive integers; `none` turns histograms
+off). A constructor argument wins over the environment, the environment over
+the framework-derived cadence, and that over the package default. At attach
+the callback prints one line per setting with its source (`[argument]`,
+`[env TORCHLENS_WATCH_EVERY]`, `[derived: logging_steps=50]`, `[default]`)
+through `print_fn=` (default `print`); the resolved values stay on
+`callback.settings`. A set but malformed variable refuses
+`watch_env_config_invalid`, naming it.
+
 **Migration note:** the shipped
 `torchlens.callbacks.lightning.LayerProfilerCallback` is a different tool
 (a per-epoch structure profiler). It re-traces under `eval()`/`no_grad()`
 -- the wrong mode for dropout/BatchNorm statistics -- cannot see training
 gradients, and pays an extra forward per profile. For training-time
 watching, use `LightningWatchCallback`; keep `LayerProfilerCallback` only
-for structure snapshots.
+for structure snapshots. Each of its JSONL records carries `run_id` (fresh
+at every Lightning `setup`, or fixed with `run_id=`) and a `disclosure` line
+naming the extra eval-mode, `no_grad` forward; a batch the forward cannot
+take skips that batch with a `lightning_profile_skipped` warning and
+training continues.
 
 `torchlens.callbacks.lightning.SummaryCallback()` prints the `tl.summary`
 table once at the start of each fit, where Lightning prints its own
