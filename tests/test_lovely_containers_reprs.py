@@ -238,6 +238,8 @@ _AUTO_REPR_ALLOWED = {
     "HealthFacts",
     "MemoryFacts",
     "ParamFacts",
+    # ParamFacts.pruned's row (two ints and the pruned tensor paths).
+    "PrunedParamFacts",
     "RatioFact",
     "SummaryRow",
     "SummaryTotals",

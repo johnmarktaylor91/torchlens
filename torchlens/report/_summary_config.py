@@ -97,12 +97,20 @@ class ColumnSpec:
 #: formatter routing (by semantic_type), alignment, and export dtype.
 COLUMN_REGISTRY: dict[str, ColumnSpec] = {
     "name": ColumnSpec("name", "name (type)", "text", "left", "always", "object"),
+    "input": ColumnSpec("input", "input", "shape", "left", "always", "object"),
     "output": ColumnSpec("output", "output", "shape", "left", "always", "object"),
+    "kernel_size": ColumnSpec("kernel_size", "kernel", "shape", "left", "always", "object"),
+    "groups": ColumnSpec("groups", "groups", "count", "right", "always", "Int64"),
     "params": ColumnSpec("params", "params", "count", "right", "always", "Int64"),
     "params_pct": ColumnSpec("params_pct", "(%)", "percent", "right", "always", "float64"),
+    "params_trainable": ColumnSpec(
+        "params_trainable", "trainable", "count", "right", "always", "Int64"
+    ),
     "flops": ColumnSpec("flops", "fwd flops", "flops", "right", "always", "Int64"),
+    "flops_pct": ColumnSpec("flops_pct", "(%)", "percent", "right", "always", "float64"),
     "macs": ColumnSpec("macs", "macs", "macs", "right", "always", "Int64"),
     "train": ColumnSpec("train", "train", "tristate", "left", "mixed_only", "object"),
+    "mode": ColumnSpec("mode", "mode", "text", "left", "always", "object"),
     "passes": ColumnSpec("passes", "passes", "count", "right", "always", "Int64"),
     "evidence": ColumnSpec("evidence", "evidence", "text", "left", "always", "object"),
 }
@@ -175,6 +183,22 @@ def _refuse_choice(
     raise InvalidArgumentError(problem, code=code, remedy=remedy)
 
 
+def _insert_in_registry_order(names: list[str], name: str) -> None:
+    """Insert ``name`` after the last present column that precedes it in the registry.
+
+    ``+input`` lands before ``output`` and ``+flops_pct`` beside ``flops``;
+    a column with no registry predecessor present goes first.
+    """
+
+    order = list(COLUMN_REGISTRY)
+    rank = order.index(name)
+    position = 0
+    for index, present in enumerate(names):
+        if present in COLUMN_REGISTRY and order.index(present) < rank:
+            position = index + 1
+    names.insert(position, name)
+
+
 def _apply_column_deltas(columns: Any, names: list[str]) -> tuple[str, ...]:
     """Apply ``+name``/``-name`` delta items to the view bundle's columns."""
 
@@ -183,7 +207,7 @@ def _apply_column_deltas(columns: Any, names: list[str]) -> tuple[str, ...]:
         if name not in COLUMN_REGISTRY:
             _refuse_choice("columns", name, tuple(COLUMN_REGISTRY))
         if item[0] == "+" and name not in names:
-            names.append(name)
+            _insert_in_registry_order(names, name)
         if item[0] == "-" and name in names:
             names.remove(name)
     return tuple(names)
