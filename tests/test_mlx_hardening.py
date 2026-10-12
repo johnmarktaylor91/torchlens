@@ -333,6 +333,47 @@ def test_mlx_intermediate_derived_grads_match_direct_reference() -> None:
 
 
 @pytest.mark.optional
+def test_mlx_intermediate_derived_grads_on_module_shaped_model() -> None:
+    """An nn.Module model gets intermediate gradients, not a silent empty set.
+
+    Walk U06.4: the replay observers built signatures with no module frames
+    while capture stamps ``op.modules``, so every op inside a module failed
+    its 1:1 match and ``intermediate_derived_grads`` came back empty.
+    """
+
+    mx.random.seed(0)
+    model = TinyMLP()
+    x = mx.random.normal((3, 4))
+    trace = tl.trace(
+        model,
+        x,
+        backend="mlx",
+        grad_options=GradOptions(
+            loss_fn=_grad_loss, input_grad_argnums=(0,), intermediate_grads=True
+        ),
+    )
+    by_name = {op.func_name: op for op in trace.layer_list if not op.is_input}
+    relu_op = by_name["relu"]
+    assert relu_op.modules, "fixture must be module-shaped (ops carry module frames)"
+    saved = {
+        op.label
+        for op in trace.layer_list
+        if op.has_saved_activation and not op.is_input and not op.is_output
+    }
+    assert saved and saved <= set(trace.intermediate_derived_grads)
+
+    def suffix(boundary: mx.array) -> mx.array:
+        """Return the scalar loss from the relu boundary onward."""
+
+        return _grad_loss(model.l2(boundary))
+
+    expected = mx.grad(suffix)(relu_op.out)
+    mx.eval(expected, relu_op.derived_grad)
+    np.testing.assert_allclose(np.asarray(relu_op.derived_grad), np.asarray(expected))
+    assert trace.intermediate_derived_grads[relu_op.label].provenance["status"] == "exact"
+
+
+@pytest.mark.optional
 def test_mlx_intermediate_derived_grads_perturbation_reference_oracle() -> None:
     """The MLX T1 oracle should catch boundary-sensitive gradients."""
 
