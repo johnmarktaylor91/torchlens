@@ -914,19 +914,19 @@ def _add_lookup_keys_for_layer_entry(
             layer_entry.module = layer_entry.modules[-1]
 
     # Allow indexing by modules exited as well. A model-output alias node
-    # inherits the module exits of the op it aliases (graph_traversal copies
-    # them); it does not re-claim a key that op already holds, so a module whose
-    # output is also a model output (timm features_only stages, resnet ``fc``)
-    # resolves to its own output op instead of turning ambiguous. The alias stays
-    # reachable through its own labels and its ``output`` role key.
-    alias_parent_labels = set(layer_entry.parents) if layer_entry.is_output else set()
+    # inherits the module calls of the op it aliases (graph_traversal copies
+    # them); it never re-claims a module key an op already holds, so a module
+    # whose output is also a model output (timm features_only stages, resnet
+    # ``fc``) resolves to its own output op instead of turning ambiguous. The
+    # alias stays reachable through its own labels and its ``output`` role key.
+    is_output_alias = bool(layer_entry.is_output)
     for module_pass in layer_entry.output_of_module_calls:
         module_name, _ = module_pass.rsplit(":", 1)
         module_keys = [module_pass]
         if self._module_capture_ws.module_build_data["module_num_calls"][module_name] == 1:
             module_keys.append(module_name)
         for module_key in module_keys:
-            if alias_parent_labels and _key_held_by_any(self, module_key, alias_parent_labels):
+            if is_output_alias and module_key in self.layer_dict_all_keys:
                 continue
             lookup_keys_for_tensor.append(module_key)
 
@@ -966,24 +966,6 @@ def _add_lookup_keys_for_layer_entry(
                 self._lookup_keys_to_layer_num_dict[lookup_key] = layer_entry.raw_index
                 self.layer_dict_all_keys[lookup_key] = layer_entry
         self._layer_num_to_lookup_keys_dict[layer_entry.raw_index].append(lookup_key)
-
-
-def _key_held_by_any(self: "Trace", key: str, labels: set[Any]) -> bool:
-    """Return whether lookup ``key`` already resolves to an Op named in ``labels``.
-
-    Args:
-        key: Lookup key about to be registered.
-        labels: Raw or final labels of candidate holder Ops.
-
-    Returns:
-        True when the current holder of ``key`` carries one of ``labels``.
-    """
-
-    holder = self.layer_dict_all_keys.get(key)
-    if holder is None:
-        return False
-    holder_labels = {holder._label_raw, holder.raw_label, holder.label, holder.layer_label}
-    return not holder_labels.isdisjoint(labels)
 
 
 def _module_call_label(module_call: Any) -> str:
