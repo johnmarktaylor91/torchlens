@@ -78,7 +78,6 @@ def _module_call_counter(model: nn.Module, names: tuple[str, ...]) -> dict[str, 
     return counts
 
 
-@pytest.mark.smoke
 def test_until_runs_on_eval_batchnorm_stack():
     """Bug 1: until= on a multi-BN eval model runs instead of refusing typed."""
 
@@ -90,7 +89,6 @@ def test_until_runs_on_eval_batchnorm_stack():
     assert result.trace["block1"].out is not None
 
 
-@pytest.mark.smoke
 def test_until_backward_without_carry_state_matches_hand_truncated_eager():
     """Bugs 1+2: until= backward works by default and equals a hand-truncated eager model.
 
@@ -170,7 +168,6 @@ _LAYER2_UPSTREAM_PARAMS = 30  # stem 3 + layer1 12 + layer2 15 (incl. downsample
 _RESNET18_PARAMS = 62
 
 
-@pytest.mark.heavy
 def test_resnet18_until_layer2_grads_match_hand_truncated_eager():
     """The RERUN-GRAD probe on stock resnet18: until= trains the stem..layer2 backbone."""
 
@@ -206,7 +203,6 @@ def test_resnet18_until_layer2_grads_match_hand_truncated_eager():
             assert param.grad is None, name
 
 
-@pytest.mark.heavy
 def test_resnet18_full_run_grads_match_eager():
     """Full default run(): backward reaches all 62 parameters, equal to eager."""
 
