@@ -311,9 +311,10 @@ def index_domain_rotation_values(
 
     if not _parent_is_index_domain_arg(layer, parent_label):
         return None
-    if not isinstance(parent_values, torch.Tensor):
-        return None
-    if parent_values.dtype not in _INDEX_DOMAIN_INT_DTYPES:
+    if (
+        not isinstance(parent_values, torch.Tensor)
+        or parent_values.dtype not in _INDEX_DOMAIN_INT_DTYPES
+    ):
         return None
     domain_size = _index_domain_size(layer)
     if domain_size is None or domain_size < 2:
