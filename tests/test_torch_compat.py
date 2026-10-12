@@ -490,6 +490,8 @@ def test_torch_capability_snapshot_contract() -> None:
         # compile counters back tl.debug.count_compiles. Build-dependent, so
         # mirror the live values.
         "HAS_SET_STANCE": tc.HAS_SET_STANCE,
+        # CUDA-graph bindings exist only on CUDA builds; mirror the live value.
+        "HAS_CUDA_GRAPHS": tc.HAS_CUDA_GRAPHS,
         "HAS_TORCH_FUNCTION_STACK_SURGERY": tc.HAS_TORCH_FUNCTION_STACK_SURGERY,
         "HAS_DYNAMO_COMPILE_COUNTERS": tc.HAS_DYNAMO_COMPILE_COUNTERS,
         # fp8 dtypes exist on every torch build we support, but the set grew across
