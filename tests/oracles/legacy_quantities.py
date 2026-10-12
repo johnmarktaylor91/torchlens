@@ -162,7 +162,7 @@ def _numeric_fields(obj: Any) -> Iterator[tuple[str, str]]:
         try:
             value = getattr(obj, name)
         except Exception:  # noqa: BLE001 - a raising property is not a numeric door
-            continue
+            value = None
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             continue
         yield name, type(value).__name__
