@@ -12,7 +12,7 @@ the serve one-liner over the public pinned vendor API (D18).
 
 Every public spelling here is DOCUMENTED-UNSTABLE pending naming-session
 ratification. The vendor schema of record is ``model_explorer.graph_builder``
-/ ``node_data_builder`` from ``ai-edge-model-explorer`` 0.1.32; the executed
+/ ``node_data_builder`` from ``ai-edge-model-explorer`` 0.1.33; the executed
 oracle is the pinned ``dist/worker.js`` from
 ``ai-edge-model-explorer-visualizer`` 0.1.2 (tests/test_modelexplorer_assets).
 """

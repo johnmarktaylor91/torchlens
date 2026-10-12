@@ -48,7 +48,8 @@ def test_serve_without_vendor_refuses_with_install_remedy(
     with pytest.raises(Exception) as excinfo:
         tl.export.model_explorer_serve(tiny_log)
     assert excinfo.value.fields["code"] == "model_explorer_serve_unavailable"
-    assert "pip install ai-edge-model-explorer" in excinfo.value.fields["install"]
+    assert excinfo.value.fields["install"] == "pip install 'torchlens[model-explorer]'"
+    assert excinfo.value.fields["dependency"] == "ai-edge-model-explorer"
 
 
 def test_serve_exports_then_calls_public_visualize(

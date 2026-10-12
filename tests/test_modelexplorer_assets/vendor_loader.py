@@ -1,6 +1,6 @@
 """Init-free loader for the pinned Model Explorer pip schema modules.
 
-``ai-edge-model-explorer`` 0.1.32 installed with ``--no-deps`` carries the
+``ai-edge-model-explorer`` 0.1.33 installed with ``--no-deps`` carries the
 two schema-of-record modules (``graph_builder``, ``node_data_builder``) but
 its package ``__init__`` imports the local server stack (flask, portpicker,
 watchdog, ...), which the schema-only test environment deliberately lacks.
