@@ -1262,6 +1262,43 @@ shim owed*
 : Opt-out for the default-on checked suppression of redundant constructor-arg
   label rows (slate 8.7). See the "show_redundant_args" entry above.
 
+**direction="rightleft" (draw value)** — *unstable — no deprecation shim owed*
+: The fourth layout direction on `Trace.draw(direction=)`, `draw_backward(vis_direction=)` and
+  `draw_combined(vis_direction=)`: edges flow right to left (Graphviz `rankdir=RL`), beside
+  `"bottomup"`, `"topdown"` and `"leftright"`. An unknown value refuses
+  `visualization_direction_invalid` naming all four.
+
+**vis_outpath=None (draw default)** — *unstable — no deprecation shim owed*
+: A bare `Trace.draw()` writes a collision-safe file in the current directory --
+  `modelgraph.<format>`, then `modelgraph-2.<format>`, `modelgraph-3.<format>` -- and always prints
+  `TorchLens graph written to <path>`, so a second bare draw never overwrites the first picture.
+  An explicit `vis_outpath=` is written exactly (overwriting) and printed only on a verbose trace.
+
+**show_module_paths / show_grad_values (draw_backward kwargs)** — *unstable — no deprecation shim owed; keyword-only*
+: Opt-in label rows on `Trace.draw_backward`: `show_module_paths=True` adds `module <address>` to
+  each backward node a module owns (`param <address>` on AccumulateGrad nodes); `show_grad_values=True`
+  adds `grad norm <x>, absmax <y>` from the node's captured output gradient (`grad values not
+  captured` when the capture kept none). Both default to `False`, leaving the default render
+  unchanged.
+
+**Bundled render font** — *unstable — no deprecation shim owed*
+: Every Graphviz render resolves the pinned `Helvetica` family to the bundled Liberation Sans 2.1.5
+  (SIL Open Font License 1.1, shipped unmodified under `torchlens/visualization/fonts/` with its
+  license) through a fontconfig file layered over the caller's own, so text metrics no longer
+  depend on which face a machine maps `Helvetica` to. The emitted DOT keeps `fontname="Helvetica"`.
+
+**Expansion manifest** — *unstable — no deprecation shim owed*
+: The JSON file `<outpath>.expansion.json` (schema `torchlens.expansion_manifest.v1`) a `draw`
+  render writes beside an over-ceiling overview: a floor-fallback plan still above the readable
+  band, or the bounded top-level module overview served past the pathological pre-gate. One entry
+  per collapsed unit: a stable `expansion_id`, `kind`, `module`, `members`, and the `draw()`
+  keywords (`expand`) that open it. Disclosed by the `collapse_expansion_manifest` warning.
+
+**render_vector_oversize (warning)** — *unstable — no deprecation shim owed*
+: A forward SVG or PDF page past the 14,400 pt per-side vector page ceiling is written exactly as
+  requested and warned with its size and the remedies (`collapse='auto'`, `module=`,
+  `vis_call_depth`): warn and obey, never a refusal.
+
 **"shape_summary" node_label_fields token** — *unstable — no deprecation shim owed*
 : Selector token rendering `Layer.shape_summary` (the L1 across-pass shape
   summary) as a label row; skipped when the field is unset. The default label
