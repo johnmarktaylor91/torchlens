@@ -89,7 +89,7 @@ BUILTIN_FACET_CAPABILITY_INVENTORY: dict[str, dict[str, str]] = {
         "final_norm_input": "op_structural",
     },
     "contrastive_image_head": {
-        "logits": "op_structural",
+        "logits_per_image": "op_structural",
         "image_projection_weight": "parameter",
         "text_features": "op_structural",
         "logit_scale": "parameter",

@@ -109,13 +109,13 @@ _MATMUL_FUNCS = frozenset({"matmul", "bmm", "baddbmm", "einsum", "__matmul__"})
 def _with_attention_common(
     result: dict[str, Any],
     module: Any,
-    n_q_heads: int | None,
-    n_kv_heads: int | None,
-    d_head: int | None,
+    heads: tuple[int | None, int | None, int | None],
     *,
     query_child: str,
 ) -> dict[str, Any]:
     """Attach common attention facets to a recipe result.
+
+    ``heads`` is ``(n_q_heads, n_kv_heads, d_head)`` from :func:`_attention_config`.
 
     ``input`` is the value the query projection child reads (by dataflow);
     the module's first input op is only the fallback, since it is the first
@@ -128,6 +128,7 @@ def _with_attention_common(
     if isinstance(input_spec, AbsenceReason):
         input_spec = first_input_spec(module, "attention")
     add_if_present(result, "input", input_spec)
+    n_q_heads, n_kv_heads, d_head = heads
     if n_q_heads is not None:
         result["n_q_heads"] = n_q_heads
         result["n_heads"] = n_q_heads
@@ -571,7 +572,7 @@ def distilbert_attention(module: Any) -> dict[str, Any]:
         ),
     )
     return _with_attention_common(
-        result, module, n_q_heads, n_kv_heads, d_head, query_child="q_lin"
+        result, module, (n_q_heads, n_kv_heads, d_head), query_child="q_lin"
     )
 
 
@@ -597,7 +598,7 @@ def gpt2_attention(module: Any) -> dict[str, Any]:
         add_if_present(result, "v", c_attn_out)
     add_if_present(result, "attn_out", child_output_spec(module, "c_proj", "gpt2_attention"))
     return _with_attention_common(
-        result, module, n_q_heads, n_kv_heads, d_head, query_child="c_attn"
+        result, module, (n_q_heads, n_kv_heads, d_head), query_child="c_attn"
     )
 
 
@@ -629,7 +630,7 @@ def bert_self_attention(module: Any) -> dict[str, Any]:
         ),
     )
     return _with_attention_common(
-        result, module, n_q_heads, n_kv_heads, d_head, query_child="query"
+        result, module, (n_q_heads, n_kv_heads, d_head), query_child="query"
     )
 
 
@@ -678,7 +679,7 @@ def gqa_attention(module: Any) -> dict[str, Any]:
     )
     add_if_present(result, "attn_out", child_output_spec(module, "o_proj", "gqa_attention"))
     return _with_attention_common(
-        result, module, n_q_heads, n_kv_heads, d_head, query_child="q_proj"
+        result, module, (n_q_heads, n_kv_heads, d_head), query_child="q_proj"
     )
 
 
@@ -704,7 +705,7 @@ def t5_attention(module: Any) -> dict[str, Any]:
         reshape_heads(child_output_spec(module, "v", "t5_attention"), n_kv_heads, d_head),
     )
     add_if_present(result, "attn_out", child_output_spec(module, "o", "t5_attention"))
-    return _with_attention_common(result, module, n_q_heads, n_kv_heads, d_head, query_child="q")
+    return _with_attention_common(result, module, (n_q_heads, n_kv_heads, d_head), query_child="q")
 
 
 @register(
@@ -733,7 +734,7 @@ def vit_self_attention(module: Any) -> dict[str, Any]:
         reshape_heads(child_output_spec(module, "value", "vit_self_attention"), n_kv_heads, d_head),
     )
     return _with_attention_common(
-        result, module, n_q_heads, n_kv_heads, d_head, query_child="query"
+        result, module, (n_q_heads, n_kv_heads, d_head), query_child="query"
     )
 
 
@@ -765,5 +766,5 @@ def clip_attention(module: Any) -> dict[str, Any]:
     )
     add_if_present(result, "attn_out", child_output_spec(module, "out_proj", "clip_attention"))
     return _with_attention_common(
-        result, module, n_q_heads, n_kv_heads, d_head, query_child="q_proj"
+        result, module, (n_q_heads, n_kv_heads, d_head), query_child="q_proj"
     )

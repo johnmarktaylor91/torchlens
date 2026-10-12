@@ -70,7 +70,7 @@ _CLASSIFIER_HEAD_FACETS = (
 )
 
 _CONTRASTIVE_HEAD_FACETS = (
-    "logits",
+    "logits_per_image",
     "image_projection_weight",
     "text_features",
     "logit_scale",
@@ -397,7 +397,8 @@ def contrastive_image_head(module: Any) -> dict[str, Any]:
 
     The text side is whatever prompts the capture ran: ``text_features`` is
     the captured ``text_projection`` output (one row per prompt, before L2
-    normalization), and ``logits`` is the captured ``logits_per_image``.
+    normalization), and ``logits_per_image`` is the captured
+    ``CLIPOutput.logits_per_image`` (``[n_images, n_prompts]``).
 
     Parameters
     ----------
@@ -411,7 +412,7 @@ def contrastive_image_head(module: Any) -> dict[str, Any]:
     """
 
     result: dict[str, Any] = {}
-    add_if_present(result, "logits", _output_leaf_spec(module, "logits_per_image"))
+    add_if_present(result, "logits_per_image", _output_leaf_spec(module, "logits_per_image"))
     add_if_present(
         result, "text_features", child_output_spec(module, "text_projection", "vision_head")
     )

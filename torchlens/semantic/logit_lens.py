@@ -382,7 +382,7 @@ def logit_lens(
     """
 
     head = _find_default_head(trace)
-    final_logits = _read_final_logits(None if head is None else head.view)
+    final_logits = _read_final_logits(head)
     if lens is not None:
         addresses = _resolve_layer_addresses(trace, facet=facet, layers=layers)
         lens_by_address = _user_lens_by_address(lens, addresses)
@@ -481,7 +481,7 @@ def logit_lens_predictions(
             code="logit_lens_k_invalid",
         )
     head = _find_default_head(trace)
-    final_logits = _read_final_logits(None if head is None else head.view)
+    final_logits = _read_final_logits(head)
     if lens is not None:
         addresses = _resolve_layer_addresses(trace, facet=facet, layers=layers)
         lens_by_address = _user_lens_by_address(lens, addresses)
@@ -754,12 +754,14 @@ class _DefaultHead:
     view: Any
     address: str | None
     tower: str | None
+    logits_facet: str = "logits"
 
 
-#: Vision head facet that identifies each fallback head kind, in priority order.
+#: Fallback vision heads, in priority order: the facet that identifies the
+#: head, its ``lens_source``, and the facet holding its captured output.
 _VISION_HEAD_KEYS = (
-    ("classifier_weight", LENS_SOURCE_CLASSIFIER_HEAD),
-    ("image_projection_weight", LENS_SOURCE_CONTRASTIVE_HEAD),
+    ("classifier_weight", LENS_SOURCE_CLASSIFIER_HEAD, "logits"),
+    ("image_projection_weight", LENS_SOURCE_CONTRASTIVE_HEAD, "logits_per_image"),
 )
 
 
@@ -770,22 +772,26 @@ def _find_default_head(trace: Any) -> _DefaultHead | None:
     for address, view in views:
         if view.has("unembed_weight"):
             return _DefaultHead(LENS_SOURCE_MODEL_HEAD, view, address or None, None)
-    for key, kind in _VISION_HEAD_KEYS:
+    for key, kind, logits_facet in _VISION_HEAD_KEYS:
         for address, view in views:
             if view.has(key):
                 tower = view.get("tower_address")
                 return _DefaultHead(
-                    kind, view, address or None, tower if isinstance(tower, str) else None
+                    kind,
+                    view,
+                    address or None,
+                    tower if isinstance(tower, str) else None,
+                    logits_facet,
                 )
     return None
 
 
-def _read_final_logits(head_view: Any | None) -> torch.Tensor | None:
-    """Return the captured real output logits when readable."""
+def _read_final_logits(head: _DefaultHead | None) -> torch.Tensor | None:
+    """Return the head's captured real output logits when readable."""
 
-    if head_view is None:
+    if head is None:
         return None
-    value = head_view.get("logits")
+    value = head.view.get(head.logits_facet)
     if value is None or isinstance(value, MissingFacet):
         return None
     try:
@@ -961,7 +967,7 @@ def _validate_lens(
     head validates against the last block of its own tower.
     """
 
-    captured = head.view.get("logits")
+    captured = head.view.get(head.logits_facet)
     if captured is None:
         raise LogitLensError(
             "Cannot validate the reconstructed lens: the model's captured head "
@@ -1134,7 +1140,7 @@ def _last_layer_pair(
 ) -> tuple[torch.Tensor, torch.Tensor, str] | str:
     """Return ``(decoded, captured, address)`` for the agreement check, or why it cannot run."""
 
-    captured = None if head is None else _read_final_logits(head.view)
+    captured = _read_final_logits(head)
     if captured is None:
         return "the trace has no captured head logits to check its last-layer decode against"
     address = _last_block_address(trace, None if head is None else head.tower)

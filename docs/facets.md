@@ -452,7 +452,7 @@ logits):
 
 ```text
 classification_head facets          contrastive_image_head facets
-logits                              logits (logits_per_image)
+logits                              logits_per_image
 classifier_weight / classifier_bias image_projection_weight
 pooled_position (token read)        text_features (text_projection output)
 tower_address (blocks feeding it)   logit_scale
