@@ -175,6 +175,7 @@ SummaryReport.unknown_flop_ops	int	quantity	unknown_flop_ops	red-needs-oracle	-	
 SummaryTotals.at_capture_bytes	int	quantity	at_capture_bytes	red-needs-oracle	-	-
 SummaryTotals.flops_forward_fma2	int	quantity	flops_forward	red-needs-oracle	-	the quantity oracle test_flops_conv_transpose_uses_input_work_basis asserts a different door; this door has none
 SummaryTotals.macs_forward	int	quantity	macs_forward	red-needs-oracle	-	the quantity oracle test_biased_linear_true_macs_not_flops_over_two asserts a different door; this door has none
+SummaryTotals.params_bytes	int	quantity	param_memory	red-needs-oracle	-	summary parameter-bytes door added by the batch-1 summary columns; no oracle asserts it
 SummaryTotals.params_executed	int	quantity	num_params_executed	red-needs-oracle	-	the quantity oracle test_declared_executed_unexecuted_split_named asserts a different door; this door has none
 SummaryTotals.params_frozen	int	quantity	num_params_frozen	red-needs-oracle	-	the quantity oracle test_mh_mixed asserts a different door; this door has none
 SummaryTotals.params_per_path_total	int	quantity	num_params_by_path	red-needs-oracle	-	-
