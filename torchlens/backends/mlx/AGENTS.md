@@ -22,7 +22,11 @@ Tier-1 standalone spec (no `capture_backend`); the `BackendSpec` in
 ## wrappers.py
 - `wrap_mlx()` / `unwrap_mlx()` / `is_mlx_wrapped()` install and remove the
   eager wrappers; `_MLXWrapperRegistry` owns the wrapped surface and
-  `mlx_tap_observer()` scopes an observer over a capture.
+  `mlx_tap_observer()` scopes an observer over a capture. With an observer
+  active the wrapper passes `module_address=` (the discovered module's primary
+  address, else `None`) so the intermediate-gradient replay observers mirror
+  capture's `"address:call_index"` module frames; their signatures must match
+  `op.modules` or module-shaped models get no intermediate gradients.
 
 ## interventions.py
 - `resolve_mlx_intervention_plan()` builds `MLXInterventionPlan` /

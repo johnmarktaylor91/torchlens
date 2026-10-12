@@ -1011,12 +1011,15 @@ def normalize_input_args(input_args: Any, model: nn.Module) -> list[Any]:
     * If the model expects exactly one positional param and the user passed
       a multi-element tuple/list, wrap it in a list so it arrives as a
       single argument: ``model(the_tuple)``.
+    * An empty tuple/list means no positional arguments, even on a
+      single-parameter forward, so a keyword-only call such as
+      ``tl.trace(model, (), {"x": t})`` reaches ``model(x=t)``.
     * Otherwise, treat each element of the tuple/list as a separate
       positional argument: ``model(arg0, arg1, ...)``.
     """
     if type(input_args) in (tuple, list):
         single = _model_expects_single_arg(model)
-        if single and len(input_args) != 1:
+        if single and len(input_args) > 1:
             # Model expects 1 arg but user passed a multi-element tuple/list.
             # The tuple/list itself IS the single argument.
             input_args = [input_args]

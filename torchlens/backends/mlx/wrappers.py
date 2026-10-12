@@ -205,8 +205,15 @@ class _MLXWrapperRegistry:
 
             observer = _ACTIVE_TAP_OBSERVER
             if observer is not None:
+                # The replay observer mirrors capture's module frames, so it
+                # needs the same discovered-module address capture would push.
+                module_address = (
+                    module_instances.get(id(args[0]))
+                    if module_tree is not None and module_instances is not None and args
+                    else None
+                )
                 observe_call = getattr(observer, "call")
-                return observe_call(original, op_name, args, kwargs)
+                return observe_call(original, op_name, args, kwargs, module_address=module_address)
             if not _state._logging_enabled:
                 return original(*args, **kwargs)
             trace = _state._active_trace

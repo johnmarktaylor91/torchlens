@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import contextlib
-import warnings
 from collections.abc import Callable
 from typing import Any, cast
 
 import torch
 
+from torchlens._errors import InvalidArgumentError
 from torchlens.data_classes.trace import ResolvedPreprocessing, Trace
 
 _MODALITY_KEYS = frozenset({"text", "image", "images", "audio", "videos"})
@@ -554,57 +554,6 @@ def _tokenizer_preprocessing_record(
     )
 
 
-def _imagenet_default_transform() -> tuple[Callable[[Any], Any], ResolvedPreprocessing]:
-    """Return the ImageNet default preprocessing fallback.
-
-    Returns
-    -------
-    tuple[Callable[[Any], Any], ResolvedPreprocessing]
-        Default transform and unverified provenance record.
-    """
-
-    warnings.warn(
-        "torchlens.trace: applying ImageNet default preprocessing (resize 256, "
-        "center-crop 224, ImageNet normalization). Model not registered for known "
-        "preprocessing; verify this matches your training pipeline. To suppress "
-        "this warning, pass transform=... explicitly to tl.trace.",
-        UserWarning,
-        stacklevel=3,
-    )
-    from torchvision import transforms as T
-
-    transform = T.Compose(
-        [
-            T.Resize(256),
-            T.CenterCrop(224),
-            T.ToTensor(),
-            T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ]
-    )
-    return (
-        transform,
-        ResolvedPreprocessing(
-            source="imagenet_default",
-            identifier="ImageNet-default-resize256-crop224",
-            verified=False,
-            config={
-                "do_resize": True,
-                "size": 256,
-                "do_center_crop": True,
-                "center_crop_size": 224,
-                "do_normalize": True,
-                "image_mean": [0.485, 0.456, 0.406],
-                "image_std": [0.229, 0.224, 0.225],
-            },
-            description=(
-                "ImageNet default (UNVERIFIED): resize 256 -> center_crop 224 -> "
-                "normalize mu=(0.485, 0.456, 0.406) sigma=(0.229, 0.224, 0.225). "
-                "Model not registered for known preprocessing."
-            ),
-        ),
-    )
-
-
 def _resolve_image_preprocessing(model: Any) -> tuple[Callable[[Any], Any], ResolvedPreprocessing]:
     """Resolve image preprocessing through the neutral authority resolver.
 
@@ -613,10 +562,10 @@ def _resolve_image_preprocessing(model: Any) -> tuple[Callable[[Any], Any], Reso
     weights handle, a timm ``default_cfg``) and the network-gated HF
     processor fetch last, with the attempt disclosed on the record; a fetch
     failure yields ``unknown``, never a silently substituted lower tier
-    (memo D8). Only when NOTHING resolves does the demoted TorchLens-authored
-    ImageNet default apply -- loudly, ``verified=False``, with any failed
-    resolution attempt disclosed in its config (memo D9; the default-flip
-    fork is FORK-1, unchanged here).
+    (memo D8). Whatever the registry resolves is applied. When NOTHING
+    resolves the capture is refused typed (walk U02.4): TorchLens never
+    applies a recipe the model was not shown to use. The refusal names the
+    explicit ImageNet-default opt-in.
 
     Parameters
     ----------
@@ -627,6 +576,11 @@ def _resolve_image_preprocessing(model: Any) -> tuple[Callable[[Any], Any], Reso
     -------
     tuple[Callable[[Any], Any], ResolvedPreprocessing]
         Transform and provenance record.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``preprocessing_unresolved`` when no authority resolves.
     """
 
     from torchlens import preprocessing as _preprocessing
@@ -640,12 +594,24 @@ def _resolve_image_preprocessing(model: Any) -> tuple[Callable[[Any], Any], Reso
             record.source = "hf_auto_image_processor"
             record.description = f"AutoImageProcessor: {record.identifier}"
         return resolution.transform, record
-    transform, fallback_record = _imagenet_default_transform()
-    if record.source == "unknown":
-        # The failed resolution (incl. any fetch disclosure) rides the
-        # fallback record so the failure is inspectable, never swallowed.
-        fallback_record.config["resolution_attempt"] = dict(record.config)
-    return transform, fallback_record
+    reason = record.config.get("reason") if isinstance(record.config, dict) else None
+    raise InvalidArgumentError(
+        f"torchlens.trace: no preprocessing authority resolved for the PIL image "
+        f"input to {type(model).__name__} ({reason or 'nothing resolved'}). "
+        "TorchLens refuses to guess a recipe the model may not have been "
+        "trained with.",
+        code="preprocessing_unresolved",
+        remedy=(
+            "pass your loader's own transform, e.g. "
+            "capture=tl.options.CaptureOptions(transform=weights.transforms()); "
+            "or opt in to the ImageNet default (resize 256, center-crop 224, "
+            "ImageNet mean/std) with "
+            "capture=tl.options.CaptureOptions(transform=tl.preprocessing.imagenet_default()); "
+            "or pass an already-preprocessed tensor"
+        ),
+        model_type=type(model).__name__,
+        resolution_attempt=dict(record.config) if isinstance(record.config, dict) else {},
+    )
 
 
 def _make_image_transform(transform: Callable[[Any], Any]) -> Callable[[Any], Any]:

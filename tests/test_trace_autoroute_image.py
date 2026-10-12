@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import builtins
 import re
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -78,8 +79,8 @@ def test_clip_image_uses_auto_processor_fallback() -> None:
 
 
 @pytest.mark.heavy
-def test_torchvision_resnet_weights_uses_tier_two_or_default() -> None:
-    """Torchvision models use attached weights when available, otherwise default."""
+def test_torchvision_resnet_weights_uses_attached_weights() -> None:
+    """Torchvision models resolve the attached weights preset's own transform."""
 
     import PIL.Image  # noqa: F401
 
@@ -92,11 +93,8 @@ def test_torchvision_resnet_weights_uses_tier_two_or_default() -> None:
     log = tl.trace(model, _pil_image(), capture=tl.options.CaptureOptions(layers_to_save="none"))
 
     assert log.input_preprocessor is not None
-    assert log.input_preprocessor.source in {"torchvision_weights", "imagenet_default"}
-    if log.input_preprocessor.source == "torchvision_weights":
-        assert log.input_preprocessor.verified is True
-    else:
-        assert log.input_preprocessor.verified is False
+    assert log.input_preprocessor.source == "torchvision_weights"
+    assert log.input_preprocessor.verified is True
 
 
 @pytest.mark.slow
@@ -116,23 +114,55 @@ def test_timm_model_uses_default_cfg_transform() -> None:
     assert log.input_preprocessor.verified is True
 
 
-def test_unknown_cnn_uses_imagenet_default_with_warning() -> None:
-    """Unknown PIL image models should fall back loudly to ImageNet defaults."""
+def test_unknown_cnn_refuses_and_names_imagenet_opt_in() -> None:
+    """A PIL image with no resolvable preprocessing refuses typed (walk U02.4).
+
+    The ImageNet default is never applied silently; the refusal names the
+    explicit opt-in.
+    """
+
+    import PIL.Image  # noqa: F401
+
+    from torchlens._errors import InvalidArgumentError
+
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        tl.trace(
+            _ImageModel(), _pil_image(), capture=tl.options.CaptureOptions(layers_to_save="none")
+        )
+
+    assert excinfo.value.fields["code"] == "preprocessing_unresolved"
+    assert excinfo.value.fields["model_type"] == "_ImageModel"
+    assert "tl.preprocessing.imagenet_default()" in str(excinfo.value)
+    assert excinfo.value.fields["resolution_attempt"]["resolution_method"] == "none"
+
+
+def test_imagenet_default_opt_in_applies_and_discloses() -> None:
+    """The explicit opt-in applies the recipe and stamps an unverified record."""
 
     import PIL.Image  # noqa: F401
 
     pytest.importorskip("torchvision.transforms")
 
-    with pytest.warns(UserWarning, match="ImageNet default preprocessing"):
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
         log = tl.trace(
-            _ImageModel(), _pil_image(), capture=tl.options.CaptureOptions(layers_to_save="none")
+            _ImageModel(),
+            _pil_image(),
+            capture=tl.options.CaptureOptions(
+                transform=tl.preprocessing.imagenet_default(), layers_to_save="all"
+            ),
         )
 
-    assert log.input_preprocessor is not None
-    assert log.input_preprocessor.source == "imagenet_default"
-    assert log.input_preprocessor.verified is False
-    assert "UNVERIFIED" in log.input_preprocessor.description
+    record = log.input_preprocessor
+    assert record is not None
+    assert record.source == "imagenet_default"
+    assert record.verified is False
+    assert record.status == "unverified_fallback"
+    assert record.config["resolution_method"] == "explicit_opt_in"
+    assert "UNVERIFIED" in record.description
     assert log.raw_input is not None
+    first_input = log[log.input_layers[0]].out
+    assert tuple(first_input.shape) == (1, 3, 224, 224)
 
 
 def test_transform_override_skips_image_autoroute() -> None:
@@ -216,14 +246,17 @@ def test_list_of_pil_images_batches() -> None:
 
     pytest.importorskip("torchvision.transforms")
 
-    with pytest.warns(UserWarning, match="ImageNet default preprocessing"):
-        log = tl.trace(
-            _ImageModel(),
-            [_pil_image(), _pil_image()],
-            capture=tl.options.CaptureOptions(layers_to_save="none"),
-        )
+    log = tl.trace(
+        _ImageModel(),
+        [_pil_image(), _pil_image()],
+        capture=tl.options.CaptureOptions(
+            transform=tl.preprocessing.imagenet_default(), layers_to_save="all"
+        ),
+    )
 
     assert log.input_preprocessor is not None
+    assert log.input_preprocessor.source == "imagenet_default"
+    assert tuple(log[log.input_layers[0]].out.shape) == (2, 3, 224, 224)
     assert log.num_ops > 0
     assert isinstance(log.raw_input, list)
 

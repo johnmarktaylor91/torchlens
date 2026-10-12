@@ -67,6 +67,7 @@ from ._factcore import (
     IdentityIndex,
     MemoryFacts,
     ParamFacts,
+    PrunedParamFacts,
     capture_fingerprint,
     factcore,
 )
@@ -154,6 +155,7 @@ __all__ = [
     "PaddingWaste",
     "ParamFacts",
     "PeakRow",
+    "PrunedParamFacts",
     "RateCalibration",
     "RatioFact",
     "RooflineResult",
