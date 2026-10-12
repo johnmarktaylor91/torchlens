@@ -101,6 +101,14 @@ def _full_slice(entry: Any) -> bool:
     return isinstance(entry, slice) and entry == slice(None, None, None)
 
 
+def _is_token_read(entries: tuple[Any, ...]) -> bool:
+    """Return whether a subscript has the ``[:, p]`` / ``[:, p, :]`` shape."""
+
+    if len(entries) not in (2, 3) or not _full_slice(entries[0]):
+        return False
+    return len(entries) == 2 or _full_slice(entries[2])
+
+
 def _single_token_position(op: Any) -> int | None:
     """Return the sequence position a ``[:, p]`` / ``[:, p, :]`` read selects.
 
@@ -112,12 +120,8 @@ def _single_token_position(op: Any) -> int | None:
     if str(getattr(op, "func_name", "")) not in _INDEX_FUNCS:
         return None
     pos = list(getattr(op, "non_tensor_pos_args", ()) or ())
-    if len(pos) != 1 or not isinstance(pos[0], tuple):
-        return None
-    entries = pos[0]
-    if len(entries) not in (2, 3) or not _full_slice(entries[0]):
-        return None
-    if len(entries) == 3 and not _full_slice(entries[2]):
+    entries = pos[0] if len(pos) == 1 else None
+    if not isinstance(entries, tuple) or not _is_token_read(entries):
         return None
     position = entries[1]
     if not isinstance(position, int) or isinstance(position, bool) or position < 0:

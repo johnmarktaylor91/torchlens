@@ -387,7 +387,7 @@ def logit_lens(
         addresses = _resolve_layer_addresses(trace, facet=facet, layers=layers)
         lens_by_address = _user_lens_by_address(lens, addresses)
         if validate:
-            _check_user_lens(trace, lens, lens_by_address, head, rtol=rtol, atol=atol)
+            _check_user_lens(trace, lens, lens_by_address, head, (rtol, atol))
         lens_source, validated = "user", False
     else:
         if head is None:
@@ -402,7 +402,7 @@ def logit_lens(
         addresses = _resolve_layer_addresses(trace, facet=facet, layers=layers, tower=head.tower)
         default_lens = _build_head_lens(head)
         if validate:
-            _validate_lens(trace, head.view, default_lens, rtol=rtol, atol=atol, tower=head.tower)
+            _validate_lens(trace, head, default_lens, rtol=rtol, atol=atol)
         lens_by_address = dict.fromkeys(addresses, default_lens)
         lens_source, validated = head.kind, validate
     entries: list[LogitLensEntry] = []
@@ -486,7 +486,7 @@ def logit_lens_predictions(
         addresses = _resolve_layer_addresses(trace, facet=facet, layers=layers)
         lens_by_address = _user_lens_by_address(lens, addresses)
         if validate:
-            _check_user_lens(trace, lens, lens_by_address, head, rtol=rtol, atol=atol)
+            _check_user_lens(trace, lens, lens_by_address, head, (rtol, atol))
         lens_source, validated = "user", False
     else:
         if head is None:
@@ -501,7 +501,7 @@ def logit_lens_predictions(
         addresses = _resolve_layer_addresses(trace, facet=facet, layers=layers, tower=head.tower)
         default_lens = _build_head_lens(head)
         if validate:
-            _validate_lens(trace, head.view, default_lens, rtol=rtol, atol=atol, tower=head.tower)
+            _validate_lens(trace, head, default_lens, rtol=rtol, atol=atol)
         lens_by_address = dict.fromkeys(addresses, default_lens)
         lens_source, validated = head.kind, validate
     token_ids = tuple(int(token) for token in tokens) if tokens is not None else ()
@@ -944,13 +944,7 @@ def _last_block_address(trace: Any, tower: str | None) -> str | None:
 
 
 def _validate_lens(
-    trace: Any,
-    head_view: Any,
-    lens: LensFunc,
-    *,
-    rtol: float,
-    atol: float,
-    tower: str | None = None,
+    trace: Any, head: _DefaultHead, lens: LensFunc, *, rtol: float, atol: float
 ) -> None:
     """Validate a reconstructed lens against captured last-block -> logits data.
 
@@ -967,7 +961,7 @@ def _validate_lens(
     head validates against the last block of its own tower.
     """
 
-    captured = head_view.get("logits")
+    captured = head.view.get("logits")
     if captured is None:
         raise LogitLensError(
             "Cannot validate the reconstructed lens: the model's captured head "
@@ -975,7 +969,7 @@ def _validate_lens(
             "exhaustive save (or a save= predicate including the head output), or "
             "pass validate=False to trust the reconstruction without a numeric check."
         )
-    reference_address = _last_block_address(trace, tower)
+    reference_address = _last_block_address(trace, head.tower)
     if reference_address is None:
         raise LogitLensError(
             "Cannot validate the reconstructed lens: no module exposes a captured "
@@ -1003,6 +997,17 @@ def _validate_lens(
         )
 
 
+def _identity_records(lens: Any, lens_by_address: Mapping[str, LensFunc]) -> list[Any]:
+    """Return every ``model_identity`` attribute on the lens and its per-layer callables."""
+
+    owners = [lens] if callable(lens) else [lens, *lens_by_address.values()]
+    return [
+        getattr(owner, "model_identity")
+        for owner in owners
+        if getattr(owner, "model_identity", None) is not None
+    ]
+
+
 def _recorded_lens_identity(
     lens: Any, lens_by_address: Mapping[str, LensFunc]
 ) -> dict[str, Any] | None:
@@ -1012,19 +1017,8 @@ def _recorded_lens_identity(
     each per-layer callable; every record found must be the same.
     """
 
-    records: list[Any] = []
-    own = getattr(lens, "model_identity", None)
-    if own is not None:
-        records.append(own)
-    if not callable(lens):
-        for layer_lens in lens_by_address.values():
-            recorded = getattr(layer_lens, "model_identity", None)
-            if recorded is not None:
-                records.append(recorded)
-    if not records:
-        return None
     distinct: list[dict[str, Any]] = []
-    for record in records:
+    for record in _identity_records(lens, lens_by_address):
         if not isinstance(record, Mapping) or not isinstance(record.get("level"), str):
             raise LogitLensError(
                 "lens.model_identity must be a model-identity record (a mapping with a "
@@ -1042,7 +1036,7 @@ def _recorded_lens_identity(
             "rebuild the lens from one model, or pass validate=False to use it anyway.",
             code="logit_lens_identity_mismatch",
         )
-    return distinct[0]
+    return distinct[0] if distinct else None
 
 
 def _compare_lens_identity(trace: Any, record: Mapping[str, Any]) -> tuple[str, str]:
@@ -1096,11 +1090,12 @@ def _check_user_lens(
     lens: Any,
     lens_by_address: Mapping[str, LensFunc],
     head: _DefaultHead | None,
-    *,
-    rtol: float,
-    atol: float,
+    tolerance: tuple[float, float],
 ) -> None:
-    """Refuse a user lens built for another model; warn when it is unverified."""
+    """Refuse a user lens built for another model; warn when it is unverified.
+
+    ``tolerance`` is the ``(rtol, atol)`` pair of the caller's lens validation.
+    """
 
     record = _recorded_lens_identity(lens, lens_by_address)
     if record is None:
@@ -1118,7 +1113,7 @@ def _check_user_lens(
                 code="logit_lens_identity_mismatch",
             )
         reason = detail
-    disagreement = _last_layer_disagreement(trace, lens, lens_by_address, head, rtol, atol)
+    disagreement = _last_layer_disagreement(trace, lens, lens_by_address, head, tolerance)
     if disagreement is None:
         return
     warnings.warn(
@@ -1134,20 +1129,10 @@ def _check_user_lens(
     )
 
 
-def _last_layer_disagreement(
-    trace: Any,
-    lens: Any,
-    lens_by_address: Mapping[str, LensFunc],
-    head: _DefaultHead | None,
-    rtol: float,
-    atol: float,
-) -> str | None:
-    """Return why the lens's last-layer decode fails to agree, or ``None``.
-
-    The check is the default lens's validation run as a check: the lens applied
-    to the last block's captured ``resid_post`` must reproduce the model's
-    captured logits.
-    """
+def _last_layer_pair(
+    trace: Any, lens: Any, lens_by_address: Mapping[str, LensFunc], head: _DefaultHead | None
+) -> tuple[torch.Tensor, torch.Tensor, str] | str:
+    """Return ``(decoded, captured, address)`` for the agreement check, or why it cannot run."""
 
     captured = None if head is None else _read_final_logits(head.view)
     if captured is None:
@@ -1163,6 +1148,28 @@ def _last_layer_disagreement(
         decoded = layer_lens(hidden.detach())
     if not isinstance(decoded, torch.Tensor):
         return f"its last-layer decode returned {type(decoded).__name__}, not logits"
+    return decoded, captured, address
+
+
+def _last_layer_disagreement(
+    trace: Any,
+    lens: Any,
+    lens_by_address: Mapping[str, LensFunc],
+    head: _DefaultHead | None,
+    tolerance: tuple[float, float],
+) -> str | None:
+    """Return why the lens's last-layer decode fails to agree, or ``None``.
+
+    The check is the default lens's validation run as a check: the lens applied
+    to the last block's captured ``resid_post`` must reproduce the model's
+    captured logits.
+    """
+
+    pair = _last_layer_pair(trace, lens, lens_by_address, head)
+    if isinstance(pair, str):
+        return pair
+    decoded, captured, address = pair
+    rtol, atol = tolerance
     comparable = _align_to_captured_slice(decoded, captured)
     if comparable is None:
         return (
