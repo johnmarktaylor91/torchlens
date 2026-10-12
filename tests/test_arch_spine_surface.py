@@ -41,8 +41,8 @@ def test_root_budget_is_frozen() -> None:
     """The root-name list is a FROZEN BUDGET (memo s5 namespace rule)."""
 
     rows = surface_rows()
-    assert len(rows) == 151, (
-        f"root surface budget moved: {len(rows)} names (frozen budget 151: "
+    assert len(rows) == 172, (
+        f"root surface budget moved: {len(rows)} names (frozen budget 172: "
         "143 at the C01 freeze, -1 private `_trace` alias retired, +6 by "
         "the A10 facade -- summary/load_extraction into __all__ plus the four "
         "pre-existing lazy namespaces bridge/callbacks/neuro/notebook -- "
@@ -55,7 +55,11 @@ def test_root_budget_is_frozen() -> None:
         "tl.brainpipe (brainpipe memo s3 home, the memory-planned extraction "
         "planner; not in __all__, same class as tl.transforms) -- and -1 by "
         "the resample_ablate alias removal (scramble_elements lives in "
-        "torchlens.intervention). "
+        "torchlens.intervention) -- and +21 by batch-2 SEL (R2-32 with the UI "
+        "inventory's root-namespace finding): module rows for existing subpackages "
+        "that raised AttributeError at the root in a fresh process, so tl.<ns> "
+        "resolves the same way before and after a capture (namespaces, not new "
+        "root verbs; not in __all__). "
         "Root growth is a deliberate act: regenerate the table, justify the "
         "new name's layer, and update this pin in the same change."
     )
@@ -88,6 +92,11 @@ def test_no_new_l6_plus_root_names() -> None:
         "torchlens.callbacks",
         "torchlens.neuro",
         "torchlens.notebook",
+        # Batch-2 SEL (R2-32 + UI inventory): pre-existing L6+ subpackages given
+        # module rows so tl.<ns> resolves the same in a fresh process and after a
+        # capture -- namespaces, not new root verbs (the A10 precedent above).
+        "torchlens.semantic",
+        "torchlens.trackers",
     }
     live_legacy = {row.canonical_path for row in surface_rows() if row.legacy_top_level}
     new_legacy = live_legacy - grandfathered

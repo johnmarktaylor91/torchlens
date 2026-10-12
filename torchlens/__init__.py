@@ -88,6 +88,32 @@ _LAZY_ATTRS = {
     "callbacks": ("torchlens.callbacks", None),
     "neuro": ("torchlens.neuro", None),
     "notebook": ("torchlens.notebook", None),
+    # Batch-2 R2-32 + UI-inventory root namespaces: existing subpackages that
+    # raised AttributeError at the root in a fresh process (most of them even
+    # after a capture) get module rows, so `tl.<ns>` resolves identically in a
+    # fresh process and after a capture. Namespaces, not new root verbs; which
+    # packages belong at the root at all is the UI sprint's question.
+    "checks": ("torchlens.checks", None),
+    "conformance": ("torchlens.conformance", None),
+    "differential": ("torchlens.differential", None),
+    "ecosystem": ("torchlens.ecosystem", None),
+    "experiment": ("torchlens.experiment", None),
+    "features": ("torchlens.features", None),
+    "inventory": ("torchlens.inventory", None),
+    "kernel_telemetry": ("torchlens.kernel_telemetry", None),
+    "mechinterp": ("torchlens.mechinterp", None),
+    "observe": ("torchlens.observe", None),
+    "preprocessing": ("torchlens.preprocessing", None),
+    "quickstart": ("torchlens.quickstart", None),
+    "selection_compare": ("torchlens.selection_compare", None),
+    "selection_graph": ("torchlens.selection_graph", None),
+    "selection_subspace": ("torchlens.selection_subspace", None),
+    "selection_values": ("torchlens.selection_values", None),
+    "semantic": ("torchlens.semantic", None),
+    "snoop": ("torchlens.snoop", None),
+    "trace_slice": ("torchlens.trace_slice", None),
+    "trackers": ("torchlens.trackers", None),
+    "tviz": ("torchlens.tviz", None),
     "bwd_hook": ("torchlens.intervention", "bwd_hook"),
     "clamp": ("torchlens.intervention", "clamp"),
     "compat": ("torchlens.compat", None),
@@ -428,8 +454,14 @@ def _out_from_log(trace: Trace, layer: str) -> _torch.Tensor:
         If the layer cannot be resolved or has no saved out.
     """
 
+    from ._errors import AmbiguousOpLookupError
+    from ._trace_selector_helpers import canonical_module_site_key
+
     try:
-        layer_log = trace[layer]
+        layer_log = trace[canonical_module_site_key(trace, layer) or layer]
+    except AmbiguousOpLookupError:
+        # An ambiguity names its candidates; a "not found" would hide them.
+        raise
     except (KeyError, ValueError) as exc:
         suggestions = trace.find_layers(layer) if hasattr(trace, "find_layers") else []
         raise ValueError(_did_you_mean_message(layer, suggestions)) from exc
@@ -479,9 +511,15 @@ def _matching_saved_layer_labels(trace: Trace, pattern: str) -> list[str]:
         Matching no-pass layer labels in execution order.
     """
 
+    from ._errors import AmbiguousOpLookupError
+    from ._trace_selector_helpers import canonical_module_site_key
+
     if pattern in trace.layer_dict_all_keys:
         return [pattern]
     if pattern in trace.layer_logs:
+        return [pattern]
+    if canonical_module_site_key(trace, pattern) is not None:
+        # A wrapper-relative or dot-flattened module name keys by the caller's spelling.
         return [pattern]
     lower_pattern = pattern.lower()
     matches = [
@@ -493,6 +531,8 @@ def _matching_saved_layer_labels(trace: Trace, pattern: str) -> list[str]:
         return matches
     try:
         resolved = trace[pattern]
+    except AmbiguousOpLookupError:
+        raise
     except (KeyError, ValueError):
         return []
     label = getattr(resolved, "layer_label", pattern)
@@ -512,8 +552,10 @@ def pluck(model: _nn.Module, x: _Any, layer: str, stop_after: _Any | None = None
         Layer label, module path, pass-qualified label, or unique substring.
         Resolves strictly to one result; ambiguous lookups raise ``ValueError``.
     stop_after:
-        Experimental stop-early site. Currently validated for ``pluck`` and
-        captured via the normal safe full-forward path.
+        Stop-early site, passed to the capture as
+        ``CaptureOptions(stop_after=...)``: the forward halts inclusively after
+        the site, and an unsupported spelling refuses typed. ``None`` reads the
+        ambient ``tl.experimental.stop_after`` site, if one is active.
 
     Returns
     -------
@@ -526,15 +568,16 @@ def pluck(model: _nn.Module, x: _Any, layer: str, stop_after: _Any | None = None
         If ``layer`` does not resolve or did not produce a saved tensor.
     """
 
-    from .experimental import _active_stop_after_site
     from .options import CaptureOptions
 
-    _ = stop_after if stop_after is not None else _active_stop_after_site()
-    trace = _resolve_top_level("trace")(
-        model,
-        x,
-        capture=CaptureOptions(layers_to_save=[layer]),
+    # U15.1: an explicit site rides the capture options, where the trace
+    # validates it; without one the trace reads the ambient site itself.
+    capture = (
+        CaptureOptions(layers_to_save=[layer])
+        if stop_after is None
+        else CaptureOptions(layers_to_save=[layer], stop_after=stop_after)
     )
+    trace = _resolve_top_level("trace")(model, x, capture=capture)
     return _out_from_log(trace, layer)
 
 
@@ -566,6 +609,7 @@ def _extract_layers_with_trace(
         If a lookup does not resolve or did not produce a saved tensor.
     """
 
+    from ._trace_selector_helpers import canonical_module_site_key
     from .options import CaptureOptions as _LazyCaptureOptions
 
     layer_plan = _normalize_extract_layers(layers)
@@ -581,7 +625,7 @@ def _extract_layers_with_trace(
     if isinstance(layers, _Mapping):
         for label, pattern in layer_plan.items():
             outputs[label] = _out_from_log(trace, pattern)
-            views[label] = trace[pattern]
+            views[label] = trace[canonical_module_site_key(trace, pattern) or pattern]
         return trace, outputs, views
 
     for pattern in layer_plan.values():
