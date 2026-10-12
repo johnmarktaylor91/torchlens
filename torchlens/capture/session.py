@@ -643,14 +643,20 @@ class CaptureSession:
                     getattr(trace, "activation_transform", None),
                 )
             if detached_spills:
+                from ..errors import TorchLensWarning
+
                 warnings.warn(
-                    f"{detached_spills} saved activation(s) were spilled to temporary disk "
-                    "under the deferred-selector escrow RAM budget, so those saved "
-                    "outs come back detached from the autograd graph although "
-                    "detach_saved_activations=False. Save fewer sites, use a live spelling "
-                    "(tl.in_module(...), tl.func(...)), or pass backward_ready=True to keep them "
-                    "attached.",
-                    RuntimeWarning,
+                    TorchLensWarning(
+                        f"{detached_spills} saved activation(s) were spilled to temporary "
+                        "disk under the deferred-selector escrow RAM budget, so they come "
+                        "back detached from the autograd graph although "
+                        "detach_saved_activations=False. Remedy: save fewer sites, use a "
+                        "live spelling (tl.in_module(...), tl.func(...)) or "
+                        "backward_ready=True to keep them attached, or pass "
+                        "detach_saved_activations=True when gradients are not needed.",
+                        code="escrow_spill_detached",
+                        detached_spill_count=detached_spills,
+                    ),
                     stacklevel=3,
                 )
             from ..postprocess import _refresh_fast_saved_summary
