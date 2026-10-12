@@ -24,7 +24,6 @@ Key functions:
 """
 
 import contextlib
-import dataclasses
 import random
 import sys
 import time
@@ -68,12 +67,7 @@ from .session import (
     attach_legacy_capture_session,
     detach_capture_session,
 )
-from .stop import (
-    StopDirective,
-    evaluate_halt_stop,
-    implied_inference_only_contradicted,
-    stop_directive_for_trace,
-)
+from .stop import StopDirective, cleared_inference_only_directive, evaluate_halt_stop
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
@@ -2031,14 +2025,10 @@ def run_and_log_inputs_through_model(
                 kind=swallowed_stop.kind,
                 boundary_label=swallowed_stop.boundary_label,
             )
-        # AGT-2132: an implied inference_only (no_grad at entry) stands only
-        # while the forward really discarded its graph; enable_grad inside the
-        # forward keeps it, so backward stays available. Before settlement,
-        # which stamps the flag on the outcome.
-        stop_directive = stop_directive_for_trace(self)
-        if self.inference_only and implied_inference_only_contradicted(stop_directive, outputs):
-            self.inference_only = False
-            self._stop_directive = dataclasses.replace(stop_directive, inference_only=False)
+        # AGT-2132: an implied inference_only holds only if the forward discarded its graph.
+        cleared = cleared_inference_only_directive(self._stop_directive, outputs)
+        if cleared is not None:  # before settlement stamps the flag on the outcome
+            self.inference_only, self._stop_directive = False, cleared
         set_capture_phase(self, CapturePhase.FINALIZE)
         from ..data_classes._nonfinite import drain_pending_nonfinite
         from ..utils.tensor_utils import synchronize_pending_cpu_async_copies
