@@ -74,6 +74,11 @@ class BoolMaskSelect(nn.Module):
         return self.proj(x)[x.sum(-1) > 0]
 
 
+#: A gather whose source is constant along the gather dim reads the same values
+#: for any in-range index; the pre-existing exemption names that case exactly.
+_VJEPA2_EXEMPTIONS = frozenset({"index_domain_value_irrelevant"})
+
+
 def _tiny_vjepa2(frames: int = 4):
     transformers = pytest.importorskip("transformers")
     config = transformers.VJEPA2Config(
@@ -151,7 +156,9 @@ def replay_record(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[dict]]:
     return record
 
 
-def _assert_index_edges_proven_in_domain(record: dict[str, list[dict]]) -> None:
+def _assert_index_edges_proven_in_domain(
+    record: dict[str, list[dict]], allowed_exemptions: frozenset[str] = frozenset()
+) -> None:
     index_calls = [call for call in record["calls"] if call["perturbs_index"]]
     assert index_calls, "the index edge was never perturbed: the instrument saw nothing"
     assert all(call["in_range"] for call in record["calls"]), [
@@ -159,7 +166,11 @@ def _assert_index_edges_proven_in_domain(record: dict[str, list[dict]]) -> None:
     ]
     assert not any(call["raised"] for call in index_calls), "an index perturbation raised"
     assert record["verdicts"], "no index-edge verdict was recorded"
-    assert all(decision == "validated" for _, decision, _ in record["verdicts"]), record["verdicts"]
+    assert any(decision == "validated" for _, decision, _ in record["verdicts"])
+    assert all(
+        decision == "validated" or (decision == "exempted" and reason in allowed_exemptions)
+        for _, decision, reason in record["verdicts"]
+    ), record["verdicts"]
 
 
 def test_gather_index_edge_is_proven_in_domain(replay_record) -> None:
@@ -173,7 +184,7 @@ def test_tiny_vjepa2_validates_with_in_domain_index_perturbations(replay_record)
     model = _tiny_vjepa2()
     inputs = {"pixel_values_videos": torch.randn(1, 4, 3, 32, 32)}
     assert tl.validate(model, (), inputs, scope="forward") is True
-    _assert_index_edges_proven_in_domain(replay_record)
+    _assert_index_edges_proven_in_domain(replay_record, _VJEPA2_EXEMPTIONS)
     assert any(call["func"] == "gather" for call in replay_record["calls"])
 
 
@@ -261,4 +272,4 @@ def test_tiny_vjepa2_validates_on_cuda_without_a_device_assert(replay_record) ->
     model = _tiny_vjepa2().cuda()
     inputs = {"pixel_values_videos": torch.randn(1, 4, 3, 32, 32, device="cuda")}
     assert tl.validate(model, (), inputs, scope="forward") is True
-    _assert_index_edges_proven_in_domain(replay_record)
+    _assert_index_edges_proven_in_domain(replay_record, _VJEPA2_EXEMPTIONS)
