@@ -250,9 +250,10 @@ def test_summary_callback_restores_modes_and_rng_exactly() -> None:
     model.backbone.eval()
     before = {name: module.training for name, module in model.named_modules()}
     running_mean = model.backbone[1].running_mean.clone()
+    batch = torch.randn(4, 4)  # drawn before the snapshot: only the callback may move it
     rng_before = torch.random.get_rng_state()
 
-    callback.on_train_batch_start(_SummaryTrainer(), model, torch.randn(4, 4), 0)
+    callback.on_train_batch_start(_SummaryTrainer(), model, batch, 0)
 
     assert {name: module.training for name, module in model.named_modules()} == before
     assert torch.equal(model.backbone[1].running_mean, running_mean)
