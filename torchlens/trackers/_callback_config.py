@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field, replace
-from typing import Any
+from typing import Any, NoReturn
 
 from ._errors import WatchConfigError
 from ._watch import SIGNALS
@@ -89,10 +89,10 @@ def _raw(name: str) -> str | None:
     return raw.strip()
 
 
-def _refuse(name: str, raw: str, expected: str) -> WatchConfigError:
-    """The typed refusal for a malformed configuration variable."""
+def _refuse(name: str, raw: str, expected: str) -> NoReturn:
+    """Refuse a malformed configuration variable, typed and naming it."""
 
-    return WatchConfigError(
+    raise WatchConfigError(
         f"{name}={raw!r} is not {expected}. A malformed configuration variable "
         "refuses rather than silently falling back to a default.",
         code="watch_env_config_invalid",
@@ -110,7 +110,7 @@ def _env_list(name: str) -> tuple[str, ...] | None:
         return None
     items = tuple(item.strip() for item in raw.split(",") if item.strip())
     if not items:
-        raise _refuse(name, raw, "a nonempty comma-separated list")
+        _refuse(name, raw, "a nonempty comma-separated list")
     return items
 
 
@@ -125,10 +125,10 @@ def _env_positive_int(name: str, *, allow_none: bool) -> tuple[bool, int | None]
     expected = "a positive integer" + (" or 'none'" if allow_none else "")
     try:
         value = int(raw)
-    except ValueError as exc:
-        raise _refuse(name, raw, expected) from exc
+    except ValueError:
+        _refuse(name, raw, expected)
     if value < 1:
-        raise _refuse(name, raw, expected)
+        _refuse(name, raw, expected)
     return (True, value)
 
 
@@ -137,7 +137,7 @@ def _env_signals() -> tuple[str, ...] | None:
 
     signals = _env_list(WATCH_SIGNALS_ENV)
     if signals is not None and any(signal not in SIGNALS for signal in signals):
-        raise _refuse(WATCH_SIGNALS_ENV, ",".join(signals), f"a comma list from {SIGNALS}")
+        _refuse(WATCH_SIGNALS_ENV, ",".join(signals), f"a comma list from {SIGNALS}")
     return signals
 
 

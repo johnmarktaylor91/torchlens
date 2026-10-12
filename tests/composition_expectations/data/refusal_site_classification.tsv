@@ -193,6 +193,7 @@ torchlens.observability._chassis:ObserverEvent.__post_init__:ObserverEventError:
 torchlens.observability._chassis:ObserverEvent.__post_init__:ObserverEventError::5	CONTRACTED	observer_event_invalid	new C06 observability-substrate site contracted in its own change: typed teaching refusal with contract-doc row (lane C06)
 torchlens.observability._chassis:ObserverEvent.__post_init__:ObserverEventError::6	CONTRACTED	observer_event_invalid	new C06 observability-substrate site contracted in its own change: typed teaching refusal with contract-doc row (lane C06)
 torchlens.observability._chassis:ObserverEvent.__post_init__:ObserverEventError::7	CONTRACTED	observer_event_invalid	new C06 observability-substrate site contracted in its own change: typed teaching refusal with contract-doc row (lane C06)
+torchlens.observability._collector:HistoryCollector._admit_artifact_bytes:HistoryArtifactError::1	CONTRACTED	history_artifact_budget_exceeded	D22 artifact byte budget refused before the block that would cross it (explorer sign-off 5); contract-doc row in the same change
 torchlens.observability._collector:HistoryCollector.__init__:WatchPlanError::1	CONTRACTED	watch_plan_invalid	new C06 observability-substrate site contracted in its own change: typed teaching refusal with contract-doc row (lane C06)
 torchlens.observability._collector:HistoryCollector._normalize_cadence:WatchPlanError::1	CONTRACTED	watch_plan_invalid	new C06 observability-substrate site contracted in its own change: typed teaching refusal with contract-doc row (lane C06)
 torchlens.observability._collector:HistoryCollector.attach:WatchLifecycleError::1	CONTRACTED	watch_lifecycle_invalid	new C06 observability-substrate site contracted in its own change: typed teaching refusal with contract-doc row (lane C06)
@@ -1053,6 +1054,7 @@ torchlens.trackers._watch:_validate_signals:WatchConfigError::1	CONTRACTED	watch
 torchlens.trackers._watch:_validate_signals:WatchConfigError::2	CONTRACTED	watch_tier_unavailable	coded + contract row; activation_grads awaits the F24 seam
 torchlens.trackers._watch:_validate_signals:WatchConfigError::3	CONTRACTED	watch_signals_invalid	coded + contract row; NO default activation selector (measured basis)
 torchlens.trackers._watch:_validate_signals:WatchConfigError::4	CONTRACTED	watch_signals_invalid	coded + contract row; activations need example_input= for attach-time discovery
+torchlens.trackers._callback_config:_refuse:WatchConfigError::1	CONTRACTED	watch_env_config_invalid	coded + contract row; a malformed TORCHLENS_WATCH_* configuration variable refuses naming it (U34.2)
 torchlens.trackers._op_grain:refuse_without_consent:WatchConfigError::1	CONTRACTED	watch_forward_wrap_consent_required	coded + contract row; op grain needs explicit consent to the disclosed forward wrap (U34.1)
 torchlens.trackers._op_grain:validate_grain_request:WatchConfigError::1	CONTRACTED	watch_grain_invalid	coded + contract row; closed grain vocabulary (None or 'op')
 torchlens.trackers._op_grain:validate_grain_request:WatchConfigError::2	CONTRACTED	watch_signals_invalid	coded + contract row; facets=/allow_forward_wrap= without grain='op' would be silently ignored
