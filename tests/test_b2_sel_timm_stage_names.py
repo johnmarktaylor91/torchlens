@@ -44,7 +44,7 @@ def _until_outcome(trace: tl.Trace, x: torch.Tensor, site: str) -> tuple:
 
     try:
         truncation = trace.run(inputs=x, until=site).report.truncation
-    except Exception as exc:  # noqa: BLE001 -- the outcome under comparison
+    except (RuntimeError, TypeError, ValueError) as exc:  # the outcome under comparison
         return ("refused", type(exc).__name__, getattr(exc, "fields", {}).get("code"))
     if truncation is None:
         return ("full run",)

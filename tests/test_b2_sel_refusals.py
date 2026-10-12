@@ -193,7 +193,7 @@ def test_unscoped_head_reports_the_sites_it_writes() -> None:
     edited.run(model, ids)
     written = sum(
         bool(torch.count_nonzero(after) == 0 and torch.count_nonzero(before) > 0)
-        for before, after in zip(_head_slices(clean, 5), _head_slices(edited, 5))
+        for before, after in zip(_head_slices(clean, 5), _head_slices(edited, 5), strict=True)
     )
     assert reported == written == 36
     scoped = clean.fork("scoped")

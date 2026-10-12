@@ -182,11 +182,7 @@ def _flattened_stage_name(item: Any, addresses: list[str]) -> Any:
 
     if not isinstance(item, str) or "." not in item:
         return item
-    base, separator, call_index = item.rpartition(":")
-    if not (separator and call_index.isdigit()):
-        base, call_suffix = item, ""
-    else:
-        call_suffix = f":{call_index}"
+    base, call_suffix = _split_call_suffix(item)
     if any(base in address for address in addresses):
         return item
     flattened = base.replace(".", "_")
@@ -774,22 +770,43 @@ def canonical_module_site_key(trace: Any, name: object) -> str | None:
         lists every candidate address.
     """
 
-    from ._errors import AmbiguousOpLookupError
-
     if not isinstance(name, str) or not name or name.startswith("."):
         return None
     keys = getattr(trace, "layer_dict_all_keys", None) or {}
     ambiguous = getattr(trace, "_ambiguous_lookup_keys", None) or {}
     if name in keys or name in ambiguous:
         return None
-    base, separator, call_index = name.rpartition(":")
-    if not (separator and call_index.isdigit()):
-        base, call_suffix = name, ""
-    else:
-        call_suffix = f":{call_index}"
+    base, call_suffix = _split_call_suffix(name)
     addresses = _trace_module_addresses(trace)
     if not addresses or base in addresses:
         return None
+    address = _unique_module_for_name(name, base, addresses)
+    if address is None:
+        return None
+    key = f"{address}{call_suffix}"
+    return key if key in keys or key in ambiguous else None
+
+
+def _split_call_suffix(name: str) -> tuple[str, str]:
+    """Split ``"address:3"`` into ``("address", ":3")``; other names keep an empty suffix."""
+
+    base, separator, call_index = name.rpartition(":")
+    if separator and call_index.isdigit():
+        return base, f":{call_index}"
+    return name, ""
+
+
+def _unique_module_for_name(name: str, base: str, addresses: list[str]) -> str | None:
+    """Return the one module address a relative or dot-flattened ``base`` names.
+
+    Raises
+    ------
+    AmbiguousOpLookupError
+        When ``base`` ends more than one module address.
+    """
+
+    from ._errors import AmbiguousOpLookupError
+
     candidates = [address for address in addresses if address.endswith(f".{base}")]
     flattened = base.replace(".", "_")
     if not candidates and flattened != base and flattened in addresses:
@@ -801,7 +818,4 @@ def canonical_module_site_key(trace: Any, name: object) -> str | None:
             f"Module name {name!r} ends {len(candidates)} module addresses: {listed}{more}. "
             "Use the full module address."
         )
-    if not candidates:
-        return None
-    key = f"{candidates[0]}{call_suffix}"
-    return key if key in keys or key in ambiguous else None
+    return candidates[0] if candidates else None

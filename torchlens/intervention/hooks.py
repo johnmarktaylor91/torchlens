@@ -687,8 +687,7 @@ def expand_facet_hook_entries(
             home_label = _facet_home_label(spec)
             _check_facet_write_conflicts(claimed, home_label=home_label, mask=mask)
             claimed.append((home_label, mask, facet_name))
-            home = getattr(spec, "home", None)
-            written.append((str(getattr(home, "layer_label", None) or home_label), facet_name))
+            written.append((home_label, facet_name))
             metadata = {
                 **entry.metadata,
                 "facet_write": True,
@@ -736,7 +735,7 @@ def _warn_facet_fanout(log: Any, selector: FacetSelector, written: list[tuple[st
 
     from .errors import MultiMatchWarning
 
-    homes = list(dict.fromkeys(home for home, _ in written))
+    homes = list(dict.fromkeys(_display_label(log, home) for home, _ in written))
     facet_names = ", ".join(dict.fromkeys(name for _, name in written))
     shown = ", ".join(homes[:4]) + (f" and {len(homes) - 4} more" if len(homes) > 4 else "")
     scope = _facet_owner_address(log, selector, homes[0], written[0][1])
@@ -752,6 +751,15 @@ def _warn_facet_fanout(log: Any, selector: FacetSelector, written: list[tuple[st
         ),
         stacklevel=4,
     )
+
+
+def _display_label(log: Any, home_label: str) -> str:
+    """Return the final layer label behind a raw home-op hook label, for messages."""
+
+    try:
+        return str(log[home_label].layer_label)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return home_label
 
 
 def _facet_owner_address(log: Any, selector: FacetSelector, home_label: str, facet: str) -> Any:

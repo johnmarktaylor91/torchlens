@@ -864,7 +864,8 @@ def _owning_module_class_name(record: Any) -> str:
 
     try:
         owner = getattr(record, "module", None)
-    except Exception:  # noqa: BLE001 -- a refusal message must not raise a second error
+    except (KeyError, RuntimeError, TypeError, ValueError):
+        # A refusal message must not raise a second error.
         owner = None
     owner_class = getattr(owner, "class_name", None) if not isinstance(owner, str) else None
     return str(owner_class) if owner_class else type(record).__name__

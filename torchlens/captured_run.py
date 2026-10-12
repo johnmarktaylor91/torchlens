@@ -265,10 +265,9 @@ class CapturedRun:
         ctx = getattr(activation, "ctx", None)
         if ctx is not None:
             return getattr(ctx, "address", None)
-        if getattr(activation, "is_buffer", False):
-            buffer_address = getattr(activation, "address", None)
-            if isinstance(buffer_address, str):
-                return buffer_address
+        buffer_address = getattr(activation, "address", None)
+        if getattr(activation, "is_buffer", False) and isinstance(buffer_address, str):
+            return buffer_address
         module = getattr(activation, "module", None)
         if not isinstance(module, str):
             return None
