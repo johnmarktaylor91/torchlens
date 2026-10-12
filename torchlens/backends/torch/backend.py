@@ -1499,7 +1499,7 @@ def output_attribution_remedy(trace: Any) -> str:
         The remedy sentence.
     """
 
-    model_ref = getattr(trace, "_source_model_ref", None)
+    model_ref = trace._source_model_ref  # noqa: SLF001 -- declared Trace field (live capture)
     model = model_ref() if model_ref is not None else None
     if isinstance(model, torch.fx.GraphModule):
         return (
