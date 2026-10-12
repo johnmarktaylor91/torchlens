@@ -184,7 +184,8 @@ record per retained autograd object, resolved order chains, label grammar, and c
 
 The module-output check never compares the root module call, because its output gradient is the
 loss gradient itself. A model whose forward calls no child module therefore has no module-output
-gradient to compare. Validation then returns `False` with a `RuntimeWarning` saying so: the check
+gradient to compare. Validation then returns `False` with a `TorchLensWarning` (code
+`backward_validation_no_module_output_evidence`) saying so: the check
 has no detection power, so the result is unverifiable rather than passed.
 `validate_layer_grads=False` checks parameter gradients alone.
 

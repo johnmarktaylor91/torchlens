@@ -19,6 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.errors import TorchLensWarning
 
 
 class _RootOnly(nn.Module):
@@ -104,9 +105,15 @@ def test_root_only_model_backward_verdict_is_disclosed_unverifiable() -> None:
     """No eligible module output: still ``False``, now with the reason."""
 
     torch.manual_seed(0)
-    with pytest.warns(RuntimeWarning, match="no module-output gradient to compare"):
+    with pytest.warns(TorchLensWarning, match="no module-output gradient to compare") as record:
         verdict = tl.validate(_RootOnly(), torch.randn(4, requires_grad=True), scope="backward")
     assert verdict is False
+    codes = [
+        getattr(entry.message, "fields", {}).get("code")
+        for entry in record
+        if isinstance(entry.message, TorchLensWarning)
+    ]
+    assert "backward_validation_no_module_output_evidence" in codes
 
 
 def test_root_only_model_parameter_gradients_alone_validate() -> None:

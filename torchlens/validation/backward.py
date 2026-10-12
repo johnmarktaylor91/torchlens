@@ -524,14 +524,17 @@ def _warn_if_no_module_output_evidence(layer_report: LayerGradReport) -> None:
     if layer_report.covered_count or any(failure_counts):
         return
     warnings.warn(
-        "validate_backward_pass found no module-output gradient to compare: "
-        f"all {len(layer_report.coverage)} module call(s) are proven exclusions "
-        "(the root module call always is), so the module-output gradient check "
-        "has zero detection power and the backward capture is unverifiable "
-        "rather than passed. A model whose forward calls no child module has "
-        "no such evidence; validate_layer_grads=False checks parameter "
-        "gradients alone.",
-        RuntimeWarning,
+        TorchLensWarning(
+            "validate_backward_pass found no module-output gradient to compare: "
+            f"all {len(layer_report.coverage)} module call(s) are proven exclusions "
+            "(the root module call always is), so the module-output gradient check "
+            "has zero detection power and the backward capture is unverifiable "
+            "rather than passed; returning False. A model whose forward calls no "
+            "child module has no such evidence. Remedy: pass "
+            "validate_layer_grads=False to check parameter gradients alone",
+            code="backward_validation_no_module_output_evidence",
+            excluded_module_calls=len(layer_report.coverage),
+        ),
         stacklevel=3,
     )
 
@@ -585,7 +588,8 @@ def validate_backward_pass(
         parameter-only validation path as an explicit opt-out. The root
         module call is never compared, so a model whose forward calls no child
         module has no module-output gradient to compare and returns False with
-        a ``RuntimeWarning``.
+        a coded ``TorchLensWarning``
+        (``backward_validation_no_module_output_evidence``).
     layer_grad_atol:
         Optional absolute tolerance for per-module-output gradients. ``None``
         derives per gradient dtype via

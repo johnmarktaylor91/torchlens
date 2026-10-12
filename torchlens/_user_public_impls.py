@@ -1825,7 +1825,8 @@ def validate_backward_pass(
     validate_layer_grads:
         If True (default), also validate captured per-module-output gradients.
         The root module call is never compared, so a model whose forward calls
-        no child module returns False with a ``RuntimeWarning``.
+        no child module returns False with a coded ``TorchLensWarning``
+        (``backward_validation_no_module_output_evidence``).
     layer_grad_atol:
         Optional layer-gradient absolute tolerance.
     layer_grad_rtol:
