@@ -66,7 +66,13 @@ class SummaryRow:
 
 @dataclass(frozen=True)
 class SummaryTotals:
-    """Headline totals read from FactCore (never re-summed here)."""
+    """Headline totals read from FactCore (never re-summed here).
+
+    ``params_bytes`` is the unique parameters' storage; ``params_effective``
+    is set only on a pruned model (raw total minus mask zeros);
+    ``optimizer_state_*`` are set only when the capture was given an
+    optimizer, read from its live state at summary time.
+    """
 
     params_total: int | None
     params_per_path_total: int | None
@@ -79,6 +85,10 @@ class SummaryTotals:
     at_capture_bytes: int
     retained_now_bytes: int
     compute_coverage: dict[str, int]
+    params_bytes: int | None = None
+    params_effective: int | None = None
+    optimizer_state_params: int | None = None
+    optimizer_state_bytes: int | None = None
 
 
 @dataclass(frozen=True)
@@ -414,9 +424,12 @@ def build_summary_data(
 
     from ._factcore import factcore
     from ._health import health_facts
+    from ._summary_columns import optimizer_state_facts
 
     core = factcore(trace)
     facts = health_facts(trace)
+    pruned = core.params.pruned
+    optimizer = optimizer_state_facts(trace)
     totals = SummaryTotals(
         params_total=core.params.total,
         params_per_path_total=core.params.per_path_total,
@@ -434,6 +447,14 @@ def build_summary_data(
             "not_applicable": core.compute.coverage.not_applicable,
             "unknown": core.compute.coverage.unknown,
         },
+        params_bytes=core.params.bytes,
+        params_effective=(
+            core.params.total - pruned.masked
+            if pruned is not None and pruned.masked is not None and core.params.total is not None
+            else None
+        ),
+        optimizer_state_params=optimizer.state_params if optimizer is not None else None,
+        optimizer_state_bytes=optimizer.state_bytes if optimizer is not None else None,
     )
     outcome = getattr(trace, "outcome", None)
     capture = CaptureFacts(

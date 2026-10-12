@@ -272,15 +272,10 @@ KNOWN_RED: tuple[KnownRed, ...] = (
     # engine no longer re-applies a boundary output node's recorded MODEL-output
     # container path to the replayed call's already-resolved output. The axes
     # test flipped to assert the edit lands correctly through the container.
-    KnownRed(
-        red_id="kwargs-only-plain-module",
-        owner="fix bundle (A04/A05 kwarg transport)",
-        exception_type="TypeError",
-        message_substring="got multiple values for argument",
-        notes="tl.trace(model, (), {name: tensor}) on a plain nn.Module passes the"
-        " kwarg twice; HF classes escape it. Loud today, but the loud/silent"
-        " asymmetry is the memo's kwarg-shadowing defect class",
-    ),
+    # kwargs-only-plain-module was fixed 2026-10-11 (walk U02.2): an empty
+    # positional tuple on a single-parameter forward is no longer wrapped into
+    # [[]], so tl.trace(model, (), {name: tensor}) reaches forward(name=...)
+    # once. The axes test asserts traced == direct output.
 )
 
 KNOWN_RED_BY_ID = {row.red_id: row for row in KNOWN_RED}

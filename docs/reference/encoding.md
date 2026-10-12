@@ -75,6 +75,12 @@ unrolled per-pass nodes carry no summary row. The `node_label_fields`
 selector token `"shape_summary"` adds the row to explicit field pickers
 (skipped when the field is unset).
 
+The `"dtype"` selector token (DOCUMENTED-UNSTABLE) adds the node's output
+dtype as one row, framework namespace dropped (`"float16"`), for reading where
+a mixed-precision graph changes dtype:
+`trace.draw(node_label_fields=["name", "shape", "dtype"])`. Nodes without a
+dtype contribute no row.
+
 ## Saved-for-backward annotation (opt-in)
 
 `draw(show_saved_for_backward=True)` (DOCUMENTED-UNSTABLE spelling) makes autograd's

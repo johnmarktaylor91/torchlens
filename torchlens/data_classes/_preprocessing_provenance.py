@@ -82,6 +82,19 @@ def stamp_user_transform_provenance(trace: Trace, input_transform: Callable[...,
         return
     from .trace import ResolvedPreprocessing, _scrubbed_transform_repr
 
+    # A TorchLens-minted transform (the ImageNet-default opt-in) carries its
+    # own record; stamp a copy so the capture names the recipe, not a guess.
+    minted = getattr(input_transform, "_tl_preprocessing_record", None)
+    if isinstance(minted, ResolvedPreprocessing):
+        trace.input_preprocessor = ResolvedPreprocessing(
+            source=minted.source,
+            identifier=minted.identifier,
+            verified=minted.verified,
+            config=dict(minted.config),
+            description=minted.description,
+        )
+        return
+
     transform_repr = _scrubbed_transform_repr(input_transform) or "<transform>"
     trace.input_preprocessor = ResolvedPreprocessing(
         source="user_transform",

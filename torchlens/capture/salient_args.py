@@ -114,6 +114,13 @@ def _conv(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
     """Return salient convolution channel, kernel, and layout parameters."""
 
     result: SalientArgs = {}
+    weight = named.get("weight")
+    if isinstance(weight, torch.Tensor):
+        # Read the weight argument itself: a computed weight (prune's
+        # weight_orig * weight_mask, a functional conv over a plain tensor)
+        # is not a parent parameter, and the bias then sits first in
+        # ``param_shapes``.
+        param_shapes = [tuple(int(dim) for dim in weight.shape)]
     if len(param_shapes) >= 1:
         w = param_shapes[0]
         if len(w) >= 2:
