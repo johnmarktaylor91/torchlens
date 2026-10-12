@@ -33,6 +33,7 @@ from ._fast_live_steer import (
 from ._fast_live_until import (
     FastUntilReached,
     function_prefix_count,
+    rearm_cleared_sites,
     resolve_fast_until,
     truncate_after,
 )
@@ -1036,6 +1037,7 @@ class _FastLiveSession:
         )
         self.module_call_counts: dict[str, int] = {}
         self.stop_at: tuple[str, int] | None = None
+        self.cleared_by_until: tuple[str, ...] = ()
         boundary_layer_labels = set(getattr(trace, "input_layers", ())) | set(
             getattr(trace, "output_layers", ())
         )
@@ -1396,6 +1398,8 @@ class _FastLiveSession:
                 provider=RunProvider.LIVE,
             )
         input_args, input_kwargs, input_size_changed = self._admit_inputs(inputs)
+        rearm_cleared_sites(self.trace, self.cleared_by_until)
+        self.cleared_by_until = ()
         self.stop_at = (
             None
             if until is None
@@ -1495,7 +1499,8 @@ class _FastLiveSession:
                 )
             )
         self._refresh_boundary_payloads(input_args, input_kwargs, None, inputs_only=True)
-        return truncate_after(self.trace, stop_plan, until)
+        truncation, self.cleared_by_until = truncate_after(self.trace, stop_plan, until)
+        return truncation
 
     def _finalize_run(self, output: Any, *, seed: int | None, truncation: Any) -> RunResult:
         """Settle one fast run's report through the shared provider finalizer."""

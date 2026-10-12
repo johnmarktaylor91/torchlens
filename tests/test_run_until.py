@@ -369,14 +369,15 @@ def test_until_fast_matrix_live_runs_loaded_refuses(tmp_path: Path):
 
     model = _Chain()
     log = tl.trace(model, torch.randn(2, 4))
+    path = tmp_path / "fast_until.tlspec"
+    tl.save(log, str(path), level="runnable", include_weights=True)
     relu_label = _type_label(log, "relu")
     result = log.run(inputs=torch.randn(2, 4), fast=True, until=relu_label)
     assert result.report.truncated is True
     assert result.report.stopped_at == relu_label
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert result.output is None
 
-    path = tmp_path / "fast_until.tlspec"
-    tl.save(log, str(path), level="runnable", include_weights=True)
     loaded = tl.load(str(path))
     with pytest.raises(ValueError) as exc_info:
         loaded.run(inputs=torch.randn(2, 4), fast=True, until=_type_label(loaded, "relu"))

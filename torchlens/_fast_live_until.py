@@ -6,8 +6,8 @@ far as ``site``: the collection hook of the stop site raises
 forward there, so nothing downstream executes. Every saved site before the stop
 keeps the fast path's per-call path, shape and dtype guards and comes back
 graph-connected under the default save; the sites after it, and the model
-output, read ``None`` for that run (they did not run), and the report carries a
-``RunTruncation``.
+output, are unsaved for that run (they did not run; the next run re-arms them),
+and the report carries a ``RunTruncation``.
 """
 
 from __future__ import annotations
@@ -20,7 +20,13 @@ from ._fast_live_plans import _FastOutputPlan
 from .errors import RunCapabilityUnavailableError
 from .runnable import RunnableErrorCode, RunTruncation
 
-__all__ = ["FastUntilReached", "function_prefix_count", "resolve_fast_until", "truncate_after"]
+__all__ = [
+    "FastUntilReached",
+    "function_prefix_count",
+    "rearm_cleared_sites",
+    "resolve_fast_until",
+    "truncate_after",
+]
 
 
 class FastUntilReached(BaseException):
@@ -139,8 +145,8 @@ def truncate_after(
     trace: Any,
     stop_plan: _FastOutputPlan,
     until: Any,
-) -> RunTruncation:
-    """Clear the payloads of every saved op after the stop and describe the cut.
+) -> tuple[RunTruncation, tuple[str, ...]]:
+    """Unsave every saved op after the stop and describe the cut.
 
     Parameters
     ----------
@@ -153,13 +159,15 @@ def truncate_after(
 
     Returns
     -------
-    RunTruncation
-        The ``live_stop_after`` disclosure for the run report.
+    tuple[RunTruncation, tuple[str, ...]]
+        The ``live_stop_after`` disclosure for the run report, and the labels
+        whose payloads were unsaved (the session re-arms them for the next run).
     """
 
     stop_raw = _stop_raw_index(trace, stop_plan)
     executed: list[str] = []
     skipped: list[str] = []
+    cleared: list[str] = []
     for op in trace.layer_list:
         raw_label = str(getattr(op, "_label_raw", op.label))
         if int(getattr(op, "raw_index", 0) or 0) <= stop_raw:
@@ -167,12 +175,14 @@ def truncate_after(
             continue
         skipped.append(raw_label)
         if bool(getattr(op, "has_saved_activation", False)):
-            # Not run this time: the not-available spelling, never the previous
-            # run's value. The next full run refreshes the site again.
+            # Not run this time: unsaved for this run, never the previous run's
+            # value; the trace stays a consistent capture (save, export).
             op._internal_set("out", None)
             op._internal_set("transformed_out", None)
+            op._internal_set("has_saved_activation", False)
+            cleared.append(op.label)
     trace.raw_output = None
-    return RunTruncation(
+    truncation = RunTruncation(
         regime="live_stop_after",
         requested_sites=(str(until),),
         stopped_at=_frontier_label(trace, stop_plan.op_labels[-1]),
@@ -180,3 +190,19 @@ def truncate_after(
         skipped_count=len(skipped),
         skipped_digest=sha256("\n".join(skipped).encode("utf-8")).hexdigest()[:16],
     )
+    return truncation, tuple(cleared)
+
+
+def rearm_cleared_sites(trace: Any, labels: Sequence[str]) -> None:
+    """Mark the sites a cut run unsaved as saved again before the next run refreshes them.
+
+    Parameters
+    ----------
+    trace:
+        The live Trace the fast run refreshes in place.
+    labels:
+        Labels :func:`truncate_after` unsaved.
+    """
+
+    for label in labels:
+        trace.layer_dict_all_keys[label]._internal_set("has_saved_activation", True)

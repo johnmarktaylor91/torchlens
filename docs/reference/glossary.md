@@ -1382,6 +1382,9 @@ deprecation shim owed*
   the default save, the regime is `live_stop_after`, the output and the later saved
   sites read `None` for that run (the next full run refreshes them), and the verdict
   is `unverifiable` because the whole-forward call fingerprint cannot be compared.
+  The fast run refreshes the live trace in place, so that verdict marks the trace as
+  every truncated run product is marked (monotonic: save, export or validate it before
+  training through `until=`).
   A loaded artifact's fast tier still refuses `run_fast_until_unsupported`. Full
   contract: [the runnable tlspec contract](runnable_tlspec_contract.md).
 
