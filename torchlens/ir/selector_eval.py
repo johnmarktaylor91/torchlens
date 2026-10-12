@@ -466,8 +466,9 @@ def live_label_error_message(label_value: str, selector_kind: str = "label") -> 
     return (
         f"tl.{selector_kind}({label_value!r}) looks like a finalized postprocess label, but "
         "live selectors run during capture before those labels exist. For post-capture "
-        f'selection use tl.where(lambda p: p.layer_label == "{label_value}"). For live hooks, '
-        'prefer a capture-time selector such as tl.func("relu") or '
+        f'selection on a saved trace use tl.where(lambda p: p.layer_label == "{label_value}") '
+        "with the push engine; a rerun or a live capture never matches it. For live hooks "
+        'and reruns, use a capture-time selector such as tl.func("relu") or '
         'tl.module("encoder.layer.4").'
     )
 
