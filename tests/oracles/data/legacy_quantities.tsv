@@ -16,40 +16,40 @@ Layer.activation_memory	Bytes	quantity	activation_memory	red-needs-row	tests/tes
 Layer.autograd_memory	Bytes	quantity	autograd_memory	red-needs-oracle	-	oracle is the zero case only (add saves no tensors); a positive case is still owed; this door has no oracle
 Layer.conditional_depth	int	quantity	conditional_depth	red-needs-oracle	-	-
 Layer.flops_backward	Flops	quantity	flops_backward	red-needs-oracle	-	-
-Layer.flops_forward	Flops	quantity	flops_forward	red-needs-oracle	-	the quantity oracle test_flops_conv_transpose_uses_input_work_basis asserts a different door; this door has none
+Layer.flops_forward	Flops	quantity	flops_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
 Layer.flops_total	Flops	quantity	flops_total	red-needs-oracle	-	-
 Layer.func_duration	Duration	quantity	func_duration	red-needs-oracle	-	-
 Layer.fx_call_index	int	identifier	-	-	-	id/index/line
 Layer.grad_fn_object_id	int	identifier	-	-	-	id/index/line
-Layer.macs_forward	Macs	quantity	macs_forward	red-needs-row	tests/test_numbers_truth_compute.py::test_biased_linear_true_macs_not_flops_over_two (I2)	-
+Layer.macs_forward	Macs	quantity	macs_forward	green	tests/test_numbers_truth_compute.py::test_biased_linear_true_macs_not_flops_over_two (I2)	-
 Layer.module_call_depth	int	quantity	module_call_depth	red-needs-oracle	-	-
 Layer.num_args_total	int	quantity	num_args_total	red-needs-oracle	-	-
 Layer.num_autograd_tensors	int	quantity	num_autograd_tensors	red-needs-oracle	-	oracle is the zero case only (add saves no tensors); a positive case is still owed; this door has no oracle
 Layer.num_children	int	quantity	num_children	red-needs-oracle	-	-
 Layer.num_kwargs	int	quantity	num_kwargs	red-needs-oracle	-	-
-Layer.num_ops	int	quantity	num_ops	red-needs-oracle	-	the quantity oracle test_summary_rows_never_spell_passes_as_ops asserts a different door; this door has none
-Layer.num_param_tensors	int	quantity	num_param_tensors	red-needs-oracle	-	the quantity oracle test_shared_storage_views_stay_distinct_parameters asserts a different door; this door has none
+Layer.num_ops	int	quantity	num_ops	green	tests/oracles/test_legacy_quantity_doors.py::test_op_pass_and_edge_counts_on_every_door (I2)	-
+Layer.num_param_tensors	int	quantity	num_param_tensors	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 Layer.num_param_tensors_frozen	int	quantity	num_param_tensors_frozen	red-needs-oracle	-	-
 Layer.num_param_tensors_trainable	int	quantity	num_param_tensors_trainable	red-needs-oracle	-	-
-Layer.num_params	int	quantity	num_params	red-needs-oracle	-	the quantity oracle test_tied_params_counted_once_by_object_identity asserts a different door; this door has none
-Layer.num_params_frozen	int	quantity	num_params_frozen	red-needs-oracle	-	the quantity oracle test_mh_mixed asserts a different door; this door has none
-Layer.num_params_trainable	int	quantity	num_params_trainable	red-needs-oracle	-	the quantity oracle test_functional_parameter_view_does_not_inflate_param_counts asserts a different door; this door has none
+Layer.num_params	int	quantity	num_params	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
+Layer.num_params_frozen	int	quantity	num_params_frozen	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
+Layer.num_params_trainable	int	quantity	num_params_trainable	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 Layer.num_parents	int	quantity	num_parents	red-needs-oracle	-	-
-Layer.num_passes	int	quantity	num_passes	red-needs-row	tests/test_loop_module_rolling.py::test_reused_single_op_module_stays_a_loop (I2)	-
+Layer.num_passes	int	quantity	num_passes	green	tests/test_loop_module_rolling.py::test_reused_single_op_module_stays_a_loop (I2)	-
 Layer.num_pos_args	int	quantity	num_pos_args	red-needs-oracle	-	-
 Layer.ordinal_index	int	identifier	-	-	-	id/index/line
 Layer.pass_index	int	identifier	-	-	-	id/index/line
 Layer.raw_index	int	identifier	-	-	-	id/index/line
 Layer.step_index	int	identifier	-	-	-	id/index/line
-Layer.total_activation_memory	Bytes	quantity	activation_memory	red-needs-oracle	-	the quantity oracle test_view_mutation_output_recomputes_transformed_payload_metadata asserts a different door; this door has none
+Layer.total_activation_memory	Bytes	quantity	activation_memory	red-needs-row	tests/oracles/test_legacy_quantity_doors.py::test_activation_bytes_on_every_compute_door (I2)	-
 Layer.total_autograd_memory	Bytes	quantity	autograd_memory	red-needs-oracle	-	oracle is the zero case only (add saves no tensors); a positive case is still owed; this door has no oracle
 Layer.total_flops_backward	Flops	quantity	flops_backward	red-needs-oracle	-	-
-Layer.total_flops_forward	Flops	quantity	flops_forward	red-needs-oracle	-	the quantity oracle test_flops_conv_transpose_uses_input_work_basis asserts a different door; this door has none
+Layer.total_flops_forward	Flops	quantity	flops_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
 Layer.total_flops_total	Flops	quantity	flops_total	red-needs-oracle	-	-
 Layer.total_func_duration	Duration	quantity	func_duration	red-needs-oracle	-	-
 Layer.total_gradient_memory	Bytes	quantity	gradient_memory	red-needs-oracle	-	-
-Layer.total_macs_forward	Macs	quantity	macs_forward	red-needs-oracle	-	the quantity oracle test_biased_linear_true_macs_not_flops_over_two asserts a different door; this door has none
-Layer.total_param_memory	Bytes	quantity	param_memory	red-needs-oracle	-	the quantity oracle test_roofline_linear_traffic_counts_parameter_bytes asserts a different door; this door has none
+Layer.total_macs_forward	Macs	quantity	macs_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
+Layer.total_param_memory	Bytes	quantity	param_memory	red-needs-row	tests/oracles/test_legacy_quantity_doors.py::test_parameter_bytes_on_every_door (I2)	-
 Layer.type_index	int	identifier	-	-	-	id/index/line
 Module.address_depth	int	quantity	address_depth	green	tests/test_module_log.py::TestModuleLogFields::test_address_depth (I2)	-
 Module.call_depth	int	quantity	call_depth	green	tests/test_module_log.py::TestModuleLogFields::test_call_depth (I2)	-
@@ -60,36 +60,36 @@ Module.internal_param_memory	Bytes	quantity	internal_param_memory	red-needs-orac
 Module.max_descendant_depth	int	quantity	max_descendant_depth	red-needs-oracle	-	-
 Module.num_calls	int	quantity	num_calls	red-needs-row	tests/test_collapse_optimizer.py::test_rolled_v2_memo_separates_digest_identical_different_num_calls (I2)	-
 Module.num_descendant_calls	int	quantity	num_descendant_calls	red-needs-oracle	-	-
-Module.num_edges	int	quantity	num_edges	red-needs-oracle	-	the quantity oracle test_linear_chain_edge_counts asserts a different door; this door has none
+Module.num_edges	int	quantity	num_edges	green	tests/oracles/test_legacy_quantity_doors.py::test_op_pass_and_edge_counts_on_every_door (I2)	-
 Module.num_input_edges	int	quantity	num_input_edges	red-needs-oracle	-	-
 Module.num_internal_edges	int	quantity	num_internal_edges	red-needs-oracle	-	-
 Module.num_layers	int	quantity	num_layers	red-needs-oracle	-	-
 Module.num_output_edges	int	quantity	num_output_edges	red-needs-oracle	-	-
-Module.num_param_tensors	int	quantity	num_param_tensors	red-needs-oracle	-	the quantity oracle test_shared_storage_views_stay_distinct_parameters asserts a different door; this door has none
+Module.num_param_tensors	int	quantity	num_param_tensors	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 Module.num_param_tensors_frozen	int	quantity	num_param_tensors_frozen	red-needs-oracle	-	-
 Module.num_param_tensors_trainable	int	quantity	num_param_tensors_trainable	red-needs-oracle	-	-
-Module.num_params	int	quantity	num_params	red-needs-oracle	-	the quantity oracle test_tied_params_counted_once_by_object_identity asserts a different door; this door has none
-Module.num_params_frozen	int	quantity	num_params_frozen	red-needs-oracle	-	the quantity oracle test_mh_mixed asserts a different door; this door has none
-Module.num_params_trainable	int	quantity	num_params_trainable	red-needs-oracle	-	the quantity oracle test_functional_parameter_view_does_not_inflate_param_counts asserts a different door; this door has none
-Module.num_recursive_param_tensors	int	quantity	num_param_tensors	red-needs-oracle	-	the quantity oracle test_shared_storage_views_stay_distinct_parameters asserts a different door; this door has none
-Module.num_recursive_param_tensors_frozen	int	quantity	num_param_tensors_frozen	red-needs-oracle	-	-
-Module.num_recursive_param_tensors_trainable	int	quantity	num_param_tensors_trainable	red-needs-oracle	-	-
-Module.num_recursive_params	int	quantity	num_params	red-needs-oracle	-	the quantity oracle test_tied_params_counted_once_by_object_identity asserts a different door; this door has none
-Module.num_recursive_params_frozen	int	quantity	num_params_frozen	red-needs-oracle	-	the quantity oracle test_mh_mixed asserts a different door; this door has none
-Module.num_recursive_params_trainable	int	quantity	num_params_trainable	red-needs-oracle	-	the quantity oracle test_functional_parameter_view_does_not_inflate_param_counts asserts a different door; this door has none
-Module.param_memory	Bytes	quantity	param_memory	red-needs-oracle	-	the quantity oracle test_roofline_linear_traffic_counts_parameter_bytes asserts a different door; this door has none
+Module.num_params	int	quantity	num_params	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
+Module.num_params_frozen	int	quantity	num_params_frozen	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
+Module.num_params_trainable	int	quantity	num_params_trainable	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
+Module.num_recursive_param_tensors	int	quantity	num_recursive_param_tensors	red-needs-oracle	-	counts address-recursive parameter RECORDS, not elements; on a root with a never-called child it reports fewer than num_param_tensors (4 vs 6 measured), so its definition needs an owner before an oracle
+Module.num_recursive_param_tensors_frozen	int	quantity	num_recursive_param_tensors_frozen	red-needs-oracle	-	counts address-recursive parameter RECORDS, not elements; on a root with a never-called child it reports fewer than num_param_tensors (4 vs 6 measured), so its definition needs an owner before an oracle
+Module.num_recursive_param_tensors_trainable	int	quantity	num_recursive_param_tensors_trainable	red-needs-oracle	-	counts address-recursive parameter RECORDS, not elements; on a root with a never-called child it reports fewer than num_param_tensors (4 vs 6 measured), so its definition needs an owner before an oracle
+Module.num_recursive_params	int	quantity	num_recursive_params	red-needs-oracle	-	counts address-recursive parameter RECORDS, not elements; on a root with a never-called child it reports fewer than num_param_tensors (4 vs 6 measured), so its definition needs an owner before an oracle
+Module.num_recursive_params_frozen	int	quantity	num_recursive_params_frozen	red-needs-oracle	-	counts address-recursive parameter RECORDS, not elements; on a root with a never-called child it reports fewer than num_param_tensors (4 vs 6 measured), so its definition needs an owner before an oracle
+Module.num_recursive_params_trainable	int	quantity	num_recursive_params_trainable	red-needs-oracle	-	counts address-recursive parameter RECORDS, not elements; on a root with a never-called child it reports fewer than num_param_tensors (4 vs 6 measured), so its definition needs an owner before an oracle
+Module.param_memory	Bytes	quantity	param_memory	red-needs-row	tests/oracles/test_legacy_quantity_doors.py::test_parameter_bytes_on_every_door (I2)	-
 Module.total_autograd_memory	Bytes	quantity	autograd_memory	red-needs-oracle	-	oracle is the zero case only (add saves no tensors); a positive case is still owed; this door has no oracle
 Module.total_flops	Flops	quantity	flops_total	red-needs-oracle	-	-
 Module.total_flops_backward	Flops	quantity	flops_backward	red-needs-oracle	-	-
-Module.total_flops_forward	Flops	quantity	flops_forward	red-needs-oracle	-	the quantity oracle test_flops_conv_transpose_uses_input_work_basis asserts a different door; this door has none
+Module.total_flops_forward	Flops	quantity	flops_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
 Module.total_forward_duration	Duration	quantity	forward_duration	red-needs-oracle	-	-
 Module.total_func_calls_duration	Duration	quantity	func_calls_duration	red-needs-oracle	-	-
 Module.total_internal_activation_memory	Bytes	quantity	internal_activation_memory	red-needs-oracle	-	-
 Module.total_internal_gradient_memory	Bytes	quantity	internal_gradient_memory	red-needs-oracle	-	-
-Module.total_macs_forward	Macs	quantity	macs_forward	red-needs-oracle	-	the quantity oracle test_biased_linear_true_macs_not_flops_over_two asserts a different door; this door has none
+Module.total_macs_forward	Macs	quantity	macs_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
 Module.total_output_activation_memory	Bytes	quantity	output_activation_memory	red-needs-oracle	-	-
 Module.total_output_gradient_memory	Bytes	quantity	output_gradient_memory	red-needs-oracle	-	-
-Module.total_param_memory	Bytes	quantity	param_memory	red-needs-oracle	-	the quantity oracle test_roofline_linear_traffic_counts_parameter_bytes asserts a different door; this door has none
+Module.total_param_memory	Bytes	quantity	param_memory	red-needs-row	tests/oracles/test_legacy_quantity_doors.py::test_parameter_bytes_on_every_door (I2)	-
 ModuleCall.autograd_memory	Bytes	quantity	autograd_memory	red-needs-oracle	-	oracle is the zero case only (add saves no tensors); a positive case is still owed; this door has no oracle
 ModuleCall.call_index	int	identifier	-	-	-	id/index/line
 ModuleCall.forward_duration	Duration	quantity	forward_duration	red-needs-oracle	-	-
@@ -99,23 +99,23 @@ ModuleCall.internal_gradient_memory	Bytes	quantity	internal_gradient_memory	red-
 ModuleCall.internal_param_memory	Bytes	quantity	internal_param_memory	red-needs-oracle	-	-
 ModuleCall.max_descendant_depth	int	quantity	max_descendant_depth	red-needs-oracle	-	-
 ModuleCall.num_descendant_calls	int	quantity	num_descendant_calls	red-needs-oracle	-	-
-ModuleCall.num_edges	int	quantity	num_edges	red-needs-oracle	-	the quantity oracle test_linear_chain_edge_counts asserts a different door; this door has none
+ModuleCall.num_edges	int	quantity	num_edges	green	tests/oracles/test_legacy_quantity_doors.py::test_op_pass_and_edge_counts_on_every_door (I2)	-
 ModuleCall.num_forward_args_total	int	quantity	num_forward_args_total	red-needs-oracle	-	-
 ModuleCall.num_forward_kwargs	int	quantity	num_forward_kwargs	red-needs-oracle	-	-
 ModuleCall.num_forward_pos_args	int	quantity	num_forward_pos_args	red-needs-oracle	-	-
 ModuleCall.num_input_edges	int	quantity	num_input_edges	red-needs-oracle	-	-
 ModuleCall.num_internal_edges	int	quantity	num_internal_edges	red-needs-oracle	-	-
 ModuleCall.num_layers	int	quantity	num_layers	red-needs-oracle	-	-
-ModuleCall.num_ops	int	quantity	num_ops	red-needs-oracle	-	the quantity oracle test_summary_rows_never_spell_passes_as_ops asserts a different door; this door has none
+ModuleCall.num_ops	int	quantity	num_ops	green	tests/oracles/test_legacy_quantity_doors.py::test_op_pass_and_edge_counts_on_every_door (I2)	-
 ModuleCall.num_output_edges	int	quantity	num_output_edges	red-needs-oracle	-	-
-ModuleCall.num_param_tensors	int	quantity	num_param_tensors	red-needs-oracle	-	the quantity oracle test_shared_storage_views_stay_distinct_parameters asserts a different door; this door has none
+ModuleCall.num_param_tensors	int	quantity	num_param_tensors	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 ModuleCall.num_param_tensors_frozen	int	quantity	num_param_tensors_frozen	red-needs-oracle	-	-
 ModuleCall.num_param_tensors_trainable	int	quantity	num_param_tensors_trainable	red-needs-oracle	-	-
 ModuleCall.ordinal_index	int	identifier	-	-	-	id/index/line
 ModuleCall.output_activation_memory	Bytes	quantity	output_activation_memory	red-needs-oracle	-	-
 ModuleCall.output_gradient_memory	Bytes	quantity	output_gradient_memory	red-needs-oracle	-	-
-ModuleCall.param_memory	Bytes	quantity	param_memory	red-needs-oracle	-	the quantity oracle test_roofline_linear_traffic_counts_parameter_bytes asserts a different door; this door has none
-Op.activation_memory	Bytes	quantity	activation_memory	red-needs-oracle	-	the quantity oracle test_view_mutation_output_recomputes_transformed_payload_metadata asserts a different door; this door has none
+ModuleCall.param_memory	Bytes	quantity	param_memory	red-needs-row	tests/oracles/test_legacy_quantity_doors.py::test_parameter_bytes_on_every_door (I2)	-
+Op.activation_memory	Bytes	quantity	activation_memory	red-needs-row	tests/oracles/test_legacy_quantity_doors.py::test_activation_bytes_on_every_compute_door (I2)	-
 Op.arithmetic_intensity	float	quantity	arithmetic_intensity	red-needs-oracle	-	-
 Op.autograd_memory	Bytes	quantity	autograd_memory	red-needs-row	tests/test_autograd_saved_bytes.py::test_add_op_reports_zero_autograd_memory (I2)	oracle is the zero case only (add saves no tensors); a positive case is still owed
 Op.bytes_read	Bytes	quantity	bytes_read	green	tests/test_roofline.py::test_linear_theoretical_bytes_and_intensity (I2)	-
@@ -123,7 +123,7 @@ Op.bytes_written	Bytes	quantity	bytes_written	green	tests/test_roofline.py::test
 Op.conditional_branch_depth	int	quantity	conditional_branch_depth	red-needs-oracle	-	-
 Op.conditional_depth	int	quantity	conditional_depth	red-needs-oracle	-	-
 Op.flops_backward	Flops	quantity	flops_backward	red-needs-oracle	-	-
-Op.flops_forward	Flops	quantity	flops_forward	red-needs-row	tests/test_metadata.py::test_flops_conv_transpose_uses_input_work_basis (I2)	-
+Op.flops_forward	Flops	quantity	flops_forward	green	tests/test_metadata.py::test_flops_conv_transpose_uses_input_work_basis (I2)	-
 Op.flops_total	Flops	quantity	flops_total	red-needs-oracle	-	-
 Op.func_call_id	int	identifier	-	-	-	id/index/line
 Op.func_duration	Duration	quantity	func_duration	red-needs-oracle	-	-
@@ -131,7 +131,7 @@ Op.fx_call_index	int	identifier	-	-	-	id/index/line
 Op.grad_fn_object_id	int	identifier	-	-	-	id/index/line
 Op.gradient_memory	Bytes	quantity	gradient_memory	red-needs-oracle	-	-
 Op.input_memory	Bytes	quantity	input_memory	red-needs-oracle	-	-
-Op.macs_forward	Macs	quantity	macs_forward	red-needs-oracle	-	the quantity oracle test_biased_linear_true_macs_not_flops_over_two asserts a different door; this door has none
+Op.macs_forward	Macs	quantity	macs_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
 Op.max_distance_from_input	int	quantity	max_distance_from_input	red-needs-oracle	-	-
 Op.max_distance_to_output	int	quantity	max_distance_to_output	red-needs-oracle	-	-
 Op.min_distance_from_input	int	quantity	min_distance_from_input	red-needs-oracle	-	-
@@ -142,14 +142,14 @@ Op.num_autograd_tensors	int	quantity	num_autograd_tensors	red-needs-row	tests/te
 Op.num_children	int	quantity	num_children	red-needs-oracle	-	-
 Op.num_inputs	int	quantity	num_inputs	red-needs-oracle	-	-
 Op.num_kwargs	int	quantity	num_kwargs	red-needs-oracle	-	-
-Op.num_param_tensors	int	quantity	num_param_tensors	red-needs-oracle	-	the quantity oracle test_shared_storage_views_stay_distinct_parameters asserts a different door; this door has none
+Op.num_param_tensors	int	quantity	num_param_tensors	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 Op.num_param_tensors_frozen	int	quantity	num_param_tensors_frozen	red-needs-oracle	-	-
 Op.num_param_tensors_trainable	int	quantity	num_param_tensors_trainable	red-needs-oracle	-	-
-Op.num_params	int	quantity	num_params	red-needs-oracle	-	the quantity oracle test_tied_params_counted_once_by_object_identity asserts a different door; this door has none
-Op.num_params_frozen	int	quantity	num_params_frozen	red-needs-oracle	-	the quantity oracle test_mh_mixed asserts a different door; this door has none
-Op.num_params_trainable	int	quantity	num_params_trainable	red-needs-oracle	-	the quantity oracle test_functional_parameter_view_does_not_inflate_param_counts asserts a different door; this door has none
+Op.num_params	int	quantity	num_params	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
+Op.num_params_frozen	int	quantity	num_params_frozen	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
+Op.num_params_trainable	int	quantity	num_params_trainable	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 Op.num_parents	int	quantity	num_parents	red-needs-oracle	-	-
-Op.num_passes	int	quantity	num_passes	red-needs-oracle	-	the quantity oracle test_reused_single_op_module_stays_a_loop asserts a different door; this door has none
+Op.num_passes	int	quantity	num_passes	green	tests/oracles/test_legacy_quantity_doors.py::test_op_pass_and_edge_counts_on_every_door (I2)	-
 Op.num_pos_args	int	quantity	num_pos_args	red-needs-oracle	-	-
 Op.ordinal_index	int	identifier	-	-	-	id/index/line
 Op.param_memory	Bytes	quantity	param_memory	red-needs-row	tests/test_w051_mechinterp_roofline.py::test_roofline_linear_traffic_counts_parameter_bytes (I2)	-
@@ -159,29 +159,29 @@ Op.step_index	int	identifier	-	-	-	id/index/line
 Op.type_index	int	identifier	-	-	-	id/index/line
 Param.gradient_memory	Bytes	quantity	gradient_memory	red-needs-oracle	-	-
 Param.num_calls	int	quantity	num_calls	red-needs-oracle	-	the quantity oracle test_rolled_v2_memo_separates_digest_identical_different_num_calls asserts a different door; this door has none
-Param.num_params	int	quantity	num_params	red-needs-oracle	-	the quantity oracle test_tied_params_counted_once_by_object_identity asserts a different door; this door has none
+Param.num_params	int	quantity	num_params	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 Param.num_uses_by_layers	int	quantity	num_uses_by_layers	red-needs-oracle	-	-
 Param.num_uses_by_ops	int	quantity	num_uses_by_ops	red-needs-oracle	-	-
 Param.ordinal_index	int	identifier	-	-	-	id/index/line
-Param.param_memory	Bytes	quantity	param_memory	red-needs-oracle	-	the quantity oracle test_roofline_linear_traffic_counts_parameter_bytes asserts a different door; this door has none
-SummaryReport.executed_params	int	quantity	num_params_executed	red-needs-oracle	-	the quantity oracle test_declared_executed_unexecuted_split_named asserts a different door; this door has none
-SummaryReport.frozen_params	int	quantity	num_params_frozen	red-needs-oracle	-	the quantity oracle test_mh_mixed asserts a different door; this door has none
-SummaryReport.total_flops_forward	int	quantity	flops_forward	red-needs-oracle	-	the quantity oracle test_flops_conv_transpose_uses_input_work_basis asserts a different door; this door has none
-SummaryReport.total_macs_forward	int	quantity	macs_forward	red-needs-oracle	-	the quantity oracle test_biased_linear_true_macs_not_flops_over_two asserts a different door; this door has none
-SummaryReport.total_params	int	quantity	num_params	red-needs-oracle	-	the quantity oracle test_tied_params_counted_once_by_object_identity asserts a different door; this door has none
-SummaryReport.trainable_params	int	quantity	num_params_trainable	red-needs-oracle	-	the quantity oracle test_functional_parameter_view_does_not_inflate_param_counts asserts a different door; this door has none
-SummaryReport.unexecuted_params	int	quantity	num_params_unexecuted	red-needs-oracle	-	the quantity oracle test_declared_executed_unexecuted_split_named asserts a different door; this door has none
+Param.param_memory	Bytes	quantity	param_memory	red-needs-row	tests/oracles/test_legacy_quantity_doors.py::test_parameter_bytes_on_every_door (I2)	-
+SummaryReport.executed_params	int	quantity	num_params_executed	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
+SummaryReport.frozen_params	int	quantity	num_params_frozen	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
+SummaryReport.total_flops_forward	int	quantity	flops_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
+SummaryReport.total_macs_forward	int	quantity	macs_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
+SummaryReport.total_params	int	quantity	num_params	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
+SummaryReport.trainable_params	int	quantity	num_params_trainable	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
+SummaryReport.unexecuted_params	int	quantity	num_params_unexecuted	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 SummaryReport.unknown_flop_ops	int	quantity	unknown_flop_ops	red-needs-oracle	-	oracle counts the trace ledger (group.count == 2); the summary integer binds to it by parity; this door has no oracle
 SummaryTotals.at_capture_bytes	int	quantity	at_capture_bytes	red-needs-oracle	-	-
-SummaryTotals.flops_forward_fma2	int	quantity	flops_forward	red-needs-oracle	-	the quantity oracle test_flops_conv_transpose_uses_input_work_basis asserts a different door; this door has none
-SummaryTotals.macs_forward	int	quantity	macs_forward	red-needs-oracle	-	the quantity oracle test_biased_linear_true_macs_not_flops_over_two asserts a different door; this door has none
+SummaryTotals.flops_forward_fma2	int	quantity	flops_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
+SummaryTotals.macs_forward	int	quantity	macs_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
 SummaryTotals.params_bytes	int	quantity	param_memory	red-needs-oracle	-	summary parameter-bytes door added by the batch-1 summary columns; no oracle asserts it
-SummaryTotals.params_executed	int	quantity	num_params_executed	red-needs-oracle	-	the quantity oracle test_declared_executed_unexecuted_split_named asserts a different door; this door has none
-SummaryTotals.params_frozen	int	quantity	num_params_frozen	red-needs-oracle	-	the quantity oracle test_mh_mixed asserts a different door; this door has none
+SummaryTotals.params_executed	int	quantity	num_params_executed	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
+SummaryTotals.params_frozen	int	quantity	num_params_frozen	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 SummaryTotals.params_per_path_total	int	quantity	num_params_by_path	red-needs-oracle	-	-
-SummaryTotals.params_total	int	quantity	num_params	red-needs-oracle	-	the quantity oracle test_tied_params_counted_once_by_object_identity asserts a different door; this door has none
-SummaryTotals.params_trainable	int	quantity	num_params_trainable	red-needs-oracle	-	the quantity oracle test_functional_parameter_view_does_not_inflate_param_counts asserts a different door; this door has none
-SummaryTotals.params_unexecuted	int	quantity	num_params_unexecuted	red-needs-oracle	-	the quantity oracle test_declared_executed_unexecuted_split_named asserts a different door; this door has none
+SummaryTotals.params_total	int	quantity	num_params	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
+SummaryTotals.params_trainable	int	quantity	num_params_trainable	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
+SummaryTotals.params_unexecuted	int	quantity	num_params_unexecuted	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 SummaryTotals.retained_now_bytes	int	quantity	retained_now_bytes	red-needs-oracle	-	-
 Trace.backward_peak_memory	Bytes	quantity	backward_peak_memory	red-needs-oracle	-	-
 Trace.branching_factor	float	quantity	branching_factor	green	tests/test_edge_counts.py::test_linear_chain_edge_counts (I2)	-
@@ -225,7 +225,7 @@ Trace.num_compute_layers	int	quantity	num_compute_layers	red-needs-oracle	-	-
 Trace.num_compute_ops	int	quantity	num_compute_ops	red-needs-oracle	-	-
 Trace.num_conditionals	int	quantity	num_conditionals	red-needs-oracle	-	-
 Trace.num_context_lines	int	identifier	-	-	-	echo of the source_context_lines option
-Trace.num_edges	int	quantity	num_edges	red-needs-row	tests/test_edge_counts.py::test_linear_chain_edge_counts (I2)	-
+Trace.num_edges	int	quantity	num_edges	green	tests/test_edge_counts.py::test_linear_chain_edge_counts (I2)	-
 Trace.num_grad_fn_calls	int	quantity	num_grad_fn_calls	red-needs-oracle	-	-
 Trace.num_grad_fns	int	quantity	num_grad_fns	red-needs-oracle	-	-
 Trace.num_grad_fns_with_op	int	quantity	num_grad_fns_with_op	red-needs-oracle	-	-
@@ -241,19 +241,19 @@ Trace.num_layers	int	quantity	num_layers	red-needs-oracle	-	-
 Trace.num_layers_with_params	int	quantity	num_layers_with_params	red-needs-oracle	-	only oracle is a JAX-backend test that cannot run in the pinned torch environment
 Trace.num_module_calls	int	quantity	num_module_calls	red-needs-oracle	-	-
 Trace.num_modules	int	quantity	num_modules	green	tests/backend_parity/test_independent_fact_pins.py::test_linear_trace_facts_hold_from_first_principles (I2)	-
-Trace.num_ops	int	quantity	num_ops	red-needs-row	tests/test_numbers_truth_vocabulary.py::test_summary_rows_never_spell_passes_as_ops (I2)	-
+Trace.num_ops	int	quantity	num_ops	green	tests/test_numbers_truth_vocabulary.py::test_summary_rows_never_spell_passes_as_ops (I2)	-
 Trace.num_ops_with_params	int	quantity	num_ops_with_params	red-needs-oracle	-	-
 Trace.num_output_layers	int	quantity	num_output_layers	red-needs-oracle	-	-
 Trace.num_output_ops	int	quantity	num_output_ops	red-needs-oracle	-	-
-Trace.num_param_tensors	int	quantity	num_param_tensors	red-needs-row	tests/test_numbers_truth_params.py::test_shared_storage_views_stay_distinct_parameters (I2)	-
+Trace.num_param_tensors	int	quantity	num_param_tensors	green	tests/test_numbers_truth_params.py::test_shared_storage_views_stay_distinct_parameters (I2)	-
 Trace.num_param_tensors_frozen	int	quantity	num_param_tensors_frozen	red-needs-oracle	-	-
 Trace.num_param_tensors_trainable	int	quantity	num_param_tensors_trainable	red-needs-oracle	-	-
-Trace.num_params	int	quantity	num_params	red-needs-row	tests/test_numbers_truth_params.py::test_tied_params_counted_once_by_object_identity (I1)	-
+Trace.num_params	int	quantity	num_params	green	tests/test_numbers_truth_params.py::test_tied_params_counted_once_by_object_identity (I1)	-
 Trace.num_params_by_path	int	quantity	num_params_by_path	red-needs-oracle	-	-
-Trace.num_params_executed	int	quantity	num_params_executed	red-needs-row	tests/test_numbers_truth_params.py::test_declared_executed_unexecuted_split_named (I2)	-
-Trace.num_params_frozen	int	quantity	num_params_frozen	red-needs-row	tests/test_param_log.py::TestTrainableFrozenTallies::test_mh_mixed (I2)	-
-Trace.num_params_trainable	int	quantity	num_params_trainable	red-needs-row	tests/test_bug_fixes_phase14.py::test_functional_parameter_view_does_not_inflate_param_counts (I1)	-
-Trace.num_params_unexecuted	int	quantity	num_params_unexecuted	red-needs-row	tests/test_numbers_truth_params.py::test_declared_executed_unexecuted_split_named (I2)	-
+Trace.num_params_executed	int	quantity	num_params_executed	green	tests/test_numbers_truth_params.py::test_declared_executed_unexecuted_split_named (I2)	-
+Trace.num_params_frozen	int	quantity	num_params_frozen	green	tests/test_param_log.py::TestTrainableFrozenTallies::test_mh_mixed (I2)	-
+Trace.num_params_trainable	int	quantity	num_params_trainable	green	tests/test_bug_fixes_phase14.py::test_functional_parameter_view_does_not_inflate_param_counts (I1)	-
+Trace.num_params_unexecuted	int	quantity	num_params_unexecuted	green	tests/test_numbers_truth_params.py::test_declared_executed_unexecuted_split_named (I2)	-
 Trace.num_saved_grad_fn_calls	int	quantity	num_saved_grad_fn_calls	red-needs-oracle	-	-
 Trace.num_saved_grad_fns	int	quantity	num_saved_grad_fns	red-needs-oracle	-	-
 Trace.num_saved_grad_layers	int	quantity	num_saved_grad_layers	red-needs-oracle	-	-
@@ -272,14 +272,14 @@ Trace.saved_activation_memory	Bytes	quantity	saved_activation_memory	green	tests
 Trace.saved_gradient_memory	Bytes	quantity	saved_gradient_memory	red-needs-oracle	-	-
 Trace.setup_duration	Duration	quantity	setup_duration	red-needs-oracle	-	-
 Trace.tlspec_version	int	identifier	-	-	-	format version
-Trace.total_activation_memory	Bytes	quantity	activation_memory	red-needs-oracle	-	the quantity oracle test_view_mutation_output_recomputes_transformed_payload_metadata asserts a different door; this door has none
+Trace.total_activation_memory	Bytes	quantity	activation_memory	red-needs-row	tests/oracles/test_legacy_quantity_doors.py::test_activation_bytes_on_every_compute_door (I2)	-
 Trace.total_autograd_memory	Bytes	quantity	autograd_memory	red-needs-oracle	-	oracle is the zero case only (add saves no tensors); a positive case is still owed; this door has no oracle
 Trace.total_backward_duration	Duration	quantity	backward_duration	red-needs-oracle	-	-
 Trace.total_backward_memory	Bytes	quantity	backward_memory	red-needs-oracle	-	-
 Trace.total_flops	Flops	quantity	flops_total	red-needs-oracle	-	-
 Trace.total_flops_backward	Flops	quantity	flops_backward	red-needs-oracle	-	-
-Trace.total_flops_forward	Flops	quantity	flops_forward	red-needs-oracle	-	the quantity oracle test_flops_conv_transpose_uses_input_work_basis asserts a different door; this door has none
+Trace.total_flops_forward	Flops	quantity	flops_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
 Trace.total_gradient_memory	Bytes	quantity	gradient_memory	red-needs-oracle	-	-
-Trace.total_macs_forward	Macs	quantity	macs_forward	red-needs-row	tests/test_numbers_truth_compute.py::test_biased_linear_true_macs_not_flops_over_two (I2)	-
+Trace.total_macs_forward	Macs	quantity	macs_forward	green	tests/test_numbers_truth_compute.py::test_biased_linear_true_macs_not_flops_over_two (I2)	-
 Trace.total_param_gradient_memory	Bytes	quantity	param_gradient_memory	red-needs-oracle	-	-
-Trace.total_param_memory	Bytes	quantity	param_memory	red-needs-oracle	-	the quantity oracle test_roofline_linear_traffic_counts_parameter_bytes asserts a different door; this door has none
+Trace.total_param_memory	Bytes	quantity	param_memory	red-needs-row	tests/oracles/test_legacy_quantity_doors.py::test_parameter_bytes_on_every_door (I2)	-
