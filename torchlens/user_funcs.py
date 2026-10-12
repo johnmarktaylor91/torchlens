@@ -2073,6 +2073,9 @@ def _run_model_and_save_specified_outs(
                 lookback=lookback,
                 lookback_payload_policy=lookback_payload_policy,  # type: ignore[arg-type]
                 on_predicate_error="fail-fast",
+                # Selector saves honour the capture's detach choice in both
+                # directions, exactly like the save-all path.
+                detach_saved_activations=bool(detach_saved_activations),
             )
             trace._halt_returns_partial_trace = halt_predicate is not None
             trace._stop_directive = StopDirective(

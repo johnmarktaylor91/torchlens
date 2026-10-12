@@ -59,6 +59,7 @@ _RECORDING_FIELDS: Final[tuple[str, ...]] = (
     "grad_transform",
     "save_raw_gradients",
     "echo",
+    "detach_saved_activations",
 )
 
 
@@ -104,6 +105,14 @@ class RecordingOptions:
     #: or ``None``; typed ``Any`` here because fastlog (L2) never imports
     #: the narration engine -- seams read the armed session off the trace.
     echo: Any | None
+    #: Whether a retained activation whose capture spec does not ask for
+    #: ``keep_grad`` is detached from the autograd graph. ``True`` (the
+    #: ``record`` default) stores detached copies; ``False`` stores
+    #: graph-connected copies wherever the source tensor carries autograd
+    #: history, as ``tl.trace``'s default save does. A spec with
+    #: ``keep_grad=True`` stays attached either way. Disk payloads are always
+    #: detached inspection copies.
+    detach_saved_activations: bool
     _specified_fields: frozenset[str] = field(
         default_factory=frozenset,
         init=False,
@@ -134,6 +143,7 @@ class RecordingOptions:
         grad_transform: GradientPostfunc | None | MissingType = MISSING,
         save_raw_gradients: bool | MissingType = MISSING,
         echo: Any | None | MissingType = MISSING,
+        detach_saved_activations: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen recording option bundle."""
 
@@ -193,6 +203,9 @@ class RecordingOptions:
                 "save_raw_gradients", save_raw_gradients, True, specified_fields
             ),
             "echo": _resolve_recording_option("echo", echo, None, specified_fields),
+            "detach_saved_activations": _resolve_recording_option(
+                "detach_saved_activations", detach_saved_activations, True, specified_fields
+            ),
         }
         _validate_recording_values(values)
         for field_name in _RECORDING_FIELDS:
@@ -242,6 +255,7 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
     default_grad = values["default_grad"]
     grad_transform = values["grad_transform"]
     save_raw_gradients = values["save_raw_gradients"]
+    detach_saved_activations = values["detach_saved_activations"]
     if not isinstance(history_size, int) or not 0 <= history_size <= 1024:
         raise InvalidArgumentError(
             f"history_size must be an integer in [0, 1024]; received {history_size!r}",
@@ -356,6 +370,14 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
             remedy="pass save_raw_gradients=True or False",
             argument="save_raw_gradients",
         )
+    if not isinstance(detach_saved_activations, bool):
+        raise InvalidArgumentError(
+            "detach_saved_activations must be a bool; "
+            f"received {type(detach_saved_activations).__name__}",
+            code="recording_option_type_invalid",
+            remedy="pass detach_saved_activations=True or False",
+            argument="detach_saved_activations",
+        )
 
 
 def merge_recording_options(
@@ -382,6 +404,7 @@ def merge_recording_options(
     grad_transform: GradientPostfunc | None | MissingType = MISSING,
     save_raw_gradients: bool | MissingType = MISSING,
     echo: Any | None | MissingType = MISSING,
+    detach_saved_activations: bool | MissingType = MISSING,
 ) -> RecordingOptions:
     """Merge flat recording kwargs into a grouped options object."""
 
@@ -411,6 +434,7 @@ def merge_recording_options(
         "grad_transform": grad_transform,
         "save_raw_gradients": save_raw_gradients,
         "echo": echo,
+        "detach_saved_activations": detach_saved_activations,
     }
     for field_name, value in incoming.items():
         if value is MISSING:
