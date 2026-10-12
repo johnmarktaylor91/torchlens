@@ -11,10 +11,12 @@
   ``example_input=`` (the one real attach-time forward, run in the model's
   CURRENT mode -- never the shipped Lightning callback's eval()/no_grad()
   re-trace flaw); zero matches refuse at attach with the live module census.
-- **Tier O (op grain)** -- SHED this queue window: requesting it refuses
-  typed with the honest cost teaching (op capture is wrap-dominated;
-  ``halt=`` is the time lever, not ``save=``) and the explicit
-  ``tl.record``/fastlog recipe as the interim spelling.
+- **Tier O (op grain)** -- per-op (and declared per-facet) activations
+  through the Route-B op-tier collector. Needs ``grain="op"``, a selector,
+  ``example_input=`` AND explicit consent (``allow_forward_wrap=True``):
+  the root forward is wrapped so sampled steps run inside one fastlog
+  capture, and that cost is calibrated and disclosed at attach
+  (``trackers/_op_grain.py``).
 
 Step law (memo 3.7): the caller's ``global_step`` is mandatory; there is no
 hidden counter, ever. Sources: the ``with watch.step(n):`` scope
@@ -53,6 +55,12 @@ from ..observability._schema import validate_step_order
 from ..utils.env_flags import closed_bool_env
 from ._amp import correct_spine, corrected_gradient_block, observed_grad_scale, unscale_stage
 from ._errors import SinkProtocolError, TrackersError, WatchConfigError, WatchRuntimeError
+from ._op_grain import (
+    OpGrainCollector,
+    disclose_cost,
+    op_selector,
+    validate_grain_request,
+)
 from ._protocol import EmissionLedger, require_capabilities, sink_name
 from ._records import (
     ScalarPoint,
@@ -188,22 +196,6 @@ class CloseReport:
         return "\n".join(lines)
 
 
-#: The honest cost teaching for op-grain deferral refusals (memo 3.9): op
-#: capture is WRAP-dominated, so save= is not the lever -- halt= is.
-_TIER_O_COST_TEACHING = (
-    "Honest cost context before you ask for it: op capture is WRAP-dominated "
-    "(~34x forward on the repo's own gpt2 CUDA rows; saving nothing still "
-    "costs ~35x), narrowing save= moves only ~14% of the bill, and halt= is "
-    "the lever that actually cuts time (10.4x vs 35.0x)."
-)
-
-_TIER_O_REMEDY = (
-    "Use module grain (signals=('activations',), select=...), or run an "
-    "explicit sampled-step capture: tl.record(model, inputs, "
-    "save=<predicate>) on the steps you care about."
-)
-
-
 @dataclass(frozen=True)
 class _SessionConfig:
     """The session-plumbing bundle (the C06 WatchSettings precedent):
@@ -231,7 +223,7 @@ class WatchSession:
         self,
         model: torch.nn.Module,
         sinks: tuple[Any, ...],
-        collector: HistoryCollector | None,
+        collector: HistoryCollector | OpGrainCollector | None,
         grammar: TagGrammar,
         config: _SessionConfig,
     ) -> None:
@@ -354,6 +346,8 @@ class WatchSession:
         for block in fresh:
             step = block.block.global_step
             self._emit_attach_rows(step)
+            if isinstance(self.collector, OpGrainCollector):
+                block = self.collector.emission_view(block)
             block, derived = self._unscale_derived(block)
             emission = emission_from_block(block, sites, self.grammar)
             if derived:
@@ -458,13 +452,16 @@ class WatchSession:
 
         if self.collector is None:
             return
-        value = 1 if sampled else _NEVER
-        for stream in list(self.collector.cadences):
-            self.collector.cadences[stream] = value
         hist = self.hist_every
         sketch_scheduled = (
             sampled and hist is not None and (not self._sampled_steps or step % hist == 0)
         )
+        if isinstance(self.collector, OpGrainCollector):
+            self.collector.arm(step, sampled, sketch_scheduled)
+            return
+        value = 1 if sampled else _NEVER
+        for stream in list(self.collector.cadences):
+            self.collector.cadences[stream] = value
         sketch_value = 1 if sketch_scheduled else _NEVER
         for stream in list(self.collector.sketch_cadences):
             self.collector.sketch_cadences[stream] = sketch_value
@@ -547,7 +544,7 @@ class WatchSession:
         """
 
         collector = self.collector
-        if collector is None:
+        if not isinstance(collector, HistoryCollector):
             return
         staging = collector._staging
         touched = list(collector._staging_touched)
@@ -686,7 +683,12 @@ class WatchSession:
             truth_updates["unscaled"] = _EVIDENCE_TO_UNSCALED.get(self._scale_evidence, "unknown")
         if skipped or not self._optimizer_fired_this_step:
             truth_updates["optimizer_status"] = "skipped" if skipped else "unknown"
-        if self.collector is not None and self.collector._block_open:
+        if isinstance(self.collector, OpGrainCollector):
+            if self.collector._block_open:
+                self.collector.settle(
+                    truth_updates, optimizer_fired=self._optimizer_fired_this_step
+                )
+        elif self.collector is not None and self.collector._block_open:
             self.collector._block_truth.update(truth_updates)
             if scaler is not None:
                 # D7: every gradient observation carries the boundary's scale
@@ -770,9 +772,14 @@ class WatchSession:
             plan.format_table(),
             f"signals={','.join(self.signals)} every={self.every}"
             + (f" hist_every={self.hist_every}" if self.hist_every else ""),
-            "tier P wraps no forward; tier M uses ordinary module hooks; "
-            "first and last eligible steps always sample",
         ]
+        if isinstance(self.collector, OpGrainCollector):
+            lines.append(self.collector.disclosure())
+        else:
+            lines.append(
+                "tier P wraps no forward; tier M uses ordinary module hooks; "
+                "first and last eligible steps always sample"
+            )
         return "\n".join(lines)
 
     def _final_forced_sample(self) -> None:
@@ -984,7 +991,6 @@ def _validate_signals(
     signals: Iterable[str],
     select: Any,
     example_input: Any,
-    grain: str | None,
 ) -> tuple[str, ...]:
     """Validate the signal request; refuse deferred tiers typed."""
 
@@ -997,14 +1003,6 @@ def _validate_signals(
             code="watch_signals_invalid",
             signals=requested,
             remedy=f"Request a nonempty subset of {SIGNALS}.",
-        )
-    if grain == "op":
-        raise WatchConfigError(
-            f"Op-grain watching (grain='op') is not shipped in this build. {_TIER_O_COST_TEACHING}",
-            code="watch_tier_unavailable",
-            signal="activations",
-            grain="op",
-            remedy=_TIER_O_REMEDY,
         )
     if "activation_grads" in requested:
         raise WatchConfigError(
@@ -1066,6 +1064,8 @@ def watch(
     allow_missing_phases: bool = False,
     event_stream: EventStream | None = None,
     settings: WatchSettings | None = None,
+    facets: Mapping[str, Any] | None = None,
+    allow_forward_wrap: bool = False,
 ) -> WatchSession:
     """Attach once; three disclosed cost tiers; loud failures (memo 3.13).
 
@@ -1085,7 +1085,10 @@ def watch(
         Subset of :data:`SIGNALS`. Default watches parameter gradients.
     select:
         Site selection (module path prefixes / parameter names). REQUIRED
-        for activations; optional narrowing for parameter streams.
+        for activations; optional narrowing for parameter streams. At
+        ``grain="op"`` strings are module path prefixes (OR-ed
+        ``tl.in_module``) and any selector-algebra object (``tl.func(...)``,
+        composed predicates) passes through as the op-tier ``save=``.
     optimizer:
         The optimizer whose step boundary anchors parameter streams.
     step:
@@ -1107,7 +1110,10 @@ def watch(
     example_input:
         Attach-time discovery batch (required for activations).
     grain:
-        ``"op"`` requests op-grain identity and refuses typed this window.
+        ``None`` (module grain) or ``"op"``: per-op activations through the
+        Route-B op-tier collector, behind ``allow_forward_wrap=True``. Only
+        ``signals=("activations",)``; ``example_input=`` and ``select=``
+        required; only the first forward of a sampled step is observed.
     descriptor:
         Histogram grid override. Only when both this and ``settings`` are
         None does the first sink offering ``default_histogram_descriptor()``
@@ -1126,10 +1132,21 @@ def watch(
         ``torchlens/check/<name>`` rows.
     settings:
         Advanced C06 collector plumbing (ring capacity, output_dir, ...).
+    facets:
+        ``grain="op"`` only: ``{op_label: splitter}`` declaring facet slices
+        of op sites (``torchlens.observability.split_heads(n)`` slices
+        attention heads); each slice is its own series under
+        ``<op label>/<facet>``.
+    allow_forward_wrap:
+        ``grain="op"`` only: explicit consent to wrap the root module's
+        forward. Attach then calibrates the wrap (plain vs wrapped forward on
+        ``example_input``, RNG and buffers restored) and discloses the cost
+        in ``plan_report()``, the tracker rows and one warning.
     """
 
     sinks = tuple(to) if isinstance(to, (tuple, list)) else (to,)
-    requested = _validate_signals(signals, select, example_input, grain)
+    requested = _validate_signals(signals, select, example_input)
+    validate_grain_request(grain, requested, facets, allow_forward_wrap)
     grammar = TagGrammar(name=name, namespace=namespace)
     disabled_by = WATCH_DISABLE_ENV if closed_bool_env(WATCH_DISABLE_ENV) else None
     needs_histograms = hist_every is not None
@@ -1175,6 +1192,20 @@ def watch(
     base_settings = _resolve_settings(settings, descriptor, needs_histograms)
     _refuse_second_session(model, grammar)
     _preflight_histogram_sinks(sinks, base_settings.descriptor, needs_histograms)
+    config = _SessionConfig(
+        signals=requested,
+        every=every,
+        hist_every=hist_every,
+        optimizer=optimizer,
+        step_source=step,
+        allow_missing_phases=allow_missing_phases,
+        event_stream=event_stream,
+    )
+    if grain == "op":
+        op_collector = OpGrainCollector(
+            model, save=op_selector(select), facets=facets, settings=base_settings
+        )
+        return _attach_op_grain(sinks, grammar, config, op_collector, example_input, budgets)
     collector = HistoryCollector(
         model,
         sites=tuple(select) if select is not None else None,
@@ -1190,21 +1221,7 @@ def watch(
     _check_budgets(collector, budgets)
     _preflight_tags(grammar, collector, requested)
     _refuse_sparse_gradients(collector, requested)
-    session = WatchSession(
-        model,
-        sinks,
-        collector,
-        grammar,
-        _SessionConfig(
-            signals=requested,
-            every=every,
-            hist_every=hist_every,
-            optimizer=optimizer,
-            step_source=step,
-            allow_missing_phases=allow_missing_phases,
-            event_stream=event_stream,
-        ),
-    )
+    session = WatchSession(model, sinks, collector, grammar, config)
     if optimizer is not None:
         session._own_optimizer_handle = optimizer.register_step_pre_hook(session._boundary_pre_hook)
     collector.attach(optimizer=optimizer)
@@ -1215,6 +1232,44 @@ def watch(
     _arm_forward_scheduling(session, model, step, requested)
     session._stage_attach_rows()
     _register_session(model, grammar, session)
+    return session
+
+
+def _attach_op_grain(  # noqa: PLR0913 -- the attach inputs travel as their own already-validated objects; packing them would only rename the bundle
+    sinks: tuple[Any, ...],
+    grammar: TagGrammar,
+    config: _SessionConfig,
+    collector: OpGrainCollector,
+    example_input: Any,
+    budgets: Mapping[str, int] | None,
+) -> WatchSession:
+    """Tier O attach: discover, budget, calibrate, wrap, disclose (U32.1/U34.1).
+
+    Discovery and calibration run BEFORE the wrap is installed, on
+    ``example_input``, with the model's RNG and buffers restored after; the
+    disclosure rows ride the deferred attach rows so they land on the first
+    step the session sees, like the manifest.
+    """
+
+    model = collector.model
+    args = example_input if isinstance(example_input, tuple) else (example_input,)
+    measurement = collector.discover_and_calibrate(args)
+    _check_budgets(collector, budgets)
+    _preflight_tags(grammar, collector, config.signals)
+    session = WatchSession(model, sinks, collector, grammar, config)
+    collector.attach(session, config.optimizer)
+    session._stage_attach_rows()
+    session._deferred_attach.append(
+        TextPoint(grammar.meta("op_grain_calibration"), 0, collector.disclosure())
+    )
+    if measurement.median_ratio is not None:
+        session._deferred_attach.append(
+            ScalarPoint(
+                grammar.run_health("op_grain_overhead_median_x"), 0, measurement.median_ratio
+            )
+        )
+    _register_session(model, grammar, session)
+    disclose_cost(collector)
     return session
 
 
@@ -1341,7 +1396,9 @@ def _preflight_histogram_sinks(
 
 
 def _preflight_tags(
-    grammar: TagGrammar, collector: HistoryCollector, requested: tuple[str, ...]
+    grammar: TagGrammar,
+    collector: HistoryCollector | OpGrainCollector,
+    requested: tuple[str, ...],
 ) -> None:
     """Render one tag per catalogued site at ATTACH so an unsafe leaf refuses now.
 
@@ -1425,7 +1482,9 @@ def _discover_without_forward(collector: HistoryCollector) -> None:
             collector.writer.add_site(site)
 
 
-def _check_budgets(collector: HistoryCollector, budgets: Mapping[str, int] | None) -> None:
+def _check_budgets(
+    collector: HistoryCollector | OpGrainCollector, budgets: Mapping[str, int] | None
+) -> None:
     """Enforce the hard preflight caps against the plan FACTS (memo 3.9)."""
 
     if not budgets:

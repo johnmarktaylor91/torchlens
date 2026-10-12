@@ -206,6 +206,9 @@ class OpTierCollector:
         self._block_step: int | None = None
         self._block_truth: StepTruth | None = None
         self._block_observations: list[ObservationRecord] | None = None
+        #: Caller-settled truth for the open block (``settle_open_block``);
+        #: absent keys fall back to the ``StepTruth`` the bracket opened with.
+        self._block_settled: dict[str, Any] = {}
 
     @property
     def site_catalog(self) -> dict[str, SiteRecord]:
@@ -350,10 +353,70 @@ class OpTierCollector:
         self._block_step = global_step
         self._block_truth = truth if truth is not None else StepTruth()
         self._block_observations = []
+        self._block_settled = {}
         try:
             yield
         finally:
             self._commit_block()
+
+    def settle_open_block(
+        self,
+        *,
+        optimizer_status: str | None = None,
+        scale: float | None = None,
+        unscaled: str | None = None,
+        trace_ref: str | None = None,
+    ) -> None:
+        """Record the optimizer truth the CALLER observed for the open block.
+
+        ``StepTruth`` can only say ``applied`` or ``skipped``; a watcher that
+        saw no optimizer boundary inside the step must be able to say
+        ``unknown`` instead of the bracket's assumed ``applied`` (D17: the
+        collector never guesses). Values given here win over the opening
+        ``StepTruth`` at commit; ``None`` keeps the opening value.
+        ``trace_ref`` points the block at a retained ``Trace`` for this step.
+
+        Raises
+        ------
+        WatchLifecycleError
+            ``watch_lifecycle_invalid`` outside a ``step()`` bracket.
+        """
+
+        self._open_block_step()
+        updates = {
+            "optimizer_status": optimizer_status,
+            "scale": scale,
+            "unscaled": unscaled,
+            "trace_ref": trace_ref,
+        }
+        self._block_settled.update({k: v for k, v in updates.items() if v is not None})
+
+    def instrumented_forward(
+        self,
+        input_args: Any,
+        input_kwargs: dict[str, Any] | None = None,
+    ) -> Any:
+        """Run exactly the per-step op-tier pass, fold nothing, return the output.
+
+        The cost-calibration door: the same fastlog pass ``observe_step``
+        runs (reducer, reduce-only path, live output), with no step bracket
+        and nothing committed, so an attach-time A/B can price the wrap
+        without writing a block into the history.
+        """
+
+        from .. import fastlog
+
+        output, _recording = fastlog.record(
+            self.model,
+            input_args,
+            input_kwargs,
+            save=self.save,
+            default_op=True,
+            activation_transform=self._reducer,
+            save_raw_activations=False,
+            return_output=True,
+        )
+        return output
 
     def observe_step(
         self,
@@ -544,15 +607,20 @@ class OpTierCollector:
         self._block_step = None
         if observations is None or truth is None or step is None:
             return
+        settled = self._block_settled
+        self._block_settled = {}
         block = StepBlockRecord(
             segment_id=self.segment_id,
             global_step=step,
             provenance="explicit",
-            optimizer_status="applied" if truth.applied else "skipped",
-            scale=truth.scale,
-            unscaled=truth.unscaled,
+            optimizer_status=settled.get(
+                "optimizer_status", "applied" if truth.applied else "skipped"
+            ),
+            scale=settled.get("scale", truth.scale),
+            unscaled=settled.get("unscaled", truth.unscaled),
             clipped=truth.clipped,
             micro_batches=truth.micro_batches,
+            trace_ref=settled.get("trace_ref"),
         )
         committed = CommittedBlock(
             block=block,
