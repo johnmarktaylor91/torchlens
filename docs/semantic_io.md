@@ -33,6 +33,12 @@ trace = tl.trace(
 )
 ```
 
+An `output_style` that no detector resolves refuses typed
+(`output_style_unknown`) with a did-you-mean over the built-in styles
+(`classification`, `imagenet`, `imagenet1k`, `hf_text`): before the forward
+when no custom detector is registered, after the capture when the
+registered custom detectors all declined it.
+
 `trace.output_postprocessor` records the resolver source, selected style,
 selected head, label source, confidence, ambiguity flag, and captured top-N
 bound. `trace.output_table(top_n, batch_items)` returns a dataframe with

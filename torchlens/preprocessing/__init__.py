@@ -41,6 +41,7 @@ from ._diagnostics import (
     InputDiagnostics,
     diagnose,
 )
+from ._imagenet_default import imagenet_default
 from ._records import (
     COMPARABLE_FIELDS,
     STATUS_AUTHORITATIVE,
@@ -70,6 +71,7 @@ __all__ = [
     "Resolution",
     "audit",
     "diagnose",
+    "imagenet_default",
     "register_authority_adapter",
     "resolve",
     "status_of",

@@ -7,7 +7,7 @@ pass-qualification pin on distilgpt2's 2-pass residual adds (D7 class 8,
 OPUS Q5), and resolved-config-fingerprint rows for the silent config-flag
 class (D7 class 4). Plus the FLIPPED container-output replay row (FIX-A
 landed: the edit now lands through the ModelOutput container) and the
-enumerated-red pin for the kwargs-only plain-module transport defect.
+flipped kwargs-only plain-module transport row (traced == direct output).
 """
 
 from __future__ import annotations
@@ -22,7 +22,6 @@ from tests.real_model.r0.expectations import (
     EAGER_SDPA_FACET_DIFF,
     EXPECTED_TRACE_PARAM_COLLISIONS,
     FORWARD_KWARG_CORPUS,
-    KNOWN_RED_BY_ID,
     SDPA_UNSUPPORTED_FAMILIES,
     load_expectations,
 )
@@ -327,10 +326,14 @@ def test_container_output_do_lands_through_model_output_container(r0_capture):
     assert moved, "the edit never reached the model-output container"
 
 
-def test_kwargs_only_plain_module_enumerated_red():
-    import torchlens as tl
+def test_kwargs_only_plain_module_traces():
+    """A keyword-only call on a plain module reaches ``forward(x=...)`` once.
 
-    red = KNOWN_RED_BY_ID["kwargs-only-plain-module"]
+    Formerly the enumerated-red row ``kwargs-only-plain-module``: an empty
+    positional tuple on a single-parameter forward was wrapped into ``[[]]``,
+    so ``x`` arrived twice ("got multiple values for argument").
+    """
+    import torchlens as tl
 
     class Plain(nn.Module):
         def __init__(self) -> None:
@@ -343,18 +346,10 @@ def test_kwargs_only_plain_module_enumerated_red():
     torch.manual_seed(SEED)
     model = Plain().eval()
     value = torch.randn(2, 4)
-    try:
-        tl.trace(model, (), {"x": value})
-    except TypeError as exc:
-        assert red.message_substring in str(exc), (
-            f"kwargs-only transport failure signature drifted: {exc}"
-        )
-        return
-    pytest.fail(
-        f"STALE enumerated-red row {red.red_id!r}: kwargs-only tl.trace on a"
-        f" plain module now works. {red.owner} fixed the transport -- delete"
-        " the KNOWN_RED row and flip this to assert traced == direct output."
-    )
+    trace = tl.trace(model, (), {"x": value})
+    direct = model(x=value)
+    traced = trace[trace.output_layers[0]].out
+    assert torch.equal(traced, direct)
 
 
 def test_config_fingerprint_use_cache_row():

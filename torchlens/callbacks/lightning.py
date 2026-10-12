@@ -1,10 +1,17 @@
-"""Lightning callback integrations."""
+"""Lightning callback integrations.
+
+``SummaryCallback`` prints ``tl.summary`` at fit start; ``LayerProfilerCallback``
+logs per-batch layer records. Both resolve lazily on top of the installed
+Lightning package (``lightning`` or the standalone ``pytorch_lightning``).
+"""
 
 from __future__ import annotations
 
 import json
+import warnings
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import torch
 
@@ -12,24 +19,33 @@ import torch
 def _lightning_callback_base() -> type[Any]:
     """Return Lightning's callback base when the optional extra is installed.
 
+    The unified ``lightning`` package wins; the standalone
+    ``pytorch_lightning`` package is the fallback, so users of either get a
+    working callback.
+
     Returns
     -------
     type[Any]
-        ``lightning.pytorch.callbacks.Callback``.
+        ``lightning.pytorch.callbacks.Callback`` or
+        ``pytorch_lightning.callbacks.Callback``.
 
     Raises
     ------
     ImportError
-        If Lightning is unavailable.
+        If neither Lightning package is available.
     """
 
     try:
         from lightning.pytorch.callbacks import Callback
     except ImportError as exc:
-        raise ImportError(
-            "LayerProfilerCallback requires Lightning: install torchlens[lightning]."
-        ) from exc
-    return Callback
+        try:
+            from pytorch_lightning.callbacks import Callback
+        except ImportError:
+            raise ImportError(
+                "TorchLens Lightning callbacks require Lightning: install "
+                "torchlens[lightning] (or the standalone pytorch_lightning package)."
+            ) from exc
+    return cast(type[Any], Callback)
 
 
 class _LayerProfilerCallbackMixin:
@@ -265,6 +281,146 @@ class _LayerProfilerCallbackMixin:
         return batch
 
 
+class _SummaryCallbackMixin:
+    """Print ``tl.summary`` once at the start of each Lightning fit."""
+
+    def __init__(
+        self,
+        *,
+        input_getter: Callable[[Any], Any] | None = None,
+        print_fn: Callable[[str], Any] = print,
+        **summary_kwargs: Any,
+    ) -> None:
+        """Initialize the callback.
+
+        Parameters
+        ----------
+        input_getter:
+            Optional callable mapping the first training batch to the model's
+            forward input. Without it the batch's ``"x"`` entry, else its first
+            element, else the batch itself is used (a mapping as keyword
+            arguments).
+        print_fn:
+            Receives the rendered summary text (default ``print``).
+        **summary_kwargs:
+            Forwarded to ``tl.summary`` (the summary grammar). Validated here,
+            so a bad option fails when the callback is built, not mid-fit.
+        """
+
+        from torchlens._user_public_impls import _validate_summary_grammar
+
+        _validate_summary_grammar(summary_kwargs)
+        super().__init__()
+        self.input_getter = input_getter
+        self.print_fn = print_fn
+        self.summary_kwargs = summary_kwargs
+        self.report: str | None = None
+        self._summarized = False
+
+    def on_fit_start(self, trainer: Any, pl_module: Any) -> None:
+        """Summarize from ``example_input_array`` when the module declares one.
+
+        Parameters
+        ----------
+        trainer:
+            Lightning trainer.
+        pl_module:
+            Lightning module.
+        """
+
+        self._summarized = False
+        example = getattr(pl_module, "example_input_array", None)
+        if example is None:
+            return
+        transfer = getattr(pl_module, "transfer_batch_to_device", None)
+        device = getattr(pl_module, "device", None)
+        if callable(transfer) and device is not None:
+            example = transfer(example, device, 0)
+        self._summarize(trainer, pl_module, example, "example_input_array")
+
+    def on_train_batch_start(
+        self,
+        trainer: Any,
+        pl_module: Any,
+        batch: Any,
+        batch_idx: int,
+    ) -> None:
+        """Summarize from the first training batch when nothing ran yet.
+
+        Parameters
+        ----------
+        trainer:
+            Lightning trainer.
+        pl_module:
+            Lightning module.
+        batch:
+            Lightning batch (already on the module's device).
+        batch_idx:
+            Batch index.
+        """
+
+        if self._summarized:
+            return
+        if self.input_getter is not None:
+            model_input = self.input_getter(batch)
+        elif isinstance(batch, dict) and "x" in batch:
+            model_input = batch["x"]
+        elif isinstance(batch, (tuple, list)) and batch:
+            model_input = batch[0]
+        else:
+            model_input = batch
+        self._summarize(trainer, pl_module, model_input, "first training batch")
+
+    def _summarize(self, trainer: Any, pl_module: Any, model_input: Any, source: str) -> None:
+        """Run the one extra summary forward and print its table.
+
+        Parameters
+        ----------
+        trainer:
+            Lightning trainer.
+        pl_module:
+            Lightning module.
+        model_input:
+            Forward input: a mapping becomes keyword arguments, a tuple or
+            list positional arguments, anything else the single argument.
+        source:
+            Which sample was used, named in the printed header.
+        """
+
+        import torchlens as tl
+        from torchlens.errors import TorchLensWarning
+
+        self._summarized = True
+        if not getattr(trainer, "is_global_zero", True):
+            return
+        input_args: Any = model_input
+        input_kwargs: dict[str, Any] | None = None
+        if isinstance(model_input, dict):
+            input_args, input_kwargs = None, dict(model_input)
+        try:
+            report = tl.summary(pl_module, input_args, input_kwargs, **self.summary_kwargs)
+        except Exception as exc:  # a fit must never die for a summary; disclosed below
+            warnings.warn(
+                TorchLensWarning(
+                    f"SummaryCallback skipped the fit-start summary: running "
+                    f"{type(pl_module).__name__}.forward on the {source} raised "
+                    f"{type(exc).__name__}: {exc}. Training continues. "
+                    "Remedy: pass input_getter= mapping a batch to the forward input",
+                    code="lightning_summary_skipped",
+                    sample_source=source,
+                    error_type=type(exc).__name__,
+                ),
+                stacklevel=2,
+            )
+            return
+        self.report = report
+        self.print_fn(
+            f"TorchLens summary (SummaryCallback; sample: {source}; one extra "
+            "forward in eval mode under no_grad, every module's mode and the RNG "
+            f"state restored)\n{report}"
+        )
+
+
 def _build_layer_profiler_callback() -> type[_LayerProfilerCallbackMixin]:
     """Build the Lightning callback class on first public use.
 
@@ -281,6 +437,38 @@ def _build_layer_profiler_callback() -> type[_LayerProfilerCallbackMixin]:
 
     LayerProfilerCallback.__module__ = __name__
     return LayerProfilerCallback
+
+
+def _build_summary_callback() -> type[_SummaryCallbackMixin]:
+    """Build the fit-start summary callback class on first public use.
+
+    Returns
+    -------
+    type[_SummaryCallbackMixin]
+        Callback class inheriting Lightning's callback base.
+    """
+
+    callback_base = _lightning_callback_base()
+
+    class SummaryCallback(_SummaryCallbackMixin, callback_base):  # type: ignore[misc, valid-type]
+        """Print ``tl.summary`` at the start of each Lightning fit.
+
+        Sample rule: the module's ``example_input_array`` when it declares one
+        (summarized in ``on_fit_start``), otherwise the first training batch
+        (summarized in ``on_train_batch_start`` before its training step).
+        The forward input is ``input_getter(batch)`` when given, else the
+        batch's ``"x"`` entry, else its first element, else the whole batch;
+        a mapping is passed as keyword arguments (``forward(**batch)``).
+        The summary costs ONE extra forward, run in eval mode under
+        ``torch.no_grad()``; every module's training flag and the RNG state
+        are restored exactly afterwards, so training is unaffected. Runs on
+        global rank zero only. A sample the forward cannot take skips the
+        summary with a ``lightning_summary_skipped`` warning; the fit goes on.
+        The last report is kept on ``self.report``.
+        """
+
+    SummaryCallback.__module__ = __name__
+    return SummaryCallback
 
 
 def __getattr__(name: str) -> Any:
@@ -302,9 +490,13 @@ def __getattr__(name: str) -> Any:
         If ``name`` is not exported by this module.
     """
 
-    if name != "LayerProfilerCallback":
+    builders = {
+        "LayerProfilerCallback": _build_layer_profiler_callback,
+        "SummaryCallback": _build_summary_callback,
+    }
+    if name not in builders:
         raise AttributeError(f"module 'torchlens.callbacks.lightning' has no attribute {name!r}")
-    callback_cls = _build_layer_profiler_callback()
+    callback_cls = builders[name]()
     globals()[name] = callback_cls
     return callback_cls
 
@@ -318,7 +510,7 @@ def __dir__() -> list[str]:
         Sorted module globals plus lazy exports.
     """
 
-    return sorted([*globals(), "LayerProfilerCallback"])
+    return sorted([*globals(), "LayerProfilerCallback", "SummaryCallback"])
 
 
-__all__ = ["LayerProfilerCallback"]  # noqa: F822
+__all__ = ["LayerProfilerCallback", "SummaryCallback"]  # noqa: F822

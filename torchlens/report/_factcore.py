@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from ..data_classes.trace import Trace
 
 #: FactCore schema version (bump on any section/field change).
-FACTCORE_SCHEMA_VERSION = 1
+FACTCORE_SCHEMA_VERSION = 2
 
 #: The grain menu (D3): one vocabulary used identically by every level=
 #: argument. op = pass-qualified executed operations; layer = recurrence-
@@ -151,6 +151,23 @@ class IdentityIndex:
 
 
 @dataclass(frozen=True)
+class PrunedParamFacts:
+    """``torch.nn.utils.prune`` state read from the capture (``<name>_orig`` +
+    ``<name>_mask``).
+
+    ``raw`` counts every element of the pruned tensors (what ``total``
+    already includes); ``masked`` counts the mask zeros, so the effective
+    count is ``total - masked``. ``masked`` is ``None`` when the capture
+    retained no mask values (the pruning is still named, never hidden).
+    A weight that is naturally zero under a one in the mask is not masked.
+    """
+
+    paths: tuple[str, ...]
+    raw: int
+    masked: int | None
+
+
+@dataclass(frozen=True)
 class ParamFacts:
     """Parameter truth (A07's identity partition, read as facts).
 
@@ -167,6 +184,8 @@ class ParamFacts:
     frozen: int | None
     tied_groups: tuple[tuple[str, ...], ...]
     evidence: str = "measured"
+    bytes: int | None = None
+    pruned: PrunedParamFacts | None = None
 
 
 @dataclass(frozen=True)
@@ -310,7 +329,65 @@ def _params(trace: Any) -> ParamFacts:
         trainable=read("num_params_trainable"),
         frozen=read("num_params_frozen"),
         tied_groups=tuple(tuple(str(name) for name in group) for group in tied),
+        bytes=_param_bytes(trace),
+        pruned=_pruned_params(trace),
     )
+
+
+def _param_bytes(trace: Any) -> int | None:
+    """Storage bytes of the unique parameter identities (dtype-true)."""
+
+    params = list(getattr(trace, "params", ()) or ())
+    if not params:
+        return None if getattr(trace, "num_params", None) is None else 0
+    total = 0
+    for param in params:
+        memory = getattr(param, "param_memory", None)
+        if memory is None:
+            return None
+        total += int(memory)
+    return total
+
+
+def _mask_zeros(buffer: Any) -> int | None:
+    """Zero count of one captured prune-mask buffer; None when not retained."""
+
+    try:
+        value = buffer.initial_value
+    except Exception:  # noqa: BLE001 - an unreadable snapshot degrades to "not retained"
+        return None
+    if value is None or not hasattr(value, "numel"):
+        return None
+    return int(value.numel() - int(value.count_nonzero()))
+
+
+def _pruned_params(trace: Any) -> PrunedParamFacts | None:
+    """Detect ``torch.nn.utils.prune`` reparametrizations in the capture.
+
+    Prune replaces ``weight`` with a ``weight_orig`` parameter plus a
+    ``weight_mask`` buffer on the same module; the pair is the signal.
+    """
+
+    buffers: dict[str, Any] = {}
+    for buffer in getattr(trace, "buffers", ()) or ():
+        buffers[str(getattr(buffer, "address", ""))] = buffer
+    paths: list[str] = []
+    raw = 0
+    masked: int | None = 0
+    for param in getattr(trace, "params", ()) or ():
+        address = str(getattr(param, "address", ""))
+        if not address.endswith("_orig"):
+            continue
+        mask = buffers.get(address[: -len("_orig")] + "_mask")
+        if mask is None:
+            continue
+        paths.append(address[: -len("_orig")])
+        raw += int(getattr(param, "num_params", 0) or 0)
+        zeros = _mask_zeros(mask)
+        masked = None if masked is None or zeros is None else masked + zeros
+    if not paths:
+        return None
+    return PrunedParamFacts(paths=tuple(paths), raw=raw, masked=masked)
 
 
 def _memory(trace: Any) -> MemoryFacts:

@@ -1267,6 +1267,31 @@ shim owed*
   renders the summary automatically on rolled varying multi-pass nodes,
   directly after the title row.
 
+**"dtype" node_label_fields token** — *unstable — no deprecation shim owed*
+: Selector token rendering the node's output dtype as a label row with the
+  framework namespace dropped (`"float16"`, `"bfloat16"`; Keras `show_dtype`
+  style), for spotting where a mixed-precision graph changes dtype. Skipped
+  when the node has no dtype.
+
+**torchlens.preprocessing.imagenet_default()** — *unstable — no deprecation shim owed*
+: The explicit opt-in to the TorchLens-authored ImageNet recipe (resize 256,
+  center-crop 224, ImageNet mean/std), passed as
+  `CaptureOptions(transform=tl.preprocessing.imagenet_default())`. A PIL image
+  whose model resolves no preprocessing authority (torchvision weights
+  handle, timm data config, HF image processor) refuses typed
+  `preprocessing_unresolved` instead of receiving this recipe silently. The
+  opted-in capture's `input_preprocessor` keeps `source="imagenet_default"`,
+  `verified=False`, status `unverified_fallback`: never an authority.
+
+**SummaryCallback (torchlens.callbacks.lightning)** — *unstable — no deprecation shim owed*
+: Lightning callback printing `tl.summary` once per fit. Sample: the
+  module's `example_input_array` (at fit start) else the first training batch
+  (before its training step), whose forward input is `input_getter(batch)`,
+  else `batch["x"]`, else `batch[0]`, else the batch (a mapping as keyword
+  arguments). One extra forward in eval mode under no_grad; every module's
+  training flag and the RNG state are restored. Rank zero only; the report
+  stays on `.report`; a rejected sample warns `lightning_summary_skipped`.
+
 **show_legend=None AUTO value** — *unstable — no deprecation shim owed*
 : The tri-state AUTO value on the stable `show_legend` kwarg: no legend unless
   an encoding channel is active, then a channel-only disclosure legend.
@@ -1358,3 +1383,48 @@ deprecation shim owed*
   logits before use and refuses `LogitLensError` when the head cannot be
   represented; pass `lens=` for a tuned lens or `validate=False` to trust
   the reconstruction explicitly. See [facets](../facets.md).
+
+**Summary columns (`summary(columns=...)`)** — *unstable — no deprecation shim owed*
+: The column registry of `tl.summary` / `trace.summary`: `name`, `input`,
+  `output`, `kernel_size`, `groups`, `params`, `params_pct`,
+  `params_trainable`, `flops`, `flops_pct`, `macs`, `train`, `mode`,
+  `passes`, `evidence`. `input` lists the shapes of the distinct tensors
+  entering a row; `output` lists every member shape of the row's output in
+  return order; `kernel_size` / `groups` read the row's own conv or
+  pooling op; `params_trainable` is the per-path trainable count (`train`
+  stays the yes/no/partial `requires_grad` tri-state); `mode` is
+  `module.training` as captured (`train` / `eval` / `mixed`); `flops_pct`
+  is the row's share of the known forward FLOPs. A `+name` delta inserts
+  at the column's registry position. A FLOP cell whose count includes a
+  full-square attention op ends in `^` with a footer note. See
+  [summary](summary.md).
+
+**Summary Params footer extras** — *unstable — no deprecation shim owed*
+: The Params footer line carries `size` (unique parameter storage, dtype
+  true), a `pruned:` note with raw and effective nonzero counts on models
+  reparametrized by `torch.nn.utils.prune` (`<name>_orig` + `<name>_mask`),
+  and `optimizer state N params, X MB` when the capture was given
+  `CaptureOptions(optimizer=...)` (read from the optimizer's live state;
+  omitted on a loaded trace). The raw values ride `SummaryTotals.params_bytes`,
+  `.params_effective`, `.optimizer_state_params`, and
+  `.optimizer_state_bytes`.
+
+**ParamFacts.bytes / ParamFacts.pruned (`tl.report.PrunedParamFacts`)** — *unstable — no deprecation shim owed*
+: FactCore parameter facts (schema version 2): `bytes` is the unique
+  parameters' storage; `pruned` is `None` unless prune reparametrizations
+  exist, else a `PrunedParamFacts(paths, raw, masked)` naming the pruned
+  tensors, their raw element count, and the mask zeros (`masked=None` when
+  the capture retained no mask values).
+
+**FlopsReport.attention_full_square_ops** — *unstable — no deprecation shim owed*
+: The count of `scaled_dot_product_attention` ops in a `flops_report`
+  forward total; when non-zero the report prints that attention FLOPs
+  count the full query x key square and masks / `is_causal` are not
+  discounted.
+
+**`output_style_unknown`** — *unstable — no deprecation shim owed*
+: The typed refusal (an `InvalidArgumentError`) for a
+  `CaptureOptions(output_style=...)` no detector can resolve, with a did-you-mean over the built-in styles
+  (`classification`, `imagenet`, `imagenet1k`, `hf_text`). It refuses before
+  the forward when no custom output detector is registered, and after the
+  capture when registered custom detectors all declined the style.
