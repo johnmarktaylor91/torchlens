@@ -508,7 +508,9 @@ class CaptureOptions:
         omitted, a capture entered under ``torch.no_grad()`` or
         ``torch.inference_mode()`` implies ``True`` unless ``backward_ready``,
         ``save_grads`` or ``intervention_ready`` asks for a backward; the
-        Trace reports the effective value.
+        Trace reports the effective value. The implied value is cleared when
+        the forward re-enables grad (``torch.enable_grad()`` inside it) and an
+        output carries autograd history.
     name:
         Optional user-facing name for the returned log.
     cache:

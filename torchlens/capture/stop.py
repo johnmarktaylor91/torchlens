@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import traceback
 import weakref
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -102,6 +102,11 @@ class StopDirective:
         Whether the forward is running under the inference-only public mode.
     inference_only_conflicts
         Explicit backward-related options that conflict with ``inference_only``.
+    inference_only_implied
+        Whether ``inference_only`` was implied by ``torch.no_grad()`` /
+        ``torch.inference_mode()`` at capture entry rather than passed
+        explicitly. Only an implied flag is reconciled against the forward's
+        actual autograd history (see :func:`reconcile_implied_inference_only`).
     """
 
     halt_options: RecordingOptions | None = None
@@ -109,6 +114,7 @@ class StopDirective:
     forward_error_mode: ForwardErrorMode = "raise"
     inference_only: bool = False
     inference_only_conflicts: tuple[str, ...] = ()
+    inference_only_implied: bool = False
 
     @property
     def has_halt(self) -> bool:
@@ -322,6 +328,66 @@ def evaluate_halt_stop(
             forward_error_mode=directive.forward_error_mode,
             inference_only=directive.inference_only,
             inference_only_conflicts=directive.inference_only_conflicts,
+            inference_only_implied=directive.inference_only_implied,
         )
         setattr(trace, "_stop_directive", directive)
     directive.evaluate_halt(ctx, frontier_output=frontier_output)
+
+
+def _outputs_carry_autograd_history(outputs: Any) -> bool:
+    """Return whether any tensor in a forward's outputs has a ``grad_fn``.
+
+    Parameters
+    ----------
+    outputs
+        The value the user forward returned (any nesting of containers).
+
+    Returns
+    -------
+    bool
+        ``True`` when at least one output tensor carries autograd history.
+    """
+
+    import torch
+
+    from .. import _state
+    from ..utils.introspection import get_vars_of_type_from_obj
+
+    with _state.pause_logging():
+        tensors = get_vars_of_type_from_obj(outputs, torch.Tensor, search_depth=5)
+        return any(getattr(t, "grad_fn", None) is not None for t in tensors)
+
+
+def reconcile_implied_inference_only(trace: object, outputs: Any) -> None:
+    """Clear an implied ``inference_only`` when the forward kept its graph.
+
+    AGT-2132: a capture entered under ``torch.no_grad()`` (or inference mode)
+    implies ``inference_only=True`` because such a forward discards the
+    autograd graph. A forward that re-enables grad itself (``with
+    torch.enable_grad():``) still builds one, so the premise does not hold:
+    when the implied flag is set and an output carries a ``grad_fn``, the
+    trace reports ``inference_only=False`` and backward stays available. An
+    explicit ``inference_only=True`` is never changed.
+
+    Parameters
+    ----------
+    trace
+        Active trace-like capture session, after the forward returned.
+    outputs
+        The value the user forward returned.
+
+    Returns
+    -------
+    None
+        Mutates ``trace.inference_only`` and its stop directive in place.
+    """
+
+    directive = getattr(trace, "_stop_directive", None)
+    if not isinstance(directive, StopDirective) or not directive.inference_only_implied:
+        return
+    if not getattr(trace, "inference_only", False):
+        return
+    if not _outputs_carry_autograd_history(outputs):
+        return
+    setattr(trace, "inference_only", False)
+    setattr(trace, "_stop_directive", replace(directive, inference_only=False))

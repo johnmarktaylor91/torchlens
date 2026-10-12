@@ -38,7 +38,10 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   with `CaptureOptions(inference_only=True)`; a `tl.trace` or `tl.record` entered under
   `torch.no_grad()` or `torch.inference_mode()` implies it unless `backward_ready`, `save_grads`
   (or `default_grad` on `tl.record`, `intervention_ready` on `tl.trace`) asks for a backward, and
-  an explicit `inference_only=False` keeps it off. `Trace.inference_only` and
+  an explicit `inference_only=False` keeps it off. The implied flag holds only when the forward
+  really discarded its graph: a forward that turns grad back on (`with torch.enable_grad():`)
+  and returns an output with autograd history is not inference-only, and backward stays
+  available. An explicit `inference_only=True` is never changed. `Trace.inference_only` and
   `outcome.inference_only` report the effective value; a later `log_backward()` refuses and names
   the cause (`recording_backward_inference_only` on a `Recording`).
 

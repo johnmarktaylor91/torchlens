@@ -106,12 +106,13 @@ def record(
     save_grads, default_grad, grad_transform, save_raw_gradients:
         Gradient capture options for a later ``Recording.log_backward()``.
         Gradient hooks are installed only when ``backward_ready=True``,
-        ``save_grads=`` or ``default_grad=`` is given (``None``/``False``
-        do not count); without one, ``log_backward()`` refuses with code
-        ``recording_backward_not_requested``. With none of them, a record made
-        under ``torch.no_grad()`` or ``torch.inference_mode()`` implies
-        ``inference_only=True``, reported on ``Recording.outcome``, and
-        ``log_backward()`` refuses with ``recording_backward_inference_only``.
+        ``save_grads=`` or ``default_grad=`` is given (``save_grads=None``
+        or ``False`` and ``default_grad=False`` do not count); without one,
+        ``log_backward()`` refuses with code ``recording_backward_not_requested``.
+        With none of them, a record made under ``torch.no_grad()`` or
+        ``torch.inference_mode()`` implies ``inference_only=True``, reported on
+        ``Recording.outcome``, and ``log_backward()`` refuses with
+        ``recording_backward_inference_only``.
     echo:
         Live narration scope: ``True``, ``"modules"``, a live selector, or a
         grouped ``tl.options.EchoOptions``. Narration and retention are fully

@@ -47,7 +47,9 @@ A `Recording` captures gradients only when the `tl.record` call asked for a back
 `backward_ready=True`, `save_grads=` or `default_grad=`; without one it installs no gradient hooks
 and `Recording.log_backward()` refuses with `recording_backward_not_requested`. A capture entered
 under `torch.no_grad()` or `torch.inference_mode()` with no backward option implies
-`inference_only=True`, and its `log_backward()` refuses naming that cause.
+`inference_only=True`, and its `log_backward()` refuses naming that cause. A forward that turns
+grad back on itself (`with torch.enable_grad():`) keeps its autograd graph, so such a capture is
+not inference-only and `log_backward()` stays available.
 
 ## Backprop To The Stimulus
 

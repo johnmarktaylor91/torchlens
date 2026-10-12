@@ -260,10 +260,10 @@ class Recorder:
         backward_ready:
             If True, omitted defaults are promoted to ``CaptureSpec(keep_grad=True)``.
             Gradient hooks are installed only when ``backward_ready=True``,
-            ``save_grads=`` or ``default_grad=`` is given (``None``/``False``
-            do not count); otherwise ``log_backward()`` refuses, and a forward
-            under ``torch.no_grad()`` or ``torch.inference_mode()`` implies
-            ``inference_only=True``.
+            ``save_grads=`` or ``default_grad=`` is given (``save_grads=None``
+            or ``False`` and ``default_grad=False`` do not count); otherwise
+            ``log_backward()`` refuses, and a forward under ``torch.no_grad()``
+            or ``torch.inference_mode()`` implies ``inference_only=True``.
         """
 
         reject_compiled_model(model, api_name="torchlens.fastlog.Recorder")
@@ -508,6 +508,7 @@ class Recorder:
             raise_on_nan=False,
             forward_error_mode=self.options.on_forward_error,
             inference_only=inference_only,
+            inference_only_implied=inference_only,
         )
         trace._capture_config = InternalCaptureConfig(
             capture_mode="predicate",

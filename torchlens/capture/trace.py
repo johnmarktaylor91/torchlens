@@ -67,7 +67,7 @@ from .session import (
     attach_legacy_capture_session,
     detach_capture_session,
 )
-from .stop import StopDirective, evaluate_halt_stop
+from .stop import StopDirective, evaluate_halt_stop, reconcile_implied_inference_only
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
@@ -2025,6 +2025,11 @@ def run_and_log_inputs_through_model(
                 kind=swallowed_stop.kind,
                 boundary_label=swallowed_stop.boundary_label,
             )
+        # AGT-2132: an implied inference_only (no_grad at entry) stands only
+        # while the forward really discarded its graph; enable_grad inside the
+        # forward keeps it, so backward stays available. Before settlement,
+        # which stamps the flag on the outcome.
+        reconcile_implied_inference_only(self, outputs)
         set_capture_phase(self, CapturePhase.FINALIZE)
         from ..data_classes._nonfinite import drain_pending_nonfinite
         from ..utils.tensor_utils import synchronize_pending_cpu_async_copies

@@ -278,3 +278,101 @@ def test_trace_under_no_grad_keeps_saved_values() -> None:
     finally:
         implied.cleanup()
         plain.cleanup()
+
+
+class _GradInsideForward(nn.Module):
+    """A forward that turns grad back on itself (energy / implicit-layer style)."""
+
+    def __init__(self) -> None:
+        """Initialize the layers."""
+
+        super().__init__()
+        self.lin = nn.Linear(4, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the model with grad enabled regardless of the caller.
+
+        Parameters
+        ----------
+        x:
+            Input batch.
+
+        Returns
+        -------
+        torch.Tensor
+            Model output, carrying autograd history.
+        """
+
+        with torch.enable_grad():
+            return torch.relu(self.lin(x))
+
+
+def _grad_inside_model_and_input() -> tuple[_GradInsideForward, torch.Tensor]:
+    """Return a deterministic enable_grad-inside model and input.
+
+    Returns
+    -------
+    tuple[_GradInsideForward, torch.Tensor]
+        Model and input batch.
+    """
+
+    torch.manual_seed(0)
+    return _GradInsideForward(), torch.randn(3, 4)
+
+
+def test_trace_under_no_grad_with_enable_grad_inside_keeps_backward() -> None:
+    """A forward that re-enables grad keeps its graph, so the implication does not apply."""
+
+    model, x = _grad_inside_model_and_input()
+    with torch.no_grad():
+        trace = tl.trace(model, x)
+    try:
+        assert trace.inference_only is False
+        assert trace.outcome.inference_only is False
+        loss = trace[trace.output_layers[0]].out.sum()
+        assert loss.grad_fn is not None
+        trace.log_backward(loss, save_grads=True)
+        assert model.lin.weight.grad is not None
+        assert any(layer.grads for layer in trace.layer_list)
+    finally:
+        trace.cleanup()
+
+
+def test_trace_explicit_inference_only_with_enable_grad_inside_stays_on() -> None:
+    """An explicit inference_only=True is never cleared, even if the forward kept a graph."""
+
+    model, x = _grad_inside_model_and_input()
+    with torch.no_grad():
+        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(inference_only=True))
+    try:
+        assert trace.inference_only is True
+        assert trace.outcome.inference_only is True
+        loss = model(x).sum()
+        with pytest.raises(ConfigurationError, match="autograd graph was discarded"):
+            trace.log_backward(loss)
+    finally:
+        trace.cleanup()
+
+
+def test_record_under_no_grad_with_enable_grad_inside_is_not_inference_only() -> None:
+    """The record door clears the implied flag too and refuses only for the missing opt-in."""
+
+    model, x = _grad_inside_model_and_input()
+    with torch.no_grad():
+        out, recording = tl.record(model, x, return_output=True)
+    assert out.grad_fn is not None
+    assert recording.outcome.inference_only is False
+    with pytest.raises(RecorderStateError) as exc_info:
+        recording.log_backward(out.sum())
+    assert exc_info.value.fields["code"] == "recording_backward_not_requested"
+
+
+def test_record_default_grad_false_does_not_opt_in() -> None:
+    """``default_grad=False`` requests no backward: no hooks, and log_backward refuses."""
+
+    model, x = _model_and_input()
+    out, recording = tl.record(model, x, save=_keep_relu, return_output=True, default_grad=False)
+    assert not _has_grad_hooks(out)
+    with pytest.raises(RecorderStateError) as exc_info:
+        recording.log_backward(out.sum(), save_grads=True)
+    assert exc_info.value.fields["code"] == "recording_backward_not_requested"

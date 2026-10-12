@@ -54,7 +54,9 @@
   (`recording_backward_not_requested`). A `tl.trace` or `tl.record` entered under
   `torch.no_grad()` or `torch.inference_mode()` with no backward option implies
   `inference_only=True` (`Trace.inference_only`, `outcome.inference_only`), and a later
-  `log_backward()` refuses naming that cause.
+  `log_backward()` refuses naming that cause. The implied flag is cleared when the forward
+  re-enables grad (`torch.enable_grad()` inside it) and an output carries autograd history;
+  an explicit `inference_only=True` is never cleared.
   Trace-side failed captures expose `exc.partial_log`, recoverable with
   `tl.partial.from_failed_capture(exc)`.
 - **Every capture product carries ONE settled typed outcome** (early-stopping
