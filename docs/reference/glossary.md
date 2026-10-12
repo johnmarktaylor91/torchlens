@@ -480,8 +480,9 @@ attribution-target alias. See the [attribution reference](attribution.md).
   name a forward called the object through;
   `tl.head` selects one attention head; `tl.facet` selects a semantic facet view; an unscoped
   `tl.head(i)` writes head `i` of every matching facet in every module and says how many sites
-  it writes (a `MultiMatchWarning`, for example 36 on a 12-layer GPT-2: q, k and v in each
-  layer); `.in_module(address)` scopes it to one module;
+  it writes (a `TorchLensWarning` coded `facet_selector_fanout`, with `fields["site_count"]`;
+  36 on a 12-layer GPT-2: q, k and v in each layer); `.in_module(address)` scopes it to one
+  module;
   `tl.func_transform` selects `torch.func` and `torch.autograd` transform boundary ops
   (including `autogradgrad`, an in-forward `torch.autograd.grad` call, with
   `transform_kind="autograd.grad"`); `tl.output` selects model outputs, and

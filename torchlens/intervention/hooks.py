@@ -714,6 +714,8 @@ def expand_facet_hook_entries(
 def _warn_facet_fanout(log: Any, selector: FacetSelector, written: list[tuple[str, str]]) -> None:
     """Say how many sites a facet selector writes when it writes more than one (forks.9).
 
+    Coded ``facet_selector_fanout``; ``fields["site_count"]`` carries the number.
+
     ``tl.head(5)`` keeps its broadcast meaning: it writes head 5 of every
     matching facet in every module. The count is the number of installed
     facet writes (one per home op and facet slice, after de-duplication), so it
@@ -733,7 +735,7 @@ def _warn_facet_fanout(log: Any, selector: FacetSelector, written: list[tuple[st
         return
     import warnings
 
-    from .errors import MultiMatchWarning
+    from ..errors import TorchLensWarning
 
     homes = list(dict.fromkeys(_display_label(log, home) for home, _ in written))
     facet_names = ", ".join(dict.fromkeys(name for _, name in written))
@@ -745,9 +747,12 @@ def _warn_facet_fanout(log: Any, selector: FacetSelector, written: list[tuple[st
         else "a narrower facet selector"
     )
     warnings.warn(
-        MultiMatchWarning(
+        TorchLensWarning(
             f"selector {selector!r} writes {len(written)} sites ({facet_names} at "
-            f"{len(homes)} home ops: {shown}). To write fewer, scope it, e.g. {narrower}."
+            f"{len(homes)} home ops: {shown}). Remedy: to write fewer, scope it, "
+            f"e.g. {narrower}",
+            code="facet_selector_fanout",
+            site_count=len(written),
         ),
         stacklevel=4,
     )

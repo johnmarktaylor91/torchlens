@@ -186,10 +186,15 @@ def test_unscoped_head_reports_the_sites_it_writes() -> None:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         edited.attach_hooks(tl.head(5), tl.zero_ablate())
-    reports = [w for w in caught if "writes" in str(w.message) and "tl.head(5)" in str(w.message)]
+    reports = [
+        w.message
+        for w in caught
+        if getattr(w.message, "fields", {}).get("code") == "facet_selector_fanout"
+    ]
     assert len(reports) == 1
-    assert issubclass(reports[0].category, errors.MultiMatchWarning)
-    reported = int(re.search(r"writes (\d+) sites", str(reports[0].message)).group(1))
+    assert "tl.head(5)" in str(reports[0])
+    reported = reports[0].fields["site_count"]
+    assert f"writes {reported} sites" in str(reports[0])
     edited.run(model, ids)
     written = sum(
         bool(torch.count_nonzero(after) == 0 and torch.count_nonzero(before) > 0)
@@ -200,7 +205,11 @@ def test_unscoped_head_reports_the_sites_it_writes() -> None:
     with warnings.catch_warnings(record=True) as caught_scoped:
         warnings.simplefilter("always")
         scoped.attach_hooks(tl.head(5, "q").in_module("transformer.h.0.attn"), tl.zero_ablate())
-    assert not [w for w in caught_scoped if "writes" in str(w.message)]
+    assert not [
+        w
+        for w in caught_scoped
+        if getattr(w.message, "fields", {}).get("code") == "facet_selector_fanout"
+    ]
 
 
 class _UnregisteredAttention(nn.Module):
