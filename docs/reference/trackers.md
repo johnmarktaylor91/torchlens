@@ -207,6 +207,24 @@ with its evidence label; no CUDA timing and no allocator-memory coloring
 until real sources exist -- missing evidence omits a field, never writes
 zero.
 
+## MLflow and Comet sinks
+
+`MLflowSink(client=None, *, run_id=None)` and `CometSink(experiment)` are native
+receivers over a run or experiment you already created; neither starts or ends it.
+
+- `MLflowSink` takes the fluent `mlflow` module (active run, or `run_id=`), an
+  `mlflow.MlflowClient` with `run_id=`, or nothing (imports mlflow, active run). Scalars go to
+  `log_metric(run_id, tag, value, step=<your step>)`, so MLflow's own counter never replaces
+  your step. Text points and raw histograms are artifacts at `<tag>/step_<NNNNNNNNNN>.txt` and
+  `.json`; the histogram JSON holds the exact `counts`, `edges` and `summary`. Keep
+  `hist_every` sparse: one file per point. A tag MLflow cannot carry (it allows letters,
+  digits, `_ - . : /` and space) refuses typed (`tracker_tag_unsafe`) and latches the sink.
+- `CometSink` takes a `comet_ml.Experiment` or `OfflineExperiment`. Scalars go to
+  `log_metric(tag, value, step=<your step>)`, text to `log_text(..., step=...,
+  metadata={"tag": tag})`. It does not advertise `raw_histogram`: Comet re-bins raw values on
+  its own fixed grid, so exact counts on explicit edges cannot survive. Asking for histograms
+  refuses by name at attach; the summary statistics still arrive as scalar series.
+
 ## Framework callbacks
 
 `HFTrainerWatchCallback(to=...)` and `LightningWatchCallback(to=...)` are

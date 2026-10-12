@@ -1302,6 +1302,19 @@ shim owed*
   no_grad, training flags restored). A batch the forward cannot take is
   skipped with a `lightning_profile_skipped` warning; training continues.
 
+**MLflowSink, CometSink (torchlens.trackers)** — *unstable — no deprecation shim owed*
+: Forward-watch sinks over a run or experiment the user created (never
+  started or ended by the sink). `MLflowSink(client=None, *, run_id=None)`
+  takes the fluent module, an `MlflowClient` + `run_id`, or nothing; keeps the
+  caller's step; raw histograms are exact JSON artifacts. `CometSink(experiment)`
+  takes an `Experiment` or `OfflineExperiment`; scalars and text only (Comet
+  re-bins histograms, so `raw_histogram` is not advertised).
+
+**tl.export.mlflow / tl.export.aim parity keys** — *unstable — no deprecation shim owed*
+: Both exporters log the per-layer table, the report and every honesty fact as
+  a string tag (wandb-export parity) and return `table`, `report`, `tags`
+  (and `artifacts` for MLflow) beside the summary metrics and `capture_honesty`.
+
 **watch(grain="op", allow_forward_wrap=True) (torchlens.trackers)** — *unstable — no deprecation shim owed*
 : Op-grain (tier O) watching: per-op activations from the Route-B op-tier
   collector during ordinary training. Needs `signals=("activations",)`,
