@@ -86,9 +86,23 @@ def test_qwen2_classifies_attention_mlp_norm_at_llama_parity(impl: str) -> None:
 
 
 def test_qwen2_eager_attention_facets_equal_an_independent_computation() -> None:
-    """q/k/v (with Qwen2's projection biases), pattern, z and result recompute exactly."""
+    """q/k/v (with Qwen2's projection biases), pattern, z and result recompute exactly.
 
-    model, trace = _capture("qwen2", "eager")
+    Hugging Face initializes the q/k/v biases to zero, so the biases are set
+    to seeded random values first: a recipe that dropped them would pass a
+    zero-bias check.
+    """
+
+    spec = FAMILY_BY_NAME["qwen2"]
+    model = spec.build("eager")
+    generator = torch.Generator().manual_seed(7)
+    with torch.no_grad():
+        for layer in model.model.layers:
+            for linear in (layer.self_attn.q_proj, layer.self_attn.k_proj, layer.self_attn.v_proj):
+                linear.bias.copy_(torch.randn(linear.bias.shape, generator=generator))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(model, spec.input_args(), spec.input_kwargs())
     attn = model.model.layers[0].self_attn
     view = trace.modules["model.layers.0.self_attn"].facets
     config = model.config
@@ -97,7 +111,6 @@ def test_qwen2_eager_attention_facets_equal_an_independent_computation() -> None
     hidden = trace.modules["model.layers.0.input_layernorm"].out
     q = torch.nn.functional.linear(hidden, attn.q_proj.weight, attn.q_proj.bias)
     k = torch.nn.functional.linear(hidden, attn.k_proj.weight, attn.k_proj.bias)
-    assert attn.q_proj.bias is not None and bool(attn.q_proj.bias.abs().sum() > 0)
     assert torch.allclose(view["q"].value, q.reshape(*q.shape[:-1], n_heads, d_head), atol=1e-6)
     assert torch.allclose(view["k"].value, k.reshape(*k.shape[:-1], n_kv, d_head), atol=1e-6)
     pattern = view["pattern"].value
