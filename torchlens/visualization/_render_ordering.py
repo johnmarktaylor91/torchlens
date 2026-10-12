@@ -15,7 +15,7 @@ import subprocess
 import tempfile
 import warnings
 from collections import defaultdict
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, cast
 
 from ..errors._base import TorchLensWarning
@@ -46,6 +46,45 @@ if TYPE_CHECKING:
     from .._literals import VisInterventionModeLiteral
     from ..data_classes.module import Module
     from .render_ir import RenderIROrderingConstraint
+
+
+@dataclass
+class SpeculativeRender:
+    """Final-format output produced inside the verifier's ordered layouts (U07.5).
+
+    The sibling-order verifier lays out the ordered DOT with ``dot -Tplain``
+    and the final render then laid out the SAME source again. With a
+    speculative render the ordered layouts also write the requested format in
+    the same Graphviz process, and the final render reuses the artifact of
+    the source it settles on instead of a fresh layout: one Graphviz layout
+    fewer per default draw. ``last_source`` / ``last_path`` / ``last_stderr``
+    describe the most recent ordered layout.
+
+    Parameters
+    ----------
+    fileformat:
+        Format the final render needs.
+    scratch_dir:
+        Directory for the speculative artifacts (the caller removes it).
+    cwd:
+        Working directory for Graphviz (the visualizer image root), matching
+        the final render's.
+    """
+
+    fileformat: str
+    scratch_dir: str
+    cwd: str | None = None
+    last_source: str | None = None
+    last_path: str | None = None
+    last_stderr: str = ""
+    layouts: int = 0
+
+    def reusable_for(self, source: str) -> str | None:
+        """Return the speculative artifact path when it was laid out from ``source``."""
+
+        if self.last_source == source and self.last_path and os.path.exists(self.last_path):
+            return self.last_path
+        return None
 
 
 def _should_order_siblings(
@@ -90,8 +129,13 @@ def _verify_and_apply_sibling_ordering(
     chains: tuple[SiblingOrderChain | RenderIROrderingConstraint, ...],
     captured_edges: list[CapturedForwardEdge],
     rankdir: str,
+    speculative: SpeculativeRender | None = None,
 ) -> tuple[str, SiblingOrderDecision]:
-    """Verify sibling rank chains and return final DOT source."""
+    """Verify sibling rank chains and return final DOT source.
+
+    ``speculative`` (U07.5) makes every ORDERED layout also write the final
+    format, so the caller can reuse the artifact of the source returned here.
+    """
 
     baseline_source = _strip_sibling_rank_groups(source)
     baseline = _layout_dot_plain(baseline_source, rankdir, captured_edges)
@@ -105,7 +149,7 @@ def _verify_and_apply_sibling_ordering(
         source = _inject_sibling_rank_groups(baseline_source, chains)
     if not chains or not _sibling_groups_fit(source, node_clusters):
         return baseline_source, _sibling_order_decision((), (), {})
-    injected = _layout_ordered_dot_plain(source, rankdir, captured_edges, baseline)
+    injected = _layout_ordered_dot_plain(source, rankdir, captured_edges, baseline, speculative)
     _assert_sibling_backstops(baseline, injected, chains, captured_edges)
 
     ratios = {
@@ -131,7 +175,7 @@ def _verify_and_apply_sibling_ordering(
         if not _sibling_groups_fit(current_source, node_clusters):
             return baseline_source, _sibling_order_decision(chains, (), ratios)
         current_layout = _layout_ordered_dot_plain(
-            current_source, rankdir, captured_edges, baseline
+            current_source, rankdir, captured_edges, baseline, speculative
         )
     return current_source, _sibling_order_decision(chains, survivors, ratios)
 
@@ -179,6 +223,7 @@ def _layout_ordered_dot_plain(
     rankdir: str,
     captured_edges: list[CapturedForwardEdge],
     baseline: PlainLayout,
+    speculative: SpeculativeRender | None = None,
 ) -> PlainLayout:
     """Lay out an ordered DOT source, raising when dot returns no layout for it.
 
@@ -186,7 +231,7 @@ def _layout_ordered_dot_plain(
     harmless; raising routes it to the plain-layout fallback instead.
     """
 
-    layout = _layout_dot_plain(source, rankdir, captured_edges)
+    layout = _layout_dot_plain(source, rankdir, captured_edges, speculative)
     if baseline.nodes and not layout.nodes:
         raise subprocess.SubprocessError("dot -Tplain produced no layout for the ordered graph")
     return layout
@@ -371,31 +416,50 @@ def _dot_opened_scope(line: str) -> tuple[str | None] | None:
     return None
 
 
+#: The only characters ``_dot_line_is_complete`` acts on (U07.5): the scan
+#: jumps between them instead of stepping through every character of the
+#: long HTML-label lines, the top Python self-time row of a default draw.
+_DOT_LINE_SPECIAL = re.compile(r'["\\<>]')
+
+
 def _dot_line_is_complete(line: str) -> bool:
     """Return whether ``line`` closes every quoted string and HTML label it opens.
 
     A multi-line label could hide ``{`` or ``}`` lines from the brace tracking,
     so such DOT is refused rather than misread. Inside an HTML label ``"`` is
     plain text; outside, the ``>`` of an ``->`` edge operator opens nothing.
+
+    Only ``"``, ``\\``, ``<`` and ``>`` change the scan state, so the loop
+    visits those positions alone; a backslash escapes the character directly
+    after it, which the scan checks by position.
     """
 
     in_quote = False
     html_depth = 0
-    previous = ""
-    escaped = False
-    for char in line:
+    escape_at = -2
+    for match in _DOT_LINE_SPECIAL.finditer(line):
+        index = match.start()
+        char = line[index]
         if in_quote:
-            in_quote = escaped or char != '"'
-            escaped = not escaped and char == "\\"
+            escaped = escape_at == index - 1
+            if char == "\\":
+                escape_at = -2 if escaped else index
+            elif char == '"' and not escaped:
+                in_quote = False
+            else:
+                escape_at = -2
         elif html_depth:
-            html_depth += {"<": 1, ">": -1}.get(char, 0)
+            if char == "<":
+                html_depth += 1
+            elif char == ">":
+                html_depth -= 1
         elif char == '"':
             in_quote = True
+            escape_at = -2
         elif char == "<":
             html_depth = 1
-        elif char == ">" and previous != "-":
+        elif char == ">" and (index == 0 or line[index - 1] != "-"):
             return False
-        previous = char
     return not in_quote and html_depth == 0
 
 
@@ -450,25 +514,34 @@ def _layout_dot_plain(
     source: str,
     rankdir: str,
     captured_edges: list[CapturedForwardEdge],
+    speculative: SpeculativeRender | None = None,
 ) -> PlainLayout:
-    """Run ``dot -Tplain`` and parse coordinates and real-edge spans."""
+    """Run ``dot -Tplain`` and parse coordinates and real-edge spans.
+
+    With ``speculative`` the same Graphviz process also writes the final
+    format from this one layout (``-Tplain -o<plain> -T<fmt> -o<artifact>``).
+    """
 
     real_edges = {(edge.tail_name, edge.head_name) for edge in captured_edges}
     with tempfile.NamedTemporaryFile("w", suffix=".dot", delete=False) as source_file:
         source_file.write(source)
         source_path = source_file.name
     try:
-        proc = _render_utils.run_bounded_subprocess(
-            ["dot", "-Tplain", source_path],
-            text=True,
-            timeout=120,
-        )
+        if speculative is None:
+            proc = _render_utils.run_bounded_subprocess(
+                ["dot", "-Tplain", source_path],
+                text=True,
+                timeout=120,
+            )
+            plain_text = proc.stdout
+        else:
+            plain_text = _layout_with_speculative_output(source, source_path, speculative)
     finally:
         os.remove(source_path)
 
     nodes: dict[str, tuple[float, float]] = {}
     pending_edges: list[tuple[str, str]] = []
-    for line in proc.stdout.splitlines():
+    for line in plain_text.splitlines():
         parts = line.split()
         if not parts:
             continue
@@ -484,6 +557,52 @@ def _layout_dot_plain(
         if edge_key[0] in nodes and edge_key[1] in nodes:
             edge_spans[edge_key] = _flow_span(nodes[edge_key[0]], nodes[edge_key[1]], rankdir)
     return PlainLayout(nodes=nodes, edge_spans=edge_spans)
+
+
+def _layout_with_speculative_output(
+    source: str, source_path: str, speculative: SpeculativeRender
+) -> str:
+    """Lay out once, writing ``-Tplain`` and the final format; return the plain text.
+
+    Parameters
+    ----------
+    source:
+        DOT text being laid out (recorded as the artifact's source).
+    source_path:
+        File holding ``source``.
+    speculative:
+        Speculative-render state updated with this layout's artifact.
+
+    Returns
+    -------
+    str
+        The ``-Tplain`` layout text.
+    """
+
+    speculative.layouts += 1
+    stem = os.path.join(speculative.scratch_dir, f"ordered{speculative.layouts}")
+    plain_path = f"{stem}.plain"
+    artifact_path = f"{stem}.{speculative.fileformat}"
+    speculative.last_source = None
+    proc = _render_utils.run_bounded_subprocess(
+        [
+            "dot",
+            "-Tplain",
+            f"-o{plain_path}",
+            f"-T{speculative.fileformat}",
+            f"-o{artifact_path}",
+            os.path.abspath(source_path),
+        ],
+        text=True,
+        timeout=120,
+        cwd=speculative.cwd,
+    )
+    with open(plain_path, encoding="utf-8") as plain_file:
+        plain_text = plain_file.read()
+    speculative.last_source = source
+    speculative.last_path = artifact_path
+    speculative.last_stderr = proc.stderr or ""
+    return plain_text
 
 
 def _sibling_chain_stretch_ratio(
@@ -528,6 +647,7 @@ def _strip_sibling_rank_groups(source: str) -> str:
 
 
 __all__ = [
+    "SpeculativeRender",
     "_dot_node_clusters",
     "_fit_sibling_chains_to_clusters",
     "_sibling_groups_fit",

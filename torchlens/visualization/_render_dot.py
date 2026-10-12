@@ -2,6 +2,7 @@
 
 # ruff: noqa: F403, F405
 
+import shutil
 import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, replace
@@ -17,6 +18,7 @@ from ._render_flow import *
 from ._render_leaf import *
 from ._render_nodes import *
 from ._render_ordering import (
+    SpeculativeRender,
     _layout_dot_plain,
     _queue_sibling_rank_group,
     _should_order_siblings,
@@ -1013,6 +1015,7 @@ def _emit_and_finish_forward(
 
     source_override = None
     trace._last_sibling_ordering_decision = SiblingOrderDecision(0, 0, {}, ())
+    speculative = _speculative_render_for(trace, dot, target, compose_code_panel)
     if forward_render_ir.ordering_constraints:
         try:
             source_override, decision = _verify_and_apply_sibling_ordering(
@@ -1020,6 +1023,7 @@ def _emit_and_finish_forward(
                 forward_render_ir.ordering_constraints,
                 work.captured_edges,
                 context.rankdir,
+                speculative,
             )
             trace._last_sibling_ordering_decision = decision
         except (subprocess.SubprocessError, OSError) as exc:
@@ -1084,6 +1088,81 @@ def _emit_and_finish_forward(
     # never written into the source: user-saved DOT keeps only stable
     # relative image refs instead of a per-run mkdtemp path that dies with
     # the trace.
+    try:
+        return _publish_forward_render(
+            trace, dot, context, target, final_source, compose_code_panel, speculative
+        )
+    finally:
+        if speculative is not None:
+            shutil.rmtree(speculative.scratch_dir, ignore_errors=True)
+
+
+def _speculative_render_for(
+    trace: "Trace", dot: Any, target: RenderTarget, compose_code_panel: bool
+) -> SpeculativeRender | None:
+    """Return speculative-render state when the final render can reuse a verifier layout.
+
+    U07.5: the sibling-order verifier's ordered layout is the same layout the
+    final render would run again; reuse needs the plain ``dot`` engine and a
+    direct (not code-panel-composed) artifact.
+
+    Parameters
+    ----------
+    trace:
+        Trace being rendered (its visualizer scratch dir is Graphviz's cwd).
+    dot:
+        Graphviz graph being rendered.
+    target:
+        Render target (the format to produce).
+    compose_code_panel:
+        Whether the final render composes a code panel (no reuse then).
+
+    Returns
+    -------
+    SpeculativeRender | None
+        Fresh state with its own scratch directory, or ``None``.
+    """
+
+    if compose_code_panel or dot.engine != "dot":
+        return None
+    image_root = getattr(trace, "_visualizer_dir", None)
+    return SpeculativeRender(
+        fileformat=target.fileformat,
+        scratch_dir=tempfile.mkdtemp(prefix="torchlens_ordered_render_"),
+        cwd=str(image_root) if image_root else None,
+    )
+
+
+def _publish_forward_render(
+    trace: "Trace",
+    dot: Any,
+    context: _ForwardRenderContext,
+    target: RenderTarget,
+    final_source: str,
+    compose_code_panel: bool,
+    speculative: SpeculativeRender | None,
+) -> Any:
+    """Write the DOT source and publish the rendered artifact atomically.
+
+    Parameters
+    ----------
+    trace, dot, context, target:
+        Render state.
+    final_source:
+        The DOT text to publish.
+    compose_code_panel:
+        Whether a code panel is composed beside the graph.
+    speculative:
+        Verifier layouts that may already hold the artifact for ``final_source``.
+
+    Returns
+    -------
+    Any
+        The Graphviz graph when ``return_graph`` was requested, else the source.
+    """
+
+    request = context.request
+    render_timeout = 120
     late_visualizer_dir = getattr(trace, "_visualizer_dir", None)
     source_path = dot.save(target.outpath)
     with open(source_path, "w", encoding="utf-8") as source_file:
@@ -1111,22 +1190,32 @@ def _emit_and_finish_forward(
                 # scaling by N" clamp warning is the signal that raster
                 # dimensions are fiction; it was silently discarded).
                 with atomic_render_target(rendered_path) as temp_rendered_path:
-                    cmd = [
-                        dot.engine,
-                        f"-T{target.fileformat}",
-                        "-o",
-                        os.path.abspath(temp_rendered_path),
-                        os.path.abspath(source_path),
-                    ]
-                    completed = _render_utils.run_bounded_subprocess(
-                        cmd,
-                        timeout=render_timeout,
-                        # T9 (grind-p3): relative node image refs resolve against
-                        # the scratch root via cwd, keeping the per-run temp path
-                        # out of the saved DOT source.
-                        cwd=str(render_image_root) if render_image_root else None,
+                    reusable = (
+                        speculative.reusable_for(final_source) if speculative is not None else None
                     )
-                    layout_stderr = surface_layout_stderr(completed.stderr, engine=dot.engine)
+                    if reusable is not None:
+                        # U07.5: the verifier already laid out exactly this
+                        # source and wrote the format; publish that artifact.
+                        shutil.move(reusable, temp_rendered_path)
+                        stderr_text: Any = cast(SpeculativeRender, speculative).last_stderr
+                    else:
+                        cmd = [
+                            dot.engine,
+                            f"-T{target.fileformat}",
+                            "-o",
+                            os.path.abspath(temp_rendered_path),
+                            os.path.abspath(source_path),
+                        ]
+                        completed = _render_utils.run_bounded_subprocess(
+                            cmd,
+                            timeout=render_timeout,
+                            # T9 (grind-p3): relative node image refs resolve
+                            # against the scratch root via cwd, keeping the
+                            # per-run temp path out of the saved DOT source.
+                            cwd=str(render_image_root) if render_image_root else None,
+                        )
+                        stderr_text = completed.stderr
+                    layout_stderr = surface_layout_stderr(stderr_text, engine=dot.engine)
                     if target.fileformat == "svg":
                         _inline_svg_file_local_images(temp_rendered_path, render_image_root)
                     _validate_rendered_output(temp_rendered_path, source_path, "forward graph")
