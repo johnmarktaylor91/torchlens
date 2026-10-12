@@ -7,3 +7,28 @@ OBL-W0-CACHE-KEY-COMPLETE	every option/entry parameter is cache-keyed or witness
 OBL-W0-DEPRECATION-IFF	a call warns deprecation iff the registry says so	behavior root: observed CALLS through invocation templates, never metadata (D6); warning must name the registered replacement and the replacement must resolve (D21)	I1	PURE_OBSERVER	P02
 OBL-W0-SURFACE-DENOM	the public-surface denominator is multi-root anchored	counted set: len(__all__); roots: static AST parse, runtime length, PUBLIC_SURFACE_SIZE constant, TARGET_ALL ledger length, classification-baseline declared count; the reachable denominator publishes beside it with its counted set (D8)	I1	PURE_OBSERVER	P02
 OBL-W0-NUMERAL-PROVENANCE	published numerals are censused with a dated legacy baseline	counted set: NUMERAL_COUNTED_SET in tests/oracles/_censuses.py; stale baseline rows block; FactRef enforcement for NEW numerals lands Wave 2 (H5)	I1	PURE_OBSERVER	F36
+OBL-Q-ADDRESS-DEPTH	a module's address depth equals its dotted-address component count	dotted components of the module address below the root; the root address 'self' is 0; unit: levels	I2	PURE_OBSERVER	REAL
+OBL-Q-BRANCHING-FACTOR	the branching factor equals the hand-counted mean fan-out	mean number of children (consumers) per compute Op; unit: children per op (float)	I2	PURE_OBSERVER	REAL
+OBL-Q-BYTES-READ	an op's read traffic equals its read-once closed form	theoretical ideal read-once bytes: every input tensor and every parameter of the op read once; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-BYTES-WRITTEN	an op's write traffic equals its write-once closed form	theoretical ideal write-once bytes of the op's outputs; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-CALL-DEPTH	a module's call depth equals its hand-counted nesting depth	nesting depth of the module's call in the call tree, a top-level child at 1; unit: levels	I2	PURE_OBSERVER	REAL
+OBL-Q-COMPLETENESS-WITNESS-UNACCOUNTED-COUNT	the unaccounted-dispatch count equals the planted gap count	aten dispatch events the completeness witness observed that no captured op accounts for; unit: events	I2	PURE_OBSERVER	REAL
+OBL-Q-MAX-IN-DEGREE	the maximum in-degree equals the hand-counted parent maximum	maximum number of parents over compute Ops; unit: edges	I2	PURE_OBSERVER	REAL
+OBL-Q-MAX-OUT-DEGREE	the maximum out-degree equals the hand-counted child maximum	maximum number of children over compute Ops; unit: edges	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-BACKWARD-PASSES	the backward-pass count equals the number of backward calls issued	backward calls recorded on the trace; unit: passes	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-COMPUTE-EDGES	the compute-edge count equals the hand count	distinct Op-graph edges whose endpoints are both compute Ops; unit: edges	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-MODULES	the module count equals the source model's submodule count	registered source-model submodules; unit: modules	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-OVERWRITES	a buffer's overwrite count equals the hand-counted writes	write events recorded for one buffer address; unit: writes	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-SAVED-OPS	the saved-op count equals the ops the save selection names	Ops whose activation was retained by the capture; unit: ops	I2	PURE_OBSERVER	REAL
+OBL-Q-SAVED-ACTIVATION-MEMORY	retained activation bytes equal the physically retained storage	physical bytes of retained activation payloads (raw and transformed), each storage counted once; unit: bytes	I1	PURE_OBSERVER	REAL
+OBL-Q-NUM-PARAMS	the parameter count equals its closed form on every door	parameter elements in scope: a Trace or summary all declared parameters, a Module its own, a Layer or Op the parameters it consumes, a Param its own elements; unit: elements	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-PARAM-TENSORS	the parameter-tensor count equals its closed form on every door	parameter tensors in scope (Trace, Layer, Op, Module, ModuleCall); unit: tensors	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-PARAMS-FROZEN	the frozen-parameter count equals its closed form on every door	elements of in-scope parameters with requires_grad False; unit: elements	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-PARAMS-TRAINABLE	the trainable-parameter count equals its closed form on every door	elements of in-scope parameters with requires_grad True; unit: elements	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-PARAMS-EXECUTED	the executed-parameter count equals its closed form on every door	elements of declared parameters consumed by a captured op; unit: elements	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-PARAMS-UNEXECUTED	the unexecuted-parameter count equals its closed form on every door	elements of declared parameters no captured op consumed; unit: elements	I2	PURE_OBSERVER	REAL
+OBL-Q-MACS-FORWARD	forward MACs equal their closed form on every door	true forward multiply-accumulates, never flops // 2; non-MAC ops count 0; unit: MACs	I2	PURE_OBSERVER	REAL
+OBL-Q-FLOPS-FORWARD	forward FLOPs equal their closed form on every door	forward floating-point operations, fma counted as 2 and bias adds counted; unit: FLOPs	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-OPS	the op count equals its closed form on every door	ops in scope; a Layer counts its passes, a module call counts its input and output boundary ops; unit: ops	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-PASSES	the pass count equals the number of times the op ran	times a layer's op executed in the forward; unit: passes	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-EDGES	the edge count equals the hand-counted graph edges on every door	distinct op-graph edges in scope, boundary edges included; unit: edges	I2	PURE_OBSERVER	REAL

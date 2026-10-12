@@ -97,6 +97,7 @@ __all__ = [
     "HAS_FP8_DTYPES",
     "HAS_PIPELINING",
     "HAS_SET_STANCE",
+    "HAS_CUDA_GRAPHS",
     "HAS_TORCH_FUNCTION_STACK_SURGERY",
     "HAS_TRACING_TENSOR_TYPES",
     "HAS_FUNCTORCH_APIS",
@@ -1230,6 +1231,20 @@ def _probe_set_stance() -> bool:
     return callable(getattr(compiler_module, "set_stance", None))
 
 
+def _probe_cuda_graphs() -> bool:
+    """Return whether this torch build carries real CUDA-graph capture bindings.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``torch._C`` has ``_CUDAGraph`` and ``_CudaStreamBase``.
+        CPU-only builds expose ``torch.cuda.graphs`` over dummy bindings that
+        raise when called, so attribute presence on ``torch.cuda`` is not enough.
+    """
+
+    return hasattr(torch._C, "_CUDAGraph") and hasattr(torch._C, "_CudaStreamBase")
+
+
 def _probe_transformer_activation_fastpath_flag() -> bool:
     """Return whether ``TransformerEncoderLayer`` exposes the fastpath flag.
 
@@ -1888,6 +1903,7 @@ HAS_DYNAMO_IS_COMPILING: bool = False
 _DYNAMO_IS_COMPILING_FN: Callable[[], bool] | None = None
 _DYNAMO_IS_COMPILING_PROBED: bool = False
 HAS_SET_STANCE: bool = _probe_set_stance()
+HAS_CUDA_GRAPHS: bool = _probe_cuda_graphs()
 HAS_TORCH_FUNCTION_STACK_SURGERY: bool = _probe_torch_function_stack_surgery()
 HAS_DYNAMO_COMPILE_COUNTERS: bool = False
 _DYNAMO_COMPILE_COUNTERS: Any | None = None
@@ -2031,6 +2047,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_MEMORY_PROFILE",
     "HAS_DYNAMO_IS_COMPILING",
     "HAS_SET_STANCE",
+    "HAS_CUDA_GRAPHS",
     "HAS_TORCH_FUNCTION_STACK_SURGERY",
     "HAS_DYNAMO_COMPILE_COUNTERS",
     "HAS_TRACING_TENSOR_TYPES",
