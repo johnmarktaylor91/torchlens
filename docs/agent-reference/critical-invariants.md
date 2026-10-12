@@ -141,8 +141,10 @@
 18a. `Trace.run(inputs=..., fast=True)` is an explicit stateful static-loop mode: loaded sparse
     traces must first settle an ordinary run as `verified`, then may reuse staged state, compiled
     binders, and one result Trace; live traces use native forward plus targeted module hooks and
-    only explicitly requested functional collection. Per-call input, path, output structure/shape/
-    dtype, and control-witness guards remain mandatory; divergence always raises. `fast=False`
+    functional collection only for the functional ops the capture saved (an explicit functional
+    `save=` predicate or the save-all default), each module call collected by its call number.
+    Per-call input, path, output structure/shape/dtype, and control-witness guards remain
+    mandatory; divergence always raises. `fast=False`
     preserves the full transaction and attestation contract. The live session also fires a
     module-targeted staged intervention spec at module exit (the steered rerun engine behind
     `trace.run(model, x)`, which falls back to capture on a typed refusal and records it in
