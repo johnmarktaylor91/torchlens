@@ -225,15 +225,19 @@ def test_fk4_pathological_trace_renders_bounded_overview_with_manifest(
         assert entry["expand"], "every collapsed unit names the draw() call that opens it"
 
 
-def test_fk4_floor_residual_writes_manifest(tmp_path: Path) -> None:
+def test_fk4_floor_residual_writes_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A floor-fallback plan still above the band ships the manifest beside it.
 
-    A flat chain whose root owns more units than K_CAP empties the frontier
-    (floor tier) and has no module box to fold, so the floor plan stays far
-    above the readable band: the honest residual FK4 discloses.
+    ``_RootFloodWithBlocks``' root owns more units than K_CAP, so the frontier
+    empties and the floor plan serves. The readable band is narrowed to one
+    unit so that plan is certainly over the band: the residual FK4 discloses.
     """
-    flat = nn.Sequential(*[layer for _ in range(100) for layer in (nn.Linear(4, 4), nn.ReLU())])
-    trace = tl.trace(flat, torch.randn(2, 4))
+    from torchlens.visualization import auto_collapse
+
+    monkeypatch.setattr(auto_collapse, "_readable_band_high", lambda trace: 1)
+    trace = tl.trace(_RootFloodWithBlocks(), torch.randn(2, 4))
     try:
         with warnings.catch_warnings(record=True) as records:
             warnings.simplefilter("always")
@@ -246,11 +250,13 @@ def test_fk4_floor_residual_writes_manifest(tmp_path: Path) -> None:
     finally:
         trace.cleanup()
     codes = _codes(records)
+    assert "collapse_floor_fallback" in codes
     assert "collapse_expansion_manifest" in codes
     manifest = _manifest(tmp_path / "floor.expansion.json")
-    assert manifest["planner"] in {"floor_fallback", "linear_fallback"}
-    assert manifest["visible_count"] > manifest["readable_band_high"]
-    assert all(entry["expansion_id"] for entry in manifest["entries"])
+    assert manifest["planner"] == "floor_fallback"
+    assert manifest["readable_band_high"] == 1
+    assert manifest["visible_count"] > 1
+    assert all(entry["expansion_id"] and entry["expand"] for entry in manifest["entries"])
 
 
 def test_fk4_ordinary_auto_render_writes_no_manifest(tmp_path: Path) -> None:
