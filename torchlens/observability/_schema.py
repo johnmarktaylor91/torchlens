@@ -29,8 +29,10 @@ from ._kernels import HistogramDescriptor, HistogramResult, SpineResult, StatKer
 
 __tl_layer__ = "L5"
 
-#: Version of this record schema; recorded in every run manifest.
-HISTORY_SCHEMA_VERSION = 1
+#: Version of this record schema; recorded in every run manifest. Version 2
+#: added the nullable :attr:`StepBlockRecord.trace_ref`; version-1 artifacts
+#: (no ``trace_ref`` key) load unchanged with ``trace_ref=None``.
+HISTORY_SCHEMA_VERSION = 2
 
 #: The five v1 streams (D7), with lifecycle truth.
 STREAMS = (
@@ -192,7 +194,14 @@ class SiteRecord:
 
 @dataclass(frozen=True)
 class StepBlockRecord:
-    """The atomic training coordinate (D4/D6/D17)."""
+    """The atomic training coordinate (D4/D6/D17).
+
+    ``trace_ref`` is the nullable pointer to a retained ``Trace`` for this
+    step (an interesting step a check or the caller chose to keep). There is
+    no raw-tensor snapshot tier: a step without a retained trace has
+    ``trace_ref=None``, and its raw values cannot be re-derived from the
+    history -- only the recorded statistics, which are exact or bounded.
+    """
 
     segment_id: str
     global_step: int
@@ -203,10 +212,22 @@ class StepBlockRecord:
     clipped: str = "unknown"
     micro_batches: int | None = None
     train_mode: bool | None = None
+    trace_ref: str | None = None
 
     def __post_init__(self) -> None:
-        """Validate the closed step vocabularies."""
+        """Validate the closed step vocabularies and the trace pointer."""
 
+        if self.trace_ref is not None and (
+            not isinstance(self.trace_ref, str) or not self.trace_ref
+        ):
+            raise HistorySchemaError(
+                f"trace_ref={self.trace_ref!r} is not a nonempty string; the "
+                "retained-trace pointer is a path or URI, or None when no trace "
+                "was kept for this step.",
+                code="history_trace_ref_invalid",
+                trace_ref=repr(self.trace_ref),
+                remedy="Pass the retained trace's path or URI as a string, or None.",
+            )
         _require_token("provenance", self.provenance, STEP_PROVENANCE)
         _require_token("optimizer_status", self.optimizer_status, OPTIMIZER_STATUS)
         _require_token("unscaled", self.unscaled, TRI_STATE)
