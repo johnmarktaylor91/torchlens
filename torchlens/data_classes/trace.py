@@ -3156,6 +3156,8 @@ class Trace(
             "_activation_transform_repr": None,
             "module_identity_mode": "torch_module",
             "param_source": "native-module",
+            # Session-time (DROP): a restored trace carries no optimizer handle.
+            "_optimizer": None,
             "save_raw_activations": True,
             "save_mode": "copy",
             "raw_output": None,

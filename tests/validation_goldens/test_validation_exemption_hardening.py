@@ -280,6 +280,7 @@ def test_scatter_exemption_uses_destination_position_not_equal_value() -> None:
             return _fake_layer(out=torch.zeros(3))
 
     layer = _fake_layer(
+        func_name="scatter",
         saved_args=(torch.zeros(3), 0, torch.arange(3), torch.zeros(3)),
         saved_kwargs={},
         parent_arg_positions={"args": {0: "dest_parent", 3: "src_parent"}, "kwargs": {}},
@@ -288,6 +289,11 @@ def test_scatter_exemption_uses_destination_position_not_equal_value() -> None:
 
     assert not _check_scatter_exempt(trace, layer, ["src_parent"])  # type: ignore[arg-type]
     assert _check_scatter_exempt(trace, layer, ["dest_parent"])  # type: ignore[arg-type]
+
+    # The full-overwrite proof holds for overwriting scatters only (matched by
+    # name): an accumulating scatter_add with the same layout stays strict.
+    accumulating = _fake_layer(**{**vars(layer), "func_name": "scatter_add"})
+    assert not _check_scatter_exempt(trace, accumulating, ["dest_parent"])  # type: ignore[arg-type]
 
 
 class DetachedParamModel(nn.Module):
@@ -2586,6 +2592,7 @@ def test_scatter_or_index_domain_exemption_uses_destination_position() -> None:
             return _fake_layer(out=torch.zeros(3))
 
     layer = _fake_layer(
+        func_name="scatter",
         saved_args=(torch.zeros(3), 0, torch.arange(3), torch.zeros(3)),
         saved_kwargs={},
         parent_arg_positions={"args": {0: "dest_parent", 3: "src_parent"}, "kwargs": {}},
