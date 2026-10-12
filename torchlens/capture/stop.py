@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import traceback
 import weakref
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -106,7 +106,7 @@ class StopDirective:
         Whether ``inference_only`` was implied by ``torch.no_grad()`` /
         ``torch.inference_mode()`` at capture entry rather than passed
         explicitly. Only an implied flag is reconciled against the forward's
-        actual autograd history (see :func:`reconcile_implied_inference_only`).
+        actual autograd history (see :func:`implied_inference_only_contradicted`).
     """
 
     halt_options: RecordingOptions | None = None
@@ -358,36 +358,32 @@ def _outputs_carry_autograd_history(outputs: Any) -> bool:
         return any(getattr(t, "grad_fn", None) is not None for t in tensors)
 
 
-def reconcile_implied_inference_only(trace: object, outputs: Any) -> None:
-    """Clear an implied ``inference_only`` when the forward kept its graph.
+def implied_inference_only_contradicted(directive: StopDirective, outputs: Any) -> bool:
+    """Return whether the forward contradicted an implied ``inference_only``.
 
     AGT-2132: a capture entered under ``torch.no_grad()`` (or inference mode)
     implies ``inference_only=True`` because such a forward discards the
     autograd graph. A forward that re-enables grad itself (``with
-    torch.enable_grad():``) still builds one, so the premise does not hold:
-    when the implied flag is set and an output carries a ``grad_fn``, the
-    trace reports ``inference_only=False`` and backward stays available. An
-    explicit ``inference_only=True`` is never changed.
+    torch.enable_grad():``) still builds one, so the premise does not hold.
+    The caller then reports ``inference_only=False`` and backward stays
+    available. An explicit ``inference_only=True`` is never contradicted.
 
     Parameters
     ----------
-    trace
-        Active trace-like capture session, after the forward returned.
+    directive
+        The capture's stop directive, which records whether the flag was
+        implied.
     outputs
         The value the user forward returned.
 
     Returns
     -------
-    None
-        Mutates ``trace.inference_only`` and its stop directive in place.
+    bool
+        ``True`` when the flag was implied and an output carries a ``grad_fn``.
     """
 
-    directive = getattr(trace, "_stop_directive", None)
-    if not isinstance(directive, StopDirective) or not directive.inference_only_implied:
-        return
-    if not getattr(trace, "inference_only", False):
-        return
-    if not _outputs_carry_autograd_history(outputs):
-        return
-    setattr(trace, "inference_only", False)
-    setattr(trace, "_stop_directive", replace(directive, inference_only=False))
+    return (
+        directive.inference_only
+        and directive.inference_only_implied
+        and _outputs_carry_autograd_history(outputs)
+    )

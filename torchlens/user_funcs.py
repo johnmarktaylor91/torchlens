@@ -2841,7 +2841,7 @@ def _effective_inference_only(capture_options: CaptureOptions, *, backward_reque
     ``log_backward`` refusal names the cause. An implied value is provisional:
     the capture clears it after the forward if an output still carries
     autograd history (``torch.enable_grad()`` inside the forward), see
-    :func:`torchlens.capture.stop.reconcile_implied_inference_only`.
+    :func:`torchlens.capture.stop.implied_inference_only_contradicted`.
 
     Parameters
     ----------

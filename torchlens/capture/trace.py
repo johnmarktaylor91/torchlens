@@ -24,6 +24,7 @@ Key functions:
 """
 
 import contextlib
+import dataclasses
 import random
 import sys
 import time
@@ -67,7 +68,12 @@ from .session import (
     attach_legacy_capture_session,
     detach_capture_session,
 )
-from .stop import StopDirective, evaluate_halt_stop, reconcile_implied_inference_only
+from .stop import (
+    StopDirective,
+    evaluate_halt_stop,
+    implied_inference_only_contradicted,
+    stop_directive_for_trace,
+)
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
@@ -2029,7 +2035,10 @@ def run_and_log_inputs_through_model(
         # while the forward really discarded its graph; enable_grad inside the
         # forward keeps it, so backward stays available. Before settlement,
         # which stamps the flag on the outcome.
-        reconcile_implied_inference_only(self, outputs)
+        stop_directive = stop_directive_for_trace(self)
+        if self.inference_only and implied_inference_only_contradicted(stop_directive, outputs):
+            self.inference_only = False
+            self._stop_directive = dataclasses.replace(stop_directive, inference_only=False)
         set_capture_phase(self, CapturePhase.FINALIZE)
         from ..data_classes._nonfinite import drain_pending_nonfinite
         from ..utils.tensor_utils import synchronize_pending_cpu_async_copies
