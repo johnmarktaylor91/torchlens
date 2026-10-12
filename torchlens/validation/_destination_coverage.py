@@ -246,9 +246,7 @@ def _get_scatter_destination_dim_index(
     kwargs = layer.saved_kwargs
     if len(args) < 1 or not isinstance(args[0], torch.Tensor):
         return None
-    if kwargs.get("reduce") is not None:
-        return None
-    if len(args) > 4 and args[4] is not None:
+    if kwargs.get("reduce") is not None or (len(args) > 4 and args[4] is not None):
         return None
 
     dest = args[0]
