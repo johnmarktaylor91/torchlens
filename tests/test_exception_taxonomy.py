@@ -566,6 +566,7 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "FittedArtifactError": ("RuntimeError",),
     "TvizError": ("RuntimeError",),
     "RankRenderEndpointError": ("RuntimeError",),
+    "OutputStyleUnknownError": ("ValueError",),
     "PluginLoadWarning": ("Warning",),
     "SynthesizedValueReadWarning": ("Warning",),
     "SubclassConstructionUnderDispatchModeError": ("RuntimeError",),
