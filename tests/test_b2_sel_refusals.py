@@ -201,3 +201,42 @@ def test_unscoped_head_reports_the_sites_it_writes() -> None:
         warnings.simplefilter("always")
         scoped.attach_hooks(tl.head(5, "q").in_module("transformer.h.0.attn"), tl.zero_ablate())
     assert not [w for w in caught_scoped if "writes" in str(w.message)]
+
+
+class _UnregisteredAttention(nn.Module):
+    """An attention block whose class no facet recipe knows."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.q = nn.Linear(8, 8)
+        self.k = nn.Linear(8, 8)
+        self.v = nn.Linear(8, 8)
+
+    def forward(self, h: torch.Tensor) -> torch.Tensor:
+        weights = torch.softmax(self.q(h) @ self.k(h).transpose(-1, -2), dim=-1)
+        return weights @ self.v(h)
+
+
+class _AttnHost(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.attn = _UnregisteredAttention()
+
+    def forward(self, h: torch.Tensor) -> torch.Tensor:
+        return self.attn(h)
+
+
+def test_facet_doors_refuse_typed_on_an_unregistered_attention_class() -> None:
+    """U36.1: both facet doors refuse with MissingFacetError, never a bare KeyError."""
+
+    from torchlens.semantic import MissingFacetError
+
+    trace = tl.trace(_AttnHost().eval(), torch.randn(1, 4, 8))
+    for view in (trace.modules["attn"].facets, trace.module_calls["attn:1"].facets):
+        with pytest.raises(MissingFacetError) as exc_info:
+            view["q"]
+        assert type(exc_info.value) is not KeyError
+        assert "_UnregisteredAttention" in str(exc_info.value)
+        assert "torchlens.semantic.register" in str(exc_info.value)
+        assert view.get("q") is None
+        assert not hasattr(view, "q")
