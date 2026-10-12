@@ -1265,6 +1265,31 @@ shim owed*
   renders the summary automatically on rolled varying multi-pass nodes,
   directly after the title row.
 
+**"dtype" node_label_fields token** — *unstable — no deprecation shim owed*
+: Selector token rendering the node's output dtype as a label row with the
+  framework namespace dropped (`"float16"`, `"bfloat16"`; Keras `show_dtype`
+  style), for spotting where a mixed-precision graph changes dtype. Skipped
+  when the node has no dtype.
+
+**torchlens.preprocessing.imagenet_default()** — *unstable — no deprecation shim owed*
+: The explicit opt-in to the TorchLens-authored ImageNet recipe (resize 256,
+  center-crop 224, ImageNet mean/std), passed as
+  `CaptureOptions(transform=tl.preprocessing.imagenet_default())`. A PIL image
+  whose model resolves no preprocessing authority (torchvision weights
+  handle, timm data config, HF image processor) refuses typed
+  `preprocessing_unresolved` instead of receiving this recipe silently. The
+  opted-in capture's `input_preprocessor` keeps `source="imagenet_default"`,
+  `verified=False`, status `unverified_fallback`: never an authority.
+
+**SummaryCallback (torchlens.callbacks.lightning)** — *unstable — no deprecation shim owed*
+: Lightning callback printing `tl.summary` once per fit. Sample: the
+  module's `example_input_array` (at fit start) else the first training batch
+  (before its training step), whose forward input is `input_getter(batch)`,
+  else `batch["x"]`, else `batch[0]`, else the batch (a mapping as keyword
+  arguments). One extra forward in eval mode under no_grad; every module's
+  training flag and the RNG state are restored. Rank zero only; the report
+  stays on `.report`; a rejected sample warns `lightning_summary_skipped`.
+
 **show_legend=None AUTO value** — *unstable — no deprecation shim owed*
 : The tri-state AUTO value on the stable `show_legend` kwarg: no legend unless
   an encoding channel is active, then a channel-only disclosure legend.

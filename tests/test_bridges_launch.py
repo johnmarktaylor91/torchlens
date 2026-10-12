@@ -350,13 +350,15 @@ def test_lightning_callback_missing_extra_errors_on_use(
     def fail_lightning(name: str, *args: Any, **kwargs: Any) -> Any:
         """Raise ImportError for Lightning imports only."""
 
-        if name == "lightning" or name.startswith("lightning."):
+        if name.split(".")[0] in {"lightning", "pytorch_lightning"}:
             raise ImportError("missing lightning")
         return real_import(name, *args, **kwargs)
 
     monkeypatch.delitem(sys.modules, "lightning", raising=False)
     monkeypatch.delitem(sys.modules, "lightning.pytorch", raising=False)
     monkeypatch.delitem(sys.modules, "lightning.pytorch.callbacks", raising=False)
+    monkeypatch.delitem(sys.modules, "pytorch_lightning", raising=False)
+    monkeypatch.delitem(sys.modules, "pytorch_lightning.callbacks", raising=False)
     monkeypatch.setattr(builtins, "__import__", fail_lightning)
 
     lightning_callbacks = tl_callbacks.lightning
