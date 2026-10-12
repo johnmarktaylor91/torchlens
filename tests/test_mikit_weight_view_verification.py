@@ -39,26 +39,33 @@ PERTURBATIONS = {
 }
 
 
-def _trace(builder_name: str):
+def _capture(builder_name: str):
     import families
 
     model = getattr(families, builder_name)("eager")
     torch.manual_seed(8)
     x = torch.randint(0, 500, (2, 7))
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    return model, tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
 
 
 @pytest.fixture(scope="module")
-def traces():
+def captured():
+    """(model, trace, address) per family; models stay referenced (views read live weights)."""
+
     built = {
-        "gpt2": (_trace("build_gpt2"), "transformer.h.1.attn"),
-        "llama": (_trace("build_llama"), "model.layers.1.self_attn"),
+        "gpt2": (*_capture("build_gpt2"), "transformer.h.1.attn"),
+        "llama": (*_capture("build_llama"), "model.layers.1.self_attn"),
     }
     try:
         yield built
     finally:
-        for trace, _ in built.values():
+        for _, trace, _ in built.values():
             trace.cleanup()
+
+
+@pytest.fixture(scope="module")
+def traces(captured):
+    return {family: (trace, address) for family, (_, trace, address) in captured.items()}
 
 
 def test_true_views_verify_on_every_role(traces):

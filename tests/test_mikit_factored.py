@@ -19,6 +19,7 @@ import torch
 import torchlens as tl
 import torchlens.mechinterp as mi
 from torchlens.mechinterp._errors import MechInterpError
+from torchlens.mechinterp._heads import _attention_modules
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "real_model" / "r0"))
 
@@ -126,11 +127,7 @@ def llama_bundle():
 
 
 def _attention_addresses(trace):
-    return [
-        str(m.address)
-        for m in trace.modules
-        if m.facets is not None and {"n_q_heads", "result"} <= set(m.facets.keys())
-    ]
+    return [str(m.address) for m in _attention_modules(trace)]
 
 
 def test_qk_ov_circuits_equal_explicit_products_gpt2(gpt2_bundle):
