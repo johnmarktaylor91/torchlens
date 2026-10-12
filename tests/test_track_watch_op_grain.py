@@ -219,6 +219,7 @@ class TestCalibrationDisclosure:
         torch.manual_seed(0)
         model = nn.Sequential(nn.Linear(8, 8), nn.BatchNorm1d(8), nn.ReLU(), nn.Dropout(0.5))
         model.train()
+        example = torch.randn(4, 8)
         buffers_before = {name: buf.clone() for name, buf in model.named_buffers()}
         rng_before = torch.random.get_rng_state()
         sink = trk.MemorySink()
@@ -230,7 +231,7 @@ class TestCalibrationDisclosure:
                 signals=("activations",),
                 grain="op",
                 select=tl.func("relu"),
-                example_input=torch.randn(4, 8),
+                example_input=example,
                 allow_forward_wrap=True,
             )
         codes = [getattr(w.message, "fields", {}).get("code") for w in caught]

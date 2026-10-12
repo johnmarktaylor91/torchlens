@@ -1054,6 +1054,13 @@ torchlens.trackers._watch:_validate_signals:WatchConfigError::1	CONTRACTED	watch
 torchlens.trackers._watch:_validate_signals:WatchConfigError::2	CONTRACTED	watch_tier_unavailable	coded + contract row; activation_grads awaits the F24 seam
 torchlens.trackers._watch:_validate_signals:WatchConfigError::3	CONTRACTED	watch_signals_invalid	coded + contract row; NO default activation selector (measured basis)
 torchlens.trackers._watch:_validate_signals:WatchConfigError::4	CONTRACTED	watch_signals_invalid	coded + contract row; activations need example_input= for attach-time discovery
+torchlens.export._trackers:_mlflow_bind:KeywordConflictError::1	CONTRACTED	tracker_mlflow_run_id_unsupported	MLflow export parity (U54.1): run_id= given to a client whose method takes none; coded + contract row
+torchlens.export._trackers:_mlflow_bind_tag:KeywordConflictError::1	CONTRACTED	tracker_mlflow_run_id_unsupported	MLflow export parity (U54.1): tag binding for a client shape that cannot take run_id; coded + contract row
+torchlens.trackers._comet:CometSink.__init__:SinkProtocolError::1	CONTRACTED	tracker_sink_invalid	Comet sink (U54.3): not an existing comet_ml experiment; coded + contract row
+torchlens.trackers._comet:CometSink.emit_histogram:SinkProtocolError::1	CONTRACTED	tracker_sink_capability_missing	Comet sink (U54.3): raw histograms not carried (Comet re-bins); coded + contract row
+torchlens.trackers._mlflow:_mlflow_module:SinkProtocolError::1	CONTRACTED	tracker_sink_unavailable	MLflow sink (U54.2): mlflow not installed; coded + contract row
+torchlens.trackers._mlflow:_mlflow_key:TagGrammarError::1	CONTRACTED	tracker_tag_unsafe	MLflow sink (U54.2): a tag MLflow cannot store refuses rather than being rewritten; coded + contract row
+torchlens.trackers._mlflow:MLflowSink.__init__:SinkProtocolError::1	CONTRACTED	tracker_sink_invalid	MLflow sink (U54.2): not a live MLflow run target; coded + contract row
 torchlens.trackers._callback_config:_refuse:WatchConfigError::1	CONTRACTED	watch_env_config_invalid	coded + contract row; a malformed TORCHLENS_WATCH_* configuration variable refuses naming it (U34.2)
 torchlens.trackers._op_grain:refuse_without_consent:WatchConfigError::1	CONTRACTED	watch_forward_wrap_consent_required	coded + contract row; op grain needs explicit consent to the disclosed forward wrap (U34.1)
 torchlens.trackers._op_grain:validate_grain_request:WatchConfigError::1	CONTRACTED	watch_grain_invalid	coded + contract row; closed grain vocabulary (None or 'op')
