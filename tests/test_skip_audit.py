@@ -1025,6 +1025,11 @@ _CUDA_DARK = (
 )
 
 DEVICE_GATED_SKIPIF_LEDGER: dict[str, str] = {
+    "test_validation_index_domain_in_range.py::test_tiny_vjepa2_validates_on_cuda_without_a_device_assert": (
+        "[2026-10-12] CUDA-only regression for the index-domain in-domain retry "
+        "(an out-of-domain perturbed index fired a device-side assert on GPU); "
+        "dark on CPU-only CI, executed on the owner's GPU box"
+    ),
     "backend_parity/test_b10_torch_characterization.py::test_paramless_model_cuda_inputs_stay_on_cuda": (
         "[2026-08-19] device-preservation pin for the H200 finding (a device-less "
         "model's CUDA inputs silently computed on CPU); dark on CPU-only CI, "
