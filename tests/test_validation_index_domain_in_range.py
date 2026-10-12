@@ -138,8 +138,9 @@ def replay_record(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[dict]]:
             )
         return output
 
-    def spy_check(self, layer, *args, **kwargs):
-        result = check(self, layer, *args, **kwargs)
+    def spy_check(self, label, *args, **kwargs):
+        result = check(self, label, *args, **kwargs)
+        layer = core._op_for_validation_label(self, label)
         labels = kwargs.get("layers_to_perturb") or ()
         if any(_parent_is_index_domain_arg(layer, label) for label in labels):
             record["verdicts"].append((layer.func_name, result.decision, result.reason))
