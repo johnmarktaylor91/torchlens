@@ -123,12 +123,12 @@ def _env_positive_int(name: str, value: str | None, *, allow_none: bool) -> tupl
         return (True, None)
     expected = "a positive integer" + (" or 'none'" if allow_none else "")
     try:
-        value = int(raw)
+        parsed = int(raw)
     except ValueError:
         _refuse(name, raw, expected)
-    if value < 1:
+    if parsed < 1:
         _refuse(name, raw, expected)
-    return (True, value)
+    return (True, parsed)
 
 
 def _env_signals() -> tuple[str, ...] | None:

@@ -427,8 +427,10 @@ class OpGrainCollector:
     ) -> Any:
         """``step=callable``: one block per sampled step, opened by its first forward."""
 
-        assert session.step_source is not None
-        step_value = int(session.step_source())
+        step_source = session.step_source
+        if step_source is None:
+            return original(*args, **kwargs)
+        step_value = int(step_source())
         if session._seen_steps and session._seen_steps[-1] == step_value:
             return original(*args, **kwargs)
         sampled = session._scheduled(step_value)
