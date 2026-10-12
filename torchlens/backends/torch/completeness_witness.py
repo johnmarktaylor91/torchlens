@@ -64,7 +64,7 @@ from ..._split_rebind import (
     rebind_function as _rebind_function,
 )
 from ...errors import ScalarEscapeWarning
-from ...utils import _torch_compat
+from ...utils import _exception_notes, _torch_compat
 from ...utils._callable_safety import private_c_forward_op_module_names
 from ...utils._torch_compat import (
     get_tensorbase_class,

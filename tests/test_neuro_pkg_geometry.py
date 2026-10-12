@@ -137,8 +137,9 @@ def test_cka_method_contract_pins() -> None:
     assert value == pytest.approx(reference, abs=1e-12)
     assert value == pytest.approx(0.8735487150980951, abs=1e-9)
 
-    # Degenerate zero-variance input -> NaN, matched rows required.
-    assert math.isnan(cka(a, np.ones((4, 2))))
+    # Degenerate zero-variance input -> NaN with a warning, matched rows required.
+    with pytest.warns(UserWarning, match="zero variance"):
+        assert math.isnan(cka(a, np.ones((4, 2))))
     with pytest.raises(ValueError, match="matched row counts"):
         cka(a, b[:3])
 

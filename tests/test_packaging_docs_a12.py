@@ -90,7 +90,7 @@ def test_extras_composition_repairs_hold() -> None:
     empty = sorted(name for name, reqs in extras.items() if not reqs)
     assert not empty, f"empty extras install nothing and market nothing: {empty}"
 
-    # neuro memo D17 (landed by D05, 2026-09-02): [neuro] is rsatoolbox-only and the
+    # neuro memo D17 (landed by D05, 2026-09-02): [neuro] never carries Brain-Score and the
     # Brain-Score seam is its own [brainscore] extra (brainscore_vision 2.3 pins
     # scikit-learn<1.6, under which rsatoolbox 0.3 cannot import); brainscore_core
     # is imported nowhere and arrives transitively.

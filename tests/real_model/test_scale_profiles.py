@@ -8,6 +8,7 @@ closed forms of the fixture's dimensions, never TorchLens's own report.
 from __future__ import annotations
 
 import resource
+import sys
 import time
 from pathlib import Path
 
@@ -77,10 +78,7 @@ def test_every_profile_is_fully_named(profile) -> None:
 def _current_rss_mib() -> float:
     """Current resident set size; a pytest worker's lifetime peak is not this run's."""
 
-    try:
-        pages = int(Path("/proc/self/statm").read_text().split()[1])
-    except OSError:
-        pytest.skip("SP1's RSS budget reads /proc/self/statm (Linux-only venue)")
+    pages = int(Path("/proc/self/statm").read_text().split()[1])
     return pages * resource.getpagesize() / (1 << 20)
 
 
@@ -101,6 +99,10 @@ def _real_retained_bytes(trace) -> int:
     return total
 
 
+@pytest.mark.skipif(
+    sys.platform != "linux",
+    reason="SP1's RSS budget reads /proc/self/statm (Linux-only venue)",
+)
 def test_sp1_wide_output_linear_quantities() -> None:
     """SP1: the wide head's quantities equal their closed forms, within budget."""
 

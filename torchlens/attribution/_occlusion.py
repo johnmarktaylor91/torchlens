@@ -216,6 +216,18 @@ def occlusion(
     resolved = _resolve_selection(trace, selection)
     if resolved._kind != "ACT":
         raise AttributionError("occlusion currently supports ACT selections only")
+    if resolved.empty:
+        # U20.5: occluding nothing scores exactly zero, which reads as a
+        # confident "no effect"; the resolved selection already knows it.
+        raise AttributionError(
+            f"occlusion selection resolved to zero elements on this trace "
+            f"({len(resolved)} touched site(s), none with a selected element), so the "
+            "occluded score would equal the original and report a confident zero. "
+            "Remedy: select at least one element: pass the op itself (e.g. "
+            "trace[label]) to occlude the whole site, or tl.units(label, [index, ...]) "
+            "with at least one in-range index.",
+            code="occlusion_selection_empty",
+        )
     edit = _occlusion_edit(baseline, blur_kernel_size)
     original_score = _score_trace(trace, score)
     fork = trace.fork(name="attribution_occlusion")
