@@ -1380,3 +1380,10 @@ deprecation shim owed*
   forward total; when non-zero the report prints that attention FLOPs
   count the full query x key square and masks / `is_causal` are not
   discounted.
+
+**`output_style_unknown`** — *unstable — no deprecation shim owed*
+: The typed refusal (an `InvalidArgumentError`) for a
+  `CaptureOptions(output_style=...)` no detector can resolve, with a did-you-mean over the built-in styles
+  (`classification`, `imagenet`, `imagenet1k`, `hf_text`). It refuses before
+  the forward when no custom output detector is registered, and after the
+  capture when registered custom detectors all declined the style.
