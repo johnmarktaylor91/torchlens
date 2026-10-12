@@ -73,9 +73,11 @@ def stamp_user_transform_provenance(trace: Trace, input_transform: Callable[...,
     A capture that APPLIED an input transform carries provenance on every
     path, not only the HF bridges (which stamp a richer record over this one
     after ``tl.trace`` returns -- an already-stamped record is never
-    overwritten). A raw callable is honest-unknown: ``verified`` stays False
-    and the derived status is ``"unknown"`` -- never a guess about what the
-    callable did.
+    overwritten). A transform that IS a recognized authority (the object
+    ``weights.transforms()`` returns, an HF image processor, a registered
+    adapter's kind) stamps that authority's own record. Any other callable is
+    honest-unknown: ``verified`` stays False and the derived status is
+    ``"unknown"`` -- never a guess about what the callable did.
     """
 
     if getattr(trace, "input_preprocessor", None) is not None:
@@ -93,6 +95,13 @@ def stamp_user_transform_provenance(trace: Trace, input_transform: Callable[...,
             config=dict(minted.config),
             description=minted.description,
         )
+        return
+
+    from torchlens.preprocessing._attached import record_for_transform
+
+    recognized = record_for_transform(input_transform)
+    if recognized is not None:
+        trace.input_preprocessor = recognized
         return
 
     transform_repr = _scrubbed_transform_repr(input_transform) or "<transform>"
