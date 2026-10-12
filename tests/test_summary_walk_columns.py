@@ -87,7 +87,6 @@ def _body_line(text: str, prefix: str) -> str:
     return next(line for line in text.splitlines() if line.startswith(prefix))
 
 
-@pytest.mark.smoke
 def test_tuple_output_row_prints_every_member_shape() -> None:
     """U02.1: an LSTM row shows output, h_n and c_n in return order."""
 
