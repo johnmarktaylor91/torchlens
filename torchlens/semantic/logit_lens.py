@@ -1069,15 +1069,18 @@ def _compare_lens_identity(trace: Any, record: Mapping[str, Any]) -> tuple[str, 
             "from manifest['signature']['model_identity'].",
             code="logit_lens_identity_invalid",
         )
-    source_ref = getattr(trace, "_source_model_ref", None)
-    model = source_ref() if callable(source_ref) else None
-    if model is None:
+    from .._data_substrate import compare_model_identity, compute_model_identity
+    from .._runnable_transaction import _require_live_source_model
+    from ..errors.runnable import RunCapabilityUnavailableError
+
+    try:
+        model = _require_live_source_model(trace)
+    except RunCapabilityUnavailableError:
         return (
             "unverifiable",
             "the trace no longer holds its source model, so the lens's measured "
             "identity cannot be compared",
         )
-    from .._data_substrate import compare_model_identity, compute_model_identity
 
     current = compute_model_identity(model, level="measured", hash_name=str(hash_name))
     verdict = compare_model_identity(record, current)
