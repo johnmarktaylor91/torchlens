@@ -8,7 +8,7 @@ import hashlib
 import re
 import types
 from collections.abc import Iterable
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from ._errors import ArgumentTypeError
 from .backends.registry import PUBLIC_OPTION_SPINE_TRACE_OPTIONS
@@ -16,7 +16,10 @@ from .capture.arg_positions import _normalize_func_name
 from .fastlog.options import PredicateFn
 from .fastlog.types import RecordContext
 from .intervention.selectors import BaseSelector
-from .options import CaptureOptions, SaveOptions
+from .options import SaveOptions
+
+if TYPE_CHECKING:
+    from .options import CaptureOptions
 
 
 def _split_save_options_and_predicate(
@@ -172,7 +175,7 @@ def _flatten_stage_names_in_options(capture_options: CaptureOptions, model: Any)
     values = capture_options.as_dict()
     values["layers_to_save"] = rewritten[0] if isinstance(selection, str) else rewritten
     return cast(
-        CaptureOptions,
+        "CaptureOptions",
         type(capture_options)().from_values(values, _explicit_fields(capture_options)),
     )
 
@@ -729,11 +732,8 @@ _TRACE_OPTION_FILTERED_NAMES = (
 def _trace_module_addresses(trace: Any) -> list[str]:
     """Return the module addresses recorded on ``trace`` (root excluded)."""
 
-    modules = getattr(trace, "modules", None)
-    if modules is None:
-        return []
     try:
-        keys = list(modules.keys())
+        keys = list(trace.modules.keys())
     except (AttributeError, TypeError):
         return []
     return [key for key in keys if isinstance(key, str) and key != "self"]
