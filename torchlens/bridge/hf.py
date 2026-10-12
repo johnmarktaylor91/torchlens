@@ -427,7 +427,7 @@ def _trace_text_capture(
     try:
         return tl.trace(model, cast(Any, text), capture=capture, **kwargs)
     except ValueDependentBranchError as exc:
-        offenses = exc.fields.get("offenses") or ()
+        offenses = cast(list[dict[str, Any]], exc.fields.get("offenses") or [])
         if not any(str(o.get("file", "")).endswith("masking_utils.py") for o in offenses):
             raise
         remedy = (
