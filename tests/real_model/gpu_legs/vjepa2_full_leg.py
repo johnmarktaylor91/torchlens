@@ -186,11 +186,30 @@ def stage_b(model: Any, inputs: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _run_stage(
+    args: Any, name: str, stage: Any, model: Any, frames: int, refused: Any = None
+) -> None:
+    import torch
+
+    gc.collect()
+    torch.cuda.empty_cache()
+    torch.cuda.reset_peak_memory_stats()
+    inputs = {"pixel_values_videos": _clip(frames).to("cuda")}
+    facts = {"frames": frames, "job_id": args.job_id, **stage(model, inputs)}
+    if refused:
+        facts["refused_longer_clips"] = refused
+    (args.out_dir / f"stage{name}.json").write_text(json.dumps(facts, indent=1))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("out_dir", type=Path)
     parser.add_argument("--frames", type=int, default=64)
-    parser.add_argument("--validate-frames", type=int, default=None)
+    parser.add_argument(
+        "--validate-frames",
+        default=None,
+        help="comma-separated clip lengths to try for stage B, longest first",
+    )
     parser.add_argument("--job-id", default="unknown")
     args = parser.parse_args(argv)
 
@@ -204,22 +223,37 @@ def main(argv: list[str] | None = None) -> int:
         return 3
     torch.manual_seed(SEED)
     model = _load("cuda")
-    validate_frames = args.validate_frames or args.frames
+    tries = (
+        [int(n) for n in args.validate_frames.split(",")] if args.validate_frames else [args.frames]
+    )
     receipt: dict[str, Any] = {
         "fingerprint": env,
         "frames": args.frames,
         "crop": CROP,
         "seed": SEED,
     }
-    for name, stage, frames in (("A", stage_a, args.frames), ("B", stage_b, validate_frames)):
+    if not (args.out_dir / "stageA.json").exists():
+        _run_stage(args, "A", stage_a, model, args.frames)
+    if not (args.out_dir / "stageB.json").exists():
+        from torchlens._save_budget import SaveBudgetExceededError
+
+        refused: list[dict[str, Any]] = []
+        for frames in tries:
+            # Only a memory refusal moves to a shorter clip; a validation failure
+            # or any other error propagates and fails the leg.
+            try:
+                _run_stage(args, "B", stage_b, model, frames, refused=refused)
+                break
+            except (SaveBudgetExceededError, torch.cuda.OutOfMemoryError) as exc:
+                refused.append(
+                    {"frames": frames, "error": f"{type(exc).__name__}: {str(exc)[:400]}"}
+                )
+        (args.out_dir / "stageB_refused.json").write_text(json.dumps(refused, indent=1))
+    for name in ("A", "B"):
         path = args.out_dir / f"stage{name}.json"
         if not path.exists():
-            gc.collect()
-            torch.cuda.empty_cache()
-            torch.cuda.reset_peak_memory_stats()
-            inputs = {"pixel_values_videos": _clip(frames).to("cuda")}
-            facts = {"frames": frames, "job_id": args.job_id, **stage(model, inputs)}
-            path.write_text(json.dumps(facts, indent=1))
+            print(f"stage {name} did not complete; see stage{name}_refused.json", file=sys.stderr)
+            return 1
         receipt[f"stage{name}"] = json.loads(path.read_text())
     stage_a_ok = (
         receipt["stageA"]["status"] == "COMPLETE" and receipt["stageA"]["traced_equals_direct"]
