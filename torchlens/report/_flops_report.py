@@ -154,6 +154,23 @@ class FlopsReport:
             lines.append("  coverage is COMPLETE, not a lower bound (0 unknown-cost ops)")
         return lines
 
+    def _parameter_lines(self) -> list[str]:
+        """The parameters block: the available counts, then each tied group."""
+
+        param_bits = []
+        for name, value in (
+            ("unique", self.params_unique),
+            ("trainable", self.params_trainable),
+            ("frozen", self.params_frozen),
+            ("executed", self.params_executed),
+            ("unexecuted", self.params_unexecuted),
+        ):
+            if value is not None:
+                param_bits.append(f"{value} {name}")
+        lines = ["parameters: " + (", ".join(param_bits) if param_bits else "unavailable")]
+        lines.extend(f"  tied: {' == '.join(group)}" for group in self.tied_param_groups)
+        return lines
+
     def __str__(self) -> str:
         """Render the six-block first screen."""
 
@@ -177,19 +194,7 @@ class FlopsReport:
                 scope += f", tokens/item={self.tokens_per_item}"
             lines.append(scope)
         lines.extend(self._coverage_lines())
-        param_bits = []
-        for name, value in (
-            ("unique", self.params_unique),
-            ("trainable", self.params_trainable),
-            ("frozen", self.params_frozen),
-            ("executed", self.params_executed),
-            ("unexecuted", self.params_unexecuted),
-        ):
-            if value is not None:
-                param_bits.append(f"{value} {name}")
-        lines.append("parameters: " + (", ".join(param_bits) if param_bits else "unavailable"))
-        for group in self.tied_param_groups:
-            lines.append(f"  tied: {' == '.join(group)}")
+        lines.extend(self._parameter_lines())
         lines.append(self.backward_status_line)
         if self.six_nd is not None:
             lines.extend(self.six_nd.lines())

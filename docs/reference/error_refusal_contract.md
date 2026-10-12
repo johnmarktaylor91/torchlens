@@ -53,6 +53,8 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
   `EchoConfigError(ConfigurationError)`, `EchoStatsError(CaptureError)` (snoop);
   `FittedArtifactError(ConfigurationError, RuntimeError)`;
   `TvizError(TorchLensError, RuntimeError)`; `RankRenderEndpointError(GraphvizRenderError)`.
+- semantic output decode: `OutputStyleUnknownError(InvalidArgumentError)` (code
+  `output_style_unknown`).
 - warning categories: `PluginLoadWarning(TorchLensWarning)` (soft plugin-load failures) and
   `SynthesizedValueReadWarning(TorchLensWarning)` (first raw value read on a trace whose inputs
   were synthesized).
