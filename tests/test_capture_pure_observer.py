@@ -8,9 +8,10 @@ forward-equivalent behavior for people who train through a trace."
   torch / CUDA (when present) / Python / NumPy random states, every module's
   ``training`` flag and plain module attributes are bit-identical to before,
   on success and when the forward raises.
-- ``CaptureOptions(carry_state=True)`` is forward-equivalent: state advances
-  exactly as one direct ``model(x)`` would (train-mode running statistics
-  bit-exact).
+- ``CaptureOptions(carry_state=True)`` is forward-equivalent: buffers, modes
+  and attributes advance exactly as one direct ``model(x)`` would (train-mode
+  running statistics bit-exact); no capture ever advances the caller's random
+  streams (R57).
 - Bug 7 (the D18 contract change): train-mode BatchNorm runs through ``run``
   and ``run(until=)``; unproven buffer-write evidence and non-norm buffer
   writers still refuse typed.
@@ -50,8 +51,8 @@ class _Stateful(nn.Module):
         self.history.append(self.calls)
         self.last_batch = int(x.shape[0])
         with torch.no_grad():
-            self.seen.copy_(torch.tensor([float(self.calls), random.random()]))
-        _ = np.random.rand()
+            self.seen.copy_(torch.stack([torch.tensor(float(self.calls)), x.mean()]))
+        _ = (random.random(), np.random.rand())
         h = self.drop(torch.relu(self.bn(self.conv(x))))
         return self.head(h.mean(dim=(2, 3)))
 
@@ -128,22 +129,23 @@ def test_default_trace_restores_state_on_the_exception_path():
 
 
 def test_carry_state_is_forward_equivalent_bit_exact():
-    """carry_state=True: state advances exactly as one direct model(x) does."""
+    """carry_state=True: buffers, modes and attributes advance exactly as one model(x) does.
+
+    Random state is the exception under both settings: every capture draws from
+    its own seed and restores the global engines (R57), so the caller's random
+    streams never advance.
+    """
 
     torch.manual_seed(0)
     model = _Stateful().train()
     reference = copy.deepcopy(model)
     x = torch.randn(2, 3, 8, 8)
-    rng = _rng_state()
     reference(x)
-    expected, expected_rng = _observed_state(reference), _rng_state()
-
-    torch.set_rng_state(rng[0])
-    random.setstate(rng[2])
-    np.random.set_state(rng[3])
+    expected = _observed_state(reference)
+    rng_before = _rng_state()
     tl.trace(model, x, capture=CaptureOptions(carry_state=True))
     _assert_state_equal(expected, _observed_state(model))
-    _assert_rng_equal(expected_rng, _rng_state())
+    _assert_rng_equal(rng_before, _rng_state())
 
 
 def _train_bn_stack() -> nn.Module:

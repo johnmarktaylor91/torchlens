@@ -281,9 +281,13 @@ def _restore_observer_buffers(snapshot: CaptureObserverSnapshot) -> None:
     for module, local_name, original in snapshot.buffers:
         key = id(original)
         if key not in restored:
-            _write_back_slot(
-                original, snapshot.buffer_clones[key], snapshot.buffer_versions.get(key)
-            )
+            clone = snapshot.buffer_clones[key]
+            if original.shape != clone.shape or original.dtype != clone.dtype:
+                # The forward resized or retyped the buffer in place: swap the
+                # snapshot's storage back in, keeping the buffer object itself.
+                original.data = clone
+            else:
+                _write_back_slot(original, clone, snapshot.buffer_versions.get(key))
             restored.add(key)
         if module._buffers.get(local_name) is not original:
             module._buffers[local_name] = original

@@ -57,7 +57,8 @@ on a fork to the existing `save_new_outs` fast capture path. The live refresh pr
 buffer-sink refusal is TRAINING-MODE AWARE (D18, by design): eval-mode BatchNorm
 (every buffer sink carries derived write evidence `buffer_value_changed=False` with agreeing
 mode claims) and train-mode BatchNorm (`buffer_value_changed=True` from a mode-sensitive norm
-call whose every recorded mode claim says train) are refresh-eligible and runnable on the
+call whose every recorded mode claim says train, plus the in-place `num_batches_tracked` counter
+advanced in that same module call) are refresh-eligible and runnable on the
 DEFAULT path and under `until=`: a default capture is a pure observer and a default run restores
 the declared state it changed (U40.1), so every run starts from the state the trace was captured
 from. Unproven (`None`) evidence, a value-changing write by anything else (counters, caches), a

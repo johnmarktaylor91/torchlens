@@ -9,6 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.options import CaptureOptions
 
 
 def test_training_mode_stateless_model_does_not_warn() -> None:
@@ -111,7 +112,9 @@ def test_graph_change_error_names_live_state_mutation_and_isolation_hint() -> No
             return torch.relu(inputs)
 
     model = _CounterBranch().eval()
-    captured = tl.trace(model, torch.ones(2))
+    # carry_state=True keeps the forward's counter write (the default capture is
+    # a pure observer and would restore it), so the run takes the other branch.
+    captured = tl.trace(model, torch.ones(2), capture=CaptureOptions(carry_state=True))
 
     with pytest.raises(ValueError) as caught:
         captured.run(inputs=torch.ones(2))

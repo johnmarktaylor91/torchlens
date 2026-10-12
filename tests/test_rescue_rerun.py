@@ -21,6 +21,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.backends.torch._tl import is_decorated_function
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
+from torchlens.options import CaptureOptions
 
 
 @pytest.fixture()
@@ -254,7 +255,7 @@ def test_train_mode_batchnorm_capture_skips_rescue_end_to_end(raw_cos: Any) -> N
     model = Model()
     model.train()
     with pytest.warns(UserWarning):
-        trace = tl.trace(model, torch.randn(4, 2))
+        trace = tl.trace(model, torch.randn(4, 2), capture=CaptureOptions(carry_state=True))
     assert model.bn.num_batches_tracked.item() == 1, "the forward must not run twice"
     info = trace.rescue_rerun
     assert info is not None
@@ -396,7 +397,7 @@ def test_train_bn_attribution_failure_never_double_mutates(raw_cos: Any) -> None
         pytest.warns(UserWarning, match="double-apply"),
         pytest.raises(OutputAttributionError) as exc_info,
     ):
-        tl.trace(model, torch.randn(4, 2))
+        tl.trace(model, torch.randn(4, 2), capture=CaptureOptions(carry_state=True))
     assert model.bn.num_batches_tracked.item() == 1, "the forward must not run twice"
     partial = getattr(exc_info.value, "partial_log", None)
     partial_trace = getattr(partial, "trace", None)
@@ -622,7 +623,7 @@ def test_journal_visible_buffer_writes_still_refuse_before_the_rerun(raw_cos: An
     model.eval()
 
     with pytest.warns(UserWarning, match="wrote module buffer state"):
-        trace = tl.trace(model, torch.randn(3, 4))
+        trace = tl.trace(model, torch.randn(3, 4), capture=CaptureOptions(carry_state=True))
 
     assert float(model.count) == 1.0
     assert trace.rescue_rerun is not None
@@ -1049,7 +1050,7 @@ def test_closure_held_original_is_rebound_without_rescue() -> None:
     raw = torch.cos
     wrap_torch()
     model = CountedRoot(_stale_closure_model(raw))
-    trace = tl.trace(model, torch.tensor([0.25, 0.5]))
+    trace = tl.trace(model, torch.tensor([0.25, 0.5]), capture=CaptureOptions(carry_state=True))
 
     assert model.calls == [1]
     assert trace.rescue_rerun is None

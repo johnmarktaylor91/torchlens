@@ -4059,31 +4059,31 @@ def _trace_torch_model(
     from .capture._weightsfree_admission import pending_admission
 
     # U40.1: a default capture is a pure observer. Buffers, random state, training
-    # modes and plain attributes are restored on every path, failure included;
-    # CaptureOptions(carry_state=True) keeps forward-equivalent state.
-    observer = capture_observer_bracket(model, carry_state=capture_options.carry_state)
-    try:
-        with (
-            observer,
-            armed_capture(episode_resolved, run_capture) as capture_callable,
-            pending_admission(meta_admission),
-        ):
-            trace = capture_with_rescue(capture_callable, eligible=rescue_eligible, model=model)
-    except BaseException as capture_exc:
-        # One settlement path for every escape: a KeyboardInterrupt or
-        # SystemExit mid-capture is released exactly like a RuntimeError.
-        if episode_resolved is not None:
-            # Best-effort: the FAILED partial product carries the episode
-            # declaration; attach the derived ledger disclosure without ever
-            # masking the user's exception.
-            attach_failed_episode_ledger(capture_exc, episode_resolved)
-        # M(oracles) item 8 (FORK-A 3/3-agreed cell): every FAILED call is
-        # PURE of TorchLens instrumentation. The capture slot was released as
-        # the exception unwound the inner finally, so the public release door
-        # is legal here; exc.partial_log keeps its already-materialized
-        # records and stays recoverable after the release.
-        _release_preparation_after_failed_capture(model)
-        raise
+    # modes and plain attributes are restored on every path, failure included and
+    # after the failure release; CaptureOptions(carry_state=True) keeps
+    # forward-equivalent state.
+    with capture_observer_bracket(model, carry_state=capture_options.carry_state):
+        try:
+            with (
+                armed_capture(episode_resolved, run_capture) as capture_callable,
+                pending_admission(meta_admission),
+            ):
+                trace = capture_with_rescue(capture_callable, eligible=rescue_eligible, model=model)
+        except BaseException as capture_exc:
+            # One settlement path for every escape: a KeyboardInterrupt or
+            # SystemExit mid-capture is released exactly like a RuntimeError.
+            if episode_resolved is not None:
+                # Best-effort: the FAILED partial product carries the episode
+                # declaration; attach the derived ledger disclosure without ever
+                # masking the user's exception.
+                attach_failed_episode_ledger(capture_exc, episode_resolved)
+            # M(oracles) item 8 (FORK-A 3/3-agreed cell): every FAILED call is
+            # PURE of TorchLens instrumentation. The capture slot was released as
+            # the exception unwound the inner finally, so the public release door
+            # is legal here; exc.partial_log keeps its already-materialized
+            # records and stays recoverable after the release.
+            _release_preparation_after_failed_capture(model)
+            raise
     if stop_after_site is not None and not bool(getattr(trace, "halted", False)):
         # Never-fired policy split by provenance (brainpipe D-16): a
         # selector-shaped site that never fired is a typo-shaped wrong result

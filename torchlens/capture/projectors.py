@@ -523,6 +523,41 @@ class RefreshProjector:
                 claims.append((f"module_training_modes[{address!r}] record", bool(modes[address])))
         return claims
 
+    def _norm_counter_sinks(self, target_sinks: list[Any], norm_writers: set[str]) -> set[str]:
+        """Return the counter sinks that belong to a proven train-mode norm call.
+
+        A train-mode BatchNorm also advances its ``num_batches_tracked`` counter
+        with an in-place ``add_`` inside the same module call as the norm
+        kernel. Such a write is eligible exactly when that module call also
+        holds a proven train-mode norm writer; any other in-place buffer write
+        stays a refused stateful writer.
+        """
+
+        norm_calls = {
+            self._sink_module_call(layer)
+            for layer in target_sinks
+            if layer._layer_label_raw in norm_writers
+        }
+        norm_calls.discard(None)
+        return {
+            layer._layer_label_raw
+            for layer in target_sinks
+            if layer.buffer_value_changed is True
+            and layer.buffer_write_kind == "inplace"
+            and (getattr(layer, "buffer_source_func_name", None) or "").rsplit(".", 1)[-1] == "add_"
+            and self._sink_module_call(layer) in norm_calls
+        }
+
+    def _sink_module_call(self, sink_layer: Any) -> str | None:
+        """Return the innermost module call of a buffer sink's producing op."""
+
+        source_label = getattr(sink_layer, "buffer_source", None)
+        layers = self.target.layer_dict_all_keys
+        if not source_label or source_label not in layers:
+            return None
+        modules = tuple(getattr(layers[source_label], "modules", ()) or ())
+        return str(modules[-1]) if modules else None
+
     def _check_buffer_sink_routing(
         self, refreshed: Any, executed_raw_labels: frozenset[str] | None = None
     ) -> None:
@@ -536,7 +571,8 @@ class RefreshProjector:
         (O1), or diverging target-vs-refreshed evidence (O2). Eval-mode
         BatchNorm (``False`` with agreeing eval claims) and train-mode BatchNorm
         (``True`` from a mode-sensitive norm call whose every recorded mode
-        claim says train) pass: a default run restores the declared state it
+        claim says train, plus its in-place counter in the same module call)
+        pass: a default run restores the declared state it
         changed and a capture is a pure observer (U40.1), so every run starts
         from the state the target was captured from.
 
@@ -568,7 +604,7 @@ class RefreshProjector:
             if value_changed is None:
                 continue
             claims = self._buffer_sink_mode_claims(self.target, sink_layer)
-            if value_changed is True and claims:
+            if value_changed is True and claims and all(claim for _authority, claim in claims):
                 train_mode_writers.add(raw_label)
             for authority, claim in claims:
                 if claim is not bool(value_changed):
@@ -579,6 +615,7 @@ class RefreshProjector:
                         f"capture-time write evidence records buffer_value_changed="
                         f"{value_changed!r} -- a tampered or incoherent mode claim",
                     )
+        train_mode_writers |= self._norm_counter_sinks(target_sinks, train_mode_writers)
         # Primary key: capture-time write evidence. None = unproven, fail closed;
         # True passes only for a proven train-mode norm writer (any other
         # value-changing write, e.g. a counter, refuses). Eval-mode sinks pass.

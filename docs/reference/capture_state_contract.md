@@ -37,8 +37,10 @@ PURE_OBSERVER (U40.1, 2026-10-11).
   buffers/RNG/modes/attributes; the explicit opt-in
   `CaptureOptions(carry_state=True)` carries FORWARD_EQUIVALENT for
   train-through-trace users (the same spelling as `trace.run(inputs=...,
-  carry_state=True)`). A capture-cache hit runs no forward, so nothing
-  advances under either.
+  carry_state=True)`): buffers, modes and plain attributes advance as one
+  direct `model(x)` would. Random state never advances under either: every
+  capture draws from its own seed and restores the global engines (R57). A
+  capture-cache hit runs no forward, so nothing advances under either.
 
 `trace.run()` keeps its own bracket: a default run restores the declared
 state (parameters and buffers) it changed, but not the random state or plain

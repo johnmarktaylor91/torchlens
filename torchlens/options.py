@@ -515,9 +515,10 @@ class CaptureOptions:
         output carries autograd history.
     carry_state:
         Whether the capture keeps the model state its forward changed
-        (forward-equivalent: norm running statistics, buffer writes, random
-        draws and plain attributes advance exactly as one direct ``model(x)``
-        would, the spelling ``trace.run(carry_state=True)`` uses). The default
+        (forward-equivalent: norm running statistics, buffer writes, training
+        modes and plain attributes advance exactly as one direct ``model(x)``
+        would, the spelling ``trace.run(carry_state=True)`` uses; no capture
+        advances the caller's random streams under either setting). The default
         ``False`` makes the capture a pure observer: buffers, random state,
         training modes and plain module attributes are restored afterwards,
         on success and on failure. A cache hit runs no forward, so nothing

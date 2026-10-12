@@ -13,6 +13,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens import trace as trace_fn
+from torchlens.options import CaptureOptions
 from torchlens.postprocess.graph_traversal import output_payload_aliases_parent
 from torchlens.validation import check_metadata_invariants
 
@@ -503,7 +504,9 @@ class TestDescriptiveValueError:
                 return x
 
         model = DynamicModel()
-        log = trace_fn(model, torch.randn(2, 10))
+        # carry_state=True keeps the forward's call_count write (the default
+        # capture restores it), so the refresh takes the other branch.
+        log = trace_fn(model, torch.randn(2, 10), capture=CaptureOptions(carry_state=True))
         with pytest.raises(ValueError, match="computational graph changed"):
             log.save_new_outs(model, torch.randn(2, 10))
 

@@ -53,9 +53,10 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   forward changed is written back only where its bytes changed. Plain attributes restore by value
   (scalars, strings, small tensors and containers) or by identity (any other object: a rebinding is
   undone, its interior state is not); lazy modules are left as their materializing forward leaves
-  them. `CaptureOptions(carry_state=True)` opts into forward-equivalent state: state advances
-  exactly as one direct `model(x)` would, the same spelling as `trace.run(inputs=...,
-  carry_state=True)`. A capture-cache hit runs no forward, so nothing advances. An item that
+  them. `CaptureOptions(carry_state=True)` opts into forward-equivalent state: buffers, modes and
+  plain attributes advance exactly as one direct `model(x)` would, the same spelling as
+  `trace.run(inputs=..., carry_state=True)`. No capture advances the caller's random streams
+  under either setting (each capture draws from its own seed and restores the global engines). A capture-cache hit runs no forward, so nothing advances. An item that
   cannot be restored is named in one `capture_state_restore_incomplete` warning. Transient: an
   option only, never persisted.
 
