@@ -252,7 +252,7 @@ Output:
 block, through the feature-detected `HAS_DYNAMO_COMPILE_COUNTERS` capability. Use it to verify the
 torch.compile coexistence contract on your own model: zero compiles while a capture holds the
 `force_eager` stance (torch >= 2.6), and a one-time bounded burst of recompilations on the first
-compiled call after each capture, then steady state (measured: none on `resnet18`, six frames on a
+compiled call after each capture, then steady state (measured: none on `resnet18`, six to seven frames on a
 tiny GPT-2). It raises `CompileCountsUnavailableError` when the runtime exposes no Dynamo
 counters.
 

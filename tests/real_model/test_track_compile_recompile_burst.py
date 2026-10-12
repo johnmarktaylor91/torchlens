@@ -6,20 +6,21 @@ recompile". Measured on real architectures (torch 2.13.0 CPU, ``aot_eager``):
 * ZERO compiles happen during a capture (the ``force_eager`` stance);
 * the first compiled call after a capture can recompile a burst of frames when
   the model has Dynamo graph breaks around TorchLens's wrapper install/uninstall
-  (tiny GPT-2: 6 frames; ``resnet18``, a single fully-captured graph: 0);
+  (tiny GPT-2: 6-7 frames; ``resnet18``, a single fully-captured graph: 0);
 * the burst lands entirely on that first call, stays within Dynamo's recompile
   limit, and every later call recompiles ZERO frames (steady state);
 * the post-capture outputs are bitwise-equal to the warm compiled outputs;
-* a second capture is followed by its own burst of the same size, so the honest
-  statement is "a bounded burst after each capture, then steady state".
+* a second capture is followed by its own burst (tiny GPT-2 measured 7 then 6),
+  so the honest statement is "a bounded burst after each capture, then steady
+  state".
 
 The bound is Dynamo's own ceiling (``recompile_limit``; ``cache_size_limit`` on
 older torch), found by feature check, never by parsing the torch version.
 
 Backend: ``aot_eager``. Dynamo guards and recompiles are what is measured, and
-that backend reproduces the same frame counts as the default inductor backend
-on CPU (6 frames after the second capture; 6-7 after the first) in about a
-tenth of the time, with no host C++ toolchain requirement.
+that backend reproduces the frame counts of the default inductor backend on
+CPU (6-7 per burst) in about a tenth of the time, with no host C++ toolchain
+requirement.
 """
 
 from __future__ import annotations
@@ -133,6 +134,6 @@ def test_post_capture_recompile_burst_is_bounded_then_steady(
         )
         bursts.append(burst)
 
-    # Measured, not assumed: every capture is followed by its own burst of the
-    # same size (resnet18 0 and 0; gpt2 6 then 6, the first can be 7 on inductor).
+    # Measured, not assumed: every capture is followed by its own burst (resnet18
+    # 0 then 0; tiny GPT-2 7 then 6 under aot_eager).
     print(f"post-capture bursts per capture: {bursts}")

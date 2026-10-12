@@ -4,8 +4,8 @@ The torch.compile coexistence contract (compile verdict, 2026-08-12) makes two
 countable promises: ZERO new compiles happen while a TorchLens capture holds
 the ``force_eager`` stance, and TorchLens's wrapper install/uninstall costs a
 one-time bounded burst of recompilations on the first compiled call after each
-capture, then steady state (measured on real models: none on ``resnet18``, six
-frames on a tiny GPT-2). This helper exposes the measurement so users can
+capture, then steady state (measured on real models: none on ``resnet18``, six to
+seven frames on a tiny GPT-2). This helper exposes the measurement so users can
 verify both promises on their own models instead of taking them on faith.
 """
 

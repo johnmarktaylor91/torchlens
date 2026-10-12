@@ -65,7 +65,7 @@
   one-time bounded burst of recompilations on the first compiled call after each capture, then
   steady state (wrapper install/uninstall guard invalidation and graph breaks around TorchLens's own
   wrapper; measured by `tests/real_model/test_track_compile_recompile_burst.py`: zero on
-  `resnet18`, six frames on a tiny GPT-2, never above Dynamo's recompile limit), and the
+  `resnet18`, six to seven frames on a tiny GPT-2, never above Dynamo's recompile limit), and the
   plain-attribute pause-logging bypass is NOT installed. The paragraph below is the torch < 2.6 /
   no-stance fallback, pinned byte-for-byte by the `_no_stance` tamper tests in
   `test_dynamo_fake_guard.py`.

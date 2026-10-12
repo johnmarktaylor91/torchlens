@@ -628,7 +628,7 @@ compiled regions run their original eager Python: the interior is fully logged
 with full verified semantics, zero graph breaks or new compiles happen during
 capture, compiled caches stay intact, and wrapper install/uninstall costs a
 one-time bounded burst of recompilations on the first compiled call after each
-capture, then steady state (measured: none on `resnet18`, six frames on a tiny
+capture, then steady state (measured: none on `resnet18`, six to seven frames on a tiny
 GPT-2). On torch < 2.6 the
 historical fallback holds: a Dynamo-traced region reached mid-capture is
 bypassed with a one-per-forward warning and the returned trace honestly
