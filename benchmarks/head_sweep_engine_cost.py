@@ -24,10 +24,11 @@ Subcommands
 ``sweep``
     Time the full sweep on one engine. Wall time is reported, never a gate.
 ``counters``
-    Deterministic counters for a few heads per engine under ``cProfile`` and an
-    aten-level dispatch counter: Python function calls, aten ops executed,
-    aten clone/copy bytes, TorchLens per-op wrapper invocations, hooks fired
-    and ops re-executed, plus the cost split by phase.
+    Deterministic counters for a few heads per engine from an aten-level
+    dispatch counter and wall-clock wrappers on named phase functions: aten
+    ops executed, aten clone/copy bytes, Python profile events inside the
+    host RNG monitor window, hooks planned and fired, replay hook
+    applications and ops re-executed, plus the cost split by phase.
 
 Every subcommand prints one JSON document on stdout (and writes it to
 ``--out`` when given). The model is the config-built gpt2-124M architecture
@@ -38,17 +39,14 @@ weights: gpt2-124M's op count, no network, no checkpoint.
 from __future__ import annotations
 
 import argparse
-import cProfile
 import gc
 import json
 import os
-import pstats
 import sys
 import time
 import warnings
 from collections import Counter
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -388,9 +386,16 @@ def _attempt(
 
 
 def _frontdoor_cases(baseline: tl.Trace, module_query: str) -> list[tuple[str, Any, str]]:
-    """The documented spellings for one module's output site."""
+    """The documented spellings for one op's output site.
 
-    table = baseline.find_sites(module_query)
+    ``module_query`` is ``"<func>#<k>"``: the k-th call of that function. Its
+    label is then looked up again through ``find_sites`` as a bare string, the
+    discovery path the errors recommend.
+    """
+
+    func_name, index = module_query.split("#")
+    table = baseline.find_sites(tl.func(func_name), max_fanout=256)[int(index)]
+    table = baseline.find_sites(_site_label(table))
     label = _site_label(table[0])
     return [
         ("find_sites_label", label, label),
@@ -408,8 +413,8 @@ def cmd_frontdoor(_args: argparse.Namespace) -> dict[str, Any]:
     gpt2 = build_gpt2()
     ids = build_ids()
     for name, model, x, query in (
-        ("mlp12", mlp, x_mlp, "layers.5"),
-        ("gpt2_124m_config", gpt2, ids, "transformer.h.5.mlp.c_fc"),
+        ("mlp12", mlp, x_mlp, "relu#5"),
+        ("gpt2_124m_config", gpt2, ids, "addmm#20"),
     ):
         baseline = capture_baseline(model, x)
         rows = []
@@ -565,86 +570,146 @@ class AtenCounter(TorchDispatchMode):
         return out
 
 
-@contextmanager
-def _profiled() -> Iterator[cProfile.Profile]:
-    """Enable a fresh cProfile profiler for the body."""
-
-    profiler = cProfile.Profile()
-    profiler.enable()
-    try:
-        yield profiler
-    finally:
-        profiler.disable()
-
-
-#: Phase entry points whose cumulative time gives the cost split.
+#: Phase entry points, as ``(module path, attribute path)``. Each is wrapped
+#: with a wall-clock accumulator for the counters run only. cProfile cannot be
+#: used here: the rerun capture installs its own ``sys.setprofile`` hook (the
+#: host RNG monitor), which displaces the profiler for the whole forward.
 PHASES: dict[str, tuple[str, str]] = {
-    "do_total": ("_trace_intervention.py", "do"),
-    "fork": ("_trace_intervention.py", "fork"),
-    "apply_mutation": ("_trace_intervention.py", "_apply_do_mutation"),
-    "rerun_run": ("rerun.py", "run"),
-    "rerun_capture": ("rerun.py", "_capture_with_active_spec"),
-    "rerun_validate": ("rerun.py", "_validate_rerun_result"),
-    "rerun_refresh_state": ("", "_refresh_matching_rerun_state_from"),
-    "rerun_replace_state": ("", "replace_state_from"),
-    "push_replay": ("replay.py", "_run_replay"),
-    "push_cone": ("replay.py", "cone_of_effect"),
-    "postprocess": ("", "postprocess"),
-    "record_audit": ("_trace_intervention.py", "_record_do_intervention_event"),
+    "fork": ("torchlens.data_classes.trace", "Trace.fork"),
+    "apply_mutation": ("torchlens.data_classes.trace", "Trace._apply_do_mutation"),
+    "record_audit": ("torchlens.data_classes.trace", "Trace._record_do_intervention_event"),
+    "rerun_capture": ("torchlens.intervention.rerun", "_capture_with_active_spec"),
+    "rerun_capture_core": ("torchlens.user_funcs", "_run_model_and_save_specified_outs"),
+    "rng_monitor_window": ("torchlens.utils.rng", "host_nondeterminism_monitor.__enter__"),
+    "rerun_validate": ("torchlens.intervention.rerun", "_validate_rerun_result"),
+    "rerun_reconcile_fires": ("torchlens.intervention.rerun", "_reconcile_rerun_hook_fires"),
+    "rerun_refresh_state": (
+        "torchlens.data_classes.trace",
+        "Trace._refresh_matching_rerun_state_from",
+    ),
+    "rerun_replace_state": ("torchlens.data_classes.trace", "Trace.replace_state_from"),
+    "push_replay": ("torchlens.intervention.replay", "_run_replay"),
+    "push_cone": ("torchlens.intervention.replay", "cone_of_effect"),
+    "push_hook_apply": ("torchlens.intervention.replay", "_apply_replay_hooks"),
 }
 
 
-def _phase_split(stats: pstats.Stats) -> dict[str, dict[str, float]]:
-    """Cumulative seconds and call counts for each named phase."""
+def _restorer(owner: Any, attr: str, original: Any, owned: bool) -> Callable[[], None]:
+    """Return a callable that undoes one patch (deleting an inherited override)."""
 
-    raw = stats.stats  # type: ignore[attr-defined]
-    split: dict[str, dict[str, float]] = {}
-    for phase, (file_suffix, func_name) in PHASES.items():
-        calls = 0
-        cumulative = 0.0
-        for (filename, _line, name), (_cc, nc, _tt, ct, _callers) in raw.items():
-            if name == func_name and filename.endswith(file_suffix or filename):
-                if "torchlens" not in filename:
-                    continue
-                calls += nc
-                cumulative = max(cumulative, ct)
-        if calls:
-            split[phase] = {"calls": calls, "cum_s": round(cumulative, 3)}
-    return split
+    def restore() -> None:
+        if owned:
+            setattr(owner, attr, original)
+        else:
+            delattr(owner, attr)
+
+    return restore
 
 
-def _wrapper_calls(stats: pstats.Stats) -> dict[str, int]:
-    """Call counts of TorchLens per-op wrappers and hook entry points."""
+class PhaseTimer:
+    """Wrap named callables with call-count and wall-clock accumulators."""
 
-    raw = stats.stats  # type: ignore[attr-defined]
-    wanted = {
-        "wrapped_func": "torch_wrapper_calls",
-        "_apply_replay_hooks": "replay_hook_applications",
-        "_fire_hooks": "live_hook_fires",
-        "run_hooks": "live_hook_fires",
-        "apply_hooks": "live_hook_fires",
-    }
-    counts: Counter[str] = Counter()
-    for (filename, _line, name), (_cc, nc, _tt, _ct, _callers) in raw.items():
-        if "torchlens" in filename and name in wanted:
-            counts[wanted[name]] += nc
-    return dict(counts)
+    def __init__(self) -> None:
+        """Start empty."""
 
+        self.calls: Counter[str] = Counter()
+        self.seconds: Counter[str] = Counter()
+        self.cone_sizes: list[int] = []
+        self.profile_events = 0
+        self._restores: list[Callable[[], None]] = []
 
-def _top_functions(stats: pstats.Stats, limit: int) -> list[dict[str, Any]]:
-    """Top TorchLens functions by own (tottime) seconds."""
+    def _wrap(self, phase: str, original: Callable[..., Any]) -> Callable[..., Any]:
+        """Return a timing wrapper for ``original``."""
 
-    raw = stats.stats  # type: ignore[attr-defined]
-    rows = []
-    for (filename, line, name), (_cc, nc, tt, ct, _callers) in raw.items():
-        if "torchlens" not in filename:
-            continue
-        short = filename.split("torchlens/", 1)[-1]
-        rows.append({"func": f"{short}:{line}:{name}", "calls": nc, "tot_s": tt, "cum_s": ct})
-    rows.sort(key=lambda r: r["tot_s"], reverse=True)
-    return [
-        {**r, "tot_s": round(r["tot_s"], 3), "cum_s": round(r["cum_s"], 3)} for r in rows[:limit]
-    ]
+        timer = self
+
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            start = time.perf_counter()
+            try:
+                result = original(*args, **kwargs)
+            finally:
+                timer.calls[phase] += 1
+                timer.seconds[phase] += time.perf_counter() - start
+            if phase == "push_cone" and isinstance(result, list):
+                timer.cone_sizes.append(len(result))
+            return result
+
+        return wrapper
+
+    def _install_window_close(self) -> None:
+        """Pair the monitor's ``__exit__`` with its ``__enter__`` to time the window."""
+
+        import torchlens.utils.rng as rng
+
+        cls = rng.host_nondeterminism_monitor
+        original_exit = cls.__exit__
+        original_make = cls._make_profile_hook
+        timer = self
+
+        def timed_exit(monitor: Any, *args: Any) -> Any:
+            opened = monitor.__dict__.pop("_perf1_opened", None)
+            try:
+                return original_exit(monitor, *args)
+            finally:
+                if opened is not None:
+                    timer.seconds["rng_monitor_window"] += time.perf_counter() - opened
+
+        def counting_make(monitor: Any, predecessor: Any, **kwargs: Any) -> Any:
+            hook = original_make(monitor, predecessor, **kwargs)
+
+            def counted(frame: Any, event: str, arg: Any) -> Any:
+                timer.profile_events += 1
+                return hook(frame, event, arg)
+
+            return counted
+
+        cls.__exit__ = timed_exit  # type: ignore[method-assign]
+        cls._make_profile_hook = counting_make  # type: ignore[method-assign]
+        self._restores.append(lambda: setattr(cls, "__exit__", original_exit))
+        self._restores.append(lambda: setattr(cls, "_make_profile_hook", original_make))
+
+    def __enter__(self) -> PhaseTimer:
+        """Install every wrapper."""
+
+        import importlib
+
+        for phase, (module_name, attr_path) in PHASES.items():
+            owner: Any = importlib.import_module(module_name)
+            *parents, attr = attr_path.split(".")
+            for parent in parents:
+                owner = getattr(owner, parent)
+            original = getattr(owner, attr)
+            owned = attr in vars(owner)
+            if phase == "rng_monitor_window":
+                timer = self
+
+                def timed_enter(monitor: Any, *, _orig: Any = original) -> Any:
+                    timer.calls["rng_monitor_window"] += 1
+                    monitor.__dict__["_perf1_opened"] = time.perf_counter()
+                    return _orig(monitor)
+
+                setattr(owner, attr, timed_enter)
+            else:
+                setattr(owner, attr, self._wrap(phase, original))
+            self._restores.append(_restorer(owner, attr, original, owned))
+        self._install_window_close()
+        return self
+
+    def __exit__(self, *exc: Any) -> None:
+        """Restore every original."""
+
+        for restore in reversed(self._restores):
+            restore()
+        self._restores.clear()
+
+    def report(self) -> dict[str, Any]:
+        """Per-phase calls and seconds."""
+
+        return {
+            phase: {"calls": self.calls[phase], "s": round(self.seconds[phase], 4)}
+            for phase in PHASES
+            if self.calls[phase]
+        }
 
 
 def _count_one(
@@ -655,24 +720,25 @@ def _count_one(
     counter = AtenCounter()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        with counter, _profiled() as profiler:
+        with PhaseTimer() as phases, counter:
+            start = time.perf_counter()
             member = ablate(baseline, site, engine, model, x)
-    stats = pstats.Stats(profiler)
+            total_s = time.perf_counter() - start
     last_run = getattr(member, "last_run", None) or {}
-    total_calls = sum(nc for (_cc, nc, _tt, _ct, _c) in stats.stats.values())  # type: ignore[attr-defined]
     row = {
         "engine": engine,
-        "python_function_calls": total_calls,
+        "wall_s_instrumented": round(total_s, 3),
         "aten_ops_executed": sum(counter.ops.values()),
         "aten_clone_like_calls": counter.clone_calls,
         "aten_clone_like_bytes": counter.clone_bytes,
         "aten_top": counter.ops.most_common(12),
+        "python_profile_events_in_rng_window": phases.profile_events,
         "hooks_planned": last_run.get("hooks"),
         "hooks_fired": last_run.get("hooks_fired"),
+        "replay_hook_applications": phases.calls["push_hook_apply"],
         "ops_in_result": len(member.layer_list),
-        "wrapper_calls": _wrapper_calls(stats),
-        "phases": _phase_split(stats),
-        "top_functions": _top_functions(stats, 15),
+        "ops_reexecuted": (sum(phases.cone_sizes) if engine == "push" else len(member.layer_list)),
+        "phases": phases.report(),
     }
     del member
     gc.collect()
@@ -688,7 +754,11 @@ def cmd_counters(args: argparse.Namespace) -> dict[str, Any]:
         plain_counter = AtenCounter()
         with plain_counter:
             model(ids)
-    baseline = capture_baseline(model, ids)
+    capture_counter = AtenCounter()
+    with PhaseTimer() as capture_phases, capture_counter:
+        start = time.perf_counter()
+        baseline = capture_baseline(model, ids)
+        capture_s = time.perf_counter() - start
     chosen = [head_sites()[i] for i in args.indices]
     rows = []
     for candidate_id, site in chosen:
@@ -696,11 +766,29 @@ def cmd_counters(args: argparse.Namespace) -> dict[str, Any]:
             row = _count_one(baseline, site, engine, model, ids)
             row["candidate"] = candidate_id
             rows.append(row)
+    # The rerun from a baseline that is NOT intervention-ready (no host RNG
+    # monitor on the rerun capture): the cost of the monitor, for PERF-2.
+    unready: dict[str, Any]
+    try:
+        plain_baseline = tl.trace(model, ids)
+        unready = _count_one(plain_baseline, chosen[0][1], "rerun", model, ids)
+        unready["candidate"] = chosen[0][0]
+        del plain_baseline
+    except Exception as exc:  # noqa: BLE001 - report the refusal shape
+        unready = {"error": type(exc).__name__, "message": str(exc).splitlines()[0][:300]}
     return {
         "environment": _environment(),
         "baseline_ops": len(baseline.layer_list),
         "plain_forward_aten_ops": sum(plain_counter.ops.values()),
+        "baseline_capture": {
+            "wall_s_instrumented": round(capture_s, 3),
+            "aten_ops_executed": sum(capture_counter.ops.values()),
+            "aten_clone_like_bytes": capture_counter.clone_bytes,
+            "python_profile_events_in_rng_window": capture_phases.profile_events,
+            "phases": capture_phases.report(),
+        },
         "rows": rows,
+        "rerun_from_unready_baseline": unready,
     }
 
 
