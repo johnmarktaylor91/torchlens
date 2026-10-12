@@ -87,9 +87,13 @@ EAGER_SDPA_FACET_DIFF: dict[str, dict[str, dict[str, tuple[str, ...]]]] = {
     # BertSelfOutput), so per-head result is structurally absent on both
     # implementations and only the real-op trio differs.
     "bert": {"bert_self_attention": {"sdpa_only": (), "eager_only": ("pattern", "scores", "z")}},
-    # albert/qwen2/clip/whisper: no facet-availability diff between
-    # implementations today (their attention carries no recipe, so there is
-    # nothing to differ -- the qwen2 emptiness itself is the KNOWN-GAP row).
+    # qwen2 (forks.10) rides the Llama gqa recipe; clip (U55.1) has its own
+    # clip_attention recipe on both towers. Both show the same honest
+    # read-vs-reconstruct boundary as llama and vit.
+    "qwen2": {"gqa_attention": dict(_EAGER_REAL_OPS)},
+    "clip": {"clip_attention": dict(_EAGER_REAL_OPS)},
+    # albert/whisper: no facet-availability diff between implementations
+    # today (their attention carries no recipe, so there is nothing to differ).
 }
 
 # Families whose upstream class REFUSES sdpa outright (pinned upstream
