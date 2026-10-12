@@ -14,6 +14,10 @@ now gets right.
 | `summary(model, input_size=(1, 3, 224, 224))` | `tl.summary(model, input_size=(1, 3, 224, 224))` |
 | `depth=3` | `depth=3` |
 | `col_names=("output_size", "num_params", "mult_adds")` | `columns=[...]` / `view="compute"` |
+| `col_names=(..., "input_size", "kernel_size", "groups")` | `columns=["+input", "+kernel_size", "+groups"]` |
+| `col_names=(..., "trainable")` | `columns=["+params_trainable"]` (a count; the `train` column says yes/no/partial) |
+| Lightning's `Mode` column | `columns=["+mode"]` (`module.training` as captured) |
+| params size (MB) footer line | `size` in the Params footer |
 | `mode="eval"` | `execution_mode="eval"` (the default; state restored) |
 | result object (`.total_params`, ...) | the returned report (`.total_params`, `.to_pandas()`, ...) |
 | printed side effect | RETURN-only; the result self-displays |
@@ -79,7 +83,7 @@ relu (ReLU)    (1, 4, 8, 8)       -          -        256
 flatten_1_3    (1, 256)           -          -          0
 fc (Linear)    (1, 5)         1.28K  ### 92.2%      2.56K
 ---------------------------------------------------------
-Params   1,388 declared | trainable 1,388 (100%)
+Params   1,388 declared | trainable 1,388 (100%) | size 5.6 KB
 Compute  16.64K FLOPs fwd (fma=2) | 8.19K MACs | 4/4 ops known (formula-exact)
 Memory   forward peak 3.4 MB (torch) | activations at capture 3.9 KB, retained now 3.9 KB
 Graph    4 ops, 4 rows shown | 6 tracked tensor rows
@@ -104,13 +108,44 @@ relu (ReLU)    (1, 4, 8, 8)       -          -        256
 flatten_1_3    (1, 256)           -          -          0
 fc (Linear)    (1, 5)         1.28K  ███ 92.2%      2.56K
 ─────────────────────────────────────────────────────────
-Params   1,388 declared | trainable 1,388 (100%)
+Params   1,388 declared | trainable 1,388 (100%) | size 5.6 KB
 Compute  16.64K FLOPs fwd (fma=2) | 8.19K MACs | 4/4 ops known (formula-exact)
 Memory   forward peak 3.4 MB (torch) | activations at capture 3.9 KB, retained now 3.9 KB
 Graph    4 ops, 4 rows shown | 6 tracked tensor rows
 Capture  torch | complete | health CHECKED-AND-CLEAN
 More:    result.details() | view='compute' for per-row MACs | docs/reference/summary.md
 ```
+
+## Coming from torchsummary
+
+`torchsummary` (and its fork `pytorch-model-summary`) is frozen; its own
+README points to torchinfo. The swap is one import:
+
+```text
+# before
+from torchsummary import summary
+summary(model, (3, 224, 224))
+
+# after
+import torchlens as tl
+tl.summary(model, input_size=(1, 3, 224, 224))  # the batch dimension is explicit
+```
+
+torchsummary's `input_size` leaves out the batch dimension and its
+`device="cuda"` default fails on a CPU-only machine; TorchLens takes the
+full shape and runs wherever the model is.
+
+Inputs that crash torchsummary (its own issue tracker) and run here:
+any LSTM, GRU, or other tuple-returning layer (the row prints every
+member shape: an LSTM shows `output`, `h_n`, and `c_n`), a stock
+`nn.TransformerEncoderLayer`, integer or embedding inputs, dict inputs
+(`input_kwargs=`), and Hugging Face GPT-2.
+
+Totals: torchsummary counts a reused module's parameters again at every
+call and skips any parameter not named `weight` or `bias`. TorchLens
+counts each Parameter object once (ties and reuse are named in the Params
+footer) and counts every parameter whatever its name. Its "Params size
+(MB)" line is the `size` part of the Params footer.
 
 ## What to expect when numbers differ
 

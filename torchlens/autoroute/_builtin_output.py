@@ -9,11 +9,19 @@ from typing import Any
 import torch
 
 from torchlens._capture_fingerprint import _never_matching_fragment
+from torchlens._errors import InvalidArgumentError
 from torchlens.autoroute.output import register
 from torchlens.data_classes.trace import ResolvedPostprocessing, Trace
 from torchlens.ir.container_registry import _is_hf_model_output
 
 DETECTOR_VERSION = "torchlens-output-a2-v1"
+#: Styles the built-in detectors resolve; a registered custom detector may
+#: resolve others (docs/semantic_io.md, Custom Output Detectors).
+BUILTIN_OUTPUT_STYLES: tuple[str, ...] = ("classification", "imagenet", "imagenet1k", "hf_text")
+#: The built-in detector names (everything else in the registry is custom).
+_BUILTIN_DETECTOR_NAMES = frozenset(
+    {"explicit_style", "hf_config_classifier", "imagenet_verified", "hf_text"}
+)
 IMAGENET_LABEL_SOURCE = "torchvision ResNet50_Weights.DEFAULT.meta['categories']"
 IMAGENET_LABEL_SOURCE_VERSION = "torchvision-imagenet1k-categories-v1"
 _TOP_N_CAPTURED = 5
@@ -112,7 +120,16 @@ def _decode_outputs_for_trace_unguarded(
     """Run the output decode without the capture-protecting belt."""
 
     meta = _build_output_meta(trace, output_style=output_style, output_head=output_head)
-    resolved = _resolve_postprocessor(outputs, meta)
+    resolved, detector_name = _resolve_postprocessor_named(outputs, meta)
+    if output_style is not None and output_style not in BUILTIN_OUTPUT_STYLES:
+        if detector_name is None or detector_name in _BUILTIN_DETECTOR_NAMES:
+            # No custom detector claimed the style: decode nothing and leave a
+            # durable record; the capture entry raises the typed refusal once
+            # the session has closed (refuse_unresolved_output_style).
+            annotations = getattr(trace, "annotations", None)
+            if isinstance(annotations, dict):
+                annotations[OUTPUT_STYLE_UNRESOLVED_KEY] = {"output_style": str(output_style)}
+            return
     if resolved is None:
         return
 
@@ -244,29 +261,103 @@ def _build_output_meta(
     }
 
 
-def _resolve_postprocessor(outputs: Any, meta: dict[str, Any]) -> ResolvedPostprocessing | None:
-    """Resolve the first matching registered output postprocessor.
+class OutputStyleUnknownError(InvalidArgumentError):
+    """``output_style=`` names a style no built-in or registered detector resolves."""
 
-    Parameters
-    ----------
-    outputs:
-        Live model outputs.
-    meta:
-        Detector metadata.
 
-    Returns
-    -------
-    ResolvedPostprocessing | None
-        Matching postprocessor, if any.
+#: ``trace.annotations`` key recording a style no detector claimed.
+OUTPUT_STYLE_UNRESOLVED_KEY = "output_style_unresolved"
+
+
+def refuse_unresolved_output_style(trace: Trace) -> None:
+    """Raise the post-capture refusal recorded by the decode step, if any.
+
+    Called by the capture entry after the session closed, so the refusal
+    never interrupts teardown.
     """
+
+    annotations = getattr(trace, "annotations", None)
+    if not isinstance(annotations, dict):
+        return
+    record = annotations.pop(OUTPUT_STYLE_UNRESOLVED_KEY, None)
+    if record is not None:
+        refuse_unknown_output_style(record.get("output_style"), custom_detectors=True)
+
+
+def _custom_detector_names() -> list[str]:
+    """Names of registered output detectors that are not built in."""
 
     from . import output as autoroute_output
 
-    for detector in autoroute_output.iter_by_priority():
-        resolved = detector(outputs, meta)
+    return [
+        detector.name
+        for detector in autoroute_output.list()
+        if detector.name not in _BUILTIN_DETECTOR_NAMES
+    ]
+
+
+def refuse_unknown_output_style(output_style: Any, *, custom_detectors: bool = False) -> None:
+    """Raise the typed did-you-mean refusal for an unresolvable ``output_style``.
+
+    Parameters
+    ----------
+    output_style:
+        The requested style.
+    custom_detectors:
+        True when the check ran after the capture with custom detectors
+        registered (none of them resolved the style).
+
+    Raises
+    ------
+    OutputStyleUnknownError
+        Always, with code ``output_style_unknown``.
+    """
+
+    import difflib
+
+    close = difflib.get_close_matches(str(output_style), BUILTIN_OUTPUT_STYLES, n=1)
+    hint = f" (did you mean {close[0]!r}?)" if close else ""
+    where = (
+        "; no built-in or registered custom output detector resolved it" if custom_detectors else ""
+    )
+    raise OutputStyleUnknownError(
+        f"unknown output_style={output_style!r}{hint}{where}. Built-in styles: "
+        f"{', '.join(BUILTIN_OUTPUT_STYLES)}.",
+        code="output_style_unknown",
+        remedy=(
+            "pass a built-in style, or register a custom detector that resolves it "
+            "with tl.autoroute.output.register(...)"
+        ),
+    )
+
+
+def check_output_style(output_style: Any) -> None:
+    """Refuse an unknown ``output_style`` before the forward when provable.
+
+    A style outside the built-in set can only be resolved by a registered
+    custom detector; with none registered the request can never decode, so
+    it refuses here instead of after a wasted capture. With custom
+    detectors registered the post-capture check decides.
+    """
+
+    if output_style is None or output_style in BUILTIN_OUTPUT_STYLES:
+        return
+    if not isinstance(output_style, str) or not _custom_detector_names():
+        refuse_unknown_output_style(output_style)
+
+
+def _resolve_postprocessor_named(
+    outputs: Any, meta: dict[str, Any]
+) -> tuple[ResolvedPostprocessing | None, str | None]:
+    """Resolve the first matching detector and name the detector that matched."""
+
+    from . import output as autoroute_output
+
+    for detector in autoroute_output.list():
+        resolved = detector.func(outputs, meta)
         if resolved is not None:
-            return resolved
-    return None
+            return resolved, detector.name
+    return None, None
 
 
 @register(name="explicit_style", priority=0)

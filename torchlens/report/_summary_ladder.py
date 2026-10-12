@@ -29,6 +29,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
+from ._summary_columns import (
+    ATTENTION_FULL_SQUARE_FUNCS,
+    label_shapes,
+    merge_mode,
+    module_call_shapes,
+    op_input_shapes,
+    op_kernel_groups,
+    training_mode,
+)
+
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
 
@@ -57,6 +67,14 @@ class ViewRow:
     reader compares against torchinfo; ``params_owned``/``flops_owned`` are
     the identity-partition shares (tie-deduped, disjoint across rows).
     ``owned_ops``/``owned_params`` make the partition testable.
+
+    The trailing fields feed the optional columns: every member shape of
+    the output in return order (``output_shape`` is the first member), the
+    distinct shapes entering the row, the row's own op kernel and conv
+    groups, the per-path trainable count, the ``module.training`` mode
+    (``mixed`` when the row's modules disagree), whether the row's FLOPs
+    include a full-square attention count, and whether it holds pruned
+    parameters.
     """
 
     row_id: str
@@ -83,6 +101,14 @@ class ViewRow:
     parent_address: str | None
     owned_ops: tuple[str, ...]
     owned_params: tuple[str, ...]
+    output_shapes: tuple[tuple[int, ...], ...] = ()
+    input_shapes: tuple[tuple[int, ...], ...] = ()
+    kernel_size: tuple[int, ...] | None = None
+    groups: int | None = None
+    params_trainable: int | None = None
+    mode: str | None = None
+    attention_full_square: bool = False
+    pruned: bool = False
 
 
 @dataclass(frozen=True)
@@ -132,6 +158,10 @@ class _OpFact:
     coverage_class: str
     passes: int
     qualified_labels: tuple[str, ...] = ()
+    input_shapes: tuple[tuple[int, ...], ...] = ()
+    kernel_size: tuple[int, ...] | None = None
+    groups: int | None = None
+    attention_full_square: bool = False
 
 
 @dataclass
@@ -142,6 +172,7 @@ class _ParamFact:
     all_paths: tuple[str, ...]
     numel: int
     trainable: bool | None
+    pruned: bool = False
 
 
 @dataclass
@@ -162,6 +193,12 @@ class _ModuleFact:
     owned_params: list[_ParamFact] = field(default_factory=list)
     subtree_owned_params: list[_ParamFact] = field(default_factory=list)
     tied: bool = False
+    output_shapes: tuple[tuple[int, ...], ...] = ()
+    input_shapes: tuple[tuple[int, ...], ...] = ()
+    mode: str | None = None
+    subtree_modes: set[str] = field(default_factory=set)
+    subtree_trainable_display: int = 0
+    pruned: bool = False
 
 
 def _short_name(address: str) -> str:
@@ -194,8 +231,9 @@ class _ModelIndex:
 
         self.core = factcore(trace)
         aggregation = self.core.compute
-        entry_meta: dict[tuple[str, int], tuple[int, tuple[str, ...], Any, int]] = {}
+        entry_meta: dict[tuple[str, int], tuple[int, tuple[str, ...], Any, int, Any]] = {}
         label_seen: dict[str, int] = {}
+        self.shapes = label_shapes(trace)
         for index, op in enumerate(getattr(trace, "layer_list", ()) or ()):
             label = str(getattr(op, "layer_label", "?"))
             occurrence = label_seen.get(label, 0)
@@ -206,6 +244,7 @@ class _ModelIndex:
                 tuple(getattr(op, "module_call_stack", ()) or ()),
                 None if shape is None else tuple(int(dim) for dim in shape),
                 int(getattr(op, "pass_index", occurrence + 1) or (occurrence + 1)),
+                op,
             )
         self.pass_facts: list[_OpFact] = []
         row_seen: dict[str, int] = {}
@@ -214,9 +253,10 @@ class _ModelIndex:
                 continue
             occurrence = row_seen.get(row.label, 0)
             row_seen[row.label] = occurrence + 1
-            exec_index, stack, shape, pass_index = entry_meta.get(
-                (row.label, occurrence), (1 << 30, (), None, occurrence + 1)
+            exec_index, stack, shape, pass_index, record = entry_meta.get(
+                (row.label, occurrence), (1 << 30, (), None, occurrence + 1, None)
             )
+            kernel_size, groups = op_kernel_groups(record)
             self.pass_facts.append(
                 _OpFact(
                     label=row.label,
@@ -232,12 +272,18 @@ class _ModelIndex:
                     coverage_class=row.coverage_class,
                     passes=1,
                     qualified_labels=(f"{row.label}:{pass_index}",),
+                    input_shapes=op_input_shapes(record, self.shapes),
+                    kernel_size=kernel_size,
+                    groups=groups,
+                    attention_full_square=row.func_name in ATTENTION_FULL_SQUARE_FUNCS
+                    and row.flops_fma2 is not None,
                 )
             )
         self.pass_facts.sort(key=lambda fact: fact.exec_index)
         self.ops = _group_layer_facts(self.pass_facts)
-        self.params = _param_facts(trace)
-        self.modules = _module_facts(trace, self.ops, self.params)
+        pruned = self.core.params.pruned
+        self.params = _param_facts(trace, set(pruned.paths) if pruned is not None else set())
+        self.modules = _module_facts(trace, self.ops, self.params, self.shapes)
         self.root_children = _root_children(trace, self.modules)
         self.max_depth = max((mod.depth for mod in self.modules.values()), default=0)
         self.declared_params = self.core.params.total
@@ -264,6 +310,9 @@ def _group_layer_facts(pass_facts: list[_OpFact]) -> list[_OpFact]:
         existing.macs = _sum_optional([existing.macs, fact.macs])
         existing.passes += 1
         existing.qualified_labels = existing.qualified_labels + fact.qualified_labels
+        existing.attention_full_square = (
+            existing.attention_full_square or fact.attention_full_square
+        )
         order = {"measured": 0, "formula_exact": 1, "estimated": 2, "hypothesis": 3, "unknown": 4}
         if order.get(fact.evidence, 4) > order.get(existing.evidence, 4):
             existing.evidence = fact.evidence
@@ -271,8 +320,12 @@ def _group_layer_facts(pass_facts: list[_OpFact]) -> list[_OpFact]:
     return [grouped[key] for key in ordered]
 
 
-def _param_facts(trace: Trace) -> list[_ParamFact]:
-    """Parameter identities with tie groups; owner = first alias path."""
+def _param_facts(trace: Trace, pruned_paths: set[str]) -> list[_ParamFact]:
+    """Parameter identities with tie groups; owner = first alias path.
+
+    ``pruned_paths`` names prune-reparametrized tensors by their public
+    path (``conv.weight``); the captured identity is ``conv.weight_orig``.
+    """
 
     facts: list[_ParamFact] = []
     seen: set[str] = set()
@@ -296,6 +349,7 @@ def _param_facts(trace: Trace) -> list[_ParamFact]:
                 all_paths=paths,
                 numel=int(numel or 0),
                 trainable=getattr(param, "is_trainable", None),
+                pruned=owner.endswith("_orig") and owner[: -len("_orig")] in pruned_paths,
             )
         )
     return facts
@@ -345,7 +399,10 @@ def _record_out_shape(record: Any) -> tuple[int, ...] | None:
 
 
 def _module_facts(
-    trace: Trace, ops: list[_OpFact], params: list[_ParamFact]
+    trace: Trace,
+    ops: list[_OpFact],
+    params: list[_ParamFact],
+    shapes: dict[str, tuple[int, ...] | None],
 ) -> dict[str, _ModuleFact]:
     """Build the module-fact table, including declared-unexecuted modules."""
 
@@ -357,6 +414,9 @@ def _module_facts(
             if address == root_address:
                 continue
             out_shape = _record_out_shape(record)
+            output_shapes, input_shapes = module_call_shapes(trace, record, shapes)
+            if output_shapes:
+                out_shape = output_shapes[0]
             facts[address] = _ModuleFact(
                 address=address,
                 class_name=str(getattr(record, "class_name", "?")),
@@ -364,6 +424,9 @@ def _module_facts(
                 children=[str(child) for child in getattr(record, "address_children", []) or []],
                 output_shape=None if out_shape is None else tuple(int(d) for d in out_shape),
                 num_calls=int(getattr(record, "num_calls", 1) or 1),
+                output_shapes=output_shapes,
+                input_shapes=input_shapes,
+                mode=training_mode(record),
             )
     _add_unexecuted_modules(trace, facts, params)
     _wire_children(facts)
@@ -483,8 +546,12 @@ def _attach_param_rollups(facts: dict[str, _ModuleFact], params: list[_ParamFact
             if owner is None:
                 continue
             owner.subtree_params_display += fact.numel
+            if fact.trainable:
+                owner.subtree_trainable_display += fact.numel
             if tied:
                 owner.tied = True
+            if fact.pruned:
+                owner.pruned = True
         address = owner_module
         if address in facts:
             facts[address].owned_params.append(fact)
@@ -512,6 +579,13 @@ def _attach_subtrees(
     _attach_param_rollups(facts, params)
     for address in ordered:
         facts[address].subtree_ops.sort(key=lambda op: op.exec_index)
+        mode = facts[address].mode
+        ancestor = address
+        while mode is not None and ancestor:
+            owner = facts.get(ancestor)
+            if owner is not None:
+                owner.subtree_modes.add(mode)
+            ancestor = ancestor.rsplit(".", 1)[0] if "." in ancestor else ""
 
 
 def _root_children(trace: Trace, facts: dict[str, _ModuleFact]) -> list[str]:
@@ -562,6 +636,13 @@ def _rollup_evidence(ops: list[_OpFact]) -> tuple[str, str | None]:
     return worst, reason
 
 
+def _own_kernel(ops: list[_OpFact]) -> tuple[tuple[int, ...] | None, int | None]:
+    """The kernel and groups of a row's own ops when exactly one is shown."""
+
+    found = {(op.kernel_size, op.groups) for op in ops if op.kernel_size is not None}
+    return found.pop() if len(found) == 1 else (None, None)
+
+
 def _module_row(index: _ModelIndex, fact: _ModuleFact, *, own_ops: bool) -> ViewRow:
     """One module row; ``own_ops`` rolls the whole subtree into this row."""
 
@@ -570,6 +651,7 @@ def _module_row(index: _ModelIndex, fact: _ModuleFact, *, own_ops: bool) -> View
     evidence, reason = _rollup_evidence(fact.subtree_ops)
     if not fact.executed:
         evidence, reason = "measured", "declared; never ran"
+    kernel_size, groups = _own_kernel(fact.direct_ops)
     return ViewRow(
         row_id=f"mod:{fact.address}",
         kind="module" if fact.executed else "unexecuted",
@@ -595,7 +677,21 @@ def _module_row(index: _ModelIndex, fact: _ModuleFact, *, own_ops: bool) -> View
         parent_address=fact.address.rsplit(".", 1)[0] if "." in fact.address else None,
         owned_ops=tuple(label for op in owned_ops for label in op.qualified_labels),
         owned_params=tuple(param.owner_path for param in owned_params),
+        output_shapes=fact.output_shapes or _single(fact.output_shape),
+        input_shapes=fact.input_shapes,
+        kernel_size=kernel_size,
+        groups=groups,
+        params_trainable=fact.subtree_trainable_display if fact.subtree_params_display else None,
+        mode=merge_mode(fact.subtree_modes),
+        attention_full_square=any(op.attention_full_square for op in fact.subtree_ops),
+        pruned=fact.pruned,
     )
+
+
+def _single(shape: tuple[int, ...] | None) -> tuple[tuple[int, ...], ...]:
+    """A one-member shape tuple, or empty when the shape is unknown."""
+
+    return () if shape is None else (shape,)
 
 
 def _op_row(op: _OpFact, depth: int, parent: str | None) -> ViewRow:
@@ -626,6 +722,11 @@ def _op_row(op: _OpFact, depth: int, parent: str | None) -> ViewRow:
         parent_address=parent,
         owned_ops=op.qualified_labels,
         owned_params=(),
+        output_shapes=_single(op.shape),
+        input_shapes=op.input_shapes,
+        kernel_size=op.kernel_size,
+        groups=op.groups,
+        attention_full_square=op.attention_full_square,
     )
 
 
@@ -714,7 +815,7 @@ def _subtree_signature(index: _ModelIndex, address: str, cache: dict[str, Any]) 
         fact.class_name,
         fact.executed,
         fact.num_calls,
-        fact.output_shape,
+        fact.output_shapes or fact.output_shape,
         params,
         op_schema,
         children,
@@ -762,6 +863,14 @@ def _fold_row(index: _ModelIndex, members: list[_ModuleFact]) -> ViewRow:
         trainable=_train_state(all_params),
         owned_ops=tuple(owned_ops),
         owned_params=tuple(owned_params),
+        params_trainable=(
+            sum(member.subtree_trainable_display for member in members) if params_display else None
+        ),
+        mode=merge_mode(mode for member in members for mode in member.subtree_modes),
+        attention_full_square=any(
+            op.attention_full_square for member in members for op in member.subtree_ops
+        ),
+        pruned=any(member.pruned for member in members),
     )
 
 
@@ -981,6 +1090,11 @@ def _elide_once(rows: list[ViewRow], index: _ModelIndex, excess: int) -> list[Vi
         parent_address=members[0].parent_address,
         owned_ops=tuple(hidden_ops),
         owned_params=tuple(hidden_params),
+        output_shapes=members[-1].output_shapes,
+        input_shapes=members[0].input_shapes,
+        params_trainable=_sum_optional([member.params_trainable for member in members]),
+        attention_full_square=any(member.attention_full_square for member in members),
+        pruned=any(member.pruned for member in members),
     )
     return rows[:start_] + [elision] + rows[end_:]
 
