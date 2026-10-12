@@ -15,11 +15,7 @@ from torch import nn
 from .. import _state
 from .._deprecations import MISSING, MissingType
 from .._errors import CaptureContextError, KeywordConflictError
-from .._training_validation import (
-    TrainingModeConfigError,
-    autograd_disabled_at_entry,
-    reject_compiled_model,
-)
+from .._training_validation import TrainingModeConfigError, reject_compiled_model
 from ..capture.config import InternalCaptureConfig
 from ..capture.outcome import safe_exception_repr, safe_exception_str
 from ..capture.predicates import _save_selector_matches, validate_followed_by_capability
@@ -485,6 +481,9 @@ class Recorder:
 
         if self._state is None or self._capture_events is None:
             raise RecorderStateError("Recorder.log() requires an active with-block")
+        # Deferred: _training_validation sits above fastlog in the layer map.
+        from .._training_validation import autograd_disabled_at_entry
+
         inference_only = not self._backward_requested and autograd_disabled_at_entry()
         trace = Trace(
             model_class_name=str(type(self.model).__name__),

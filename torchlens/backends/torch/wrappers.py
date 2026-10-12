@@ -1032,9 +1032,7 @@ def _cow_payload_state_ptrs(trace: Any) -> Any:
     witnesses, backward capture, gradient saving, user activation transforms
     that may mutate the payload in place, predicate recording, streaming
     writers, non-copy save modes) keeps the historical eager clone.
-    ``inference_only`` stays eligible: it only wraps the forward in
-    ``torch.no_grad()``, the same forward as a user's own ``no_grad`` capture,
-    and a ``no_grad`` capture now implies it (AGT-2132).
+    ``inference_only`` (implied by ``no_grad``) only adds ``no_grad``: eligible.
     """
     try:
         cached = _COW_STATE_PTRS_CACHE.get(trace, _COW_UNSET)

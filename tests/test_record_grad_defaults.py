@@ -89,7 +89,6 @@ def _has_grad_hooks(tensor: torch.Tensor) -> bool:
     return bool(getattr(tensor, "_backward_hooks", None))
 
 
-@pytest.mark.smoke
 def test_record_installs_no_grad_hooks_by_default() -> None:
     """A plain record leaves the output without gradient hooks."""
 
@@ -188,12 +187,13 @@ def test_record_keeps_saved_payload_values() -> None:
     model, x = _model_and_input()
     plain = tl.record(model, x, save=_keep_relu)
     hooked = tl.record(model, x, save=_keep_relu, backward_ready=True)
-    (plain_record,) = list(plain)
-    (hooked_record,) = list(hooked)
-    assert torch.equal(plain_record.out, hooked_record.out.detach())
+    plain_outs = [record.ram_payload for record in plain if record.ctx.label == "relu_1"]
+    hooked_outs = [record.ram_payload for record in hooked if record.ctx.label == "relu_1"]
+    assert len(plain_outs) == len(hooked_outs) >= 1
+    for plain_out, hooked_out in zip(plain_outs, hooked_outs):
+        assert torch.equal(plain_out, hooked_out.detach())
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("grad_off", [torch.no_grad, torch.inference_mode])
 def test_trace_under_no_grad_implies_inference_only(grad_off: type) -> None:
     """A tl.trace entered with autograd off reports inference_only=True."""
