@@ -1374,8 +1374,16 @@ deprecation shim owed*
   `report.truncated` (bool) and `report.stopped_at` (the stop-frontier site
   label), with the full `RunTruncation` disclosure on `report.truncation`
   (regime, requested sites, executed/skipped counts, skipped-site digest).
-  Skipped sites are "not-run", never "passed". Full contract:
-  [the runnable tlspec contract](runnable_tlspec_contract.md).
+  Skipped sites are "not-run", never "passed". With `fast=True` on a live trace
+  (U26.3) the native forward is cut right after the `until=` site, which must be a
+  site the capture saved (a module address, `"address:call"`, or a saved op label;
+  otherwise `run_capability_unavailable` at stage `fast_until_site_unsaved`): the
+  prefix keeps the fast path's per-call guards and comes back graph-connected under
+  the default save, the regime is `live_stop_after`, the output and the later saved
+  sites read `None` for that run (the next full run refreshes them), and the verdict
+  is `unverifiable` because the whole-forward call fingerprint cannot be compared.
+  A loaded artifact's fast tier still refuses `run_fast_until_unsupported`. Full
+  contract: [the runnable tlspec contract](runnable_tlspec_contract.md).
 
 **Trace.sites_table()** — *unstable — no deprecation shim owed*
 : The tabular view of a trace's structural sites: one row per distinct L1

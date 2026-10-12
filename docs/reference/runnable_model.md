@@ -228,7 +228,8 @@ run.
 **E5 -- Fast run.** `run_fast_loaded_trace` / `run_fast_live_trace`: verify-once then
 guarded loop. The guard and detection-stage namespace (`fast_verify_once`,
 `fast_state_static_guard`, `fast_seed_guard`, `fast_execution_context_guard`,
-`fast_live_function_plan`, `fast_live_module_plan`) is contract surface. Fast mode
+`fast_live_function_plan`, `fast_live_module_plan`, `fast_until_site_unsaved`, `fast_until_prefix`)
+is contract surface. Fast mode
 composes with new run keywords only by explicit matrix entry; silence means typed
 refusal, never undefined behavior.
 
