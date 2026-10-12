@@ -232,6 +232,8 @@ def test_gather_index_edge_is_proven_in_domain(replay_record) -> None:
     _assert_index_edges_proven_in_domain(replay_record)
 
 
+# heavy by measurement: 8.6-9.5 s on CPU (pinned venv), over the unmarked 8 s budget.
+@pytest.mark.heavy
 def test_tiny_vjepa2_validates_with_in_domain_index_perturbations(replay_record) -> None:
     model = _tiny_vjepa2()
     inputs = {"pixel_values_videos": torch.randn(1, 4, 3, 32, 32)}
@@ -361,6 +363,7 @@ def test_corrupted_saved_gather_still_fails_validation(corrupt: str) -> None:
         trace.cleanup()
 
 
+@pytest.mark.heavy
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA leg: run on a GPU venue")
 def test_tiny_vjepa2_validates_on_cuda_without_a_device_assert(replay_record) -> None:
     model = _tiny_vjepa2().cuda()
