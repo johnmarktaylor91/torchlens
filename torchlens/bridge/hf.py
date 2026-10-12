@@ -1,4 +1,8 @@
-"""Hugging Face auto-route bridge helpers."""
+"""Hugging Face auto-route bridge helpers and the TorchLens attention backend.
+
+The attention backend (``register_attention``, ``record_attention``) lives in
+``torchlens.bridge.hf_attention`` and is re-exported here.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +13,12 @@ from typing import Any, cast
 import torch
 
 from torchlens._errors import InvalidArgumentError
+from torchlens.bridge.hf_attention import (
+    AttentionCall,
+    AttentionRecording,
+    record_attention,
+    register_attention,
+)
 from torchlens.data_classes.trace import ResolvedPreprocessing, Trace
 
 _MODALITY_KEYS = frozenset({"text", "image", "images", "audio", "videos"})
@@ -704,12 +714,16 @@ def _extract_hf_processor_config(processor: Any) -> dict[str, Any]:
 
 
 __all__ = [
+    "AttentionCall",
+    "AttentionRecording",
     "_can_resolve_hf_processor",
     "_can_resolve_hf_tokenizer",
     "_has_attached_image_processor",
     "_is_hf_image_input",
     "_is_hf_multimodal_input",
     "_is_hf_text_input",
+    "record_attention",
+    "register_attention",
     "trace_image",
     "trace_multimodal",
     "trace_text",
