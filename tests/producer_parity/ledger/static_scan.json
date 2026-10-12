@@ -9316,7 +9316,7 @@
   "field": "modules",
   "file": "torchlens/visualization/_render_dot.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -9332,7 +9332,7 @@
   "field": "layer_type",
   "file": "torchlens/visualization/_render_edges.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 1,
   "via_getattr": false
  },
  {
@@ -9374,14 +9374,6 @@
   "has_default": true,
   "sites": 2,
   "via_getattr": true
- },
- {
-  "ambiguous": false,
-  "field": "step_index",
-  "file": "torchlens/visualization/_render_edges.py",
-  "has_default": false,
-  "sites": 8,
-  "via_getattr": false
  },
  {
   "ambiguous": false,
@@ -9660,7 +9652,7 @@
   "field": "modules",
   "file": "torchlens/visualization/collapse_fallback.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": false
  },
  {
