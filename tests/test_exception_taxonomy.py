@@ -1189,7 +1189,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     # L4 declared-state restore bracket: an INTERNAL carrier converted into
     # the typed run_state_restore_failed refusal at the transaction boundary
     # (never user-facing; parked by the L6 merge train post-merge repair).
-    "torchlens._runnable_state.LiveStateRestoreFailure": (
+    "torchlens._runnable_state_live.LiveStateRestoreFailure": (
         "internal mid-bracket carrier; surfaced as run_state_restore_failed"
     ),
     # -- L7a structure-only refusals + S3 registrar (DOCUMENTED-UNSTABLE;
