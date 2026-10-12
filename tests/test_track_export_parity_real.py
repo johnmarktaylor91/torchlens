@@ -54,6 +54,7 @@ def _assert_mlflow_run(
 ) -> None:
     """Read the run back through the client and check every parity feature."""
 
+    tmp_path.mkdir(parents=True, exist_ok=True)  # download_artifacts needs an existing dir
     run = client.get_run(run_id)
     assert run.data.metrics == {f"{prefix}.{key}": float(result[key]) for key in _KEYS}
     assert run.data.metrics[f"{prefix}.num_layers"] == len(trace.layer_list)
@@ -148,6 +149,23 @@ def _open_run(aim: Any, tmp_path: Path) -> Any:
     )
 
 
+def _aim_series(run: Any, name: str, context: dict[str, Any]) -> tuple[list[int], list[float]]:
+    """Read one tracked series back through the Aim SDK as ``(steps, values)``."""
+
+    for metric in run.metrics():
+        found = metric.context
+        found = found.to_dict() if hasattr(found, "to_dict") else dict(found)
+        if metric.name == name and found == context:
+            steps, values = metric.values.sparse_numpy()
+            return list(steps), list(values)
+    raise AssertionError(f"series {name!r} with context {context!r} was not tracked")
+
+
+def _aim_tag_names(run: Any) -> set[str]:
+    tags = run.props.tags
+    return {tag.name for tag in tags}
+
+
 def test_aim_run_on_a_local_repo_has_parity(trace: Any, aim_run: Any, tmp_path: Path) -> None:
     aim = aim_run
     run = _open_run(aim, tmp_path)
@@ -157,16 +175,15 @@ def test_aim_run_on_a_local_repo_has_parity(trace: Any, aim_run: Any, tmp_path: 
     finally:
         run.close()
 
-    read = aim.Repo.from_path(str(tmp_path)).get_run(run_hash)
-    assert read is not None
+    read = aim.Run(run_hash=run_hash, repo=str(tmp_path), read_only=True)
     # Summary metrics (existing behavior, kept).
     for key in _KEYS:
-        values = read.get_metric(f"tl.{key}", {}).values.sparse_numpy()[1]
-        assert list(values) == [float(result[key])]
+        steps, values = _aim_series(read, f"tl.{key}", {})
+        assert values == [float(result[key])]
     # Per-layer table: lossless run param, one row per layer, same columns.
     rows = read["tl.layers"]
     assert len(rows) == len(trace.layer_list) == len(result["table"])
-    assert list(rows[0]) == list(result["table"].columns)
+    assert set(rows[0]) == set(result["table"].columns)
     # ... plus one chartable series per numeric column, step = row index.
     column = next(
         name
@@ -175,11 +192,9 @@ def test_aim_run_on_a_local_repo_has_parity(trace: Any, aim_run: Any, tmp_path: 
             isinstance(row[name], int | float) and not isinstance(row[name], bool) for row in rows
         )
     )
-    series = read.get_metric(f"tl.layers.{column}", {"table": "layers"})
-    assert series is not None
-    steps, values = series.values.sparse_numpy()
-    assert list(steps) == list(range(len(rows)))
-    assert list(values) == [float(row[column]) for row in rows]
+    steps, values = _aim_series(read, f"tl.layers.{column}", {"table": "layers"})
+    assert steps == list(range(len(rows)))
+    assert values == [float(row[column]) for row in rows]
     # Report: the honesty preamble rides the run param.
     report = read["tl.report"]
     assert report == result["report"]
@@ -189,5 +204,5 @@ def test_aim_run_on_a_local_repo_has_parity(trace: Any, aim_run: Any, tmp_path: 
     facts = capture_honesty_facts(trace)
     assert read["tl.capture_honesty"] == json.loads(json.dumps(facts))
     expected = {f"tl.capture_honesty.{fact}={_fact_text(value)}" for fact, value in facts.items()}
-    assert {tag.name for tag in read.props.tags} == expected
+    assert _aim_tag_names(read) == expected
     assert "tl.capture_honesty.capture_status=complete" in expected

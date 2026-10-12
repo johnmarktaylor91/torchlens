@@ -65,6 +65,7 @@ def _assert_mlflow_matches(
     client: Any, run_id: str, memory: trk.MemorySink, tmp_path: Path
 ) -> None:
     assert memory.scalars and memory.histograms and memory.texts
+    (tmp_path / "read").mkdir(parents=True, exist_ok=True)  # download_artifacts needs it
     run = client.get_run(run_id)
     assert set(run.data.metrics) == {point.tag for point in memory.scalars}
     emitted_steps: set[int] = set()
