@@ -355,9 +355,16 @@ def _verify_qkv(
     n_heads, _, d_head = weight_view.shape
     flat = weight_view.permute(1, 0, 2).reshape(hidden.shape[-1], n_heads * d_head)
     recon = hidden @ flat
+    # The reconstruction is an independent summation, so the budget carries the
+    # accumulated-|addend| magnitude (semantic/tolerances.py); without it the
+    # strict form refuses correct views wherever q/k/v cancel (all 36 roles of
+    # real GPT-2 small, measured), while wrong views still miss by >1e4x.
+    magnitude = hidden.detach().abs() @ flat.detach().abs()
     if bias_view is not None:
         recon = recon + bias_view.reshape(-1)
+        magnitude = magnitude + bias_view.detach().abs().reshape(-1)
     recon = recon.reshape(-1, n_heads, d_head)
+    magnitude = magnitude.reshape(-1, n_heads, d_head)
     target = facet_tensor
     if target.dim() == 4 and target.shape[1] == n_heads and target.shape[3] == d_head:
         # [b, head, pos, d_head] layout: bring heads next to d_head first.
@@ -365,7 +372,9 @@ def _verify_qkv(
     if target.numel() != recon.numel():
         return "unavailable"
     target = target.reshape(-1, n_heads, d_head)
-    if not within_reconstruction_tolerance(recon, target, reduction_length=int(hidden.shape[-1])):
+    if not within_reconstruction_tolerance(
+        recon, target, magnitude=magnitude, reduction_length=int(hidden.shape[-1])
+    ):
         refuse(
             code="mi_weight_view_unverified",
             message="The derived head-indexed weight view does not reproduce the captured "
