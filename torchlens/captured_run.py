@@ -10,6 +10,9 @@ from .ir import CaptureEvents
 
 ActivationT = TypeVar("ActivationT")
 
+#: Addresses listed in an ``activation_address_unmatched`` refusal before eliding.
+_ADDRESS_LISTING_LIMIT = 20
+
 
 def forget_event_stream(run: object) -> None:
     """Release the run-owned raw event stream for an explicitly cleaned run.
@@ -168,13 +171,59 @@ class CapturedRun:
         ]
 
     def activations_by_address(self, address: str) -> list[Any]:
-        """Return activation records captured at a module/buffer address."""
+        """Return activation records captured at a module/buffer address.
 
-        return [
-            activation
-            for activation in self._iter_activation_records()
-            if self._activation_address(activation) == address
+        Parameters
+        ----------
+        address:
+            Module or buffer address, e.g. ``"layer1.0.conv1"``.
+
+        Returns
+        -------
+        list[Any]
+            Projection-specific activation records at ``address``, in capture order.
+
+        Raises
+        ------
+        InvalidArgumentError
+            ``activation_address_unmatched`` when no retained activation sits at
+            ``address``; the error lists the addresses that do exist.
+        """
+
+        records = self._iter_activation_records()
+        matches = [
+            activation for activation in records if self._activation_address(activation) == address
         ]
+        if matches:
+            return matches
+        from ._errors import InvalidArgumentError
+
+        known = sorted(
+            {
+                str(found)
+                for found in (self._activation_address(activation) for activation in records)
+                if found is not None
+            }
+        )
+        shown = ", ".join(repr(name) for name in known[:_ADDRESS_LISTING_LIMIT])
+        more = (
+            f" (and {len(known) - _ADDRESS_LISTING_LIMIT} more)"
+            if len(known) > _ADDRESS_LISTING_LIMIT
+            else ""
+        )
+        raise InvalidArgumentError(
+            f"no retained activation at address {address!r}; addresses with retained "
+            f"activations: {shown or 'none'}{more}",
+            code="activation_address_unmatched",
+            remedy=(
+                f"pass one of the listed addresses, e.g. activations_by_address({known[0]!r})"
+                if known
+                else "capture with activations saved (the default save keeps every layer), "
+                "then look the address up again"
+            ),
+            argument="address",
+            known_addresses=tuple(known),
+        )
 
     def _iter_activation_records(self) -> Iterable[Any]:
         """Iterate projection-specific retained activation records."""
@@ -207,13 +256,24 @@ class CapturedRun:
         return getattr(activation, "pass_index", None)
 
     def _activation_address(self, activation: Any) -> str | None:
-        """Return the address for one projection-specific activation."""
+        """Return the module or buffer address for one projection-specific activation.
+
+        Trace ops store their innermost module as a call label (``"fc:1"``) and
+        buffer ops their buffer address; both report the bare address.
+        """
 
         ctx = getattr(activation, "ctx", None)
         if ctx is not None:
             return getattr(ctx, "address", None)
+        if getattr(activation, "is_buffer", False):
+            buffer_address = getattr(activation, "address", None)
+            if isinstance(buffer_address, str):
+                return buffer_address
         module = getattr(activation, "module", None)
-        return module if isinstance(module, str) else None
+        if not isinstance(module, str):
+            return None
+        address, separator, call_index = module.rpartition(":")
+        return address if separator and call_index.isdigit() else module
 
     def _activation_payload(self, activation: Any) -> Any:
         """Return the retained payload for one projection-specific activation."""
