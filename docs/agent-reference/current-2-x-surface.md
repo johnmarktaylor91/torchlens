@@ -1051,7 +1051,10 @@
   antialias/channel-order/value-range/mean/std; strict mode refuses mismatch AND
   unknown with distinct codes `preprocessing_audit_mismatch`/`_unknown`; opaque
   callables and partial metadata never become match; the demoted `imagenet_default`
-  fallback never anchors `verified`); `diagnose()` is the opt-in tensor arm whose
+  recipe never anchors `verified`); a PIL image whose model resolves no authority
+  refuses `preprocessing_unresolved` (the ImageNet recipe is never applied
+  silently; its explicit opt-in is
+  `CaptureOptions(transform=tl.preprocessing.imagenet_default())`); `diagnose()` is the opt-in tensor arm whose
   outcome vocabulary HAS NO match member. `ResolvedPreprocessing.status` derives the
   closed authority standing (authoritative/unverified_fallback/unknown); plain
   `tl.trace(transform=)` captures stamp honest `user_transform` provenance.
