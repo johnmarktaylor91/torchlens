@@ -18,6 +18,18 @@ __all__ = (
 )
 
 
+#: Failures a compare or restore step may raise (never ``BaseException``): each
+#: is reported to the caller instead of being masked.
+_RESTORE_ERRORS = (
+    RuntimeError,
+    TypeError,
+    ValueError,
+    AttributeError,
+    KeyError,
+    NotImplementedError,
+)
+
+
 class LiveStateRestoreFailure(RuntimeError):
     """Internal carrier for a declared-state restore that failed mid-bracket.
 
@@ -51,7 +63,7 @@ def _declared_slot_unchanged(original: torch.Tensor, clone: torch.Tensor) -> boo
             and original.device == clone.device
             and _state_bytes_equal(original, clone)
         )
-    except Exception:
+    except _RESTORE_ERRORS:
         return False
 
 
