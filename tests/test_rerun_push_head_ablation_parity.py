@@ -9,7 +9,7 @@ output and on the logits, both must equal a hand-written
 oracle path), and the un-ablated baseline must differ: a completed rerun that
 returns an un-ablated trace is exactly the defect this file guards.
 
-The default-tier case sweeps every head of the shrunk real-class GPT-2. The
+The ``heavy`` case (about 15 s) sweeps every head of the shrunk real-class GPT-2. The
 full 12x12 head set on the gpt2-124M architecture (about 40 minutes on four
 CPU threads) is ``rare``: run it explicitly with ``-m rare``.
 
@@ -133,6 +133,7 @@ def _assert_head_sweep_parity(model: nn.Module, ids: torch.Tensor) -> int:
     return checked
 
 
+@pytest.mark.heavy
 def test_rerun_head_ablation_equals_push_on_every_head() -> None:
     model = _shrunk_gpt2()
     generator = torch.Generator().manual_seed(0)
