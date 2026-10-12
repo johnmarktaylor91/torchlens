@@ -127,7 +127,7 @@ def test_unknown_direction_teaches_four_values() -> None:
     message = str(excinfo.value)
     for value in ("bottomup", "topdown", "leftright", "rightleft"):
         assert value in message
-    assert excinfo.value.code == "visualization_direction_invalid"
+    assert excinfo.value.fields["code"] == "visualization_direction_invalid"
 
 
 def test_two_bare_draws_write_two_files_and_print_both(

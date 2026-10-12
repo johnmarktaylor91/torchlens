@@ -53,6 +53,7 @@ from .render_execution import (
     atomic_render_target,
     build_render_geometry_record,
     surface_layout_stderr,
+    warn_oversize_vector,
 )
 from .renderers.graphviz import GraphvizRenderer
 from .request import RenderTarget, ResolvedRenderRequest
@@ -331,8 +332,11 @@ def _resolve_collapse_request(
     collapse_uses_default_folds = request.collapse in {"auto", "max"} or (
         isinstance(request.collapse, float) and request.collapse > 0.0
     )
-    if request.fold_repeats is not False and (
-        request.fold_repeats is True or collapse_uses_default_folds
+    overview_reason = getattr(collapse_fn, "_torchlens_overview_reason", None)
+    if (
+        overview_reason is None
+        and request.fold_repeats is not False
+        and (request.fold_repeats is True or collapse_uses_default_folds)
     ):
         from .auto_collapse import resolve_repeat_folds
 
@@ -459,6 +463,11 @@ def _graph_caption_body(trace: "Trace", request: ResolvedRenderRequest) -> str:
         if getattr(collapse_result, "k_cap_exhausted", False):
             floor_note += f" -- root owns {collapse_result.root_own_units} units, above K_CAP"
         caption_body += f"<B>{html_escape(floor_note)}</B><br align='left'/>"
+    if getattr(request.collapse_fn, "_torchlens_overview_reason", None) is not None:
+        caption_body += (
+            "<B>collapse overview: top-level modules only (trace past the smart-collapse "
+            "ceiling); see the expansion manifest</B><br align='left'/>"
+        )
     return caption_body
 
 
@@ -947,6 +956,7 @@ def _emit_and_finish_forward(
             output_path=f"{target.outpath}.{target.fileformat}",
             stderr_text=rank_execution.get("stderr_text", ""),
         )
+        warn_oversize_vector(trace._last_render_geometry)
         _report_saved_graph(trace, target)
         return result
 
@@ -1128,6 +1138,7 @@ def _emit_and_finish_forward(
                 output_path=rendered_path,
                 stderr_text=layout_stderr,
             )
+            warn_oversize_vector(trace._last_render_geometry)
             if not target.save_only:
                 _view_rendered_file(rendered_path)
             _report_saved_graph(trace, target)
@@ -1361,7 +1372,61 @@ def draw(
     work = _populate_forward_ir(self, context)
 
     forward_render_ir = _finalize_forward_ir(self, context, work)
-    return _emit_and_finish_forward(self, context, work, forward_render_ir)
+    rendered = _emit_and_finish_forward(self, context, work, forward_render_ir)
+    _write_overview_expansion_manifest(self, request, target)
+    return rendered
+
+
+def _write_overview_expansion_manifest(
+    trace: "Trace", request: ResolvedRenderRequest, target: RenderTarget
+) -> None:
+    """Write the FK4 expansion manifest beside an over-ceiling overview.
+
+    Fires for the two residual shapes: a floor-fallback plan still above the
+    readable band, and the top-level overview served past the pathological
+    pre-gate. Ordinary renders write nothing extra.
+
+    Parameters
+    ----------
+    trace:
+        Trace that was rendered.
+    request:
+        Resolved request (its ``collapse_fn`` carries the planner facts).
+    target:
+        Render target (the manifest rides beside ``target.outpath``).
+    """
+
+    from ._expansion_manifest import build_expansion_manifest, write_expansion_manifest
+    from .auto_collapse import _readable_band_high
+    from .collapse_plan import collapse_plan_for_trace, count
+
+    collapse_fn = request.collapse_fn
+    band_high = _readable_band_high(trace)
+    overview_reason = getattr(collapse_fn, "_torchlens_overview_reason", None)
+    result = getattr(collapse_fn, "_torchlens_v2_result", None)
+    if overview_reason is not None:
+        plan = collapse_plan_for_trace(trace, collapse_fn, None, request)
+        planner, reason = "overview_fallback", overview_reason
+    elif (
+        result is not None
+        and getattr(result, "planner", "") == "floor_fallback"
+        and count(result.plan) > band_high
+    ):
+        plan, planner, reason = result.plan, "floor_fallback", result.reason
+    else:
+        return
+    manifest = build_expansion_manifest(plan, planner=planner, reason=reason, band_high=band_high)
+    path = write_expansion_manifest(target.outpath, manifest)
+    warnings.warn(
+        TorchLensWarning(
+            f"This render is an over-ceiling overview ({manifest['visible_count']} visible "
+            f"units, above the readable band of {band_high}); its {len(manifest['entries'])} "
+            f"collapsed units and the draw() call that opens each are listed in {path}. "
+            "Remedy: open a unit with module=<address> from the manifest",
+            code="collapse_expansion_manifest",
+        ),
+        stacklevel=user_stacklevel(),
+    )
 
 
 def _warn_render_omission(message: str) -> None:

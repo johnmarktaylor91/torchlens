@@ -110,10 +110,17 @@ quality planner is admitted when `U <= 2000` AND the predicted cost fits the bud
   `collapse_budget_fallback` warning and `OptimizerResult.planner="linear_fallback"` —
   never an uncollapsed wall.
 - Only PATHOLOGICAL inputs (raw ops above 20x the constant) still decline outright:
-  `draw` warns (`collapse_pathological_skip`) and renders uncollapsed,
-  `Trace.collapse_plan()` refuses typed (`collapse_plan_unavailable`, reason
+  `draw` warns (`collapse_pathological_skip`) and renders a bounded top-level
+  module overview plus an expansion manifest (forks.11 FK4; uncollapsed only when
+  the root has no child module), `Trace.collapse_plan()` refuses typed (`collapse_plan_unavailable`, reason
   `collapse_ops_ceiling`), and `Trace.collapse_schedule()` degrades to its single
   full-graph step.
+- Over-ceiling residuals (forks.11 FK4, DOCUMENTED-UNSTABLE): when the served
+  overview is still above the readable band -- a floor-fallback plan, or the
+  pathological top-level overview -- `draw` writes `<outpath>.expansion.json` beside
+  the picture (schema `torchlens.expansion_manifest.v1`: one entry per collapsed unit
+  with a stable `expansion_id` and the `draw()` keywords that open it) and warns
+  `collapse_expansion_manifest` with its path.
 - A generous wall-clock watchdog (off in CI and under `TORCHLENS_DETERMINISTIC`;
   `TORCHLENS_COLLAPSE_WATCHDOG=0` disables) may abandon the quality planner mid-run to
   the same fallback; every firing is disclosed as an estimator bug

@@ -624,6 +624,12 @@ def resolve_collapse_fn(
         from .collapse_optimizer import select_collapse_plan
 
         result = select_collapse_plan(trace, resolved_context, mode=collapse)
+        if result.declined and "collapse_ops_ceiling" in (result.reason or ""):
+            # forks.11 FK4: past the pathological pre-gate the render is a
+            # bounded top-level overview plus an expansion manifest, never an
+            # uncollapsed wall (a flat trace with no child modules has no
+            # coarser legal plan and stays as it is, disclosed by the skip).
+            return _pathological_overview_fn(trace, result.reason)
         if not result.declined:
             _warn_undisclosed_floor(trace, collapse, result, resolved_context)
 
@@ -639,6 +645,39 @@ def resolve_collapse_fn(
             setattr(v2_collapse_fn, "_torchlens_v2_mode", collapse)
             return v2_collapse_fn
     return None
+
+
+def _pathological_overview_fn(trace: Trace, reason: str | None) -> Callable[[Module], bool] | None:
+    """Return the top-level overview predicate for a pathological trace (FK4).
+
+    One O(modules) pass selects every direct child module of the root that
+    hides more than one operation; the renderer then builds one plan from it.
+    The predicate carries ``_torchlens_overview_reason`` so the draw path
+    skips run folding (the raw-op ceiling already refuses it), captions the
+    overview, and writes the expansion manifest.
+
+    Parameters
+    ----------
+    trace:
+        Trace past the pathological pre-gate.
+    reason:
+        The optimizer's typed decline reason.
+
+    Returns
+    -------
+    Callable[[Module], bool] | None
+        The overview predicate, or ``None`` when the root has no child module
+        to box (the residual then renders as captured).
+    """
+
+    from .collapse_fallback import _fallback_collapse_fn, _top_level_fallback_addresses
+
+    selected = frozenset(_top_level_fallback_addresses(trace))
+    if not selected:
+        return None
+    overview_fn = _fallback_collapse_fn(selected)
+    setattr(overview_fn, "_torchlens_overview_reason", reason or "collapse_ops_ceiling")
+    return overview_fn
 
 
 @_revision_scoped

@@ -426,7 +426,9 @@ def select_collapse_plan(
                     f"{op_count} ops, above the pathological-input pre-gate "
                     f"({PATHOLOGICAL_OP_MULTIPLIER} x the defensive constant "
                     f"COLLAPSE_OPTIMIZER_MAX_OPS={COLLAPSE_OPTIMIZER_MAX_OPS}). "
-                    "The graph renders uncollapsed; reduce the rendered "
+                    "draw() renders a bounded top-level module overview "
+                    "with an expansion manifest instead (uncollapsed only "
+                    "when the root has no child module); reduce the rendered "
                     "graph first with module= focus, vis_call_depth, or "
                     "rolled mode.",
                     code="collapse_pathological_skip",
