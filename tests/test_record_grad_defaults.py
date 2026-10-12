@@ -187,8 +187,8 @@ def test_record_keeps_saved_payload_values() -> None:
     model, x = _model_and_input()
     plain = tl.record(model, x, save=_keep_relu)
     hooked = tl.record(model, x, save=_keep_relu, backward_ready=True)
-    plain_outs = [record.ram_payload for record in plain if record.ctx.label == "relu_1"]
-    hooked_outs = [record.ram_payload for record in hooked if record.ctx.label == "relu_1"]
+    plain_outs = [record.ram_payload for record in plain if record.ram_payload is not None]
+    hooked_outs = [record.ram_payload for record in hooked if record.ram_payload is not None]
     assert len(plain_outs) == len(hooked_outs) >= 1
     for plain_out, hooked_out in zip(plain_outs, hooked_outs):
         assert torch.equal(plain_out, hooked_out.detach())
