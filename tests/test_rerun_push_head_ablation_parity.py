@@ -12,10 +12,18 @@ returns an un-ablated trace is exactly the defect this file guards.
 The default-tier case sweeps every head of the shrunk real-class GPT-2. The
 full 12x12 head set on the gpt2-124M architecture (about 40 minutes on four
 CPU threads) is ``rare``: run it explicitly with ``-m rare``.
+
+The front-door rows: a ``tl.where`` predicate on ``p.layer_label`` resolves
+on the saved trace (the push engine ablates with it) but cannot match during
+a live forward. A rerun of the same graph on the same inputs therefore
+refuses typed (``rerun_selector_unmatchable_live``) and leaves the trace
+unchanged, instead of completing un-ablated behind a warning; a rerun on NEW
+inputs keeps the ``rerun_zero_fire`` warning.
 """
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
 import pytest
@@ -23,6 +31,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.intervention.errors import LiveModeLabelError
 from torchlens.options import CaptureOptions, InterventionOptions
 
 #: Declared tolerance (absolute, float32). Observed: bitwise equal.
@@ -137,3 +146,89 @@ def test_rerun_head_ablation_equals_push_on_the_12x12_gpt2_head_set() -> None:
     generator = torch.Generator().manual_seed(0)
     ids = torch.randint(0, 50257, (1, 16), generator=generator)
     assert _assert_head_sweep_parity(model, ids) == 144
+
+
+class _Mlp12(nn.Module):
+    """Twelve ReLU layers: the toy substrate of the original front-door report."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        torch.manual_seed(0)
+        self.layers = nn.ModuleList(nn.Linear(16, 16) for _ in range(12))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        for layer in self.layers:
+            x = torch.relu(layer(x))
+        return x
+
+
+def _mlp_case() -> tuple[nn.Module, torch.Tensor, tl.Trace, str]:
+    model = _Mlp12().eval()
+    x = torch.randn(2, 16, generator=torch.Generator().manual_seed(0))
+    baseline = tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
+    relu_sites = baseline.find_sites(tl.func("relu"), max_fanout=32)
+    label = str(baseline.find_sites(relu_sites[5].layer_label)[0].layer_label)
+    return model, x, baseline, label
+
+
+def _rerun(baseline: tl.Trace, site: Any, model: nn.Module, x: torch.Tensor) -> tl.Trace:
+    return baseline.fork().do(
+        site,
+        tl.zero_ablate(),
+        model=model,
+        x=x,
+        intervention=InterventionOptions(engine="rerun"),
+    )
+
+
+def test_layer_label_predicate_rerun_on_same_inputs_refuses_typed() -> None:
+    model, x, baseline, label = _mlp_case()
+    predicate = tl.where(lambda p: p.layer_label == label)
+    # The push engine resolves the predicate on the saved trace and ablates.
+    pushed = baseline.fork().do(
+        predicate, tl.zero_ablate(), intervention=InterventionOptions(engine="replay")
+    )
+    assert torch.count_nonzero(pushed[label].out) == 0
+    # The rerun cannot match it live: refused typed, never an un-ablated result.
+    member = baseline.fork()
+    before = member[label].out.clone()
+    with pytest.raises(LiveModeLabelError) as excinfo:
+        member.do(
+            predicate,
+            tl.zero_ablate(),
+            model=model,
+            x=x,
+            intervention=InterventionOptions(engine="rerun"),
+        )
+    assert excinfo.value.fields["code"] == "rerun_selector_unmatchable_live"
+    assert excinfo.value.fields["source_site_count"] == 1
+    assert torch.equal(member[label].out, before)
+    assert torch.count_nonzero(member[label].out) > 0
+
+
+def test_layer_label_predicate_rerun_on_new_inputs_keeps_the_warning() -> None:
+    model, x, baseline, label = _mlp_case()
+    predicate = tl.where(lambda p: p.layer_label == label)
+    with pytest.warns(UserWarning, match="fired at zero sites on the new inputs"):
+        result = _rerun(baseline, predicate, model, x + 1.0)
+    assert result.last_run["hooks_fired"] == 0
+    assert result.last_run["hooks_unfired"] == 1
+
+
+def test_label_and_head_spellings_and_plain_capture_are_unchanged() -> None:
+    model, x, baseline, label = _mlp_case()
+    # A bare finalized label still refuses before the forward, with its own code.
+    with pytest.raises(LiveModeLabelError) as excinfo:
+        _rerun(baseline, label, model, x)
+    assert excinfo.value.fields["code"] == "rerun_staged_label_unmatchable"
+    # A live-matchable selector still ablates on the rerun, with no warning.
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = _rerun(baseline, tl.func("relu"), model, x)
+    assert not [w for w in caught if "fired at zero sites" in str(w.message)]
+    assert result.last_run["hooks_unfired"] == 0
+    assert torch.count_nonzero(result[label].out) == 0
+    # Plain capture is untouched by the rerun refusal.
+    plain = tl.trace(model, x)
+    with torch.no_grad():
+        assert torch.equal(plain[plain.output_layers[0]].out, model(x))
