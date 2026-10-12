@@ -9,12 +9,28 @@ math over that facet vocabulary plus the existing block ``resid_*`` facets,
 so new architectures extend coverage by registering recipes, never by
 editing this appliance.
 
+Vision models have no language-model head. When none exists, the default
+lens falls back to a vision head facet recipe: a classifier head
+(``classification_head``: final norm plus ``classifier`` over one token) or
+CLIP's image-text similarity (``contrastive_image_head``: decode against the
+captured text features of the prompts the capture ran). The fallback lens is
+validated exactly like the language-model lens: re-projecting the last
+block's captured ``resid_post`` must reproduce the model's captured logits.
+
+A user lens (``lens=``) may record the model it was built for as a
+``model_identity`` attribute (the record an extraction artifact carries in
+``manifest["signature"]["model_identity"]``). A measured identity that
+differs from the traced model refuses unless ``validate=False``; a lens with
+no comparable identity gets a last-layer agreement check that warns when
+its last-layer decode does not reproduce the model's captured logits.
+
 Every spelling here is DOCUMENTED-UNSTABLE pending naming-session
 ratification.
 """
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -22,7 +38,7 @@ from typing import Any
 import torch
 from torch.nn import functional as F
 
-from ..errors._base import TorchLensError
+from ..errors._base import TorchLensError, TorchLensWarning
 from .facets import Facet, MissingFacet
 
 __all__ = [
@@ -46,6 +62,15 @@ TIE_CONVENTION = "rank = 1 + count(logits strictly greater); tied logits share t
 #: every projected row says what it is.
 PROVENANCE_NATIVE = "native output"
 PROVENANCE_PROJECTED = "projected through final norm/head"
+
+#: ``lens_source`` values for the default lens, by the head that built it.
+LENS_SOURCE_MODEL_HEAD = "model_head"
+LENS_SOURCE_CLASSIFIER_HEAD = "classifier_head"
+LENS_SOURCE_CONTRASTIVE_HEAD = "contrastive_head"
+
+#: The only identity-record level a trace can be compared against.
+_COMPARABLE_IDENTITY_LEVEL = "measured"
+_IDENTITY_HASHES = frozenset({"blake2b", "sha256"})
 
 
 class LogitLensError(TorchLensError, RuntimeError):
@@ -113,11 +138,14 @@ class LogitLensResult:
         Hidden-state facet name that was projected.
     lens_source:
         ``"model_head"`` when the lens was reconstructed from the
-        ``language_model_head`` facets, ``"user"`` when supplied via ``lens=``.
+        ``language_model_head`` facets, ``"classifier_head"`` or
+        ``"contrastive_head"`` when it came from a vision head recipe, and
+        ``"user"`` when supplied via ``lens=``.
     validated:
         Whether the reconstructed lens was numerically validated against the
         captured last-block ``resid_post`` -> logits pair. Always ``False``
-        for user lenses (TorchLens has no oracle for them).
+        for user lenses (TorchLens has no oracle for them; see the identity
+        check under ``logit_lens(validate=...)``).
     final_logits:
         The model's captured real output logits when readable, else ``None``.
     """
@@ -280,7 +308,8 @@ class LogitLensPredictions:
     facet:
         Hidden-state facet that was projected.
     lens_source:
-        ``"model_head"`` or ``"user"`` (see :class:`LogitLensResult`).
+        ``"model_head"``, ``"classifier_head"``, ``"contrastive_head"`` or
+        ``"user"`` (see :class:`LogitLensResult`).
     validated:
         Whether the reconstructed lens passed numeric validation.
     tie_convention:
@@ -310,25 +339,37 @@ def logit_lens(
     Parameters
     ----------
     trace:
-        Completed TorchLens trace of a language model captured with the
-        relevant activations saved (the default exhaustive save suffices).
+        Completed TorchLens trace of a language model, a vision classifier
+        (classification head), or a CLIP model run on images and label
+        prompts, captured with the relevant activations saved (the default
+        exhaustive save suffices).
     facet:
         Hidden-state facet to project (``"resid_post"``, ``"resid_pre"``, or
         ``"resid_mid"``).
     layers:
         Explicit module addresses to project; defaults to every module
-        exposing ``facet``, in trace order.
+        exposing ``facet``, in trace order. A vision head lens projects only
+        the blocks of the tower that feeds its head (CLIP's vision tower,
+        never its text tower).
     lens:
         Optional user lens: one callable ``hidden -> logits`` applied to every
         layer, or a mapping from module address to per-layer callables (e.g. a
         tuned lens). When omitted, the lens is reconstructed from the
-        ``language_model_head`` facets and numerically validated.
+        ``language_model_head`` facets (or, when the trace has no language
+        model head, from a vision head recipe) and numerically validated. A
+        user lens may carry a ``model_identity`` attribute (on the callable,
+        the mapping, or each per-layer callable) holding the identity record
+        of the model it was built for.
     validate:
-        Whether to validate the reconstructed default lens by re-projecting
-        the last block's captured ``resid_post`` and comparing against the
+        Whether to check the lens. For the reconstructed default lens: re-project
+        the last block's captured ``resid_post`` and compare against the
         captured logits. Fail-closed: validation that cannot run (missing
         anchors) refuses rather than silently trusting the reconstruction.
-        Ignored for user lenses.
+        For a user lens: a recorded measured identity that differs from the
+        traced model refuses (``logit_lens_identity_mismatch``); a lens with no
+        comparable identity gets the same last-layer re-projection as a check
+        that warns (``logit_lens_identity_unrecorded``) when it disagrees or
+        cannot run. ``validate=False`` skips every check.
     rtol:
         Relative tolerance for lens validation.
     atol:
@@ -340,26 +381,30 @@ def logit_lens(
         Per-layer projections in block order.
     """
 
-    addresses = _resolve_layer_addresses(trace, facet=facet, layers=layers)
-    head_view = _find_head_view(trace)
-    final_logits = _read_final_logits(head_view)
+    head = _find_default_head(trace)
+    final_logits = _read_final_logits(None if head is None else head.view)
     if lens is not None:
+        addresses = _resolve_layer_addresses(trace, facet=facet, layers=layers)
         lens_by_address = _user_lens_by_address(lens, addresses)
+        if validate:
+            _check_user_lens(trace, lens, lens_by_address, head, rtol=rtol, atol=atol)
         lens_source, validated = "user", False
     else:
-        if head_view is None:
+        if head is None:
             raise LogitLensError(
-                "No module in this trace exposes the 'unembed_weight' facet, so the "
+                "No module in this trace exposes the 'unembed_weight' facet (or a vision "
+                "head's 'classifier_weight' / 'image_projection_weight' facet), so the "
                 "model's own lens cannot be reconstructed. Remedy: register a facet "
                 "recipe producing the language_model_head facet names for this "
                 "architecture (tl.facets.register), or pass lens= explicitly.",
                 code="logit_lens_head_unavailable",
             )
-        default_lens = _build_default_lens(head_view)
+        addresses = _resolve_layer_addresses(trace, facet=facet, layers=layers, tower=head.tower)
+        default_lens = _build_head_lens(head)
         if validate:
-            _validate_lens(trace, head_view, default_lens, rtol=rtol, atol=atol)
+            _validate_lens(trace, head.view, default_lens, rtol=rtol, atol=atol, tower=head.tower)
         lens_by_address = dict.fromkeys(addresses, default_lens)
-        lens_source, validated = "model_head", validate
+        lens_source, validated = head.kind, validate
     entries: list[LogitLensEntry] = []
     with torch.no_grad():
         for layer_index, address in enumerate(addresses):
@@ -435,26 +480,30 @@ def logit_lens_predictions(
             f"k must be a positive integer, got {k!r}. Remedy: pass k >= 1.",
             code="logit_lens_k_invalid",
         )
-    addresses = _resolve_layer_addresses(trace, facet=facet, layers=layers)
-    head_view = _find_head_view(trace)
-    final_logits = _read_final_logits(head_view)
+    head = _find_default_head(trace)
+    final_logits = _read_final_logits(None if head is None else head.view)
     if lens is not None:
+        addresses = _resolve_layer_addresses(trace, facet=facet, layers=layers)
         lens_by_address = _user_lens_by_address(lens, addresses)
+        if validate:
+            _check_user_lens(trace, lens, lens_by_address, head, rtol=rtol, atol=atol)
         lens_source, validated = "user", False
     else:
-        if head_view is None:
+        if head is None:
             raise LogitLensError(
-                "No module in this trace exposes the 'unembed_weight' facet, so the "
+                "No module in this trace exposes the 'unembed_weight' facet (or a vision "
+                "head's 'classifier_weight' / 'image_projection_weight' facet), so the "
                 "model's own lens cannot be reconstructed. Remedy: register a facet "
                 "recipe producing the language_model_head facet names for this "
                 "architecture (tl.facets.register), or pass lens= explicitly.",
                 code="logit_lens_head_unavailable",
             )
-        default_lens = _build_default_lens(head_view)
+        addresses = _resolve_layer_addresses(trace, facet=facet, layers=layers, tower=head.tower)
+        default_lens = _build_head_lens(head)
         if validate:
-            _validate_lens(trace, head_view, default_lens, rtol=rtol, atol=atol)
+            _validate_lens(trace, head.view, default_lens, rtol=rtol, atol=atol, tower=head.tower)
         lens_by_address = dict.fromkeys(addresses, default_lens)
-        lens_source, validated = "model_head", validate
+        lens_source, validated = head.kind, validate
     token_ids = tuple(int(token) for token in tokens) if tokens is not None else ()
     rows: list[LogitLensPrediction] = []
     sequence_length: int | None = None
@@ -482,7 +531,7 @@ def logit_lens_predictions(
         if include_native and final_logits is not None:
             native_length = int(final_logits.shape[-2]) if final_logits.ndim >= 3 else 1
             full_length = sequence_length if sequence_length is not None else native_length
-            head_address = _head_module_address(trace) or "<head>"
+            head_address = (head.address if head is not None else None) or "<head>"
             rows.append(
                 _reduce_projection_row(
                     final_logits,
@@ -506,15 +555,6 @@ def logit_lens_predictions(
         lens_source=lens_source,
         validated=validated,
     )
-
-
-def _head_module_address(trace: Any) -> str | None:
-    """Return the address of the module exposing the unembedding facets."""
-
-    for module in trace.modules:
-        if module.facets.has("unembed_weight"):
-            return str(getattr(module, "address", "")) or None
-    return None
 
 
 def _reduce_projection_row(
@@ -641,8 +681,24 @@ def _row_positions(
     return tuple(normalized)
 
 
-def _resolve_layer_addresses(trace: Any, *, facet: str, layers: Sequence[str] | None) -> list[str]:
-    """Return the block addresses to project, validating availability."""
+def _in_tower(address: str, tower: str | None) -> bool:
+    """Return whether a module address lies inside a head's tower."""
+
+    if tower is None or tower == "self":
+        return True
+    return address == tower or address.startswith(f"{tower}.")
+
+
+def _resolve_layer_addresses(
+    trace: Any, *, facet: str, layers: Sequence[str] | None, tower: str | None = None
+) -> list[str]:
+    """Return the block addresses to project, validating availability.
+
+    ``tower`` (vision heads only) restricts the default to the blocks of the
+    tower feeding the head and refuses explicit layers outside it: a CLIP
+    image head decodes the vision tower's residual stream, never the text
+    tower's.
+    """
 
     available = [
         str(module.address)
@@ -650,21 +706,70 @@ def _resolve_layer_addresses(trace: Any, *, facet: str, layers: Sequence[str] | 
         if getattr(module, "address", None) != "self" and module.facets.has(facet)
     ]
     if layers is None:
-        if not available:
+        in_tower = [address for address in available if _in_tower(address, tower)]
+        if not in_tower:
             raise LogitLensError(
                 f"No modules in this trace expose facet {facet!r}. Logit lens needs "
                 "transformer blocks with residual-stream facets; capture with the "
                 "default exhaustive save, or register a block facet recipe for this "
                 "architecture."
             )
-        return available
+        return in_tower
     missing = [address for address in layers if address not in available]
     if missing:
         raise LogitLensError(
             f"Modules {tuple(missing)!r} do not expose facet {facet!r} in this trace. "
             f"Available: {tuple(available)!r}."
         )
+    outside = [str(address) for address in layers if not _in_tower(str(address), tower)]
+    if outside:
+        raise LogitLensError(
+            f"Modules {tuple(outside)!r} lie outside {tower!r}, the tower whose blocks "
+            "feed this trace's vision head, so the head's lens cannot decode them. "
+            f"Remedy: pass layers inside {tower!r}, or pass lens= for those layers.",
+            code="logit_lens_layer_outside_head",
+        )
     return [str(address) for address in layers]
+
+
+@dataclass(frozen=True)
+class _DefaultHead:
+    """The head a default lens is reconstructed from."""
+
+    kind: str
+    view: Any
+    address: str | None
+    tower: str | None
+
+
+#: Vision head facet that identifies each fallback head kind, in priority order.
+_VISION_HEAD_KEYS = (
+    ("classifier_weight", LENS_SOURCE_CLASSIFIER_HEAD),
+    ("image_projection_weight", LENS_SOURCE_CONTRASTIVE_HEAD),
+)
+
+
+def _find_default_head(trace: Any) -> _DefaultHead | None:
+    """Return the language-model head, else the first vision head, else ``None``."""
+
+    view = _find_head_view(trace)
+    if view is not None:
+        address = next(
+            (str(m.address) for m in trace.modules if m.facets.has("unembed_weight")), None
+        )
+        return _DefaultHead(LENS_SOURCE_MODEL_HEAD, view, address, None)
+    for key, kind in _VISION_HEAD_KEYS:
+        for module in trace.modules:
+            candidate = module.facets
+            if candidate.has(key):
+                tower = candidate.get("tower_address")
+                return _DefaultHead(
+                    kind,
+                    candidate,
+                    str(getattr(module, "address", "")) or None,
+                    tower if isinstance(tower, str) else None,
+                )
+    return None
 
 
 def _find_head_view(trace: Any) -> Any | None:
@@ -712,8 +817,17 @@ def _user_lens_by_address(
     )
 
 
-def _build_default_lens(head_view: Any) -> LensFunc:
-    """Reconstruct the model's own final-norm + unembed lens from facets."""
+def _optional_tensor(head_view: Any, name: str) -> torch.Tensor | None:
+    """Return a facet's tensor, or ``None`` when the facet is absent."""
+
+    value = head_view.get(name)
+    if value is None or isinstance(value, MissingFacet):
+        return None
+    return _facet_tensor(value, name=name).detach()
+
+
+def _final_norm_fn(head_view: Any) -> LensFunc:
+    """Reconstruct the head's final normalization from its facets."""
 
     kind = head_view.get("final_norm_kind")
     if not isinstance(kind, str):
@@ -723,35 +837,34 @@ def _build_default_lens(head_view: Any) -> LensFunc:
             "own lens cannot be reconstructed. Pass lens= explicitly, or register "
             "a facet recipe classifying this model's final norm."
         )
-    weight = _facet_tensor(head_view["unembed_weight"], name="unembed_weight").detach()
     gamma = _facet_tensor(head_view["final_norm_gamma"], name="final_norm_gamma").detach()
-    beta_value = head_view.get("final_norm_beta")
-    beta = (
-        None
-        if beta_value is None or isinstance(beta_value, MissingFacet)
-        else _facet_tensor(beta_value, name="final_norm_beta").detach()
-    )
-    bias_value = head_view.get("unembed_bias")
-    bias = (
-        None
-        if bias_value is None or isinstance(bias_value, MissingFacet)
-        else _facet_tensor(bias_value, name="unembed_bias").detach()
-    )
+    beta = _optional_tensor(head_view, "final_norm_beta")
     eps_value = head_view.get("final_norm_eps")
     eps = float(eps_value) if isinstance(eps_value, (int, float)) else 1e-5
+
+    def _normalize(hidden: torch.Tensor) -> torch.Tensor:
+        """Apply the reconstructed final norm to a hidden state."""
+
+        if kind == "layer_norm":
+            return F.layer_norm(hidden, gamma.shape, gamma, beta, eps)
+        if kind == "rms_norm":
+            return hidden * torch.rsqrt(hidden.pow(2).mean(dim=-1, keepdim=True) + eps) * gamma
+        raise LogitLensError(f"Unknown final_norm_kind {kind!r}; pass lens= explicitly.")
+
+    return _normalize
+
+
+def _build_default_lens(head_view: Any) -> LensFunc:
+    """Reconstruct the model's own final-norm + unembed lens from facets."""
+
+    normalize = _final_norm_fn(head_view)
+    weight = _facet_tensor(head_view["unembed_weight"], name="unembed_weight").detach()
+    bias = _optional_tensor(head_view, "unembed_bias")
 
     def _apply(hidden: torch.Tensor) -> torch.Tensor:
         """Apply the reconstructed final norm + unembedding to a hidden state."""
 
-        if kind == "layer_norm":
-            normalized = F.layer_norm(hidden, gamma.shape, gamma, beta, eps)
-        elif kind == "rms_norm":
-            normalized = (
-                hidden * torch.rsqrt(hidden.pow(2).mean(dim=-1, keepdim=True) + eps) * gamma
-            )
-        else:
-            raise LogitLensError(f"Unknown final_norm_kind {kind!r}; pass lens= explicitly.")
-        logits = normalized @ weight.transpose(-2, -1)
+        logits = normalize(hidden) @ weight.transpose(-2, -1)
         if bias is not None:
             logits = logits + bias
         return logits
@@ -759,7 +872,90 @@ def _build_default_lens(head_view: Any) -> LensFunc:
     return _apply
 
 
-def _validate_lens(trace: Any, head_view: Any, lens: LensFunc, *, rtol: float, atol: float) -> None:
+def _read_token(hidden: torch.Tensor, position: int) -> torch.Tensor:
+    """Return the one sequence position a vision head reads, ``[batch, hidden]``."""
+
+    if hidden.ndim != 3:
+        raise LogitLensError(
+            f"A vision head lens reads one token of a [batch, sequence, hidden] state, "
+            f"but the projected hidden state has shape {tuple(hidden.shape)}. Remedy: "
+            "project a block residual facet such as 'resid_post', or pass lens=.",
+            code="logit_lens_hidden_rank_invalid",
+        )
+    return hidden[:, position, :]
+
+
+def _vector_norm(tensor: torch.Tensor) -> torch.Tensor:
+    """Return the last-axis L2 norm, computed the way CLIP computes it."""
+
+    return torch.sum(torch.pow(tensor, 2), dim=-1, keepdim=True) ** 0.5
+
+
+def _build_head_lens(head: _DefaultHead) -> LensFunc:
+    """Reconstruct the default lens of a language-model or vision head."""
+
+    if head.kind == LENS_SOURCE_MODEL_HEAD:
+        return _build_default_lens(head.view)
+    view = head.view
+    normalize = _final_norm_fn(view)
+    position = view.get("pooled_position")
+    if not isinstance(position, int) or isinstance(position, bool):
+        raise LogitLensError(
+            "The vision head's token read was not identified (facet 'pooled_position' "
+            "is unavailable), so the model's own lens cannot be reconstructed. Remedy: "
+            "pass lens= explicitly, or register a facet recipe for this head.",
+            code="logit_lens_head_unavailable",
+        )
+    if head.kind == LENS_SOURCE_CLASSIFIER_HEAD:
+        weight = _facet_tensor(view["classifier_weight"], name="classifier_weight").detach()
+        bias = _optional_tensor(view, "classifier_bias")
+
+        def _classify(hidden: torch.Tensor) -> torch.Tensor:
+            """Read the head's token, normalize it, and apply the classifier."""
+
+            logits = normalize(_read_token(hidden, position)) @ weight.transpose(-2, -1)
+            return logits if bias is None else logits + bias
+
+        return _classify
+    projection = _facet_tensor(
+        view["image_projection_weight"], name="image_projection_weight"
+    ).detach()
+    text = _facet_tensor(view["text_features"], name="text_features").detach()
+    scale = _facet_tensor(view["logit_scale"], name="logit_scale").detach().exp()
+    text_unit = text / _vector_norm(text)
+
+    def _similarity(hidden: torch.Tensor) -> torch.Tensor:
+        """Score the head's token against the captured label-prompt features."""
+
+        image = normalize(_read_token(hidden, position)) @ projection.transpose(-2, -1)
+        image = image / _vector_norm(image)
+        return (text_unit @ image.transpose(-2, -1) * scale).transpose(-2, -1)
+
+    return _similarity
+
+
+def _last_block_address(trace: Any, tower: str | None) -> str | None:
+    """Return the last block exposing ``resid_post`` inside the head's tower."""
+
+    resid_addresses = [
+        str(module.address)
+        for module in trace.modules
+        if getattr(module, "address", None) != "self"
+        and module.facets.has("resid_post")
+        and _in_tower(str(module.address), tower)
+    ]
+    return resid_addresses[-1] if resid_addresses else None
+
+
+def _validate_lens(
+    trace: Any,
+    head_view: Any,
+    lens: LensFunc,
+    *,
+    rtol: float,
+    atol: float,
+    tower: str | None = None,
+) -> None:
     """Validate a reconstructed lens against captured last-block -> logits data.
 
     Applying the reconstructed final norm + unembedding to the LAST block's
@@ -771,7 +967,8 @@ def _validate_lens(trace: Any, head_view: Any, lens: LensFunc, *, rtol: float, a
     the reconstruction WRONG, and a wrong lens is a confidently mislabelled
     reading of someone's model. Fail-closed: when the anchors needed to
     validate were not captured, this refuses rather than silently trusting the
-    reconstruction (pass ``validate=False`` to opt out explicitly).
+    reconstruction (pass ``validate=False`` to opt out explicitly). A vision
+    head validates against the last block of its own tower.
     """
 
     captured = head_view.get("logits")
@@ -782,12 +979,8 @@ def _validate_lens(trace: Any, head_view: Any, lens: LensFunc, *, rtol: float, a
             "exhaustive save (or a save= predicate including the head output), or "
             "pass validate=False to trust the reconstruction without a numeric check."
         )
-    resid_addresses = [
-        str(module.address)
-        for module in trace.modules
-        if getattr(module, "address", None) != "self" and module.facets.has("resid_post")
-    ]
-    if not resid_addresses:
+    reference_address = _last_block_address(trace, tower)
+    if reference_address is None:
         raise LogitLensError(
             "Cannot validate the reconstructed lens: no module exposes a captured "
             "'resid_post' facet to replay through it. Re-capture with the default "
@@ -795,7 +988,7 @@ def _validate_lens(trace: Any, head_view: Any, lens: LensFunc, *, rtol: float, a
             "without a numeric check."
         )
     reference_hidden = _facet_tensor(
-        trace.modules[resid_addresses[-1]].facets["resid_post"], name="resid_post"
+        trace.modules[reference_address].facets["resid_post"], name="resid_post"
     ).detach()
     reference_logits = _facet_tensor(captured, name="logits").detach()
     with torch.no_grad():
@@ -812,6 +1005,184 @@ def _validate_lens(trace: Any, head_view: Any, lens: LensFunc, *, rtol: float, a
             "between the last block and the head). Pass lens= explicitly or "
             "register a corrected facet recipe."
         )
+
+
+def _recorded_lens_identity(
+    lens: Any, lens_by_address: Mapping[str, LensFunc]
+) -> dict[str, Any] | None:
+    """Return the one model-identity record a user lens carries, or ``None``.
+
+    The record may sit on the lens itself (a callable or the mapping) or on
+    each per-layer callable; every record found must be the same.
+    """
+
+    records: list[Any] = []
+    own = getattr(lens, "model_identity", None)
+    if own is not None:
+        records.append(own)
+    if not callable(lens):
+        for layer_lens in lens_by_address.values():
+            recorded = getattr(layer_lens, "model_identity", None)
+            if recorded is not None:
+                records.append(recorded)
+    if not records:
+        return None
+    distinct: list[dict[str, Any]] = []
+    for record in records:
+        if not isinstance(record, Mapping) or not isinstance(record.get("level"), str):
+            raise LogitLensError(
+                "lens.model_identity must be a model-identity record (a mapping with a "
+                f"'level' entry, as in an extraction manifest), got {type(record).__name__}. "
+                "Remedy: attach the record from manifest['signature']['model_identity'], "
+                "or drop the attribute.",
+                code="logit_lens_identity_invalid",
+            )
+        if dict(record) not in distinct:
+            distinct.append(dict(record))
+    if len(distinct) > 1:
+        raise LogitLensError(
+            f"The user lens carries {len(distinct)} different model-identity records "
+            "across its per-layer callables, so it cannot belong to one model. Remedy: "
+            "rebuild the lens from one model, or pass validate=False to use it anyway.",
+            code="logit_lens_identity_mismatch",
+        )
+    return distinct[0]
+
+
+def _compare_lens_identity(trace: Any, record: Mapping[str, Any]) -> tuple[str, str]:
+    """Compare a lens's identity record against the traced model.
+
+    Returns
+    -------
+    tuple[str, str]
+        ``("match", "")``, ``("mismatch", why)`` or ``("unverifiable", why)``.
+    """
+
+    level = record.get("level")
+    if level != _COMPARABLE_IDENTITY_LEVEL:
+        return (
+            "unverifiable",
+            f"its recorded identity has level {level!r}, and only a 'measured' state "
+            "digest can be compared against the traced model",
+        )
+    hash_name = record.get("hash", "blake2b")
+    if hash_name not in _IDENTITY_HASHES:
+        raise LogitLensError(
+            f"lens.model_identity names hash {hash_name!r}; a measured identity record "
+            f"uses one of {sorted(_IDENTITY_HASHES)}. Remedy: attach the unmodified record "
+            "from manifest['signature']['model_identity'].",
+            code="logit_lens_identity_invalid",
+        )
+    source_ref = getattr(trace, "_source_model_ref", None)
+    model = source_ref() if callable(source_ref) else None
+    if model is None:
+        return (
+            "unverifiable",
+            "the trace no longer holds its source model, so the lens's measured "
+            "identity cannot be compared",
+        )
+    from .._data_substrate import compare_model_identity, compute_model_identity
+
+    current = compute_model_identity(model, level="measured", hash_name=str(hash_name))
+    verdict = compare_model_identity(record, current)
+    if verdict is None:
+        return "match", ""
+    if verdict == "unavailable":
+        return (
+            "unverifiable",
+            "the traced model's state cannot be measured (meta-device or offloaded entries)",
+        )
+    return "mismatch", verdict
+
+
+def _check_user_lens(
+    trace: Any,
+    lens: Any,
+    lens_by_address: Mapping[str, LensFunc],
+    head: _DefaultHead | None,
+    *,
+    rtol: float,
+    atol: float,
+) -> None:
+    """Refuse a user lens built for another model; warn when it is unverified."""
+
+    record = _recorded_lens_identity(lens, lens_by_address)
+    if record is None:
+        reason = "it records no model identity"
+    else:
+        verdict, detail = _compare_lens_identity(trace, record)
+        if verdict == "match":
+            return
+        if verdict == "mismatch":
+            raise LogitLensError(
+                "The user lens records a model identity that differs from the traced "
+                f"model ({detail} differs), so its rows would be a confident reading of a "
+                "different model. Remedy: use a lens built for this model, or pass "
+                "validate=False to apply it anyway.",
+                code="logit_lens_identity_mismatch",
+            )
+        reason = detail
+    disagreement = _last_layer_disagreement(trace, lens, lens_by_address, head, rtol, atol)
+    if disagreement is None:
+        return
+    warnings.warn(
+        TorchLensWarning(
+            f"logit_lens could not confirm the user lens belongs to this model: {reason}, "
+            f"and {disagreement}. Remedy: attach the model's identity record as "
+            "lens.model_identity (an extraction manifest's "
+            "manifest['signature']['model_identity']), or pass validate=False to skip "
+            "the check",
+            code="logit_lens_identity_unrecorded",
+        ),
+        stacklevel=3,
+    )
+
+
+def _last_layer_disagreement(
+    trace: Any,
+    lens: Any,
+    lens_by_address: Mapping[str, LensFunc],
+    head: _DefaultHead | None,
+    rtol: float,
+    atol: float,
+) -> str | None:
+    """Return why the lens's last-layer decode fails to agree, or ``None``.
+
+    The check is the default lens's validation run as a check: the lens applied
+    to the last block's captured ``resid_post`` must reproduce the model's
+    captured logits.
+    """
+
+    captured = None if head is None else _read_final_logits(head.view)
+    if captured is None:
+        return "the trace has no captured head logits to check its last-layer decode against"
+    address = _last_block_address(trace, None if head is None else head.tower)
+    if address is None:
+        return "no block exposes a captured 'resid_post' to check its last-layer decode on"
+    layer_lens = lens if callable(lens) else lens_by_address.get(address)
+    if layer_lens is None:
+        return f"it has no entry for the last block {address!r}, so its last layer is unchecked"
+    hidden = _facet_tensor(trace.modules[address].facets["resid_post"], name="resid_post")
+    with torch.no_grad():
+        decoded = layer_lens(hidden.detach())
+    if not isinstance(decoded, torch.Tensor):
+        return f"its last-layer decode returned {type(decoded).__name__}, not logits"
+    comparable = _align_to_captured_slice(decoded, captured)
+    if comparable is None:
+        return (
+            f"its last-layer decode (shape {tuple(decoded.shape)}) is not comparable with "
+            f"the captured logits (shape {tuple(captured.shape)})"
+        )
+    comparable = comparable.to(captured.dtype)
+    if torch.allclose(comparable, captured, rtol=rtol, atol=atol):
+        return None
+    agree = (comparable.argmax(dim=-1) == captured.argmax(dim=-1)).float().mean().item()
+    max_diff = (comparable - captured).abs().max().item()
+    return (
+        f"its last-layer decode on {address!r} does not reproduce the captured logits "
+        f"(max |difference| {max_diff:.4g}, top-1 agreement {agree:.1%}, rtol={rtol}, "
+        f"atol={atol})"
+    )
 
 
 def _align_to_captured_slice(
