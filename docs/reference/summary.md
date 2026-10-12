@@ -106,6 +106,53 @@ its successor:
 | `level="waterfall"` | `trace.profile(level="op")`, or `trace.to_pandas()` in execution order |
 | `level="output"` | `trace.output_table()` |
 
+## Columns
+
+`columns=` takes a bundle name (`"overview"`, `"compute"`), an exact
+ordered list, or `+name` / `-name` deltas on the view's bundle. A `+name`
+lands at its registry position (`+input` before `output`, `+flops_pct`
+beside `fwd flops`).
+
+| Column | Header | Cell |
+|---|---|---|
+| `name` | `name (type)` | attribute name and class, indented by depth; `[never ran]`, `[pruned]`, and `*` (tied) tags |
+| `input` | `input` | shapes of the distinct tensors entering the row |
+| `output` | `output` | every member shape of the row's output in return order (an LSTM row shows `output`, `h_n`, `c_n`) |
+| `kernel_size` | `kernel` | kernel size of the row's own conv or pooling op |
+| `groups` | `groups` | conv groups of the row's own conv op |
+| `params` | `params` | parameters per module path |
+| `params_pct` | `(%)` | share of the declared parameter total |
+| `params_trainable` | `trainable` | trainable parameters per module path (a count) |
+| `flops` | `fwd flops` | forward FLOPs under `flop_convention` |
+| `flops_pct` | `(%)` | share of the whole-model known forward FLOPs |
+| `macs` | `macs` | MACs the row owns |
+| `train` | `train` | `yes` / `no` / `partial` over `requires_grad` (auto-shown when trainability is mixed) |
+| `mode` | `mode` | `train` / `eval` from `module.training` as captured; `mixed` when the row's modules disagree |
+| `passes` | `passes` | call count |
+| `evidence` | `evidence` | weakest FLOP evidence class of the row |
+
+`mode` reports the flags the capture ran under: the one-call door
+defaults to `execution_mode="eval"`, so pass `execution_mode="same"` (or
+summarize a `tl.trace` capture) to see the model's own flags.
+
+A FLOP cell whose count includes `scaled_dot_product_attention` ends in
+`^`, and the footer explains it: attention FLOPs count the full
+query x key square, and attention masks and `is_causal` are not
+discounted.
+
+```python
+import torch, torchlens as tl
+from torch import nn
+
+net = nn.Sequential(nn.Conv2d(3, 8, 3, groups=1), nn.ReLU(), nn.Conv2d(8, 8, 3, groups=8))
+report = tl.summary(
+    net,
+    torch.randn(1, 3, 16, 16),
+    columns=["+input", "+kernel_size", "+groups", "+params_trainable", "+flops_pct", "+mode"],
+)
+print(report)
+```
+
 With NO input at all, `tl.summary(model)` infers a verified input via
 `infer_input_shape`, reuses its verification trace (no second capture),
 and discloses the synthesis.
@@ -136,6 +183,10 @@ neither the model nor the Trace and survives cleanup and GC:
   `unexecuted_params`, `trainable_params`, `frozen_params`,
   `total_flops_forward`, `total_macs_forward`, `unknown_flop_ops`,
   `capture_status`.
+- `report.totals` (`SummaryTotals`) also carries `params_bytes` (the
+  unique parameters' storage), `params_effective` (set on a pruned model:
+  the raw total minus mask zeros), and `optimizer_state_params` /
+  `optimizer_state_bytes` (set when the capture was given an optimizer).
 - Projections: `to_pandas(scope="display"|"all")`, `to_dict()` (bounded,
   JSON-safe), `to_markdown()`, `to_html()`, `render(style=)`, `print()`.
 - `report.details()` serves the capture facts;
@@ -147,6 +198,15 @@ partial, rescued, and episode captures banner ABOVE the table via the one
 shared honesty chokepoint, and the footer's five subjects (Params /
 Compute / Memory / Graph / Capture) carry coverage, both payload scopes
 (`at capture` vs `retained now`), and the health verdict.
+
+The Params footer also carries the parameter storage (`size 5.6 KB`); on
+a model pruned with `torch.nn.utils.prune` it names the pruned tensors
+with raw and effective nonzero counts (`pruned: 3,016 effective nonzero
+of 3,124 raw (108 masked in conv.weight)`); and when the capture was
+given an optimizer (`tl.trace(model, x,
+capture=tl.options.CaptureOptions(optimizer=opt))`) it adds
+`optimizer state N params, X KB`, read from the optimizer's live state
+(zero before the first `step()`).
 
 ## Performance
 
