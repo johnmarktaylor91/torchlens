@@ -69,7 +69,8 @@ def test_contract_versions_and_digests_are_ledger_distinct() -> None:
     old = json.loads(V8_CONTRACT.read_text(encoding="utf-8"))
     new = json.loads(V9_CONTRACT.read_text(encoding="utf-8"))
     assert old["contract"]["tlspec_version"] == 8
-    assert new["contract"]["tlspec_version"] == TLSPEC_VERSION == 9
+    # v9 is a frozen contract of record since the v10 bump; the runtime moved on.
+    assert new["contract"]["tlspec_version"] == 9 < TLSPEC_VERSION
     assert old["writer_contract_digest"] != new["writer_contract_digest"], (
         "the two contracts of record must be digest-distinct (the ledger keys "
         "on the digest, never the stamp alone)"

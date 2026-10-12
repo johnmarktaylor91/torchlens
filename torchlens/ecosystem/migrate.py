@@ -84,6 +84,9 @@ _ABSENT_FAMILIES_BY_TARGET: dict[int, tuple[str, ...]] = {
         "source_snapshots",
         "structure_evidence",
     ),
+    # The v10 window's admitted fact families join here as their writers land
+    # (the v10 field registry, tests/test_schema_v10_contract_and_goldens.py).
+    10: (),
 }
 
 

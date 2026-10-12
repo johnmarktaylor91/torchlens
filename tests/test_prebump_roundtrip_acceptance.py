@@ -967,16 +967,16 @@ def test_real_v7_artifact_still_loads_at_recorded_schema() -> None:
     assert loaded.structure_only in (None, False)
 
 
-def test_v9_artifact_is_distinguishable_from_v7(tmp_path) -> None:
-    """A fresh save stamps tlspec_version 9; the v7 fixture stays 7."""
+def test_current_artifact_is_distinguishable_from_v7(tmp_path) -> None:
+    """A fresh save stamps tlspec_version 10; the v7 fixture stays 7."""
 
     trace = _tiny_trace()
     state, _, _ = scrub_for_save(trace)
-    assert state["tlspec_version"] == TLSPEC_VERSION == 9
-    path = tmp_path / "fresh_v9.tlspec"
+    assert state["tlspec_version"] == TLSPEC_VERSION == 10
+    path = tmp_path / "fresh_v10.tlspec"
     tl.save(trace, str(path))
     loaded = tl.load(str(path))
-    assert loaded.tlspec_version == 9
+    assert loaded.tlspec_version == 10
     assert [op.site_key for op in loaded.ops] == [op.site_key for op in trace.ops]
 
 
