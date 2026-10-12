@@ -44,6 +44,18 @@ _RESTORE_ERRORS = (
 )
 
 
+#: Failures a compare or restore step may raise (never ``BaseException``): each
+#: is reported to the caller instead of being masked.
+_RESTORE_ERRORS = (
+    RuntimeError,
+    TypeError,
+    ValueError,
+    AttributeError,
+    KeyError,
+    NotImplementedError,
+)
+
+
 class LiveStateRestoreFailure(RuntimeError):
     """Internal carrier for a declared-state restore that failed mid-bracket.
 
