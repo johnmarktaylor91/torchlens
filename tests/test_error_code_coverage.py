@@ -106,7 +106,6 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "bundle_statistic_invalid",
         "code_panel_model_collected",
         "code_panel_side_invalid",
-        "compiled_callable_unsupported",
         "container_leaf_not_saved",
         "container_not_reconstructable",
         "container_selector_requires_registry",
