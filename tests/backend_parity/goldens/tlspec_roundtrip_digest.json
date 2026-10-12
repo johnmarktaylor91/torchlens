@@ -234,8 +234,6 @@
           "lookup_keys": [
             -1,
             4,
-            "fc2",
-            "fc2:1",
             "output",
             "output_1",
             "output_1",
@@ -502,8 +500,6 @@
           "lookup_keys": [
             -1,
             4,
-            "fc2",
-            "fc2:1",
             "output",
             "output_1",
             "output_1",
@@ -538,13 +534,13 @@
     }
   },
   "sha256_chunks": [
-    "edede05f",
-    "26a3c153",
-    "c0099f52",
-    "2aaa83c9",
-    "b72fdccf",
-    "2ddbec56",
-    "95920a8c",
-    "de2140fe"
+    "38923835",
+    "a16a62db",
+    "2e20137c",
+    "d5e55601",
+    "312a9e8d",
+    "3e29d87b",
+    "29d25c95",
+    "5c37146f"
   ]
 }

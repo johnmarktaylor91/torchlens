@@ -4937,10 +4937,6 @@
     "lookup_keys": [
      -1,
      36,
-     "encoder",
-     "encoder.norm2",
-     "encoder.norm2:1",
-     "encoder:1",
      "output",
      "output_1",
      "output_1",
@@ -22025,10 +22021,6 @@
     "lookup_keys": [
      -1,
      36,
-     "encoder",
-     "encoder.norm2",
-     "encoder.norm2:1",
-     "encoder:1",
      "output",
      "output_1",
      "output_1",
@@ -31587,24 +31579,7 @@
   },
   "trace": {
    "_activation_transform_repr": null,
-   "_ambiguous_lookup_keys": {
-    "\"encoder\"": [
-     36,
-     37
-    ],
-    "\"encoder.norm2\"": [
-     36,
-     37
-    ],
-    "\"encoder.norm2:1\"": [
-     36,
-     37
-    ],
-    "\"encoder:1\"": [
-     36,
-     37
-    ]
-   },
+   "_ambiguous_lookup_keys": {},
    "_annotation_blobs": null,
    "_append_sequence_id": 0,
    "_buffer_persistence": "<raises AttributeError>",
@@ -32009,10 +31984,6 @@
     "37": [
      -1,
      36,
-     "encoder",
-     "encoder.norm2",
-     "encoder.norm2:1",
-     "encoder:1",
      "output",
      "output_1",
      "output_1",
@@ -40837,10 +40808,6 @@
     "lookup_keys": [
      -1,
      36,
-     "encoder",
-     "encoder.norm2",
-     "encoder.norm2:1",
-     "encoder:1",
      "output",
      "output_1",
      "output_1",
@@ -57925,10 +57892,6 @@
     "lookup_keys": [
      -1,
      36,
-     "encoder",
-     "encoder.norm2",
-     "encoder.norm2:1",
-     "encoder:1",
      "output",
      "output_1",
      "output_1",
@@ -67487,24 +67450,7 @@
   },
   "trace": {
    "_activation_transform_repr": null,
-   "_ambiguous_lookup_keys": {
-    "\"encoder\"": [
-     36,
-     37
-    ],
-    "\"encoder.norm2\"": [
-     36,
-     37
-    ],
-    "\"encoder.norm2:1\"": [
-     36,
-     37
-    ],
-    "\"encoder:1\"": [
-     36,
-     37
-    ]
-   },
+   "_ambiguous_lookup_keys": {},
    "_annotation_blobs": null,
    "_append_sequence_id": 0,
    "_buffer_persistence": "<raises AttributeError>",
@@ -67909,10 +67855,6 @@
     "37": [
      -1,
      36,
-     "encoder",
-     "encoder.norm2",
-     "encoder.norm2:1",
-     "encoder:1",
      "output",
      "output_1",
      "output_1",
@@ -76789,10 +76731,6 @@
     "lookup_keys": [
      -1,
      36,
-     "encoder",
-     "encoder.norm2",
-     "encoder.norm2:1",
-     "encoder:1",
      "output",
      "output_1",
      "output_1",
@@ -93877,10 +93815,6 @@
     "lookup_keys": [
      -1,
      36,
-     "encoder",
-     "encoder.norm2",
-     "encoder.norm2:1",
-     "encoder:1",
      "output",
      "output_1",
      "output_1",
@@ -103439,24 +103373,7 @@
   },
   "trace": {
    "_activation_transform_repr": null,
-   "_ambiguous_lookup_keys": {
-    "\"encoder\"": [
-     36,
-     37
-    ],
-    "\"encoder.norm2\"": [
-     36,
-     37
-    ],
-    "\"encoder.norm2:1\"": [
-     36,
-     37
-    ],
-    "\"encoder:1\"": [
-     36,
-     37
-    ]
-   },
+   "_ambiguous_lookup_keys": {},
    "_annotation_blobs": null,
    "_append_sequence_id": 0,
    "_buffer_persistence": "<raises AttributeError>",
@@ -103861,10 +103778,6 @@
     "37": [
      -1,
      36,
-     "encoder",
-     "encoder.norm2",
-     "encoder.norm2:1",
-     "encoder:1",
      "output",
      "output_1",
      "output_1",
@@ -112697,10 +112610,6 @@
     "lookup_keys": [
      -1,
      36,
-     "encoder",
-     "encoder.norm2",
-     "encoder.norm2:1",
-     "encoder:1",
      "output",
      "output_1",
      "output_1",
@@ -129395,10 +129304,6 @@
     "lookup_keys": [
      -1,
      36,
-     "encoder",
-     "encoder.norm2",
-     "encoder.norm2:1",
-     "encoder:1",
      "output",
      "output_1",
      "output_1",
@@ -138105,24 +138010,7 @@
   },
   "trace": {
    "_activation_transform_repr": null,
-   "_ambiguous_lookup_keys": {
-    "\"encoder\"": [
-     36,
-     37
-    ],
-    "\"encoder.norm2\"": [
-     36,
-     37
-    ],
-    "\"encoder.norm2:1\"": [
-     36,
-     37
-    ],
-    "\"encoder:1\"": [
-     36,
-     37
-    ]
-   },
+   "_ambiguous_lookup_keys": {},
    "_annotation_blobs": null,
    "_append_sequence_id": 0,
    "_buffer_persistence": {},
@@ -138527,10 +138415,6 @@
     "37": [
      -1,
      36,
-     "encoder",
-     "encoder.norm2",
-     "encoder.norm2:1",
-     "encoder:1",
      "output",
      "output_1",
      "output_1",

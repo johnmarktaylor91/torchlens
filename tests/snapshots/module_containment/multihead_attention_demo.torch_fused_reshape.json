@@ -683,8 +683,6 @@
       "lookup_keys": [
         "-1",
         "27",
-        "attn",
-        "attn:1",
         "output",
         "output_1",
         "output_1:1",
@@ -1792,8 +1790,6 @@
       "lookup_keys": [
         "-1",
         "27",
-        "attn",
-        "attn:1",
         "output",
         "output_1",
         "output_1",
