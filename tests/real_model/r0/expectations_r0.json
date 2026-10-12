@@ -157,7 +157,7 @@
      "final_norm_kind",
      "image_projection_weight",
      "logit_scale",
-     "logits",
+     "logits_per_image",
      "pooled_position",
      "text_features",
      "tower_address"
@@ -211,7 +211,7 @@
      "final_norm_kind",
      "image_projection_weight",
      "logit_scale",
-     "logits",
+     "logits_per_image",
      "pooled_position",
      "text_features",
      "tower_address"
