@@ -25,7 +25,7 @@ tier rows: `present` native emitters, `bridge` foreign-peer writers).
 ## The netron subsystem (F14; kwarg spellings DOCUMENTED-UNSTABLE)
 
 `netron(log, path=None, *, granularity="module", depth=1,
-show_buffers="meaningful", attachment=False, open=False, baseline=None)`
+show_buffers="meaningful", attachment=None, open=False, baseline=None)`
 emits schema-v2 ONNX protobuf-JSON (irVersion 10, custom domains
 `ai.torchlens.lossy` / `ai.torchlens.module`, NEVER re-domained to real
 ONNX names — ruling N1). Module split: `_netron.py` entry + validation +
@@ -35,7 +35,10 @@ default per DISSENT D1; ruling N2 makes module the FILE default);
 `_netron_fields.py` curated attrs/wording contract (module-path attr is
 never named `module`; missing-is-absent-never-zero);
 `_netron_emit.py` deterministic serialization; `_netron_attachment.py` the
-`netron:attachment` companion with four fail-closed vendor guards. Every
+`netron:attachment` companion (written by default beside every file export,
+ruling U09.3) with four fail-closed vendor guards; `_netron_diff.py` the
+`baseline=` per-node diff facts read from `torchlens.differential.diff_report`
+(ruling U09.5). Every
 artifact must stay green under strict `onnx.ModelProto` parse +
 `check_model(full_check=True)` — the checker catches what netron's
 permissive reader swallows, including the function-cycle class that KILLS

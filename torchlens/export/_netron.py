@@ -20,12 +20,14 @@ from pathlib import Path
 from typing import Any
 
 from .._capture_honesty import capture_honesty_facts
+from .._errors import ArgumentTypeError
 from .._literals import BufferVisibilityLiteral
 from .._options_validation import _validate_buffer_visibility
 from ..errors import ConfigurationError, TorchLensWarning
 from ..utils.display import atomic_write_text
 from ._common import _require_trace
 from ._netron_attachment import write_attachment
+from ._netron_diff import NetronBaselineDiff, apply_node_facts, build_baseline_diff, sidecar_rows
 from ._netron_emit import NETRON_SCHEMA_VERSION, emit_model_json
 from ._netron_module import project_module
 from ._netron_records import (
@@ -207,11 +209,46 @@ def _metadata_props(
     if getattr(log, "intervention_audit", None):
         rows.append(("torchlens.intervened", "true"))
     if baseline is not None:
-        # Reserved diff-plumbing slot (netron #1544; compo row C4).
-        rows.append(("torchlens.baseline", str(baseline)))
+        # The diff slot (netron #1544; compo row C4): the U09.5 diff summary
+        # JSON for a baseline Trace, or the caller's identifier string.
+        rows.append(("torchlens.baseline", baseline))
     if projection.fallback_reason:
         rows.append(("torchlens.granularity_fallback_reason", projection.fallback_reason))
     return rows
+
+
+def _baseline_slot(
+    log: Any, baseline: Any, projection: NetronProjection
+) -> tuple[str | None, NetronBaselineDiff | None]:
+    """Resolve ``baseline=`` into the slot text and the per-node diff (U09.5).
+
+    A ``Trace`` is diffed against the exported trace through
+    ``torchlens.differential.diff_report`` and its per-node facts are
+    attached to the projection's nodes; a string is recorded verbatim as a
+    baseline identifier with no per-node facts.
+    """
+
+    if baseline is None:
+        return None, None
+    if isinstance(baseline, str):
+        return baseline, None
+    from ..data_classes.trace import Trace
+
+    if not isinstance(baseline, Trace):
+        raise ArgumentTypeError(
+            f"tl.export.netron baseline= expected a Trace (or an identifier "
+            f"string), got {type(baseline).__name__}",
+            code="export_expected_trace",
+            remedy=(
+                "pass the reference capture, e.g. tl.export.netron(trace, path, "
+                "baseline=tl.trace(reference_model, x))"
+            ),
+            argument="baseline",
+            received_type=type(baseline).__name__,
+        )
+    diff = build_baseline_diff(log, baseline, projection)
+    apply_node_facts(projection, diff)
+    return diff.summary_json(), diff
 
 
 def _serve(name: str, payload: bytes, *, browse: bool) -> tuple[str, int]:
@@ -259,9 +296,9 @@ def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-
     granularity: str = "module",
     depth: int = 1,
     show_buffers: BufferVisibilityLiteral = "meaningful",
-    attachment: bool = False,
+    attachment: bool | None = None,
     open: bool = False,  # noqa: A002 - the memo-ruled one-liner spelling
-    baseline: str | None = None,
+    baseline: Any = None,
 ) -> Path | None:
     """Export a lossy ONNX ``ModelProto`` JSON graph that netron opens.
 
@@ -295,14 +332,24 @@ def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-
         hidden counts ride the owning function docString and the model
         metadata.
     attachment:
-        Also write the ``<stem>.attachment.json`` metrics companion
-        (netron's own sidecar channel; drop it onto the open model).
+        The ``<stem>.attachment.json`` metrics companion (netron's own
+        sidecar channel; drop it onto the open model). ``None`` (default,
+        ruling U09.3) writes it beside every file export and skips it for
+        the memory-only serve, which has no file for it to sit beside;
+        ``True`` demands it (and refuses ``path=None``); ``False`` opts
+        out.
     open:
         Serve through the installed netron package (loopback, ephemeral
         port) and open a browser tab / notebook widget.
     baseline:
-        Optional baseline trace identifier for the reserved
-        ``torchlens.baseline`` diff-plumbing slot (netron #1544).
+        Optional reference for the ``torchlens.baseline`` diff slot
+        (netron #1544; ruling U09.5). A ``Trace`` is diffed against ``log``
+        through ``torchlens.differential.diff_report`` (``log - baseline``):
+        each exported node carries its ``torchlens.diff.*`` facts (status,
+        largest value delta, reference label, join verdict; row counts for
+        module-call and rolled nodes) in its ``metadataProps`` and in the
+        attachment sidecar, and the slot holds the JSON summary. A string is
+        recorded verbatim as a baseline identifier, with no per-node facts.
 
     Returns
     -------
@@ -319,7 +366,7 @@ def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-
             "to serve the artifact from memory.",
             code="netron_path_or_open_required",
         )
-    if path is None and attachment:
+    if path is None and attachment is True:
         raise ConfigurationError(
             "The netron attachment companion is a second FILE netron merges "
             "beside the artifact, so it needs a real path. Remedy: pass "
@@ -328,12 +375,13 @@ def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-
         )
     projection = _build_projection(log, granularity, depth, show_buffers)
     _warn_extent(projection)
+    baseline_text, diff = _baseline_slot(log, baseline, projection)
     graph_name = str(getattr(log, "model_class_name", "TorchLens graph"))
     text = emit_model_json(
         projection,
         graph_name=graph_name,
         disclaimer=NETRON_DISCLAIMER,
-        metadata_props=_metadata_props(log, projection, show_buffers, baseline),
+        metadata_props=_metadata_props(log, projection, show_buffers, baseline_text),
     )
     if path is None:
         _serve(f"{graph_name or 'torchlens'}.json", text.encode(), browse=True)
@@ -341,8 +389,12 @@ def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_text(destination, text)
-    if attachment:
-        write_attachment(projection, destination)
+    if attachment is not False:
+        write_attachment(
+            projection,
+            destination,
+            extra_metadata=sidecar_rows(diff) if diff is not None else None,
+        )
     if open:
         _serve(destination.name, text.encode(), browse=True)
     return destination

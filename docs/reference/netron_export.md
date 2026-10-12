@@ -3,8 +3,9 @@
 `tl.export.netron` turns a finished `Trace` into a single JSON file the
 [Netron](https://github.com/lutzroeder/netron) viewer opens fully lit:
 typed shapes on every edge (Netron's oldest open ask, #71), the module
-hierarchy as one-click drill-down boxes, a curated properties panel, and an
-optional metrics companion rendered in Netron's own sidebar sections. Every
+hierarchy as one-click drill-down boxes, a curated properties panel, and a
+metrics companion (written by default) rendered in Netron's own sidebar
+sections. Every
 keyword spelling below is DOCUMENTED-UNSTABLE pending the naming sprint.
 
 ```python
@@ -13,7 +14,8 @@ import torchlens as tl
 log = tl.trace(model, x)
 tl.export.netron(log, "model.json")                    # module view (default)
 tl.export.netron(log, "model.json", granularity="op")  # every leaf op
-tl.export.netron(log, "model.json", attachment=True)   # + metrics companion
+tl.export.netron(log, "model.json", attachment=False)  # no metrics companion
+tl.export.netron(log, "model.json", baseline=ref_log)  # + per-node diff facts
 tl.export.netron(log, open=True)                       # serve + browser tab
 ```
 
@@ -54,13 +56,33 @@ artifacts — it drops the twenty train-mode counter ops natively.
 
 ## The metrics companion
 
-`attachment=True` writes `<stem>.attachment.json`, Netron's own
-`netron:attachment` sidecar: per-node observed durations, estimated FLOPs,
-and captured-tensor bytes render in dedicated "Metadata" and "Metrics"
-sidebar sections after you drop the companion onto the open model. The
-main artifact stays self-contained — the companion is additive depth. The
-writer refuses (code `netron_attachment_invalid`) any row Netron would
-silently drop.
+Every file export also writes `<stem>.attachment.json` beside the artifact
+(`attachment=None`, the default): Netron's own `netron:attachment` sidecar,
+with per-node observed durations, estimated FLOPs, and captured-tensor
+bytes that render in dedicated "Metadata" and "Metrics" sidebar sections
+after you drop the companion onto the open model. The main artifact stays
+self-contained; the companion is additive depth. `attachment=False` opts
+out; `attachment=True` demands it and refuses the memory-only serve
+(`path=None`), which has no file for a companion to sit beside (the default
+skips it there). The writer refuses (code `netron_attachment_invalid`) any
+row Netron would silently drop.
+
+## Diffing two captures
+
+`baseline=` takes the reference `Trace` and fills the `torchlens.baseline`
+slot from TorchLens' own guarded differential
+(`torchlens.differential.diff_report(log, baseline)`, `log - baseline`).
+Netron has no diff view, so the facts ride the channels it renders: each
+exported node whose ops settled into a diff row carries `torchlens.diff.*`
+rows in its node metadata and in the companion (`status`, `max_abs_delta`,
+`reference_label`, `verdict`, `detail`; a module-call or rolled node carries
+`row_counts` over its ops and the largest delta among them). A node with no
+settled row carries no diff facts, never a zero. The model-level
+`torchlens.baseline` row holds the JSON summary: direction, row counts over
+the closed `added|removed|unresolved|excluded_machinery|unreachable|zero|changed`
+vocabulary, and the reference-only (`removed`) labels the subject graph
+cannot draw. A string `baseline=` is recorded verbatim as an identifier,
+with no per-node facts.
 
 ## Opening it
 

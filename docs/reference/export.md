@@ -79,8 +79,10 @@ graph.json True
 `tl.export.netron(log, path)` writes an enriched, lossy ONNX `ModelProto` JSON graph
 (schema v2, irVersion 10) that Netron opens fully lit: typed shapes on every edge, native
 graph inputs/outputs, the module hierarchy as drill-down FunctionProtos (the default
-`granularity="module"` view), curated panel facts, and an optional `netron:attachment`
-metrics companion. The acceptance contract — strict protobuf-JSON parse into
+`granularity="module"` view), curated panel facts, a `netron:attachment` metrics
+companion written beside the file by default (`attachment=False` opts out), and, with
+`baseline=<reference Trace>`, per-node diff facts from `torchlens.differential.diff_report`.
+The acceptance contract — strict protobuf-JSON parse into
 `onnx.ModelProto` plus `onnx.checker.check_model(full_check=True)` — is pinned in
 `tests/test_netron_export_contract.py`, and Netron 9.2.2's own parser is executed over the
 artifact in `tests/test_netron_export_vendor.py`. It deliberately is not a runnable ONNX
