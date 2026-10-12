@@ -32,8 +32,6 @@ from dataclasses import dataclass
 from importlib import resources
 from typing import Any
 
-import torch
-
 from .._io import _json
 from ._errors import refuse
 from ._heads import _attention_modules
@@ -173,25 +171,33 @@ def _facet_home_modules(trace: Any, facet: str, scope: str | None = None) -> lis
     return homes
 
 
+def _param_rows(facet: Any) -> int | None:
+    """Return a 2D parameter facet's row count from its recorded shape.
+
+    Reads the parameter record's shape METADATA (``spec.home.shape``), never
+    the live value, so resolution still answers after the source model was
+    garbage-collected.
+    """
+
+    home = getattr(getattr(facet, "spec", None), "home", None)
+    shape = tuple(getattr(home, "shape", ()) or ())
+    return int(shape[0]) if len(shape) == 2 else None
+
+
 def _vocab_size(trace: Any) -> int | None:
-    """Return the unembedding's vocabulary size, when a head is readable."""
+    """Return the unembedding's vocabulary size, when a head is recorded."""
 
     for module in _facet_home_modules(trace, "unembed_weight"):
-        weight = module.facets.get("unembed_weight")
-        value = getattr(weight, "value", weight)
-        if isinstance(value, torch.Tensor) and value.dim() == 2:
-            return int(value.shape[0])
+        rows = _param_rows(module.facets.get("unembed_weight"))
+        if rows is not None:
+            return rows
     return None
 
 
 def _embedding_rows(module: Any) -> int | None:
     """Return an embedding module's table size (``num_embeddings``)."""
 
-    weight = module.facets.get("weight")
-    value = getattr(weight, "value", weight)
-    if isinstance(value, torch.Tensor) and value.dim() == 2:
-        return int(value.shape[0])
-    return None
+    return _param_rows(module.facets.get("weight"))
 
 
 def _embedding_homes(trace: Any, role: str) -> list[Any]:

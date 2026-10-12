@@ -19,6 +19,7 @@ import torch
 
 import torchlens as tl
 import torchlens.mechinterp as mi
+from torchlens.mechinterp._heads import _attention_modules
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "real_model" / "r0"))
 
@@ -34,23 +35,30 @@ EXPECTED_ABSENT = {
 }
 
 
-def _trace(builder_name: str):
+def _capture(builder_name: str):
     import families
 
     model = getattr(families, builder_name)("eager")
     torch.manual_seed(4)
     x = torch.randint(0, 500, (1, 6))
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    return model, tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
 
 
 @pytest.fixture(scope="module")
-def traces():
-    built = {"gpt2": _trace("build_gpt2"), "llama": _trace("build_llama")}
+def captured():
+    """(model, trace) pairs; the models stay referenced for the module's life."""
+
+    built = {"gpt2": _capture("build_gpt2"), "llama": _capture("build_llama")}
     try:
         yield built
     finally:
-        for trace in built.values():
+        for _, trace in built.values():
             trace.cleanup()
+
+
+@pytest.fixture(scope="module")
+def traces(captured):
+    return {family: trace for family, (_, trace) in captured.items()}
 
 
 def _rows_4x():
@@ -76,9 +84,7 @@ def test_every_4x_row_resolves_to_a_live_site(traces):
     assert len(rows) >= 25
     covered: set[str] = set()
     for family, trace in traces.items():
-        n_layers = sum(
-            1 for m in trace.modules if m.facets is not None and "n_q_heads" in m.facets.keys()
-        )
+        n_layers = len(_attention_modules(trace))
         assert n_layers == 2
         for row in rows:
             if row["tlens"] in EXPECTED_ABSENT[family]:
@@ -116,3 +122,19 @@ def test_embedding_roles_resolve_token_and_position(traces):
         absent = mi.resolve_alias(llama, position_name)
         assert absent.status == "structurally_absent" and absent.module_address is None
         assert "position" in (absent.remedy or "")
+
+
+def test_resolution_answers_after_the_model_is_collected():
+    """Roles read recorded parameter shapes, never live values: no raise after GC."""
+
+    import gc
+
+    model, trace = _capture("build_gpt2")
+    del model
+    gc.collect()
+    try:
+        assert mi.resolve_alias(trace, "embed.hook_out").module_address == "transformer.wte"
+        assert mi.resolve_alias(trace, "hook_pos_embed").module_address == "transformer.wpe"
+        assert mi.resolve_alias(trace, "blocks.1.attn.o.hook_in").status == "real"
+    finally:
+        trace.cleanup()
