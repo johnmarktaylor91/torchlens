@@ -723,6 +723,8 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `record_not_bound` | Record's owning Trace reference is gone | Keep the owning Trace alive |
 | `recording_events_not_retained` | `to_trace()` on a disk-recovered Recording | Convert the in-session Recording |
 | `recording_backward_halted` | `log_backward()` on a halted Recording (the sparse frontier retained no complete output to root the backward walk) | Re-record without `halt=` or use `trace(halt=...)` for prefix backward |
+| `recording_backward_inference_only` | `log_backward()` on a Recording whose forward ran under `torch.no_grad()` or `torch.inference_mode()` with no backward option, so `tl.record` implied `inference_only=True` and built no autograd graph (`RecorderStateError`) | Record again with gradients enabled and pass `backward_ready=True` or `save_grads=` |
+| `recording_backward_not_requested` | `log_backward()` on a Recording made without `backward_ready=True`, `save_grads=` or `default_grad=`; `tl.record` installed no gradient hooks, so the backward would record nothing (`RecorderStateError`) | Pass `backward_ready=True` or `save_grads=` to `tl.record` and record again |
 | `recording_event_stream_unavailable` | Raw per-event metadata read on a Recording that no longer holds its capture event stream — explicitly cleaned, or restored from a payload-only projection (`RecorderStateError`) | Read events on the in-session Recording before cleanup |
 | `recording_failed_not_convertible` | `to_trace()` on a failed partial Recording | Fix the forward and re-record |
 | `recording_halt_frontier_missing` | Halted Recording retained no frontier payload | Save the halt frontier or use `trace(halt=...)` |

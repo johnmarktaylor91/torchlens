@@ -99,7 +99,11 @@ from ._trace_selector_helpers import (
     _stable_cache_fragment,
 )
 from ._trace_state import TraceState
-from ._training_validation import TrainingModeConfigError, validate_training_compatibility
+from ._training_validation import (
+    TrainingModeConfigError,
+    autograd_disabled_at_entry,
+    validate_training_compatibility,
+)
 from .autoroute._builtin_output import semantic_output_cache_key
 from .backends import (
     BackendName,
@@ -2820,6 +2824,34 @@ def _refuse_non_torch_episode(public_trace_kwargs: dict[str, Any], resolved_spec
             )
 
 
+def _effective_inference_only(capture_options: CaptureOptions, *, backward_requested: bool) -> bool:
+    """Resolve ``inference_only`` for one torch capture (AGT-2132).
+
+    An explicit value always wins. Otherwise a capture entered under
+    ``torch.no_grad()`` or ``torch.inference_mode()`` builds no autograd graph,
+    so it implies ``inference_only=True`` unless a backward-related option asks
+    for one. The Trace then reports ``inference_only=True`` and a later
+    ``log_backward`` refusal names the cause.
+
+    Parameters
+    ----------
+    capture_options:
+        Resolved capture options for this call.
+    backward_requested:
+        Whether ``backward_ready``, ``save_grads`` or ``intervention_ready``
+        is in force.
+
+    Returns
+    -------
+    bool
+        The ``inference_only`` value the capture runs with.
+    """
+
+    if capture_options.is_field_explicit("inference_only"):
+        return bool(capture_options.inference_only)
+    return not backward_requested and autograd_disabled_at_entry()
+
+
 def _trace_torch_model(
     model: nn.Module | Callable[..., Any],
     input_args: str | torch.Tensor | list[Any] | tuple[Any, ...],
@@ -3389,6 +3421,10 @@ def _trace_torch_model(
         inference_only=capture_options.inference_only,
         inference_only_conflicts=tuple(inference_only_conflicts),
     )
+    inference_only_value = _effective_inference_only(
+        capture_options,
+        backward_requested=bool(train_mode_value or should_save_grads or intervention_ready),
+    )
     chunk_plan = None
     if normalized_chunk_size is not None:
         _validate_chunked_forward_capture(
@@ -3478,7 +3514,7 @@ def _trace_torch_model(
             "save_mode": save_mode_value,
             "recurrence_detection": recurrence_detection,
             "backward_ready": train_mode_value,
-            "inference_only": capture_options.inference_only,
+            "inference_only": inference_only_value,
             "chunk_size": normalized_chunk_size,
             "chunk_paths": normalize_chunk_paths(chunk_paths_value),
             "capture_container_structure": capture_container_structure,
@@ -3621,7 +3657,7 @@ def _trace_torch_model(
             unwrap_when_done=False,
             verbose=verbose,
             backward_ready=train_mode_value,
-            inference_only=capture_options.inference_only,
+            inference_only=inference_only_value,
             name=log_name,
             cache=False,
             cache_dir=capture_options.cache_dir,
@@ -3916,7 +3952,7 @@ def _trace_torch_model(
         normalized_hook_plan=None,
         verbose=verbose,
         backward_ready=train_mode_value,
-        inference_only=capture_options.inference_only,
+        inference_only=inference_only_value,
         name=log_name,
         module_filter=capture_options.module_filter,
         emit_nvtx=capture_options.emit_nvtx,

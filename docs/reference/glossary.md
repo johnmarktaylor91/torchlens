@@ -12,7 +12,9 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 **Recording**
 : A sparse, torch-only event stream returned by `tl.record(model, inputs, save=...)`.
   `Recording.to_trace()` materializes full graph structure; reading a payload that was not selected
-  by `save=` fails explicitly.
+  by `save=` fails explicitly. `tl.record` installs gradient hooks only when `backward_ready=True`,
+  `save_grads=` or `default_grad=` is given; without one, `Recording.log_backward()` refuses with
+  code `recording_backward_not_requested`.
 
 **PartialTrace**
 : A recoverable prefix of a failed `tl.trace(...)` capture. A raised capture exception may expose
@@ -30,6 +32,15 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 : The frozen `Trace.outcome`, `Recording.outcome`, or `PartialTrace.outcome`. Its status is one of
   `COMPLETE`, `HALTED`, `ABORTED_NONFINITE`, `FAILED`, `UNATTESTED`, or `UNKNOWN`; failed outcomes
   also identify the phase. See [Capture outcomes](capture_outcomes.md).
+
+**Inference-only capture**
+: A capture whose forward ran under `torch.no_grad()`, so it built no autograd graph. Request it
+  with `CaptureOptions(inference_only=True)`; a `tl.trace` or `tl.record` entered under
+  `torch.no_grad()` or `torch.inference_mode()` implies it unless `backward_ready`, `save_grads`
+  (or `default_grad` on `tl.record`, `intervention_ready` on `tl.trace`) asks for a backward, and
+  an explicit `inference_only=False` keeps it off. `Trace.inference_only` and
+  `outcome.inference_only` report the effective value; a later `log_backward()` refuses and names
+  the cause (`recording_backward_inference_only` on a `Recording`).
 
 **Bound-method root**
 : The ruled `tl.trace` root contract: an `nn.Module` OR a bound method of one, e.g.

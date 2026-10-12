@@ -215,7 +215,12 @@ assert relu.out.shape == (2, 8)
   `tl.func(...)`) still holds every op output as a candidate and spills to temporary files past
   a 64 MB budget; `torchlens.capture.preflight.address_preflight` reports it as deferred.
 - **`CaptureOptions(inference_only=True)`** runs the forward under `torch.no_grad()`. It saved
-  about 5% per trace in the measurement above.
+  about 5% per trace in the measurement above. A capture entered inside `torch.no_grad()` or
+  `torch.inference_mode()` implies it unless a backward option (`backward_ready`, `save_grads`)
+  asks for one; `trace.inference_only` reports the value in force.
+- **`tl.record` skips gradient hooks by default.** It installs them only when
+  `backward_ready=True`, `save_grads=` or `default_grad=` is given, so pass one of those before a
+  `Recording.log_backward()`, which refuses otherwise.
 - **Keep the wrappers installed.** `tl.trace` keeps torch wrapped between calls by default.
   `CaptureOptions(unwrap_when_done=True)` re-wraps on the next call, a fixed 2 to 5% per trace
   on the small models.

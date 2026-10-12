@@ -136,7 +136,13 @@ Row rationales, stated once:
   cell, which describes Trace-side backward (a halted Trace holds the prefix
   autograd graph; a halted Recording is a sparse event product whose frontier
   pass retained no complete output to root the backward walk, the same
-  boundary that refuses halted-no-payload `to_trace()`).
+  boundary that refuses halted-no-payload `to_trace()`). It also refuses a
+  COMPLETE Recording that cannot have captured gradients:
+  `recording_backward_not_requested` when the record installed no gradient
+  hooks (no `backward_ready=True`, `save_grads=` or `default_grad=`), and
+  `recording_backward_inference_only` when the forward ran under
+  `torch.no_grad()` or `torch.inference_mode()`, which implies
+  `inference_only=True` (reported as `Recording.outcome.inference_only`).
 
 ## `raise_on_nan`'s honest scope
 

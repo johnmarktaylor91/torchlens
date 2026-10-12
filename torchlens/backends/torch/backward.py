@@ -93,7 +93,9 @@ _SAVED_TENSORS_HOOKS_INIT_PATCHED = False
 _TORCHLENS_PKG_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _INFERENCE_ONLY_BACKWARD_ERROR = (
     "Cannot run log_backward on a trace captured with inference_only=True: the autograd "
-    "graph was discarded during capture. Re-capture without inference_only (optionally with "
+    "graph was discarded during capture. inference_only is either passed explicitly or "
+    "implied when the capture runs under torch.no_grad() or torch.inference_mode(). "
+    "Re-capture with gradients enabled and without inference_only (optionally with "
     "backward_ready=True) to enable deferred backward."
 )
 _CHUNKED_FORWARD_BACKWARD_ERROR = (
@@ -3075,6 +3077,49 @@ def _first_tensor_from_hook_args(
     return None
 
 
+def _ensure_recording_backward_requested(trace: Any) -> None:
+    """Refuse a Recording backward that the forward record did not prepare for.
+
+    ``tl.record`` installs gradient hooks only when ``backward_ready=True``,
+    ``save_grads=`` or ``default_grad=`` is given, and implies
+    ``inference_only=True`` for a forward run under ``torch.no_grad()`` or
+    ``torch.inference_mode()``. A backward over either kind of record would
+    capture nothing, so it refuses instead.
+
+    Parameters
+    ----------
+    trace:
+        Runtime trace of the recording's last forward pass.
+
+    Raises
+    ------
+    RecorderStateError
+        ``recording_backward_inference_only`` or
+        ``recording_backward_not_requested``.
+    """
+
+    from ...fastlog.exceptions import RecorderStateError
+
+    if getattr(trace, "inference_only", False):
+        raise RecorderStateError(
+            "Cannot call log_backward on this Recording: its forward ran under "
+            "torch.no_grad() or torch.inference_mode(), so tl.record implied "
+            "inference_only=True and no autograd graph was built. Remedy: record again "
+            "with gradients enabled and pass backward_ready=True or save_grads= to tl.record.",
+            code="recording_backward_inference_only",
+            capability="backward",
+        )
+    if not getattr(trace, "capture_tensor_grad_hooks", True):
+        raise RecorderStateError(
+            "Cannot call log_backward on this Recording: tl.record installs gradient hooks "
+            "only when a backward is requested up front, so this backward would record "
+            "nothing. Remedy: pass backward_ready=True or save_grads= to tl.record (or "
+            "Recorder) and record again.",
+            code="recording_backward_not_requested",
+            capability="backward",
+        )
+
+
 def log_recording_backward(
     recording: Any,
     loss: torch.Tensor,
@@ -3097,6 +3142,7 @@ def log_recording_backward(
         raise RecorderStateError(
             "Recording.log_backward() requires a live runtime trace from Recorder.log()."
         )
+    _ensure_recording_backward_requested(trace)
     effective_save_grads = (
         save_grads if save_grads is not None else recording_state.options.save_grads
     )

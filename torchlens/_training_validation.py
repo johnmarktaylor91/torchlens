@@ -29,6 +29,22 @@ for _dtype_name in ("uint16", "uint32", "uint64"):
         _NON_GRAD_DTYPES.add(_resolved_dtype)
 
 
+def autograd_disabled_at_entry() -> bool:
+    """Return whether autograd is off where a capture is entered.
+
+    A capture entered under ``torch.no_grad()`` or ``torch.inference_mode()``
+    builds no autograd graph, so ``tl.trace`` and ``tl.record`` imply
+    ``inference_only=True`` for it unless the caller asked for a backward.
+
+    Returns
+    -------
+    bool
+        ``True`` when gradient mode is disabled or inference mode is active.
+    """
+
+    return not torch.is_grad_enabled() or torch.is_inference_mode_enabled()
+
+
 class TrainingModeConfigError(ConfigurationError, ValueError):
     """Raised when ``backward_ready=True`` conflicts with capture configuration.
 

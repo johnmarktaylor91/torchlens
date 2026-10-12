@@ -504,7 +504,11 @@ class CaptureOptions:
     backward_ready:
         Whether capture keeps autograd-connected tensors for training workflows.
     inference_only:
-        Whether capture wraps the user forward in ``torch.no_grad()``.
+        Whether capture wraps the user forward in ``torch.no_grad()``. When
+        omitted, a capture entered under ``torch.no_grad()`` or
+        ``torch.inference_mode()`` implies ``True`` unless ``backward_ready``,
+        ``save_grads`` or ``intervention_ready`` asks for a backward; the
+        Trace reports the effective value.
     name:
         Optional user-facing name for the returned log.
     cache:
