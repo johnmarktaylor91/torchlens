@@ -125,6 +125,43 @@ def _reject_extra_positional_input(grad_transform: Any) -> None:
     )
 
 
+def _reject_non_mapping_input_kwargs(input_kwargs: Any) -> None:
+    """Refuse a non-Mapping ``input_kwargs`` before any backend dispatch (U11.2).
+
+    The natural multi-input spelling ``tl.trace(model, a, b)`` lands ``b`` in
+    ``input_kwargs``. The torch path refused it typed, but other backends (the
+    JAX two-positional spelling) crashed deep inside their capture instead, so
+    the check runs at ``trace()`` entry for every backend.
+
+    Parameters
+    ----------
+    input_kwargs:
+        The value ``trace()`` received in its ``input_kwargs`` slot.
+
+    Raises
+    ------
+    ArgumentTypeError
+        With code ``input_kwargs_type_invalid`` when the slot is neither
+        ``None`` nor a ``Mapping``.
+    """
+
+    import collections.abc
+
+    if input_kwargs is None or isinstance(input_kwargs, collections.abc.Mapping):
+        return
+    from ._errors import ArgumentTypeError
+
+    raise ArgumentTypeError(
+        "input_kwargs must be a Mapping of keyword arguments for "
+        f"model.forward(), got {type(input_kwargs).__name__}. Passing "
+        "multiple positional inputs as separate arguments is not "
+        "supported: bundle them as one tuple, e.g. "
+        "tl.trace(model, (input_a, input_b, input_c)).",
+        code="input_kwargs_type_invalid",
+        remedy="pass keyword args as a dict, or bundle positional inputs into one tuple",
+    )
+
+
 def _coerce_input_args(model: Any, input_args: Any) -> Any:
     """Coerce positional model inputs while preserving batched ergonomic inputs.
 

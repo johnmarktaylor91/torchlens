@@ -1128,7 +1128,7 @@
   brain data), all AttributeError-lineage typed; `__all__`/`dir()` advertise only
   dependency-present names. Brain-Score alias branch LIVE (gate passed):
   `tl.neuro.activations_extractor`/`get_activations_fn` gated on brainscore_vision
-  alone (extras split D17: neuro = rsatoolbox-only; new `brainscore` extra, filed).
+  alone (extras split D17: neuro = rsatoolbox, never Brain-Score; new `brainscore` extra, filed).
   repgeom riders: `rdm(metric="gaussian")` (thingsvision bandwidth convention,
   credited), `rank_transform_rdm` + `rdm_node_spec(display="rank"|"percentile")`.
   `tl.stats.cka` contract published (linear, biased, CPU float64, matched rows, NaN

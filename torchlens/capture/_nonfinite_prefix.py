@@ -46,6 +46,7 @@ import contextlib
 from typing import TYPE_CHECKING, Any
 
 from ..constants import RAW_LABEL_SUFFIX
+from ..utils._exception_notes import annotate_guarded
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
@@ -305,10 +306,11 @@ def maybe_finalize_nonfinite_prefix(
             f"{type(finalize_exc).__name__}: {finalize_exc}"
         )
         with contextlib.suppress(Exception):
-            exc.add_note(
+            annotate_guarded(
+                exc,
                 "TorchLens prefix finalization for public NaN labels failed "
                 f"({type(finalize_exc).__name__}: {finalize_exc}); the public "
-                "label is unavailable (never a raw spelling)."
+                "label is unavailable (never a raw spelling).",
             )
         with contextlib.suppress(Exception):
             _rewrite_nonfinite_error(trace, exc, finalized=False)

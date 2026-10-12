@@ -83,7 +83,8 @@ notebook = ["ipython>=8.0", "jupyter-client>=8.0"]
 # rsatoolbox: >=0.1.5 keeps the validated floor; the ceiling admits the 0.2/0.3
 # line because 0.1.5 ships no cp313 wheels (0.3.x is the first that does) and the
 # bridge surface used (rsatoolbox.data.Dataset) is stable across the range.
-# neuro is rsatoolbox-ONLY (neuro memo D17, both halves landed by D05 2026-09-02).
+# neuro carries rsatoolbox plus xarray (tl.export.xarray, U28.2 2026-10-12) and never
+# Brain-Score (neuro memo D17, both halves landed by D05 2026-09-02).
 # The Brain-Score seam (torchlens/bridge/brain_score.py imports
 # brainscore_vision.model_helpers) lives in its OWN extra below, which is the
 # spelling torchlens.neuro's teaching remedy names
@@ -100,6 +101,7 @@ notebook = ["ipython>=8.0", "jupyter-client>=8.0"]
 # brainscore_core is named nowhere (imported nowhere; arrives transitively).
 neuro = [
     "rsatoolbox>=0.1.5,<0.4",
+    "xarray>=2023.1",
 ]
 brainscore = ["brainscore_vision~=2.3; python_version >= '3.11'"]
 # F14 (netron memo D-20): the serve/widget one-liner's teaching refusal

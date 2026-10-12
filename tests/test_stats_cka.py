@@ -74,9 +74,10 @@ def test_streaming_cka_matches_one_shot() -> None:
 
 
 def test_cka_degenerate_input_returns_nan() -> None:
-    """A zero-variance representation has a documented NaN result."""
+    """A zero-variance representation has a documented NaN result, with a warning."""
 
-    assert math.isnan(cka(torch.ones(5, 3), torch.randn(5, 4)))
+    with pytest.warns(UserWarning, match="zero variance"):
+        assert math.isnan(cka(torch.ones(5, 3), torch.randn(5, 4)))
 
 
 def test_cross_covariance_matches_direct_computation() -> None:

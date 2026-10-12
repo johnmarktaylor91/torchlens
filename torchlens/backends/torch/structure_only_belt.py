@@ -44,7 +44,6 @@ import functools
 import inspect
 import threading
 import types
-import warnings
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -54,6 +53,7 @@ import torch
 
 from ... import _state
 from ...errors._base import TorchLensError
+from ...utils._exception_notes import annotate_guarded
 from ...utils._torch_symbols import torch_attr
 from ._tl import DescriptorCompatProperty, get_tensor_label
 from .completeness_witness import (
@@ -457,16 +457,6 @@ def _raised_by_raise_statement(tb: types.TracebackType) -> bool:
     return False
 
 
-def _annotate_guarded(exc: BaseException, note: str) -> None:
-    """The guarded PEP-678 house idiom (3.10 degrades to a RuntimeWarning)."""
-
-    add_note = getattr(exc, "add_note", None)
-    if add_note is not None:
-        add_note(note)
-    else:  # Python 3.10: no PEP 678 notes — surface via warning.
-        warnings.warn(note, RuntimeWarning, stacklevel=3)
-
-
 _USER_ANNOTATION: Final[str] = (
     "torchlens: raised during structure-only capture; tensors here may be meta (no values)"
 )
@@ -576,7 +566,7 @@ def structure_only_forward_boundary(trace: Any) -> Iterator[None]:
         innermost_external = _is_external(innermost_path)
         user_raised = innermost_external and _raised_by_raise_statement(innermost)
         if user_raised:
-            _annotate_guarded(exc, _USER_ANNOTATION)
+            annotate_guarded(exc, _USER_ANNOTATION)
             raise
         externals = _external_frames(exc)
         # The INNERMOST external frame is the failing callsite (a traceback
@@ -680,5 +670,5 @@ def structure_only_forward_boundary(trace: Any) -> Iterator[None]:
                 ),
             ) from exc
         # Unclassifiable: propagate unchanged with the guarded annotation.
-        _annotate_guarded(exc, _USER_ANNOTATION)
+        annotate_guarded(exc, _USER_ANNOTATION)
         raise
