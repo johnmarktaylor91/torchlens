@@ -168,7 +168,6 @@ _KNOWN_UNSUPPORTED_ARG_SPEC_REASONS = {
     "backward": "autograd/backward helper left on dynamic fallback pending gradient schema audit",
     "batchnormbackwardelemt": "autograd/backward helper left on dynamic fallback pending gradient schema audit",
     "batchnormbackwardreduce": "autograd/backward helper left on dynamic fallback pending gradient schema audit",
-    "clearnonserializablecacheddata": "metadata/control helper with no validated tensor-input schema",
     "cudnnrnn": "demoted fragment: schema mismatch: missing_positions=[5, 15], extra_positions=[14], missing_names=[]",
     "debughasinternaloverlap": "internal/private helper left on dynamic fallback until independently validated",
     "deepcopy": "demoted fragment: no operator schema available",
@@ -640,3 +639,65 @@ def test_schema_corrected_unary_specs_capture_all_tensor_parents(
     assert len(op.parents) == expected_parent_count
     assert op.is_internal_source is False
     assert all(trace[parent_label].has_output_descendant for parent_label in op.parents)
+
+
+class _DeepcopyBufferModel(torch.nn.Module):
+    """Deep-copies a buffer inside forward (the 0bed774f1 root-only model shape)."""
+
+    def __init__(self) -> None:
+        """Register the buffer."""
+
+        super().__init__()
+        self.register_buffer("buf", torch.ones(3))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return ``x * deepcopy(buf)``.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            The product.
+        """
+
+        import copy
+
+        return x * copy.deepcopy(self.buf)
+
+
+@pytest.mark.skipif(
+    not hasattr(torch.Tensor, "_clear_non_serializable_cached_data"),
+    reason="this torch's Tensor.__deepcopy__ has no cache-clearing helper",
+)
+def test_deepcopy_inside_forward_calls_are_arg_spec_covered(monkeypatch) -> None:
+    """Every call a forward deepcopy reaches is covered, and its internals never become ops.
+
+    ``Tensor.__deepcopy__`` calls ``self._clear_non_serializable_cached_data()`` inside
+    the logged deepcopy. It returns ``None``, so it never logs an op or caches a dynamic
+    spec; the usage-stats lookup-table gate (``test_arg_positions``) needs its static
+    spec. This pins that in targeted runs, where usage stats are otherwise off.
+    """
+
+    import torchlens as tl
+    from torchlens import _state
+
+    monkeypatch.setattr(_state, "_collect_usage_stats", True)
+    monkeypatch.setattr(_state, "_function_call_counts", {})
+    monkeypatch.setattr(_state, "_function_call_models", {})
+    trace = tl.trace(_DeepcopyBufferModel(), torch.randn(3))
+    try:
+        names = {_normalize_func_name(name) for name in _state._function_call_counts}
+        assert "clearnonserializablecacheddata" in names
+        uncovered = {
+            name
+            for name in names
+            if name not in FUNC_ARG_SPECS and name not in _state._dynamic_arg_specs
+        }
+        assert uncovered == set()
+        assert not any("clear" in str(op.type).lower() for op in trace.ops)
+    finally:
+        trace.cleanup()

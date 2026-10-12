@@ -1124,6 +1124,9 @@ _UNARY_FUNCS = [
     "index",
     "symint",
     "checkkeypaddingmask",
+    # Tensor.__deepcopy__ calls self._clear_non_serializable_cached_data()
+    # inside the (logged) deepcopy; returns None, so it never becomes an op.
+    "clearnonserializablecacheddata",
 ]
 
 for _name in _UNARY_FUNCS:
