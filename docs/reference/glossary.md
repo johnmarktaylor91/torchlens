@@ -1284,8 +1284,9 @@ shim owed*
 **Bundled render font** — *unstable — no deprecation shim owed*
 : Every Graphviz render resolves the pinned `Helvetica` family to the bundled Liberation Sans 2.1.5
   (SIL Open Font License 1.1, shipped unmodified under `torchlens/visualization/fonts/` with its
-  license) through a fontconfig file layered over the caller's own, so text metrics no longer
-  depend on which face a machine maps `Helvetica` to. The emitted DOT keeps `fontname="Helvetica"`.
+  license) through a fontconfig file layered over the caller's own (it maps `Helvetica` and
+  `Arial`, the family Graphviz's PostScript alias table asks for), so text metrics no longer
+  depend on which face a machine has installed. The emitted DOT keeps `fontname="Helvetica"`.
 
 **Expansion manifest** — *unstable — no deprecation shim owed*
 : The JSON file `<outpath>.expansion.json` (schema `torchlens.expansion_manifest.v1`) a `draw`

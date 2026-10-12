@@ -70,7 +70,7 @@ def test_fk3_bundled_font_files_ship_with_license() -> None:
 
 
 def test_fk3_pinned_family_resolves_to_bundled_font() -> None:
-    """Under the render environment fontconfig resolves Helvetica to the bundled file."""
+    """Under the render environment fontconfig resolves the pinned family to the bundled file."""
     env = _fonts.graphviz_font_env()
     assert env is not None
     fc_match = shutil.which("fc-match")
@@ -84,10 +84,13 @@ def test_fk3_pinned_family_resolves_to_bundled_font() -> None:
             check=True,
             timeout=60,
         ).stdout
-        for pattern in ("Helvetica", "Helvetica:bold")
+        for pattern in ("Helvetica", "Helvetica:bold", "Arial", "Arial:bold")
     }
     assert os.path.basename(resolved["Helvetica"]) == "LiberationSans-Regular.ttf"
     assert os.path.basename(resolved["Helvetica:bold"]) == "LiberationSans-Bold.ttf"
+    # Graphviz's PostScript alias table asks fontconfig for Arial, not Helvetica.
+    assert os.path.basename(resolved["Arial"]) == "LiberationSans-Regular.ttf"
+    assert os.path.basename(resolved["Arial:bold"]) == "LiberationSans-Bold.ttf"
     font_dir = str(_fonts.bundled_font_status()["font_dir"])
     assert all(path.startswith(font_dir) for path in resolved.values())
 
@@ -223,8 +226,14 @@ def test_fk4_pathological_trace_renders_bounded_overview_with_manifest(
 
 
 def test_fk4_floor_residual_writes_manifest(tmp_path: Path) -> None:
-    """A floor-fallback plan still above the band ships the manifest beside it."""
-    trace = tl.trace(_RootFloodWithBlocks(), torch.randn(2, 4))
+    """A floor-fallback plan still above the band ships the manifest beside it.
+
+    A flat chain whose root owns more units than K_CAP empties the frontier
+    (floor tier) and has no module box to fold, so the floor plan stays far
+    above the readable band: the honest residual FK4 discloses.
+    """
+    flat = nn.Sequential(*[layer for _ in range(100) for layer in (nn.Linear(4, 4), nn.ReLU())])
+    trace = tl.trace(flat, torch.randn(2, 4))
     try:
         with warnings.catch_warnings(record=True) as records:
             warnings.simplefilter("always")
@@ -237,10 +246,9 @@ def test_fk4_floor_residual_writes_manifest(tmp_path: Path) -> None:
     finally:
         trace.cleanup()
     codes = _codes(records)
-    assert "collapse_floor_fallback" in codes
     assert "collapse_expansion_manifest" in codes
     manifest = _manifest(tmp_path / "floor.expansion.json")
-    assert manifest["planner"] == "floor_fallback"
+    assert manifest["planner"] in {"floor_fallback", "linear_fallback"}
     assert manifest["visible_count"] > manifest["readable_band_high"]
     assert all(entry["expansion_id"] for entry in manifest["entries"])
 

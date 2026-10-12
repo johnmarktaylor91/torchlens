@@ -7,9 +7,10 @@ same graph laid out differently. FK3 ruled for bundling an open font over
 fingerprinting a system one. TorchLens ships Liberation Sans 2.1.5 (SIL Open
 Font License 1.1, unmodified files plus ``fonts/OFL.txt``), which is
 metric-compatible with Helvetica/Arial, and every Graphviz subprocess gets a
-fontconfig configuration that resolves the pinned family to it. The emitted
-DOT keeps ``fontname="Helvetica"``, so no DOT byte changes; only which face
-measures and draws the text is now fixed.
+fontconfig configuration that resolves the pinned family -- and ``Arial``, the
+family Graphviz's PostScript alias table actually asks fontconfig for -- to it.
+The emitted DOT keeps ``fontname="Helvetica"``, so no DOT byte changes; only
+which face measures and draws the text is now fixed.
 
 The configuration includes the caller's own fontconfig file (``FONTCONFIG_FILE``
 when set, else the platform's system file), so every other family still
@@ -43,11 +44,13 @@ BUNDLED_FONT_FAMILY = "Liberation Sans"
 #: Font files shipped under ``torchlens/visualization/fonts``.
 BUNDLED_FONT_FILES = ("LiberationSans-Regular.ttf", "LiberationSans-Bold.ttf")
 
-#: Pinned family names the configuration maps onto the bundled face. The
-#: typography record emits ``Helvetica``; ``Helvetica-Bold`` is the
-#: high-contrast record's PostScript spelling, which Graphviz splits into the
-#: ``Helvetica`` family at bold weight before asking fontconfig.
-_PINNED_FAMILIES = ("Helvetica",)
+#: Family names the configuration maps onto the bundled face. The typography
+#: record emits ``Helvetica`` (``Helvetica-Bold`` on the high-contrast skin),
+#: and Graphviz's PostScript alias table turns that into the family ``Arial``
+#: (at bold weight for ``-Bold``) before its pango plugin asks fontconfig --
+#: measured: ``fontname: "Helvetica" resolved to: (ps:pango Arial, REGULAR)``.
+#: Both names map, so the bundled face wins whichever spelling arrives.
+_PINNED_FAMILIES = ("Helvetica", "Arial")
 
 _FONT_DIR = Path(__file__).with_name("fonts")
 
