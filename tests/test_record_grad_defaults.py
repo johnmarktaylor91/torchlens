@@ -359,7 +359,7 @@ def test_record_under_no_grad_with_enable_grad_inside_is_not_inference_only() ->
 
     model, x = _grad_inside_model_and_input()
     with torch.no_grad():
-        out, recording = tl.record(model, x, return_output=True)
+        out, recording = tl.record(model, x, save=_keep_relu, return_output=True)
     assert out.grad_fn is not None
     assert recording.outcome.inference_only is False
     with pytest.raises(RecorderStateError) as exc_info:
