@@ -1,0 +1,215 @@
+"""V-JEPA 2 full-clip capture and validation leg (GPU venue; U55.4).
+
+Runs ``facebook/vjepa2-vitl-fpc64-256`` at its native 64 frames x 256 px
+through ``tl.trace`` and ``tl.validate(scope="forward")`` on one CUDA device
+and writes a receipt with the environment fingerprint. CPU CI covers video
+with the VideoMAE registry row instead; that row never stands in for this
+receipt. Usage::
+
+    python tests/real_model/gpu_legs/vjepa2_full_leg.py OUT_DIR [--frames 64] [--job-id ID]
+
+The weights must already be in the Hugging Face cache (the leg runs offline).
+Each stage writes ``stage<A|B>.json``; a rerun skips a stage whose receipt
+exists, so a timeout loses at most one stage.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import platform
+import resource
+import subprocess
+import sys
+import time
+from pathlib import Path
+from typing import Any
+
+MODEL_ID = "facebook/vjepa2-vitl-fpc64-256"
+REVISION = "b3c1679b7c34d3255ef3547f27c7b226aefab26f"  # pragma: allowlist secret
+WEIGHT_FILE = "model.safetensors"
+WEIGHT_SHA256 = (
+    "25466aef85727d16546c6cf8c99f12fcfad9cbca8225d45f23685e2e025b786b"  # pragma: allowlist secret
+)
+IMAGE_MEAN = (0.485, 0.456, 0.406)
+IMAGE_STD = (0.229, 0.224, 0.225)
+CROP = 256
+SEED = 0
+
+
+def _sha256(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 22), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _driver() -> str:
+    try:
+        return subprocess.run(
+            ["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+
+
+def fingerprint(job_id: str) -> dict[str, Any]:
+    """Return the GPU environment fingerprint the receipt carries."""
+
+    import torch
+    import transformers
+
+    import torchlens
+
+    cuda = torch.cuda.is_available()
+    return {
+        "job_id": job_id,
+        "python": platform.python_version(),
+        "glibc": "-".join(platform.libc_ver()),
+        "torch": torch.__version__,
+        "torch_cuda_runtime": torch.version.cuda,
+        "cudnn": torch.backends.cudnn.version() if cuda else None,
+        "cuda_available": cuda,
+        "device": torch.cuda.get_device_name(0) if cuda else None,
+        "device_capability": list(torch.cuda.get_device_capability(0)) if cuda else None,
+        "driver": _driver(),
+        "transformers": transformers.__version__,
+        "torchlens": getattr(torchlens, "__version__", "unknown"),
+        "torchlens_commit": os.environ.get("TORCHLENS_COMMIT", "unknown"),
+        "model_id": MODEL_ID,
+        "revision": REVISION,
+    }
+
+
+def _clip(frames: int) -> Any:
+    import torch
+
+    generator = torch.Generator().manual_seed(SEED)
+    raw = torch.rand(1, frames, 3, CROP, CROP, generator=generator)
+    mean = torch.tensor(IMAGE_MEAN).view(1, 1, 3, 1, 1)
+    std = torch.tensor(IMAGE_STD).view(1, 1, 3, 1, 1)
+    return (raw - mean) / std
+
+
+def _load(device: str) -> Any:
+    import torch
+    from huggingface_hub import hf_hub_download
+    from transformers import AutoModel
+
+    weights = hf_hub_download(MODEL_ID, WEIGHT_FILE, revision=REVISION, local_files_only=True)
+    actual = _sha256(weights)
+    if actual != WEIGHT_SHA256:
+        raise SystemExit(f"weight sha256 {actual} != pinned {WEIGHT_SHA256}")
+    model = AutoModel.from_pretrained(
+        MODEL_ID, revision=REVISION, dtype=torch.float32, attn_implementation="sdpa"
+    )
+    return model.to(device).eval()
+
+
+def _peaks() -> dict[str, float]:
+    import torch
+
+    peak = {"peak_host_rss_mib": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024}
+    if torch.cuda.is_available():
+        peak["peak_gpu_mib"] = torch.cuda.max_memory_allocated() / (1 << 20)
+    return peak
+
+
+def stage_a(model: Any, inputs: dict[str, Any]) -> dict[str, Any]:
+    """Capture every op, activations to host; traced output == direct forward."""
+
+    import torch
+
+    import torchlens as tl
+    from torchlens.options import CaptureOptions
+
+    with torch.no_grad():
+        direct = model(**inputs).last_hidden_state.detach().cpu()
+    start = time.monotonic()
+    trace = tl.trace(model, (), dict(inputs), capture=CaptureOptions(output_device="cpu"))
+    seconds = time.monotonic() - start
+    try:
+        matches = [
+            op
+            for op in trace.output_ops
+            if isinstance(op.out, torch.Tensor) and op.out.shape == direct.shape
+        ]
+        equal = any(torch.equal(op.out.cpu(), direct) for op in matches)
+        max_abs = min((float((op.out.cpu() - direct).abs().max()) for op in matches), default=None)
+        return {
+            "status": trace.outcome.status.name,
+            "traced_equals_direct": equal,
+            "max_abs_diff_vs_direct": max_abs,
+            "num_ops": int(trace.num_ops),
+            "num_layers": int(trace.num_layers),
+            "num_modules": int(trace.num_modules),
+            "saved_activation_memory_bytes": int(trace.saved_activation_memory),
+            "trace_seconds": round(seconds, 1),
+            **_peaks(),
+        }
+    finally:
+        trace.cleanup()
+
+
+def stage_b(model: Any, inputs: dict[str, Any]) -> dict[str, Any]:
+    """Forward replay validation on the same clip."""
+
+    import torchlens as tl
+
+    start = time.monotonic()
+    ok = tl.validate(model, (), dict(inputs), scope="forward", output_device="cpu")
+    return {
+        "validate_forward": bool(ok),
+        "validate_seconds": round(time.monotonic() - start, 1),
+        **_peaks(),
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument("out_dir", type=Path)
+    parser.add_argument("--frames", type=int, default=64)
+    parser.add_argument("--job-id", default="unknown")
+    args = parser.parse_args(argv)
+
+    import torch
+
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    env = fingerprint(args.job_id)
+    (args.out_dir / "fingerprint.json").write_text(json.dumps(env, indent=1))
+    if not env["cuda_available"]:
+        print("no CUDA device: this leg runs on a GPU venue only", file=sys.stderr)
+        return 3
+    torch.manual_seed(SEED)
+    model = _load("cuda")
+    inputs = {"pixel_values_videos": _clip(args.frames).to("cuda")}
+    receipt: dict[str, Any] = {
+        "fingerprint": env,
+        "frames": args.frames,
+        "crop": CROP,
+        "seed": SEED,
+    }
+    for name, stage in (("A", stage_a), ("B", stage_b)):
+        path = args.out_dir / f"stage{name}.json"
+        if not path.exists():
+            torch.cuda.reset_peak_memory_stats()
+            path.write_text(json.dumps(stage(model, inputs), indent=1))
+        receipt[f"stage{name}"] = json.loads(path.read_text())
+    stage_a_ok = (
+        receipt["stageA"]["status"] == "COMPLETE" and receipt["stageA"]["traced_equals_direct"]
+    )
+    receipt["passed"] = bool(stage_a_ok and receipt["stageB"]["validate_forward"])
+    (args.out_dir / "receipt.json").write_text(json.dumps(receipt, indent=1))
+    print(json.dumps({"passed": receipt["passed"], "job_id": args.job_id}))
+    return 0 if receipt["passed"] else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
