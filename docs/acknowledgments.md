@@ -14,10 +14,11 @@ everything else is related prior art, and nothing here implies endorsement.
 Two upstream license situations deserve a plain statement. **baukit** is
 unlicensed and **zennit** is LGPL: from both, TorchLens takes ideas and
 vocabulary only -- no source copied, ported, generated-from, or vendored.
-Permissively licensed work is different: the one named CODE borrow (treescope,
-Apache-2.0) is ported with a license notice in the source file
-(`torchlens/notebook/_truncation.py`), and Apache-2.0 reuse carries NOTICE
-attribution. Do not over-apply the cleanroom rule to permissively licensed
+Permissively licensed work is different: the named CODE borrows are ported
+with a license notice in the source file -- treescope (Apache-2.0,
+`torchlens/notebook/_truncation.py`) and TransformerLens's `FactoredMatrix`
+(MIT, `torchlens/mechinterp/_factored.py`) -- and Apache-2.0 reuse carries
+NOTICE attribution. Do not over-apply the cleanroom rule to permissively licensed
 work; do not under-apply it to unlicensed or copyleft work.
 
 ## Mechanistic interpretability tooling
@@ -28,8 +29,12 @@ work; do not under-apply it to unlicensed or copyleft work.
   logit attributions), the cached-scale LayerNorm linearization our norm facet
   is validated against bit-exactly, `get_act_name` ergonomics and the `L5H7`
   spelling, `test_prompt`, `head_detector`'s conventions, `FactoredMatrix`
-  (to be ported with credit, not reinvented), position and head addressing
-  ergonomics (`'last'` as a first-class spelling), the ablation-sweep idiom,
+  (vendored under the MIT License from TransformerLens v4.2.0, commit
+  `bd55eab6`, as `torchlens.mechinterp.FactoredMatrix`, feeding the QK/OV
+  circuits built on verified head weight views), the `TransformerBridge`
+  4.x canonical hook vocabulary our alias table translates, position and
+  head addressing ergonomics (`'last'` as a first-class spelling), the
+  ablation-sweep idiom,
   the "% of the clean/corrupt gap recovered" idiom, its demo notebooks as the
   de-facto acceptance gallery of mechinterp, and its published
   model-compatibility table as prior art for claimed-vs-tested lists.
