@@ -363,21 +363,17 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
             remedy="pass a callable grad_transform or None",
             argument="grad_transform",
         )
-    if not isinstance(save_raw_gradients, bool):
-        raise InvalidArgumentError(
-            f"save_raw_gradients must be a bool; received {type(save_raw_gradients).__name__}",
-            code="recording_option_type_invalid",
-            remedy="pass save_raw_gradients=True or False",
-            argument="save_raw_gradients",
-        )
-    if not isinstance(detach_saved_activations, bool):
-        raise InvalidArgumentError(
-            "detach_saved_activations must be a bool; "
-            f"received {type(detach_saved_activations).__name__}",
-            code="recording_option_type_invalid",
-            remedy="pass detach_saved_activations=True or False",
-            argument="detach_saved_activations",
-        )
+    for flag_name, flag in (
+        ("save_raw_gradients", save_raw_gradients),
+        ("detach_saved_activations", detach_saved_activations),
+    ):
+        if not isinstance(flag, bool):
+            raise InvalidArgumentError(
+                f"{flag_name} must be a bool; received {type(flag).__name__}",
+                code="recording_option_type_invalid",
+                remedy=f"pass {flag_name}=True or False",
+                argument=flag_name,
+            )
 
 
 def merge_recording_options(
