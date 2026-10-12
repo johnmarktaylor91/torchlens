@@ -259,6 +259,11 @@ class Recorder:
             ``True`` to mirror the slow path.
         backward_ready:
             If True, omitted defaults are promoted to ``CaptureSpec(keep_grad=True)``.
+            Gradient hooks are installed only when ``backward_ready=True``,
+            ``save_grads=`` or ``default_grad=`` is given (``None``/``False``
+            do not count); otherwise ``log_backward()`` refuses, and a forward
+            under ``torch.no_grad()`` or ``torch.inference_mode()`` implies
+            ``inference_only=True``.
         """
 
         reject_compiled_model(model, api_name="torchlens.fastlog.Recorder")
@@ -283,6 +288,13 @@ class Recorder:
             backward_ready=backward_ready,
         )
         self.model = unwrapped_model
+        # Gradient hooks are installed only when the caller asks for a backward
+        # up front; ``log_backward`` refuses otherwise (AGT-2132).
+        self._backward_requested = (
+            backward_ready
+            or not (save_grads is MISSING or save_grads is None or save_grads is False)
+            or not (default_grad is MISSING or default_grad is False)
+        )
         # echo= normalization runs at construction so the typed refusals
         # (bad spellings, finalized-label selectors) fire BEFORE any forward.
         if echo is MISSING or echo is None or echo is False:
@@ -394,14 +406,18 @@ class Recorder:
 
             if getattr(self._recording, "_outcome", None) is None:
                 recording = self._recording
+                inference_only = bool(getattr(self._state.runtime_trace, "inference_only", False))
                 if recording.halted:
                     stamped = CaptureOutcome(
                         status=CaptureStatus.HALTED,
                         reason=recording.halt_reason,
                         boundary_label=recording.halt_reason,
+                        inference_only=inference_only,
                     )
                 else:
-                    stamped = CaptureOutcome(status=CaptureStatus.COMPLETE)
+                    stamped = CaptureOutcome(
+                        status=CaptureStatus.COMPLETE, inference_only=inference_only
+                    )
                 stamp_recording_outcome(recording, stamped)
         else:
             self._state.abort_storage(safe_exception_str(exc_value))
@@ -464,6 +480,10 @@ class Recorder:
 
         if self._state is None or self._capture_events is None:
             raise RecorderStateError("Recorder.log() requires an active with-block")
+        # Deferred: _training_validation sits above fastlog in the layer map.
+        from .._training_validation import autograd_disabled_at_entry
+
+        inference_only = not self._backward_requested and autograd_disabled_at_entry()
         trace = Trace(
             model_class_name=str(type(self.model).__name__),
             activation_transform=self.options.activation_transform,
@@ -476,7 +496,9 @@ class Recorder:
             grad_transform=self.options.grad_transform,
             save_raw_gradients=self.options.save_raw_gradients,
             detach_saved_activations=False,
+            capture_tensor_grad_hooks=self._backward_requested,
             backward_ready=True,
+            inference_only=inference_only,
         )
         trace.capture_mode = "predicate"
         trace._fastlog_recording = self._state.recording
@@ -485,7 +507,7 @@ class Recorder:
             halt_options=self.options,
             raise_on_nan=False,
             forward_error_mode=self.options.on_forward_error,
-            inference_only=False,
+            inference_only=inference_only,
         )
         trace._capture_config = InternalCaptureConfig(
             capture_mode="predicate",
@@ -530,7 +552,9 @@ class Recorder:
                 "n_ops",
                 max(self._state.recording.n_ops, self._next_pass_index),
             )
-            self._mark_halted_pass(self._next_pass_index, halt_exc)
+            self._mark_halted_pass(
+                self._next_pass_index, halt_exc, inference_only=trace.inference_only
+            )
             if self._echo_session is not None:
                 # Halted is not failed: no crash tail, one typed disclosure.
                 self._echo_session.note_line("-- echo: capture halted (not failed) --")
@@ -625,7 +649,9 @@ class Recorder:
             return
         self._capture_events.concat(source)
 
-    def _mark_halted_pass(self, pass_index: int, halt_exc: HaltSignal) -> None:
+    def _mark_halted_pass(
+        self, pass_index: int, halt_exc: HaltSignal, *, inference_only: bool = False
+    ) -> None:
         """Persist halt state for the given pass."""
 
         if self._state is None:
@@ -640,6 +666,7 @@ class Recorder:
                 reason=halt_exc.reason,
                 boundary_kind=getattr(halt_exc, "boundary_kind", None),
                 boundary_label=getattr(halt_exc, "boundary_label", None) or halt_exc.reason,
+                inference_only=inference_only,
             ),
         )
 

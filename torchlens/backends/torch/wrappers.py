@@ -1029,10 +1029,10 @@ def _cow_payload_state_ptrs(trace: Any) -> Any:
 
     Eligibility is deliberately narrow — the plain default capture only. Every
     mode where saved payloads interact with other machinery (runnable
-    witnesses, backward capture, gradient saving, inference-mode tensors,
-    user activation transforms that may mutate the payload in place, predicate
-    recording, streaming writers, non-copy save modes) keeps the historical
-    eager clone.
+    witnesses, backward capture, gradient saving, user activation transforms
+    that may mutate the payload in place, predicate recording, streaming
+    writers, non-copy save modes) keeps the historical eager clone.
+    ``inference_only`` (implied by ``no_grad``) only adds ``no_grad``: eligible.
     """
     try:
         cached = _COW_STATE_PTRS_CACHE.get(trace, _COW_UNSET)
@@ -1045,7 +1045,6 @@ def _cow_payload_state_ptrs(trace: Any) -> Any:
         _COW_ENABLED
         and not getattr(trace, "intervention_ready", False)
         and not getattr(trace, "backward_ready", False)
-        and not getattr(trace, "inference_only", False)
         and getattr(trace, "save_grads", None) in (None, False)
         and getattr(trace, "activation_transform", None) is None
         and getattr(trace, "capture_mode", None) != "predicate"

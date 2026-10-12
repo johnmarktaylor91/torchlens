@@ -926,6 +926,34 @@ class Recording(CapturedRun):
                 status="halted",
             )
 
+        # A record without a backward opt-in installed no gradient hooks, and a
+        # forward under no_grad / inference_mode implied inference_only and built
+        # no autograd graph: either backward would capture nothing (AGT-2132).
+        state = getattr(self, "_recording_state", None)
+        runtime_trace = getattr(state, "runtime_trace", None)
+        if getattr(runtime_trace, "inference_only", False):
+            from .exceptions import RecorderStateError
+
+            raise RecorderStateError(
+                "Cannot call log_backward on this Recording: its forward ran under "
+                "torch.no_grad() or torch.inference_mode(), so tl.record implied "
+                "inference_only=True and no autograd graph was built. Remedy: record again "
+                "with gradients enabled and pass backward_ready=True or save_grads= to tl.record.",
+                code="recording_backward_inference_only",
+                capability="backward",
+            )
+        if not getattr(runtime_trace, "capture_tensor_grad_hooks", True):
+            from .exceptions import RecorderStateError
+
+            raise RecorderStateError(
+                "Cannot call log_backward on this Recording: tl.record installs gradient hooks "
+                "only when a backward is requested up front, so this backward would record "
+                "nothing. Remedy: pass backward_ready=True or save_grads= to tl.record (or "
+                "Recorder) and record again.",
+                code="recording_backward_not_requested",
+                capability="backward",
+            )
+
         from ..backends.torch.backward import log_recording_backward
 
         return log_recording_backward(

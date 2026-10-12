@@ -1744,7 +1744,8 @@ class Trace(
             verbose: If True, print timed progress messages at each major pipeline stage.
             backward_ready: Session-time flag for training-compatible out retention.
                 Portable bundle load restores the default ``False`` value.
-            inference_only: Whether the forward was captured under ``torch.no_grad()``.
+            inference_only: Whether the forward was captured under ``torch.no_grad()``,
+                requested explicitly or implied by a capture entered with autograd off.
             chunked_forward: Whether the trace was assembled from forward chunks.
             emit_nvtx: Whether decorated torch operations should emit NVTX ranges
                 around captured torch calls. This is a profiling aid for CUDA/Nsight

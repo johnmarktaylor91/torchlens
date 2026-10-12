@@ -49,6 +49,12 @@
   and best-effort `last_event_*` fields. user-op failures exclude the failing call; TL-side
   capture failures may include a skipped/partial current-call event. Failed partials cannot be
   converted with `Recording.to_trace()` or used with `Recording.log_backward()`.
+  `tl.record` installs gradient hooks only when `backward_ready=True`, `save_grads=` or
+  `default_grad=` is given; otherwise `Recording.log_backward()` refuses
+  (`recording_backward_not_requested`). A `tl.trace` or `tl.record` entered under
+  `torch.no_grad()` or `torch.inference_mode()` with no backward option implies
+  `inference_only=True` (`Trace.inference_only`, `outcome.inference_only`), and a later
+  `log_backward()` refuses naming that cause.
   Trace-side failed captures expose `exc.partial_log`, recoverable with
   `tl.partial.from_failed_capture(exc)`.
 - **Every capture product carries ONE settled typed outcome** (early-stopping

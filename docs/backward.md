@@ -43,6 +43,12 @@ belongs to a live TorchLens trace. If an engine path bypasses those wrappers, te
 implicit pass. Consecutive bypassed backwards may merge because hook events alone do not reveal a
 hard engine boundary; use TorchLens triggers for exact pass boundaries.
 
+A `Recording` captures gradients only when the `tl.record` call asked for a backward with
+`backward_ready=True`, `save_grads=` or `default_grad=`; without one it installs no gradient hooks
+and `Recording.log_backward()` refuses with `recording_backward_not_requested`. A capture entered
+under `torch.no_grad()` or `torch.inference_mode()` with no backward option implies
+`inference_only=True`, and its `log_backward()` refuses naming that cause.
+
 ## Backprop To The Stimulus
 
 For activation maximization, adversarial examples, and GAN inversion, the optimized stimulus can

@@ -93,7 +93,9 @@ _SAVED_TENSORS_HOOKS_INIT_PATCHED = False
 _TORCHLENS_PKG_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _INFERENCE_ONLY_BACKWARD_ERROR = (
     "Cannot run log_backward on a trace captured with inference_only=True: the autograd "
-    "graph was discarded during capture. Re-capture without inference_only (optionally with "
+    "graph was discarded during capture. inference_only is either passed explicitly or "
+    "implied when the capture runs under torch.no_grad() or torch.inference_mode(). "
+    "Re-capture with gradients enabled and without inference_only (optionally with "
     "backward_ready=True) to enable deferred backward."
 )
 _CHUNKED_FORWARD_BACKWARD_ERROR = (
