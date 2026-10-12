@@ -494,7 +494,8 @@ def honesty_banner_lines(log: Any) -> list[str]:
     """Return honesty banner lines for NON-CLEAN captures only.
 
     A surface "opens with the honesty banner when the capture is non-clean":
-    unverified/rescued/structure-only/poisoned/episode/advisory facts render;
+    unverified/rescued/structure-only/poisoned/episode/intervened/advisory
+    facts render;
     a clean verified plain capture returns no lines. Use this on presenter
     surfaces (``TraceSlice.summary``, ``draw`` captions) where a full status
     block would be noise but laundering the facts away is silent wrongness.
@@ -533,6 +534,14 @@ def honesty_banner_lines(log: Any) -> list[str]:
         lines.append(
             f"episode capture ({episode.get('n_steps_declared')} declared step(s), "
             f"fidelity_basis={basis}, step_join={episode.get('step_join')}{suffix})"
+        )
+    interventions = facts.get("interventions")
+    if interventions is not None:
+        lines.append(
+            f"INTERVENED capture ({interventions.get('fire_count')} fire(s), "
+            f"{interventions.get('replaced_op_count')} replaced op(s), "
+            f"{interventions.get('audit_row_count')} audit row(s)): values at "
+            "fired sites are COUNTERFACTUAL, not the model's"
         )
     for advisory in facts.get("advisories", ()):
         lines.append(
