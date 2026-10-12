@@ -7577,6 +7577,22 @@
  },
  {
   "ambiguous": true,
+  "field": "params",
+  "file": "torchlens/report/_factcore.py",
+  "has_default": true,
+  "sites": 2,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/report/_flops_report.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/report/_flops_report.py",
   "has_default": false,
@@ -7606,6 +7622,22 @@
   "has_default": false,
   "sites": 1,
   "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "params",
+  "file": "torchlens/report/_summary_columns.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/report/_summary_columns.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
  },
  {
   "ambiguous": true,
@@ -7644,7 +7676,7 @@
   "field": "params",
   "file": "torchlens/report/_summary_ladder.py",
   "has_default": false,
-  "sites": 5,
+  "sites": 6,
   "via_getattr": false
  },
  {
@@ -7673,6 +7705,14 @@
  },
  {
   "ambiguous": true,
+  "field": "params",
+  "file": "torchlens/report/_summary_render.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "kind",
   "file": "torchlens/report/_summary_report.py",
   "has_default": false,
@@ -7684,7 +7724,7 @@
   "field": "params",
   "file": "torchlens/report/_summary_report.py",
   "has_default": false,
-  "sites": 6,
+  "sites": 10,
   "via_getattr": false
  },
  {
@@ -7700,7 +7740,7 @@
   "field": "params",
   "file": "torchlens/report/_summary_result.py",
   "has_default": false,
-  "sites": 8,
+  "sites": 9,
   "via_getattr": false
  },
  {
