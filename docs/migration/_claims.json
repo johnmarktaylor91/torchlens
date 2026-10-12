@@ -385,6 +385,24 @@
       "lint": "FAIL any attached query whose stated scope, executed literally, yields a different number than the one it labels.",
       "last_verified": "2026-08-26",
       "owner": "maintainers"
+    },
+    {
+      "id": "flops-name-both-conventions",
+      "competitor": "fvcore; thop; ptflops; calflops; DeepSpeed flops profiler; torch.utils.flop_counter.FlopCounterMode (and Lightning ModelSummary, which reports it)",
+      "neutral_fact": "FLOP counters disagree by convention, not by error. TorchLens counts every executed op (matmul family plus elementwise, normalization, softmax, and attention terms) under a named FMA convention (fma=2 by default); FlopCounterMode and the counters built on it count the matmul family only. On the same GPT-2 (124M, sequence 16, CPU) TorchLens reports 3,974,725,648 forward FLOPs (fma=2) against FlopCounterMode's 3,962,462,208 (eager attention) or 3,953,025,024 (SDPA path); the 12,263,440 gap is the elementwise terms. An earlier 5.21 GFLOPs TorchLens reading set beside 4.0 GFLOPs from FlopCounterMode included a since-fixed double count of the tied lm_head matmul, and showed how an unlabeled comparison misleads.",
+      "allowed_public_wording": "Every cross-tool FLOP number names both conventions: TorchLens counts every executed op under fma=2 (one MAC = 2 FLOPs); <tool> counts <its convention>. tl.debug.flops_vs_dispatch runs both on the same model and input.",
+      "narrowed_scope_wording": "Quote one tool's number with its own convention named, without the comparison.",
+      "limitation_wording": "No cross-tool FLOP comparison in copy.",
+      "required_credit": null,
+      "evidence_refs": [
+        "maintainer review record (private)",
+        "tests/test_summary_rebuild_pins.py::test_gpt2_flagship_pins (3,974,725,648 at T=16)",
+        "torchlens/debug/_flops_vs_dispatch.py (side-by-side dispatch-counter comparison)"
+      ],
+      "tl_side_gates": [],
+      "lint": "FAIL any sentence or table that compares a TorchLens FLOP figure with another tool's figure unless both counting conventions are named beside the numbers (which ops each counts and the FMA convention); FAIL any 'more accurate' framing of a convention difference.",
+      "last_verified": "2026-10-11",
+      "owner": "maintainers"
     }
   ],
   "check_block_line": "Every check pass over dossiers/boundary copy emits exactly one line: 'CLAIM-LINT: <n_run> run / <n_fail> fail [ids: ...]' (N5).",
