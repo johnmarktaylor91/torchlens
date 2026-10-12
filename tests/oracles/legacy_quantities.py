@@ -15,7 +15,11 @@ quantity id and a status:
 - ``red-needs-row``: an independent (I1/I2) oracle test exists and passes;
   the quantity is red only because Table A has no row for it yet.
 - ``red-needs-oracle``: no independent oracle; one must be written.
-- ``green``: a Table A row with a passing I1/I2 oracle (none yet).
+- ``green``: a Table A row (``OBL-Q-<QUANTITY>`` in ``obligations.tsv``) with a
+  passing I1/I2 oracle, and a Table B binding for every door of the quantity
+  naming that oracle as its positive control. The check enforces both
+  directions: green needs the rows, and every ``OBL-Q-`` row needs a green
+  quantity.
 
 A quantity's status is the worst status over its doors. Usage::
 
@@ -50,6 +54,20 @@ COUNTED_SET = (
     " reached from two fixtures (eval forward; train mode with save_grads,"
     " backward, input/output distances and peak-memory measurement)"
 )
+
+#: Dotted public path of each in-scope class, as Table B names doors.
+DOOR_PATHS = {
+    "Trace": "torchlens.Trace",
+    "Layer": "torchlens.Layer",
+    "Op": "torchlens.Op",
+    "Module": "torchlens.data_classes.module.Module",
+    "ModuleCall": "torchlens.data_classes.module.ModuleCall",
+    "Param": "torchlens.data_classes.param.Param",
+    "Buffer": "torchlens.data_classes.buffer.Buffer",
+    "SummaryReport": "torchlens.report._summary_report.SummaryReport",
+    "SummaryTotals": "torchlens.report._summary_report.SummaryTotals",
+    "CaptureFacts": "torchlens.report._summary_report.CaptureFacts",
+}
 
 SCOPE = (
     "Trace",
@@ -194,6 +212,45 @@ def quantity_status(rows: Iterable[dict[str, str]]) -> dict[str, str]:
     return dict(sorted(status.items()))
 
 
+def obligation_id(quantity_id: str) -> str:
+    """Return the Table A id a quantity's row must carry."""
+
+    return "OBL-Q-" + quantity_id.upper().replace("_", "-")
+
+
+def registry_findings(rows: list[dict[str, str]]) -> list[str]:
+    """Cross-check green quantities against Tables A and B, both directions."""
+
+    repo_root = str(Path(__file__).resolve().parents[2])
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
+    from tests.oracles._registry import load_registry, validate
+
+    registry = load_registry()
+    findings = list(validate(registry))
+    obligations = {row.obligation_id: row for row in registry.obligations}
+    bindings = {(row.obligation_id, row.door): row for row in registry.bindings}
+    status = quantity_status(rows)
+    for row in rows:
+        if row["kind"] != "quantity" or status[row["quantity_id"]] != "green":
+            continue
+        oid = obligation_id(row["quantity_id"])
+        cls, field = row["door"].split(".", 1)
+        binding = bindings.get((oid, f"{DOOR_PATHS[cls]}.{field}"))
+        if oid not in obligations:
+            findings.append(f"{row['door']}: green without its Table A row {oid}")
+        elif binding is None:
+            findings.append(f"{row['door']}: green without a Table B binding to {oid}")
+        elif binding.positive_control != row["oracle_ref"].split(" (")[0]:
+            findings.append(
+                f"{row['door']}: binding names {binding.positive_control!r}, not its oracle"
+            )
+    green = {obligation_id(q) for q, s in status.items() if s == "green"}
+    for oid in sorted(o for o in obligations if o.startswith("OBL-Q-") and o not in green):
+        findings.append(f"{oid}: Table A quantity row without a green census quantity")
+    return findings
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--list", action="store_true", help="print every red quantity")
@@ -221,12 +278,14 @@ def main(argv: list[str] | None = None) -> int:
         for quantity, status in quantities.items():
             if status != "green":
                 print(f"  {status}\t{quantity}")
+    findings = registry_findings(rows)
+    for finding in findings:
+        print(f"REGISTRY: {finding}")
     if missing or stale:
         print(
             f"DRIFT: {len(missing)} unrowed live doors {missing[:10]}; {len(stale)} stale rows {stale[:10]}"
         )
-        return 1
-    return 0
+    return 1 if (missing or stale or findings) else 0
 
 
 if __name__ == "__main__":

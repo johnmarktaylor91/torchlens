@@ -10,7 +10,7 @@ Buffer.buffer_overwrite_index	int	identifier	-	-	-	id/index/line
 Buffer.buffer_pass	int	identifier	-	-	-	pass ordinal
 Buffer.call_index	int	identifier	-	-	-	id/index/line
 Buffer.gradient_memory	Bytes	quantity	gradient_memory	red-needs-oracle	-	-
-Buffer.num_overwrites	int	quantity	num_overwrites	red-needs-row	tests/test_buffer_datamodel.py::test_recurrent_cell_reassignment_does_not_break_loop_detection (I2)	-
+Buffer.num_overwrites	int	quantity	num_overwrites	green	tests/test_buffer_datamodel.py::test_recurrent_cell_reassignment_does_not_break_loop_detection (I2)	-
 CaptureFacts.advisories	int	quantity	advisories	red-needs-oracle	-	-
 Layer.activation_memory	Bytes	quantity	activation_memory	red-needs-row	tests/test_bug_fixes_phase14.py::test_view_mutation_output_recomputes_transformed_payload_metadata (I1)	-
 Layer.autograd_memory	Bytes	quantity	autograd_memory	red-needs-oracle	-	oracle is the zero case only (add saves no tensors); a positive case is still owed; this door has no oracle
@@ -51,8 +51,8 @@ Layer.total_gradient_memory	Bytes	quantity	gradient_memory	red-needs-oracle	-	-
 Layer.total_macs_forward	Macs	quantity	macs_forward	red-needs-oracle	-	the quantity oracle test_biased_linear_true_macs_not_flops_over_two asserts a different door; this door has none
 Layer.total_param_memory	Bytes	quantity	param_memory	red-needs-oracle	-	the quantity oracle test_roofline_linear_traffic_counts_parameter_bytes asserts a different door; this door has none
 Layer.type_index	int	identifier	-	-	-	id/index/line
-Module.address_depth	int	quantity	address_depth	red-needs-row	tests/test_module_log.py::TestModuleLogFields::test_address_depth (I2)	-
-Module.call_depth	int	quantity	call_depth	red-needs-row	tests/test_module_log.py::TestModuleLogFields::test_call_depth (I2)	-
+Module.address_depth	int	quantity	address_depth	green	tests/test_module_log.py::TestModuleLogFields::test_address_depth (I2)	-
+Module.call_depth	int	quantity	call_depth	green	tests/test_module_log.py::TestModuleLogFields::test_call_depth (I2)	-
 Module.collapse_score	float	quantity	collapse_score	red-needs-oracle	-	-
 Module.forward_duration	Duration	quantity	forward_duration	red-needs-oracle	-	-
 Module.func_calls_duration	Duration	quantity	func_calls_duration	red-needs-oracle	-	-
@@ -118,8 +118,8 @@ ModuleCall.param_memory	Bytes	quantity	param_memory	red-needs-oracle	-	the quant
 Op.activation_memory	Bytes	quantity	activation_memory	red-needs-oracle	-	the quantity oracle test_view_mutation_output_recomputes_transformed_payload_metadata asserts a different door; this door has none
 Op.arithmetic_intensity	float	quantity	arithmetic_intensity	red-needs-oracle	-	-
 Op.autograd_memory	Bytes	quantity	autograd_memory	red-needs-row	tests/test_autograd_saved_bytes.py::test_add_op_reports_zero_autograd_memory (I2)	oracle is the zero case only (add saves no tensors); a positive case is still owed
-Op.bytes_read	Bytes	quantity	bytes_read	red-needs-row	tests/test_roofline.py::test_linear_theoretical_bytes_and_intensity (I2)	-
-Op.bytes_written	Bytes	quantity	bytes_written	red-needs-row	tests/test_roofline.py::test_linear_theoretical_bytes_and_intensity (I2)	-
+Op.bytes_read	Bytes	quantity	bytes_read	green	tests/test_roofline.py::test_linear_theoretical_bytes_and_intensity (I2)	-
+Op.bytes_written	Bytes	quantity	bytes_written	green	tests/test_roofline.py::test_linear_theoretical_bytes_and_intensity (I2)	-
 Op.conditional_branch_depth	int	quantity	conditional_branch_depth	red-needs-oracle	-	-
 Op.conditional_depth	int	quantity	conditional_depth	red-needs-oracle	-	-
 Op.flops_backward	Flops	quantity	flops_backward	red-needs-oracle	-	-
@@ -183,7 +183,7 @@ SummaryTotals.params_trainable	int	quantity	num_params_trainable	red-needs-oracl
 SummaryTotals.params_unexecuted	int	quantity	num_params_unexecuted	red-needs-oracle	-	the quantity oracle test_declared_executed_unexecuted_split_named asserts a different door; this door has none
 SummaryTotals.retained_now_bytes	int	quantity	retained_now_bytes	red-needs-oracle	-	-
 Trace.backward_peak_memory	Bytes	quantity	backward_peak_memory	red-needs-oracle	-	-
-Trace.branching_factor	float	quantity	branching_factor	red-needs-row	tests/test_edge_counts.py::test_linear_chain_edge_counts (I2)	-
+Trace.branching_factor	float	quantity	branching_factor	green	tests/test_edge_counts.py::test_linear_chain_edge_counts (I2)	-
 Trace.capture_duration	Duration	quantity	capture_duration	red-needs-oracle	-	-
 Trace.capture_end_time	float	identifier	-	-	-	wall-clock timestamp
 Trace.capture_owner_thread_id	int	identifier	-	-	-	thread id
@@ -196,7 +196,7 @@ Trace.completeness_witness_accounted_count	int	quantity	completeness_witness_acc
 Trace.completeness_witness_callback_ns	int	quantity	completeness_witness_callback_ns	red-needs-oracle	-	-
 Trace.completeness_witness_event_count	int	quantity	completeness_witness_event_count	red-needs-oracle	-	-
 Trace.completeness_witness_expected_opaque_count	int	quantity	completeness_witness_expected_opaque_count	red-needs-oracle	-	-
-Trace.completeness_witness_unaccounted_count	int	quantity	completeness_witness_unaccounted_count	red-needs-row	tests/test_completeness_witness.py::test_direct_aten_call_trips_non_vacuous_witness (I2)	-
+Trace.completeness_witness_unaccounted_count	int	quantity	completeness_witness_unaccounted_count	green	tests/test_completeness_witness.py::test_direct_aten_call_trips_non_vacuous_witness (I2)	-
 Trace.escape_detector_callback_ns	int	quantity	escape_detector_callback_ns	red-needs-oracle	-	-
 Trace.escape_detector_event_count	int	quantity	escape_detector_event_count	red-needs-oracle	-	-
 Trace.forward_duration	Duration	quantity	forward_duration	red-needs-oracle	-	-
@@ -207,19 +207,19 @@ Trace.init_source_line	int	identifier	-	-	-	id/index/line
 Trace.input_object_id	int	identifier	-	-	-	id/index/line
 Trace.last_backward_duration	Duration	quantity	last_backward_duration	red-needs-oracle	-	-
 Trace.last_backward_root_grad_fn_object_id	int	identifier	-	-	-	id/index/line
-Trace.max_in_degree	int	quantity	max_in_degree	red-needs-row	tests/test_edge_counts.py::test_n_way_combine_max_in_degree (I2)	-
+Trace.max_in_degree	int	quantity	max_in_degree	green	tests/test_edge_counts.py::test_n_way_combine_max_in_degree (I2)	-
 Trace.max_layer_op_count	int	quantity	max_layer_op_count	red-needs-oracle	-	-
-Trace.max_out_degree	int	quantity	max_out_degree	red-needs-row	tests/test_edge_counts.py::test_residual_reuse_counts_skip_edge (I2)	-
+Trace.max_out_degree	int	quantity	max_out_degree	green	tests/test_edge_counts.py::test_residual_reuse_counts_skip_edge (I2)	-
 Trace.model_object_id	int	identifier	-	-	-	id/index/line
 Trace.num_backward_edges	int	quantity	num_backward_edges	red-needs-oracle	-	-
-Trace.num_backward_passes	int	quantity	num_backward_passes	red-needs-row	tests/test_backward.py::test_recording_backward_context_manager (I2)	-
+Trace.num_backward_passes	int	quantity	num_backward_passes	green	tests/test_backward.py::test_recording_backward_context_manager (I2)	-
 Trace.num_buffer_edges	int	quantity	num_buffer_edges	red-needs-oracle	-	-
 Trace.num_buffer_layers	int	quantity	num_buffer_layers	red-needs-oracle	-	-
 Trace.num_buffer_read_ops	int	quantity	num_buffer_read_ops	red-needs-oracle	-	-
 Trace.num_buffer_sink_ops	int	quantity	num_buffer_sink_ops	red-needs-oracle	-	-
 Trace.num_buffer_source_ops	int	quantity	num_buffer_source_ops	red-needs-oracle	-	-
 Trace.num_buffer_write_ops	int	quantity	num_buffer_write_ops	red-needs-oracle	-	-
-Trace.num_compute_edges	int	quantity	num_compute_edges	red-needs-row	tests/test_edge_counts.py::test_linear_chain_edge_counts (I2)	-
+Trace.num_compute_edges	int	quantity	num_compute_edges	green	tests/test_edge_counts.py::test_linear_chain_edge_counts (I2)	-
 Trace.num_compute_layers	int	quantity	num_compute_layers	red-needs-oracle	-	-
 Trace.num_compute_ops	int	quantity	num_compute_ops	red-needs-oracle	-	-
 Trace.num_conditionals	int	quantity	num_conditionals	red-needs-oracle	-	-
@@ -239,7 +239,7 @@ Trace.num_layer_edges	int	quantity	num_layer_edges	red-needs-oracle	-	-
 Trace.num_layers	int	quantity	num_layers	red-needs-oracle	-	-
 Trace.num_layers_with_params	int	quantity	num_layers_with_params	red-needs-oracle	-	only oracle is a JAX-backend test that cannot run in the pinned torch environment
 Trace.num_module_calls	int	quantity	num_module_calls	red-needs-oracle	-	-
-Trace.num_modules	int	quantity	num_modules	red-needs-row	tests/backend_parity/test_independent_fact_pins.py::test_linear_trace_facts_hold_from_first_principles (I2)	-
+Trace.num_modules	int	quantity	num_modules	green	tests/backend_parity/test_independent_fact_pins.py::test_linear_trace_facts_hold_from_first_principles (I2)	-
 Trace.num_ops	int	quantity	num_ops	red-needs-row	tests/test_numbers_truth_vocabulary.py::test_summary_rows_never_spell_passes_as_ops (I2)	-
 Trace.num_ops_with_params	int	quantity	num_ops_with_params	red-needs-oracle	-	-
 Trace.num_output_layers	int	quantity	num_output_layers	red-needs-oracle	-	-
@@ -262,12 +262,12 @@ Trace.num_saved_grad_ops	int	quantity	num_saved_grad_ops	red-needs-oracle	-	-
 Trace.num_saved_layers	int	quantity	num_saved_layers	red-needs-oracle	-	-
 Trace.num_saved_module_calls	int	quantity	num_saved_module_calls	red-needs-oracle	-	-
 Trace.num_saved_modules	int	quantity	num_saved_modules	red-needs-oracle	-	-
-Trace.num_saved_ops	int	quantity	num_saved_ops	red-needs-row	tests/backend_parity/test_b10_torch_characterization.py::test_selective_layers_to_save_uses_fast_pass_save_new_outs (I2)	-
+Trace.num_saved_ops	int	quantity	num_saved_ops	green	tests/backend_parity/test_b10_torch_characterization.py::test_selective_layers_to_save_uses_fast_pass_save_new_outs (I2)	-
 Trace.num_tensors	int	quantity	num_tensors	red-needs-oracle	-	-
 Trace.num_uncalled_modules	int	quantity	num_uncalled_modules	red-needs-oracle	-	-
 Trace.overhead_duration	Duration	quantity	overhead_duration	red-needs-oracle	-	-
 Trace.random_seed	int	identifier	-	-	-	seed echo
-Trace.saved_activation_memory	Bytes	quantity	saved_activation_memory	red-needs-row	tests/test_brainpipe_byte_model.py::test_saved_activation_memory_equals_real_retained_bytes (I1)	-
+Trace.saved_activation_memory	Bytes	quantity	saved_activation_memory	green	tests/test_brainpipe_byte_model.py::test_saved_activation_memory_equals_real_retained_bytes (I1)	-
 Trace.saved_gradient_memory	Bytes	quantity	saved_gradient_memory	red-needs-oracle	-	-
 Trace.setup_duration	Duration	quantity	setup_duration	red-needs-oracle	-	-
 Trace.tlspec_version	int	identifier	-	-	-	format version

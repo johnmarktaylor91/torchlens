@@ -10,3 +10,17 @@ BND-W0-004	OBL-W0-CACHE-KEY-COMPLETE	torchlens.options.CaptureOptions	CR2	declar
 BND-W0-005	OBL-W0-DEPRECATION-IFF	torchlens	CR1	declared	untouched	no		n/a	test_oracle_w0_deprecation.py::test_plant_registered_nonwarning_door_goes_red
 BND-W0-006	OBL-W0-SURFACE-DENOM	torchlens.__all__	CR1	declared	untouched	no		n/a	test_oracle_w0_lints.py::test_plant_denominator_drift_goes_red
 BND-W0-007	OBL-W0-NUMERAL-PROVENANCE	published-docs-and-tests-corpus	CR8	declared	untouched	no		n/a	test_oracle_w0_lints.py::test_plant_numeral_is_found_and_stale_row_blocks
+BND-Q-001	OBL-Q-ADDRESS-DEPTH	torchlens.data_classes.module.Module.address_depth	CR1	submodule	untouched	no		n/a	tests/test_module_log.py::TestModuleLogFields::test_address_depth
+BND-Q-002	OBL-Q-BRANCHING-FACTOR	torchlens.Trace.branching_factor	CR1	declared	untouched	no		n/a	tests/test_edge_counts.py::test_linear_chain_edge_counts
+BND-Q-003	OBL-Q-BYTES-READ	torchlens.Op.bytes_read	CR1	declared	untouched	yes	SP1-wide-output-linear	n/a	tests/test_roofline.py::test_linear_theoretical_bytes_and_intensity
+BND-Q-004	OBL-Q-BYTES-WRITTEN	torchlens.Op.bytes_written	CR1	declared	untouched	yes	SP1-wide-output-linear	n/a	tests/test_roofline.py::test_linear_theoretical_bytes_and_intensity
+BND-Q-005	OBL-Q-CALL-DEPTH	torchlens.data_classes.module.Module.call_depth	CR1	submodule	untouched	no		n/a	tests/test_module_log.py::TestModuleLogFields::test_call_depth
+BND-Q-006	OBL-Q-COMPLETENESS-WITNESS-UNACCOUNTED-COUNT	torchlens.Trace.completeness_witness_unaccounted_count	CR1	declared	untouched	no		n/a	tests/test_completeness_witness.py::test_direct_aten_call_trips_non_vacuous_witness
+BND-Q-007	OBL-Q-MAX-IN-DEGREE	torchlens.Trace.max_in_degree	CR1	declared	untouched	no		n/a	tests/test_edge_counts.py::test_n_way_combine_max_in_degree
+BND-Q-008	OBL-Q-MAX-OUT-DEGREE	torchlens.Trace.max_out_degree	CR1	declared	untouched	no		n/a	tests/test_edge_counts.py::test_residual_reuse_counts_skip_edge
+BND-Q-009	OBL-Q-NUM-BACKWARD-PASSES	torchlens.Trace.num_backward_passes	CR1	declared	untouched	no		n/a	tests/test_backward.py::test_recording_backward_context_manager
+BND-Q-010	OBL-Q-NUM-COMPUTE-EDGES	torchlens.Trace.num_compute_edges	CR1	declared	untouched	no		n/a	tests/test_edge_counts.py::test_linear_chain_edge_counts
+BND-Q-011	OBL-Q-NUM-MODULES	torchlens.Trace.num_modules	CR1	declared	untouched	no		n/a	tests/backend_parity/test_independent_fact_pins.py::test_linear_trace_facts_hold_from_first_principles
+BND-Q-012	OBL-Q-NUM-OVERWRITES	torchlens.data_classes.buffer.Buffer.num_overwrites	CR1	submodule	untouched	no		n/a	tests/test_buffer_datamodel.py::test_recurrent_cell_reassignment_does_not_break_loop_detection
+BND-Q-013	OBL-Q-NUM-SAVED-OPS	torchlens.Trace.num_saved_ops	CR1	declared	untouched	no		n/a	tests/backend_parity/test_b10_torch_characterization.py::test_selective_layers_to_save_uses_fast_pass_save_new_outs
+BND-Q-014	OBL-Q-SAVED-ACTIVATION-MEMORY	torchlens.Trace.saved_activation_memory	CR1	declared	untouched	yes	SP1-wide-output-linear	n/a	tests/test_brainpipe_byte_model.py::test_saved_activation_memory_equals_real_retained_bytes
