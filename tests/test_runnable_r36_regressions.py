@@ -1229,6 +1229,7 @@ _COUPLED_WITNESS_EXEC_FILES = (
     "torchlens/_runnable_verification.py",
     "torchlens/_runnable_witness_contracts.py",
     "torchlens/_runnable_state.py",
+    "torchlens/_runnable_state_live.py",
     "torchlens/_io/runnable.py",
     "torchlens/backends/torch/completeness_witness.py",
     "torchlens/backends/torch/backend.py",

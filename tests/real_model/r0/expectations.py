@@ -285,6 +285,58 @@ KNOWN_RED: tuple[KnownRed, ...] = (
 KNOWN_RED_BY_ID = {row.red_id: row for row in KNOWN_RED}
 
 
+@dataclass(frozen=True)
+class DatedGap:
+    """A dated known coverage gap: a leg no venue runs yet, never a red row.
+
+    ``KNOWN_RED`` pins defects that reproduce; a dated gap names coverage
+    that cannot execute on any current venue, with its entry date, the ruling
+    that created it and the condition that deletes it.
+    """
+
+    gap_id: str
+    dated: str
+    ruling: str
+    owner: str
+    closes_when: str
+    notes: str
+
+
+DATED_GAPS: tuple[DatedGap, ...] = (
+    DatedGap(
+        gap_id="flash-attention-2-impl",
+        dated="2026-10-12",
+        ruling="U42.1",
+        owner="the GPU real-model leg (campaign 2)",
+        closes_when=(
+            "a GPU leg captures and validates a real-model family under"
+            " attn_implementation='flash_attention_2'"
+        ),
+        notes="FA2 kernels need CUDA and the flash-attn package; every real-model"
+        " leg today is CPU, so no family runs the flash_attention_2"
+        " implementation (FamilySpec.impls stays eager/sdpa)",
+    ),
+    DatedGap(
+        gap_id="vjepa2-full-clip-forward-validation",
+        dated="2026-10-12",
+        ruling="U55.4",
+        owner="the GPU real-model leg (campaign 2)",
+        closes_when=(
+            "forward validation of r2-vjepa2-vitl-fpc64-256 at its native 64 frames"
+            " passes on a GPU venue (tests/real_model/gpu_legs/vjepa2_full_leg.py)"
+        ),
+        notes="measured on one 48 GB L40 at fp32: the 64-frame capture passes"
+        " (5937 ops, traced output bitwise equal, 55.9 GB retained on host), but"
+        " forward validation keeps saved activations on the device and the default"
+        " save budget refused it at 64, 32 and 16 frames (projected 9.5, 14.2 and"
+        " 16.5 GB lower bounds against half the free device memory); the gather"
+        " index error seen at 8 and 16 frames is a separate defect report",
+    ),
+)
+
+DATED_GAPS_BY_ID = {row.gap_id: row for row in DATED_GAPS}
+
+
 def expected_n_ops(expected: dict) -> int:
     """Return the op-count golden for the installed transformers version.
 

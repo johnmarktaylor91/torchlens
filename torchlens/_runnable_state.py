@@ -918,55 +918,6 @@ def snapshot_live_declared_state(model: object) -> LiveDeclaredStateSnapshot:
     return LiveDeclaredStateSnapshot(bindings=tuple(bindings), clones=clones)
 
 
-class LiveStateRestoreFailure(RuntimeError):
-    """Internal carrier for a declared-state restore that failed mid-bracket.
-
-    The transaction converts this into the typed ``run_state_restore_failed``
-    refusal with the structured fields the contract promises; the failing
-    restore exception is chained as ``__cause__``.
-    """
-
-    def __init__(self, state_dict_name: str, groups_restored: int) -> None:
-        super().__init__(
-            f"declared-state restore failed at {state_dict_name!r} after "
-            f"{groups_restored} alias group(s) were restored"
-        )
-        self.state_dict_name = state_dict_name
-        self.groups_restored = groups_restored
-
-
-def restore_live_declared_state(snapshot: LiveDeclaredStateSnapshot) -> None:
-    """Restore a declared-state snapshot onto the live model (finally bracket).
-
-    Runs under ``no_grad`` and ``pause_logging``, one value restore per alias
-    group (distinct live object), then re-binds any slot the forward reassigned
-    to a different object back to its ORIGINAL object -- so repeated run()
-    calls leave the model bit-identical with ``a is b`` alias semantics intact.
-    Raises :class:`LiveStateRestoreFailure` (original exception chained) on the
-    first failed restore; the caller owns the state-compromised consequence
-    (L4 5.4).
-    """
-
-    restored: set[int] = set()
-    with _state.pause_logging(), torch.no_grad():
-        for _module, _registry_attr, _local_name, canonical, original in snapshot.bindings:
-            key = id(original)
-            if key in restored:
-                continue
-            try:
-                original.copy_(snapshot.clones[key])
-            except Exception as exc:
-                raise LiveStateRestoreFailure(canonical, len(restored)) from exc
-            restored.add(key)
-        for module, registry_attr, local_name, canonical, original in snapshot.bindings:
-            try:
-                registry = getattr(module, registry_attr, None)
-                if isinstance(registry, dict) and registry.get(local_name) is not original:
-                    registry[local_name] = original
-            except Exception as exc:
-                raise LiveStateRestoreFailure(canonical, len(restored)) from exc
-
-
 def load_trace_state_dict(trace: Any, sd: Mapping[str, Any]) -> None:
     """Validate and atomically stage a user state mapping on a sparse Trace.
 

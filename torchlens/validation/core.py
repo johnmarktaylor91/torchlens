@@ -59,6 +59,7 @@ from ._edge_boundary import (
     _tensor_content_digest,
 )
 from ._index_domain import (
+    _parent_is_index_domain_arg,
     index_domain_rotation_values,
     index_domain_single_entry_values,
     layer_has_index_domain_parent,
@@ -3197,7 +3198,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     # perturbation, so this can only convert ``unverified`` into an
     # evidence-backed verdict (validated OR failed), never mask one.
     if recomputed_output is None and perturb:
-        for retry_strategy in ("step_up", "step_down"):
+        for retry_strategy in _raise_retry_strategies(layer, layers_to_perturb):
             retry_args, _retry_reason = _prepare_input_args_for_validating_layer(
                 self, layer, layers_to_perturb, perturb_strategy=retry_strategy
             )
@@ -3343,7 +3344,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
         # an unrealistically large step would falsely "confirm" a numerically
         # inert edge, so those keep the plain unit steps and route to the
         # ``ulp_swamped_perturbation`` exemption below.
-        for retry_strategy in _perturbation_retry_strategies(layer):
+        for retry_strategy in _perturbation_retry_strategies(layer, layers_to_perturb):
             retry_args, _retry_reason = _prepare_input_args_for_validating_layer(
                 self, layer, layers_to_perturb, perturb_strategy=retry_strategy
             )
@@ -4004,13 +4005,42 @@ def _op_is_value_discretizing(layer: Op) -> bool:
 _INDEX_SINGLE_ENTRY_STRATEGY = "index_single_entry"
 
 
-def _perturbation_retry_strategies(layer: Op) -> list[str]:
+def _raise_retry_strategies(layer: Op, layers_to_perturb: list[str]) -> tuple[str, ...]:
+    """Return the retries for a first perturbation whose execution raised.
+
+    Parameters
+    ----------
+    layer:
+        Child op being validated.
+    layers_to_perturb:
+        Labels of the parents this check perturbs.
+
+    Returns
+    -------
+    tuple of str
+        ``step_up``/``step_down``; only the in-domain single-entry move for an
+        index-domain parent (see ``_perturbation_retry_strategies``).
+    """
+
+    if any(_parent_is_index_domain_arg(layer, label) for label in layers_to_perturb):
+        return (_INDEX_SINGLE_ENTRY_STRATEGY,)
+    return ("step_up", "step_down")
+
+
+def _perturbation_retry_strategies(
+    layer: Op, layers_to_perturb: list[str] | None = None
+) -> list[str]:
     """Return the ordered deterministic retry strategies for perturbation.
 
     Parameters
     ----------
     layer:
         Child op being validated; gates the geometric magnitude ladder.
+    layers_to_perturb:
+        Perturbed parent labels. For an index/target-slot parent only the
+        in-domain single-entry move runs: a value step shifts every index and
+        moves the extreme one out of ``[0, domain)``, an absorbed raise on CPU
+        (no evidence) and a fatal device-side assert on CUDA.
 
     Returns
     -------
@@ -4026,6 +4056,8 @@ def _perturbation_retry_strategies(layer: Op) -> list[str]:
         run while the edge still looks non-influential.
     """
 
+    if any(_parent_is_index_domain_arg(layer, label) for label in layers_to_perturb or ()):
+        return [_INDEX_SINGLE_ENTRY_STRATEGY]
     strategies = _value_retry_strategies(layer)
     if layer_has_index_domain_parent(layer):
         # The default probe rotates EVERY index by one domain position, a

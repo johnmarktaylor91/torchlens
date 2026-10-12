@@ -215,6 +215,12 @@ def _index_put_indices_are_unique(index: tuple[Any, ...]) -> bool:
     return True
 
 
+#: Overwriting scatters, the only ops the full-overwrite proof below holds for.
+#: Accumulating writes (scatter_add, index_add) add once per index entry, so a
+#: duplicate index changes the output even when every slot is covered.
+_OVERWRITE_SCATTER_FUNC_NAMES = frozenset({"scatter", "scatter_"})
+
+
 def _get_scatter_destination_dim_index(
     layer: Op,
 ) -> tuple[torch.Tensor, int, torch.Tensor] | None:
@@ -229,16 +235,18 @@ def _get_scatter_destination_dim_index(
     -------
     tuple[torch.Tensor, int, torch.Tensor] | None
         Destination tensor, scatter dimension, and index tensor, or ``None``
-        when the call shape is unsupported or uses reduce semantics.
+        when the op is not an overwriting scatter (matched by name, never by
+        argument layout alone), the call shape is unsupported, or it uses
+        reduce semantics.
     """
 
+    if getattr(layer, "func_name", None) not in _OVERWRITE_SCATTER_FUNC_NAMES:
+        return None
     args = layer.saved_args
     kwargs = layer.saved_kwargs
     if len(args) < 1 or not isinstance(args[0], torch.Tensor):
         return None
-    if kwargs.get("reduce") is not None:
-        return None
-    if len(args) > 4 and args[4] is not None:
+    if kwargs.get("reduce") is not None or (len(args) > 4 and args[4] is not None):
         return None
 
     dest = args[0]
