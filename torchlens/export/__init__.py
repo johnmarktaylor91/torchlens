@@ -563,6 +563,14 @@ def memory_timeline_v2(log: Any, path: str | Path) -> Path:
     return destination
 
 
+_XARRAY_SITE_REMEDY = (
+    "export only sites that share the presentation axis: re-capture with "
+    "capture=tl.options.CaptureOptions(layers_to_save=[name, ...]) (unsaved layers are "
+    "skipped and disclosed), or export one site with "
+    "tl.bridge.xarray.data_array(trace, site)"
+)
+
+
 def xarray(log: Any) -> Any:
     """Return a NeuroidAssembly-shaped xarray DataArray of saved outs.
 
@@ -582,7 +590,15 @@ def xarray(log: Any) -> Any:
     ImportError
         If xarray is not installed.
     ValueError
-        If no saved tensor outs are available or presentation counts differ.
+        If no saved tensor outs are available.
+    InvalidArgumentError
+        ``xarray_buffer_layer_unsupported`` when a saved layer is a buffer, and
+        ``xarray_presentation_mismatch`` when saved outs disagree on the
+        leading (presentation) size. Unsaved layers of a partial trace are
+        skipped and listed in ``attrs["skipped_unsaved_layers"]``; buffer
+        layers it did not request are skipped and listed in
+        ``attrs["skipped_buffer_layers"]``. A save-all trace, or a named
+        buffer, refuses on the buffer.
     """
     # D15: xarray's product IS saved tensor values -- it refuses through the
     # EXISTING value-payload capability (a marked empty array would be synthetic).
@@ -596,16 +612,42 @@ def xarray(log: Any) -> Any:
         raise ImportError(
             "xarray export requires xarray. Install an environment with xarray available."
         ) from exc
+    from .._errors import InvalidArgumentError
 
     arrays = []
     layer_coord: list[str] = []
     layer_label_coord: list[str] = []
     index_coord: list[int] = []
+    skipped_unsaved: list[str] = []
+    skipped_buffers: list[str] = []
+    # Buffer values are retained whatever save= selects; only a buffer the
+    # caller requested (save-all, or named) is exported -- and refused.
+    requested = getattr(log, "layers_to_save", "all")
+    requested_labels = set() if requested == "all" else set(requested)
     presentation_count: int | None = None
     for layer in _iter_layers(log):
+        label = str(getattr(layer, "layer_label", getattr(layer, "label", "<unknown>")))
+        # U28.2: a partial trace's unsaved placeholders raise on ``.out``;
+        # skip them and disclose the skip in ``attrs``.
+        if getattr(layer, "has_saved_activation", None) is False:
+            skipped_unsaved.append(label)
+            continue
         out = getattr(layer, "out", None)
         if not isinstance(out, torch.Tensor):
             continue
+        if getattr(layer, "is_buffer", False):
+            named = {label, str(getattr(layer, "label", label))} & requested_labels
+            if requested != "all" and not named:
+                skipped_buffers.append(label)
+                continue
+            raise InvalidArgumentError(
+                f"xarray export does not take buffer layers: {label} is a saved buffer "
+                "(module state, not a per-presentation activation)",
+                code="xarray_buffer_layer_unsupported",
+                remedy=_XARRAY_SITE_REMEDY,
+                argument="log",
+                layer=label,
+            )
         values = out.detach().cpu().numpy()
         if values.ndim == 0:
             flat = values.reshape(1, 1)
@@ -616,15 +658,16 @@ def xarray(log: Any) -> Any:
         if presentation_count is None:
             presentation_count = int(flat.shape[0])
         elif flat.shape[0] != presentation_count:
-            label = str(getattr(layer, "label", getattr(layer, "layer_label", "<unknown>")))
-            raise ValueError(
+            raise InvalidArgumentError(
                 "All exported outs must share the same presentation count; "
-                f"{label} has {flat.shape[0]}, expected {presentation_count}."
+                f"{label} has {flat.shape[0]}, expected {presentation_count}",
+                code="xarray_presentation_mismatch",
+                remedy=_XARRAY_SITE_REMEDY,
+                argument="log",
+                layer=label,
             )
         arrays.append(flat)
-        layer_name = str(getattr(layer, "layer_label", ""))
-        label = str(getattr(layer, "layer_label", layer_name))
-        layer_coord.extend([layer_name] * flat.shape[1])
+        layer_coord.extend([label] * flat.shape[1])
         layer_label_coord.extend([label] * flat.shape[1])
         index_coord.extend(range(flat.shape[1]))
 
@@ -647,6 +690,8 @@ def xarray(log: Any) -> Any:
             "assembly": "NeuroidAssembly",
             "source": "torchlens.export.xarray",
             "torchlens_capture_honesty": capture_honesty_facts(log),
+            "skipped_unsaved_layers": skipped_unsaved,
+            "skipped_buffer_layers": skipped_buffers,
         },
     )
 
