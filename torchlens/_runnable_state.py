@@ -917,8 +917,50 @@ def snapshot_live_declared_state(model: object) -> LiveDeclaredStateSnapshot:
                     f"cloning state entry {canonical!r} failed ({exc!r})",
                     state_dict_name=canonical,
                 ) from exc
-    versions = {id(value): tensor_version_or_none(value) for *_rest, value in bindings}
+    versions = declared_state_versions(value for *_rest, value in bindings)
     return LiveDeclaredStateSnapshot(bindings=tuple(bindings), clones=clones, versions=versions)
+
+
+def declared_slot_unchanged(original: torch.Tensor, clone: torch.Tensor) -> bool:
+    """Return whether a live state slot still holds its snapshot bytes (byte-exact, NaN-safe)."""
+
+    from .backends.torch.rescue import _state_bytes_equal
+
+    try:
+        return (
+            original.shape == clone.shape
+            and original.dtype == clone.dtype
+            and original.device == clone.device
+            and _state_bytes_equal(original, clone)
+        )
+    except (RuntimeError, TypeError, ValueError, AttributeError, NotImplementedError):
+        return False
+
+
+def write_back_slot(original: torch.Tensor, clone: torch.Tensor, version: int | None) -> None:
+    """Write one slot's snapshot back, only if its bytes changed.
+
+    A write that left the version counter unchanged (train-mode BatchNorm running
+    statistics; autograd saved them at that version) is undone through ``.data`` so
+    backward still works; a tracked in-place write is undone with a tracked
+    ``copy_``, so autograd refuses a backward that would read restored values.
+    """
+
+    if declared_slot_unchanged(original, clone):
+        return
+    if original.is_inference():  # writable only inside inference mode; no counter to keep
+        with torch.inference_mode():
+            original.copy_(clone)
+    elif version is not None and tensor_version_or_none(original) == version:
+        original.data.copy_(clone)
+    else:
+        original.copy_(clone)
+
+
+def declared_state_versions(values: Iterable[torch.Tensor]) -> dict[int, int | None]:
+    """Return the version counter of each distinct state tensor (``None`` if unreadable)."""
+
+    return {id(value): tensor_version_or_none(value) for value in values}
 
 
 def load_trace_state_dict(trace: Any, sd: Mapping[str, Any]) -> None:

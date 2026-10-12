@@ -19,10 +19,15 @@ from typing import Any
 import torch
 
 from . import _state
-from ._runnable_state import LiveDeclaredStateSnapshot
-from .utils._torch_compat import tensor_version_or_none
+from ._runnable_state import (
+    LiveDeclaredStateSnapshot,
+    declared_slot_unchanged,
+    declared_state_versions,
+    write_back_slot,
+)
 
 __all__ = (
+    "CaptureObserverHandle",
     "CaptureObserverSnapshot",
     "LiveStateRestoreFailure",
     "capture_observer_bracket",
@@ -61,55 +66,37 @@ class LiveStateRestoreFailure(RuntimeError):
         self.groups_restored = groups_restored
 
 
-def _declared_slot_unchanged(original: torch.Tensor, clone: torch.Tensor) -> bool:
-    """Return whether a live declared-state slot still holds its snapshot bytes.
+def _unalias_trace_payloads(trace: Any, changed: list[torch.Tensor]) -> None:
+    """Give trace payloads that share storage with a changed state tensor their own copy.
 
-    Byte-exact and NaN-safe (the shared state-write audit compare). Any compare
-    failure answers ``False`` so the caller restores rather than trusts.
+    A captured op whose output IS a live buffer (an in-place counter update, a
+    buffer layer) records that tensor, so writing the buffer back in place
+    would rewrite what the trace recorded. Each such payload is replaced by a
+    copy of its forward-time value first; the model keeps its buffer objects.
     """
 
-    from .backends.torch.rescue import _state_bytes_equal
-
-    try:
-        return (
-            original.shape == clone.shape
-            and original.dtype == clone.dtype
-            and original.device == clone.device
-            and _state_bytes_equal(original, clone)
-        )
-    except _RESTORE_ERRORS:
-        return False
-
-
-def _write_back_slot(
-    original: torch.Tensor, clone: torch.Tensor, snapshot_version: int | None
-) -> None:
-    """Write one slot's snapshot back, only if its bytes changed.
-
-    A write that left the version counter where the snapshot found it (a
-    kernel-internal update: train-mode BatchNorm advances its running
-    statistics without bumping their counter, and autograd saved them at that
-    version) is undone the same way, through ``.data``, so a later
-    ``backward()`` still finds the version it saved. A tracked in-place write
-    is undone with a tracked ``copy_``: autograd then refuses a backward that
-    would read the restored values, loudly, instead of computing a wrong
-    gradient.
-    """
-
-    if _declared_slot_unchanged(original, clone):
+    if trace is None or not changed:
         return
-    if original.is_inference():
-        # An inference tensor is writable only inside inference mode (and keeps no
-        # version counter to preserve).
-        with torch.inference_mode():
-            original.copy_(clone)
-    elif snapshot_version is not None and tensor_version_or_none(original) == snapshot_version:
-        original.data.copy_(clone)
-    else:
-        original.copy_(clone)
+    from .data_classes._state_adapter import state_items
+
+    storages = {
+        (tensor.device, tensor.untyped_storage().data_ptr())
+        for tensor in changed
+        if not tensor.is_meta
+    }
+    for layer in getattr(trace, "layer_list", ()) or ():
+        fields = dict(state_items(layer))
+        for field_name in ("out", "transformed_out"):
+            value = fields.get(field_name)
+            if (
+                isinstance(value, torch.Tensor)
+                and not value.is_meta
+                and (value.device, value.untyped_storage().data_ptr()) in storages
+            ):
+                layer._internal_set(field_name, value.detach().clone())
 
 
-def restore_live_declared_state(snapshot: LiveDeclaredStateSnapshot) -> None:
+def restore_live_declared_state(snapshot: LiveDeclaredStateSnapshot, trace: Any = None) -> None:
     """Restore a declared-state snapshot onto the live model (finally bracket).
 
     Runs under ``no_grad`` and ``pause_logging``, one value restore per alias
@@ -131,12 +118,18 @@ def restore_live_declared_state(snapshot: LiveDeclaredStateSnapshot) -> None:
 
     restored: set[int] = set()
     with _state.pause_logging(), torch.no_grad():
+        changed = {
+            id(original): original
+            for *_rest, original in snapshot.bindings
+            if not declared_slot_unchanged(original, snapshot.clones[id(original)])
+        }
+        _unalias_trace_payloads(trace, list(changed.values()))
         for _module, _registry_attr, _local_name, canonical, original in snapshot.bindings:
             key = id(original)
             if key in restored:
                 continue
             try:
-                _write_back_slot(original, snapshot.clones[key], snapshot.versions.get(key))
+                write_back_slot(original, snapshot.clones[key], snapshot.versions.get(key))
             except Exception as exc:
                 raise LiveStateRestoreFailure(canonical, len(restored)) from exc
             restored.add(key)
@@ -255,7 +248,7 @@ def snapshot_capture_observer_state(model: Any) -> CaptureObserverSnapshot:
                 buffers.append((module, local_name, value))
                 if id(value) not in clones:
                     clones[id(value)] = value.detach().clone()
-                    versions[id(value)] = tensor_version_or_none(value)
+                    versions.update(declared_state_versions((value,)))
             names = _observer_attr_names(module)
             attr_names.append((module, type(module), names))
             for name in sorted(names):
@@ -274,9 +267,15 @@ def snapshot_capture_observer_state(model: Any) -> CaptureObserverSnapshot:
     )
 
 
-def _restore_observer_buffers(snapshot: CaptureObserverSnapshot) -> None:
+def _restore_observer_buffers(snapshot: CaptureObserverSnapshot, trace: Any = None) -> None:
     """Write back changed buffers and re-bind reassigned buffer slots."""
 
+    changed = [
+        snapshot_buffer
+        for snapshot_buffer in {id(b): b for _m, _n, b in snapshot.buffers}.values()
+        if not declared_slot_unchanged(snapshot_buffer, snapshot.buffer_clones[id(snapshot_buffer)])
+    ]
+    _unalias_trace_payloads(trace, changed)
     restored: set[int] = set()
     for module, local_name, original in snapshot.buffers:
         key = id(original)
@@ -287,7 +286,7 @@ def _restore_observer_buffers(snapshot: CaptureObserverSnapshot) -> None:
                 # snapshot's storage back in, keeping the buffer object itself.
                 original.data = clone
             else:
-                _write_back_slot(original, clone, snapshot.buffer_versions.get(key))
+                write_back_slot(original, clone, snapshot.buffer_versions.get(key))
             restored.add(key)
         if module._buffers.get(local_name) is not original:
             module._buffers[local_name] = original
@@ -325,7 +324,7 @@ def _restore_observer_attrs(snapshot: CaptureObserverSnapshot) -> list[str]:
     return failed
 
 
-def restore_capture_observer_state(snapshot: CaptureObserverSnapshot) -> None:
+def restore_capture_observer_state(snapshot: CaptureObserverSnapshot, trace: Any = None) -> None:
     """Restore a capture observer snapshot (every item attempted, failures disclosed).
 
     Buffers are written back only where their bytes changed (an unconditional
@@ -340,7 +339,7 @@ def restore_capture_observer_state(snapshot: CaptureObserverSnapshot) -> None:
     failed: list[str] = []
     with _state.pause_logging(), torch.no_grad():
         try:
-            _restore_observer_buffers(snapshot)
+            _restore_observer_buffers(snapshot, trace)
         except _RESTORE_ERRORS as exc:
             failed.append(f"buffers ({exc!r})")
         for module, training in snapshot.modes:
@@ -365,22 +364,38 @@ def restore_capture_observer_state(snapshot: CaptureObserverSnapshot) -> None:
         )
 
 
+class CaptureObserverHandle:
+    """What the capture hands back to its observer bracket: the trace it produced."""
+
+    __slots__ = ("trace",)
+
+    def __init__(self) -> None:
+        self.trace: Any = None
+
+
 @contextmanager
-def capture_observer_bracket(model: Any, *, carry_state: bool) -> Iterator[None]:
+def capture_observer_bracket(model: Any, *, carry_state: bool) -> Iterator[CaptureObserverHandle]:
     """Run a capture as a pure observer unless ``carry_state`` opts out (U40.1).
 
     The default snapshots buffers (persistent and non-persistent), every
     module's ``training`` flag, the global random states and plain instance
     attributes before the capture, and restores them afterwards on every path,
     success or exception. ``carry_state=True`` skips the bracket: state
-    advances exactly as one direct ``model(x)`` would.
+    advances exactly as one direct ``model(x)`` would. The caller sets
+    ``handle.trace`` to the captured trace (a failure's ``partial_log`` is
+    picked up from the exception), so payloads that alias a restored buffer keep
+    their forward-time values.
     """
 
+    handle = CaptureObserverHandle()
     if carry_state:
-        yield
+        yield handle
         return
     snapshot = snapshot_capture_observer_state(model)
     try:
-        yield
+        yield handle
+    except BaseException as exc:
+        handle.trace = handle.trace or getattr(exc, "partial_log", None)
+        raise
     finally:
-        restore_capture_observer_state(snapshot)
+        restore_capture_observer_state(snapshot, handle.trace)

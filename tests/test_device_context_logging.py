@@ -21,6 +21,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.options import CaptureOptions
 
 
 class _MetaFactoryConsumerModel(nn.Module):
@@ -111,7 +112,7 @@ def test_meta_device_context_factory_under_active_logging() -> None:
     model = _MetaFactoryConsumerModel()
     x = torch.randn(2, 4)
 
-    log = tl.trace(model, x)
+    log = tl.trace(model, x, capture=CaptureOptions(carry_state=True))
 
     # Runtime behavior matches untraced: factory output and downstream op
     # both landed on the meta device.
@@ -129,7 +130,9 @@ def test_meta_device_context_with_save_arg_values() -> None:
     from torchlens.options import CaptureOptions
 
     model = _MetaFactoryConsumerModel()
-    tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(save_arg_values=True))
+    tl.trace(
+        model, torch.randn(2, 4), capture=CaptureOptions(carry_state=True, save_arg_values=True)
+    )
     assert model.seen_devices == ["meta", "meta"]
 
 
@@ -141,7 +144,9 @@ def test_meta_factory_output_metadata_with_selective_save() -> None:
     """
     _warm_torchlens_wrapping()
     model = _MetaFactoryOutputModel()
-    log = tl.trace(model, torch.randn(2, 4), save=tl.func("mul"))
+    log = tl.trace(
+        model, torch.randn(2, 4), save=tl.func("mul"), capture=CaptureOptions(carry_state=True)
+    )
 
     assert model.seen_devices == ["meta"]
     factory_layer = _output_parent(log, 1)
@@ -161,7 +166,7 @@ def test_meta_factory_as_model_output_full_save() -> None:
     postprocess ``_add_output_layers`` saved-activation comparison.
     """
     model = _MetaFactoryOutputModel()
-    log = tl.trace(model, torch.randn(2, 4))
+    log = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(carry_state=True))
 
     assert model.seen_devices == ["meta"]
     factory_layer = _output_parent(log, 1)
@@ -175,7 +180,7 @@ def test_cpu_default_unaffected_under_active_logging() -> None:
     model = _CpuFactoryModel()
     x = torch.randn(2, 4)
 
-    log = tl.trace(model, x)
+    log = tl.trace(model, x, capture=CaptureOptions(carry_state=True))
 
     assert model.seen_devices == ["cpu"]
     factory_layer = _output_parent(log, 1)

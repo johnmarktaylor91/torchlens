@@ -1208,7 +1208,7 @@ def _restore_declared_state_or_mark(trace: Any, fork: Any, snapshot: Any) -> Non
     from .runnable import mark_trace_path_status
 
     try:
-        restore_live_declared_state(snapshot)
+        restore_live_declared_state(snapshot, trace=fork)
     except LiveStateRestoreFailure as exc:
         mark_trace_path_status(fork, PathFaithfulness.UNVERIFIABLE, None)
         _state.unregister_log(fork)

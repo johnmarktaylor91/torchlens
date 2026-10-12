@@ -258,3 +258,20 @@ def test_resnet18_train_mode_runs_through_run_and_until():
     result.trace["layer2"].out.pow(2).mean().backward()
     for name, value in before.items():
         assert torch.equal(value, dict(model.named_buffers())[name]), name
+
+
+def test_carry_state_does_not_change_the_trace():
+    """carry_state changes only the model's post-capture state, never the trace."""
+
+    torch.manual_seed(0)
+    model = _Stateful().train()
+    twin = copy.deepcopy(model)
+    x = torch.randn(2, 3, 8, 8)
+    pure = tl.trace(model, x, capture=CaptureOptions(random_seed=3))
+    carried = tl.trace(twin, x, capture=CaptureOptions(random_seed=3, carry_state=True))
+    assert [op.layer_label for op in pure.layer_list] == [
+        op.layer_label for op in carried.layer_list
+    ]
+    for left, right in zip(pure.layer_list, carried.layer_list, strict=True):
+        if isinstance(left.out, torch.Tensor):
+            assert torch.equal(left.out, right.out), left.layer_label

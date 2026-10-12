@@ -4062,13 +4062,14 @@ def _trace_torch_model(
     # modes and plain attributes are restored on every path, failure included and
     # after the failure release; CaptureOptions(carry_state=True) keeps
     # forward-equivalent state.
-    with capture_observer_bracket(model, carry_state=capture_options.carry_state):
+    with capture_observer_bracket(model, carry_state=capture_options.carry_state) as observer:
         try:
             with (
                 armed_capture(episode_resolved, run_capture) as capture_callable,
                 pending_admission(meta_admission),
             ):
                 trace = capture_with_rescue(capture_callable, eligible=rescue_eligible, model=model)
+                observer.trace = trace
         except BaseException as capture_exc:
             # One settlement path for every escape: a KeyboardInterrupt or
             # SystemExit mid-capture is released exactly like a RuntimeError.

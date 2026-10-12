@@ -6,6 +6,7 @@ CaptureOptions.cache
 CaptureOptions.cache_dir
 CaptureOptions.capture_container_structure
 CaptureOptions.capture_tensor_grad_hooks
+CaptureOptions.carry_state
 CaptureOptions.compute_input_output_distances
 CaptureOptions.detach_saved_activations
 CaptureOptions.distributed_witness

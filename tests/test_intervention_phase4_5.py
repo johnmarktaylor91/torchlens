@@ -102,12 +102,12 @@ def test_intervention_ready_without_hooks_preserves_returned_values() -> None:
     baseline_log = tl.trace(
         baseline_model,
         x,
-        capture=CaptureOptions(intervention_ready=False),
+        capture=CaptureOptions(intervention_ready=False, carry_state=True),
     )
     ready_log = tl.trace(
         ready_model,
         x,
-        capture=CaptureOptions(intervention_ready=True),
+        capture=CaptureOptions(intervention_ready=True, carry_state=True),
     )
 
     assert baseline_model.latest is not None

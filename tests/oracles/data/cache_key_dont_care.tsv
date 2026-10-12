@@ -14,3 +14,4 @@ trace.input_args	hashed directly by _capture_cache_key, outside cache_config
 trace.input_kwargs	hashed directly by _capture_cache_key, outside cache_config
 trace.input_size	consumed by the quickstart ladder BEFORE the capture machinery (popped from public_trace_kwargs); the ladder re-enters trace() with the synthesized concrete input_args, which ARE hashed directly	tests/test_quickstart_resolver_matrix.py::TestOneResolverOneRecord::test_resolver_is_deterministic_across_calls
 trace.model	hashed directly by _capture_cache_key, outside cache_config
+carry_state	post-capture model-state policy: the captured trace is identical under both values, and a cache hit runs no forward under either	tests/test_capture_pure_observer.py::test_carry_state_does_not_change_the_trace
