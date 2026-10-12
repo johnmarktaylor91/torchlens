@@ -772,8 +772,11 @@ def canonical_module_site_key(trace: Any, name: object) -> str | None:
 
     if not isinstance(name, str) or not name or name.startswith("."):
         return None
-    keys = getattr(trace, "layer_dict_all_keys", None) or {}
-    ambiguous = getattr(trace, "_ambiguous_lookup_keys", None) or {}
+    try:
+        keys = trace.layer_dict_all_keys or {}
+        ambiguous = trace._ambiguous_lookup_keys or {}
+    except AttributeError:
+        return None
     if name in keys or name in ambiguous:
         return None
     base, call_suffix = _split_call_suffix(name)

@@ -100,10 +100,18 @@ def test_activations_by_address_lists_existing_addresses(net) -> None:
 
 
 @pytest.fixture
-def empty_registry(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
-    registry: dict[str, Any] = {}
-    monkeypatch.setattr(_appliances, "_REGISTRY", registry)
-    return registry
+def empty_registry() -> Any:
+    """Isolate the appliance registry: unregister everything a test added."""
+
+    before = set(_appliances._APPLIANCES.list_ids())
+    hidden = {name: _appliances._APPLIANCES.get(name) for name in before}
+    for name in before:
+        _appliances._APPLIANCES.unregister(name)
+    yield _appliances._APPLIANCES
+    for name in set(_appliances._APPLIANCES.list_ids()):
+        _appliances._APPLIANCES.unregister(name)
+    for name, entry in hidden.items():
+        tl.accessors.register_appliance(name, entry.factory, summary=entry.summary)
 
 
 class _OutsideAppliance:

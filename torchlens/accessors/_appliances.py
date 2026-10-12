@@ -9,6 +9,8 @@ and outside packages register the same way, through
 A factory is either a callable taking the trace, or a ``"module:attribute"``
 string naming one; the string form defers the import until the first
 ``trace.using(name)`` call, so registering costs nothing at import time.
+The registry is one domain door over the private registry kernel
+(``torchlens._registry``), like export targets and transforms.
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .._errors import ArgumentConflictError, ArgumentTypeError, InvalidArgumentError
+from .._registry import ProviderInfo, Registry, create_registry
 
 ApplianceFactory = Callable[[Any], Any]
 
@@ -45,9 +48,9 @@ class ApplianceEntry:
     summary: str = ""
 
 
-#: Live registry, name -> entry. TorchLens-owned appliances register here
-#: through :func:`register_appliance` like any outside package.
-_REGISTRY: dict[str, ApplianceEntry] = {}
+#: The one appliance registry (kernel-enrolled at import). TorchLens-owned
+#: appliances register through :func:`register_appliance` like any outside package.
+_APPLIANCES: Registry[ApplianceEntry] = create_registry("appliances", kind_label="appliance")
 
 
 def _validated_name(name: object) -> str:
@@ -80,6 +83,7 @@ def register_appliance(
     *,
     summary: str = "",
     replace: bool = False,
+    provider: ProviderInfo | None = None,
 ) -> None:
     """Register an appliance so ``trace.using(name)`` returns it.
 
@@ -95,6 +99,9 @@ def register_appliance(
         Optional one-line description.
     replace:
         Allow replacing an existing registration under the same name.
+    provider:
+        Optional provider identity for out-of-tree packages; defaults to an
+        anonymous user provider row.
 
     Raises
     ------
@@ -128,7 +135,7 @@ def register_appliance(
             argument="factory",
             received_type=type(factory).__name__,
         )
-    if checked in _REGISTRY and not replace:
+    if checked in _APPLIANCES.snapshot().values and not replace:
         raise ArgumentConflictError(
             f"an appliance named {checked!r} is already registered",
             code="appliance_name_taken",
@@ -138,7 +145,13 @@ def register_appliance(
             ),
             argument="name",
         )
-    _REGISTRY[checked] = ApplianceEntry(checked, factory, str(summary))
+    _APPLIANCES.register(
+        checked,
+        ApplianceEntry(checked, factory, str(summary)),
+        capabilities={"lazy_import": isinstance(factory, str)},
+        provider=provider if provider is not None else ProviderInfo(provider_id="user"),
+        replace=replace,
+    )
 
 
 def registered_appliances() -> dict[str, str]:
@@ -150,17 +163,19 @@ def registered_appliances() -> dict[str, str]:
         ``name -> summary`` for every registered appliance.
     """
 
-    return {name: _REGISTRY[name].summary for name in sorted(_REGISTRY)}
+    entries = _APPLIANCES.snapshot().values
+    return {name: entries[name].summary for name in sorted(entries)}
 
 
 def _entry_for(name: object) -> ApplianceEntry:
     """Return the registry entry for ``name`` or refuse typed with the known names."""
 
     checked = _validated_name(name)
-    entry = _REGISTRY.get(checked)
+    entries = _APPLIANCES.snapshot().values
+    entry = entries.get(checked)
     if entry is not None:
         return entry
-    names = sorted(_REGISTRY)
+    names = sorted(entries)
     if names:
         listed = ", ".join(repr(known) for known in names)
         remedy = f"use one of the registered appliances: trace.using({names[0]!r}); all: {listed}"
@@ -180,14 +195,13 @@ def _entry_for(name: object) -> ApplianceEntry:
 
 
 def _resolve_factory(entry: ApplianceEntry) -> ApplianceFactory:
-    """Return the callable for ``entry``, importing a ``module:attribute`` path once."""
+    """Return the callable for ``entry``, importing a ``module:attribute`` path on use."""
 
     factory = entry.factory
     if not isinstance(factory, str):
         return factory
     module_path, _, attribute = factory.partition(":")
-    resolved = getattr(importlib.import_module(module_path), attribute)
-    _REGISTRY[entry.name] = ApplianceEntry(entry.name, resolved, entry.summary)
+    resolved: ApplianceFactory = getattr(importlib.import_module(module_path), attribute)
     return resolved
 
 

@@ -1150,21 +1150,25 @@ class FacetView(Mapping[FacetKey, Any]):
             reason = self._missing.get(name)
             if reason is not None and reason.status != "structurally_absent":
                 raise MissingFacetError(name, reason)
-            raise MissingFacetError(name, self._absent_reason(name, reason))
+            if reason is not None:
+                # A recipe declared the facet structurally absent here: plain
+                # KeyError, the Mapping contract for a key that cannot exist.
+                raise KeyError(name)
+            raise MissingFacetError(name, self._absent_reason(name))
         value = self._cache[name]
         if isinstance(value, FacetSpec):
             value = Facet(value)
             self._cache[name] = value
         return value
 
-    def _absent_reason(self, name: FacetKey, reason: AbsenceReason | None) -> AbsenceReason:
-        """Describe a facet this record does not have, naming what it does have (U36.1)."""
+    def _absent_reason(self, name: FacetKey) -> AbsenceReason:
+        """Describe a facet no registered recipe produces here, naming what exists (U36.1)."""
 
         record = self._record
         owner = getattr(record, "address", None) or getattr(record, "label", None) or "record"
         class_name = getattr(record, "class_name", None) or _owning_module_class_name(record)
         available = sorted(str(key) for key in self._cache)
-        detail = (reason.detail if reason is not None else None) or (
+        detail = (
             f"no registered recipe for {owner!r} ({class_name}) produces it; available facets: "
             f"{available if available else 'none'}"
         )
