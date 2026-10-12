@@ -145,21 +145,6 @@ class _OfflineBenchmark:
         return float(out.detach().float().mean().item() + len(layer) * 0.001)
 
 
-class _TraceObject:
-    """nnsight-like cached trace fixture."""
-
-    def to_dict(self) -> dict[str, Any]:
-        """Return a trace dictionary.
-
-        Returns
-        -------
-        dict[str, Any]
-            Trace payload.
-        """
-
-        return {"nodes": [{"name": "embed"}, {"name": "proj"}], "source": "offline-fixture"}
-
-
 def _cnn_log() -> tuple[_TinyCnn, torch.Tensor, Any]:
     """Build a deterministic CNN log.
 
@@ -445,23 +430,3 @@ def test_profiler_join_merges_per_op_timing(tmp_path: Path) -> None:
 
     assert conv_row["kineto_event_count"] == 1
     assert conv_row["kineto_duration_us"] == 12.5
-
-
-def test_nnsight_bridge_normalizes_offline_trace_fixture() -> None:
-    """nnsight bridge should normalize an offline cached trace-like object."""
-
-    payload = tl.bridge.nnsight.from_trace(_TraceObject())
-
-    assert payload["schema"] == "torchlens.nnsight_trace.v1"
-    assert payload["nodes"] == [{"name": "embed"}, {"name": "proj"}]
-    assert payload["metadata"]["source"] == "offline-fixture"
-
-
-def test_nnsight_bridge_refuses_unsupported_objects() -> None:
-    """An object with no mapping, to_dict() or nodes is refused, never emptied."""
-
-    class _LiveTracer:
-        """Stand-in for a live tracer: no to_dict, no nodes."""
-
-    with pytest.raises(TypeError, match="supports a mapping"):
-        tl.bridge.nnsight.from_trace(_LiveTracer())

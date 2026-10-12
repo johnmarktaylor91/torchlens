@@ -78,10 +78,6 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         OPTIONAL_PREVIEW,
         "MLflow tracker export (no declared extra); nightly.yml bridges-real track leg",
     ),
-    "nnsight": (
-        OPTIONAL_PREVIEW,
-        "nnsight extra; real-package bridge leg in nightly.yml bridges-real",
-    ),
     "pytorch_grad_cam": (
         OPTIONAL_PREVIEW,
         "gradcam extra; real-package bridge leg in nightly.yml bridges-real",

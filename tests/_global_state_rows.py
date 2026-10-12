@@ -1054,7 +1054,6 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/bridge/huggingface.py", "__all__"),
         ("torchlens/bridge/inseq.py", "__all__"),
         ("torchlens/bridge/lit/__init__.py", "__all__"),
-        ("torchlens/bridge/nnsight.py", "__all__"),
         ("torchlens/bridge/profiler.py", "__all__"),
         ("torchlens/bridge/repeng.py", "__all__"),
         ("torchlens/bridge/rsatoolbox.py", "__all__"),
