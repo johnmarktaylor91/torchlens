@@ -22,6 +22,7 @@ import os
 from typing import Any
 
 import pytest
+import torch
 from support.r1_venue import IN_OFFLINE_VENUE
 
 from tests.real_model.registry import Registry
@@ -78,7 +79,10 @@ def r1_loader(artifact_registry: Registry):
                 or "gpt" in row.model_id
                 else AutoModel
             )
-            model = loader.from_pretrained(row.model_id, revision=row.revision).eval()
+            # The forks.3 / video rows are pinned and measured in float32; Switch's
+            # config says bfloat16, which transformers 5 would load by default.
+            dtype = {"dtype": torch.float32} if artifact_id in _HEAD_CLASS_BY_ARTIFACT else {}
+            model = loader.from_pretrained(row.model_id, revision=row.revision, **dtype).eval()
             tokenizer = (
                 None
                 if artifact_id in _NO_TOKENIZER
