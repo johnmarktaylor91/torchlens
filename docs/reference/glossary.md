@@ -16,6 +16,23 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   `save_grads=` or `default_grad=` is given; without one, `Recording.log_backward()` refuses with
   code `recording_backward_not_requested`.
 
+**Saved-activation autograd history** *(knob spellings documented-unstable)*
+: `CaptureOptions(detach_saved_activations=False)`, the `tl.trace` default, keeps every saved
+  payload graph-connected on every save path: the save-all default, `tl.module` and
+  `tl.in_module` selectors, op-label `layers_to_save`, the legacy `trace.run(model, x)` rerun,
+  `trace.run(inputs=...)` and `trace.run(inputs=..., fast=True)`; `True` detaches on every one
+  of them. `tl.extract(..., detach_saved_activations=False)` and
+  `tl.record(..., detach_saved_activations=False)` (also `tl.fastlog.Recorder` and
+  `RecordingOptions.detach_saved_activations`) attach on request; both keep their detached
+  default, and `tl.record` refuses an explicit `True` with `backward_ready=True`
+  (`backward_ready_conflict`). A per-site `CaptureSpec(keep_grad=True)` stays attached either
+  way, and disk payloads are always detached. An escrowed deferred-selector payload spilled to
+  temporary disk comes back detached, with a `RuntimeWarning` naming the count.
+  `Trace.pinned_autograd_memory` discloses what the attached payloads keep alive: the bytes of
+  the tensors autograd saved for every op upstream of a saved site, once per storage,
+  excluding Parameters and views of them. It reads `Bytes(0)` when every payload is detached
+  or the forward ran without grad, and `None` on a loaded trace (session-time, never saved).
+
 **PartialTrace**
 : A recoverable prefix of a failed `tl.trace(...)` capture. A raised capture exception may expose
   `exc.partial_log`; recover it with `tl.partial.from_failed_capture(exc)`. A partial trace is not
@@ -583,7 +600,8 @@ attribution-target alias. See the [attribution reference](attribution.md).
 ## Extraction, observers, and admin
 
 **Extraction helpers**
-: `tl.pluck` returns the saved out for one layer, `tl.extract` for many layers, and
+: `tl.pluck` returns the saved out for one layer, `tl.extract` for many layers
+  (detached by default; `detach_saved_activations=False` returns graph-connected outs), and
   `tl.extract_dataset` extracts outs from an iterable dataset in batches. (The former
   `peek` and `batched_extract` aliases are removed.) Disk-mode `extract_dataset`
   (``output_dir=``) writes a SELF-DESCRIBING artifact: atomic ``batch_XXXXX.pt`` shards
