@@ -610,7 +610,7 @@ def xarray(log: Any) -> Any:
         import xarray as xr
     except ImportError as exc:
         raise ImportError(
-            "xarray export requires xarray. Install an environment with xarray available."
+            "xarray export requires xarray. Install with: pip install torchlens[neuro]"
         ) from exc
     from .._errors import InvalidArgumentError
 

@@ -6,7 +6,7 @@ hands representations across that seam with provenance that cannot lie, and
 teaches where everything else lives. Every spelling on this page is
 DOCUMENTED-UNSTABLE pending the naming sprint.
 
-Install: `pip install "torchlens[neuro]"` (rsatoolbox, every supported
+Install: `pip install "torchlens[neuro]"` (rsatoolbox and xarray, every supported
 Python). The Brain-Score seam is a separate extra:
 `pip install "torchlens[brainscore]"` (brainscore-vision, Python >= 3.11).
 Keep the two in separate environments: brainscore-vision 2.3 pins
