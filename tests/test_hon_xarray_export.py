@@ -81,22 +81,6 @@ def test_save_all_resnet_refuses_buffers_typed_and_the_remedies_run() -> None:
     assert per_site.sizes["presentation"] == 8
 
 
-def test_a_named_buffer_refuses_in_a_partial_trace() -> None:
-    """A buffer the caller asked for is exported nowhere: it refuses typed."""
-
-    model, images = _resnet_and_images()
-    probe = tl.trace(model, images, capture=tl.options.CaptureOptions(layers_to_save=["avgpool"]))
-    buffer_label = next(op.label for op in probe.layer_list if op.is_buffer)
-    trace = tl.trace(
-        model,
-        images,
-        capture=tl.options.CaptureOptions(layers_to_save=[buffer_label, "avgpool"]),
-    )
-    with pytest.raises(InvalidArgumentError) as info:
-        tl.export.xarray(trace)
-    assert info.value.fields["code"] == "xarray_buffer_layer_unsupported"
-
-
 class _Transposer(nn.Module):
     """Saves an activation whose leading axis is not the batch."""
 

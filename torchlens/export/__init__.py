@@ -595,10 +595,10 @@ def xarray(log: Any) -> Any:
         ``xarray_buffer_layer_unsupported`` when a saved layer is a buffer, and
         ``xarray_presentation_mismatch`` when saved outs disagree on the
         leading (presentation) size. Unsaved layers of a partial trace are
-        skipped and listed in ``attrs["skipped_unsaved_layers"]``; buffer
-        layers it did not request are skipped and listed in
-        ``attrs["skipped_buffer_layers"]``. A save-all trace, or a named
-        buffer, refuses on the buffer.
+        skipped and listed in ``attrs["skipped_unsaved_layers"]``; its
+        retained buffer layers are skipped and listed in
+        ``attrs["skipped_buffer_layers"]``. A save-all trace refuses on the
+        buffer.
     """
     # D15: xarray's product IS saved tensor values -- it refuses through the
     # EXISTING value-payload capability (a marked empty array would be synthetic).
@@ -620,10 +620,9 @@ def xarray(log: Any) -> Any:
     index_coord: list[int] = []
     skipped_unsaved: list[str] = []
     skipped_buffers: list[str] = []
-    # Buffer values are retained whatever save= selects; only a buffer the
-    # caller requested (save-all, or named) is exported -- and refused.
-    requested = getattr(log, "layers_to_save", "all")
-    requested_labels = set() if requested == "all" else set(requested)
+    # Buffer values are retained whatever save= selects, so a partial trace
+    # skips (and discloses) them; a save-all trace requested them and refuses.
+    save_all = getattr(log, "layers_to_save", "all") == "all"
     presentation_count: int | None = None
     for layer in _iter_layers(log):
         label = str(getattr(layer, "layer_label", getattr(layer, "label", "<unknown>")))
@@ -636,8 +635,7 @@ def xarray(log: Any) -> Any:
         if not isinstance(out, torch.Tensor):
             continue
         if getattr(layer, "is_buffer", False):
-            named = {label, str(getattr(layer, "label", label))} & requested_labels
-            if requested != "all" and not named:
+            if not save_all:
                 skipped_buffers.append(label)
                 continue
             raise InvalidArgumentError(
