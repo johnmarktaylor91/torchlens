@@ -63,6 +63,54 @@ class TakeAlongDim(nn.Module):
         return torch.take_along_dim(self.proj(x), torch.argsort(x, dim=1), dim=1)
 
 
+class IndexAdd(nn.Module):
+    """index_add of the input rows into projected rows, by a computed permutation."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.proj = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.proj(x).index_add(0, torch.argsort(x.sum(-1)), x)
+
+
+class IndexCopy(nn.Module):
+    """index_copy of the input rows into projected rows, by a computed permutation."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.proj = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.proj(x).index_copy(0, torch.argsort(x.sum(-1)), x)
+
+
+class IndexFill(nn.Module):
+    """index_fill of two computed columns."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.proj = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.proj(x).index_fill(1, torch.argsort(x[0])[:2], 0.0)
+
+
+class DuplicateIndexAdd(nn.Module):
+    """index_add of a constant into a 1-D destination by a covering, duplicated index.
+
+    The scatter overwrite proof would call this permutation-invariant (every
+    slot covered, constant source), but index_add accumulates: moving one entry
+    changes how often a slot is incremented.
+    """
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        dest = x.sum(-1)
+        order = torch.argsort(dest)
+        index = torch.cat([order, order[:1]])
+        return dest.index_add(0, index, torch.ones_like(index, dtype=dest.dtype))
+
+
 class BoolMaskSelect(nn.Module):
     """Boolean-mask indexing: a mask is not an index domain."""
 
@@ -194,8 +242,18 @@ def test_tiny_vjepa2_validates_with_in_domain_index_perturbations(replay_record)
         (NllByTarget, "nll_loss"),
         (lambda: NllByTarget(ignore_index=1), "nll_loss"),
         (TakeAlongDim, "take_along_dim"),
+        (IndexAdd, "index_add"),
+        (IndexCopy, "index_copy"),
+        (IndexFill, "index_fill"),
     ],
-    ids=["nll_loss", "nll_loss-ignore_index-in-domain", "take_along_dim"],
+    ids=[
+        "nll_loss",
+        "nll_loss-ignore_index-in-domain",
+        "take_along_dim",
+        "index_add",
+        "index_copy",
+        "index_fill",
+    ],
 )
 def test_registered_index_op_is_proven_in_domain(replay_record, model_factory, func) -> None:
     torch.manual_seed(0)
@@ -210,8 +268,14 @@ def test_registered_index_op_is_proven_in_domain(replay_record, model_factory, f
 
 @pytest.mark.parametrize(
     ("model_factory", "index_func"),
-    [(NllByTarget, "argmax"), (TakeAlongDim, "argsort")],
-    ids=["nll_loss", "take_along_dim"],
+    [
+        (NllByTarget, "argmax"),
+        (TakeAlongDim, "argsort"),
+        (IndexAdd, "argsort"),
+        (IndexCopy, "argsort"),
+        (IndexFill, "argsort"),
+    ],
+    ids=["nll_loss", "take_along_dim", "index_add", "index_copy", "index_fill"],
 )
 def test_corrupted_saved_index_fails_for_registered_ops(model_factory, index_func) -> None:
     torch.manual_seed(0)
@@ -230,6 +294,32 @@ def test_corrupted_saved_index_fails_for_registered_ops(model_factory, index_fun
         assert trace.validate_forward_pass(ground_truth) is False
     finally:
         trace.cleanup()
+
+
+def test_index_add_never_reaches_the_scatter_overwrite_exemption(replay_record) -> None:
+    """The overwrite proof matches overwriting scatters by name, not by layout."""
+
+    from torchlens.validation._destination_coverage import _get_scatter_destination_dim_index
+
+    class Scatter(nn.Module):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            dest = x.sum(-1)
+            return dest.scatter(0, torch.argsort(dest), torch.ones_like(dest))
+
+    x = torch.randn(3, 4)
+    for model, func, expect_components in (
+        (DuplicateIndexAdd(), "index_add", False),
+        (Scatter(), "scatter", True),
+    ):
+        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_arg_values=True))
+        try:
+            op = next(o for o in trace.layer_list if o.func_name == func)
+            assert (_get_scatter_destination_dim_index(op) is not None) is expect_components, func
+        finally:
+            trace.cleanup()
+    assert tl.validate(DuplicateIndexAdd(), x, scope="forward") is True
+    verdicts = [v for v in replay_record["verdicts"] if v[0] == "index_add"]
+    assert verdicts and all(decision == "validated" for _, decision, _ in verdicts), verdicts
 
 
 def test_boolean_mask_indexing_stays_on_its_current_path() -> None:

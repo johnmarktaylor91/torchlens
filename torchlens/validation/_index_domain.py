@@ -60,9 +60,16 @@ _INDEX_DOMAIN_ARG_SPECS: dict[str, tuple[int, frozenset[str]]] = {
     # take_along_dim(input, indices, dim) -- domain = input.shape[dim], or
     # input.numel() when dim is None (indices into the flattened input).
     "take_along_dim": (1, frozenset({"indices"})),
-    # NOT registered: index_add/index_copy/index_fill. Registration would route
-    # them into the scatter value-irrelevance exemption in exemptions.py, whose
-    # overwrite reasoning does not hold for index_add's accumulation.
+    # index_add/index_copy/index_fill(input, dim, index, ...) and their in-place
+    # forms -- domain = input.shape[dim], as for index_select. No exemption
+    # applies to them: the scatter overwrite proof matches overwriting scatters
+    # by name (``_destination_coverage._OVERWRITE_SCATTER_FUNC_NAMES``).
+    "index_add": (2, frozenset({"index"})),
+    "index_add_": (2, frozenset({"index"})),
+    "index_copy": (2, frozenset({"index"})),
+    "index_copy_": (2, frozenset({"index"})),
+    "index_fill": (2, frozenset({"index"})),
+    "index_fill_": (2, frozenset({"index"})),
 }
 
 #: Class-target ops whose ``ignore_index`` marks targets that contribute nothing.
