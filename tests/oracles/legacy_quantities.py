@@ -96,12 +96,16 @@ def _traces() -> Iterator[Any]:
     torch.manual_seed(0)
     inputs = torch.randn(2, 3, 8, 8)
     yield tl.trace(_fixture_model().eval(), inputs)
+    from torchlens.options import CaptureOptions
+
     trace = tl.trace(
         _fixture_model().train(),
         inputs,
-        save_grads=True,
-        compute_input_output_distances=True,
-        measure_python_peak_memory=True,
+        capture=CaptureOptions(
+            save_grads=True,
+            compute_input_output_distances=True,
+            measure_python_peak_memory=True,
+        ),
     )
     trace.backward(trace[trace.output_layers[0]].out.sum())
     yield trace
