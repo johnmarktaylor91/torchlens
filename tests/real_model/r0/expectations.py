@@ -312,6 +312,22 @@ DATED_GAPS: tuple[DatedGap, ...] = (
         " leg today is CPU, so no family runs the flash_attention_2"
         " implementation (FamilySpec.impls stays eager/sdpa)",
     ),
+    DatedGap(
+        gap_id="vjepa2-full-clip-forward-validation",
+        dated="2026-10-12",
+        ruling="U55.4",
+        owner="the GPU real-model leg (campaign 2)",
+        closes_when=(
+            "forward validation of r2-vjepa2-vitl-fpc64-256 at its native 64 frames"
+            " passes on a GPU venue (tests/real_model/gpu_legs/vjepa2_full_leg.py)"
+        ),
+        notes="measured on one 48 GB L40 at fp32: the 64-frame capture passes"
+        " (5937 ops, traced output bitwise equal, 55.9 GB retained on host), but"
+        " forward validation keeps saved activations on the device and the default"
+        " save budget refused it at 64, 32 and 16 frames (projected 9.5, 14.2 and"
+        " 16.5 GB lower bounds against half the free device memory); the gather"
+        " index error seen at 8 and 16 frames is a separate defect report",
+    ),
 )
 
 DATED_GAPS_BY_ID = {row.gap_id: row for row in DATED_GAPS}
