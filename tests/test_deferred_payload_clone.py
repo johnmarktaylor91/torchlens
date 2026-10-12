@@ -132,6 +132,50 @@ def test_deferred_payloads_byte_identical_grad_mode():
     _assert_payloads_identical(log_eager, log_defer)
 
 
+def _explicit_inference_only_zoo_trace(defer: bool, seed: int = 7):
+    """Trace the zoo with explicit ``inference_only=True`` under grad-ENABLED ambient.
+
+    This is brainpipe's default posture (D-13), made clone-on-write eligible by
+    AGT-2132: ``inference_only`` only wraps the forward in ``no_grad``.
+    """
+    with _payload_clone_mode(defer):
+        torch.manual_seed(seed)
+        model = _InplaceZoo().train()
+        torch.manual_seed(seed)
+        x = torch.randn(2, 8)
+        assert torch.is_grad_enabled()
+        log = tl.trace(
+            model,
+            x,
+            capture=tl.options.CaptureOptions(random_seed=99, inference_only=True),
+        )
+    return model, log
+
+
+def _live_pending_aliases() -> int:
+    return sum(1 for entries in _tu._DEFER_PENDING.values() for e in entries if e.ref() is not None)
+
+
+def test_explicit_inference_only_grad_enabled_payloads_byte_identical():
+    _, log_eager = _explicit_inference_only_zoo_trace(defer=False)
+    _, log_defer = _explicit_inference_only_zoo_trace(defer=True)
+    assert log_eager.inference_only is True
+    assert log_defer.inference_only is True
+    _assert_payloads_identical(log_eager, log_defer)
+
+
+def test_explicit_inference_only_grad_enabled_defers_and_kill_switch_holds():
+    import gc
+
+    gc.collect()  # earlier tests' (cyclic) traces may still pin live aliases
+    baseline_live = _live_pending_aliases()
+    _, log_eager = _explicit_inference_only_zoo_trace(defer=False)
+    assert _live_pending_aliases() == baseline_live, "kill switch left a deferred alias"
+    _, log_defer = _explicit_inference_only_zoo_trace(defer=True)
+    assert _live_pending_aliases() > baseline_live, "no payload was deferred"
+    assert log_eager.inference_only is True and log_defer.inference_only is True
+
+
 def test_post_hoc_inplace_edit_isolation():
     _, log = _zoo_trace(defer=True)
     labels = _tensor_payload_labels(log)
