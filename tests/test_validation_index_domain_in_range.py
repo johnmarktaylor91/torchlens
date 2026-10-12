@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import pytest
 import torch
+import torch.nn.functional as F
 from torch import nn
 
 import torchlens as tl
@@ -35,6 +36,42 @@ class GatherByIndex(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         index = torch.argsort(x.sum(-1), dim=1)
         return torch.gather(self.proj(x), 1, index.unsqueeze(-1).expand(-1, -1, 4))
+
+
+class NllByTarget(nn.Module):
+    """nll_loss whose target is computed in the forward (5 classes, targets in [0, 4))."""
+
+    def __init__(self, ignore_index: int = -100) -> None:
+        super().__init__()
+        self.proj = nn.Linear(4, 5)
+        self.ignore_index = ignore_index
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        target = torch.argmax(x, dim=-1)
+        log_probs = torch.log_softmax(self.proj(x), dim=-1)
+        return F.nll_loss(log_probs, target, ignore_index=self.ignore_index)
+
+
+class TakeAlongDim(nn.Module):
+    """take_along_dim with sort indices computed in the forward."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.proj = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.take_along_dim(self.proj(x), torch.argsort(x, dim=1), dim=1)
+
+
+class BoolMaskSelect(nn.Module):
+    """Boolean-mask indexing: a mask is not an index domain."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.proj = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.proj(x)[x.sum(-1) > 0]
 
 
 def _tiny_vjepa2(frames: int = 4):
@@ -79,8 +116,16 @@ def replay_record(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[dict]]:
         output = execute(layer, input_args, layers_to_perturb, layer_label, verbose)
         if getattr(layer, "func_name", None) in _INDEX_DOMAIN_ARG_SPECS:
             index, size = _index_arg(layer, input_args), _index_domain_size(layer)
+            ignore = (layer.saved_kwargs or {}).get("ignore_index")
+            saved = _index_arg(
+                layer, {"args": layer.saved_args or (), "kwargs": layer.saved_kwargs or {}}
+            )
+            ignore_kept = True
+            if isinstance(ignore, int) and index is not None and saved is not None:
+                ignore_kept = bool(torch.equal(index == ignore, saved == ignore))
             record["calls"].append(
                 {
+                    "ignore_kept": ignore_kept,
                     "func": layer.func_name,
                     "perturbs_index": any(
                         _parent_is_index_domain_arg(layer, label) for label in layers_to_perturb
@@ -129,6 +174,59 @@ def test_tiny_vjepa2_validates_with_in_domain_index_perturbations(replay_record)
     assert tl.validate(model, (), inputs, scope="forward") is True
     _assert_index_edges_proven_in_domain(replay_record)
     assert any(call["func"] == "gather" for call in replay_record["calls"])
+
+
+@pytest.mark.parametrize(
+    ("model_factory", "func"),
+    [
+        (NllByTarget, "nll_loss"),
+        (lambda: NllByTarget(ignore_index=1), "nll_loss"),
+        (TakeAlongDim, "take_along_dim"),
+    ],
+    ids=["nll_loss", "nll_loss-ignore_index-in-domain", "take_along_dim"],
+)
+def test_registered_index_op_is_proven_in_domain(replay_record, model_factory, func) -> None:
+    torch.manual_seed(0)
+    model = model_factory().eval()
+    assert tl.validate(model, torch.randn(6, 4), scope="forward") is True
+    _assert_index_edges_proven_in_domain(replay_record)
+    assert any(call["func"] == func for call in replay_record["calls"]), "op not registered"
+    assert all(call["ignore_kept"] for call in replay_record["calls"]), (
+        "a target moved onto or off ignore_index"
+    )
+
+
+@pytest.mark.parametrize(
+    ("model_factory", "index_func"),
+    [(NllByTarget, "argmax"), (TakeAlongDim, "argsort")],
+    ids=["nll_loss", "take_along_dim"],
+)
+def test_corrupted_saved_index_fails_for_registered_ops(model_factory, index_func) -> None:
+    torch.manual_seed(0)
+    model = model_factory().eval()
+    x = torch.randn(6, 4)
+    with torch.no_grad():
+        ground_truth = model(x)
+    trace = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(save_arg_values=True, save_rng_states=True),
+    )
+    try:
+        index_op = next(op for op in trace.layer_list if op.func_name == index_func)
+        index_op.out.copy_(index_op.out.roll(1, 0))
+        assert trace.validate_forward_pass(ground_truth) is False
+    finally:
+        trace.cleanup()
+
+
+def test_boolean_mask_indexing_stays_on_its_current_path() -> None:
+    """A mask changes the output shape when perturbed, so it is never an index domain."""
+
+    assert "__getitem__" not in _INDEX_DOMAIN_ARG_SPECS
+    assert "index" not in _INDEX_DOMAIN_ARG_SPECS
+    torch.manual_seed(0)
+    assert tl.validate(BoolMaskSelect().eval(), torch.randn(6, 4), scope="forward") is True
 
 
 @pytest.mark.parametrize("corrupt", ["saved_gather_output", "saved_index"])
