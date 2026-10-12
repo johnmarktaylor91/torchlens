@@ -261,6 +261,9 @@ def report(model: nn.Module, input: Any) -> CompatReport:  # noqa: A002
         _accelerate_dispatch_row(model),
         _accelerate_offload_row(model),
         _bitsandbytes_row(model),
+        _gptq_awq_row(model),
+        _cuda_graphs_row(model),
+        _serving_engine_row(model),
         _peft_row(model),
         _tied_parameters_row(model),
         _multi_gpu_rng_row(),
@@ -680,6 +683,152 @@ def _bitsandbytes_row(model: nn.Module) -> CompatRow:
         detected,
         details,
         "Log an unquantized reference model when exact out metadata is required."
+        if detected
+        else "",
+    )
+
+
+#: GPTQ/AWQ quantization methods as Hugging Face configs name them.
+_GPTQ_AWQ_METHODS = ("gptq", "awq")
+#: Module namespaces of the GPTQ/AWQ kernel packages and integrations.
+_GPTQ_AWQ_NAMESPACES = ("auto_gptq", "gptqmodel", "awq", "optimum.gptq")
+#: Qualified name of the forward ``torch.cuda.make_graphed_callables`` installs.
+_GRAPHED_FORWARD_QUALNAME = "make_graphed_callables.<locals>.make_graphed_forward.<locals>.new_fwd"
+#: Serving-engine namespaces whose models run outside eager PyTorch modules.
+_SERVING_NAMESPACES = ("vllm", "sglang")
+
+
+def _gptq_awq_row(model: nn.Module) -> CompatRow:
+    """Build the GPTQ/AWQ packed-weight quantization row (N-SC-2).
+
+    Parameters
+    ----------
+    model:
+        Model to inspect.
+
+    Returns
+    -------
+    CompatRow
+        Report row.
+    """
+
+    quant_config = getattr(getattr(model, "config", None), "quantization_config", None)
+    method = (
+        quant_config.get("quant_method")
+        if isinstance(quant_config, dict)
+        else getattr(quant_config, "quant_method", None)
+    )
+    detected = str(getattr(method, "value", method)).lower() in _GPTQ_AWQ_METHODS or any(
+        _class_in_namespace(module, _GPTQ_AWQ_NAMESPACES) for module in _iter_modules(model)
+    )
+    details = (
+        "GPTQ/AWQ packed-int weights detected (qweight/qzeros/scales buffers, dense "
+        "weights rebuilt inside the kernel). Capture of these modules is NOT verified "
+        "on any venue: parameter counts, bytes, FLOPs and weight attribution describe "
+        "the packed buffers, and the kernels need a GPU. See "
+        "docs/reference/deployment_envelope.md."
+        if detected
+        else "No GPTQ/AWQ quantization detected."
+    )
+    return CompatRow(
+        "gptq_awq_quantized",
+        "GPTQ/AWQ quantization",
+        "not_tested" if detected else "pass",
+        "warning" if detected else "ok",
+        detected,
+        details,
+        "Log the unquantized checkpoint when exact weights, counts or FLOPs matter."
+        if detected
+        else "",
+    )
+
+
+def _cuda_graphs_row(model: nn.Module) -> CompatRow:
+    """Build the CUDA-graphs entry row (N-SC-3).
+
+    Parameters
+    ----------
+    model:
+        Model to inspect.
+
+    Returns
+    -------
+    CompatRow
+        Report row.
+    """
+
+    from ..utils import _torch_compat
+
+    graphed = any(
+        getattr(getattr(module, "__dict__", {}).get("forward"), "__qualname__", "")
+        == _GRAPHED_FORWARD_QUALNAME
+        for module in _iter_modules(model)
+    )
+    capturing = False
+    if _torch_compat.HAS_CUDA_GRAPHS:
+        try:
+            capturing = bool(torch.cuda.is_current_stream_capturing())
+        except RuntimeError:
+            capturing = False
+    detected = graphed or capturing
+    details = (
+        "CUDA-graph entry detected ("
+        + ("a make_graphed_callables forward" if graphed else "an active stream capture")
+        + "). Graph replay runs recorded kernels without Python, so TorchLens' "
+        "function wrappers see none of it; capture of graphed models is NOT verified "
+        "on any venue."
+        if detected
+        else "No CUDA-graph entry detected"
+        + ("." if _torch_compat.HAS_CUDA_GRAPHS else " (this torch build has no CUDA graphs).")
+    )
+    return CompatRow(
+        "cuda_graphs",
+        "CUDA graphs",
+        "not_tested" if detected else "pass",
+        "warning" if detected else "ok",
+        detected,
+        details,
+        "Trace an eager copy of the module, built without make_graphed_callables and "
+        "outside any torch.cuda.graph() capture."
+        if detected
+        else "",
+    )
+
+
+def _serving_engine_row(model: nn.Module) -> CompatRow:
+    """Build the serving-engine posture row (N-SC-4).
+
+    Parameters
+    ----------
+    model:
+        Model or engine object to inspect.
+
+    Returns
+    -------
+    CompatRow
+        Report row.
+    """
+
+    detected = _class_in_namespace(model, _SERVING_NAMESPACES) or any(
+        _class_in_namespace(module, _SERVING_NAMESPACES) for module in _iter_modules(model)
+    )
+    details = (
+        "vLLM/SGLang serving model detected; serving engines run fused kernels, paged "
+        "KV caches and CUDA graphs outside eager PyTorch, which is outside TorchLens' "
+        "capture scope."
+        if detected
+        else "No vLLM/SGLang serving engine detected."
+    )
+    return CompatRow(
+        "serving_engine",
+        "Serving engines (vLLM/SGLang)",
+        "scope" if detected else "pass",
+        "warning" if detected else "ok",
+        detected,
+        details,
+        "Capture the Hugging Face twin: load the same checkpoint and revision with "
+        "transformers.AutoModelForCausalLM.from_pretrained and trace that (recipe in "
+        "docs/reference/deployment_envelope.md)."
         if detected
         else "",
     )

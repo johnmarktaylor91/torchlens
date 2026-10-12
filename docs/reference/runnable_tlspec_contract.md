@@ -1525,7 +1525,11 @@ the C4 certified-fresh vocabulary is not yet shipped, so any candidate skip disc
 declared-state mutations on the live model. The DEFAULT live run brackets execution with a
 declared-state snapshot-restore (named parameters plus every registered buffer, one clone and
 one restore per alias group with `a is b` preserved, restore in `finally` on every path), so
-repeated `run()` calls leave the model bit-identical and report `False`. The snapshot is taken
+repeated `run()` calls leave the model bit-identical and report `False`. The restore writes back
+only the slots whose bytes changed, so the version counters of parameters and buffers the forward
+left untouched stay put and `backward()` through the default run's graph-attached activations
+works without `carry_state=True` (an unconditional write-back bumped every counter autograd had
+saved and raised torch's in-place modification error). The snapshot is taken
 and validated BEFORE any forward runs: enumeration failure, an unprovable or overlapping alias
 topology, and a clone/allocation failure each refuse typed (`run_state_snapshot_unsupported`,
 fail-before-execute). A restore that fails AFTER execution poisons the transactional fork,

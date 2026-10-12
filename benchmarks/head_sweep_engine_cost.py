@@ -683,8 +683,10 @@ class PhaseTimer:
             if phase == "rng_monitor_window":
                 timer = self
 
-                def timed_enter(monitor: Any, *, _orig: Any = original) -> Any:
-                    timer.calls["rng_monitor_window"] += 1
+                def timed_enter(
+                    monitor: Any, *, _orig: Any = original, _timer: PhaseTimer = timer
+                ) -> Any:
+                    _timer.calls["rng_monitor_window"] += 1
                     monitor.__dict__["_perf1_opened"] = time.perf_counter()
                     return _orig(monitor)
 

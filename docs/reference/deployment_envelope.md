@@ -64,6 +64,36 @@ uint8 payloads) outside the registered parameter/buffer contract:
 - FLOPs counts and out-dtype metadata are best-effort (the standing
   quantized-module disclosure).
 
+## Disclosed by `tl.compat.report`, not verified (scale honesty)
+
+Three deployment paths have no verified capture on any venue. `tl.compat.report(model, x)`
+names each one when it detects it, so a capture on these paths is never silently
+presented as verified. The row keys are DOCUMENTED-UNSTABLE.
+
+| Row key | Fires when | Status | What it means |
+| --- | --- | --- | --- |
+| `gptq_awq_quantized` | the Hugging Face `quantization_config.quant_method` is `gptq` or `awq`, or a module comes from `auto_gptq`, `gptqmodel`, `awq` or `optimum.gptq` | `not_tested` | packed-int weights (`qweight`/`qzeros`/`scales`) are rebuilt inside GPU kernels; parameter counts, bytes, FLOPs and weight attribution describe the packed buffers |
+| `cuda_graphs` | a module's forward was installed by `torch.cuda.make_graphed_callables`, or the report runs inside an active CUDA stream capture (`HAS_CUDA_GRAPHS` builds only) | `not_tested` | graph replay runs recorded kernels without Python, so TorchLens' function wrappers see none of it |
+| `serving_engine` | the model or a module comes from `vllm` or `sglang` | `scope` | serving engines run fused kernels, paged KV caches and CUDA graphs outside eager PyTorch |
+
+### Serving engines: capture the Hugging Face twin
+
+A vLLM or SGLang deployment serves a checkpoint that also loads as an eager
+`transformers` model. Load the same model id and revision with `transformers`
+and trace that twin; its activations are the eager reference the serving
+kernels approximate.
+
+```text
+# Sketch (needs network access to the checkpoint), not executed by the docs suite.
+import transformers
+import torchlens as tl
+
+model_id, revision = "Qwen/Qwen2.5-0.5B-Instruct", "main"  # the id and revision you serve
+twin = transformers.AutoModelForCausalLM.from_pretrained(model_id, revision=revision).eval()
+tokenizer = transformers.AutoTokenizer.from_pretrained(model_id, revision=revision)
+trace = tl.trace(twin, (), dict(tokenizer("The capital of France is", return_tensors="pt")))
+```
+
 ## NOT yet verified (gated on the GPU campaign)
 
 The following publish NO claim until the C-DEPLOY cluster row runs them on
