@@ -16,7 +16,7 @@ from .capture.arg_positions import _normalize_func_name
 from .fastlog.options import PredicateFn
 from .fastlog.types import RecordContext
 from .intervention.selectors import BaseSelector
-from .options import SaveOptions
+from .options import CaptureOptions, SaveOptions
 
 
 def _split_save_options_and_predicate(
@@ -83,9 +83,9 @@ def _is_save_label_selection(save_value: object) -> bool:
 def _route_save_label_selection(
     save_value: object,
     capture: Any,
-    capture_options: Any,
+    capture_options: CaptureOptions,
     model: Any = None,
-) -> tuple[Any, Any]:
+) -> tuple[Any, CaptureOptions]:
     """Route ``save=[...]`` / ``save='...'`` into the ``layers_to_save`` selection.
 
     The list form documented on ``tl.trace`` (layer names, pass-qualified labels,
@@ -105,7 +105,7 @@ def _route_save_label_selection(
 
     Returns
     -------
-    tuple[Any, Any]
+    tuple[Any, CaptureOptions]
         ``(save value left for predicate/SaveOptions splitting, capture options)``.
 
     Raises
@@ -136,7 +136,7 @@ def _route_save_label_selection(
     return None, _flatten_stage_names_in_options(merged, model)
 
 
-def _flatten_stage_names_in_options(capture_options: Any, model: Any) -> Any:
+def _flatten_stage_names_in_options(capture_options: CaptureOptions, model: Any) -> CaptureOptions:
     """Rewrite dotted stage names registered with dots flattened to their module address.
 
     timm ``FeatureListNet`` registers stage ``"stages.0"`` as module ``"stages_0"``;
@@ -154,7 +154,7 @@ def _flatten_stage_names_in_options(capture_options: Any, model: Any) -> Any:
 
     Returns
     -------
-    Any
+    CaptureOptions
         ``capture_options``, or a copy with the rewritten ``layers_to_save``.
     """
 
@@ -171,7 +171,10 @@ def _flatten_stage_names_in_options(capture_options: Any, model: Any) -> Any:
 
     values = capture_options.as_dict()
     values["layers_to_save"] = rewritten[0] if isinstance(selection, str) else rewritten
-    return type(capture_options)().from_values(values, _explicit_fields(capture_options))
+    return cast(
+        CaptureOptions,
+        type(capture_options)().from_values(values, _explicit_fields(capture_options)),
+    )
 
 
 def _flattened_stage_name(item: Any, addresses: list[str]) -> Any:
