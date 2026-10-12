@@ -83,8 +83,8 @@ A vLLM or SGLang deployment serves a checkpoint that also loads as an eager
 and trace that twin; its activations are the eager reference the serving
 kernels approximate.
 
-```python
-# API sketch: needs network access to the checkpoint.
+```text
+# Sketch (needs network access to the checkpoint), not executed by the docs suite.
 import transformers
 import torchlens as tl
 
