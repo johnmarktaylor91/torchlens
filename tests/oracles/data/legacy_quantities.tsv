@@ -1,0 +1,2 @@
+# Legacy quantity census (U40.2); see tests/oracles/legacy_quantities.py.
+door	value_type	kind	quantity_id	status	oracle_ref	note
