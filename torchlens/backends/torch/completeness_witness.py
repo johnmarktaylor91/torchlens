@@ -66,6 +66,9 @@ from ..._split_rebind import (
 from ...errors import ScalarEscapeWarning
 from ...utils import _torch_compat
 from ...utils._callable_safety import private_c_forward_op_module_names
+from ...utils._exception_notes import (
+    annotate_guarded,  # rebound _completeness_storage bodies call it
+)
 from ...utils._torch_compat import (
     get_tensorbase_class,
     tensor_version_or_none,

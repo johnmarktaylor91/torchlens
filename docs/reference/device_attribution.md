@@ -38,7 +38,9 @@ separated under `torchlens::internal::` instead of polluting the timeline
 (on a real GPT-2 capture, half the ranges used to be our own
 `register_hook` installs). Nsight Systems' timeline shows which kernels ran
 under which TorchLens-visible op. This is visual correlation only — no
-joined table, no FLOPs, no throughput numbers come back.
+joined table, no FLOPs, no throughput numbers come back. On a host where
+`torch.cuda.is_available()` is false the option refuses typed
+(`emit_nvtx_unavailable`) instead of silently emitting nothing.
 
 ```python
 import torch
@@ -49,8 +51,19 @@ import torchlens as tl
 model = nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 4)).eval()
 x = torch.randn(2, 8)
 
-log = tl.trace(model, x, capture=tl.options.CaptureOptions(emit_nvtx=True))
-assert log.emit_nvtx
+if torch.cuda.is_available():
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(emit_nvtx=True))
+    assert log.emit_nvtx
+else:
+    # Without CUDA there is nothing to emit to: TorchLens refuses typed, as
+    # torch.autograd.profiler.emit_nvtx() does on such a host.
+    try:
+        tl.trace(model, x, capture=tl.options.CaptureOptions(emit_nvtx=True))
+    except tl.errors.InvalidArgumentError as refusal:
+        assert refusal.fields["code"] == "emit_nvtx_unavailable"
+    else:
+        raise AssertionError("emit_nvtx=True was accepted on a CUDA-less host")
+    log = tl.trace(model, x)
 ```
 
 Capture under Nsight Systems with:

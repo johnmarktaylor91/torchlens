@@ -92,12 +92,13 @@ def test_cross_covariance_edge_semantics() -> None:
 
 @pytest.mark.smoke
 def test_streaming_cka_zero_variance_is_nan_and_one_shot_rejects_mismatched_rows() -> None:
-    """Zero-variance representations report NaN; row mismatch raises."""
+    """Zero-variance representations report NaN with a warning; row mismatch raises."""
 
     streaming = tl.stats.CKA()
     streaming.update(torch.ones(3, 2), torch.ones(3, 4))
     streaming.update(torch.ones(3, 2), torch.ones(3, 4))
-    assert math.isnan(streaming.result())
+    with pytest.warns(UserWarning, match="zero variance"):
+        assert math.isnan(streaming.result())
 
     with pytest.raises(ValueError, match="matched row counts"):
         tl.stats.cka(torch.ones(3, 2), torch.ones(4, 2))

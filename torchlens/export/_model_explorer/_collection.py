@@ -20,7 +20,7 @@ from typing import Any
 from ..._capture_honesty import capture_honesty_facts
 from ..._errors import InvalidArgumentError
 from ...errors._base import TorchLensError
-from .._common import _iter_layers
+from .._common import _iter_layers, _require_trace
 from ._attrs import AttrContext
 from ._build import GraphSpec, build_graph, build_rolled_graph, rolling_changes_identity
 from ._options import ModelExplorerOptions
@@ -77,6 +77,7 @@ def to_model_explorer_dict(log: Any, **options: Any) -> dict[str, Any]:
         A strict vendor ``GraphCollection`` payload.
     """
 
+    _require_trace(log, exporter="tl.export.model_explorer")
     opts = ModelExplorerOptions(**options)
     if opts.privacy_profile not in PRIVACY_PROFILES:
         raise InvalidArgumentError(

@@ -1244,7 +1244,8 @@ def smoothgrad(
     n_samples
         Number of noised saliency samples to average.
     noise_level
-        Standard deviation of Gaussian noise added to each input copy.
+        Standard deviation of Gaussian noise added to each input copy; must be
+        positive (zero noise refuses ``smoothgrad_noise_level_invalid``).
     seed
         Optional random seed for deterministic noise samples without mutating
         global torch RNG state.
@@ -1256,8 +1257,16 @@ def smoothgrad(
     """
 
     _validate_positive_int("n_samples", n_samples)
-    if noise_level < 0:
-        raise AttributionError("noise_level must be non-negative")
+    if noise_level <= 0:
+        # U21.5: zero noise averages n_samples identical saliency maps -- a
+        # pointless loop dressed as SmoothGrad -- so it refuses with negatives.
+        raise AttributionError(
+            f"smoothgrad noise_level must be positive; got {noise_level!r}. "
+            "Remedy: pass a positive Gaussian scale such as noise_level=0.1, or call "
+            "torchlens.attribution.saliency(model, inputs, target=...) for the "
+            "noise-free map.",
+            code="smoothgrad_noise_level_invalid",
+        )
     # D7: SmoothGrad is the thin alias over the sampling substrate. The
     # per-sample ABSOLUTE VALUE happens before the mean because the child is
     # saliency, which absolute-values each sample's gradients itself; the

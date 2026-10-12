@@ -27,6 +27,7 @@ from ...ir.predicate import RecordContext
 from ...ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
 from ...ir.workspaces import RawGraphWorkspace
+from ...utils._exception_notes import annotate_guarded
 from ...utils.arg_handling import (
     INPUT_WAS_PARAMETER_ATTR,
     normalize_input_args,
@@ -958,18 +959,15 @@ class TorchBackend:
                         ),
                         output_address=output_address,
                     )
+                remedy = output_attribution_remedy(self_trace)
                 raise OutputAttributionError(
                     "TorchLens could not attribute a model output tensor to any traced op "
                     f"(output address {output_address!r}, "
                     f"shape={shape_text}, dtype={t.dtype}). This may indicate an opaque "
                     "execution boundary or a pre-bound torch function that escaped wrapping. "
-                    "Use ordinary torch module attributes during forward, or bind/import torch "
-                    "functions after TorchLens has wrapped torch.",
+                    f"Remedy: {remedy}.",
                     code="output_attribution_failed",
-                    remedy=(
-                        "use ordinary torch module attributes during forward, or "
-                        "bind/import torch functions after TorchLens has wrapped torch"
-                    ),
+                    remedy=remedy,
                     output_address=output_address,
                 )
             attributable_output_tensors.append(t)
@@ -1212,9 +1210,10 @@ class TorchBackend:
             warnings.warn(message, category, stacklevel=stacklevel + 1)
         except Exception as advisory_error:
             with contextlib.suppress(Exception):
-                exc.add_note(
+                annotate_guarded(
+                    exc,
                     "TorchLens advisory suppressed (a warnings filter raised it "
-                    f"as {type(advisory_error).__name__}): {message}"
+                    f"as {type(advisory_error).__name__}): {message}",
                 )
 
     def cleanup_failed_forward_session(
@@ -1279,9 +1278,10 @@ class TorchBackend:
                     stacklevel=2,
                 )
                 with contextlib.suppress(Exception):
-                    exc.add_note(
+                    annotate_guarded(
+                        exc,
                         "TorchLens partial-trace construction also failed: "
-                        f"{type(construction_error).__name__}: {construction_error}"
+                        f"{type(construction_error).__name__}: {construction_error}",
                     )
             else:
                 try:
@@ -1289,10 +1289,11 @@ class TorchBackend:
                     # B8-45: the SUCCESS path must tell the user the recovery
                     # exists too -- only the two attachment-FAILURE arms did.
                     with contextlib.suppress(Exception):
-                        exc.add_note(
+                        annotate_guarded(
+                            exc,
                             "TorchLens attached partial capture diagnostics: inspect "
                             "exc.partial_log, or recover it with "
-                            "torchlens.partial.from_failed_capture(exception)."
+                            "torchlens.partial.from_failed_capture(exception).",
                         )
                 except Exception as attachment_error:
                     _register_failed_capture(exc, partial_log)
@@ -1307,10 +1308,11 @@ class TorchBackend:
                         stacklevel=2,
                     )
                     with contextlib.suppress(Exception):
-                        exc.add_note(
+                        annotate_guarded(
+                            exc,
                             "TorchLens retained partial capture recovery in its bounded "
                             "exception-identity registry; call "
-                            "torchlens.partial.from_failed_capture(exception)."
+                            "torchlens.partial.from_failed_capture(exception).",
                         )
         finally:
             self.cleanup_model_session(session, prepared_model)
@@ -1470,6 +1472,43 @@ def _register_model_output_container_snapshot(
         leaf_occurrences=tuple(occurrences),
         reconstructable=reconstructable,
     )
+
+
+_OUTPUT_ATTRIBUTION_REMEDY = (
+    "use ordinary torch module attributes during forward, or "
+    "bind/import torch functions after TorchLens has wrapped torch"
+)
+
+
+def output_attribution_remedy(trace: Any) -> str:
+    """Remedy for ``output_attribution_failed``, aimed at export products (U35.2).
+
+    An fx ``GraphModule`` root (``torch.export.export(...).module()`` or
+    ``torch.fx.symbolic_trace``) runs generated code whose call targets were
+    bound when the graph was built, so the torch-function-binding advice does
+    not apply; the fix is to trace the eager source module.
+
+    Parameters
+    ----------
+    trace:
+        The capture whose output could not be attributed.
+
+    Returns
+    -------
+    str
+        The remedy sentence.
+    """
+
+    model_ref = getattr(trace, "_source_model_ref", None)
+    model = model_ref() if model_ref is not None else None
+    if isinstance(model, torch.fx.GraphModule):
+        return (
+            "trace the source nn.Module before export: this root is a torch.fx "
+            "GraphModule (torch.export ... .module() or torch.fx.symbolic_trace) whose "
+            "generated forward calls targets bound at graph build time; call "
+            "tl.trace(source_model, x) on the eager module instead"
+        )
+    return _OUTPUT_ATTRIBUTION_REMEDY
 
 
 def _is_direct_registered_buffer_output(trace: Trace, tensor: torch.Tensor) -> bool:

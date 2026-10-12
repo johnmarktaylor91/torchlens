@@ -18,6 +18,47 @@ from typing import Any
 import torch
 
 
+def _nvtx_host_available() -> bool:
+    """Return whether this host can emit NVTX ranges (a CUDA device is visible)."""
+
+    return bool(torch.cuda.is_available())
+
+
+def refuse_unavailable_nvtx(emit_nvtx: bool) -> None:
+    """Refuse ``emit_nvtx=True`` on a host without CUDA, as torch does (U35.3).
+
+    ``torch.autograd.profiler.emit_nvtx()`` refuses on such a host; before this
+    check every TorchLens range push was silently swallowed, so the option
+    looked accepted while emitting nothing.
+
+    Parameters
+    ----------
+    emit_nvtx:
+        The resolved capture option.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``emit_nvtx_unavailable`` when ``emit_nvtx`` is set and CUDA is unavailable.
+    """
+
+    if not emit_nvtx or _nvtx_host_available():
+        return
+    from ..._errors import InvalidArgumentError
+
+    raise InvalidArgumentError(
+        "emit_nvtx=True needs a CUDA device with an NVIDIA driver, and torch reports "
+        "none on this host, so no NVTX range could be emitted "
+        "(torch.autograd.profiler.emit_nvtx refuses here too)",
+        code="emit_nvtx_unavailable",
+        remedy=(
+            "drop emit_nvtx=True on this host, or run the capture where "
+            "torch.cuda.is_available() is True"
+        ),
+        argument="emit_nvtx",
+    )
+
+
 def _nvtx_range_push(name: str) -> bool:
     """Push an NVTX range if CUDA NVTX support is available.
 
