@@ -892,7 +892,7 @@
   outside the contract. Contract: `docs/reference/predicate_runtime.md`.
 - NETRON EXPORT v2 (F14; every kwarg spelling DOCUMENTED-UNSTABLE pending the
   naming sprint): `tl.export.netron(log, path=None, *, granularity="module"|"op"|"rolled",
-  depth=1, show_buffers="never"|"meaningful"|"always", attachment=False, open=False,
+  depth=1, show_buffers="never"|"meaningful"|"always", attachment=None, open=False,
   baseline=None)` emits schema-v2 ONNX protobuf-JSON (irVersion 10, custom domains
   `ai.torchlens.lossy`/`ai.torchlens.module` — NEVER re-domained for colour, ruling N1)
   with typed values + native graph I/O, per-call module FunctionProtos (module is the FILE
@@ -901,8 +901,12 @@
   policy + counter-chain rule with disclosures, variance-gated rolled projection (feedback
   disclosed via the `recurrence` attr, never drawn — a cycle fails the checker), curated
   wording-contract panel attrs (missing is ABSENT never zero; the module-path attr is not
-  named `module`), the `netron:attachment` companion (four fail-closed vendor guards,
-  `attachment=True`), serve/widget one-liner (`open=True`, extra `torchlens[netron]`), and
+  named `module`), the `netron:attachment` companion (four fail-closed vendor guards;
+  written beside every file export by default, ruling U09.3; `attachment=False` opts out,
+  `attachment=True` refuses the memory-only serve), `baseline=<reference Trace>` per-node
+  `torchlens.diff.*` facts from `torchlens.differential.diff_report` in node metadataProps
+  and the companion plus the diff summary in the `torchlens.baseline` slot (ruling U09.5;
+  a string stays a bare identifier), serve/widget one-liner (`open=True`, extra `torchlens[netron]`), and
   an extent-budget WARN past ~27 ranks. Every artifact stays green under strict
   `onnx.ModelProto` parse + `check_model(full_check=True)`; netron 9.2.2's own parser
   executes over it in CI (tests/test_netron_export_*.py). Doc:
