@@ -336,6 +336,11 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
     ),
     "transformers": (TEST_EXTRA, "transformers"),
     "transformers.modeling_outputs": (TEST_EXTRA, "transformers"),
+    "transformers.masking_utils": (
+        TEST_EXTRA,
+        "transformers; submodule gate because the AttentionMaskInterface the HF "
+        "attention backend pairs with ships from 4.53, so older band legs skip honestly",
+    ),
     "transformers.models.qwen3_moe": (
         TEST_EXTRA,
         "transformers; submodule gate because Qwen3-MoE ships only in newer "

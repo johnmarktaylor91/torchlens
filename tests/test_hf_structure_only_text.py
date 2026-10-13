@@ -15,7 +15,8 @@ import pytest
 import torch
 
 transformers = pytest.importorskip("transformers")
-tokenizers = pytest.importorskip("tokenizers")
+
+import tokenizers  # noqa: E402  (a hard dependency of transformers)
 
 from tests.real_model.r0.families import FAMILY_BY_NAME  # noqa: E402
 from torchlens._errors import InvalidArgumentError  # noqa: E402
