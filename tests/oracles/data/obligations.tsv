@@ -138,3 +138,4 @@ OBL-Q-SETUP-DURATION	the setup duration is bounded by an outside clock	seconds b
 OBL-Q-NUM-FORWARD-POS-ARGS	the call's positional-argument count equals the hand count	positional arguments the call's forward received, the root call included; unit: arguments	I2	PURE_OBSERVER	REAL
 OBL-Q-NUM-FORWARD-KWARGS	the call's keyword-argument count equals the hand count	keyword arguments the call's forward received, the root call included; unit: arguments	I2	PURE_OBSERVER	REAL
 OBL-Q-NUM-FORWARD-ARGS-TOTAL	the call's argument total equals the hand count	positional plus keyword arguments of the call's forward, the root call included; unit: arguments	I2	PURE_OBSERVER	REAL
+OBL-Q-COMPLETENESS-WITNESS-EXPECTED-OPAQUE-COUNT	the expected-opaque count equals the recounted tensor-to-Python reads	witness events inside an audited opaque boundary (a tensor bool or scalar read); unit: events	I1	PURE_OBSERVER	REAL

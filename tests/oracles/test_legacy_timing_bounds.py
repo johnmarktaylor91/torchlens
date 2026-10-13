@@ -23,6 +23,7 @@ from torch.utils._python_dispatch import TorchDispatchMode
 
 import torchlens as tl
 from tests.oracles.test_legacy_graph_counts import Grad, Graph
+from tests.oracles.test_legacy_module_counts import Cond
 from torchlens import _state
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.options import CaptureOptions
@@ -213,13 +214,15 @@ def _detectors_armed():
 
 
 @pytest.mark.usefixtures("_detectors_armed")
-@pytest.mark.parametrize("model_name", ["grad", "graph"])
+@pytest.mark.parametrize("model_name", ["grad", "graph", "cond"])
 def test_witness_and_detector_event_counts_match_a_recount(model_name: str) -> None:
     torch.manual_seed(0)
-    model = {"grad": Grad, "graph": Graph}[model_name]().eval()
-    inputs = (
-        (torch.randn(2, 4),) if model_name == "grad" else (torch.randn(2, 4), torch.randn(2, 4))
-    )
+    model = {"grad": Grad, "graph": Graph, "cond": Cond}[model_name]().eval()
+    inputs = {
+        "grad": (torch.randn(2, 4),),
+        "graph": (torch.randn(2, 4), torch.randn(2, 4)),
+        "cond": (torch.ones(2, 3),),  # both ifs taken: two bool reads
+    }[model_name]
     unwrap_torch()  # recount on plain torch
     with _DispatchCount() as dispatches:
         model(*inputs)
@@ -231,8 +234,12 @@ def test_witness_and_detector_event_counts_match_a_recount(model_name: str) -> N
     wall_ns = (time.perf_counter() - started) * 1e9
     try:
         assert trace.completeness_witness_event_count == dispatches.count
-        # Every dispatch lies under a captured wrapped call: all are accounted.
-        assert trace.completeness_witness_accounted_count == dispatches.count
+        # A tensor bool read is an audited opaque boundary; every other
+        # dispatch lies under a captured wrapped call and is accounted.
+        assert trace.completeness_witness_expected_opaque_count == dispatches.scalar_reads
+        assert dispatches.scalar_reads == (2 if model_name == "cond" else 0)
+        accounted = dispatches.count - dispatches.scalar_reads
+        assert trace.completeness_witness_accounted_count == accounted
         assert trace.escape_detector_event_count == functions.count
         assert 0 < trace.completeness_witness_callback_ns <= wall_ns
         assert 0 < trace.escape_detector_callback_ns <= wall_ns
