@@ -65,7 +65,8 @@ Key entry points:
   `tl.report.explain(trace, max_tokens=N)` budget-prunes the text report by
   whole sections low-value-first with a disclosed `Truncation` section;
   capture-status honesty facts and partial-capture failure evidence never
-  drop; refuses typed with `format="json"`. `torchlens.bridge.mcp` (extra
+  drop. The report is prose only: its machine projection is `trace.to_agent_json()`.
+  `torchlens.bridge.mcp` (extra
   `torchlens[mcp]`, mcp>=2.0) serves read-only MCP stdio tools over saved
   `.tlspec` artifacts + environment (doctor / api_map / load_overview /
   agent_dump / explain); no user-code execution, no mutation.

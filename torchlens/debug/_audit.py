@@ -168,7 +168,7 @@ def _audit_partial_trace(partial: PartialTrace) -> TraceAudit:
             message=f"{type(exception).__name__}: {exception}",
             ops=(last_label,) if last is not None else (),
             modules=modules,
-            follow_up="tl.report.explain(partial, format='json')",
+            follow_up="tl.report.explain(partial)",
         )
     ]
     nonfinite = partial.first_nonfinite()

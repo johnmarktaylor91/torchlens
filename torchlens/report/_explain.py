@@ -19,16 +19,14 @@ from .._capture_honesty import (
 )
 
 Audience = Literal["researcher", "practitioner", "auto"]
-ExplainFormat = Literal["text", "json"]
 
 
 def explain(
     log: Any,
     audience: Audience = "auto",
-    format: ExplainFormat = "text",
     *,
     max_tokens: int | None = None,
-) -> str | dict[str, Any]:
+) -> str:
     """Explain a TorchLens log in plain language.
 
     Parameters
@@ -39,9 +37,6 @@ def explain(
         Report style. ``"researcher"`` includes graph-pattern detail,
         ``"practitioner"`` emphasizes operational status, and ``"auto"``
         selects a balanced report.
-    format:
-        ``"text"`` for the existing prose report or ``"json"`` for a
-        structured dictionary.
     max_tokens:
         Optional token budget for the text report (DOCUMENTED-UNSTABLE
         spelling, naming ratification pending). Whole sections are dropped in
@@ -49,49 +44,29 @@ def explain(
         token) fits, and every drop is disclosed in a trailing ``Truncation``
         section. The ``Capture status`` honesty section is never dropped: a
         budget below that floor returns the floor plus a disclosure rather
-        than a misleading fragment. Not supported with ``format="json"``
-        (that schema is fixed-shape and already minimal).
+        than a misleading fragment.
 
     Returns
     -------
-    str | dict[str, Any]
-        Multi-section prose, or the stable flat schema documented below.
+    str
+        Multi-section prose.
 
     Raises
     ------
     ValueError
-        If ``audience``, ``format``, or ``max_tokens`` is not supported.
+        If ``audience`` or ``max_tokens`` is not supported.
 
     Notes
     -----
-    The JSON schema is identified by ``schema="torchlens.explain.v1"`` and
-    contains these stable snake-case keys: ``schema``, ``audience``,
-    ``capture_status``, ``capture_verified``, ``capture_verification_reason``,
-    ``rescue_rerun``, ``model_class``, ``layer_count``, ``operation_count``,
-    ``saved_tensor_count``, ``total_tensor_count``, ``has_backward_pass``,
-    ``exception_type``, ``exception_message``, ``last_completed_op_label``,
-    ``last_completed_op_shape``, ``last_completed_op_dtype``,
-    ``last_completed_op_device``, ``failing_boundary``, and
-    ``first_nonfinite``. Evidence unavailable from the supplied log is reported
-    as ``"unknown"`` rather than inferred. ``capture_status`` is the log's
-    settled ``CaptureOutcome`` status value (``"partial"`` for a failed
-    partial capture), never assumed complete; ``capture_verified`` is the
-    tri-state stored fact (``None`` = not recorded; the default capture does not arm
-    the completeness witness).
+    This report is prose only. The machine-readable projection of the same
+    facts is ``trace.to_agent_json()`` (the one machine core); the former
+    ``format="json"`` form of this report is removed.
     """
 
     refuse_presenter_subject(log, "tl.report.explain")
     if audience not in {"researcher", "practitioner", "auto"}:
         raise ValueError("audience must be 'researcher', 'practitioner', or 'auto'.")
-    if format not in {"text", "json"}:
-        raise ValueError("format must be 'text' or 'json'.")
     if max_tokens is not None:
-        if format == "json":
-            raise ValueError(
-                "max_tokens applies to format='text' only: the "
-                "torchlens.explain.v1 JSON schema is fixed-shape and already "
-                "minimal. Drop max_tokens, or use format='text'."
-            )
         if isinstance(max_tokens, bool) or not isinstance(max_tokens, int) or max_tokens < 1:
             raise ValueError(
                 "max_tokens must be a positive integer token budget for the "
@@ -100,12 +75,7 @@ def explain(
 
     if _is_partial_trace(log):
         diagnosis = _partial_diagnosis(log)
-        if format == "json":
-            return _partial_json(log, audience, diagnosis)
         return _budgeted_report(_partial_sections(diagnosis), max_tokens, drop_order=())
-
-    if format == "json":
-        return _full_json(log, audience)
 
     sections = [
         ("Capture status", _capture_status_lines(log)),
@@ -539,163 +509,6 @@ def _capture_status_lines(log: Any) -> list[str]:
             f"{advisory.get('first_location') or 'unknown location'})."
         )
     return lines
-
-
-def _base_json(log: Any, audience: Audience) -> dict[str, Any]:
-    """Return fields common to complete and partial JSON reports.
-
-    Parameters
-    ----------
-    log:
-        Capture object.
-    audience:
-        Requested audience label.
-
-    Returns
-    -------
-    dict[str, Any]
-        Common stable-schema fields.
-    """
-
-    # ONE machine core (sumfam D17/item 14): the count fields below read
-    # the same FactCore sections agent_json reads, so the two projections
-    # cannot drift apart; the parity gate pins every overlapping field.
-    try:
-        from ._factcore import factcore
-
-        core = factcore(log)
-        layer_count = core.counts.layers
-        operation_count = core.counts.tracked_tensor_rows
-        saved_count = core.memory.at_capture_saved_ops
-    except Exception:  # noqa: BLE001 -- partial/foreign logs keep the raw fallback
-        core = None
-        layer_count = _safe_len(getattr(log, "layer_list", None))
-        operation_count = int(getattr(log, "num_ops", 0) or 0)
-        saved_count = int(getattr(log, "num_saved_ops", 0) or 0)
-    return {
-        "schema": "torchlens.explain.v1",
-        "audience": audience,
-        **_capture_verification(log),
-        "model_class": getattr(log, "model_class_name", type(log).__name__),
-        "layer_count": layer_count,
-        "operation_count": operation_count,
-        "saved_tensor_count": saved_count,
-        "total_tensor_count": int(getattr(log, "num_tensors", 0) or 0),
-        "has_backward_pass": bool(getattr(log, "has_backward_pass", False)),
-        "exception_type": "unknown",
-        "exception_message": "unknown",
-        "last_completed_op_label": "unknown",
-        "last_completed_op_shape": "unknown",
-        "last_completed_op_dtype": "unknown",
-        "last_completed_op_device": "unknown",
-        "failing_boundary": "unknown",
-        "first_nonfinite": _first_nonfinite_summary(log),
-    }
-
-
-def _full_json(log: Any, audience: Audience) -> dict[str, Any]:
-    """Build the stable JSON schema for a completed trace.
-
-    Parameters
-    ----------
-    log:
-        Completed trace.
-    audience:
-        Requested audience label.
-
-    Returns
-    -------
-    dict[str, Any]
-        Stable full-trace report dictionary.
-    """
-
-    return _base_json(log, audience)
-
-
-def _partial_json(
-    log: Any,
-    audience: Audience,
-    diagnosis: dict[str, Any],
-) -> dict[str, Any]:
-    """Build the stable JSON schema for a partial trace.
-
-    Parameters
-    ----------
-    log:
-        Partial capture wrapper.
-    audience:
-        Requested audience label.
-    diagnosis:
-        Evidence fields from :func:`_partial_diagnosis`.
-
-    Returns
-    -------
-    dict[str, Any]
-        Stable failed-capture report dictionary.
-    """
-
-    result = _base_json(log, audience)
-    result.update(diagnosis)
-    result.update(
-        {
-            "capture_status": "partial",
-            "model_class": getattr(log.trace, "model_class_name", type(log.trace).__name__),
-            "layer_count": len(log.raw_layers),
-            "operation_count": len(log.raw_layers),
-            "saved_tensor_count": sum(
-                bool(getattr(op, "has_saved_activation", False)) for op in log.raw_layers
-            ),
-            "total_tensor_count": len(log.raw_layers),
-        }
-    )
-    return result
-
-
-def _first_nonfinite_summary(log: Any) -> str:
-    """Return a saved-output non-finite summary without speculation.
-
-    Parameters
-    ----------
-    log:
-        Completed trace-like object.
-
-    Returns
-    -------
-    str
-        First recorded non-finite detail, or a scoped clean statement.
-    """
-
-    from ._health import health_facts
-
-    # D4/D14 (F09): explain never scans -- this summary serves the basis in
-    # hand (capture record, prior scan memo, persisted artifact record) and
-    # says NOT-CHECKED otherwise, with the spelling that would scan.
-    facts = health_facts(log, allow_scan=False)
-    if facts.verdict == "found":
-        labels = facts.nonfinite_labels or facts.alias_nonfinite_labels
-        return _first_nonfinite_detail(log, str(labels[0]).rsplit(":", 1)[0])
-    if facts.verdict == "checked_and_clean":
-        return (
-            f"No non-finite values found ({facts.checked} output(s) examined; basis: "
-            f"{facts.source_basis or facts.basis})."
-        )
-    if (facts.source_basis or facts.basis) not in ("unscanned", "underivable"):
-        # A basis exists but coverage has gaps: disclose exactly what the
-        # scan could not or did not examine (disk-backed payloads,
-        # unsaved outputs) instead of a bare NOT-CHECKED. The shared
-        # gap-note wording (one source, never drifting) is safe here: a
-        # basis is in hand, so no new scan runs.
-        from ..data_classes._nonfinite import coverage_gap_note
-
-        return (
-            "No non-finite values found in the examined outputs"
-            f"{coverage_gap_note(log, kind='saved')} -- NOT-CHECKED overall "
-            f"(basis: {facts.source_basis or facts.basis})."
-        )
-    return (
-        "Non-finite health NOT-CHECKED on this object; scan retained payloads with "
-        "tl.report.health_facts(trace) or trace.nonfinite_ops."
-    )
 
 
 def _first_nonfinite_detail(log: Any, saved_label: str) -> str:
