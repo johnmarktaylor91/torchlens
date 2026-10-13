@@ -238,36 +238,40 @@ def _copy_left_by_forward(value: Any, originals: set[int], depth: int = 0) -> An
 
     if isinstance(value, torch.Tensor):
         return value.detach().clone() if id(value) in originals else value
-    if depth >= _MAX_DEPTH:
-        return value
     kind = type(value)
-    if kind is list:
-        return [_copy_left_by_forward(item, originals, depth + 1) for item in value]
+    if depth >= _MAX_DEPTH or not (kind in (list, dict, set) or isinstance(value, tuple)):
+        return value
+    if kind is set:
+        return set(value)
     if kind is dict:
         return {
             key: _copy_left_by_forward(item, originals, depth + 1) for key, item in value.items()
         }
-    if kind is set:
-        return set(value)
-    if isinstance(value, tuple):
-        items = [_copy_left_by_forward(item, originals, depth + 1) for item in value]
-        make = getattr(kind, "_make", None)  # a namedtuple keeps its type
-        return tuple(items) if kind is tuple or make is None else make(items)
-    return value
+    items = [_copy_left_by_forward(item, originals, depth + 1) for item in value]
+    if kind is list:
+        return items
+    make = getattr(kind, "_make", None)  # a namedtuple keeps its type
+    return tuple(items) if kind is tuple or make is None else make(items)
+
+
+def _restore_tensor(obj: Any, snapshot: torch.Tensor, version: int | None) -> None:
+    """Write a tensor's snapshot back in place (the buffer rules: only changed bytes)."""
+
+    from ._runnable_state import write_back_slot
+
+    if not isinstance(obj, torch.Tensor):
+        return
+    if obj.shape != snapshot.shape or obj.dtype != snapshot.dtype:
+        obj.data = snapshot  # resized or retyped in place: swap the storage back
+    else:
+        write_back_slot(obj, snapshot, version)
 
 
 def _restore_into(obj: Any, snapshot: Any, skeleton: Any) -> None:
     """Restore ``obj`` (an original object) to ``snapshot`` in place, inner identities kept."""
 
-    from ._runnable_state import write_back_slot
-
     if isinstance(snapshot, torch.Tensor):
-        if not isinstance(obj, torch.Tensor):
-            return
-        if obj.shape != snapshot.shape or obj.dtype != snapshot.dtype:
-            obj.data = snapshot  # resized or retyped in place: swap the storage back
-        else:
-            write_back_slot(obj, snapshot, skeleton)
+        _restore_tensor(obj, snapshot, skeleton)
         return
     if skeleton is None or _is_identity_only(snapshot) or _is_special(snapshot):
         return

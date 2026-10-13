@@ -12,7 +12,7 @@ what the forward wrote to attributes on the trace;
 from __future__ import annotations
 
 import warnings
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
@@ -251,8 +251,12 @@ def _restore_observer_buffers(snapshot: CaptureObserverSnapshot, trace: Any = No
             module._buffers[local_name] = original
 
 
-def restore_capture_observer_state(snapshot: CaptureObserverSnapshot, trace: Any = None) -> None:
+def restore_capture_observer_state(
+    snapshot: CaptureObserverSnapshot, trace: Any = None
+) -> dict[int, dict[str, Any]]:
     """Restore a capture observer snapshot (every item attempted, failures disclosed).
+
+    Returns the forward's plain-attribute writes keyed by ``id(module)``.
 
     Buffers are written back only where their bytes changed (an unconditional
     write bumps version counters autograd saved). Restoration never raises: a
@@ -274,7 +278,6 @@ def restore_capture_observer_state(snapshot: CaptureObserverSnapshot, trace: Any
                 module.training = training
         writes, attr_failures = settle_module_attrs(snapshot.attrs, restore=True)
         failed.extend(attr_failures)
-        attach_attribute_writes(trace, snapshot.paths, writes)
     try:
         set_rng_from_saved_states(snapshot.rng)
     except _RESTORE_ERRORS as exc:
@@ -291,6 +294,7 @@ def restore_capture_observer_state(snapshot: CaptureObserverSnapshot, trace: Any
             ),
             stacklevel=4,
         )
+    return writes
 
 
 class CaptureObserverHandle:
@@ -307,33 +311,26 @@ def attach_attribute_writes(
 ) -> None:
     """Give each traced ``Module`` record the attribute writes its forward made.
 
-    Best effort and never raising (it runs in the capture's ``finally``): a
-    module the trace has no record for, or a failed capture's partial product
-    without module records, simply carries no record.
+    Runs for a completed capture only (a failed capture's partial product
+    carries no record); a module the trace has no record for is skipped.
     """
 
     from .data_classes.module import set_attribute_writes
 
-    target = getattr(trace, "trace", trace)  # a failure's partial_log may wrap the trace
-    try:
-        records = target.modules if target is not None else None
-    except Exception:  # a partial product may lack module records; never mask the capture
-        return
+    records = getattr(trace, "modules", None) if trace is not None else None
     if records is None:
         return
     for path, module in paths:
         module_writes = writes.get(id(module))
-        if module_writes is None:
-            continue
-        try:
-            record = records[path or "self"]
-        except Exception:  # a module this trace has no record for (any lookup error type)
-            continue
-        set_attribute_writes(record, module_writes)
+        address = path or "self"
+        if module_writes is not None and address in records:
+            set_attribute_writes(records[address], module_writes)
 
 
 @contextmanager
-def capture_observer_bracket(model: Any, *, carry_state: bool) -> Iterator[CaptureObserverHandle]:
+def capture_observer_bracket(
+    model: Any, *, carry_state: bool, on_failure: Callable[[], None] | None = None
+) -> Iterator[CaptureObserverHandle]:
     """Run a capture as a pure observer unless ``carry_state`` opts out (U40.1).
 
     The default snapshots buffers (persistent and non-persistent), every
@@ -345,7 +342,9 @@ def capture_observer_bracket(model: Any, *, carry_state: bool) -> Iterator[Captu
     (``Module.attribute_writes``). The caller sets ``handle.trace`` to the
     captured trace (a failure's ``partial_log`` is picked up from the
     exception), so payloads that alias a restored buffer keep their
-    forward-time values.
+    forward-time values. ``on_failure`` runs after the restore when the capture
+    raises (the failed-capture preparation release), before the exception
+    propagates.
     """
 
     handle = CaptureObserverHandle()
@@ -355,19 +354,21 @@ def capture_observer_bracket(model: Any, *, carry_state: bool) -> Iterator[Captu
             attrs = snapshot_module_attrs(modules)
         try:
             yield handle
-        except BaseException as exc:
-            handle.trace = handle.trace or getattr(exc, "partial_log", None)
+        except BaseException:
+            if on_failure is not None:
+                on_failure()
             raise
-        finally:
-            with _state.pause_logging(), torch.no_grad():
-                writes, _failed = settle_module_attrs(attrs, restore=False)
-            attach_attribute_writes(handle.trace, tuple(modules), writes)
+        with _state.pause_logging(), torch.no_grad():
+            writes, _failed = settle_module_attrs(attrs, restore=False)
+        attach_attribute_writes(handle.trace, tuple(modules), writes)
         return
     snapshot = snapshot_capture_observer_state(model)
     try:
         yield handle
     except BaseException as exc:
-        handle.trace = handle.trace or getattr(exc, "partial_log", None)
+        restore_capture_observer_state(snapshot, handle.trace or getattr(exc, "partial_log", None))
+        if on_failure is not None:
+            on_failure()
         raise
-    finally:
-        restore_capture_observer_state(snapshot, handle.trace)
+    writes = restore_capture_observer_state(snapshot, handle.trace)
+    attach_attribute_writes(handle.trace, snapshot.paths, writes)

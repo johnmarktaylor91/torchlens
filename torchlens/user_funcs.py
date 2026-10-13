@@ -4058,38 +4058,35 @@ def _trace_torch_model(
 
     # U40.1 / AGT-2360: a default capture is a pure observer. Buffers, random
     # state, training modes and plain attributes are restored on every path,
-    # failure included, BEFORE the failure release (the release's own
-    # normalization of held torch functions must survive the restore and is
-    # not a forward write); CaptureOptions(carry_state=True) keeps
-    # forward-equivalent state. Both record the forward's attribute writes.
-    try:
-        with capture_observer_bracket(model, carry_state=capture_options.carry_state) as observer:
-            try:
-                with (
-                    armed_capture(episode_resolved, run_capture) as capture_callable,
-                    pending_admission(meta_admission),
-                ):
-                    trace = capture_with_rescue(
-                        capture_callable, eligible=rescue_eligible, model=model
-                    )
-                    observer.trace = trace
-            except BaseException as capture_exc:
-                if episode_resolved is not None:
-                    # Best-effort: the FAILED partial product carries the episode
-                    # declaration; attach the derived ledger disclosure without ever
-                    # masking the user's exception.
-                    attach_failed_episode_ledger(capture_exc, episode_resolved)
-                raise
-    except BaseException:
-        # One settlement path for every escape: a KeyboardInterrupt or
-        # SystemExit mid-capture is released exactly like a RuntimeError.
-        # M(oracles) item 8 (FORK-A 3/3-agreed cell): every FAILED call is
-        # PURE of TorchLens instrumentation. The capture slot was released as
-        # the exception unwound the inner finally, so the public release door
-        # is legal here; exc.partial_log keeps its already-materialized
-        # records and stays recoverable after the release.
-        _release_preparation_after_failed_capture(model)
-        raise
+    # failure included; CaptureOptions(carry_state=True) keeps forward-equivalent
+    # state. Both record the forward's attribute writes. On failure the bracket
+    # restores FIRST and then runs the release (on_failure), so the release's
+    # normalization of held torch functions stands and is not a forward write.
+    # M(oracles) item 8 (FORK-A 3/3-agreed cell): every FAILED call is PURE of
+    # TorchLens instrumentation; one settlement path for every escape (a
+    # KeyboardInterrupt or SystemExit is released exactly like a RuntimeError).
+    # The capture slot was released as the exception unwound the inner finally,
+    # so the public release door is legal there; exc.partial_log keeps its
+    # already-materialized records and stays recoverable after the release.
+    with capture_observer_bracket(
+        model,
+        carry_state=capture_options.carry_state,
+        on_failure=lambda: _release_preparation_after_failed_capture(model),
+    ) as observer:
+        try:
+            with (
+                armed_capture(episode_resolved, run_capture) as capture_callable,
+                pending_admission(meta_admission),
+            ):
+                trace = capture_with_rescue(capture_callable, eligible=rescue_eligible, model=model)
+                observer.trace = trace
+        except BaseException as capture_exc:
+            if episode_resolved is not None:
+                # Best-effort: the FAILED partial product carries the episode
+                # declaration; attach the derived ledger disclosure without ever
+                # masking the user's exception.
+                attach_failed_episode_ledger(capture_exc, episode_resolved)
+            raise
     if stop_after_site is not None and not bool(getattr(trace, "halted", False)):
         # Never-fired policy split by provenance (brainpipe D-16): a
         # selector-shaped site that never fired is a typo-shaped wrong result
