@@ -227,7 +227,7 @@ def linear_fallback_plan(
         return frozenset(), {}, full_plan
     collapse_fn = _fallback_collapse_fn(selected)
     folds: dict[str, ModuleRepeatFold] = {}
-    if len(trace.ops) <= raw_op_ceiling:
+    if len(trace.layer_list) <= raw_op_ceiling:
         # The shipped band-gated fold policy: folds are discovered against
         # the greedy selection exactly as the v1 render path would discover
         # them, so a run of selected same-structure boxes still reads as

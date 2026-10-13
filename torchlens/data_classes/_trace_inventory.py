@@ -66,7 +66,7 @@ def build_sites_table(trace: Trace) -> pd.DataFrame:
     from ._site_key import parse_site_key
 
     pd = _require_pandas()
-    ops = list(trace.ops)
+    ops = list(trace.layer_list)
     keyed = [op for op in ops if getattr(op, "site_key", None) is not None]
     if ops and not keyed:
         raise InvalidArgumentError(

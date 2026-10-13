@@ -735,7 +735,7 @@ def _registry_sibling_leaves_from_trace(
 def _op_from_raw_label(trace: Any, raw_label: str) -> Op | None:
     """Return the op whose raw label matches ``raw_label``."""
 
-    for candidate in trace.ops:
+    for candidate in trace.layer_list:
         if (
             getattr(candidate, "layer_label_raw", None) == raw_label
             or getattr(candidate, "_layer_label_raw", None) == raw_label
