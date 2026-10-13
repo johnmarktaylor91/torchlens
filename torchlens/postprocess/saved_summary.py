@@ -36,11 +36,41 @@ def count_saved_module_calls_from_output_ops(
         }
     else:
         saved_labels = set(saved_op_labels)
+    aliases = op_label_aliases(trace)
     return sum(
         1
         for module_call in getattr(trace, "module_calls", ())
-        if any(label in saved_labels for label in getattr(module_call, "output_ops", ()))
+        if any(
+            aliases.get(label, label) in saved_labels
+            for label in getattr(module_call, "output_ops", ())
+        )
     )
+
+
+def op_label_aliases(trace: "Trace") -> dict[str, str]:
+    """Map each single-pass Layer label to its one pass-qualified Op label.
+
+    The root ModuleCall stores its ``output_ops`` as layer-space labels
+    (``output_1``) while every other call stores pass-qualified Op labels
+    (``linear_1_1:1``), so a membership test against Op labels must resolve
+    the layer-space form first or it never counts the root call. Only a Layer
+    with exactly one pass names one Op; a multi-pass Layer label stays as is.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose Op labels are mapped.
+
+    Returns
+    -------
+    dict[str, str]
+        Pass-qualified Op label keyed by single-pass Layer label.
+    """
+
+    by_layer: dict[str, list[str]] = {}
+    for op in getattr(trace, "layer_list", ()):
+        by_layer.setdefault(op.layer_label, []).append(op.label)
+    return {layer: labels[0] for layer, labels in by_layer.items() if len(labels) == 1}
 
 
 def refresh_saved_module_call_count(

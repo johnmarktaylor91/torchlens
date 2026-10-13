@@ -1559,10 +1559,33 @@ class TraceStatsMixin(_TraceMixinBase):
     def saved_module_calls(self: "Trace") -> Accessor[Any]:
         """Access ModuleCalls whose outputs include saved activations."""
 
-        saved_labels = set(self.saved_ops.keys())
+        return self._module_calls_with_output_in(set(self.saved_ops.keys()))
+
+    def _module_calls_with_output_in(self: "Trace", op_labels: set[str]) -> Accessor[Any]:
+        """Access ModuleCalls with at least one output Op among ``op_labels``.
+
+        The root call's layer-space output labels resolve to their Op labels
+        first (``op_label_aliases``), so the root call counts like any other.
+
+        Parameters
+        ----------
+        op_labels:
+            Pass-qualified Op labels to match against each call's outputs.
+
+        Returns
+        -------
+        Accessor[Any]
+            Matching ModuleCalls keyed by call label, in call order.
+        """
+
+        from ..postprocess.saved_summary import op_label_aliases
+
+        aliases = op_label_aliases(self)
         calls: OrderedDict[str, Any] = OrderedDict()
         for call in self.module_calls:
-            if any(label in saved_labels for label in getattr(call, "output_ops", [])):
+            if any(
+                aliases.get(label, label) in op_labels for label in getattr(call, "output_ops", [])
+            ):
                 calls[call.call_label] = call
         return TraceModuleCallAccessor(calls)
 
@@ -1589,12 +1612,7 @@ class TraceStatsMixin(_TraceMixinBase):
     def saved_grad_module_calls(self: "Trace") -> Accessor[Any]:
         """Access ModuleCalls whose outputs include saved gradients."""
 
-        saved_labels = set(self.saved_grad_ops.keys())
-        calls: OrderedDict[str, Any] = OrderedDict()
-        for call in self.module_calls:
-            if any(label in saved_labels for label in getattr(call, "output_ops", [])):
-                calls[call.call_label] = call
-        return TraceModuleCallAccessor(calls)
+        return self._module_calls_with_output_in(set(self.saved_grad_ops.keys()))
 
     @property
     def saved_grad_modules(self: "Trace") -> Accessor[Any]:

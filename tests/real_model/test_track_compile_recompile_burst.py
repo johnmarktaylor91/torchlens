@@ -25,8 +25,12 @@ requirement.
 
 from __future__ import annotations
 
+import json
+import subprocess
+import sys
 import warnings
 from collections.abc import Callable
+from pathlib import Path
 
 import pytest
 import torch
@@ -82,7 +86,8 @@ def _build_resnet18() -> tuple[nn.Module, torch.Tensor]:
 def _build_tiny_gpt2() -> tuple[nn.Module, torch.Tensor]:
     """Build a tiny-config Hugging Face GPT-2 (random weights, no download)."""
 
-    transformers = pytest.importorskip("transformers")
+    import transformers
+
     torch.manual_seed(0)
     config = transformers.GPT2Config(n_layer=2, n_embd=64, n_head=2, vocab_size=128, n_positions=32)
     model = transformers.GPT2LMHeadModel(config).eval()
@@ -98,13 +103,41 @@ def _forward(model: nn.Module, x: torch.Tensor) -> torch.Tensor:
     return out.logits if hasattr(out, "logits") else out
 
 
-@pytest.mark.parametrize("build", [_build_resnet18, _build_tiny_gpt2], ids=["resnet18", "gpt2"])
-def test_post_capture_recompile_burst_is_bounded_then_steady(
-    build: Callable[[], tuple[nn.Module, torch.Tensor]],
-) -> None:
-    """Zero compiles in capture; a bounded burst on the first call after; then none."""
+_BUILDS: dict[str, Callable[[], tuple[nn.Module, torch.Tensor]]] = {
+    "resnet18": _build_resnet18,
+    "gpt2": _build_tiny_gpt2,
+}
 
-    model, x = build()
+#: Child entry point. ``torch.compile`` leaves compiled FX graphs (with
+#: activation-shaped ``example_value`` tensors) in process-wide caches that
+#: ``torch.compiler.reset()`` does not release, which would leak into the
+#: process-wide live-holder counts of later tests; the measurement runs in a
+#: fresh interpreter instead.
+_CHILD_SCRIPT = (
+    "import json, runpy, sys; "
+    "ns = runpy.run_path(sys.argv[1]); "
+    "print(json.dumps({'bursts': ns['_child_main'](sys.argv[2])}))"
+)
+
+
+def _child_main(build_name: str) -> list[int]:
+    """Child-process entry: the suite session's warmup capture, then the measurement.
+
+    tests/conftest.py captures once at session start, so torch is already
+    wrapped when a suite test compiles; the child does the same so the bursts
+    are measured under the conditions the bounds were recorded in.
+    """
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        tl.trace(nn.Linear(2, 2), torch.zeros(1, 2)).cleanup()
+    return _measure_bursts(build_name)
+
+
+def _measure_bursts(build_name: str) -> list[int]:
+    """Measure the post-capture recompile bursts of one compiled model, asserting each leg."""
+
+    model, x = _BUILDS[build_name]()
     torch.compiler.reset()
     compiled = torch.compile(model, backend=_BACKEND)
     warm = _forward(compiled, x)
@@ -133,7 +166,27 @@ def test_post_capture_recompile_burst_is_bounded_then_steady(
             f"steady state expected after the burst, got per-call counts {per_call}"
         )
         bursts.append(burst)
+    return bursts
 
+
+@pytest.mark.parametrize("build_name", list(_BUILDS))
+def test_post_capture_recompile_burst_is_bounded_then_steady(build_name: str) -> None:
+    """Zero compiles in capture; a bounded burst on the first call after; then none."""
+
+    if build_name == "gpt2":
+        pytest.importorskip("transformers")
+    result = subprocess.run(
+        [sys.executable, "-c", _CHILD_SCRIPT, str(Path(__file__).resolve()), build_name],
+        capture_output=True,
+        text=True,
+        timeout=600,
+        check=False,
+    )
+    assert result.returncode == 0, (
+        f"the {build_name} measurement failed in its child process:\n{result.stderr[-4000:]}"
+    )
+    bursts = json.loads(result.stdout.strip().splitlines()[-1])["bursts"]
+    assert len(bursts) == _CAPTURES
     # Measured, not assumed: every capture is followed by its own burst (resnet18
     # 0 then 0; tiny GPT-2 7 then 6 under aot_eager).
     print(f"post-capture bursts per capture: {bursts}")

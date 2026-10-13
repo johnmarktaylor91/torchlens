@@ -182,3 +182,52 @@ def test_activation_bytes_on_every_compute_door(fixture_a) -> None:
         assert int(value) == A_OUT_BYTES
     # The trace total sums every retained activation: the input and the output.
     assert int(trace.total_activation_memory) == A_IN_BYTES + A_OUT_BYTES
+
+
+class BufferHolder(nn.Module):
+    """A float32 scalar buffer written in place and a float64 vector buffer read."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_buffer("count", torch.zeros(()))
+        self.register_buffer("scale", torch.full((4,), 2.0, dtype=torch.float64))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        self.count.add_(1.0)
+        return x * self.scale
+
+
+def test_buffer_activation_bytes_on_the_buffer_door() -> None:
+    torch.manual_seed(0)
+    trace = tl.trace(BufferHolder().eval(), torch.randn(2, 4))
+    try:
+        by_address = {buffer.address: buffer for buffer in trace.buffers}
+        # The final observed value: a 0-d float32 (4 bytes) and 4 float64s (32 bytes).
+        assert int(by_address["count"].activation_memory) == 1 * FP32
+        assert int(by_address["scale"].activation_memory) == 4 * 8
+    finally:
+        trace.cleanup()
+
+
+class MixedPrecision(nn.Module):
+    """A float64 Linear(4, 4) and a float32 Linear(4, 4) registered under two names."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.wide = nn.Linear(4, 4).double()
+        self.tied = nn.Linear(4, 4)
+        self.tied2 = self.tied
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.tied2(self.tied(self.wide(x.double()).float()))
+
+
+def test_summary_parameter_bytes_count_unique_storage() -> None:
+    torch.manual_seed(0)
+    trace = tl.trace(MixedPrecision().eval(), torch.randn(2, 4))
+    try:
+        # wide: 20 float64 elements = 160 bytes; tied: 20 float32 elements = 80
+        # bytes, counted once although two names hold it and it ran twice.
+        assert int(trace.summary().totals.params_bytes) == 20 * 8 + 20 * FP32
+    finally:
+        trace.cleanup()
