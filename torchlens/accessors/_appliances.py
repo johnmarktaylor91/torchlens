@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .._errors import ArgumentConflictError, ArgumentTypeError, InvalidArgumentError
-from .._registry import ProviderInfo, Registry, create_registry
+from .._registry import TORCHLENS_PROVIDER, ProviderInfo, Registry, create_registry
 
 ApplianceFactory = Callable[[Any], Any]
 
@@ -222,3 +222,11 @@ def open_appliance(trace: Any, name: str) -> Any:
     """
 
     return _resolve_factory(_entry_for(name))(trace)
+
+
+register_appliance(
+    "mi",
+    "torchlens.mechinterp._appliance:MechInterpAppliance",
+    summary="mechinterp kit: head_scores, qk_circuit, ov_circuit",
+    provider=TORCHLENS_PROVIDER,
+)
