@@ -68,6 +68,8 @@ class NetronNode:
     attrs: list[NetronAttr] = field(default_factory=list)
     doc: str = ""
     input_names: list[str] | None = None  # netron's undocumented port hook
+    #: Extra ``NodeProto.metadataProps`` rows (the U09.5 per-node diff facts).
+    metadata: list[tuple[str, str]] = field(default_factory=list)
 
 
 @dataclass

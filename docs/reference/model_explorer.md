@@ -6,7 +6,7 @@ frontend, showing the graph your code ACTUALLY RAN with TorchLens' measured
 facts on it. Every spelling on this page is DOCUMENTED-UNSTABLE pending the
 naming session. The vendor schema of record is
 `model_explorer.graph_builder` / `node_data_builder` from
-`ai-edge-model-explorer` 0.1.32; the executed contract oracle is the pinned
+`ai-edge-model-explorer` 0.1.33; the executed contract oracle is the pinned
 `dist/worker.js` from npm `ai-edge-model-explorer-visualizer` 0.1.2
 (`tests/test_modelexplorer_assets/`).
 
@@ -103,7 +103,7 @@ missing values are coverage, never zero.
 
 Exports (when given a `Trace`) and calls the public pinned
 `model_explorer.visualize(...)` -- `reuse_server=`, `host=`, `port=` forward
-verbatim. Needs `pip install ai-edge-model-explorer==0.1.32`
+verbatim. Needs `pip install 'torchlens[model-explorer]'`
 (`model_explorer_serve_unavailable` teaches this at the point of failure).
 
 ## Validation report vocabulary

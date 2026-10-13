@@ -71,21 +71,29 @@ def build_episode_graphs(
     header = ledger.get("header") or {}
     rows = ledger.get("rows") or []
     stepped_address = str(header.get("stepped_module", "") or "")
-    if not stepped_address or not isinstance(rows, list):
+    ledger_usable = bool(stepped_address) and isinstance(rows, list)
+    if not ledger_usable and context.options.per_step is not False:
         raise ModelExplorerExportError(
             "Episode ledger is missing its stepped-module address or rows; the "
             "per-step export cannot derive step membership",
             code="model_explorer_episode_ledger_unavailable",
             remedy="re-capture with episode=EpisodeSpec(...) or export with per_step=False",
         )
-    plans, driver_labels = _plan_steps(log, entries, rows, stepped_address)
     episode_facts = {
         **context.root_facts,
         "view": "episode (full exact execution)",
         "episode_id": str(header.get("episode_id", "")),
-        "n_steps": str(len(rows)),
+        "n_steps": str(len(rows)) if isinstance(rows, list) else "unknown",
         "token_feed": str(header.get("token_feed", "")),
     }
+    if ledger_usable:
+        plans, driver_labels = _plan_steps(log, entries, rows, stepped_address)
+    else:
+        # per_step=False on a ledger without step membership: the full exact
+        # graph still exports (its own remedy promises it), with the missing
+        # step drivers disclosed rather than guessed.
+        plans, driver_labels = [], frozenset()
+        episode_facts["step_drivers"] = "unavailable: the ledger has no stepped-module address"
     full = build_graph(
         log,
         entries,

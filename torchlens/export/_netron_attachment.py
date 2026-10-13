@@ -183,6 +183,7 @@ def write_attachment(
     *,
     key_fn: Callable[[str], str] | None = None,
     stats_fn: Callable[[NetronProjection], list[dict[str, Any]]] | None = None,
+    extra_metadata: list[dict[str, Any]] | None = None,
 ) -> Path:
     """Write the ``<name>.attachment.json`` companion next to the artifact.
 
@@ -200,6 +201,9 @@ def write_attachment(
     stats_fn:
         Optional extra-rows provider (the deferred saved-tensor statistics
         seam; rows must satisfy the same guards). Defaults to none.
+    extra_metadata:
+        Optional extra metadata rows (the U09.5 per-node diff facts; rows
+        must satisfy the same guards). Defaults to none.
 
     Returns
     -------
@@ -219,6 +223,8 @@ def write_attachment(
     metadata, metrics = _default_rows(projection)
     if stats_fn is not None:
         metrics.extend(stats_fn(projection))
+    if extra_metadata:
+        metadata.extend(dict(row) for row in extra_metadata)
     seen: set[tuple[str, str, str, str]] = set()
     for container_name, rows in (("metadata", metadata), ("metrics", metrics)):
         for item in rows:
