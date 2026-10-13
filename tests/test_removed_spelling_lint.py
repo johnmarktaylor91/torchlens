@@ -109,6 +109,13 @@ _FORBIDDEN: dict[str, re.Pattern[str]] = {
         r"|VisualizationOptions\s*\([^)\n]*\b(?:mode|max_module_depth|layout_engine"
         r"|node_mode)\s*="
     ),
+    # Batch-2 removals (remove-and-rename, no shim): the profiler bridge's
+    # execution_trace (U53.1; join stays) and explain's JSON form
+    # (defaults.7; the machine projection is trace.to_agent_json()).
+    "batch2_report": re.compile(
+        r"\bprofiler\.execution_trace\b|\bexecution_trace\s*\("
+        r"|\bexplain\s*\([^)\n]*\bformat\s*="
+    ),
 }
 
 #: Lines spelling a grouped-option bundle are exempt from ``trace_flat``.
@@ -191,11 +198,16 @@ _NEEDLES: dict[str, tuple[str, ...]] = {
         "StreamingOptions",
         "VisualizationOptions",
     ),
+    "batch2_report": ("execution_trace", "explain"),
 }
 
 #: The audited-legitimate ledger: path -> (groups | {"ALL"}, reason).
 #: Every row must still MATCH (a stale row fails the lint until pruned).
 _ALLOWED: dict[str, tuple[frozenset[str], str]] = {
+    "tests/test_report_explain.py": (
+        frozenset({"batch2_report"}),
+        "pytest.raises absence pin: explain(format=...) is removed (defaults.7)",
+    ),
     "CHANGELOG.md": (
         frozenset({"ALL"}),
         "release history; records the old spellings as history by design",
@@ -427,6 +439,7 @@ def test_lint_is_red_capable(tmp_path: Path) -> None:
         "buffers_bool": "log.draw(show_buffers=True)\n",
         "node_style_domain": "log.draw(node_style='vision')\n",
         "inert_opts": "opts = SaveOptions(output_dir='out')\n",
+        "batch2_report": 'payload = tl.report.explain(trace, format="json")\n',
     }
     assert set(planted) == set(_FORBIDDEN)
     assert set(_NEEDLES) == set(_FORBIDDEN), "every group needs a needle row"
@@ -437,6 +450,10 @@ def test_lint_is_red_capable(tmp_path: Path) -> None:
         assert any(hit_group == group for hit_group, _, _ in hits), (
             f"scanner failed to flag the planted {group} resurrection: {snippet!r}"
         )
+
+    resurrected = "nodes = tl.bridge.profiler.execution_trace(trace, path)\n"
+    hits = _scan_file(tmp_path / "planted_execution_trace.py", resurrected)
+    assert any(group == "batch2_report" for group, _, _ in hits)
 
     clean = 'log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))\n'
     assert not _scan_file(tmp_path / "clean.py", clean), (
