@@ -60,7 +60,7 @@ from .outcome import (
     settle_failed,
     settle_halted,
 )
-from .peak_memory import forward_peak_value, peak_rss_bytes, process_rss_bytes, reset_peak_rss
+from .peak_memory import peak_rss_bytes, process_rss_bytes, record_forward_peak, reset_peak_rss
 from .session import (
     CaptureSession,
     attach_capture_events_session,
@@ -324,12 +324,9 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
                 after = process_rss_bytes()
         rss_delta = max(0, after - before)
         trace.forward_memory_backend = backend_label
-        peak, trace.forward_peak_memory_reason = forward_peak_value(
-            backend_label,
-            max(rss_delta, int(traced_peak)),
-            python_peak_measured=tracemalloc_module is not None,
+        record_forward_peak(
+            trace, backend_label, max(rss_delta, int(traced_peak)), tracemalloc_module
         )
-        trace.forward_peak_memory = None if peak is None else Bytes(peak)
         # F20 peak PAIR (brainpipe D-7). ``live`` is a Python-allocation peak
         # and exists only when the tracemalloc opt-in paid for it; ``None``
         # means unmeasured, never zero. ``resident`` is the host high-water

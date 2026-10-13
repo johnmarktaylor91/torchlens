@@ -3,7 +3,7 @@
 Split out of ``capture/trace.py`` under the R43 file-size ratchet: the
 process RSS readers, the per-capture resident high-water scoping, and the
 ``Trace.forward_peak_memory_pair`` reader live here; the forward bracket in
-``capture/trace.py`` stays the only writer.
+``capture/trace.py`` stays the only writer (through :func:`record_forward_peak`).
 """
 
 from __future__ import annotations
@@ -186,3 +186,26 @@ def forward_peak_value(
     if python_peak_measured:
         return None, CPU_ZERO_PEAK_WITH_PYTHON_REASON
     return None, CPU_ZERO_PEAK_REASON
+
+
+def record_forward_peak(trace: Any, backend: str, measured: int, python_probe: Any) -> None:
+    """Write ``forward_peak_memory`` and its reason onto ``trace`` (forks.13).
+
+    Parameters
+    ----------
+    trace:
+        The trace the forward bracket measured.
+    backend:
+        The measurement backend label.
+    measured:
+        ``max(rss_delta, python_peak)`` in bytes.
+    python_probe:
+        The tracemalloc module when the opt-in probe ran, else ``None``.
+    """
+
+    from ..quantities import Bytes
+
+    peak, trace.forward_peak_memory_reason = forward_peak_value(
+        backend, measured, python_peak_measured=python_probe is not None
+    )
+    trace.forward_peak_memory = None if peak is None else Bytes(peak)
