@@ -32,3 +32,42 @@ OBL-Q-FLOPS-FORWARD	forward FLOPs equal their closed form on every door	forward 
 OBL-Q-NUM-OPS	the op count equals its closed form on every door	ops in scope; a Layer counts its passes, a module call counts its input and output boundary ops; unit: ops	I2	PURE_OBSERVER	REAL
 OBL-Q-NUM-PASSES	the pass count equals the number of times the op ran	times a layer's op executed in the forward; unit: passes	I2	PURE_OBSERVER	REAL
 OBL-Q-NUM-EDGES	the edge count equals the hand-counted graph edges on every door	distinct op-graph edges in scope, boundary edges included; unit: edges	I2	PURE_OBSERVER	REAL
+OBL-Q-ACTIVATION-MEMORY	a tensor's activation bytes equal elements times element size on every door	bytes of one observed tensor value (an op output, or a buffer's final observed value); a total sums the retained ones; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-PARAM-MEMORY	parameter bytes equal elements times element size over the unique parameters	storage bytes of the parameters in scope, each parameter tensor counted once however many names hold it; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-TENSORS	the trace's tensor count equals the hand-counted op passes	op passes in the trace, boundary ops (inputs, outputs, buffer reads and writes) included; unit: ops	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-COMPUTE-OPS	the compute-op count equals the hand-counted non-boundary op passes	op passes that are not an input, output or buffer boundary; unit: ops	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-COMPUTE-LAYERS	the compute-layer count equals the hand-counted non-boundary layers	layers (repeated passes of one operation grouped) that are not boundaries; unit: layers	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-LAYER-EDGES	the layer-edge count equals the hand-counted rolled-graph edges	distinct (parent layer, child layer) pairs, a pass feeding the next pass of its own layer included; unit: edges	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-INPUT-OPS	the input-op count equals the number of model input tensors	input boundary op passes, one per model input tensor; unit: ops	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-INPUT-LAYERS	the input-layer count equals the number of model input tensors	input boundary layers, one per model input tensor; unit: layers	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-OUTPUT-OPS	the output-op count equals the number of model output tensors	output boundary op passes, one per model output tensor; unit: ops	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-OUTPUT-LAYERS	the output-layer count equals the number of model output tensors	output boundary layers, one per model output tensor; unit: layers	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-BUFFER-LAYERS	the buffer-layer count equals the hand-counted buffer reads and writes	buffer boundary layers: one per registered-buffer read and one per recorded write; unit: layers	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-BUFFER-READ-OPS	the buffer-read count equals the hand-counted registered-buffer reads	buffer ops that bring a registered buffer's value into the graph; unit: ops	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-BUFFER-SOURCE-OPS	the buffer-source count equals the hand-counted registered-buffer reads	buffer ops that act as graph sources (the reads); unit: ops	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-BUFFER-WRITE-OPS	the buffer-write count equals the hand-counted recorded buffer writes	buffer ops recording a write (in place, fused or reassigned) to a registered buffer; unit: ops	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-BUFFER-SINK-OPS	the buffer-sink count equals the hand-counted recorded buffer writes	buffer ops that end a buffer's dataflow (the writes); unit: ops	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-BUFFER-EDGES	the buffer-edge count equals the hand-counted edges touching a buffer op	distinct op-graph edges with at least one buffer endpoint; unit: edges	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-INTERNAL-SOURCE-OPS	the internal-source count equals the hand-counted parentless non-input ops	op passes with no parent that are not model inputs (factories and buffer reads); unit: ops	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-INTERNAL-SOURCE-LAYERS	the internal-source layer count equals the hand-counted parentless non-input layers	layers of the internal-source ops; unit: layers	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-INTERNAL-SINK-OPS	the internal-sink count equals the hand-counted childless non-output ops	op passes with no child that are not model outputs (discarded results and unread buffer writes); unit: ops	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-INTERNAL-SINK-LAYERS	the internal-sink layer count equals the hand-counted childless non-output layers	layers of the internal-sink ops; unit: layers	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-PARENTS	the parent count equals the hand-counted distinct producers	distinct parent ops of an op, or distinct parent layers of a layer; unit: nodes	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-CHILDREN	the child count equals the hand-counted distinct consumers	distinct child ops of an op, or distinct child layers of a layer; unit: nodes	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-INPUTS	an op's input count equals its hand-counted graph parents	distinct graph-parent ops feeding an op; unit: ops	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-INTERNAL-EDGES	a module scope's internal edges equal the hand-counted edges inside it	distinct op-graph edges whose both endpoints are ops of the module or call; unit: edges	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-INPUT-EDGES	a module scope's input edges equal the hand-counted edges entering it	distinct op-graph edges from an op outside the module or call to one inside; unit: edges	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-OUTPUT-EDGES	a module scope's output edges equal the hand-counted edges leaving it	distinct op-graph edges from an op inside the module or call to one outside; unit: edges	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-MODULE-CALLS	the module-call count equals the hand-counted calls, the root call included	module invocations in the trace, the root call counted once; unit: calls	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-UNCALLED-MODULES	the uncalled-module count equals the hand-counted registered modules never called	registered modules of the source model with no call in the trace; unit: modules	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-OPS-WITH-PARAMS	the parameter-using op count equals the hand-counted op passes that read a parameter	op passes that use at least one parameter tensor; unit: ops	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-LAYERS-WITH-PARAMS	the parameter-using layer count equals the hand-counted layers that read a parameter	layers with at least one op pass that uses a parameter tensor; unit: layers	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-SAVED-LAYERS	the saved-layer count equals the hand-counted layers with a retained activation	layers with at least one op whose activation is retained; unit: layers	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-SAVED-MODULE-CALLS	the saved-call count equals the hand-counted calls with a retained output	module calls, the root call included, with at least one output op whose activation is retained; unit: calls	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-SAVED-MODULES	the saved-module count equals the hand-counted modules with a saved call	modules with at least one saved module call; unit: modules	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-SAVED-GRAD-OPS	the saved-gradient op count equals the hand-counted ops that received a gradient	op passes whose output received and kept a gradient in backward; unit: ops	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-SAVED-GRAD-LAYERS	the saved-gradient layer count equals the hand-counted layers that received a gradient	layers with at least one op that kept a gradient; unit: layers	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-SAVED-GRAD-MODULE-CALLS	the saved-gradient call count equals the hand-counted calls whose output received a gradient	module calls, the root call included, with at least one output op that kept a gradient; unit: calls	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-SAVED-GRAD-MODULES	the saved-gradient module count equals the hand-counted modules with such a call	modules with at least one saved-gradient module call; unit: modules	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-SAVED-GRAD-FNS	the saved-gradient backward-node count equals the captured differentiable ops	backward nodes (grad_fns) of captured forward ops that kept their gradients; unit: grad_fns	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-SAVED-GRAD-FN-CALLS	the saved-gradient backward-call count equals saved nodes times backward passes	calls of saved-gradient backward nodes, one per node per backward pass; unit: calls	I2	PURE_OBSERVER	REAL
