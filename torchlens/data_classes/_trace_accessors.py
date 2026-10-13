@@ -1,11 +1,11 @@
 """Trace accessor helpers."""
 
 from collections import OrderedDict
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from typing import Any
 
 from .._errors import AmbiguousOpLookupError
-from ._accessor_base import Accessor
+from ._accessor_base import Accessor, attach_source_honesty
 from .op import Op
 
 
@@ -103,8 +103,31 @@ class OrphanAccessor(Accessor[Op]):
         return "orphan"
 
 
+def _is_counted_op(op: Op) -> bool:
+    """Whether an op row counts toward ``Trace.num_ops`` (sumfam F1).
+
+    The count excludes the input, output and buffer rows, the definition in
+    ``backends/_finalize.py``; those rows are aliases of a tensor, not ops.
+    """
+
+    return not (
+        getattr(op, "is_input", False)
+        or getattr(op, "is_output", False)
+        or getattr(op, "is_buffer", False)
+    )
+
+
 class TraceOpAccessor(Accessor[Op]):
-    """Trace-level accessor for type-strict Op lookups."""
+    """Trace-level accessor for type-strict Op lookups.
+
+    Counting and iteration cover the ops ``Trace.num_ops`` counts (sumfam
+    F1): ``len``, iteration, integer indexing, ``keys``/``values``/``items``
+    and ``to_pandas`` skip the input, output and buffer rows, so
+    ``len(trace.ops) == trace.num_ops``. Label lookup still resolves EVERY
+    row: ``trace.ops["input_1"]`` returns the input row and ``"input_1" in
+    trace.ops`` is true although the label is not in ``keys()``. The
+    alias-inclusive row sequence is ``trace.layer_list``.
+    """
 
     def __init__(self, ops: Sequence[Op], layer_num_calls: Mapping[str, int]) -> None:
         """Initialize from ordered Op records.
@@ -123,6 +146,7 @@ class TraceOpAccessor(Accessor[Op]):
             op_lookup[op.label] = op
             self._raw_index_lookup[op.raw_index] = op
         super().__init__(op_lookup, item_list=list(ops))
+        self._counted_cache: list[Op] | None = None
         self._layer_num_calls = dict(layer_num_calls)
         # Lazily built reverse indexes for ``_resolve_substring``; see
         # ``_ensure_alias_indexes``. Lifetime is this accessor instance, whose
@@ -133,6 +157,70 @@ class TraceOpAccessor(Accessor[Op]):
         self._layer_alias_index: dict[Any, list[Op]] | None = None
         self._alias_index_unavailable = False
         self._resolved_op_cache: dict[str, Op] = {}
+
+    def _counted_ops(self) -> list[Op]:
+        """The counted op rows, in capture order.
+
+        Flags settle at finalization (``_tracing_finished`` is mirrored onto
+        every op), so the list is memoized only once the last row is
+        finished; mid-capture reads recompute it.
+        """
+
+        cached = getattr(self, "_counted_cache", None)
+        if cached is not None:
+            return cached
+        counted = [op for op in self._list if _is_counted_op(op)]
+        if self._list and getattr(self._list[-1], "_tracing_finished", False):
+            self._counted_cache = counted
+        return counted
+
+    def __getitem__(self, key: int | str) -> Op:
+        """Return a counted op by ordinal, or any row by label."""
+
+        if isinstance(key, int):
+            return self._counted_ops()[key]
+        return super().__getitem__(key)
+
+    def __iter__(self) -> Iterator[Op]:
+        """Iterate over the counted ops in capture order."""
+
+        return iter(self._counted_ops())
+
+    def __len__(self) -> int:
+        """Return the counted op total (equals ``Trace.num_ops``)."""
+
+        return len(self._counted_ops())
+
+    def keys(self) -> list[Any]:
+        """Return the labels of the counted ops."""
+
+        return [op.label for op in self._counted_ops()]
+
+    def values(self) -> list[Op]:
+        """Return the counted ops."""
+
+        return list(self._counted_ops())
+
+    def items(self) -> list[tuple[Any, Op]]:
+        """Return ``(label, op)`` pairs for the counted ops."""
+
+        return [(op.label, op) for op in self._counted_ops()]
+
+    def to_pandas(self) -> Any:
+        """Return one row per counted op (the same rows ``len`` counts)."""
+
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+            ) from e
+
+        counted = self._counted_ops()
+        frames = [op.to_pandas() for op in counted if hasattr(op, "to_pandas")]
+        if not frames:
+            return pd.DataFrame()
+        return attach_source_honesty(pd.concat(frames, ignore_index=True), counted)
 
     def by_raw_index(self, raw_index: int) -> Op:
         """Return an Op by its realtime raw capture index.
