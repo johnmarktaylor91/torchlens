@@ -2356,3 +2356,10 @@ env: py3.12-torch2.14.1
 torch: 2.14.1
 source: 8e6482af469de2ef7bb938b9faae9c8cdd6c1d21 (dirty)
 recorded: 2026-10-12T22:42:12.266417+00:00
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: BRIDGE batch-2: new bridge consumer reads (captum param.kind) and the hub/preprocessing modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 5975ceb991126960a5db0d83ef6a975aed5b2527 (clean)
+recorded: 2026-10-13T00:31:35.941783+00:00

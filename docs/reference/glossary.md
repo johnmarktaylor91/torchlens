@@ -1413,6 +1413,35 @@ shim owed*
   opted-in capture's `input_preprocessor` keeps `source="imagenet_default"`,
   `verified=False`, status `unverified_fallback`: never an authority.
 
+**torchlens.preprocessing.attach_authority(model, authority)** — *unstable — no deprecation shim owed*
+: Records a model's preprocessing authority on the model so discovery finds
+  it: a torchvision model built with `weights=` keeps no handle to its
+  weights, and the preset cannot be inferred from the class. Afterwards
+  `resolve(model=model)`, PIL-input autorouting and `check_card` resolve the
+  attached authority as model metadata. Accepts any recognized authority;
+  an opaque callable refuses `preprocessing_attach_opaque`. Returns the model.
+
+**torchlens.preprocessing.check_card(trace_or_record, *, model=None, authority=None, offline=None)** — *unstable — no deprecation shim owed*
+: The on-request preprocessing verifier: compares the preprocessing a capture
+  recorded (`Trace.input_preprocessor`) with the model's known card (HF image
+  processor, torchvision weights, timm or open_clip config, or a named
+  `authority=`), returns the field-level `PreprocessingAudit`, and warns
+  `preprocessing_card_mismatch` when a field disagrees. Nothing runs it
+  automatically. An opaque record compares as unknown, never as a match.
+
+**torchlens.bridge.huggingface.from_hub(repo_id, *, path_in_repo, revision, token, api)** — *unstable — no deprecation shim owed*
+: Downloads the gzipped `.tlspec` tar that `push_to_hub` uploads, checks
+  every tar member (no links, absolute or parent-escaping names, one
+  top-level bundle), and loads it eagerly onto the CPU through `tl.load`'s default-deny
+  loader. `push_to_hub` accepts only a `Trace` or `Bundle` and never uploads
+  a pickle (`hub_push_artifact_unsupported`); its default `path_in_repo` is
+  `torchlens_artifact.tar.gz`.
+
+**call_kwargs (torchlens.bridge.gradcam.cam)** — *unstable — no deprecation shim owed*
+: Mapping forwarded unchanged to the pytorch-grad-cam call (`aug_smooth`,
+  `eigen_smooth`); an option given both here and as a keyword refuses
+  `bridge_gradcam_call_option_conflict`.
+
 **SummaryCallback (torchlens.callbacks.lightning)** — *unstable — no deprecation shim owed*
 : Lightning callback printing `tl.summary` once per fit. Sample: the
   module's `example_input_array` (at fit start) else the first training batch

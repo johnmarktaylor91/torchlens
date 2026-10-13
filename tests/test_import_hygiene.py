@@ -381,7 +381,7 @@ assert collisions == {
     # ``torchlens.bridge`` idiom: CardTree IR, the cards, the frontier query).
     "bridge": [
         "brain_score", "captum", "depyf", "dialz", "gradcam", "hf",
-        "huggingface", "inseq", "lit", "mcp", "nnsight", "profiler",
+        "huggingface", "inseq", "lit", "mcp", "profiler",
         "repeng", "rsatoolbox", "sae", "sae_lens", "shap",
         "steering_vectors", "treescope",
         # F21 tvscope B8: the per-site xarray/NeuroidAssembly adapter module.

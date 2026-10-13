@@ -1,4 +1,4 @@
-"""Typed refusal codes of the contrastive, depyf, nnsight and MLflow bridges.
+"""Typed refusal codes of the contrastive, depyf and MLflow bridges.
 
 Every refusal these bridges added raises a ``TorchLensError`` subclass that
 keeps its historical built-in lineage (``ValueError``/``TypeError``/
@@ -24,7 +24,7 @@ from torchlens._errors import (
     InvalidArgumentError,
     KeywordConflictError,
 )
-from torchlens.bridge import _contrastive, depyf as bdepyf, nnsight as bnnsight
+from torchlens.bridge import _contrastive, depyf as bdepyf
 from torchlens.export import _trackers
 
 
@@ -150,13 +150,6 @@ def test_depyf_nothing_dumped(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) ->
     with pytest.raises(CaptureContextError) as info:
         bdepyf.dump(torch.nn.Linear(2, 2), torch.randn(1, 2), tmp_path)
     _assert_code(info.value, "bridge_depyf_nothing_dumped")
-
-
-def test_nnsight_trace_unsupported() -> None:
-    with pytest.raises(ArgumentTypeError) as info:
-        bnnsight.from_trace(object())
-    assert isinstance(info.value, TypeError)
-    _assert_code(info.value, "bridge_nnsight_trace_unsupported")
 
 
 class _FluentClient:

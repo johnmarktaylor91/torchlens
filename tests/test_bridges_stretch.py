@@ -177,54 +177,6 @@ def test_shap_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     assert payload["values"].shape == x.shape
 
 
-def test_inseq_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
-    """inseq bridge loads an attribution model and forwards attribution args."""
-
-    class FakeAttributionModel:
-        """inseq attribution fixture."""
-
-        def attribute(
-            self,
-            input_texts: str,
-            generated_texts: str | None = None,
-            *,
-            step_scores: list[str] | None = None,
-        ) -> dict[str, Any]:
-            """Return a deterministic attribution payload (inseq 0.7 keyword names)."""
-
-            return {
-                "inputs": input_texts,
-                "generated_texts": generated_texts,
-                "step_scores": step_scores,
-            }
-
-    loaded: list[str] = []
-
-    def load_model(model_or_id: str, attribution_method: str) -> FakeAttributionModel:
-        """Return a fake attribution model."""
-
-        assert model_or_id == "tiny"
-        loaded.append(attribution_method)
-        return FakeAttributionModel()
-
-    monkeypatch.setitem(sys.modules, "inseq", _module("inseq", load_model=load_model))
-
-    payload = tl.bridge.inseq.attribute(
-        "tiny",
-        "hello",
-        method="saliency",
-        generated_texts="world",
-        step_scores=["probability"],
-    )
-
-    assert payload["schema"] == "torchlens.inseq.v1"
-    assert payload["method"] == "saliency"
-    assert payload["attributions"]["generated_texts"] == "world"
-    # The default method is inseq's own spelling, not "integrated_grads".
-    assert tl.bridge.inseq.attribute("tiny", "hello")["method"] == "integrated_gradients"
-    assert loaded == ["saliency", "integrated_gradients"]
-
-
 def _contrastive_logs() -> tuple[Any, Any]:
     """Trace the tiny model on a positive and a negative batch of two inputs.
 

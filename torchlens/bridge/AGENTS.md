@@ -22,8 +22,12 @@ optional dependency.
   call.
 
 ## Adapter files and main entry points
-- `captum.py`: `attribute()`, `layer()` (extra: `torchlens[captum]`;
-  `layer()` is `_utils.module_for_site`).
+- `captum.py`: `attribute(log, method, target=None, *, inputs=None, **kwargs)`,
+  `layer()` (extra: `torchlens[captum]`; `layer()` is `_utils.module_for_site`).
+  `target=` is forwarded only when given (LayerActivation and most Neuron*
+  classes reject it); without `inputs=` every logged input is forwarded (the
+  tensor, or the positional tuple in `forward` order); a keyword-only, nested
+  or unsaved input refuses `bridge_captum_inputs_unresolved`.
 - `shap.py`: `explain(log, *, background, inputs=None, ...)` (default
   `shap.DeepExplainer`; extra `torchlens[shap]`, `shap>=0.45.1,<1`).
   `background` is REQUIRED keyword-only: the old default made the explained
@@ -55,6 +59,12 @@ optional dependency.
   parity, mask-trap tripwire) and `tests/test_hf_attention_backend_deploy.py`
   (device_map, disk offload, bitsandbytes on CPU).
 - `huggingface.py`: `push_to_hub()` for artifacts (extra: `torchlens[hf]`).
+- `huggingface.py`: `push_to_hub()` uploads a `Trace`/`Bundle` as a gzipped
+  tar of its portable `.tlspec` bundle (never a pickle; anything else refuses
+  `hub_push_artifact_unsupported`); `from_hub()` downloads it, checks every tar
+  member (`hub_artifact_unsafe`) and loads eagerly through `tl.load`'s
+  default-deny loader. Tests use an `api=` fake exposing `upload_file` /
+  `hf_hub_download` (extra: `torchlens[hf]`).
 - `profiler.py`: `execution_trace()`, `join()` correlate a Kineto/Chrome trace
   with captured layers; stdlib-only, no import gate. `join()` (schema
   `torchlens.profiler_join.v2`) assigns each complete event to at most one
@@ -71,7 +81,9 @@ optional dependency.
 - `gradcam.py`: `cam()`, `layer()` (extra: `torchlens[gradcam]`). `cam()`
   splits `**kwargs` by name: keywords the CAM constructor declares
   (`reshape_transform`, ...) go to the constructor, the rest (`aug_smooth`,
-  `eigen_smooth`) to the CAM call. `layer()` is `_utils.module_for_site`.
+  `eigen_smooth`) to the CAM call; `call_kwargs=` is the explicit spelling
+  for call options (a key given both ways refuses
+  `bridge_gradcam_call_option_conflict`). `layer()` is `_utils.module_for_site`.
 - `brain_score.py`: `per_layer()` takes a CALLABLE offline benchmark (no
   import gate; raises `TypeError` on non-callables). `get_activations_fn()`
   builds the `get_activations(images, layer_names) -> OrderedDict[str,
@@ -98,8 +110,6 @@ optional dependency.
   `MCPServer` high-level API (schemas derived from handler signatures — keep
   handler params in sync with `TOOL_SPECS`). No tool executes user code or
   mutates state; live capture stays a Python-process concern.
-- `nnsight.py`: `from_trace()` normalizes a cached nnsight-style trace into a
-  stable payload schema; offline, no import gate.
 - `inseq.py`: `attribute()` (extra: `torchlens[inseq]`).
 - `depyf.py`: `dump()` (extra: `torchlens[depyf]`).
 - Contrastive steering family (`steering_vectors.py`, `repeng.py`, `dialz.py`):
@@ -138,18 +148,17 @@ optional dependency.
   - repeng/dialz layer `i` matches `hidden_states[i + 1]`, which is the
     output of `model.layers.<i>` except at the last layer, where Hugging Face
     returns the final-norm output (site `"model.norm"`).
-- `nnsight.py`: `from_trace()` normalizes a cached nnsight-style trace (a
-  mapping, `to_dict()` returning a mapping, or an object with `nodes`) into
-  a stable payload schema; anything else, including a live nnsight 0.7
-  tracer, raises `TypeError` naming the supported shapes (never an empty
-  payload). Offline, no import gate.
 - `inseq.py`: `attribute(model_or_id, inputs, *, method="integrated_gradients",
   generated_texts=None, attribution_model=None, **kwargs)`; names follow
   inseq 0.7 (`load_model(model, attribution_method)`,
   `AttributionModel.attribute(input_texts, generated_texts=...)`); inseq
   swallows unknown keywords with only a warning, so a wrong spelling is
-  silently ignored -- verify keywords against inseq's signatures (extra:
-  `torchlens[inseq]`).
+  silently ignored -- verify keywords against inseq's signatures. `method`
+  may be the TorchLens spelling (`input_x_grad` maps to `input_x_gradient`);
+  an unknown name refuses `bridge_inseq_method_unknown`. With
+  `generated_texts=` the bridge compares `result.info["generated_texts"]`
+  with the request and refuses `bridge_inseq_forced_decoding_ignored` on a
+  difference (extra: `torchlens[inseq]`).
 - `depyf.py`: `dump(model, x, path, **prepare_debug_kwargs) -> list[Path]`
   runs `with depyf.prepare_debug(path): torch.compile(model)(*x)` and
   returns the files written; `path` is required; a cached compile that
@@ -165,9 +174,9 @@ optional dependency.
   naming the exact extra, e.g.
   "Captum bridge requires the `captum` extra: install torchlens[captum].".
 - Tests gate on the dependency with `pytest.importorskip()`; offline adapters
-  (`brain_score`, `nnsight`, `profiler`) run without extras. Fake-module
-  tests pass while the real package fails (depyf, inseq and nnsight all
-  did), so each bridge also keeps a real-package file
+  (`brain_score`, `profiler`) run without extras. Fake-module
+  tests pass while the real package fails (depyf and inseq
+  both did), so each bridge also keeps a real-package file
   `tests/test_bridge_real_<bridge>.py` that compares against the package
   used directly.
 

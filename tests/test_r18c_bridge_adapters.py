@@ -711,18 +711,19 @@ def test_execution_trace_docstring_is_honest() -> None:
 # --------------------------------------------------------------------------- #
 # LOW-4 / LOW-S1 huggingface: artifact format tag + extension-aware name
 # --------------------------------------------------------------------------- #
-def test_push_to_hub_pickle_format_tag() -> None:
-    """A picklable artifact reports the pickle format and keeps the .pkl name."""
+def test_push_to_hub_refuses_objects_without_a_tlspec_path() -> None:
+    """A plain object is refused typed; push_to_hub never falls back to pickle."""
 
+    from torchlens._errors import ArgumentTypeError
     from torchlens.bridge import huggingface
 
-    result = huggingface.push_to_hub({"trace": "data"}, "example/repo", dry_run=True)
-    assert result["format"] == "pickle"
-    assert result["path_in_repo"] == "torchlens_artifact.pkl"
+    with pytest.raises(ArgumentTypeError) as info:
+        huggingface.push_to_hub({"trace": "data"}, "example/repo", dry_run=True)
+    assert info.value.fields["code"] == "hub_push_artifact_unsupported"
 
 
 def test_push_to_hub_tarball_format_and_name(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A bundle fallback reports tar.gz and switches the default name extension."""
+    """A bundle upload reports tar.gz under the default ``.tar.gz`` name."""
 
     from torchlens.bridge import huggingface
 

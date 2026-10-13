@@ -1,16 +1,24 @@
-"""Hugging Face Hub publishing helpers."""
+"""Hugging Face Hub publishing and loading helpers.
+
+Both directions go through the portable ``.tlspec`` bundle: ``push_to_hub``
+uploads a gzipped tar of the privacy-scrubbed bundle (never a raw pickle),
+and ``from_hub`` downloads that tar, extracts it under strict member checks,
+and loads it through the default-deny ``.tlspec`` loader (``torchlens.load``).
+"""
 
 from __future__ import annotations
 
 import io
-import pickle
 import tarfile
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
-_DEFAULT_PATH_IN_REPO = "torchlens_artifact.pkl"
-_DEFAULT_TARBALL_PATH_IN_REPO = "torchlens_artifact.tar.gz"
+_DEFAULT_PATH_IN_REPO = "torchlens_artifact.tar.gz"
+_BUNDLE_ARCNAME = "bundle"
+#: Upper bounds on a downloaded artifact's tar: a Hub file is untrusted input.
+_MAX_TAR_MEMBERS = 100_000
+_MAX_TAR_BYTES = 64 * 1024**3
 
 
 def push_to_hub(
@@ -26,12 +34,17 @@ def push_to_hub(
     api: Any | None = None,
     save_level: str = "portable",
 ) -> dict[str, Any]:
-    """Upload a real TorchLens artifact to the Hugging Face Hub.
+    """Upload a TorchLens ``Trace`` or ``Bundle`` to the Hugging Face Hub.
+
+    The artifact is saved as a privacy-scrubbed portable ``.tlspec`` bundle
+    and uploaded as one gzipped tar; :func:`from_hub` reads it back through
+    the safe loader. Nothing is ever uploaded as a raw pickle: an object with
+    no ``.tlspec`` save path is refused.
 
     Parameters
     ----------
     log_or_bundle_or_spec:
-        ``Trace``, ``Bundle``, or ``InterventionSpec``-like object to publish.
+        ``Trace`` or ``Bundle`` to publish.
     repo_id:
         Target Hugging Face repository ID.
     token:
@@ -50,59 +63,45 @@ def push_to_hub(
     api:
         Optional ``HfApi``-compatible object for tests or advanced callers.
     save_level:
-        Public ``.tlspec`` save level used when the artifact must be
-        serialized through the portable-bundle scrub path (``"audit"``,
-        ``"executable_with_callables"``, or ``"portable"``). Only consulted
-        when ``log_or_bundle_or_spec`` is a ``Trace``/``Bundle`` that cannot
-        be pickled directly (see ``_artifact_bytes``).
+        Public ``.tlspec`` save level of the uploaded bundle (``"audit"``,
+        ``"executable_with_callables"``, or ``"portable"``).
 
     Returns
     -------
     dict[str, Any]
-        Upload metadata including ``repo_id``, ``path_in_repo``, and ``format``
-        (``"pickle"`` or ``"tar.gz"``). When the artifact must be packed as a
-        gzipped tar bundle and the caller left ``path_in_repo`` at its default,
-        the destination name is switched to a ``.tar.gz`` extension so a bundle
-        is never uploaded under a ``.pkl`` name.
+        Upload metadata including ``repo_id``, ``path_in_repo``,
+        ``size_bytes`` and ``format`` (always ``"tar.gz"``).
 
     Raises
     ------
     ImportError
         If ``huggingface_hub`` is unavailable.
+    ArgumentTypeError
+        ``hub_push_artifact_unsupported`` when the object is neither a
+        ``Trace`` nor a ``Bundle`` (raw pickling is never a fallback).
     TorchLensIOError
-        If the artifact cannot be serialized at all. ``push_to_hub`` never
-        silently substitutes a metadata-only stub for genuine artifact
-        content -- either the real artifact is uploaded, or this raises.
+        If the ``.tlspec`` bundle save fails. ``push_to_hub`` never silently
+        substitutes a metadata-only stub for genuine artifact content.
     """
 
-    if api is None and not dry_run:
-        try:
-            from huggingface_hub import HfApi
-        except ImportError as exc:
-            raise ImportError(
-                "Hugging Face publishing requires the `hf` extra: install torchlens[hf]."
-            ) from exc
-        api = HfApi(token=token)
-
-    payload, artifact_format = _artifact_bytes(log_or_bundle_or_spec, save_level=save_level)
-    if artifact_format == "tar.gz" and path_in_repo == _DEFAULT_PATH_IN_REPO:
-        path_in_repo = _DEFAULT_TARBALL_PATH_IN_REPO
+    payload = _artifact_bytes(log_or_bundle_or_spec, save_level=save_level)
 
     if dry_run:
         return {
             "repo_id": repo_id,
             "path_in_repo": path_in_repo,
             "size_bytes": len(payload),
-            "format": artifact_format,
+            "format": "tar.gz",
             "dry_run": True,
         }
+
+    if api is None:
+        api = _hf_api(token)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         artifact_path = Path(tmpdir) / Path(path_in_repo).name
         artifact_path.write_bytes(payload)
         size_bytes = artifact_path.stat().st_size
-        if api is None:
-            raise RuntimeError("A Hugging Face API object is required when dry_run=False.")
         if create_repo:
             api.create_repo(repo_id=repo_id, private=private, exist_ok=True)
         upload_result = api.upload_file(
@@ -116,82 +115,233 @@ def push_to_hub(
         "repo_id": repo_id,
         "path_in_repo": path_in_repo,
         "size_bytes": size_bytes,
-        "format": artifact_format,
+        "format": "tar.gz",
         "dry_run": False,
         "upload_result": upload_result,
     }
 
 
-def _artifact_bytes(
-    log_or_bundle_or_spec: Any, *, save_level: str = "portable"
-) -> tuple[bytes, str]:
-    """Serialize an artifact for Hub upload and report its serialized format.
+def from_hub(
+    repo_id: str,
+    *,
+    path_in_repo: str = _DEFAULT_PATH_IN_REPO,
+    revision: str | None = None,
+    token: str | None = None,
+    api: Any | None = None,
+) -> Any:
+    """Download a TorchLens artifact from the Hub and load it safely.
+
+    The file must be the gzipped ``.tlspec`` tar that :func:`push_to_hub`
+    writes. Its members are checked before extraction (regular files and
+    directories under one top-level bundle directory only: no links, devices,
+    absolute paths or ``..``), and the bundle is loaded eagerly onto the CPU through
+    ``torchlens.load``, whose metadata unpickler is default-deny and never
+    imports foreign custom callables. The extracted copy is deleted after the
+    load.
+
+    Parameters
+    ----------
+    repo_id:
+        Source Hugging Face repository ID.
+    path_in_repo:
+        Artifact filename inside the repository.
+    revision:
+        Optional branch, tag or commit to download from.
+    token:
+        Optional Hub token (used only when ``api`` is not given).
+    api:
+        Optional ``HfApi``-compatible object exposing ``hf_hub_download``,
+        for tests, mirrors or advanced callers.
+    Returns
+    -------
+    Trace | Bundle | InterventionSpec
+        Whatever the ``.tlspec`` manifest names, as ``torchlens.load`` returns.
+
+    Raises
+    ------
+    ImportError
+        If ``huggingface_hub`` is unavailable and no ``api`` is given.
+    TorchLensIOError
+        ``hub_artifact_unsafe`` when the download is not a readable gzipped
+        tar or a member fails the extraction checks; any ``.tlspec`` load
+        refusal propagates unchanged.
+    """
+
+    from .._io.bundle import load as _load
+
+    if api is None:
+        api = _hf_api(token)
+    downloaded = Path(
+        api.hf_hub_download(repo_id=repo_id, filename=path_in_repo, revision=revision)
+    )
+    with tempfile.TemporaryDirectory() as tmpdir:
+        bundle_dir = _extract_bundle(downloaded, Path(tmpdir))
+        return _load(bundle_dir, lazy=False, map_location="cpu")
+
+
+def _hf_api(token: str | None) -> Any:
+    """Return a ``huggingface_hub.HfApi`` or raise naming the ``hf`` extra."""
+
+    try:
+        from huggingface_hub import HfApi
+    except ImportError as exc:
+        raise ImportError(
+            "Hugging Face publishing requires the `hf` extra: install torchlens[hf]."
+        ) from exc
+    return HfApi(token=token)
+
+
+def _extract_bundle(archive: Path, destination: Path) -> Path:
+    """Extract a pushed ``.tlspec`` tar after checking every member.
+
+    Parameters
+    ----------
+    archive:
+        Downloaded gzipped tar.
+    destination:
+        Empty directory to extract into.
+
+    Returns
+    -------
+    Path
+        The single top-level bundle directory.
+
+    Raises
+    ------
+    TorchLensIOError
+        ``hub_artifact_unsafe`` on an unreadable archive, a link or special
+        member, an absolute or parent-escaping name, more than one top-level
+        entry, or a member count or total size over the bounds.
+    """
+
+    from .._io import TorchLensIOError
+
+    root, problem = _checked_extract(archive, destination)
+    if problem is not None:
+        raise TorchLensIOError(
+            f"from_hub refused {archive.name}: {problem}. Only the gzipped `.tlspec` "
+            "tar written by push_to_hub is loaded. Remedy: point path_in_repo at an "
+            "artifact uploaded with torchlens.bridge.huggingface.push_to_hub, or "
+            "download the file yourself and inspect it before loading it with "
+            "torchlens.load.",
+            code="hub_artifact_unsafe",
+            remedy=(
+                "point path_in_repo at an artifact uploaded with push_to_hub, or "
+                "download and inspect the file before loading it with torchlens.load"
+            ),
+        )
+    return destination / root
+
+
+def _checked_extract(archive: Path, destination: Path) -> tuple[str, str | None]:
+    """Check every member, then extract; return ``(root, problem)``."""
+
+    try:
+        with tarfile.open(archive, mode="r:gz") as tar:
+            members = tar.getmembers()
+            problem = _members_problem(members)
+            if problem is None:
+                # The ``data`` filter (PEP 706) re-checks names and links where the
+                # interpreter has it; every member was checked above either way.
+                extract_options: dict[str, Any] = (
+                    {"filter": "data"} if hasattr(tarfile, "data_filter") else {}
+                )
+                tar.extractall(destination, **extract_options)  # noqa: S202
+    except (tarfile.TarError, OSError, EOFError) as exc:
+        return "", f"not a readable gzipped tar ({exc})"
+    if problem is not None:
+        return "", problem
+    root = PurePosixPath(members[0].name).parts[0]
+    if not (destination / root).is_dir():
+        return "", "the top-level entry is not a bundle directory"
+    return root, None
+
+
+def _members_problem(members: list[tarfile.TarInfo]) -> str | None:
+    """Return why a member list is unsafe to extract, or ``None``."""
+
+    problem = next((p for p in map(_member_problem, members) if p is not None), None)
+    if problem is not None:
+        return problem
+    roots = {PurePosixPath(member.name).parts[0] for member in members}
+    if len(roots) != 1:
+        return f"expected one top-level bundle, found {len(roots)}"
+    if len(members) > _MAX_TAR_MEMBERS:
+        return f"{len(members)} members exceed the bound"
+    if sum(member.size for member in members) > _MAX_TAR_BYTES:
+        return "total size exceeds the bound"
+    return None
+
+
+def _member_problem(member: tarfile.TarInfo) -> str | None:
+    """Return why one tar member is unsafe to extract, or ``None``."""
+
+    if not (member.isfile() or member.isdir()):
+        return f"member {member.name!r} is a link or special file"
+    parts = PurePosixPath(member.name).parts
+    if not parts or member.name.startswith("/") or ".." in parts or "\\" in member.name:
+        return f"member name {member.name!r} escapes the bundle"
+    return None
+
+
+def _artifact_bytes(log_or_bundle_or_spec: Any, *, save_level: str = "portable") -> bytes:
+    """Serialize a ``Trace``/``Bundle`` as a gzipped tar of its ``.tlspec`` bundle.
 
     Parameters
     ----------
     log_or_bundle_or_spec:
         Artifact object.
     save_level:
-        Public ``.tlspec`` save level used for the portable-bundle fallback
-        path (see below).
+        Public ``.tlspec`` save level.
 
     Returns
     -------
-    tuple[bytes, str]
-        The serialized bytes and a format tag. A ``Trace``/``Bundle`` -- which
-        raw ``pickle.dumps`` would embed ``$HOME``, the username, and absolute
-        source/bundle/visualizer paths into (R62-1: a privacy leak to the one
-        PUBLIC sharing surface) -- is ALWAYS serialized through the same real,
-        privacy-scrubbed ``.tlspec`` portable bundle path used by
-        :func:`torchlens.save`/``Bundle.save`` and returned as a gzipped tar
-        archive with the tag ``"tar.gz"``. The scrub is real, not a metadata
-        stand-in. Only an object with NO portable-bundle save path (e.g. a plain
-        dict of user data the caller chose to push) is pickled directly and
-        tagged ``"pickle"``.
+    bytes
+        The gzipped tar. The bundle is the same privacy-scrubbed portable
+        save :func:`torchlens.save` / ``Bundle.save`` write (raw pickling of a
+        ``Trace`` would embed ``$HOME``, the username and absolute source
+        paths into a public upload).
 
     Raises
     ------
+    ArgumentTypeError
+        ``hub_push_artifact_unsupported`` for any other object.
     TorchLensIOError
-        If the artifact cannot be serialized at all (the portable-bundle path
-        itself fails, or a no-bundle object fails to pickle).
+        If the bundle save fails.
     """
 
+    from .._errors import ArgumentTypeError
     from .._io import TorchLensIOError
 
-    # Privacy-first (R62-1): any artifact with a portable-bundle save path
-    # (Trace/Bundle) is serialized through the SCRUBBED bundle path, never raw
-    # ``pickle.dumps`` -- raw pickle leaks $HOME, the username, and absolute
-    # source paths to a public hub. Raw pickle is reserved for objects that have
-    # no bundle save path and thus carry no scrubbable TorchLens internals.
     saver = _resolve_bundle_saver(log_or_bundle_or_spec)
-    if saver is not None:
-        try:
-            with tempfile.TemporaryDirectory() as tmpdir:
-                bundle_dir = Path(tmpdir) / "bundle"
-                saver(bundle_dir, level=save_level, overwrite=True)
-                buffer = io.BytesIO()
-                with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
-                    tar.add(bundle_dir, arcname=bundle_dir.name)
-                return buffer.getvalue(), "tar.gz"
-        except Exception as bundle_error:
-            raise TorchLensIOError(
-                "push_to_hub could not serialize this "
-                f"{type(log_or_bundle_or_spec).__name__} artifact for upload through "
-                f"the privacy-scrubbed portable `.tlspec` bundle path ({bundle_error!r}). "
-                "Refusing to fall back to raw pickle (which would leak local paths) or "
-                "to silently upload a metadata-only stub instead of the real artifact."
-            ) from bundle_error
-
+    if saver is None:
+        raise ArgumentTypeError(
+            "push_to_hub uploads only a Trace or a Bundle (as a portable `.tlspec` "
+            f"bundle); got {type(log_or_bundle_or_spec).__name__}. Raw pickling is "
+            "never used for Hub uploads.",
+            code="hub_push_artifact_unsupported",
+            remedy=(
+                "push a Trace or a Bundle; save an intervention recipe with "
+                "torchlens.io.save_intervention(trace, path) and share that "
+                "`.tlspec` directory; share plain data in a format of your choice"
+            ),
+            received_type=type(log_or_bundle_or_spec).__name__,
+        )
     try:
-        return pickle.dumps(log_or_bundle_or_spec), "pickle"
-    except Exception as direct_pickle_error:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            bundle_dir = Path(tmpdir) / _BUNDLE_ARCNAME
+            saver(bundle_dir, level=save_level, overwrite=True)
+            buffer = io.BytesIO()
+            with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
+                tar.add(bundle_dir, arcname=_BUNDLE_ARCNAME)
+            return buffer.getvalue()
+    except Exception as bundle_error:
         raise TorchLensIOError(
             "push_to_hub could not serialize this "
-            f"{type(log_or_bundle_or_spec).__name__} artifact for upload "
-            f"({direct_pickle_error!r}) and it has no portable `.tlspec` bundle "
-            "save path to fall back to. Refusing to silently upload a metadata-only "
-            "stub instead of the real artifact."
-        ) from direct_pickle_error
+            f"{type(log_or_bundle_or_spec).__name__} artifact through the "
+            f"privacy-scrubbed portable `.tlspec` bundle path ({bundle_error!r}). "
+            "Refusing to upload a metadata-only stub instead of the real artifact."
+        ) from bundle_error
 
 
 def _resolve_bundle_saver(log_or_bundle_or_spec: Any) -> Any | None:
@@ -240,4 +390,4 @@ def _resolve_bundle_saver(log_or_bundle_or_spec: Any) -> Any | None:
     return None
 
 
-__all__ = ["push_to_hub"]
+__all__ = ["from_hub", "push_to_hub"]

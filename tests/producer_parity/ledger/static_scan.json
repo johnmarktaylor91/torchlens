@@ -2378,6 +2378,14 @@
  {
   "ambiguous": true,
   "field": "kind",
+  "file": "torchlens/bridge/captum.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
   "file": "torchlens/bridge/gradcam.py",
   "has_default": false,
   "sites": 1,
