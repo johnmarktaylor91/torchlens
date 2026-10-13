@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
 ProfileLevel = Literal["op", "module", "call"]
 ProfileSort = Literal["time", "flops", "activation_memory", "param_count"]
+ProfileGroupBy = Literal["source_line"]
 
 #: Column additivity metadata (costreport D5): stamped on every export so
 #: no consumer sums an inclusive column. At op level the self and subtree
@@ -111,6 +112,9 @@ class TraceProfile:
     partition_total: int | None = None
     unknown_events: int = 0
     column_additivity: dict[str, bool] = field(default_factory=dict)
+    # U53.2: the op-row grouping key (``"source_line"``), or ``None`` for
+    # one row per op. DOCUMENTED-UNSTABLE spelling.
+    group_by: str | None = None
 
     def to_pandas(self, *, include_totals: bool = False, evidence: bool = False) -> pd.DataFrame:
         """Return a copy of the underlying profile dataframe.
@@ -183,7 +187,7 @@ class TraceProfile:
             time_values = [
                 value
                 for value, kind in zip(self.frame["time"], self.frame["kind"], strict=True)
-                if value == value and value is not None and kind == "op"
+                if value == value and value is not None and kind in ("op", "source_line")
             ]
             row["time"] = sum(time_values) if time_values else None
         return row
@@ -778,7 +782,9 @@ def _rollup_row(
     return row, row_evidence
 
 
-def _validate_profile_args(level: str, sort_by: str, top_k: int | None) -> None:
+def _validate_profile_args(
+    level: str, sort_by: str, top_k: int | None, group_by: str | None = None
+) -> None:
     """Refuse invalid view arguments with the historical messages."""
 
     if level not in {"op", "module", "call"}:
@@ -787,6 +793,15 @@ def _validate_profile_args(level: str, sort_by: str, top_k: int | None) -> None:
         raise ValueError("sort_by must be 'time', 'flops', 'activation_memory', or 'param_count'.")
     if top_k is not None and (not isinstance(top_k, int) or isinstance(top_k, bool) or top_k < 0):
         raise ValueError("top_k must be a non-negative integer or None.")
+    if group_by is not None:
+        from ._profile_source_line import PROFILE_GROUP_BY_KEYS
+
+        if group_by not in PROFILE_GROUP_BY_KEYS:
+            raise ValueError("group_by must be 'source_line' or None.")
+        if level != "op":
+            raise ValueError(
+                f"group_by={group_by!r} groups op rows; use level='op' (got level={level!r})."
+            )
 
 
 def _assemble_level_rows(
@@ -859,6 +874,7 @@ def build_profile(
     sort_by: ProfileSort = "time",
     ascending: bool = False,
     top_k: int | None = None,
+    group_by: ProfileGroupBy | None = None,
 ) -> TraceProfile:
     """Build a unified op, module, or invocation resource profile.
 
@@ -877,6 +893,13 @@ def build_profile(
         Number of sorted bottleneck rows to retain. ``None`` retains all rows.
         Percent denominators are UNAFFECTED (D6: a view never changes the
         partition total).
+    group_by:
+        ``"source_line"`` folds the op rows into one row per user source
+        line (the op's recorded call site), summing its activation bytes,
+        FLOPs and time; boundary rows fold into one row, so every additive
+        column still sums to the ungrouped op view. Only valid with
+        ``level="op"``. ``None`` (default) keeps one row per op.
+        DOCUMENTED-UNSTABLE spelling.
 
     Returns
     -------
@@ -893,7 +916,7 @@ def build_profile(
     column additivity stamped on every export (D5).
     """
 
-    _validate_profile_args(level, sort_by, top_k)
+    _validate_profile_args(level, sort_by, top_k, group_by)
 
     from ._compute_truth import compute_aggregation
 
@@ -915,6 +938,12 @@ def build_profile(
             "owners": owners,
         },
     )
+    if group_by == "source_line":
+        from ._profile_source_line import group_rows_by_source_line
+
+        rows, row_evidence = group_rows_by_source_line(
+            rows, list(trace.layer_list), row_evidence, _weakest_evidence
+        )
 
     columns = [
         "name",
@@ -994,4 +1023,5 @@ def build_profile(
         partition_total=partition_total,
         unknown_events=aggregation.coverage.unknown,
         column_additivity=additivity,
+        group_by=group_by,
     )

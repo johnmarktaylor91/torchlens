@@ -672,6 +672,7 @@ class TraceStatsMixin(_TraceMixinBase):
         sort_by: Literal["time", "flops", "activation_memory", "param_count"] = "time",
         ascending: bool = False,
         top_k: int | None = None,
+        group_by: Literal["source_line"] | None = None,
     ) -> "TraceProfile":
         """Return a unified resource profile assembled from this trace.
 
@@ -685,6 +686,10 @@ class TraceStatsMixin(_TraceMixinBase):
             Whether to sort the selected metric ascending.
         top_k:
             Number of rows to keep after sorting, or ``None`` for all rows.
+        group_by:
+            ``"source_line"`` folds op rows into one row per user source line
+            (activation bytes, FLOPs and time summed; the groups sum to the
+            ungrouped view). Only with ``level="op"``. DOCUMENTED-UNSTABLE.
 
         Returns
         -------
@@ -705,6 +710,7 @@ class TraceStatsMixin(_TraceMixinBase):
             sort_by=sort_by,
             ascending=ascending,
             top_k=top_k,
+            group_by=group_by,
         )
 
     def sites_table(self: "Trace") -> Any:
