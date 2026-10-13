@@ -139,7 +139,7 @@ def log_model_metadata(
 
 
 def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input rungs plus the two execution dials ARE the spec'd surface (F17 B11)
-    model: nn.Module,
+    model: nn.Module | str,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...] | None = None,
     input_kwargs: dict[Any, Any] | None = None,
     *,
@@ -167,7 +167,11 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
     Parameters
     ----------
     model:
-        PyTorch model to inspect.
+        PyTorch model to inspect, or a Hugging Face Hub model id (``"gpt2"``):
+        a string fetches the config only, builds the architecture on the meta
+        device (no weight download) and takes the weights-free path, so it
+        needs ``input_size=`` or meta inputs. Requires ``transformers``; the
+        string form is DOCUMENTED-UNSTABLE.
     input_args:
         Positional args for ``model.forward()``. The quickstart input ladder
         applies (F17): a real input is the gold rung; omit it and pass
@@ -203,6 +207,10 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
 
     _validate_summary_modes(execution_mode, grad_mode)
     _validate_summary_grammar(summary_kwargs)
+    if isinstance(model, str):
+        from .report._summary_hub import build_hub_meta_model
+
+        model = build_hub_meta_model(model)
     _reject_opaque_wrappers(model)
     model = unwrap_compiled_model(model)
     model = _unwrap_data_parallel(model)
