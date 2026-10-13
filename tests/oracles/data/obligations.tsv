@@ -100,3 +100,44 @@ OBL-Q-FLOPS-BACKWARD	backward FLOPs equal the multiplier estimate where a backwa
 OBL-Q-FLOPS-TOTAL	total FLOPs equal forward plus backward	forward plus backward FLOPs, summed over passes and calls; unit: FLOPs	I2	PURE_OBSERVER	REAL
 OBL-Q-ARITHMETIC-INTENSITY	arithmetic intensity equals FLOPs over read-once write-once bytes	forward FLOPs / (input + parameter + output bytes); unit: FLOPs per byte	I2	PURE_OBSERVER	REAL
 OBL-Q-UNKNOWN-FLOP-OPS	the summary's unknown-compute count equals the hand count	ops with no FLOP rule; unit: ops	I2	PURE_OBSERVER	REAL
+OBL-Q-AUTOGRAD-MEMORY	autograd-saved bytes equal a saved_tensors_hooks recount on every door	bytes the captured forward's autograd saved for each op (a storage once per op, views in full), summed per Layer, call, module and trace; unit: bytes	I1	PURE_OBSERVER	REAL
+OBL-Q-BACKWARD-DURATION	backward durations lie between a planted hook sleep and an outside clock	seconds of all backward passes; unit: seconds	I1	PURE_OBSERVER	REAL
+OBL-Q-CAPTURE-DURATION	the capture duration lies between a planted sleep and an outside clock	seconds from capture start to end; unit: seconds	I1	PURE_OBSERVER	REAL
+OBL-Q-CAPTURE-THREAD-COUNT-END	the end thread count equals a recount, one higher after a planted thread	live Python threads when the capture ended; unit: threads	I1	PURE_OBSERVER	REAL
+OBL-Q-CAPTURE-THREAD-COUNT-START	the start thread count equals threading.active_count()	live Python threads when the capture started; unit: threads	I1	PURE_OBSERVER	REAL
+OBL-Q-CLEANUP-DURATION	the cleanup duration is bounded by an outside clock	seconds of postprocess after the forward; unit: seconds	I1	PURE_OBSERVER	REAL
+OBL-Q-COMPLETENESS-WITNESS-ACCOUNTED-COUNT	the accounted count equals the dispatch recount on a fully wrapped forward	witness events attributed to a captured call; unit: events	I1	PURE_OBSERVER	REAL
+OBL-Q-COMPLETENESS-WITNESS-CALLBACK-NS	the witness callback time is bounded by an outside clock	nanoseconds spent in witness callbacks; unit: nanoseconds	I1	PURE_OBSERVER	REAL
+OBL-Q-COMPLETENESS-WITNESS-EVENT-COUNT	the witness event count equals a TorchDispatchMode recount	ATen dispatch events the completeness witness observed; unit: events	I1	PURE_OBSERVER	REAL
+OBL-Q-CONDITIONAL-BRANCH-DEPTH	the branch depth equals the hand-counted if nesting	arms enclosing the op in the source (len of conditional_branch_stack); unit: levels	I2	PURE_OBSERVER	REAL
+OBL-Q-CONDITIONAL-DEPTH	the conditional depth equals the hand-counted direct roles	distinct conditionals the record takes a direct role in (the consumed bool, or an arm-entry op); unit: conditionals	I2	PURE_OBSERVER	REAL
+OBL-Q-ESCAPE-DETECTOR-CALLBACK-NS	the detector callback time is bounded by an outside clock	nanoseconds spent in escape-detector callbacks; unit: nanoseconds	I1	PURE_OBSERVER	REAL
+OBL-Q-ESCAPE-DETECTOR-EVENT-COUNT	the detector event count equals a TorchFunctionMode recount	torch-function events the escape detector classified; unit: events	I1	PURE_OBSERVER	REAL
+OBL-Q-FORWARD-DURATION	forward durations lie between a planted sleep and an outside clock	wall seconds of the forward (trace) or of the call's forward(); unit: seconds	I1	PURE_OBSERVER	REAL
+OBL-Q-FUNC-CALLS-DURATION	function-call totals exclude a planted non-op sleep and fit an outside clock	seconds spent inside the ops' functions, summed over the scope; unit: seconds	I1	PURE_OBSERVER	REAL
+OBL-Q-FUNC-DURATION	an op's function duration fits the forward minus a planted sleep	seconds inside the op's function (0 for boundary nodes); unit: seconds	I1	PURE_OBSERVER	REAL
+OBL-Q-LAST-BACKWARD-DURATION	the last backward duration lies between a planted hook sleep and an outside clock	seconds of the most recent backward pass; unit: seconds	I1	PURE_OBSERVER	REAL
+OBL-Q-MAX-DESCENDANT-DEPTH	the deepest nested-call depth equals the hand-counted call tree	levels of nested ModuleCalls beneath the call (0 for a leaf); a Module takes the max over its calls; unit: levels	I2	PURE_OBSERVER	REAL
+OBL-Q-MODULE-CALL-DEPTH	an op's module-call depth equals the hand-counted non-root calls on the stack	non-root ModuleCalls active when the op ran (the root call excluded); a Layer reads its first pass; unit: calls	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-AUTOGRAD-TENSORS	the autograd-saved tensor count equals a saved_tensors_hooks recount	distinct tensors the captured forward's autograd saved for the op; unit: tensors	I1	PURE_OBSERVER	REAL
+OBL-Q-NUM-BUFFER-LAYERS	the buffer-Layer count equals the hand-counted buffer Layers	distinct buffer Layers, not their passes; unit: Layers	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-CALLS	a module's call count and a parameter's use count equal the hand counts	Module: invocations of that module; Param: Ops that consumed the parameter (0 for a never-called module's); unit: calls	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-CONDITIONALS	the conditional count equals the hand-counted if statements	tensor-bool conditionals the forward evaluated; unit: conditionals	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-DESCENDANT-CALLS	the nested-call count equals the hand-counted call tree	ModuleCalls made while the call is on the stack, recursively; a Module sums over its calls; unit: calls	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-LAYERS	the Layer count equals the hand-counted distinct Layers	distinct Layers (a Layer run twice counts once) in the trace, the module or the call; unit: Layers	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-PARAMS-BY-PATH	the per-path parameter total equals named_parameters(remove_duplicate=False)	parameter elements counted once per registration path, ties counted per path; unit: elements	I1	PURE_OBSERVER	REAL
+OBL-Q-NUM-RECURSIVE-PARAM-TENSORS	the address-recursive parameter-tensor count equals the hand count	parameter tensors in the address subtree; unit: tensors	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-RECURSIVE-PARAM-TENSORS-FROZEN	the frozen address-recursive tensor count equals the hand count	frozen parameter tensors in the address subtree; unit: tensors	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-RECURSIVE-PARAM-TENSORS-TRAINABLE	the trainable address-recursive tensor count equals the hand count	trainable parameter tensors in the address subtree; unit: tensors	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-RECURSIVE-PARAMS	the address-recursive parameter-record count equals the hand count	nn.Parameter records owned by the module's address subtree, never-called descendants included; unit: records	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-RECURSIVE-PARAMS-FROZEN	the frozen address-recursive record count equals the hand count	frozen nn.Parameter records in the address subtree; unit: records	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-RECURSIVE-PARAMS-TRAINABLE	the trainable address-recursive record count equals the hand count	trainable nn.Parameter records in the address subtree; unit: records	I2	PURE_OBSERVER	REAL
+OBL-Q-OVERHEAD-DURATION	the overhead lies between a planted non-op sleep and an outside clock	capture seconds outside function calls; unit: seconds	I1	PURE_OBSERVER	REAL
+OBL-Q-PINNED-AUTOGRAD-MEMORY	pinned autograd bytes equal a whole-graph saved_tensors_hooks recount	bytes of distinct non-Parameter tensors autograd saved upstream of the attached payloads; unit: bytes	I1	PURE_OBSERVER	REAL
+OBL-Q-SETUP-DURATION	the setup duration is bounded by an outside clock	seconds before the forward starts; unit: seconds	I1	PURE_OBSERVER	REAL
+OBL-Q-NUM-FORWARD-POS-ARGS	the call's positional-argument count equals the hand count	positional arguments the call's forward received, the root call included; unit: arguments	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-FORWARD-KWARGS	the call's keyword-argument count equals the hand count	keyword arguments the call's forward received, the root call included; unit: arguments	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-FORWARD-ARGS-TOTAL	the call's argument total equals the hand count	positional plus keyword arguments of the call's forward, the root call included; unit: arguments	I2	PURE_OBSERVER	REAL
+OBL-Q-COMPLETENESS-WITNESS-EXPECTED-OPAQUE-COUNT	the expected-opaque count equals the recounted tensor-to-Python reads	witness events inside an audited opaque boundary (a tensor bool or scalar read); unit: events	I1	PURE_OBSERVER	REAL
+OBL-Q-AT-CAPTURE-BYTES	the at-capture payload bytes equal the saved activations' closed form	bytes of every activation the capture saved, whether or not its payload is still here; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-RETAINED-NOW-BYTES	the retained payload bytes equal the closed form, 0 on a payload-stripped artifact	bytes of saved activations whose payload is resident or lazily loadable now; unit: bytes	I2	PURE_OBSERVER	REAL

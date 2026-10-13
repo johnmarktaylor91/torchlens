@@ -191,6 +191,12 @@ def rehydrate_trace(
             module_accessor_state._list,
             module_accessor_state._pass_dict,
         )
+        # An artifact written before the root call counted among saved module
+        # calls stores a count without it; re-derive the stored scalar from the
+        # loaded records so it matches ``saved_module_calls``.
+        from ..postprocess.saved_summary import refresh_saved_module_call_count
+
+        refresh_saved_module_call_count(trace)
 
     serialized_tlspec_version = (
         manifest.tlspec_version

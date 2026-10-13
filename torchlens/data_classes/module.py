@@ -533,8 +533,8 @@ class ModuleCall:
 
     @property
     def num_layers(self) -> int:
-        """Number of layers in this pass."""
-        return len(self.ops)
+        """Number of distinct Layers among this call's Ops (``num_ops`` counts each pass)."""
+        return len({str(op_label).rsplit(":", 1)[0] for op_label in self.ops})
 
     @property
     def num_ops(self) -> int:
@@ -739,7 +739,7 @@ class ModuleCall:
 
     @property
     def autograd_memory(self) -> Bytes:
-        """Autograd-saved tensor bytes for all Ops executed inside this call."""
+        """Sum of the per-op bytes the captured forward's autograd saved inside this call."""
 
         trace = self._source_trace
         if trace is None:
@@ -1735,14 +1735,10 @@ class Module:
                     and param.address not in recursive_param_dict
                 ):
                     recursive_param_dict[param.address] = param
-        # A never-called descendant has no Module record, so the walk above
-        # misses it; its parameters are still in the address subtree.
-        prefix = f"{self.address}."
+        # A never-called descendant has no Module record; its params are still in the subtree.
         for param in trace.param_logs:
-            if param.address in recursive_param_dict:
-                continue
-            if self.address == "self" or str(param.module_address).startswith(prefix):
-                recursive_param_dict[param.address] = param
+            if self.address == "self" or str(param.module_address).startswith(f"{self.address}."):
+                recursive_param_dict.setdefault(param.address, param)
         return ParamAccessor(recursive_param_dict)
 
     @property

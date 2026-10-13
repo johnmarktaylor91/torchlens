@@ -896,3 +896,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: c9e40cb2956d3d75ce296ed99e760a529b3b294d (dirty)
 recorded: 2026-10-13T10:33:17.881279+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: AGT-2362 REAL-2B2: root ModuleCall lists pass-qualified Ops and its forward arguments; ModuleCall.num_layers counts distinct Layers; Param.num_calls counts the Ops that used it; num_buffer_layers counts distinct buffer Layers; tied-module parameter aliases; Layer conditional roles; uncalled modules recorded at capture end; the loader refreshes num_saved_module_calls
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 711308c2b55233e51cfd4224a6b71985649a73a9 (dirty)
+recorded: 2026-10-13T10:39:36.490182+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: AGT-2362 REAL-2B2: root ModuleCall lists pass-qualified Ops and its forward arguments; ModuleCall.num_layers counts distinct Layers; Param.num_calls counts the Ops that used it; num_buffer_layers counts distinct buffer Layers; tied-module parameter aliases; Layer conditional roles; uncalled modules recorded at capture end; the loader refreshes num_saved_module_calls
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 711308c2b55233e51cfd4224a6b71985649a73a9 (dirty)
+recorded: 2026-10-13T10:39:36.522697+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: AGT-2362 REAL-2B2: root ModuleCall lists pass-qualified Ops and its forward arguments; ModuleCall.num_layers counts distinct Layers; Param.num_calls counts the Ops that used it; num_buffer_layers counts distinct buffer Layers; tied-module parameter aliases; Layer conditional roles; uncalled modules recorded at capture end; the loader refreshes num_saved_module_calls
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 711308c2b55233e51cfd4224a6b71985649a73a9 (dirty)
+recorded: 2026-10-13T10:39:36.546638+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: AGT-2362 REAL-2B2: root ModuleCall lists pass-qualified Ops and its forward arguments; ModuleCall.num_layers counts distinct Layers; Param.num_calls counts the Ops that used it; num_buffer_layers counts distinct buffer Layers; tied-module parameter aliases; Layer conditional roles; uncalled modules recorded at capture end; the loader refreshes num_saved_module_calls
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 711308c2b55233e51cfd4224a6b71985649a73a9 (dirty)
+recorded: 2026-10-13T10:39:36.572757+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: AGT-2362 REAL-2B2: root ModuleCall lists pass-qualified Ops and its forward arguments; ModuleCall.num_layers counts distinct Layers; Param.num_calls counts the Ops that used it; num_buffer_layers counts distinct buffer Layers; tied-module parameter aliases; Layer conditional roles; uncalled modules recorded at capture end; the loader refreshes num_saved_module_calls
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 711308c2b55233e51cfd4224a6b71985649a73a9 (dirty)
+recorded: 2026-10-13T10:39:36.598278+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: AGT-2362 REAL-2B2: root ModuleCall lists pass-qualified Ops and its forward arguments; ModuleCall.num_layers counts distinct Layers; Param.num_calls counts the Ops that used it; num_buffer_layers counts distinct buffer Layers; tied-module parameter aliases; Layer conditional roles; uncalled modules recorded at capture end; the loader refreshes num_saved_module_calls
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 711308c2b55233e51cfd4224a6b71985649a73a9 (dirty)
+recorded: 2026-10-13T10:39:36.634811+00:00

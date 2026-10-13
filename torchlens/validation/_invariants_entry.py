@@ -181,11 +181,20 @@ def _check_function_root_module_invariants(trace: Trace) -> None:
     root_call = root.ops.get(1)
     if root_call is None:
         raise MetadataInvariantError(name, "root module must have exactly one self:1 call")
-    if list(root_call.ops) != trace_layer_labels:
-        raise MetadataInvariantError(
-            name,
-            "root module self:1 ops must exactly match trace.layer_labels",
-        )
+    # The call lists pass-qualified Op labels in execution order (exactly
+    # trace.op_labels), and its distinct Layers in order are exactly
+    # trace.layer_labels. One raise site for the check.
+    root_call_ops = list(root_call.ops)
+    root_call_problem = (
+        "root module self:1 ops must exactly match trace.op_labels"
+        if root_call_ops != list(trace.op_labels)
+        else "root module self:1 ops must project onto exactly trace.layer_labels"
+        if list(dict.fromkeys(trace.ops[label].layer_label for label in root_call_ops))
+        != list(trace_layer_labels)
+        else None
+    )
+    if root_call_problem is not None:
+        raise MetadataInvariantError(name, root_call_problem)
 
     trace_layer_set = set(trace_layer_labels)
     for owner_label, owner in (("root module", root), ("root module call", root_call)):

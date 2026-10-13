@@ -66,7 +66,14 @@ V10_FIELD_ADMISSIONS: dict[str, dict[str, str]] = {
     # would read as current; it loads as None ("not measured").
     # SCHEMA-REQUESTS row 8 (REPORT, forks.13): why a CPU forward peak is None.
     # KEEP: the reason travels with the None it explains; v9 artifacts read None.
-    "trace": {"pinned_autograd_memory": "drop", "forward_peak_memory_reason": "keep"},
+    # SCHEMA-REQUESTS row 9 (REAL-2B2, AGT-2362): the uncalled-module record,
+    # taken while the source model is live. DROP: a restored trace reads
+    # num_uncalled_modules as None (unknown), never a stale 0.
+    "trace": {
+        "pinned_autograd_memory": "drop",
+        "forward_peak_memory_reason": "keep",
+        "_uncalled_module_addresses": "drop",
+    },
     # SCHEMA-REQUESTS row 6 (OBSERVER, AGT-2360): the record of the plain
     # attributes a forward wrote (arbitrary user objects). DROP, both the public
     # property and its slot: a loaded, unpickled or deep-copied trace reads None.

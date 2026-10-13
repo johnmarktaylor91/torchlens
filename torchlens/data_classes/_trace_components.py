@@ -219,6 +219,7 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "input_annotations": "graph",
     "_source_code_blob": "source_metadata",
     "_source_model_ref": "source_metadata",
+    "_uncalled_module_addresses": "source_metadata",
     "parent_run": "graph",
     "model_object_id": "source_metadata",
     "model_class_qualname": "source_metadata",

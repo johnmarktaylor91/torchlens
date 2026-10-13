@@ -221,19 +221,23 @@
     {
       "address": "self",
       "call_label": "self:1",
-      "forward_args_summary": "None",
-      "forward_kwargs_summary": "None",
+      "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32)]",
+      "forward_kwargs_summary": "{}",
       "input_layers": [
         "input_1"
       ],
       "ops": [
-        "input_1",
-        "newzeros_1_1",
-        "newzeros_2_2",
-        "lstmcell_1_3",
-        "lstmcell_2_4",
-        "linear_1_5",
-        "output_1"
+        "input_1:1",
+        "newzeros_1_1:1",
+        "newzeros_2_2:1",
+        "lstmcell_1_3:1",
+        "lstmcell_2_4:1",
+        "lstmcell_1_3:2",
+        "lstmcell_2_4:2",
+        "lstmcell_1_3:3",
+        "lstmcell_2_4:3",
+        "linear_1_5:1",
+        "output_1:1"
       ],
       "output_layers": [
         "output_1"

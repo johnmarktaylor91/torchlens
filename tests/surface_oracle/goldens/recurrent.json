@@ -1513,11 +1513,11 @@
     "facets": "<torchlens.semantic.facets.FacetView>",
     "forward_arg_names": [],
     "forward_args": null,
-    "forward_args_summary": "None",
+    "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
     "forward_args_template": null,
     "forward_duration": "<measured>",
     "forward_kwargs": null,
-    "forward_kwargs_summary": "None",
+    "forward_kwargs_summary": "{}",
     "forward_kwargs_template": null,
     "forward_pre_hook_effects": [],
     "func_calls_duration": "<measured>",
@@ -1550,22 +1550,26 @@
     "name": "",
     "num_descendant_calls": 3,
     "num_edges": 7,
-    "num_forward_args_total": 0,
+    "num_forward_args_total": 1,
     "num_forward_kwargs": 0,
-    "num_forward_pos_args": 0,
+    "num_forward_pos_args": 1,
     "num_input_edges": 0,
     "num_internal_edges": 7,
     "num_layers": 4,
-    "num_ops": 4,
+    "num_ops": 8,
     "num_output_edges": 0,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "ops": [
-     "input_1",
-     "linear_1_1",
-     "tanh_1_2",
-     "output_1"
+     "input_1:1",
+     "linear_1_1:1",
+     "tanh_1_2:1",
+     "linear_1_1:2",
+     "tanh_1_2:2",
+     "linear_1_1:3",
+     "tanh_1_2:3",
+     "output_1:1"
     ],
     "ordinal_index": 0,
     "out": {
@@ -1598,7 +1602,7 @@
      "output_1"
     ],
     "output_ops": [
-     "output_1"
+     "output_1:1"
     ],
     "output_paths": [],
     "output_structure": null,
@@ -1839,13 +1843,13 @@
     "custom_methods": [],
     "facets": "<torchlens.semantic.facets.FacetView>",
     "forward_args": null,
-    "forward_args_summary": "None",
+    "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
     "forward_args_template": null,
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
     "forward_kwargs": null,
-    "forward_kwargs_summary": "None",
+    "forward_kwargs_summary": "{}",
     "forward_kwargs_template": null,
     "forward_pre_hooks": [],
     "forward_signature": null,
@@ -1947,7 +1951,7 @@
      "output_1"
     ],
     "output_ops": [
-     "output_1"
+     "output_1:1"
     ],
     "output_structure": null,
     "outs": [
@@ -8012,11 +8016,11 @@
     "facets": "<torchlens.semantic.facets.FacetView>",
     "forward_arg_names": [],
     "forward_args": null,
-    "forward_args_summary": "None",
+    "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
     "forward_args_template": null,
     "forward_duration": "<measured>",
     "forward_kwargs": null,
-    "forward_kwargs_summary": "None",
+    "forward_kwargs_summary": "{}",
     "forward_kwargs_template": null,
     "forward_pre_hook_effects": [],
     "func_calls_duration": "<measured>",
@@ -8049,22 +8053,26 @@
     "name": "",
     "num_descendant_calls": 3,
     "num_edges": 7,
-    "num_forward_args_total": 0,
+    "num_forward_args_total": 1,
     "num_forward_kwargs": 0,
-    "num_forward_pos_args": 0,
+    "num_forward_pos_args": 1,
     "num_input_edges": 0,
     "num_internal_edges": 7,
     "num_layers": 4,
-    "num_ops": 4,
+    "num_ops": 8,
     "num_output_edges": 0,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "ops": [
-     "input_1",
-     "linear_1_1",
-     "tanh_1_2",
-     "output_1"
+     "input_1:1",
+     "linear_1_1:1",
+     "tanh_1_2:1",
+     "linear_1_1:2",
+     "tanh_1_2:2",
+     "linear_1_1:3",
+     "tanh_1_2:3",
+     "output_1:1"
     ],
     "ordinal_index": 0,
     "out": {
@@ -8097,7 +8105,7 @@
      "output_1"
     ],
     "output_ops": [
-     "output_1"
+     "output_1:1"
     ],
     "output_paths": [],
     "output_structure": null,
@@ -8338,13 +8346,13 @@
     "custom_methods": [],
     "facets": "<torchlens.semantic.facets.FacetView>",
     "forward_args": null,
-    "forward_args_summary": "None",
+    "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
     "forward_args_template": null,
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
     "forward_kwargs": null,
-    "forward_kwargs_summary": "None",
+    "forward_kwargs_summary": "{}",
     "forward_kwargs_template": null,
     "forward_pre_hooks": [],
     "forward_signature": null,
@@ -8446,7 +8454,7 @@
      "output_1"
     ],
     "output_ops": [
-     "output_1"
+     "output_1:1"
     ],
     "output_structure": null,
     "outs": [
@@ -14510,11 +14518,11 @@
     "facets": "<torchlens.semantic.facets.FacetView>",
     "forward_arg_names": [],
     "forward_args": null,
-    "forward_args_summary": "None",
+    "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
     "forward_args_template": null,
     "forward_duration": "<measured>",
     "forward_kwargs": null,
-    "forward_kwargs_summary": "None",
+    "forward_kwargs_summary": "{}",
     "forward_kwargs_template": null,
     "forward_pre_hook_effects": [],
     "func_calls_duration": "<measured>",
@@ -14547,22 +14555,26 @@
     "name": "",
     "num_descendant_calls": 3,
     "num_edges": 7,
-    "num_forward_args_total": 0,
+    "num_forward_args_total": 1,
     "num_forward_kwargs": 0,
-    "num_forward_pos_args": 0,
+    "num_forward_pos_args": 1,
     "num_input_edges": 0,
     "num_internal_edges": 7,
     "num_layers": 4,
-    "num_ops": 4,
+    "num_ops": 8,
     "num_output_edges": 0,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "ops": [
-     "input_1",
-     "linear_1_1",
-     "tanh_1_2",
-     "output_1"
+     "input_1:1",
+     "linear_1_1:1",
+     "tanh_1_2:1",
+     "linear_1_1:2",
+     "tanh_1_2:2",
+     "linear_1_1:3",
+     "tanh_1_2:3",
+     "output_1:1"
     ],
     "ordinal_index": 0,
     "out": {
@@ -14595,7 +14607,7 @@
      "output_1"
     ],
     "output_ops": [
-     "output_1"
+     "output_1:1"
     ],
     "output_paths": [],
     "output_structure": null,
@@ -14836,13 +14848,13 @@
     "custom_methods": [],
     "facets": "<torchlens.semantic.facets.FacetView>",
     "forward_args": null,
-    "forward_args_summary": "None",
+    "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
     "forward_args_template": null,
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
     "forward_kwargs": null,
-    "forward_kwargs_summary": "None",
+    "forward_kwargs_summary": "{}",
     "forward_kwargs_template": null,
     "forward_pre_hooks": [],
     "forward_signature": null,
@@ -14944,7 +14956,7 @@
      "output_1"
     ],
     "output_ops": [
-     "output_1"
+     "output_1:1"
     ],
     "output_structure": null,
     "outs": [
@@ -19287,7 +19299,7 @@
    "num_saved_modules": 2,
    "num_saved_ops": 8,
    "num_tensors": 8,
-   "num_uncalled_modules": 0,
+   "num_uncalled_modules": null,
    "observer_spans": [],
    "op_equivalence_classes": {
     "\"input_2_4_torch.float32\"": {
@@ -20941,11 +20953,11 @@
     "facets": "<torchlens.semantic.facets.FacetView>",
     "forward_arg_names": [],
     "forward_args": null,
-    "forward_args_summary": "None",
+    "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
     "forward_args_template": null,
     "forward_duration": "<measured>",
     "forward_kwargs": null,
-    "forward_kwargs_summary": "None",
+    "forward_kwargs_summary": "{}",
     "forward_kwargs_template": null,
     "forward_pre_hook_effects": [],
     "func_calls_duration": "<measured>",
@@ -20978,22 +20990,26 @@
     "name": "",
     "num_descendant_calls": 3,
     "num_edges": 7,
-    "num_forward_args_total": 0,
+    "num_forward_args_total": 1,
     "num_forward_kwargs": 0,
-    "num_forward_pos_args": 0,
+    "num_forward_pos_args": 1,
     "num_input_edges": 0,
     "num_internal_edges": 7,
     "num_layers": 4,
-    "num_ops": 4,
+    "num_ops": 8,
     "num_output_edges": 0,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "ops": [
-     "input_1",
-     "linear_1_1",
-     "tanh_1_2",
-     "output_1"
+     "input_1:1",
+     "linear_1_1:1",
+     "tanh_1_2:1",
+     "linear_1_1:2",
+     "tanh_1_2:2",
+     "linear_1_1:3",
+     "tanh_1_2:3",
+     "output_1:1"
     ],
     "ordinal_index": 0,
     "out": {
@@ -21026,7 +21042,7 @@
      "output_1"
     ],
     "output_ops": [
-     "output_1"
+     "output_1:1"
     ],
     "output_paths": [],
     "output_structure": null,
@@ -21267,13 +21283,13 @@
     "custom_methods": [],
     "facets": "<torchlens.semantic.facets.FacetView>",
     "forward_args": null,
-    "forward_args_summary": "None",
+    "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
     "forward_args_template": null,
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
     "forward_kwargs": null,
-    "forward_kwargs_summary": "None",
+    "forward_kwargs_summary": "{}",
     "forward_kwargs_template": null,
     "forward_pre_hooks": [],
     "forward_signature": null,
@@ -21375,7 +21391,7 @@
      "output_1"
     ],
     "output_ops": [
-     "output_1"
+     "output_1:1"
     ],
     "output_structure": null,
     "outs": [
@@ -27437,11 +27453,11 @@
     "facets": "<torchlens.semantic.facets.FacetView>",
     "forward_arg_names": [],
     "forward_args": null,
-    "forward_args_summary": "None",
+    "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
     "forward_args_template": null,
     "forward_duration": "<measured>",
     "forward_kwargs": null,
-    "forward_kwargs_summary": "None",
+    "forward_kwargs_summary": "{}",
     "forward_kwargs_template": null,
     "forward_pre_hook_effects": [],
     "func_calls_duration": "<measured>",
@@ -27474,22 +27490,26 @@
     "name": "",
     "num_descendant_calls": 3,
     "num_edges": 7,
-    "num_forward_args_total": 0,
+    "num_forward_args_total": 1,
     "num_forward_kwargs": 0,
-    "num_forward_pos_args": 0,
+    "num_forward_pos_args": 1,
     "num_input_edges": 0,
     "num_internal_edges": 7,
     "num_layers": 4,
-    "num_ops": 4,
+    "num_ops": 8,
     "num_output_edges": 0,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "ops": [
-     "input_1",
-     "linear_1_1",
-     "tanh_1_2",
-     "output_1"
+     "input_1:1",
+     "linear_1_1:1",
+     "tanh_1_2:1",
+     "linear_1_1:2",
+     "tanh_1_2:2",
+     "linear_1_1:3",
+     "tanh_1_2:3",
+     "output_1:1"
     ],
     "ordinal_index": 0,
     "out": {
@@ -27522,7 +27542,7 @@
      "output_1"
     ],
     "output_ops": [
-     "output_1"
+     "output_1:1"
     ],
     "output_paths": [],
     "output_structure": null,
@@ -27763,13 +27783,13 @@
     "custom_methods": [],
     "facets": "<torchlens.semantic.facets.FacetView>",
     "forward_args": null,
-    "forward_args_summary": "None",
+    "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
     "forward_args_template": null,
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
     "forward_kwargs": null,
-    "forward_kwargs_summary": "None",
+    "forward_kwargs_summary": "{}",
     "forward_kwargs_template": null,
     "forward_pre_hooks": [],
     "forward_signature": null,
@@ -27871,7 +27891,7 @@
      "output_1"
     ],
     "output_ops": [
-     "output_1"
+     "output_1:1"
     ],
     "output_structure": null,
     "outs": [
@@ -32050,7 +32070,7 @@
    "num_saved_modules": 2,
    "num_saved_ops": 8,
    "num_tensors": 8,
-   "num_uncalled_modules": 0,
+   "num_uncalled_modules": null,
    "observer_spans": [],
    "op_equivalence_classes": {
     "\"input_2_4_torch.float32\"": {

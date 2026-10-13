@@ -264,6 +264,7 @@ STORAGE_BINDINGS: dict[str, dict[str, StorageBinding]] = {
         "_receptive_field_solution": StorageBinding(StorageKind.RUNTIME, annotation='typing.Any'),
         "_rf_directional_solutions": StorageBinding(StorageKind.RUNTIME, annotation='typing.Any'),
         "_optimizer": StorageBinding(StorageKind.RUNTIME),
+        "_uncalled_module_addresses": StorageBinding(StorageKind.RUNTIME),
         "measure_python_peak_memory": StorageBinding(StorageKind.RUNTIME),
         "_forward_peak_memory_pair": StorageBinding(StorageKind.RUNTIME),
         "distributed_witness": StorageBinding(StorageKind.RUNTIME),

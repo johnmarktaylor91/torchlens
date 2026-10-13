@@ -13,18 +13,18 @@ Buffer.gradient_memory	Bytes	quantity	gradient_memory	green	tests/oracles/test_l
 Buffer.num_overwrites	int	quantity	num_overwrites	green	tests/test_buffer_datamodel.py::test_recurrent_cell_reassignment_does_not_break_loop_detection (I2)	-
 CaptureFacts.advisories	int	quantity	advisories	red-needs-oracle	-	-
 Layer.activation_memory	Bytes	quantity	activation_memory	green	tests/test_bug_fixes_phase14.py::test_view_mutation_output_recomputes_transformed_payload_metadata (I1)	-
-Layer.autograd_memory	Bytes	quantity	autograd_memory	red-needs-oracle	-	oracle is the zero case only (add saves no tensors); a positive case is still owed; this door has no oracle
-Layer.conditional_depth	int	quantity	conditional_depth	red-needs-oracle	-	-
+Layer.autograd_memory	Bytes	quantity	autograd_memory	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
+Layer.conditional_depth	int	quantity	conditional_depth	green	tests/oracles/test_legacy_module_counts.py::test_conditional_counts (I2)	-
 Layer.flops_backward	Flops	quantity	flops_backward	green	tests/oracles/test_legacy_closed_forms.py::test_backward_and_total_flops (I2)	-
 Layer.flops_forward	Flops	quantity	flops_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
 Layer.flops_total	Flops	quantity	flops_total	green	tests/oracles/test_legacy_closed_forms.py::test_backward_and_total_flops (I2)	-
-Layer.func_duration	Duration	quantity	func_duration	red-needs-oracle	-	-
+Layer.func_duration	Duration	quantity	func_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_op_and_layer_func_durations_are_bounded (I1)	-
 Layer.fx_call_index	int	identifier	-	-	-	id/index/line
 Layer.grad_fn_object_id	int	identifier	-	-	-	id/index/line
 Layer.macs_forward	Macs	quantity	macs_forward	green	tests/test_numbers_truth_compute.py::test_biased_linear_true_macs_not_flops_over_two (I2)	-
-Layer.module_call_depth	int	quantity	module_call_depth	red-needs-oracle	-	-
+Layer.module_call_depth	int	quantity	module_call_depth	green	tests/oracles/test_legacy_module_counts.py::test_module_call_tree_counts (I2)	-
 Layer.num_args_total	int	quantity	num_args_total	green	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts (I2)	-
-Layer.num_autograd_tensors	int	quantity	num_autograd_tensors	red-needs-oracle	-	oracle is the zero case only (add saves no tensors); a positive case is still owed; this door has no oracle
+Layer.num_autograd_tensors	int	quantity	num_autograd_tensors	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
 Layer.num_children	int	quantity	num_children	green	tests/oracles/test_legacy_graph_counts.py::test_parent_child_and_input_counts (I2)	-
 Layer.num_kwargs	int	quantity	num_kwargs	green	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts (I2)	-
 Layer.num_ops	int	quantity	num_ops	green	tests/oracles/test_legacy_quantity_doors.py::test_op_pass_and_edge_counts_on_every_door (I2)	-
@@ -42,11 +42,11 @@ Layer.pass_index	int	identifier	-	-	-	id/index/line
 Layer.raw_index	int	identifier	-	-	-	id/index/line
 Layer.step_index	int	identifier	-	-	-	id/index/line
 Layer.total_activation_memory	Bytes	quantity	activation_memory	green	tests/oracles/test_legacy_quantity_doors.py::test_activation_bytes_on_every_compute_door (I2)	-
-Layer.total_autograd_memory	Bytes	quantity	autograd_memory	red-needs-oracle	-	oracle is the zero case only (add saves no tensors); a positive case is still owed; this door has no oracle
+Layer.total_autograd_memory	Bytes	quantity	autograd_memory	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
 Layer.total_flops_backward	Flops	quantity	flops_backward	green	tests/oracles/test_legacy_closed_forms.py::test_backward_and_total_flops (I2)	-
 Layer.total_flops_forward	Flops	quantity	flops_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
 Layer.total_flops_total	Flops	quantity	flops_total	green	tests/oracles/test_legacy_closed_forms.py::test_backward_and_total_flops (I2)	-
-Layer.total_func_duration	Duration	quantity	func_duration	red-needs-oracle	-	-
+Layer.total_func_duration	Duration	quantity	func_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_op_and_layer_func_durations_are_bounded (I1)	-
 Layer.total_gradient_memory	Bytes	quantity	gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_on_layers_modules_and_buffers (I2)	-
 Layer.total_macs_forward	Macs	quantity	macs_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
 Layer.total_param_memory	Bytes	quantity	param_memory	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_bytes_on_every_door (I2)	-
@@ -54,16 +54,16 @@ Layer.type_index	int	identifier	-	-	-	id/index/line
 Module.address_depth	int	quantity	address_depth	green	tests/test_module_log.py::TestModuleLogFields::test_address_depth (I2)	-
 Module.call_depth	int	quantity	call_depth	green	tests/test_module_log.py::TestModuleLogFields::test_call_depth (I2)	-
 Module.collapse_score	float	quantity	collapse_score	red-needs-oracle	-	-
-Module.forward_duration	Duration	quantity	forward_duration	red-needs-oracle	-	-
-Module.func_calls_duration	Duration	quantity	func_calls_duration	red-needs-oracle	-	-
+Module.forward_duration	Duration	quantity	forward_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_module_and_call_durations_are_bounded (I1)	-
+Module.func_calls_duration	Duration	quantity	func_calls_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_module_and_call_durations_are_bounded (I1)	-
 Module.internal_param_memory	Bytes	quantity	internal_param_memory	green	tests/oracles/test_legacy_closed_forms.py::test_activation_parameter_and_input_bytes (I2)	-
-Module.max_descendant_depth	int	quantity	max_descendant_depth	red-needs-oracle	-	-
-Module.num_calls	int	quantity	num_calls	red-needs-row	tests/test_collapse_optimizer.py::test_rolled_v2_memo_separates_digest_identical_different_num_calls (I2)	-
-Module.num_descendant_calls	int	quantity	num_descendant_calls	red-needs-oracle	-	-
+Module.max_descendant_depth	int	quantity	max_descendant_depth	green	tests/oracles/test_legacy_module_counts.py::test_module_call_tree_counts (I2)	-
+Module.num_calls	int	quantity	num_calls	green	tests/oracles/test_legacy_module_counts.py::test_module_call_tree_counts (I2)	-
+Module.num_descendant_calls	int	quantity	num_descendant_calls	green	tests/oracles/test_legacy_module_counts.py::test_module_call_tree_counts (I2)	-
 Module.num_edges	int	quantity	num_edges	green	tests/oracles/test_legacy_quantity_doors.py::test_op_pass_and_edge_counts_on_every_door (I2)	-
 Module.num_input_edges	int	quantity	num_input_edges	green	tests/oracles/test_legacy_graph_counts.py::test_module_scope_edge_and_layer_counts (I2)	-
 Module.num_internal_edges	int	quantity	num_internal_edges	green	tests/oracles/test_legacy_graph_counts.py::test_module_scope_edge_and_layer_counts (I2)	-
-Module.num_layers	int	quantity	num_layers	red-needs-oracle	-	-
+Module.num_layers	int	quantity	num_layers	green	tests/oracles/test_legacy_module_counts.py::test_layer_and_op_counts_on_the_root_call (I2)	-
 Module.num_output_edges	int	quantity	num_output_edges	green	tests/oracles/test_legacy_graph_counts.py::test_module_scope_edge_and_layer_counts (I2)	-
 Module.num_param_tensors	int	quantity	num_param_tensors	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 Module.num_param_tensors_frozen	int	quantity	num_param_tensors_frozen	green	tests/oracles/test_legacy_closed_forms.py::test_param_tensor_counts_split_frozen_and_trainable (I2)	-
@@ -71,42 +71,42 @@ Module.num_param_tensors_trainable	int	quantity	num_param_tensors_trainable	gree
 Module.num_params	int	quantity	num_params	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 Module.num_params_frozen	int	quantity	num_params_frozen	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 Module.num_params_trainable	int	quantity	num_params_trainable	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
-Module.num_recursive_param_tensors	int	quantity	num_recursive_param_tensors	red-needs-oracle	-	counts address-recursive parameter RECORDS, not elements; on a root with a never-called child it reports fewer than num_param_tensors (4 vs 6 measured), so its definition needs an owner before an oracle
-Module.num_recursive_param_tensors_frozen	int	quantity	num_recursive_param_tensors_frozen	red-needs-oracle	-	counts address-recursive parameter RECORDS, not elements; on a root with a never-called child it reports fewer than num_param_tensors (4 vs 6 measured), so its definition needs an owner before an oracle
-Module.num_recursive_param_tensors_trainable	int	quantity	num_recursive_param_tensors_trainable	red-needs-oracle	-	counts address-recursive parameter RECORDS, not elements; on a root with a never-called child it reports fewer than num_param_tensors (4 vs 6 measured), so its definition needs an owner before an oracle
-Module.num_recursive_params	int	quantity	num_recursive_params	red-needs-oracle	-	counts address-recursive parameter RECORDS, not elements; on a root with a never-called child it reports fewer than num_param_tensors (4 vs 6 measured), so its definition needs an owner before an oracle
-Module.num_recursive_params_frozen	int	quantity	num_recursive_params_frozen	red-needs-oracle	-	counts address-recursive parameter RECORDS, not elements; on a root with a never-called child it reports fewer than num_param_tensors (4 vs 6 measured), so its definition needs an owner before an oracle
-Module.num_recursive_params_trainable	int	quantity	num_recursive_params_trainable	red-needs-oracle	-	counts address-recursive parameter RECORDS, not elements; on a root with a never-called child it reports fewer than num_param_tensors (4 vs 6 measured), so its definition needs an owner before an oracle
+Module.num_recursive_param_tensors	int	quantity	num_recursive_param_tensors	green	tests/oracles/test_legacy_module_counts.py::test_recursive_param_counts (I2)	-
+Module.num_recursive_param_tensors_frozen	int	quantity	num_recursive_param_tensors_frozen	green	tests/oracles/test_legacy_module_counts.py::test_recursive_param_counts (I2)	-
+Module.num_recursive_param_tensors_trainable	int	quantity	num_recursive_param_tensors_trainable	green	tests/oracles/test_legacy_module_counts.py::test_recursive_param_counts (I2)	-
+Module.num_recursive_params	int	quantity	num_recursive_params	green	tests/oracles/test_legacy_module_counts.py::test_recursive_param_counts (I2)	-
+Module.num_recursive_params_frozen	int	quantity	num_recursive_params_frozen	green	tests/oracles/test_legacy_module_counts.py::test_recursive_param_counts (I2)	-
+Module.num_recursive_params_trainable	int	quantity	num_recursive_params_trainable	green	tests/oracles/test_legacy_module_counts.py::test_recursive_param_counts (I2)	-
 Module.param_memory	Bytes	quantity	param_memory	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_bytes_on_every_door (I2)	-
-Module.total_autograd_memory	Bytes	quantity	autograd_memory	red-needs-oracle	-	oracle is the zero case only (add saves no tensors); a positive case is still owed; this door has no oracle
+Module.total_autograd_memory	Bytes	quantity	autograd_memory	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
 Module.total_flops	Flops	quantity	flops_total	green	tests/oracles/test_legacy_closed_forms.py::test_backward_and_total_flops (I2)	-
 Module.total_flops_backward	Flops	quantity	flops_backward	green	tests/oracles/test_legacy_closed_forms.py::test_backward_and_total_flops (I2)	-
 Module.total_flops_forward	Flops	quantity	flops_forward	green	tests/oracles/test_legacy_closed_forms.py::test_backward_and_total_flops (I2)	-
-Module.total_forward_duration	Duration	quantity	forward_duration	red-needs-oracle	-	-
-Module.total_func_calls_duration	Duration	quantity	func_calls_duration	red-needs-oracle	-	-
+Module.total_forward_duration	Duration	quantity	forward_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_module_and_call_durations_are_bounded (I1)	-
+Module.total_func_calls_duration	Duration	quantity	func_calls_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_module_and_call_durations_are_bounded (I1)	-
 Module.total_internal_activation_memory	Bytes	quantity	internal_activation_memory	green	tests/oracles/test_legacy_closed_forms.py::test_activation_parameter_and_input_bytes (I2)	-
 Module.total_internal_gradient_memory	Bytes	quantity	internal_gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_on_layers_modules_and_buffers (I2)	-
 Module.total_macs_forward	Macs	quantity	macs_forward	green	tests/oracles/test_legacy_closed_forms.py::test_backward_and_total_flops (I2)	-
 Module.total_output_activation_memory	Bytes	quantity	output_activation_memory	green	tests/oracles/test_legacy_closed_forms.py::test_activation_parameter_and_input_bytes (I2)	-
 Module.total_output_gradient_memory	Bytes	quantity	output_gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_on_layers_modules_and_buffers (I2)	-
 Module.total_param_memory	Bytes	quantity	param_memory	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_bytes_on_every_door (I2)	-
-ModuleCall.autograd_memory	Bytes	quantity	autograd_memory	red-needs-oracle	-	oracle is the zero case only (add saves no tensors); a positive case is still owed; this door has no oracle
+ModuleCall.autograd_memory	Bytes	quantity	autograd_memory	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
 ModuleCall.call_index	int	identifier	-	-	-	id/index/line
-ModuleCall.forward_duration	Duration	quantity	forward_duration	red-needs-oracle	-	-
-ModuleCall.func_calls_duration	Duration	quantity	func_calls_duration	red-needs-oracle	-	-
+ModuleCall.forward_duration	Duration	quantity	forward_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_module_and_call_durations_are_bounded (I1)	-
+ModuleCall.func_calls_duration	Duration	quantity	func_calls_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_module_and_call_durations_are_bounded (I1)	-
 ModuleCall.internal_activation_memory	Bytes	quantity	internal_activation_memory	green	tests/oracles/test_legacy_closed_forms.py::test_activation_parameter_and_input_bytes (I2)	-
 ModuleCall.internal_gradient_memory	Bytes	quantity	internal_gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_one_backward_pass (I2)	-
 ModuleCall.internal_param_memory	Bytes	quantity	internal_param_memory	green	tests/oracles/test_legacy_closed_forms.py::test_activation_parameter_and_input_bytes (I2)	-
-ModuleCall.max_descendant_depth	int	quantity	max_descendant_depth	red-needs-oracle	-	-
-ModuleCall.num_descendant_calls	int	quantity	num_descendant_calls	red-needs-oracle	-	-
+ModuleCall.max_descendant_depth	int	quantity	max_descendant_depth	green	tests/oracles/test_legacy_module_counts.py::test_module_call_tree_counts (I2)	-
+ModuleCall.num_descendant_calls	int	quantity	num_descendant_calls	green	tests/oracles/test_legacy_module_counts.py::test_module_call_tree_counts (I2)	-
 ModuleCall.num_edges	int	quantity	num_edges	green	tests/oracles/test_legacy_quantity_doors.py::test_op_pass_and_edge_counts_on_every_door (I2)	-
-ModuleCall.num_forward_args_total	int	quantity	num_forward_args_total	red-needs-oracle	-	oracle tests/oracles/test_legacy_closed_forms.py::test_root_call_forward_argument_counts (strict xfail): the root call reports 0 forward arguments; non-root calls pass
-ModuleCall.num_forward_kwargs	int	quantity	num_forward_kwargs	red-needs-oracle	-	oracle tests/oracles/test_legacy_closed_forms.py::test_root_call_forward_argument_counts (strict xfail): the root call reports 0 forward arguments; non-root calls pass
-ModuleCall.num_forward_pos_args	int	quantity	num_forward_pos_args	red-needs-oracle	-	oracle tests/oracles/test_legacy_closed_forms.py::test_root_call_forward_argument_counts (strict xfail): the root call reports 0 forward arguments; non-root calls pass
+ModuleCall.num_forward_args_total	int	quantity	num_forward_args_total	green	tests/oracles/test_legacy_closed_forms.py::test_root_call_forward_argument_counts (I2)	non-root calls: test_module_call_forward_argument_counts
+ModuleCall.num_forward_kwargs	int	quantity	num_forward_kwargs	green	tests/oracles/test_legacy_closed_forms.py::test_root_call_forward_argument_counts (I2)	non-root calls: test_module_call_forward_argument_counts
+ModuleCall.num_forward_pos_args	int	quantity	num_forward_pos_args	green	tests/oracles/test_legacy_closed_forms.py::test_root_call_forward_argument_counts (I2)	non-root calls: test_module_call_forward_argument_counts
 ModuleCall.num_input_edges	int	quantity	num_input_edges	green	tests/oracles/test_legacy_graph_counts.py::test_module_scope_edge_and_layer_counts (I2)	-
 ModuleCall.num_internal_edges	int	quantity	num_internal_edges	green	tests/oracles/test_legacy_graph_counts.py::test_module_scope_edge_and_layer_counts (I2)	-
-ModuleCall.num_layers	int	quantity	num_layers	red-needs-oracle	-	-
-ModuleCall.num_ops	int	quantity	num_ops	green	tests/oracles/test_legacy_quantity_doors.py::test_op_pass_and_edge_counts_on_every_door (I2)	-
+ModuleCall.num_layers	int	quantity	num_layers	green	tests/oracles/test_legacy_module_counts.py::test_layer_and_op_counts_on_the_root_call (I2)	-
+ModuleCall.num_ops	int	quantity	num_ops	green	tests/oracles/test_legacy_module_counts.py::test_layer_and_op_counts_on_the_root_call (I2)	-
 ModuleCall.num_output_edges	int	quantity	num_output_edges	green	tests/oracles/test_legacy_graph_counts.py::test_module_scope_edge_and_layer_counts (I2)	-
 ModuleCall.num_param_tensors	int	quantity	num_param_tensors	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 ModuleCall.num_param_tensors_frozen	int	quantity	num_param_tensors_frozen	green	tests/oracles/test_legacy_closed_forms.py::test_param_tensor_counts_split_frozen_and_trainable (I2)	-
@@ -117,16 +117,16 @@ ModuleCall.output_gradient_memory	Bytes	quantity	output_gradient_memory	green	te
 ModuleCall.param_memory	Bytes	quantity	param_memory	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_bytes_on_every_door (I2)	-
 Op.activation_memory	Bytes	quantity	activation_memory	green	tests/oracles/test_legacy_quantity_doors.py::test_activation_bytes_on_every_compute_door (I2)	-
 Op.arithmetic_intensity	float	quantity	arithmetic_intensity	green	tests/oracles/test_legacy_closed_forms.py::test_arithmetic_intensity_by_the_read_once_write_once_model (I2)	-
-Op.autograd_memory	Bytes	quantity	autograd_memory	red-needs-row	tests/test_autograd_saved_bytes.py::test_add_op_reports_zero_autograd_memory (I2)	oracle is the zero case only (add saves no tensors); a positive case is still owed
+Op.autograd_memory	Bytes	quantity	autograd_memory	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
 Op.bytes_read	Bytes	quantity	bytes_read	green	tests/test_roofline.py::test_linear_theoretical_bytes_and_intensity (I2)	-
 Op.bytes_written	Bytes	quantity	bytes_written	green	tests/test_roofline.py::test_linear_theoretical_bytes_and_intensity (I2)	-
-Op.conditional_branch_depth	int	quantity	conditional_branch_depth	red-needs-oracle	-	-
-Op.conditional_depth	int	quantity	conditional_depth	red-needs-oracle	-	-
+Op.conditional_branch_depth	int	quantity	conditional_branch_depth	green	tests/oracles/test_legacy_module_counts.py::test_conditional_counts (I2)	-
+Op.conditional_depth	int	quantity	conditional_depth	green	tests/oracles/test_legacy_module_counts.py::test_conditional_counts (I2)	-
 Op.flops_backward	Flops	quantity	flops_backward	green	tests/oracles/test_legacy_closed_forms.py::test_backward_flops_follow_the_backward_that_runs (I2)	-
 Op.flops_forward	Flops	quantity	flops_forward	green	tests/test_metadata.py::test_flops_conv_transpose_uses_input_work_basis (I2)	-
 Op.flops_total	Flops	quantity	flops_total	green	tests/oracles/test_legacy_closed_forms.py::test_backward_and_total_flops (I2)	-
 Op.func_call_id	int	identifier	-	-	-	id/index/line
-Op.func_duration	Duration	quantity	func_duration	red-needs-oracle	-	-
+Op.func_duration	Duration	quantity	func_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_op_and_layer_func_durations_are_bounded (I1)	-
 Op.fx_call_index	int	identifier	-	-	-	id/index/line
 Op.grad_fn_object_id	int	identifier	-	-	-	id/index/line
 Op.gradient_memory	Bytes	quantity	gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_one_backward_pass (I2)	-
@@ -136,9 +136,9 @@ Op.max_distance_from_input	int	quantity	max_distance_from_input	green	tests/orac
 Op.max_distance_to_output	int	quantity	max_distance_to_output	green	tests/oracles/test_legacy_closed_forms.py::test_input_and_output_hop_distances (I2)	-
 Op.min_distance_from_input	int	quantity	min_distance_from_input	green	tests/oracles/test_legacy_closed_forms.py::test_input_and_output_hop_distances (I2)	-
 Op.min_distance_to_output	int	quantity	min_distance_to_output	green	tests/oracles/test_legacy_closed_forms.py::test_input_and_output_hop_distances (I2)	-
-Op.module_call_depth	int	quantity	module_call_depth	red-needs-oracle	-	-
+Op.module_call_depth	int	quantity	module_call_depth	green	tests/oracles/test_legacy_module_counts.py::test_module_call_tree_counts (I2)	-
 Op.num_args_total	int	quantity	num_args_total	green	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts (I2)	-
-Op.num_autograd_tensors	int	quantity	num_autograd_tensors	red-needs-row	tests/test_autograd_saved_bytes.py::test_add_op_reports_zero_autograd_memory (I2)	oracle is the zero case only (add saves no tensors); a positive case is still owed
+Op.num_autograd_tensors	int	quantity	num_autograd_tensors	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
 Op.num_children	int	quantity	num_children	green	tests/oracles/test_legacy_graph_counts.py::test_parent_child_and_input_counts (I2)	-
 Op.num_inputs	int	quantity	num_inputs	green	tests/oracles/test_legacy_graph_counts.py::test_parent_child_and_input_counts (I2)	-
 Op.num_kwargs	int	quantity	num_kwargs	green	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts (I2)	-
@@ -158,7 +158,7 @@ Op.raw_index	int	identifier	-	-	-	id/index/line
 Op.step_index	int	identifier	-	-	-	id/index/line
 Op.type_index	int	identifier	-	-	-	id/index/line
 Param.gradient_memory	Bytes	quantity	gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_one_backward_pass (I2)	-
-Param.num_calls	int	quantity	num_calls	red-needs-oracle	-	the quantity oracle test_rolled_v2_memo_separates_digest_identical_different_num_calls asserts a different door; this door has none
+Param.num_calls	int	quantity	num_calls	green	tests/oracles/test_legacy_module_counts.py::test_param_call_counts (I2)	-
 Param.num_params	int	quantity	num_params	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 Param.num_uses_by_layers	int	quantity	num_uses_by_layers	green	tests/oracles/test_legacy_closed_forms.py::test_layer_op_count_and_parameter_uses (I2)	-
 Param.num_uses_by_ops	int	quantity	num_uses_by_ops	green	tests/oracles/test_legacy_closed_forms.py::test_layer_op_count_and_parameter_uses (I2)	-
@@ -172,41 +172,41 @@ SummaryReport.total_params	int	quantity	num_params	green	tests/oracles/test_lega
 SummaryReport.trainable_params	int	quantity	num_params_trainable	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 SummaryReport.unexecuted_params	int	quantity	num_params_unexecuted	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 SummaryReport.unknown_flop_ops	int	quantity	unknown_flop_ops	green	tests/oracles/test_legacy_closed_forms.py::test_summary_counts_unknown_flop_ops (I2)	-
-SummaryTotals.at_capture_bytes	int	quantity	at_capture_bytes	red-needs-oracle	-	-
+SummaryTotals.at_capture_bytes	int	quantity	at_capture_bytes	green	tests/oracles/test_legacy_payload_bytes.py::test_payload_byte_totals_at_capture_and_now (I2)	-
 SummaryTotals.flops_forward_fma2	int	quantity	flops_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
 SummaryTotals.macs_forward	int	quantity	macs_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
 SummaryTotals.params_bytes	int	quantity	param_memory	green	tests/oracles/test_legacy_quantity_doors.py::test_summary_parameter_bytes_count_unique_storage (I2)	-
 SummaryTotals.params_executed	int	quantity	num_params_executed	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 SummaryTotals.params_frozen	int	quantity	num_params_frozen	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
-SummaryTotals.params_per_path_total	int	quantity	num_params_by_path	red-needs-oracle	-	-
+SummaryTotals.params_per_path_total	int	quantity	num_params_by_path	green	tests/oracles/test_legacy_module_counts.py::test_params_by_path_recount (I1)	-
 SummaryTotals.params_total	int	quantity	num_params	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 SummaryTotals.params_trainable	int	quantity	num_params_trainable	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 SummaryTotals.params_unexecuted	int	quantity	num_params_unexecuted	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
-SummaryTotals.retained_now_bytes	int	quantity	retained_now_bytes	red-needs-oracle	-	-
+SummaryTotals.retained_now_bytes	int	quantity	retained_now_bytes	green	tests/oracles/test_legacy_payload_bytes.py::test_payload_byte_totals_at_capture_and_now (I2)	-
 Trace.backward_peak_memory	Bytes	quantity	backward_peak_memory	red-needs-oracle	-	-
 Trace.branching_factor	float	quantity	branching_factor	green	tests/test_edge_counts.py::test_linear_chain_edge_counts (I2)	-
-Trace.capture_duration	Duration	quantity	capture_duration	red-needs-oracle	-	-
+Trace.capture_duration	Duration	quantity	capture_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_phase_durations_are_bounded_by_an_outside_clock (I1)	-
 Trace.capture_end_time	float	identifier	-	-	-	wall-clock timestamp
 Trace.capture_owner_thread_id	int	identifier	-	-	-	thread id
 Trace.capture_start_time	float	identifier	-	-	-	wall-clock timestamp
-Trace.capture_thread_count_end	int	quantity	capture_thread_count_end	red-needs-oracle	-	-
-Trace.capture_thread_count_start	int	quantity	capture_thread_count_start	red-needs-oracle	-	-
+Trace.capture_thread_count_end	int	quantity	capture_thread_count_end	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_thread_counts_match_a_recount (I1)	-
+Trace.capture_thread_count_start	int	quantity	capture_thread_count_start	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_thread_counts_match_a_recount (I1)	-
 Trace.class_source_line	int	identifier	-	-	-	id/index/line
-Trace.cleanup_duration	Duration	quantity	cleanup_duration	red-needs-oracle	-	-
-Trace.completeness_witness_accounted_count	int	quantity	completeness_witness_accounted_count	red-needs-oracle	-	-
-Trace.completeness_witness_callback_ns	int	quantity	completeness_witness_callback_ns	red-needs-oracle	-	-
-Trace.completeness_witness_event_count	int	quantity	completeness_witness_event_count	red-needs-oracle	-	-
-Trace.completeness_witness_expected_opaque_count	int	quantity	completeness_witness_expected_opaque_count	red-needs-oracle	-	-
+Trace.cleanup_duration	Duration	quantity	cleanup_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_phase_durations_are_bounded_by_an_outside_clock (I1)	-
+Trace.completeness_witness_accounted_count	int	quantity	completeness_witness_accounted_count	green	tests/oracles/test_legacy_timing_bounds.py::test_witness_and_detector_event_counts_match_a_recount (I1)	-
+Trace.completeness_witness_callback_ns	int	quantity	completeness_witness_callback_ns	green	tests/oracles/test_legacy_timing_bounds.py::test_witness_and_detector_event_counts_match_a_recount (I1)	-
+Trace.completeness_witness_event_count	int	quantity	completeness_witness_event_count	green	tests/oracles/test_legacy_timing_bounds.py::test_witness_and_detector_event_counts_match_a_recount (I1)	-
+Trace.completeness_witness_expected_opaque_count	int	quantity	completeness_witness_expected_opaque_count	green	tests/oracles/test_legacy_timing_bounds.py::test_witness_and_detector_event_counts_match_a_recount (I1)	-
 Trace.completeness_witness_unaccounted_count	int	quantity	completeness_witness_unaccounted_count	green	tests/test_completeness_witness.py::test_direct_aten_call_trips_non_vacuous_witness (I2)	-
-Trace.escape_detector_callback_ns	int	quantity	escape_detector_callback_ns	red-needs-oracle	-	-
-Trace.escape_detector_event_count	int	quantity	escape_detector_event_count	red-needs-oracle	-	-
-Trace.forward_duration	Duration	quantity	forward_duration	red-needs-oracle	-	-
+Trace.escape_detector_callback_ns	int	quantity	escape_detector_callback_ns	green	tests/oracles/test_legacy_timing_bounds.py::test_witness_and_detector_event_counts_match_a_recount (I1)	-
+Trace.escape_detector_event_count	int	quantity	escape_detector_event_count	green	tests/oracles/test_legacy_timing_bounds.py::test_witness_and_detector_event_counts_match_a_recount (I1)	-
+Trace.forward_duration	Duration	quantity	forward_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_phase_durations_are_bounded_by_an_outside_clock (I1)	-
 Trace.forward_peak_memory	Bytes	quantity	forward_peak_memory	red-needs-oracle	-	-
 Trace.forward_source_line	int	identifier	-	-	-	id/index/line
-Trace.func_calls_duration	Duration	quantity	func_calls_duration	red-needs-oracle	-	-
+Trace.func_calls_duration	Duration	quantity	func_calls_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_phase_durations_are_bounded_by_an_outside_clock (I1)	-
 Trace.init_source_line	int	identifier	-	-	-	id/index/line
 Trace.input_object_id	int	identifier	-	-	-	id/index/line
-Trace.last_backward_duration	Duration	quantity	last_backward_duration	red-needs-oracle	-	-
+Trace.last_backward_duration	Duration	quantity	last_backward_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_backward_durations_are_bounded_by_an_outside_clock (I1)	-
 Trace.last_backward_root_grad_fn_object_id	int	identifier	-	-	-	id/index/line
 Trace.max_in_degree	int	quantity	max_in_degree	green	tests/test_edge_counts.py::test_n_way_combine_max_in_degree (I2)	-
 Trace.max_layer_op_count	int	quantity	max_layer_op_count	green	tests/oracles/test_legacy_closed_forms.py::test_layer_op_count_and_parameter_uses (I2)	-
@@ -215,7 +215,7 @@ Trace.model_object_id	int	identifier	-	-	-	id/index/line
 Trace.num_backward_edges	int	quantity	num_backward_edges	green	tests/oracles/test_legacy_closed_forms.py::test_backward_graph_counts_match_a_raw_recount (I2)	-
 Trace.num_backward_passes	int	quantity	num_backward_passes	green	tests/test_backward.py::test_recording_backward_context_manager (I2)	-
 Trace.num_buffer_edges	int	quantity	num_buffer_edges	green	tests/oracles/test_legacy_graph_counts.py::test_buffer_counts (I2)	-
-Trace.num_buffer_layers	int	quantity	num_buffer_layers	red-needs-oracle	-	counts buffer version ops, not Layers: a three-step loop over a training BatchNorm and a counter has 4 buffer Layers of 4 passes and reports 16; needs an owner meaning (part B)
+Trace.num_buffer_layers	int	quantity	num_buffer_layers	green	tests/oracles/test_legacy_module_counts.py::test_buffer_layer_counts (I2)	-
 Trace.num_buffer_read_ops	int	quantity	num_buffer_read_ops	green	tests/oracles/test_legacy_graph_counts.py::test_buffer_counts (I2)	-
 Trace.num_buffer_sink_ops	int	quantity	num_buffer_sink_ops	green	tests/oracles/test_legacy_graph_counts.py::test_buffer_counts (I2)	-
 Trace.num_buffer_source_ops	int	quantity	num_buffer_source_ops	green	tests/oracles/test_legacy_graph_counts.py::test_buffer_counts (I2)	-
@@ -223,7 +223,7 @@ Trace.num_buffer_write_ops	int	quantity	num_buffer_write_ops	green	tests/oracles
 Trace.num_compute_edges	int	quantity	num_compute_edges	green	tests/test_edge_counts.py::test_linear_chain_edge_counts (I2)	-
 Trace.num_compute_layers	int	quantity	num_compute_layers	green	tests/oracles/test_legacy_graph_counts.py::test_op_and_layer_counts (I2)	-
 Trace.num_compute_ops	int	quantity	num_compute_ops	green	tests/oracles/test_legacy_graph_counts.py::test_op_and_layer_counts (I2)	-
-Trace.num_conditionals	int	quantity	num_conditionals	red-needs-oracle	-	-
+Trace.num_conditionals	int	quantity	num_conditionals	green	tests/oracles/test_legacy_module_counts.py::test_conditional_counts (I2)	-
 Trace.num_context_lines	int	identifier	-	-	-	echo of the source_context_lines option
 Trace.num_edges	int	quantity	num_edges	green	tests/test_edge_counts.py::test_linear_chain_edge_counts (I2)	-
 Trace.num_grad_fn_calls	int	quantity	num_grad_fn_calls	green	tests/oracles/test_legacy_closed_forms.py::test_backward_graph_counts_match_a_raw_recount (I2)	-
@@ -237,7 +237,7 @@ Trace.num_internal_sink_ops	int	quantity	num_internal_sink_ops	green	tests/oracl
 Trace.num_internal_source_layers	int	quantity	num_internal_source_layers	green	tests/oracles/test_legacy_graph_counts.py::test_internal_source_and_sink_counts (I2)	-
 Trace.num_internal_source_ops	int	quantity	num_internal_source_ops	green	tests/oracles/test_legacy_graph_counts.py::test_internal_source_and_sink_counts (I2)	-
 Trace.num_layer_edges	int	quantity	num_layer_edges	green	tests/oracles/test_legacy_graph_counts.py::test_op_and_layer_counts (I2)	-
-Trace.num_layers	int	quantity	num_layers	red-needs-oracle	-	-
+Trace.num_layers	int	quantity	num_layers	green	tests/oracles/test_legacy_module_counts.py::test_layer_and_op_counts_on_the_root_call (I2)	-
 Trace.num_layers_with_params	int	quantity	num_layers_with_params	green	tests/oracles/test_legacy_graph_counts.py::test_module_call_and_param_use_counts (I2)	-
 Trace.num_module_calls	int	quantity	num_module_calls	green	tests/oracles/test_legacy_graph_counts.py::test_module_call_and_param_use_counts (I2)	-
 Trace.num_modules	int	quantity	num_modules	green	tests/backend_parity/test_independent_fact_pins.py::test_linear_trace_facts_hold_from_first_principles (I2)	-
@@ -249,7 +249,7 @@ Trace.num_param_tensors	int	quantity	num_param_tensors	green	tests/test_numbers_
 Trace.num_param_tensors_frozen	int	quantity	num_param_tensors_frozen	green	tests/oracles/test_legacy_closed_forms.py::test_param_tensor_counts_split_frozen_and_trainable (I2)	-
 Trace.num_param_tensors_trainable	int	quantity	num_param_tensors_trainable	green	tests/oracles/test_legacy_closed_forms.py::test_param_tensor_counts_split_frozen_and_trainable (I2)	-
 Trace.num_params	int	quantity	num_params	green	tests/test_numbers_truth_params.py::test_tied_params_counted_once_by_object_identity (I1)	-
-Trace.num_params_by_path	int	quantity	num_params_by_path	red-needs-oracle	-	-
+Trace.num_params_by_path	int	quantity	num_params_by_path	green	tests/oracles/test_legacy_module_counts.py::test_params_by_path_recount (I1)	-
 Trace.num_params_executed	int	quantity	num_params_executed	green	tests/test_numbers_truth_params.py::test_declared_executed_unexecuted_split_named (I2)	-
 Trace.num_params_frozen	int	quantity	num_params_frozen	green	tests/test_param_log.py::TestTrainableFrozenTallies::test_mh_mixed (I2)	-
 Trace.num_params_trainable	int	quantity	num_params_trainable	green	tests/test_bug_fixes_phase14.py::test_functional_parameter_view_does_not_inflate_param_counts (I1)	-
@@ -266,16 +266,16 @@ Trace.num_saved_modules	int	quantity	num_saved_modules	green	tests/oracles/test_
 Trace.num_saved_ops	int	quantity	num_saved_ops	green	tests/backend_parity/test_b10_torch_characterization.py::test_selective_layers_to_save_uses_fast_pass_save_new_outs (I2)	-
 Trace.num_tensors	int	quantity	num_tensors	green	tests/oracles/test_legacy_graph_counts.py::test_op_and_layer_counts (I2)	-
 Trace.num_uncalled_modules	int	quantity	num_uncalled_modules	green	tests/oracles/test_legacy_graph_counts.py::test_module_call_and_param_use_counts (I2)	-
-Trace.overhead_duration	Duration	quantity	overhead_duration	red-needs-oracle	-	-
-Trace.pinned_autograd_memory	Bytes	quantity	pinned_autograd_memory	red-needs-oracle	-	R2-37 disclosure of autograd bytes the attached saved activations keep alive; added after the part-A base; autograd family (part B)
+Trace.overhead_duration	Duration	quantity	overhead_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_phase_durations_are_bounded_by_an_outside_clock (I1)	-
+Trace.pinned_autograd_memory	Bytes	quantity	pinned_autograd_memory	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
 Trace.random_seed	int	identifier	-	-	-	seed echo
 Trace.saved_activation_memory	Bytes	quantity	saved_activation_memory	green	tests/test_brainpipe_byte_model.py::test_saved_activation_memory_equals_real_retained_bytes (I1)	-
 Trace.saved_gradient_memory	Bytes	quantity	saved_gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_two_backward_passes (I2)	-
-Trace.setup_duration	Duration	quantity	setup_duration	red-needs-oracle	-	-
+Trace.setup_duration	Duration	quantity	setup_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_phase_durations_are_bounded_by_an_outside_clock (I1)	-
 Trace.tlspec_version	int	identifier	-	-	-	format version
 Trace.total_activation_memory	Bytes	quantity	activation_memory	green	tests/oracles/test_legacy_quantity_doors.py::test_activation_bytes_on_every_compute_door (I2)	-
-Trace.total_autograd_memory	Bytes	quantity	autograd_memory	red-needs-oracle	-	oracle is the zero case only (add saves no tensors); a positive case is still owed; this door has no oracle
-Trace.total_backward_duration	Duration	quantity	backward_duration	red-needs-oracle	-	-
+Trace.total_autograd_memory	Bytes	quantity	autograd_memory	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
+Trace.total_backward_duration	Duration	quantity	backward_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_backward_durations_are_bounded_by_an_outside_clock (I1)	-
 Trace.total_backward_memory	Bytes	quantity	backward_memory	red-needs-oracle	-	-
 Trace.total_flops	Flops	quantity	flops_total	green	tests/oracles/test_legacy_closed_forms.py::test_backward_and_total_flops (I2)	-
 Trace.total_flops_backward	Flops	quantity	flops_backward	green	tests/oracles/test_legacy_closed_forms.py::test_backward_flops_follow_the_backward_that_runs (I2)	-

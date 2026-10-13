@@ -1008,15 +1008,18 @@ def test_module_layer_containment_fires_on_invalid_modulecall_op_label() -> None
 
 
 def test_module_layer_containment_fires_on_modulecall_num_layers_mismatch() -> None:
-    """Arm 3: ModuleCall.num_layers must equal len(ops)."""
+    """Arm 3: ModuleCall.num_layers must equal the distinct Layers of its ops."""
 
-    mcall = SimpleNamespace(ops=["relu_1"], num_layers=5, input_layers=[], output_layers=[])
+    mcall = SimpleNamespace(
+        ops=["relu_1"], num_ops=1, num_layers=5, input_layers=[], output_layers=[]
+    )
     mod = SimpleNamespace(address="self", layer_labels=[], num_layers=0, ops={1: mcall})
     fake_trace = SimpleNamespace(
         modules=_AddrIndexed([mod]),
         op_labels=["relu_1"],
         layer_labels=[],
         layer_logs={},
+        layer_dict_all_keys={"relu_1": SimpleNamespace(layer_label="relu_1")},
         layer_list=[],
     )
     with pytest.raises(MetadataInvariantError, match="num_layers=5"):

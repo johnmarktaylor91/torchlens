@@ -741,9 +741,30 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
                 param_log._lazy_at_prep = True  # type: ignore[attr-defined]
             param_logs[param_address] = param_log
 
+    _add_shared_module_aliases(model, param_logs, param_id_to_address)
     trace._param_log_by_pid = param_id_to_address
     trace._session_param_inventory = stamped_params
     trace.param_logs = ParamAccessor(param_logs)
+
+
+def _add_shared_module_aliases(
+    model: nn.Module, param_logs: dict[str, Param], param_id_to_address: dict[int, str]
+) -> None:
+    """Add the addresses of modules registered under a second name to their Params.
+
+    ``model.modules()`` yields a module object once (``self.tied2 = self.tied``),
+    so only the duplicate-keeping parameter walk sees the second name.
+    """
+
+    for alias_address, param in model.named_parameters(remove_duplicate=False):
+        param_log = param_logs.get(param_id_to_address.get(id(param), ""))
+        if param_log is None:
+            continue
+        if alias_address not in param_log.all_addresses:
+            param_log.all_addresses.append(alias_address)
+        alias_module_address = alias_address.rpartition(".")[0] or "self"
+        if alias_module_address not in param_log.all_module_addresses:
+            param_log.all_module_addresses.append(alias_module_address)
 
 
 # ---------------------------------------------------------------------------

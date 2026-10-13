@@ -349,11 +349,29 @@ def _check_module_layer_containment(ml: Trace) -> None:
                         f"'{lbl}' not in op_labels or layer_labels",
                     )
 
-            if mpl.num_layers != len(mpl.ops):
+            # num_ops is len(ops); num_layers counts the distinct Layers the
+            # ops resolve to through the trace (an unresolvable op is itself
+            # the problem). One raise site for the check.
+            resolved = [
+                getattr(ml.layer_dict_all_keys.get(lbl), "layer_label", None) for lbl in mpl.ops
+            ]
+            unresolved = [
+                lbl
+                for lbl, layer in zip(mpl.ops, resolved, strict=True)
+                if not isinstance(layer, str)
+            ]
+            count_problem = None
+            if mpl.num_ops != len(mpl.ops):
+                count_problem = f"num_ops={mpl.num_ops} != len(ops)={len(mpl.ops)}"
+            elif unresolved:
+                count_problem = f"op '{unresolved[0]}' resolves to no Layer"
+            elif mpl.num_layers != len(set(resolved)):
+                count_problem = (
+                    f"num_layers={mpl.num_layers} != distinct Layers of ops={len(set(resolved))}"
+                )
+            if count_problem is not None:
                 raise MetadataInvariantError(
-                    name,
-                    f"ModuleCall '{addr}:{call_index}': "
-                    f"num_layers={mpl.num_layers} != len(ops)={len(mpl.ops)}",
+                    name, f"ModuleCall '{addr}:{call_index}': {count_problem}"
                 )
 
             # input/output layers subset of ops (using both pass-qualified
