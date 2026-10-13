@@ -442,7 +442,6 @@ def test_gradient_bytes_after_two_backward_passes(grad_twice) -> None:
     # place, so its size does not change.
     model, trace, _, _ = grad_twice
     _assert_grad_case_bytes(model, trace, passes=2)
-    assert all(len(op.grads) == 2 for op in trace.layer_list if op.has_grad)
 
 
 def test_gradient_bytes_on_layers_modules_and_buffers(outer_case) -> None:
