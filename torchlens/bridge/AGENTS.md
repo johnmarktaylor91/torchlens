@@ -44,6 +44,16 @@ optional dependency.
   `autoroute/_builtin_input.py` and imported eagerly by `user_funcs.py`, so it
   must import cleanly without `transformers` installed (gating stays inside
   the functions).
+- `hf_attention.py` (re-exported from `hf.py`): `register_attention(model=None)`
+  registers the `"torchlens"` attention function AND its matching mask function
+  (`torchlens_mask`, transformers' boolean `sdpa_mask` with the causal skip
+  off) under one key; `record_attention(model, check_sdpa=False)` records
+  per-head probabilities per attention module in an `AttentionRecording`. The
+  active recording is a never-rebound `ContextVar`. transformers imports stay
+  inside functions (hf.py is imported eagerly). Tests:
+  `tests/test_hf_attention_backend.py` (independent float64 reference, SDPA
+  parity, mask-trap tripwire) and `tests/test_hf_attention_backend_deploy.py`
+  (device_map, disk offload, bitsandbytes on CPU).
 - `huggingface.py`: `push_to_hub()` for artifacts (extra: `torchlens[hf]`).
 - `profiler.py`: `execution_trace()`, `join()` correlate a Kineto/Chrome trace
   with captured layers; stdlib-only, no import gate. `join()` (schema

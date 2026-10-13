@@ -1,4 +1,8 @@
-"""Hugging Face auto-route bridge helpers."""
+"""Hugging Face auto-route bridge helpers and the TorchLens attention backend.
+
+The attention backend (``register_attention``, ``record_attention``) lives in
+``torchlens.bridge.hf_attention`` and is re-exported here.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +13,12 @@ from typing import Any, cast
 import torch
 
 from torchlens._errors import InvalidArgumentError
+from torchlens.bridge.hf_attention import (
+    AttentionCall,
+    AttentionRecording,
+    record_attention,
+    register_attention,
+)
 from torchlens.data_classes.trace import ResolvedPreprocessing, Trace
 
 _MODALITY_KEYS = frozenset({"text", "image", "images", "audio", "videos"})
@@ -278,17 +288,22 @@ def trace_text(
 
     tokenizer_was_explicit = tokenizer is not None
     tok = tokenizer or _resolve_tokenizer(model)
-    transform, transform_state = _make_text_transform(tok, chat_template=chat_template)
+    structure_only = bool(getattr(kwargs.get("capture"), "structure_only", False))
+    transform, transform_state = _make_text_transform(
+        tok, chat_template=chat_template, structure_only=structure_only
+    )
+    # Structure-only captures hold no output values to decode as text.
+    style = {} if structure_only else {"output_style": "hf_text"}
     capture = tl.options.merge_capture_options(
         capture=kwargs.pop("capture", None),
         transform=transform,
-        output_style="hf_text",
+        **style,
     )
     had_tokenizer = hasattr(model, "_torchlens_output_tokenizer")
     previous_tokenizer = getattr(model, "_torchlens_output_tokenizer", None)
     model._torchlens_output_tokenizer = tok
     try:
-        log = tl.trace(model, cast(Any, text), capture=capture, **kwargs)
+        log = _trace_text_capture(model, text, capture, structure_only, kwargs)
     finally:
         if had_tokenizer:
             model._torchlens_output_tokenizer = previous_tokenizer
@@ -392,6 +407,68 @@ def trace_multimodal(model: Any, input_dict: dict[str, Any], **kwargs: Any) -> T
     return log
 
 
+def _trace_text_capture(
+    model: Any, text: Any, capture: Any, structure_only: bool, kwargs: dict[str, Any]
+) -> Trace:
+    """Run the text capture; name the attention remedy on a mask value read.
+
+    Under ``structure_only`` the synthesized all-ones mask reaches transformers'
+    mask builder; the sdpa builder reads mask values to decide whether to skip
+    the mask, which refuses typed. The refusal is re-raised with the same type
+    and code plus the one-line remedy (never an automatic backend switch).
+    """
+
+    import torchlens as tl
+
+    if not structure_only:
+        return tl.trace(model, cast(Any, text), capture=capture, **kwargs)
+    from torchlens.capture.structure_only import ValueDependentBranchError
+
+    try:
+        return tl.trace(model, cast(Any, text), capture=capture, **kwargs)
+    except ValueDependentBranchError as exc:
+        offenses = cast(list[dict[str, Any]], exc.fields.get("offenses") or [])
+        if not any(str(o.get("file", "")).endswith("masking_utils.py") for o in offenses):
+            raise
+        remedy = (
+            "structure-only text capture needs a mask path that reads no values: load the "
+            'model with attn_implementation="eager", or call '
+            "tl.bridge.hf.register_attention(model)"
+        )
+        context = {k: v for k, v in exc.fields.items() if k not in ("code", "remedy")}
+        raise ValueDependentBranchError(
+            f"{exc}\nRemedy for text input: {remedy}.",
+            code="value_dependent_branch_unsupported",
+            remedy=remedy,
+            **cast(dict[str, Any], context),
+        ) from exc
+
+
+def _meta_text_inputs(encoded: Any) -> dict[str, Any]:
+    """Return tokenized text on the meta device with an all-ones mask (U38.1).
+
+    The structure-only text policy: the token ids keep only their shape on
+    meta and the mask is a meta all-ones mask. A tokenizer mask that is not
+    all ones (padded prompts) refuses typed: its pattern would be lost.
+    """
+
+    mask = encoded.get("attention_mask")
+    if isinstance(mask, torch.Tensor) and not bool(torch.all(mask == 1)):
+        raise InvalidArgumentError(
+            "structure-only text capture builds an all-ones attention mask, but the "
+            "tokenized prompts are padded (their mask is not all ones)",
+            code="structure_only_text_mask_not_all_ones",
+            remedy="trace one prompt (or prompts of equal token length) at a time",
+        )
+    meta = {
+        key: value.to("meta") if isinstance(value, torch.Tensor) else value
+        for key, value in encoded.items()
+    }
+    if isinstance(mask, torch.Tensor):
+        meta["attention_mask"] = torch.ones(mask.shape, dtype=mask.dtype, device="meta")
+    return meta
+
+
 def _resolve_tokenizer(model: Any) -> Any:
     """Resolve a tokenizer for a Hugging Face model.
 
@@ -432,7 +509,7 @@ def _resolve_tokenizer(model: Any) -> Any:
 
 
 def _make_text_transform(
-    tokenizer: Any, *, chat_template: bool = False
+    tokenizer: Any, *, chat_template: bool = False, structure_only: bool = False
 ) -> tuple[Callable[[Any], Any], dict[str, Any]]:
     """Build a tokenizer transform for ``torchlens.trace``.
 
@@ -443,6 +520,9 @@ def _make_text_transform(
     chat_template:
         Whether to apply a chat template to message-list inputs before
         tokenization.
+    structure_only:
+        Whether the capture is structure-only: the tokenized inputs then move
+        to the meta device with an all-ones mask (``_meta_text_inputs``).
 
     Returns
     -------
@@ -475,12 +555,12 @@ def _make_text_transform(
         try:
             result = tokenizer(text, return_tensors="pt", padding=True)
             state["padding"] = True
-            return result
         except ValueError as exc:
-            if isinstance(original_text, str) and "padding token" in str(exc):
-                state["padding"] = False
-                return tokenizer(text, return_tensors="pt", padding=False)
-            raise
+            if not (isinstance(original_text, str) and "padding token" in str(exc)):
+                raise
+            state["padding"] = False
+            result = tokenizer(text, return_tensors="pt", padding=False)
+        return _meta_text_inputs(result) if structure_only else result
 
     return transform, state
 
@@ -704,12 +784,16 @@ def _extract_hf_processor_config(processor: Any) -> dict[str, Any]:
 
 
 __all__ = [
+    "AttentionCall",
+    "AttentionRecording",
     "_can_resolve_hf_processor",
     "_can_resolve_hf_tokenizer",
     "_has_attached_image_processor",
     "_is_hf_image_input",
     "_is_hf_multimodal_input",
     "_is_hf_text_input",
+    "record_attention",
+    "register_attention",
     "trace_image",
     "trace_multimodal",
     "trace_text",

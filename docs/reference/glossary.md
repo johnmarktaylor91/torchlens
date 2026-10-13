@@ -1547,3 +1547,40 @@ deprecation shim owed*
   (`classification`, `imagenet`, `imagenet1k`, `hf_text`). It refuses before
   the forward when no custom output detector is registered, and after the
   capture when registered custom detectors all declined the style.
+
+**tl.bridge.hf.register_attention(model=None)** — *unstable — no deprecation shim owed*
+: Registers TorchLens as a Hugging Face attention backend: one call puts a
+  `"torchlens"` attention function in transformers' `AttentionInterface`
+  AND its matching mask function in `AttentionMaskInterface` (the boolean
+  `sdpa_mask` with the causal skip off), so the model always receives an
+  explicit causal and padding mask. Registering the attention function alone
+  is the mask trap: transformers then builds no mask and padding leaks into
+  attention. Never registers over a built-in key; a foreign `"torchlens"`
+  registration refuses `hf_attention_key_taken`. With `model=`, also calls
+  `model.set_attn_implementation("torchlens")`. Returns the key, for
+  `from_pretrained(..., attn_implementation="torchlens")`. Memory cost: the
+  backend materializes the full `(batch, heads, q_len, kv_len)` probability
+  matrix in every attention call, unlike fused SDPA or flash kernels.
+
+**tl.bridge.hf.record_attention(model, *, check_sdpa=False)** — *unstable — no deprecation shim owed*
+: Context manager yielding an `AttentionRecording`: every attention call of
+  a model on the `"torchlens"` backend records its per-head probabilities,
+  keyed by the attention module's qualified name, without a TorchLens trace.
+  The recorded tensor is exactly the one the backend multiplied by the
+  values (and returns as `output_attentions`). Refuses
+  `hf_attention_backend_not_selected` for a model on another backend.
+  `check_sdpa=True` also runs `scaled_dot_product_attention` on each call
+  and refuses `hf_attention_sdpa_mismatch` beyond the semantic SDPA
+  reconstruction tolerance (doubles the attention cost; calls with dropout,
+  softcapping or attention sinks are left unchecked and say so). Retained
+  memory is `batch * heads * q_len * kv_len * itemsize` bytes per call: for
+  a Llama-2-7B shape (32 layers, 32 heads) at 4096 tokens in bfloat16, 1 GiB
+  per layer and 32 GiB per sequence.
+
+**AttentionRecording / AttentionCall (`tl.bridge.hf`)** — *unstable — no deprecation shim owed*
+: `AttentionRecording` is a read-only mapping from attention-module name to
+  probabilities `(batch, heads, q_len, kv_len)`; `recording[name]` serves a
+  module called once and refuses `hf_attention_multiple_calls` otherwise,
+  `calls_for(name)` returns every call in order, `.calls` lists all
+  `AttentionCall` records (`module_name`, `probs`, `num_key_value_heads`,
+  `mask_kind`, `sdpa_checked`), and `.nbytes` is the retained total.
