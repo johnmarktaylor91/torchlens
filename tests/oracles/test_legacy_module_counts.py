@@ -207,8 +207,12 @@ def test_layer_and_op_counts_on_the_root_call() -> None:
     ("factory", "train", "expected"),
     [
         (Graph, False, 1),  # scale
-        (Counter, False, 2),  # count, scale
-        (LoopedBatchNorm, True, 4),  # running_mean, running_var, num_batches_tracked, count
+        # Outside a loop each buffer version is its own Layer: count read,
+        # count written version, scale read.
+        (Counter, False, 3),
+        # In the loop each buffer's read and three written versions are four
+        # passes of one Layer: running_mean, running_var, num_batches_tracked, count.
+        (LoopedBatchNorm, True, 4),
     ],
 )
 def test_buffer_layer_counts(factory, train, expected) -> None:

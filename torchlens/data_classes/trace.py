@@ -1282,6 +1282,8 @@ class Trace(
         "input_annotations": FieldPolicy.KEEP,
         "_source_code_blob": FieldPolicy.KEEP,
         "_source_model_ref": FieldPolicy.DROP,
+        # Session-time: recorded at the module build while the model is live.
+        "_uncalled_module_addresses": FieldPolicy.DROP,
         "parent_run": FieldPolicy.DROP,
         "model_object_id": FieldPolicy.KEEP,
         "model_class_qualname": FieldPolicy.KEEP,
@@ -2535,8 +2537,7 @@ class Trace(
             ``num_uncalled_modules`` reads ``None`` in that case.
         """
 
-        workspace = self.__dict__.get("_module_capture_ws")
-        stored = getattr(workspace, "uncalled_module_addresses", None)
+        stored = self.__dict__.get("_uncalled_module_addresses")
         if stored is not None:
             return _CallableList(stored)
         source_ref = getattr(self, "_source_model_ref", None)
@@ -3016,6 +3017,7 @@ class Trace(
         # does for every tlspec-loaded Trace.
         state["facet_registry_snapshot"] = None
         state["pinned_autograd_memory"] = None  # R2-37: a pickled copy pins nothing
+        state.pop("_uncalled_module_addresses", None)  # session-time: unknown once restored
         state.pop("_raw_graph_ws", None)
         state.pop("_module_capture_ws", None)
         state.pop("_wrapper_runtime_ws", None)
@@ -3232,6 +3234,7 @@ class Trace(
         state.pop("_keep_grads_in_memory", None)
         state.pop("_grad_stream_retain_in_memory", None)
         state["pinned_autograd_memory"] = None  # R2-37: a restored trace pins nothing
+        state.pop("_uncalled_module_addresses", None)
         pop_retired_legacy_keys(state)
         if state.get("_intervention_spec") is None:
             state["_intervention_spec"] = InterventionSpec()

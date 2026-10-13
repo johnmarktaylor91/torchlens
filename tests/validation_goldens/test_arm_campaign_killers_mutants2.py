@@ -540,12 +540,13 @@ def test_module_layer_containment_fires_on_output_layers_outside_known_labels() 
 
     (M1 raise-arm campaign: ``module_layer_containment#a04`` survivor --
     layer_labels resolution, the num_layers count, the ops-membership check,
-    and the num_layers/len(ops) check must all stay silent, so only the
+    and the num_ops and num_layers checks must all stay silent, so only the
     output_layers roster names a label outside op_labels/layer_labels.)
     """
 
     mpl = SimpleNamespace(
         ops=["op_1_1"],
+        num_ops=1,
         num_layers=1,
         input_layers=["op_1_1"],
         output_layers=["ghost_out_9_9"],
@@ -561,6 +562,7 @@ def test_module_layer_containment_fires_on_output_layers_outside_known_labels() 
         op_labels=["op_1_1"],
         layer_labels=["op_1_1"],
         layer_logs={"op_1_1": object()},
+        layer_dict_all_keys={"op_1_1": SimpleNamespace(layer_label="op_1_1")},
         layer_list=[],
     )
 

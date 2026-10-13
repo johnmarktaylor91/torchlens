@@ -4,7 +4,9 @@ A duration has no closed form, so each is bounded by a clock TorchLens does not
 read: ``time.perf_counter`` around the capture (an upper bound) and a planted
 ``time.sleep`` inside the forward or a backward hook (a lower bound, and a gap
 the function-call totals must exclude). Thread counts are recounted with
-``threading.active_count()``. These are the I1 oracles the census
+``threading.active_count()``; the completeness witness's ATen events with a
+``TorchDispatchMode`` and the escape detector's torch-function events with a
+``TorchFunctionMode`` on plain torch. These are the I1 oracles the census
 (``tests/oracles/data/legacy_quantities.tsv``) names for those doors.
 """
 
@@ -16,9 +18,13 @@ import time
 import pytest
 import torch
 from torch import nn
+from torch.overrides import TorchFunctionMode
+from torch.utils._python_dispatch import TorchDispatchMode
 
 import torchlens as tl
-from tests.oracles.test_legacy_graph_counts import Grad
+from tests.oracles.test_legacy_graph_counts import Grad, Graph
+from torchlens import _state
+from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.options import CaptureOptions
 
 SLEEP = 0.05  # seconds planted in Sleeper.forward
@@ -166,3 +172,67 @@ def test_capture_thread_counts_match_a_recount() -> None:
             trace.cleanup()
     finally:
         stop.set()
+
+
+class _DispatchCount(TorchDispatchMode):
+    """Counts every ATen dispatch event, the completeness witness's unit."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.count = 0
+
+    def __torch_dispatch__(self, func, types, args=(), kwargs=None):
+        self.count += 1
+        return func(*args, **(kwargs or {}))
+
+
+class _FunctionCount(TorchFunctionMode):
+    """Counts every torch-function call, the escape detector's unit."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.count = 0
+
+    def __torch_function__(self, func, types, args=(), kwargs=None):
+        self.count += 1
+        return func(*args, **(kwargs or {}))
+
+
+@pytest.fixture
+def _detectors_armed():
+    """Arm the escape detector and completeness witness, then restore the prior modes."""
+
+    saved = (_state._escape_detector_mode, _state._completeness_witness_mode)
+    unwrap_torch()
+    wrap_torch(escape_detector="shadow", completeness_witness=True)
+    yield
+    unwrap_torch()
+    wrap_torch(escape_detector=saved[0], completeness_witness=saved[1])
+
+
+@pytest.mark.usefixtures("_detectors_armed")
+@pytest.mark.parametrize("model_name", ["grad", "graph"])
+def test_witness_and_detector_event_counts_match_a_recount(model_name: str) -> None:
+    torch.manual_seed(0)
+    if model_name == "grad":
+        model, inputs = Grad().eval(), (torch.randn(2, 4),)
+    else:
+        model, inputs = Graph().eval(), (torch.randn(2, 4), torch.randn(2, 4))
+    unwrap_torch()  # recount on plain torch
+    with _DispatchCount() as dispatches:
+        model(*inputs)
+    with _FunctionCount() as functions:
+        model(*inputs)
+    wrap_torch(escape_detector="shadow", completeness_witness=True)
+    started = time.perf_counter()
+    trace = tl.trace(model, inputs if len(inputs) > 1 else inputs[0])
+    wall_ns = (time.perf_counter() - started) * 1e9
+    try:
+        assert trace.completeness_witness_event_count == dispatches.count
+        # Every dispatch lies under a captured wrapped call: all are accounted.
+        assert trace.completeness_witness_accounted_count == dispatches.count
+        assert trace.escape_detector_event_count == functions.count
+        assert 0 < trace.completeness_witness_callback_ns <= wall_ns
+        assert 0 < trace.escape_detector_callback_ns <= wall_ns
+    finally:
+        trace.cleanup()

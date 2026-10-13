@@ -102,10 +102,6 @@ class ModuleCaptureWorkspace:
     module_build_data: dict[str, Any] = field(default_factory=dict)
     module_metadata: dict[Any, Any] = field(default_factory=dict)
     module_forward_args: dict[Any, Any] = field(default_factory=dict)
-    # Registered module addresses the captured forward never called, computed
-    # once the module records exist while the source model is still live
-    # (step 16); ``None`` until then. Session-time: the workspace never pickles.
-    uncalled_module_addresses: tuple[str, ...] | None = None
     # (module, prior instance ``forward`` or the absent sentinel, installed
     # wrapper) per decorated submodule; installed at session start, emptied by
     # the session cleanup that puts every prior forward back.

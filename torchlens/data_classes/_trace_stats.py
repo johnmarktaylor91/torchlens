@@ -1844,8 +1844,7 @@ class TraceStatsMixin(_TraceMixinBase):
         unpickled trace (the record is session-time) whose model is gone.
         """
 
-        workspace = self.__dict__.get("_module_capture_ws")
-        stored = getattr(workspace, "uncalled_module_addresses", None)
+        stored = self.__dict__.get("_uncalled_module_addresses")
         if stored is not None:
             return len(stored)
         source_ref = getattr(self, "_source_model_ref", None)

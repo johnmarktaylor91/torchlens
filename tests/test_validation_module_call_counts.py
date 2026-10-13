@@ -23,15 +23,11 @@ from torchlens.validation import check_metadata_invariants
 
 
 class RootLoop(nn.Module):
-    """A root-owned weight applied three times: one Layer with three passes, no submodule."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.w = nn.Parameter(torch.randn(4, 4))
+    """A parameter-free loop at the root: repeated ops grouped into multi-pass Layers."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         for _ in range(3):
-            x = torch.tanh(x @ self.w)
+            x = torch.tanh(x * 2)
         return x
 
 

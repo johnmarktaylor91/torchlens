@@ -5946,7 +5946,7 @@ def test_module_output_structure_allows_literal_metadata_fields() -> None:
     )
     try:
         root_call = log.module_calls["self:1"]
-        assert root_call.output_ops == ["output_1"]
+        assert root_call.output_ops == ["output_1:1"]
         assert log[root_call.output_ops[0]].container_path
         assert check_metadata_invariants(log) is True
     finally:

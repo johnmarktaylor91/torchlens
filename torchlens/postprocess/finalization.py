@@ -1032,7 +1032,7 @@ def _build_module_logs(self: "Trace") -> None:
         adopt_records(_core, "module_call", pass_dict.values())
 
     rebuild_trace_accessors(self, module_dict, module_order, pass_dict)
-    self._module_capture_ws.uncalled_module_addresses = uncalled_module_addresses(self)
+    self.__dict__["_uncalled_module_addresses"] = uncalled_module_addresses(self)
 
     # Clean up temporary build state to free memory. These dicts are only
     # needed during construction and are not part of the user-facing API.
