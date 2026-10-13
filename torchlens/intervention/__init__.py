@@ -29,6 +29,7 @@ from ._metrics import (
     relative_l2,
     resolve_metric as resolve_metric,
 )
+from ._position_edits import at_positions
 from ._subspace_edits import subspace_ablate, subspace_interchange
 from ._super.super_op import (
     SuperAtenOp,
@@ -359,6 +360,7 @@ __all__ = [
     "sample_from",
     "sampling_records",
     "set_direction_mean",
+    "at_positions",
     "subspace_ablate",
     "subspace_interchange",
     "relative_l1_scalar",
