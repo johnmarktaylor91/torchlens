@@ -326,6 +326,7 @@ is documented unstable and may be renamed or removed without a compatibility ali
 | QK and OV circuits on verified head weight views | `qk_circuit`, `ov_circuit` | unstable -- no deprecation shim owed |
 | Per-neuron MLP rows under the identity gate | `mlp_neuron_contributions`, `layers`, `neurons`, `onto`, `positions` | unstable -- no deprecation shim owed |
 | Alias table generation value | `generation="4.x"` (TransformerBridge canonical hook names) | unstable -- no deprecation shim owed |
+| Appliance on the `trace.using` door | `trace.using("mi")`, `head_scores`, `qk_circuit`, `ov_circuit` | unstable -- no deprecation shim owed |
 
 <!-- MECHINTERP-KIT-UNSTABLE-INDEX:END -->
 
@@ -795,7 +796,8 @@ one exact `other_neurons` row.
 
 **Appliance door (`Trace.using`)** *(spelling documented-unstable)*
 : `trace.using(name)` returns the appliance registered as `name`, bound to that trace (for
-  example `trace.using("mi").head_scores(...)` once the `"mi"` appliance is registered).
+  example `trace.using("mi").head_scores(...)`; TorchLens registers `"mi"`, the mechinterp
+  kit, whose methods return exactly what the matching `torchlens.mechinterp` functions return).
   Appliances hang off this one door instead of adding methods to `Trace`; TorchLens's own and
   outside packages register the same way, with
   `torchlens.accessors.register_appliance(name, factory, summary="", replace=False)`, where
