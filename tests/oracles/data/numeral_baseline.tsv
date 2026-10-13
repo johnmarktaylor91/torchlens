@@ -3163,7 +3163,6 @@ package-docstrings	torchlens/data_classes/param.py	84
 package-docstrings	torchlens/data_classes/trace.py	10
 package-docstrings	torchlens/data_classes/trace.py	14
 package-docstrings	torchlens/data_classes/trace.py	16
-package-docstrings	torchlens/data_classes/trace.py	20
 package-docstrings	torchlens/data_classes/trace.py	3.2
 package-docstrings	torchlens/dataset_extraction.py	10
 package-docstrings	torchlens/dataset_extraction.py	11
