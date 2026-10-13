@@ -694,27 +694,26 @@ def _sparse_function_ref(ctx: RecordContext, function: FunctionCallRef | None) -
 
 def _sparse_output_ref(
     ctx: RecordContext,
-    spec: CaptureSpec,
     values: _SparseFreezeValues,
     *,
-    ram_payload: torch.Tensor | None,
+    has_saved_activation: bool,
+    detach_saved_activations: bool,
     container_path: tuple[Any, ...],
-    detach_unkept: bool = True,
 ) -> OutputRef:
     """Return the sparse commit's output ref (shared by both freeze shapes).
 
-    ``detach_unkept`` is the session's ``detach_saved_activations`` choice:
-    the op's recorded detach flag is ``False`` whenever its payload was kept
-    graph-connected, either by ``keep_grad`` or by an attached session.
+    The caller resolves both flags from the capture spec: the recorded detach
+    flag is ``False`` whenever the payload was kept graph-connected, either by
+    ``keep_grad`` or by an attached session.
     """
 
     return OutputRef(
         tensor=values.tensor_ref,
         transformed_tensor=values.transformed_ref,
-        has_saved_activation=bool(spec.save_out and (ram_payload is not None)),
+        has_saved_activation=has_saved_activation,
         output_device=str(ctx.tensor_device) if ctx.tensor_device is not None else None,
         activation_transform=None,
-        detach_saved_activations=not (spec.keep_grad or not detach_unkept),
+        detach_saved_activations=detach_saved_activations,
         visualizer_path=None,
         multi_output_index=ctx.output_index,
         in_multi_output=bool(container_path),
@@ -786,11 +785,10 @@ def _record_from_record_context(
         ),
         output=_sparse_output_ref(
             ctx,
-            spec,
             values,
-            ram_payload=ram_payload,
+            has_saved_activation=bool(spec.save_out and (ram_payload is not None)),
+            detach_saved_activations=not (spec.keep_grad or not detach_unkept),
             container_path=container_path,
-            detach_unkept=detach_unkept,
         ),
         is_bottom_level=bool(ctx.is_bottom_level_func),
         func_call_id=ctx.func_call_id,

@@ -226,7 +226,9 @@ def test_fast_optimiser_steps_match_hand_truncated_eager_model() -> None:
         eager.stem_to_layer2(batch).pow(2).mean().backward()
         eager_opt.step()
 
-    for (name, after_fast), after_eager in zip(traced.named_parameters(), eager.parameters()):
+    for (name, after_fast), after_eager in zip(
+        traced.named_parameters(), eager.parameters(), strict=True
+    ):
         assert torch.equal(after_fast, after_eager), name
 
 
