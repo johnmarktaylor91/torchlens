@@ -421,9 +421,15 @@ def _log_output_tensor_info(
         args,
         kwargs,
     )
-    fields_dict["flops_backward"] = compute_backward_flops(
-        fields_dict.get("func_name"),  # type: ignore[arg-type]
-        fields_dict["flops_forward"],
+    # An output with no autograd node runs no backward, so it costs zero
+    # backward FLOPs (e.g. frozen weights under backward_ready=True).
+    fields_dict["flops_backward"] = (
+        compute_backward_flops(
+            fields_dict.get("func_name"),  # type: ignore[arg-type]
+            fields_dict["flops_forward"],
+        )
+        if t.grad_fn is not None
+        else 0
     )
 
     # Child tensor variation tracking
