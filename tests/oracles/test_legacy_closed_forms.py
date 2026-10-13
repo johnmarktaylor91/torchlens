@@ -595,6 +595,10 @@ def test_backward_and_total_flops(grad_once, outer_case) -> None:
     )
     assert int(modules["block.fc"].total_flops_forward) == 2 * 108
     assert int(modules["block"].total_flops_forward) == 2 * 132
+    # MACs: fc 3*4*4 = 48 per pass, head 3*4*2 = 24; relu, mul and sum have none.
+    assert int(modules["block.fc"].total_macs_forward) == 2 * 48
+    assert int(modules["block"].total_macs_forward) == 2 * 48
+    assert int(modules["self"].total_macs_forward) == 2 * 48 + 24
     assert int(modules["self"].total_flops_backward) == int(trace.total_flops_backward)
 
 

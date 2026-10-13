@@ -56,7 +56,7 @@ BND-Q-043	OBL-Q-NUM-PARAMS-UNEXECUTED	torchlens.report._summary_report.SummaryTo
 BND-Q-044	OBL-Q-NUM-PARAMS-UNEXECUTED	torchlens.Trace.num_params_unexecuted	CR1	declared	untouched	no		n/a	tests/test_numbers_truth_params.py::test_declared_executed_unexecuted_split_named
 BND-Q-045	OBL-Q-MACS-FORWARD	torchlens.Layer.macs_forward	CR1	declared	untouched	no		n/a	tests/test_numbers_truth_compute.py::test_biased_linear_true_macs_not_flops_over_two
 BND-Q-046	OBL-Q-MACS-FORWARD	torchlens.Layer.total_macs_forward	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door
-BND-Q-047	OBL-Q-MACS-FORWARD	torchlens.data_classes.module.Module.total_macs_forward	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door
+BND-Q-047	OBL-Q-MACS-FORWARD	torchlens.data_classes.module.Module.total_macs_forward	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_backward_and_total_flops
 BND-Q-048	OBL-Q-MACS-FORWARD	torchlens.Op.macs_forward	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door
 BND-Q-049	OBL-Q-MACS-FORWARD	torchlens.report._summary_report.SummaryReport.total_macs_forward	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door
 BND-Q-050	OBL-Q-MACS-FORWARD	torchlens.report._summary_report.SummaryTotals.macs_forward	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door

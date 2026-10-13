@@ -86,7 +86,7 @@ Module.total_forward_duration	Duration	quantity	forward_duration	red-needs-oracl
 Module.total_func_calls_duration	Duration	quantity	func_calls_duration	red-needs-oracle	-	-
 Module.total_internal_activation_memory	Bytes	quantity	internal_activation_memory	green	tests/oracles/test_legacy_closed_forms.py::test_activation_parameter_and_input_bytes (I2)	-
 Module.total_internal_gradient_memory	Bytes	quantity	internal_gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_on_layers_modules_and_buffers (I2)	-
-Module.total_macs_forward	Macs	quantity	macs_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
+Module.total_macs_forward	Macs	quantity	macs_forward	green	tests/oracles/test_legacy_closed_forms.py::test_backward_and_total_flops (I2)	-
 Module.total_output_activation_memory	Bytes	quantity	output_activation_memory	green	tests/oracles/test_legacy_closed_forms.py::test_activation_parameter_and_input_bytes (I2)	-
 Module.total_output_gradient_memory	Bytes	quantity	output_gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_on_layers_modules_and_buffers (I2)	-
 Module.total_param_memory	Bytes	quantity	param_memory	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_bytes_on_every_door (I2)	-
