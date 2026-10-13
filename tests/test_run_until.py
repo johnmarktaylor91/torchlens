@@ -360,13 +360,25 @@ def test_until_requires_full_inputs(tmp_path):
     assert result.report.truncated is True
 
 
-def test_until_fast_refuses_typed():
-    """Composition matrix: until= x fast=True refuses typed."""
+def test_until_fast_matrix_live_runs_loaded_refuses(tmp_path: Path):
+    """Composition matrix (U26.3): until= x fast=True stops a live run; a loaded one refuses.
+
+    The live fast tier cuts its native forward after the saved site; a loaded
+    artifact's fast tier compiles the full recorded path and still refuses typed.
+    """
 
     model = _Chain()
     log = tl.trace(model, torch.randn(2, 4))
+    relu_label = _type_label(log, "relu")
+    result = log.run(inputs=torch.randn(2, 4), fast=True, until=relu_label)
+    assert result.report.truncated is True
+    assert result.report.stopped_at == relu_label
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.output is None
+
+    loaded, _x = _loaded_runnable(tmp_path)
     with pytest.raises(ValueError) as exc_info:
-        log.run(inputs=torch.randn(2, 4), fast=True, until=_type_label(log, "relu"))
+        loaded.run(inputs=torch.randn(2, 4), fast=True, until=_type_label(loaded, "relu"))
     assert exc_info.value.fields["code"] == "run_fast_until_unsupported"
 
 

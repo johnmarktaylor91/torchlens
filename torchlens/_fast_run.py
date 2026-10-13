@@ -15,6 +15,13 @@ from torch import nn
 
 from . import _state
 from ._call_fingerprint import fingerprinting, install_module_token_hooks
+from ._fast_live_plans import (
+    _FastOutputPlan,
+    _pair_output_leaves,
+    build_function_plans,
+    build_module_plans,
+    recorded_module_call_counts,
+)
 from ._fast_live_steer import (
     SteerPlan,
     clear_unrefreshed_shape_metadata,
@@ -22,6 +29,13 @@ from ._fast_live_steer import (
     install_steer_hooks,
     refusal_code,
     session_is_active,
+)
+from ._fast_live_until import (
+    FastUntilReached,
+    function_prefix_count,
+    rearm_cleared_sites,
+    resolve_fast_until,
+    truncate_after,
 )
 from ._fast_sparse_state import _state_mutating_call_ids
 from ._runnable_execution import (
@@ -94,108 +108,6 @@ from .runnable import (
 )
 from .utils._torch_compat import tensor_has_named_dims
 from .utils.rng import restore_host_rng, set_random_seed, snapshot_host_rng
-
-
-@dataclass(frozen=True, slots=True)
-class _FastOutputPlan:
-    """Expected tensor leaves for one live module or functional call."""
-
-    address_or_name: str
-    op_labels: tuple[str, ...]
-    shapes: tuple[tuple[int, ...] | None, ...]
-    dtypes: tuple[str | None, ...]
-    save_labels: frozenset[str]
-    # Each op's container path inside the call's output, when capture tied
-    # every op to exactly one path; ``None`` keeps the positional pairing.
-    paths: tuple[tuple[Any, ...], ...] | None = None
-    # The module call (1-based pass number) this plan collects; ``None`` for
-    # functional plans. A module the forward calls more than once (resnet's
-    # BasicBlock reuses one ``self.relu``) fires its hook on every call, and
-    # only the planned calls are collected.
-    call_index: int | None = None
-
-
-def _pair_output_leaves(
-    output: Any, captured_paths: Sequence[tuple[Any, ...]] | None, count: int
-) -> tuple[list[Any] | None, str]:
-    """Pair ``count`` captured output ops with the tensor leaves of a live output.
-
-    The walk is capture's own output walker (plus its bare-attribute fallback),
-    so a typed container capture descended into (a Hugging Face ``ModelOutput``
-    carrying a ``DynamicCache`` of per-layer key/value tensors, a namedtuple, a
-    dataclass) is seen the same way here. With per-op paths every captured path
-    must resolve to exactly one leaf and the output must carry no other leaf;
-    without them (a single leaf, an opaque root, a role-hinted family) the
-    pairing is positional over the same walk. Returns the paired values, or
-    ``None`` with the reason when the structure differs from the capture.
-    """
-
-    from .backends.torch._ops_containers import _walk_output_tensors_with_paths
-    from .utils.introspection import get_vars_of_type_from_obj
-
-    native = [
-        (tuple(path), tensor) for tensor, path, _spec in _walk_output_tensors_with_paths(output)
-    ]
-    if not native:
-        native = [
-            ((), tensor)
-            for tensor in get_vars_of_type_from_obj(output, torch.Tensor, search_depth=4)
-        ]
-    if len(native) != count:
-        return None, f"{len(native)} tensor leaves against {count} captured output ops"
-    by_path = dict(native)
-    if (
-        captured_paths is None
-        or len(by_path) != len(native)
-        or any(path == () for path in captured_paths)
-    ):
-        return [tensor for _path, tensor in native], ""
-    missing = [path for path in captured_paths if path not in by_path]
-    if missing:
-        return None, f"unmatched captured output paths {missing}"
-    return [by_path[path] for path in captured_paths], ""
-
-
-def _module_output_paths(
-    trace: Any, module_call: Any, address: str, resolved: Sequence[Any]
-) -> tuple[tuple[Any, ...], ...] | None:
-    """Return each output op's container path in a module call's output.
-
-    ``ModuleCall.output_paths`` is in capture traversal order while
-    ``output_ops`` is in op order; the documented tie between them is each
-    op's ``multi_output_name``, minted from its path (or a role hint) at
-    capture. ``None`` when the call has fewer than two leaves or any op lacks
-    a unique path, which keeps the positional pairing.
-    """
-
-    from .data_classes._module_role_hints import (
-        multi_output_role_from_path,
-        role_hints_for_module_class,
-    )
-
-    paths = tuple(tuple(path) for path in (getattr(module_call, "output_paths", None) or ()))
-    if len(paths) < 2 or len(paths) != len(resolved):
-        return None
-    try:
-        module = trace.modules[address]
-    except (KeyError, IndexError, TypeError, AttributeError):
-        module = None
-    hints = role_hints_for_module_class(getattr(module, "cls", None))
-    by_name: dict[str, tuple[Any, ...]] = {}
-    for index, path in enumerate(paths):
-        name = multi_output_role_from_path(path, index, hints=hints)
-        if name is None or name in by_name:
-            return None
-        by_name[name] = path
-    matched: list[tuple[Any, ...]] = []
-    for item in resolved:
-        name = getattr(item, "multi_output_name", None)
-        if name not in by_name:
-            return None
-        matched.append(by_name[name])
-    if len(set(matched)) != len(matched):
-        return None
-    return tuple(matched)
 
 
 @dataclass(frozen=True, slots=True)
@@ -401,30 +313,6 @@ def _fast_input_check(
     )
 
 
-def _recorded_module_call_counts(trace: Any, addresses: frozenset[str]) -> dict[str, int]:
-    """Count the captured calls of each planned module address.
-
-    Parameters
-    ----------
-    trace:
-        Source trace whose ``module_calls`` keys spell ``address:call``.
-    addresses:
-        Module addresses the fast session collects from.
-
-    Returns
-    -------
-    dict[str, int]
-        Recorded call count per planned address.
-    """
-
-    counts: dict[str, int] = dict.fromkeys(addresses, 0)
-    for call_label in list(trace.module_calls.keys()):
-        address = str(call_label).rpartition(":")[0] or str(call_label)
-        if address in counts:
-            counts[address] += 1
-    return counts
-
-
 def _module_call_budget(
     trace: Any, module_plans: Sequence[_FastOutputPlan]
 ) -> tuple[dict[str, frozenset[int]], dict[str, int]]:
@@ -449,7 +337,7 @@ def _module_call_budget(
         planned[plan.address_or_name] = planned.get(plan.address_or_name, frozenset()) | {
             int(plan.call_index or 1)
         }
-    return planned, _recorded_module_call_counts(trace, frozenset(planned))
+    return planned, recorded_module_call_counts(trace, frozenset(planned))
 
 
 def _drop_uncollected_payloads(trace: Any, supported_labels: set[str]) -> None:
@@ -1036,8 +924,8 @@ class _FastLiveSession:
         self.function_index = 0
         self.last_function_output: tuple[str, int] | None = None
         self.failure: ContractCheck | None = None
-        self.module_plans = self._build_module_plans(trace)
-        self.function_plans = self._build_function_plans(
+        self.module_plans = build_module_plans(trace)
+        self.function_plans = build_function_plans(
             trace,
             frozenset(label for plan in self.module_plans for label in plan.save_labels),
         )
@@ -1045,6 +933,8 @@ class _FastLiveSession:
             trace, self.module_plans
         )
         self.module_call_counts: dict[str, int] = {}
+        self.stop_at: tuple[str, int] | None = None
+        self.cleared_by_until: tuple[str, ...] = ()
         boundary_layer_labels = set(getattr(trace, "input_layers", ())) | set(
             getattr(trace, "output_layers", ())
         )
@@ -1125,138 +1015,6 @@ class _FastLiveSession:
         except BaseException:
             self._hook_finalizer()
             raise
-
-    @staticmethod
-    def _build_module_plans(trace: Any) -> tuple[_FastOutputPlan, ...]:
-        """Derive the module-call exit sequence whose outputs the capture saved.
-
-        Every module call (leaf or container) whose output ops carry a saved
-        activation gets a plan, including the ``interventionreplacement`` op a
-        module-boundary intervention leaves as the module's output. Plans are
-        ordered as torch fires forward hooks: by module EXIT, i.e. the raw
-        index of the module's last output op, with the deeper module first
-        when a nested call hands the same tensor to its parent. The root module is
-        the input/output boundary and is refreshed separately.
-        """
-
-        keyed: list[tuple[int, int, _FastOutputPlan]] = []
-        module_calls = trace.module_calls
-        for call_label in list(module_calls.keys()):
-            module_call = module_calls[call_label]
-            address, _, call_suffix = call_label.rpartition(":")
-            if not address:
-                address, call_suffix = call_suffix, "1"
-            if address == "self":
-                continue
-            resolved = tuple(
-                trace.layer_dict_all_keys[label]
-                for label in module_call.output_ops
-                if label in trace.layer_dict_all_keys
-            )
-            if not resolved or not any(
-                bool(getattr(item, "has_saved_activation", False)) for item in resolved
-            ):
-                continue
-            labels = tuple(item.label for item in resolved)
-            # A module exits after its LAST output op: a returned KV cache
-            # carries tensors produced long before the module's final op.
-            exit_index = max(int(getattr(item, "raw_index", 0) or 0) for item in resolved)
-            keyed.append(
-                (
-                    exit_index,
-                    -address.count("."),
-                    _FastOutputPlan(
-                        address_or_name=address,
-                        op_labels=labels,
-                        shapes=tuple(
-                            tuple(item.shape) if item.shape is not None else None
-                            for item in resolved
-                        ),
-                        dtypes=tuple(
-                            str(item.dtype) if item.dtype is not None else None for item in resolved
-                        ),
-                        save_labels=frozenset(
-                            label
-                            for label, item in zip(labels, resolved)
-                            if bool(getattr(item, "has_saved_activation", False))
-                        ),
-                        paths=_module_output_paths(trace, module_call, address, resolved),
-                        call_index=int(call_suffix) if call_suffix.isdigit() else 1,
-                    ),
-                )
-            )
-        keyed.sort(key=lambda item: (item[0], item[1]))
-        return tuple(plan for _, _, plan in keyed)
-
-    @staticmethod
-    def _build_function_plans(
-        trace: Any, module_saved_labels: frozenset[str]
-    ) -> tuple[_FastOutputPlan, ...]:
-        """Derive scoped functional calls needed by saved non-module ops.
-
-        Both save forms qualify. A functional ``save=`` predicate collects the
-        functional ops it saved. The default save-all capture collects only the
-        saved functional ops that no module output covers (``out += identity``
-        inside a residual block, before the block's last op), so a module
-        output such as an intervention replacement is never collected twice.
-        Collection runs in capture order under the same per-call path, shape
-        and dtype guards.
-
-        Parameters
-        ----------
-        trace:
-            Source trace.
-        module_saved_labels:
-            Saved op labels the module plans already collect.
-        """
-
-        explicit = getattr(trace, "_predicate_save_options", None) is not None
-        target_names = {
-            str(op.func_name)
-            for op in trace.layer_list
-            if bool(getattr(op, "has_saved_activation", False))
-            and not bool(getattr(op, "is_atomic_module", False))
-            and str(getattr(op, "func_name", "none")) not in {"none", "identity"}
-            and (explicit or op.label not in module_saved_labels)
-        }
-        plans: list[_FastOutputPlan] = []
-        ops = [op for op in trace.layer_list if str(getattr(op, "func_name", "")) in target_names]
-        index = 0
-        while index < len(ops):
-            first = ops[index]
-            group = [first]
-            spec = getattr(first, "container_spec", None)
-            if spec is not None:
-                next_index = index + 1
-                while (
-                    next_index < len(ops)
-                    and ops[next_index].raw_index == group[-1].raw_index + 1
-                    and getattr(ops[next_index], "container_spec", None) is spec
-                ):
-                    group.append(ops[next_index])
-                    next_index += 1
-            labels = tuple(item.label for item in group)
-            plans.append(
-                _FastOutputPlan(
-                    address_or_name=str(first.func_name),
-                    op_labels=labels,
-                    shapes=tuple(
-                        tuple(item.shape) if item.shape is not None else None for item in group
-                    ),
-                    dtypes=tuple(
-                        str(item.dtype) if item.dtype is not None else None for item in group
-                    ),
-                    save_labels=frozenset(
-                        item.label
-                        for item in group
-                        if bool(getattr(item, "has_saved_activation", False))
-                        and not bool(getattr(item, "is_atomic_module", False))
-                        and (explicit or item.label not in module_saved_labels)
-                    ),
-                )
-            )
-            index += len(group)
-        return tuple(plans)
 
     def close(self) -> None:
         """Remove persistent module hooks owned by this session."""
@@ -1403,6 +1161,8 @@ class _FastLiveSession:
             return
         self.module_index += 1
         self._capture_plan_output(plan, output)
+        if self.stop_at == ("module", self.module_index - 1) and self.failure is None:
+            raise FastUntilReached
 
     def capture_function(self, func_name: str, output: Any) -> None:
         """Collect and guard one explicitly requested functional-op event."""
@@ -1434,6 +1194,8 @@ class _FastLiveSession:
             return
         self.function_index += 1
         self._capture_plan_output(plan, output)
+        if self.stop_at == ("function", self.function_index - 1) and self.failure is None:
+            raise FastUntilReached
 
     @contextmanager
     def activated(self) -> Any:
@@ -1508,8 +1270,14 @@ class _FastLiveSession:
             _raise_failed_contract_as_divergence(failed_input, fork=None)
         return input_args, input_kwargs, input_size_changed
 
-    def run(self, inputs: Any, *, seed: int | None) -> RunResult:
-        """Execute one native forward and enforce the cached static graph guard."""
+    def run(self, inputs: Any, *, seed: int | None, until: Any = None) -> RunResult:
+        """Execute one native forward and enforce the cached static graph guard.
+
+        ``until`` names a saved module the forward stops after (U26.3): the
+        prefix keeps every per-call guard, the cut is disclosed as a
+        ``RunTruncation``, and the call fingerprint (a whole-forward guard)
+        cannot be compared, so the verdict is ``unverifiable``.
+        """
 
         self.run_started_at = time.monotonic()
         model = self.model_ref()
@@ -1520,18 +1288,50 @@ class _FastLiveSession:
                 provider=RunProvider.LIVE,
             )
         input_args, input_kwargs, input_size_changed = self._admit_inputs(inputs)
+        rearm_cleared_sites(self.trace, self.cleared_by_until)
+        self.cleared_by_until = ()
+        self.stop_at = (
+            None
+            if until is None
+            else resolve_fast_until(self.trace, self.module_plans, self.function_plans, until)
+        )
         self.steer_plan.refuse_changed_helpers()
         if seed is not None:
             set_random_seed(seed)
+        truncation = None
         with self.activated(), self.steer_plan.context(), fingerprinting() as fingerprint:
-            if isinstance(input_args, list):
-                output = model(*input_args, **dict(input_kwargs))
-            else:
-                output = model(input_args, **dict(input_kwargs))
+            try:
+                if isinstance(input_args, list):
+                    output = model(*input_args, **dict(input_kwargs))
+                else:
+                    output = model(input_args, **dict(input_kwargs))
+            except FastUntilReached:
+                output = None
+                truncation = until
         self.shape_varied = self.shape_varied or input_size_changed
-        self.last_fingerprint = fingerprint.value
+        self.last_fingerprint = None if truncation is not None else fingerprint.value
         if self.failure is not None:
             self._poison_and_raise(self.failure)
+        if truncation is not None:
+            truncation = self._settle_truncated_prefix(until, input_args, input_kwargs)
+        else:
+            self._check_full_path()
+            self._refresh_boundary_payloads(input_args, input_kwargs, output)
+        if self.shape_varied and not self.shape_metadata_cleared:
+            # Honesty rule: a native forward refreshes only the saved sites and
+            # the boundary ops. Every other op's shape and size metadata would
+            # otherwise read capture-time numbers as if they were this run's,
+            # so they take the not-available spelling (None) once and for all.
+            clear_unrefreshed_shape_metadata(self.trace, self.refreshed_labels)
+            self.shape_metadata_cleared = True
+        # A cut forward leaves downstream staged hooks unfired by design.
+        unfired = self.steer_plan.warn_unfired() if truncation is None else ()
+        self._record_fast_run(seed=seed, unfired=unfired, until=until)
+        return self._finalize_run(output, seed=seed, truncation=truncation)
+
+    def _check_full_path(self) -> None:
+        """Enforce the whole-forward guards: call fingerprint and every planned call."""
+
         if self.fingerprint_reference is not None and self.last_fingerprint != tuple(
             self.fingerprint_reference
         ):
@@ -1569,16 +1369,32 @@ class _FastLiveSession:
                 f"{len(self.function_plans)} requested calls.",
             )
             self._poison_and_raise(failed)
-        self._refresh_boundary_payloads(input_args, input_kwargs, output)
-        if self.shape_varied and not self.shape_metadata_cleared:
-            # Honesty rule: a native forward refreshes only the saved sites and
-            # the boundary ops. Every other op's shape and size metadata would
-            # otherwise read capture-time numbers as if they were this run's,
-            # so they take the not-available spelling (None) once and for all.
-            clear_unrefreshed_shape_metadata(self.trace, self.refreshed_labels)
-            self.shape_metadata_cleared = True
-        unfired = self.steer_plan.warn_unfired()
-        self._record_fast_run(seed=seed, unfired=unfired)
+
+    def _settle_truncated_prefix(
+        self, until: Any, input_args: Any, input_kwargs: Mapping[str, Any]
+    ) -> Any:
+        """Check the executed prefix of a cut forward, then clear what did not run."""
+
+        kind, index = cast(tuple[str, int], self.stop_at)
+        stop_plan = (self.module_plans if kind == "module" else self.function_plans)[index]
+        expected_functions = function_prefix_count(self.trace, stop_plan, self.function_plans)
+        if self.function_index != expected_functions:
+            self._poison_and_raise(
+                _contract_check(
+                    "fast_until_prefix",
+                    False,
+                    RunnableErrorCode.CONDITIONAL_ARM_DIVERGENCE,
+                    f"Live forward reached until={until!r} after {self.function_index} of the "
+                    f"{expected_functions} functional calls the capture ran before it.",
+                )
+            )
+        self._refresh_boundary_payloads(input_args, input_kwargs, None, inputs_only=True)
+        truncation, self.cleared_by_until = truncate_after(self.trace, stop_plan, until)
+        return truncation
+
+    def _finalize_run(self, output: Any, *, seed: int | None, truncation: Any) -> RunResult:
+        """Settle one fast run's report through the shared provider finalizer."""
+
         readiness = ReadinessReport(
             status=ReadinessStatus.READY,
             provider=RunProvider.LIVE,
@@ -1601,7 +1417,11 @@ class _FastLiveSession:
         # container at UNVERIFIABLE. fast=True must never improve the verdict the
         # ordinary provider would settle on the same trace.
         lossy = _container_spec_reconstruction_lossy(_output_container_spec(self.trace))
-        provisional = PathFaithfulness.UNVERIFIABLE if lossy else PathFaithfulness.VERIFIED
+        provisional = (
+            PathFaithfulness.UNVERIFIABLE
+            if lossy or truncation is not None
+            else PathFaithfulness.VERIFIED
+        )
         # Same declaration contract as the ordinary live provider (deephunt
         # F2): a host-RNG capture's fast report must not read as a
         # deterministic-looking empty tuple next to VERIFIED.
@@ -1628,9 +1448,12 @@ class _FastLiveSession:
             # The fast-live "fork" IS the user's live Trace: an inherited
             # divergence must raise without evicting it from the registry.
             unregister_fork_on_divergence=False,
+            truncation=truncation,
         )
 
-    def _record_fast_run(self, *, seed: int | None, unfired: tuple[str, ...]) -> None:
+    def _record_fast_run(
+        self, *, seed: int | None, unfired: tuple[str, ...], until: Any = None
+    ) -> None:
         """Stamp ``last_run``, the operation ledger and the state for one fast run."""
 
         from ._trace_state import TraceState
@@ -1669,6 +1492,7 @@ class _FastLiveSession:
             "shape_varied": self.shape_varied,
             "call_fingerprint": self.last_fingerprint,
             "refreshed_labels": tuple(sorted(self.refreshed_labels)),
+            "until": until,
         }
         trace._record_operation(**record)
         trace.state = TraceState.RERUN_PROPAGATED
@@ -1704,6 +1528,8 @@ class _FastLiveSession:
         input_args: Any,
         input_kwargs: Mapping[str, Any],
         output: Any,
+        *,
+        inputs_only: bool = False,
     ) -> None:
         """Refresh saved model-input/output payloads from the native call boundaries."""
 
@@ -1727,6 +1553,8 @@ class _FastLiveSession:
                 op = self.trace.layer_dict_all_keys[label]
                 if bool(getattr(op, "has_saved_activation", False)):
                     op.save_activation(value, (), {}, False)
+        if inputs_only:
+            return
         output_labels = tuple(getattr(self.trace, "output_layers", ()))
         output_values = self._match_native_output_leaves(output, output_labels)
         for label, value in zip(output_labels, output_values, strict=True):
@@ -1815,7 +1643,9 @@ def run_fast_loaded_trace(trace: Any, inputs: Any, *, seed: int | None) -> RunRe
     return result
 
 
-def run_fast_live_trace(trace: Any, inputs: Any, *, seed: int | None) -> RunResult:
+def run_fast_live_trace(
+    trace: Any, inputs: Any, *, seed: int | None, until: Any = None
+) -> RunResult:
     """Run the explicit native-forward targeted-collection live fast path."""
 
     source_ref = getattr(trace, "_source_model_ref", None)
@@ -1840,7 +1670,7 @@ def run_fast_live_trace(trace: Any, inputs: Any, *, seed: int | None) -> RunResu
             session.close()
         session = _FastLiveSession(trace, model)
         trace.__dict__["_fast_run_session"] = session
-    return session.run(inputs, seed=seed)
+    return session.run(inputs, seed=seed, until=until)
 
 
 #: Typed refusals that send the legacy rerun door back to the capture engine.

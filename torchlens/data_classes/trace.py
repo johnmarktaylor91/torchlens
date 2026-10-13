@@ -1457,9 +1457,7 @@ class Trace(
         "total_gradient_memory": FieldPolicy.KEEP,
         "total_backward_memory": FieldPolicy.KEEP,
         "total_autograd_memory": FieldPolicy.KEEP,
-        # R2-37 disclosure of the live autograd graph the attached saved
-        # activations pin; a loaded trace pins nothing, so it never persists.
-        "pinned_autograd_memory": FieldPolicy.DROP,
+        "pinned_autograd_memory": FieldPolicy.DROP,  # R2-37: live graph only
         "num_saved_ops": FieldPolicy.KEEP,
         "saved_activation_memory": FieldPolicy.KEEP,
         "saved_gradient_memory": FieldPolicy.KEEP,
@@ -1989,9 +1987,7 @@ class Trace(
         self.total_gradient_memory: Bytes = Bytes(0)
         self.total_backward_memory: Bytes = Bytes(0)
         self.total_autograd_memory: Bytes | None = None
-        # Autograd-saved bytes kept alive by graph-connected saved activations
-        # (R2-37); None when not measured (non-torch backends, loaded traces).
-        self.pinned_autograd_memory: Bytes | None = None
+        self.pinned_autograd_memory: Bytes | None = None  # R2-37 disclosure
         self.num_saved_ops: int = 0  # layers with has_saved_activation=True
         self.saved_activation_memory: Bytes = Bytes(0)
         self.saved_gradient_memory: Bytes = Bytes(0)
@@ -3001,9 +2997,7 @@ class Trace(
         # `_snapshot_for_record` falls back to the live registry exactly as it
         # does for every tlspec-loaded Trace.
         state["facet_registry_snapshot"] = None
-        # R2-37: the pinned-graph disclosure measures THIS live object's
-        # autograd graph; a pickled copy pins nothing.
-        state["pinned_autograd_memory"] = None
+        state["pinned_autograd_memory"] = None  # R2-37: a pickled copy pins nothing
         state.pop("_raw_graph_ws", None)
         state.pop("_module_capture_ws", None)
         state.pop("_wrapper_runtime_ws", None)
@@ -3219,9 +3213,7 @@ class Trace(
             state["_saved_grad_labels"] = state.pop("_saved_grads_set")
         state.pop("_keep_grads_in_memory", None)
         state.pop("_grad_stream_retain_in_memory", None)
-        # Session-time (DROP): a restored trace pins no autograd graph, so a
-        # number arriving in restored state is never surfaced.
-        state["pinned_autograd_memory"] = None
+        state["pinned_autograd_memory"] = None  # R2-37: a restored trace pins nothing
         pop_retired_legacy_keys(state)
         if state.get("_intervention_spec") is None:
             state["_intervention_spec"] = InterventionSpec()
