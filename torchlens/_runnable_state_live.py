@@ -342,12 +342,8 @@ def _attribute_rewind(attrs: tuple[ModuleAttrSnapshot, ...]) -> Iterator[None]:
         with _state.pause_logging(), torch.no_grad():
             settle_module_attrs(attrs, restore=True)
 
-    previous = _state._capture_attribute_rewind
-    _state._capture_attribute_rewind = rewind
-    try:
+    with _state.publish_attribute_rewind(rewind):
         yield
-    finally:
-        _state._capture_attribute_rewind = previous
 
 
 @contextmanager

@@ -1904,6 +1904,9 @@ class Module:
     def __setstate__(self, state: dict[str, Any]) -> None:
         """Restore pickle state without touching disk."""
         read_tlspec_version(state, cls_name=type(self).__name__, cls=type(self))
+        # Session-time record: a state carrying one (forged or foreign) never surfaces it.
+        state.pop("_attribute_writes", None)
+        state.pop("attribute_writes", None)
         module_setstate_defaults: dict[str, Any] = {
             **_MODULE_CONTAINER_DEFAULTS,
             "_buffer_accessor": None,

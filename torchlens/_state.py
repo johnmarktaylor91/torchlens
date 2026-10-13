@@ -108,7 +108,7 @@ this to know *where* to record tensor operations.  Always None outside a
 logging session.
 """
 
-_capture_attribute_rewind: Any | None = None
+_capture_attribute_rewind: Callable[[], None] | None = None
 """Puts plain module attributes back to the capture's pre-forward snapshot.
 
 Set by the capture observer bracket (``_runnable_state_live``) for the capture
@@ -897,6 +897,41 @@ def capture_reservation(resume: object | None = None) -> Iterator[object]:
             with _capture_admission_lock:
                 _capture_reserved_by = None
                 _capture_reservation_token = None
+
+
+@contextmanager
+def publish_attribute_rewind(rewind: Callable[[], None]) -> Iterator[None]:
+    """Publish the capture observer's plain-attribute rewind for one capture.
+
+    The state-owned transition for ``_capture_attribute_rewind``: the previous
+    value (an enclosing capture's rewind, or ``None``) comes back on every exit.
+
+    Parameters
+    ----------
+    rewind:
+        Zero-argument callable restoring the capture's pre-forward plain
+        attributes.
+    """
+
+    global _capture_attribute_rewind
+    previous = _capture_attribute_rewind
+    _capture_attribute_rewind = rewind
+    try:
+        yield
+    finally:
+        _capture_attribute_rewind = previous
+
+
+def rewind_capture_attributes() -> None:
+    """Run the published plain-attribute rewind, if a capture published one.
+
+    The escape-rescue re-run calls this before its second forward, so the
+    re-run starts from the attributes the first forward started from.
+    """
+
+    rewind = _capture_attribute_rewind
+    if rewind is not None:
+        rewind()
 
 
 @contextmanager

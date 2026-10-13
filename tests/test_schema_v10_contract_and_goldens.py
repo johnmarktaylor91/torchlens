@@ -65,6 +65,10 @@ V10_FIELD_ADMISSIONS: dict[str, dict[str, str]] = {
     # or unpickled trace pins nothing, so a persisted capture-time number
     # would read as current; it loads as None ("not measured").
     "trace": {"pinned_autograd_memory": "drop"},
+    # SCHEMA-REQUESTS row 6 (OBSERVER, AGT-2360): the record of the plain
+    # attributes a forward wrote (arbitrary user objects). DROP, both the public
+    # property and its slot: a loaded, unpickled or deep-copied trace reads None.
+    "module": {"attribute_writes": "drop", "_attribute_writes": "drop"},
 }
 
 #: Registered retypes of existing v9 persisted fields: record key -> {field

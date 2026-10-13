@@ -243,6 +243,22 @@ def test_record_never_rides_pickles_or_the_capture_cache(tmp_path):
     assert not hasattr(model, "last_ref")
     restored = pickle.loads(pickle.dumps(trace))
     assert restored.modules["self"].attribute_writes is None
+    assert copy.deepcopy(trace).modules["self"].attribute_writes is None
+
+
+def test_forged_state_never_surfaces_an_attribute_write_record():
+    """A Module state carrying a record (forged or foreign) restores without it."""
+
+    from torchlens.types import Module
+
+    trace = tl.trace(_Stash(), torch.randn(2, 4))
+    state = trace.modules["self"].__getstate__()
+    forged = {"x": AttributeWrite("added", "forged")}
+    state["_attribute_writes"] = forged
+    state["attribute_writes"] = forged
+    record = Module.__new__(Module)
+    record.__setstate__(state)
+    assert record.attribute_writes is None
 
 
 def test_default_trace_restores_state_on_the_exception_path():
