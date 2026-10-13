@@ -5822,13 +5822,10 @@ test-docstrings	tests/test_io_mediated_allocation_bypass.py	282,000
 test-docstrings	tests/test_io_mediated_allocation_bypass.py	30
 test-docstrings	tests/test_io_mediated_allocation_bypass.py	354
 test-docstrings	tests/test_io_pickle.py	153,1905
-test-docstrings	tests/test_io_pickle.py	2.33
 test-docstrings	tests/test_io_pickle.py	7065122
 test-docstrings	tests/test_io_plain_pickle.py	10
-test-docstrings	tests/test_io_plain_pickle.py	2.33
 test-docstrings	tests/test_io_runnable_payload_integrity.py	16
 test-docstrings	tests/test_io_runnable_payload_integrity.py	16.
-test-docstrings	tests/test_io_runnable_payload_integrity.py	2.33
 test-docstrings	tests/test_io_runnable_payload_integrity.py	256
 test-docstrings	tests/test_io_scrub_policy.py	10
 test-docstrings	tests/test_io_scrub_policy.py	20
@@ -6013,7 +6010,6 @@ test-docstrings	tests/test_modelexplorer_real.py	40
 test-docstrings	tests/test_modelexplorer_real.py	50
 test-docstrings	tests/test_modelexplorer_real.py	75
 test-docstrings	tests/test_module_containment_equality.py	2.7.1
-test-docstrings	tests/test_module_containment_save_load.py	2.33
 test-docstrings	tests/test_module_focus.py	25
 test-docstrings	tests/test_module_import_isolation.py	470
 test-docstrings	tests/test_module_log.py	10
@@ -6997,7 +6993,6 @@ test-docstrings	tests/test_tlspec_runnable_state.py	71
 test-docstrings	tests/test_tlspec_runnable_v2_contract.py	25
 test-docstrings	tests/test_tlspec_unified.py	18
 test-docstrings	tests/test_tlspec_unified.py	2.16
-test-docstrings	tests/test_tlspec_unified.py	2.33
 test-docstrings	tests/test_tlspec_uninit_consumer_r55.py	1.0,
 test-docstrings	tests/test_tlspec_uninit_consumer_r55.py	2.0,
 test-docstrings	tests/test_tlspec_uninit_consumer_r55.py	3.0

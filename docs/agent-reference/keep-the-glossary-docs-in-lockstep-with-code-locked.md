@@ -72,8 +72,8 @@ Incomplete witness coverage is `unverifiable`, never `verified`; numeric attesta
 `not_applicable` for sparse-only or ineligible activation-payload runs. Model outputs with ZERO
 tensor leaves remain subject to the output-container rules below. `trace.run(inputs=x, fast=True)`
 is the explicit guarded static-loop exception to source immutability: live traces execute native
-`forward()` with targeted module hooks (and scoped functional collection only for an explicit
-functional `save=` predicate); loaded traces perform one ordinary verified run, then reuse staged
+`forward()` with targeted module hooks (and scoped functional collection only for the functional ops
+the capture saved: an explicit functional `save=` predicate or the save-all default); loaded traces perform one ordinary verified run, then reuse staged
 state, compiled binders, and one result Trace. Every fast iteration retains input, output-shape/
 dtype, call-path, and control-witness guards and always raises on divergence. Default `fast=False`
 keeps the full transactional validation/attestation path. The fast-mode handle

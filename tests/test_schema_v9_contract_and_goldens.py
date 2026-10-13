@@ -43,7 +43,8 @@ def _record_contracts(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))["contract"]["record_contracts"]
 
 
-@pytest.mark.smoke
+# Not smoke since the v10 bump: v9 is frozen, so this diff can no longer move; the
+# live per-PR gate is tests/test_schema_v10_contract_and_goldens.py's registry smoke case.
 def test_v8_to_v9_field_name_diff_is_exactly_the_pinned_additions() -> None:
     old = _record_contracts(V8_CONTRACT)
     new = _record_contracts(V9_CONTRACT)
@@ -69,7 +70,8 @@ def test_contract_versions_and_digests_are_ledger_distinct() -> None:
     old = json.loads(V8_CONTRACT.read_text(encoding="utf-8"))
     new = json.loads(V9_CONTRACT.read_text(encoding="utf-8"))
     assert old["contract"]["tlspec_version"] == 8
-    assert new["contract"]["tlspec_version"] == TLSPEC_VERSION == 9
+    # v9 is a frozen contract of record since the v10 bump; the runtime moved on.
+    assert new["contract"]["tlspec_version"] == 9 < TLSPEC_VERSION
     assert old["writer_contract_digest"] != new["writer_contract_digest"], (
         "the two contracts of record must be digest-distinct (the ledger keys "
         "on the digest, never the stamp alone)"

@@ -70,6 +70,11 @@ class RetentionProfile:
         not a capability). Crossing it refuses typed, naming the committed
         bytes and the cheap live-resolvable remedy; ``None`` disables the
         bound explicitly.
+    activation_attached
+        Whether escrowed activation copies stay graph-connected (the trace keeps
+        ``detach_saved_activations=False``), so a deferred selector returns the
+        same attached payloads as the save-all path. A payload spilled to
+        temporary disk comes back detached and is disclosed by a warning.
     activation_module_exit_addresses
         Module addresses (optionally pass-qualified) of a deferred selector
         built only from ``tl.module`` terms joined by ``|``. When set, only
@@ -88,6 +93,7 @@ class RetentionProfile:
     gradient_warning_threshold_bytes: int = 512 * 1024 * 1024
     escrow_spill_budget_bytes: int | None = DEFAULT_ESCROW_SPILL_BUDGET_BYTES
     activation_module_exit_addresses: tuple[str, ...] | None = None
+    activation_attached: bool = False
 
 
 def _freeze_intent(value: Any) -> Any:

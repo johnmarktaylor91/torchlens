@@ -110,6 +110,11 @@ class _FastOutputPlan:
     # Each op's container path inside the call's output, when capture tied
     # every op to exactly one path; ``None`` keeps the positional pairing.
     paths: tuple[tuple[Any, ...], ...] | None = None
+    # The module call (1-based pass number) this plan collects; ``None`` for
+    # functional plans. A module the forward calls more than once (resnet's
+    # BasicBlock reuses one ``self.relu``) fires its hook on every call, and
+    # only the planned calls are collected.
+    call_index: int | None = None
 
 
 def _pair_output_leaves(
@@ -538,6 +543,30 @@ def _state_mutating_call_ids(
             state_storage_ids,
         )
     )
+
+
+def _recorded_module_call_counts(trace: Any, addresses: frozenset[str]) -> dict[str, int]:
+    """Count the captured calls of each planned module address.
+
+    Parameters
+    ----------
+    trace:
+        Source trace whose ``module_calls`` keys spell ``address:call``.
+    addresses:
+        Module addresses the fast session collects from.
+
+    Returns
+    -------
+    dict[str, int]
+        Recorded call count per planned address.
+    """
+
+    counts: dict[str, int] = dict.fromkeys(addresses, 0)
+    for call_label in list(trace.module_calls.keys()):
+        address = str(call_label).rpartition(":")[0] or str(call_label)
+        if address in counts:
+            counts[address] += 1
+    return counts
 
 
 def _remove_fast_live_hooks(handles: list[Any]) -> None:
@@ -1106,7 +1135,19 @@ class _FastLiveSession:
         self.last_function_output: tuple[str, int] | None = None
         self.failure: ContractCheck | None = None
         self.module_plans = self._build_module_plans(trace)
-        self.function_plans = self._build_function_plans(trace)
+        self.function_plans = self._build_function_plans(
+            trace,
+            frozenset(label for plan in self.module_plans for label in plan.save_labels),
+        )
+        self.planned_module_calls: dict[str, frozenset[int]] = {}
+        for plan in self.module_plans:
+            self.planned_module_calls[plan.address_or_name] = self.planned_module_calls.get(
+                plan.address_or_name, frozenset()
+            ) | {int(plan.call_index or 1)}
+        self.expected_module_calls = _recorded_module_call_counts(
+            trace, frozenset(self.planned_module_calls)
+        )
+        self.module_call_counts: dict[str, int] = {}
         boundary_layer_labels = set(getattr(trace, "input_layers", ())) | set(
             getattr(trace, "output_layers", ())
         )
@@ -1212,7 +1253,9 @@ class _FastLiveSession:
         module_calls = trace.module_calls
         for call_label in list(module_calls.keys()):
             module_call = module_calls[call_label]
-            address = call_label.rsplit(":", 1)[0]
+            address, _, call_suffix = call_label.rpartition(":")
+            if not address:
+                address, call_suffix = call_suffix, "1"
             if address == "self":
                 continue
             resolved = tuple(
@@ -1248,6 +1291,7 @@ class _FastLiveSession:
                             if bool(getattr(item, "has_saved_activation", False))
                         ),
                         paths=_module_output_paths(trace, module_call, address, resolved),
+                        call_index=int(call_suffix) if call_suffix.isdigit() else 1,
                     ),
                 )
             )
@@ -1255,17 +1299,35 @@ class _FastLiveSession:
         return tuple(plan for _, _, plan in keyed)
 
     @staticmethod
-    def _build_function_plans(trace: Any) -> tuple[_FastOutputPlan, ...]:
-        """Derive scoped functional calls needed by explicitly saved non-module ops."""
+    def _build_function_plans(
+        trace: Any, module_saved_labels: frozenset[str]
+    ) -> tuple[_FastOutputPlan, ...]:
+        """Derive scoped functional calls needed by saved non-module ops.
 
-        if getattr(trace, "_predicate_save_options", None) is None:
-            return ()
+        Both save forms qualify. A functional ``save=`` predicate collects the
+        functional ops it saved. The default save-all capture collects only the
+        saved functional ops that no module output covers (``out += identity``
+        inside a residual block, before the block's last op), so a module
+        output such as an intervention replacement is never collected twice.
+        Collection runs in capture order under the same per-call path, shape
+        and dtype guards.
+
+        Parameters
+        ----------
+        trace:
+            Source trace.
+        module_saved_labels:
+            Saved op labels the module plans already collect.
+        """
+
+        explicit = getattr(trace, "_predicate_save_options", None) is not None
         target_names = {
             str(op.func_name)
             for op in trace.layer_list
             if bool(getattr(op, "has_saved_activation", False))
             and not bool(getattr(op, "is_atomic_module", False))
             and str(getattr(op, "func_name", "none")) not in {"none", "identity"}
+            and (explicit or op.label not in module_saved_labels)
         }
         plans: list[_FastOutputPlan] = []
         ops = [op for op in trace.layer_list if str(getattr(op, "func_name", "")) in target_names]
@@ -1299,6 +1361,7 @@ class _FastLiveSession:
                         for item in group
                         if bool(getattr(item, "has_saved_activation", False))
                         and not bool(getattr(item, "is_atomic_module", False))
+                        and (explicit or item.label not in module_saved_labels)
                     ),
                 )
             )
@@ -1412,6 +1475,22 @@ class _FastLiveSession:
 
         if not self.active or threading.get_ident() != self.owner_thread_id or self.failure:
             return
+        call_index = self.module_call_counts.get(address, 0) + 1
+        self.module_call_counts[address] = call_index
+        if call_index > self.expected_module_calls.get(address, call_index):
+            self.failure = _contract_check(
+                "fast_live_module_extra_call",
+                False,
+                RunnableErrorCode.CONDITIONAL_ARM_DIVERGENCE,
+                f"Live model called module {address!r} {call_index} times; the capture "
+                f"recorded {self.expected_module_calls[address]}.",
+            )
+            return
+        if call_index not in self.planned_module_calls.get(address, frozenset()):
+            # An unsaved call of a module whose other calls are saved: nothing
+            # to collect; the per-address call count and the call fingerprint
+            # still guard the structure.
+            return
         if self.module_index >= len(self.module_plans):
             self.failure = _contract_check(
                 "fast_live_module_extra",
@@ -1421,12 +1500,14 @@ class _FastLiveSession:
             )
             return
         plan = self.module_plans[self.module_index]
-        if plan.address_or_name != address:
+        if plan.address_or_name != address or int(plan.call_index or 1) != call_index:
             self.failure = _contract_check(
                 "fast_live_module_path",
                 False,
                 RunnableErrorCode.CONDITIONAL_ARM_DIVERGENCE,
-                f"Live module path changed: expected {plan.address_or_name!r}, got {address!r}.",
+                "Live module path changed: expected "
+                f"{plan.address_or_name!r} call {plan.call_index or 1}, got {address!r} "
+                f"call {call_index}.",
                 affected_op_labels=plan.op_labels,
             )
             return
@@ -1473,6 +1554,7 @@ class _FastLiveSession:
             raise RuntimeError("Fast live runs cannot be nested or concurrent.")
         self.owner_thread_id = threading.get_ident()
         self.module_index = 0
+        self.module_call_counts = {}
         self.function_index = 0
         self.last_function_output = None
         self.failure = None
@@ -1576,7 +1658,10 @@ class _FastLiveSession:
                 f"{tuple(self.fingerprint_reference)}.",
             )
             self._poison_and_raise(failed)
-        if self.module_index != len(self.module_plans):
+        if self.module_index != len(self.module_plans) or any(
+            self.module_call_counts.get(address, 0) != count
+            for address, count in self.expected_module_calls.items()
+        ):
             failed = _contract_check(
                 "fast_live_module_missing",
                 False,

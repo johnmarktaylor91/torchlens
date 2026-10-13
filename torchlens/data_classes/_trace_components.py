@@ -287,6 +287,7 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "total_gradient_memory": "totals",
     "total_backward_memory": "totals",
     "total_autograd_memory": "totals",
+    "pinned_autograd_memory": "totals",
     "num_saved_ops": "totals",
     "saved_activation_memory": "totals",
     "saved_gradient_memory": "totals",

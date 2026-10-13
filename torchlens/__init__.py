@@ -542,6 +542,8 @@ def _extract_layers_with_trace(
     model: _nn.Module,
     x: _Any,
     layers: _Iterable[str] | _Mapping[str, str],
+    *,
+    detach_saved_activations: bool = True,
 ) -> tuple[Trace, dict[str, _torch.Tensor], dict[str, _Any]]:
     """Run one selective capture and resolve the requested layers.
 
@@ -553,6 +555,8 @@ def _extract_layers_with_trace(
         Positional input argument or argument container for ``model.forward``.
     layers:
         Either a list of layer lookups or a mapping of ``user_label -> layer_lookup``.
+    detach_saved_activations:
+        Whether the returned outs are detached from the autograd graph.
 
     Returns
     -------
@@ -574,6 +578,7 @@ def _extract_layers_with_trace(
         x,
         capture=_LazyCaptureOptions(
             layers_to_save=list(layer_plan.values()),
+            detach_saved_activations=detach_saved_activations,
         ),
     )
     outputs: dict[str, _torch.Tensor] = {}
@@ -599,6 +604,8 @@ def extract(
     model: _nn.Module,
     x: _Any,
     layers: _Iterable[str] | _Mapping[str, str],
+    *,
+    detach_saved_activations: bool = True,
 ) -> dict[str, _torch.Tensor]:
     """Return saved outs for many layers.
 
@@ -610,6 +617,11 @@ def extract(
         Positional input argument or argument container for ``model.forward``.
     layers:
         Either a list of layer lookups or a mapping of ``user_label -> layer_lookup``.
+    detach_saved_activations:
+        DOCUMENTED-UNSTABLE. Defaults to ``True``: the outs are detached
+        copies. ``False`` returns graph-connected outs (``grad_fn`` set
+        wherever the model's forward carries autograd history), so a loss
+        built from them backpropagates into the model's parameters.
 
     Returns
     -------
@@ -618,7 +630,9 @@ def extract(
         resolved layer labels to outs for list inputs.
     """
 
-    _trace, outputs, _views = _extract_layers_with_trace(model, x, layers)
+    _trace, outputs, _views = _extract_layers_with_trace(
+        model, x, layers, detach_saved_activations=detach_saved_activations
+    )
     return outputs
 
 

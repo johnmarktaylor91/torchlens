@@ -368,10 +368,13 @@ def runtime_row() -> LedgerRow:
 #: ``(min_writer_inclusive, max_writer_exclusive_or_None, governed stamps)``.
 #: tlspec 6 was first written by released v2.31.0 (measured on genuine
 #: wheels; the "first shipped in 2.33" comment was false). tlspec 7/8/9 have
-#: only ever been written by dev builds of main self-reporting >= 2.34.1.
+#: only ever been written by dev builds of main self-reporting >= 2.34.1, and
+#: tlspec 10 (the batch-2 coordinated write) by dev builds self-reporting
+#: >= 2.36.0.
 _GOVERNED_PRODUCER_WINDOWS: tuple[tuple[str, str | None, frozenset[int]], ...] = (
     ("2.31.0", None, frozenset({6})),
     ("2.34.1", None, frozenset({7, 8, 9})),
+    ("2.36.0", None, frozenset({10})),
 )
 
 

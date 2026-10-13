@@ -135,7 +135,7 @@ def _record_predicate_output(
     transformed_disk_payload = None
     if spec.save_out:
         if _is_default_ram_payload(state, spec):
-            ram_payload = safe_copy(out, detach_tensor=True)
+            ram_payload = safe_copy(out, detach_tensor=state.options.detach_saved_activations)
         else:
             (
                 ram_payload,
@@ -170,8 +170,9 @@ def _is_default_ram_payload(state: Any, spec: CaptureSpec) -> bool:
     Returns
     -------
     bool
-        ``True`` when generic storage resolution would only perform one detached
-        in-memory copy with no transform, dtype, device, or save-mode work.
+        ``True`` when generic storage resolution would only perform one
+        in-memory copy (detached unless the session keeps saved activations
+        attached) with no transform, dtype, device, or save-mode work.
     """
 
     return bool(

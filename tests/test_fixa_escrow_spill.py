@@ -21,6 +21,7 @@ from __future__ import annotations
 import dataclasses
 import os
 from pathlib import Path
+from typing import Any
 
 import pytest
 import torch
@@ -191,6 +192,23 @@ def test_config_built_clip_visual_projection_bit_equal_through_forced_spill(forc
     )
 
 
+def _detached(**fields: Any) -> Any:
+    """Return capture options for a detached deferred save (the pre-U27.1 escrow path).
+
+    Parameters
+    ----------
+    **fields:
+        Other ``CaptureOptions`` fields.
+
+    Returns
+    -------
+    CaptureOptions
+        Options with ``detach_saved_activations=True``.
+    """
+
+    return tl.options.CaptureOptions(detach_saved_activations=True, **fields)
+
+
 @pytest.mark.heavy
 @pytest.mark.real_model
 def test_resnet18_batch8_deferred_spellings_complete_and_materialize_bit_exact():
@@ -207,12 +225,14 @@ def test_resnet18_batch8_deferred_spellings_complete_and_materialize_bit_exact()
     model = torchvision.models.resnet18(weights="IMAGENET1K_V1").eval()
     x = torch.randn(8, 3, 224, 224, generator=torch.Generator().manual_seed(1))
 
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=["conv2d_5_15"]))
+    # Detached saves keep this test on the spill path it was written for; the
+    # attached default's spill disclosure is pinned in test_module_save_live_retention.
+    log = tl.trace(model, x, capture=_detached(layers_to_save=["conv2d_5_15"]))
     op = log["conv2d_5_15"]
     assert op.output_of_modules == ("layer1.1.conv2",)
     assert torch.equal(op.out, _eager_module_output(model, "layer1.1.conv2", x))
 
-    ordinal_log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=[5]))
+    ordinal_log = tl.trace(model, x, capture=_detached(layers_to_save=[5]))
     saved = [
         op
         for op in ordinal_log.layer_list
@@ -222,7 +242,7 @@ def test_resnet18_batch8_deferred_spellings_complete_and_materialize_bit_exact()
     for op in saved:
         assert torch.equal(op.out, _eager_module_output(model, op.output_of_modules[-1], x))
 
-    output_log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=["output"]))
+    output_log = tl.trace(model, x, capture=_detached(layers_to_save=["output"]))
     with torch.no_grad():
         direct = model(x)
     output_ops = [
@@ -243,7 +263,7 @@ def test_resnet50_batch1_op_label_selective_save_completes():
 
     model = torchvision.models.resnet50(weights="IMAGENET1K_V1").eval()
     x = torch.randn(1, 3, 224, 224, generator=torch.Generator().manual_seed(1))
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=["conv2d_10_30"]))
+    log = tl.trace(model, x, capture=_detached(layers_to_save=["conv2d_10_30"]))
     op = log["conv2d_10_30"]
     assert torch.equal(op.out, _eager_module_output(model, op.output_of_modules[-1], x))
 
