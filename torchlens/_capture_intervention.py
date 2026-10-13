@@ -305,10 +305,13 @@ def intervene_selector_fired_nowhere(trace: Trace, selector: Any, direction: str
         return int(getattr(trace, "_tl_intervene_selector_fire_count", 0)) == 0
     if direction != "backward":
         return False
-    from .intervention.errors import SiteResolutionError
+    from .intervention.errors import MultiMatchWarning, SiteResolutionError
 
     fanout = len(getattr(trace, "layer_list", ()) or ()) + 1
     try:
-        return not trace.resolve_sites(selector, max_fanout=fanout)
+        with warnings.catch_warnings():
+            # Only the zero-match fact is asked; fan-out is the user's design.
+            warnings.simplefilter("ignore", MultiMatchWarning)
+            return not trace.resolve_sites(selector, max_fanout=fanout)
     except SiteResolutionError:
         return True

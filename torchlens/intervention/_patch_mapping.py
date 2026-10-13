@@ -10,6 +10,7 @@ length. DOCUMENTED-UNSTABLE spelling.
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Iterable, Mapping
 from typing import Any
 
@@ -109,7 +110,12 @@ def resolve_source_site(source: Any, source_site: Any) -> tuple[str, Any]:
         op = source.layer_dict_all_keys.get(source_site)
         ops: tuple[Any, ...] = () if op is None else (op,)
     else:
-        sites = source.resolve_sites(source_site, max_fanout=len(source.layer_list) + 1)
+        from .errors import MultiMatchWarning
+
+        with warnings.catch_warnings():
+            # Several matches are this refusal's subject, not a warning.
+            warnings.simplefilter("ignore", MultiMatchWarning)
+            sites = source.resolve_sites(source_site, max_fanout=len(source.layer_list) + 1)
         ops = tuple(sites)
     candidates = [op for op in ops if int(getattr(op, "num_passes", 1) or 1) <= 1 or _is_pass(op)]
     if len(ops) != 1 or len(candidates) != 1:
