@@ -416,6 +416,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_runnable_state_live.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": false,
   "field": "layer_type",
   "file": "torchlens/_runnable_transaction.py",
