@@ -88,7 +88,7 @@ def pass_peak_facts(trace: Any, which: str = "forward") -> PassPeakFacts:
             which=which,
             backend=backend if isinstance(backend, str) else None,
             value_bytes=None,
-            meaning=reason if explained else "not measured on this capture",
+            meaning=str(reason) if explained else "not measured on this capture",
             ratio_eligible=False,
             caveat="",
         )
