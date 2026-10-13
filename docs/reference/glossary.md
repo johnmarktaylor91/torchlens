@@ -1799,3 +1799,41 @@ deprecation shim owed*
   `calls_for(name)` returns every call in order, `.calls` lists all
   `AttentionCall` records (`module_name`, `probs`, `num_key_value_heads`,
   `mask_kind`, `sdpa_checked`), and `.nbytes` is the retained total.
+
+**DebugReport (`tl.debug.DebugReport`)** — *unstable — no deprecation shim owed*
+: The one typed result of every report-shaped `tl.debug` helper (U42.2):
+  `report_type`, `subject` and `status` (the lead), `to_dict()` (a plain,
+  JSON-friendly payload; tensors and graph records summarized, never
+  inlined), `to_pandas()` (the table), and `str(report)` (a bounded card:
+  lead line, at most five findings, the exact remainder, the exits). The
+  typed results (`TraceAudit`, `DeterminismReport`, `NanReport`,
+  `FindNanResult`, `ParamAudit`, ...) subclass it; those with a house-voice
+  `__repr__` keep printing it and serve the card as `report.card()`. The
+  table helpers `compare`, `compare_params`, `dead_neurons`,
+  `gradient_flow_audit`, `hot_path` and `recompute_candidates` return a
+  tabular `DebugReport` whose `.to_pandas()` is the DataFrame they used to
+  return (`attrs` included); the report has a table and never is one.
+
+**Trace.profile(group_by="source_line") / TraceProfile.group_by** — *unstable — no deprecation shim owed*
+: `group_by="source_line"` folds the op rows of `trace.profile()` into one
+  row per user source line (`"<file>:<line>"`, the op's recorded call site),
+  summing activation bytes, FLOPs and instrumented time; boundary rows fold
+  into one `<inputs and outputs>` row, so every additive column sums to the
+  ungrouped op view. Only with `level="op"`. `TraceProfile.group_by` records
+  the key (`None` for one row per op).
+
+**tl.summary("<hub model id>", input_size=...)** — *unstable — no deprecation shim owed*
+: A string model is a Hugging Face Hub id (or local config directory):
+  `tl.summary` fetches the config only, builds the declared architecture on
+  the meta device (no weights downloaded or allocated, `trust_remote_code`
+  never set) and takes the weights-free summary path, so it needs
+  `input_size=` or meta inputs. Requires `transformers`.
+
+**Trace.forward_peak_memory_reason** — *unstable — no deprecation shim owed*
+: Why `Trace.forward_peak_memory` is `None`: on CPU a forward RSS delta of 0
+  is recorded as `None` with this reason, which names
+  `CaptureOptions(measure_python_peak_memory=True)` (forks.13). `None` when a
+  value was measured, and on artifacts that predate the field. Persisted
+  (KEEP); a loaded reason beside a number refuses
+  `artifact_forward_peak_memory_invalid`. CUDA, MPS and the backward peak keep
+  their numeric semantics.

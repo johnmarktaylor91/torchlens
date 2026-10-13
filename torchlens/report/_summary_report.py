@@ -26,6 +26,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from ._summary_charset import degrade
+
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
 
@@ -134,7 +136,9 @@ class SummaryReport(str):
     ) -> SummaryReport:
         """Build the report around the rendered text."""
 
-        report = super().__new__(cls, text)
+        # The payload is the canonical ASCII contract on every build path
+        # (summary D1): a non-ASCII name degrades one character per character.
+        report = super().__new__(cls, degrade(text))
         report._rows = rows
         report._totals = totals
         report._capture = capture

@@ -18,6 +18,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .._debug_report import FoundReport
+
 __all__ = ["FirstBadThing", "amp_scaled_gradients_hint"]
 
 #: Closed coverage vocabulary: "complete" (every relevant payload checked),
@@ -28,7 +30,7 @@ COVERAGE_VALUES = ("complete", "found_first_among_checked", "partial", "none")
 
 
 @dataclass(frozen=True)
-class FirstBadThing:
+class FirstBadThing(FoundReport):
     """One first-bad-thing finding in the shared diagnostic vocabulary.
 
     Parameters
@@ -81,6 +83,24 @@ class FirstBadThing:
     uncertainty_zone: tuple[str, ...] = field(default_factory=tuple)
     detection_basis: str = "saved_activations"
     message: str = ""
+
+    def _report_subject(self) -> str:
+        """What this report examined (the card's subject)."""
+
+        return str(self.tool)
+
+    def _report_coverage(self) -> str | None:
+        """What this report did and did not examine."""
+
+        return str(self.coverage) or None
+
+    def _report_findings(self) -> list[str]:
+        """One-line findings for the card, most severe first."""
+
+        findings = [self.message] if self.message else []
+        if self.label is not None:
+            findings.append(f"first bad: {self.label} ({self.kind}) at {self.source_line}")
+        return findings
 
 
 def amp_scaled_gradients_hint(*, all_nonfinite: bool = False) -> str:

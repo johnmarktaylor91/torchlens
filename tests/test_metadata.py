@@ -153,16 +153,22 @@ def test_forward_peak_memory_is_populated(small_input):
 
     The default path deliberately does NOT run a tracemalloc probe -- that
     allocator hook costs 1.7x-2.5x total capture time -- so the coarse host delta
-    may legitimately round to 0 for a model this small. The measurement is
-    present and labeled; positive Python-allocation peaks for small models are
-    the opt-in behavior asserted by
+    may read 0 for a model this small; on CPU that zero is recorded as ``None``
+    with ``forward_peak_memory_reason`` (forks.13). The measurement is present
+    and labeled; positive Python-allocation peaks for small models are the
+    opt-in behavior asserted by
     ``test_measure_python_peak_memory_opt_in_reports_positive_peak``.
     """
 
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input)
-    assert isinstance(mh.forward_peak_memory, torchlens.Bytes)
-    assert int(mh.forward_peak_memory) >= 0
+    if mh.forward_peak_memory is None:
+        assert mh.forward_memory_backend == "cpu"
+        assert "measure_python_peak_memory=True" in mh.forward_peak_memory_reason
+    else:
+        assert isinstance(mh.forward_peak_memory, torchlens.Bytes)
+        assert int(mh.forward_peak_memory) >= 0
+        assert mh.forward_peak_memory_reason is None
     assert mh.forward_memory_backend in {"cpu", "cuda", "mps"}
     assert mh.measure_python_peak_memory is False
 

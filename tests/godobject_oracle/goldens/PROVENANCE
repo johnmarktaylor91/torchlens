@@ -366,6 +366,21 @@ torch: 2.13.0+cpu
 source: 3abe59625acdb0f1b6aea4fe9fc71e2ed30ccc36 (dirty)
 recorded: 2026-10-13T05:59:50.932214+00:00
 ---
+generator: tests/test_state_keyset_contract.py
+flag: TORCHLENS_UPDATE_STATE_KEYSET_ORACLE=1
+reason: forks.13 (JMT 2026-10-12 1:01 AM PT, RULINGS-2B.md:22; batch-2 lane REPORT, SCHEMA-REQUESTS rows 7-8): Trace.forward_peak_memory retyped to Bytes or None and Trace.forward_peak_memory_reason added (KEEP)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c9e40cb2956d3d75ce296ed99e760a529b3b294d (dirty)
+recorded: 2026-10-13T10:33:29.787084+00:00
+---
+generator: tests/godobject_oracle legacy
+flag: TORCHLENS_UPDATE_LEGACY_ARTIFACT_ORACLE=1
+reason: forks.13 (JMT 2026-10-12 1:01 AM PT, RULINGS-2B.md:22; batch-2 lane REPORT, SCHEMA-REQUESTS rows 7-8): Trace.forward_peak_memory retyped to Bytes or None and Trace.forward_peak_memory_reason added (KEEP)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c9e40cb2956d3d75ce296ed99e760a529b3b294d (dirty)
+recorded: 2026-10-13T10:33:35.370689+00:00
 generator: tests/godobject_oracle legacy
 flag: TORCHLENS_UPDATE_LEGACY_ARTIFACT_ORACLE=1
 reason: AGT-2362 REAL-2B2: root ModuleCall lists pass-qualified Ops and its forward arguments; ModuleCall.num_layers counts distinct Layers; Param.num_calls counts the Ops that used it; num_buffer_layers counts distinct buffer Layers; tied-module parameter aliases; Layer conditional roles; uncalled modules recorded at capture end; the loader refreshes num_saved_module_calls
@@ -381,3 +396,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: a7416a008f983984597a9004665d8ea0d26bd281 (clean)
 recorded: 2026-10-13T10:44:50.332139+00:00
+---
+generator: tests/test_state_keyset_contract.py
+flag: TORCHLENS_UPDATE_STATE_KEYSET_ORACLE=1
+reason: forks.13 (JMT 2026-10-12, RULINGS-2B.md:22; lane REPORT, SCHEMA-REQUESTS rows 7-8) merged with REAL-2B2 row 9 (AGT-2362): regenerate on the combined train for Trace.forward_peak_memory_reason (KEEP) beside Trace._uncalled_module_addresses (DROP)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ee78dd35000f9b63fa9c3b437046c226789c7d3b (dirty)
+recorded: 2026-10-13T12:47:42.124071+00:00
+---
+generator: tests/godobject_oracle legacy
+flag: TORCHLENS_UPDATE_LEGACY_ARTIFACT_ORACLE=1
+reason: forks.13 (JMT 2026-10-12, RULINGS-2B.md:22; lane REPORT, SCHEMA-REQUESTS rows 7-8) merged with REAL-2B2 row 9 (AGT-2362): regenerate on the combined train for Trace.forward_peak_memory_reason (KEEP) beside Trace._uncalled_module_addresses (DROP)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ee78dd35000f9b63fa9c3b437046c226789c7d3b (dirty)
+recorded: 2026-10-13T12:47:45.583390+00:00

@@ -60,7 +60,7 @@ from .outcome import (
     settle_failed,
     settle_halted,
 )
-from .peak_memory import peak_rss_bytes, process_rss_bytes, reset_peak_rss
+from .peak_memory import peak_rss_bytes, process_rss_bytes, record_forward_peak, reset_peak_rss
 from .session import (
     CaptureSession,
     attach_capture_events_session,
@@ -168,8 +168,8 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
 
     CPU/MPS measure a process resident-set-size (or MPS allocator) delta, which
     captures torch's C++-allocated tensor buffers for sizeable models. That
-    counter is coarse: for models small enough that the forward fits in
-    already-resident heap headroom the delta legitimately rounds to ``0``.
+    counter is coarse: when the forward fits in already-resident heap headroom
+    the CPU delta reads 0 and is recorded as ``None`` with a reason (forks.13).
 
     ``CaptureOptions(measure_python_peak_memory=True)`` additionally folds in the
     stdlib ``tracemalloc`` Python-allocation peak, which stays reliably positive
@@ -324,7 +324,9 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
                 after = process_rss_bytes()
         rss_delta = max(0, after - before)
         trace.forward_memory_backend = backend_label
-        trace.forward_peak_memory = Bytes(max(rss_delta, int(traced_peak)))
+        record_forward_peak(
+            trace, backend_label, max(rss_delta, int(traced_peak)), tracemalloc_module
+        )
         # F20 peak PAIR (brainpipe D-7). ``live`` is a Python-allocation peak
         # and exists only when the tracemalloc opt-in paid for it; ``None``
         # means unmeasured, never zero. ``resident`` is the host high-water

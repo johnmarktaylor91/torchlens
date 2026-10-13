@@ -4,8 +4,7 @@ Covers the depyf prepare_debug contract, tensor_layers explicit-site validation
 (A3-14), the extractor/ILG .model unwrap gate (A3-15), dialz
 default-method detection, the lovely non-mutating fallback (A3-17), the repeng /
 steering contrastive-row contract, the profiler blank-label guard
-(A3-01 partial), null traceEvents handling (LOW-9), the execution_trace schema
-docstring (A3-18), and the push_to_hub artifact-format tag (LOW-4 / LOW-S1).
+(A3-01 partial), null traceEvents handling (LOW-9), and the push_to_hub artifact-format tag (LOW-4 / LOW-S1).
 
 The adapters are exercised with stubbed optional dependencies and fake logs so
 the suite needs none of the optional extras installed.
@@ -693,19 +692,6 @@ def test_profiler_null_events(trace: dict[str, Any]) -> None:
     from torchlens.bridge import profiler
 
     assert profiler.join(_FakeLog([]), trace)["ops"] == []
-
-
-# --------------------------------------------------------------------------- #
-# A3-18 profiler docstring honesty
-# --------------------------------------------------------------------------- #
-def test_execution_trace_docstring_is_honest() -> None:
-    """The docstring no longer claims ExecutionTraceObserver compatibility."""
-
-    from torchlens.bridge import profiler
-
-    doc = profiler.execution_trace.__doc__ or ""
-    assert "ExecutionTraceObserver-compatible" not in doc
-    assert "torchlens.execution_trace.v1" in doc
 
 
 # --------------------------------------------------------------------------- #

@@ -376,6 +376,7 @@
       "total_param_gradient_memory",
       "forward_peak_memory",
       "forward_memory_backend",
+      "forward_peak_memory_reason",
       "capture_start_time",
       "capture_end_time",
       "_phase_timings",
@@ -949,6 +950,7 @@
       "forward_duration",
       "forward_memory_backend",
       "forward_peak_memory",
+      "forward_peak_memory_reason",
       "forward_signature",
       "forward_source_file",
       "forward_source_line",
@@ -1064,13 +1066,13 @@
     ]
   },
   "sha256_chunks": [
-    "3e4c4f4f",
-    "65e95ed1",
-    "df136e32",
-    "7e20a8fb",
-    "d704cfdc",
-    "b74d7c84",
-    "7823bc09",
-    "dfba79f1"
+    "505fb40e",
+    "a3842b8e",
+    "4c4c7617",
+    "9b7f1844",
+    "0374c5be",
+    "8f460ab8",
+    "a3d200d0",
+    "2b0c6b7b"
   ]
 }

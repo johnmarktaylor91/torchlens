@@ -1025,6 +1025,7 @@
     "forward_duration": "keep",
     "forward_memory_backend": "keep",
     "forward_peak_memory": "keep",
+    "forward_peak_memory_reason": "keep",
     "forward_signature": "keep",
     "forward_source_file": "keep",
     "forward_source_line": "keep",
@@ -3541,6 +3542,7 @@
      "forward_duration": "keep",
      "forward_memory_backend": "keep",
      "forward_peak_memory": "keep",
+     "forward_peak_memory_reason": "keep",
      "forward_signature": "keep",
      "forward_source_file": "keep",
      "forward_source_line": "keep",
@@ -3743,6 +3745,7 @@
      "forward_duration": "fact",
      "forward_memory_backend": "fact",
      "forward_peak_memory": "fact",
+     "forward_peak_memory_reason": "fact",
      "forward_signature": "fact",
      "forward_source_file": "fact",
      "forward_source_line": "fact",
@@ -3931,6 +3934,7 @@
      "forward_duration",
      "forward_memory_backend",
      "forward_peak_memory",
+     "forward_peak_memory_reason",
      "forward_signature",
      "forward_source_file",
      "forward_source_line",
@@ -4077,5 +4081,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "db6677e7e9fd04d7a1b0f057388e5e9e740c45bece5499013bf562ea917ecd5e"
+ "writer_contract_digest": "857d68c15278e3ee5e5a3e911c352207f6221217e1ea6d6a8825fe393966292b"
 }

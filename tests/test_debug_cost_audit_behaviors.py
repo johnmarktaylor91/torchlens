@@ -43,7 +43,7 @@ def cost_trace() -> Iterator[tl.Trace]:
 def test_hot_path_ranks_source_lines_with_full_percentages(cost_trace) -> None:
     """hot_path() groups ops by source line, sorts by cost, and sums to 100%."""
 
-    frame = hot_path(cost_trace, by="duration")
+    frame = hot_path(cost_trace, by="duration").to_pandas()
     assert list(frame.columns) == ["source_file:line", "op_count", "total_cost", "pct_total"]
     assert len(frame) >= 2
     costs = list(frame["total_cost"])

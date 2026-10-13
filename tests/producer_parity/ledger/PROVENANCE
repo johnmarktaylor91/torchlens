@@ -2379,3 +2379,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: ffde3ffe29960d3adee384d324e96e4369310048 (clean)
 recorded: 2026-10-13T04:53:39.235542+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: lane REPORT batch 2: U42.2 DebugReport, U53.1, U53.2, U04.4, defaults.7, summary D1, costreport moved producer read sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 919d6b5a6f449cb1024e1c8a895411f1af07e593 (dirty)
+recorded: 2026-10-13T10:23:44.346965+00:00

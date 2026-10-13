@@ -2,9 +2,40 @@
 
 `tl.debug` inspects a completed trace when the graph itself is the diagnostic: it can
 locate non-finite saved tensors, walk dependencies, compare runs, rank cost and
-recomputation candidates, audit saved gradients, and infer a runnable input shape. Most
-table-returning helpers require pandas. Capture with the normal `tl.trace(...)` API, then
-pass the resulting trace to a helper.
+recomputation candidates, audit saved gradients, and infer a runnable input shape. Capture
+with the normal `tl.trace(...)` API, then pass the resulting trace to a helper.
+
+## The report object (`DebugReport`)
+
+Every report-shaped `tl.debug` result is a `tl.debug.DebugReport` (DOCUMENTED-UNSTABLE
+spelling): `report_type`, `subject` and `status` name what was examined and the verdict,
+`to_dict()` returns a plain JSON-friendly payload, `to_pandas()` returns the table, and
+`print(report)` shows a bounded card (a lead line, at most five findings, the exact
+remainder, and the exits). The typed results (`TraceAudit`, `DeterminismReport`,
+`NanReport`, `FindNanResult`, `ParamAudit`, ...) are `DebugReport` subclasses; results
+that already print a house-voice summary keep it, and `report.card()` gives the card.
+The table helpers (`compare`, `compare_params`, `dead_neurons`, `gradient_flow_audit`,
+`hot_path`, `recompute_candidates`) return a tabular `DebugReport`: the report has a
+table and never is one, so read the DataFrame with `.to_pandas()` (it needs pandas; the
+`*_rows` cores below do not).
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+trace = tl.trace(nn.Linear(2, 2), torch.ones(1, 2))
+report = tl.debug.hot_path(trace, by="flops")
+print(isinstance(report, tl.debug.DebugReport), report.report_type)
+print(report.to_pandas().columns.tolist())
+```
+
+Output:
+
+```text
+True hot_path
+['source_file:line', 'op_count', 'total_cost', 'pct_total']
+```
 
 For *environment* problems (rather than trace problems), start with
 [`tl.utils.doctor()`](#tlutilsdoctor) below.
@@ -193,8 +224,8 @@ True __sub__
 ## `compare`
 
 `tl.debug.compare(trace_a, trace_b, *, rtol=1e-5, atol=1e-8)` compares saved dense
-floating activations with matching operation labels and returns a pandas DataFrame. Its
-`attrs` contain aggregate counts.
+floating activations with matching operation labels and returns a tabular `DebugReport`
+whose `.to_pandas()` DataFrame carries aggregate counts in `attrs`.
 
 ```python
 import torch
@@ -204,7 +235,7 @@ import torchlens as tl
 model = nn.ReLU()
 left = tl.trace(model, torch.tensor([[-1.0, 2.0]]))
 right = tl.trace(model, torch.tensor([[-1.0, 3.0]]))
-comparison = tl.debug.compare(left, right)
+comparison = tl.debug.compare(left, right).to_pandas()
 print(comparison.shape, comparison.attrs["value_diverged"])
 ```
 
@@ -218,8 +249,8 @@ Output:
 
 `tl.debug.compare_params(model_a, model_b, *, rtol=1e-5, atol=1e-8, include_buffers=False)`
 (DOCUMENTED-UNSTABLE spelling) is the weight-space counterpart of `compare`: it aligns two
-models' parameters on their qualified names and returns a pandas DataFrame with one row per
-name and aggregate counts in `attrs`. Tensors on different devices are compared on CPU;
+models' parameters on their qualified names and returns a tabular `DebugReport` whose
+`.to_pandas()` DataFrame has one row per name and aggregate counts in `attrs`. Tensors on different devices are compared on CPU;
 shape/dtype mismatches and meta tensors skip the value comparison with the reason recorded.
 `include_buffers=True` adds registered buffers (rows carry `kind="buffer"`).
 
@@ -234,7 +265,7 @@ right = nn.Linear(4, 2)
 right.load_state_dict(left.state_dict())
 with torch.no_grad():
     right.bias.add_(1.0)
-report = tl.debug.compare_params(left, right)
+report = tl.debug.compare_params(left, right).to_pandas()
 print(report.attrs["matched"], report.attrs["value_diverged"])
 print(report.loc[report["allclose"] == False, "name"].tolist())  # noqa: E712
 ```
@@ -307,7 +338,7 @@ from torch import nn
 import torchlens as tl
 
 trace = tl.trace(nn.ReLU(), torch.tensor([[-1.0, 2.0], [-3.0, 4.0]]))
-report = tl.debug.dead_neurons(trace)
+report = tl.debug.dead_neurons(trace).to_pandas()
 print(report.columns.tolist())
 ```
 
@@ -372,7 +403,7 @@ from torchlens.options import CaptureOptions
 
 trace = tl.trace(nn.Linear(2, 1), torch.ones(1, 2), capture=CaptureOptions(save_grads=True))
 trace.log_backward(trace[trace.output_layers[0]].out.sum())
-report = tl.debug.gradient_flow_audit(trace)
+report = tl.debug.gradient_flow_audit(trace).to_pandas()
 print(report.shape, report.attrs["bwd"])
 ```
 
@@ -423,7 +454,7 @@ from torch import nn
 import torchlens as tl
 
 trace = tl.trace(nn.Linear(2, 2), torch.ones(1, 2))
-report = tl.debug.hot_path(trace, by="flops")
+report = tl.debug.hot_path(trace, by="flops").to_pandas()
 print(report.columns.tolist(), report.attrs["metric"])
 ```
 
@@ -443,9 +474,9 @@ exploding_threshold=1e4)`, and `tl.debug.hot_path_rows(trace, by="flops")`
 [`compare`](#compare), [`dead_neurons`](#dead_neurons),
 [`gradient_flow_audit`](#gradient_flow_audit), and [`hot_path`](#hot_path).
 Each returns `(rows, attrs)` — a list of plain per-row dicts plus the same
-`attrs` mapping the DataFrame view carries (aggregate counts, parameters,
-capture-honesty facts) — importable and runnable without pandas. The
-DataFrame helpers are thin views over these cores, so both spellings always
+`attrs` mapping the report's `.to_pandas()` frame carries (aggregate counts,
+parameters, capture-honesty facts) — importable and runnable without pandas. The
+table helpers are thin views over these cores, so both spellings always
 report identical facts; agent/MCP consumers use the row cores directly.
 
 ```python
@@ -524,7 +555,7 @@ from torch import nn
 import torchlens as tl
 
 trace = tl.trace(nn.Linear(2, 2), torch.ones(1, 2))
-report = tl.debug.recompute_candidates(trace)
+report = tl.debug.recompute_candidates(trace).to_pandas()
 print(report.columns.tolist())
 ```
 

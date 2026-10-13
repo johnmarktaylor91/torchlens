@@ -24,6 +24,7 @@ Spellings DOCUMENTED-UNSTABLE pending naming-session ratification.
 from __future__ import annotations
 
 import os
+import unicodedata
 from typing import Any
 
 #: The declared glyph table: unicode character -> ASCII character.
@@ -37,11 +38,36 @@ GLYPH_TABLE: dict[str, str] = {
 
 _DEGRADE_TABLE = str.maketrans(GLYPH_TABLE)
 
+#: Stand-in for a non-ASCII character with no ASCII base letter.
+NON_ASCII_STAND_IN = "?"
+
+
+def _ascii_char(char: str) -> str:
+    """One ASCII character for one non-ASCII character (summary D1).
+
+    A letter with an ASCII base (``é``) keeps the base (``e``); anything
+    else becomes :data:`NON_ASCII_STAND_IN`. Always exactly one character,
+    so column widths and alignment are unchanged.
+    """
+
+    base = unicodedata.normalize("NFKD", char).encode("ascii", "ignore").decode("ascii")
+    return base if len(base) == 1 else NON_ASCII_STAND_IN
+
 
 def degrade(unicode_text: str) -> str:
-    """Map a unicode render to its ASCII form through the glyph table."""
+    """Map a unicode render to its ASCII form, one character per character.
 
-    return unicode_text.translate(_DEGRADE_TABLE)
+    The declared glyph table maps the render's own glyphs; any other
+    non-ASCII character (a model, class or module name such as
+    ``café_προβολή``) maps through :func:`_ascii_char`, so the result is
+    always pure ASCII (summary D1). The structured data (``rows``,
+    ``to_dict()``) keeps the real names.
+    """
+
+    text = unicode_text.translate(_DEGRADE_TABLE)
+    if text.isascii():
+        return text
+    return "".join(char if char.isascii() else _ascii_char(char) for char in text)
 
 
 def _stream_verifies_glyphs(stream: Any) -> bool:

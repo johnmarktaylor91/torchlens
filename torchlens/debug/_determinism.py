@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._debug_report import DebugReport
 from ..utils._torch_compat import read_legacy_fp32_controls, snapshot_fp32_precision_controls
 from ._common import _compute_ops, _op_label, _safe_out, _source_line
 from ._first_bad import FirstBadThing
@@ -35,7 +36,7 @@ VERDICTS = ("repeatable_under_test", "nondeterminism_observed", "inconclusive")
 
 
 @dataclass(frozen=True)
-class DeterminismReport:
+class DeterminismReport(DebugReport):
     """Typed result of :func:`check_determinism`.
 
     Parameters
@@ -115,6 +116,25 @@ class DeterminismReport:
     seed_sensitivity_verdict: str | None
     remedies: tuple[str, ...] = field(default_factory=tuple)
     message: str = ""
+
+    def _report_subject(self) -> str:
+        """What this report examined (the card's subject)."""
+
+        return f"{self.runs} runs, seed={self.seed}"
+
+    def _report_status(self) -> str:
+        """The verdict token on the card's lead line."""
+
+        return str(self.verdict)
+
+    def _report_findings(self) -> list[str]:
+        """One-line findings for the card, most severe first."""
+
+        findings = [self.message] if self.message else []
+        findings.extend(f"divergent op: {label}" for label in self.divergent_ops)
+        findings.extend(f"non-finite op: {label}" for label in self.nonfinite_ops)
+        findings.extend(f"remedy: {remedy}" for remedy in self.remedies)
+        return findings
 
     @property
     def first_bad_thing(self) -> FirstBadThing:

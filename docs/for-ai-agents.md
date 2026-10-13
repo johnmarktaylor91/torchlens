@@ -231,8 +231,8 @@ sprint) describe the same surface the rest of this page drives:
   sections (low-value first), disclosing every drop in a trailing `Truncation` section.
   The `Capture status` honesty facts and partial-capture failure evidence are never
   dropped: a budget below that floor returns the floor plus a disclosure instead of a
-  misleading fragment. `max_tokens` refuses with `format="json"` (that schema is
-  fixed-shape and already minimal).
+  misleading fragment. The report is prose only: for the machine-readable form of the
+  same facts use `trace.to_agent_json()`.
 
 ```python
 import json

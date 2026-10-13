@@ -5,14 +5,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    import pandas as pd
-
     from torchlens.data_classes.trace import Trace
 
+from .._debug_report import DebugReport, table_report, trace_subject
 from ._common import _compute_ops, _op_label, _require_pandas
 
 
-def recompute_candidates(trace: Trace, *, budget_gb: float | None = None) -> pd.DataFrame:
+def recompute_candidates(trace: Trace, *, budget_gb: float | None = None) -> DebugReport:
     """Rank ops by activation memory per forward FLOP.
 
     Parameters
@@ -24,7 +23,9 @@ def recompute_candidates(trace: Trace, *, budget_gb: float | None = None) -> pd.
 
     Returns
     -------
-    pandas.DataFrame
+    DebugReport
+        Tabular ``tl.debug`` report (U42.2); ``.to_pandas()`` returns the
+        DataFrame described here.
         Candidate rows with exclusion counts in ``df.attrs``.
     """
 
@@ -80,4 +81,9 @@ def recompute_candidates(trace: Trace, *, budget_gb: float | None = None) -> pd.
         frame.attrs[f"excluded_{key}_count"] = value
     from .._capture_honesty import attach_dataframe_honesty
 
-    return attach_dataframe_honesty(frame, trace)
+    return table_report(
+        "recompute_candidates",
+        attach_dataframe_honesty(frame, trace),
+        subject=trace_subject(trace),
+        finding_columns=("op", "activation_memory", "mem_per_flop", "suggested"),
+    )

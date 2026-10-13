@@ -63,10 +63,13 @@ def test_debug_dataframes_carry_honesty(export_trace: tl.Trace) -> None:
 
     from torchlens import debug
 
-    assert _facts_of(debug.hot_path(export_trace))["capture_status"] == "complete"
-    assert _facts_of(debug.recompute_candidates(export_trace))["capture_status"] == "complete"
-    assert _facts_of(debug.dead_neurons(export_trace))["capture_status"] == "complete"
-    compare_frame = debug.compare(export_trace, export_trace)
+    assert _facts_of(debug.hot_path(export_trace).to_pandas())["capture_status"] == "complete"
+    assert (
+        _facts_of(debug.recompute_candidates(export_trace).to_pandas())["capture_status"]
+        == "complete"
+    )
+    assert _facts_of(debug.dead_neurons(export_trace).to_pandas())["capture_status"] == "complete"
+    compare_frame = debug.compare(export_trace, export_trace).to_pandas()
     both = compare_frame.attrs[DATAFRAME_ATTRS_KEY]
     assert both["trace_a"]["capture_status"] == "complete"
     assert both["trace_b"]["capture_status"] == "complete"

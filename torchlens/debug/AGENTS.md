@@ -4,6 +4,27 @@ Power-user diagnostics for completed traces. Imported lazily as `tl.debug` and
 deliberately NOT in the top-level `__all__`. Everything here is read-only analysis;
 nothing mutates a trace or the capture pipeline.
 
+## The report object (U42.2; DOCUMENTED-UNSTABLE)
+- Every report-shaped result is a `tl.debug.DebugReport` (defined in
+  `torchlens/_debug_report.py`, at the package root so `checks.ParamAudit` can
+  subclass it without importing this package): `report_type`, `subject`,
+  `status`, `to_dict()`, `to_pandas()`, and `str()` = a bounded card (lead line,
+  at most five findings, exact remainder, exits). Results with a house-voice
+  `__repr__` (`TraceAudit`, `DTypeRangeAudit`, `FindNanResult`, `ParamAudit`) keep
+  printing it (`_prints_repr = True`; the card is `report.card()`).
+- Subclasses state the lead through `_report_subject` / `_report_status` /
+  `_report_findings` (optionally `_report_coverage`, `_report_severity_counts`,
+  `_report_rows`). Do not add dataclass fields named `report_type`, `subject` or
+  `status` (they are base properties).
+- The tabular helpers (`hot_path`, `dead_neurons`, `compare`,
+  `recompute_candidates`, `gradient_flow_audit`, `compare_params`) return a
+  tabular `DebugReport` built by `table_report(...)`; `.to_pandas()` is the frame
+  (attrs included). It never forwards DataFrame methods. The `*_rows` helpers stay
+  the pandas-free core.
+- Not reports: the context managers (`isolated_capture`, `preserved_rng_state`,
+  `count_compiles`), `clone_input_tree`, `amp_scaled_gradients_hint` (a string),
+  `first_divergence` (a dict or None), and `_grad_fn_walk.py` (VIZ-R).
+
 ## _nan.py
 - `find_nan(model, x, **trace_kwargs)` captures fresh and localizes the first
   nonfinite value; `find_nan_in_trace(trace)` / `bisect_nan(trace)` work on an
@@ -22,7 +43,8 @@ nothing mutates a trace or the capture pipeline.
   DOCUMENTED-UNSTABLE spellings.
 
 ## _cost.py
-- `hot_path(trace, by="flops")` ranks ops by cost metric into a pandas DataFrame.
+- `hot_path(trace, by="flops")` ranks source lines by cost metric (a tabular
+  `DebugReport`; `.to_pandas()` is the frame).
 - `theoretical_op_bytes(op)` estimates input/parameter traffic from metadata only.
 
 ## _compile_counter.py
@@ -48,8 +70,9 @@ nothing mutates a trace or the capture pipeline.
   fractions, and narrowing casts per op.
 
 ## _gradients.py
-- `gradient_flow_audit(...)` builds a gradient-magnitude DataFrame; returns an
-  annotated empty frame with a message rather than raising when grads are absent.
+- `gradient_flow_audit(...)` builds a gradient-magnitude table (a tabular
+  `DebugReport`); its frame is an annotated empty frame with a message rather than
+  raising when grads are absent.
 
 ## _infer_input_shape.py
 - `infer_input_shape(model, **kwargs)` -> `InferInputShapeResult`; iterative
@@ -65,4 +88,5 @@ nothing mutates a trace or the capture pipeline.
 - pandas is required lazily per call (`_require_pandas()`), not at import.
 - Several helpers (`find_nan`, `graph_breaks`, `infer_input_shape`) run fresh
   forwards/captures; they are not safe on models with destructive side effects.
-- Keep result objects typed dataclasses; callers branch on fields, not messages.
+- Keep result objects typed dataclasses that subclass `DebugReport`; callers branch
+  on fields, not messages.

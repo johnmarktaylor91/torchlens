@@ -56,6 +56,8 @@ ARTIFACT_VOLATILE_METADATA_FIELDS: tuple[str, ...] = (
     "cleanup_duration",
     "func_calls_duration",
     "forward_peak_memory",
+    # forks.13: varies exactly with forward_peak_memory (set iff a CPU delta read 0).
+    "forward_peak_memory_reason",
 )
 ARTIFACT_VOLATILE_MANIFEST_FIELDS: tuple[str, ...] = (
     "created_at",
@@ -301,6 +303,7 @@ MODEL_LOG_FIELD_ORDER = [
     "total_param_gradient_memory",
     "forward_peak_memory",
     "forward_memory_backend",
+    "forward_peak_memory_reason",
     # Time elapsed
     "capture_start_time",
     "capture_end_time",

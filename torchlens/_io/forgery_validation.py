@@ -16,11 +16,7 @@ from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any, NoReturn, TypeGuard
 
 from . import TorchLensIOError
-from ._forgery_identity_facts import (
-    _validate_episode_step_stamps,
-    _validate_root_entry_point,
-    _validate_tl_authored_root,
-)
+from ._forgery_identity_facts import _validate_identity_facts
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
@@ -122,9 +118,7 @@ def validate_persisted_forgery_surfaces(trace: Trace) -> None:
     _validate_sidecar_namespace(trace)
     _validate_capture_advisories(trace)
     _validate_injection_provenance(trace)
-    _validate_episode_step_stamps(trace)
-    _validate_tl_authored_root(trace)
-    _validate_root_entry_point(trace)
+    _validate_identity_facts(trace)
     _validate_source_snapshots(trace)
     _validate_structure_evidence(trace)
 

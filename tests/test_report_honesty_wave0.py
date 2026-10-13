@@ -67,7 +67,7 @@ def test_styled_link_registers_stay_opt_in() -> None:
 
 
 @pytest.mark.smoke
-def test_explain_text_and_json_are_escape_free() -> None:
+def test_explain_text_is_escape_free() -> None:
     """explain() output is publishable data: no ESC bytes on any fixture."""
 
     trace = _nan_trace()
@@ -76,10 +76,8 @@ def test_explain_text_and_json_are_escape_free() -> None:
     assert trace.nonfinite_ops
     report = tl.report.explain(trace)
     assert ESC not in report
-    payload = tl.report.explain(trace, format="json")
-    assert ESC not in str(payload)
     # The non-finite evidence still names the site in plain text.
-    assert "truediv" in payload["first_nonfinite"]
+    assert "truediv" in report
 
 
 def test_str_trace_is_escape_free() -> None:

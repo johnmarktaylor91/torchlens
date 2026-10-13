@@ -201,7 +201,7 @@ def test_hot_path_returns_ranked_dataframe(metric: str) -> None:
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
     trace = tl.trace(model, torch.randn(3, 4))
 
-    frame = tl.debug.hot_path(trace, by=metric)  # type: ignore[arg-type]
+    frame = tl.debug.hot_path(trace, by=metric).to_pandas()  # type: ignore[arg-type]
 
     assert list(frame.columns) == ["source_file:line", "op_count", "total_cost", "pct_total"]
     assert len(frame) > 0
@@ -235,6 +235,6 @@ def test_hot_path_reports_missing_metric_exclusions() -> None:
     first_compute = next(op for op in trace.layer_list if int(op.step_index or 0) > 0)
     first_compute.flops_forward = None
 
-    frame = tl.debug.hot_path(trace, by="flops")
+    frame = tl.debug.hot_path(trace, by="flops").to_pandas()
 
     assert frame.attrs["excluded_missing_metric_count"] >= 1

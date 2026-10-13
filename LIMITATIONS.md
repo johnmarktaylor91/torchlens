@@ -140,9 +140,9 @@ compatibility rows state this rather than issuing an unqualified clean bill of h
 
 ## Disk-backed reporting
 
-`repr`, `str`, notebook HTML, and `report.explain(..., format="json")` never materialize a saved
-activation solely to answer the NaN/Inf summary. An unmaterialized disk ref is counted as
-"disk-backed and not examined by reporting" in clean HTML/JSON answers. Call `op.materialize_out()`
+`repr`, `str`, notebook HTML, `report.explain(...)`, and `trace.to_agent_json()` never materialize
+a saved activation solely to answer the NaN/Inf summary. An unmaterialized disk ref is counted as
+"disk-backed and not examined by reporting" in clean text, HTML and JSON answers. Call `op.materialize_out()`
 explicitly before asking for a value-based answer when the I/O cost is intended.
 
 ## Bundle Diff Rendering

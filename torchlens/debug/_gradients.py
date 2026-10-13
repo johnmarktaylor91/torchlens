@@ -32,10 +32,9 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 if TYPE_CHECKING:
-    import pandas as pd
-
     from torchlens.data_classes.trace import Trace
 
+from .._debug_report import DebugReport, table_report, trace_subject
 from ._common import _op_label, _require_pandas, _tensor_unavailable_reason
 
 #: Column order shared by the rows core and the DataFrame view. The first
@@ -550,7 +549,7 @@ def gradient_flow_audit(  # noqa: PLR0913 -- the D17 fix-pack public surface: sh
     grad_scale: float | None = None,
     grad_scales: Mapping[int, float] | None = None,
     basis: str = "total_norm",
-) -> pd.DataFrame:
+) -> DebugReport:
     """Audit saved op gradients for vanishing, exploding, and zero gradients.
 
     Parameters
@@ -576,7 +575,9 @@ def gradient_flow_audit(  # noqa: PLR0913 -- the D17 fix-pack public surface: sh
 
     Returns
     -------
-    pandas.DataFrame
+    DebugReport
+        Tabular ``tl.debug`` report (U42.2); ``.to_pandas()`` returns the
+        DataFrame described here.
         Ranked audit rows with counts in ``df.attrs``. The optional view over
         :func:`gradient_flow_audit_rows` (the pandas-free core). New fix-pack
         columns: ``module``, ``is_frontier`` (the culprit localizer, memo
@@ -605,4 +606,9 @@ def gradient_flow_audit(  # noqa: PLR0913 -- the D17 fix-pack public surface: sh
     pd = _require_pandas()
     frame = pd.DataFrame(rows, columns=list(_GRAD_AUDIT_COLUMNS))
     frame.attrs.update(attrs)
-    return frame
+    return table_report(
+        "gradient_flow_audit",
+        frame,
+        subject=trace_subject(trace),
+        finding_columns=("op", "module", "verdict", "grad_norm"),
+    )

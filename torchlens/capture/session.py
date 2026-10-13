@@ -800,6 +800,7 @@ class CaptureSession:
                 "setup_duration": getattr(trace, "setup_duration", 0),
                 "forward_duration": getattr(trace, "forward_duration", 0),
                 "forward_peak_memory": getattr(trace, "forward_peak_memory", None),
+                "forward_peak_memory_reason": getattr(trace, "forward_peak_memory_reason", None),
                 "forward_memory_backend": getattr(trace, "forward_memory_backend", None),
                 "random_seed": getattr(trace, "random_seed", None),
                 "source_model_ref": getattr(trace, "_source_model_ref", None),

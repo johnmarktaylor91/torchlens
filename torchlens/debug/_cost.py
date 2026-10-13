@@ -8,11 +8,10 @@ from typing import TYPE_CHECKING, Any, Literal
 import torch
 
 if TYPE_CHECKING:
-    import pandas as pd
-
     from torchlens.data_classes.op import Op
     from torchlens.data_classes.trace import Trace
 
+from .._debug_report import DebugReport, table_report, trace_subject
 from ..quantities import Bytes
 from ._common import _ordered_ops, _require_pandas, _source_line
 
@@ -305,7 +304,7 @@ def hot_path_rows(
     return [dict(row) for row in sorted_rows], attrs
 
 
-def hot_path(trace: Trace, by: CostMetric = "flops") -> pd.DataFrame:
+def hot_path(trace: Trace, by: CostMetric = "flops") -> DebugReport:
     """Rank source lines by aggregate forward cost.
 
     Parameters
@@ -317,7 +316,9 @@ def hot_path(trace: Trace, by: CostMetric = "flops") -> pd.DataFrame:
 
     Returns
     -------
-    pandas.DataFrame
+    DebugReport
+        Tabular ``tl.debug`` report (U42.2); ``.to_pandas()`` returns the
+        DataFrame described here.
         Columns are ``source_file:line``, ``op_count``, ``total_cost``, and
         ``pct_total``. The number of ops excluded for missing metrics is stored
         in ``df.attrs["excluded_missing_metric_count"]``. The optional view
@@ -331,4 +332,9 @@ def hot_path(trace: Trace, by: CostMetric = "flops") -> pd.DataFrame:
         columns=["source_file:line", "op_count", "total_cost", "pct_total"],
     )
     frame.attrs.update(attrs)
-    return frame
+    return table_report(
+        "hot_path",
+        frame,
+        subject=trace_subject(trace),
+        finding_columns=("source_file:line", "total_cost", "pct_total"),
+    )

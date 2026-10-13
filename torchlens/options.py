@@ -591,8 +591,9 @@ class CaptureOptions:
         ``Trace.forward_peak_memory`` additionally includes a ``tracemalloc``
         Python-allocation peak. The default is ``False``: the CPU/MPS
         measurement is then the cheap host resident-set-size (or MPS allocator)
-        delta alone, which reads ``0`` for models too small to move that
-        coarse-grained counter. Enabling it installs CPython's allocator hook
+        delta alone; on CPU a delta of 0 (a model too small to move that
+        coarse-grained counter) is recorded as ``None`` with
+        ``Trace.forward_peak_memory_reason`` naming this option. Enabling it installs CPython's allocator hook
         for the duration of the forward pass, which is precise for small models
         but taxes every traced operation (measured at 1.7x-2.5x total capture
         time on torchvision CNNs and ViTs), so it is opt-in. CUDA captures

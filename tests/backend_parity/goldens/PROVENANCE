@@ -285,3 +285,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 20c14e9e35d94b7d037c46e2904fd8e5ac95401c (dirty)
 recorded: 2026-10-12T22:49:30.309513+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (field_order_dataframe_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: forks.13 (JMT 2026-10-12 1:01 AM PT, RULINGS-2B.md:22; batch-2 lane REPORT): MODEL_LOG_FIELD_ORDER gains Trace.forward_peak_memory_reason (KEEP)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 84cc0860fcb91aa969b445d3ff8a54d5f162280f (dirty)
+recorded: 2026-10-13T11:44:26.362991+00:00

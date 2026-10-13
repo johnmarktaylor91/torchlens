@@ -268,3 +268,32 @@ def nonfinite_verdict(trace: Any) -> str:
     """
 
     return health_facts(trace).verdict
+
+
+#: The partial-coverage hint (forks.7): ``track_nonfinite`` stays False by
+#: default (no overhead), so a NOT-CHECKED surface names the option that
+#: records every op's verdict during capture.
+TRACK_NONFINITE_HINT = "capture with CaptureOptions(track_nonfinite=True) to check every op"
+
+
+def nonfinite_option_hint(trace: Any, verdict: str) -> str | None:
+    """Return the track_nonfinite hint for a NOT-CHECKED verdict, else ``None``.
+
+    Parameters
+    ----------
+    trace:
+        The trace whose health verdict is rendered.
+    verdict:
+        Its three-state verdict.
+
+    Returns
+    -------
+    str | None
+        :data:`TRACK_NONFINITE_HINT` while the option is off and the verdict
+        is ``not_checked``; ``None`` otherwise (the option already ran, or the
+        verdict is settled).
+    """
+
+    if verdict != "not_checked" or getattr(trace, "track_nonfinite", False):
+        return None
+    return TRACK_NONFINITE_HINT

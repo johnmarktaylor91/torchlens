@@ -65,7 +65,7 @@ optional dependency.
   member (`hub_artifact_unsafe`) and loads eagerly through `tl.load`'s
   default-deny loader. Tests use an `api=` fake exposing `upload_file` /
   `hf_hub_download` (extra: `torchlens[hf]`).
-- `profiler.py`: `execution_trace()`, `join()` correlate a Kineto/Chrome trace
+- `profiler.py`: `join()` correlates a Kineto/Chrome trace
   with captured layers; stdlib-only, no import gate. `join()` (schema
   `torchlens.profiler_join.v2`) assigns each complete event to at most one
   layer: a `record_function` range whose name EQUALS a layer label, else the

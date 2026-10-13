@@ -6,10 +6,11 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._debug_report import DebugReport, table_report
 from ._common import _require_pandas
 
 if TYPE_CHECKING:
-    import pandas as pd
+    pass
 
 
 def _named_state(
@@ -149,7 +150,7 @@ def compare_params(
     rtol: float = 1e-5,
     atol: float = 1e-8,
     include_buffers: bool = False,
-) -> pd.DataFrame:
+) -> DebugReport:
     """Compare two models' parameters name by name.
 
     The counterpart of :func:`compare` for weights instead of activations:
@@ -173,7 +174,9 @@ def compare_params(
 
     Returns
     -------
-    pandas.DataFrame
+    DebugReport
+        Tabular ``tl.debug`` report (U42.2); ``.to_pandas()`` returns the
+        DataFrame described here.
         One row per qualified name with columns ``name``, ``kind``,
         ``status``, ``shape_match``, ``dtype_match``, ``max_abs``,
         ``mean_abs``, ``allclose``, and ``reason``; ``attrs`` carries the
@@ -258,4 +261,9 @@ def compare_params(
         ],
     )
     frame.attrs.update(summary)
-    return frame
+    return table_report(
+        "compare_params",
+        frame,
+        subject=f"{type(model_a).__name__} vs {type(model_b).__name__}",
+        finding_columns=("name", "status", "max_abs", "reason"),
+    )

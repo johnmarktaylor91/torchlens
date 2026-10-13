@@ -203,7 +203,10 @@ def test_pass_peak_observation_independent_of_sampling(monkeypatch) -> None:
     sampled = _capture_with_provider(monkeypatch, provider, model, x)
     try:
         assert plain.forward_memory_backend == sampled.forward_memory_backend
-        assert type(plain.forward_peak_memory) is type(sampled.forward_peak_memory)
+        # forks.13: a CPU delta of 0 reads None (with a reason); either reading
+        # is the same measurement kind, so compare the kind, not the RSS luck.
+        for peak in (plain.forward_peak_memory, sampled.forward_peak_memory):
+            assert peak is None or isinstance(peak, tl.Bytes)
     finally:
         plain.cleanup()
         sampled.cleanup()
