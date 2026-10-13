@@ -1796,6 +1796,7 @@ class Module:
 
         Glossary: bare ``param_memory`` is own-address; use
         ``internal_param_memory`` for the address-recursive sum.
+        The root Module (``self``) encompasses every parameter of the model.
         """
 
         return Bytes(sum(int(param.param_memory or 0) for param in self.params))
@@ -2200,19 +2201,28 @@ class Module:
 
     @property
     def num_param_tensors(self) -> int:
-        """Number of parameter tensors owned by this Module."""
+        """Number of parameter tensors owned by this Module.
+
+        The root Module (``self``) encompasses every parameter of the model.
+        """
 
         return len(self.params)
 
     @property
     def num_param_tensors_trainable(self) -> int:
-        """Number of trainable parameter tensors owned by this Module."""
+        """Number of trainable parameter tensors owned by this Module.
+
+        The root Module (``self``) encompasses every parameter of the model.
+        """
 
         return sum(1 for param in self.params if param.is_trainable)
 
     @property
     def num_param_tensors_frozen(self) -> int:
-        """Number of frozen parameter tensors owned by this Module."""
+        """Number of frozen parameter tensors owned by this Module.
+
+        The root Module (``self``) encompasses every parameter of the model.
+        """
 
         return sum(1 for param in self.params if not param.is_trainable)
 
@@ -2373,15 +2383,37 @@ class Module:
                 total += val
         return total
 
+    def _sum_call_op_field(self, field: str) -> int:
+        """Sum a numeric Op field over every Op this Module's calls ran (skipping None).
+
+        Each Op counts once, so a Module called twice counts both passes of
+        a Layer it runs, never only the Layer's representative pass.
+        """
+        trace = self._source_trace
+        if trace is None:
+            return 0
+        seen: set[str] = set()
+        total = 0
+        for call in self.ops.values():
+            for label in call.ops:
+                for op in _resolve_call_ops(trace, label):
+                    if op.label in seen:
+                        continue
+                    seen.add(op.label)
+                    val = getattr(op, field, None)
+                    if val is not None:
+                        total += val
+        return total
+
     @property
     def total_flops_forward(self) -> Flops:
-        """Sum of forward FLOPs across all Layers in this Module."""
-        return Flops(self._sum_layer_field("flops_forward"))
+        """Sum of forward FLOPs across every Op this Module's calls ran."""
+        return Flops(self._sum_call_op_field("flops_forward"))
 
     @property
     def total_flops_backward(self) -> Flops:
-        """Sum of backward FLOPs across all Layers in this Module."""
-        return Flops(self._sum_layer_field("flops_backward"))
+        """Sum of backward FLOPs across every Op this Module's calls ran."""
+        return Flops(self._sum_call_op_field("flops_backward"))
 
     @property
     def total_flops(self) -> Flops:
