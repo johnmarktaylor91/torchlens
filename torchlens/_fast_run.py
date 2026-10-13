@@ -340,6 +340,51 @@ def _module_call_budget(
     return planned, recorded_module_call_counts(trace, frozenset(planned))
 
 
+def _admitted_collection_labels(trace: Any, plans: Sequence[_FastOutputPlan]) -> set[str]:
+    """Return the op labels the fast live session refreshes, refusing uncollectable saves.
+
+    Parameters
+    ----------
+    trace:
+        Source trace whose saved ops the plans must cover.
+    plans:
+        Module and function output plans the session collects.
+
+    Returns
+    -------
+    set[str]
+        Labels the plans collect plus the model's boundary ops.
+
+    Raises
+    ------
+    RunCapabilityUnavailableError
+        When a saved functional op is covered by no plan.
+    """
+
+    boundary_layer_labels = set(getattr(trace, "input_layers", ())) | set(
+        getattr(trace, "output_layers", ())
+    )
+    supported_labels = {label for plan in plans for label in plan.save_labels} | {
+        op.label for op in trace.layer_list if op.layer_label in boundary_layer_labels
+    }
+    unsupported_function_labels = tuple(
+        op.label
+        for op in trace.layer_list
+        if bool(getattr(op, "has_saved_activation", False))
+        and str(getattr(op, "func_name", "none")) not in {"none", "identity"}
+        and op.label not in supported_labels
+    )
+    if unsupported_function_labels:
+        raise RunCapabilityUnavailableError(
+            "fast=True collects functional operations only when they were explicitly "
+            "requested by the capture save predicate. Recapture with save=tl.func(...) "
+            f"for: {', '.join(unsupported_function_labels[:8])}.",
+            code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+            detection_stage="fast_live_function_plan",
+        )
+    return supported_labels
+
+
 def _drop_uncollected_payloads(trace: Any, supported_labels: set[str]) -> None:
     """Clear saved payloads the fast live session will not refresh.
 
@@ -935,29 +980,9 @@ class _FastLiveSession:
         self.module_call_counts: dict[str, int] = {}
         self.stop_at: tuple[str, int] | None = None
         self.cleared_by_until: tuple[str, ...] = ()
-        boundary_layer_labels = set(getattr(trace, "input_layers", ())) | set(
-            getattr(trace, "output_layers", ())
+        supported_labels = _admitted_collection_labels(
+            trace, (*self.module_plans, *self.function_plans)
         )
-        supported_labels = {
-            label
-            for plan in (*self.module_plans, *self.function_plans)
-            for label in plan.save_labels
-        } | {op.label for op in trace.layer_list if op.layer_label in boundary_layer_labels}
-        unsupported_function_labels = tuple(
-            op.label
-            for op in trace.layer_list
-            if bool(getattr(op, "has_saved_activation", False))
-            and str(getattr(op, "func_name", "none")) not in {"none", "identity"}
-            and op.label not in supported_labels
-        )
-        if unsupported_function_labels:
-            raise RunCapabilityUnavailableError(
-                "fast=True collects functional operations only when they were explicitly "
-                "requested by the capture save predicate. Recapture with save=tl.func(...) "
-                f"for: {', '.join(unsupported_function_labels[:8])}.",
-                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
-                detection_stage="fast_live_function_plan",
-            )
         modules = dict(model.named_modules())
         plan_addresses = tuple(dict.fromkeys(plan.address_or_name for plan in self.module_plans))
         # Every typed refusal must fire BEFORE the unsupported-activation wipe

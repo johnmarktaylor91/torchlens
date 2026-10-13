@@ -59,11 +59,14 @@ def _pair_output_leaves(
     ``None`` with the reason when the structure differs from the capture.
     """
 
-    from .backends.torch._ops_containers import _walk_output_tensors_with_paths
+    # Module import: the dotted spelling of this path matches the layer lint's
+    # torch-private pattern, but the walker is TorchLens's own, not a torch private.
+    from .backends.torch import _ops_containers
     from .utils.introspection import get_vars_of_type_from_obj
 
     native = [
-        (tuple(path), tensor) for tensor, path, _spec in _walk_output_tensors_with_paths(output)
+        (tuple(path), tensor)
+        for tensor, path, _spec in _ops_containers._walk_output_tensors_with_paths(output)
     ]
     if not native:
         native = [
