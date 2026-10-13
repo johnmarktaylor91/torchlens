@@ -1183,6 +1183,76 @@ def helper_from_serialized(
     return rebuild_builtin_helper(name, args, kwargs)
 
 
+def _builtin_constructors() -> dict[str, Callable[..., HelperSpec]]:
+    """Return the builtin helper-name registry (name -> public constructor).
+
+    Returns
+    -------
+    dict[str, Callable[..., HelperSpec]]
+        Every builtin helper name a saved spec may carry, including the
+        legacy ``resample_ablate`` load alias.
+    """
+
+    # Local import: ``add``/``replace_with`` live in ``predicates`` (which
+    # imports this module), so a module-level import would cycle. They mint
+    # portability="builtin" specs like every entry below, and their absence
+    # here made a saved/pickled spec a dead artifact (R10-1: save succeeded,
+    # load raised intervention_helper_unknown).
+    from .compose import compose
+    from .predicates import add, replace_with
+    from .stochastic import mean_fill, permute_batch
+    from .sweep import sweep_replace
+
+    return {
+        "add": add,
+        "replace_with": replace_with,
+        "sweep_replace": sweep_replace,
+        # F02 stochastic/population family (builtin-portability members only:
+        # the population-carrying verbs are opaque_audit and never rebuild).
+        "compose": compose,
+        "mean_fill": mean_fill,
+        "permute_batch": permute_batch,
+        "zero_ablate": zero_ablate,
+        "mean_ablate": mean_ablate,
+        "scramble_elements": scramble_elements,
+        # Artifact-load compatibility: saved specs from before the honest
+        # rename persist helper name "resample_ablate"; they reconstruct
+        # through the same constructor (same bytes, honest name).
+        "resample_ablate": scramble_elements,
+        "steer": steer,
+        "scale": scale,
+        "clamp": clamp,
+        "noise": noise,
+        "project_onto": project_onto,
+        "project_off": project_off,
+        "swap_with": swap_with,
+        "splice_module": splice_module,
+        "bwd_hook": bwd_hook,
+        "grad_clamp": grad_clamp,
+        "grad_clip": grad_clip,
+        "grad_noise": grad_noise,
+        "grad_zero": grad_zero,
+        "grad_scale": grad_scale,
+    }
+
+
+def builtin_helper_constructor(name: str) -> Callable[..., HelperSpec] | None:
+    """Return the public constructor registered for a builtin helper name.
+
+    Parameters
+    ----------
+    name:
+        Builtin helper name.
+
+    Returns
+    -------
+    Callable[..., HelperSpec] | None
+        The constructor, or ``None`` when ``name`` is not a builtin helper.
+    """
+
+    return _builtin_constructors().get(name)
+
+
 def rebuild_builtin_helper(
     name: str, args: tuple[Any, ...], kwargs: Mapping[str, Any]
 ) -> HelperSpec:
@@ -1214,47 +1284,7 @@ def rebuild_builtin_helper(
         If ``name`` is not a known builtin helper.
     """
 
-    # Local import: ``add``/``replace_with`` live in ``predicates`` (which
-    # imports this module), so a module-level import would cycle. They mint
-    # portability="builtin" specs like every entry below, and their absence
-    # here made a saved/pickled spec a dead artifact (R10-1: save succeeded,
-    # load raised intervention_helper_unknown).
-    from .compose import compose
-    from .predicates import add, replace_with
-    from .stochastic import mean_fill, permute_batch
-    from .sweep import sweep_replace
-
-    constructors: dict[str, Callable[..., HelperSpec]] = {
-        "add": add,
-        "replace_with": replace_with,
-        "sweep_replace": sweep_replace,
-        # F02 stochastic/population family (builtin-portability members only:
-        # the population-carrying verbs are opaque_audit and never rebuild).
-        "compose": compose,
-        "mean_fill": mean_fill,
-        "permute_batch": permute_batch,
-        "zero_ablate": zero_ablate,
-        "mean_ablate": mean_ablate,
-        "scramble_elements": scramble_elements,
-        # Artifact-load compatibility: saved specs from before the honest
-        # rename persist helper name "resample_ablate"; they reconstruct
-        # through the same constructor (same bytes, honest name).
-        "resample_ablate": scramble_elements,
-        "steer": steer,
-        "scale": scale,
-        "clamp": clamp,
-        "noise": noise,
-        "project_onto": project_onto,
-        "project_off": project_off,
-        "swap_with": swap_with,
-        "splice_module": splice_module,
-        "bwd_hook": bwd_hook,
-        "grad_clamp": grad_clamp,
-        "grad_clip": grad_clip,
-        "grad_noise": grad_noise,
-        "grad_zero": grad_zero,
-        "grad_scale": grad_scale,
-    }
+    constructors = _builtin_constructors()
     if name not in constructors:
         raise InvalidArgumentError(
             f"Builtin intervention helper {name!r} is unknown",

@@ -216,6 +216,24 @@ class HelperSpec:
 
         return self.helper_name
 
+    def __repr__(self) -> str:
+        """Render the public spelling of this edit (``tl.Edit`` is its public name).
+
+        A builtin helper prints as the public constructor call that builds it
+        (``tl.grad_scale(2.0)``), which is also the identity a saved spec
+        rebuilds from. Every other edit prints as ``tl.Edit(...)`` with its
+        identity fields; the hook factory is session-side and never printed.
+
+        Returns
+        -------
+        str
+            Public spelling of this edit.
+        """
+
+        from ._edit_repr import render_edit_repr
+
+        return render_edit_repr(self)
+
     def __call__(self) -> Callable[..., Any]:
         """Build this helper's normalized hook callable.
 
