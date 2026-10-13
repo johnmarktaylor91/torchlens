@@ -46,7 +46,7 @@ def _by_hand(model: nn.Sequential, rows: list[int], cols: list[int], fn: Any) ->
     with torch.no_grad():
         hidden = model[1](model[0](_IDS))
         edited = hidden.clone()
-        for row, col in zip(rows, cols):
+        for row, col in zip(rows, cols, strict=True):
             edited[row, col] = fn(hidden[row, col])
         return model[2](edited)
 

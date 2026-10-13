@@ -88,7 +88,7 @@ class _Fixture:
         _loss(clean(ids)).backward()
         self.clean = _grads(clean)
         probe = tl.trace(self.fresh(), ids)
-        self.ln_label = probe.find_sites(tl.func("layer_norm")).first().layer_label
+        self.ln_label = probe.find_sites(tl.module("transformer.h.0.ln_1")).first().layer_label
         self.multi_pass = [layer.layer_label for layer in probe.layers if layer.num_passes > 1]
 
     def fresh(self) -> torch.nn.Module:
@@ -177,7 +177,7 @@ def _run_backward(trace: Any, model: torch.nn.Module, runner: str) -> Grads:
     else:
         named = [(name, param) for name, param in model.named_parameters()]
         found = torch.autograd.grad(loss, [param for _, param in named], allow_unused=True)
-        return {name: grad for (name, _), grad in zip(named, found)}
+        return {name: grad for (name, _), grad in zip(named, found, strict=True)}
     return _grads(model)
 
 
