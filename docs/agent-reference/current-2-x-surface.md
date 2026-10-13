@@ -526,7 +526,14 @@
   edge carriers against the audit (`artifact_edge_substitutions_invalid`), and checks the
   TorchLens-owned annotation families (`artifact_annotations_invalid`); a v9+ artifact with
   no `root_entry_point` refuses `artifact_root_entry_point_invalid`.
-- TLSPEC V9 (the C07 coordinated schema write, 2026-08-27; current version): the
+- TLSPEC V10 (the batch-2 coordinated schema write, 2026-10-12; current version): one bump
+  for every new saved field of the window, each admitted by the v10 field registry
+  (`tests/test_schema_v10_contract_and_goldens.py::V10_FIELD_ADMISSIONS`) before its writer
+  lands; the writer contract and the below-floor refusal name the floor release `2.31.0`
+  (the first tlspec-6 writer; v9 froze the false "2.33"); `reserved_vocabularies.step_scores`
+  reserves the generation step-score names, credited to inseq. Contract of record:
+  `torchlens/schemas/writer_contract_v10.json`; the v9 contract stays frozen beside it.
+- TLSPEC V9 (the C07 coordinated schema write, 2026-08-27): the
   `intervention_audit` grammar admits the shipped per-site `source` disclosure, PARAM
   rows/recipes (pre-v9 readers refused a saved selection- or param-intervened artifact's OWN
   load), and the EVENT (`intervention_event_v2`) row kind with its optional hash-chain
