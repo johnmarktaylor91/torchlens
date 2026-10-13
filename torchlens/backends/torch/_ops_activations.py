@@ -421,15 +421,16 @@ def _log_output_tensor_info(
         args,
         kwargs,
     )
-    # An output with no autograd node runs no backward, so it costs zero
-    # backward FLOPs (e.g. frozen weights under backward_ready=True).
+    # An output with no autograd node runs no backward, so a known op costs
+    # zero backward FLOPs (e.g. frozen weights under backward_ready=True);
+    # an op with unknown forward FLOPs stays unknown.
     fields_dict["flops_backward"] = (
-        compute_backward_flops(
+        0
+        if t.grad_fn is None and fields_dict["flops_forward"] is not None
+        else compute_backward_flops(
             fields_dict.get("func_name"),  # type: ignore[arg-type]
             fields_dict["flops_forward"],
         )
-        if t.grad_fn is not None
-        else 0
     )
 
     # Child tensor variation tracking
