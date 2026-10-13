@@ -16,10 +16,11 @@ same-grammar signal the ledger keys on. Concrete writer identity lives in
 the compatibility ledger row next to the digest, not inside it.
 
 The contract of record is committed at
-``torchlens/schemas/writer_contract_v{TLSPEC_VERSION}.json`` (v9 as of the
-C07 coordinated schema write; the superseded v8 contract stays pinned at
-``tests/release_goldens/writer_contract_v8.json`` for the reviewable
-cross-version field-set diff) and enforced by
+``torchlens/schemas/writer_contract_v{TLSPEC_VERSION}.json`` (v10 as of the
+batch-2 coordinated schema write; the superseded v9 contract stays frozen
+byte-for-byte at ``torchlens/schemas/writer_contract_v9.json`` and the v8
+contract at ``tests/release_goldens/writer_contract_v8.json``, for the
+reviewable cross-version field-set diffs) and enforced by
 ``tests/test_tlspec_envelope_contract.py``: regenerating from the live tree
 must reproduce the committed contract byte-for-byte, and a persisted field
 name that DISAPPEARS from the live contract must be covered by an alias rule
@@ -37,6 +38,7 @@ from typing import Any
 from . import MIN_TLSPEC_VERSION, MIN_TORCHLENS_VERSION_TEXT, TLSPEC_VERSION
 from ._json import loads_bounded
 from .field_registry import registry_snapshot
+from .format_contract import RESERVED_STEP_SCORE_CREDIT, RESERVED_STEP_SCORE_NAMES
 
 #: Identity fields a conforming writer stamps on every manifest (the
 #: REQUIREMENT is contract; the values are ledger data, deliberately outside
@@ -99,6 +101,22 @@ def _component_schema_versions() -> dict[str, Any]:
     }
 
 
+def _reserved_vocabularies() -> dict[str, Any]:
+    """Name vocabularies reserved for future persisted families (v10, U22.3).
+
+    A reservation freezes the NAMES with the contract of record before any
+    writer exists; it declares no field slot and changes no load behaviour.
+    """
+
+    return {
+        "step_scores": {
+            "names": list(RESERVED_STEP_SCORE_NAMES),
+            "credit": RESERVED_STEP_SCORE_CREDIT,
+            "status": "reserved",
+        }
+    }
+
+
 def _canonical_json(value: Any) -> str:
     """Serialize ``value`` canonically (sorted keys, tight separators)."""
 
@@ -117,6 +135,7 @@ def writer_contract() -> dict[str, Any]:
         "payload_codec_ids": list(PAYLOAD_CODEC_IDS),
         "manifest_schema_ids": _manifest_schema_ids(),
         "component_schema_versions": _component_schema_versions(),
+        "reserved_vocabularies": _reserved_vocabularies(),
         **registry_snapshot(),
     }
 

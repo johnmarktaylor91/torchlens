@@ -1294,3 +1294,4 @@ torchlens.bridge.hf_attention:_check_unsupported:InvalidArgumentError::1	CONTRAC
 torchlens.bridge.hf_attention:_check_against_sdpa:ValidationError::1	CONTRACTED	hf_attention_sdpa_mismatch	U36.2 (batch-2 HF): opt-in per-call SDPA parity check refuses a disagreeing output
 torchlens.bridge.hf_attention:register_attention:InvalidArgumentError::1	CONTRACTED	hf_attention_key_taken	U36.2 (batch-2 HF): a foreign torchlens registry entry is never overwritten
 torchlens.bridge.hf_attention:record_attention:InvalidArgumentError::1	CONTRACTED	hf_attention_backend_not_selected	U36.2 (batch-2 HF): recording a model on another backend refuses instead of staying empty
+torchlens.fastlog.options:_validate_recording_values:InvalidArgumentError::15	CONTRACTED	recording_option_type_invalid	U27.1 (RUN-B phase 1, landed through SCHEMA): a non-bool detach_saved_activations= on tl.record / Recorder refuses typed with code, remedy and the existing contract-doc row

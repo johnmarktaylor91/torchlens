@@ -100,6 +100,7 @@ def _resolve_storage(
     save_raw_activations: bool = True,
     ctx: Any | None = None,
     kind: Literal["activation", "grad"] = "activation",
+    detach_saved_activations: bool = True,
 ) -> tuple[
     torch.Tensor | None,
     torch.Tensor | None,
@@ -130,6 +131,13 @@ def _resolve_storage(
         suppressed and only the transformed copy is retained.
     ctx:
         Record context used to enrich transform error messages.
+    kind:
+        Whether the payload is an activation or a gradient.
+    detach_saved_activations:
+        Whether a RAM activation payload whose spec does not ask for
+        ``keep_grad`` is detached. ``False`` keeps a graph-connected copy
+        wherever the source carries autograd history, without the strict
+        ``keep_grad`` checks; gradient and disk payloads always detach.
 
     Raises
     ------
@@ -192,9 +200,14 @@ def _resolve_storage(
         and spec.device is None
     )
 
+    attach_unkept = kind == "activation" and not detach_saved_activations
     if intent.in_ram:
         raw_ram = _raw_payload_source(
-            tensor, spec, target="ram", reduce_only=reduce_only, detach=not spec.keep_grad
+            tensor,
+            spec,
+            target="ram",
+            reduce_only=reduce_only,
+            detach=not (spec.keep_grad or attach_unkept),
         )
         if transform is not None:
             transformed_ram = _invoke_transform(

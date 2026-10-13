@@ -208,6 +208,7 @@ STORAGE_BINDINGS: dict[str, dict[str, StorageBinding]] = {
         "total_gradient_memory": StorageBinding(StorageKind.SCALAR),
         "total_backward_memory": StorageBinding(StorageKind.SCALAR),
         "total_autograd_memory": StorageBinding(StorageKind.SCALAR),
+        "pinned_autograd_memory": StorageBinding(StorageKind.RUNTIME),
         "num_saved_ops": StorageBinding(StorageKind.SCALAR),
         "saved_activation_memory": StorageBinding(StorageKind.SCALAR),
         "saved_gradient_memory": StorageBinding(StorageKind.SCALAR),

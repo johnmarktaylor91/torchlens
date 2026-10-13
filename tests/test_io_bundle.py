@@ -652,9 +652,9 @@ def test_bundle_save_complex64_still_round_trips(tmp_path: Path) -> None:
             # runtime (see the scenario-specific monkeypatch in the body) to
             # keep the older-writer info-log branch reachable under G5.
             "torchlens_older_supported",
-            lambda manifest: manifest.__setitem__("torchlens_version", "2.34.1"),
+            lambda manifest: manifest.__setitem__("torchlens_version", "2.36.0"),
             "info_log",
-            "2.34.1",
+            "2.36.0",
         ),
         (
             "python_major_mismatch",
@@ -688,9 +688,9 @@ def test_bundle_version_policy_rows(
     resolved_expected_text = expected_text() if callable(expected_text) else expected_text
 
     if scenario == "torchlens_older_supported":
-        # The manifest writer (2.34.1) is a governed stamp-9 producer; pretend
+        # The manifest writer (2.36.0) is a governed stamp-10 producer; pretend
         # the runtime moved past it so the older-writer info-log branch runs
-        # (with the real runtime AT the first stamp-9 writer, every strictly
+        # (with the real runtime AT the first stamp-10 writer, every strictly
         # older writer forms an ungoverned pair and refuses instead).
         monkeypatch.setattr("torchlens._io.manifest.TORCHLENS_VERSION", "2.99.0")
 

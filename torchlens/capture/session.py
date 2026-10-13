@@ -401,7 +401,7 @@ class CaptureSession:
 
         profile = self.plan.retention_profile
         with _state.pause_logging():
-            payload = safe_copy(tensor, detach_tensor=True)
+            payload = safe_copy(tensor, detach_tensor=not profile.activation_attached)
             nbytes = int(payload.nelement() * payload.element_size())
         self.activation_escrow[raw_index] = ActivationEscrowPayload(payload, nbytes)
         self.activation_escrow_ram_bytes += nbytes
@@ -496,7 +496,12 @@ class CaptureSession:
                 # exclusively owns is NOT a clone: the storage is written
                 # once, unchanged.
                 clear_meta(candidate.tensor)
-                torch.save(candidate.tensor, spill_path)
+                spilled = candidate.tensor
+                if spilled is not None and spilled.requires_grad:
+                    # A file holds values, never autograd history: the reload
+                    # is detached, and the deferred resolution discloses it.
+                    spilled = safe_copy(spilled, detach_tensor=True, save_mode="reference")
+                torch.save(spilled, spill_path)
             candidate.tensor = None
             candidate.spill_path = spill_path
             self.activation_escrow_ram_bytes -= candidate.nbytes
@@ -594,12 +599,19 @@ class CaptureSession:
                         for parent_label in op.parents
                     )
                 )
+            attached_escrow = self.plan.retention_profile.activation_attached
+            detached_spills = 0
             for op in trace.layer_list:
                 if op.raw_index not in selected_nums:
                     continue
                 payload = live_output_by_raw_index.get(op.raw_index)
                 payload_entry = self.activation_escrow.get(op.raw_index)
                 if payload is None and payload_entry is not None:
+                    detached_spills += int(
+                        attached_escrow
+                        and payload_entry.tensor is None
+                        and not trace.backward_ready
+                    )
                     payload = payload_entry.materialize()
                 if trace.backward_ready:
                     payload = self.gradient_reference_escrow.get(op.raw_index, payload)
@@ -629,6 +641,23 @@ class CaptureSession:
                     {},
                     False,
                     getattr(trace, "activation_transform", None),
+                )
+            if detached_spills:
+                from ..errors import TorchLensWarning
+
+                warnings.warn(
+                    TorchLensWarning(
+                        f"{detached_spills} saved activation(s) were spilled to temporary "
+                        "disk under the deferred-selector escrow RAM budget, so they come "
+                        "back detached from the autograd graph although "
+                        "detach_saved_activations=False. Remedy: save fewer sites, use a "
+                        "live spelling (tl.in_module(...), tl.func(...)) or "
+                        "backward_ready=True to keep them attached, or pass "
+                        "detach_saved_activations=True when gradients are not needed.",
+                        code="escrow_spill_detached",
+                        detached_spill_count=detached_spills,
+                    ),
+                    stacklevel=3,
                 )
             from ..postprocess import _refresh_fast_saved_summary
 
@@ -954,6 +983,11 @@ def compile_legacy_capture_plan(
         gradient_window=gradient_window if deferred_gradients else 0,
         spillable=deferred_activation and not graph_connected,
         activation_module_exit_addresses=module_exit_addresses,
+        activation_attached=(
+            deferred_activation
+            and not graph_connected
+            and not bool(getattr(trace, "detach_saved_activations", True))
+        ),
     )
     return CapturePlan.compile(
         projection_target=projection_target,

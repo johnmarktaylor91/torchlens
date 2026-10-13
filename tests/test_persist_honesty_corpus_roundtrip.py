@@ -32,8 +32,8 @@ _CORPUS_SHA256 = (  # content digest, not a credential
 )
 _COMMITTED_CORPUS = Path(__file__).parent / "release_goldens" / "genuine_release_artifacts.tar.gz"
 
-#: writer -> loadability expectation. The rehydration floor is torchlens 2.33
-#: (tlspec 6); the 2.31/2.32 rows exercise whichever side of the governed
+#: writer -> loadability expectation. The rehydration floor is tlspec 6, first
+#: written by torchlens 2.31.0; the 2.31/2.32 rows exercise whichever side of the governed
 #: window they fall on in the CURRENT runtime, refusing ONLY with the three
 #: governed compatibility types -- never an untyped crash or a non-governed
 #: refusal introduced by a behavioral change.

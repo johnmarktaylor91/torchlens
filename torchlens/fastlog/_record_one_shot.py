@@ -65,6 +65,7 @@ def record(
     backward_ready: bool = False,
     echo: Any | None = None,
     backend: BackendName | None = None,
+    detach_saved_activations: bool | MissingType = MISSING,
 ) -> Recording | tuple[Any, Recording]:
     """Record one model forward pass with capture predicates.
 
@@ -103,6 +104,14 @@ def record(
         payloads are retained. Defaults to ``True`` to mirror the slow path.
     backward_ready:
         If True, omitted defaults are promoted to keep-grad capture specs.
+    detach_saved_activations:
+        DOCUMENTED-UNSTABLE. Whether retained activations are detached from the
+        autograd graph. Defaults to ``True``. ``False`` keeps graph-connected
+        copies wherever the recorded tensor carries autograd history, so a
+        loss built from ``record.ram_payload`` backpropagates into the model.
+        A spec with ``keep_grad=True`` stays attached either way; disk payloads
+        are always detached. ``backward_ready=True`` refuses an explicit
+        ``True``.
     save_grads, default_grad, grad_transform, save_raw_gradients:
         Gradient capture options for a later ``Recording.log_backward()``.
         Gradient hooks are installed only when ``backward_ready=True``,
@@ -195,6 +204,7 @@ def record(
         save_raw_gradients=save_raw_gradients,
         backward_ready=backward_ready,
         echo=echo,
+        detach_saved_activations=detach_saved_activations,
     ) as recorder:
         output = recorder.log(input_args, input_kwargs)
     recording = recorder.recording

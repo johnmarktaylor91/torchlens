@@ -1,4 +1,4 @@
-"""Phase 4 regression tests: save/load schema versioning and the 2.33 floor."""
+"""Phase 4 regression tests: save/load schema versioning and the tlspec-6 floor."""
 
 from __future__ import annotations
 
@@ -25,14 +25,14 @@ def _simple_model_and_input() -> tuple[torch.nn.Module, torch.Tensor]:
 
 
 def test_io_format_version_and_floor() -> None:
-    """The coordinated tlspec v9 bump stamps 9; the 2.33 rehydration floor stays 6."""
+    """The coordinated tlspec v10 bump stamps 10; the rehydration floor stays 6."""
 
-    assert TLSPEC_VERSION == 9
+    assert TLSPEC_VERSION == 10
     assert MIN_TLSPEC_VERSION == 6
 
 
 def test_pre_floor_module_call_state_refuses_typed() -> None:
-    """A v5 ModuleCall state refuses at the 2.33 rehydration floor."""
+    """A v5 ModuleCall state refuses at the tlspec-6 rehydration floor."""
 
     model, x = _simple_model_and_input()
     trace = tl.trace(model, x)
@@ -41,7 +41,7 @@ def test_pre_floor_module_call_state_refuses_typed() -> None:
     state["tlspec_version"] = 5
 
     restored = type(call).__new__(type(call))
-    with pytest.raises(ArtifactVersionBelowFloorError, match="torchlens 2.33"):
+    with pytest.raises(ArtifactVersionBelowFloorError, match="torchlens 2.31.0"):
         restored.__setstate__(state)
 
 
@@ -64,7 +64,7 @@ def test_legacy_thread_field_pickle_refuses_typed() -> None:
     """A v2 Op state with thread-replay fields refuses instead of resurrecting.
 
     Pre-floor behavior dropped the legacy thread fields with a one-per-process
-    ``DeprecationWarning``; the 2.33 floor replaces that resurrection path with
+    ``DeprecationWarning``; the tlspec-6 floor replaces that resurrection path with
     a typed refusal that names the floor.
     """
 

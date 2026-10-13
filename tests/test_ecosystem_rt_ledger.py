@@ -197,7 +197,7 @@ def test_dev_build_identity_row_is_generated_not_curated() -> None:
     row = ledger_rows()[-1]
     assert row.exact_release is False
     assert row.build_dirty_state == "unknown"
-    assert row.tlspec_version == 9
+    assert row.tlspec_version == 10
     assert row.writer_contract_digest is not None
 
 
