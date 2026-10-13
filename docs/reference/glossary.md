@@ -862,9 +862,11 @@ one exact `other_neurons` row.
 
 **Conditional depth**
 : `Op.conditional_depth` and `Layer.conditional_depth` count the distinct conditionals the record
-  takes a direct role in (evaluating the condition or running in an arm), as listed in
-  `in_conditionals`; an op nested in two `if` bodies has a role only in the inner one. Nesting
-  depth is `len(conditional_branch_stack)`.
+  takes a direct role in, as listed in `in_conditionals`: the `evaluation` role marks the bool an
+  arm's test consumed, and the `body` role marks an op an arm's entry edge feeds (an op whose
+  input was computed outside that arm), not every op inside the arm. An op nested in two `if`
+  bodies takes a role only where an entry edge reaches it. Nesting depth is
+  `len(conditional_branch_stack)`.
 
 **Lookup and reentrancy errors**
 : `tl.AmbiguousOpLookupError` is raised when a bare Op lookup matches multiple

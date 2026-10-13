@@ -1,0 +1,168 @@
+"""Independent-clock and event-recount oracles for the legacy durations and witness counters.
+
+A duration has no closed form, so each is bounded by a clock TorchLens does not
+read: ``time.perf_counter`` around the capture (an upper bound) and a planted
+``time.sleep`` inside the forward or a backward hook (a lower bound, and a gap
+the function-call totals must exclude). Thread counts are recounted with
+``threading.active_count()``. These are the I1 oracles the census
+(``tests/oracles/data/legacy_quantities.tsv``) names for those doors.
+"""
+
+from __future__ import annotations
+
+import threading
+import time
+
+import pytest
+import torch
+from torch import nn
+
+import torchlens as tl
+from tests.oracles.test_legacy_graph_counts import Grad
+from torchlens.options import CaptureOptions
+
+SLEEP = 0.05  # seconds planted in Sleeper.forward
+BACKWARD_SLEEP = 0.03  # seconds planted in a backward hook
+
+
+class Sleeper(nn.Module):
+    """Sleeps, then runs a Linear: the sleep is inside this call, outside every op."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        time.sleep(SLEEP)
+        return self.fc(x)
+
+
+class Sleepy(nn.Module):
+    """Root -> Sleeper -> Linear, then a ReLU at the root."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.s = Sleeper()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.s(x).relu()
+
+
+@pytest.fixture(scope="module")
+def timed_trace():
+    torch.manual_seed(0)
+    model = Sleepy()
+    started = time.perf_counter()
+    trace = tl.trace(model, torch.randn(2, 4))
+    wall = time.perf_counter() - started
+    yield trace, wall
+    trace.cleanup()
+
+
+def test_capture_phase_durations_are_bounded_by_an_outside_clock(timed_trace) -> None:
+    trace, wall = timed_trace
+    capture = float(trace.capture_duration)
+    setup, forward, cleanup = (
+        float(trace.setup_duration),
+        float(trace.forward_duration),
+        float(trace.cleanup_duration),
+    )
+    assert SLEEP <= forward <= capture <= wall
+    assert 0 < setup <= wall and 0 < cleanup <= wall
+    assert setup + forward + cleanup <= wall
+    func_calls = float(trace.func_calls_duration)
+    # The planted sleep is not a function call: the op total excludes it.
+    assert 0 < func_calls <= forward - SLEEP
+    assert SLEEP <= float(trace.overhead_duration) <= wall
+
+
+def test_module_and_call_durations_are_bounded(timed_trace) -> None:
+    trace, wall = timed_trace
+    root, sleeper, fc = (trace.module_calls[label] for label in ("self:1", "s:1", "s.fc:1"))
+    assert SLEEP <= float(sleeper.forward_duration) <= float(root.forward_duration) <= wall
+    # fc runs after the sleep, inside Sleeper's call.
+    assert 0 < float(fc.forward_duration) <= float(sleeper.forward_duration) - SLEEP
+    for call in (root, sleeper, fc):
+        assert 0 < float(call.func_calls_duration) <= float(call.forward_duration)
+    assert float(sleeper.func_calls_duration) <= float(sleeper.forward_duration) - SLEEP
+    for address, call in (("self", root), ("s", sleeper), ("s.fc", fc)):
+        module = trace.modules[address]
+        assert float(module.forward_duration) == pytest.approx(float(call.forward_duration))
+        assert float(module.total_forward_duration) <= wall
+        assert float(module.total_forward_duration) >= SLEEP or address == "s.fc"
+        assert 0 < float(module.func_calls_duration) <= float(module.total_forward_duration)
+        assert float(module.total_func_calls_duration) <= float(module.total_forward_duration)
+
+
+def test_op_and_layer_func_durations_are_bounded(timed_trace) -> None:
+    trace, wall = timed_trace
+    budget = float(trace.forward_duration) - SLEEP  # ops run outside the sleep
+    total = 0.0
+    for op in trace.ops:
+        duration = float(op.func_duration)
+        if op.is_input or op.is_output:
+            assert duration == 0.0, op.label  # boundary nodes run no function
+            continue
+        assert 0 < duration <= budget, op.label
+        total += duration
+        layer = trace.layers[op.layer_label]
+        assert 0 < float(layer.func_duration) <= budget
+        assert 0 < float(layer.total_func_duration) <= budget
+    assert total <= budget <= wall
+
+
+def test_backward_durations_are_bounded_by_an_outside_clock() -> None:
+    torch.manual_seed(0)
+    trace = tl.trace(Grad(), torch.randn(2, 4), capture=CaptureOptions(save_grads=True))
+    try:
+        out = trace[trace.output_layers[0]].out
+        out.register_hook(lambda grad: (time.sleep(BACKWARD_SLEEP), grad)[1])
+        walls = []
+        for retain in (True, False):
+            started = time.perf_counter()
+            trace.backward(out.sum(), retain_graph=retain)
+            walls.append(time.perf_counter() - started)
+        last = float(trace.last_backward_duration)
+        total = float(trace.total_backward_duration)
+        assert BACKWARD_SLEEP <= last <= walls[1]
+        assert 2 * BACKWARD_SLEEP <= total <= sum(walls)
+    finally:
+        trace.cleanup()
+
+
+class Spawner(nn.Module):
+    """Starts one thread that outlives the forward."""
+
+    def __init__(self, stop: threading.Event) -> None:
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+        self.stop = stop
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        threading.Thread(target=self.stop.wait, daemon=True).start()
+        return self.fc(x)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_capture_thread_counts_match_a_recount() -> None:
+    torch.manual_seed(0)
+    before = threading.active_count()
+    trace = tl.trace(Grad(), torch.randn(2, 4))
+    try:
+        assert trace.capture_thread_count_start == before
+        assert trace.capture_thread_count_end == before  # nothing started a thread
+    finally:
+        trace.cleanup()
+    stop = threading.Event()
+    try:
+        before = threading.active_count()
+        trace = tl.trace(Spawner(stop), torch.randn(2, 4))
+        try:
+            assert trace.capture_thread_count_start == before
+            assert (
+                trace.capture_thread_count_end == before + 1
+            )  # the one thread the forward started
+        finally:
+            trace.cleanup()
+    finally:
+        stop.set()
