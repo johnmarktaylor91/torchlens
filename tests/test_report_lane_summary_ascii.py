@@ -24,7 +24,10 @@ def test_summary_str_is_ascii_for_a_non_ascii_module_name() -> None:
     text = str(report)
     assert text.isascii()
     assert "cafe_" in text
-    assert any(_NAME in row.name for row in report.rows)
+    # The structured data keeps the real name: the unicode render and the table.
+    assert _NAME in report.render("unicode")
+    frame = report.to_pandas()
+    assert any(_NAME in cell for cell in frame.astype(str).to_numpy().ravel())
 
 
 def test_degrade_keeps_width_and_alignment() -> None:
