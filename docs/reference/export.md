@@ -290,8 +290,8 @@ Every saved buffer layer (module state such as BatchNorm running statistics, ret
 `<label>_dim_<i>`, no presentation axis, its values unchanged, and the variable attribute
 `torchlens_kind="module_state"` (plus `layer_label` and `buffer_address`);
 `dataset.attrs["module_state_variables"]` lists them. A save-all trace and a partial trace
-export buffers the same way; a partial trace's unsaved layers are skipped and listed in
-`attrs["skipped_unsaved_layers"]`. xarray must be installed.
+export buffers the same way; a partial trace's unsaved layers get no data variable and are
+listed in `attrs["skipped_unsaved_layers"]`. xarray must be installed.
 
 ```python
 import torch
