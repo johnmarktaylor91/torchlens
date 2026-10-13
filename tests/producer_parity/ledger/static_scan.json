@@ -3060,7 +3060,7 @@
   "field": "modules",
   "file": "torchlens/capture/projectors.py",
   "has_default": true,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": true
  },
  {

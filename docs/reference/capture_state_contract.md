@@ -3,10 +3,9 @@
 Normative spec for what a `tl.trace` call may leave changed on the user's
 model and process, what it restores, and what it discloses. This is the
 A06 deliverable of M(oracles) item 8 ("instance-forward cleanup +
-entry-surface state restoration"): the settled cells are implemented and
-pinned by tests; the one genuinely open cell (the success-path default state
-relation, FORK-A) is specified here for both branches so the ruling lands as
-a default flip plus tests, not a design.
+entry-surface state restoration"): every cell is implemented and pinned by
+tests. The success-path default state relation (FORK-A) is ruled
+PURE_OBSERVER (U40.1, 2026-10-11).
 
 ## Vocabulary
 
@@ -24,26 +23,29 @@ a default flip plus tests, not a design.
 
 | Cell | Contract | Where |
 |---|---|---|
-| FAILED `tl.trace` (any phase: entry refusal after preparation, forward error, TL-side capture failure, postprocess failure) | PURE of instrumentation: the failure path releases the preparation (same semantics as `tl.release_model`), so the model pickles and the next capture re-prepares from scratch with full module attribution. State the partial forward already mutated (running stats, RNG) is NOT rolled back; the failure warning discloses this boundary. `exc.partial_log` stays recoverable after the release. | `torchlens/user_funcs.py::_release_preparation_after_failed_capture`; pinned by `tests/test_capopts_truth_failed_capture_release.py` |
+| FAILED `tl.trace` (any phase: entry refusal after preparation, forward error, TL-side capture failure, postprocess failure) | PURE of instrumentation: the failure path releases the preparation (same semantics as `tl.release_model`), so the model pickles and the next capture re-prepares from scratch with full module attribution. Under the default the observer bracket below also rolls back the state the partial forward mutated (buffers, RNG, modes; plain attributes only once that restore is turned on); with `carry_state=True` it is NOT rolled back. Materialized lazy modules are never rolled back. `exc.partial_log` stays recoverable after the release. | `torchlens/user_funcs.py::_release_preparation_after_failed_capture`; pinned by `tests/test_capopts_truth_failed_capture_release.py`, `tests/test_capture_pure_observer.py` |
 | Per-session parameter state | `requires_grad` forced True for graph construction is restored to the user's exact values at session cleanup, every capture, success or failure. | `model_prep._cleanup_model_session` / `_restore_session_param_state` |
 | Session tensor labels | Stripped from model/buffer/input tensors at session cleanup. | `model_prep._undecorate_model_tensors` |
-| Train-mode running statistics | NOT restored on the default path (the forward really runs; `torch.no_grad` does not stop running-stat updates). Disclosed once per process with warning code `batchnorm_train_stats_mutated`. | `torchlens/user_funcs.py::_warn_once_train_mode_running_stats`; pinned by `tests/test_capopts_truth_batchnorm_warn.py` |
+| Successful `tl.trace` state (default) | PURE_OBSERVER: buffers (persistent and non-persistent), every module's `training` flag and the global random states (torch, live CUDA devices, Python, NumPy) are snapshotted before the forward and restored after it. A buffer is written back only where its bytes changed; a write that left its version counter unchanged (train-mode BatchNorm running statistics) is undone the same way, so `backward()` through the capture's graph keeps working, and trace payloads that alias a restored buffer keep their forward-time values. Plain attributes are NOT restored yet: the restore is built (value or identity snapshots, added attributes removed) but opt-in until it is reconciled with the stale-reference holder contract and the idiom of reading values the forward stored on the module. An item that cannot be restored is named in one `capture_state_restore_incomplete` warning. | `torchlens/_runnable_state_live.py::capture_observer_bracket`; pinned by `tests/test_capture_pure_observer.py` |
+| Train-mode running statistics | Restored on the default path. Under `CaptureOptions(carry_state=True)` (FORWARD_EQUIVALENT) they advance exactly as one direct `model(x)` would, disclosed once per process with warning code `batchnorm_train_stats_mutated`. | `torchlens/user_funcs.py::_warn_once_train_mode_running_stats`; pinned by `tests/test_capopts_truth_batchnorm_warn.py` |
 | Successful `tl.trace` instrumentation | Persistent by design until `tl.release_model(model)` (re-capture speed; the release door restores pickling and is the documented workflow). Dissolve-on-teardown is List-B feature work, not part of this contract. | `model_prep.release_model` |
 | Observational surfaces (summary, render/read/validate/export) | PURE under either FORK-A branch (3/3 panel agreement). The summary eval/no_grad default with full state restoration is A07's implementation (summary A4); extraction's no_grad/eval wrap with exact restore is A11's. Both consume the same inventory below. | A07 / A11 |
 
-## FORK-A (open; decision pending): the success-path default
+## FORK-A (ruled: PURE_OBSERVER, U40.1)
 
-Both branches are fully designed in the oracles memo (section 11). The
-harness, registry, and every other cell above are identical under both;
-only the default state relation of a SUCCESSFUL `tl.trace` on a stateful
-(train-mode) model differs:
+- **PURE_OBSERVER (the default)**: trace snapshots and restores
+  buffers/RNG/modes (attributes: built, opt-in for now); the explicit opt-in
+  `CaptureOptions(carry_state=True)` carries FORWARD_EQUIVALENT for
+  train-through-trace users (the same spelling as `trace.run(inputs=...,
+  carry_state=True)`): buffers, modes and plain attributes advance as one
+  direct `model(x)` would. Random state never advances under either: every
+  capture draws from its own seed and restores the global engines (R57). A
+  capture-cache hit runs no forward, so nothing advances under either.
 
-- **PURE_OBSERVER (panel lean, 2-1)**: trace snapshots and restores
-  buffers/RNG/modes/attributes by default; an explicit opt-in kwarg carries
-  FORWARD_EQUIVALENT for train-through-trace users.
-- **FORWARD_EQUIVALENT**: trace is an instrumented execution; state advances
-  as one direct `model(x)` would, disclosed in the returned artifact; an
-  explicit observational mode is PURE by restoration.
+`trace.run()` keeps its own bracket: a default run restores the declared
+state (parameters and buffers) it changed, but not the random state or plain
+attributes, so repeated training steps through `run()` keep drawing fresh
+dropout masks.
 
 Neither branch makes "your model can no longer be saved" an honest outcome
 -- the unpicklable-model residue is a bug under both (the FAILED-call release
@@ -64,18 +66,16 @@ attributes held across a later wrap-state change).
    implementation-fingerprint attribute walk is the existing precedent).
 6. Parameter `requires_grad` (already restored per session).
 
-Cost model: 1-4 are cheap snapshots (one `state_dict` clone bounded by model
-size); 5 is the only open-ended item and both branches bound it to the
-disclosed plain-attribute scan. The snapshot belongs at
-`_prepare_model_session`; the restore at `_cleanup_model_session`, keyed on
-the ruled default (or the explicit kwarg overriding it).
+Cost model: 1-4 are cheap snapshots (buffers are cloned, parameters are not);
+5 is bounded by the plain-attribute scan (value snapshots for small values,
+identity for everything else). The bracket wraps the capture driver in
+`_trace_torch_model` and is skipped under `carry_state=True`.
 
 ## Disclosure rules
 
-- A capture that mutates running statistics discloses once per process
-  (`batchnorm_train_stats_mutated`). This stays true under
-  FORWARD_EQUIVALENT and becomes unreachable-by-default under PURE_OBSERVER
-  (the warn site then guards the opt-in path).
+- A `carry_state=True` capture that mutates running statistics discloses
+  once per process (`batchnorm_train_stats_mutated`); the default
+  PURE_OBSERVER capture restores them and never warns.
 - A failed capture's warning (`CaptureAttemptFailedWarning`) names exactly
   what was restored (instrumentation, torch environment) and what was not
   (state the partial forward mutated).

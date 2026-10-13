@@ -845,13 +845,13 @@ def test_buffer_value_changed_none_fails_closed():
         log.cleanup()
 
 
-def test_state_restore_does_not_loosen_projector():
-    """5.2 red-stays-red: snapshot-restore never loosens the buffer-sink refusal.
+def test_state_restore_admits_only_proven_train_mode_norm_writers():
+    """5.2 under U40.1: run() admits a proven train-mode BatchNorm, nothing looser.
 
-    Snapshot-restore fixes VALUES; the buffer-sink refusal is about ROUTING
-    analysis and keeps its own authority. A train-mode BatchNorm (genuine
-    value-changing buffer writes) still refuses on the default run() path
-    after the restore bracket ships.
+    The default run() restores the declared state it changed and the capture is a
+    pure observer, so a train-mode BatchNorm (proven norm writes plus its counter)
+    runs and leaves its statistics as they were. A lone counter buffer is not a
+    norm writer and still refuses on the same path.
     """
 
     from torchlens.errors import BufferSinkRoutingError
@@ -859,6 +859,15 @@ def test_state_restore_does_not_loosen_projector():
     model = _BatchNormModel()
     model.train()
     log = trace_fn(model, torch.randn(3, 4))
+    try:
+        before = {name: buf.clone() for name, buf in model.named_buffers()}
+        log.run(inputs=torch.randn(3, 4))
+        for name, buf in model.named_buffers():
+            assert torch.equal(before[name], buf), name
+    finally:
+        log.cleanup()
+    counter = _BufferCounterModel()
+    log = trace_fn(counter, torch.randn(3, 4))
     try:
         with pytest.raises(BufferSinkRoutingError) as exc_info:
             log.run(inputs=torch.randn(3, 4))

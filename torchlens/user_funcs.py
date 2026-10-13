@@ -1195,15 +1195,14 @@ def _warn_once_train_mode_running_stats(model: nn.Module) -> None:
 
     warnings.warn(
         _TorchLensWarning(
-            f"tracing runs the model's REAL forward: {len(mutating)} norm "
-            "layer(s) in train mode with track_running_stats=True updated "
+            "tracing runs the model's REAL forward with CaptureOptions(carry_state=True) "
+            f"(forward-equivalent state): {len(mutating)} norm layer(s) in train mode with track_running_stats=True updated "
             "their running statistics in place during this capture "
             "(running_mean/running_var advance under momentum, even inside "
             "torch.no_grad or inference_only=True). This disclosure fires "
             "once per process. "
-            "Remedy: call model.eval() before tracing for observational "
-            "captures (model.train() restores the mode), or snapshot "
-            "model.state_dict() beforehand to roll the statistics back; "
+            "Remedy: drop carry_state=True for an observational capture (the "
+            "default restores the statistics afterwards); "
             "training-through-trace users can ignore this",
             code="batchnorm_train_stats_mutated",
         ),
@@ -3637,7 +3636,11 @@ def _trace_torch_model(
     # forward, no mutation) and structure-only captures retain no values, so
     # neither path reaches this warn. The chunked fan-out recurses back into
     # this function, but the outer call warns first and latches the flag.
-    if not _BATCHNORM_TRAIN_STATS_WARNED and not capture_options.structure_only:
+    if (
+        not _BATCHNORM_TRAIN_STATS_WARNED
+        and not capture_options.structure_only
+        and capture_options.carry_state
+    ):
         _warn_once_train_mode_running_stats(model)
     if (
         chunk_plan is not None
@@ -3712,6 +3715,7 @@ def _trace_torch_model(
             track_device_memory=capture_options.track_device_memory,
             structure_only=capture_options.structure_only,
             log_injections=capture_options.log_injections,
+            carry_state=capture_options.carry_state,
         )
         recursive_save_options = SaveOptions(
             activation_transform=activation_transform,
@@ -4061,30 +4065,37 @@ def _trace_torch_model(
         and grad_transform is None
         and output_transform_value is None
     )
+    from ._runnable_state_live import capture_observer_bracket
     from .capture._episode_join import armed_capture
     from .capture._weightsfree_admission import pending_admission
 
-    try:
-        with (
-            armed_capture(episode_resolved, run_capture) as capture_callable,
-            pending_admission(meta_admission),
-        ):
-            trace = capture_with_rescue(capture_callable, eligible=rescue_eligible, model=model)
-    except BaseException as capture_exc:
-        # One settlement path for every escape: a KeyboardInterrupt or
-        # SystemExit mid-capture is released exactly like a RuntimeError.
-        if episode_resolved is not None:
-            # Best-effort: the FAILED partial product carries the episode
-            # declaration; attach the derived ledger disclosure without ever
-            # masking the user's exception.
-            attach_failed_episode_ledger(capture_exc, episode_resolved)
-        # M(oracles) item 8 (FORK-A 3/3-agreed cell): every FAILED call is
-        # PURE of TorchLens instrumentation. The capture slot was released as
-        # the exception unwound the inner finally, so the public release door
-        # is legal here; exc.partial_log keeps its already-materialized
-        # records and stays recoverable after the release.
-        _release_preparation_after_failed_capture(model)
-        raise
+    # U40.1: a default capture is a pure observer. Buffers, random state, training
+    # modes and plain attributes are restored on every path, failure included and
+    # after the failure release; CaptureOptions(carry_state=True) keeps
+    # forward-equivalent state.
+    with capture_observer_bracket(model, carry_state=capture_options.carry_state) as observer:
+        try:
+            with (
+                armed_capture(episode_resolved, run_capture) as capture_callable,
+                pending_admission(meta_admission),
+            ):
+                trace = capture_with_rescue(capture_callable, eligible=rescue_eligible, model=model)
+                observer.trace = trace
+        except BaseException as capture_exc:
+            # One settlement path for every escape: a KeyboardInterrupt or
+            # SystemExit mid-capture is released exactly like a RuntimeError.
+            if episode_resolved is not None:
+                # Best-effort: the FAILED partial product carries the episode
+                # declaration; attach the derived ledger disclosure without ever
+                # masking the user's exception.
+                attach_failed_episode_ledger(capture_exc, episode_resolved)
+            # M(oracles) item 8 (FORK-A 3/3-agreed cell): every FAILED call is
+            # PURE of TorchLens instrumentation. The capture slot was released as
+            # the exception unwound the inner finally, so the public release door
+            # is legal here; exc.partial_log keeps its already-materialized
+            # records and stays recoverable after the release.
+            _release_preparation_after_failed_capture(model)
+            raise
     if stop_after_site is not None and not bool(getattr(trace, "halted", False)):
         # Never-fired policy split by provenance (brainpipe D-16): a
         # selector-shaped site that never fired is a typo-shaped wrong result

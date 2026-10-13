@@ -26,7 +26,8 @@ def test_receipt_covers_every_public_field_in_order() -> None:
     # new option (landed track_device_memory x F44 log_injections); the
     # merged tree carries both. As of T85 (F01-AMENDED landed) both parents
     # carry log_injections, so the pins agree at 49.
-    assert len(receipt) == 49
+    # 49 -> 50: U40.1 CaptureOptions.carry_state.
+    assert len(receipt) == 50
 
 
 def test_receipt_distinguishes_explicit_from_default() -> None:

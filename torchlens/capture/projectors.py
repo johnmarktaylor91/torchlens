@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import warnings
 import weakref
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 from weakref import WeakKeyDictionary
 
+from ..constants import LAYER_PASS_LOG_FIELD_ORDER
 from ..ir.capture_events import _clone_op_event_for_replay
 from ..ir.events import OpEvent
 from .session import CapturedRunCore
@@ -138,6 +141,58 @@ def _cloned_core_events(core: CapturedRunCore) -> tuple[OpEvent, ...]:
     """
 
     return tuple(_clone_op_event_for_replay(event) for event in core.events)
+
+
+#: Set only while ``trace.run()`` refreshes a live model: that door restores the
+#: declared state it changed (or the caller opted into ``carry_state=True``), so a
+#: proven train-mode norm writer is eligible there. Every other refresh door
+#: (``save_new_outs``) keeps refusing it.
+_TRAIN_MODE_NORM_WRITERS_ELIGIBLE: ContextVar[bool] = ContextVar(
+    "torchlens_train_mode_norm_writers_eligible", default=False
+)
+
+
+@contextmanager
+def train_mode_norm_writers_eligible() -> Iterator[None]:
+    """Admit proven train-mode norm writers for the refreshes inside this block."""
+
+    token = _TRAIN_MODE_NORM_WRITERS_ELIGIBLE.set(True)
+    try:
+        yield
+    finally:
+        _TRAIN_MODE_NORM_WRITERS_ELIGIBLE.reset(token)
+
+
+#: Fields ``Trace._refresh_rerun_op_from`` never copies from a rerun, and the
+#: extra non-ordered fields it does copy; the until= prefix projection mirrors both
+#: (``tests/test_run_until_projection_cost.py`` pins the equivalence).
+_RERUN_KEPT_OP_FIELDS = frozenset(
+    {
+        "source_trace",
+        "_source_trace_ref",
+        "input_ops",
+        "input_activations",
+        "input_shapes",
+        "input_dtypes",
+        "input_memory",
+        "num_inputs",
+        "is_in_conditional_body",
+    }
+)
+_RERUN_EXTRA_OP_FIELDS = (
+    "out_ref",
+    "grad_ref",
+    "_pending_blob_id",
+    "_pending_transformed_out_blob_id",
+    "_pending_grad_blob_id",
+    "_pending_transformed_grad_blob_id",
+    "annotations",
+    "interventions",
+    "container_spec",
+    "args_template",
+    "kwargs_template",
+    "_edge_uses",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -325,15 +380,8 @@ class RefreshProjector:
                 f"got {len(refreshed_signature)}; first divergence at "
                 f"{next((expected[0] for expected, actual in zip(target_signature, refreshed_signature, strict=False) if expected != actual), 'op count')!r})",
             )
-        from ..data_classes._state_adapter import state_items
-
-        preserved_states = [dict(state_items(layer)) for layer in target_prefix]
         for layer, new_layer in zip(target_prefix, refreshed_prefix, strict=True):
-            self.target._refresh_rerun_op_from(layer, new_layer)
-        for layer, preserved in zip(target_prefix, preserved_states, strict=True):
-            for field_name, value in preserved.items():
-                if field_name not in self._DYNAMIC_OP_FIELDS:
-                    layer._internal_set(field_name, value)
+            self._project_prefix_op(layer, new_layer)
         # 3.3.3 sanitation: skipped records are retained structure-only; value
         # payloads are cleared at fork-finalization so omission never reads as
         # a fresh value.
@@ -344,6 +392,42 @@ class RefreshProjector:
         self.target._layer_nums_to_save = self.layer_nums_to_save
         self.target._grad_op_nums_to_save = self.grad_layer_nums_to_save
         self._rebind_backward_hooks(raw_labels=executed)
+
+    def _project_prefix_op(self, layer: Any, new_layer: Any) -> None:
+        """Copy one executed op's refreshed per-call fields onto its target op.
+
+        The net effect of ``Trace._refresh_rerun_op_from`` followed by restoring
+        every non-dynamic field the target op already holds (the full
+        ``project`` sequence), computed directly: only the dynamic per-call
+        fields, and fields the target op does not hold yet, are copied. Copying
+        every recorded field and then writing the static ones back cost a deep
+        copy of each op's static metadata on every truncated run.
+        ``tests/test_run_until_projection_cost.py`` pins the equivalence.
+        """
+
+        from ..data_classes._state_adapter import state_items
+
+        held = {name for name, _value in state_items(layer)}
+        new_state = dict(state_items(new_layer))
+        dynamic = self._DYNAMIC_OP_FIELDS
+        copy_value = self.target._copy_rerun_value
+        for field_name in LAYER_PASS_LOG_FIELD_ORDER:
+            if field_name in _RERUN_KEPT_OP_FIELDS:
+                continue
+            if field_name in dynamic or field_name not in held:
+                self._set_refreshed_field(layer, field_name, copy_value(new_state.get(field_name)))
+        for field_name in _RERUN_EXTRA_OP_FIELDS:
+            if hasattr(new_layer, field_name) and (field_name in dynamic or field_name not in held):
+                self._set_refreshed_field(layer, field_name, copy_value(new_state.get(field_name)))
+        layer.source_trace = self.target
+
+    def _set_refreshed_field(self, layer: Any, field_name: str, value: Any) -> None:
+        """Write one refreshed field, keeping user annotations like the full refresh."""
+
+        if field_name == "annotations":
+            preserved = self.target._copy_user_annotations(getattr(layer, "annotations", None))
+            value = self.target._merge_user_annotations(value, preserved)
+        layer._internal_set(field_name, value)
 
     @staticmethod
     def _graph_change_error(refreshed: Any, detail: str | None = None) -> ValueError:
@@ -461,17 +545,60 @@ class RefreshProjector:
                 claims.append((f"module_training_modes[{address!r}] record", bool(modes[address])))
         return claims
 
+    def _norm_counter_sinks(self, target_sinks: list[Any], norm_writers: set[str]) -> set[str]:
+        """Return the counter sinks that belong to a proven train-mode norm call.
+
+        A train-mode BatchNorm also advances its ``num_batches_tracked`` counter
+        with an in-place ``add_`` inside the same module call as the norm
+        kernel. Such a write is eligible exactly when that module call also
+        holds a proven train-mode norm writer; any other in-place buffer write
+        stays a refused stateful writer.
+        """
+
+        norm_calls = {
+            self._sink_module_call(layer)
+            for layer in target_sinks
+            if layer._layer_label_raw in norm_writers
+        }
+        norm_calls.discard(None)
+        return {
+            layer._layer_label_raw
+            for layer in target_sinks
+            if layer.buffer_value_changed is True
+            and layer.buffer_write_kind == "inplace"
+            and (getattr(layer, "buffer_source_func_name", None) or "").rsplit(".", 1)[-1] == "add_"
+            and self._sink_module_call(layer) in norm_calls
+        }
+
+    def _sink_module_call(self, sink_layer: Any) -> str | None:
+        """Return the innermost module call of a buffer sink's producing op."""
+
+        source_label = getattr(sink_layer, "buffer_source", None)
+        layers = self.target.layer_dict_all_keys
+        if not source_label or source_label not in layers:
+            return None
+        modules = tuple(getattr(layers[source_label], "modules", ()) or ())
+        return str(modules[-1]) if modules else None
+
     def _check_buffer_sink_routing(
         self, refreshed: Any, executed_raw_labels: frozenset[str] | None = None
     ) -> None:
         """Enforce the D18 mode-aware buffer-sink routing contract (typed).
 
-        Refuse iff any buffer sink carries ``buffer_value_changed is not False``
-        (``True`` = a write happened; ``None`` = unproven, fail closed), a
-        recorded mode claim contradicts the write evidence, the refreshed
-        rerun's own journal recorded a value-changing buffer write (O1), or the
-        target-vs-refreshed evidence tuples diverge (O2). Eval-mode BatchNorm
-        (all sinks ``False`` with agreeing eval claims) passes.
+        Refuse iff any buffer sink carries unproven evidence
+        (``buffer_value_changed is None``, fail closed), a value-changing write
+        (``True``) that is not a proven train-mode norm writer, a recorded mode
+        claim contradicting the write evidence, the refreshed rerun's own
+        journal recording a value-changing write the target does not prove
+        (O1), or diverging target-vs-refreshed evidence (O2). Eval-mode
+        BatchNorm (``False`` with agreeing eval claims) and train-mode BatchNorm
+        (``True`` from a mode-sensitive norm call whose every recorded mode
+        claim says train, plus its in-place counter in the same module call)
+        pass: a default run restores the declared state it
+        changed and a capture is a pure observer (U40.1), so every run starts
+        from the state the target was captured from. Only ``trace.run()``
+        admits them (``train_mode_norm_writers_eligible``); the legacy
+        ``save_new_outs`` refresh restores nothing and keeps refusing.
 
         ``executed_raw_labels`` scopes the check to a truncated run's executed
         prefix: in-prefix sinks are compared at FULL strength including the O2
@@ -494,12 +621,16 @@ class RefreshProjector:
         )
         # Belt: recorded mode claims must agree with the write evidence where
         # both exist; a contradiction refuses typed, never resolved permissively.
+        train_mode_writers: set[str] = set()
         for sink_layer, (raw_label, value_changed, _) in zip(
             target_sinks, target_rows, strict=True
         ):
             if value_changed is None:
                 continue
-            for authority, claim in self._buffer_sink_mode_claims(self.target, sink_layer):
+            claims = self._buffer_sink_mode_claims(self.target, sink_layer)
+            if value_changed is True and claims and all(claim for _authority, claim in claims):
+                train_mode_writers.add(raw_label)
+            for authority, claim in claims:
                 if claim is not bool(value_changed):
                     raise self._buffer_sink_routing_error(
                         refreshed,
@@ -508,28 +639,39 @@ class RefreshProjector:
                         f"capture-time write evidence records buffer_value_changed="
                         f"{value_changed!r} -- a tampered or incoherent mode claim",
                     )
-        # Primary key: capture-time write evidence. True = train-mode writer;
-        # None = unproven, fail closed. Eval-mode sinks (False) pass.
-        written = [row for row in target_rows if row[1] is not False]
+        train_mode_writers |= self._norm_counter_sinks(target_sinks, train_mode_writers)
+        if not _TRAIN_MODE_NORM_WRITERS_ELIGIBLE.get():
+            train_mode_writers.clear()
+        # Primary key: capture-time write evidence. None = unproven, fail closed;
+        # True passes only for a proven train-mode norm writer (any other
+        # value-changing write, e.g. a counter, refuses). Eval-mode sinks pass.
+        written = [
+            row for row in target_rows if row[1] is not False and row[0] not in train_mode_writers
+        ]
         if written:
             names = ", ".join(repr(label) for label, _, _ in written)
             unproven = all(value_changed is None for _, value_changed, _ in written)
             reason = (
                 "carries unproven buffer write evidence (buffer_value_changed=None, fail closed)"
                 if unproven
-                else "recorded value-changing buffer writes (train-mode buffer writers)"
+                else "recorded value-changing buffer writes that are not proven train-mode "
+                "norm writers (counters, caches or other stateful buffers)"
             )
             raise self._buffer_sink_routing_error(
                 refreshed,
                 f"refresh target {reason} on buffer sink op(s) {names}, "
                 "whose live routing can change across reruns",
             )
-        # O1 refresh write tripwire: on the newly-allowed no-write path the
-        # refreshed rerun's OWN journal must also record no value-changing
-        # buffer write -- independent fresh evidence a tampered stored bit
-        # cannot buy a pass against.
+        # O1 refresh write tripwire: the refreshed rerun's OWN journal must
+        # record no value-changing buffer write beyond the target's proven
+        # train-mode norm writers -- independent fresh evidence a tampered
+        # stored bit cannot buy a pass against.
         refreshed_rows = self._buffer_sink_evidence(refreshed)
-        refreshed_written = [row for row in refreshed_rows if row[1] is not False]
+        refreshed_written = [
+            row
+            for row in refreshed_rows
+            if row[1] is not False and not (row[1] is True and row[0] in train_mode_writers)
+        ]
         if refreshed_written:
             names = ", ".join(repr(label) for label, _, _ in refreshed_written)
             raise self._buffer_sink_routing_error(
