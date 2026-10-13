@@ -226,6 +226,7 @@ STORAGE_BINDINGS: dict[str, dict[str, StorageBinding]] = {
         "total_param_gradient_memory": StorageBinding(StorageKind.SCALAR),
         "forward_peak_memory": StorageBinding(StorageKind.SCALAR),
         "forward_memory_backend": StorageBinding(StorageKind.SCALAR),
+        "forward_peak_memory_reason": StorageBinding(StorageKind.SCALAR),
         "capture_start_time": StorageBinding(StorageKind.SCALAR, annotation="<class 'float'>"),
         "capture_end_time": StorageBinding(StorageKind.SCALAR, annotation="<class 'float'>"),
         "_phase_timings": StorageBinding(StorageKind.SCALAR),

@@ -8,7 +8,6 @@ are asserted directly.
 
 from __future__ import annotations
 
-import json
 import sys
 from types import SimpleNamespace
 from typing import Any
@@ -177,17 +176,10 @@ def test_sae_lens_bridge_dispatches_encode_decode_and_refuses_junk(
         sae_bridge.encode(conv_log, "relu_1_2", _Sae())
 
 
-def test_profiler_execution_trace_writes_layer_nodes(conv_log, tmp_path) -> None:
-    """execution_trace() writes the documented per-layer node schema."""
+def test_profiler_execution_trace_is_removed() -> None:
+    """U53.1: the profiler bridge keeps only ``join``; ``execution_trace`` is gone."""
 
     from torchlens.bridge import profiler
 
-    destination = tmp_path / "exec_trace.json"
-    payload = profiler.execution_trace(conv_log, destination)
-
-    on_disk = json.loads(destination.read_text(encoding="utf-8"))
-    assert on_disk == payload
-    assert payload["schema"] == "torchlens.execution_trace.v1"
-    assert len(payload["nodes"]) == len(conv_log.layer_list)
-    by_name = {node["name"]: node for node in payload["nodes"]}
-    assert "conv2d_1_1" in by_name["relu_1_2"]["inputs"]
+    assert not hasattr(profiler, "execution_trace")
+    assert profiler.__all__ == ["join"]

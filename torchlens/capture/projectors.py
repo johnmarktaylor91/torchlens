@@ -885,6 +885,7 @@ class RecordingProjection:
         trace.setup_duration = self.trace_facts["setup_duration"]
         trace.forward_duration = self.trace_facts["forward_duration"]
         trace.forward_peak_memory = self.trace_facts["forward_peak_memory"]
+        trace.forward_peak_memory_reason = self.trace_facts.get("forward_peak_memory_reason")
         trace.forward_memory_backend = self.trace_facts["forward_memory_backend"]
         trace._source_model_ref = self.trace_facts["source_model_ref"]
         trace.random_seed = self.trace_facts["random_seed"]

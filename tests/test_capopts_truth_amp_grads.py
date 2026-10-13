@@ -55,7 +55,7 @@ def test_scaled_backward_false_flags_and_hints() -> None:
     pytest.importorskip("pandas")
     from torchlens.debug import gradient_flow_audit
 
-    frame = gradient_flow_audit(_scaled_backward_trace())
+    frame = gradient_flow_audit(_scaled_backward_trace()).to_pandas()
     measurable = len(frame) - int(frame.attrs.get("unavailable", 0))
     assert measurable > 0
     assert frame.attrs["exploding"] == measurable
@@ -69,7 +69,7 @@ def test_grad_scale_audits_in_unscaled_units() -> None:
     pytest.importorskip("pandas")
     from torchlens.debug import gradient_flow_audit
 
-    frame = gradient_flow_audit(_scaled_backward_trace(), grad_scale=SCALE)
+    frame = gradient_flow_audit(_scaled_backward_trace(), grad_scale=SCALE).to_pandas()
     assert frame.attrs["exploding"] == 0, (
         "unscaled toy gradients must not flag exploding once the disclosed "
         "loss scale is divided out"
@@ -106,6 +106,6 @@ def test_unscaled_backward_stays_clean_without_hint() -> None:
         save_mode="reference",
     )
     list(log)[-1].out.sum().backward()
-    frame = gradient_flow_audit(log)
+    frame = gradient_flow_audit(log).to_pandas()
     assert frame.attrs["exploding"] == 0
     assert "all_exploding_hint" not in frame.attrs

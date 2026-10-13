@@ -193,18 +193,22 @@ def test_partial_explain_and_audit_still_answer(partial_trace) -> None:
 
 
 @pytest.mark.smoke
-def test_explain_json_agent_json_overlapping_fields_agree(family_trace) -> None:
-    """One machine core: every overlapping fact is equal across the two
-    projections (the 69/151 bug class regression gate)."""
+def test_agent_json_is_the_one_machine_projection(family_trace) -> None:
+    """One machine core (D17; defaults.7): explain is prose only, and the
+    agent JSON counts read the same FactCore the summary family reads (the
+    69/151 bug class regression gate)."""
 
-    explain_json = tl.report.explain(family_trace, format="json")
+    import inspect
+
+    from torchlens.report._factcore import factcore
+
+    assert "format" not in inspect.signature(tl.report.explain).parameters
+    core = factcore(family_trace)
     agent_json = family_trace.to_agent_json()
-    assert explain_json["layer_count"] == agent_json["counts"]["layers"]
-    assert explain_json["operation_count"] == agent_json["counts"]["operations"]
-    assert explain_json["saved_tensor_count"] == agent_json["counts"]["tensors_saved"]
-    assert explain_json["model_class"] == agent_json["capture"]["model_class"]
-    assert explain_json["capture_status"] == agent_json["capture"]["capture_status"]
-    assert explain_json["has_backward_pass"] == agent_json["capture"]["has_backward_pass"]
+    assert agent_json["counts"]["layers"] == core.counts.layers
+    assert agent_json["counts"]["operations"] == core.counts.tracked_tensor_rows
+    assert agent_json["counts"]["tensors_saved"] == core.memory.at_capture_saved_ops
+    assert agent_json["capture"]["model_class"] == family_trace.model_class_name
 
 
 @pytest.mark.smoke

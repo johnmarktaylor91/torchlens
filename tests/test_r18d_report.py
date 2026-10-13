@@ -116,11 +116,7 @@ def test_explain_selective_save_reports_without_crashing() -> None:
     # Precondition: the input boundary is genuinely unsaved (the crash trigger).
     assert unsaved and saved
 
-    report_json = tl.report.explain(log, format="json")
-    assert isinstance(report_json, dict)
-    assert isinstance(report_json["first_nonfinite"], str)
-
-    report_text = tl.report.explain(log, format="text")
+    report_text = tl.report.explain(log)
     assert isinstance(report_text, str)
     assert "Shared parameters" in report_text
 
@@ -132,9 +128,11 @@ def test_explain_selective_save_still_flags_saved_nonfinite() -> None:
     x[0, 0] = float("nan")
     log = tl.trace(_SelectiveTinyModel(), x, save=tl.func("relu"))
 
-    report_json = tl.report.explain(log, format="json")
-    # relu(nan) == nan and relu IS saved, so the scan must still detect it.
-    assert "non-finite" in report_json["first_nonfinite"].lower()
+    # D14 (F09): explain never scans; arm the evidence through the explicit
+    # door. relu(nan) == nan and relu IS saved, so the scan must detect it.
+    assert log.nonfinite_ops
+    report_text = tl.report.explain(log)
+    assert "FOUND:" in report_text
 
 
 # --------------------------------------------------------------------------- H4

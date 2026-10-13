@@ -2,53 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import warnings
 from itertools import chain
 from pathlib import Path
 from typing import Any, cast
 
 from .._io import _json
-from ..utils.display import atomic_write_text
-
-
-def execution_trace(log: Any, trace_path: str | Path) -> dict[str, Any]:
-    """Export a lightweight TorchLens execution-trace JSON file.
-
-    This writes TorchLens' own ``torchlens.execution_trace.v1`` schema (per-layer
-    ``id``/``name``/``op``/``inputs``/``bytes`` nodes). It is NOT the PyTorch
-    ExecutionTraceObserver / Chakra execution-trace schema (``1.1.1-chakra`` with
-    ``attrs``/``ctrl_deps``/``outputs``), so Chakra/HTA consumers cannot parse it.
-
-    Parameters
-    ----------
-    log:
-        ``Trace`` to export.
-    trace_path:
-        Destination JSON path.
-
-    Returns
-    -------
-    dict[str, Any]
-        Trace payload written to disk.
-    """
-
-    nodes = []
-    for layer in getattr(log, "layer_list", []):
-        nodes.append(
-            {
-                "id": getattr(layer, "raw_index", None),
-                "name": getattr(layer, "layer_label", None),
-                "op": getattr(layer, "func_name", None),
-                "inputs": list(getattr(layer, "parents", []) or []),
-                "bytes": getattr(layer, "activation_memory", None),
-            }
-        )
-    payload = {"schema": "torchlens.execution_trace.v1", "nodes": nodes}
-    path = Path(trace_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write_text(path, json.dumps(payload, indent=2))
-    return payload
 
 
 def join(log: Any, kineto_trace: str | Path | dict[str, Any]) -> dict[str, Any]:
@@ -473,4 +432,4 @@ def _metadata(trace: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in trace.items() if key not in {"traceEvents", "events"}}
 
 
-__all__ = ["execution_trace", "join"]
+__all__ = ["join"]

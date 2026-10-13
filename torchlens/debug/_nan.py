@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._debug_report import DebugReport, FoundReport
 from ..errors import CaptureError
 
 if TYPE_CHECKING:
@@ -17,7 +18,7 @@ from ._common import _ordered_ops, _source_line
 
 
 @dataclass(frozen=True)
-class BisectNanResult:
+class BisectNanResult(FoundReport):
     """Result returned by :func:`bisect_nan`.
 
     Parameters
@@ -63,7 +64,7 @@ class BisectNanResult:
 
 
 @dataclass(frozen=True)
-class FindNanResult:
+class FindNanResult(FoundReport):
     """Structured first-non-finite diagnostic returned by ``find_nan``.
 
     Parameters
@@ -112,6 +113,13 @@ class FindNanResult:
     uncertainty_zone: tuple[str, ...]
     message: str
     label_status: str = "final"
+
+    _prints_repr = True
+
+    def _report_subject(self) -> str:
+        """What this report examined (the card's subject)."""
+
+        return str(self.scope)
 
     @property
     def first_bad_thing(self) -> Any:
@@ -641,7 +649,7 @@ with torch.autograd.set_detect_anomaly(True):
 
 
 @dataclass(frozen=True)
-class NanReport:
+class NanReport(DebugReport):
     """One-call NaN forensics report (torchnative 6.5 / W3.1).
 
     The pitch is STRUCTURAL: the default capture names the ORIGIN op (not
@@ -671,6 +679,35 @@ class NanReport:
     scope_note: str
     uncertainty_zone: tuple[str, ...]
     defer_recipe: str = _DETECT_ANOMALY_RECIPE
+
+    def _report_subject(self) -> str:
+        """What this report examined (the card's subject)."""
+
+        return f"{self.phase} pass"
+
+    def _report_status(self) -> str:
+        """The verdict token on the card's lead line."""
+
+        return "found" if self.found else "not_found"
+
+    def _report_coverage(self) -> str | None:
+        """What this report did and did not examine."""
+
+        return (
+            f"{self.checked} checked, {self.unchecked} unchecked, "
+            f"{self.unexamined} unexamined (basis: {self.coverage_basis})"
+        )
+
+    def _report_findings(self) -> list[str]:
+        """One-line findings for the card, most severe first."""
+
+        findings = []
+        if self.origin_label is not None:
+            findings.append(f"origin: {self.origin_label} ({self.kind})")
+        findings.extend(f"non-finite: {label}" for label in self.nonfinite_labels)
+        if self.scope_note:
+            findings.append(self.scope_note)
+        return findings
 
     def summary(self) -> str:
         """Return the human-readable report text."""

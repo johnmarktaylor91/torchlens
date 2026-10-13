@@ -84,6 +84,9 @@ class SummaryFacts:
     params_pruned_raw: int = 0
     params_masked: int | None = None
     optimizer: OptimizerStateFacts | None = None
+    # forks.7: a NOT-CHECKED verdict on a capture that did not record every
+    # op names the opt-in (track_nonfinite stays False by default).
+    health_hint: str | None = None
 
 
 def _human(value: int | None) -> str:
@@ -492,7 +495,8 @@ def render_summary_pair(
         capture_bits.append(facts.outcome_status)
     if facts.capture_verified is True:
         capture_bits.append("verified")
-    capture_bits.append(f"health {facts.health_verdict.upper().replace('_', '-')}")
+    health = f"health {facts.health_verdict.upper().replace('_', '-')}"
+    capture_bits.append(f"{health} ({facts.health_hint})" if facts.health_hint else health)
     lines.append(f"Capture  {' | '.join(capture_bits)}")
     if any(row.tied for row in rows):
         lines.append("*        tied parameters (identity counted once; see Params)")

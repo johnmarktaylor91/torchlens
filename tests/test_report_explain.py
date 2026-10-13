@@ -106,31 +106,17 @@ def test_explain_returns_sensible_string_for_each_audience() -> None:
         assert "No backward passes are recorded" in text
 
 
-def test_explain_json_uses_stable_full_trace_schema() -> None:
-    """JSON reports expose the documented v1 keys for complete traces."""
+def test_explain_json_form_is_removed() -> None:
+    """defaults.7: explain is prose only; the machine projection is to_agent_json."""
 
-    report = tl.report.explain(_captured_log(), format="json")
+    import inspect
 
-    assert isinstance(report, dict)
-    assert report["schema"] == "torchlens.explain.v1"
-    assert report["capture_status"] == "complete"
-    assert {
-        "audience",
-        "model_class",
-        "layer_count",
-        "operation_count",
-        "saved_tensor_count",
-        "total_tensor_count",
-        "has_backward_pass",
-        "exception_type",
-        "exception_message",
-        "last_completed_op_label",
-        "last_completed_op_shape",
-        "last_completed_op_dtype",
-        "last_completed_op_device",
-        "failing_boundary",
-        "first_nonfinite",
-    }.issubset(report)
+    log = _captured_log()
+    assert "format" not in inspect.signature(tl.report.explain).parameters
+    assert "to_agent_json()" in (tl.report.explain.__doc__ or "")
+    with pytest.raises(TypeError, match="format"):
+        tl.report.explain(log, format="json")  # type: ignore[call-arg]
+    assert log.to_agent_json()["capture"]["capture_status"] == "complete"
 
 
 def test_explain_and_audit_diagnose_real_partial_failure() -> None:
@@ -143,7 +129,6 @@ def test_explain_and_audit_diagnose_real_partial_failure() -> None:
     last_label = str(getattr(last, "_label_raw"))
 
     text = tl.report.explain(partial)
-    report = tl.report.explain(partial, format="json")
     audit = partial.audit()
 
     assert isinstance(text, str)
@@ -151,12 +136,8 @@ def test_explain_and_audit_diagnose_real_partial_failure() -> None:
     assert last_label in text
     assert "RuntimeError" in text
     assert "mat1 and mat2 shapes cannot be multiplied" in text
-    assert isinstance(report, dict)
-    assert report["capture_status"] == "partial"
-    assert report["last_completed_op_label"] == last_label
-    assert report["exception_type"] == "RuntimeError"
-    assert report["exception_message"] == str(exc_info.value)
-    assert "forward at" in report["failing_boundary"]
+    assert str(exc_info.value) in text
+    assert "Failing boundary: forward at" in text
     assert audit == tl.debug.audit_trace(partial)
     failure = next(
         finding for finding in audit.findings if finding.check == "partial_capture_exception"
@@ -260,9 +241,9 @@ def test_source_locations_keep_repr_plain_and_expose_html_links() -> None:
 def test_explain_surfaces_halted_capture_status() -> None:
     """FAIL-AFTER-WHERE-PASSED-BEFORE: a HALTED capture no longer reads complete.
 
-    ``_base_json`` HARDCODED ``capture_status="complete"`` for every
-    non-partial log, so ``explain(format="json")`` presented a halted capture
-    as clean -- the exact thing report/AGENTS.md's honesty contract forbids.
+    The report once hardcoded ``capture_status="complete"`` for every
+    non-partial log, presenting a halted capture as clean -- the exact thing
+    report/AGENTS.md's honesty contract forbids.
     """
 
     from fixtures.capture_outcome_models import ThreeStageModel, halt_on_relu
@@ -270,8 +251,7 @@ def test_explain_surfaces_halted_capture_status() -> None:
     trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
     assert trace.outcome.status.value == "halted"
 
-    report = tl.report.explain(trace, format="json")
-    assert report["capture_status"] == "halted"
+    assert trace.to_agent_json()["capture"]["capture_status"] == "halted"
 
     text = tl.report.explain(trace)
     assert "Capture outcome: halted." in text
@@ -284,9 +264,9 @@ def test_explain_surfaces_unverified_capture() -> None:
     log.capture_verified = False
     log.capture_verification_reason = "dynamo_region_not_logged"
 
-    report = tl.report.explain(log, format="json")
-    assert report["capture_verified"] is False
-    assert report["capture_verification_reason"] == "dynamo_region_not_logged"
+    capture = log.to_agent_json()["capture"]
+    assert capture["capture_verified"] is False
+    assert capture["capture_verification_reason"] == "dynamo_region_not_logged"
 
     text = tl.report.explain(log)
     assert "UNVERIFIED" in text
@@ -394,12 +374,10 @@ def test_explain_max_tokens_never_drops_partial_failure_evidence() -> None:
 
 
 def test_explain_max_tokens_refusals_teach_the_fix() -> None:
-    """Invalid budgets and the json combination refuse with the remedy named."""
+    """Invalid budgets refuse with the remedy named."""
 
     log = _captured_log()
     with pytest.raises(ValueError, match="positive integer"):
         tl.report.explain(log, max_tokens=0)
     with pytest.raises(ValueError, match="positive integer"):
         tl.report.explain(log, max_tokens=True)
-    with pytest.raises(ValueError, match="format='text'"):
-        tl.report.explain(log, format="json", max_tokens=50)

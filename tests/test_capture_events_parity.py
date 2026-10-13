@@ -31,6 +31,9 @@ _EXPECTED_ALLOWLIST = {
             "capture_end_time",
             "forward_duration",
             "forward_peak_memory",
+            # forks.13: set iff a CPU forward delta read 0, so it varies exactly
+            # with forward_peak_memory between two otherwise identical captures.
+            "forward_peak_memory_reason",
             "func_calls_duration",
             "setup_duration",
             "capture_start_time",

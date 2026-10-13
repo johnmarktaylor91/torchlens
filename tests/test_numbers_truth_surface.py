@@ -118,7 +118,13 @@ def test_memory_footer_reports_measured_peak(small_log: tl.Trace) -> None:
     backend = small_log.forward_memory_backend
     assert backend in {"cpu", "cuda", "mps"}
     facts = pass_peak_facts(small_log)
-    assert facts.value_bytes is not None
+    if facts.value_bytes is None:
+        # forks.13: a CPU RSS delta of 0 is recorded as None with its reason,
+        # which the footer prints verbatim (never "not tracked", never a 0).
+        assert backend == "cpu"
+        assert facts.meaning == small_log.forward_peak_memory_reason
+        assert f"forward peak unavailable ({facts.meaning})" in text
+        return
     # The basis is always named; a measured value is never called unavailable.
     assert f"({facts.meaning})" in text
     assert "forward peak unavailable" not in text

@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._debug_report import FoundReport, rows_of
 from ._first_bad import FirstBadThing, amp_scaled_gradients_hint
 
 if TYPE_CHECKING:
@@ -81,7 +82,7 @@ class BackwardTransition:
 
 
 @dataclass(frozen=True)
-class BackwardNanResult:
+class BackwardNanResult(FoundReport):
     """Result of :func:`bisect_nan_backward`.
 
     Parameters
@@ -135,6 +136,28 @@ class BackwardNanResult:
     grad_scale: float | None
     amp_hint: str | None
     message: str
+
+    def _report_subject(self) -> str:
+        """What this report examined (the card's subject)."""
+
+        return f"backward pass {self.backward_pass}"
+
+    def _report_coverage(self) -> str | None:
+        """What this report did and did not examine."""
+
+        return f"{self.checked_calls} calls checked, {self.unchecked_calls} unchecked"
+
+    def _report_findings(self) -> list[str]:
+        """One-line findings for the card, most severe first."""
+
+        findings = [self.message] if self.message else []
+        findings.extend(f"healed: {label}" for label in self.healed)
+        return findings
+
+    def _report_rows(self) -> list[dict[str, Any]] | None:
+        """The natural table rows behind ``to_pandas()``."""
+
+        return rows_of(self.transitions)
 
     @property
     def first_bad_thing(self) -> FirstBadThing:

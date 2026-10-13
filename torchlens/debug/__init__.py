@@ -1,7 +1,13 @@
-"""Power-user debugging helpers for completed TorchLens traces."""
+"""Power-user debugging helpers for completed TorchLens traces.
+
+Every report-shaped result is a :class:`DebugReport` (U42.2; DOCUMENTED-UNSTABLE):
+``report_type``/``subject``/``status``, ``to_dict()``, ``to_pandas()`` and a bounded
+printed card.
+"""
 
 from __future__ import annotations
 
+from .._debug_report import DebugReport
 from ._audit import AuditFinding as AuditFinding, TraceAudit, audit_trace
 from ._compile_counter import (
     CompileCounts as CompileCounts,
@@ -51,6 +57,7 @@ __all__ = [
     "BackwardTransition",
     "BisectNanResult",
     "BisectPrecisionResult",
+    "DebugReport",
     "DeterminismReport",
     "FirstBadThing",
     "CompileCountsUnavailableError",

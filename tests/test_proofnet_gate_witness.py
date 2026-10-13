@@ -168,7 +168,7 @@ EXCEPT_SKIP_LEDGER: frozenset[str] = frozenset(
         "test_punchlist_terminology_lint.py:154",
         "test_real_world_models.py:1496",
         "test_real_world_models.py:1728",
-        "test_removed_spelling_lint.py:349",
+        "test_removed_spelling_lint.py:361",
         "test_tlspec_runnable_r41_crossthread_witness.py:465",
         "test_tlspec_runnable_r69_input_contract.py:779",
         "test_transforms_lib_real_models.py:290",

@@ -3,7 +3,7 @@
 Split out of ``capture/trace.py`` under the R43 file-size ratchet: the
 process RSS readers, the per-capture resident high-water scoping, and the
 ``Trace.forward_peak_memory_pair`` reader live here; the forward bracket in
-``capture/trace.py`` stays the only writer.
+``capture/trace.py`` stays the only writer (through :func:`record_forward_peak`).
 """
 
 from __future__ import annotations
@@ -142,3 +142,70 @@ def read_peak_pair(trace: Any) -> dict[str, Any] | None:
     except AttributeError:
         pair = None
     return dict(pair) if pair is not None else None
+
+
+#: The recorded reason for a CPU forward peak of ``None`` (forks.13): the host
+#: RSS delta read 0, which says only that the forward fit in already-resident
+#: heap headroom, never that it allocated nothing.
+CPU_ZERO_PEAK_REASON = (
+    "not measured: the CPU RSS delta read 0; pass "
+    "CaptureOptions(measure_python_peak_memory=True) for the Python-allocation peak"
+)
+
+#: The reason when the opt-in tracemalloc peak ALSO read 0.
+CPU_ZERO_PEAK_WITH_PYTHON_REASON = (
+    "not measured: the CPU RSS delta and the Python-allocation peak "
+    "(measure_python_peak_memory=True) both read 0"
+)
+
+
+def forward_peak_value(
+    backend: str, measured: int, *, python_peak_measured: bool
+) -> tuple[int | None, str | None]:
+    """Return the forward peak to record and its reason (forks.13).
+
+    Parameters
+    ----------
+    backend:
+        The measurement backend (``"cpu"``, ``"mps"``, ...).
+    measured:
+        ``max(rss_delta, python_peak)`` in bytes.
+    python_peak_measured:
+        Whether the opt-in tracemalloc probe ran.
+
+    Returns
+    -------
+    tuple[int | None, str | None]
+        ``(measured, None)`` for every positive value and every non-CPU
+        backend (MPS and CUDA semantics are unchanged); ``(None, reason)`` for
+        a CPU zero, the reason naming ``measure_python_peak_memory=True``.
+    """
+
+    if backend != "cpu" or measured > 0:
+        return measured, None
+    if python_peak_measured:
+        return None, CPU_ZERO_PEAK_WITH_PYTHON_REASON
+    return None, CPU_ZERO_PEAK_REASON
+
+
+def record_forward_peak(trace: Any, backend: str, measured: int, python_probe: Any) -> None:
+    """Write ``forward_peak_memory`` and its reason onto ``trace`` (forks.13).
+
+    Parameters
+    ----------
+    trace:
+        The trace the forward bracket measured.
+    backend:
+        The measurement backend label.
+    measured:
+        ``max(rss_delta, python_peak)`` in bytes.
+    python_probe:
+        The tracemalloc module when the opt-in probe ran, else ``None``.
+    """
+
+    from ..quantities import Bytes
+
+    peak, trace.forward_peak_memory_reason = forward_peak_value(
+        backend, measured, python_peak_measured=python_probe is not None
+    )
+    trace.forward_peak_memory = None if peak is None else Bytes(peak)

@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from .._debug_report import FoundReport, rows_of
 from ._common import _compute_ops, _op_label, _safe_out, _source_line, _tensor_unavailable_reason
 
 if TYPE_CHECKING:
@@ -65,7 +66,7 @@ class PrecisionRow:
 
 
 @dataclass(frozen=True)
-class BisectPrecisionResult:
+class BisectPrecisionResult(FoundReport):
     """Result of :func:`bisect_precision`.
 
     Parameters
@@ -102,6 +103,20 @@ class BisectPrecisionResult:
     rows: tuple[PrecisionRow, ...]
     skipped: tuple[tuple[str, str], ...]
     message: str
+
+    def _report_findings(self) -> list[str]:
+        """One-line findings for the card, most severe first."""
+
+        findings = [self.message] if self.message else []
+        findings.extend(
+            f"{row.label}: max_abs_err={row.max_abs_err:.4g}" for row in self.rows if row.diverged
+        )
+        return findings
+
+    def _report_rows(self) -> list[dict[str, Any]] | None:
+        """The natural table rows behind ``to_pandas()``."""
+
+        return rows_of(self.rows)
 
 
 def bisect_precision(
