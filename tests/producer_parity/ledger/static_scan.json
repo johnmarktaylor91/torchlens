@@ -4441,6 +4441,14 @@
  },
  {
   "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/intervention/_edit_repr.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/intervention/_module_alias_guard.py",
   "has_default": false,
@@ -4515,6 +4523,14 @@
   "ambiguous": false,
   "field": "func_call_id",
   "file": "torchlens/intervention/audit.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/intervention/binding.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -4636,7 +4652,7 @@
   "field": "params",
   "file": "torchlens/intervention/param_substitution.py",
   "has_default": true,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": true
  },
  {
@@ -5914,6 +5930,14 @@
  {
   "ambiguous": true,
   "field": "modules",
+  "file": "torchlens/ir/selector_eval.py",
+  "has_default": true,
+  "sites": 2,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
   "file": "torchlens/ir/selector_eval.py",
   "has_default": true,
   "sites": 2,
