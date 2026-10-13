@@ -27,7 +27,10 @@ carry_state=True keeps them".
 from __future__ import annotations
 
 import copy
+import pickle
 import random
+import warnings
+import weakref
 from collections import OrderedDict
 
 import numpy as np
@@ -210,6 +213,36 @@ def test_loaded_trace_has_no_attribute_write_record(tmp_path):
     loaded = tl.load(str(path))
     assert loaded.modules["self"].attribute_writes is None
     assert loaded.modules["fc"].attribute_writes is None
+
+
+class _UnpicklableStash(nn.Module):
+    """Stashes a weak reference (unpicklable) on itself during the forward."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = self.fc(x)
+        self.last_ref = weakref.ref(self.fc)
+        return y
+
+
+def test_record_never_rides_pickles_or_the_capture_cache(tmp_path):
+    """The session-time record is dropped from pickle state: caching and pickling still work."""
+
+    model = _UnpicklableStash()
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)  # "Not caching this capture" would raise
+        trace = tl.trace(
+            model,
+            torch.randn(2, 4),
+            capture=CaptureOptions(cache=True, cache_dir=tmp_path / "cache"),
+        )
+    assert trace.modules["self"].attribute_writes["last_ref"].kind == "added"
+    assert not hasattr(model, "last_ref")
+    restored = pickle.loads(pickle.dumps(trace))
+    assert restored.modules["self"].attribute_writes is None
 
 
 def test_default_trace_restores_state_on_the_exception_path():

@@ -1897,6 +1897,7 @@ class Module:
         state["_source_trace_ref"] = None
         state["_buffer_accessor"] = None
         state.pop("_facets_cache", None)
+        state.pop("_attribute_writes", None)  # session-time; arbitrary user objects
         state["tlspec_version"] = TLSPEC_VERSION
         return state
 

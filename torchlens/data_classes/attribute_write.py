@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
-__all__ = ["AttributeWrite", "AttributeWriteKind"]
+__all__ = ("AttributeWrite", "AttributeWriteKind")
 
 #: How the forward changed the attribute: ``"added"`` (absent before the
 #: forward), ``"replaced"`` (rebound to another object, or the same container
