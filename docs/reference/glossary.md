@@ -1293,7 +1293,11 @@ shim owed; S2-gated*
 **tl.Edit / do(selection, edit)** — *Edit ratified (slate 5.5, subject to D7
 default-keep); mask-application semantics documented-unstable*
 : `tl.Edit` is the public edit-object type; `HelperSpec` is its deprecated
-  alias (stable surface, no removal scheduled). `trace.do(selection, edit)`
+  alias (stable surface, no removal scheduled). `repr(edit)` prints the
+  public spelling: a builtin edit prints as the public call that builds it
+  (`tl.grad_scale(2.0)`, default-valued keywords omitted; evaluating it
+  rebuilds an equal edit), any other edit as `tl.Edit('name', kind=...,
+  portability=...)`. `trace.do(selection, edit)`
   applies an edit to a resolved selection under the NORMATIVE
   MASK-APPLICATION CONTRACT: the edit hook computes its full replacement
   exactly as today (helpers stay mask-oblivious), then the ENGINE applies
@@ -1314,12 +1318,22 @@ default-keep); mask-application semantics documented-unstable*
   its optional hash-chain extension -- pre-v9 readers refused a saved
   selection- or param-intervened artifact's own load).
 
-**tl.patch_from(source_trace)** — *unstable — no deprecation shim owed*
+**tl.patch_from(source_trace, *, source_site=None, positions=None, position_axis=1)** — *unstable — no deprecation shim owed*
 : Edit factory patching targeted sites from another trace's recorded
   post-capture values (activation patching); with a Selection target only
-  the selected elements are patched. Portability `opaque_audit`: persisted
-  args carry source-trace IDENTITY only (never the Trace, never tensors);
-  values bind at do() time session-side; no executable-save path in v1.
+  the selected elements are patched. Source-to-target mapping (Patchscopes,
+  SelfIE): `source_site=` reads the donor at another site of the source trace
+  (a label, pass-qualified on multi-pass layers, or a selector naming exactly
+  one op; else `patch_source_site_unresolved`), and `positions=` (an int, a
+  `{source_position: target_position}` dict, or a list of pairs; negatives
+  count from the end) writes those source positions into those target
+  positions along `position_axis`, leaving the other target positions
+  unchanged; the prompts may differ in length and a donor batch of one
+  broadcasts (`patch_positions_invalid`, `patch_positions_out_of_range`,
+  `patch_positions_shape_mismatch`). Portability `opaque_audit`: persisted
+  args carry source-trace IDENTITY plus the mapping (never the Trace, never
+  tensors); values bind at do() time session-side; no executable-save path
+  in v1.
 
 **trace.edges / edge substitution** — *unstable — no deprecation shim owed;
 S2/S3-gated*
