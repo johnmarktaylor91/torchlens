@@ -712,11 +712,9 @@ def buffer_operand_selection(trace: Trace, selection: Any) -> Any:
     ):
         return None
     buffers = getattr(trace, "buffers", None)
-    try:
-        buffer = buffers[node.name] if buffers is not None else None
-    except (KeyError, IndexError, TypeError):
-        buffer = None
-    if buffer is None:
+    buffer = buffers[node.name] if buffers is not None and node.name in buffers else None
+    if buffer is None or getattr(buffer, "address", None) != node.name:
+        # Full buffer addresses only: a short name is never guessed.
         return None
     versions = tuple(getattr(buffer, "versions", ()) or ())
     initial = versions[0] if versions else None
