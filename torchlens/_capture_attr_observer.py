@@ -171,6 +171,8 @@ def snapshot_module_attrs(modules: list[tuple[str, Any]]) -> tuple[ModuleAttrSna
 
 
 def _is_identity_only(snapshot: Any) -> bool:
+    """Return whether the bracket tracks this attribute by identity only."""
+
     from ._capture_state_helpers import _PlainAttrIdentitySnapshot
 
     return isinstance(snapshot, _PlainAttrIdentitySnapshot)
@@ -312,6 +314,8 @@ def _put_back(module: Any, name: str, value: Any) -> None:
 
 
 def _equal_scalar(left: Any, right: Any) -> bool:
+    """Return whether two immutable scalars are the same value (NaN equals NaN)."""
+
     return (
         isinstance(left, _IMMUTABLE_SCALARS)
         and type(left) is type(right)

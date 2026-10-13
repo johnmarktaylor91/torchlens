@@ -185,7 +185,9 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
         "Module",
         Module,
         tuple(constants.MODULE_LOG_FIELD_ORDER),
-        dropped_display_fields=frozenset({"cls"}),
+        # attribute_writes: the session-time record of the forward's plain-attribute
+        # writes (AGT-2360); arbitrary user objects, never persisted.
+        dropped_display_fields=frozenset({"cls", "attribute_writes"}),
     ),
     FieldOrderCase(
         "ModuleCall",
