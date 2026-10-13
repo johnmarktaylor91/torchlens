@@ -481,13 +481,19 @@ def write_trace_safetensors(trace: Any, path: str | Path) -> Path:
         "omitted": {"trace": trace_omitted, "op": op_omitted},
     }
     target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.with_name(target.name + ".tmp")
-    save_file(
-        tensors,
-        str(temporary),
-        metadata={_METADATA_KEY: json.dumps(document, sort_keys=True, separators=(",", ":"))},
-    )
-    os.replace(temporary, target)
+    try:
+        save_file(
+            tensors,
+            str(temporary),
+            metadata={_METADATA_KEY: json.dumps(document, sort_keys=True, separators=(",", ":"))},
+        )
+        os.replace(temporary, target)
+    finally:
+        # A failed write leaves no partial file behind (the replace already
+        # consumed the temporary on success).
+        temporary.unlink(missing_ok=True)
     return target
 
 
