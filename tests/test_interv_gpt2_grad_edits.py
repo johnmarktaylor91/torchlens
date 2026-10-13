@@ -388,6 +388,22 @@ def test_zero_match_forward_selector_gradient_edit_warns(tiny: _Fixture) -> None
         )
 
 
+def test_rerun_refuses_gradient_edit_with_its_real_cause(tiny: _Fixture) -> None:
+    """A gradient edit on the forward-only rerun engine refuses naming that cause."""
+
+    model = tiny.fresh()
+    trace = tl.trace(model, tiny.ids, capture=tl.options.CaptureOptions(backward_ready=True))
+    with pytest.raises(LiveModeLabelError) as info:
+        trace.do(
+            tl.module(_MLP),
+            tl.grad_zero(),
+            model=model,
+            x=tiny.ids,
+            intervention=tl.options.InterventionOptions(engine="rerun", confirm_mutation=True),
+        )
+    assert info.value.fields["code"] == "rerun_gradient_edit_unsupported"
+
+
 @pytest.mark.parametrize("helper_name", sorted(_HELPERS))
 def test_bind_refuses_gradient_edits_typed(tiny: _Fixture, helper_name: str) -> None:
     """The capture-free bind lane refuses a gradient edit instead of editing activations."""
