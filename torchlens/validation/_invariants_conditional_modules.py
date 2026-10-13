@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..data_classes.module import Module
@@ -301,27 +301,6 @@ def _check_pass_count_consistency(ml: Trace) -> None:
             )
 
 
-def _module_call_count_problem(ml: Trace, mpl: Any) -> str | None:
-    """Return why a ModuleCall's ``num_ops``/``num_layers`` disagree with its Op list, or ``None``.
-
-    ``num_ops`` is ``len(ops)``; ``num_layers`` is the number of distinct
-    Layers the ops resolve to through the trace (an op label that resolves to
-    no Layer is itself the problem).
-    """
-
-    if mpl.num_ops != len(mpl.ops):
-        return f"num_ops={mpl.num_ops} != len(ops)={len(mpl.ops)}"
-    call_layer_labels: set[str] = set()
-    for lbl in mpl.ops:
-        resolved = getattr(ml.layer_dict_all_keys.get(lbl), "layer_label", None)
-        if not isinstance(resolved, str):
-            return f"op '{lbl}' resolves to no Layer"
-        call_layer_labels.add(resolved)
-    if mpl.num_layers != len(call_layer_labels):
-        return f"num_layers={mpl.num_layers} != distinct Layers of ops={len(call_layer_labels)}"
-    return None
-
-
 def _check_module_layer_containment(ml: Trace) -> None:
     """Check H: Module <-> Layer containment consistency.
 
@@ -370,7 +349,26 @@ def _check_module_layer_containment(ml: Trace) -> None:
                         f"'{lbl}' not in op_labels or layer_labels",
                     )
 
-            count_problem = _module_call_count_problem(ml, mpl)
+            # num_ops is len(ops); num_layers counts the distinct Layers the
+            # ops resolve to through the trace (an unresolvable op is itself
+            # the problem). One raise site for the check.
+            resolved = [
+                getattr(ml.layer_dict_all_keys.get(lbl), "layer_label", None) for lbl in mpl.ops
+            ]
+            unresolved = [
+                lbl
+                for lbl, layer in zip(mpl.ops, resolved, strict=True)
+                if not isinstance(layer, str)
+            ]
+            count_problem = None
+            if mpl.num_ops != len(mpl.ops):
+                count_problem = f"num_ops={mpl.num_ops} != len(ops)={len(mpl.ops)}"
+            elif unresolved:
+                count_problem = f"op '{unresolved[0]}' resolves to no Layer"
+            elif mpl.num_layers != len(set(resolved)):
+                count_problem = (
+                    f"num_layers={mpl.num_layers} != distinct Layers of ops={len(set(resolved))}"
+                )
             if count_problem is not None:
                 raise MetadataInvariantError(
                     name, f"ModuleCall '{addr}:{call_index}': {count_problem}"
