@@ -1442,7 +1442,13 @@ deprecation shim owed*
   rerun/set_only refuse `param_substitution_engine_unsupported`. The audit
   record (kind `PARAM`) discloses "substituted at consumption … live
   parameters unchanged" — the product is DERIVED-class, never a blessed
-  VERIFIED reproduction of the original weights.
+  VERIFIED reproduction of the original weights. BUFFER OPERANDS
+  (documented-unstable): `do(tl.params("<buffer address>", mask), edit)` on a
+  registered buffer (BatchNorm running stats, a rotary cache, recurrent state)
+  substitutes the buffer's INITIAL version node, the value its consumers read,
+  and replays the cone through the leaf-site path (needs an
+  `intervention_ready=True` capture); in-forward writes thread the edited
+  value; the live buffer is never written.
 
 **TapObserver.values(masked=True)** — *unstable — no deprecation shim owed*
 : `tap(resolved_selection)` stores each firing site's mask on the

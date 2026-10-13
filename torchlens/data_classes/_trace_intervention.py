@@ -1267,12 +1267,18 @@ class TraceInterventionMixin(_TraceMixinBase):
                 (),
             )
         if lifted is not None and lifted.kind == "PARAM":
-            return (
-                self._apply_selection_param_do(
-                    selection, lifted, edit, engine=engine, strict=strict
-                ),
-                (),
-            )
+            from ..intervention.param_substitution import buffer_operand_selection
+
+            buffer_units = buffer_operand_selection(self, lifted)
+            if buffer_units is None:
+                return (
+                    self._apply_selection_param_do(
+                        selection, lifted, edit, engine=engine, strict=strict
+                    ),
+                    (),
+                )
+            selection = buffer_units
+            lifted = _lift(selection)
         resolved, plan, audit = build_selection_do_plan(self, selection, edit)
         leaf_items = [item for item in plan if item["is_leaf"]]
         hook_items = [item for item in plan if not item["is_leaf"]]

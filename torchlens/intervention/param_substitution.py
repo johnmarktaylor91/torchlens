@@ -76,7 +76,7 @@ if TYPE_CHECKING:
     from ..data_classes.param import Param
     from ..data_classes.trace import Trace
 
-__all__ = ["apply_param_substitution_do"]
+__all__ = ["apply_param_substitution_do", "buffer_operand_selection"]
 
 #: Marker distinguishing param-derived tier-(ii) entries from edge-selection
 #: entries in the shared ``Op.edge_substitutions`` store. The replay
@@ -668,3 +668,72 @@ def _rollback_param_substitutions(committed: list[tuple[Any, tuple[Any, ...]]]) 
         stamps.pop(store_key, None)
         child_op._internal_set("edge_substitutions", store or None)
         child_op._internal_set("edge_replacement_stamps", stamps or None)
+
+
+def buffer_operand_selection(trace: Trace, selection: Any) -> Any:
+    """Lower a ``tl.params(name)`` selection naming a registered BUFFER (N-IV-9).
+
+    Buffers are not parameters: they are versioned graph nodes (one plain op
+    per observed version, ``docs/buffers.md``), so the operand a buffer
+    what-if substitutes is the buffer's INITIAL version node, the value every
+    consumer reads before any in-forward write. The selection is lowered to
+    that leaf site with the same element mask, and the ordinary leaf-site edit
+    path commits it and replays the cone; written versions thread the edited
+    value through ``do()`` replay exactly as for any buffer edit.
+
+    Parameters
+    ----------
+    trace:
+        Trace the edit targets.
+    selection:
+        The PARAM-kind selection given to ``do()``.
+
+    Returns
+    -------
+    Any
+        The equivalent ACT unit selection, or ``None`` when the selection is
+        not a single named-buffer term (parameters keep parameter substitution).
+
+    Raises
+    ------
+    SelectionError
+        ``selection_unresolvable`` when the buffer has no recorded version or
+        the mask does not match the buffer's shape.
+    """
+
+    from ..selection import _ParamTerm, units
+
+    node = getattr(selection, "_node", None)
+    if not isinstance(node, _ParamTerm):
+        return None
+    if any(
+        getattr(param, "address", None) == node.name or param.name == node.name
+        for param in getattr(trace, "params", ())
+    ):
+        return None
+    buffers = getattr(trace, "buffers", None)
+    try:
+        buffer = buffers[node.name] if buffers is not None else None
+    except (KeyError, IndexError, TypeError):
+        buffer = None
+    if buffer is None:
+        return None
+    versions = tuple(getattr(buffer, "versions", ()) or ())
+    initial = versions[0] if versions else None
+    value = getattr(initial, "out", None)
+    if initial is None or not isinstance(value, torch.Tensor):
+        raise _underivable(
+            f"buffer {node.name!r} has no recorded initial version with a saved value.",
+            param_address=node.name,
+        )
+    if node.mask is None:
+        mask = torch.ones(tuple(value.shape), dtype=torch.bool)
+    elif tuple(node.mask.shape) == tuple(value.shape):
+        mask = node.mask
+    else:
+        raise _underivable(
+            f"supplied mask shape {tuple(node.mask.shape)!r} does not match buffer "
+            f"{node.name!r} shape {tuple(value.shape)!r}.",
+            param_address=node.name,
+        )
+    return units(str(initial.label), mask)
