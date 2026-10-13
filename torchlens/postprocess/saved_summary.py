@@ -85,9 +85,11 @@ def refresh_pinned_autograd_memory(trace: "Trace", saved_ops: Iterable[object]) 
     not apply.
     """
 
+    from ..backends import TORCH_BACKEND_NAME
     from ..quantities import Bytes
 
-    if str(getattr(trace, "backend", "torch") or "torch") != "torch":
+    backend_name = str(getattr(trace, "backend", TORCH_BACKEND_NAME) or TORCH_BACKEND_NAME)
+    if backend_name != TORCH_BACKEND_NAME:
         trace.pinned_autograd_memory = None
         return
     from ..backends.torch._pinned_graph import pinned_autograd_bytes
