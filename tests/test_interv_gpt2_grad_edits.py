@@ -84,6 +84,7 @@ class _Fixture:
 
         self.base = model.eval()
         self.ids = ids
+        self._oracles: dict[tuple[str, str, GradFn], Grads] = {}
         clean = self.fresh()
         _loss(clean(ids)).backward()
         self.clean = _grads(clean)
@@ -99,7 +100,15 @@ class _Fixture:
         return model
 
     def oracle(self, kind: str, target: str, fn: GradFn) -> Grads:
-        """Return parameter gradients with ``fn`` applied by plain torch hooks."""
+        """Return parameter gradients with ``fn`` applied by plain torch hooks (memoized)."""
+
+        key = (kind, target, fn)
+        if key not in self._oracles:
+            self._oracles[key] = self._oracle(kind, target, fn)
+        return self._oracles[key]
+
+    def _oracle(self, kind: str, target: str, fn: GradFn) -> Grads:
+        """Compute one oracle: a deep copy of the model edited by plain torch hooks."""
 
         model = self.fresh()
         handles: list[Any] = []
@@ -261,6 +270,8 @@ def tiny() -> _Fixture:
 _DOORS = ("intervene", "attach_hooks", "layer.attach_hooks", "set")
 
 
+# 40 cells of about 0.4 s each: heavy-class aggregate compute (tests/AGENTS.md, families).
+@pytest.mark.heavy
 @pytest.mark.parametrize("opt_in", sorted(_OPT_INS))
 @pytest.mark.parametrize("runner", _RUNNERS)
 @pytest.mark.parametrize("door", _DOORS)
