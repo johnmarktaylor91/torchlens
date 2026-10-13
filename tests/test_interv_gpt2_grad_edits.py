@@ -398,6 +398,24 @@ def test_bind_refuses_gradient_edits_typed(tiny: _Fixture, helper_name: str) -> 
         bound(tiny.ids)
 
 
+def _scaled_layernorm_oracle(fixture: _Fixture, addresses: tuple[str, ...]) -> Grads:
+    """Return gradients with the output gradient of each named module doubled."""
+
+    model = fixture.fresh()
+
+    def _on_output(module: Any, args: Any, out: Any) -> None:
+        """Double the gradient flowing back into the module output."""
+
+        del module, args
+        out.register_hook(_double)
+
+    handles = [model.get_submodule(name).register_forward_hook(_on_output) for name in addresses]
+    _loss(model(fixture.ids)).backward()
+    for handle in handles:
+        handle.remove()
+    return _grads(model)
+
+
 requires_offline_venue = pytest.mark.skipif(
     not IN_OFFLINE_VENUE,
     reason=(
@@ -459,15 +477,6 @@ class TestRealGPT2:
                 intervene=tl.when(selector, tl.grad_scale(2.0)),
             )
             got = _run_backward(trace, model, "trace.backward")
-        oracle_model = real.fresh()
-        handles = [
-            oracle_model.get_submodule(f"transformer.h.3.{name}").register_forward_hook(
-                lambda module, args, out: out.register_hook(_double)
-            )
-            for name in ("ln_1", "ln_2")
-        ]
-        _loss(oracle_model(real.ids)).backward()
-        for handle in handles:
-            handle.remove()
-        _assert_matches_oracle(got, _grads(oracle_model), real.clean)
+        want = _scaled_layernorm_oracle(real, ("transformer.h.3.ln_1", "transformer.h.3.ln_2"))
+        _assert_matches_oracle(got, want, real.clean)
         assert _backward_fires(trace) > 0
