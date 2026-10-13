@@ -317,7 +317,7 @@ def attach_attribute_writes(
     target = getattr(trace, "trace", trace)  # a failure's partial_log may wrap the trace
     try:
         records = target.modules if target is not None else None
-    except _RESTORE_ERRORS:  # a partial product may lack module records
+    except Exception:  # a partial product may lack module records; never mask the capture
         return
     if records is None:
         return
@@ -327,7 +327,7 @@ def attach_attribute_writes(
             continue
         try:
             record = records[path or "self"]
-        except _RESTORE_ERRORS:  # module never registered on this trace
+        except Exception:  # a module this trace has no record for (any lookup error type)
             continue
         set_attribute_writes(record, module_writes)
 
