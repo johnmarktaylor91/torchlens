@@ -59,6 +59,14 @@
   an explicit `inference_only=True` is never cleared.
   Trace-side failed captures expose `exc.partial_log`, recoverable with
   `tl.partial.from_failed_capture(exc)`.
+- **A default `tl.trace` is a pure observer** (U40.1; `carry_state` DOCUMENTED-UNSTABLE):
+  buffers (persistent and non-persistent), every module's `training` flag and the global random
+  states are restored after the capture, on success and on failure.
+  `CaptureOptions(carry_state=True)` keeps forward-equivalent state (the same spelling as
+  `trace.run(inputs=..., carry_state=True)`). A default `trace.run()` restores the parameters and
+  buffers it changed, not random state. Train-mode BatchNorm runs through
+  `run` and `run(until=)` (D18); `backward()` through a default run's activations works without
+  `carry_state=True`.
 - **Every capture product carries ONE settled typed outcome** (early-stopping
   unification; doc of record `docs/reference/capture_outcomes.md`).
   `Trace.outcome` / `Recording.outcome` / `PartialTrace.outcome` return a frozen

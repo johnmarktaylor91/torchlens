@@ -391,7 +391,10 @@ def test_structural_fixture_traces_faithfully(fixture_name):
             # state, and prove the buffers MOVE during capture.
             model.bn.reset_running_stats()
             baseline = model.bn.running_mean.clone()
-        trace = tl.trace(model, args, kwargs)
+        # The train-bn cell measures capture-time mutation, so it opts into
+        # forward-equivalent state (a default capture is a pure observer, U40.1).
+        capture = tl.options.CaptureOptions(carry_state=fixture_name == "train-bn")
+        trace = tl.trace(model, args, kwargs, capture=capture)
     assert trace.outcome.status.name == "COMPLETE"
     if fixture_name == "container-output":
         leaves = [op.out for op in trace.output_ops]

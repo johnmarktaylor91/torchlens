@@ -157,7 +157,7 @@ _OBSERVER_SKIPPED_ATTRS = frozenset({"training", "forward"})
 
 @dataclass(frozen=True, slots=True)
 class CaptureObserverSnapshot:
-    """What a default capture restores: buffers, RNG, modes and plain attributes.
+    """What a capture restores: buffers, RNG and modes (plain attributes on request).
 
     ``buffers`` holds one ``(module, local_name, original)`` row per buffer
     registration and ``buffer_clones`` one value clone per distinct buffer

@@ -1219,8 +1219,9 @@ def _release_preparation_after_failed_capture(model: nn.Module) -> None:
     module metadata and prepared-model registry entries so the next capture
     prepares from scratch. Every ``BaseException`` (``KeyboardInterrupt``,
     ``SystemExit``) takes this path, exactly like an ordinary ``Exception``.
-    State the partial forward already mutated (e.g. norm running statistics)
-    is NOT rolled back; that boundary is documented at the failure warning.
+    State the partial forward mutated (buffers, random state, modes) is rolled
+    back by the capture observer bracket unless
+    ``CaptureOptions(carry_state=True)``; the failure warning states the boundary.
 
     Parameters
     ----------
@@ -4069,9 +4070,9 @@ def _trace_torch_model(
     from .capture._episode_join import armed_capture
     from .capture._weightsfree_admission import pending_admission
 
-    # U40.1: a default capture is a pure observer. Buffers, random state, training
-    # modes and plain attributes are restored on every path, failure included and
-    # after the failure release; CaptureOptions(carry_state=True) keeps
+    # U40.1: a default capture is a pure observer. Buffers, random state and
+    # training modes are restored on every path, failure included and after the
+    # failure release; CaptureOptions(carry_state=True) keeps
     # forward-equivalent state.
     with capture_observer_bracket(model, carry_state=capture_options.carry_state) as observer:
         try:
