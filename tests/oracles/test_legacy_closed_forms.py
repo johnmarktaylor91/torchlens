@@ -326,10 +326,6 @@ def test_module_call_forward_argument_counts(outer_case) -> None:
         ) == (positional, keyword, positional + keyword), label
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="the root ModuleCall is built without its forward arguments, so it reports 0",
-)
 def test_root_call_forward_argument_counts(graph_trace, outer_case) -> None:
     # Outer.forward(x): one positional; Graph.forward(x, y): two.
     _, trace, _, _ = outer_case

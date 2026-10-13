@@ -1901,6 +1901,8 @@ def run_and_log_inputs_through_model(
                     ambient[AMBIENT_FP32_UNREPRESENTABLE_KEY] = unrepresentable
                 self._runnable.capture_ambient = ambient
 
+            # The root forward runs undecorated: keep its arguments for the root call.
+            self._module_capture_ws.root_forward_args = (input_args, input_kwargs)
             if self.capture_mode == "predicate":
                 with _structure_only_forward_boundary(self):
                     outputs = _run_predicate_forward_with_root_frame(

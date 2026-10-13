@@ -249,6 +249,7 @@ def _build_root_module_log(
     )
 
     root_pre_hook_provenance = _pre_hook_provenance_for_call(self, "self:1")
+    root_args, root_kwargs = self._module_capture_ws.root_forward_args or (None, None)
     root_pass = ModuleCall(
         address="self",
         call_index=1,
@@ -258,6 +259,8 @@ def _build_root_module_log(
         output_layers=_layer_space_labels(self, self.output_layers),
         output_ops=op_space_labels(self, self.output_layers),
         output_structure=_first_output_structure(self, list(self.output_layers)),
+        forward_args=root_args,
+        forward_kwargs=root_kwargs,
         inputs_before_pre_hooks=root_pre_hook_provenance[0],
         inputs_after_pre_hooks=root_pre_hook_provenance[1],
         forward_pre_hook_effects=root_pre_hook_provenance[2],
@@ -1038,6 +1041,7 @@ def _build_module_logs(self: "Trace") -> None:
     # needed during construction and are not part of the user-facing API.
     self._module_capture_ws.module_metadata = {}
     self._module_capture_ws.module_forward_args = {}
+    self._module_capture_ws.root_forward_args = None
     from ..ir.workspaces import _init_module_hierarchy_data
 
     self._module_capture_ws.module_build_data = _init_module_hierarchy_data()

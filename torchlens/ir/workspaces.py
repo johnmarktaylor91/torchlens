@@ -102,6 +102,9 @@ class ModuleCaptureWorkspace:
     module_build_data: dict[str, Any] = field(default_factory=dict)
     module_metadata: dict[Any, Any] = field(default_factory=dict)
     module_forward_args: dict[Any, Any] = field(default_factory=dict)
+    # The root call's ``(args, kwargs)``: the root forward is never decorated,
+    # so ``module_forward_args`` has no ``("self", 1)`` entry. Cleared with it.
+    root_forward_args: tuple[Any, Any] | None = None
     # (module, prior instance ``forward`` or the absent sentinel, installed
     # wrapper) per decorated submodule; installed at session start, emptied by
     # the session cleanup that puts every prior forward back.

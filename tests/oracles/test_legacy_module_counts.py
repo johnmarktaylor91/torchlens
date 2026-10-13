@@ -268,3 +268,33 @@ def test_conditional_counts() -> None:
             assert layer.conditional_depth == expected, layer.layer_label
     finally:
         trace.cleanup()
+
+
+class Boom(nn.Module):
+    """Raises inside the forward, after one op."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        _ = x * 2
+        raise RuntimeError("boom")
+
+
+def _root_args_held(trace: object) -> object:
+    workspace = getattr(trace, "__dict__", {}).get("_module_capture_ws")
+    return getattr(workspace, "root_forward_args", None)
+
+
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_root_forward_arguments_do_not_outlive_the_capture() -> None:
+    torch.manual_seed(0)
+    trace = tl.trace(Graph().eval(), (torch.randn(2, 4), torch.randn(2, 4)))
+    try:
+        assert _root_args_held(trace) is None
+        root = trace.module_calls["self:1"]
+        assert root.forward_args is None  # released like every call's (GC-11)
+        assert root.num_forward_pos_args == 2  # the count survives the release
+    finally:
+        trace.cleanup()
+    with pytest.raises(RuntimeError) as failure:
+        tl.trace(Boom(), torch.randn(2, 4))
+    partial = getattr(failure.value, "partial_log", None)
+    assert _root_args_held(partial) is None
