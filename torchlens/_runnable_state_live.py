@@ -337,6 +337,8 @@ def _attribute_rewind(attrs: tuple[ModuleAttrSnapshot, ...]) -> Iterator[None]:
     """
 
     def rewind() -> None:
+        """Restore plain attributes to the pre-forward snapshot (rescue re-run)."""
+
         with _state.pause_logging(), torch.no_grad():
             settle_module_attrs(attrs, restore=True)
 
