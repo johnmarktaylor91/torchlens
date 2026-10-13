@@ -499,9 +499,11 @@ prof_log = tl.trace(model, torch.randn(1, 3, 64, 64))
 print(prof_log.profile(level='module', sort_by='flops', top_k=8))
 print(prof_log.profile().honesty())
 
-# Nsight-ready: wrap each captured op in an identity-carrying NVTX range
-nvtx_log = tl.trace(model, torch.randn(1, 3, 64, 64),
-                    capture=tl.options.CaptureOptions(emit_nvtx=True))
+# Nsight-ready: wrap each captured op in an identity-carrying NVTX range (CUDA only;
+# without CUDA, emit_nvtx=True is refused with a typed error)
+if torch.cuda.is_available():
+    nvtx_log = tl.trace(model, torch.randn(1, 3, 64, 64),
+                        capture=tl.options.CaptureOptions(emit_nvtx=True))
 ```
 
 Dataset-level statistics stream in constant memory -- including *exact*
