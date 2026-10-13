@@ -14,6 +14,7 @@ import warnings
 from itertools import pairwise
 
 import torch
+from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
@@ -88,7 +89,7 @@ def test_id_reuse_never_reroots_a_newborn_tensor_as_a_buffer() -> None:
         trace = tl.trace(model, torch.ones(4))
 
     # The scenario must actually happen, or this test proves nothing.
-    assert _reused_across_kinds(model.alias_ids) > 0, model.alias_ids[:8]
+    assert _reused_across_kinds(stashed(trace, "alias_ids")) > 0, stashed(trace, "alias_ids")[:8]
 
     buffer_ops = [op for op in trace.layer_list if op.is_buffer]
     assert buffer_ops

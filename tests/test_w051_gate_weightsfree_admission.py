@@ -16,6 +16,7 @@ from typing import Any
 
 import pytest
 import torch
+from _forward_stash import stashed
 from torch import nn
 from torch.overrides import TorchFunctionMode
 
@@ -58,7 +59,7 @@ def test_autocast_stays_a_class_inside_the_admitted_forward() -> None:
     )
     try:
         assert trace.outcome.status.value == "complete"
-        assert model.seen == {
+        assert stashed(trace, "seen") == {
             "isclass": True,
             "isinstance": True,
             "issubclass_amp": True,

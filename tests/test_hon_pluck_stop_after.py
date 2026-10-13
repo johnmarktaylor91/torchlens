@@ -15,19 +15,24 @@ from torch import nn
 import torchlens as tl
 from torchlens.errors import ArgumentTypeError
 
+#: Second-stage runs, counted outside the model: ``tl.pluck`` returns only the
+#: activation, and a default capture restores every plain attribute the forward
+#: writes, so a counter on the module would always read 0 afterwards.
+_SECOND_RUNS: list[int] = []
+
 
 class _Counted(nn.Module):
-    """Two stages; the second counts how often it runs."""
+    """Two stages; the second records each run in ``_SECOND_RUNS``."""
 
     def __init__(self) -> None:
         super().__init__()
         self.first = nn.Linear(4, 4)
         self.second = nn.Linear(4, 2)
-        self.second_calls = 0
+        _SECOND_RUNS.clear()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         h = torch.relu(self.first(x))
-        self.second_calls += 1
+        _SECOND_RUNS.append(1)
         return self.second(h)
 
 
@@ -37,10 +42,10 @@ def test_pluck_stop_after_halts_the_forward() -> None:
     model, x = _Counted(), torch.randn(2, 4)
     out = tl.pluck(model, x, "linear_1_1", stop_after="first")
     assert torch.allclose(out, model.first(x))
-    assert model.second_calls == 0
+    assert len(_SECOND_RUNS) == 0
 
     tl.pluck(model, x, "linear_1_1")
-    assert model.second_calls == 1, "without stop_after the full forward runs"
+    assert len(_SECOND_RUNS) == 1, "without stop_after the full forward runs"
 
 
 def test_pluck_stop_after_refuses_an_unsupported_spelling() -> None:

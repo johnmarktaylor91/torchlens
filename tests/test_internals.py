@@ -10,6 +10,7 @@ from collections import defaultdict
 import pytest
 import torch
 import torch.nn as nn
+from _forward_stash import stashed
 
 import torchlens as tl
 from torchlens import trace as trace_fn
@@ -697,7 +698,7 @@ class TestNestedTupleArgs:
         saved_list = stack_entry.saved_args[0]
         assert isinstance(saved_list, list)
         assert len(saved_list) == 2
-        live_pair = model._last_pair
+        live_pair = stashed(log, "_last_pair")
 
         # Identity: the saved container and its tensors must be copies, not references.
         assert saved_list is not live_pair

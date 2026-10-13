@@ -58,6 +58,11 @@ def _interrupt_after(tmp_path: Path, n_shards: int) -> None:
         (tmp_path / json.loads(line)["file"]).unlink()
 
 
+#: Forward calls per ``_CountingModel`` (by id), outside the model: a default
+#: capture is a pure observer and restores plain attributes the forward writes.
+_FORWARD_CALLS: dict[int, int] = {}
+
+
 class _CountingModel(nn.Module):
     """Tiny deterministic model that counts forward invocations."""
 
@@ -69,7 +74,17 @@ class _CountingModel(nn.Module):
         self.fc = nn.Linear(3, 4)
         self.relu = nn.ReLU()
         self.head = nn.Linear(4, 2)
-        self.n_forward_calls = 0
+        _FORWARD_CALLS[id(self)] = 0
+
+    @property
+    def n_forward_calls(self) -> int:
+        """Forward invocations, kept outside the model (a capture restores attributes)."""
+
+        return _FORWARD_CALLS[id(self)]
+
+    @n_forward_calls.setter
+    def n_forward_calls(self, value: int) -> None:
+        _FORWARD_CALLS[id(self)] = value
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         """Run the affine stack and count the call.

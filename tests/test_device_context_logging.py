@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import pytest
 import torch
+from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
@@ -115,7 +116,7 @@ def test_meta_device_context_factory_under_active_logging() -> None:
 
     # Runtime behavior matches untraced: factory output and downstream op
     # both landed on the meta device.
-    assert model.seen_devices == ["meta", "meta"]
+    assert stashed(log, "seen_devices") == ["meta", "meta"]
 
     # The non-meta branch of the graph is captured intact.
     mul_layer = _layer_by_func(log, "mul")
@@ -129,8 +130,8 @@ def test_meta_device_context_with_save_arg_values() -> None:
     from torchlens.options import CaptureOptions
 
     model = _MetaFactoryConsumerModel()
-    tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(save_arg_values=True))
-    assert model.seen_devices == ["meta", "meta"]
+    log = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(save_arg_values=True))
+    assert stashed(log, "seen_devices") == ["meta", "meta"]
 
 
 def test_meta_factory_output_metadata_with_selective_save() -> None:
@@ -143,7 +144,7 @@ def test_meta_factory_output_metadata_with_selective_save() -> None:
     model = _MetaFactoryOutputModel()
     log = tl.trace(model, torch.randn(2, 4), save=tl.func("mul"))
 
-    assert model.seen_devices == ["meta"]
+    assert stashed(log, "seen_devices") == ["meta"]
     factory_layer = _output_parent(log, 1)
     # Shape/dtype come from the post-injection meta tensor: torch.zeros(3, 4)
     # under the meta context (a CPU tensor would have identical shape only if
@@ -163,7 +164,7 @@ def test_meta_factory_as_model_output_full_save() -> None:
     model = _MetaFactoryOutputModel()
     log = tl.trace(model, torch.randn(2, 4))
 
-    assert model.seen_devices == ["meta"]
+    assert stashed(log, "seen_devices") == ["meta"]
     factory_layer = _output_parent(log, 1)
     # Captured metadata records the post-injection device.
     assert factory_layer.out.device.type == "meta"
@@ -177,7 +178,7 @@ def test_cpu_default_unaffected_under_active_logging() -> None:
 
     log = tl.trace(model, x)
 
-    assert model.seen_devices == ["cpu"]
+    assert stashed(log, "seen_devices") == ["cpu"]
     factory_layer = _output_parent(log, 1)
     assert factory_layer.out.device.type == "cpu"
     assert torch.equal(factory_layer.out, torch.zeros(3, 4))

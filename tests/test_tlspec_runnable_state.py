@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 import torch
+from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
@@ -52,7 +53,9 @@ def runnable_artifact(
             cache=False,
         ),
     )
-    assert model.forward_calls == 1
+    # Pure observer: the counter is restored; the forward's write is on the trace.
+    assert model.forward_calls == 0
+    assert stashed(trace, "forward_calls") == 1
     path = tmp_path_factory.mktemp("runnable-state") / "state.tlspec"
     trace.save(path, level="runnable")
     state = {name: value.detach().clone() for name, value in model.state_dict().items()}

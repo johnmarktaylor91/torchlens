@@ -17,6 +17,7 @@ from __future__ import annotations
 import pytest
 import torch
 import torch.nn as nn
+from _forward_stash import stashed
 
 import torchlens as tl
 from torchlens.backends.torch.bound_root import TLBoundMethodRoot
@@ -97,7 +98,7 @@ def test_tl_authored_root_marker_lands_on_root_op_record() -> None:
 def test_bound_method_called_exactly_once() -> None:
     model = _ToyLM()
     log = tl.trace(model.generate, _ids())
-    assert model.generate_calls == 1
+    assert stashed(log, "generate_calls", module="owner") == 1
     assert log.root_entry_point.endswith(".generate")
 
 

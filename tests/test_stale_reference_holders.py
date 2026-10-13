@@ -37,6 +37,7 @@ from collections.abc import Callable, Iterator
 
 import pytest
 import torch
+from _forward_stash import stashed
 from _stale_holders import forward_runs
 from torch import nn
 
@@ -396,7 +397,7 @@ def test_aliased_holders_stay_aliased_during_the_capture(raw: types.SimpleNamesp
     wrap_torch()
     trace = tl.trace(model, torch.randn(2, 4))
 
-    assert model.seen == [True]
+    assert stashed(trace, "seen") == [True]
     assert [op.func_name for op in trace.ops].count("gelu") == 2
     assert model.a is held and model.b is held
 

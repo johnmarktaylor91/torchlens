@@ -48,17 +48,25 @@ _RESTORE_ERRORS = (
 
 _IMMUTABLE_SCALARS = (type(None), bool, int, float, complex, str, bytes)
 _MISSING = object()
+#: Container depth the skeleton, restore and record copy descend (the
+#: validation snapshotter's own bound).
+_MAX_DEPTH = 64
 
 
 @dataclass(frozen=True, slots=True)
 class _AttrSlot:
-    """One plain attribute as the forward found it: its object and a value snapshot."""
+    """One plain attribute as the forward found it.
+
+    ``original`` is the object in the slot, ``snapshot`` its value snapshot and
+    ``skeleton`` the identities inside it (see :func:`_skeleton`), so a restore
+    puts back the same inner objects, not copies.
+    """
 
     name: str
     attr_path: str
     original: Any
     snapshot: Any
-    version: int | None
+    skeleton: Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,10 +121,32 @@ def _value_snapshot(module: Any, name: str, attr_path: str) -> Any:
         return _PlainAttrIdentitySnapshot(value=value, value_type_name=type(value).__name__)
 
 
-def snapshot_module_attrs(modules: list[tuple[str, Any]]) -> tuple[ModuleAttrSnapshot, ...]:
-    """Snapshot the plain attributes of each distinct module (path order)."""
+def _skeleton(value: Any, depth: int = 0) -> Any:
+    """Record the identities inside a value-snapshotted attribute.
+
+    A tensor records its version counter; a ``list``/``tuple`` its items and a
+    ``dict`` its ``(key, item)`` pairs, each with the item's own skeleton; a
+    ``set`` its items. Anything else needs no skeleton (immutable, or tracked
+    by identity).
+    """
 
     from ._runnable_state import declared_state_versions
+
+    if isinstance(value, torch.Tensor):
+        return declared_state_versions((value,)).get(id(value))
+    if depth >= _MAX_DEPTH:
+        return None
+    if isinstance(value, (list, tuple)):
+        return [(item, _skeleton(item, depth + 1)) for item in value]
+    if type(value) is dict:
+        return [(key, item, _skeleton(item, depth + 1)) for key, item in value.items()]
+    if type(value) in (set, frozenset):
+        return list(value)
+    return None
+
+
+def snapshot_module_attrs(modules: list[tuple[str, Any]]) -> tuple[ModuleAttrSnapshot, ...]:
+    """Snapshot the plain attributes of each distinct module (path order)."""
 
     snapshots: list[ModuleAttrSnapshot] = []
     seen: set[int] = set()
@@ -129,16 +159,13 @@ def snapshot_module_attrs(modules: list[tuple[str, Any]]) -> tuple[ModuleAttrSna
         for name in sorted(names):
             original = module.__dict__[name]
             attr_path = f"{path or '<root>'}.{name}"
-            version = (
-                declared_state_versions((original,)).get(id(original))
-                if isinstance(original, torch.Tensor)
-                else None
+            snapshot = _value_snapshot(module, name, attr_path)
+            skeleton = (
+                None
+                if _is_identity_only(snapshot) or _is_special(snapshot)
+                else (_skeleton(original))
             )
-            slots.append(
-                _AttrSlot(
-                    name, attr_path, original, _value_snapshot(module, name, attr_path), version
-                )
-            )
+            slots.append(_AttrSlot(name, attr_path, original, snapshot, skeleton))
         snapshots.append(ModuleAttrSnapshot(module, type(module), names, tuple(slots)))
     return tuple(snapshots)
 
@@ -186,44 +213,87 @@ def _contents_unchanged(module: Any, slot: _AttrSlot) -> bool:
         return False  # grew past the snapshot bounds or no longer comparable
 
 
-def _copy_left_by_forward(value: Any, attr_path: str) -> Any:
-    """Copy an object the forward changed in place (the trace keeps this copy)."""
+def _original_tensor_ids(original: Any, skeleton: Any, depth: int = 0) -> set[int]:
+    """Ids of the tensors inside an attribute before the forward (restored in place)."""
 
-    from ._capture_state_helpers import _plain_attr_restore_value, _snapshot_plain_attr_value
+    if isinstance(original, torch.Tensor):
+        return {id(original)}
+    if skeleton is None or depth >= _MAX_DEPTH or not isinstance(skeleton, list):
+        return set()
+    ids: set[int] = set()
+    for row in skeleton:
+        if isinstance(row, tuple) and len(row) in (2, 3):
+            ids |= _original_tensor_ids(row[-2], row[-1], depth + 1)
+    return ids
+
+
+def _copy_left_by_forward(value: Any, originals: set[int], depth: int = 0) -> Any:
+    """Copy an object the forward changed in place (the trace keeps this copy).
+
+    Builtin ``list``/``tuple``/``dict``/``set`` containers are copied
+    recursively; a tensor that existed before the forward (``originals``; the
+    restore rewrites it in place) is cloned, whatever its size; a tensor the
+    forward created and any other object are kept by reference.
+    """
 
     if isinstance(value, torch.Tensor):
-        return value.detach().clone()
-    if type(value) in (list, dict, set):
-        return type(value)(value)
-    try:
-        return _plain_attr_restore_value(_snapshot_plain_attr_value(value, attr_path))
-    except _RESTORE_ERRORS:
+        return value.detach().clone() if id(value) in originals else value
+    if depth >= _MAX_DEPTH:
         return value
+    kind = type(value)
+    if kind is list:
+        return [_copy_left_by_forward(item, originals, depth + 1) for item in value]
+    if kind is dict:
+        return {
+            key: _copy_left_by_forward(item, originals, depth + 1) for key, item in value.items()
+        }
+    if kind is set:
+        return set(value)
+    if isinstance(value, tuple):
+        items = [_copy_left_by_forward(item, originals, depth + 1) for item in value]
+        make = getattr(kind, "_make", None)  # a namedtuple keeps its type
+        return tuple(items) if kind is tuple or make is None else make(items)
+    return value
 
 
-def _restore_contents(module: Any, slot: _AttrSlot) -> bool:
-    """Restore the original object's contents in place; ``False`` when it cannot be."""
+def _restore_into(obj: Any, snapshot: Any, skeleton: Any) -> None:
+    """Restore ``obj`` (an original object) to ``snapshot`` in place, inner identities kept."""
 
-    from ._capture_state_helpers import _plain_attr_restore_value
     from ._runnable_state import write_back_slot
 
-    original, snapshot = slot.original, slot.snapshot
-    if isinstance(snapshot, torch.Tensor) and isinstance(original, torch.Tensor):
-        if original.shape != snapshot.shape or original.dtype != snapshot.dtype:
-            original.data = snapshot  # resized or retyped in place: swap the storage back
+    if isinstance(snapshot, torch.Tensor):
+        if not isinstance(obj, torch.Tensor):
+            return
+        if obj.shape != snapshot.shape or obj.dtype != snapshot.dtype:
+            obj.data = snapshot  # resized or retyped in place: swap the storage back
         else:
-            write_back_slot(original, snapshot, slot.version)
-        return True
-    if _is_special(snapshot):
+            write_back_slot(obj, snapshot, skeleton)
+        return
+    if skeleton is None or _is_identity_only(snapshot) or _is_special(snapshot):
+        return
+    if isinstance(obj, (list, tuple)) and isinstance(snapshot, (list, tuple)):
+        for (item, child), item_snapshot in zip(skeleton, snapshot, strict=True):
+            _restore_into(item, item_snapshot, child)
+        if type(obj) is list:
+            obj[:] = [item for item, _child in skeleton]
+    elif type(obj) is dict and isinstance(snapshot, dict):
+        for (_key, item, child), item_snapshot in zip(skeleton, snapshot.values(), strict=True):
+            _restore_into(item, item_snapshot, child)
+        obj.clear()
+        obj.update((key, item) for key, item, _child in skeleton)
+    elif type(obj) is set:
+        obj.clear()
+        obj.update(skeleton)
+
+
+def _restore_contents(slot: _AttrSlot) -> bool:
+    """Restore the original object's contents in place; ``False`` when it cannot be."""
+
+    if _is_special(slot.snapshot) or (
+        slot.skeleton is None and not isinstance(slot.snapshot, torch.Tensor)
+    ):
         return False
-    value = _plain_attr_restore_value(snapshot)
-    if type(original) is list:
-        original[:] = value
-    elif type(original) in (dict, set):
-        original.clear()
-        original.update(value)
-    else:
-        return False
+    _restore_into(slot.original, slot.snapshot, slot.skeleton)
     return True
 
 
@@ -259,12 +329,13 @@ def _settle_slot(module: Any, slot: _AttrSlot, restore: bool) -> AttributeWrite 
             None if _equal_scalar(current, slot.original) else AttributeWrite("replaced", current)
         )
     elif contents_changed:
-        write = AttributeWrite("replaced", _copy_left_by_forward(current, slot.attr_path))
+        originals = _original_tensor_ids(slot.original, slot.skeleton)
+        write = AttributeWrite("replaced", _copy_left_by_forward(current, originals))
     else:
         write = None
     if not restore:
         return write
-    if contents_changed and not _restore_contents(module, slot):
+    if contents_changed and not _restore_contents(slot):
         # Not restorable in place (a tuple, a managed tensor): bind a fresh value copy.
         _put_back(module, slot.name, _plain_attr_restore_value(slot.snapshot))
         return write

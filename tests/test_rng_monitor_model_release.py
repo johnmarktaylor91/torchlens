@@ -23,6 +23,7 @@ import time
 
 import numpy as np
 import torch
+from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
@@ -128,7 +129,7 @@ def test_in_window_started_thread_parked_after_capture_does_not_pin_the_model() 
     hold, outcome = threading.Event(), []
     model = _StartsParkedThread(hold, outcome)
     trace = _intervention_ready_trace(model)
-    helper = model.thread
+    helper = stashed(trace, "thread")
     assert helper is not None and helper.is_alive()
     del model
     try:

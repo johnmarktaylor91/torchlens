@@ -15,6 +15,7 @@ the armed-lane baseline coalescing onto the ``_runnable_capture_state`` clones.
 from __future__ import annotations
 
 import torch
+from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
@@ -78,7 +79,7 @@ def test_plain_trace_skips_param_snapshot_and_stamps_fail_closed():
     # The fail-closed stamp: state-writeback coverage is UNKNOWABLE, never "no writeback".
     assert param_byte_witness_not_armed(trace) is True
     # No whole-storage byte baseline was built for any param (the RAM win).
-    tracker = model.probe
+    tracker = stashed(trace, "probe")
     assert tracker is not None
     assert not tracker.address_to_param_snapshot
     # The cheap pointer index stays armed on both lanes.
@@ -109,7 +110,7 @@ def test_armed_baseline_coalesces_onto_capture_state_clone():
     trace = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(**_RUNNABLE_CAP))
     capture_state = trace._runnable.capture_state
     assert capture_state is not None
-    tracker = model.probe
+    tracker = stashed(trace, "probe")
     assert tracker is not None
     assert dict.get(tracker.address_to_param_snapshot, "lin.weight") is not None
     resolved = tracker.address_to_param_snapshot.get("lin.weight")

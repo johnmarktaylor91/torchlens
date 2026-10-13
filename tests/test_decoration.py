@@ -15,6 +15,7 @@ import weakref
 
 import pytest
 import torch
+from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
@@ -994,9 +995,9 @@ class TestInPlaceOps:
         """Active logging must not replace PyTorch same-object returns with clones."""
 
         model = SameObjectReturnModel()
-        trace_fn(model, torch.randn(2, 3))
-        assert model.contiguous_returned_input is True
-        assert model.inplace_returned_input is True
+        trace = trace_fn(model, torch.randn(2, 3))
+        assert stashed(trace, "contiguous_returned_input") is True
+        assert stashed(trace, "inplace_returned_input") is True
 
 
 # =========================================================================

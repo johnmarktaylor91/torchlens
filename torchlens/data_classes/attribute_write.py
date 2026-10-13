@@ -32,9 +32,11 @@ class AttributeWrite:
         What the forward left in the attribute: the object itself when the
         forward bound a new object (the record keeps it alive as long as the
         trace, so a large stashed tensor costs its full memory), a copy when
-        the forward changed the original object in place (a tensor of any
-        size is cloned; a builtin ``list``/``dict``/``set`` is copied one
-        level deep), and ``None`` when the forward removed the attribute.
+        the forward changed the original object in place (builtin
+        ``list``/``tuple``/``dict``/``set`` containers are copied recursively,
+        a tensor that existed before the forward is cloned whatever its size,
+        a tensor the forward created is kept by reference), and ``None`` when
+        the forward removed the attribute.
 
     Notes
     -----
@@ -43,7 +45,9 @@ class AttributeWrite:
     identity (custom objects, containers over 128 items or nested deeper than
     64 levels, containers holding unsupported values) are recorded only when
     the forward rebinds or removes them; a change inside such an object is
-    neither recorded nor undone.
+    neither recorded nor undone. Rebinding to an equal immutable scalar is not
+    a write. A capture that re-ran the forward (escape rescue) records the net
+    effect of both runs.
     """
 
     kind: AttributeWriteKind

@@ -6,6 +6,7 @@ from typing import Any, cast
 
 import pytest
 import torch
+from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
@@ -164,9 +165,9 @@ def test_live_intervention_retention_contract(entrypoint: str) -> None:
         )
         relu_layer = next(layer for layer in log.layer_list if layer.func_name == "relu")
         assert log.state is TraceState.LIVE_CAPTURED
-        assert model.latest is not None
+        assert stashed(log, "latest") is not None
         assert relu_layer.out is not None
-        assert torch.equal(model.latest, relu_layer.out)
+        assert torch.equal(stashed(log, "latest"), relu_layer.out)
         assert torch.count_nonzero(relu_layer.out) == 0
         assert len(relu_layer.interventions) == 1
         assert relu_layer.interventions[0].timing == "post"

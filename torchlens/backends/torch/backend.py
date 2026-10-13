@@ -1355,8 +1355,8 @@ class TorchBackend:
             "TorchLens capture attempt failed "
             f"({type(exc).__name__}); TorchLens instrumentation is removed "
             "from the model and the torch environment restored. A default "
-            "capture also rolls back the buffers, random state and training "
-            "modes the partial forward changed; under "
+            "capture also rolls back the buffers, random state, training "
+            "modes and plain attributes the partial forward changed; under "
             "CaptureOptions(carry_state=True) they are not rolled back, and "
             "materialized lazy modules never are. Partial diagnostics ride the exception "
             "(exc.partial_log / torchlens.partial.from_failed_capture).",

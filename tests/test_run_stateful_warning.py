@@ -112,6 +112,11 @@ def test_graph_change_error_names_live_state_mutation_and_isolation_hint() -> No
 
     model = _CounterBranch().eval()
     captured = tl.trace(model, torch.ones(2))
+    # A default capture is a pure observer (it restores ``calls``), so the live
+    # state changes the way it does in use: an ordinary forward between capture
+    # and run.
+    assert model.calls == 0
+    model(torch.ones(2))
 
     with pytest.raises(ValueError) as caught:
         captured.run(inputs=torch.ones(2))

@@ -40,6 +40,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import torch
+from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
@@ -186,8 +187,8 @@ def test_repr_of_tensor_during_active_logging_does_not_log_detach() -> None:
 
     trace = tl.trace(model, x)
 
-    assert model.last_repr is not None
-    assert "tensor(" in model.last_repr
+    assert stashed(trace, "last_repr") is not None
+    assert "tensor(" in stashed(trace, "last_repr")
     assert trace._orphan_labels == []
     func_names = [layer.func_name for layer in trace]
     assert "detach" not in func_names

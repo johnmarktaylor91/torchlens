@@ -1560,33 +1560,15 @@ class Module:
 
     @property
     def attribute_writes(self) -> Mapping[str, AttributeWrite] | None:
-        """Plain attributes this module's forward wrote, as a read-only mapping.
+        """Plain attributes this module's forward wrote: ``{name: AttributeWrite}``, read-only.
 
-        Keys are attribute names; each value is an :class:`AttributeWrite`
-        (``kind`` ``"added"``, ``"replaced"`` or ``"removed"``, and the
-        ``value`` the forward left). A default capture puts every plain
-        attribute back as it was before the forward, so a value the forward
-        stashes on the module is read here:
-        ``trace.modules["encoder.attn"].attribute_writes["last_weights"].value``.
-        ``CaptureOptions(carry_state=True)`` records the same rows and keeps the
-        writes on the module.
-
-        Memory: the record holds a reference to whatever the forward bound (a
-        large stashed tensor stays alive as long as the trace); an object the
-        forward changed in place is copied (a tensor of any size cloned, a
-        builtin ``list``/``dict``/``set`` copied one level deep). Objects the
-        capture tracks by identity only (custom objects, containers over 128
-        items or 64 levels, containers holding unsupported values) are recorded
-        only when rebound or removed; a change inside one is neither recorded
-        nor undone. A capture that re-ran the forward (escape rescue) records
-        the net effect of both runs.
-
-        Returns
-        -------
-        Mapping[str, AttributeWrite] | None
-            ``{}`` when the forward wrote nothing on this module; ``None`` when
-            no record exists (a loaded trace, a lazy module, a non-torch
-            backend). Session-time only: never persisted.
+        A default capture puts every plain attribute back after the forward, so a
+        stashed value is read here (``attribute_writes["last_weights"].value``);
+        ``carry_state=True`` records the same rows. The record keeps what the
+        forward bound alive as long as the trace; in-place changes are copied
+        (rules and residuals: :class:`AttributeWrite`). ``{}`` when nothing was
+        written; ``None`` without a record (a loaded trace, a lazy module, a
+        non-torch backend): session-time only, never persisted.
         """
 
         writes = self.__dict__.get("_attribute_writes")

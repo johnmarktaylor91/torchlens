@@ -456,6 +456,11 @@ def test_captured_model_called_inside_another_capture() -> None:
     assert torch.equal(outer_trace[outer_trace.output_layers[0]].out.detach(), expected)
 
 
+#: Where ``_MidCaptureCopier`` puts its mid-capture deepcopy: outside the model,
+#: because a default capture restores every plain attribute the forward writes.
+_SINK: list[nn.Module] = []
+
+
 class _MidCaptureCopier(_Model):
     """``_Model`` that deep-copies ``block`` and ``alt`` while it runs.
 
@@ -471,14 +476,13 @@ class _MidCaptureCopier(_Model):
 
         super().__init__()
         self.where = where
-        self.sink: list[nn.Module] = []
         if where == "hook":
             self.gate.register_forward_hook(self._snapshot_hook)
 
     def _snapshot(self) -> None:
         """Deep-copy ``block`` and ``alt`` into the sink."""
 
-        self.sink.append(copy.deepcopy(nn.Sequential(self.block, self.alt)))
+        _SINK.append(copy.deepcopy(nn.Sequential(self.block, self.alt)))
 
     def _snapshot_hook(self, module: nn.Module, args: Any, output: Any) -> None:
         """Forward hook on ``gate``: take the snapshot."""
@@ -517,12 +521,12 @@ def test_deepcopy_taken_inside_a_capture_is_its_own_model(door: str, where: str)
     model = _MidCaptureCopier(where).eval()
     before = _model_fingerprint(model)
     reference = _eager_out(model)
-    model.sink.clear()
+    _SINK.clear()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         _DOORS[door](model)  # type: ignore[arg-type]
-    assert len(model.sink) == 1, "the model should have snapshotted exactly once"
-    clone = model.sink.pop()
+    assert len(_SINK) == 1, "the model should have snapshotted exactly once"
+    clone = _SINK.pop()
     _assert_fingerprints_equal(before, _model_fingerprint(model))
     model.where = "never"  # stop snapshotting on the eager oracle runs below
 

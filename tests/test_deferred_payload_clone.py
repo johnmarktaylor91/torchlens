@@ -22,6 +22,7 @@ import warnings
 import pytest
 import torch
 import torch.nn as nn
+from _forward_stash import stashed
 
 import torchlens as tl
 import torchlens.backends.torch.wrappers as _wrappers
@@ -194,7 +195,7 @@ def test_retained_live_activation_mutation_does_not_corrupt_saved():
     saved = {k: log[k].out.clone() for k in labels}
     # The model kept a live handle to a mid-forward activation; a post-capture
     # in-place write through it must be intercepted before the bytes move.
-    model.stash.add_(999.0)
+    stashed(log, "stash").add_(999.0)
     for k in labels:
         assert torch.equal(saved[k], log[k].out), k
 

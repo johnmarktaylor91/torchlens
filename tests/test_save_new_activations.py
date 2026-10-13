@@ -504,6 +504,10 @@ class TestDescriptiveValueError:
 
         model = DynamicModel()
         log = trace_fn(model, torch.randn(2, 10))
+        # The capture restores ``call_count`` (pure observer); an ordinary forward
+        # advances it, so the refresh takes the other branch.
+        assert model.call_count == 0
+        model(torch.randn(2, 10))
         with pytest.raises(ValueError, match="computational graph changed"):
             log.save_new_outs(model, torch.randn(2, 10))
 

@@ -89,8 +89,9 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   (`"added"`, `"replaced"` for a rebinding or an in-place change, `"removed"`) and `value`, what
   the forward left: the object itself when the forward bound a new object (the trace keeps it
   alive, so a large stashed tensor costs its full memory for the trace's lifetime), a copy when
-  the forward changed the original object in place (a tensor of any size is cloned; a builtin
-  `list`/`dict`/`set` is copied one level deep), `None` when removed. `{}` when the forward wrote
+  the forward changed the original object in place (builtin `list`/`tuple`/`dict`/`set`
+  containers are copied recursively, a tensor that existed before the forward is cloned whatever
+  its size, a tensor the forward created is kept by reference), `None` when removed. `{}` when the forward wrote
   nothing on the module; `None` when no record exists (a loaded trace, a lazy module, a
   non-torch backend). Recorded by default and under `CaptureOptions(carry_state=True)`; a change
   inside an identity-tracked object is not recorded; a capture that re-ran the forward (escape

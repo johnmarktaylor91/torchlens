@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 import torch
+from _forward_stash import stashed
 from example_models import TinyReluAdd as _TinyShiftModel
 
 import torchlens as tl
@@ -110,9 +111,9 @@ def test_intervention_ready_without_hooks_preserves_returned_values() -> None:
         capture=CaptureOptions(intervention_ready=True),
     )
 
-    assert baseline_model.latest is not None
-    assert ready_model.latest is not None
-    assert torch.equal(ready_model.latest, baseline_model.latest)
+    assert stashed(baseline_log, "latest") is not None
+    assert stashed(ready_log, "latest") is not None
+    assert torch.equal(stashed(ready_log, "latest"), stashed(baseline_log, "latest"))
     assert torch.equal(
         ready_log[ready_log.output_layers[0]].out,
         baseline_log[baseline_log.output_layers[0]].out,

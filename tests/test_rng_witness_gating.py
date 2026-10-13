@@ -15,6 +15,7 @@ from __future__ import annotations
 import sys
 
 import torch
+from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
@@ -47,7 +48,7 @@ def test_plain_trace_does_not_arm_monitor_and_stamps_fail_closed():
     model = _ProfileProbeModel()
     trace = tl.trace(model, torch.randn(2, 4))
     # No profile hook was installed for the user forward.
-    assert model.profile_hook_during_forward is None
+    assert stashed(trace, "profile_hook_during_forward") is None
     # The fail-closed stamp: channel coverage is UNKNOWABLE, never "no consumption".
     assert trace._runnable.rng_monitor_uncertain is True
     assert trace._runnable.rng_monitor_uncertain_detail == ("monitor_not_armed",)

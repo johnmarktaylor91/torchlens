@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import pytest
 import torch
+from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
@@ -221,7 +222,7 @@ def test_every_live_field_reads_mid_forward() -> None:
     """Functional smoke: all 111 live fields project on a real capture event."""
 
     model = _MidForwardReader()
-    tl.trace(model, torch.randn(2, 4))
-    assert set(model.read) == set(_LIVE_FIELD_GETTERS)
-    assert model.read["_tracing_finished"] is False
-    assert model.mutable_fresh is True
+    log = tl.trace(model, torch.randn(2, 4))
+    assert set(stashed(log, "read")) == set(_LIVE_FIELD_GETTERS)
+    assert stashed(log, "read")["_tracing_finished"] is False
+    assert stashed(log, "mutable_fresh") is True

@@ -18,6 +18,7 @@ from typing import Any
 
 import pytest
 import torch
+from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
@@ -192,8 +193,13 @@ def test_dict_held_tensor_mutated_in_place_matches_eager_and_validates() -> None
     add_ = next(op for op in trace.layer_list if op.type == "add" and op.parents)
     assert trace.layer_dict_all_keys[add_.parents[0]].type == "buffer"
     assert torch.equal(trace[trace.output_layers[0]].out, eager_out)
-    # Capture mutates the held tensor once, as one eager forward does.
-    assert torch.equal(traced_model.state["count"], eager_model.state["count"])
+    # A default capture is a pure observer: the held tensor is restored in place
+    # (same object), and the forward's one write, equal to one eager forward's, is
+    # read from the trace.
+    held = traced_model.state["count"]
+    assert torch.equal(held, model.state["count"])
+    written = stashed(trace, "state")["count"]
+    assert torch.equal(written, eager_model.state["count"]) and written is not held
     assert tl.validate(copy.deepcopy(model), x, scope="forward") is True
 
 

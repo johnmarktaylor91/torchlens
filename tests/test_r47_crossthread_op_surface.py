@@ -36,6 +36,7 @@ from typing import Any
 
 import pytest
 import torch
+from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
@@ -292,10 +293,12 @@ def test_patches_installed_while_armed_and_restored_after() -> None:
             return self.lin(x).relu()
 
     model = _ProbeModel()
-    tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(random_seed=1, **_CAP))
+    log = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(random_seed=1, **_CAP))
 
-    assert model.during["count"] == len(originals)
-    assert model.during["all_patched"] is True, "not every torch._ops call class was patched"
+    assert stashed(log, "during")["count"] == len(originals)
+    assert stashed(log, "during")["all_patched"] is True, (
+        "not every torch._ops call class was patched"
+    )
     # restored: original identity, no lingering wrapper marker
     for cls, original in originals.items():
         current = cls.__dict__.get("__call__")

@@ -7,6 +7,7 @@ from collections.abc import Iterator
 
 import pytest
 import torch
+from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
@@ -442,9 +443,9 @@ def test_device_context_factory_injection_during_active_logging() -> None:
     """Factory functions honor ``torch.device`` contexts while TorchLens is logging."""
 
     model = DeviceContextFactoryModel()
-    tl.trace(model, torch.randn(1), capture=CaptureOptions(layers_to_save="none"))
+    log = tl.trace(model, torch.randn(1), capture=CaptureOptions(layers_to_save="none"))
 
-    assert model.factory_device_type == "meta"
+    assert stashed(log, "factory_device_type") == "meta"
 
 
 def test_torch_compile_row_discloses_mid_forward_creation_exception() -> None:

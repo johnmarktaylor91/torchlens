@@ -8,6 +8,7 @@ from typing import Any, cast
 
 import pytest
 import torch
+from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
@@ -384,7 +385,7 @@ def test_top_level_tuple_input_type_is_preserved_after_internal_device_move() ->
     model = _TupleInputModel()
     trace = tl.trace(model, (torch.ones(2, 2), torch.full((2, 2), 2.0)))
 
-    assert model.saw_tuple is True
+    assert stashed(trace, "saw_tuple") is True
     assert _input_io_roles(trace) == {"input.pair.0", "input.pair.1"}
 
 

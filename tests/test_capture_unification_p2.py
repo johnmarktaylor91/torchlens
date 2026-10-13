@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 import torch
+from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
@@ -111,12 +112,14 @@ def test_negative_gate_no_live_mutation_during_forward() -> None:
     """A real forward pass should not populate mutable live-op structures."""
 
     model = _MidForwardProbe()
-    tl.trace(model, torch.randn(1, 3), capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(
+        model, torch.randn(1, 3), capture=tl.options.CaptureOptions(layers_to_save="all")
+    )
 
-    assert model.observations["raw_dict_len"] == 0
-    assert model.observations["raw_labels_len"] == 0
-    assert model.observations["event_count"] > 0
-    assert model.observations["live_index_has_label"] is True
+    assert stashed(log, "observations")["raw_dict_len"] == 0
+    assert stashed(log, "observations")["raw_labels_len"] == 0
+    assert stashed(log, "observations")["event_count"] > 0
+    assert stashed(log, "observations")["live_index_has_label"] is True
 
 
 def test_no_hot_path_liveoprecord_construction_or_field_writes() -> None:
@@ -143,21 +146,25 @@ def test_in_pass_getitem_returns_event_backed_op() -> None:
     """In-pass raw-label lookup should return the current event-backed op."""
 
     model = _MidForwardProbe()
-    tl.trace(model, torch.randn(1, 3), capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(
+        model, torch.randn(1, 3), capture=tl.options.CaptureOptions(layers_to_save="all")
+    )
 
-    assert model.observations["getitem_label"].startswith("linear_")
-    assert model.observations["getitem_shape"] == (1, 4)
+    assert stashed(log, "observations")["getitem_label"].startswith("linear_")
+    assert stashed(log, "observations")["getitem_shape"] == (1, 4)
 
 
 def test_live_repr_reads_events_during_capture() -> None:
     """The mid-capture repr counts ops from emitted events."""
 
     model = _MidForwardProbe()
-    tl.trace(model, torch.randn(1, 3), capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(
+        model, torch.randn(1, 3), capture=tl.options.CaptureOptions(layers_to_save="all")
+    )
 
-    count = model.observations["summary_count"]
-    assert count == model.observations["event_count"]
-    assert f"layers={count}" in model.observations["live_repr"]
+    count = stashed(log, "observations")["summary_count"]
+    assert count == stashed(log, "observations")["event_count"]
+    assert f"layers={count}" in stashed(log, "observations")["live_repr"]
 
 
 def test_mid_forward_summary_refuses_typed() -> None:
@@ -171,9 +178,11 @@ def test_mid_forward_summary_refuses_typed() -> None:
     from torchlens._errors import CaptureContextError
 
     model = _MidForwardProbe()
-    tl.trace(model, torch.randn(1, 3), capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(
+        model, torch.randn(1, 3), capture=tl.options.CaptureOptions(layers_to_save="all")
+    )
 
-    error = model.observations.get("summary_error")
+    error = stashed(log, "observations").get("summary_error")
     assert isinstance(error, CaptureContextError)
     assert error.fields["code"] == "trace_not_finished"
     assert "repr(trace)" in str(error)
