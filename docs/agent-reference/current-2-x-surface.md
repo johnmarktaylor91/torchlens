@@ -1141,8 +1141,14 @@
   silently; its explicit opt-in is
   `CaptureOptions(transform=tl.preprocessing.imagenet_default())`); `diagnose()` is the opt-in tensor arm whose
   outcome vocabulary HAS NO match member. `ResolvedPreprocessing.status` derives the
-  closed authority standing (authoritative/unverified_fallback/unknown); plain
-  `tl.trace(transform=)` captures stamp honest `user_transform` provenance.
+  closed authority standing (authoritative/unverified_fallback/unknown); a
+  `tl.trace(transform=)` capture whose transform IS a recognized authority (the object
+  `weights.transforms()` returns, an HF image processor) stamps that authority's own
+  record, any other transform honest `user_transform` provenance; `attach_authority`
+  records an authority a model cannot carry (torchvision weights), discovery also reads
+  an open_clip `visual.preprocess_cfg`, and `check_card()` is the ON-REQUEST verifier
+  (recorded preprocessing against the model's card, warning
+  `preprocessing_card_mismatch`; nothing runs it automatically).
   `torchlens.inventory.list_sites` is the two-rung site inventory (free module
   listing; one disclosed-cost metadata-only forward) whose emitted selectors are
   CERTIFIED against the engine's matcher at emission -- every selector extracts keyed
