@@ -32,6 +32,7 @@ from typing import Any, NoReturn
 import torch
 
 from .._errors import InvalidArgumentError
+from ..utils._torch_symbols import torch_attr
 
 __tl_layer__ = "L5"
 
@@ -228,7 +229,7 @@ def _decode_tag(tag: str, payload: Any, path: Path) -> Any:
     if tag == "$float" and payload in ("nan", "inf", "-inf"):
         return float(payload)
     if tag == "$dtype":
-        dtype = getattr(torch, str(payload), None)
+        dtype = torch_attr(str(payload))
         if isinstance(dtype, torch.dtype):
             return dtype
     if tag == "$size" and isinstance(payload, list):
