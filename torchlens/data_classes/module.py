@@ -48,7 +48,12 @@ from .._io import (
 from ..constants import LAYER_LOG_FIELD_ORDER, MODULE_LOG_FIELD_ORDER, MODULE_PASS_LOG_FIELD_ORDER
 from ..quantities import Bytes, Duration, Flops, Macs
 from ._accessor_base import Accessor
-from ._call_tree import _edge_counts_for_scope, _print_call_tree_from_root, _resolve_call_ops
+from ._call_tree import (
+    _edge_counts_for_scope,
+    _print_call_tree_from_root,
+    _resolve_call_ops,
+    _sum_call_ops_field,
+)
 from ._runtime_handles import runtime_handle_from_trace
 from .attribute_write import AttributeWrite
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
@@ -2201,28 +2206,19 @@ class Module:
 
     @property
     def num_param_tensors(self) -> int:
-        """Number of parameter tensors owned by this Module.
-
-        The root Module (``self``) encompasses every parameter of the model.
-        """
+        """Number of parameter tensors owned by this Module (the root owns all)."""
 
         return len(self.params)
 
     @property
     def num_param_tensors_trainable(self) -> int:
-        """Number of trainable parameter tensors owned by this Module.
-
-        The root Module (``self``) encompasses every parameter of the model.
-        """
+        """Number of trainable parameter tensors owned by this Module (the root owns all)."""
 
         return sum(1 for param in self.params if param.is_trainable)
 
     @property
     def num_param_tensors_frozen(self) -> int:
-        """Number of frozen parameter tensors owned by this Module.
-
-        The root Module (``self``) encompasses every parameter of the model.
-        """
+        """Number of frozen parameter tensors owned by this Module (the root owns all)."""
 
         return sum(1 for param in self.params if not param.is_trainable)
 
@@ -2371,49 +2367,15 @@ class Module:
         self._buffer_accessor = BufferAccessor(scoped, source_trace=self._source_trace)
         return cast("BufferAccessor", self._buffer_accessor)
 
-    def _sum_layer_field(self, field: str) -> int:
-        """Sum a numeric field across all layers in this module (skipping None)."""
-        if self._source_trace is None:
-            return 0
-        total = 0
-        for label in self.layer_labels:
-            entry = self._source_trace[label]
-            val = getattr(entry, field, None)
-            if val is not None:
-                total += val
-        return total
-
-    def _sum_call_op_field(self, field: str) -> int:
-        """Sum a numeric Op field over every Op this Module's calls ran (skipping None).
-
-        Each Op counts once, so a Module called twice counts both passes of
-        a Layer it runs, never only the Layer's representative pass.
-        """
-        trace = self._source_trace
-        if trace is None:
-            return 0
-        seen: set[str] = set()
-        total = 0
-        for call in self.ops.values():
-            for label in call.ops:
-                for op in _resolve_call_ops(trace, label):
-                    if op.label in seen:
-                        continue
-                    seen.add(op.label)
-                    val = getattr(op, field, None)
-                    if val is not None:
-                        total += val
-        return total
-
     @property
     def total_flops_forward(self) -> Flops:
         """Sum of forward FLOPs across every Op this Module's calls ran."""
-        return Flops(self._sum_call_op_field("flops_forward"))
+        return Flops(_sum_call_ops_field(self._source_trace, self.ops.values(), "flops_forward"))
 
     @property
     def total_flops_backward(self) -> Flops:
         """Sum of backward FLOPs across every Op this Module's calls ran."""
-        return Flops(self._sum_call_op_field("flops_backward"))
+        return Flops(_sum_call_ops_field(self._source_trace, self.ops.values(), "flops_backward"))
 
     @property
     def total_flops(self) -> Flops:
@@ -2422,14 +2384,14 @@ class Module:
 
     @property
     def total_macs_forward(self) -> Macs:
-        """TRUE forward MACs across this Module's layers (known splits only).
+        """TRUE forward MACs across every Op this Module's calls ran (known splits only).
 
         Derived from each op's two-term compute record, never ``flops // 2``.
-        Layers with an unknown MAC split are excluded (trace-level
+        Ops with an unknown MAC split are excluded (trace-level
         disclosure: ``Trace.macs_unknown_split_ops``).
         """
 
-        return Macs(self._sum_layer_field("total_macs_forward"))
+        return Macs(_sum_call_ops_field(self._source_trace, self.ops.values(), "macs_forward"))
 
     @property
     def total_macs_backward(self) -> Macs | None:

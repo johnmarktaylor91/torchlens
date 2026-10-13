@@ -4,8 +4,9 @@ Split out of ``module.py`` under the R43 file-size ratchet (T74b bounce):
 the ``show_call_tree`` ASCII printer with its display/visibility helpers,
 plus the call-scope helpers that resolve a ModuleCall's op-slot labels and
 count its scoped graph edges. ``module.py`` consumes
-``_edge_counts_for_scope``, ``_print_call_tree_from_root``, and
-``_resolve_call_ops``; the display-only helpers are internal to the printer.
+``_edge_counts_for_scope``, ``_print_call_tree_from_root``,
+``_resolve_call_ops`` and ``_sum_call_ops_field``; the display-only helpers
+are internal to the printer.
 """
 
 from typing import TYPE_CHECKING, TextIO
@@ -13,6 +14,8 @@ from typing import TYPE_CHECKING, TextIO
 from .._errors import RecordBindingError
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from .module import ModuleCall
     from .op import Op
     from .trace import Trace
@@ -81,6 +84,27 @@ def _is_atomic_module_call(call: "ModuleCall") -> bool:
         for op_label in call.output_ops
         for op in _resolve_call_ops(trace, op_label)
     )
+
+
+def _sum_call_ops_field(trace: "Trace | None", calls: "Iterable[ModuleCall]", field: str) -> int:
+    """Sum a numeric Op field once per Op over the Ops the given calls ran.
+
+    A Module called twice counts both passes of a Layer it runs, never only
+    the Layer's representative pass; ``None`` values are skipped.
+    """
+
+    if trace is None:
+        return 0
+    seen: set[str] = set()
+    total = 0
+    for call in calls:
+        for label in call.ops:
+            for op in _resolve_call_ops(trace, label):
+                value = getattr(op, field, None)
+                if op.label not in seen and value is not None:
+                    total += value
+                seen.add(op.label)
+    return total
 
 
 def _resolve_call_ops(trace: "Trace", label: str) -> list["Op"]:
