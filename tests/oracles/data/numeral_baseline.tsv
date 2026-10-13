@@ -2792,7 +2792,6 @@ package-docstrings	torchlens/bridge/brain_score.py	29
 package-docstrings	torchlens/bridge/brain_score.py	3.11
 package-docstrings	torchlens/bridge/brain_score.py	3.12
 package-docstrings	torchlens/bridge/brain_score.py	4.3
-package-docstrings	torchlens/bridge/huggingface.py	62
 package-docstrings	torchlens/bridge/lit/__init__.py	10
 package-docstrings	torchlens/bridge/lit/__init__.py	11
 package-docstrings	torchlens/bridge/lit/__init__.py	11,

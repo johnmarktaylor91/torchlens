@@ -1263,6 +1263,8 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/postprocess/ast_branches.py", "__all__"),
         ("torchlens/postprocess/loop_grouping_adapter.py", "__all__"),
         ("torchlens/preprocessing/__init__.py", "__all__"),
+        ("torchlens/preprocessing/_attached.py", "__all__"),
+        ("torchlens/preprocessing/_card.py", "__all__"),
         ("torchlens/quickstart/__init__.py", "__all__"),
         ("torchlens/receptive_field/__init__.py", "__all__"),
         ("torchlens/receptive_field/_engine.py", "__all__"),

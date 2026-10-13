@@ -241,10 +241,12 @@ def _checked_extract(archive: Path, destination: Path) -> tuple[str, str | None]
             members = tar.getmembers()
             problem = _members_problem(members)
             if problem is None:
-                if hasattr(tarfile, "data_filter"):
-                    tar.extractall(destination, filter="data")
-                else:  # pragma: no cover - interpreters without PEP 706
-                    tar.extractall(destination)  # noqa: S202 -- every member checked above
+                # The ``data`` filter (PEP 706) re-checks names and links where the
+                # interpreter has it; every member was checked above either way.
+                extract_options: dict[str, Any] = (
+                    {"filter": "data"} if hasattr(tarfile, "data_filter") else {}
+                )
+                tar.extractall(destination, **extract_options)  # noqa: S202
     except (tarfile.TarError, OSError, EOFError) as exc:
         return "", f"not a readable gzipped tar ({exc})"
     if problem is not None:
