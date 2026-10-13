@@ -66,3 +66,35 @@ def refresh_saved_module_call_count(
     count = count_saved_module_calls_from_output_ops(trace, saved_op_labels)
     trace.num_saved_module_calls = count
     return count
+
+
+def refresh_pinned_autograd_memory(trace: "Trace", saved_ops: Iterable[object]) -> None:
+    """Disclose the autograd bytes the trace's attached saved activations keep alive.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose saved-output summary is being refreshed.
+    saved_ops:
+        Ops that retain an activation payload.
+
+    Notes
+    -----
+    Sets ``trace.pinned_autograd_memory`` (R2-37): ``Bytes(0)`` when every
+    payload is detached, ``None`` on a non-torch backend, where the walk does
+    not apply.
+    """
+
+    from ..quantities import Bytes
+
+    if str(getattr(trace, "backend", "torch") or "torch") != "torch":
+        trace.pinned_autograd_memory = None
+        return
+    from ..backends.torch._pinned_graph import pinned_autograd_bytes
+
+    payloads = [
+        payload
+        for op in saved_ops
+        for payload in (getattr(op, "out", None), getattr(op, "transformed_out", None))
+    ]
+    trace.pinned_autograd_memory = Bytes(pinned_autograd_bytes(payloads))

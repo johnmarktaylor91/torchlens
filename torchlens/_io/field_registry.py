@@ -252,7 +252,8 @@ def registry_snapshot() -> dict[str, Any]:
     """One JSON-serializable snapshot of the whole registry.
 
     The canonical input to the writer contract digest and the committed
-    contract-of-record golden (``torchlens/schemas/writer_contract_v9.json``).
+    contract-of-record golden
+    (``torchlens/schemas/writer_contract_v<TLSPEC_VERSION>.json``).
     """
 
     records: dict[str, Any] = {}

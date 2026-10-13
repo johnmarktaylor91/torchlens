@@ -699,8 +699,14 @@ def _sparse_output_ref(
     *,
     ram_payload: torch.Tensor | None,
     container_path: tuple[Any, ...],
+    detach_unkept: bool = True,
 ) -> OutputRef:
-    """Return the sparse commit's output ref (shared by both freeze shapes)."""
+    """Return the sparse commit's output ref (shared by both freeze shapes).
+
+    ``detach_unkept`` is the session's ``detach_saved_activations`` choice:
+    the op's recorded detach flag is ``False`` whenever its payload was kept
+    graph-connected, either by ``keep_grad`` or by an attached session.
+    """
 
     return OutputRef(
         tensor=values.tensor_ref,
@@ -708,7 +714,7 @@ def _sparse_output_ref(
         has_saved_activation=bool(spec.save_out and (ram_payload is not None)),
         output_device=str(ctx.tensor_device) if ctx.tensor_device is not None else None,
         activation_transform=None,
-        detach_saved_activations=not spec.keep_grad,
+        detach_saved_activations=not (spec.keep_grad or not detach_unkept),
         visualizer_path=None,
         multi_output_index=ctx.output_index,
         in_multi_output=bool(container_path),
@@ -734,6 +740,7 @@ def _record_from_record_context(
         tuple[tuple[str, int], ...],
     ]
     | None = None,
+    detach_unkept: bool = True,
 ) -> OpRecord:
     """Sparse-pipeline decomposed freeze: ``OpCore`` + facets, no ``OpEvent``.
 
@@ -778,7 +785,12 @@ def _record_from_record_context(
             for parent in ctx.parent_labels
         ),
         output=_sparse_output_ref(
-            ctx, spec, values, ram_payload=ram_payload, container_path=container_path
+            ctx,
+            spec,
+            values,
+            ram_payload=ram_payload,
+            container_path=container_path,
+            detach_unkept=detach_unkept,
         ),
         is_bottom_level=bool(ctx.is_bottom_level_func),
         func_call_id=ctx.func_call_id,
@@ -886,6 +898,8 @@ class SparseOpDraft:
         ]
         | None
     )
+    #: The session's ``detach_saved_activations`` choice at draft time.
+    detach_unkept: bool = True
 
     pipeline: str = field(default="sparse", init=False)
 
@@ -903,6 +917,7 @@ class SparseOpDraft:
             function=self.function,
             container_path=self.container_path,
             module_fields=self.module_fields,
+            detach_unkept=self.detach_unkept,
         )
 
 
@@ -956,6 +971,11 @@ def append_projected_event(
         _add_tensor_backward_hook(trace, tensor, label_raw)
     recording_state = _active_recording_state
     module_fields = None if recording_state is None else recording_state.module_fields_for(ctx)
+    detach_unkept = (
+        bool(getattr(trace, "detach_saved_activations", True))
+        if recording_state is None
+        else recording_state.options.detach_saved_activations
+    )
     commit_op(
         trace,
         SparseOpDraft(
@@ -969,6 +989,7 @@ def append_projected_event(
             function=function,
             container_path=container_path,
             module_fields=module_fields,
+            detach_unkept=detach_unkept,
         ),
     )
 

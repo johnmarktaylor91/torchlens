@@ -282,6 +282,7 @@ MODEL_LOG_FIELD_ORDER = [
     "total_gradient_memory",
     "total_backward_memory",
     "total_autograd_memory",
+    "pinned_autograd_memory",
     "num_saved_ops",
     "saved_activation_memory",
     "saved_gradient_memory",

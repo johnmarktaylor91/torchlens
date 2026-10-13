@@ -341,6 +341,7 @@ def _save_predicate_activation_fields(
         save_raw_activations=getattr(trace, "save_raw_activations", True),
         ctx=ctx,
         kind="activation",
+        detach_saved_activations=bool(getattr(trace, "detach_saved_activations", True)),
     )
     metadata_tensor = ram_payload
     if metadata_tensor is None:
