@@ -282,16 +282,24 @@ trace.json True
 
 ### `xarray`
 
-`tl.export.xarray(log)` returns an `xarray.DataArray` of saved tensor outputs with
-`presentation` and `neuroid` dimensions. All exported outputs must have the same presentation
-count; xarray must be installed.
+`tl.export.xarray(log)` returns an `xarray.Dataset`. Its `out` variable is the
+NeuroidAssembly-shaped `xarray.DataArray` of saved non-buffer tensor outputs with
+`presentation` and `neuroid` dimensions; all of them must have the same presentation count.
+Every saved buffer layer (module state such as BatchNorm running statistics, retained whatever
+`save=` selects) is its own data variable named by its layer label, with its own dimensions
+`<label>_dim_<i>`, no presentation axis, its values unchanged, and the variable attribute
+`torchlens_kind="module_state"` (plus `layer_label` and `buffer_address`);
+`dataset.attrs["module_state_variables"]` lists them. A save-all trace and a partial trace
+export buffers the same way; a partial trace's unsaved layers are skipped and listed in
+`attrs["skipped_unsaved_layers"]`. xarray must be installed.
 
 ```python
 import torch
 from torch import nn
 import torchlens as tl
 
-assembly = tl.export.xarray(tl.trace(nn.ReLU(), torch.ones(1, 2)))
+dataset = tl.export.xarray(tl.trace(nn.ReLU(), torch.ones(1, 2)))
+assembly = dataset["out"]
 print(assembly.dims, assembly.shape)
 ```
 

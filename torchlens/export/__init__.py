@@ -581,34 +581,80 @@ def _presentation_by_neuroid(values: Any) -> Any:
     return values.reshape(values.shape[0], -1)
 
 
+#: Variable attribute that marks a buffer variable as module state, not an activation.
+_XARRAY_KIND_ATTR = "torchlens_kind"
+_XARRAY_MODULE_STATE = "module_state"
+
+
+def _module_state_variables(xr: Any, buffers: list[tuple[Any, Any]]) -> dict[str, Any]:
+    """Build one ``DataArray`` per buffer layer: its own shape and dims, no presentation axis.
+
+    Parameters
+    ----------
+    xr:
+        The imported ``xarray`` module.
+    buffers:
+        ``(layer, values)`` pairs, ``values`` the buffer's saved out as a NumPy array.
+
+    Returns
+    -------
+    dict[str, Any]
+        Variables keyed by buffer layer label. Each has dims ``<label>_dim_<i>``
+        (one per tensor axis, none for a 0-d buffer) and attrs
+        ``torchlens_kind="module_state"``, ``layer_label`` and ``buffer_address``.
+    """
+    variables: dict[str, Any] = {}
+    for layer, values in buffers:
+        label = _layer_label(layer)
+        variables[label] = xr.DataArray(
+            values,
+            dims=tuple(f"{label}_dim_{axis}" for axis in range(values.ndim)),
+            name=label,
+            attrs={
+                _XARRAY_KIND_ATTR: _XARRAY_MODULE_STATE,
+                "layer_label": label,
+                "buffer_address": str(getattr(layer, "address", None) or ""),
+            },
+        )
+    return variables
+
+
+def _layer_label(layer: Any) -> str:
+    """Return a layer's label as exported (``layer_label``, then ``label``)."""
+    return str(getattr(layer, "layer_label", getattr(layer, "label", "<unknown>")))
+
+
 def xarray(log: Any) -> Any:
-    """Return a NeuroidAssembly-shaped xarray DataArray of saved outs.
+    """Return an xarray Dataset: the NeuroidAssembly of saved outs plus module state.
 
     Parameters
     ----------
     log:
-        TorchLens ``Trace`` whose saved tensor outs should be flattened
-        into ``presentation`` by ``neuroid`` form.
+        TorchLens ``Trace`` whose saved tensor outs should be exported.
 
     Returns
     -------
     Any
-        ``xarray.DataArray`` with ``presentation`` and ``neuroid`` dimensions.
+        ``xarray.Dataset``. ``ds["out"]`` is the NeuroidAssembly-shaped
+        ``DataArray`` of every saved non-buffer out, flattened to
+        ``presentation`` by ``neuroid``. Each saved buffer layer (module
+        state, retained whatever ``save=`` selects) is its own data variable
+        named by its layer label, with its own dims ``<label>_dim_<i>``, no
+        presentation axis, its values unchanged, and the variable attribute
+        ``torchlens_kind="module_state"`` (plus ``layer_label`` and
+        ``buffer_address``). ``ds.attrs["module_state_variables"]`` lists them.
+        Unsaved layers of a partial trace are skipped and listed in
+        ``attrs["skipped_unsaved_layers"]`` (on the Dataset and on ``out``).
 
     Raises
     ------
     ImportError
         If xarray is not installed.
     ValueError
-        If no saved tensor outs are available.
+        If no saved non-buffer tensor outs are available.
     InvalidArgumentError
-        ``xarray_buffer_layer_unsupported`` when a saved layer is a buffer, and
-        ``xarray_presentation_mismatch`` when saved outs disagree on the
-        leading (presentation) size. Unsaved layers of a partial trace are
-        skipped and listed in ``attrs["skipped_unsaved_layers"]``; its
-        retained buffer layers are skipped and listed in
-        ``attrs["skipped_buffer_layers"]``. A save-all trace refuses on the
-        buffer.
+        ``xarray_presentation_mismatch`` when saved non-buffer outs disagree on
+        the leading (presentation) size.
     """
     # D15: xarray's product IS saved tensor values -- it refuses through the
     # EXISTING value-payload capability (a marked empty array would be synthetic).
@@ -626,16 +672,12 @@ def xarray(log: Any) -> Any:
 
     arrays = []
     layer_coord: list[str] = []
-    layer_label_coord: list[str] = []
     index_coord: list[int] = []
     skipped_unsaved: list[str] = []
-    skipped_buffers: list[str] = []
-    # Buffer values are retained whatever save= selects, so a partial trace
-    # skips (and discloses) them; a save-all trace requested them and refuses.
-    save_all = getattr(log, "layers_to_save", "all") == "all"
+    buffers: list[tuple[Any, Any]] = []
     presentation_count: int | None = None
     for layer in _iter_layers(log):
-        label = str(getattr(layer, "layer_label", getattr(layer, "label", "<unknown>")))
+        label = _layer_label(layer)
         # U28.2: a partial trace's unsaved placeholders raise on ``.out``;
         # skip them and disclose the skip in ``attrs``.
         if getattr(layer, "has_saved_activation", None) is False:
@@ -644,19 +686,14 @@ def xarray(log: Any) -> Any:
         out = getattr(layer, "out", None)
         if not isinstance(out, torch.Tensor):
             continue
+        values = out.detach().cpu().numpy()
+        # Batch-2 buffer ruling (option c): a buffer is module state with no
+        # presentation axis; it exports as its own variable, on save-all and
+        # partial traces alike.
         if getattr(layer, "is_buffer", False):
-            if not save_all:
-                skipped_buffers.append(label)
-                continue
-            raise InvalidArgumentError(
-                f"xarray export does not take buffer layers: {label} is a saved buffer "
-                "(module state, not a per-presentation activation)",
-                code="xarray_buffer_layer_unsupported",
-                remedy=_XARRAY_SITE_REMEDY,
-                argument="log",
-                layer=label,
-            )
-        flat = _presentation_by_neuroid(out.detach().cpu().numpy())
+            buffers.append((layer, values))
+            continue
+        flat = _presentation_by_neuroid(values)
         if presentation_count is None:
             presentation_count = int(flat.shape[0])
         elif flat.shape[0] != presentation_count:
@@ -670,30 +707,39 @@ def xarray(log: Any) -> Any:
             )
         arrays.append(flat)
         layer_coord.extend([label] * flat.shape[1])
-        layer_label_coord.extend([label] * flat.shape[1])
         index_coord.extend(range(flat.shape[1]))
 
     if not arrays or presentation_count is None:
         raise ValueError("No saved tensor outs are available for xarray export.")
 
     data = np.concatenate(arrays, axis=1)
-    return xr.DataArray(
+    honesty = capture_honesty_facts(log)
+    assembly = xr.DataArray(
         data,
         dims=("presentation", "neuroid"),
         coords={
             "presentation": list(range(presentation_count)),
             "neuroid": list(range(data.shape[1])),
             "layer": ("neuroid", layer_coord),
-            "layer_label": ("neuroid", layer_label_coord),
+            "layer_label": ("neuroid", list(layer_coord)),
             "neuroid_index": ("neuroid", index_coord),
         },
         name="out",
         attrs={
             "assembly": "NeuroidAssembly",
             "source": "torchlens.export.xarray",
-            "torchlens_capture_honesty": capture_honesty_facts(log),
+            "torchlens_capture_honesty": honesty,
             "skipped_unsaved_layers": skipped_unsaved,
-            "skipped_buffer_layers": skipped_buffers,
+        },
+    )
+    module_state = _module_state_variables(xr, buffers)
+    return xr.Dataset(
+        {"out": assembly, **module_state},
+        attrs={
+            "source": "torchlens.export.xarray",
+            "torchlens_capture_honesty": honesty,
+            "skipped_unsaved_layers": list(skipped_unsaved),
+            "module_state_variables": list(module_state),
         },
     )
 

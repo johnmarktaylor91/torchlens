@@ -1442,6 +1442,19 @@ shim owed*
   a string tag (wandb-export parity) and return `table`, `report`, `tags`
   (and `artifacts` for MLflow) beside the summary metrics and `capture_honesty`.
 
+**tl.export.xarray(log)** — *unstable — no deprecation shim owed*
+: Returns an `xarray.Dataset` (CHANGED, batch-2 buffer ruling, option c: it returned
+  a bare `DataArray`; read today's array as `tl.export.xarray(log)["out"]`).
+  `out` is the NeuroidAssembly `DataArray` of saved non-buffer outs,
+  `presentation` by `neuroid` with `layer` / `layer_label` / `neuroid_index`
+  coords. Each saved buffer layer is its own variable named by its layer label:
+  own dims `<label>_dim_<i>`, no presentation axis, values unchanged, attrs
+  `torchlens_kind="module_state"`, `layer_label`, `buffer_address`; the Dataset's
+  `attrs["module_state_variables"]` lists them. Save-all and partial traces both
+  export buffers (the former buffer-layer refusal is removed);
+  unsaved layers are listed in `attrs["skipped_unsaved_layers"]`. Leading-size
+  disagreement refuses `xarray_presentation_mismatch`.
+
 **watch(grain="op", allow_forward_wrap=True) (torchlens.trackers)** — *unstable — no deprecation shim owed*
 : Op-grain (tier O) watching: per-op activations from the Route-B op-tier
   collector during ordinary training. Needs `signals=("activations",)`,
