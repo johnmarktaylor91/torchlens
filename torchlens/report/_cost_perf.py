@@ -798,6 +798,12 @@ def instrumented_rate_calibration(
 #: The measurable tiers: public callables, never harness rung names (D25).
 COST_REPORT_TIERS: tuple[str, ...] = ("raw_forward", "trace")
 
+#: Ladder tiers that have no shipped callable yet, printed as words only
+#: (costreport bind row): no numeral in any column, not even a target.
+COST_REPORT_UNSHIPPED_TIERS: dict[str, str] = {
+    "bind": "planned / not shipped / not measured",
+}
+
 
 @dataclass(frozen=True)
 class CostTierMeasurement:
@@ -836,6 +842,8 @@ class CostReportResult:
                 f"  {tier.tier:<12} {tier.median_seconds * 1e3:9.3f} ms "
                 f"(spread {tier.spread_seconds * 1e3:.3f} ms; {ratio} vs raw forward)"
             )
+        for tier_name, status in COST_REPORT_UNSHIPPED_TIERS.items():
+            lines.append(f"  {tier_name:<12} {status}")
         lines.append(
             "  environment: " + ", ".join(f"{k}={v}" for k, v in sorted(self.environment.items()))
         )
