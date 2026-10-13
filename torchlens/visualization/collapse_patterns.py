@@ -309,7 +309,7 @@ def match_patterns(
     segments: dict[str, SegmentDescriptor] = {}
     claimed: set[str] = set()
     token_cache: dict[str, set[str]] = {}
-    ops = [cast("Op", op) for op in trace.layer_list]
+    ops = [cast("Op", op) for op in trace.ops]
     # Relationship collections hold bare labels while ``Op.label`` is
     # pass-qualified; index both spellings so extension can follow children.
     labels_index: dict[str, Op] = {}

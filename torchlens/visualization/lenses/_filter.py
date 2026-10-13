@@ -192,7 +192,7 @@ def _resolve_selection_operand(trace: Trace, selection: Any) -> tuple[Any, ...]:
 def _structural_join(trace: Trace, structural: set[str], labels: set[str]) -> None:
     """Add labels for ops whose L1 site key matches a cross-run aligned entry."""
 
-    for op in trace.layer_list:
+    for op in trace.ops:
         if str(getattr(op, "site_key", "")) in structural:
             labels.add(op.layer_label)
             label = getattr(op, "label", None)
@@ -278,7 +278,7 @@ def compile_display_filter(trace: Trace, display_filter: DisplayFilter) -> Compi
 
     eligible = 0
     filtered_labels: set[str] = set()
-    for op in trace.layer_list:
+    for op in trace.ops:
         if _is_boundary(op):
             continue
         eligible += 1

@@ -212,7 +212,7 @@ def records_for_member(trace: Trace, member: str) -> list[Any]:
 
     if member.startswith("total_"):
         return list(trace.layers)
-    return list(trace.layer_list)
+    return list(trace.ops)
 
 
 def safe_label(record: Any) -> str:

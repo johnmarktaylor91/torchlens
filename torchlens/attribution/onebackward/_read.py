@@ -146,7 +146,7 @@ class _SitePayloads:
     def __init__(self, trace: Any) -> None:
         """Index ops by pass-qualified label for payload reads."""
 
-        self._ops = {op.label: op for op in trace.layer_list}
+        self._ops = {op.label: op for op in trace.ops}
         self._save_mode = getattr(trace, "save_mode", "copy")
         self._cache: dict[str, torch.Tensor | None] = {}
 

@@ -32,7 +32,7 @@ def _op_refs_by_func_call_id(trace: Any) -> dict[int, tuple[OpRef, ...]]:
     """
 
     grouped: dict[int, list[OpRef]] = defaultdict(list)
-    for row_index, op in enumerate(trace.layer_list):
+    for row_index, op in enumerate(trace.ops):
         func_call_id = getattr(op, "func_call_id", None)
         label = getattr(op, "layer_label", None)
         if isinstance(func_call_id, int) and isinstance(label, str):
@@ -263,7 +263,7 @@ def _link_forward_grad_fn_rows(trace: Any, profile: _PrimitiveOpProfile) -> None
     grad_fns = getattr(trace, "grad_fn_logs", {}) or {}
     if not grad_fns:
         return
-    ops = list(trace.layer_list)
+    ops = list(trace.ops)
     partitions: dict[int, list[AtenOp]] = defaultdict(list)
     for row in profile.primitive_ops:
         if (

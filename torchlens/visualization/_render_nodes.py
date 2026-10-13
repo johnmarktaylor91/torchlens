@@ -315,7 +315,7 @@ def _op_for_occurrence_label(trace: "Trace", label: str | None) -> Op | None:
         return None
     if label in trace.ops:
         return trace.ops[label]
-    for op in trace.layer_list:
+    for op in trace.ops:
         if (
             getattr(op, "layer_label_raw", None) == label
             or getattr(op, "_layer_label_raw", None) == label
@@ -344,7 +344,7 @@ def _render_output_node_name_for_path(
     """
 
     output_labels = set(getattr(trace, "output_layers", ()) or ())
-    for op in trace.layer_list:
+    for op in trace.ops:
         if getattr(op, "layer_label", None) not in output_labels:
             continue
         if tuple(getattr(op, "container_path", ()) or ()) == path:

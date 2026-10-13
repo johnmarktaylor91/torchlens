@@ -288,7 +288,7 @@ def _build_index(trace: Any, token: tuple[Any, ...]) -> ReadEdgeIndex:
     edges: dict[str, SiteEdge] = {}
     unaddressable: dict[str, str] = {}
     alias_members: dict[tuple[int, int], list[str]] = {}
-    for op in trace.layer_list:
+    for op in trace.ops:
         label = op.label
         resolved = _resolve_node(op, rejoin_map)
         if resolved is None:

@@ -113,7 +113,7 @@ def _call_depth_estimate(trace: Trace, depth: int) -> int:
 
     visible_ops = 0
     cut_boxes: set[str] = set()
-    for op in trace.layer_list:
+    for op in trace.ops:
         stack = tuple(getattr(op, "module_call_stack", ()) or ())
         if len(stack) <= depth:
             visible_ops += 1
@@ -130,7 +130,7 @@ def _op_value_maps(
     if not values:
         return {}, {}
     op_modules: dict[str, tuple[str, ...]] = {}
-    for op in trace.layer_list:
+    for op in trace.ops:
         label = getattr(op, "label", None) or op.layer_label
         if label in values:
             op_modules[label] = tuple(getattr(op, "modules", ()) or ())
@@ -168,7 +168,7 @@ def resolve_budget(
 
     channel_values, op_modules = _op_value_maps(trace, values)
     channel_active = bool(channel_values)
-    op_count = len(trace.layer_list)
+    op_count = len(trace.ops)
 
     if op_count > COLLAPSE_OPTIMIZER_MAX_OPS:
         return _resolve_above_ceiling(trace, op_count, channel_active)
@@ -294,7 +294,7 @@ def _resolve_above_ceiling(trace: Trace, op_count: int, channel_active: bool) ->
     best_estimate = _call_depth_estimate(trace, 1)
     chosen: tuple[int, int] | None = None
     max_depth = max(
-        (len(tuple(getattr(op, "module_call_stack", ()) or ())) for op in trace.layer_list),
+        (len(tuple(getattr(op, "module_call_stack", ()) or ())) for op in trace.ops),
         default=1,
     )
     for depth in range(1, max(max_depth, 1) + 1):
