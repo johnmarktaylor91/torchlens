@@ -214,10 +214,10 @@ def _detectors_armed():
 @pytest.mark.parametrize("model_name", ["grad", "graph"])
 def test_witness_and_detector_event_counts_match_a_recount(model_name: str) -> None:
     torch.manual_seed(0)
-    if model_name == "grad":
-        model, inputs = Grad().eval(), (torch.randn(2, 4),)
-    else:
-        model, inputs = Graph().eval(), (torch.randn(2, 4), torch.randn(2, 4))
+    model = {"grad": Grad, "graph": Graph}[model_name]().eval()
+    inputs = (
+        (torch.randn(2, 4),) if model_name == "grad" else (torch.randn(2, 4), torch.randn(2, 4))
+    )
     unwrap_torch()  # recount on plain torch
     with _DispatchCount() as dispatches:
         model(*inputs)

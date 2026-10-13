@@ -145,6 +145,24 @@ def _check_region_replay_provenance(trace: Trace) -> None:
         )
 
 
+def _root_call_ops_problem(
+    trace: Trace, root_call_ops: list[str], trace_layer_labels: list[str]
+) -> str | None:
+    """Return why the root ``self:1`` call's Op list is wrong, or ``None``.
+
+    The call lists pass-qualified Op labels in execution order (exactly
+    ``trace.op_labels``), and its distinct Layers in order are exactly
+    ``trace.layer_labels``.
+    """
+
+    if root_call_ops != list(trace.op_labels):
+        return "root module self:1 ops must exactly match trace.op_labels"
+    projection = list(dict.fromkeys(trace.ops[label].layer_label for label in root_call_ops))
+    if projection != trace_layer_labels:
+        return "root module self:1 ops must project onto exactly trace.layer_labels"
+    return None
+
+
 def _check_function_root_module_invariants(trace: Trace) -> None:
     """Check minimal module metadata required for ``function_root`` traces.
 
@@ -181,20 +199,9 @@ def _check_function_root_module_invariants(trace: Trace) -> None:
     root_call = root.ops.get(1)
     if root_call is None:
         raise MetadataInvariantError(name, "root module must have exactly one self:1 call")
-    root_call_ops = list(root_call.ops)
-    if root_call_ops != list(trace.op_labels):
-        raise MetadataInvariantError(
-            name,
-            "root module self:1 ops must exactly match trace.op_labels",
-        )
-    root_call_layer_projection = list(
-        dict.fromkeys(trace.ops[op_label].layer_label for op_label in root_call_ops)
-    )
-    if root_call_layer_projection != trace_layer_labels:
-        raise MetadataInvariantError(
-            name,
-            "root module self:1 ops must project onto exactly trace.layer_labels",
-        )
+    root_call_problem = _root_call_ops_problem(trace, list(root_call.ops), trace_layer_labels)
+    if root_call_problem is not None:
+        raise MetadataInvariantError(name, root_call_problem)
 
     trace_layer_set = set(trace_layer_labels)
     for owner_label, owner in (("root module", root), ("root module call", root_call)):
