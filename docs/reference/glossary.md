@@ -392,7 +392,37 @@ one exact `other_neurons` row.
   only a firing report (`.last_report`), and supports HF `generate` with the KV cache on or off.
   It is not an `nn.Module` and bindings never nest; zero firings fail closed unless
   `on_zero_fire="disclose"`. `torchlens.intervention.steer_generate` is one-call sugar for
-  `spec.bind(model).generate(...)`.
+  `spec.bind(model).generate(...)`. Decode steps: the binding counts root forwards, so
+  `torchlens.intervention.at_step(k)` on a bound call or `generate` names the k-th forward
+  (step 0 is the prefill), on op-level rules and as `tl.module(address) & at_step(...)`
+  boundary rules, capture-free; outside a binding or an episode capture the qualifier still
+  refuses `episode_step_selector_without_episode`. Gradient edits (`tl.grad_zero`,
+  `tl.grad_scale`, `tl.bwd_hook`, ...) refuse `bind_rule_unsupported`: the lane replaces forward
+  values only; edit gradients on a `backward_ready` trace and call `trace.backward(loss)`.
+
+**torchlens.intervention.subspace_ablate(basis, *, mode="zero", feature_axis=-1, mean=None, seed=None)** — *documented-unstable*
+: Edit acting on the component of a site value inside the span of a `[k, d]` basis (rows need
+  not be orthonormal; a rank-deficient or non-finite basis refuses `subspace_basis_invalid`).
+  With `P` the orthogonal projector onto the span: `mode="zero"` gives `x - P x` (the
+  k-dimensional `project_off`), `mode="mean"` gives `x - P x + P mean`, and `mode="resample"`
+  gives `x - P x + P x[perm]` for a seeded batch permutation (`seed=` required). Inconsistent
+  mode arguments refuse `subspace_mode_invalid`; a basis over the wrong width refuses
+  `subspace_basis_dim_mismatch` at fire time. Zero mode on the span of class-mean differences
+  is the LEACE mean-equalizing erasure.
+
+**torchlens.intervention.subspace_interchange(basis, source, *, feature_axis=-1)** — *documented-unstable*
+: k-dimensional basis interchange: `x - P x + P s`, with `s` the source trace's value at the
+  same site (same-site donor resolution as `tl.patch_from`); applies a learned rotation the
+  user trained elsewhere.
+
+**torchlens.intervention.at_positions(edit, positions, *, mask=None, assume_no_padding=False, axis=1)** — *documented-unstable*
+: Restricts a same-shape edit to chosen token positions of a `(batch, tokens, ...)` site value
+  (token-position editing): `positions` is an int, a list of ints, a slice, a per-row
+  `(batch,)` index tensor, or `"first"` / `"last"`, the first or last REAL token of each row
+  resolved from `mask=` under the token-pooling mask policy (no mask and no
+  `assume_no_padding=True` refuses `transform_mask_missing`; a mask that does not describe the
+  value refuses `transform_mask_incompatible`). Unsupported spellings refuse
+  `position_edit_invalid`; positions past the sequence refuse `position_edit_out_of_range`.
 
 **Bundle**
 : A named collection of aligned Traces, constructed with `tl.bundle(...)` or `tl.Bundle(...)`, for
