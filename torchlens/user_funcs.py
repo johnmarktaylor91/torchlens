@@ -1289,6 +1289,31 @@ def _warn_failed_capture_release_incomplete(release_exc: BaseException) -> None:
     )
 
 
+def _forward_selector_resolves(trace: Trace, selector: Any) -> bool:
+    """Return whether a forward intervene selector matches any captured op.
+
+    Parameters
+    ----------
+    trace:
+        Completed capture.
+    selector:
+        Capture-time ``intervene=`` selector.
+
+    Returns
+    -------
+    bool
+        ``True`` when at least one captured op matches.
+    """
+
+    from .intervention.errors import SiteResolutionError
+
+    fanout = len(getattr(trace, "layer_list", ()) or ()) + 1
+    try:
+        return bool(trace.resolve_sites(selector, max_fanout=fanout))
+    except SiteResolutionError:
+        return False
+
+
 def _warn_zero_match_capture_selectors(
     trace: Trace,
     *,
@@ -1381,8 +1406,21 @@ def _warn_zero_match_capture_selectors(
         if (
             isinstance(intervene_selector, BaseSelector)
             and not defer_backward_intervention
-            and intervene_direction in {"forward", "both"}
-            and int(getattr(trace, "_tl_intervene_selector_fire_count", 0)) == 0
+            and (
+                (
+                    intervene_direction in {"forward", "both"}
+                    and int(getattr(trace, "_tl_intervene_selector_fire_count", 0)) == 0
+                )
+                or (
+                    # A gradient edit on a forward selector arms at backward
+                    # time through the paired forward op, so no forward fire
+                    # counts it; its zero-match fact is the selector resolving
+                    # to no captured op (the same site lifecycle the backward
+                    # match evaluates).
+                    intervene_direction == "backward"
+                    and not _forward_selector_resolves(trace, intervene_selector)
+                )
+            )
         ):
             _record_unmatched("intervene", intervene_selector, intervene_direction)
             warnings.warn(
