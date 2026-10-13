@@ -1024,6 +1024,7 @@
     "forward_duration": "keep",
     "forward_memory_backend": "keep",
     "forward_peak_memory": "keep",
+    "forward_peak_memory_reason": "keep",
     "forward_signature": "keep",
     "forward_source_file": "keep",
     "forward_source_line": "keep",
@@ -3539,6 +3540,7 @@
      "forward_duration": "keep",
      "forward_memory_backend": "keep",
      "forward_peak_memory": "keep",
+     "forward_peak_memory_reason": "keep",
      "forward_signature": "keep",
      "forward_source_file": "keep",
      "forward_source_line": "keep",
@@ -3741,6 +3743,7 @@
      "forward_duration": "fact",
      "forward_memory_backend": "fact",
      "forward_peak_memory": "fact",
+     "forward_peak_memory_reason": "fact",
      "forward_signature": "fact",
      "forward_source_file": "fact",
      "forward_source_line": "fact",
@@ -3929,6 +3932,7 @@
      "forward_duration",
      "forward_memory_backend",
      "forward_peak_memory",
+     "forward_peak_memory_reason",
      "forward_signature",
      "forward_source_file",
      "forward_source_line",
@@ -4075,5 +4079,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "909598f3d81c4648adee47a382105d2128f0e9722212d5034a3806d4bc8dbaa3"
+ "writer_contract_digest": "bb03a3e6bbcaa653213e17b518dda552eed473b1e46fef0e54a0e951f38f9e0d"
 }

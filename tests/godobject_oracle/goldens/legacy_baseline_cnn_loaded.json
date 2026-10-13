@@ -5687,6 +5687,7 @@
   "forward_memory_backend": "<measured>",
   "forward_peak_memory": "<measured>",
   "forward_peak_memory_pair": "<measured>",
+  "forward_peak_memory_reason": "<measured>",
   "forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
   "forward_source_file": "test_aliases.py",
   "forward_source_line": 36,

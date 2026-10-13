@@ -811,3 +811,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 3abe59625acdb0f1b6aea4fe9fc71e2ed30ccc36 (clean)
 recorded: 2026-10-13T05:59:36.552600+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: forks.13 (JMT 2026-10-12 1:01 AM PT, RULINGS-2B.md:22; batch-2 lane REPORT, SCHEMA-REQUESTS rows 7-8): Trace.forward_peak_memory retyped to Bytes or None and Trace.forward_peak_memory_reason added (KEEP)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c9e40cb2956d3d75ce296ed99e760a529b3b294d (dirty)
+recorded: 2026-10-13T10:33:17.744426+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: forks.13 (JMT 2026-10-12 1:01 AM PT, RULINGS-2B.md:22; batch-2 lane REPORT, SCHEMA-REQUESTS rows 7-8): Trace.forward_peak_memory retyped to Bytes or None and Trace.forward_peak_memory_reason added (KEEP)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c9e40cb2956d3d75ce296ed99e760a529b3b294d (dirty)
+recorded: 2026-10-13T10:33:17.772375+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: forks.13 (JMT 2026-10-12 1:01 AM PT, RULINGS-2B.md:22; batch-2 lane REPORT, SCHEMA-REQUESTS rows 7-8): Trace.forward_peak_memory retyped to Bytes or None and Trace.forward_peak_memory_reason added (KEEP)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c9e40cb2956d3d75ce296ed99e760a529b3b294d (dirty)
+recorded: 2026-10-13T10:33:17.798645+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: forks.13 (JMT 2026-10-12 1:01 AM PT, RULINGS-2B.md:22; batch-2 lane REPORT, SCHEMA-REQUESTS rows 7-8): Trace.forward_peak_memory retyped to Bytes or None and Trace.forward_peak_memory_reason added (KEEP)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c9e40cb2956d3d75ce296ed99e760a529b3b294d (dirty)
+recorded: 2026-10-13T10:33:17.824689+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: forks.13 (JMT 2026-10-12 1:01 AM PT, RULINGS-2B.md:22; batch-2 lane REPORT, SCHEMA-REQUESTS rows 7-8): Trace.forward_peak_memory retyped to Bytes or None and Trace.forward_peak_memory_reason added (KEEP)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c9e40cb2956d3d75ce296ed99e760a529b3b294d (dirty)
+recorded: 2026-10-13T10:33:17.850795+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: forks.13 (JMT 2026-10-12 1:01 AM PT, RULINGS-2B.md:22; batch-2 lane REPORT, SCHEMA-REQUESTS rows 7-8): Trace.forward_peak_memory retyped to Bytes or None and Trace.forward_peak_memory_reason added (KEEP)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c9e40cb2956d3d75ce296ed99e760a529b3b294d (dirty)
+recorded: 2026-10-13T10:33:17.881279+00:00
