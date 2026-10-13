@@ -1175,7 +1175,7 @@ def _speculative_render_for(
 
     if compose_code_panel or dot.engine != "dot":
         return None
-    image_root = getattr(trace, "_visualizer_dir", None)
+    image_root = trace._visualizer_dir
     return SpeculativeRender(
         fileformat=target.fileformat,
         scratch_dir=tempfile.mkdtemp(prefix="torchlens_ordered_render_"),

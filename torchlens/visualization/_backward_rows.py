@@ -127,7 +127,7 @@ def _backward_module_path_row(grad_fn_handle: GradFn, trace: Any) -> str | None:
             return None
         return f"module {module_key.split(':', 1)[0]}"
     if grad_fn_handle.type == "accumulategrad" and trace is not None:
-        param_address = getattr(trace, "_grad_fn_param_refs", {}).get(grad_fn_handle.label)
+        param_address = trace._grad_fn_param_refs.get(grad_fn_handle.label)
         if param_address is not None:
             return f"param {param_address}"
     return None

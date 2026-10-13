@@ -639,8 +639,10 @@ def render_surgery(trace: Trace, **user_kwargs: Any) -> Any:
             # rides beside the file that was actually written.
             from ._render_utils import DEFAULT_DRAW_STEM
 
-            geometry = getattr(trace, "_last_render_geometry", None)
-            written = getattr(geometry, "output_path", None)
+            try:
+                written: str | None = trace._last_render_geometry.output_path
+            except AttributeError:  # renderer that records no geometry (dagua)
+                written = None
             outpath = os.path.splitext(written)[0] if written else DEFAULT_DRAW_STEM
         census_path = f"{outpath}.census.txt"
         with open(census_path, "w", encoding="ascii", errors="replace") as census_file:
