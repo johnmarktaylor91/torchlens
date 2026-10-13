@@ -235,7 +235,7 @@ def _observer_attr_snapshot(module: Any, name: str, attr_path: str) -> Any:
 #: forward wrote collides with the stale-reference holder contract and with the
 #: idiom of reading values a forward stores on the module, so it stays opt-in
 #: until that is reconciled; flipping this default is the whole change.
-RESTORE_PLAIN_ATTRIBUTES_BY_DEFAULT = False
+RESTORE_PLAIN_ATTRIBUTES_BY_DEFAULT = True
 
 
 def snapshot_capture_observer_state(
