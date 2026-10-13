@@ -1006,6 +1006,13 @@
   `tl.export.tensorboard` requires keyword `step` (default removed). `tl.export.mlflow` /
   `tl.export.aim` log the per-layer table, the report and honesty facts as string tags
   (wandb parity; U54.1) and return `table`, `report`, `tags` (+ `artifacts` for MLflow).
+  CHANGED (batch-2 buffer ruling, option c): `tl.export.xarray(log)` returns an
+  `xarray.Dataset`, not a `DataArray`: `ds["out"]` is the unchanged NeuroidAssembly
+  (`presentation` x `neuroid`), and every saved buffer layer is its own variable named
+  by its layer label with dims `<label>_dim_<i>` (no presentation axis) and attrs
+  `torchlens_kind="module_state"`, `layer_label`, `buffer_address`
+  (`ds.attrs["module_state_variables"]` lists them). Save-all exports everything; the
+  former buffer-layer refusal is removed.
   OP GRAIN (batch-2 U32.1/U34.1): `watch(..., signals=("activations",),
   grain="op", select=<prefixes or selector>, example_input=x,
   allow_forward_wrap=True, facets=None)` drives the Route-B
