@@ -276,7 +276,7 @@ def _merge_intervention_spec_hooks(
     )
 
 
-def intervene_selector_fired_nowhere(trace: Trace, selector: Any, direction: str) -> bool:
+def intervene_selector_fired_nowhere(trace: Trace, selector: Any, direction: str | None) -> bool:
     """Return whether a capture-time ``intervene=`` selector edited nothing.
 
     A forward (or both-direction) edit counts its forward fires. A gradient

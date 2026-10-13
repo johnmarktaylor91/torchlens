@@ -720,8 +720,11 @@ def buffer_operand_selection(trace: Trace, selection: Any) -> Any:
     initial = versions[0] if versions else None
     value = getattr(initial, "out", None)
     if initial is None or not isinstance(value, torch.Tensor):
-        raise _underivable(
-            f"buffer {node.name!r} has no recorded initial version with a saved value.",
+        raise SelectionError(
+            f"buffer {node.name!r} has no recorded initial version with a saved value, so "
+            "its consumers' operand cannot be substituted. Remedy: re-capture with "
+            "intervention_ready=True so buffer versions keep their values.",
+            code="param_substitution_occurrence_underivable",
             param_address=node.name,
         )
     if node.mask is None:
@@ -729,9 +732,11 @@ def buffer_operand_selection(trace: Trace, selection: Any) -> Any:
     elif tuple(node.mask.shape) == tuple(value.shape):
         mask = node.mask
     else:
-        raise _underivable(
+        raise SelectionError(
             f"supplied mask shape {tuple(node.mask.shape)!r} does not match buffer "
-            f"{node.name!r} shape {tuple(value.shape)!r}.",
+            f"{node.name!r} shape {tuple(value.shape)!r}. Remedy: pass a bool mask over "
+            "the buffer's shape, or no mask for the whole buffer.",
+            code="param_substitution_occurrence_underivable",
             param_address=node.name,
         )
     return units(str(initial.label), mask)
