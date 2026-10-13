@@ -292,6 +292,30 @@ The callable/index annotation used inside `torchlens.attribution` is privately n
 `_AttributionTarget`; `TargetSpec` refers only to the intervention selector record and is not an
 attribution-target alias. See the [attribution reference](attribution.md).
 
+### Documented-unstable mechinterp kit additions INDEX
+
+Batch-2 additions to `torchlens.mechinterp` (the transformer analysis kit). Every spelling below
+is documented unstable and may be renamed or removed without a compatibility alias.
+
+<!-- MECHINTERP-KIT-UNSTABLE-INDEX:START -->
+
+| Surface | Exact spelling or token | Stability |
+| --- | --- | --- |
+| Factored low-rank algebra (vendored from TransformerLens, MIT) | `FactoredMatrix`, `A`, `B`, `AB`, `BA`, `T`, `svd`, `U`, `S`, `V`, `eigenvalues`, `norm`, `make_even`, `get_corner`, `collapse_l`, `collapse_r`, `unsqueeze`, `pair`, `ldim`, `mdim`, `rdim` | unstable -- no deprecation shim owed |
+| QK and OV circuits on verified head weight views | `qk_circuit`, `ov_circuit` | unstable -- no deprecation shim owed |
+| Per-neuron MLP rows under the identity gate | `mlp_neuron_contributions`, `layers`, `neurons`, `onto`, `positions` | unstable -- no deprecation shim owed |
+| Alias table generation value | `generation="4.x"` (TransformerBridge canonical hook names) | unstable -- no deprecation shim owed |
+
+<!-- MECHINTERP-KIT-UNSTABLE-INDEX:END -->
+
+`qk_circuit(trace, attention)` and `ov_circuit(trace, attention)` return a `FactoredMatrix` of
+shape `[n_q_heads, d_model, d_model]` built from `head_weight_views` (TransformerLens's
+`model.QK` / `model.OV` convention; biases excluded; under grouped-query attention each query head
+pairs with the KV head that serves it). `mlp_neuron_contributions` returns a `ComponentStack` with
+one row per hidden neuron (`hidden[n] * W_out[n]`, read from the output projection's captured
+input), a verified bias constant, and the D7 grading; unselected neurons under `neurons=` fold into
+one exact `other_neurons` row.
+
 ## Selection and storage
 
 **Predicate**
