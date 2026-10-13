@@ -29,19 +29,24 @@ _NAMED = ("first", "last")
 def _validate_positions(positions: Any) -> Any:
     """Return ``positions`` in a canonical form, refusing unsupported shapes."""
 
-    if isinstance(positions, str):
-        if positions in _NAMED:
-            return positions
-    elif isinstance(positions, slice):
+    if isinstance(positions, str) and positions in _NAMED:
         return positions
-    elif isinstance(positions, int) and not isinstance(positions, bool):
+    if isinstance(positions, slice):
+        return positions
+    if isinstance(positions, int) and not isinstance(positions, bool):
         return (int(positions),)
-    elif isinstance(positions, torch.Tensor):
-        if positions.ndim == 1 and not positions.is_floating_point():
-            return positions.detach().to(torch.int64).clone()
-    elif isinstance(positions, (list, tuple)) and positions:
-        if all(isinstance(item, int) and not isinstance(item, bool) for item in positions):
-            return tuple(int(item) for item in positions)
+    if (
+        isinstance(positions, torch.Tensor)
+        and positions.ndim == 1
+        and not positions.is_floating_point()
+    ):
+        return positions.detach().to(torch.int64).clone()
+    if (
+        isinstance(positions, (list, tuple))
+        and positions
+        and all(isinstance(item, int) and not isinstance(item, bool) for item in positions)
+    ):
+        return tuple(int(item) for item in positions)
     raise InvalidArgumentError(
         f"at_positions positions= must be an int, a non-empty list of ints, a slice, a "
         f"per-row (batch,) integer tensor, 'first' or 'last'; received {positions!r}",

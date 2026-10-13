@@ -43,9 +43,13 @@ def render_edit_repr(spec: HelperSpec) -> str:
     if public is not None:
         path, target = public
         parts = [_render_value(value) for value in spec.args]
+        order = list(inspect.signature(target).parameters)
+        keyed = sorted(
+            spec.kwargs, key=lambda item: order.index(item[0]) if item[0] in order else len(order)
+        )
         parts.extend(
             f"{key}={_render_value(value)}"
-            for key, value in spec.kwargs
+            for key, value in keyed
             if not _is_signature_default(target, key, value)
         )
         return f"{path}({', '.join(parts)})"
@@ -148,9 +152,12 @@ def _render_value(value: Any) -> str:
 
     if isinstance(value, torch.Tensor):
         return f"<tensor shape={tuple(value.shape)} dtype={value.dtype}>"
-    if callable(value) and not isinstance(value, type) and hasattr(value, "__qualname__"):
-        if type(value).__name__ in {"function", "builtin_function_or_method", "method"}:
-            return f"<function {value.__qualname__}>"
+    if (
+        callable(value)
+        and not isinstance(value, type)
+        and type(value).__name__ in {"function", "builtin_function_or_method", "method"}
+    ):
+        return f"<function {value.__qualname__}>"
     if isinstance(value, tuple):
         inner = ", ".join(_render_value(item) for item in value)
         return f"({inner},)" if len(value) == 1 else f"({inner})"
