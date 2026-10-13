@@ -52,7 +52,11 @@ def _require_pandas() -> Any:
     return pd
 
 
-def _plain(value: Any, depth: int = 0) -> Any:  # noqa: PLR0911 -- one flat type dispatch
+#: Sentinel: :func:`_plain_structured` did not recognize a container.
+_NOT_STRUCTURED = object()
+
+
+def _plain(value: Any, depth: int = 0) -> Any:
     """Convert ``value`` into a JSON-friendly payload without inlining payloads.
 
     Parameters
@@ -74,6 +78,13 @@ def _plain(value: Any, depth: int = 0) -> Any:  # noqa: PLR0911 -- one flat type
         return value
     if depth >= _MAX_PLAIN_DEPTH:
         return f"<{type(value).__name__}>"
+    converted = _plain_structured(value, depth)
+    return _plain_leaf(value) if converted is _NOT_STRUCTURED else converted
+
+
+def _plain_structured(value: Any, depth: int) -> Any:
+    """Convert a report, enum, mapping, dataclass or sequence element-wise."""
+
     if isinstance(value, DebugReport):
         return value.to_dict()
     if isinstance(value, enum.Enum):
@@ -88,6 +99,12 @@ def _plain(value: Any, depth: int = 0) -> Any:  # noqa: PLR0911 -- one flat type
     if isinstance(value, (list, tuple, set, frozenset)):
         items = sorted(value, key=repr) if isinstance(value, (set, frozenset)) else value
         return [_plain(item, depth + 1) for item in items]
+    return _NOT_STRUCTURED
+
+
+def _plain_leaf(value: Any) -> str:
+    """Summarize a non-container value: dtype/device text, tensor shape, label."""
+
     if type(value).__name__ in ("dtype", "device", "Size"):
         return str(value)
     shape = getattr(value, "shape", None)
@@ -233,6 +250,23 @@ class DebugReport:
         if self._prints_repr:
             return repr(self)
         return self.card()
+
+
+class FoundReport(DebugReport):
+    """A :class:`DebugReport` whose verdict is a ``found`` flag.
+
+    The status is ``"found"`` / ``"not_found"`` and the lead finding is the
+    report's ``message``; subclasses add subject, coverage or more findings.
+    """
+
+    __slots__ = ()
+
+    def _report_status(self) -> str:
+        return "found" if getattr(self, "found", False) else "not_found"
+
+    def _report_findings(self) -> list[str]:
+        message = getattr(self, "message", "")
+        return [str(message)] if message else []
 
 
 def rows_of(records: Sequence[Any]) -> list[dict[str, Any]]:

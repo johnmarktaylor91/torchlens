@@ -15,7 +15,7 @@ from torch import nn
 from torchlens._errors import ShapeInferenceError
 from torchlens.debug._infer_failure_classify import classify_nongeometric_failure
 
-from .._debug_report import DebugReport
+from .._debug_report import FoundReport
 
 if TYPE_CHECKING:
     from torchlens.data_classes.trace import Trace
@@ -35,7 +35,7 @@ FailureReason = Literal[
 
 
 @dataclass(frozen=True)
-class InferInputShapeResult(DebugReport):
+class InferInputShapeResult(FoundReport):
     """Result returned by :func:`infer_input_shape`.
 
     Parameters
@@ -90,18 +90,6 @@ class InferInputShapeResult(DebugReport):
 
     def _report_subject(self) -> str:
         return f"input shape ({self.strategy})"
-
-    def _report_status(self) -> str:
-        return "found" if self.found else "not_found"
-
-    def _report_findings(self) -> list[str]:
-        findings = [self.message] if self.message else []
-        if self.shape is not None:
-            findings.append(f"shape: {self.shape} dtype: {self.dtype}")
-        if self.constraining_module is not None:
-            findings.append(f"constrained by module {self.constraining_module}")
-        findings.extend(f"attempt {shape}: {outcome}" for shape, outcome in self.attempts)
-        return findings
 
 
 @dataclass(frozen=True)

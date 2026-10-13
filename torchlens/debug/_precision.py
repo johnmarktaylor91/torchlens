@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
-from .._debug_report import DebugReport, rows_of
+from .._debug_report import FoundReport, rows_of
 from ._common import _compute_ops, _op_label, _safe_out, _source_line, _tensor_unavailable_reason
 
 if TYPE_CHECKING:
@@ -66,7 +66,7 @@ class PrecisionRow:
 
 
 @dataclass(frozen=True)
-class BisectPrecisionResult(DebugReport):
+class BisectPrecisionResult(FoundReport):
     """Result of :func:`bisect_precision`.
 
     Parameters
@@ -103,9 +103,6 @@ class BisectPrecisionResult(DebugReport):
     rows: tuple[PrecisionRow, ...]
     skipped: tuple[tuple[str, str], ...]
     message: str
-
-    def _report_status(self) -> str:
-        return "found" if self.found else "not_found"
 
     def _report_findings(self) -> list[str]:
         findings = [self.message] if self.message else []

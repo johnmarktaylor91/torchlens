@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from .._debug_report import DebugReport
+from .._debug_report import DebugReport, FoundReport
 from ..errors import CaptureError
 
 if TYPE_CHECKING:
@@ -18,7 +18,7 @@ from ._common import _ordered_ops, _source_line
 
 
 @dataclass(frozen=True)
-class BisectNanResult(DebugReport):
+class BisectNanResult(FoundReport):
     """Result returned by :func:`bisect_nan`.
 
     Parameters
@@ -44,15 +44,6 @@ class BisectNanResult(DebugReport):
     kind: str
     message: str
 
-    def _report_subject(self) -> str:
-        return "trace"
-
-    def _report_status(self) -> str:
-        return "found" if self.found else "not_found"
-
-    def _report_findings(self) -> list[str]:
-        return [self.message] if self.message else []
-
     @property
     def first_bad_thing(self) -> Any:
         """Project this result into the shared first-bad-thing vocabulary."""
@@ -73,7 +64,7 @@ class BisectNanResult(DebugReport):
 
 
 @dataclass(frozen=True)
-class FindNanResult(DebugReport):
+class FindNanResult(FoundReport):
     """Structured first-non-finite diagnostic returned by ``find_nan``.
 
     Parameters
@@ -127,12 +118,6 @@ class FindNanResult(DebugReport):
 
     def _report_subject(self) -> str:
         return str(self.scope)
-
-    def _report_status(self) -> str:
-        return "found" if self.found else "not_found"
-
-    def _report_findings(self) -> list[str]:
-        return [self.message] if self.message else []
 
     @property
     def first_bad_thing(self) -> Any:

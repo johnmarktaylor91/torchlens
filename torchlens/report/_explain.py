@@ -66,12 +66,13 @@ def explain(
     refuse_presenter_subject(log, "tl.report.explain")
     if audience not in {"researcher", "practitioner", "auto"}:
         raise ValueError("audience must be 'researcher', 'practitioner', or 'auto'.")
-    if max_tokens is not None:
-        if isinstance(max_tokens, bool) or not isinstance(max_tokens, int) or max_tokens < 1:
-            raise ValueError(
-                "max_tokens must be a positive integer token budget for the "
-                "text report; omit it for the full report."
-            )
+    if max_tokens is not None and (
+        isinstance(max_tokens, bool) or not isinstance(max_tokens, int) or max_tokens < 1
+    ):
+        raise ValueError(
+            "max_tokens must be a positive integer token budget for the "
+            "text report; omit it for the full report."
+        )
 
     if _is_partial_trace(log):
         diagnosis = _partial_diagnosis(log)

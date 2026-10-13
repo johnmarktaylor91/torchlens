@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from .._debug_report import DebugReport, rows_of
+from .._debug_report import FoundReport, rows_of
 from ._first_bad import FirstBadThing, amp_scaled_gradients_hint
 
 if TYPE_CHECKING:
@@ -82,7 +82,7 @@ class BackwardTransition:
 
 
 @dataclass(frozen=True)
-class BackwardNanResult(DebugReport):
+class BackwardNanResult(FoundReport):
     """Result of :func:`bisect_nan_backward`.
 
     Parameters
@@ -139,9 +139,6 @@ class BackwardNanResult(DebugReport):
 
     def _report_subject(self) -> str:
         return f"backward pass {self.backward_pass}"
-
-    def _report_status(self) -> str:
-        return "found" if self.found else "not_found"
 
     def _report_coverage(self) -> str | None:
         return f"{self.checked_calls} calls checked, {self.unchecked_calls} unchecked"

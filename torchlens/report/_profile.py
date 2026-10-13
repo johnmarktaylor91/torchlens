@@ -867,7 +867,7 @@ def _assemble_level_rows(
     return rows, row_evidence
 
 
-def build_profile(
+def build_profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascending, top_k, group_by) ARE Trace.profile's public surface
     trace: Trace,
     *,
     level: ProfileLevel = "op",

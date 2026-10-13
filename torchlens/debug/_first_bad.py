@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .._debug_report import DebugReport
+from .._debug_report import FoundReport
 
 __all__ = ["FirstBadThing", "amp_scaled_gradients_hint"]
 
@@ -30,7 +30,7 @@ COVERAGE_VALUES = ("complete", "found_first_among_checked", "partial", "none")
 
 
 @dataclass(frozen=True)
-class FirstBadThing(DebugReport):
+class FirstBadThing(FoundReport):
     """One first-bad-thing finding in the shared diagnostic vocabulary.
 
     Parameters
@@ -86,9 +86,6 @@ class FirstBadThing(DebugReport):
 
     def _report_subject(self) -> str:
         return str(self.tool)
-
-    def _report_status(self) -> str:
-        return "found" if self.found else "not_found"
 
     def _report_coverage(self) -> str | None:
         return str(self.coverage) or None
