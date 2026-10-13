@@ -38930,6 +38930,7 @@
     "__ref__": "Trace",
     "label": null
    },
+   "pinned_autograd_memory": "<measured>",
    "profile_enabled": false,
    "raise_on_nan": false,
    "random_seed": 20260812,
@@ -38996,7 +38997,7 @@
    "structure_evidence": null,
    "structure_only": false,
    "tied_param_groups": [],
-   "tlspec_version": 9,
+   "tlspec_version": 10,
    "total_activation_memory": "<measured>",
    "total_autograd_memory": "<measured>",
    "total_backward_duration": "<measured>",
