@@ -1671,7 +1671,13 @@ def _resolve_patch_donor_site(source: Any, layer_log: Any) -> tuple[Any, Any]:
     return site_label, source_site
 
 
-def patch_from(source: Any) -> HelperSpec:
+def patch_from(
+    source: Any,
+    *,
+    source_site: Any = None,
+    positions: Any = None,
+    position_axis: int = 1,
+) -> HelperSpec:
     """Create a helper that patches site values from another trace's capture.
 
     For each targeted site, the replacement value is the SOURCE trace's
@@ -1692,19 +1698,62 @@ def patch_from(source: Any) -> HelperSpec:
     ONE stochastic primitive; ``patch_from(plan)`` applies it -- one coherent
     donor per logical firing under the derived-seed law).
 
+    SOURCE-TO-TARGET MAPPING (Patchscopes, SelfIE): ``source_site=`` reads
+    the donor at another site of the source trace (a label, pass-qualified on
+    multi-pass layers, or a selector naming one op) instead of the edited
+    site, and ``positions=`` writes chosen source positions into chosen
+    target positions along ``position_axis`` (default 1, the sequence axis of
+    a ``(batch, seq, hidden)`` activation), leaving every other target
+    position unchanged. ``positions`` is an ``int`` (same position on both
+    sides), a ``{source_position: target_position}`` dict, or a list of
+    pairs; negative positions count from the end. With a position map the two
+    prompts may differ in length, and a donor batch of one broadcasts across
+    the target batch.
+
+    Parameters
+    ----------
+    source:
+        Source trace (or a ``SamplingPlan``, which takes no mapping).
+    source_site:
+        Donor site on the source trace; ``None`` reads the edited site.
+    positions:
+        Source-to-target position map; ``None`` patches the whole value.
+    position_axis:
+        Axis the positions index, on both the donor and the target value.
+
+    Returns
+    -------
+    HelperSpec
+        The patch edit.
+
     DOCUMENTED-UNSTABLE spelling pending its naming-session ratification.
     """
 
+    from ._patch_mapping import apply_position_map, normalize_positions, resolve_source_site
     from .stochastic import SamplingPlan, plan_patch_helper
 
     if isinstance(source, SamplingPlan):
+        if source_site is not None or positions is not None:
+            raise InvalidArgumentError(
+                "patch_from(SamplingPlan) takes no source_site= or positions= mapping: "
+                "the plan already chooses its donors",
+                code="patch_positions_invalid",
+                remedy="drop source_site=/positions=, or patch from a source Trace",
+                argument="source_site" if source_site is not None else "positions",
+            )
         return plan_patch_helper(source)
 
+    pairs = normalize_positions(positions)
     identity = {
         "source_trace_label": str(getattr(source, "trace_label", "") or ""),
         "source_model_class": str(getattr(source, "model_class_qualname", "") or ""),
         "source_object_id": str(id(source)),
     }
+    if source_site is not None:
+        identity["source_site"] = repr(source_site)
+    if pairs is not None:
+        identity["positions"] = repr(pairs)
+        identity["position_axis"] = str(int(position_axis))
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook binding source values at fire time."""
@@ -1723,13 +1772,20 @@ def patch_from(source: Any) -> HelperSpec:
 
             from .errors import HookValueError
 
-            site_label, source_site = _resolve_patch_donor_site(source, hook.layer_log)
-            value = source_site.out
+            if source_site is None:
+                site_label, donor_op = _resolve_patch_donor_site(source, hook.layer_log)
+            else:
+                site_label, donor_op = resolve_source_site(source, source_site)
+            value = donor_op.out
             if not isinstance(value, torch.Tensor):
                 raise HookValueError(f"patch_from source value at {site_label!r} is not a tensor.")
             # Never hand the source trace's stored tensor itself downstream —
             # the engine writes hook outputs into this trace's records.
-            return value.detach().clone()
+            if pairs is None:
+                return value.detach().clone()
+            return apply_position_map(
+                out, value.detach(), pairs, int(position_axis), site_label=site_label
+            )
 
         return _hook
 
