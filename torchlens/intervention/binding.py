@@ -37,6 +37,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from .._errors import InvalidArgumentError
+from ._bind_step import ACTIVE_BIND_SESSION, active_bind_decode_step
 from ._helper_fingerprint import helper_versions
 from ._module_alias_guard import (
     bare_module_address,
@@ -186,10 +187,37 @@ def _module_anchor_addresses(rule: Any) -> list[str]:
     return anchors
 
 
-def _is_boundary_rule(rule: Any) -> bool:
-    """Whether a rule targets a module OUTPUT boundary (plain ``tl.module``)."""
+def _boundary_parts(rule: Any) -> tuple[Any, tuple[Any, ...]] | None:
+    """Split a module-boundary WHERE term into its module term and step qualifiers.
 
-    return getattr(rule.where, "selector_kind", None) == "module"
+    A boundary rule is a plain ``tl.module(address)`` or an AND of exactly one
+    such term with ``at_step(...)`` decode-step qualifiers (N-IV-12), which the
+    boundary hook checks against the armed call's decode step.
+
+    Returns
+    -------
+    tuple[Any, tuple[Any, ...]] | None
+        ``(module_selector, step_selectors)``, or ``None`` for any other shape.
+    """
+
+    from .selectors import CompositeSelector
+
+    where = rule.where
+    if getattr(where, "selector_kind", None) == "module":
+        return where, ()
+    if not isinstance(where, CompositeSelector) or where.operator != "and":
+        return None
+    modules = [child for child in where.selectors if child.selector_kind == "module"]
+    steps = tuple(child for child in where.selectors if child.selector_kind == "episode_step")
+    if len(modules) != 1 or not steps or len(modules) + len(steps) != len(where.selectors):
+        return None
+    return modules[0], steps
+
+
+def _is_boundary_rule(rule: Any) -> bool:
+    """Whether a rule targets a module OUTPUT boundary (``tl.module``, optionally step-qualified)."""
+
+    return _boundary_parts(rule) is not None
 
 
 def _rule_contains_module_boundary(rule: Any) -> bool:
@@ -621,6 +649,7 @@ class _ArmedRuntime:
         self._handles: list[Any] = []
         self._minter_cm: Any = None
         self._mode: Any = None
+        self._step_token: Any = None
 
     def __enter__(self) -> _ArmedRuntime:
         """Install the runtime atomically (teardown on partial failure)."""
@@ -629,6 +658,7 @@ class _ArmedRuntime:
 
         try:
             self._minter_token = _ACTIVE_LIVE_MINTER.set(self.session.minter)
+            self._step_token = ACTIVE_BIND_SESSION.set(self.session)
             self._install_tracker_hooks()
             self._install_boundary_hooks()
             if self.binding._op_level_plans:
@@ -680,6 +710,12 @@ class _ArmedRuntime:
             except BaseException as exc:  # noqa: BLE001 -- teardown must continue
                 first = first or exc
             self._minter_token = None  # type: ignore[assignment]
+        if getattr(self, "_step_token", None) is not None:
+            try:
+                ACTIVE_BIND_SESSION.reset(self._step_token)
+            except BaseException as exc:  # noqa: BLE001 -- teardown must continue
+                first = first or exc
+            self._step_token = None
         return first
 
     def _install_tracker_hooks(self) -> None:
@@ -745,7 +781,8 @@ class _ArmedRuntime:
         session = self.session
         binding = self.binding
         for plan in binding._boundary_plans:
-            target_value = str(plan.rule.where.selector_value)
+            parts = _boundary_parts(plan.rule)
+            target_value = str(parts[0].selector_value) if parts is not None else ""
             for address in plan.boundary_targets:
                 module = binding._modules_by_address[address]
                 self._handles.append(
@@ -776,6 +813,8 @@ def _make_boundary_hook(
         # ("blocks.7:2") matches only that pass -- the same candidate spelling
         # the capture lifecycle produces for containment matching.
         if not module_address_matches(f"{address}:{pass_index}", target_value):
+            return None
+        if not _decode_step_admits(plan):
             return None
         replacements: dict[tuple[Any, ...], Any] = {}
         for out, container_path, _spec in _iter_loggable_live_outputs(output, True):
@@ -814,6 +853,16 @@ def _make_boundary_hook(
         return _replace_output_tensors_by_path(output, replacements)
 
     return _boundary
+
+
+def _decode_step_admits(plan: _RulePlan) -> bool:
+    """Whether a boundary rule's ``at_step`` qualifiers admit the current decode step."""
+
+    parts = _boundary_parts(plan.rule)
+    if parts is None or not parts[1]:
+        return True
+    step = active_bind_decode_step()
+    return step is not None and all(step in selector.steps for selector in parts[1])
 
 
 def _alias_disclosure(aliases: dict[str, str]) -> dict[str, tuple[str, ...]]:

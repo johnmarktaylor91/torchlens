@@ -1218,6 +1218,15 @@ def _episode_step_matches(value: Any, subject: Any, lifecycle: str) -> bool:
 
         session = active_join_session()
         if session is None:
+            from torchlens.intervention._bind_step import active_bind_decode_step
+
+            # Capture-free door (N-IV-12): an armed binding counts root
+            # forwards, so a bound generate answers the step qualifier with
+            # its decode step (prefill is step 0); the episode semantics above
+            # are unchanged.
+            decode_step = active_bind_decode_step()
+            if decode_step is not None:
+                return decode_step in steps
             from torchlens.intervention.errors import SelectorCapabilityError
 
             raise SelectorCapabilityError(
