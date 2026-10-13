@@ -2,7 +2,9 @@
 
 TransformerLens's daily-driver analysis tools rebuilt on torchlens: residual
 decomposition, direct logit attribution, per-head results, patching grids,
-head-taxonomy scores, prompt utilities, an alias layer, and retention plans
+head-taxonomy scores, per-neuron MLP rows, QK/OV circuits (``FactoredMatrix``,
+vendored from TransformerLens with credit), prompt utilities, an alias layer, and
+retention plans
 -- derived from the captured graph on ANY architecture with a certifiable
 additive residual topology, with verification built in (identities run IN
 the API, not only in CI).
@@ -21,10 +23,12 @@ from ._aliases import AliasResolution, alias_report, resolve_alias, translation_
 from ._compose import apply_norm_scale, full_decomposition, stack_facet
 from ._dla import direct_logit_contributions, token_directions
 from ._errors import MechInterpError
+from ._factored import FactoredMatrix
 from ._grids import PatchGrid, grid, patch_heads_grid, patch_residual_grid
 from ._heads import attention_head_contributions
 from ._lowered import LoweredResult, lowered_counterfactual
-from ._params import HeadWeightViews, ProjectionSource, head_weight_views
+from ._neurons import mlp_neuron_contributions
+from ._params import HeadWeightViews, ProjectionSource, head_weight_views, ov_circuit, qk_circuit
 from ._prompts import PromptInspection, inspect_prompt, test_prompt
 from ._records import ComponentRow, ComponentStack, ContributionScores, Coordinate
 from ._residual import residual_accumulation, residual_decomposition
@@ -37,6 +41,7 @@ __all__ = [
     "ComponentStack",
     "ContributionScores",
     "Coordinate",
+    "FactoredMatrix",
     "HeadScoreResult",
     "HeadWeightViews",
     "LoweredResult",
@@ -55,8 +60,11 @@ __all__ = [
     "head_weight_views",
     "inspect_prompt",
     "lowered_counterfactual",
+    "mlp_neuron_contributions",
+    "ov_circuit",
     "patch_heads_grid",
     "patch_residual_grid",
+    "qk_circuit",
     "residual_accumulation",
     "residual_decomposition",
     "resolve_alias",

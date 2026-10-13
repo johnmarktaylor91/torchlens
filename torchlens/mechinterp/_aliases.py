@@ -8,8 +8,13 @@ HONEST status (``real`` / ``reconstructed_read_only`` / ``needs_capture`` /
 first contact with fused reality is a teaching message, not a KeyError.
 
 Accepted forms: full 2.x names (``blocks.3.attn.hook_z``), 3.x bridge-cache
-names (the two generations have DIFFERENT vocabularies -- measured),
-tuple forms (``("z", 3)``), and compact forms (``"k6"``). Layer indices
+names (the two generations have DIFFERENT vocabularies -- measured), the
+4.x ``TransformerBridge`` canonical names (``blocks.3.attn.o.hook_in``,
+``blocks.3.ln2.hook_in``), tuple forms (``("z", 3)``), and compact forms
+(``"k6"``). Rows may carry a ``scope`` (attention / mlp modules only), an
+embedding ``role`` (token / position, decided by table size against the
+unembedding vocabulary), and an ``only_if_facet`` / ``unless_facet``
+condition where one TLens name means different tensors by architecture. Layer indices
 resolve through the EXECUTED attention/block order, so models with no
 ``blocks.N`` naming still resolve; no parser manufactures paths.
 
@@ -67,7 +72,8 @@ class AliasResolution:
     remedy:
         The action that unblocks the caller (always present off ``real``).
     generation:
-        Which TLens generation vocabulary matched (``2.x`` / ``3.x-bridge``).
+        Which TLens generation vocabulary matched (``2.x`` / ``3.x-bridge`` /
+        ``4.x``).
     """
 
     query: str
@@ -92,43 +98,174 @@ def translation_table() -> list[dict[str, Any]]:
     return list(data["rows"])
 
 
-def _parse_query(name: Any) -> tuple[str, str | None, int | None, str | None]:
-    """Normalize a query to (display, facet-or-None, layer-or-None, generation).
+#: Facets that identify a module's scope when a translation row names one.
+_SCOPE_KEYS: dict[str, frozenset[str]] = {
+    "attention": frozenset({"n_q_heads", "d_head"}),
+    "mlp": frozenset({"down_out"}),
+}
 
-    Full names match translation rows (with ``{L}`` extraction); tuples are
-    ``(facet, layer)``; compact ``"k6"`` is facet + layer. An unmatched full
-    name returns (display, None, None, None) and resolves structurally
-    absent with the table as the remedy.
+
+@dataclass(frozen=True)
+class _Query:
+    """A parsed alias query: the matched translation row (if any) and its layer."""
+
+    display: str
+    facet: str | None
+    layer: int | None
+    generation: str | None
+    row: dict[str, Any] | None = None
+
+
+def _match_row(text: str, row: dict[str, Any]) -> tuple[bool, int | None]:
+    """Return (matched, layer) for one translation row's ``{L}`` pattern."""
+
+    pattern = str(row["tlens"])
+    regex = "^" + re.escape(pattern).replace(r"\{L\}", r"(\d+)") + "$"
+    match = re.match(regex, text)
+    if not match:
+        return False, None
+    return True, (int(match.group(1)) if match.groups() else None)
+
+
+def _parse_query(name: Any, prefer: str | None = None) -> _Query:
+    """Normalize a query to its translation row, facet, layer and generation.
+
+    Full names match translation rows (with ``{L}`` extraction; a name that
+    appears in several generations resolves through the ``prefer``
+    generation's row when given, else the first); tuples are ``(facet,
+    layer)``; compact ``"k6"`` is facet + layer. An unmatched full name
+    carries no facet and resolves structurally absent with the table as
+    the remedy.
     """
 
     if isinstance(name, tuple):
         facet, layer = name
-        return f"({facet!r}, {layer})", str(facet), int(layer), None
+        return _Query(f"({facet!r}, {layer})", str(facet), int(layer), None)
     text = str(name)
     compact = _COMPACT_PATTERN.match(text)
     if compact:
-        return text, compact.group(1), int(compact.group(2)), None
+        return _Query(text, compact.group(1), int(compact.group(2)), None)
+    matches = []
     for row in translation_table():
-        pattern = str(row["tlens"])
-        regex = "^" + re.escape(pattern).replace(r"\{L\}", r"(\d+)") + "$"
-        match = re.match(regex, text)
-        if match:
-            layer = int(match.group(1)) if match.groups() else None
-            return text, str(row["facet"]), layer, str(row["generation"])
-    return text, None, None, None
+        matched, layer = _match_row(text, row)
+        if matched:
+            matches.append((row, layer))
+    if not matches:
+        return _Query(text, None, None, None)
+    chosen = next((m for m in matches if m[0]["generation"] == prefer), matches[0])
+    row, layer = chosen
+    return _Query(text, str(row["facet"]), layer, str(row["generation"]), row)
 
 
-def _facet_home_modules(trace: Any, facet: str) -> list[Any]:
-    """Return modules exposing ``facet`` in executed order."""
+def _facet_home_modules(trace: Any, facet: str, scope: str | None = None) -> list[Any]:
+    """Return modules exposing ``facet`` in executed order, filtered by row scope."""
 
     from ._heads import _facet_keys_or_none
 
+    required = {facet} | set(_SCOPE_KEYS.get(scope or "", frozenset()))
     homes = []
     for module in trace.modules:
         keys = _facet_keys_or_none(module)
-        if keys is not None and facet in keys:
+        if keys is not None and required <= keys:
             homes.append(module)
     return homes
+
+
+def _param_rows(facet: Any) -> int | None:
+    """Return a 2D parameter facet's row count from its recorded shape.
+
+    Reads the parameter record's shape METADATA (``spec.home.shape``), never
+    the live value, so resolution still answers after the source model was
+    garbage-collected.
+    """
+
+    home = getattr(getattr(facet, "spec", None), "home", None)
+    shape = tuple(getattr(home, "shape", ()) or ())
+    return int(shape[0]) if len(shape) == 2 else None
+
+
+def _vocab_size(trace: Any) -> int | None:
+    """Return the unembedding's vocabulary size, when a head is recorded."""
+
+    for module in _facet_home_modules(trace, "unembed_weight"):
+        rows = _param_rows(module.facets.get("unembed_weight"))
+        if rows is not None:
+            return rows
+    return None
+
+
+def _embedding_rows(module: Any) -> int | None:
+    """Return an embedding module's table size (``num_embeddings``)."""
+
+    return _param_rows(module.facets.get("weight"))
+
+
+def _embedding_homes(trace: Any, role: str) -> list[Any]:
+    """Return the embedding modules serving ``role`` (``token`` / ``position``).
+
+    The token embedding is the lookup whose table size equals the
+    unembedding's vocabulary (a structural fact, never a module-name
+    guess); with no readable head, a lone embedding is the token embedding.
+    Every other lookup is a position-side candidate, so BERT-style token-type
+    tables make ``position`` ambiguous rather than silently wrong.
+    """
+
+    embeddings = _facet_home_modules(trace, "lookup")
+    vocab = _vocab_size(trace)
+    if vocab is None:
+        token = embeddings[:1] if len(embeddings) == 1 else []
+    else:
+        token = [m for m in embeddings if _embedding_rows(m) == vocab]
+    if role == "token":
+        return token
+    return [m for m in embeddings if m not in token]
+
+
+def _homes_for(trace: Any, query: _Query, facet: str) -> list[Any]:
+    """Return candidate home modules for a parsed query."""
+
+    row = query.row or {}
+    role = row.get("role")
+    if role is not None:
+        return _embedding_homes(trace, str(role))
+    return _facet_home_modules(trace, facet, row.get("scope"))
+
+
+def _layer_candidates(trace: Any, query: _Query, homes: list[Any]) -> list[Any]:
+    """Return the executed-order modules a layer index counts over.
+
+    A scoped or role-bearing row counts only its own homes; an unscoped
+    query with no home falls back to the attention modules (the historical
+    order, so ``("pattern", 1)`` still finds layer 1).
+    """
+
+    if homes:
+        return homes
+    row = query.row or {}
+    if row.get("role") is not None or row.get("scope") in _SCOPE_KEYS:
+        return []
+    return _attention_modules(trace)
+
+
+def _condition_absence(module: Any, row: dict[str, Any] | None) -> str | None:
+    """Return the row's absence remedy when its facet condition fails, else None.
+
+    ``only_if_facet`` / ``unless_facet`` express where a TransformerLens name
+    means a DIFFERENT tensor by architecture (4.x ``mlp.hook_pre`` is the
+    gate projection's raw output on gated MLPs), so the resolver answers
+    honestly absent instead of serving the wrong tensor.
+    """
+
+    if not row:
+        return None
+    from ._heads import _facet_keys_or_none
+
+    keys = _facet_keys_or_none(module) or set()
+    only_if = row.get("only_if_facet")
+    unless = row.get("unless_facet")
+    if (only_if is not None and only_if not in keys) or (unless is not None and unless in keys):
+        return str(row.get("absent_remedy") or "this name means a different tensor here")
+    return None
 
 
 def _status_for(module: Any, facet: str) -> tuple[str, str | None]:
@@ -172,6 +309,35 @@ def _site_coordinates(module: Any, facet: str) -> tuple[str | None, int | None]:
     return getattr(home, "site_key", None), getattr(home, "pass_index", None)
 
 
+def _resolve_on(module: Any, query: _Query, facet: str) -> AliasResolution:
+    """Resolve a parsed query against its chosen home module."""
+
+    absent = _condition_absence(module, query.row)
+    if absent is not None:
+        return AliasResolution(
+            query=query.display,
+            status="structurally_absent",
+            facet=facet,
+            module_address=str(module.address),
+            remedy=absent,
+            generation=query.generation,
+        )
+    status, remedy = _status_for(module, facet)
+    site_key, pass_index = (
+        _site_coordinates(module, facet) if status.startswith(("real", "recon")) else (None, None)
+    )
+    return AliasResolution(
+        query=query.display,
+        status=status,
+        facet=facet,
+        module_address=str(module.address),
+        site_key=site_key,
+        pass_index=pass_index,
+        remedy=remedy,
+        generation=query.generation,
+    )
+
+
 def resolve_alias(trace: Any, name: Any) -> AliasResolution:
     """Resolve one TLens spelling against a trace (mikit D16).
 
@@ -180,7 +346,8 @@ def resolve_alias(trace: Any, name: Any) -> AliasResolution:
     trace:
         A finished torchlens trace.
     name:
-        Full TLens name, tuple form ``(facet, layer)``, or compact ``"k6"``.
+        Full TLens name (2.x, 3.x-bridge or 4.x canonical), tuple form
+        ``(facet, layer)``, or compact ``"k6"``.
 
     Returns
     -------
@@ -188,76 +355,58 @@ def resolve_alias(trace: Any, name: Any) -> AliasResolution:
         Never raises for an unresolvable name -- the status IS the answer.
     """
 
-    display, facet, layer, generation = _parse_query(name)
-    if facet is None:
+    return _resolve(trace, _parse_query(name))
+
+
+def _resolve(trace: Any, query: _Query) -> AliasResolution:
+    """Resolve a parsed query (shared by ``resolve_alias`` and ``alias_report``)."""
+
+    if query.facet is None:
         return AliasResolution(
-            query=display,
+            query=query.display,
             status="structurally_absent",
             remedy="no translation row matches this spelling; see "
             "tl.mechinterp.translation_table() for the known (name, generation) rows",
         )
-    homes = _facet_home_modules(trace, facet)
-    if not homes and facet in ("resid_pre", "resid_mid", "resid_post", "mlp_out", "attn_out"):
-        homes = _facet_home_modules(trace, facet)
-    if layer is not None:
-        ordered = homes if len(homes) > 1 else _attention_modules(trace)
-        candidates = list(homes) or ordered
-        if layer >= len(candidates):
+    facet = query.facet
+    homes = _homes_for(trace, query, facet)
+    if query.layer is not None:
+        candidates = _layer_candidates(trace, query, homes)
+        if query.layer >= len(candidates):
             return AliasResolution(
-                query=display,
+                query=query.display,
                 status="structurally_absent",
                 facet=facet,
-                remedy=f"layer {layer} outside the {len(candidates)} executed modules "
+                remedy=f"layer {query.layer} outside the {len(candidates)} executed modules "
                 f"exposing {facet!r}",
-                generation=generation,
+                generation=query.generation,
             )
-        module = candidates[layer]
-        status, remedy = _status_for(module, facet)
-        site_key, pass_index = (
-            _site_coordinates(module, facet)
-            if status.startswith(("real", "recon"))
-            else (None, None)
-        )
-        return AliasResolution(
-            query=display,
-            status=status,
-            facet=facet,
-            module_address=str(module.address),
-            site_key=site_key,
-            pass_index=pass_index,
-            remedy=remedy,
-            generation=generation,
-        )
+        return _resolve_on(candidates[query.layer], query, facet)
     if not homes:
+        role = (query.row or {}).get("role")
+        detail = (
+            f"no {role} embedding in this trace (a rotary or position-free model has no "
+            "learned position table)"
+            if role
+            else f"no module in this trace exposes {facet!r}"
+        )
         return AliasResolution(
-            query=display,
+            query=query.display,
             status="structurally_absent",
             facet=facet,
-            remedy=f"no module in this trace exposes {facet!r}; see "
-            "tl.facets.facet_coverage(trace)",
-            generation=generation,
+            remedy=f"{detail}; see tl.facets.facet_coverage(trace)",
+            generation=query.generation,
         )
     if len(homes) > 1:
         return AliasResolution(
-            query=display,
+            query=query.display,
             status="ambiguous",
             facet=facet,
             remedy=f"{len(homes)} modules expose {facet!r}; qualify with a layer index "
             f"(e.g. ('{facet}', 0)) or a module address",
-            generation=generation,
+            generation=query.generation,
         )
-    status, remedy = _status_for(homes[0], facet)
-    site_key, pass_index = _site_coordinates(homes[0], facet)
-    return AliasResolution(
-        query=display,
-        status=status,
-        facet=facet,
-        module_address=str(homes[0].address),
-        site_key=site_key,
-        pass_index=pass_index,
-        remedy=remedy,
-        generation=generation,
-    )
+    return _resolve_on(homes[0], query, facet)
 
 
 def alias_report(trace: Any, *, generation: str = "2.x") -> list[AliasResolution]:
@@ -274,7 +423,7 @@ def alias_report(trace: Any, *, generation: str = "2.x") -> list[AliasResolution
         refuse(
             code="mi_translation_generation_unknown",
             message=f"No translation rows carry generation {generation!r}.",
-            remedy='pass generation="2.x" or "3.x-bridge"',
+            remedy='pass generation="2.x", "3.x-bridge" or "4.x"',
             generation=generation,
         )
     n_layers = len(_attention_modules(trace))
@@ -283,7 +432,8 @@ def alias_report(trace: Any, *, generation: str = "2.x") -> list[AliasResolution
         pattern = str(row["tlens"])
         if "{L}" in pattern:
             for layer in range(n_layers):
-                report.append(resolve_alias(trace, pattern.replace("{L}", str(layer))))
+                name = pattern.replace("{L}", str(layer))
+                report.append(_resolve(trace, _parse_query(name, prefer=generation)))
         else:
-            report.append(resolve_alias(trace, pattern))
+            report.append(_resolve(trace, _parse_query(pattern, prefer=generation)))
     return report

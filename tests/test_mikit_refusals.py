@@ -235,5 +235,5 @@ def test_translation_table_rows_well_formed():
     rows = mi.translation_table()
     assert len(rows) >= 18
     for row in rows:
-        assert row["tlens"] and row["generation"] in ("2.x", "3.x-bridge")
+        assert row["tlens"] and row["generation"] in ("2.x", "3.x-bridge", "4.x")
         assert row["facet"]
