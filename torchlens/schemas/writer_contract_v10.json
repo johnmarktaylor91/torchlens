@@ -948,6 +948,7 @@
     "_trace_core": "drop",
     "_tracing_finished": "keep",
     "_transform": "drop",
+    "_uncalled_module_addresses": "drop",
     "_validation_diagnostics": "drop",
     "_visualizer_dir": "drop",
     "_warned_direct_write": "drop",
@@ -3463,6 +3464,7 @@
      "_trace_core": "drop",
      "_tracing_finished": "keep",
      "_transform": "drop",
+     "_uncalled_module_addresses": "drop",
      "_validation_diagnostics": "drop",
      "_visualizer_dir": "drop",
      "_warned_direct_write": "drop",
@@ -4075,5 +4077,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "909598f3d81c4648adee47a382105d2128f0e9722212d5034a3806d4bc8dbaa3"
+ "writer_contract_digest": "db6677e7e9fd04d7a1b0f057388e5e9e740c45bece5499013bf562ea917ecd5e"
 }
