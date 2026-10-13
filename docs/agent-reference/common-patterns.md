@@ -12,6 +12,10 @@ import torchlens as tl
 
 log = tl.trace(model, x, save=tl.func("relu"))
 activation = log["relu_1_2"].out
+# A default trace is a pure observer: buffers, modes, random state and plain module
+# attributes are put back afterwards. A value the forward stashes on a module
+# (self.last_weights = w) is read from the trace; carry_state=True keeps it on the module.
+stashed = log.modules["self"].attribute_writes  # {name: AttributeWrite(kind, value)}
 # Module and stage names resolve to that module's output at every selector door,
 # including timm stage names (FeatureGetterNet's "blocks.9" for "model.blocks.9").
 backbone = torch.nn.Sequential()

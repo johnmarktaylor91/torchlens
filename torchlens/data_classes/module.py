@@ -23,8 +23,9 @@ This matches each accessor's natural granularity.
 """
 
 import weakref
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -49,6 +50,7 @@ from ..quantities import Bytes, Duration, Flops, Macs
 from ._accessor_base import Accessor
 from ._call_tree import _edge_counts_for_scope, _print_call_tree_from_root, _resolve_call_ops
 from ._runtime_handles import runtime_handle_from_trace
+from .attribute_write import AttributeWrite
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 from .layer import _layer_log_to_row
 
@@ -93,6 +95,7 @@ _TO_PANDAS_EXCLUDED_MODULE_FIELDS: frozenset[str] = frozenset(
         "full_backward_hooks",
         # Arbitrary user-selected payload (parallel to Op.annotations exclusion):
         "custom_attributes",
+        "attribute_writes",
     }
 )
 
@@ -1253,6 +1256,10 @@ class Module:
         "full_backward_hooks": FieldPolicy.KEEP,
         "custom_attributes": FieldPolicy.BLOB_RECURSIVE,
         "custom_methods": FieldPolicy.KEEP,
+        # Session-time record of the forward's plain-attribute writes (arbitrary
+        # user objects): never persisted; a loaded trace reads None.
+        "attribute_writes": FieldPolicy.DROP,
+        "_attribute_writes": FieldPolicy.DROP,
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
         # Lazily-populated facet-view cache: a public ``.facets`` read poked
         # it into ``__dict__``, so an undeclared row made a read-only accessor
@@ -1550,6 +1557,40 @@ class Module:
         self.input_layers = input_layers
         self.output_ops = output_ops
         self.output_layers = output_layers
+
+    @property
+    def attribute_writes(self) -> Mapping[str, AttributeWrite] | None:
+        """Plain attributes this module's forward wrote, as a read-only mapping.
+
+        Keys are attribute names; each value is an :class:`AttributeWrite`
+        (``kind`` ``"added"``, ``"replaced"`` or ``"removed"``, and the
+        ``value`` the forward left). A default capture puts every plain
+        attribute back as it was before the forward, so a value the forward
+        stashes on the module is read here:
+        ``trace.modules["encoder.attn"].attribute_writes["last_weights"].value``.
+        ``CaptureOptions(carry_state=True)`` records the same rows and keeps the
+        writes on the module.
+
+        Memory: the record holds a reference to whatever the forward bound (a
+        large stashed tensor stays alive as long as the trace); an object the
+        forward changed in place is copied (a tensor of any size cloned, a
+        builtin ``list``/``dict``/``set`` copied one level deep). Objects the
+        capture tracks by identity only (custom objects, containers over 128
+        items or 64 levels, containers holding unsupported values) are recorded
+        only when rebound or removed; a change inside one is neither recorded
+        nor undone. A capture that re-ran the forward (escape rescue) records
+        the net effect of both runs.
+
+        Returns
+        -------
+        Mapping[str, AttributeWrite] | None
+            ``{}`` when the forward wrote nothing on this module; ``None`` when
+            no record exists (a loaded trace, a lazy module, a non-torch
+            backend). Session-time only: never persisted.
+        """
+
+        writes = self.__dict__.get("_attribute_writes")
+        return None if writes is None else MappingProxyType(writes)
 
     @property
     def name(self) -> str:
@@ -2758,3 +2799,9 @@ def _install_module_facades() -> None:
 
 
 _install_module_facades()
+
+
+def set_attribute_writes(record: Module, writes: dict[str, AttributeWrite]) -> None:
+    """Attach a capture's attribute-write record to one ``Module`` (internal)."""
+
+    record.__dict__["_attribute_writes"] = dict(writes)

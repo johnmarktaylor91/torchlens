@@ -21,6 +21,11 @@ module-level table keyed by the session, outside the trace (the failed-capture
 scrub drops runtime-only trace fields). Each undo restores only a location
 that still holds the object it installed, so forward-time reassignment,
 removal or interruption never makes cleanup clobber or resurrect anything.
+The journal never reads state the forward left on the module: after this
+cleanup, a default (pure-observer) capture restores every plain attribute to
+its pre-capture object and contents and records the forward's edits on the
+trace (``Module.attribute_writes``); under ``CaptureOptions(carry_state=True)``
+the forward's edits stay, which is the case the never-clobber rule protects.
 """
 
 from __future__ import annotations

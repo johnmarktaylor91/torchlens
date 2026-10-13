@@ -17,6 +17,13 @@ namedtuples) to the wrappers for the capture's duration and restores the
 user's objects afterwards, so those captures take ONE forward with no warning.
 Holders it cannot rebind (a module global, a custom object) keep the
 disclosure plus the rescue forward.
+
+Holder contract under the pure-observer capture (AGT-2360): the rebind
+journal and the rescue never read state the forward left on the module. A
+default capture restores every plain attribute afterwards, so forward-time
+holder edits are undone and read from the trace's attribute-write record;
+only ``CaptureOptions(carry_state=True)`` keeps them, and then the journal
+still never clobbers a location the forward changed.
 """
 
 from __future__ import annotations
@@ -37,6 +44,7 @@ from torchlens._errors import TorchLensCaptureGapWarning
 from torchlens.backends.torch import rescue
 from torchlens.backends.torch._tl import is_decorated_function
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
+from torchlens.options import CaptureOptions
 
 _PROVENANCE = "no graph/source provenance"
 _Acts = namedtuple("_Acts", ["first"])
@@ -164,7 +172,12 @@ class _BoxHolder(nn.Module):
 
 
 class _Counted(nn.Module):
-    """Root wrapper counting how many times the capture ran the forward."""
+    """Root wrapper counting how many times the capture ran the forward.
+
+    The count is a forward-time write, so a default (pure-observer) capture
+    restores ``calls`` to ``[0]`` and the count is read from the trace record
+    (:func:`_forward_runs`).
+    """
 
     def __init__(self, inner: nn.Module) -> None:
         super().__init__()
@@ -176,6 +189,18 @@ class _Counted(nn.Module):
 
         self.calls[0] += 1
         return self.inner(x)
+
+
+def _forward_runs(trace: tl.Trace, model: _Counted) -> int:
+    """Forward runs the capture made, read from the trace's attribute-write record.
+
+    Also checks the observer contract: the module's own counter is back at 0.
+    """
+
+    assert model.calls == [0]
+    write = trace.modules["self"].attribute_writes["calls"]
+    assert write.kind == "replaced"
+    return int(write.value[0])
 
 
 def _module_global_module(env: types.SimpleNamespace) -> nn.Module:
@@ -218,7 +243,7 @@ def test_rebindable_stale_reference_captures_in_one_forward(
         warnings.simplefilter("error", UserWarning)
         trace = tl.trace(model, torch.randn(2, 4))
 
-    assert model.calls == [1]
+    assert _forward_runs(trace, model) == 1
     assert "gelu" in [op.func_name for op in trace.ops]
     assert "internalsource" not in [layer.layer_type for layer in trace.layer_list]
     assert trace.rescue_rerun is None
@@ -236,7 +261,7 @@ def test_unrebindable_stale_reference_is_disclosed_and_rescued(
     with pytest.warns(UserWarning, match=r"adopted at module exit inner\.act"):
         trace = tl.trace(model, torch.randn(2, 4))
 
-    assert model.calls == [2]
+    assert _forward_runs(trace, model) == 2
     assert "gelu" in [op.func_name for op in trace.ops]
     assert "internalsource" not in [layer.layer_type for layer in trace.layer_list]
     assert trace.rescue_rerun is not None and trace.rescue_rerun["recovered"] is True
@@ -321,7 +346,7 @@ def test_transformers_activation_built_before_capture_needs_no_rescue(
         warnings.simplefilter("error", UserWarning)
         trace = tl.trace(model, torch.randn(2, 4))
 
-    assert model.calls == [1]
+    assert _forward_runs(trace, model) == 1
     assert [op.func_name for op in trace.ops].count("gelu") == 1
     assert trace.rescue_rerun is None
     assert act.act is held_before
@@ -387,26 +412,54 @@ def test_aliased_holders_stay_aliased_during_the_capture(raw: types.SimpleNamesp
     assert model.a is held and model.b is held
 
 
-def test_forward_time_holder_edits_are_never_clobbered(raw: types.SimpleNamespace) -> None:
-    """Cleanup restores only locations that still hold what the rebind installed."""
+class _Editing(nn.Module):
+    """Edits its holders during the forward: clears, deletes and rebinds."""
 
-    class Editing(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.items = [raw.gelu]
-            self.table = {"op": raw.tanh, "gone": raw.relu}
-            self.act = raw.gelu
+    def __init__(self, raw: types.SimpleNamespace) -> None:
+        super().__init__()
+        self.items = [raw.gelu]
+        self.table = {"op": raw.tanh, "gone": raw.relu}
+        self.act = raw.gelu
 
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            y = self.table["op"](self.items[0](x))
-            self.items.clear()
-            del self.table["gone"]
-            self.act = torch.sigmoid
-            return y
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = self.table["op"](self.items[0](x))
+        self.items.clear()
+        del self.table["gone"]
+        self.act = torch.sigmoid
+        return y
 
-    model = Editing()
+
+def test_default_capture_undoes_forward_time_holder_edits(raw: types.SimpleNamespace) -> None:
+    """A default capture is a pure observer: every holder is back as it was, by identity.
+
+    The rebind journal undoes only locations that still hold what it installed;
+    the observer bracket then restores every plain attribute the forward
+    changed (the cleared list and the edited dict in place, the rebound
+    attribute to its original object). The edits are read from the trace.
+    """
+
+    model = _Editing(raw)
+    items, table = model.items, model.table
     wrap_torch()
-    tl.trace(model, torch.randn(2, 4))
+    trace = tl.trace(model, torch.randn(2, 4))
+
+    assert model.items is items and items == [raw.gelu]
+    assert model.table is table and table == {"op": raw.tanh, "gone": raw.relu}
+    assert model.act is raw.gelu
+    writes = trace.modules["self"].attribute_writes
+    assert writes["items"].value == []
+    assert set(writes["table"].value) == {"op"} and writes["table"].value["op"] is raw.tanh
+    assert writes["act"].value is torch.sigmoid
+
+
+def test_forward_time_holder_edits_are_never_clobbered_under_carry_state(
+    raw: types.SimpleNamespace,
+) -> None:
+    """With carry_state=True cleanup restores only locations still holding a wrapper."""
+
+    model = _Editing(raw)
+    wrap_torch()
+    tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(carry_state=True))
 
     assert model.items == []
     assert set(model.table) == {"op"} and model.table["op"] is raw.tanh

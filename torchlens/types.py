@@ -12,6 +12,7 @@ import torch
 
 from .capture.outcome import CaptureOutcome, CapturePhase, CaptureStatus, FailureOrigin
 from .data_classes.aten_op import AtenOp, OpRef
+from .data_classes.attribute_write import AttributeWrite
 from .data_classes.backward_pass import BackwardPass
 from .data_classes.buffer import Buffer
 from .data_classes.func_call_location import FuncCallLocation
@@ -30,6 +31,7 @@ GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
 __all__ = [
     "ActivationPostfunc",
     "AtenOp",
+    "AttributeWrite",
     "BackwardPass",
     "Buffer",
     "Bytes",

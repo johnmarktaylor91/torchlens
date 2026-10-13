@@ -901,6 +901,8 @@ MODULE_LOG_FIELD_ORDER = [
     "max_descendant_depth",
     "custom_attributes",
     "custom_methods",
+    # Session-time record of the forward's plain-attribute writes (never persisted)
+    "attribute_writes",
 ]
 
 GRAD_FN_PASS_LOG_FIELD_ORDER = [

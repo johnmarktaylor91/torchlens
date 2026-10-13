@@ -68,14 +68,34 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   NumPy) before the forward and restores them afterwards, on success and on failure, so a
   train-mode BatchNorm's running statistics do not advance. A buffer the forward changed is written
   back only where its bytes changed, and trace payloads that alias it keep their forward-time
-  values. Plain module attributes the forward writes are not restored yet (the restore is built
-  but opt-in until it is reconciled with the stale-reference holder contract); lazy modules are
-  left as their materializing forward leaves them. `CaptureOptions(carry_state=True)` opts into forward-equivalent state: buffers, modes and
-  plain attributes advance exactly as one direct `model(x)` would, the same spelling as
-  `trace.run(inputs=..., carry_state=True)`. No capture advances the caller's random streams
+  values. Every plain module attribute is restored too: a rebound or removed attribute gets its
+  original object back, a tensor or builtin `list`/`dict`/`set` changed in place is restored in
+  place, and attributes the forward added are removed; what the forward wrote is read from the
+  trace (`Module.attribute_writes`). Objects without a value snapshot (custom objects, containers
+  over 128 items or 64 levels) are tracked by identity: a rebinding is undone, a change inside
+  them is not. Lazy modules are left as their materializing forward leaves them.
+  `CaptureOptions(carry_state=True)` opts into forward-equivalent state: buffers, modes and
+  plain attributes advance exactly as one direct `model(x)` would, and the attribute writes are
+  recorded the same way, the same spelling as `trace.run(inputs=..., carry_state=True)`. No capture advances the caller's random streams
   under either setting (each capture draws from its own seed and restores the global engines). A capture-cache hit runs no forward, so nothing advances. An item that
   cannot be restored is named in one `capture_state_restore_incomplete` warning. Transient: an
   option only, never persisted.
+
+**Module.attribute_writes / AttributeWrite** — *unstable — no deprecation shim owed*
+: The plain instance attributes one module's forward wrote during the capture, as a read-only
+  mapping `{attribute name: AttributeWrite}`, for example
+  `trace.modules["encoder.attn"].attribute_writes["last_weights"].value`.
+  `torchlens.types.AttributeWrite` is a frozen record with `kind`
+  (`"added"`, `"replaced"` for a rebinding or an in-place change, `"removed"`) and `value`, what
+  the forward left: the object itself when the forward bound a new object (the trace keeps it
+  alive, so a large stashed tensor costs its full memory for the trace's lifetime), a copy when
+  the forward changed the original object in place (a tensor of any size is cloned; a builtin
+  `list`/`dict`/`set` is copied one level deep), `None` when removed. `{}` when the forward wrote
+  nothing on the module; `None` when no record exists (a loaded trace, a lazy module, a
+  non-torch backend). Recorded by default and under `CaptureOptions(carry_state=True)`; a change
+  inside an identity-tracked object is not recorded; a capture that re-ran the forward (escape
+  rescue) records the net effect of both runs. Session-time only: never persisted, excluded
+  from `to_pandas()`.
 
 **Bound-method root**
 : The ruled `tl.trace` root contract: an `nn.Module` OR a bound method of one, e.g.

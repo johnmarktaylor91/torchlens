@@ -59,10 +59,17 @@
   an explicit `inference_only=True` is never cleared.
   Trace-side failed captures expose `exc.partial_log`, recoverable with
   `tl.partial.from_failed_capture(exc)`.
-- **A default `tl.trace` is a pure observer** (U40.1; `carry_state` DOCUMENTED-UNSTABLE):
-  buffers (persistent and non-persistent), every module's `training` flag and the global random
-  states are restored after the capture, on success and on failure.
-  `CaptureOptions(carry_state=True)` keeps forward-equivalent state (the same spelling as
+- **A default `tl.trace` is a pure observer** (U40.1, AGT-2360; `carry_state`,
+  `Module.attribute_writes` and `torchlens.types.AttributeWrite` DOCUMENTED-UNSTABLE): buffers
+  (persistent and non-persistent), every module's `training` flag, the global random states and
+  every plain module attribute are restored after the capture, on success and on failure
+  (rebound attributes get their original object back; containers and tensors changed in place
+  are restored in place; added attributes are removed). A value the forward stashes on a module
+  is read from the trace: `trace.modules["encoder.attn"].attribute_writes["last_weights"].value`
+  (`kind` is `"added"`, `"replaced"` or `"removed"`; `{}` when nothing was written; `None` on a
+  loaded trace, the record is never persisted; the record keeps what the forward bound alive as
+  long as the trace). `CaptureOptions(carry_state=True)` keeps forward-equivalent state, writes
+  included, and records the same rows (the same spelling as
   `trace.run(inputs=..., carry_state=True)`). A default `trace.run()` restores the parameters and
   buffers it changed, not random state. Train-mode BatchNorm runs through
   `run` and `run(until=)` (D18); `backward()` through a default run's activations works without

@@ -3,8 +3,9 @@
 The default live ``run()`` snapshots the model's declared state (parameters and
 buffers) before executing and restores it afterwards (``_runnable_state``
 takes the snapshot; this module restores it). A default ``tl.trace`` is a pure
-observer (U40.1): ``capture_observer_bracket`` snapshots buffers, random state and
-training modes (plain attributes on request) and restores them after the capture;
+observer (U40.1): ``capture_observer_bracket`` snapshots buffers, random state,
+training modes and plain attributes and restores them after the capture, recording
+what the forward wrote to attributes on the trace;
 ``CaptureOptions(carry_state=True)`` opts into forward-equivalent state.
 """
 
@@ -19,6 +20,11 @@ from typing import Any
 import torch
 
 from . import _state
+from ._capture_attr_observer import (
+    ModuleAttrSnapshot,
+    settle_module_attrs,
+    snapshot_module_attrs,
+)
 from ._runnable_state import (
     LiveDeclaredStateSnapshot,
     declared_slot_unchanged,
@@ -30,6 +36,7 @@ __all__ = (
     "CaptureObserverHandle",
     "CaptureObserverSnapshot",
     "LiveStateRestoreFailure",
+    "attach_attribute_writes",
     "capture_observer_bracket",
     "restore_capture_observer_state",
     "restore_live_declared_state",
@@ -148,24 +155,18 @@ def restore_live_declared_state(snapshot: LiveDeclaredStateSnapshot, trace: Any 
 # Capture observer bracket (U40.1): a default ``tl.trace`` is a pure observer.
 # ---------------------------------------------------------------------------
 
-#: Instance attributes the observer bracket never snapshots: torch's own
-#: per-module registries and hook dicts (the exact bare-``nn.Module`` baseline,
-#: computed at runtime), the mode flag (restored separately), and TorchLens
-#: instrumentation that persists across captures by design.
-_OBSERVER_SKIPPED_ATTRS = frozenset({"training", "forward"})
-
 
 @dataclass(frozen=True, slots=True)
 class CaptureObserverSnapshot:
-    """What a capture restores: buffers, RNG and modes (plain attributes on request).
+    """What a capture restores: buffers, RNG, modes and plain attributes.
 
     ``buffers`` holds one ``(module, local_name, original)`` row per buffer
     registration and ``buffer_clones`` one value clone per distinct buffer
     object. ``modes`` holds every module's ``training`` flag, ``rng`` the
     global torch (CPU and live CUDA devices), Python and NumPy generator
-    states, and ``attrs`` one value snapshot per plain instance attribute
-    (``attr_names`` the attribute names each module had, so attributes the
-    forward adds are removed).
+    states, ``attrs`` each module's plain instance attributes (objects plus
+    value snapshots, see ``_capture_attr_observer``) and ``paths`` every
+    ``(path, module)`` row the bracket covers, for the trace record.
     """
 
     buffers: tuple[tuple[Any, str, torch.Tensor], ...]
@@ -173,8 +174,8 @@ class CaptureObserverSnapshot:
     buffer_versions: dict[int, int | None]
     modes: tuple[tuple[Any, bool], ...]
     rng: dict[str, Any]
-    attrs: tuple[tuple[Any, str, str, Any], ...]
-    attr_names: tuple[tuple[Any, type, frozenset[str]], ...]
+    attrs: tuple[ModuleAttrSnapshot, ...]
+    paths: tuple[tuple[str, Any], ...]
 
 
 def _observed_modules(model: Any) -> list[tuple[str, Any]]:
@@ -195,52 +196,7 @@ def _observed_modules(model: Any) -> list[tuple[str, Any]]:
     ]
 
 
-def _observer_attr_names(module: Any) -> frozenset[str]:
-    """Return the plain instance attribute names the bracket snapshots."""
-
-    from ._capture_state_helpers import _module_baseline_instance_attrs
-
-    baseline = _module_baseline_instance_attrs()
-    return frozenset(
-        name
-        for name in module.__dict__
-        if name not in baseline
-        and name not in _OBSERVER_SKIPPED_ATTRS
-        and not name.startswith(("tl_", "_tl"))
-    )
-
-
-def _observer_attr_snapshot(module: Any, name: str, attr_path: str) -> Any:
-    """Snapshot one plain attribute by value, or by identity when unsupported.
-
-    Value snapshots cover scalars, strings, small tensors and small containers
-    of them; any other object (configs, caches of large tensors) is tracked by
-    identity, so a forward that REBINDS it is undone while its interior state
-    is outside the bracket.
-    """
-
-    from ._capture_state_helpers import (
-        _PlainAttrIdentitySnapshot,
-        _snapshot_module_plain_attr_value,
-    )
-
-    try:
-        return _snapshot_module_plain_attr_value(module, name, attr_path)
-    except RuntimeError:
-        value = module.__dict__[name]
-        return _PlainAttrIdentitySnapshot(value=value, value_type_name=type(value).__name__)
-
-
-#: Plain-attribute restore is built but off by default: restoring attributes the
-#: forward wrote collides with the stale-reference holder contract and with the
-#: idiom of reading values a forward stores on the module, so it stays opt-in
-#: until that is reconciled; flipping this default is the whole change.
-RESTORE_PLAIN_ATTRIBUTES_BY_DEFAULT = True
-
-
-def snapshot_capture_observer_state(
-    model: Any, *, restore_attributes: bool = RESTORE_PLAIN_ATTRIBUTES_BY_DEFAULT
-) -> CaptureObserverSnapshot:
+def snapshot_capture_observer_state(model: Any) -> CaptureObserverSnapshot:
     """Snapshot the state a default (pure-observer) capture restores afterwards."""
 
     from .utils.rng import log_current_rng_states
@@ -249,10 +205,8 @@ def snapshot_capture_observer_state(
     buffers: list[tuple[Any, str, torch.Tensor]] = []
     clones: dict[int, torch.Tensor] = {}
     versions: dict[int, int | None] = {}
-    attrs: list[tuple[Any, str, str, Any]] = []
-    attr_names: list[tuple[Any, type, frozenset[str]]] = []
     with _state.pause_logging(), torch.no_grad():
-        for path, module in modules:
+        for _path, module in modules:
             for local_name, value in module._buffers.items():
                 if not isinstance(value, torch.Tensor) or torch.nn.parameter.is_lazy(value):
                     continue
@@ -260,23 +214,15 @@ def snapshot_capture_observer_state(
                 if id(value) not in clones:
                     clones[id(value)] = value.detach().clone()
                     versions.update(declared_state_versions((value,)))
-            if not restore_attributes:
-                continue
-            names = _observer_attr_names(module)
-            attr_names.append((module, type(module), names))
-            for name in sorted(names):
-                attr_path = f"{path or '<root>'}.{name}"
-                attrs.append(
-                    (module, name, attr_path, _observer_attr_snapshot(module, name, attr_path))
-                )
+        attrs = snapshot_module_attrs(modules)
     return CaptureObserverSnapshot(
         buffers=tuple(buffers),
         buffer_clones=clones,
         buffer_versions=versions,
         modes=tuple((module, bool(module.training)) for _path, module in modules),
         rng=log_current_rng_states(),
-        attrs=tuple(attrs),
-        attr_names=tuple(attr_names),
+        attrs=attrs,
+        paths=tuple(modules),
     )
 
 
@@ -305,38 +251,6 @@ def _restore_observer_buffers(snapshot: CaptureObserverSnapshot, trace: Any = No
             module._buffers[local_name] = original
 
 
-def _restore_observer_attrs(snapshot: CaptureObserverSnapshot) -> list[str]:
-    """Restore changed plain attributes; return the paths that could not be restored."""
-
-    from ._capture_state_helpers import _plain_attr_restore_value, _plain_attr_values_equal
-
-    failed: list[str] = []
-    for module, cls, names in snapshot.attr_names:
-        if type(module) is not cls:
-            continue
-        for name in sorted(_observer_attr_names(module) - names):
-            try:
-                delattr(module, name)
-            except _RESTORE_ERRORS:
-                failed.append(f"{type(module).__name__}.{name}")
-    for module, name, attr_path, saved in snapshot.attrs:
-        try:
-            current = _observer_attr_snapshot(module, name, attr_path)
-            if _plain_attr_values_equal(current, saved, attr_path):
-                continue
-        except _RESTORE_ERRORS:
-            pass  # deleted by the forward, or no longer comparable: restore it
-        try:
-            value = _plain_attr_restore_value(saved)
-            if isinstance(value, torch.nn.Parameter) and name not in module._parameters:
-                module.__dict__[name] = value
-            else:
-                setattr(module, name, value)
-        except _RESTORE_ERRORS:
-            failed.append(attr_path)
-    return failed
-
-
 def restore_capture_observer_state(snapshot: CaptureObserverSnapshot, trace: Any = None) -> None:
     """Restore a capture observer snapshot (every item attempted, failures disclosed).
 
@@ -358,7 +272,9 @@ def restore_capture_observer_state(snapshot: CaptureObserverSnapshot, trace: Any
         for module, training in snapshot.modes:
             if module.training is not training:
                 module.training = training
-        failed.extend(_restore_observer_attrs(snapshot))
+        writes, attr_failures = settle_module_attrs(snapshot.attrs, restore=True)
+        failed.extend(attr_failures)
+        attach_attribute_writes(trace, snapshot.paths, writes)
     try:
         set_rng_from_saved_states(snapshot.rng)
     except _RESTORE_ERRORS as exc:
@@ -386,31 +302,68 @@ class CaptureObserverHandle:
         self.trace: Any = None
 
 
+def attach_attribute_writes(
+    trace: Any, paths: tuple[tuple[str, Any], ...], writes: dict[int, dict[str, Any]]
+) -> None:
+    """Give each traced ``Module`` record the attribute writes its forward made.
+
+    Best effort and never raising (it runs in the capture's ``finally``): a
+    module the trace has no record for, or a failed capture's partial product
+    without module records, simply carries no record.
+    """
+
+    from .data_classes.module import set_attribute_writes
+
+    target = getattr(trace, "trace", trace)  # a failure's partial_log may wrap the trace
+    try:
+        records = target.modules if target is not None else None
+    except _RESTORE_ERRORS:  # a partial product may lack module records
+        return
+    if records is None:
+        return
+    for path, module in paths:
+        module_writes = writes.get(id(module))
+        if module_writes is None:
+            continue
+        try:
+            record = records[path or "self"]
+        except _RESTORE_ERRORS:  # module never registered on this trace
+            continue
+        set_attribute_writes(record, module_writes)
+
+
 @contextmanager
-def capture_observer_bracket(
-    model: Any,
-    *,
-    carry_state: bool,
-    restore_attributes: bool = RESTORE_PLAIN_ATTRIBUTES_BY_DEFAULT,
-) -> Iterator[CaptureObserverHandle]:
+def capture_observer_bracket(model: Any, *, carry_state: bool) -> Iterator[CaptureObserverHandle]:
     """Run a capture as a pure observer unless ``carry_state`` opts out (U40.1).
 
     The default snapshots buffers (persistent and non-persistent), every
-    module's ``training`` flag and the global random states before the capture,
-    and restores them afterwards on every path, success or exception;
-    ``restore_attributes=True`` also restores plain instance attributes (off by
-    default, see ``RESTORE_PLAIN_ATTRIBUTES_BY_DEFAULT``). ``carry_state=True``
-    skips the bracket: state advances exactly as one direct ``model(x)`` would. The caller sets
-    ``handle.trace`` to the captured trace (a failure's ``partial_log`` is
-    picked up from the exception), so payloads that alias a restored buffer keep
-    their forward-time values.
+    module's ``training`` flag, every plain instance attribute and the global
+    random states before the capture, and restores them afterwards on every
+    path, success or exception. ``carry_state=True`` restores nothing: state
+    advances exactly as one direct ``model(x)`` would. Both record what the
+    forward wrote to plain attributes on the trace's ``Module`` records
+    (``Module.attribute_writes``). The caller sets ``handle.trace`` to the
+    captured trace (a failure's ``partial_log`` is picked up from the
+    exception), so payloads that alias a restored buffer keep their
+    forward-time values.
     """
 
     handle = CaptureObserverHandle()
     if carry_state:
-        yield handle
+        modules = _observed_modules(model)
+        with _state.pause_logging(), torch.no_grad():
+            attrs = snapshot_module_attrs(modules)
+        try:
+            yield handle
+        except BaseException as exc:
+            handle.trace = handle.trace or getattr(exc, "partial_log", None)
+            raise
+        finally:
+            with _state.pause_logging(), torch.no_grad():
+                writes, _failed = settle_module_attrs(attrs, restore=False)
+            attach_attribute_writes(handle.trace, tuple(modules), writes)
         return
-    snapshot = snapshot_capture_observer_state(model, restore_attributes=restore_attributes)
+    snapshot = snapshot_capture_observer_state(model)
     try:
         yield handle
     except BaseException as exc:

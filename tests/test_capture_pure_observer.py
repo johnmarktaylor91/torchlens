@@ -2,18 +2,23 @@
 
 JMT's ruling (2026-10-11): "Pure observer: the trace snapshots and restores
 buffers, random state, modes and attributes; an explicit opt-in gives
-forward-equivalent behavior for people who train through a trace."
+forward-equivalent behavior for people who train through a trace." AGT-2360
+(2026-10-12, option c): "Full pure observer: restore attributes too; the trace
+records what the forward wrote so stashed values are read from it;
+carry_state=True keeps them".
 
 - After a default ``tl.trace``, buffers (persistent and non-persistent), the
-  torch / CUDA (when present) / Python / NumPy random states and every module's
-  ``training`` flag are bit-identical to before, on success and when the
-  forward raises. Plain-attribute restore is built but opt-in for now (it
-  collides with the stale-reference holder contract); attributes the forward
-  writes stay as it leaves them.
+  torch / CUDA (when present) / Python / NumPy random states, every module's
+  ``training`` flag and every plain attribute are as before, on success and
+  when the forward raises. Attributes keep their identity: a rebound object is
+  put back, a container changed in place is restored in place.
+- What the forward wrote is read from the trace:
+  ``trace.modules[address].attribute_writes[name]`` (``AttributeWrite``);
+  a loaded trace has no record (``None``).
 - ``CaptureOptions(carry_state=True)`` is forward-equivalent: buffers, modes
   and attributes advance exactly as one direct ``model(x)`` would (train-mode
-  running statistics bit-exact); no capture ever advances the caller's random
-  streams (R57).
+  running statistics bit-exact), and the same writes are recorded; no capture
+  ever advances the caller's random streams (R57).
 - Bug 7 (the D18 contract change): train-mode BatchNorm runs through ``run``
   and ``run(until=)``; unproven buffer-write evidence and non-norm buffer
   writers still refuse typed.
@@ -33,6 +38,7 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens.errors import BufferSinkRoutingError
 from torchlens.options import CaptureOptions
+from torchlens.types import AttributeWrite
 
 
 class _Stateful(nn.Module):
@@ -82,22 +88,6 @@ def _assert_rng_equal(before: tuple, after: tuple) -> None:
     assert before[3][2:] == after[3][2:]
 
 
-def _restored_state(model: nn.Module) -> dict:
-    """Buffers and modes: what a default capture restores."""
-
-    return {
-        "buffers": {name: buf.detach().clone() for name, buf in model.named_buffers()},
-        "modes": {name: module.training for name, module in model.named_modules()},
-    }
-
-
-def _assert_restored_equal(before: dict, after: dict) -> None:
-    assert before["buffers"].keys() == after["buffers"].keys()
-    for name, value in before["buffers"].items():
-        assert torch.equal(value, after["buffers"][name]), name
-    assert before["modes"] == after["modes"]
-
-
 def _observed_state(model: nn.Module) -> dict:
     return {
         "buffers": {name: buf.detach().clone() for name, buf in model.named_buffers()},
@@ -121,50 +111,118 @@ def _assert_state_equal(before: dict, after: dict) -> None:
     assert before["attrs"] == after["attrs"]
 
 
-def test_default_trace_restores_buffers_rng_and_modes():
-    """A default capture of a train-mode stateful model restores buffers, RNG and modes."""
+def test_default_trace_restores_buffers_rng_modes_and_attributes():
+    """A default capture of a train-mode stateful model leaves every piece of state as it was."""
 
     torch.manual_seed(0)
     model = _Stateful().train()
+    history = model.history
     x = torch.randn(2, 3, 8, 8)
-    before, rng_before = _restored_state(model), _rng_state()
+    before, rng_before = _observed_state(model), _rng_state()
     tl.trace(model, x)
-    _assert_restored_equal(before, _restored_state(model))
+    _assert_state_equal(before, _observed_state(model))
     _assert_rng_equal(rng_before, _rng_state())
-    # Plain attributes the forward wrote stay (attribute restore is opt-in).
-    assert model.calls == 1 and model.last_batch == 2
+    assert not hasattr(model, "last_batch")
+    # The list the forward appended to is restored in place, not replaced.
+    assert model.history is history and history == [1]
+
+
+def test_default_trace_records_what_the_forward_wrote():
+    """Stashed values are read from the trace: added, replaced (rebound or in place)."""
+
+    torch.manual_seed(0)
+    model = _Stateful().train()
+    trace = tl.trace(model, torch.randn(2, 3, 8, 8))
+    writes = trace.modules["self"].attribute_writes
+    assert writes is not None
+    assert set(writes) == {"calls", "history", "last_batch"}
+    assert writes["calls"] == AttributeWrite("replaced", 1)
+    assert writes["history"] == AttributeWrite("replaced", [1, 1])
+    assert writes["history"].value is not model.history  # a copy of the in-place change
+    assert writes["last_batch"] == AttributeWrite("added", 2)
+    assert dict(trace.modules["bn"].attribute_writes) == {}
+    with pytest.raises(TypeError):
+        writes["calls"] = AttributeWrite("added", 0)  # type: ignore[index]
+
+
+class _Stash(nn.Module):
+    """Stashes a tensor, deletes an attribute, rebinds one and edits a tensor in place."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+        self.scratch = "gone after the forward"
+        self.cfg = {"mode": "a"}
+        self.count = torch.zeros(3)
+        self.big = torch.zeros(5000)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = self.fc(x)
+        self.last_out = y.detach()
+        del self.scratch
+        self.cfg = {"mode": "b"}
+        with torch.no_grad():
+            self.count += 1
+            self.big[0] = 7.0
+        return y
+
+
+def test_attribute_restore_keeps_identity_and_records_every_kind():
+    """Rebinds, removals, additions and in-place tensor edits are undone and recorded."""
+
+    model = _Stash()
+    cfg, count, big = model.cfg, model.count, model.big
+    trace = tl.trace(model, torch.randn(2, 4))
+    assert model.scratch == "gone after the forward"
+    assert model.cfg is cfg and cfg == {"mode": "a"}
+    assert model.count is count and torch.equal(count, torch.zeros(3))
+    assert model.big is big and torch.equal(big, torch.zeros(5000))
+    assert not hasattr(model, "last_out")
+    writes = trace.modules["self"].attribute_writes
+    assert set(writes) == {"big", "cfg", "count", "last_out", "scratch"}
+    assert writes["scratch"] == AttributeWrite("removed", None)
+    assert writes["cfg"] == AttributeWrite("replaced", {"mode": "b"})
+    assert writes["last_out"].kind == "added"
+    assert torch.equal(writes["last_out"].value, trace["linear_1_1"].out)
+    assert writes["count"].kind == "replaced" and torch.equal(writes["count"].value, torch.ones(3))
+    assert writes["big"].kind == "replaced" and writes["big"].value[0].item() == 7.0
+
+
+def test_carry_state_keeps_the_writes_and_records_them():
+    """carry_state=True leaves the forward's attribute writes and records the same rows."""
+
+    model = _Stash()
+    trace = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(carry_state=True))
+    assert not hasattr(model, "scratch") and model.cfg == {"mode": "b"}
+    assert torch.equal(model.count, torch.ones(3)) and model.last_out is not None
+    writes = trace.modules["self"].attribute_writes
+    assert set(writes) == {"big", "cfg", "count", "last_out", "scratch"}
+    assert writes["last_out"].value is model.last_out
+
+
+def test_loaded_trace_has_no_attribute_write_record(tmp_path):
+    """The record is session-time only: a loaded trace reads None, never raises."""
+
+    trace = tl.trace(_Stash(), torch.randn(2, 4))
+    assert trace.modules["self"].attribute_writes is not None
+    path = tmp_path / "stash.tlspec"
+    tl.save(trace, path)
+    loaded = tl.load(str(path))
+    assert loaded.modules["self"].attribute_writes is None
+    assert loaded.modules["fc"].attribute_writes is None
 
 
 def test_default_trace_restores_state_on_the_exception_path():
-    """A capture whose forward raises after writing state still restores it."""
+    """A capture whose forward raises after writing state still restores all of it."""
 
     torch.manual_seed(0)
     model = _Boom().train()
     x = torch.randn(2, 3, 8, 8)
-    before, rng_before = _restored_state(model), _rng_state()
+    before, rng_before = _observed_state(model), _rng_state()
     with pytest.raises(RuntimeError, match="boom after the state writes"):
         tl.trace(model, x)
-    _assert_restored_equal(before, _restored_state(model))
-    _assert_rng_equal(rng_before, _rng_state())
-
-
-def test_plain_attribute_restore_is_built_but_opt_in():
-    """The bracket restores plain attributes only when asked (a one-line default flip)."""
-
-    from torchlens._runnable_state_live import (
-        RESTORE_PLAIN_ATTRIBUTES_BY_DEFAULT,
-        capture_observer_bracket,
-    )
-
-    assert RESTORE_PLAIN_ATTRIBUTES_BY_DEFAULT is False
-    torch.manual_seed(0)
-    model = _Stateful().train()
-    x = torch.randn(2, 3, 8, 8)
-    before = _observed_state(model)
-    with capture_observer_bracket(model, carry_state=False, restore_attributes=True):
-        model(x)
     _assert_state_equal(before, _observed_state(model))
-    assert not hasattr(model, "last_batch")
+    _assert_rng_equal(rng_before, _rng_state())
 
 
 def test_carry_state_is_forward_equivalent_bit_exact():
@@ -182,9 +240,10 @@ def test_carry_state_is_forward_equivalent_bit_exact():
     reference(x)
     expected = _observed_state(reference)
     rng_before = _rng_state()
-    tl.trace(model, x, capture=CaptureOptions(carry_state=True))
+    trace = tl.trace(model, x, capture=CaptureOptions(carry_state=True))
     _assert_state_equal(expected, _observed_state(model))
     _assert_rng_equal(rng_before, _rng_state())
+    assert trace.modules["self"].attribute_writes["last_batch"] == AttributeWrite("added", 2)
 
 
 def _train_bn_stack() -> nn.Module:
