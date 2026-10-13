@@ -42,8 +42,11 @@ from ..errors._base import ConfigurationError
 from ..transforms._pipeline import OpaqueStep
 from .callable_identity import classify_callable
 from .dtype_policy import tensor_payload_bytes
+from .harvest_schema import HARVEST_BLOCK_KEY, validate_harvest_block
+from .intervened import final_harvest_block
 from .selector_plan import SelectorPlan, selector_request_record
 from .shards import shard_extension
+from .token_store import INPUT_IDS_KEY
 
 if TYPE_CHECKING:
     from ..transforms import TransformPipeline
@@ -288,7 +291,7 @@ def build_signature(plan: _RunPlan, model_identity_record: dict[str, Any]) -> di
     return {
         "schema_version": MANIFEST_SCHEMA_V2,
         "native_format": NATIVE_FORMATS[shard_format],
-        "layer_plan": dict(plan.layer_plan),
+        "layer_plan": _signature_layer_plan(plan),
         "layers_kind": plan.layers_kind,
         "batch_size": plan.batch_size,
         "transform_pipeline": plan.transform_record,
@@ -298,7 +301,7 @@ def build_signature(plan: _RunPlan, model_identity_record: dict[str, Any]) -> di
         "model_structure": model_structure_record(plan.model),
         "padding_side": "as_collated",
         "position_ids_source": "derived_or_refused",
-        "model_mode": "eval_no_grad",
+        "model_mode": _signature_model_mode(plan),
         "pool": plan.pool_record,
         "dtype_policy": plan.dtype_record,
         "ragged": plan.ragged,
@@ -307,6 +310,60 @@ def build_signature(plan: _RunPlan, model_identity_record: dict[str, Any]) -> di
         "callable_identity": _callable_identity_signature(plan),
         "selector_plan": selector_plan_record,
     }
+
+
+def _signature_layer_plan(plan: _RunPlan) -> dict[str, str]:
+    """Return the signature's layer plan, naming the stored ids key (R2-08).
+
+    A VALUE-level extension of the existing D16 ``layer_plan`` field (the
+    tvscope B5 precedent): runs without ``store_input_ids=True`` keep the
+    historical value byte-for-byte, and a run that stores ids differs in a
+    field every resuming release already compares, so no release can
+    continue such an artifact without its ids (or vice versa).
+
+    Parameters
+    ----------
+    plan:
+        Resolved run configuration.
+
+    Returns
+    -------
+    dict[str, str]
+        The layer plan, plus ``{"input_ids": "stimulus_input_ids"}`` when
+        ids are stored.
+    """
+
+    layer_plan = dict(plan.layer_plan)
+    if plan.store_input_ids:
+        layer_plan[INPUT_IDS_KEY] = "stimulus_input_ids"
+    return layer_plan
+
+
+def _signature_model_mode(plan: _RunPlan) -> Any:
+    """Return the signature's model mode, naming the intervention (R2-08).
+
+    A VALUE-level extension of the existing D16 ``model_mode`` field: a
+    clean run keeps the historical ``"eval_no_grad"`` byte-for-byte, so a
+    pre-R2-08 artifact resumes under a clean run, while an intervened run
+    records its intervention identity there, so every resuming release
+    (including ones that predate intervened extraction) refuses to continue
+    an intervened artifact clean, or a clean one intervened.
+
+    Parameters
+    ----------
+    plan:
+        Resolved run configuration.
+
+    Returns
+    -------
+    Any
+        ``"eval_no_grad"``, or ``{"mode": "eval_no_grad", "intervention":
+        record}``.
+    """
+
+    if plan.intervention is None:
+        return "eval_no_grad"
+    return {"mode": "eval_no_grad", "intervention": plan.intervention.signature_record()}
 
 
 #: Algorithm id of the structural model record (module tree + hyperparameters).
@@ -464,6 +521,14 @@ def _base_manifest(
         "run": {},
         "totals": None,
         "ledger_digest": None,
+        # R2-08: a clean run declares policy="none" explicitly, so a reader
+        # can tell "no intervention" from "written before the schema".
+        # Intervened runs write their block at the batch-zero freeze.
+        **(
+            {}
+            if isinstance(signature.get("model_mode"), Mapping)
+            else final_harvest_block(None, None, [])
+        ),
     }
 
 
@@ -1008,6 +1073,11 @@ def _prepare_disk_run(
                 ),
                 dict(recorded_selector.get("request") or {}),
             )
+        if HARVEST_BLOCK_KEY in existing:
+            validate_harvest_block(existing[HARVEST_BLOCK_KEY])
+        recorded_intervention = (existing.get("run") or {}).get("intervention")
+        if recorded_intervention:
+            prep_state["intervention_sites"] = list(recorded_intervention["target_site_keys"])
         prep_state["ragged_state"] = _rehydrate_ragged_state(existing, prep_state["resume_audit"])
         _clean_orphan_tmp_files(container_path)
         # A torn final ledger line is crash debris: cleared before appends

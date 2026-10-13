@@ -673,6 +673,29 @@ one exact `other_neurons` row.
   a model output resolves to its own output op, not the model-output alias. A relative name
   that ends several module addresses refuses `ambiguous_op_lookup` and lists them; a
   `":<call>"` suffix selects one call of a reused module.
+**Intervened extraction** *(spellings documented-unstable)*
+: `tl.extract_dataset(..., intervene=spec)` takes a `tl.when(selector, helper)` spec and
+  captures every batch with it armed, so the stored rows are the intervened activations.
+  Batch zero freezes the structural sites the spec fired at; a later batch that fires
+  nowhere refuses `extraction_intervention_no_fire` and one that fires elsewhere refuses
+  `extraction_intervention_site_drift`. Module (`tl.module`, `tl.in_module`) and op-type
+  (`tl.func`) addressed specs run; finer address classes refuse
+  `harvest_address_class_ungated`, and every helper must declare `batch_independent=True`.
+  Disk mode records the counterfactual in the manifest's `tl_counterfactual_harvest_v1`
+  block (policy, engine `live_hook`, address class, site keys, fire receipt digest),
+  ledgers each shard's fire receipt, and puts the intervention identity in the resume
+  signature; a clean run declares `policy="none"`.
+
+**Token store** *(spellings documented-unstable)*
+: `tl.extract_dataset(..., store_input_ids=True)` stores each batch's token ids as the
+  ordinary `input_ids` key, trimmed by the batch mask under `ragged="trim"` like the
+  token-axis activations. `ExtractionReader.token_batch(shard_index, keys=None)` and
+  `ExtractionReader.token_rows(keys=None, *, max_bytes=None)` read stored keys one row per
+  token as a `torchlens.dataset_extraction.TokenRows` (`values` per key, `stimulus_row`,
+  `position`, `n_tokens`); padding is never a token row.
+  `torchlens.dataset_extraction.shuffled_batches(reader, batch_size, *, seed=0,
+  keys=None, buffer_shards=1, tokens=False)` shuffles across `buffer_shards` shards at
+  once (the cross-shard mixing buffer) and yields token rows when `tokens=True`.
 
 **Observers**
 : `tl.tap` creates a tap observer for a site; `tl.span` records a named observer span
@@ -761,6 +784,16 @@ one exact `other_neurons` row.
   name without `replace=True` refuses `appliance_name_taken`; a malformed name or factory
   refuses `appliance_registration_invalid`. The word clashes with `tl.semantic.using(*recipes)`
   (a recipe scope); the naming review settles both.
+**Safetensors Trace export** *(spellings documented-unstable)*
+: `tl.export.safetensors(trace, path)` writes one pickle-free `.safetensors` file: every
+  tensor-valued op payload (`out`, `transformed_out`, `grad`, `transformed_grad`) as a
+  tensor entry, and a JSON header document (schema `tl_trace_safetensors_v1`) holding the
+  tlspec version, the writer-contract digest, the capture-honesty facts, and, for the
+  `trace` record and every `op` record, each writer-contract KEEP field with an exact JSON
+  encoding (the rest listed under `omitted` with their value types).
+  `tl.io.read_safetensors(path)` reads it back as a read-only record (`header`,
+  `trace_fields`, `op_fields`, `tensors`, `omitted`); payloads are bit-equal, complex
+  included.
 
 **Streaming statistics**
 : `tl.stats` is the streaming-statistics namespace: constant-memory accumulators

@@ -51,7 +51,11 @@ ADDRESS_CLASSES = ("module", "type", "save_predicate", "label", "op", "selection
 #: lane + save path + the real 64-image resnet18 workload green). Flipping a
 #: class in is the execution owner's one-line change, made only beside the
 #: measured gate evidence — the schema itself never adjudicates a gate.
-EXECUTABLE_ADDRESS_CLASSES: frozenset[str] = frozenset()
+#: R2-08 (intervened extraction, :mod:`.intervened`) certifies the two
+#: structural classes: per-shard fire receipts ledgered and attested, the
+#: disk save path round-tripped and resumed, and the 64-image resnet18
+#: workload green (``tests/test_b2_extract_harvest_gate.py``).
+EXECUTABLE_ADDRESS_CLASSES: frozenset[str] = frozenset({"module", "type"})
 
 
 @dataclass(frozen=True)
