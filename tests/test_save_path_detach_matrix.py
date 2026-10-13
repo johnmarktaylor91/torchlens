@@ -182,6 +182,9 @@ def _site_after(path: str, model: _Net, trace: Any, x2: torch.Tensor) -> torch.T
     return trace.run(inputs=x2, fast=True).trace[_SITE].out
 
 
+# heavy, not unmarked: the 24 cells cost about 0.5s each, a heavy-class 11.6s
+# aggregate measured on a quiet worker (85% of the unmarked family budget).
+@pytest.mark.heavy
 @pytest.mark.parametrize("detach", [False, True], ids=["attached", "detached"])
 @pytest.mark.parametrize("path", ["trace", "legacy_run", "run_inputs", "run_inputs_fast"])
 @pytest.mark.parametrize("save_name", list(_SAVES))
