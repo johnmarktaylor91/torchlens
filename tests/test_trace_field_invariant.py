@@ -29,6 +29,7 @@ def test_trace_field_set_subset_of_user_facing() -> None:
         "_layer_nums_to_save",
         "_grad_op_nums_to_save",
         "_source_model_ref",
+        "_uncalled_module_addresses",
         "_transform",
         "_output_transform",
         "_grad_transform",

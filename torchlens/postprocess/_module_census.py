@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
 
-__all__ = ["bind_layer_conditional_roles", "op_space_labels", "uncalled_module_addresses"]
+__all__ = ("bind_layer_conditional_roles", "op_space_labels", "uncalled_module_addresses")
 
 
 def op_space_labels(trace: Trace, labels: Sequence[str]) -> list[str]:
@@ -57,7 +57,7 @@ def uncalled_module_addresses(trace: Trace) -> tuple[str, ...] | None:
         model is already gone and the set cannot be known.
     """
 
-    source_ref = getattr(trace, "_source_model_ref", None)
+    source_ref = trace._source_model_ref
     model = source_ref() if source_ref is not None else None
     if model is None or not hasattr(model, "named_modules"):
         return None
