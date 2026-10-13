@@ -209,7 +209,7 @@ nnsight = ["nnsight~=0.4"]
 # numpy 1.x.
 lit = ["lit-nlp>=1.3,<1.4"]
 depyf = ["depyf~=0.18"]
-compat-shims = ["torchextractor>=0.3,<2", "sentence-transformers>=2.5,<5"]
+compat-shims = ["torchextractor>=0.3,<2", "sentence-transformers>=2.5,<6"]
 vision-shims = ["torchvision>=0.18,<1"]
 # `all` aliases `all-stretch` so the two never drift, and BOTH resolve:
 # FIX-BY-EXCLUSION (Batch-8 ruling, 2026-08-26): `all` means "everything that
@@ -240,7 +240,7 @@ all-stretch = [
     "ipython>=8.0; python_version < '3.13'",
     "depyf~=0.18",
     "torchextractor>=0.3,<2",
-    "sentence-transformers>=2.5,<5",
+    "sentence-transformers>=2.5,<6",
     "torchvision>=0.18,<1",
     "torchshow~=0.5",
     "lovely-tensors~=0.1.18",
