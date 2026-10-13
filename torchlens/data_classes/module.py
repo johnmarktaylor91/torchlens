@@ -1730,6 +1730,14 @@ class Module:
                     and param.address not in recursive_param_dict
                 ):
                     recursive_param_dict[param.address] = param
+        # A never-called descendant has no Module record, so the walk above
+        # misses it; its parameters are still in the address subtree.
+        prefix = f"{self.address}."
+        for param in trace.param_logs:
+            if param.address in recursive_param_dict:
+                continue
+            if self.address == "self" or str(param.module_address).startswith(prefix):
+                recursive_param_dict[param.address] = param
         return ParamAccessor(recursive_param_dict)
 
     @property
