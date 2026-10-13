@@ -15,11 +15,7 @@ from torch import nn
 from .. import _state
 from .._deprecations import MISSING, MissingType
 from .._errors import CaptureContextError, KeywordConflictError
-from .._training_validation import (
-    TrainingModeConfigError,
-    reject_compiled_model,
-    validate_training_compatibility,
-)
+from .._training_validation import TrainingModeConfigError, reject_compiled_model
 from ..capture.config import InternalCaptureConfig
 from ..capture.outcome import safe_exception_repr, safe_exception_str
 from ..capture.predicates import _save_selector_matches, validate_followed_by_capability
@@ -282,6 +278,9 @@ class Recorder:
         """
 
         reject_compiled_model(model, api_name="torchlens.fastlog.Recorder")
+        # Deferred: _training_validation sits above fastlog in the layer map.
+        from .._training_validation import validate_training_compatibility
+
         validate_training_compatibility(
             backward_ready=backward_ready,
             streaming=None,
