@@ -365,3 +365,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 3abe59625acdb0f1b6aea4fe9fc71e2ed30ccc36 (dirty)
 recorded: 2026-10-13T05:59:50.932214+00:00
+---
+generator: tests/godobject_oracle legacy
+flag: TORCHLENS_UPDATE_LEGACY_ARTIFACT_ORACLE=1
+reason: AGT-2362 REAL-2B2: root ModuleCall lists pass-qualified Ops and its forward arguments; ModuleCall.num_layers counts distinct Layers; Param.num_calls counts the Ops that used it; num_buffer_layers counts distinct buffer Layers; tied-module parameter aliases; Layer conditional roles; uncalled modules recorded at capture end; the loader refreshes num_saved_module_calls
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 711308c2b55233e51cfd4224a6b71985649a73a9 (dirty)
+recorded: 2026-10-13T10:39:44.611021+00:00

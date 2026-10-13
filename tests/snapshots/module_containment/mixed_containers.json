@@ -315,23 +315,23 @@
     {
       "address": "self",
       "call_label": "self:1",
-      "forward_args_summary": "None",
-      "forward_kwargs_summary": "None",
+      "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32)]",
+      "forward_kwargs_summary": "{}",
       "input_layers": [
         "input_1"
       ],
       "ops": [
-        "input_1",
-        "linear_1_1",
-        "relu_1_2",
-        "sin_1_3",
-        "linear_2_4",
-        "relu_2_5",
-        "zeroslike_1_6",
-        "add_1_7",
-        "sigmoid_1_8",
-        "linear_3_9",
-        "output_1"
+        "input_1:1",
+        "linear_1_1:1",
+        "relu_1_2:1",
+        "sin_1_3:1",
+        "linear_2_4:1",
+        "relu_2_5:1",
+        "zeroslike_1_6:1",
+        "add_1_7:1",
+        "sigmoid_1_8:1",
+        "linear_3_9:1",
+        "output_1:1"
       ],
       "output_layers": [
         "output_1"

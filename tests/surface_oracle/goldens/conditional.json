@@ -324,7 +324,7 @@
       1
      ]
     },
-    "conditional_depth": 0,
+    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -370,7 +370,9 @@
     "has_saved_activation": true,
     "has_siblings": false,
     "has_trainable_params": false,
-    "in_conditionals": [],
+    "in_conditionals": [
+     "<torchlens.data_classes.trace.ConditionalRoleRef>"
+    ],
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
@@ -381,9 +383,9 @@
     "is_buffer_source": false,
     "is_compute_layer": true,
     "is_final_output": false,
-    "is_in_conditional": false,
+    "is_in_conditional": true,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
+    "is_in_conditional_evaluation": true,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
@@ -1336,7 +1338,7 @@
       1
      ]
     },
-    "conditional_depth": 0,
+    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -1387,7 +1389,9 @@
     "has_saved_activation": true,
     "has_siblings": false,
     "has_trainable_params": false,
-    "in_conditionals": [],
+    "in_conditionals": [
+     "<torchlens.data_classes.trace.ConditionalRoleRef>"
+    ],
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
@@ -1398,7 +1402,7 @@
     "is_buffer_source": false,
     "is_compute_layer": true,
     "is_final_output": false,
-    "is_in_conditional": false,
+    "is_in_conditional": true,
     "is_in_conditional_body": true,
     "is_in_conditional_evaluation": false,
     "is_inplace": false,
@@ -1832,11 +1836,11 @@
     "facets": "<torchlens.semantic.facets.FacetView>",
     "forward_arg_names": [],
     "forward_args": null,
-    "forward_args_summary": "None",
+    "forward_args_summary": "[Tensor(shape=(2, 2), dtype=float32)]",
     "forward_args_template": null,
     "forward_duration": "<measured>",
     "forward_kwargs": null,
-    "forward_kwargs_summary": "None",
+    "forward_kwargs_summary": "{}",
     "forward_kwargs_template": null,
     "forward_pre_hook_effects": [],
     "func_calls_duration": "<measured>",
@@ -1869,9 +1873,9 @@
     "name": "",
     "num_descendant_calls": 0,
     "num_edges": 6,
-    "num_forward_args_total": 0,
+    "num_forward_args_total": 1,
     "num_forward_kwargs": 0,
-    "num_forward_pos_args": 0,
+    "num_forward_pos_args": 1,
     "num_input_edges": 0,
     "num_internal_edges": 6,
     "num_layers": 7,
@@ -1881,13 +1885,13 @@
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "ops": [
-     "input_1",
-     "rand_1_1",
-     "add_1_2",
-     "sum_1_3",
-     "gt_1_4",
-     "sigmoid_1_5",
-     "output_1"
+     "input_1:1",
+     "rand_1_1:1",
+     "add_1_2:1",
+     "sum_1_3:1",
+     "gt_1_4:1",
+     "sigmoid_1_5:1",
+     "output_1:1"
     ],
     "ordinal_index": 0,
     "out": {
@@ -1920,7 +1924,7 @@
      "output_1"
     ],
     "output_ops": [
-     "output_1"
+     "output_1:1"
     ],
     "output_paths": [],
     "output_structure": null,
@@ -1991,13 +1995,13 @@
     "custom_methods": [],
     "facets": "<torchlens.semantic.facets.FacetView>",
     "forward_args": null,
-    "forward_args_summary": "None",
+    "forward_args_summary": "[Tensor(shape=(2, 2), dtype=float32)]",
     "forward_args_template": null,
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
     "forward_kwargs": null,
-    "forward_kwargs_summary": "None",
+    "forward_kwargs_summary": "{}",
     "forward_kwargs_template": null,
     "forward_pre_hooks": [],
     "forward_signature": null,
@@ -2114,7 +2118,7 @@
      "output_1"
     ],
     "output_ops": [
-     "output_1"
+     "output_1:1"
     ],
     "output_structure": null,
     "outs": [
@@ -6208,7 +6212,7 @@
       1
      ]
     },
-    "conditional_depth": 0,
+    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -6254,7 +6258,9 @@
     "has_saved_activation": true,
     "has_siblings": false,
     "has_trainable_params": false,
-    "in_conditionals": [],
+    "in_conditionals": [
+     "<torchlens.data_classes.trace.ConditionalRoleRef>"
+    ],
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
@@ -6265,9 +6271,9 @@
     "is_buffer_source": false,
     "is_compute_layer": true,
     "is_final_output": false,
-    "is_in_conditional": false,
+    "is_in_conditional": true,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
+    "is_in_conditional_evaluation": true,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
@@ -7220,7 +7226,7 @@
       1
      ]
     },
-    "conditional_depth": 0,
+    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -7271,7 +7277,9 @@
     "has_saved_activation": true,
     "has_siblings": false,
     "has_trainable_params": false,
-    "in_conditionals": [],
+    "in_conditionals": [
+     "<torchlens.data_classes.trace.ConditionalRoleRef>"
+    ],
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
@@ -7282,7 +7290,7 @@
     "is_buffer_source": false,
     "is_compute_layer": true,
     "is_final_output": false,
-    "is_in_conditional": false,
+    "is_in_conditional": true,
     "is_in_conditional_body": true,
     "is_in_conditional_evaluation": false,
     "is_inplace": false,
@@ -7716,11 +7724,11 @@
     "facets": "<torchlens.semantic.facets.FacetView>",
     "forward_arg_names": [],
     "forward_args": null,
-    "forward_args_summary": "None",
+    "forward_args_summary": "[Tensor(shape=(2, 2), dtype=float32)]",
     "forward_args_template": null,
     "forward_duration": "<measured>",
     "forward_kwargs": null,
-    "forward_kwargs_summary": "None",
+    "forward_kwargs_summary": "{}",
     "forward_kwargs_template": null,
     "forward_pre_hook_effects": [],
     "func_calls_duration": "<measured>",
@@ -7753,9 +7761,9 @@
     "name": "",
     "num_descendant_calls": 0,
     "num_edges": 6,
-    "num_forward_args_total": 0,
+    "num_forward_args_total": 1,
     "num_forward_kwargs": 0,
-    "num_forward_pos_args": 0,
+    "num_forward_pos_args": 1,
     "num_input_edges": 0,
     "num_internal_edges": 6,
     "num_layers": 7,
@@ -7765,13 +7773,13 @@
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "ops": [
-     "input_1",
-     "rand_1_1",
-     "add_1_2",
-     "sum_1_3",
-     "gt_1_4",
-     "sigmoid_1_5",
-     "output_1"
+     "input_1:1",
+     "rand_1_1:1",
+     "add_1_2:1",
+     "sum_1_3:1",
+     "gt_1_4:1",
+     "sigmoid_1_5:1",
+     "output_1:1"
     ],
     "ordinal_index": 0,
     "out": {
@@ -7804,7 +7812,7 @@
      "output_1"
     ],
     "output_ops": [
-     "output_1"
+     "output_1:1"
     ],
     "output_paths": [],
     "output_structure": null,
@@ -7875,13 +7883,13 @@
     "custom_methods": [],
     "facets": "<torchlens.semantic.facets.FacetView>",
     "forward_args": null,
-    "forward_args_summary": "None",
+    "forward_args_summary": "[Tensor(shape=(2, 2), dtype=float32)]",
     "forward_args_template": null,
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
     "forward_kwargs": null,
-    "forward_kwargs_summary": "None",
+    "forward_kwargs_summary": "{}",
     "forward_kwargs_template": null,
     "forward_pre_hooks": [],
     "forward_signature": null,
@@ -7998,7 +8006,7 @@
      "output_1"
     ],
     "output_ops": [
-     "output_1"
+     "output_1:1"
     ],
     "output_structure": null,
     "outs": [
@@ -12084,7 +12092,7 @@
       1
      ]
     },
-    "conditional_depth": 0,
+    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -12130,7 +12138,9 @@
     "has_saved_activation": true,
     "has_siblings": false,
     "has_trainable_params": false,
-    "in_conditionals": [],
+    "in_conditionals": [
+     "<torchlens.data_classes.trace.ConditionalRoleRef>"
+    ],
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
@@ -12141,9 +12151,9 @@
     "is_buffer_source": false,
     "is_compute_layer": true,
     "is_final_output": false,
-    "is_in_conditional": false,
+    "is_in_conditional": true,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
+    "is_in_conditional_evaluation": true,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
@@ -13096,7 +13106,7 @@
       1
      ]
     },
-    "conditional_depth": 0,
+    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -13147,7 +13157,9 @@
     "has_saved_activation": true,
     "has_siblings": false,
     "has_trainable_params": false,
-    "in_conditionals": [],
+    "in_conditionals": [
+     "<torchlens.data_classes.trace.ConditionalRoleRef>"
+    ],
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
@@ -13158,7 +13170,7 @@
     "is_buffer_source": false,
     "is_compute_layer": true,
     "is_final_output": false,
-    "is_in_conditional": false,
+    "is_in_conditional": true,
     "is_in_conditional_body": true,
     "is_in_conditional_evaluation": false,
     "is_inplace": false,
@@ -13592,11 +13604,11 @@
     "facets": "<torchlens.semantic.facets.FacetView>",
     "forward_arg_names": [],
     "forward_args": null,
-    "forward_args_summary": "None",
+    "forward_args_summary": "[Tensor(shape=(2, 2), dtype=float32)]",
     "forward_args_template": null,
     "forward_duration": "<measured>",
     "forward_kwargs": null,
-    "forward_kwargs_summary": "None",
+    "forward_kwargs_summary": "{}",
     "forward_kwargs_template": null,
     "forward_pre_hook_effects": [],
     "func_calls_duration": "<measured>",
@@ -13629,9 +13641,9 @@
     "name": "",
     "num_descendant_calls": 0,
     "num_edges": 6,
-    "num_forward_args_total": 0,
+    "num_forward_args_total": 1,
     "num_forward_kwargs": 0,
-    "num_forward_pos_args": 0,
+    "num_forward_pos_args": 1,
     "num_input_edges": 0,
     "num_internal_edges": 6,
     "num_layers": 7,
@@ -13641,13 +13653,13 @@
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "ops": [
-     "input_1",
-     "rand_1_1",
-     "add_1_2",
-     "sum_1_3",
-     "gt_1_4",
-     "sigmoid_1_5",
-     "output_1"
+     "input_1:1",
+     "rand_1_1:1",
+     "add_1_2:1",
+     "sum_1_3:1",
+     "gt_1_4:1",
+     "sigmoid_1_5:1",
+     "output_1:1"
     ],
     "ordinal_index": 0,
     "out": {
@@ -13680,7 +13692,7 @@
      "output_1"
     ],
     "output_ops": [
-     "output_1"
+     "output_1:1"
     ],
     "output_paths": [],
     "output_structure": null,
@@ -13751,13 +13763,13 @@
     "custom_methods": [],
     "facets": "<torchlens.semantic.facets.FacetView>",
     "forward_args": null,
-    "forward_args_summary": "None",
+    "forward_args_summary": "[Tensor(shape=(2, 2), dtype=float32)]",
     "forward_args_template": null,
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
     "forward_kwargs": null,
-    "forward_kwargs_summary": "None",
+    "forward_kwargs_summary": "{}",
     "forward_kwargs_template": null,
     "forward_pre_hooks": [],
     "forward_signature": null,
@@ -13874,7 +13886,7 @@
      "output_1"
     ],
     "output_ops": [
-     "output_1"
+     "output_1:1"
     ],
     "output_structure": null,
     "outs": [
@@ -17485,7 +17497,7 @@
    "num_saved_modules": 1,
    "num_saved_ops": 7,
    "num_tensors": 7,
-   "num_uncalled_modules": 0,
+   "num_uncalled_modules": null,
    "observer_spans": [],
    "op_equivalence_classes": {
     "\"add_82724eb7c2eda8ba\"": {
@@ -17962,7 +17974,7 @@
       1
      ]
     },
-    "conditional_depth": 0,
+    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -18008,7 +18020,9 @@
     "has_saved_activation": true,
     "has_siblings": false,
     "has_trainable_params": false,
-    "in_conditionals": [],
+    "in_conditionals": [
+     "<torchlens.data_classes.trace.ConditionalRoleRef>"
+    ],
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
@@ -18019,9 +18033,9 @@
     "is_buffer_source": false,
     "is_compute_layer": true,
     "is_final_output": false,
-    "is_in_conditional": false,
+    "is_in_conditional": true,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
+    "is_in_conditional_evaluation": true,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
@@ -18974,7 +18988,7 @@
       1
      ]
     },
-    "conditional_depth": 0,
+    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -19025,7 +19039,9 @@
     "has_saved_activation": true,
     "has_siblings": false,
     "has_trainable_params": false,
-    "in_conditionals": [],
+    "in_conditionals": [
+     "<torchlens.data_classes.trace.ConditionalRoleRef>"
+    ],
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
@@ -19036,7 +19052,7 @@
     "is_buffer_source": false,
     "is_compute_layer": true,
     "is_final_output": false,
-    "is_in_conditional": false,
+    "is_in_conditional": true,
     "is_in_conditional_body": true,
     "is_in_conditional_evaluation": false,
     "is_inplace": false,
@@ -19470,11 +19486,11 @@
     "facets": "<torchlens.semantic.facets.FacetView>",
     "forward_arg_names": [],
     "forward_args": null,
-    "forward_args_summary": "None",
+    "forward_args_summary": "[Tensor(shape=(2, 2), dtype=float32)]",
     "forward_args_template": null,
     "forward_duration": "<measured>",
     "forward_kwargs": null,
-    "forward_kwargs_summary": "None",
+    "forward_kwargs_summary": "{}",
     "forward_kwargs_template": null,
     "forward_pre_hook_effects": [],
     "func_calls_duration": "<measured>",
@@ -19507,9 +19523,9 @@
     "name": "",
     "num_descendant_calls": 0,
     "num_edges": 6,
-    "num_forward_args_total": 0,
+    "num_forward_args_total": 1,
     "num_forward_kwargs": 0,
-    "num_forward_pos_args": 0,
+    "num_forward_pos_args": 1,
     "num_input_edges": 0,
     "num_internal_edges": 6,
     "num_layers": 7,
@@ -19519,13 +19535,13 @@
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "ops": [
-     "input_1",
-     "rand_1_1",
-     "add_1_2",
-     "sum_1_3",
-     "gt_1_4",
-     "sigmoid_1_5",
-     "output_1"
+     "input_1:1",
+     "rand_1_1:1",
+     "add_1_2:1",
+     "sum_1_3:1",
+     "gt_1_4:1",
+     "sigmoid_1_5:1",
+     "output_1:1"
     ],
     "ordinal_index": 0,
     "out": {
@@ -19558,7 +19574,7 @@
      "output_1"
     ],
     "output_ops": [
-     "output_1"
+     "output_1:1"
     ],
     "output_paths": [],
     "output_structure": null,
@@ -19629,13 +19645,13 @@
     "custom_methods": [],
     "facets": "<torchlens.semantic.facets.FacetView>",
     "forward_args": null,
-    "forward_args_summary": "None",
+    "forward_args_summary": "[Tensor(shape=(2, 2), dtype=float32)]",
     "forward_args_template": null,
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
     "forward_kwargs": null,
-    "forward_kwargs_summary": "None",
+    "forward_kwargs_summary": "{}",
     "forward_kwargs_template": null,
     "forward_pre_hooks": [],
     "forward_signature": null,
@@ -19752,7 +19768,7 @@
      "output_1"
     ],
     "output_ops": [
-     "output_1"
+     "output_1:1"
     ],
     "output_structure": null,
     "outs": [
@@ -23854,7 +23870,7 @@
       1
      ]
     },
-    "conditional_depth": 0,
+    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -23900,7 +23916,9 @@
     "has_saved_activation": true,
     "has_siblings": false,
     "has_trainable_params": false,
-    "in_conditionals": [],
+    "in_conditionals": [
+     "<torchlens.data_classes.trace.ConditionalRoleRef>"
+    ],
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
@@ -23911,9 +23929,9 @@
     "is_buffer_source": false,
     "is_compute_layer": true,
     "is_final_output": false,
-    "is_in_conditional": false,
+    "is_in_conditional": true,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
+    "is_in_conditional_evaluation": true,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
@@ -24855,7 +24873,7 @@
       1
      ]
     },
-    "conditional_depth": 0,
+    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -24906,7 +24924,9 @@
     "has_saved_activation": true,
     "has_siblings": false,
     "has_trainable_params": false,
-    "in_conditionals": [],
+    "in_conditionals": [
+     "<torchlens.data_classes.trace.ConditionalRoleRef>"
+    ],
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
@@ -24917,7 +24937,7 @@
     "is_buffer_source": false,
     "is_compute_layer": true,
     "is_final_output": false,
-    "is_in_conditional": false,
+    "is_in_conditional": true,
     "is_in_conditional_body": true,
     "is_in_conditional_evaluation": false,
     "is_inplace": false,
@@ -25351,11 +25371,11 @@
     "facets": "<torchlens.semantic.facets.FacetView>",
     "forward_arg_names": [],
     "forward_args": null,
-    "forward_args_summary": "None",
+    "forward_args_summary": "[Tensor(shape=(2, 2), dtype=float32)]",
     "forward_args_template": null,
     "forward_duration": "<measured>",
     "forward_kwargs": null,
-    "forward_kwargs_summary": "None",
+    "forward_kwargs_summary": "{}",
     "forward_kwargs_template": null,
     "forward_pre_hook_effects": [],
     "func_calls_duration": "<measured>",
@@ -25388,9 +25408,9 @@
     "name": "",
     "num_descendant_calls": 0,
     "num_edges": 6,
-    "num_forward_args_total": 0,
+    "num_forward_args_total": 1,
     "num_forward_kwargs": 0,
-    "num_forward_pos_args": 0,
+    "num_forward_pos_args": 1,
     "num_input_edges": 0,
     "num_internal_edges": 6,
     "num_layers": 7,
@@ -25400,13 +25420,13 @@
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "ops": [
-     "input_1",
-     "rand_1_1",
-     "add_1_2",
-     "sum_1_3",
-     "gt_1_4",
-     "sigmoid_1_5",
-     "output_1"
+     "input_1:1",
+     "rand_1_1:1",
+     "add_1_2:1",
+     "sum_1_3:1",
+     "gt_1_4:1",
+     "sigmoid_1_5:1",
+     "output_1:1"
     ],
     "ordinal_index": 0,
     "out": {
@@ -25439,7 +25459,7 @@
      "output_1"
     ],
     "output_ops": [
-     "output_1"
+     "output_1:1"
     ],
     "output_paths": [],
     "output_structure": null,
@@ -25510,13 +25530,13 @@
     "custom_methods": [],
     "facets": "<torchlens.semantic.facets.FacetView>",
     "forward_args": null,
-    "forward_args_summary": "None",
+    "forward_args_summary": "[Tensor(shape=(2, 2), dtype=float32)]",
     "forward_args_template": null,
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
     "forward_kwargs": null,
-    "forward_kwargs_summary": "None",
+    "forward_kwargs_summary": "{}",
     "forward_kwargs_template": null,
     "forward_pre_hooks": [],
     "forward_signature": null,
@@ -25633,7 +25653,7 @@
      "output_1"
     ],
     "output_ops": [
-     "output_1"
+     "output_1:1"
     ],
     "output_structure": null,
     "outs": [
@@ -29120,7 +29140,7 @@
    "num_saved_modules": 1,
    "num_saved_ops": 7,
    "num_tensors": 7,
-   "num_uncalled_modules": 0,
+   "num_uncalled_modules": null,
    "observer_spans": [],
    "op_equivalence_classes": {
     "\"add_82724eb7c2eda8ba\"": {

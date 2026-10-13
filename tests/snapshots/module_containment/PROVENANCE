@@ -273,3 +273,131 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: d86a11a5d32752f26f96a753bf3eb529d4f1e0e9 (dirty)
 recorded: 2026-10-13T05:40:25.659935+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: AGT-2362 REAL-2B2: root ModuleCall lists pass-qualified Ops and its forward arguments; ModuleCall.num_layers counts distinct Layers; Param.num_calls counts the Ops that used it; num_buffer_layers counts distinct buffer Layers; tied-module parameter aliases; Layer conditional roles; uncalled modules recorded at capture end; the loader refreshes num_saved_module_calls
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 711308c2b55233e51cfd4224a6b71985649a73a9 (dirty)
+recorded: 2026-10-13T10:39:53.624724+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: AGT-2362 REAL-2B2: root ModuleCall lists pass-qualified Ops and its forward arguments; ModuleCall.num_layers counts distinct Layers; Param.num_calls counts the Ops that used it; num_buffer_layers counts distinct buffer Layers; tied-module parameter aliases; Layer conditional roles; uncalled modules recorded at capture end; the loader refreshes num_saved_module_calls
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 711308c2b55233e51cfd4224a6b71985649a73a9 (dirty)
+recorded: 2026-10-13T10:39:53.889823+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: AGT-2362 REAL-2B2: root ModuleCall lists pass-qualified Ops and its forward arguments; ModuleCall.num_layers counts distinct Layers; Param.num_calls counts the Ops that used it; num_buffer_layers counts distinct buffer Layers; tied-module parameter aliases; Layer conditional roles; uncalled modules recorded at capture end; the loader refreshes num_saved_module_calls
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 711308c2b55233e51cfd4224a6b71985649a73a9 (dirty)
+recorded: 2026-10-13T10:39:53.972418+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: AGT-2362 REAL-2B2: root ModuleCall lists pass-qualified Ops and its forward arguments; ModuleCall.num_layers counts distinct Layers; Param.num_calls counts the Ops that used it; num_buffer_layers counts distinct buffer Layers; tied-module parameter aliases; Layer conditional roles; uncalled modules recorded at capture end; the loader refreshes num_saved_module_calls
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 711308c2b55233e51cfd4224a6b71985649a73a9 (dirty)
+recorded: 2026-10-13T10:39:54.082789+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: AGT-2362 REAL-2B2: root ModuleCall lists pass-qualified Ops and its forward arguments; ModuleCall.num_layers counts distinct Layers; Param.num_calls counts the Ops that used it; num_buffer_layers counts distinct buffer Layers; tied-module parameter aliases; Layer conditional roles; uncalled modules recorded at capture end; the loader refreshes num_saved_module_calls
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 711308c2b55233e51cfd4224a6b71985649a73a9 (dirty)
+recorded: 2026-10-13T10:39:54.211957+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: AGT-2362 REAL-2B2: root ModuleCall lists pass-qualified Ops and its forward arguments; ModuleCall.num_layers counts distinct Layers; Param.num_calls counts the Ops that used it; num_buffer_layers counts distinct buffer Layers; tied-module parameter aliases; Layer conditional roles; uncalled modules recorded at capture end; the loader refreshes num_saved_module_calls
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 711308c2b55233e51cfd4224a6b71985649a73a9 (dirty)
+recorded: 2026-10-13T10:39:54.320485+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: AGT-2362 REAL-2B2: root ModuleCall lists pass-qualified Ops and its forward arguments; ModuleCall.num_layers counts distinct Layers; Param.num_calls counts the Ops that used it; num_buffer_layers counts distinct buffer Layers; tied-module parameter aliases; Layer conditional roles; uncalled modules recorded at capture end; the loader refreshes num_saved_module_calls
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 711308c2b55233e51cfd4224a6b71985649a73a9 (dirty)
+recorded: 2026-10-13T10:39:54.387584+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: AGT-2362 REAL-2B2: root ModuleCall lists pass-qualified Ops and its forward arguments; ModuleCall.num_layers counts distinct Layers; Param.num_calls counts the Ops that used it; num_buffer_layers counts distinct buffer Layers; tied-module parameter aliases; Layer conditional roles; uncalled modules recorded at capture end; the loader refreshes num_saved_module_calls
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 711308c2b55233e51cfd4224a6b71985649a73a9 (dirty)
+recorded: 2026-10-13T10:39:54.646171+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: AGT-2362 REAL-2B2: root ModuleCall lists pass-qualified Ops and its forward arguments; ModuleCall.num_layers counts distinct Layers; Param.num_calls counts the Ops that used it; num_buffer_layers counts distinct buffer Layers; tied-module parameter aliases; Layer conditional roles; uncalled modules recorded at capture end; the loader refreshes num_saved_module_calls
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 711308c2b55233e51cfd4224a6b71985649a73a9 (dirty)
+recorded: 2026-10-13T10:39:54.731518+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: AGT-2362 REAL-2B2: root ModuleCall lists pass-qualified Ops and its forward arguments; ModuleCall.num_layers counts distinct Layers; Param.num_calls counts the Ops that used it; num_buffer_layers counts distinct buffer Layers; tied-module parameter aliases; Layer conditional roles; uncalled modules recorded at capture end; the loader refreshes num_saved_module_calls
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 711308c2b55233e51cfd4224a6b71985649a73a9 (dirty)
+recorded: 2026-10-13T10:39:54.788638+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: AGT-2362 REAL-2B2: root ModuleCall lists pass-qualified Ops and its forward arguments; ModuleCall.num_layers counts distinct Layers; Param.num_calls counts the Ops that used it; num_buffer_layers counts distinct buffer Layers; tied-module parameter aliases; Layer conditional roles; uncalled modules recorded at capture end; the loader refreshes num_saved_module_calls
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 711308c2b55233e51cfd4224a6b71985649a73a9 (dirty)
+recorded: 2026-10-13T10:39:54.861263+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: AGT-2362 REAL-2B2: root ModuleCall lists pass-qualified Ops and its forward arguments; ModuleCall.num_layers counts distinct Layers; Param.num_calls counts the Ops that used it; num_buffer_layers counts distinct buffer Layers; tied-module parameter aliases; Layer conditional roles; uncalled modules recorded at capture end; the loader refreshes num_saved_module_calls
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 711308c2b55233e51cfd4224a6b71985649a73a9 (dirty)
+recorded: 2026-10-13T10:39:54.931237+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: AGT-2362 REAL-2B2: root ModuleCall lists pass-qualified Ops and its forward arguments; ModuleCall.num_layers counts distinct Layers; Param.num_calls counts the Ops that used it; num_buffer_layers counts distinct buffer Layers; tied-module parameter aliases; Layer conditional roles; uncalled modules recorded at capture end; the loader refreshes num_saved_module_calls
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 711308c2b55233e51cfd4224a6b71985649a73a9 (dirty)
+recorded: 2026-10-13T10:39:55.025320+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: AGT-2362 REAL-2B2: root ModuleCall lists pass-qualified Ops and its forward arguments; ModuleCall.num_layers counts distinct Layers; Param.num_calls counts the Ops that used it; num_buffer_layers counts distinct buffer Layers; tied-module parameter aliases; Layer conditional roles; uncalled modules recorded at capture end; the loader refreshes num_saved_module_calls
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 711308c2b55233e51cfd4224a6b71985649a73a9 (dirty)
+recorded: 2026-10-13T10:39:55.085621+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: AGT-2362 REAL-2B2: root ModuleCall lists pass-qualified Ops and its forward arguments; ModuleCall.num_layers counts distinct Layers; Param.num_calls counts the Ops that used it; num_buffer_layers counts distinct buffer Layers; tied-module parameter aliases; Layer conditional roles; uncalled modules recorded at capture end; the loader refreshes num_saved_module_calls
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 711308c2b55233e51cfd4224a6b71985649a73a9 (dirty)
+recorded: 2026-10-13T10:39:55.157513+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: AGT-2362 REAL-2B2: root ModuleCall lists pass-qualified Ops and its forward arguments; ModuleCall.num_layers counts distinct Layers; Param.num_calls counts the Ops that used it; num_buffer_layers counts distinct buffer Layers; tied-module parameter aliases; Layer conditional roles; uncalled modules recorded at capture end; the loader refreshes num_saved_module_calls
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 711308c2b55233e51cfd4224a6b71985649a73a9 (dirty)
+recorded: 2026-10-13T10:39:55.221740+00:00

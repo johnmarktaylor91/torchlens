@@ -414,28 +414,28 @@
     {
       "address": "self",
       "call_label": "self:1",
-      "forward_args_summary": "None",
-      "forward_kwargs_summary": "None",
+      "forward_args_summary": "[Tensor(shape=(1, 4, 16, 16), dtype=float32)]",
+      "forward_kwargs_summary": "{}",
       "input_layers": [
         "input_1"
       ],
       "ops": [
-        "input_1",
-        "conv2d_1_1",
-        "relu_1_2",
-        "conv2d_2_3",
-        "relu_2_4",
-        "conv2d_3_5",
-        "relu_3_6",
-        "cat_1_7",
-        "conv2d_4_8",
-        "relu_4_9",
-        "cat_2_10",
-        "conv2d_5_11",
-        "relu_5_12",
-        "cat_3_13",
-        "conv2d_6_14",
-        "output_1"
+        "input_1:1",
+        "conv2d_1_1:1",
+        "relu_1_2:1",
+        "conv2d_2_3:1",
+        "relu_2_4:1",
+        "conv2d_3_5:1",
+        "relu_3_6:1",
+        "cat_1_7:1",
+        "conv2d_4_8:1",
+        "relu_4_9:1",
+        "cat_2_10:1",
+        "conv2d_5_11:1",
+        "relu_5_12:1",
+        "cat_3_13:1",
+        "conv2d_6_14:1",
+        "output_1:1"
       ],
       "output_layers": [
         "output_1"
