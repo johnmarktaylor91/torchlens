@@ -644,8 +644,14 @@
   `structure_only_measurements_unsupported`; `tl.summary(meta_model,
   input_size=...)` is the rung-4 auto-selecting facade (bare summary with
   no input evidence refuses); `Trace.check_plan(plan)` is the audit-only
-  nnsight-scan-parity checker (`executable=False` always). Doc of record:
-  `docs/reference/weightsfree_capture.md`.
+  nnsight-scan-parity checker (`executable=False` always). Raw text works
+  structure-only (U38.1): the text bridge keeps the token ids' shape on meta
+  with a meta ALL-ONES mask (padded prompts refuse
+  `structure_only_text_mask_not_all_ones`); it traces and discharges under
+  `attn_implementation="eager"` or the TorchLens backend, while the default
+  `sdpa` mask builder reads mask values and refuses typed
+  `value_dependent_branch_unsupported` naming that remedy (never an automatic
+  backend switch). Doc of record: `docs/reference/weightsfree_capture.md`.
 - SELECTION ALGEBRA (L6 stage 1; Selection/ResolvedSelection/resolve/
   `__selection__`/operators slate-ratified subject to D7, producer
   constructors + members DOCUMENTED-UNSTABLE): `tl.Selection` is the
@@ -1024,6 +1030,12 @@
 - `tl.receptive_field` is a lazy power-user submodule. `Op`, `Layer`, `ModuleCall`, and
   `Module` expose `receptive_field` and `projective_field` views; `Trace` exposes the matching
   `receptive_fields()` and `projective_fields()` tables.
+- HF ATTENTION BACKEND (U36.2, spellings DOCUMENTED-UNSTABLE): `tl.bridge.hf.register_attention(model=None)`
+  registers the `"torchlens"` attention function AND its matching mask function (the
+  mask trap: an attention function without one gets no mask); `tl.bridge.hf.record_attention(model,
+  check_sdpa=False)` yields an `AttentionRecording` of per-head probabilities per attention module,
+  no trace. Full `(batch, heads, q, kv)` matrix per call: 32 GiB per 4096-token Llama-2-7B-shape
+  sequence in bf16. Refusal codes `hf_attention_*`.
 - `torchlens.bridge` contains optional adapters for Captum, HF, SHAP, SAE Lens, LIT,
   profiler, and related tools. `bridge.sae.splice(model_or_log, inputs, site=, sae=,
   latents_edit=)` (DOCUMENTED-UNSTABLE) is the packaged SAE splice experiment: fork +
