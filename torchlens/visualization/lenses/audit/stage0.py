@@ -244,12 +244,16 @@ def palette_distinguishability(
 def _dot_json(dot_source: str, *, timeout: int = 120) -> dict[str, Any]:
     """Run ``dot -Tjson`` on a DOT source and parse the layout."""
 
+    from ..._fonts import graphviz_font_env
+
+    # Measure with the same bundled font the renders draw with (FK3).
     completed = subprocess.run(
         ["dot", "-Tjson"],
         input=dot_source.encode("utf-8"),
         capture_output=True,
         check=True,
         timeout=timeout,
+        env=graphviz_font_env(),
     )
     # The bounded reader guards even this trusted-subprocess boundary: a
     # pathological layout cannot exhaust the parser (parse-depth guard).

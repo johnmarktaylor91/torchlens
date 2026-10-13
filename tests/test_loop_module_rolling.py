@@ -842,8 +842,8 @@ def test_recurrence_back_edge_merges_in_out_into_one_midpoint_label(tmp_path: Pa
     the same two nodes; four head/tail labels would fight for that narrow band,
     so the back-edge's annotations merge into one midpoint ``label`` (graphviz
     reserves dummy-node space for it, pushing the anti-parallel curves apart).
-    The forward edge keeps its separate head/tail labels: a forward edge may
-    also carry argument or conditional midpoint labels.
+    Under forks.11 FK5 (midpoint-compose the rolled channel) the forward edge,
+    which carries no argument or conditional label, composes the same way.
     """
 
     dot = _render_dot(_trace(TanhRNNCellLoop()), tmp_path, "rnn_back_edge", vis_call_depth=1000)
@@ -858,9 +858,9 @@ def test_recurrence_back_edge_merges_in_out_into_one_midpoint_label(tmp_path: Pa
     forward_edges = _dot_edge_attrs(dot, "linear_1_1", "tanh_1_2")
     assert len(forward_edges) == 1
     forward_attrs = forward_edges[0]
-    assert _html_label_lines(forward_attrs, "headlabel") == ["In 1-4"]
-    assert _html_label_lines(forward_attrs, "taillabel") == ["Out 1-4"]
-    assert _html_label_lines(forward_attrs, "label") is None
+    assert "headlabel" not in forward_attrs
+    assert "taillabel" not in forward_attrs
+    assert _html_label_lines(forward_attrs, "label") == ["In 1-4", "Out 1-4"]
 
 
 def test_buffer_edges_merge_annotations_into_midpoint_labels(tmp_path: Path) -> None:
@@ -895,40 +895,36 @@ def test_buffer_edges_merge_annotations_into_midpoint_labels(tmp_path: Path) -> 
         assert "taillabel" not in attrs
 
 
-def test_varying_forward_edges_keep_html_head_tail_labels(tmp_path: Path) -> None:
-    """Forward edges that vary across passes keep HTML head/tail In/Out labels.
+def test_varying_forward_edges_compose_midpoint_labels(tmp_path: Path) -> None:
+    """Forward edges that vary across passes compose In/Out into midpoint labels.
 
-    ``DeepLoopBody`` is a three-op cycle: its body edges stay forward edges with
-    separate head/tail labels, emitted as borderless one-cell HTML tables so the
-    text keeps an even transparent margin from the node and arrowhead (graphviz
-    allocates no layout space for plain head/tail labels). Body edges of a
-    >=3-op cycle bow near the merged back-edge midpoint label, so they carry
-    audit-derived per-edge ``labeldistance``/``labelangle`` placement attrs;
-    straight edges (e.g. the input edge) keep graphviz's default placement.
+    ``DeepLoopBody`` is a three-op cycle. forks.11 FK5 (lean B, decided on the
+    post-sink-fix GPT-2 numbers) composes every vouched rolled annotation into
+    one midpoint ``label``, which Graphviz reserves layout space for: the body
+    edges that used to need tuned ``labeldistance``/``labelangle`` endpoint
+    placement now carry one-line midpoint labels, and no edge carries
+    placement attrs.
     """
 
     dot = _render_dot(_trace(DeepLoopBody()), tmp_path, "deep_forward", vis_call_depth=1000)
 
     body_out = _dot_edge_attrs(dot, "linear_1_1", "relu_1_2")
     assert len(body_out) == 1
-    assert _html_label_lines(body_out[0], "taillabel") == ["Out 1-3"]
+    assert _html_label_lines(body_out[0], "label") == ["Out 1-3"]
 
     body_in = _dot_edge_attrs(dot, "relu_1_2", "layernorm_1_3")
     assert len(body_in) == 1
-    assert _html_label_lines(body_in[0], "headlabel") == ["In 1-3"]
+    assert _html_label_lines(body_in[0], "label") == ["In 1-3"]
 
-    # Cycle body edges carry tuned tangent-relative placement (values are
-    # tunable constants -- assert presence, not numbers).
-    for attrs in (body_out[0], body_in[0]):
-        assert "labeldistance=" in attrs
-        assert "labelangle=" in attrs
-
-    # The straight input edge keeps default placement and its head label.
     input_edge = _dot_edge_attrs(dot, "input_1", "linear_1_1")
     assert len(input_edge) == 1
-    assert _html_label_lines(input_edge[0], "headlabel") == ["In 1"]
-    assert "labeldistance=" not in input_edge[0]
-    assert "labelangle=" not in input_edge[0]
+    assert _html_label_lines(input_edge[0], "label") == ["In 1"]
+
+    for attrs in (body_out[0], body_in[0], input_edge[0]):
+        assert "headlabel" not in attrs
+        assert "taillabel" not in attrs
+        assert "labeldistance=" not in attrs
+        assert "labelangle=" not in attrs
 
     # The cycle's back-edge merges to a midpoint label like any recurrence.
     back_edge = _dot_edge_attrs(dot, "layernorm_1_3", "linear_1_1")

@@ -20,6 +20,10 @@ from ._typography import DEFAULT_TYPOGRAPHY
 # malformed/huge conditional subgraph can never turn edge labelling into a hot loop.
 _BRANCH_KIND_SEARCH_LIMIT = 256
 
+# U08.5: the opt-in backward rows of the ``draw_backward`` call being rendered
+# (a ``_backward_rows.BackwardRowOptions``; ``None`` adds no rows).
+_BACKWARD_ROWS: ContextVar[Any] = ContextVar("torchlens_backward_rows", default=None)
+
 
 def _backward_dot_node_name(grad_fn_handle: "GradFn") -> str:
     """Return a DOT-safe node name for a grad_fn_handle log.
@@ -710,6 +714,11 @@ def _compute_backward_node_lines(
         # Suppressed only when EVERY visible node would print "grad N/A"
         # (the memo's x36 uniform row); a mixed render keeps its N/A rows.
         lines.append(f"grad {_format_backward_output_shape(grad_fn_handle)}")
+    rows = _BACKWARD_ROWS.get()
+    if rows is not None:
+        from ._backward_rows import backward_opt_in_rows
+
+        lines.extend(backward_opt_in_rows(grad_fn_handle, call, rows))
     return lines
 
 
@@ -2313,6 +2322,7 @@ def _shared_gradient_passes(parent_layer: GraphNode, child_layer: GraphNode) -> 
 
 __all__ = [
     "BackwardStyleInventory",
+    "_BACKWARD_ROWS",
     "_add_backward_node_to_graphviz",
     "_add_collapsed_container_node",
     "_add_combined_backward_edges",

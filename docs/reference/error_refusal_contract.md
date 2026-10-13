@@ -774,9 +774,11 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `collapse_floor_fallback` | WARNING code (`TorchLensWarning`): `collapse="auto"`/`"max"` fell back to the conservative floor plan; typed half on `OptimizerResult` (collapse memo D4) | Reduce the rendered graph with `module=` focus, `vis_call_depth`, or rolled mode |
 | `collapse_budget_fallback` | WARNING code (`TorchLensWarning`): the (U, W) work estimator refused quality-planner admission; the deterministic compact fallback plan renders instead of an uncollapsed wall (collapse memo D5) | Reduce the rendered graph with `module=` focus, `vis_call_depth`, or rolled mode |
 | `collapse_pathological_skip` | WARNING code (`TorchLensWarning`): the trace crossed the pathological pre-gate (20x `COLLAPSE_OPTIMIZER_MAX_OPS` raw ops) and smart collapse declined outright (collapse memo D5(i)) | Reduce the rendered graph with `module=` focus, `vis_call_depth`, or rolled mode |
+| `collapse_expansion_manifest` | WARNING code (`TorchLensWarning`): an over-ceiling overview render wrote its expansion manifest `<outpath>.expansion.json` (forks.11 FK4) | Open a unit with `module=<address>` from the manifest |
 | `collapse_watchdog_fallback` | WARNING code (`TorchLensWarning`): the quality planner was abandoned mid-run (watchdog/allocation cap) for the deterministic fallback; disclosed as an estimator bug with (U, W, predicted, actual) (collapse memo D5(v)) | Report the disclosed tuple; reduce the rendered graph |
 | `collapse_near_uncollapsed` | WARNING code (`TorchLensWarning`): an auto/max plan left >=90% of rendered units visible (collapse memo D4 release invariant) | Reduce the rendered graph with `module=` focus, `vis_call_depth`, or rolled mode |
 | `layout_engine_stderr` | WARNING code (`TorchLensWarning`): a zero-exit Graphviz layout wrote to stderr (the cairo clamp class; vizmech D24) | Read `trace._last_render_geometry`; on a size clamp render direct SVG or reduce the graph |
+| `render_vector_oversize` | WARNING code (`TorchLensWarning`): a forward SVG/PDF page exceeds the 14,400 pt per-side vector page ceiling; written as requested (forks.11 FK1) | Draw with `collapse='auto'`, focus with `module=`, or limit `vis_call_depth` |
 | `sibling_order_fallback` | WARNING code (`TorchLensWarning`): the sibling-order post-pass could not lay out the ordered graph, so the render used the plain layout (invariant 11) | Pass `order_siblings=False` to skip the pass |
 | `battery_anchor_insufficient` | Threshold freezing received fewer than two anchor judgements per side (`InvalidArgumentError`; lens battery harness, spelling DOCUMENTED-UNSTABLE) | Collect ten judgements per anchor before freezing |
 | `battery_sentinel_probe_missing` | A sentinel (known-bad) packet's answer key lacks a channel-semantics probe, so the control could never fail (`InvalidArgumentError`; lens battery harness, spelling DOCUMENTED-UNSTABLE) | Generate the key with `generate_answer_key(..., sentinel=True)` |
@@ -980,7 +982,7 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `visualization_show_containers_invalid` | `show_containers` is outside its closed vocabulary | Pass False or one of `labels`, `cluster`, `collapsed`, `auto`, `nodes` |
 | `visualization_intervention_mode_invalid` | Intervention rendering mode is unknown | Choose `node_mark` or `as_node` |
 | `visualization_layout_invalid` | Visualization layout is unknown | Choose `auto`, `dot`, or `rank` |
-| `visualization_direction_invalid` | Render direction is unknown | Choose `bottomup`, `topdown`, or `leftright` |
+| `visualization_direction_invalid` | Render direction is unknown | Choose `bottomup`, `topdown`, `leftright`, or `rightleft` |
 | `visualization_renderer_invalid` | Visualization renderer is unknown | Choose `graphviz` or `dagua` |
 | `visualization_theme_invalid` | Visualization theme is unknown | Choose a supported theme |
 | `visualization_mode_invalid` | Backend visualization mode is unsupported | Choose a backend-supported mode |

@@ -376,6 +376,11 @@ torchlens = [
     # runtime; the D05 wheel-venue gate (2026-09-02) caught the file missing from
     # BOTH artifacts (three tests/test_mikit_* rows red on the installed wheel).
     "mechinterp/*.json",
+    # forks.11 FK3: the bundled open font (Liberation Sans, SIL OFL 1.1, shipped
+    # unmodified with its license) every Graphviz render resolves the pinned
+    # family to; visualization/_fonts.py falls back to system fonts without it.
+    "visualization/fonts/*.ttf",
+    "visualization/fonts/OFL.txt",
 ]
 
 [tool.setuptools.exclude-package-data]

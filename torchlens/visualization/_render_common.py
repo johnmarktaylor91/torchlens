@@ -771,47 +771,6 @@ _EDGE_LABEL_FONT_SIZE = int(DEFAULT_TYPOGRAPHY.annotation_size)
 _EDGE_LABEL_PAD = 4  # points of transparent margin on every side of a head/tail label
 _SELF_LOOP_LABEL_HGAP = 8  # points of blank spacer left/right of a self-loop label
 
-
-# Placement attrs (labeldistance, labelangle) for head/tail pass labels on
-# structurally at-risk rolled edges.  Setting EITHER attr switches graphviz
-# from its default endpoint-label placement to ``place_portlabel``, which
-# positions the label relative to the edge's END TANGENT -- so the label
-# follows an oblique or bowed spline instead of clipping it.  The default
-# placement is kept for ordinary (straight) edges: explicitly setting the
-# documented "defaults" (1.0, -25) is NOT a no-op and measurably worsens them.
-# Values chosen by offline audit-scored sweeps over the 16-model rolled
-# inspection set (exact per-label geometry audit): each clears the listed
-# failure class to zero hard violations while keeping labels within 9pt of
-# their endpoint node.
-#
-# PORTABILITY WARNING: these placements are FONT-METRIC-SENSITIVE.  Graphviz
-# resolves the default serif to different fonts per platform (macOS Times,
-# Linux Liberation Serif), and sub-point glyph-width differences move the
-# label bbox enough to flip a tight clearance into a penetration.  The
-# original macOS/Times-tuned oblique pair ("2.0", "-45") had ALWAYS clipped
-# 4 of the 16 models under Linux font metrics.  Current values were re-tuned
-# 2026-08 on Linux (Liberation Serif) against dot 2.43 / 7.0.5 / 14.1
-# simultaneously, selecting for the widest worst-case margin (>=2pt to the
-# nearest spline/arrowhead/node, >=1pt of headroom under the 9pt orphan
-# band) rather than bare passes.  If a class cannot reach robust margins on
-# BOTH font stacks, do NOT re-tune it on your box (that re-breaks the other
-# platform) -- move the class to a midpoint-merged label instead, which gets
-# reserved layout space and is font-metric-independent (see the multi-step
-# skip-edge merge in ``_render_edges._label_rolled_call_indexs``).
-#
-# Heads of >=3-op cycle body edges: the cycle's merged back-edge midpoint
-# label bows the whole forward chain; labels otherwise clip their own
-# spline/arrowhead.
-_ROLLED_CYCLE_HEAD_LABEL_PLACEMENT = ("1.6", "-90")
-# Heads of adjacent forward edges into a self-loop-bearing layer: the
-# self-loop arc invades the default head-label spot.
-_ROLLED_SELF_LOOP_HEAD_LABEL_PLACEMENT = ("1.6", "-65")
-# Tails of >=3-op cycle body edges (heads use the steeper pair above).
-# Multi-step skip edges touching a self-loop layer used to share this pair
-# ("oblique" class); they midpoint-merge now -- no clean placement exists
-# for them across engines and font stacks.
-_ROLLED_CYCLE_TAIL_LABEL_PLACEMENT = ("2.6", "-45")
-
 __all__ = [
     "Any",
     "BACKWARD_ACCUMULATION_EDGE_STYLE",
@@ -912,9 +871,6 @@ __all__ = [
     "_RenderIRDecisionBuilder",
     "_GRAPHVIZ_ESCAPE_HINT",
     "_NOISE_BUFFER_NAMES",
-    "_ROLLED_CYCLE_HEAD_LABEL_PLACEMENT",
-    "_ROLLED_CYCLE_TAIL_LABEL_PLACEMENT",
-    "_ROLLED_SELF_LOOP_HEAD_LABEL_PLACEMENT",
     "_SELF_LOOP_LABEL_HGAP",
     "_SIBLING_ORDER_WARNING_EMITTED",
     "_SVG_ATTR_RE",

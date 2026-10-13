@@ -516,8 +516,10 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     "torchlens/postprocess/loop_grouping_adapter.py": 2600,
     "torchlens/visualization/_render_leaf.py": 2400,
     # Re-keyed down 2450 -> 2350 (r7 R43-F2 slack rule) after the F13 legend
-    # rewrite deleted the six-node emitter from this module.
-    "torchlens/visualization/_render_edges.py": 2350,
+    # rewrite deleted the six-node emitter from this module; 2350 -> 2100 after
+    # forks.11 FK5 midpoint-composed the rolled channel and deleted the tuned
+    # head/tail placement classes.
+    "torchlens/visualization/_render_edges.py": 2100,
     # Re-keyed 2400 -> 2300 at the C03 fix cycle (2026-08-27): the site-key-first
     # compat checker (check_spec_compat + SpecCompat/TargetManifestDiff and its
     # private helpers) moved to intervention/spec_compat.py, decomposed under

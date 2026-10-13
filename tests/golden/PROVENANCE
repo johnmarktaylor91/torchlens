@@ -90,3 +90,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 24e90ebfb3cb1ffff2b41f853857374742c86c36 (clean; run-on snapshot 7c0297a9e)
 recorded: 2026-10-09T20:31:28.613008+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: forks.11 FK5 (rolled In/Out midpoint compose, lean B) and R2-29 (default skin to Okabe-Ito after the N10 resolver); render bytes change by design
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 01ae4491d26d1e6bf628bd522b6e4c15b492663a (dirty)
+recorded: 2026-10-12T23:24:41.637135+00:00
+---
+generator: tests/test_rank_render_ir_semantic_goldens.py
+flag: TORCHLENS_UPDATE_RANK_RENDER_IR=1
+reason: forks.11 FK5 (rolled In/Out midpoint compose, lean B) and R2-29 (default skin to Okabe-Ito after the N10 resolver); render bytes change by design
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 01ae4491d26d1e6bf628bd522b6e4c15b492663a (dirty)
+recorded: 2026-10-12T23:24:46.169664+00:00

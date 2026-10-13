@@ -18,10 +18,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization._render_common import (
-    FROZEN_PARAMS_BG_COLOR,
-    TRAINABLE_PARAMS_BG_COLOR,
-)
+from torchlens.visualization.themes import resolve_theme
+
+#: Parameter fills as the DEFAULT skin renders them (Okabe-Ito since R2-29).
+TRAINABLE_PARAMS_BG_COLOR = resolve_theme("torchlens").semantic_palette["params_trainable"]
+FROZEN_PARAMS_BG_COLOR = resolve_theme("torchlens").semantic_palette["params_frozen"]
 
 pytest.importorskip("graphviz")
 

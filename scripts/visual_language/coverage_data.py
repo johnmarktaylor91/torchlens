@@ -438,7 +438,7 @@ ROWS: Mapping[str, Row] = {
         "direction-layout",
         P,
         "_render_utils:direction_to_rankdir",
-        variants=("bottomup", "topdown", "leftright"),
+        variants=("bottomup", "topdown", "leftright", "rightleft"),
     ),
     "VY02": _R(
         "layout.engine",
@@ -552,6 +552,8 @@ ENTRY_CHEATS: Mapping[str, tuple[str, ...]] = {
         "vis_direction",
         "code_panel",
         "bwd",
+        "show_module_paths",
+        "show_grad_values",
     ),
     "Trace.draw_combined": (
         "vis_outpath",

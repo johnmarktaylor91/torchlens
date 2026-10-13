@@ -1846,214 +1846,6 @@ def _html_combined_recurrence_label(top: str, bottom: Optional[str] = None) -> s
     )
 
 
-def _is_rolled_recurrence_back_edge(child_node: "Layer", parent_node: "Layer") -> bool:
-    """Returns True if a rolled edge runs backwards in execution order.
-
-    A recurrence back-edge feeds a layer whose first op executes EARLIER than
-    the source layer's first op (e.g. ``tanh_1_2 -> linear_1_1`` in an RNN
-    cell).  ``Layer.step_index`` records exactly that first-op position in the
-    global execution order, so a structural comparison suffices -- no label
-    parsing.  Input/buffer layers (``step_index`` 0) and output layers
-    (``step_index`` is the final op count, never smaller than a real parent's)
-    are excluded by requiring both indices to be positive, so input/output and
-    buffer-write edges are never flagged.
-
-    Args:
-        child_node: The destination Layer of the edge.
-        parent_node: The source Layer of the edge.
-    """
-    child_step = child_node.step_index
-    parent_step = parent_node.step_index
-    if not isinstance(child_step, int) or not isinstance(parent_step, int):
-        return False
-    return 0 < child_step < parent_step
-
-
-def _layer_has_rolled_self_loop(
-    node: "Layer", rolled_maps: "_RolledEdgeMaps | None" = None
-) -> bool:
-    """Returns True if a Layer feeds itself across passes (rolled self-loop edge).
-
-    Args:
-        node: The Layer to check.
-        rolled_maps: Optional per-draw memo of the rolled-edge map properties.
-    """
-    maps = rolled_maps if rolled_maps is not None else _RolledEdgeMaps()
-    return node.layer_label in maps.child_ops_per_layer(node)
-
-
-def _is_rolled_congested_recurrence_forward_edge(
-    child_node: "Layer",
-    parent_node: "Layer",
-    rolled_maps: "_RolledEdgeMaps | None" = None,
-) -> bool:
-    """Returns True for the forward partner of a recurrence back-edge whose band
-    is congested by a self-loop.
-
-    The forward edge and its merged back-edge run anti-parallel; when either
-    endpoint ALSO carries a recurrence self-loop, three-plus near-parallel
-    curves crowd that band and the forward edge's head/tail labels collide with
-    the back-edge's spline and arrowhead.  Merging the forward edge's
-    annotations into a midpoint ``label`` (which Graphviz reserves dummy-node
-    space for) pushes the curves apart, the same cure as the back-edge merge.
-    Plain two-node recurrences (no self-loop) keep head/tail labels: their band
-    holds only two curves and lays out cleanly.
-
-    Args:
-        child_node: The destination Layer of the edge.
-        parent_node: The source Layer of the edge.
-        rolled_maps: Optional per-draw memo of the rolled-edge map properties.
-    """
-    maps = rolled_maps if rolled_maps is not None else _RolledEdgeMaps()
-    return (
-        _is_rolled_recurrence_back_edge(parent_node, child_node)
-        and parent_node.layer_label in maps.child_ops_per_layer(child_node)
-        and (
-            _layer_has_rolled_self_loop(parent_node, maps)
-            or _layer_has_rolled_self_loop(child_node, maps)
-        )
-    )
-
-
-def _is_rolled_cycle_body_edge(
-    child_node: "Layer",
-    parent_node: "Layer",
-    maps: "_RolledEdgeMaps",
-) -> bool:
-    """Returns True for a forward body edge of a >=3-op rolled cycle.
-
-    Both endpoints are recurrent and there is no direct reverse edge: a
-    direct reverse edge means a two-op cycle, which lays out straight and is
-    handled by the back-edge midpoint merge.  The cycle's merged back-edge
-    midpoint label bows the whole forward chain, so these edges carry tuned
-    tangent-relative placement attrs (``_ROLLED_CYCLE_HEAD_LABEL_PLACEMENT``
-    / ``_ROLLED_CYCLE_TAIL_LABEL_PLACEMENT``).
-
-    Args:
-        child_node: The destination Layer of the edge.
-        parent_node: The source Layer of the edge.
-        maps: Per-draw memo of the rolled-edge map properties.
-    """
-    p_step = parent_node.step_index
-    c_step = child_node.step_index
-    if not isinstance(p_step, int) or not isinstance(c_step, int):
-        return False
-    return (
-        0 < p_step < c_step
-        and parent_node.num_passes > 1
-        and child_node.num_passes > 1
-        and parent_node.layer_label not in maps.child_ops_per_layer(child_node)
-    )
-
-
-def _is_rolled_multistep_skip_edge(
-    child_node: "Layer",
-    parent_node: "Layer",
-    maps: "_RolledEdgeMaps",
-) -> bool:
-    """Returns True for a multi-step skip edge touching a self-loop layer.
-
-    These long skip edges (e.g. input -> loop op) bow around the ranks they
-    skip, so an endpoint head/tail label -- which Graphviz reserves no layout
-    space for -- has no safe spot: audit sweeps found no
-    ``labeldistance``/``labelangle`` pair that clears the node, spline, and
-    arrowhead on all engines without orphaning the label past the 9pt band,
-    and the winning pairs differed between macOS/Times and Linux/Liberation
-    font metrics.  Single-annotation skip edges therefore midpoint-merge
-    (like buffer edges) instead of taking placement attrs.  Cycle body edges
-    take precedence: those keep their tuned endpoint placement.  Edges into
-    output layers run straight to the top rank and stay default.
-
-    Args:
-        child_node: The destination Layer of the edge.
-        parent_node: The source Layer of the edge.
-        maps: Per-draw memo of the rolled-edge map properties.
-    """
-    p_step = parent_node.step_index
-    c_step = child_node.step_index
-    if not isinstance(p_step, int) or not isinstance(c_step, int):
-        return False
-    if _is_rolled_cycle_body_edge(child_node, parent_node, maps):
-        return False
-    span = c_step - p_step
-    return (
-        0 <= p_step < c_step
-        and 2 <= span <= 4
-        and (
-            _layer_has_rolled_self_loop(parent_node, maps)
-            or _layer_has_rolled_self_loop(child_node, maps)
-        )
-        and child_node.layer_type != "output"
-    )
-
-
-def _is_rolled_buffer_edge(child_node: "Layer", parent_node: "Layer") -> bool:
-    """Returns True if either endpoint of a rolled edge is a buffer layer.
-
-    Buffer layers carry the structural ``is_buffer`` flag (glossary:
-    ``is_buffer_source``); their ``step_index`` is 0, so
-    ``_is_rolled_recurrence_back_edge`` deliberately never matches them.  A
-    buffer's read edge and write edge run anti-parallel in a narrow band (the
-    same geometry the back-edge midpoint merge solves), so buffer-incident
-    edges get the same midpoint treatment for their ``In``/``Out`` annotations.
-
-    Args:
-        child_node: The destination Layer of the edge.
-        parent_node: The source Layer of the edge.
-    """
-    return bool(child_node.is_buffer) or bool(parent_node.is_buffer)
-
-
-def _rolled_pass_label_placement(
-    child_node: "Layer",
-    parent_node: "Layer",
-    out_label: Optional[str],
-    in_label: Optional[str],
-    rolled_maps: "_RolledEdgeMaps | None" = None,
-) -> Optional[Tuple[str, str]]:
-    """Pick explicit (labeldistance, labelangle) for an at-risk head/tail label.
-
-    Returns None (keep graphviz's default endpoint placement) for edges that
-    lay out straight; returns tuned tangent-relative placement attrs for the
-    structural classes whose splines bow near the labeled endpoint (see the
-    ``_ROLLED_*_LABEL_PLACEMENT`` constants).  Only single-annotation edges are
-    conditioned: the attrs are per-edge and move BOTH endpoint labels, and
-    dual-annotation edges lay out straight (their recurrence partners merge to
-    midpoint labels instead).
-
-    Args:
-        child_node: The destination Layer of the edge.
-        parent_node: The source Layer of the edge.
-        out_label: The ``Out ...`` annotation, if the edge carries one.
-        in_label: The ``In ...`` annotation, if the edge carries one.
-        rolled_maps: Optional per-draw memo of the rolled-edge map properties.
-    """
-    has_head = in_label is not None
-    has_tail = out_label is not None
-    if has_head == has_tail:
-        return None
-    p_step = parent_node.step_index
-    c_step = child_node.step_index
-    if not isinstance(p_step, int) or not isinstance(c_step, int):
-        return None
-    maps = rolled_maps if rolled_maps is not None else _RolledEdgeMaps()
-    span = c_step - p_step
-    forward = 0 < p_step < c_step
-    # Body edge of a >=3-op cycle (multi-step skip edges never reach here:
-    # single-annotation skip edges midpoint-merge upstream in
-    # ``_label_rolled_call_indexs`` because no placement pair is safe for
-    # them across engines and font stacks).
-    if _is_rolled_cycle_body_edge(child_node, parent_node, maps):
-        return (
-            _ROLLED_CYCLE_HEAD_LABEL_PLACEMENT if has_head else _ROLLED_CYCLE_TAIL_LABEL_PLACEMENT
-        )
-    # Adjacent forward edge into a self-loop layer: the self-loop arc sits
-    # where the default head label would go.
-    if has_head and forward and span == 1 and _layer_has_rolled_self_loop(child_node, maps):
-        return _ROLLED_SELF_LOOP_HEAD_LABEL_PLACEMENT
-    return None
-
-
 def _label_rolled_call_indexs(
     child_node: "Layer",
     parent_node: "Layer",
@@ -2067,47 +1859,22 @@ def _label_rolled_call_indexs(
     """Add pass-number annotations to edges in rolled mode.
 
     In rolled mode, a single edge may represent connections from different
-    ops.  When edges vary across ops (``edges_vary_across_ops``),
-    tail and head labels show which ops the edge applies to, e.g.,
-    ``"Out 1,3"`` / ``"In 2,4"``.  Uses ``int_list_to_compact_str`` for
-    concise range notation (e.g., ``"1-3"`` instead of ``"1,2,3"``).
+    ops.  When edges vary across ops (``edges_vary_across_ops``), the edge
+    says which ops it applies to, e.g. ``"Out 1,3"`` / ``"In 2,4"``, using
+    ``int_list_to_compact_str`` for concise ranges (``"1-3"``).
 
-    Labels are emitted as HTML-like tables with small spacer cells so the text
-    keeps an even gap from the node and the arrowhead without crowding it (a plain
-    head/tail label is not allocated layout space and would touch the node).
-
-    Self-loops are special-cased: their head/tail labels crowd against the node
-    and (unlike forward edges) a recurrence self-edge never carries argument or
-    conditional midpoint labels.  So the ``In``/``Out`` annotations are merged
-    into a single midpoint ``label``, which Graphviz reserves layout space for
-    (it is modeled as a dummy node), eliminating the overlap.  The ``In`` line is
-    placed above ``Out`` for bottom-up graphs (flow points up) and flipped for
-    top-down ones.
-
-    Recurrence back-edges between distinct nodes get the same merge when the
-    caller marks it safe (``allow_midpoint_merge``): a back-edge runs
-    anti-parallel to the forward edge between the same two nodes, so four
-    head/tail labels would fight for the narrow gap between the two near-parallel
-    edges and collide with the arrowheads.  Merging into one midpoint ``label``
-    both clears that gap and -- because Graphviz reserves a dummy-node spot for
-    midpoint labels -- pushes the anti-parallel edges apart.  Forward edges keep
-    head/tail labels: they may carry argument or conditional midpoint labels
-    that a combined label would collide with, which is also why the caller must
-    vouch (no existing ``label``, argument labeler cannot fire) before a
-    back-edge merges.
-
-    Buffer-incident edges (either endpoint has ``is_buffer``) merge under the
-    same caller gate, including when only ONE of ``In``/``Out`` is present
-    (rendered as a one-line midpoint label).  Buffer layers have
-    ``step_index`` 0, so the back-edge check never matches them, yet a
-    buffer's read and write edges run anti-parallel in the same narrow band --
-    and the read edge curves enough that even its own head label collides with
-    its own spline.
-
-    Head/tail labels that stay (no merge) may get explicit per-edge
-    ``labeldistance``/``labelangle`` attrs when the edge belongs to a
-    structural class whose spline bows near the labeled endpoint; see
-    ``_rolled_pass_label_placement``.
+    forks.11 FK5 (lean B): the annotations compose into ONE midpoint ``label``
+    whenever the caller vouches the slot is free (``allow_midpoint_merge``: no
+    conditional label set, no argument label coming). Graphviz reserves layout
+    space for a midpoint label (a dummy node), so it never collides with a
+    node, spline or arrowhead, on any engine or font stack -- the endpoint
+    head/tail labels it replaces get no reserved space, which is why the
+    measured stock GPT-2 rolled page carried 38 more hard label violations
+    with them. The ``In`` line sits above ``Out`` for bottom-up graphs (flow
+    points up) and below it for top-down ones. Recurrence self-loops always
+    merge a full pair. An unvouched edge keeps head/tail labels, emitted as
+    HTML tables with small spacer cells so the text keeps an even gap from
+    the node and the arrowhead.
 
     Args:
         child_node: The child Layer node.
@@ -2115,9 +1882,8 @@ def _label_rolled_call_indexs(
         edge_dict: Mutable dict of edge attributes; taillabel/headlabel/label may be added.
         is_self_loop: Whether this edge is a node's recurrence self-loop.
         rankdir: Graphviz rank direction, used to order a combined label's lines.
-        allow_midpoint_merge: Whether a non-self-loop edge may safely take a
-            midpoint ``label`` (no conditional label present, no argument label
-            coming); only such recurrence back-edges merge their annotations.
+        allow_midpoint_merge: Whether the edge may take a midpoint ``label`` (no
+            conditional label present, no argument label coming).
         rolled_maps: Optional per-draw memo of the rolled-edge map properties.
     """
     maps = rolled_maps if rolled_maps is not None else _RolledEdgeMaps()
@@ -2134,45 +1900,29 @@ def _label_rolled_call_indexs(
         else None
     )
 
-    is_buffer_edge = not is_self_loop and _is_rolled_buffer_edge(child_node, parent_node)
-    merge_into_midpoint = is_self_loop or (
-        allow_midpoint_merge
-        and (
-            is_buffer_edge
-            or _is_rolled_recurrence_back_edge(child_node, parent_node)
-            or _is_rolled_congested_recurrence_forward_edge(child_node, parent_node, maps)
-        )
-    )
-    if merge_into_midpoint and out_label is not None and in_label is not None:
+    # forks.11 FK5 (lean B, decided on the post-sink-fix numbers: stock GPT-2
+    # rolled, 97 -> 59 hard label violations at 1.008x page area): every
+    # rolled In/Out annotation the caller vouches for -- no conditional label
+    # set, no argument label coming -- composes into ONE midpoint ``label``,
+    # which Graphviz reserves layout space for (a dummy node), so it clears
+    # nodes, splines and arrowheads on every engine and font stack. Self-loops
+    # always merge a full pair. Unvouched edges keep head/tail labels.
+    if (is_self_loop or allow_midpoint_merge) and out_label is not None and in_label is not None:
         top, bottom = (out_label, in_label) if rankdir == "TB" else (in_label, out_label)
         edge_dict["label"] = _html_combined_recurrence_label(top, bottom)
         return
     single_label = out_label if out_label is not None else in_label
-    is_single_merge_edge = is_buffer_edge or (
-        not is_self_loop and _is_rolled_multistep_skip_edge(child_node, parent_node, maps)
-    )
-    if is_single_merge_edge and allow_midpoint_merge and single_label is not None:
-        # A buffer edge with a single annotation still merges: its read and
-        # write edges run anti-parallel in a narrow band, where a head/tail
-        # label collides with the opposing edge's spline and arrowhead.
-        # Single-annotation multi-step skip edges merge for the same reason a
-        # midpoint label is the structural fix: the bowed long curve leaves
-        # no endpoint spot that clears node, spline, and arrowhead on every
-        # engine and font stack (see ``_is_rolled_multistep_skip_edge``).
+    if (
+        allow_midpoint_merge
+        and single_label is not None
+        and (out_label is None or in_label is None)
+    ):
         edge_dict["label"] = _html_combined_recurrence_label(single_label)
         return
-
     if out_label is not None:
         edge_dict["taillabel"] = _html_edge_label(out_label)
     if in_label is not None:
         edge_dict["headlabel"] = _html_edge_label(in_label)
-    if (out_label is not None or in_label is not None) and allow_midpoint_merge:
-        # ``allow_midpoint_merge`` doubles as the caller's promise that the
-        # argument labeler cannot add a headlabel later, so the per-edge
-        # placement attrs below can only ever move OUR pass labels.
-        placement = _rolled_pass_label_placement(child_node, parent_node, out_label, in_label, maps)
-        if placement is not None:
-            edge_dict["labeldistance"], edge_dict["labelangle"] = placement
 
 
 def _get_lowest_module_for_two_render_nodes(
@@ -2291,16 +2041,10 @@ __all__ = [
     "_intervention_hook_node_name",
     "_is_buffer_visible",
     "_is_noise_buffer",
-    "_is_rolled_buffer_edge",
-    "_is_rolled_congested_recurrence_forward_edge",
-    "_is_rolled_cycle_body_edge",
     "_is_rolled_loop_carried_self_edge",
-    "_is_rolled_multistep_skip_edge",
-    "_is_rolled_recurrence_back_edge",
     "_is_run_fold_representative",
     "_label_node_arguments_if_needed",
     "_label_rolled_call_indexs",
-    "_layer_has_rolled_self_loop",
     "_occurrence_matches_op",
     "_op_is_model_input_container_leaf",
     "_op_is_model_output_container_leaf",
@@ -2309,7 +2053,6 @@ __all__ = [
     "_queue_run_fold_ellipsis_node",
     "_raw_op_label",
     "_rendered_edge_signature",
-    "_rolled_pass_label_placement",
     "_run_fold_ancestor_for_node",
     "_run_fold_ellipsis_label",
     "_run_fold_ellipsis_node_name",

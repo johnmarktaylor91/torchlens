@@ -21,6 +21,7 @@ include torchlens/py.typed
 recursive-include torchlens/autoroute/data *.json *.md
 recursive-include torchlens/schemas *.json
 recursive-include torchlens/mechinterp *.json
+recursive-include torchlens/visualization/fonts *.ttf OFL.txt
 # Belt: agent docs must never ship even if a blanket include returns.
 recursive-exclude torchlens CLAUDE.md AGENTS.md
 prune tests

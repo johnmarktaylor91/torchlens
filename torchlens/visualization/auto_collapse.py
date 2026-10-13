@@ -624,6 +624,14 @@ def resolve_collapse_fn(
         from .collapse_optimizer import select_collapse_plan
 
         result = select_collapse_plan(trace, resolved_context, mode=collapse)
+        if result.declined and "collapse_ops_ceiling" in (result.reason or ""):
+            # forks.11 FK4: past the pathological pre-gate the render is a
+            # bounded top-level overview plus an expansion manifest, never an
+            # uncollapsed wall (a flat trace with no child modules has no
+            # coarser legal plan and stays as it is, disclosed by the skip).
+            from .collapse_fallback import pathological_overview_fn
+
+            return pathological_overview_fn(trace, result.reason)
         if not result.declined:
             _warn_undisclosed_floor(trace, collapse, result, resolved_context)
 

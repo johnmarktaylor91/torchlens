@@ -42,6 +42,10 @@ if TYPE_CHECKING:
     from .source_graph import SourceGraph
 
 
+#: Attribute the FK4 pathological overview predicate carries (its decline reason).
+OVERVIEW_REASON_ATTR = "_torchlens_overview_reason"
+
+
 def _top_level_fallback_addresses(trace: Trace) -> tuple[str, ...]:
     """Return direct child module addresses suitable for floor fallback boxes.
 
@@ -79,6 +83,69 @@ def _fallback_collapse_fn(selected: frozenset[str]) -> Callable[[Module], bool]:
         return module.address in selected
 
     return collapse_fn
+
+
+def pathological_overview_fn(trace: Trace, reason: str | None) -> Callable[[Module], bool] | None:
+    """Return the top-level overview predicate for a pathological trace (FK4).
+
+    One O(modules) pass selects the OUTERMOST modules that hide more than one
+    operation -- the root's direct children, or the first called modules under
+    a container such as ``nn.ModuleList`` that is never called itself; the
+    renderer then builds one plan from them.
+    The predicate carries ``_torchlens_overview_reason`` so the draw path
+    skips run folding (the raw-op ceiling already refuses it), captions the
+    overview, and writes the expansion manifest.
+
+    Parameters
+    ----------
+    trace:
+        Trace past the pathological pre-gate.
+    reason:
+        The optimizer's typed decline reason.
+
+    Returns
+    -------
+    Callable[[Module], bool] | None
+        The overview predicate, or ``None`` when the root has no child module
+        to box (the residual then renders as captured).
+    """
+
+    selected = _outermost_multi_op_addresses(trace)
+    if not selected:
+        return None
+    overview_fn = _fallback_collapse_fn(selected)
+    setattr(overview_fn, OVERVIEW_REASON_ATTR, reason or "collapse_ops_ceiling")
+    return overview_fn
+
+
+def _outermost_multi_op_addresses(trace: Trace) -> frozenset[str]:
+    """Return the outermost module addresses that hide more than one operation.
+
+    Parameters
+    ----------
+    trace:
+        Trace being rendered.
+
+    Returns
+    -------
+    frozenset[str]
+        Addresses with ``num_layers > 1`` and no selected ancestor.
+    """
+
+    candidates = sorted(
+        (
+            str(getattr(module, "address", ""))
+            for module in trace.modules
+            if str(getattr(module, "address", "")) not in {"", "self"}
+            and int(getattr(module, "num_layers", 0) or 0) > 1
+        ),
+        key=lambda address: (address.count("."), address),
+    )
+    selected: list[str] = []
+    for address in candidates:
+        if not any(address.startswith(f"{outer}.") for outer in selected):
+            selected.append(address)
+    return frozenset(selected)
 
 
 def _greedy_box_selection(trace: Trace, band_high: int, universe_count: int) -> frozenset[str]:

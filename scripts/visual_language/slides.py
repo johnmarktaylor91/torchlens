@@ -111,6 +111,7 @@ def constants() -> dict[str, Any]:
         _render_utils,
         code_panel,
         surgery_visuals,
+        themes,
     )
     from torchlens.visualization._rank_layout_internal import layout
     from torchlens.visualization._typography import DEFAULT_TYPOGRAPHY
@@ -120,6 +121,9 @@ def constants() -> dict[str, Any]:
         for name, param in inspect.signature(TraceVisualizationMixin.draw).parameters.items()
     }
     typo = DEFAULT_TYPOGRAPHY
+    # Role colors as the default skin renders them (Okabe-Ito since R2-29), not the
+    # historical constants the skin translates.
+    palette = themes.resolve_theme("torchlens").semantic_palette
     return {
         "fan_in": _edge_multiplicity._ARG_LABEL_MIDPOINT_FANIN,
         "commute": ", ".join(_render_common.COMMUTE_FUNCS),
@@ -138,12 +142,12 @@ def constants() -> dict[str, Any]:
         "emphasis_pt": f"{typo.emphasis_size:g}",
         "font": typo.family,
         "surgery_cap": surgery_visuals._MAX_MARK_ROWS_PER_NODE,
-        "trainable": _render_common.TRAINABLE_PARAMS_BG_COLOR,
-        "frozen": _render_common.FROZEN_PARAMS_BG_COLOR,
-        "generic_params": _render_common.PARAMS_NODE_BG_COLOR,
-        "bool_color": _render_common.BOOL_NODE_COLOR,
-        "input_color": _render_common.INPUT_COLOR,
-        "output_color": _render_common.OUTPUT_COLOR,
+        "trainable": palette["params_trainable"],
+        "frozen": palette["params_frozen"],
+        "generic_params": palette["params_generic"],
+        "bool_color": palette["boolean"],
+        "input_color": palette["input"],
+        "output_color": palette["output"],
         "grad_color": _render_common.GRADIENT_ARROW_COLOR,
     }
 
@@ -223,7 +227,7 @@ SLIDES: tuple[Slide, ...] = (
         keys=(
             Key("Green: the input, named @input.<argument>", "node(fillcolor={input_color})"),
             Key("Arrows point from producer to consumer", "edge(style=solid)"),
-            Key("Red: the output, at the top", "node(fillcolor={output_color})"),
+            Key("Vermillion: the output, at the top", "node(fillcolor={output_color})"),
         ),
         footnote="A caption under the graph names the model and counts tensors, memory and "
         "parameters; bold warning lines join it when a capture was poisoned or unverified.",
@@ -238,7 +242,7 @@ SLIDES: tuple[Slide, ...] = (
         keys=(
             Key("Box: nn.Linear called as a module", "node(shape=box)"),
             Key("Oval: F.linear called as a function", "node(shape=oval, text~linear)"),
-            Key("Grey: the op uses parameters", "node(fillcolor={trainable})"),
+            Key("Blue: the op uses parameters", "node(fillcolor={trainable})"),
             Key("White: no parameters", "node(fillcolor=white, shape=oval)"),
         ),
         rows=("VN01", "VN02"),
@@ -274,13 +278,13 @@ SLIDES: tuple[Slide, ...] = (
     ),
     Slide(
         id="grey-params",
-        title="Grey means parameters",
-        rule="Light grey trains, dark grey is frozen, two-tone is both. Fill precedence: input, "
+        title="Blue means parameters",
+        rule="Light blue trains, dark blue is frozen, two-tone is both. Fill precedence: input, "
         "output, boolean, then parameters.",
         panels=(Panel("a", "Params", kwargs={**CAP, **FULL}),),
         keys=(
-            Key("Light grey {trainable}: all trainable", "node(fillcolor={trainable})"),
-            Key("Dark grey {frozen}: frozen, shapes in brackets", "node(fillcolor={frozen})"),
+            Key("Light blue {trainable}: all trainable", "node(fillcolor={trainable})"),
+            Key("Dark blue {frozen}: frozen, shapes in brackets", "node(fillcolor={frozen})"),
             Key("Two-tone: some of each", "node(fillcolor~:)"),
             Key("Caption counts trainable parameters", "graph(label~trainable)", at="Params"),
         ),
@@ -491,7 +495,7 @@ SLIDES: tuple[Slide, ...] = (
                 at="mutated parameter",
             ),
         ),
-        footnote="A frozen Parameter takes the dark grey fill.",
+        footnote="A frozen Parameter takes the dark blue fill.",
         rows=("VN09", "VE11", "VI01"),
     ),
     Slide(
@@ -670,12 +674,12 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="focus",
         title="Focus on one module: module=",
-        rule="Only the module's own ops; green and red ovals stand for the outside. "
+        rule="Only the module's own ops; green and vermillion ovals stand for the outside. "
         'trace.modules["blocks.0"].draw() is the same.',
         panels=(Panel("a", "Stack", kwargs={"module": "blocks.0"}),),
         keys=(
             Key("Green: where data enters", "node(fillcolor={input_color})"),
-            Key("Red: where data leaves", "node(fillcolor={output_color})"),
+            Key("Vermillion: where data leaves", "node(fillcolor={output_color})"),
             Key("Only the module's own ops", "node(text~relu)"),
         ),
         rows=("VN15", "VR08"),

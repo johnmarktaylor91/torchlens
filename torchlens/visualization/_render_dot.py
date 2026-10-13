@@ -2,6 +2,7 @@
 
 # ruff: noqa: F403, F405
 
+import shutil
 import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, replace
@@ -17,6 +18,7 @@ from ._render_flow import *
 from ._render_leaf import *
 from ._render_nodes import *
 from ._render_ordering import (
+    SpeculativeRender,
     _layout_dot_plain,
     _queue_sibling_rank_group,
     _should_order_siblings,
@@ -34,7 +36,12 @@ from ._render_regions import (
     _setup_subgraphs,
     _setup_subgraphs_recurse,
 )
-from ._render_utils import html_escape
+from ._render_utils import (
+    DEFAULT_DRAW_STEM,
+    announce_written_graph,
+    collision_safe_outpath,
+    html_escape,
+)
 from ._svg_compose import (
     _inline_svg_file_local_images,
     _inline_svg_local_images,
@@ -48,6 +55,7 @@ from .render_execution import (
     atomic_render_target,
     build_render_geometry_record,
     surface_layout_stderr,
+    warn_oversize_vector,
 )
 from .renderers.graphviz import GraphvizRenderer
 from .request import RenderTarget, ResolvedRenderRequest
@@ -129,6 +137,24 @@ def _strip_render_extension(vis_outpath: str) -> str:
     from ._render_utils import strip_known_extension
 
     return strip_known_extension(vis_outpath)
+
+
+def _report_saved_graph(trace: "Trace", target: RenderTarget) -> None:
+    """Report the written graph path: always for a bare draw, else only when verbose.
+
+    Parameters
+    ----------
+    trace:
+        Trace that was rendered (its ``verbose`` flag gates the quiet case).
+    target:
+        Resolved render target.
+    """
+
+    rendered_path = f"{target.outpath}.{target.fileformat}"
+    if target.announce_path:
+        announce_written_graph(rendered_path)
+    else:
+        _vprint(trace, f"Graph saved to {rendered_path}")
 
 
 def _validate_rendered_output(rendered_path: str, source_path: str, graph_kind: str) -> None:
@@ -308,8 +334,11 @@ def _resolve_collapse_request(
     collapse_uses_default_folds = request.collapse in {"auto", "max"} or (
         isinstance(request.collapse, float) and request.collapse > 0.0
     )
-    if request.fold_repeats is not False and (
-        request.fold_repeats is True or collapse_uses_default_folds
+    overview_reason = getattr(collapse_fn, "_torchlens_overview_reason", None)
+    if (
+        overview_reason is None
+        and request.fold_repeats is not False
+        and (request.fold_repeats is True or collapse_uses_default_folds)
     ):
         from .auto_collapse import resolve_repeat_folds
 
@@ -436,7 +465,64 @@ def _graph_caption_body(trace: "Trace", request: ResolvedRenderRequest) -> str:
         if getattr(collapse_result, "k_cap_exhausted", False):
             floor_note += f" -- root owns {collapse_result.root_own_units} units, above K_CAP"
         caption_body += f"<B>{html_escape(floor_note)}</B><br align='left'/>"
+    if getattr(request.collapse_fn, "_torchlens_overview_reason", None) is not None:
+        caption_body += (
+            "<B>collapse overview: top-level modules only (trace past the smart-collapse "
+            "ceiling); see the expansion manifest</B><br align='left'/>"
+        )
+    reuse_note = _module_reuse_note(trace, request)
+    if reuse_note is not None:
+        caption_body += f"{html_escape(reuse_note)}<br align='left'/>"
     return caption_body
+
+
+def _module_reuse_note(trace: "Trace", request: ResolvedRenderRequest) -> str | None:
+    """Disclose module reuse on an unrolled overview, never switching modes (collapse 5).
+
+    The collapse panel ratified "disclose, don't switch" for weight-shared
+    models: the default ``vis_mode`` stays, and an overview render (a smart
+    collapse mode) says how many modules ran more than once and that rolled
+    mode draws the loop. Nested modules of a reused module are not counted
+    again.
+
+    Parameters
+    ----------
+    trace:
+        Trace being rendered.
+    request:
+        Resolved request (its ``vis_mode`` and ``collapse`` gate the note).
+
+    Returns
+    -------
+    str | None
+        The note, or ``None`` when the render is rolled, not an overview, or
+        no module ran more than once.
+    """
+
+    overview = request.collapse in ("auto", "max") or (
+        isinstance(request.collapse, float) and request.collapse > 0.0
+    )
+    if request.vis_mode != "unrolled" or not overview:
+        return None
+    reused = {
+        str(module.address): int(module.num_calls)
+        for module in trace.modules
+        if str(getattr(module, "address", "")) not in ("", "self")
+        and int(getattr(module, "num_calls", 1) or 1) > 1
+    }
+    outermost = {
+        address: calls
+        for address, calls in reused.items()
+        if not any(address.startswith(f"{other}.") for other in reused)
+    }
+    if not outermost:
+        return None
+    count = len(outermost)
+    calls = sum(outermost.values())
+    noun = "module" if count == 1 else "modules"
+    return (
+        f"this model reuses {count} {noun} across {calls} calls; vis_mode='rolled' shows the loop"
+    )
 
 
 def _build_graphviz_shell(
@@ -924,7 +1010,8 @@ def _emit_and_finish_forward(
             output_path=f"{target.outpath}.{target.fileformat}",
             stderr_text=rank_execution.get("stderr_text", ""),
         )
-        _vprint(trace, f"Graph saved to {target.outpath}.{target.fileformat}")
+        warn_oversize_vector(trace._last_render_geometry)
+        _report_saved_graph(trace, target)
         return result
 
     dot = context.dot
@@ -980,6 +1067,7 @@ def _emit_and_finish_forward(
 
     source_override = None
     trace._last_sibling_ordering_decision = SiblingOrderDecision(0, 0, {}, ())
+    speculative = _speculative_render_for(trace, dot, target, compose_code_panel)
     if forward_render_ir.ordering_constraints:
         try:
             source_override, decision = _verify_and_apply_sibling_ordering(
@@ -987,6 +1075,7 @@ def _emit_and_finish_forward(
                 forward_render_ir.ordering_constraints,
                 work.captured_edges,
                 context.rankdir,
+                speculative,
             )
             trace._last_sibling_ordering_decision = decision
         except (subprocess.SubprocessError, OSError) as exc:
@@ -1051,6 +1140,79 @@ def _emit_and_finish_forward(
     # never written into the source: user-saved DOT keeps only stable
     # relative image refs instead of a per-run mkdtemp path that dies with
     # the trace.
+    try:
+        return _publish_forward_render(trace, context, target, final_source, speculative)
+    finally:
+        if speculative is not None:
+            shutil.rmtree(speculative.scratch_dir, ignore_errors=True)
+
+
+def _speculative_render_for(
+    trace: "Trace", dot: Any, target: RenderTarget, compose_code_panel: bool
+) -> SpeculativeRender | None:
+    """Return speculative-render state when the final render can reuse a verifier layout.
+
+    U07.5: the sibling-order verifier's ordered layout is the same layout the
+    final render would run again; reuse needs the plain ``dot`` engine and a
+    direct (not code-panel-composed) artifact.
+
+    Parameters
+    ----------
+    trace:
+        Trace being rendered (its visualizer scratch dir is Graphviz's cwd).
+    dot:
+        Graphviz graph being rendered.
+    target:
+        Render target (the format to produce).
+    compose_code_panel:
+        Whether the final render composes a code panel (no reuse then).
+
+    Returns
+    -------
+    SpeculativeRender | None
+        Fresh state with its own scratch directory, or ``None``.
+    """
+
+    if compose_code_panel or dot.engine != "dot":
+        return None
+    image_root = trace._visualizer_dir
+    return SpeculativeRender(
+        fileformat=target.fileformat,
+        scratch_dir=tempfile.mkdtemp(prefix="torchlens_ordered_render_"),
+        cwd=str(image_root) if image_root else None,
+    )
+
+
+def _publish_forward_render(
+    trace: "Trace",
+    context: _ForwardRenderContext,
+    target: RenderTarget,
+    final_source: str,
+    speculative: SpeculativeRender | None,
+) -> Any:
+    """Write the DOT source and publish the rendered artifact atomically.
+
+    Parameters
+    ----------
+    trace, context, target:
+        Render state (``context.dot`` is the Graphviz graph).
+    final_source:
+        The DOT text to publish.
+    speculative:
+        Verifier layouts that may already hold the artifact for ``final_source``.
+
+    Returns
+    -------
+    Any
+        The Graphviz graph when ``return_graph`` was requested, else the source.
+    """
+
+    request = context.request
+    dot = context.dot
+    compose_code_panel = context.source_text is not None and _code_panel_composition_available(
+        target.fileformat, context.engine
+    )
+    render_timeout = 120
     late_visualizer_dir = getattr(trace, "_visualizer_dir", None)
     source_path = dot.save(target.outpath)
     with open(source_path, "w", encoding="utf-8") as source_file:
@@ -1078,22 +1240,32 @@ def _emit_and_finish_forward(
                 # scaling by N" clamp warning is the signal that raster
                 # dimensions are fiction; it was silently discarded).
                 with atomic_render_target(rendered_path) as temp_rendered_path:
-                    cmd = [
-                        dot.engine,
-                        f"-T{target.fileformat}",
-                        "-o",
-                        os.path.abspath(temp_rendered_path),
-                        os.path.abspath(source_path),
-                    ]
-                    completed = _render_utils.run_bounded_subprocess(
-                        cmd,
-                        timeout=render_timeout,
-                        # T9 (grind-p3): relative node image refs resolve against
-                        # the scratch root via cwd, keeping the per-run temp path
-                        # out of the saved DOT source.
-                        cwd=str(render_image_root) if render_image_root else None,
+                    reusable = (
+                        speculative.reusable_for(final_source) if speculative is not None else None
                     )
-                    layout_stderr = surface_layout_stderr(completed.stderr, engine=dot.engine)
+                    if reusable is not None:
+                        # U07.5: the verifier already laid out exactly this
+                        # source and wrote the format; publish that artifact.
+                        shutil.move(reusable, temp_rendered_path)
+                        stderr_text: Any = cast(SpeculativeRender, speculative).last_stderr
+                    else:
+                        cmd = [
+                            dot.engine,
+                            f"-T{target.fileformat}",
+                            "-o",
+                            os.path.abspath(temp_rendered_path),
+                            os.path.abspath(source_path),
+                        ]
+                        completed = _render_utils.run_bounded_subprocess(
+                            cmd,
+                            timeout=render_timeout,
+                            # T9 (grind-p3): relative node image refs resolve
+                            # against the scratch root via cwd, keeping the
+                            # per-run temp path out of the saved DOT source.
+                            cwd=str(render_image_root) if render_image_root else None,
+                        )
+                        stderr_text = completed.stderr
+                    layout_stderr = surface_layout_stderr(stderr_text, engine=dot.engine)
                     if target.fileformat == "svg":
                         _inline_svg_file_local_images(temp_rendered_path, render_image_root)
                     _validate_rendered_output(temp_rendered_path, source_path, "forward graph")
@@ -1105,9 +1277,10 @@ def _emit_and_finish_forward(
                 output_path=rendered_path,
                 stderr_text=layout_stderr,
             )
+            warn_oversize_vector(trace._last_render_geometry)
             if not target.save_only:
                 _view_rendered_file(rendered_path)
-            _vprint(trace, f"Graph saved to {target.outpath}.{target.fileformat}")
+            _report_saved_graph(trace, target)
             if os.path.exists(source_path):
                 os.remove(source_path)
         except subprocess.TimeoutExpired as error:
@@ -1130,7 +1303,7 @@ def draw(
     self: "Trace",
     vis_mode: VisModeLiteral = "unrolled",
     vis_call_depth: int = 1000,
-    vis_outpath: str = "modelgraph",
+    vis_outpath: str | None = None,
     vis_graph_overrides: Optional[Dict[str, Any]] = None,
     module: "Module | str | None" = None,
     node_mode: VisNodeModeLiteral = "default",
@@ -1286,6 +1459,14 @@ def draw(
         from ._encoding import raise_encoding_dagua_refusal
 
         raise_encoding_dagua_refusal(request.encoding.active_channels())
+    # forks.12: a bare draw (no vis_outpath) writes a collision-safe file and
+    # always prints where; an explicit path is written exactly, as before.
+    announce_path = vis_outpath is None
+    resolved_outpath = (
+        collision_safe_outpath(DEFAULT_DRAW_STEM, vis_fileformat)
+        if vis_outpath is None
+        else _strip_render_extension(vis_outpath)
+    )
     if vis_renderer == "dagua":
         opted_in_module = sys.modules.get("torchlens.experimental.dagua")
         if not getattr(opted_in_module, "__torchlens_dagua_opted_in__", False):
@@ -1300,7 +1481,7 @@ def draw(
             self,
             vis_mode=vis_mode,
             vis_call_depth=vis_call_depth,
-            vis_outpath=vis_outpath,
+            vis_outpath=resolved_outpath,
             vis_save_only=vis_save_only,
             vis_fileformat=vis_fileformat,
             vis_buffers=show_buffer_layers == "always",
@@ -1310,11 +1491,12 @@ def draw(
     request, repeat_folds, segments, segment_lookup = _resolve_collapse_request(self, request)
 
     target = RenderTarget(
-        outpath=_strip_render_extension(vis_outpath),
+        outpath=resolved_outpath,
         fileformat=vis_fileformat,
         save_only=vis_save_only,
         viewer=not vis_save_only,
         renderer_name=vis_renderer,
+        announce_path=announce_path,
     )
     context = _resolve_forward_context(
         self,
@@ -1329,7 +1511,61 @@ def draw(
     work = _populate_forward_ir(self, context)
 
     forward_render_ir = _finalize_forward_ir(self, context, work)
-    return _emit_and_finish_forward(self, context, work, forward_render_ir)
+    rendered = _emit_and_finish_forward(self, context, work, forward_render_ir)
+    _write_overview_expansion_manifest(self, request, target)
+    return rendered
+
+
+def _write_overview_expansion_manifest(
+    trace: "Trace", request: ResolvedRenderRequest, target: RenderTarget
+) -> None:
+    """Write the FK4 expansion manifest beside an over-ceiling overview.
+
+    Fires for the residual shapes: a coarse fallback plan (floor or linear
+    tier) still above the readable band, and the top-level overview served
+    past the pathological pre-gate. Ordinary renders write nothing extra.
+
+    Parameters
+    ----------
+    trace:
+        Trace that was rendered.
+    request:
+        Resolved request (its ``collapse_fn`` carries the planner facts).
+    target:
+        Render target (the manifest rides beside ``target.outpath``).
+    """
+
+    from ._expansion_manifest import build_expansion_manifest, write_expansion_manifest
+    from .auto_collapse import _readable_band_high
+    from .collapse_plan import collapse_plan_for_trace, count
+
+    collapse_fn = request.collapse_fn
+    band_high = _readable_band_high(trace)
+    overview_reason = getattr(collapse_fn, "_torchlens_overview_reason", None)
+    result = getattr(collapse_fn, "_torchlens_v2_result", None)
+    if overview_reason is not None:
+        plan = collapse_plan_for_trace(trace, collapse_fn, None, request)
+        planner, reason = "overview_fallback", overview_reason
+    elif (
+        result is not None
+        and getattr(result, "planner", "") in ("floor_fallback", "linear_fallback")
+        and count(result.plan) > band_high
+    ):
+        plan, planner, reason = result.plan, str(result.planner), result.reason
+    else:
+        return
+    manifest = build_expansion_manifest(plan, planner=planner, reason=reason, band_high=band_high)
+    path = write_expansion_manifest(target.outpath, manifest)
+    warnings.warn(
+        TorchLensWarning(
+            f"This render is an over-ceiling overview ({manifest['visible_count']} visible "
+            f"units, above the readable band of {band_high}); its {len(manifest['entries'])} "
+            f"collapsed units and the draw() call that opens each are listed in {path}. "
+            "Remedy: open a unit with module=<address> from the manifest",
+            code="collapse_expansion_manifest",
+        ),
+        stacklevel=user_stacklevel(),
+    )
 
 
 def _warn_render_omission(message: str) -> None:
