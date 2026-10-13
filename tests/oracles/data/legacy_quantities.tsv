@@ -215,7 +215,7 @@ Trace.model_object_id	int	identifier	-	-	-	id/index/line
 Trace.num_backward_edges	int	quantity	num_backward_edges	red-needs-oracle	-	-
 Trace.num_backward_passes	int	quantity	num_backward_passes	green	tests/test_backward.py::test_recording_backward_context_manager (I2)	-
 Trace.num_buffer_edges	int	quantity	num_buffer_edges	green	tests/oracles/test_legacy_graph_counts.py::test_buffer_counts (I2)	-
-Trace.num_buffer_layers	int	quantity	num_buffer_layers	green	tests/oracles/test_legacy_graph_counts.py::test_buffer_counts (I2)	-
+Trace.num_buffer_layers	int	quantity	num_buffer_layers	red-needs-oracle	-	counts buffer version ops, not Layers: a three-step loop over a training BatchNorm and a counter has 4 buffer Layers of 4 passes and reports 16; needs an owner meaning (part B)
 Trace.num_buffer_read_ops	int	quantity	num_buffer_read_ops	green	tests/oracles/test_legacy_graph_counts.py::test_buffer_counts (I2)	-
 Trace.num_buffer_sink_ops	int	quantity	num_buffer_sink_ops	green	tests/oracles/test_legacy_graph_counts.py::test_buffer_counts (I2)	-
 Trace.num_buffer_source_ops	int	quantity	num_buffer_source_ops	green	tests/oracles/test_legacy_graph_counts.py::test_buffer_counts (I2)	-

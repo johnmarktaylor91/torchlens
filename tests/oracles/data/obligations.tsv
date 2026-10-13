@@ -42,11 +42,10 @@ OBL-Q-NUM-INPUT-OPS	the input-op count equals the number of model input tensors	
 OBL-Q-NUM-INPUT-LAYERS	the input-layer count equals the number of model input tensors	input boundary layers, one per model input tensor; unit: layers	I2	PURE_OBSERVER	REAL
 OBL-Q-NUM-OUTPUT-OPS	the output-op count equals the number of model output tensors	output boundary op passes, one per model output tensor; unit: ops	I2	PURE_OBSERVER	REAL
 OBL-Q-NUM-OUTPUT-LAYERS	the output-layer count equals the number of model output tensors	output boundary layers, one per model output tensor; unit: layers	I2	PURE_OBSERVER	REAL
-OBL-Q-NUM-BUFFER-LAYERS	the buffer-layer count equals the hand-counted buffer reads and writes	buffer boundary layers: one per registered-buffer read and one per recorded write; unit: layers	I2	PURE_OBSERVER	REAL
 OBL-Q-NUM-BUFFER-READ-OPS	the buffer-read count equals the hand-counted registered-buffer reads	buffer ops that bring a registered buffer's value into the graph; unit: ops	I2	PURE_OBSERVER	REAL
-OBL-Q-NUM-BUFFER-SOURCE-OPS	the buffer-source count equals the hand-counted registered-buffer reads	buffer ops that act as graph sources (the reads); unit: ops	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-BUFFER-SOURCE-OPS	the buffer-source count equals the hand-counted registered-buffer reads	buffer ops that bring a buffer value in from outside the graph (the reads, which are parentless); unit: ops	I2	PURE_OBSERVER	REAL
 OBL-Q-NUM-BUFFER-WRITE-OPS	the buffer-write count equals the hand-counted recorded buffer writes	buffer ops recording a write (in place, fused or reassigned) to a registered buffer; unit: ops	I2	PURE_OBSERVER	REAL
-OBL-Q-NUM-BUFFER-SINK-OPS	the buffer-sink count equals the hand-counted recorded buffer writes	buffer ops that end a buffer's dataflow (the writes); unit: ops	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-BUFFER-SINK-OPS	the buffer-sink count equals the hand-counted recorded buffer writes	buffer ops recording a write, the same set as the write ops whether or not a later op reads the written value; unit: ops	I2	PURE_OBSERVER	REAL
 OBL-Q-NUM-BUFFER-EDGES	the buffer-edge count equals the hand-counted edges touching a buffer op	distinct op-graph edges with at least one buffer endpoint; unit: edges	I2	PURE_OBSERVER	REAL
 OBL-Q-NUM-INTERNAL-SOURCE-OPS	the internal-source count equals the hand-counted parentless non-input ops	op passes with no parent that are not model inputs (factories and buffer reads); unit: ops	I2	PURE_OBSERVER	REAL
 OBL-Q-NUM-INTERNAL-SOURCE-LAYERS	the internal-source layer count equals the hand-counted parentless non-input layers	layers of the internal-source ops; unit: layers	I2	PURE_OBSERVER	REAL

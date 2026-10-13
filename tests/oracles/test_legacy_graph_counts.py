@@ -66,6 +66,22 @@ class Counter(nn.Module):
         return x * self.scale  # read "scale", mul
 
 
+class LoopedBatchNorm(nn.Module):
+    """A training BatchNorm1d and an in-place counter inside a three-step loop."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.bn = nn.BatchNorm1d(4)
+        self.fc = nn.Linear(4, 4)
+        self.register_buffer("count", torch.zeros(()))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        for _ in range(3):
+            self.count.add_(1.0)
+            x = self.fc(self.bn(x)).relu()
+        return x
+
+
 class Grad(nn.Module):
     """Linear -> ReLU -> Linear, all differentiable."""
 
@@ -118,6 +134,14 @@ def batchnorm_trace():
 
 
 @pytest.fixture(scope="module")
+def looped_trace():
+    torch.manual_seed(0)
+    trace = tl.trace(LoopedBatchNorm().train(), torch.randn(5, 4))
+    yield trace
+    trace.cleanup()
+
+
+@pytest.fixture(scope="module")
 def grad_trace():
     torch.manual_seed(0)
     trace = tl.trace(Grad().train(), torch.randn(3, 4), capture=CaptureOptions(save_grads=True))
@@ -157,15 +181,13 @@ def test_boundary_counts(graph_trace) -> None:
     assert int(trace.num_output_ops) == int(trace.num_output_layers) == G_OUTPUTS
 
 
-def test_buffer_counts(graph_trace, counter_trace, batchnorm_trace) -> None:
+def test_buffer_counts(graph_trace, counter_trace, batchnorm_trace, looped_trace) -> None:
     trace = graph_trace
-    assert int(trace.num_buffer_layers) == 1
     assert int(trace.num_buffer_read_ops) == int(trace.num_buffer_source_ops) == 1
     assert int(trace.num_buffer_write_ops) == int(trace.num_buffer_sink_ops) == 0
     assert int(trace.num_buffer_edges) == 1  # scale -> mul
     # Counter: reads of count and scale, one write of count.
     trace = counter_trace
-    assert int(trace.num_buffer_layers) == 3
     assert int(trace.num_buffer_read_ops) == int(trace.num_buffer_source_ops) == 2
     assert int(trace.num_buffer_write_ops) == int(trace.num_buffer_sink_ops) == 1
     # count -> add_, add_ -> written count, scale -> mul.
@@ -174,14 +196,24 @@ def test_buffer_counts(graph_trace, counter_trace, batchnorm_trace) -> None:
     # num_batches_tracked, and writes all three (num_batches_tracked += 1 and
     # the two running-stat updates).
     trace = batchnorm_trace
-    assert int(trace.num_buffer_layers) == 6
     assert int(trace.num_buffer_read_ops) == int(trace.num_buffer_source_ops) == 3
     assert int(trace.num_buffer_write_ops) == int(trace.num_buffer_sink_ops) == 3
     # nbt -> add_, add_ -> nbt', mean -> bn, var -> bn, bn -> mean', bn -> var'.
     assert int(trace.num_buffer_edges) == 6
+    # Looped: four buffers (count, nbt, mean, var) are each read once, from
+    # their initial value; every step writes all four (12 writes), and later
+    # steps consume the written versions directly.
+    trace = looped_trace
+    assert int(trace.num_buffer_read_ops) == int(trace.num_buffer_source_ops) == 4
+    assert int(trace.num_buffer_write_ops) == int(trace.num_buffer_sink_ops) == 12
+    # Per step: count -> add_ -> count', nbt -> add_ -> nbt', mean -> bn,
+    # var -> bn, bn -> mean', bn -> var': 8 buffer edges, 3 steps.
+    assert int(trace.num_buffer_edges) == 3 * 8
 
 
-def test_internal_source_and_sink_counts(graph_trace, counter_trace, batchnorm_trace) -> None:
+def test_internal_source_and_sink_counts(
+    graph_trace, counter_trace, batchnorm_trace, looped_trace
+) -> None:
     # Graph: sources are the buffer read and torch.ones; the sink is sigmoid.
     trace = graph_trace
     assert int(trace.num_internal_source_ops) == int(trace.num_internal_source_layers) == 2
@@ -195,6 +227,12 @@ def test_internal_source_and_sink_counts(graph_trace, counter_trace, batchnorm_t
     trace = batchnorm_trace
     assert int(trace.num_internal_source_ops) == int(trace.num_internal_source_layers) == 3
     assert int(trace.num_internal_sink_ops) == int(trace.num_internal_sink_layers) == 3
+    # Looped: the four initial reads are sources; only each buffer's last
+    # write is unread, so four sinks. Each buffer is one Layer whose passes
+    # are its versions, so the source and sink Layers are the same four.
+    trace = looped_trace
+    assert int(trace.num_internal_source_ops) == int(trace.num_internal_source_layers) == 4
+    assert int(trace.num_internal_sink_ops) == int(trace.num_internal_sink_layers) == 4
 
 
 def test_parent_child_and_input_counts(graph_trace) -> None:
