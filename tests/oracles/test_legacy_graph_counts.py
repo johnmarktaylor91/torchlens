@@ -298,3 +298,24 @@ def test_saved_gradient_counts(grad_trace) -> None:
     # relu, addmm) keep their gradients; two backward passes call each once.
     assert int(trace.num_saved_grad_fns) == 3
     assert int(trace.num_saved_grad_fn_calls) == 2 * 3
+
+
+@pytest.mark.parametrize("axis", ["train_batchnorm", "in_place", "plain_cnn"])
+def test_internal_source_flag_and_list_name_the_same_ops(axis: str) -> None:
+    # The flag is set at materialization and the list at capture; an Op is an
+    # internal source by one exactly when it is by the other. plain_cnn writes
+    # no buffer, train_batchnorm and in_place do.
+    from capture_oracle._models import build_model_case
+
+    torch.manual_seed(0)
+    model, model_input = build_model_case(axis)
+    trace = tl.trace(model, model_input)
+    try:
+        listed = set(trace.internal_source_ops)
+        flagged = {op.label for op in trace.layer_list if op.is_internal_source}
+        assert listed == flagged, (listed, flagged)
+        for op in trace.layer_list:
+            if op.is_internal_source:
+                assert not op.parents, op.label
+    finally:
+        trace.cleanup()

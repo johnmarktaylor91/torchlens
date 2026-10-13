@@ -1318,6 +1318,15 @@ class BufferWriteTracker:
         version_label = get_tensor_label(value)
         if version_label is None:
             return None
+        if producer_label_raw is not None:
+            # Logged as a source tensor, but the producer becomes its parent
+            # at materialization (``_buffer_write_fields``), which clears its
+            # ``is_internal_source`` flag; an internal source is parentless,
+            # so the list drops it here to keep naming the same Ops as the flag.
+            # In place, like the capture-time appends, so no alias goes stale.
+            sources = self.trace.internal_source_ops
+            if version_label in sources:
+                sources.remove(version_label)
         return version_label
 
     def _refresh_overlapping_alias_snapshots(self, written_address: str) -> None:

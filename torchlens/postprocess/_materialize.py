@@ -373,7 +373,6 @@ def ingest_op_records(inputs: IngestInputs, manifest: Mapping[str, str]) -> Step
         inputs.timing_sink("object_construction:op", time.perf_counter() - start)
         local_registrations[event.label_raw] = op_log
     _drop_missing_buffer_sources(local_registrations)
-    _drop_parented_versions_from_sources(inputs.owning_trace, buffer_write_fields)
     return Step0Result(
         raw_log_registrations=tuple(local_registrations.items()),
         input_layer_labels=tuple(input_layer_labels),
@@ -1478,38 +1477,11 @@ def _buffer_write_fields(
             # A version node is logged like a source tensor, but once its
             # producer is attached it has a parent, and an internal source is
             # a parentless non-input node (the IR rule in op_record_scatter).
+            # Capture drops the node from internal_source_ops at the same
+            # point (BufferWriteTracker._log_buffer_version_node).
             fields["is_internal_source"] = False
         by_label[label_raw] = fields
     return by_label
-
-
-def _drop_parented_versions_from_sources(
-    trace: Any, buffer_write_fields: Mapping[str, Mapping[str, object]]
-) -> None:
-    """Remove buffer version nodes that gained a producer from ``internal_source_ops``.
-
-    Capture appends every buffer version node to ``trace.internal_source_ops``
-    when it logs it as a source tensor; :func:`_buffer_write_fields` then gives
-    a written version its producer as a parent and clears its
-    ``is_internal_source`` flag, so the list drops it too and the flag and the
-    list keep naming the same Ops.
-
-    Parameters
-    ----------
-    trace
-        Trace being materialized; ``internal_source_ops`` is replaced, never mutated.
-    buffer_write_fields
-        Buffer-write fields keyed by raw version-node label.
-    """
-
-    parented = {
-        label_raw
-        for label_raw, fields in buffer_write_fields.items()
-        if fields.get("is_internal_source") is False
-    }
-    sources = getattr(trace, "internal_source_ops", None)
-    if parented and isinstance(sources, list):
-        trace.internal_source_ops = [label for label in sources if label not in parented]
 
 
 def _empty_module_input_fields() -> dict[str, object]:
