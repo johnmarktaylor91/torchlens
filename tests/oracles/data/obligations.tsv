@@ -70,3 +70,33 @@ OBL-Q-NUM-SAVED-GRAD-MODULE-CALLS	the saved-gradient call count equals the hand-
 OBL-Q-NUM-SAVED-GRAD-MODULES	the saved-gradient module count equals the hand-counted modules with such a call	modules with at least one saved-gradient module call; unit: modules	I2	PURE_OBSERVER	REAL
 OBL-Q-NUM-SAVED-GRAD-FNS	the saved-gradient backward-node count equals the captured differentiable ops	backward nodes (grad_fns) of captured forward ops that kept their gradients; unit: grad_fns	I2	PURE_OBSERVER	REAL
 OBL-Q-NUM-SAVED-GRAD-FN-CALLS	the saved-gradient backward-call count equals saved nodes times backward passes	calls of saved-gradient backward nodes, one per node per backward pass; unit: calls	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-PARAM-TENSORS-FROZEN	the frozen parameter-tensor count equals the hand count	nn.Parameter tensors with requires_grad False consumed by an op/layer or owned by a module (the root owns all); unit: tensors	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-PARAM-TENSORS-TRAINABLE	the trainable parameter-tensor count equals the hand count	nn.Parameter tensors with requires_grad True consumed by an op/layer or owned by a module (the root owns all); unit: tensors	I2	PURE_OBSERVER	REAL
+OBL-Q-MIN-DISTANCE-FROM-INPUT	the nearest-input hop count equals the hand count	fewest Op-graph edges from any model input; None when unreachable; unit: hops	I2	PURE_OBSERVER	REAL
+OBL-Q-MAX-DISTANCE-FROM-INPUT	the farthest-input hop count equals the hand count	most Op-graph edges from any model input; None when unreachable; unit: hops	I2	PURE_OBSERVER	REAL
+OBL-Q-MIN-DISTANCE-TO-OUTPUT	the nearest-output hop count equals the hand count	fewest Op-graph edges to any model output; None when unreachable; unit: hops	I2	PURE_OBSERVER	REAL
+OBL-Q-MAX-DISTANCE-TO-OUTPUT	the farthest-output hop count equals the hand count	most Op-graph edges to any model output; None when unreachable; unit: hops	I2	PURE_OBSERVER	REAL
+OBL-Q-MAX-LAYER-OP-COUNT	the largest Layer pass count equals the hand count	most Ops (passes) grouped into one Layer; unit: ops	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-USES-BY-OPS	a parameter's op-use count equals the hand count	Ops that consumed the parameter tensor; unit: ops	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-USES-BY-LAYERS	a parameter's layer-use count equals the hand count	Layers whose Ops consumed the parameter tensor; unit: layers	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-POS-ARGS	the positional-argument count equals the call as written	positional arguments of the torch call; unit: arguments	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-KWARGS	the keyword-argument count equals the call as written	keyword arguments of the torch call; unit: arguments	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-ARGS-TOTAL	the argument total equals positional plus keyword	all arguments of the torch call; unit: arguments	I2	PURE_OBSERVER	REAL
+OBL-Q-GRADIENT-MEMORY	gradient bytes equal element count times element size	bytes of the gradient tensors an op, layer, parameter, buffer or trace holds, each tensor once at trace level; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-PARAM-GRADIENT-MEMORY	parameter-gradient bytes equal the raw Tensor.grad recount	bytes of every parameter's .grad; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-SAVED-GRADIENT-MEMORY	saved gradient bytes equal the retained per-pass gradients	bytes of the output gradients save_grads retained, one record per op per backward pass; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-OUTPUT-GRADIENT-MEMORY	a call's output-gradient bytes equal the hand count	gradient bytes of the Ops forming a call's return value, summed over calls for a module; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-INTERNAL-GRADIENT-MEMORY	a call's internal-gradient bytes equal the hand count	gradient bytes of a call's non-output Ops, summed over calls for a module; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-OUTPUT-ACTIVATION-MEMORY	a call's output-activation bytes equal the hand count	activation bytes of the Ops forming a call's return value, summed over calls for a module; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-INTERNAL-ACTIVATION-MEMORY	a call's internal-activation bytes equal the hand count	activation bytes of a call's non-output Ops, summed over calls for a module; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-INTERNAL-PARAM-MEMORY	subtree parameter bytes equal the hand count	parameter bytes of every module under the address subtree, called or not; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-INPUT-MEMORY	an op's input bytes equal its saved parents' bytes	activation bytes of an Op's saved graph parents; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-GRAD-FNS	the backward-node count equals a raw autograd-graph recount	distinct autograd nodes reachable from the loss through next_functions; unit: nodes	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-GRAD-FN-CALLS	the backward-call count equals hook-counted node executions	executions of backward nodes over all backward passes, counted by a hook per node; unit: calls	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-GRAD-FNS-WITH-OP	the paired backward-node count equals the hand count	backward nodes that are the grad_fn of an Op's own tensor; unit: nodes	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-GRAD-FNS-WITHOUT-OP	the unpaired backward-node count equals the recount minus the paired	backward nodes not the grad_fn of any Op's own tensor; unit: nodes	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-BACKWARD-EDGES	the backward-edge count equals a raw autograd-graph recount	distinct (node, next node) pairs among reachable autograd nodes; unit: edges	I2	PURE_OBSERVER	REAL
+OBL-Q-FLOPS-BACKWARD	backward FLOPs equal the multiplier estimate where a backward node runs	documented multiplier on forward FLOPs (linear 2x, elementwise 1x) for ops whose output has an autograd node, zero otherwise, summed over passes and calls; unit: FLOPs	I2	PURE_OBSERVER	REAL
+OBL-Q-FLOPS-TOTAL	total FLOPs equal forward plus backward	forward plus backward FLOPs, summed over passes and calls; unit: FLOPs	I2	PURE_OBSERVER	REAL
+OBL-Q-ARITHMETIC-INTENSITY	arithmetic intensity equals FLOPs over read-once write-once bytes	forward FLOPs / (input + parameter + output bytes); unit: FLOPs per byte	I2	PURE_OBSERVER	REAL
+OBL-Q-UNKNOWN-FLOP-OPS	the summary's unknown-compute count equals the hand count	ops with no FLOP rule; unit: ops	I2	PURE_OBSERVER	REAL
