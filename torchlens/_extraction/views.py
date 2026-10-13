@@ -24,7 +24,7 @@ __tl_layer__ = "L5"
 __all__ = ["as_torch_dataset", "feature_matrix", "shuffled_batches"]
 
 
-def shuffled_batches(
+def shuffled_batches(  # noqa: PLR0913 - the public view's knob surface (R2-08 adds two keywords)
     reader: Any,
     batch_size: int,
     *,

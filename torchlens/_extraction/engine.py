@@ -1738,6 +1738,96 @@ def _freeze_batch_zero(
     writer.write_manifest()
 
 
+def _continuation_run_state(
+    prep_state: dict[str, Any], completed_rows: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Seed the per-run state a continuation inherits from its prefix.
+
+    Parameters
+    ----------
+    prep_state:
+        Preparation facts from :func:`_prepare_disk_run`.
+    completed_rows:
+        The trusted ledger prefix.
+
+    Returns
+    -------
+    dict[str, Any]
+        Run state holding the adopted selector plan, the frozen D4 ragged
+        state, the frozen intervention sites, and the prefix's per-shard
+        fire counts (R2-08).
+    """
+
+    run_state: dict[str, Any] = {}
+    if prep_state.get("selector_plan_record") is not None:
+        run_state["selector_plan"] = prep_state["selector_plan_record"]
+    ragged_state = prep_state.get("ragged_state")
+    if ragged_state is not None:
+        # A continuation freezes NOTHING from its own first batch: the D4
+        # gate compares against the manifest's frozen layouts and shapes
+        # (audit 2.10b: a resumed run could otherwise commit [4,16,16]
+        # shards under a [4,8,8] key, or trimmed shards under a dense one).
+        run_state["pooled_shapes"] = dict(ragged_state["pooled_shapes"])
+        run_state["trimmed_keys"] = set(ragged_state["trimmed_keys"])
+    if prep_state.get("intervention_sites") is not None:
+        # A continuation attests against the prefix's frozen fired sites.
+        run_state["intervention_sites"] = list(prep_state["intervention_sites"])
+    run_state["intervention_fire_counts"] = [
+        int((row.get("intervention") or {}).get("fire_count", 0)) for row in completed_rows
+    ]
+    return run_state
+
+
+def _shard_row_facts(
+    plan: _RunPlan,
+    context: BatchContext,
+    batch_facts: tuple[dict[str, dict[str, Any]], str],
+    run_state: dict[str, Any],
+) -> dict[str, Any]:
+    """Build one shard's ledger row facts.
+
+    Parameters
+    ----------
+    plan:
+        Resolved run configuration.
+    context:
+        This batch's context.
+    batch_facts:
+        ``(key_facts, input_digest)`` from the store pipeline.
+    run_state:
+        Mutable per-run state (mask geometry, the batch's fire receipt, and
+        the per-shard fire counts it appends to).
+
+    Returns
+    -------
+    dict[str, Any]
+        Per-key facts, id/input digests, position source, the mask geometry
+        when present, and the fire receipt on intervened runs (R2-08).
+    """
+
+    key_facts, input_digest = batch_facts
+    row_facts: dict[str, Any] = {
+        "keys": key_facts,
+        "ids_range_digest": _ids_range_digest(plan, context.row_start, context.row_count),
+        "input_digest": input_digest,
+        "position_ids_source": context.position_ids_source,
+    }
+    geometry = run_state.get("current_geometry")
+    if geometry is not None:
+        row_facts["row_geometry"] = {
+            "starts": geometry["starts"],
+            "extents": geometry["extents"],
+            "padding_side": geometry["padding_side"],
+            "contiguous": geometry["contiguous"],
+        }
+    if plan.intervention is not None:
+        row_facts["intervention"] = dict(run_state["current_receipt"])
+        run_state["intervention_fire_counts"].append(
+            int(run_state["current_receipt"]["fire_count"])
+        )
+    return row_facts
+
+
 def run_to_disk(plan: _RunPlan, container_path: Path, resume: bool) -> list[Path]:
     """Run the disk-mode extraction engine (the v2 commit protocol).
 
@@ -1768,23 +1858,7 @@ def run_to_disk(plan: _RunPlan, container_path: Path, resume: bool) -> list[Path
     if plan.device is not None:
         plan.model.to(plan.device)
     manifest = writer.manifest
-    run_state: dict[str, Any] = {}
-    if prep_state.get("selector_plan_record") is not None:
-        run_state["selector_plan"] = prep_state["selector_plan_record"]
-    ragged_state = prep_state.get("ragged_state")
-    if ragged_state is not None:
-        # A continuation freezes NOTHING from its own first batch: the D4
-        # gate compares against the manifest's frozen layouts and shapes
-        # (audit 2.10b: a resumed run could otherwise commit [4,16,16]
-        # shards under a [4,8,8] key, or trimmed shards under a dense one).
-        run_state["pooled_shapes"] = dict(ragged_state["pooled_shapes"])
-        run_state["trimmed_keys"] = set(ragged_state["trimmed_keys"])
-    if prep_state.get("intervention_sites") is not None:
-        # A continuation attests against the prefix's frozen fired sites.
-        run_state["intervention_sites"] = list(prep_state["intervention_sites"])
-    fire_counts = [
-        int((row.get("intervention") or {}).get("fire_count", 0)) for row in completed_rows
-    ]
+    run_state = _continuation_run_state(prep_state, completed_rows)
     remaining = _consume_skipped_with_replay(plan, completed_rows, run_state)
     n_skip = sum(int(row["n_rows"]) for row in completed_rows)
     start_index = len(completed_rows)
@@ -1813,24 +1887,7 @@ def run_to_disk(plan: _RunPlan, container_path: Path, resume: bool) -> list[Path
                     plan, writer, (layer_views, batch_outputs, processed, envelope), run_state
                 )
             _validate_against_plan(manifest, processed)
-            ids_range = _ids_range_digest(plan, row_start, context.row_count)
-            geometry = run_state.get("current_geometry")
-            row_facts: dict[str, Any] = {
-                "keys": key_facts,
-                "ids_range_digest": ids_range,
-                "input_digest": input_digest,
-                "position_ids_source": context.position_ids_source,
-            }
-            if geometry is not None:
-                row_facts["row_geometry"] = {
-                    "starts": geometry["starts"],
-                    "extents": geometry["extents"],
-                    "padding_side": geometry["padding_side"],
-                    "contiguous": geometry["contiguous"],
-                }
-            if plan.intervention is not None:
-                row_facts["intervention"] = dict(run_state["current_receipt"])
-                fire_counts.append(int(run_state["current_receipt"]["fire_count"]))
+            row_facts = _shard_row_facts(plan, context, (key_facts, input_digest), run_state)
             row = writer.commit_shard(
                 index=batch_index,
                 row_start=row_start,
@@ -1853,7 +1910,11 @@ def run_to_disk(plan: _RunPlan, container_path: Path, resume: bool) -> list[Path
     if prep_state.get("resume_audit"):
         run_block.setdefault("resume_audit", []).extend(prep_state["resume_audit"])
     manifest.update(
-        final_harvest_block(plan.intervention, run_state.get("intervention_sites"), fire_counts)
+        final_harvest_block(
+            plan.intervention,
+            run_state.get("intervention_sites"),
+            run_state["intervention_fire_counts"],
+        )
     )
     writer.finalize(n_shards=n_committed, n_stimuli=row_start)
     return container_paths

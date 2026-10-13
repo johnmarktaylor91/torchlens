@@ -59,7 +59,9 @@ def _same(left: Any, right: Any) -> bool:
     if type(left) is not type(right):
         return False
     if isinstance(left, (list, tuple)):
-        return len(left) == len(right) and all(_same(a, b) for a, b in zip(left, right))
+        return len(left) == len(right) and all(
+            _same(a, b) for a, b in zip(left, right, strict=True)
+        )
     if isinstance(left, dict):
         return left.keys() == right.keys() and all(_same(left[k], right[k]) for k in left)
     return bool(left == right)
@@ -140,3 +142,43 @@ def test_export_registry_row_and_refusals(tmp_path: Path) -> None:
     with pytest.raises(InvalidArgumentError) as excinfo:
         tl.io.read_safetensors(foreign)
     assert excinfo.value.fields["code"] == "trace_safetensors_invalid"
+
+
+def _rewrite_header(path: Path, **changes: Any) -> None:
+    """Rewrite the export's header document in place (tamper helper)."""
+
+    from safetensors import safe_open
+    from safetensors.torch import save_file
+
+    with safe_open(str(path), framework="pt") as handle:
+        document = json.loads(handle.metadata()["torchlens"])
+        tensors = {name: handle.get_tensor(name) for name in handle.keys()}
+    document.update(changes)
+    save_file(tensors, str(path), metadata={"torchlens": json.dumps(document)})
+
+
+def test_reader_refuses_versions_and_digests_it_cannot_honour(tmp_path: Path) -> None:
+    """A newer tlspec version or a non-digest refuses; a current file says so."""
+
+    path = tl.export.safetensors(_trace(), tmp_path / "trace.safetensors")
+    assert tl.io.read_safetensors(path).header["writer_contract_current"] is True
+    for changes, code in [
+        ({"tlspec_version": 99}, "trace_safetensors_version_unsupported"),
+        ({"writer_contract_digest": "not-a-digest"}, "trace_safetensors_invalid"),
+        ({"schema": "tl_trace_safetensors_v0"}, "trace_safetensors_invalid"),
+    ]:
+        target = tmp_path / f"tampered-{code}-{len(changes)}.safetensors"
+        target.write_bytes(path.read_bytes())
+        _rewrite_header(target, **changes)
+        with pytest.raises(InvalidArgumentError) as excinfo:
+            tl.io.read_safetensors(target)
+        assert excinfo.value.fields["code"] == code
+
+
+def test_export_writes_only_keep_fields(tmp_path: Path) -> None:
+    """No DROP or session-time field ever reaches the file."""
+
+    loaded = tl.io.read_safetensors(tl.export.safetensors(_trace(), tmp_path / "t.safetensors"))
+    assert set(loaded.trace_fields) <= _keep("trace")
+    for fields in loaded.op_fields.values():
+        assert set(fields) <= _keep("op")

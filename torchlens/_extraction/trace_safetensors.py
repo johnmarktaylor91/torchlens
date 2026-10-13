@@ -22,8 +22,10 @@ import dataclasses
 import json
 import math
 import os
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from types import MappingProxyType
+from typing import Any, NoReturn
 
 import torch
 
@@ -83,6 +85,9 @@ class SafetensorsTrace:
 def _encode(value: Any, depth: int = 0) -> Any:
     """Encode one value as tagged JSON, or return the unencodable sentinel.
 
+    Dispatch is on the EXACT type: a subclass (an enum over ``str``, a
+    namedtuple) is not silently flattened to its base, it is disclosed.
+
     Parameters
     ----------
     value:
@@ -96,33 +101,37 @@ def _encode(value: Any, depth: int = 0) -> Any:
         JSON-native tagged form, or ``_UNENCODABLE``.
     """
 
-    if depth > _MAX_DEPTH:
+    encoder = _ENCODERS.get(type(value))
+    if encoder is None or depth > _MAX_DEPTH:
         return _UNENCODABLE
-    if value is None or isinstance(value, (bool, str)):
-        return value
-    if type(value) is int:
-        return value
-    if type(value) is float:
-        return value if math.isfinite(value) else {"$float": repr(value)}
-    if isinstance(value, torch.dtype):
-        return {"$dtype": str(value).removeprefix("torch.")}
-    if isinstance(value, torch.Size):
-        return {"$size": [int(dim) for dim in value]}
-    if isinstance(value, torch.device):
-        return {"$device": str(value)}
-    if type(value) in (list, tuple, set, frozenset):
-        items = [_encode(item, depth + 1) for item in value]
-        if any(item is _UNENCODABLE for item in items):
-            return _UNENCODABLE
-        if type(value) is list:
-            return items
-        if type(value) is tuple:
-            return {"$tuple": items}
-        ordered = sorted(items, key=lambda item: json.dumps(item, sort_keys=True))
-        return {"$set" if type(value) is set else "$frozenset": ordered}
-    if type(value) is dict:
-        return _encode_dict(value, depth)
-    return _UNENCODABLE
+    return encoder(value, depth)
+
+
+def _encode_float(value: float, depth: int) -> Any:
+    """Encode a float; non-finite values take the ``$float`` tag."""
+
+    return value if math.isfinite(value) else {"$float": repr(value)}
+
+
+def _encode_items(values: Any, depth: int) -> list[Any] | None:
+    """Encode a sequence's items, or ``None`` when any item is unencodable."""
+
+    items = [_encode(item, depth + 1) for item in values]
+    return None if any(item is _UNENCODABLE for item in items) else items
+
+
+def _encode_sequence(value: Any, depth: int) -> Any:
+    """Encode a list natively and a tuple / set / frozenset under its tag."""
+
+    items = _encode_items(value, depth)
+    if items is None:
+        return _UNENCODABLE
+    if type(value) is list:
+        return items
+    if type(value) is tuple:
+        return {"$tuple": items}
+    ordered = sorted(items, key=lambda item: json.dumps(item, sort_keys=True))
+    return {"$set" if type(value) is set else "$frozenset": ordered}
 
 
 def _encode_dict(value: dict[Any, Any], depth: int) -> Any:
@@ -150,8 +159,28 @@ def _encode_dict(value: dict[Any, Any], depth: int) -> Any:
     return {"$map": [[key, item] for key, item in pairs]}
 
 
-def _invalid(problem: str, path: Path) -> InvalidArgumentError:
-    """Build the typed refusal for a file that is not a valid export.
+#: Exact-type encoders of the tagged JSON form.
+_ENCODERS: Mapping[type, Any] = MappingProxyType(
+    {
+        type(None): lambda value, depth: value,
+        bool: lambda value, depth: value,
+        int: lambda value, depth: value,
+        str: lambda value, depth: value,
+        float: _encode_float,
+        torch.dtype: lambda value, depth: {"$dtype": str(value).removeprefix("torch.")},
+        torch.Size: lambda value, depth: {"$size": [int(dim) for dim in value]},
+        torch.device: lambda value, depth: {"$device": str(value)},
+        list: _encode_sequence,
+        tuple: _encode_sequence,
+        set: _encode_sequence,
+        frozenset: _encode_sequence,
+        dict: _encode_dict,
+    }
+)
+
+
+def _refuse_invalid(problem: str, path: Path, cause: BaseException | None = None) -> NoReturn:
+    """Refuse a file that is not a valid TorchLens safetensors Trace export.
 
     Parameters
     ----------
@@ -159,19 +188,21 @@ def _invalid(problem: str, path: Path) -> InvalidArgumentError:
         What is wrong.
     path:
         The file read.
+    cause:
+        The underlying parse error, chained when given.
 
-    Returns
-    -------
-    InvalidArgumentError
+    Raises
+    ------
+    torchlens.errors.InvalidArgumentError
         ``trace_safetensors_invalid``.
     """
 
-    return InvalidArgumentError(
+    raise InvalidArgumentError(
         f"{str(path)!r} is not a valid TorchLens safetensors Trace export: {problem}.",
         code="trace_safetensors_invalid",
         remedy="read files written by tl.export.safetensors(trace, path)",
         path=str(path),
-    )
+    ) from cause
 
 
 def _decode_tag(tag: str, payload: Any, path: Path) -> Any:
@@ -207,7 +238,7 @@ def _decode_tag(tag: str, payload: Any, path: Path) -> Any:
         return {"$tuple": tuple, "$set": set, "$frozenset": frozenset}[tag](items)
     if tag == "$map" and isinstance(payload, list):
         return {_decode(key, path): _decode(item, path) for key, item in payload}
-    raise _invalid(f"unknown or malformed value tag {tag!r}", path)
+    _refuse_invalid(f"unknown or malformed value tag {tag!r}", path)
 
 
 def _decode(value: Any, path: Path) -> Any:
@@ -416,6 +447,50 @@ def write_trace_safetensors(trace: Any, path: str | Path) -> Path:
     return target
 
 
+def _require_honourable(document: dict[str, Any], path: Path) -> None:
+    """Refuse a document this reader's contract cannot honour.
+
+    The reader decodes every field generically, so any writer contract whose
+    ``tlspec_version`` lies in this build's readable window is honoured (the
+    field names it carries are that contract's KEEP fields; the header says
+    whether the digest matches this build's contract). A newer version, or a
+    digest that is not a digest, refuses.
+
+    Parameters
+    ----------
+    document:
+        The parsed header document.
+    path:
+        The file read (refusal text).
+
+    Raises
+    ------
+    torchlens.errors.InvalidArgumentError
+        ``trace_safetensors_version_unsupported`` outside the readable
+        window; ``trace_safetensors_invalid`` for a malformed digest.
+    """
+
+    from .._io import MIN_TLSPEC_VERSION, TLSPEC_VERSION
+
+    version = document.get("tlspec_version")
+    if type(version) is not int or not MIN_TLSPEC_VERSION <= version <= TLSPEC_VERSION:
+        raise InvalidArgumentError(
+            f"{str(path)!r} was written under tlspec version {version!r}; this "
+            f"build reads versions {MIN_TLSPEC_VERSION} to {TLSPEC_VERSION}.",
+            code="trace_safetensors_version_unsupported",
+            remedy="read it with the TorchLens release that wrote it, or a newer one",
+            path=str(path),
+            tlspec_version=repr(version),
+        )
+    digest = document.get("writer_contract_digest")
+    if not (
+        isinstance(digest, str)
+        and len(digest) == 64
+        and all(char in "0123456789abcdef" for char in digest)
+    ):
+        _refuse_invalid("its writer_contract_digest is not a SHA-256 hex digest", path)
+
+
 def read_trace_safetensors(path: str | Path) -> SafetensorsTrace:
     """Read a Trace safetensors export back (no code execution).
 
@@ -438,18 +513,20 @@ def read_trace_safetensors(path: str | Path) -> SafetensorsTrace:
     from safetensors import safe_open
 
     from .._io._json import loads_bounded
+    from .._io.writer_contract import writer_contract_digest
 
     source = Path(path)
     with safe_open(str(source), framework="pt") as handle:
         metadata = handle.metadata() or {}
         if _METADATA_KEY not in metadata:
-            raise _invalid("its header carries no TorchLens document", source)
+            _refuse_invalid("its header carries no TorchLens document", source)
         try:
             document = loads_bounded(metadata[_METADATA_KEY])
         except json.JSONDecodeError as exc:
-            raise _invalid(f"its header document is not valid JSON ({exc.msg})", source) from exc
+            _refuse_invalid(f"its header document is not valid JSON ({exc.msg})", source, exc)
         if not isinstance(document, dict) or document.get("schema") != TRACE_SAFETENSORS_SCHEMA:
-            raise _invalid(f"its header schema is not {TRACE_SAFETENSORS_SCHEMA!r}", source)
+            _refuse_invalid(f"its header schema is not {TRACE_SAFETENSORS_SCHEMA!r}", source)
+        _require_honourable(document, source)
         tensors: dict[str, dict[str, torch.Tensor]] = {}
         for name, entry in (document.get("tensors") or {}).items():
             tensor = handle.get_tensor(name)
@@ -459,6 +536,9 @@ def read_trace_safetensors(path: str | Path) -> SafetensorsTrace:
     header_keys = ("schema", "tlspec_version", "writer_contract_digest", "torchlens_version")
     header = {key: document.get(key) for key in header_keys}
     header["capture_honesty"] = document.get("capture_honesty")
+    header["writer_contract_current"] = document["writer_contract_digest"] == (
+        writer_contract_digest()
+    )
     return SafetensorsTrace(
         header=header,
         trace_fields=_decode(document.get("trace") or {}, source),

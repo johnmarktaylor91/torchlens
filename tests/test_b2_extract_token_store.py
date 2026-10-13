@@ -285,3 +285,39 @@ def test_store_input_ids_refusals(tmp_path: Path) -> None:
     with pytest.raises(InvalidArgumentError) as excinfo:
         list(shuffled_batches(open_extraction(reader_dir), 2, buffer_shards=0))
     assert excinfo.value.fields["code"] == "extraction_reader_buffer_shards_invalid"
+
+
+def test_resume_compares_the_stored_ids_flag(tmp_path: Path) -> None:
+    """Continuing a stored-ids artifact without ids (or the reverse) refuses."""
+
+    import json
+
+    from torchlens.dataset_extraction import MANIFEST_FILENAME, DatasetExtractionResumeError
+
+    _extract(tmp_path)
+    full = open_extraction(tmp_path).token_rows()
+    manifest_path = tmp_path / MANIFEST_FILENAME
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest.update(status="in_progress", totals=None, ledger_digest=None)
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    ledger = tmp_path / "ledger.jsonl"
+    lines = ledger.read_text(encoding="utf-8").splitlines()
+    ledger.write_text("".join(line + "\n" for line in lines[:2]), encoding="utf-8")
+    for line in lines[2:]:
+        (tmp_path / json.loads(line)["file"]).unlink()
+    with pytest.raises(DatasetExtractionResumeError) as excinfo:
+        extract_dataset(
+            _TokenModel().eval(),
+            list(_TEXTS),
+            {"h": "proj"},
+            batch_size=2,
+            output_dir=tmp_path,
+            collate=_collate,
+            ragged="trim",
+            progress=False,
+            resume=True,
+        )
+    assert excinfo.value.fields["mismatched_fields"] == ["layer_plan"]
+    _extract(tmp_path, resume=True)
+    resumed = open_extraction(tmp_path).token_rows()
+    assert all(torch.equal(resumed.values[key], full.values[key]) for key in full.values)

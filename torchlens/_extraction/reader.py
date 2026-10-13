@@ -32,6 +32,7 @@ import torch
 from .._data_substrate import ExtractionArtifactError, read_trusted_rows
 from .._errors import InvalidArgumentError
 from ..utils._torch_symbols import torch_attr
+from .harvest_schema import HARVEST_BLOCK_KEY, validate_harvest_block
 from .ragged import RaggedBatch, to_padded
 from .shards import read_shard
 from .token_store import TokenRows, concat_token_rows, shard_token_rows
@@ -1263,6 +1264,10 @@ def open_extraction(
         )
     rows = read_trusted_rows(container)
     check_layout_coherence(manifest, rows)
+    if HARVEST_BLOCK_KEY in manifest:
+        # R2-08: the counterfactual record parses fail-closed; a torn or
+        # foreign block never half-loads (absent = written before the schema).
+        validate_harvest_block(manifest[HARVEST_BLOCK_KEY])
     if manifest.get("status") == "complete":
         n_ledgered = (manifest.get("totals") or {}).get("n_shards")
         if len(rows) != n_ledgered:

@@ -110,7 +110,7 @@ def test_intervened_disk_artifact_records_the_counterfactual(tmp_path: Path) -> 
     run_record = manifest["run"]["intervention"]
     assert run_record["spec_digest"] == spec.spec_digest
     assert run_record["target_site_keys"] == list(harvest.target_site_keys)
-    assert manifest["signature"]["intervention"]["policy"] == "intervened"
+    assert manifest["signature"]["model_mode"]["intervention"]["policy"] == "intervened"
     rows = read_trusted_rows(tmp_path)
     assert len(rows) == 3
     for row in rows:
@@ -128,7 +128,7 @@ def test_clean_disk_artifact_declares_policy_none(tmp_path: Path) -> None:
     )
     manifest = _manifest(tmp_path)
     assert validate_harvest_block(manifest[HARVEST_BLOCK_KEY]).policy == "none"
-    assert "intervention" not in manifest["signature"]
+    assert manifest["signature"]["model_mode"] == "eval_no_grad"
     assert all("intervention" not in row for row in read_trusted_rows(tmp_path))
 
 
@@ -183,7 +183,7 @@ def test_intervened_resume_continues_and_refuses_a_changed_intervention(tmp_path
         with pytest.raises(DatasetExtractionResumeError) as excinfo:
             extract_dataset(model, _stimuli(), _LAYERS, intervene=intervene, resume=True, **kwargs)
         assert excinfo.value.fields["code"] == "extraction_resume_signature_mismatch"
-        assert "intervention" in excinfo.value.fields["mismatched_fields"]
+        assert excinfo.value.fields["mismatched_fields"] == ["model_mode"]
 
 
 def test_intervene_refusals_are_typed() -> None:
@@ -229,3 +229,78 @@ def test_a_batch_without_a_fire_refuses() -> None:
             intervene=tl.when(tl.func("sigmoid"), tl.zero_ablate()),
         )
     assert excinfo.value.fields["code"] == "extraction_intervention_no_fire"
+
+
+class _ShapeBranch(nn.Module):
+    """Takes a second relu only on short batches (a structural branch)."""
+
+    def __init__(self) -> None:
+        """Build the site deterministically."""
+
+        super().__init__()
+        torch.manual_seed(0)
+        self.fc1 = nn.Linear(6, 8)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """One relu on full batches, two on the short tail batch."""
+
+        hidden = torch.relu(self.fc1(x))
+        if x.shape[0] < 4:
+            hidden = torch.relu(hidden * 2.0)
+        return hidden * 1.0
+
+
+def test_a_batch_firing_at_other_sites_refuses() -> None:
+    """The short tail batch fires at a second relu: one artifact, one counterfactual."""
+
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        extract_dataset(
+            _ShapeBranch().eval(),
+            _stimuli(),
+            {"h": "fc1"},
+            batch_size=4,
+            progress=False,
+            intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
+        )
+    assert excinfo.value.fields["code"] == "extraction_intervention_site_drift"
+    assert excinfo.value.fields["batch_index"] == 2
+
+
+def test_pre_r208_manifest_still_loads_and_resumes(tmp_path: Path) -> None:
+    """A manifest without the harvest block (older writers) opens and resumes clean."""
+
+    model = _Chain().eval()
+    kwargs = {"batch_size": 2, "output_dir": tmp_path, "progress": False}
+    extract_dataset(model, _stimuli(), _LAYERS, **kwargs)
+    full = open_extraction(tmp_path).materialize()
+    manifest = _manifest(tmp_path)
+    del manifest[HARVEST_BLOCK_KEY]
+    (tmp_path / MANIFEST_FILENAME).write_text(json.dumps(manifest), encoding="utf-8")
+    assert torch.equal(open_extraction(tmp_path).materialize()["d"], full["d"])
+    _interrupt_after(tmp_path, 2)
+    manifest = _manifest(tmp_path)
+    del manifest[HARVEST_BLOCK_KEY]
+    (tmp_path / MANIFEST_FILENAME).write_text(json.dumps(manifest), encoding="utf-8")
+    extract_dataset(model, _stimuli(), _LAYERS, resume=True, **kwargs)
+    resumed = open_extraction(tmp_path).materialize()
+    assert all(torch.equal(resumed[key], full[key]) for key in full)
+
+
+def test_malformed_harvest_block_refuses_typed(tmp_path: Path) -> None:
+    """A torn or foreign counterfactual block never half-loads."""
+
+    extract_dataset(
+        _Chain().eval(),
+        _stimuli(),
+        _LAYERS,
+        batch_size=4,
+        output_dir=tmp_path,
+        progress=False,
+        intervene=_spec(),
+    )
+    manifest = _manifest(tmp_path)
+    manifest[HARVEST_BLOCK_KEY]["receipt_digest"] = None
+    (tmp_path / MANIFEST_FILENAME).write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        open_extraction(tmp_path)
+    assert excinfo.value.fields["code"] == "harvest_schema_invalid"
