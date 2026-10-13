@@ -64,7 +64,9 @@ V10_FIELD_ADMISSIONS: dict[str, dict[str, str]] = {
     # autograd graph the attached saved activations keep alive. DROP: a loaded
     # or unpickled trace pins nothing, so a persisted capture-time number
     # would read as current; it loads as None ("not measured").
-    "trace": {"pinned_autograd_memory": "drop"},
+    # SCHEMA-REQUESTS row 8 (REPORT, forks.13): why a CPU forward peak is None.
+    # KEEP: the reason travels with the None it explains; v9 artifacts read None.
+    "trace": {"pinned_autograd_memory": "drop", "forward_peak_memory_reason": "keep"},
     # SCHEMA-REQUESTS row 6 (OBSERVER, AGT-2360): the record of the plain
     # attributes a forward wrote (arbitrary user objects). DROP, both the public
     # property and its slot: a loaded, unpickled or deep-copied trace reads None.
@@ -74,7 +76,11 @@ V10_FIELD_ADMISSIONS: dict[str, dict[str, str]] = {
 #: Registered retypes of existing v9 persisted fields: record key -> {field
 #: name -> one-line description of the old and new type}. A retype keeps the
 #: field name, so the name diff cannot see it; the registration is the record.
-V10_FIELD_RETYPES: dict[str, dict[str, str]] = {}
+V10_FIELD_RETYPES: dict[str, dict[str, str]] = {
+    # SCHEMA-REQUESTS row 7 (REPORT, forks.13): a CPU forward delta of 0 is
+    # recorded as None with forward_peak_memory_reason; KEEP policy unchanged.
+    "trace": {"forward_peak_memory": "Bytes -> Bytes | None (CPU zero delta reads None)"},
+}
 
 _INSEQ_STEP_SCORES_MAP_KEYS = (
     "logit",

@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, NoReturn, TypeGuard
 from . import TorchLensIOError
 from ._forgery_identity_facts import (
     _validate_episode_step_stamps,
+    _validate_forward_peak_memory_reason,
     _validate_root_entry_point,
     _validate_tl_authored_root,
 )
@@ -125,6 +126,7 @@ def validate_persisted_forgery_surfaces(trace: Trace) -> None:
     _validate_episode_step_stamps(trace)
     _validate_tl_authored_root(trace)
     _validate_root_entry_point(trace)
+    _validate_forward_peak_memory_reason(trace)
     _validate_source_snapshots(trace)
     _validate_structure_evidence(trace)
 

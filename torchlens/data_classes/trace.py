@@ -274,6 +274,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "total_param_gradient_memory": 0,
     "forward_peak_memory": 0,
     "forward_memory_backend": "unknown",
+    "forward_peak_memory_reason": None,
     "_forward_peak_memory_pair": None,
     "_phase_timings": {},
     "_replay_arg_version_data_complete": True,
@@ -1487,6 +1488,7 @@ class Trace(
         "total_param_gradient_memory": FieldPolicy.KEEP,
         "forward_peak_memory": FieldPolicy.KEEP,
         "forward_memory_backend": FieldPolicy.KEEP,
+        "forward_peak_memory_reason": FieldPolicy.KEEP,
         # r83 S4: live-capture scratch reinstated by ``__setstate__`` alongside
         # ``_tl_backward_hooked_tensor_keys``, but never registered here. Any
         # trace that went through ``__setstate__`` -- which ``cache=True`` makes
@@ -2017,8 +2019,11 @@ class Trace(
         self.num_params_frozen: int = 0
         self.total_param_memory: Bytes = Bytes(0)
         self.total_param_gradient_memory: Bytes = Bytes(0)
-        self.forward_peak_memory: Bytes = Bytes(0)
+        # forks.13: a CPU forward delta of 0 is recorded as ``None`` with
+        # ``forward_peak_memory_reason`` naming measure_python_peak_memory=True.
+        self.forward_peak_memory: Bytes | None = Bytes(0)
         self.forward_memory_backend: str = "unknown"
+        self.forward_peak_memory_reason: str | None = None
         self._forward_peak_memory_pair: dict[str, Any] | None = None
 
         # Structured module info:
@@ -3197,6 +3202,7 @@ class Trace(
             "total_param_gradient_memory": 0,
             "forward_peak_memory": 0,
             "forward_memory_backend": "unknown",
+            "forward_peak_memory_reason": None,
             "_postprocessing_active": False,
             # `_backward_gradfn_refs` is `FieldPolicy.DROP` (never part of
             # `MODEL_LOG_FIELD_ORDER`) and `__getstate__` always emits an
@@ -3301,6 +3307,8 @@ class Trace(
             "forward_peak_memory",
             "backward_peak_memory",
         ):
+            if field_name == "forward_peak_memory" and state.get(field_name, 0) is None:
+                continue  # forks.13: a recorded CPU zero stays None
             state[field_name] = Bytes(state.get(field_name, 0) or 0)
         if state.get("total_autograd_memory") is not None:
             state["total_autograd_memory"] = Bytes(state["total_autograd_memory"])

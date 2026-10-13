@@ -305,6 +305,7 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "total_param_gradient_memory": "totals",
     "forward_peak_memory": "totals",
     "forward_memory_backend": "totals",
+    "forward_peak_memory_reason": "totals",
     "capture_start_time": "totals",
     "capture_end_time": "totals",
     "_phase_timings": "totals",

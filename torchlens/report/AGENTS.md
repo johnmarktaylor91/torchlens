@@ -55,5 +55,5 @@ Reporting helpers over finished captures and observer metadata (`tl.report`).
 - Honesty rows must reflect capture verification state faithfully — a rescued or
   ceilinged capture (`capture_verified=False`) must stay visible in profile/explain
   output; never present an unverified capture as clean.
-- `forward_peak_memory` is a runtime measurement that legitimately reads `0` on the
-  default CPU path — never present it as a portable fact (root rule, `docs/agent-reference/known-gotchas.md`).
+- `forward_peak_memory` is a runtime measurement that reads `None` (with
+  `forward_peak_memory_reason`) when the default CPU delta is 0 — never present it as a portable fact (root rule, `docs/agent-reference/known-gotchas.md`).
