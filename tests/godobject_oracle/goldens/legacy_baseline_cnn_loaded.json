@@ -6201,7 +6201,7 @@
   "num_saved_grad_ops": 0,
   "num_saved_layers": 6,
   "num_saved_module_calls": 2,
-  "num_saved_modules": 2,
+  "num_saved_modules": 3,
   "num_saved_ops": 6,
   "num_tensors": 6,
   "num_uncalled_modules": 0,
