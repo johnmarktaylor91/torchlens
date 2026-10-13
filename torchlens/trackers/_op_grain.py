@@ -163,6 +163,8 @@ class OpGrainCollector:
         facets: Mapping[str, Any] | None,
         settings: WatchSettings,
     ) -> None:
+        """Wrap a fresh op-tier collector over ``model`` with the watch's settings."""
+
         self.model = model
         self.inner = OpTierCollector(model, save=save, facets=facets, settings=settings)
         self.streams: tuple[str, ...] = ("activation",)
@@ -203,10 +205,14 @@ class OpGrainCollector:
 
     @property
     def _last_step(self) -> int | None:
+        """The last committed step on the op tier (``None`` before any)."""
+
         return self.inner._last_step
 
     @property
     def _block_open(self) -> bool:
+        """True while a step bracket is open on the op tier."""
+
         return self.inner._block_observations is not None
 
     @property
@@ -318,16 +324,22 @@ class OpGrainCollector:
         buffers = [(buf, buf.detach().clone()) for _, buf in model.named_buffers()]
 
         def reset_rng() -> None:
+            """Put the snapshotted CPU (and CUDA) RNG state back."""
+
             torch.random.set_rng_state(cpu_rng)
             if cuda_rng is not None:
                 torch.cuda.set_rng_state_all(cuda_rng)
 
         def plain() -> Any:
+            """The baseline arm: the model's own forward."""
+
             reset_rng()
             with torch.no_grad():
                 return model(*example)
 
         def wrapped() -> Any:
+            """The instrumented arm: the per-step op-tier pass."""
+
             reset_rng()
             with torch.no_grad():
                 return self.inner.instrumented_forward(fastlog_args)

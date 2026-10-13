@@ -199,11 +199,16 @@ def test_aim_run_on_a_local_repo_has_parity(trace: Any, aim_run: Any, tmp_path: 
     recorder = _TrackRecorder(run)
     try:
         result = tl.export.aim(trace, run=recorder, prefix="tl")
-        run_hash = run.hash
+        # Read back through the live Aim run object: re-opening a just-closed run
+        # by hash did not return its params or series under aim 3.29 (probed).
+        _assert_aim_parity(trace, result, recorder, run)
     finally:
         run.close()
 
-    read = aim.Run(run_hash=run_hash, repo=str(tmp_path), read_only=True)
+
+def _assert_aim_parity(trace: Any, result: dict[str, Any], recorder: Any, read: Any) -> None:
+    """The three parity features, read from the Aim run the exporter wrote to."""
+
     # Summary metrics (existing behavior, kept).
     for key in _KEYS:
         steps, values = _aim_series(recorder, f"tl.{key}", {})
