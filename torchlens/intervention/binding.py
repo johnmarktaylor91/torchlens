@@ -200,6 +200,45 @@ def _rule_contains_module_boundary(rule: Any) -> bool:
     )
 
 
+def _rule_plan_problem(rule: Any) -> tuple[str, str] | None:
+    """Return why one rule cannot run on the capture-free lane, if it cannot.
+
+    Parameters
+    ----------
+    rule:
+        Spec rule being lowered.
+
+    Returns
+    -------
+    tuple[str, str] | None
+        ``(reason, remedy)`` for a refusal, or ``None`` when the rule lowers.
+    """
+
+    from .types import HelperSpec
+
+    decision = rule.decision
+    if decision is None or decision.hook is None:
+        return (
+            "carries no executable hook payload; the capture-free lane can only "
+            "run value-replacing actions",
+            "use a value-replacing action (tl.scale, tl.noise, tl.replace_with, "
+            "or a callable taking (out, *, hook))",
+        )
+    hook = decision.hook
+    edits_gradients = decision.direction in ("backward", "both") or (
+        isinstance(hook, HelperSpec) and (hook.kind == "backward" or hook.direction == "backward")
+    )
+    if edits_gradients:
+        return (
+            "edits gradients; the capture-free lane runs forward value "
+            "replacements only, so it would edit the activation instead",
+            "capture with tl.trace(model, x, capture=tl.options.CaptureOptions("
+            "backward_ready=True), intervene=tl.when(site, edit)) and run "
+            "trace.backward(loss)",
+        )
+    return None
+
+
 class _RulePlan:
     """One rule's bind-time lowering: the normalized hook callable + stamps."""
 
@@ -218,21 +257,23 @@ class _RulePlan:
         ------
         BindingPreflightError
             ``bind_rule_unsupported`` when the rule's decision carries no
-            executable hook payload.
+            executable hook payload, or when it edits gradients: the
+            capture-free lane runs forward value replacements only, and
+            lowering a gradient edit as a forward hook would silently edit
+            the activation instead.
         """
 
         from .hooks import normalize_hook
         from .types import HelperSpec
 
         decision = rule.decision
-        if decision is None or decision.hook is None:
+        problem = _rule_plan_problem(rule)
+        if problem is not None:
+            reason, remedy = problem
             raise BindingPreflightError(
-                f"rule {rule.rule_id} ({rule.action_repr}) carries no executable "
-                "hook payload; the capture-free lane can only run value-replacing "
-                "actions",
+                f"rule {rule.rule_id} ({rule.action_repr}) {reason}",
                 code="bind_rule_unsupported",
-                remedy="use a value-replacing action (tl.scale, tl.noise, "
-                "tl.replace_with, or a callable taking (out, *, hook))",
+                remedy=remedy,
             )
         self.rule = rule
         self.helper_spec = decision.hook if isinstance(decision.hook, HelperSpec) else None
