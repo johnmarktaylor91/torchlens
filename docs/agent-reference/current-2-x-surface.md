@@ -185,9 +185,8 @@
   geometry violations quarantine `episode_ledger_incoherent`); the annotations key AND the
   Bundle `member_relations` key persist plainly as of the tlspec v8 coordinated bump.
   DIAGNOSTIC-TIER cost, superlinear (gpt2-124M CPU: N=20 79 s / N=100 657 s, 947 MB, 5.4 GB
-  RSS) — tens of steps, never hundreds; guarded-fast (`trace.run(fast=True)`, which needs a
-  functional `save=tl.func(...)` on the capture -- the default capture re-runs through
-  `trace.run(inputs=...)`) is the engine for episode-scale re-runs and must reproduce wrapped
+  RSS) — tens of steps, never hundreds; guarded-fast (`trace.run(fast=True)`, which collects
+  every site the capture saved, the save-all default and module saves included) is the engine for episode-scale re-runs and must reproduce wrapped
   tokens bit-exactly (pinned). The same engine serves a STEERED rerun: `trace.run(model, x)`
   on a module-targeted staged spec fires the staged hooks at module exit inside a native
   forward (`last_run["engine"] == "guarded_fast"`), admits a changed input length under the
@@ -390,6 +389,11 @@
   (`collapse_pathological_skip`; `collapse_plan()` refuses `collapse_plan_unavailable`;
   the schedule degrades to one full-graph step). Context reductions (`module=` focus,
   `vis_call_depth`, rolled mode) genuinely re-admit the quality planner.
+- The committed collapse reference SVGs (`docs/images/collapse`) are rendered with libpango
+  1.52. Hosts with an older Pango (1.44, the Ubuntu 20.04 packages) lay text out at different
+  widths, so `scripts/render_collapse_reference.py --check` and the schema-lockstep
+  `docs/images/collapse` artifact check fail there on text-width coordinates only (same labels,
+  same fonts). Check or re-record on a Pango 1.52+ host; never re-record from an older one.
 - Smart-collapse metadata is computed at access time: `Module.collapse_score`,
   `Trace.module_collapse_order`, and `Trace.collapse_order(mode=...)` (the documented-inert
   `weights=` parameter was removed -- collapse memo D9, clean-v2). These are
