@@ -349,11 +349,27 @@ def _check_module_layer_containment(ml: Trace) -> None:
                         f"'{lbl}' not in op_labels or layer_labels",
                     )
 
-            if mpl.num_layers != len(mpl.ops):
+            if mpl.num_ops != len(mpl.ops):
                 raise MetadataInvariantError(
                     name,
                     f"ModuleCall '{addr}:{call_index}': "
-                    f"num_layers={mpl.num_layers} != len(ops)={len(mpl.ops)}",
+                    f"num_ops={mpl.num_ops} != len(ops)={len(mpl.ops)}",
+                )
+            call_layer_labels: set[str] = set()
+            for lbl in mpl.ops:
+                resolved = getattr(ml.layer_dict_all_keys.get(lbl), "layer_label", None)
+                if not isinstance(resolved, str):
+                    raise MetadataInvariantError(
+                        name,
+                        f"ModuleCall '{addr}:{call_index}' op '{lbl}' resolves to no Layer",
+                    )
+                call_layer_labels.add(resolved)
+            if mpl.num_layers != len(call_layer_labels):
+                raise MetadataInvariantError(
+                    name,
+                    f"ModuleCall '{addr}:{call_index}': "
+                    f"num_layers={mpl.num_layers} != distinct Layers of ops="
+                    f"{len(call_layer_labels)}",
                 )
 
             # input/output layers subset of ops (using both pass-qualified
