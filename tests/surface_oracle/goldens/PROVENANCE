@@ -944,3 +944,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 711308c2b55233e51cfd4224a6b71985649a73a9 (dirty)
 recorded: 2026-10-13T10:39:36.634811+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: forks.13 (JMT 2026-10-12, RULINGS-2B.md:22; lane REPORT, SCHEMA-REQUESTS rows 7-8) merged with REAL-2B2 row 9 (AGT-2362): regenerate on the combined train for Trace.forward_peak_memory_reason (KEEP) beside Trace._uncalled_module_addresses (DROP)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ee78dd35000f9b63fa9c3b437046c226789c7d3b (dirty)
+recorded: 2026-10-13T12:47:34.254443+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: forks.13 (JMT 2026-10-12, RULINGS-2B.md:22; lane REPORT, SCHEMA-REQUESTS rows 7-8) merged with REAL-2B2 row 9 (AGT-2362): regenerate on the combined train for Trace.forward_peak_memory_reason (KEEP) beside Trace._uncalled_module_addresses (DROP)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ee78dd35000f9b63fa9c3b437046c226789c7d3b (dirty)
+recorded: 2026-10-13T12:47:34.294296+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: forks.13 (JMT 2026-10-12, RULINGS-2B.md:22; lane REPORT, SCHEMA-REQUESTS rows 7-8) merged with REAL-2B2 row 9 (AGT-2362): regenerate on the combined train for Trace.forward_peak_memory_reason (KEEP) beside Trace._uncalled_module_addresses (DROP)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ee78dd35000f9b63fa9c3b437046c226789c7d3b (dirty)
+recorded: 2026-10-13T12:47:34.330536+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: forks.13 (JMT 2026-10-12, RULINGS-2B.md:22; lane REPORT, SCHEMA-REQUESTS rows 7-8) merged with REAL-2B2 row 9 (AGT-2362): regenerate on the combined train for Trace.forward_peak_memory_reason (KEEP) beside Trace._uncalled_module_addresses (DROP)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ee78dd35000f9b63fa9c3b437046c226789c7d3b (dirty)
+recorded: 2026-10-13T12:47:34.380319+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: forks.13 (JMT 2026-10-12, RULINGS-2B.md:22; lane REPORT, SCHEMA-REQUESTS rows 7-8) merged with REAL-2B2 row 9 (AGT-2362): regenerate on the combined train for Trace.forward_peak_memory_reason (KEEP) beside Trace._uncalled_module_addresses (DROP)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ee78dd35000f9b63fa9c3b437046c226789c7d3b (dirty)
+recorded: 2026-10-13T12:47:34.424053+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: forks.13 (JMT 2026-10-12, RULINGS-2B.md:22; lane REPORT, SCHEMA-REQUESTS rows 7-8) merged with REAL-2B2 row 9 (AGT-2362): regenerate on the combined train for Trace.forward_peak_memory_reason (KEEP) beside Trace._uncalled_module_addresses (DROP)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ee78dd35000f9b63fa9c3b437046c226789c7d3b (dirty)
+recorded: 2026-10-13T12:47:34.478834+00:00
