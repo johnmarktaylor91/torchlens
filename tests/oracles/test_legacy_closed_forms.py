@@ -115,13 +115,22 @@ def _raw_graph(loss: torch.Tensor) -> tuple[list[object], set[tuple[int, int]]]:
     return list(nodes.values()), edges
 
 
+def _counting_hook(tally: Tally, key: object):
+    """A node post-hook that counts one execution under ``key``."""
+
+    def hook(*_args: object) -> None:
+        tally.update([key])
+
+    return hook
+
+
 def _backward_with_call_tally(trace, model_loss: torch.Tensor, passes: int) -> Tally:
     """Run ``passes`` backward passes, tallying each raw node's executions by hook."""
 
     tally: Tally = Tally()
     nodes, _ = _raw_graph(model_loss)
     for node in nodes:
-        node.register_hook(lambda *_args, key=id(node): tally.update([key]))
+        node.register_hook(_counting_hook(tally, id(node)))
     for index in range(passes):
         trace.backward(model_loss, retain_graph=index < passes - 1)
     return tally
@@ -541,7 +550,7 @@ def test_backward_flops_follow_the_backward_that_runs(backward_ready: bool) -> N
         nodes, _ = _raw_graph(loss)
         ran: Tally = Tally()
         for node in nodes:
-            node.register_hook(lambda *_args, name=type(node).__name__: ran.update([name]))
+            node.register_hook(_counting_hook(ran, type(node).__name__))
         loss.backward()
         a_runs = not backward_ready
         assert ran["AddmmBackward0"] == (2 if a_runs else 1)
