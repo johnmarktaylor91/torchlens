@@ -18,6 +18,7 @@ import torchlens as tl
 from torchlens.selection import SelectionError
 
 _CAPTURE = tl.options.CaptureOptions(intervention_ready=True)
+_CONFIRM = tl.options.InterventionOptions(confirm_mutation=True)
 
 
 def _batchnorm_model() -> nn.Sequential:
@@ -38,7 +39,7 @@ def _edited_output(model: nn.Module, selection: object, edit: object) -> torch.T
     """Run one buffer what-if through TorchLens and return the model output."""
 
     trace = tl.trace(model, _X, capture=_CAPTURE)
-    edited = trace.do(selection, edit)
+    edited = trace.do(selection, edit, intervention=_CONFIRM)
     return edited[edited.output_layers[0]].out.detach()
 
 
@@ -94,7 +95,7 @@ def test_state_buffer_what_if_threads_through_writes() -> None:
     model = _StateCell()
     x = torch.tensor([0.1, -0.2, 0.3])
     trace = tl.trace(model, x, capture=_CAPTURE)
-    edited = trace.do(tl.params("h"), tl.replace_with(torch.ones(3)))
+    edited = trace.do(tl.params("h"), tl.replace_with(torch.ones(3)), intervention=_CONFIRM)
     got = edited[edited.output_layers[0]].out.detach()
     want = torch.tanh(torch.tanh(torch.ones(3) + x) + x) * 2.0
     torch.testing.assert_close(got, want, rtol=0.0, atol=1e-6)
@@ -105,5 +106,9 @@ def test_buffer_mask_shape_mismatch_refuses_typed() -> None:
 
     trace = tl.trace(_batchnorm_model(), _X, capture=_CAPTURE)
     with pytest.raises(SelectionError) as info:
-        trace.do(tl.params("1.running_mean", torch.ones(3, dtype=torch.bool)), tl.scale(2.0))
+        trace.do(
+            tl.params("1.running_mean", torch.ones(3, dtype=torch.bool)),
+            tl.scale(2.0),
+            intervention=_CONFIRM,
+        )
     assert info.value.fields["code"] == "param_substitution_occurrence_underivable"

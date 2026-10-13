@@ -202,6 +202,18 @@ def test_out_of_range_position_refuses_typed(tiny_gpt2: torch.nn.Module) -> None
     assert info.value.fields["code"] == "patch_positions_out_of_range"
 
 
+def test_mismatched_hidden_width_refuses_typed(tiny_gpt2: torch.nn.Module) -> None:
+    """A donor slice of another width refuses ``patch_positions_shape_mismatch``."""
+
+    source = tl.trace(tiny_gpt2, _SOURCE)
+    edit = tl.patch_from(
+        source, source_site=tl.module("transformer.h.0.mlp.c_fc"), positions={-1: 0}
+    )
+    with pytest.raises(HookValueError) as info:
+        tl.trace(tiny_gpt2, _TARGET, intervene=tl.when(tl.module("transformer.h.1"), edit))
+    assert info.value.fields["code"] == "patch_positions_shape_mismatch"
+
+
 def test_ambiguous_source_site_refuses_typed(tiny_gpt2: torch.nn.Module) -> None:
     """A source site naming more than one op never guesses a donor."""
 

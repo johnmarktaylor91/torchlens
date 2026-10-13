@@ -144,3 +144,17 @@ def test_out_of_range_position_refuses_typed() -> None:
     with pytest.raises(HookValueError) as info:
         _run(_model(), at_positions(tl.zero_ablate(), 7))
     assert info.value.fields["code"] == "position_edit_out_of_range"
+
+
+def test_shape_changing_edit_refuses_typed() -> None:
+    """Only a same-shape edit can be kept at some positions: ``position_edit_shape_mismatch``."""
+
+    def _narrow(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+        """Return a value of another shape."""
+
+        del hook
+        return out[..., :2]
+
+    with pytest.raises(HookValueError) as info:
+        _run(_model(), at_positions(_narrow, [0]))
+    assert info.value.fields["code"] == "position_edit_shape_mismatch"
