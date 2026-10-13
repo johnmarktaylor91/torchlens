@@ -23,7 +23,7 @@ from importlib import metadata
 from typing import Any
 
 from ..facets import mark_current_registry_as_builtins
-from . import attention, embedding, lm_head, mlp, norm, residual
+from . import attention, embedding, lm_head, mlp, norm, residual, vision_head
 
 BUILTIN_FACET_CAPABILITY_INVENTORY: dict[str, dict[str, str]] = {
     "attention": {
@@ -70,6 +70,31 @@ BUILTIN_FACET_CAPABILITY_INVENTORY: dict[str, dict[str, str]] = {
         "logits": "op_structural",
         "unembed_weight": "parameter",
         "unembed_bias": "parameter",
+        "final_norm_kind": "computed_read_only",
+        "final_norm_eps": "computed_read_only",
+        "final_norm_gamma": "parameter",
+        "final_norm_beta": "parameter",
+        "final_norm_input": "op_structural",
+    },
+    "classification_head": {
+        "logits": "op_structural",
+        "classifier_weight": "parameter",
+        "classifier_bias": "parameter",
+        "pooled_position": "computed_read_only",
+        "tower_address": "computed_read_only",
+        "final_norm_kind": "computed_read_only",
+        "final_norm_eps": "computed_read_only",
+        "final_norm_gamma": "parameter",
+        "final_norm_beta": "parameter",
+        "final_norm_input": "op_structural",
+    },
+    "contrastive_image_head": {
+        "logits_per_image": "op_structural",
+        "image_projection_weight": "parameter",
+        "text_features": "op_structural",
+        "logit_scale": "parameter",
+        "pooled_position": "computed_read_only",
+        "tower_address": "computed_read_only",
         "final_norm_kind": "computed_read_only",
         "final_norm_eps": "computed_read_only",
         "final_norm_gamma": "parameter",
@@ -215,4 +240,5 @@ __all__ = [
     "mlp",
     "norm",
     "residual",
+    "vision_head",
 ]

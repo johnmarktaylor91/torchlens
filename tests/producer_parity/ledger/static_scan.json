@@ -7945,10 +7945,18 @@
  },
  {
   "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/semantic/logit_lens.py",
+  "has_default": false,
+  "sites": 4,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/semantic/logit_lens.py",
   "has_default": false,
-  "sites": 7,
+  "sites": 5,
   "via_getattr": false
  },
  {
@@ -8027,6 +8035,14 @@
   "ambiguous": true,
   "field": "parents",
   "file": "torchlens/semantic/recipes/residual.py",
+  "has_default": true,
+  "sites": 2,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/semantic/recipes/vision_head.py",
   "has_default": true,
   "sites": 2,
   "via_getattr": true

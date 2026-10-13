@@ -29,7 +29,7 @@ def layer_norm(module: Any) -> dict[str, Any]:
 
 
 @register(
-    class_name=("RMSNorm", "LlamaRMSNorm", "MistralRMSNorm"),
+    class_name=("RMSNorm", "LlamaRMSNorm", "MistralRMSNorm", "Qwen2RMSNorm"),
     target_scope="module",
     facets=_NORM_FACETS,
 )

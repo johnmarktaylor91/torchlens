@@ -41,6 +41,7 @@ from ._helpers import (
     needs_capture,
     op_output_readable,
     parameter_spec,
+    projection_input_spec,
     reshape_heads,
     structural,
 )
@@ -108,14 +109,26 @@ _MATMUL_FUNCS = frozenset({"matmul", "bmm", "baddbmm", "einsum", "__matmul__"})
 def _with_attention_common(
     result: dict[str, Any],
     module: Any,
-    n_q_heads: int | None,
-    n_kv_heads: int | None,
-    d_head: int | None,
+    heads: tuple[int | None, int | None, int | None],
+    *,
+    query_child: str,
 ) -> dict[str, Any]:
-    """Attach common attention facets to a recipe result."""
+    """Attach common attention facets to a recipe result.
+
+    ``heads`` is ``(n_q_heads, n_kv_heads, d_head)`` from :func:`_attention_config`.
+
+    ``input`` is the value the query projection child reads (by dataflow);
+    the module's first input op is only the fallback, since it is the first
+    tensor input in creation order (rotary ``cos``/``sin`` or a mask on
+    Llama-class models), not necessarily the hidden state.
+    """
 
     add_if_present(result, "attn_out", module_output_spec(module, "attention"))
-    add_if_present(result, "input", first_input_spec(module, "attention"))
+    input_spec = projection_input_spec(module, query_child, "attention")
+    if isinstance(input_spec, AbsenceReason):
+        input_spec = first_input_spec(module, "attention")
+    add_if_present(result, "input", input_spec)
+    n_q_heads, n_kv_heads, d_head = heads
     if n_q_heads is not None:
         result["n_q_heads"] = n_q_heads
         result["n_heads"] = n_q_heads
@@ -558,7 +571,9 @@ def distilbert_attention(module: Any) -> dict[str, Any]:
             child_output_spec(module, "v_lin", "distilbert_attention"), n_kv_heads, d_head
         ),
     )
-    return _with_attention_common(result, module, n_q_heads, n_kv_heads, d_head)
+    return _with_attention_common(
+        result, module, (n_q_heads, n_kv_heads, d_head), query_child="q_lin"
+    )
 
 
 @register(
@@ -582,7 +597,9 @@ def gpt2_attention(module: Any) -> dict[str, Any]:
         add_if_present(result, "k", c_attn_out)
         add_if_present(result, "v", c_attn_out)
     add_if_present(result, "attn_out", child_output_spec(module, "c_proj", "gpt2_attention"))
-    return _with_attention_common(result, module, n_q_heads, n_kv_heads, d_head)
+    return _with_attention_common(
+        result, module, (n_q_heads, n_kv_heads, d_head), query_child="c_attn"
+    )
 
 
 @register(
@@ -612,7 +629,9 @@ def bert_self_attention(module: Any) -> dict[str, Any]:
             child_output_spec(module, "value", "bert_self_attention"), n_kv_heads, d_head
         ),
     )
-    return _with_attention_common(result, module, n_q_heads, n_kv_heads, d_head)
+    return _with_attention_common(
+        result, module, (n_q_heads, n_kv_heads, d_head), query_child="query"
+    )
 
 
 @register(
@@ -623,6 +642,7 @@ def bert_self_attention(module: Any) -> dict[str, Any]:
         "MistralSdpaAttention",
         "LlamaFlashAttention2",
         "MistralFlashAttention2",
+        "Qwen2Attention",
         "ViTAttention",
     ),
     target_scope="module",
@@ -632,10 +652,12 @@ def gqa_attention(module: Any) -> dict[str, Any]:
     """Return facets for ``q_proj``/``k_proj``/``v_proj``/``o_proj`` attention.
 
     Covers the transformers 5.x unified classes (``LlamaAttention`` /
-    ``MistralAttention``, backend chosen at runtime), the 4.x per-backend
-    subclasses, and the 5.x ``ViTAttention`` (same child layout, MHA with
-    ``n_kv_heads == n_q_heads``); fusedness comes from the captured graph,
-    never these names.
+    ``MistralAttention`` / ``Qwen2Attention``, backend chosen at runtime), the
+    4.x per-backend subclasses, and the 5.x ``ViTAttention`` (same child
+    layout, MHA with ``n_kv_heads == n_q_heads``). ``Qwen2Attention`` differs
+    from Llama only in carrying q/k/v biases, which ride inside the captured
+    projection outputs. Fusedness comes from the captured graph, never these
+    names.
     """
 
     n_q_heads, n_kv_heads, d_head = _attention_config(module)
@@ -656,7 +678,9 @@ def gqa_attention(module: Any) -> dict[str, Any]:
         reshape_heads(child_output_spec(module, "v_proj", "gqa_attention"), n_kv_heads, d_head),
     )
     add_if_present(result, "attn_out", child_output_spec(module, "o_proj", "gqa_attention"))
-    return _with_attention_common(result, module, n_q_heads, n_kv_heads, d_head)
+    return _with_attention_common(
+        result, module, (n_q_heads, n_kv_heads, d_head), query_child="q_proj"
+    )
 
 
 @register(class_name="T5Attention", target_scope="module", facets=_ATTENTION_FACETS)
@@ -681,7 +705,7 @@ def t5_attention(module: Any) -> dict[str, Any]:
         reshape_heads(child_output_spec(module, "v", "t5_attention"), n_kv_heads, d_head),
     )
     add_if_present(result, "attn_out", child_output_spec(module, "o", "t5_attention"))
-    return _with_attention_common(result, module, n_q_heads, n_kv_heads, d_head)
+    return _with_attention_common(result, module, (n_q_heads, n_kv_heads, d_head), query_child="q")
 
 
 @register(
@@ -709,4 +733,38 @@ def vit_self_attention(module: Any) -> dict[str, Any]:
         "v",
         reshape_heads(child_output_spec(module, "value", "vit_self_attention"), n_kv_heads, d_head),
     )
-    return _with_attention_common(result, module, n_q_heads, n_kv_heads, d_head)
+    return _with_attention_common(
+        result, module, (n_q_heads, n_kv_heads, d_head), query_child="query"
+    )
+
+
+@register(class_name="CLIPAttention", target_scope="module", facets=_ATTENTION_FACETS)
+def clip_attention(module: Any) -> dict[str, Any]:
+    """Return facets for CLIP attention modules (vision and text towers).
+
+    transformers 5.x ``CLIPAttention`` projects through ``q_proj``/``k_proj``/
+    ``v_proj`` and writes through ``out_proj`` (MHA, ``n_kv_heads ==
+    n_q_heads``); one class serves both towers and every attention backend.
+    """
+
+    n_q_heads, n_kv_heads, d_head = _attention_config(module)
+    result: dict[str, Any] = {}
+    add_if_present(
+        result,
+        "q",
+        reshape_heads(child_output_spec(module, "q_proj", "clip_attention"), n_q_heads, d_head),
+    )
+    add_if_present(
+        result,
+        "k",
+        reshape_heads(child_output_spec(module, "k_proj", "clip_attention"), n_kv_heads, d_head),
+    )
+    add_if_present(
+        result,
+        "v",
+        reshape_heads(child_output_spec(module, "v_proj", "clip_attention"), n_kv_heads, d_head),
+    )
+    add_if_present(result, "attn_out", child_output_spec(module, "out_proj", "clip_attention"))
+    return _with_attention_common(
+        result, module, (n_q_heads, n_kv_heads, d_head), query_child="q_proj"
+    )

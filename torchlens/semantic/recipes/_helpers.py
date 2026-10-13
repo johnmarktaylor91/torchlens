@@ -135,6 +135,23 @@ def module_input_op_spec(module: Any, recipe_id: str) -> FacetSpec | AbsenceReas
     return FacetSpec.from_home(op, home_kind="op", recipe_id=recipe_id)
 
 
+def projection_input_spec(
+    module: Any, child_name: str, recipe_id: str
+) -> FacetSpec | AbsenceReason:
+    """Return the op-anchored value a projection child of ``module`` reads.
+
+    An attention module may receive several tensors (hidden states, rotary
+    ``cos``/``sin``, masks, position ids), and its call's first input op is
+    the first in CREATION order, not the hidden state. The value its query
+    projection reads is the residual-stream input by dataflow.
+    """
+
+    child = child_module(module, child_name)
+    if child is None:
+        return structural(f"child module {child_name!r} is absent")
+    return module_input_op_spec(child, recipe_id)
+
+
 def module_output(module: Any) -> Any | None:
     """Return a module's first-call single output when available."""
 
