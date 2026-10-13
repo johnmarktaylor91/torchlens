@@ -488,8 +488,9 @@
   interior is fully logged with FULL verified semantics (no ceiling), interior interventions work,
   zero graph breaks / zero new compiles happen during capture (fresh shapes included), compiled
   caches stay intact with the warm artifact bitwise-reproduced afterward, and TorchLens wrapper
-  install/uninstall costs at most ONE bounded recompile on the next compiled call (verify with
-  `tl.debug.count_compiles()`; correlate breaks with `tl.debug.graph_breaks()`). Compiled child
+  install/uninstall costs a one-time bounded burst of recompilations on the first compiled call
+  after each capture, then steady state (measured: none on `resnet18`, six to seven frames on a tiny GPT-2;
+  verify with `tl.debug.count_compiles()`; correlate breaks with `tl.debug.graph_breaks()`). Compiled child
   `nn.Module`s are still unwrapped to their eager source in both regimes. On torch < 2.6 (or a
   stance that fails to engage) the exact historical fallback holds: a Dynamo-traced region reached
   mid-capture is bypassed with a one-per-forward warning and the returned `Trace` honestly contains
@@ -998,9 +999,32 @@
 - TRAINING-TIME WATCH (F26; DOCUMENTED-UNSTABLE): `torchlens.trackers` is the
   attach-once watch engine over the C06 records -- `watch`/`WatchSession`,
   sinks (TensorBoardSink incl. `add_histogram_raw` precomputed buckets,
-  WandbSink, JSONLSink, MemorySink), `HFTrainerWatchCallback` /
+  WandbSink, JSONLSink, MemorySink; batch-2 U54.2/U54.3: `MLflowSink(client=None, *,
+  run_id=None)` and `CometSink(experiment)` over a user-created run, caller step kept,
+  Comet without raw histograms), `HFTrainerWatchCallback` /
   `LightningWatchCallback`, TB GraphDef with real StepStats. CHANGED:
-  `tl.export.tensorboard` requires keyword `step` (default removed).
+  `tl.export.tensorboard` requires keyword `step` (default removed). `tl.export.mlflow` /
+  `tl.export.aim` log the per-layer table, the report and honesty facts as string tags
+  (wandb parity; U54.1) and return `table`, `report`, `tags` (+ `artifacts` for MLflow).
+  OP GRAIN (batch-2 U32.1/U34.1): `watch(..., signals=("activations",),
+  grain="op", select=<prefixes or selector>, example_input=x,
+  allow_forward_wrap=True, facets=None)` drives the Route-B
+  `OpTierCollector` through a consented root-forward wrap (no consent:
+  `watch_forward_wrap_consent_required`; unknown grain: `watch_grain_invalid`);
+  attach calibrates plain vs wrapped forward (RNG and buffers restored) into
+  `session.collector.calibration` and discloses it (plan report,
+  `torchlens/meta/op_grain_calibration`, `torchlens/run/op_grain_overhead_median_x`,
+  one `watch_op_grain_cost_disclosed` warning); first forward of a sampled step
+  only; facet leaves `<op label>/<facet>`; `close()` removes the wrap.
+  CALLBACK ENV CONFIG (U34.2): explicit callbacks read `TORCHLENS_WATCH_SIGNALS`
+  / `_SELECT` / `_EVERY` / `_HIST_EVERY` for settings not passed (never
+  activation), print each setting's source via `print_fn=` (argument > env >
+  derived > default), keep `callback.settings`; malformed refuses
+  `watch_env_config_invalid`. HISTORY (explorer sign-offs): nullable
+  `StepBlockRecord.trace_ref` (history schema 2, v1 loads unchanged);
+  `WatchSettings(sketch_embeddings=False, artifact_budget_bytes=256 MiB)`
+  (embedding tables >= 2**20 elements spine-only; budget refuses
+  `history_artifact_budget_exceeded` before the crossing block).
 - LIGHTNING FIT-START SUMMARY (walk U03.4; DOCUMENTED-UNSTABLE):
   `torchlens.callbacks.lightning.SummaryCallback(input_getter=None, print_fn=print,
   **summary_kwargs)` prints `tl.summary` once per fit: sample = the module's
@@ -1010,6 +1034,9 @@
   restored; rank zero only; a sample the forward rejects warns
   `lightning_summary_skipped` and the fit continues; summary options validate at
   construction. Both callbacks resolve on `lightning` or standalone `pytorch_lightning`.
+  `LayerProfilerCallback` records carry `run_id` (fresh per Lightning `setup`,
+  or `run_id=`) and `disclosure`; an untraceable batch warns
+  `lightning_profile_skipped` and training continues.
 - OBSERVABILITY HOME (C06 + F24/F25/F27; DOCUMENTED-UNSTABLE):
   `torchlens.observability` (~100 names) carries the L5 record schema,
   summary transforms, `HistoryView` (bounded exactly-mergeable training
