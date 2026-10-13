@@ -113,6 +113,9 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
                 "module_filter",
                 "num_modules",
                 "parent_run",
+                # R2-37: the live pinned-graph disclosure; a loaded trace pins
+                # nothing, so it never persists.
+                "pinned_autograd_memory",
                 "replay_frontier",
             }
         ),

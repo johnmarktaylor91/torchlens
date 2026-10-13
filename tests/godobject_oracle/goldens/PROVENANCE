@@ -293,3 +293,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 80ee7e085d8b9cf4353218e151dc8fbb00cce2ae (clean)
 recorded: 2026-10-09T03:08:33.107494+00:00
+---
+generator: tests/test_state_keyset_contract.py
+flag: TORCHLENS_UPDATE_STATE_KEYSET_ORACLE=1
+reason: R2-37 via the v10 field registry: Trace.pinned_autograd_memory (DROP), SCHEMA-REQUESTS row 2
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 65ffdc92dd00ac8189700e8435f5215c0cbeabe9 (dirty)
+recorded: 2026-10-12T21:26:42.636720+00:00
+---
+generator: tests/godobject_oracle legacy
+flag: TORCHLENS_UPDATE_LEGACY_ARTIFACT_ORACLE=1
+reason: R2-37 (RUN-B phase 1 landed through SCHEMA): Trace.pinned_autograd_memory joins the public Trace surface
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: cdd5c2f9ac0cff9f94420085613f0d9f6e2f50c9 (dirty)
+recorded: 2026-10-12T23:34:35.546750+00:00

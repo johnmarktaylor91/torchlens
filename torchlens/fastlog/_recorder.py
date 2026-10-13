@@ -15,7 +15,11 @@ from torch import nn
 from .. import _state
 from .._deprecations import MISSING, MissingType
 from .._errors import CaptureContextError, KeywordConflictError
-from .._training_validation import TrainingModeConfigError, reject_compiled_model
+from .._training_validation import (
+    TrainingModeConfigError,
+    reject_compiled_model,
+    validate_training_compatibility,
+)
 from ..capture.config import InternalCaptureConfig
 from ..capture.outcome import safe_exception_repr, safe_exception_str
 from ..capture.predicates import _save_selector_matches, validate_followed_by_capability
@@ -228,6 +232,7 @@ class Recorder:
         save_raw_gradients: bool | MissingType = MISSING,
         backward_ready: bool = False,
         echo: Any | None | MissingType = MISSING,
+        detach_saved_activations: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a recorder and perform construction-time validation.
 
@@ -264,9 +269,26 @@ class Recorder:
             or ``False`` and ``default_grad=False`` do not count); otherwise
             ``log_backward()`` refuses, and a forward under ``torch.no_grad()``
             or ``torch.inference_mode()`` implies ``inference_only=True``.
+        detach_saved_activations:
+            DOCUMENTED-UNSTABLE. Whether retained activations are detached from
+            the autograd graph. Defaults to ``True`` (detached copies). ``False``
+            keeps graph-connected copies wherever the recorded tensor carries
+            autograd history, so a loss built from them backpropagates into the
+            model; unlike ``CaptureSpec(keep_grad=True)`` it does not refuse
+            integer tensors or detached transforms. A spec with
+            ``keep_grad=True`` stays attached either way, and disk payloads are
+            always detached. ``backward_ready=True`` refuses an explicit
+            ``True``.
         """
 
         reject_compiled_model(model, api_name="torchlens.fastlog.Recorder")
+        validate_training_compatibility(
+            backward_ready=backward_ready,
+            streaming=None,
+            detach_saved_activations=(
+                detach_saved_activations if isinstance(detach_saved_activations, bool) else None
+            ),
+        )
         storage_supplied = storage is not MISSING and storage is not None
         streaming_supplied = streaming is not MISSING and streaming is not None
         if storage_supplied and streaming_supplied:
@@ -326,6 +348,7 @@ class Recorder:
             grad_transform=grad_transform,
             save_raw_gradients=save_raw_gradients,
             echo=echo_normalized if echo_normalized is not None else MISSING,
+            detach_saved_activations=detach_saved_activations,
         )
         validate_recording_options(self.options)
         validate_followed_by_capability(

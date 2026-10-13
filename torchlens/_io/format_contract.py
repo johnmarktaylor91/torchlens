@@ -62,7 +62,14 @@ __tl_layer__ = "L1"
 # unconditionally) with the Op.tl_authored_root marker and Op.episode_step
 # stamp -- all with fail-closed load validation so the F40b/F40c/F41/F42/
 # F-EPISODE/F-WITNESS writers need no further version bump.
-TLSPEC_VERSION = 9
+# v10 is the batch-2 coordinated schema write: ONE bump for every new saved
+# field of the window (each addition is admitted by the v10 field registry
+# before its writer lands, so no further version bump follows), the corrected
+# floor text in the writer contract (2.31.0, the first tlspec-6 writer; v9
+# froze the false "2.33"), and the reserved generation step-score vocabulary
+# credited to inseq (``RESERVED_STEP_SCORE_NAMES``). The v9 contract of record
+# stays frozen byte-for-byte beside the v10 one.
+TLSPEC_VERSION = 10
 
 # Rehydration floor: artifacts older than tlspec_version 6 refuse to load
 # instead of being resurrected through legacy field-alias ladders. The FIRST
@@ -71,11 +78,39 @@ TLSPEC_VERSION = 9
 # was false and backed the producer inequality that orphaned lawful
 # v2.31.0/v2.32.4 artifacts; producer pair-consistency now lives in the
 # governed ledger, ``torchlens._io.compat_ledger``, gate G5).
-# ``MIN_TORCHLENS_VERSION_TEXT`` remains the release-family text stamped into
-# the writer contract; its VALUE is frozen with the committed v9 contract
-# golden (C07 territory) and is no longer matched against any manifest.
+# ``MIN_TORCHLENS_VERSION_TEXT`` is the floor release text stamped into the
+# writer contract and the below-floor refusal; it is never matched against a
+# manifest. The v9 contract of record keeps its frozen "2.33"; from v10 the
+# text is the ledger's producer floor writer (``compat_ledger.floor_metadata``).
 MIN_TLSPEC_VERSION = 6
-MIN_TORCHLENS_VERSION_TEXT = "2.33"
+MIN_TORCHLENS_VERSION_TEXT = "2.31.0"
+
+# Reserved generation step-score vocabulary (U22.3), credited to inseq: the
+# keys of inseq's ``STEP_SCORES_MAP`` (``inseq/attr/step_functions.py``,
+# inseq 0.7.1), verbatim and in inseq's order. A name registration, not a
+# field slot: a future TorchLens generation read surface persists its
+# per-step scores under exactly these names, and the v10 writer contract
+# records them so the names freeze with the contract of record.
+RESERVED_STEP_SCORE_NAMES: tuple[str, ...] = (
+    "logit",
+    "probability",
+    "entropy",
+    "crossentropy",
+    "perplexity",
+    "contrast_logits",
+    "contrast_prob",
+    "contrast_logits_diff",
+    "contrast_prob_diff",
+    "pcxmi",
+    "kl_divergence",
+    "in_context_pvi",
+    "mc_dropout_prob_avg",
+    "top_p_size",
+)
+RESERVED_STEP_SCORE_CREDIT = (
+    "Step-score names from inseq (Sarti et al., ACL 2023 demo; "
+    "https://github.com/inseq-team/inseq), the STEP_SCORES_MAP keys of inseq 0.7.1."
+)
 
 
 # Ledger-derived honesty (gate G6): a below-floor remedy must never NAME a

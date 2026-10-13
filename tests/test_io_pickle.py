@@ -123,7 +123,7 @@ def test_scrubbed_pickle_roundtrip_rehydrates_accessors(tmp_path) -> None:
 
 
 def test_trace_setstate_refuses_pre_versioning_state() -> None:
-    """Missing version tags refuse at the 2.33 rehydration floor."""
+    """Missing version tags refuse at the tlspec-6 rehydration floor."""
 
     from torchlens._io import ArtifactVersionBelowFloorError
 
@@ -132,7 +132,7 @@ def test_trace_setstate_refuses_pre_versioning_state() -> None:
     old_state.pop("tlspec_version", None)
 
     restored = Trace.__new__(Trace)
-    with pytest.raises(ArtifactVersionBelowFloorError, match="torchlens 2.33"):
+    with pytest.raises(ArtifactVersionBelowFloorError, match="torchlens 2.31.0"):
         restored.__setstate__(old_state)
 
 
