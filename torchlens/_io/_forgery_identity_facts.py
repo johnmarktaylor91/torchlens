@@ -239,3 +239,17 @@ def _validate_forward_peak_memory_reason(trace: Trace) -> None:
                 "hand-edit the forward peak-memory fields"
             ),
         )
+
+
+def _validate_identity_facts(trace: Trace) -> None:
+    """Run the Trace identity-fact validators in their contract order.
+
+    Episode-step stamps, the TL-authored root flag, the root entry point,
+    then the forward-peak reason pair (the one consumer is
+    ``validate_persisted_forgery_surfaces``).
+    """
+
+    _validate_episode_step_stamps(trace)
+    _validate_tl_authored_root(trace)
+    _validate_root_entry_point(trace)
+    _validate_forward_peak_memory_reason(trace)
