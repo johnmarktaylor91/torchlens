@@ -65,7 +65,7 @@ def collect_summary_facts(
     from .._capture_honesty import honesty_banner_lines
     from ._compute_truth import unknown_op_ledger
     from ._factcore import factcore
-    from ._health import health_facts
+    from ._health import health_facts, nonfinite_option_hint
 
     core = factcore(trace)
     health = health_facts(trace)
@@ -102,6 +102,7 @@ def collect_summary_facts(
         capture_verified=getattr(trace, "capture_verified", None),
         structure_only=bool(getattr(trace, "structure_only", False)),
         health_verdict=health.verdict,
+        health_hint=nonfinite_option_hint(trace, health.verdict),
         params_total=core.params.total,
         params_per_path_total=core.params.per_path_total,
         params_trainable=core.params.trainable,

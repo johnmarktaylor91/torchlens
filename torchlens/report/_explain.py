@@ -747,6 +747,7 @@ def _anomaly_lines(log: Any) -> list[str]:
                 "- NOT-CHECKED overall: no non-finite values in the examined outputs"
                 f"{coverage_gap_note(log, kind='saved')} (basis: {basis})."
             ),
+            *_track_nonfinite_hint_lines(log),
             "- Not audited: judgments (severity, follow-ups) come from tl.audit(trace).",
         ]
     return [
@@ -758,7 +759,17 @@ def _anomaly_lines(log: Any) -> list[str]:
             "- To scan retained payloads (payload_scan cost): "
             "tl.report.health_facts(trace) or trace.nonfinite_ops."
         ),
+        *_track_nonfinite_hint_lines(log),
     ]
+
+
+def _track_nonfinite_hint_lines(log: Any) -> list[str]:
+    """The forks.7 partial-coverage hint line, while track_nonfinite is off."""
+
+    from ._health import nonfinite_option_hint
+
+    hint = nonfinite_option_hint(log, "not_checked")
+    return [f"- To check every op as it runs: {hint}."] if hint else []
 
 
 def _intervention_lines(log: Any) -> list[str]:
