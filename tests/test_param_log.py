@@ -14,6 +14,12 @@ from torchlens import trace as trace_fn
 from torchlens._errors import AmbiguousOpLookupError
 from torchlens.types import Param
 from torchlens.visualization import show_model_graph
+from torchlens.visualization.themes import resolve_theme
+
+#: Parameter fills as the DEFAULT skin renders them (Okabe-Ito since R2-29).
+_TRAINABLE = resolve_theme("torchlens").semantic_palette["params_trainable"]
+_FROZEN = resolve_theme("torchlens").semantic_palette["params_frozen"]
+_MIXED = resolve_theme("torchlens").semantic_palette["params_gradient"]
 
 VIS_OUTPUT_DIR = opj(os.environ["TORCHLENS_TEST_OUTPUTS_DIR"], "visualizations")
 
@@ -619,11 +625,11 @@ class TestVisualizationParams:
 
     def test_trainable_bg_color(self):
         dot, mh = self._get_dot_source(_make_simple_model(), _simple_input())
-        assert "#D9D9D9" in dot  # TRAINABLE_PARAMS_BG_COLOR
+        assert _TRAINABLE in dot
 
     def test_frozen_bg_color(self):
         dot, mh = self._get_dot_source(_make_all_frozen(), _simple_input())
-        assert "#B0B0B0" in dot  # FROZEN_PARAMS_BG_COLOR
+        assert _FROZEN in dot
 
     def test_mixed_grad_fill(self):
         """When a layer has both trainable and frozen params, use grad fill."""
@@ -633,7 +639,7 @@ class TestVisualizationParams:
         model[0].weight.requires_grad = False
         dot, mh = self._get_dot_source(model, _simple_input())
         # Gradient fill uses "color1:color2" syntax
-        assert "#D9D9D9:#B0B0B0" in dot
+        assert _MIXED in dot
         assert "gradangle" in dot
 
     def test_graph_caption_all_trainable(self):
@@ -653,12 +659,12 @@ class TestVisualizationParams:
     def test_collapsed_module_trainable_color(self):
         """Collapsed module with all trainable params should use trainable color."""
         dot, mh = self._get_dot_source(_make_simple_model(), _simple_input(), vis_call_depth=1)
-        assert "#D9D9D9" in dot
+        assert _TRAINABLE in dot
 
     def test_collapsed_module_frozen_color(self):
         """Collapsed module with all frozen params should use frozen color."""
         dot, mh = self._get_dot_source(_make_all_frozen(), _simple_input(), vis_call_depth=1)
-        assert "#B0B0B0" in dot
+        assert _FROZEN in dot
 
     def test_collapsed_module_mixed_grad(self):
         """Collapsed module with mixed frozen/trainable should use grad fill."""
@@ -666,7 +672,7 @@ class TestVisualizationParams:
         model[0].weight.requires_grad = False
         dot, mh = self._get_dot_source(model, _simple_input(), vis_call_depth=1)
         # The collapsed "0" module has mixed params
-        assert "#D9D9D9:#B0B0B0" in dot or "#D9D9D9" in dot  # at least one color appears
+        assert _MIXED in dot or _TRAINABLE in dot  # at least one color appears
 
     def test_collapsed_module_param_detail(self):
         """Collapsed module should show trainable/frozen param breakdown."""
