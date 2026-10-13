@@ -239,9 +239,9 @@ def _stub_xarray(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
             self,
             data: Any,
             dims: tuple[str, ...],
-            coords: dict[str, Any],
             name: str,
             attrs: dict[str, Any],
+            coords: dict[str, Any] | None = None,
         ) -> None:
             self.data = data
             self.dims = dims
@@ -250,7 +250,17 @@ def _stub_xarray(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
             self.attrs = attrs
             captured.append(self)
 
-    monkeypatch.setitem(sys.modules, "xarray", SimpleNamespace(DataArray=_DataArray))
+    class _Dataset:
+        def __init__(self, data_vars: dict[str, Any], attrs: dict[str, Any]) -> None:
+            self.data_vars = data_vars
+            self.attrs = attrs
+
+        def __getitem__(self, name: str) -> Any:
+            return self.data_vars[name]
+
+    monkeypatch.setitem(
+        sys.modules, "xarray", SimpleNamespace(DataArray=_DataArray, Dataset=_Dataset)
+    )
     return captured
 
 
@@ -269,9 +279,12 @@ def test_xarray_flattens_scalar_vector_and_matrix_outs(
         ]
     )
 
-    array = tl.export.xarray(log)
+    dataset = tl.export.xarray(log)
+    array = dataset["out"]
 
     assert array is captured[0]
+    assert list(dataset.data_vars) == ["out"]
+    assert dataset.attrs["module_state_variables"] == []
     assert array.dims == ("presentation", "neuroid")
     assert array.data.shape == (1, 4)
     assert list(array.data[0]) == [2.5, 1.0, 2.0, 3.0]
@@ -285,9 +298,44 @@ def test_xarray_flattens_scalar_vector_and_matrix_outs(
             SimpleNamespace(out=torch.zeros(2, 2, 2), layer_label="b_1_1"),
         ]
     )
-    array_2 = tl.export.xarray(batched)
+    array_2 = tl.export.xarray(batched)["out"]
     assert array_2.data.shape == (2, 7)
     assert array_2.coords["presentation"] == [0, 1]
+
+
+def test_xarray_exports_buffers_as_module_state_variables(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A buffer layer is its own variable: own dims, no presentation axis, marked."""
+
+    _stub_xarray(monkeypatch)
+    log = SimpleNamespace(
+        layer_list=[
+            SimpleNamespace(
+                out=torch.arange(3.0), layer_label="buffer_1", is_buffer=True, address="bn.mean"
+            ),
+            SimpleNamespace(
+                out=torch.tensor(7), layer_label="buffer_2", is_buffer=True, address="bn.count"
+            ),
+            SimpleNamespace(out=torch.ones(2, 3), layer_label="relu_1_1"),
+        ]
+    )
+
+    dataset = tl.export.xarray(log)
+
+    assert list(dataset.data_vars) == ["out", "buffer_1", "buffer_2"]
+    assert dataset.attrs["module_state_variables"] == ["buffer_1", "buffer_2"]
+    assert dataset["out"].data.shape == (2, 3)
+    assert dataset["out"].coords["layer"] == ("neuroid", ["relu_1_1"] * 3)
+    vector, scalar = dataset["buffer_1"], dataset["buffer_2"]
+    assert vector.dims == ("buffer_1_dim_0",)
+    assert list(vector.data) == [0.0, 1.0, 2.0]
+    assert scalar.dims == ()
+    assert int(scalar.data) == 7
+    for variable, address in ((vector, "bn.mean"), (scalar, "bn.count")):
+        assert variable.attrs["torchlens_kind"] == "module_state"
+        assert variable.attrs["buffer_address"] == address
+        assert variable.attrs["layer_label"] == variable.name
 
 
 @pytest.mark.smoke

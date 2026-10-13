@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
 from torch import nn
@@ -12,6 +12,9 @@ from ._errors import InvalidArgumentError
 from .errors._base import ConfigurationError
 from .utils._torch_compat import get_dynamo_optimized_module_type
 from .utils._torch_symbols import torch_attr
+
+if TYPE_CHECKING:
+    from .options import CaptureOptions
 
 _NON_GRAD_DTYPES = {
     torch.int8,
@@ -44,6 +47,37 @@ def autograd_disabled_at_entry() -> bool:
     """
 
     return not torch.is_grad_enabled() or torch.is_inference_mode_enabled()
+
+
+def effective_inference_only(capture_options: CaptureOptions, *, backward_requested: bool) -> bool:
+    """Resolve ``inference_only`` for one torch capture (AGT-2132).
+
+    An explicit value always wins. Otherwise a capture entered under
+    ``torch.no_grad()`` or ``torch.inference_mode()`` builds no autograd graph,
+    so it implies ``inference_only=True`` unless a backward-related option asks
+    for one. The Trace then reports ``inference_only=True`` and a later
+    ``log_backward`` refusal names the cause. An implied value is provisional:
+    the capture clears it after the forward if an output still carries
+    autograd history (``torch.enable_grad()`` inside the forward), see
+    :func:`torchlens.capture.stop.cleared_inference_only_directive`.
+
+    Parameters
+    ----------
+    capture_options:
+        Resolved capture options for this call.
+    backward_requested:
+        Whether ``backward_ready``, ``save_grads`` or ``intervention_ready``
+        is in force.
+
+    Returns
+    -------
+    bool
+        The ``inference_only`` value the capture runs with.
+    """
+
+    if capture_options.is_field_explicit("inference_only"):
+        return bool(capture_options.inference_only)
+    return not backward_requested and autograd_disabled_at_entry()
 
 
 class TrainingModeConfigError(ConfigurationError, ValueError):

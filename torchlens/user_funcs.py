@@ -103,7 +103,7 @@ from ._trace_selector_helpers import (
 from ._trace_state import TraceState
 from ._training_validation import (
     TrainingModeConfigError,
-    autograd_disabled_at_entry,
+    effective_inference_only,
     validate_training_compatibility,
 )
 from .autoroute._builtin_output import (
@@ -2854,37 +2854,6 @@ def _refuse_non_torch_episode(public_trace_kwargs: dict[str, Any], resolved_spec
             )
 
 
-def _effective_inference_only(capture_options: CaptureOptions, *, backward_requested: bool) -> bool:
-    """Resolve ``inference_only`` for one torch capture (AGT-2132).
-
-    An explicit value always wins. Otherwise a capture entered under
-    ``torch.no_grad()`` or ``torch.inference_mode()`` builds no autograd graph,
-    so it implies ``inference_only=True`` unless a backward-related option asks
-    for one. The Trace then reports ``inference_only=True`` and a later
-    ``log_backward`` refusal names the cause. An implied value is provisional:
-    the capture clears it after the forward if an output still carries
-    autograd history (``torch.enable_grad()`` inside the forward), see
-    :func:`torchlens.capture.stop.cleared_inference_only_directive`.
-
-    Parameters
-    ----------
-    capture_options:
-        Resolved capture options for this call.
-    backward_requested:
-        Whether ``backward_ready``, ``save_grads`` or ``intervention_ready``
-        is in force.
-
-    Returns
-    -------
-    bool
-        The ``inference_only`` value the capture runs with.
-    """
-
-    if capture_options.is_field_explicit("inference_only"):
-        return bool(capture_options.inference_only)
-    return not backward_requested and autograd_disabled_at_entry()
-
-
 def _model_type_remedy(model: Any) -> str:
     """Remedy for ``model_type_unsupported``; export products get their own (U35.2)."""
 
@@ -3465,7 +3434,7 @@ def _trace_torch_model(
         inference_only=capture_options.inference_only,
         inference_only_conflicts=tuple(inference_only_conflicts),
     )
-    inference_only_value = _effective_inference_only(
+    inference_only_value = effective_inference_only(
         capture_options,
         backward_requested=bool(train_mode_value or should_save_grads or intervention_ready),
     )

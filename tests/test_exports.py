@@ -408,7 +408,8 @@ def test_xarray_export_has_neuroidassembly_shape(export_log: Any) -> None:
     """xarray export should expose presentation and neuroid dimensions."""
     pytest.importorskip("xarray")
 
-    assembly = tl.export.xarray(export_log)
+    dataset = tl.export.xarray(export_log)
+    assembly = dataset["out"]
 
     assert assembly.dims == ("presentation", "neuroid")
     assert "layer" in assembly.coords
