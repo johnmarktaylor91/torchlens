@@ -32,8 +32,10 @@ import torch
 from .._data_substrate import ExtractionArtifactError, read_trusted_rows
 from .._errors import InvalidArgumentError
 from ..utils._torch_symbols import torch_attr
+from .harvest_schema import HARVEST_BLOCK_KEY, validate_harvest_block
 from .ragged import RaggedBatch, to_padded
 from .shards import read_shard
+from .token_store import TokenRows, concat_token_rows, shard_token_rows
 
 __tl_layer__ = "L5"
 
@@ -926,6 +928,82 @@ class ExtractionReader:
         return out
 
     # ------------------------------------------------------------------
+    # Token rows (R2-08 token SAE store; DOCUMENTED-UNSTABLE)
+    # ------------------------------------------------------------------
+
+    def token_batch(self, shard_index: int, keys: list[str] | None = None) -> TokenRows:
+        """Read ONE shard flattened to token rows (bounded memory).
+
+        A trimmed key's packed values are its token rows; a dense key
+        qualifies only when the shard ledgered a mask with every row
+        unpadded at the key's width. Every selected key must share one
+        token axis.
+
+        Parameters
+        ----------
+        shard_index:
+            Ledger-order shard position.
+        keys:
+            Optional output-key subset (default: every key).
+
+        Returns
+        -------
+        TokenRows
+            The shard's aligned token rows, stimulus rows, and positions.
+        """
+
+        payload = self.batch(shard_index, keys=keys)
+        row = self._rows[shard_index]
+        return shard_token_rows(payload, row.get("row_geometry"), int(row["row_start"]))
+
+    def token_rows(
+        self, keys: list[str] | None = None, *, max_bytes: int | None = None
+    ) -> TokenRows:
+        """Materialize every shard as aligned token rows, in ledger order.
+
+        Parameters
+        ----------
+        keys:
+            Optional output-key subset (default: every key).
+        max_bytes:
+            Optional explicit budget override (same guard as
+            :meth:`materialize`).
+
+        Returns
+        -------
+        TokenRows
+            One row per stored token across the artifact.
+
+        Raises
+        ------
+        torchlens.errors.InvalidArgumentError
+            ``extraction_eager_budget_exceeded`` over the byte budget, and
+            the :meth:`token_batch` refusals.
+        """
+
+        needed = self.requested_bytes(keys)
+        budget = max_bytes if max_bytes is not None else _default_byte_budget()
+        if needed > budget:
+            raise InvalidArgumentError(
+                f"Reading token rows of {sorted(keys) if keys else 'all keys'} needs "
+                f"exactly {needed:,} bytes, over the {budget:,}-byte budget.",
+                code="extraction_eager_budget_exceeded",
+                remedy=(
+                    "stream shards with reader.token_batch(i) or "
+                    "shuffled_batches(..., tokens=True), request fewer keys, "
+                    "or override explicitly with max_bytes="
+                ),
+                requested_bytes=needed,
+                budget_bytes=budget,
+            )
+        if keys is not None:
+            for key in keys:
+                self.logical_shape(key)  # refuses unknown keys typed
+        return concat_token_rows(
+            [self.token_batch(index, keys=keys) for index in range(len(self._rows))]
+        )
+
+    # ------------------------------------------------------------------
     # Trusted-prefix monitoring
     # ------------------------------------------------------------------
 
@@ -1186,6 +1264,10 @@ def open_extraction(
         )
     rows = read_trusted_rows(container)
     check_layout_coherence(manifest, rows)
+    if HARVEST_BLOCK_KEY in manifest:
+        # R2-08: the counterfactual record parses fail-closed; a torn or
+        # foreign block never half-loads (absent = written before the schema).
+        validate_harvest_block(manifest[HARVEST_BLOCK_KEY])
     if manifest.get("status") == "complete":
         n_ledgered = (manifest.get("totals") or {}).get("n_shards")
         if len(rows) != n_ledgered:

@@ -219,6 +219,33 @@ def inspect_tlspec(path: str | Path) -> dict[str, Any]:
     raise FileNotFoundError(f"No TorchLens .tlspec manifest found at {tlspec_path}.")
 
 
+def read_safetensors(path: str | Path) -> Any:
+    """Read a ``tl.export.safetensors`` Trace export back (R2-08; DOCUMENTED-UNSTABLE).
+
+    The file holds no pickle, so reading it never executes code. Returns a
+    read-only record: ``header`` (schema, tlspec version, writer-contract
+    digest, TorchLens version, capture-honesty facts), ``trace_fields`` and
+    ``op_fields`` (the exported writer-contract KEEP fields, decoded to their
+    original Python values), ``tensors`` (``op label -> {payload field:
+    tensor}``, bit-equal to the exported payloads), and ``omitted`` (KEEP
+    fields that had no exact JSON encoding).
+
+    Parameters
+    ----------
+    path:
+        File written by :func:`torchlens.export.safetensors`.
+
+    Returns
+    -------
+    Any
+        The read-only export record.
+    """
+
+    from .._extraction.trace_safetensors import read_trace_safetensors
+
+    return read_trace_safetensors(path)
+
+
 def load_intervention_spec(
     path: str | Path,
     *,
@@ -303,6 +330,7 @@ __all__ = [
     "list_sidecar_families",
     "load_intervention_spec",
     "log_model_metadata",
+    "read_safetensors",
     "read_sidecar",
     "register_sidecar_family",
     "rehydrate_nested",

@@ -1102,6 +1102,20 @@
   (typed refusals `extraction_resume_*` / `extraction_manifest_invalid`);
   `torchlens.dataset_extraction.load_extraction` reads the artifact back with metadata.
   Crash-safety is pinned by a hard-process-death test.
+- R2-08 EXTRACTION ADDITIONS (every spelling DOCUMENTED-UNSTABLE):
+  `tl.extract_dataset(model, x, layers, intervene=tl.when(tl.module("fc2"), tl.zero_ablate()))`
+  stores INTERVENED activations: batch zero freezes the fired sites, a batch firing nowhere
+  or elsewhere refuses (`extraction_intervention_no_fire` / `_site_drift`), disk mode writes
+  the `tl_counterfactual_harvest_v1` block plus per-shard fire receipts, and the intervention
+  identity rides the signature's `model_mode` value (module and op-type address classes run;
+  finer ones refuse `harvest_address_class_ungated`; helpers must be `batch_independent`).
+  `store_input_ids=True` stores token ids as the ordinary `input_ids` key (trimmed like the
+  token-axis activations); `open_extraction(d).token_rows()` / `.token_batch(i)` return
+  `TokenRows` (one row per token, with `stimulus_row` and `position`), and
+  `shuffled_batches(reader, n, buffer_shards=k, tokens=True)` is the cross-shard mixing buffer.
+  `tl.export.safetensors(trace, path)` writes one pickle-free safetensors file (payload
+  tensors plus a JSON header of the writer contract's KEEP fields, honesty facts and the
+  contract digest); `tl.io.read_safetensors(path)` reads it back bit-equal.
 - BRAINPIPE (F20; every spelling DOCUMENTED-UNSTABLE): `torchlens.brainpipe` is the
   memory-planned whole-model extraction planner over the extraction artifact --
   `extraction_plan(model, probe_inputs, sites=, n_stimuli=, batch_size=, transform=,
@@ -1148,8 +1162,14 @@
   silently; its explicit opt-in is
   `CaptureOptions(transform=tl.preprocessing.imagenet_default())`); `diagnose()` is the opt-in tensor arm whose
   outcome vocabulary HAS NO match member. `ResolvedPreprocessing.status` derives the
-  closed authority standing (authoritative/unverified_fallback/unknown); plain
-  `tl.trace(transform=)` captures stamp honest `user_transform` provenance.
+  closed authority standing (authoritative/unverified_fallback/unknown); a
+  `tl.trace(transform=)` capture whose transform IS a recognized authority (the object
+  `weights.transforms()` returns, an HF image processor) stamps that authority's own
+  record, any other transform honest `user_transform` provenance; `attach_authority`
+  records an authority a model cannot carry (torchvision weights), discovery also reads
+  an open_clip `visual.preprocess_cfg`, and `check_card()` is the ON-REQUEST verifier
+  (recorded preprocessing against the model's card, warning
+  `preprocessing_card_mismatch`; nothing runs it automatically).
   `torchlens.inventory.list_sites` is the two-rung site inventory (free module
   listing; one disclosed-cost metadata-only forward) whose emitted selectors are
   CERTIFIED against the engine's matcher at emission -- every selector extracts keyed

@@ -2525,6 +2525,7 @@ package-docstrings	torchlens/_trace_core/relation_views.py	3.5,
 package-docstrings	torchlens/_trace_selector_helpers.py	1_2
 package-docstrings	torchlens/_trace_selector_helpers.py	256
 package-docstrings	torchlens/_trace_state.py	3.3,
+package-docstrings	torchlens/_training_validation.py	2132
 package-docstrings	torchlens/_transport.py	35
 package-docstrings	torchlens/_transport.py	35,
 package-docstrings	torchlens/_user_public_impls.py	1.0
@@ -2949,7 +2950,6 @@ package-docstrings	torchlens/bridge/brain_score.py	4.3
 package-docstrings	torchlens/bridge/gradcam.py	17_66
 package-docstrings	torchlens/bridge/gradcam.py	18
 package-docstrings	torchlens/bridge/hf.py	02.4
-package-docstrings	torchlens/bridge/huggingface.py	62
 package-docstrings	torchlens/bridge/lit/__init__.py	10
 package-docstrings	torchlens/bridge/lit/__init__.py	11
 package-docstrings	torchlens/bridge/lit/__init__.py	11,
@@ -4418,7 +4418,6 @@ package-docstrings	torchlens/user_funcs.py	15
 package-docstrings	torchlens/user_funcs.py	15,
 package-docstrings	torchlens/user_funcs.py	17
 package-docstrings	torchlens/user_funcs.py	1_1
-package-docstrings	torchlens/user_funcs.py	2132
 package-docstrings	torchlens/user_funcs.py	256
 package-docstrings	torchlens/user_funcs.py	28
 package-docstrings	torchlens/user_funcs.py	35.2

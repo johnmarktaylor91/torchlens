@@ -693,6 +693,29 @@ one exact `other_neurons` row.
   a model output resolves to its own output op, not the model-output alias. A relative name
   that ends several module addresses refuses `ambiguous_op_lookup` and lists them; a
   `":<call>"` suffix selects one call of a reused module.
+**Intervened extraction** *(spellings documented-unstable)*
+: `tl.extract_dataset(..., intervene=spec)` takes a `tl.when(selector, helper)` spec and
+  captures every batch with it armed, so the stored rows are the intervened activations.
+  Batch zero freezes the structural sites the spec fired at; a later batch that fires
+  nowhere refuses `extraction_intervention_no_fire` and one that fires elsewhere refuses
+  `extraction_intervention_site_drift`. Module (`tl.module`, `tl.in_module`) and op-type
+  (`tl.func`) addressed specs run; finer address classes refuse
+  `harvest_address_class_ungated`, and every helper must declare `batch_independent=True`.
+  Disk mode records the counterfactual in the manifest's `tl_counterfactual_harvest_v1`
+  block (policy, engine `live_hook`, address class, site keys, fire receipt digest),
+  ledgers each shard's fire receipt, and puts the intervention identity in the resume
+  signature; a clean run declares `policy="none"`.
+
+**Token store** *(spellings documented-unstable)*
+: `tl.extract_dataset(..., store_input_ids=True)` stores each batch's token ids as the
+  ordinary `input_ids` key, trimmed by the batch mask under `ragged="trim"` like the
+  token-axis activations. `ExtractionReader.token_batch(shard_index, keys=None)` and
+  `ExtractionReader.token_rows(keys=None, *, max_bytes=None)` read stored keys one row per
+  token as a `torchlens.dataset_extraction.TokenRows` (`values` per key, `stimulus_row`,
+  `position`, `n_tokens`); padding is never a token row.
+  `torchlens.dataset_extraction.shuffled_batches(reader, batch_size, *, seed=0,
+  keys=None, buffer_shards=1, tokens=False)` shuffles across `buffer_shards` shards at
+  once (the cross-shard mixing buffer) and yields token rows when `tokens=True`.
 
 **Observers**
 : `tl.tap` creates a tap observer for a site; `tl.span` records a named observer span
@@ -781,6 +804,16 @@ one exact `other_neurons` row.
   name without `replace=True` refuses `appliance_name_taken`; a malformed name or factory
   refuses `appliance_registration_invalid`. The word clashes with `tl.semantic.using(*recipes)`
   (a recipe scope); the naming review settles both.
+**Safetensors Trace export** *(spellings documented-unstable)*
+: `tl.export.safetensors(trace, path)` writes one pickle-free `.safetensors` file: every
+  tensor-valued op payload (`out`, `transformed_out`, `grad`, `transformed_grad`) as a
+  tensor entry, and a JSON header document (schema `tl_trace_safetensors_v1`) holding the
+  tlspec version, the writer-contract digest, the capture-honesty facts, and, for the
+  `trace` record and every `op` record, each writer-contract KEEP field with an exact JSON
+  encoding (the rest listed under `omitted` with their value types).
+  `tl.io.read_safetensors(path)` reads it back as a read-only record (`header`,
+  `trace_fields`, `op_fields`, `tensors`, `omitted`); payloads are bit-equal, complex
+  included.
 
 **Streaming statistics**
 : `tl.stats` is the streaming-statistics namespace: constant-memory accumulators
@@ -1432,6 +1465,35 @@ shim owed*
   `preprocessing_unresolved` instead of receiving this recipe silently. The
   opted-in capture's `input_preprocessor` keeps `source="imagenet_default"`,
   `verified=False`, status `unverified_fallback`: never an authority.
+
+**torchlens.preprocessing.attach_authority(model, authority)** — *unstable — no deprecation shim owed*
+: Records a model's preprocessing authority on the model so discovery finds
+  it: a torchvision model built with `weights=` keeps no handle to its
+  weights, and the preset cannot be inferred from the class. Afterwards
+  `resolve(model=model)`, PIL-input autorouting and `check_card` resolve the
+  attached authority as model metadata. Accepts any recognized authority;
+  an opaque callable refuses `preprocessing_attach_opaque`. Returns the model.
+
+**torchlens.preprocessing.check_card(trace_or_record, *, model=None, authority=None, offline=None)** — *unstable — no deprecation shim owed*
+: The on-request preprocessing verifier: compares the preprocessing a capture
+  recorded (`Trace.input_preprocessor`) with the model's known card (HF image
+  processor, torchvision weights, timm or open_clip config, or a named
+  `authority=`), returns the field-level `PreprocessingAudit`, and warns
+  `preprocessing_card_mismatch` when a field disagrees. Nothing runs it
+  automatically. An opaque record compares as unknown, never as a match.
+
+**torchlens.bridge.huggingface.from_hub(repo_id, *, path_in_repo, revision, token, api)** — *unstable — no deprecation shim owed*
+: Downloads the gzipped `.tlspec` tar that `push_to_hub` uploads, checks
+  every tar member (no links, absolute or parent-escaping names, one
+  top-level bundle), and loads it eagerly onto the CPU through `tl.load`'s default-deny
+  loader. `push_to_hub` accepts only a `Trace` or `Bundle` and never uploads
+  a pickle (`hub_push_artifact_unsupported`); its default `path_in_repo` is
+  `torchlens_artifact.tar.gz`.
+
+**call_kwargs (torchlens.bridge.gradcam.cam)** — *unstable — no deprecation shim owed*
+: Mapping forwarded unchanged to the pytorch-grad-cam call (`aug_smooth`,
+  `eigen_smooth`); an option given both here and as a keyword refuses
+  `bridge_gradcam_call_option_conflict`.
 
 **SummaryCallback (torchlens.callbacks.lightning)** — *unstable — no deprecation shim owed*
 : Lightning callback printing `tl.summary` once per fit. Sample: the

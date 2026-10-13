@@ -26,6 +26,12 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from ._attached import (
+    adapt_torchvision_preset,
+    discover_attached,
+    discover_open_clip,
+    probe_torchvision_preset,
+)
 from ._records import DeclaredPreprocessing, Resolution, unknown_resolution
 
 __tl_layer__ = "L5"
@@ -563,6 +569,7 @@ def _adapt_explicit_mapping(authority: Mapping[str, Any]) -> Resolution:
 #: the generic explicit mapping; Weights enums before processors.
 _BUILTIN_ADAPTERS: tuple[AuthorityAdapter, ...] = (
     AuthorityAdapter("torchvision_weights", _probe_torchvision_weights, _adapt_torchvision_weights),
+    AuthorityAdapter("torchvision_preset", probe_torchvision_preset, adapt_torchvision_preset),
     AuthorityAdapter("hf_image_processor", _probe_hf_processor, _adapt_hf_processor),
     AuthorityAdapter("timm_config", _probe_timm_config, _adapt_timm_config),
     AuthorityAdapter("compose_pipeline", _probe_compose, _adapt_compose),
@@ -631,8 +638,10 @@ def _offline_policy(offline: bool | None) -> tuple[bool, str]:
 def _discover_from_model(model: Any, offline: bool | None) -> Resolution:
     """Auto-discover an authority from model-attached metadata (memo D8).
 
-    Order: no-network tiers first (a planted torchvision weights handle, a
-    timm ``default_cfg``), then the network-gated HF processor fetch. A fetch
+    Order: no-network tiers first (an authority recorded by
+    ``attach_authority``, a planted torchvision weights handle, a timm
+    ``default_cfg``, an open_clip ``visual.preprocess_cfg``), then the
+    network-gated HF processor fetch. A fetch
     failure yields ``unknown`` with the fetch disclosure -- never a silent
     fall-through to a TorchLens-authored recipe.
 
@@ -649,6 +658,9 @@ def _discover_from_model(model: Any, offline: bool | None) -> Resolution:
         Discovered authority or the honest unknown.
     """
 
+    attached = discover_attached(model)
+    if attached is not None:
+        return attached
     weights = getattr(model, "_torchlens_weights", None)
     if weights is not None and _probe_torchvision_weights(weights):
         resolution = _adapt_torchvision_weights(weights)
@@ -657,6 +669,9 @@ def _discover_from_model(model: Any, offline: bool | None) -> Resolution:
         timm_resolution = _discover_timm(model)
         if timm_resolution is not None:
             return timm_resolution
+    open_clip_resolution = discover_open_clip(model)
+    if open_clip_resolution is not None:
+        return open_clip_resolution
     return _discover_hf(model, offline)
 
 

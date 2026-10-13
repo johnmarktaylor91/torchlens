@@ -50,6 +50,12 @@ from .envelope import (
     default_collate,
     envelope_input_digest,
 )
+from .intervened import (
+    InterventionPlan,
+    attest_batch_receipt,
+    batch_receipt,
+    final_harvest_block,
+)
 from .pool import apply_pool
 from .ragged import (
     RaggedBatch,
@@ -63,6 +69,7 @@ from .selector_plan import (
     freeze_selector_plan,
 )
 from .shards import shard_extension, write_shard
+from .token_store import INPUT_IDS_KEY, envelope_input_ids, refuse_input_ids_collision
 
 __tl_layer__ = "L5"
 
@@ -133,6 +140,13 @@ class _RunPlan:
     input_opaque:
         Whether the input path runs an opaque (identification-only)
         callable; opaque input runs refuse resume continuation.
+    intervention:
+        The resolved ``intervene=`` spec (R2-08), or ``None`` for a clean
+        run; intervened runs capture through the live intervention door.
+    store_input_ids:
+        Whether each batch's token ids are stored as the ordinary
+        ``input_ids`` key (R2-08 token store), bypassing pool, transform,
+        and save-dtype casts.
     """
 
     model: nn.Module
@@ -162,6 +176,8 @@ class _RunPlan:
     input_transform: Any = None
     input_block: dict[str, Any] | None = None
     input_opaque: bool = False
+    intervention: InterventionPlan | None = None
+    store_input_ids: bool = False
 
     @property
     def resume_verifiable(self) -> bool:
@@ -201,6 +217,8 @@ def _pipeline_for(plan: _RunPlan, key: str) -> TransformPipeline | None:
         The chain, or ``None``.
     """
 
+    if plan.store_input_ids and key == INPUT_IDS_KEY:
+        return None
     if key in plan.pipelines:
         return plan.pipelines[key]
     return plan.selector_pipeline
@@ -780,6 +798,20 @@ def _capture_outputs(
             ),
             None,
         )
+    if plan.intervention is not None:
+        # R2-08: the intervened capture runs the live intervention door and
+        # ledgers its fire receipt; batch zero freezes the fired sites.
+        trace = _tl.trace(
+            plan.model,
+            envelope.args,
+            dict(envelope.kwargs),
+            capture=_tl.options.CaptureOptions(layers_to_save=list(plan.layer_plan.values())),
+            intervene=plan.intervention.spec,
+        )
+        receipt = batch_receipt(trace)
+        attest_batch_receipt(receipt, run_state, batch_index)
+        run_state["current_receipt"] = receipt
+        return _resolve_trace_outputs(plan, trace)
     if envelope.kwargs:
         trace = _tl.trace(
             plan.model,
@@ -787,26 +819,54 @@ def _capture_outputs(
             dict(envelope.kwargs),
             capture=_tl.options.CaptureOptions(layers_to_save=list(plan.layer_plan.values())),
         )
-        outputs: dict[str, torch.Tensor] = {}
-        views: dict[str, Any] = {}
-        if plan.layers_kind == "mapping":
-            for label, pattern in plan.layer_plan.items():
-                view = trace[pattern]
-                outputs[label] = view.out
-                views[label] = view
-            return outputs, views
-        for pattern in plan.layer_plan.values():
-            matches = _tl._matching_saved_layer_labels(trace, pattern)
-            if not matches:
-                raise ValueError(f"Layer lookup {pattern!r} did not resolve to a saved layer.")
-            for match in matches:
-                view = trace[match]
-                outputs[match] = view.out
-                views[match] = view
-        return outputs, views
+        return _resolve_trace_outputs(plan, trace)
     _trace, outputs, views = _tl._extract_layers_with_trace(
         plan.model, envelope.first_input(), plan.layers
     )
+    return outputs, views
+
+
+def _resolve_trace_outputs(
+    plan: _RunPlan, trace: Any
+) -> tuple[dict[str, torch.Tensor], dict[str, Any]]:
+    """Resolve the plan's layer lookups against one completed capture.
+
+    Parameters
+    ----------
+    plan:
+        Resolved run configuration (string or mapping ``layers=``).
+    trace:
+        The batch's capture.
+
+    Returns
+    -------
+    tuple[dict[str, torch.Tensor], dict[str, Any]]
+        Saved outs by output key and the resolved ``Layer`` views.
+
+    Raises
+    ------
+    ValueError
+        If a sequence lookup resolves to no saved layer.
+    """
+
+    import torchlens as _tl
+
+    outputs: dict[str, torch.Tensor] = {}
+    views: dict[str, Any] = {}
+    if plan.layers_kind == "mapping":
+        for label, pattern in plan.layer_plan.items():
+            view = trace[pattern]
+            outputs[label] = view.out
+            views[label] = view
+        return outputs, views
+    for pattern in plan.layer_plan.values():
+        matches = _tl._matching_saved_layer_labels(trace, pattern)
+        if not matches:
+            raise ValueError(f"Layer lookup {pattern!r} did not resolve to a saved layer.")
+        for match in matches:
+            view = trace[match]
+            outputs[match] = view.out
+            views[match] = view
     return outputs, views
 
 
@@ -1533,7 +1593,70 @@ def _process_one_batch(
         collate_disclosure=envelope.disclosure,
     )
     processed, key_facts = _store_batch(plan, batch_outputs, context, run_state)
+    if plan.store_input_ids:
+        refuse_input_ids_collision(batch_outputs)
+        ids = envelope_input_ids(envelope, batch_index)
+        batch_outputs = {**batch_outputs, INPUT_IDS_KEY: ids}
+        processed[INPUT_IDS_KEY], key_facts[INPUT_IDS_KEY] = _store_input_ids(
+            plan, ids, context, run_state
+        )
     return envelope, context, batch_outputs, layer_views, processed, key_facts, input_digest
+
+
+def _store_input_ids(
+    plan: _RunPlan,
+    ids: torch.Tensor,
+    context: BatchContext,
+    run_state: dict[str, Any],
+) -> tuple[torch.Tensor | RaggedBatch, dict[str, Any]]:
+    """Store one batch's token ids as the ordinary ``input_ids`` key.
+
+    The ids bypass pool, transform, and save-dtype casts (they are the
+    stimulus, not an activation) but ride the same D4 ragged gate as every
+    other key: under ``ragged="trim"`` they are trimmed by the batch mask
+    exactly as the token-axis activations are, so stored token ``j`` of
+    stimulus ``i`` is the id whose activation sits at the same position.
+
+    Parameters
+    ----------
+    plan:
+        Resolved run configuration.
+    ids:
+        ``[rows, width]`` integer token ids from the batch envelope.
+    context:
+        This batch's context.
+    run_state:
+        Mutable per-run state (frozen shapes, trimmed-key set).
+
+    Returns
+    -------
+    tuple[torch.Tensor | RaggedBatch, dict[str, Any]]
+        The stored payload and its per-key ledger facts.
+    """
+
+    trimmed = _apply_ragged_gate(plan, INPUT_IDS_KEY, ids, run_state)
+    geometry = run_state.get("current_geometry")
+    if trimmed and geometry is not None:
+        carrier = trim_batch(INPUT_IDS_KEY, ids, cast("dict[str, Any]", geometry))
+        values = carrier.values.detach().cpu().contiguous()
+        facts: dict[str, Any] = {
+            "layout": "trimmed",
+            "per_stimulus_shape": [None],
+            "dtype": str(values.dtype),
+            "n_values": int(values.shape[0]),
+        }
+        if plan.checksums != "none":
+            facts["value_reduction"] = value_reduction(INPUT_IDS_KEY, carrier.values)
+        stored: torch.Tensor | RaggedBatch = RaggedBatch(
+            values=values, offsets=carrier.offsets, row_shapes=carrier.row_shapes
+        )
+    else:
+        facts = {"per_stimulus_shape": list(ids.shape[1:]), "dtype": str(ids.dtype)}
+        if plan.checksums != "none":
+            facts["value_reduction"] = value_reduction(INPUT_IDS_KEY, ids)
+        stored = ids.detach().cpu().contiguous()
+    validate_row_counts(context, {INPUT_IDS_KEY: stored})
+    return stored, facts
 
 
 def run_in_memory(plan: _RunPlan) -> dict[str, torch.Tensor]:
@@ -1602,7 +1725,107 @@ def _freeze_batch_zero(
     if selector_plan is not None:
         run_block["selector_plan"] = selector_plan.to_record()
     run_block["collate_observed"] = dict(envelope.disclosure)
+    if plan.store_input_ids:
+        manifest["layers"][INPUT_IDS_KEY]["source"] = "stimulus_input_ids"
+    if plan.intervention is not None:
+        sites = list(run_state["intervention_sites"])
+        run_block["intervention"] = {
+            **plan.intervention.signature_record(),
+            "target_site_keys": sites,
+        }
+        receipt = run_state["current_receipt"]
+        manifest.update(final_harvest_block(plan.intervention, sites, [receipt["fire_count"]]))
     writer.write_manifest()
+
+
+def _continuation_run_state(
+    prep_state: dict[str, Any], completed_rows: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Seed the per-run state a continuation inherits from its prefix.
+
+    Parameters
+    ----------
+    prep_state:
+        Preparation facts from :func:`_prepare_disk_run`.
+    completed_rows:
+        The trusted ledger prefix.
+
+    Returns
+    -------
+    dict[str, Any]
+        Run state holding the adopted selector plan, the frozen D4 ragged
+        state, the frozen intervention sites, and the prefix's per-shard
+        fire counts (R2-08).
+    """
+
+    run_state: dict[str, Any] = {}
+    if prep_state.get("selector_plan_record") is not None:
+        run_state["selector_plan"] = prep_state["selector_plan_record"]
+    ragged_state = prep_state.get("ragged_state")
+    if ragged_state is not None:
+        # A continuation freezes NOTHING from its own first batch: the D4
+        # gate compares against the manifest's frozen layouts and shapes
+        # (audit 2.10b: a resumed run could otherwise commit [4,16,16]
+        # shards under a [4,8,8] key, or trimmed shards under a dense one).
+        run_state["pooled_shapes"] = dict(ragged_state["pooled_shapes"])
+        run_state["trimmed_keys"] = set(ragged_state["trimmed_keys"])
+    if prep_state.get("intervention_sites") is not None:
+        # A continuation attests against the prefix's frozen fired sites.
+        run_state["intervention_sites"] = list(prep_state["intervention_sites"])
+    run_state["intervention_fire_counts"] = [
+        int((row.get("intervention") or {}).get("fire_count", 0)) for row in completed_rows
+    ]
+    return run_state
+
+
+def _shard_row_facts(
+    plan: _RunPlan,
+    context: BatchContext,
+    batch_facts: tuple[dict[str, dict[str, Any]], str],
+    run_state: dict[str, Any],
+) -> dict[str, Any]:
+    """Build one shard's ledger row facts.
+
+    Parameters
+    ----------
+    plan:
+        Resolved run configuration.
+    context:
+        This batch's context.
+    batch_facts:
+        ``(key_facts, input_digest)`` from the store pipeline.
+    run_state:
+        Mutable per-run state (mask geometry, the batch's fire receipt, and
+        the per-shard fire counts it appends to).
+
+    Returns
+    -------
+    dict[str, Any]
+        Per-key facts, id/input digests, position source, the mask geometry
+        when present, and the fire receipt on intervened runs (R2-08).
+    """
+
+    key_facts, input_digest = batch_facts
+    row_facts: dict[str, Any] = {
+        "keys": key_facts,
+        "ids_range_digest": _ids_range_digest(plan, context.row_start, context.row_count),
+        "input_digest": input_digest,
+        "position_ids_source": context.position_ids_source,
+    }
+    geometry = run_state.get("current_geometry")
+    if geometry is not None:
+        row_facts["row_geometry"] = {
+            "starts": geometry["starts"],
+            "extents": geometry["extents"],
+            "padding_side": geometry["padding_side"],
+            "contiguous": geometry["contiguous"],
+        }
+    if plan.intervention is not None:
+        row_facts["intervention"] = dict(run_state["current_receipt"])
+        run_state["intervention_fire_counts"].append(
+            int(run_state["current_receipt"]["fire_count"])
+        )
+    return row_facts
 
 
 def run_to_disk(plan: _RunPlan, container_path: Path, resume: bool) -> list[Path]:
@@ -1635,17 +1858,7 @@ def run_to_disk(plan: _RunPlan, container_path: Path, resume: bool) -> list[Path
     if plan.device is not None:
         plan.model.to(plan.device)
     manifest = writer.manifest
-    run_state: dict[str, Any] = {}
-    if prep_state.get("selector_plan_record") is not None:
-        run_state["selector_plan"] = prep_state["selector_plan_record"]
-    ragged_state = prep_state.get("ragged_state")
-    if ragged_state is not None:
-        # A continuation freezes NOTHING from its own first batch: the D4
-        # gate compares against the manifest's frozen layouts and shapes
-        # (audit 2.10b: a resumed run could otherwise commit [4,16,16]
-        # shards under a [4,8,8] key, or trimmed shards under a dense one).
-        run_state["pooled_shapes"] = dict(ragged_state["pooled_shapes"])
-        run_state["trimmed_keys"] = set(ragged_state["trimmed_keys"])
+    run_state = _continuation_run_state(prep_state, completed_rows)
     remaining = _consume_skipped_with_replay(plan, completed_rows, run_state)
     n_skip = sum(int(row["n_rows"]) for row in completed_rows)
     start_index = len(completed_rows)
@@ -1674,21 +1887,7 @@ def run_to_disk(plan: _RunPlan, container_path: Path, resume: bool) -> list[Path
                     plan, writer, (layer_views, batch_outputs, processed, envelope), run_state
                 )
             _validate_against_plan(manifest, processed)
-            ids_range = _ids_range_digest(plan, row_start, context.row_count)
-            geometry = run_state.get("current_geometry")
-            row_facts: dict[str, Any] = {
-                "keys": key_facts,
-                "ids_range_digest": ids_range,
-                "input_digest": input_digest,
-                "position_ids_source": context.position_ids_source,
-            }
-            if geometry is not None:
-                row_facts["row_geometry"] = {
-                    "starts": geometry["starts"],
-                    "extents": geometry["extents"],
-                    "padding_side": geometry["padding_side"],
-                    "contiguous": geometry["contiguous"],
-                }
+            row_facts = _shard_row_facts(plan, context, (key_facts, input_digest), run_state)
             row = writer.commit_shard(
                 index=batch_index,
                 row_start=row_start,
@@ -1710,5 +1909,12 @@ def run_to_disk(plan: _RunPlan, container_path: Path, resume: bool) -> list[Path
     run_block["position_ids_sources"] = sorted(position_sources)
     if prep_state.get("resume_audit"):
         run_block.setdefault("resume_audit", []).extend(prep_state["resume_audit"])
+    manifest.update(
+        final_harvest_block(
+            plan.intervention,
+            run_state.get("intervention_sites"),
+            run_state["intervention_fire_counts"],
+        )
+    )
     writer.finalize(n_shards=n_committed, n_stimuli=row_start)
     return container_paths

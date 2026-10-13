@@ -3,20 +3,23 @@
 from __future__ import annotations
 
 import inspect
+from collections.abc import Mapping
 from typing import Any
 
 from torch import nn
 
+from .._errors import KeywordConflictError
 from ._utils import first_input_tensor, module_for_site, source_model
 
 
-def cam(
+def cam(  # noqa: PLR0913 -- bridge door mirroring pytorch-grad-cam's constructor and call options
     log: Any,
     site: Any,
     *,
     inputs: Any | None = None,
     targets: Any | None = None,
     cam_class: Any | None = None,
+    call_kwargs: Mapping[str, Any] | None = None,
     **kwargs: Any,
 ) -> dict[str, Any]:
     """Run a pytorch-grad-cam method for a TorchLens site.
@@ -34,6 +37,9 @@ def cam(
         Optional pytorch-grad-cam targets.
     cam_class:
         Optional CAM class or factory. Defaults to ``pytorch_grad_cam.GradCAM``.
+    call_kwargs:
+        Options forwarded unchanged to the CAM call, e.g.
+        ``{"aug_smooth": True, "eigen_smooth": True}``.
     **kwargs:
         Options split by name: a keyword the CAM constructor names
         (``reshape_transform``, ...) goes to the constructor; any other
@@ -50,6 +56,9 @@ def cam(
         If pytorch-grad-cam is unavailable.
     TypeError
         If an option is named by neither the constructor nor the CAM call.
+    KeywordConflictError
+        ``bridge_gradcam_call_option_conflict`` when one option is given both
+        in ``call_kwargs`` and as a keyword.
     """
 
     try:
@@ -65,10 +74,19 @@ def cam(
     factory = getattr(pytorch_grad_cam, "GradCAM") if cam_class is None else cam_class
     init_names = _named_parameters(factory)
     init_kwargs = {key: value for key, value in kwargs.items() if key in init_names}
-    call_kwargs = {key: value for key, value in kwargs.items() if key not in init_names}
+    routed = {key: value for key, value in kwargs.items() if key not in init_names}
+    explicit = dict(call_kwargs or {})
+    both = sorted(set(routed) & set(explicit))
+    if both:
+        raise KeywordConflictError(
+            f"Grad-CAM bridge got the call option(s) {both} both in call_kwargs= and as keywords.",
+            code="bridge_gradcam_call_option_conflict",
+            remedy="give each CAM call option once, preferably in call_kwargs=",
+            options=both,
+        )
     cam_runner = factory(model=model, target_layers=[target_layer], **init_kwargs)
     cam_output = _call_cam(
-        cam_runner, input_tensor=input_tensor, targets=targets, call_kwargs=call_kwargs
+        cam_runner, input_tensor=input_tensor, targets=targets, call_kwargs={**routed, **explicit}
     )
     return {
         "schema": "torchlens.gradcam.v1",
