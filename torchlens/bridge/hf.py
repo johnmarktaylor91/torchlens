@@ -435,9 +435,12 @@ def _trace_text_capture(
             'model with attn_implementation="eager", or call '
             "tl.bridge.hf.register_attention(model)"
         )
-        fields = cast(dict[str, Any], {**exc.fields, "remedy": remedy})
+        context = {k: v for k, v in exc.fields.items() if k not in ("code", "remedy")}
         raise ValueDependentBranchError(
-            f"{exc}\nRemedy for text input: {remedy}.", **fields
+            f"{exc}\nRemedy for text input: {remedy}.",
+            code="value_dependent_branch_unsupported",
+            remedy=remedy,
+            **cast(dict[str, Any], context),
         ) from exc
 
 
