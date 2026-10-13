@@ -128,8 +128,10 @@ def test_explain_selective_save_still_flags_saved_nonfinite() -> None:
     x[0, 0] = float("nan")
     log = tl.trace(_SelectiveTinyModel(), x, save=tl.func("relu"))
 
+    # D14 (F09): explain never scans; arm the evidence through the explicit
+    # door. relu(nan) == nan and relu IS saved, so the scan must detect it.
+    assert log.nonfinite_ops
     report_text = tl.report.explain(log)
-    # relu(nan) == nan and relu IS saved, so the scan must still detect it.
     assert "FOUND:" in report_text
 
 
