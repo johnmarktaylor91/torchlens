@@ -42,6 +42,7 @@ from ..errors._base import ConfigurationError
 from ..transforms._pipeline import OpaqueStep
 from .callable_identity import classify_callable
 from .dtype_policy import tensor_payload_bytes
+from .intervened import final_harvest_block
 from .selector_plan import SelectorPlan, selector_request_record
 from .shards import shard_extension
 
@@ -306,7 +307,32 @@ def build_signature(plan: _RunPlan, model_identity_record: dict[str, Any]) -> di
         "collate": _collate_signature(plan),
         "callable_identity": _callable_identity_signature(plan),
         "selector_plan": selector_plan_record,
+        **_intervention_signature(plan),
     }
+
+
+def _intervention_signature(plan: _RunPlan) -> dict[str, Any]:
+    """Return the R2-08 intervention signature field (absent on clean runs).
+
+    A clean run keeps the historical signature shape byte-for-byte, so a
+    pre-R2-08 artifact (which could only be clean) resumes under a clean
+    run, and any intervention difference mismatches the ``intervention``
+    field compared beside the D16 fields.
+
+    Parameters
+    ----------
+    plan:
+        Resolved run configuration.
+
+    Returns
+    -------
+    dict[str, Any]
+        ``{"intervention": record}`` or ``{}``.
+    """
+
+    if plan.intervention is None:
+        return {}
+    return {"intervention": plan.intervention.signature_record()}
 
 
 #: Algorithm id of the structural model record (module tree + hyperparameters).
@@ -464,6 +490,10 @@ def _base_manifest(
         "run": {},
         "totals": None,
         "ledger_digest": None,
+        # R2-08: a clean run declares policy="none" explicitly, so a reader
+        # can tell "no intervention" from "written before the schema".
+        # Intervened runs write their block at the batch-zero freeze.
+        **({} if "intervention" in signature else final_harvest_block(None, None, [])),
     }
 
 
@@ -750,6 +780,8 @@ def _refuse_signature_mismatch(
     mismatched = [
         field for field in compare_signatures(recorded, current) if field != "callable_identity"
     ]
+    if recorded.get("intervention") != current.get("intervention"):
+        mismatched.append("intervention")
     if not mismatched:
         _refuse_model_structure_mismatch(
             recorded.get("model_structure"), current.get("model_structure"), manifest_path, audits
@@ -1008,6 +1040,9 @@ def _prepare_disk_run(
                 ),
                 dict(recorded_selector.get("request") or {}),
             )
+        recorded_intervention = (existing.get("run") or {}).get("intervention")
+        if recorded_intervention:
+            prep_state["intervention_sites"] = list(recorded_intervention["target_site_keys"])
         prep_state["ragged_state"] = _rehydrate_ragged_state(existing, prep_state["resume_audit"])
         _clean_orphan_tmp_files(container_path)
         # A torn final ledger line is crash debris: cleared before appends

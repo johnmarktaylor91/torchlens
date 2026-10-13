@@ -30,12 +30,16 @@ def shuffled_batches(
     *,
     seed: int = 0,
     keys: list[str] | None = None,
+    buffer_shards: int = 1,
+    tokens: bool = False,
 ) -> Any:
     """Yield shuffled training batches without thrashing shard handles.
 
-    The SAE/CLT access pattern: SHARD order is shuffled, then rows shuffle
-    WITHIN each shard — an approximate global shuffle that touches each
-    shard exactly once instead of thrashing thousands of handles.
+    The SAE/CLT access pattern: SHARD order is shuffled, then the shuffle
+    buffer holds ``buffer_shards`` consecutive shards of that order at once
+    and shuffles rows ACROSS them (the cross-shard mixing buffer, R2-08) —
+    each shard is still touched exactly once. ``buffer_shards=1`` (the
+    default) shuffles within one shard at a time.
 
     Parameters
     ----------
@@ -47,12 +51,20 @@ def shuffled_batches(
         Shuffle seed (deterministic across runs).
     keys:
         Optional output-key subset.
+    buffer_shards:
+        Shards mixed per shuffle buffer (DOCUMENTED-UNSTABLE; R2-08). Peak
+        memory is that many shards of the selected keys.
+    tokens:
+        Yield TOKEN rows instead of stimulus rows (DOCUMENTED-UNSTABLE;
+        R2-08): every selected key is read through
+        ``reader.token_batch`` and must share one token axis.
 
     Yields
     ------
     dict[str, torch.Tensor]
-        Batches of at most ``batch_size`` rows (per-shard tail batches may
-        run short; rows never cross shard boundaries).
+        Batches of at most ``batch_size`` rows (each buffer's tail batch
+        may run short; rows never cross buffer boundaries). Stimulus-row
+        mode yields dense keys only; trimmed keys need ``tokens=True``.
     """
 
     if batch_size <= 0:
@@ -62,20 +74,81 @@ def shuffled_batches(
             remedy="pass batch_size >= 1",
             batch_size=batch_size,
         )
+    _validate_buffer_shards(buffer_shards)
     rng = random.Random(seed)
     order = list(range(int(reader.n_shards)))
     rng.shuffle(order)
-    for position in order:
-        payload = reader.batch(position, keys=keys)
-        dense = {key: value for key, value in payload.items() if isinstance(value, torch.Tensor)}
-        if not dense:
+    for start in range(0, len(order), buffer_shards):
+        pooled = _load_buffer(reader, order[start : start + buffer_shards], keys, tokens)
+        if not pooled:
             continue
-        n_rows = min(int(tensor.shape[0]) for tensor in dense.values())
+        n_rows = min(int(tensor.shape[0]) for tensor in pooled.values())
         permutation = list(range(n_rows))
         rng.shuffle(permutation)
-        for start in range(0, n_rows, batch_size):
-            rows = permutation[start : start + batch_size]
-            yield {key: tensor[rows] for key, tensor in dense.items()}
+        for offset in range(0, n_rows, batch_size):
+            rows = permutation[offset : offset + batch_size]
+            yield {key: tensor[rows] for key, tensor in pooled.items()}
+
+
+def _validate_buffer_shards(buffer_shards: Any) -> None:
+    """Refuse a mixing-buffer size that is not a positive integer.
+
+    Parameters
+    ----------
+    buffer_shards:
+        The requested buffer size in shards.
+
+    Raises
+    ------
+    torchlens.errors.InvalidArgumentError
+        ``extraction_reader_buffer_shards_invalid``.
+    """
+
+    if isinstance(buffer_shards, int) and not isinstance(buffer_shards, bool) and buffer_shards > 0:
+        return
+    raise InvalidArgumentError(
+        f"shuffled_batches(buffer_shards={buffer_shards!r}) needs a positive integer.",
+        code="extraction_reader_buffer_shards_invalid",
+        remedy="pass buffer_shards >= 1 (1 shuffles within one shard at a time)",
+        buffer_shards=repr(buffer_shards),
+    )
+
+
+def _load_buffer(
+    reader: Any, shards: list[int], keys: list[str] | None, tokens: bool
+) -> dict[str, torch.Tensor]:
+    """Load one shuffle buffer: the listed shards' rows, concatenated.
+
+    Parameters
+    ----------
+    reader:
+        An open extraction reader.
+    shards:
+        Ledger positions in buffer order.
+    keys:
+        Optional output-key subset.
+    tokens:
+        Whether to read token rows.
+
+    Returns
+    -------
+    dict[str, torch.Tensor]
+        ``key -> rows`` over the buffer (empty when no key qualifies).
+    """
+
+    parts: list[dict[str, torch.Tensor]] = []
+    for position in shards:
+        if tokens:
+            parts.append(dict(reader.token_batch(position, keys=keys).values))
+            continue
+        payload = reader.batch(position, keys=keys)
+        dense = {key: value for key, value in payload.items() if isinstance(value, torch.Tensor)}
+        if dense:
+            parts.append(dense)
+    if len(parts) == 1:
+        return parts[0]
+    common = [key for key in (parts[0] if parts else {}) if all(key in part for part in parts)]
+    return {key: torch.cat([part[key] for part in parts], dim=0) for key in common}
 
 
 def feature_matrix(reader: Any, key: str, *, max_bytes: int | None = None) -> torch.Tensor:

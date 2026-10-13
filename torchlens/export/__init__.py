@@ -1109,6 +1109,35 @@ def _safe_id(value: str) -> str:
     return "".join(char if char.isalnum() else "-" for char in value).strip("-")
 
 
+def safetensors(log: Any, path: str | Path) -> Path:
+    """Export one Trace to a single safetensors file (R2-08; DOCUMENTED-UNSTABLE).
+
+    Every tensor-valued op payload (``out``, ``transformed_out``, ``grad``,
+    ``transformed_grad``) is a tensor entry; the metadata is one JSON
+    document in the safetensors header holding, for the ``trace`` record and
+    every ``op`` record, each writer-contract KEEP field with an exact JSON
+    encoding (the rest are listed in its ``omitted`` disclosure), the
+    writer-contract digest, and the capture-honesty facts. The file holds no
+    pickle. Read it back with :func:`torchlens.io.read_safetensors`.
+
+    Parameters
+    ----------
+    log:
+        TorchLens ``Trace`` to export.
+    path:
+        Destination ``.safetensors`` path (written atomically).
+
+    Returns
+    -------
+    Path
+        Written path.
+    """
+
+    from .._extraction.trace_safetensors import write_trace_safetensors
+
+    return write_trace_safetensors(log, path)
+
+
 # ---------------------------------------------------------------------------
 # Builtin registrations: through the SAME public door out-of-tree exporters
 # use (registry law 6.1 -- builtins never take a kernel side channel). The
@@ -1138,6 +1167,7 @@ _BUILTIN_EXPORT_TARGETS: tuple[tuple[str, Any, str, dict[str, Any]], ...] = (
     ("parquet", parquet, "present", {"output": "file", "requires_extra": "pandas"}),
     ("json", json, "present", {"output": "file", "requires_extra": "pandas"}),
     ("xarray", xarray, "present", {"output": "object", "requires_extra": "xarray"}),
+    ("safetensors", safetensors, "present", {"output": "file", "requires_extra": "none"}),
     ("netron", netron, "bridge", {"output": "file", "requires_extra": "none"}),
     ("model_explorer", model_explorer, "bridge", {"output": "file", "requires_extra": "none"}),
     (
@@ -1184,6 +1214,7 @@ __all__ = [
     "parquet",
     "register_export_target",
     "resolve_export_target",
+    "safetensors",
     "speedscope",
     "svg",
     "tensorboard",

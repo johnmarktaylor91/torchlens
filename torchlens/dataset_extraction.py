@@ -70,6 +70,11 @@ from ._extraction.engine import (
     run_in_memory,
     run_to_disk,
 )
+from ._extraction.intervened import (
+    InterventionPlan,
+    coerce_intervention,
+    refuse_intervened_selector_layers,
+)
 from ._extraction.resume import (
     MANIFEST_FILENAME,
     DatasetExtractionResumeError,
@@ -77,6 +82,11 @@ from ._extraction.resume import (
     load_manifest as _load_manifest,
     validate_checksums_level,
     validate_stimulus_ids,
+)
+from ._extraction.token_store import (
+    TokenRows,
+    refuse_input_ids_collision,
+    validate_store_input_ids,
 )
 from ._extraction_provenance import (
     INPUT_PREPROCESSING_SCHEMA,
@@ -155,6 +165,35 @@ def _refuse_disk_only_options(kwargs_in_memory: dict[str, Any]) -> None:
         remedy="pass output_dir= (disk mode), or drop these options",
         options={key: repr(value) for key, value in kwargs_in_memory.items()},
     )
+
+
+def _resolve_token_and_intervention(
+    intervene: Any, store_input_ids: Any, layers: Any
+) -> tuple[InterventionPlan | None, bool]:
+    """Resolve the R2-08 ``intervene=`` and ``store_input_ids=`` slots.
+
+    Parameters
+    ----------
+    intervene:
+        ``None`` or an intervention spec.
+    store_input_ids:
+        The token-id storage flag.
+    layers:
+        The caller's ``layers=`` request.
+
+    Returns
+    -------
+    tuple[InterventionPlan | None, bool]
+        The resolved intervention (``None`` = clean) and the flag.
+    """
+
+    keep_input_ids = validate_store_input_ids(store_input_ids)
+    if keep_input_ids and isinstance(layers, Mapping):
+        refuse_input_ids_collision(layers.keys())
+    intervention = coerce_intervention(intervene)
+    if intervention is not None and is_selector_request(layers):
+        refuse_intervened_selector_layers()
+    return intervention, keep_input_ids
 
 
 def _validate_run_options(  # noqa: PLR0913 - validates the public knob surface one-to-one
@@ -277,6 +316,8 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
     checksums: str = "fast",
     pipeline_id: str | None = None,
     acknowledge_v1_prefix: bool = False,
+    intervene: Any = None,
+    store_input_ids: bool = False,
 ) -> dict[str, torch.Tensor] | list[Path]:
     """Extract outputs from an iterable dataset in batches.
 
@@ -394,6 +435,24 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         Explicit acknowledgment for resuming an IN-PROGRESS v1 artifact:
         the prefix's semantics are recorded asserted-not-measured and the
         artifact carries ``unknown_v1_prefix_semantics: true`` permanently.
+    intervene:
+        Optional :class:`torchlens.intervention.spec.InterventionSpec`
+        (``tl.when(selector, helper)``; DOCUMENTED-UNSTABLE, R2-08): every
+        batch is captured with the spec armed, so stored rows are the
+        INTERVENED activations. Batch zero freezes the structural sites the
+        spec fired at; a batch firing nowhere or elsewhere refuses typed.
+        Disk mode records the counterfactual in the manifest's
+        ``tl_counterfactual_harvest_v1`` block (address class, sites, fire
+        receipt digest) and ledgers each shard's fire receipt; the
+        intervention identity joins the resume signature. Module- and
+        op-type-addressed specs run; finer address classes refuse typed.
+        Helpers must declare ``batch_independent=True``. String or mapping
+        ``layers=`` only.
+    store_input_ids:
+        Store each batch's token ids as the ordinary ``input_ids`` key
+        (DOCUMENTED-UNSTABLE, R2-08 token store), trimmed by the batch mask
+        under ``ragged="trim"`` like the token-axis activations; read token
+        rows back with ``open_extraction(...).token_rows()``.
 
     Returns
     -------
@@ -444,6 +503,9 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         )
     input_callable, input_block, input_identity, input_opaque = coerce_input_preprocessing(
         input_transform, input_provenance
+    )
+    intervention, keep_input_ids = _resolve_token_and_intervention(
+        intervene, store_input_ids, layers
     )
     pool_policy, pool_record = resolve_pool_policy(pool)
     dtype_policy, dtype_record = resolve_dtype_policy(dtype)
@@ -526,6 +588,8 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         input_transform=input_callable,
         input_block=input_block,
         input_opaque=input_opaque,
+        intervention=intervention,
+        store_input_ids=keep_input_ids,
     )
     if output_dir is None:
         return run_in_memory(plan)
@@ -794,6 +858,7 @@ __all__ = [
     "DatasetExtractionResumeError",
     "LoadedExtraction",
     "RaggedBatch",
+    "TokenRows",
     "as_torch_dataset",
     "export_extraction",
     "extract_dataset",
