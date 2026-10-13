@@ -18,7 +18,7 @@ from .._capture_honesty import (
     honesty_preamble_lines,
 )
 from .._errors import ArgumentTypeError, KeywordConflictError
-from ._common import _scalarize_cell
+from ._common import _require_trace, _scalarize_cell
 
 __tl_layer__ = "L8"
 
@@ -45,6 +45,8 @@ def tensorboard(log: Any, writer: Any, *, step: int, prefix: str = "torchlens") 
         The writer object passed in.
     """
 
+    # U33.2: a non-Trace input used to write plausible zeros (getattr defaults).
+    _require_trace(log, exporter="tl.export.tensorboard")
     _require_tracker_object(writer, method_name="tensorboard", required_method="add_scalar")
     # One converter for every tracker exporter (F26 unification): the four
     # historical exporters had drifted onto three different summary sets.

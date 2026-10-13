@@ -8,6 +8,7 @@ from typing import Any
 import torch
 from torch import nn
 
+from ._errors import InvalidArgumentError
 from .errors._base import ConfigurationError
 from .utils._torch_compat import get_dynamo_optimized_module_type
 from .utils._torch_symbols import torch_attr
@@ -66,8 +67,9 @@ def reject_compiled_model(model: nn.Module, *, api_name: str) -> None:
 
     Raises
     ------
-    RuntimeError
-        If ``model`` is a compiled ``OptimizedModule`` wrapper.
+    InvalidArgumentError
+        ``compiled_model_unsupported`` if ``model`` is a compiled
+        ``OptimizedModule`` wrapper, whatever the other options are.
     """
 
     optimized_module_type = get_dynamo_optimized_module_type()
@@ -79,11 +81,20 @@ def reject_compiled_model(model: nn.Module, *, api_name: str) -> None:
         is_optimized_module = model.__class__.__name__ == "OptimizedModule"
 
     if is_optimized_module:
-        raise RuntimeError(
-            f"{api_name} does not support torch.compile'd models in backward_ready: "
-            "dynamo replaces the Python forward with a compiled graph that "
-            "byops TorchLens' function wrappers. Call the API on the "
-            "original un-compiled model."
+        # U31.4: typed, and the condition is stated as it is checked (any
+        # torch.compile wrapper, not only under backward_ready).
+        raise InvalidArgumentError(
+            f"{api_name} does not record torch.compile'd models (got an OptimizedModule "
+            "wrapper): Dynamo replaces the Python forward with a compiled graph that "
+            "bypasses TorchLens' function wrappers",
+            code="compiled_model_unsupported",
+            remedy=(
+                "pass the eager source module (compiled._orig_mod), or use "
+                "tl.trace(compiled, x), which traces the eager source; to inspect what "
+                "torch.compile generated, use tl.bridge.depyf.dump(model, x, path)"
+            ),
+            argument="model",
+            received_type=type(model).__name__,
         )
 
 

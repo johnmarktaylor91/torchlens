@@ -748,6 +748,49 @@ def _stability_change(previous: Tensor, current: Tensor) -> float:
     return max(l1, l2)
 
 
+def _model_position_limit(model: Module) -> int | None:
+    """Return the model config's maximum sequence length, if it declares one."""
+
+    config = getattr(model, "config", None)
+    for name in ("max_position_embeddings", "n_positions", "n_ctx"):
+        value = getattr(config, name, None)
+        if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+            return value
+    return None
+
+
+def _refuse_beyond_position_limit(model: Module, length: int) -> None:
+    """Refuse an un-truncated input longer than the model's position limit (U23.3).
+
+    Without ``max_length`` a long input ran past the position table and either
+    crashed inside the model or scored positions the model never trained on.
+    The refusal names the explicit truncation spelling instead.
+
+    Parameters
+    ----------
+    model:
+        HF-style model whose ``config`` may declare a position limit.
+    length:
+        Tokenized input length.
+
+    Raises
+    ------
+    AttributionError
+        ``text_input_exceeds_position_limit`` when ``length`` exceeds the limit.
+    """
+
+    limit = _model_position_limit(model)
+    if limit is None or length <= limit:
+        return
+    raise AttributionError(
+        f"text() input is {length} tokens but the model's position limit is {limit}, "
+        "and no max_length was given, so the attribution would run past the "
+        f"position table. Remedy: pass max_length={limit} to truncate explicitly "
+        "(the result records the retained span), or shorten the text.",
+        code="text_input_exceeds_position_limit",
+    )
+
+
 def text(
     model: Module,
     tokenizer: Any,
@@ -793,7 +836,9 @@ def text(
         baseline).
     max_length
         Optional EXPLICIT truncation; records the original length and the
-        retained span, and warns visibly. Never applied silently.
+        retained span, and warns visibly. Never applied silently: without it,
+        an input longer than the model config's position limit refuses
+        ``text_input_exceeds_position_limit``.
 
     Returns
     -------
@@ -846,6 +891,8 @@ def text(
         attention_mask = torch.ones_like(input_ids)
     special_mask = encoding.get("special_tokens_mask")
 
+    if max_length is None:
+        _refuse_beyond_position_limit(model, int(input_ids.shape[1]))
     truncation_record: dict[str, Any] | None = None
     if max_length is not None:
         full_ids = tokenizer(text)["input_ids"]

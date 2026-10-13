@@ -1203,7 +1203,7 @@ def _restore_declared_state_or_mark(trace: Any, fork: Any, snapshot: Any) -> Non
     alias groups restored before the failure, and chains the restore exception.
     """
 
-    from ._runnable_state import LiveStateRestoreFailure, restore_live_declared_state
+    from ._runnable_state_live import LiveStateRestoreFailure, restore_live_declared_state
     from .errors import StateBindingError
     from .runnable import mark_trace_path_status
 

@@ -1,6 +1,6 @@
-"""The torchlens 2.33 / tlspec_version 6 rehydration floor (drop-not-resurrect).
+"""The tlspec_version 6 rehydration floor (drop-not-resurrect; first writer 2.31.0).
 
-Artifacts written by torchlens >= 2.33 (``tlspec_version >= 6``) load; anything
+Artifacts written by torchlens >= 2.31.0 (``tlspec_version >= 6``) load; anything
 older refuses with the typed ``ArtifactVersionBelowFloorError`` naming the
 floor, instead of being resurrected through legacy field-alias ladders.
 """
@@ -27,7 +27,7 @@ from torchlens._io._canonical_pickle import dump_canonical_metadata
 from torchlens.data_classes.op import Op
 from torchlens.errors import ArtifactVersionBelowFloorError
 
-FLOOR_MATCH = "torchlens 2.33"
+FLOOR_MATCH = "torchlens 2.31.0"
 
 
 def _stamp_between_floor(path: Path, version: int) -> None:
@@ -72,7 +72,7 @@ def test_floor_error_is_typed_and_public() -> None:
 
 
 def test_current_artifacts_load_clean(tmp_path: Path) -> None:
-    """A 2.33+ save round-trips with no floor refusal and no version warning."""
+    """A current save round-trips with no floor refusal and no version warning."""
 
     trace = _build_trace()
     path = tmp_path / "current.tlspec"
@@ -283,7 +283,7 @@ def test_inconsistent_producer_pair_refuses_typed(tmp_path: Path) -> None:
     ],
 )
 def test_real_pre_floor_artifacts_refuse_typed(fixture: str) -> None:
-    """Checked-in real pre-2.33 artifacts refuse with the floor named."""
+    """Checked-in real pre-floor artifacts refuse with the floor named."""
 
     fixture_path = Path(__file__).parent / fixture
     with pytest.raises(ArtifactVersionBelowFloorError, match=FLOOR_MATCH):

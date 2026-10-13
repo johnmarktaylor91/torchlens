@@ -12,7 +12,7 @@ from ..backends.registry import BackendUnsupportedError
 from ..intervention.selectors import BaseSelector
 from ..ir.selector_eval import first_selector_kind_outside
 from ..quantities import Bytes
-from .saved_summary import refresh_saved_module_call_count
+from .saved_summary import refresh_pinned_autograd_memory, refresh_saved_module_call_count
 
 _STATIC_SELECTOR_KINDS = frozenset(
     {
@@ -299,6 +299,7 @@ def _refresh_saved_activation_summary(trace: Any) -> None:
     trace.saved_activation_memory = Bytes(retained_activation_bytes(saved_ops))
     trace.num_saved_layers = len({op.layer_label for op in saved_ops})
     refresh_saved_module_call_count(trace, {op.label for op in saved_ops})
+    refresh_pinned_autograd_memory(trace, saved_ops)
     trace._layers_saved = trace.num_saved_ops == len(getattr(trace, "layer_list", ()))
 
 

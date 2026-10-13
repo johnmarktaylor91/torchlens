@@ -24,6 +24,7 @@ from .._literals import BufferVisibilityLiteral
 from .._options_validation import _validate_buffer_visibility
 from ..errors import ConfigurationError, TorchLensWarning
 from ..utils.display import atomic_write_text
+from ._common import _require_trace
 from ._netron_attachment import write_attachment
 from ._netron_emit import NETRON_SCHEMA_VERSION, emit_model_json
 from ._netron_module import project_module
@@ -309,6 +310,7 @@ def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-
         The written JSON path, or ``None`` for the memory-only serve mode.
     """
 
+    _require_trace(log, exporter="tl.export.netron")
     _validate_options(granularity, depth, show_buffers)
     if path is None and not open:
         raise ConfigurationError(

@@ -116,7 +116,7 @@ from .loop_grouping_adapter import (
     RecurrenceNode,
     group_recurrent_nodes,
 )
-from .saved_summary import refresh_saved_module_call_count
+from .saved_summary import refresh_pinned_autograd_memory, refresh_saved_module_call_count
 
 if TYPE_CHECKING:
     from .._trace_core.op_store import StepAuditResult
@@ -691,6 +691,7 @@ def _refresh_fast_saved_summary(self: "Trace") -> None:
     self.saved_activation_memory = Bytes(retained_activation_bytes(saved_layers))
     self.num_saved_layers = len({layer_entry.layer_label for layer_entry in saved_layers})
     refresh_saved_module_call_count(self, {layer_entry.label for layer_entry in saved_layers})
+    refresh_pinned_autograd_memory(self, saved_layers)
 
 
 def postprocess(

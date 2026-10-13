@@ -8,7 +8,44 @@ from __future__ import annotations
 
 from typing import Any
 
+from .._errors import ArgumentTypeError
+
 __tl_layer__ = "L7"
+
+
+def _require_trace(log: Any, *, exporter: str) -> None:
+    """Refuse a non-``Trace`` input to a graph exporter, typed (U09.2, U10.5).
+
+    Without this gate a wrong argument reached the projection code and either
+    crashed deep inside it or wrote a plausible empty artifact.
+
+    Parameters
+    ----------
+    log:
+        Candidate capture passed to the exporter.
+    exporter:
+        Public exporter spelling used in the message (``"tl.export.netron"``).
+
+    Raises
+    ------
+    ArgumentTypeError
+        ``export_expected_trace`` when ``log`` is not a ``Trace``.
+    """
+
+    from ..data_classes.trace import Trace
+
+    if isinstance(log, Trace):
+        return
+    raise ArgumentTypeError(
+        f"{exporter} expected a Trace, got {type(log).__name__}",
+        code="export_expected_trace",
+        remedy=(
+            f"capture first and pass the Trace, e.g. {exporter}(tl.trace(model, x), path); "
+            "for a saved artifact pass tl.load(artifact_path)"
+        ),
+        argument="log",
+        received_type=type(log).__name__,
+    )
 
 
 def _iter_layers(log: Any) -> list[Any]:

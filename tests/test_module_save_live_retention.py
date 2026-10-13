@@ -27,6 +27,7 @@ from torch import nn
 import torchlens as tl
 import torchlens.capture.session as session_mod
 import torchlens.ir.selector_eval as selector_eval
+from torchlens.errors import TorchLensWarning
 
 
 class _Inner(nn.Module):
@@ -266,9 +267,15 @@ def test_forced_spill_writes_only_ops_inside_matching_passes(address, spills, mo
     monkeypatch.setattr(CapturePlan, "compile", classmethod(tiny_budget_compile))
     model, x = _model_and_input()
     selector = tl.module(address)
-    with _counting(monkeypatch) as counts:
+    # The default save keeps payloads attached; a spilled one comes back
+    # detached, and the capture discloses it (U27.1).
+    with _counting(monkeypatch) as counts, pytest.warns(TorchLensWarning) as caught:
         log = tl.trace(model, x, save=selector)
     assert counts["spills"] == spills, counts
+    assert any(
+        getattr(record.message, "fields", {}).get("code") == "escrow_spill_detached"
+        for record in caught
+    )
     assert set(_saved(log)) == {
         site.layer_label for site in tl.trace(model, x).find_sites(selector)
     }

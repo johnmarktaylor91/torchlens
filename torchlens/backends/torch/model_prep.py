@@ -2252,6 +2252,7 @@ def _record_predicate_module_boundary_outputs(
             transformed_ram_payload=transformed_ram,
             predicate_matched=True,
             container_path=tuple(container_path),
+            detach_unkept=state.options.detach_saved_activations,
         )
         selected_policy = selected_event.policy
         if selected_policy is None:  # pragma: no cover - sparse freeze always stamps one

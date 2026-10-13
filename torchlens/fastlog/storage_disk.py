@@ -236,6 +236,7 @@ class DiskStorageBackend:
             save_raw_activations=save_raw,
             ctx=ctx,
             kind="grad" if kind == "grad" else "activation",
+            detach_saved_activations=options.detach_saved_activations,
         )
 
     def finalize(self) -> None:

@@ -218,7 +218,7 @@ def optimizer_state_facts(trace: Trace) -> OptimizerStateFacts | None:
     trace has none and the footer omits the line.
     """
 
-    optimizer = getattr(trace, "_optimizer", None)
+    optimizer = trace._optimizer  # noqa: SLF001 -- declared session field (DROP: None on load)
     state = getattr(optimizer, "state", None)
     if optimizer is None or state is None:
         return None

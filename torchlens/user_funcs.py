@@ -75,6 +75,7 @@ from ._errors import (
 from ._input_coerce import (
     _coerce_input_args,
     _reject_extra_positional_input,
+    _reject_non_mapping_input_kwargs,
     _reject_unrouted_forward_kwargs,
 )
 from ._io import TorchLensIOError
@@ -122,6 +123,7 @@ from .backends._options import (
     TRACE_OPTION_CAPABILITY_GATES,
     reject_extra_trace_kwargs,
 )
+from .backends.torch._op_markers import refuse_unavailable_nvtx
 from .backends.torch._tl import get_tensor_label
 from .backends.torch.bound_root import (
     TLBoundMethodRoot,
@@ -2080,6 +2082,9 @@ def _run_model_and_save_specified_outs(
                 lookback=lookback,
                 lookback_payload_policy=lookback_payload_policy,  # type: ignore[arg-type]
                 on_predicate_error="fail-fast",
+                # Selector saves honour the capture's detach choice in both
+                # directions, exactly like the save-all path.
+                detach_saved_activations=bool(detach_saved_activations),
             )
             trace._halt_returns_partial_trace = halt_predicate is not None
             trace._stop_directive = StopDirective(
@@ -2728,6 +2733,7 @@ def trace(
     """
     _reject_unrouted_forward_kwargs(forward_kwargs)
     del forward_kwargs  # must never ride the ladder's locals() snapshot below
+    _reject_non_mapping_input_kwargs(input_kwargs)
     model, intervene = _model_door.resolve_trace_operands(model, intervene)
     if input_size is not None or input_args is None:
         model = _reject_non_module_ladder_root(model)
@@ -2744,7 +2750,10 @@ def trace(
             "TorchLens cannot capture a torch.compile-produced plain callable because it is "
             "not an nn.Module",
             code="compiled_callable_unsupported",
-            remedy="pass the original eager nn.Module instead of the compiled callable",
+            remedy=(
+                "pass the original eager nn.Module instead of the compiled callable; to "
+                "inspect what torch.compile generated, use tl.bridge.depyf.dump(fn, x, path)"
+            ),
             argument="model",
         )
     _reject_extra_positional_input(grad_transform)
@@ -2876,6 +2885,24 @@ def _effective_inference_only(capture_options: CaptureOptions, *, backward_reque
     return not backward_requested and autograd_disabled_at_entry()
 
 
+def _model_type_remedy(model: Any) -> str:
+    """Remedy for ``model_type_unsupported``; export products get their own (U35.2)."""
+
+    exported_program = getattr(getattr(torch, "export", None), "ExportedProgram", None)
+    if isinstance(exported_program, type) and isinstance(model, exported_program):
+        return (
+            "trace the source nn.Module before export: tl.trace(model, x) on the eager "
+            "module you passed to torch.export.export (an ExportedProgram is a lowered "
+            "graph, not the model's own forward)"
+        )
+    return (
+        "pass a torch.nn.Module, or a bound method of an nn.Module "
+        "(owner resolved via method.__self__, e.g. "
+        "tl.trace(model.generate, input_ids)), or select the backend "
+        "that owns the supplied model"
+    )
+
+
 def _trace_torch_model(
     model: nn.Module | Callable[..., Any],
     input_args: str | torch.Tensor | list[Any] | tuple[Any, ...],
@@ -2997,32 +3024,15 @@ def _trace_torch_model(
                 f"Unsupported model type for capture: received {type(model).__name__}, "
                 "not a torch.nn.Module or a bound method of one",
                 code="model_type_unsupported",
-                remedy=(
-                    "pass a torch.nn.Module, or a bound method of an nn.Module "
-                    "(owner resolved via method.__self__, e.g. "
-                    "tl.trace(model.generate, input_ids)), or select the backend "
-                    "that owns the supplied model"
-                ),
+                remedy=_model_type_remedy(model),
                 argument="model",
                 received_type=type(model).__name__,
             )
     _reject_opaque_wrappers(model)
-    # grind-r5 b7 R55 (fable MED, survived from round 1 -- it misdirected two
-    # hostile review lanes): the natural multi-input spelling
-    # ``tl.trace(model, q, k, v)`` lands tensor ``k`` in ``input_kwargs`` and
-    # ``v`` in the next positional slot, then crashes DEEP with an
-    # ambient-import-dependent error that never names the mistake. Refuse
-    # typed at entry, naming the tuple spelling.
-    if input_kwargs is not None and not isinstance(input_kwargs, collections.abc.Mapping):
-        raise ArgumentTypeError(
-            "input_kwargs must be a Mapping of keyword arguments for "
-            f"model.forward(), got {type(input_kwargs).__name__}. Passing "
-            "multiple positional inputs as separate arguments is not "
-            "supported: bundle them as one tuple, e.g. "
-            "tl.trace(model, (input_a, input_b, input_c)).",
-            code="input_kwargs_type_invalid",
-            remedy="pass keyword args as a dict, or bundle positional inputs into one tuple",
-        )
+    # grind-r5 b7 R55: ``tl.trace(model, q, k, v)`` lands ``k`` in
+    # ``input_kwargs``; trace() refuses it before dispatch for every backend
+    # (U11.2), and direct callers of this torch path get the same check.
+    _reject_non_mapping_input_kwargs(input_kwargs)
     model = unwrap_compiled_model(model)
     model = _unwrap_data_parallel(model)
     if reconstruction_ready is not MISSING and reconstruction_ready:
@@ -3281,6 +3291,7 @@ def _trace_torch_model(
             remedy="set save_mode to 'copy', 'reference', 'view', or 'cpu_async'",
             argument="save_mode",
         )
+    refuse_unavailable_nvtx(capture_options.emit_nvtx)
     save_arg_values = capture_options.save_arg_values
     capture_tensor_grad_hooks = capture_options.capture_tensor_grad_hooks
     save_code_context = capture_options.save_code_context

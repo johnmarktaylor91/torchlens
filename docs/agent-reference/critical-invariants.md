@@ -34,7 +34,7 @@
     (`annotation_value_unportable` / `metadata_value_unportable`); load anchors manifest facts
     to the pickled state (`bundle_manifest_metadata_mismatch`) and validates graph structure,
     edge carriers, and TorchLens-owned annotation families.
-9b. tlspec v9 (C07 coordinated schema write; current): the audit grammar admits per-site
+9b. tlspec v9 (C07 coordinated schema write): the audit grammar admits per-site
     `source`, PARAM rows/recipes, and the EVENT envelope row kind (+ optional
     `seq`/`prev_event_digest` hash-chain slots); `"sidecar"` persists plainly with
     envelope-shape load validation; `"health_facts"`/`"capture_advisories"` are reserved
@@ -58,6 +58,13 @@
     `entry_state_digest`/`exit_state_digest` carried-state witness slots; v1/foreign
     versions quarantine), and entry-dark slots `Trace.root_entry_point` (written unconditionally),
     `Op.episode_step`, `Op.tl_authored_root` with fail-closed validation.
+9d. tlspec v10 (batch-2 coordinated schema write; current): one bump for every new saved
+    field of the window, each admitted by the v10 field registry
+    (`tests/test_schema_v10_contract_and_goldens.py::V10_FIELD_ADMISSIONS`) before its writer
+    lands, so no further bump follows; the writer contract states the floor release as
+    `2.31.0` (v9 froze the false "2.33"); `reserved_vocabularies.step_scores` reserves the
+    generation step-score names, credited to inseq. Contract of record
+    `torchlens/schemas/writer_contract_v10.json`; the v9 contract stays frozen beside it.
 10. `backward_ready=True` rejects contradictory detaching/disk-save settings and preserves user
     `requires_grad` choices.
 10a. `inference_only=True` wraps forward capture in `torch.no_grad()` for forward-only analysis
@@ -141,8 +148,10 @@
 18a. `Trace.run(inputs=..., fast=True)` is an explicit stateful static-loop mode: loaded sparse
     traces must first settle an ordinary run as `verified`, then may reuse staged state, compiled
     binders, and one result Trace; live traces use native forward plus targeted module hooks and
-    only explicitly requested functional collection. Per-call input, path, output structure/shape/
-    dtype, and control-witness guards remain mandatory; divergence always raises. `fast=False`
+    functional collection only for the functional ops the capture saved (an explicit functional
+    `save=` predicate or the save-all default), each module call collected by its call number.
+    Per-call input, path, output structure/shape/dtype, and control-witness guards remain
+    mandatory; divergence always raises. `fast=False`
     preserves the full transaction and attestation contract. The live session also fires a
     module-targeted staged intervention spec at module exit (the steered rerun engine behind
     `trace.run(model, x)`, which falls back to capture on a typed refusal and records it in

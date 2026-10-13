@@ -358,6 +358,7 @@
       "total_gradient_memory",
       "total_backward_memory",
       "total_autograd_memory",
+      "pinned_autograd_memory",
       "num_saved_ops",
       "saved_activation_memory",
       "saved_gradient_memory",
@@ -1063,13 +1064,13 @@
     ]
   },
   "sha256_chunks": [
-    "7df5d4c7",
-    "8874bbb9",
-    "37dc182a",
-    "2f09aecf",
-    "f3a11ff2",
-    "102971e3",
-    "7148e98d",
-    "d1229d1f"
+    "3e4c4f4f",
+    "65e95ed1",
+    "df136e32",
+    "7e20a8fb",
+    "d704cfdc",
+    "b74d7c84",
+    "7823bc09",
+    "dfba79f1"
   ]
 }
