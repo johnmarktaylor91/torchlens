@@ -20,6 +20,7 @@ from typing import Any
 
 import torch
 
+from .._debug_report import DebugReport
 from ._constants import MAX_FRACTION_DEFAULT, SUBNORMAL_FRACTION_THRESHOLD_DEFAULT
 from ._errors import CheckConfigError
 from ._records import CHECK_REPORT_SCHEMA_VERSION, CheckFinding, severity_sorted
@@ -29,7 +30,7 @@ __tl_layer__ = "L5"
 
 
 @dataclass(frozen=True)
-class ParamAudit:
+class ParamAudit(DebugReport):
     """Notebook-friendly parameter-space audit (mirrors ``TraceAudit``).
 
     ``rows`` carries one entry per unique tensor (tied aliases preserved);
@@ -45,6 +46,20 @@ class ParamAudit:
     skipped: tuple[tuple[str, str], ...]
     coverage: dict[str, Any] = field(default_factory=dict)
     schema_version: int = CHECK_REPORT_SCHEMA_VERSION
+
+    _prints_repr = True
+
+    def _report_subject(self) -> str:
+        return f"{len(self.rows)} tensors"
+
+    def _report_status(self) -> str:
+        return f"{len(self.findings)} findings" if self.findings else "clean"
+
+    def _report_findings(self) -> list[str]:
+        return [f"[{item.severity}] {item.check}: {item.message}" for item in self.findings]
+
+    def _report_rows(self) -> list[dict[str, Any]] | None:
+        return [finding.to_dict() for finding in self.findings]
 
     def to_dict(self) -> dict[str, Any]:
         """Return the versioned JSON-serializable audit payload."""

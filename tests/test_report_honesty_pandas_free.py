@@ -111,7 +111,7 @@ def test_view_attrs_match_core_attrs(grad_trace: tl.Trace) -> None:
     """With pandas present, each DataFrame view carries the core's attrs."""
 
     pytest.importorskip("pandas")
-    frame = dbg.gradient_flow_audit(grad_trace)
+    frame = dbg.gradient_flow_audit(grad_trace).to_pandas()
     rows, attrs = dbg.gradient_flow_audit_rows(grad_trace)
     assert len(frame) == len(rows)
     assert list(frame["op"]) == [row["op"] for row in rows]

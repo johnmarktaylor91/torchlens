@@ -10,11 +10,10 @@ from typing import TYPE_CHECKING, Any, Literal
 import torch
 
 if TYPE_CHECKING:
-    import pandas as pd
-
     from torchlens.data_classes.op import Op
     from torchlens.data_classes.trace import Trace
 
+from .._debug_report import DebugReport, table_report, trace_subject
 from ._common import (
     _compute_ops,
     _op_from_label,
@@ -31,7 +30,7 @@ LineageDirection = Literal["ancestors", "descendants", "both"]
 
 
 @dataclass(frozen=True)
-class LineageResult:
+class LineageResult(DebugReport):
     """Result returned by :func:`lineage`.
 
     Parameters
@@ -50,6 +49,21 @@ class LineageResult:
     direction: str
     nodes: list[tuple[str, int, str | None, tuple[int, ...] | None, str | None]]
     message: str
+
+    def _report_subject(self) -> str:
+        return f"{self.start_label} ({self.direction})"
+
+    def _report_status(self) -> str:
+        return f"{len(self.nodes)} nodes" if self.nodes else "empty"
+
+    def _report_findings(self) -> list[str]:
+        findings = [self.message] if self.message else []
+        findings.extend(f"{node[0]} (depth {node[1]})" for node in self.nodes)
+        return findings
+
+    def _report_rows(self) -> list[dict[str, Any]] | None:
+        names = ("label", "depth", "func_name", "shape", "module")
+        return [dict(zip(names, node, strict=False)) for node in self.nodes]
 
 
 def lineage(
@@ -304,7 +318,7 @@ def compare(
     *,
     rtol: float = 1e-5,
     atol: float = 1e-8,
-) -> pd.DataFrame:
+) -> DebugReport:
     """Compare saved dense floating activations across two traces.
 
     Parameters
@@ -320,7 +334,9 @@ def compare(
 
     Returns
     -------
-    pandas.DataFrame
+    DebugReport
+        Tabular ``tl.debug`` report (U42.2); ``.to_pandas()`` returns the
+        DataFrame described here.
         One row per pass-qualified op with summary counts in ``df.attrs``.
         The optional view over :func:`compare_rows` (the pandas-free core).
     """
@@ -341,7 +357,12 @@ def compare(
         ],
     )
     frame.attrs.update(attrs)
-    return frame
+    return table_report(
+        "compare",
+        frame,
+        subject=f"{trace_subject(trace_a)} vs {trace_subject(trace_b)}",
+        finding_columns=("op", "status", "max_abs", "reason"),
+    )
 
 
 def first_divergence(
@@ -480,7 +501,7 @@ def dead_neurons_rows(
     return rows, attrs
 
 
-def dead_neurons(trace: Trace, *, dim: int = 1, threshold: float = 0.0) -> pd.DataFrame:
+def dead_neurons(trace: Trace, *, dim: int = 1, threshold: float = 0.0) -> DebugReport:
     """Find units that are inactive or zero-variance in one completed trace.
 
     A single trace is a single example; zero-variance here is an insufficient-sample
@@ -498,7 +519,9 @@ def dead_neurons(trace: Trace, *, dim: int = 1, threshold: float = 0.0) -> pd.Da
 
     Returns
     -------
-    pandas.DataFrame
+    DebugReport
+        Tabular ``tl.debug`` report (U42.2); ``.to_pandas()`` returns the
+        DataFrame described here.
         Columns are ``op``, ``total_units``, ``dead_count``, ``dead_frac``,
         ``sample_dead_idx``, and ``reason``. The optional view over
         :func:`dead_neurons_rows` (the pandas-free core).
@@ -511,4 +534,9 @@ def dead_neurons(trace: Trace, *, dim: int = 1, threshold: float = 0.0) -> pd.Da
         columns=["op", "total_units", "dead_count", "dead_frac", "sample_dead_idx", "reason"],
     )
     frame.attrs.update(attrs)
-    return frame
+    return table_report(
+        "dead_neurons",
+        frame,
+        subject=trace_subject(trace),
+        finding_columns=("op", "dead_count", "total_units", "dead_frac"),
+    )

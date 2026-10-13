@@ -53,7 +53,7 @@ x = torch.randn(32, 64)
 
 # 1. LOCATE with TorchLens (instrumented; fine for ranking):
 log = tl.trace(model, x)
-ranked = tl.debug.hot_path(log, by="duration")
+ranked = tl.debug.hot_path(log, by="duration").to_pandas()
 log.cleanup()
 
 # 2. QUOTE with torch.utils.benchmark (owns warmup, sync, replicates):

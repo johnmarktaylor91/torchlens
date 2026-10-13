@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import torch
 
+from .._debug_report import DebugReport, rows_of
 from ._common import _compute_ops
 from ._gradients import gradient_flow_audit
 from ._nan import _nonfinite_kind, bisect_nan, find_nan_in_trace
@@ -49,7 +50,7 @@ class AuditFinding:
 
 
 @dataclass(frozen=True)
-class TraceAudit:
+class TraceAudit(DebugReport):
     """Notebook-friendly report from trace-local health diagnostics.
 
     Parameters
@@ -65,6 +66,23 @@ class TraceAudit:
     findings: tuple[AuditFinding, ...]
     checks_run: tuple[str, ...]
     skipped: tuple[tuple[str, str], ...]
+
+    _prints_repr = True
+
+    def _report_status(self) -> str:
+        return f"{len(self.findings)} findings" if self.findings else "clean"
+
+    def _report_severity_counts(self) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for finding in self.findings:
+            counts[str(finding.severity)] = counts.get(str(finding.severity), 0) + 1
+        return counts
+
+    def _report_findings(self) -> list[str]:
+        return [f"[{item.severity}] {item.check}: {item.message}" for item in self.findings]
+
+    def _report_rows(self) -> list[dict[str, Any]] | None:
+        return rows_of(self.findings)
 
     def __repr__(self) -> str:
         """Render a compact audit suitable for notebooks.
@@ -359,7 +377,7 @@ def audit_trace(trace: Trace | PartialTrace) -> TraceAudit:
                 )
             )
         else:
-            frame = gradient_flow_audit(trace)
+            frame = gradient_flow_audit(trace).to_pandas()
             checks_run.append("gradient_flow_audit")
             for _, row in frame[frame["severity"] > 0].iterrows():
                 findings.append(

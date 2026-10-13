@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._debug_report import DebugReport, rows_of
 from ._audit import AuditFinding, AuditSeverity
 from ._common import _compute_ops, _op_label, _safe_out
 from ._nan import _module_address, _nonfinite_kind
@@ -16,7 +17,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class DTypeRangeAudit:
+class DTypeRangeAudit(DebugReport):
     """Coverage-bounded dtype range audit result.
 
     Attributes
@@ -32,6 +33,20 @@ class DTypeRangeAudit:
     findings: tuple[AuditFinding, ...]
     n_ops_audited: int
     n_ops_total: int
+
+    _prints_repr = True
+
+    def _report_status(self) -> str:
+        return f"{len(self.findings)} findings" if self.findings else "clean"
+
+    def _report_coverage(self) -> str | None:
+        return f"{self.n_ops_audited} of {self.n_ops_total} ops audited"
+
+    def _report_findings(self) -> list[str]:
+        return [f"[{item.severity}] {item.check}: {item.message}" for item in self.findings]
+
+    def _report_rows(self) -> list[dict[str, Any]] | None:
+        return rows_of(self.findings)
 
     @property
     def coverage(self) -> float:

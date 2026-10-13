@@ -26,7 +26,7 @@ def main() -> None:
     nan_result = tl.debug.bisect_nan(trace)
     print(nan_result.message)
 
-    hot = tl.debug.hot_path(trace, by="memory")
+    hot = tl.debug.hot_path(trace, by="memory").to_pandas()
     print(hot.head())
 
 

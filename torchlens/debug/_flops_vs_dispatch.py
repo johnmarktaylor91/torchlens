@@ -27,11 +27,12 @@ from typing import Any
 
 import torch
 
+from .._debug_report import DebugReport
 from ..errors import CaptureError
 
 
 @dataclass(frozen=True)
-class FlopsCrossCheck:
+class FlopsCrossCheck(DebugReport):
     """Side-by-side dispatch-formula evidence (never an oracle).
 
     ``native_total`` and ``torchlens_total`` are both fma=2 analytic
@@ -50,6 +51,23 @@ class FlopsCrossCheck:
     witness: dict[str, Any] = field(default_factory=dict)
     provenance: dict[str, Any] = field(default_factory=dict)
     coverage_notes: tuple[str, ...] = ()
+
+    def _report_subject(self) -> str:
+        return f"torch {self.torch_version}, {self.convention}"
+
+    def _report_status(self) -> str:
+        if self.delta is None:
+            return "incomparable"
+        return "agree" if self.delta == 0 else "disagree"
+
+    def _report_findings(self) -> list[str]:
+        findings = [
+            f"torchlens_total={self.torchlens_total}, native_total={self.native_total}, "
+            f"delta={self.delta}"
+        ]
+        findings.extend(f"unknown op: {label}" for label in self.torchlens_unknown_ops)
+        findings.extend(self.coverage_notes)
+        return findings
 
     def to_dict(self) -> dict[str, Any]:
         """Return the JSON-able report."""

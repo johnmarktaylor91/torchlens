@@ -11,6 +11,7 @@ from typing import Any, cast
 import torch
 from torch import nn
 
+from .._debug_report import DebugReport, rows_of
 from .._errors import _actionable_message, _ActionableErrorMixin
 from .._input_coerce import _coerce_input_args
 from ..errors._base import CompatibilityError
@@ -128,7 +129,7 @@ class GraphBreak:
 
 
 @dataclass(frozen=True)
-class GraphBreakReport:
+class GraphBreakReport(DebugReport):
     """Structured Dynamo graph-break correlation result.
 
     Attributes
@@ -138,6 +139,23 @@ class GraphBreakReport:
     """
 
     breaks: tuple[GraphBreak, ...]
+
+    def _report_subject(self) -> str:
+        return "compiled model"
+
+    def _report_status(self) -> str:
+        return f"{len(self.breaks)} breaks" if self.breaks else "no_breaks"
+
+    def _report_findings(self) -> list[str]:
+        return [
+            f"{item.reason} at {item.source_file}:{item.line_number}"
+            if item.source_file is not None
+            else item.reason
+            for item in self.breaks
+        ]
+
+    def _report_rows(self) -> list[dict[str, Any]] | None:
+        return rows_of(self.breaks)
 
     def __len__(self) -> int:
         """Return the number of graph breaks.
