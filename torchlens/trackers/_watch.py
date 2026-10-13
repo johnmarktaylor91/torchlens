@@ -683,19 +683,7 @@ class WatchSession:
             truth_updates["unscaled"] = _EVIDENCE_TO_UNSCALED.get(self._scale_evidence, "unknown")
         if skipped or not self._optimizer_fired_this_step:
             truth_updates["optimizer_status"] = "skipped" if skipped else "unknown"
-        if isinstance(self.collector, OpGrainCollector):
-            if self.collector._block_open:
-                self.collector.settle(
-                    truth_updates, optimizer_fired=self._optimizer_fired_this_step
-                )
-        elif self.collector is not None and self.collector._block_open:
-            self.collector._block_truth.update(truth_updates)
-            if scaler is not None:
-                # D7: every gradient observation carries the boundary's scale
-                # truth, never a default; the emitter corrects "scaled" rows.
-                stamp = _EVIDENCE_TO_GRAD_SCALE.get(self._scale_evidence, "unknown")
-                for key in list(self.collector._block_grad_scale):
-                    self.collector._block_grad_scale[key] = stamp
+        self._apply_block_truth(truth_updates, scaler)
         self._step_open = False
         transaction.__exit__(
             type(failure) if failure is not None else None,
@@ -720,6 +708,23 @@ class WatchSession:
                 f"unwound: {exc.fields.get('code')}"
             )
         self._enforce_phases(step_value, failure, skipped)
+
+    def _apply_block_truth(self, truth_updates: dict[str, Any], scaler: Any) -> None:
+        """Write the step's observed truth onto the open block (either collector)."""
+
+        collector = self.collector
+        if collector is None or not collector._block_open:
+            return
+        if isinstance(collector, OpGrainCollector):
+            collector.settle(truth_updates, optimizer_fired=self._optimizer_fired_this_step)
+            return
+        collector._block_truth.update(truth_updates)
+        if scaler is not None:
+            # D7: every gradient observation carries the boundary's scale
+            # truth, never a default; the emitter corrects "scaled" rows.
+            stamp = _EVIDENCE_TO_GRAD_SCALE.get(self._scale_evidence, "unknown")
+            for key in list(collector._block_grad_scale):
+                collector._block_grad_scale[key] = stamp
 
     def _enforce_phases(
         self,

@@ -12,9 +12,9 @@ needs explicit consent and is priced at attach:
 
 - consent: ``allow_forward_wrap=True``; without it ``grain="op"`` refuses
   typed with the cost teaching;
-- calibration: an interleaved A/B (the paired-ratio overhead harness) of the
-  plain forward against the wrapped pass on ``example_input``, under
-  ``no_grad``; the RNG state and every buffer are restored after discovery
+- calibration: an interleaved A/B (the paired-ratio overhead harness, with an
+  output-structure witness) of the plain forward against the wrapped pass on
+  ``example_input``, under ``no_grad``; the RNG state and every buffer are restored after discovery
   and calibration, so attach leaves the model's state as it found it;
 - disclosure: the calibration lands in ``plan_report()``, in the
   ``torchlens/meta/op_grain_calibration`` text row and the
@@ -340,6 +340,7 @@ class OpGrainCollector:
                 reps=CALIBRATION_REPS,
                 warmup=CALIBRATION_WARMUP,
                 predicate=_CALIBRATION_PREDICATE,
+                compare=_same_structure,
             )
         finally:
             reset_rng()
@@ -455,6 +456,33 @@ class OpGrainCollector:
             if self._wrapper is not None:
                 self.model.__dict__["forward"] = self._wrapper
             self._inside = False
+
+
+def _same_structure(plain: Any, wrapped: Any) -> bool:
+    """Calibration witness: both arms returned outputs of one structure.
+
+    Value agreement is the wrong witness for a COST calibration: a model with
+    dropout (or any RNG draw the capture path orders differently) gives the
+    arms different values on one input. Shapes and dtypes of every tensor
+    leaf must agree, so the two arms ran the same program shape.
+    """
+
+    if isinstance(plain, torch.Tensor) or isinstance(wrapped, torch.Tensor):
+        return (
+            isinstance(plain, torch.Tensor)
+            and isinstance(wrapped, torch.Tensor)
+            and plain.shape == wrapped.shape
+            and plain.dtype == wrapped.dtype
+        )
+    if isinstance(plain, (tuple, list)) and isinstance(wrapped, (tuple, list)):
+        return len(plain) == len(wrapped) and all(
+            _same_structure(a, b) for a, b in zip(plain, wrapped, strict=True)
+        )
+    if isinstance(plain, Mapping) and isinstance(wrapped, Mapping):
+        return plain.keys() == wrapped.keys() and all(
+            _same_structure(plain[key], wrapped[key]) for key in plain
+        )
+    return type(plain) is type(wrapped)
 
 
 def _fastlog_args(args: tuple[Any, ...]) -> Any:
