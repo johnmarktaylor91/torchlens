@@ -141,9 +141,10 @@ def _run_with_detached_activation_guidance(
     except RuntimeError as exc:
         if labels and str(exc) == _NO_GRAD_AUTOGRAD_ERROR:
             guidance = (
-                f"TorchLens retained activation {labels[0]!r} after detaching it from autograd "
-                "in the default capture mode. Re-trace with backward_ready=True before "
-                "building a loss from this saved activation."
+                f"TorchLens retained activation {labels[0]!r} detached from autograd "
+                "(detach_saved_activations=True, the tl.record and tl.extract default). "
+                "Re-trace with backward_ready=True and without detach_saved_activations=True "
+                "before building a loss from this saved activation."
             )
             exc.args = (f"{exc}\n\n{guidance}", *exc.args[1:])
         raise

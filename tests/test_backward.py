@@ -172,11 +172,20 @@ def _saved_relu(trace: tl.Trace) -> torch.Tensor:
 
 
 def test_detached_saved_activation_backward_names_backward_ready_remedy() -> None:
-    """A TorchLens-detached retained activation gives targeted backward guidance."""
+    """A TorchLens-detached retained activation gives targeted backward guidance.
+
+    The trace opts into detaching (U27.1: a default trace keeps selector saves
+    graph-connected; ``tl.record`` and ``tl.extract`` detach by default).
+    """
 
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
-    trace = tl.trace(model, x, save=tl.func("relu"))
+    trace = tl.trace(
+        model,
+        x,
+        save=tl.func("relu"),
+        capture=CaptureOptions(detach_saved_activations=True),
+    )
     saved = _saved_relu(trace)
 
     with pytest.raises(RuntimeError, match=r"Re-trace with backward_ready=True") as exc_info:
@@ -185,6 +194,19 @@ def test_detached_saved_activation_backward_names_backward_ready_remedy() -> Non
     assert type(exc_info.value) is RuntimeError
     assert str(exc_info.value).startswith(_NO_GRAD_AUTOGRAD_ERROR)
     assert x.grad is None
+
+
+def test_default_trace_selector_save_keeps_the_graph_for_backward() -> None:
+    """A default-trace selector save keeps the graph, so backward reaches the input (U27.1)."""
+
+    model = _TinyBackwardModel()
+    x = torch.randn(2, 3, requires_grad=True)
+    trace = tl.trace(model, x, save=tl.func("relu"))
+    saved = _saved_relu(trace)
+
+    assert saved.grad_fn is not None
+    saved.sum().backward()
+    assert x.grad is not None
 
 
 def test_unrelated_detached_tensor_backward_keeps_native_error() -> None:
