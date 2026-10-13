@@ -2529,10 +2529,16 @@ class Trace(
         -------
         _CallableList
             Module addresses present on the source model but absent from the
-            captured module accessor. Returns an empty list when the source
-            model is no longer available.
+            captured module accessor, recorded when the capture finished.
+            Returns an empty list when that record is missing (a loaded or
+            unpickled trace) and the source model is no longer available;
+            ``num_uncalled_modules`` reads ``None`` in that case.
         """
 
+        workspace = self.__dict__.get("_module_capture_ws")
+        stored = getattr(workspace, "uncalled_module_addresses", None)
+        if stored is not None:
+            return _CallableList(stored)
         source_ref = getattr(self, "_source_model_ref", None)
         model = source_ref() if source_ref is not None else None
         if model is None:

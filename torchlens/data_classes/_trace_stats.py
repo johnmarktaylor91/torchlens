@@ -1729,9 +1729,13 @@ class TraceStatsMixin(_TraceMixinBase):
 
     @property
     def num_buffer_layers(self: "Trace") -> int:
-        """Number of buffer-boundary Layers."""
+        """Number of distinct buffer-boundary Layers.
 
-        return len(self.buffer_layers)
+        ``buffer_layers`` lists a buffer Layer once per pass (a buffer read in
+        a loop repeats), so the count dedupes it.
+        """
+
+        return len(dict.fromkeys(self.buffer_layers))
 
     @property
     def buffer_read_ops(self: "Trace") -> list[str]:
@@ -1832,9 +1836,21 @@ class TraceStatsMixin(_TraceMixinBase):
         return len(self.internal_sink_ops)
 
     @property
-    def num_uncalled_modules(self: "Trace") -> int:
-        """Number of registered source-model modules not called in this Trace."""
+    def num_uncalled_modules(self: "Trace") -> int | None:
+        """Number of registered source-model modules not called in this Trace.
 
+        Recorded when the capture finished, so it survives the source model
+        being garbage-collected. ``None`` when it cannot be known: a loaded or
+        unpickled trace (the record is session-time) whose model is gone.
+        """
+
+        workspace = self.__dict__.get("_module_capture_ws")
+        stored = getattr(workspace, "uncalled_module_addresses", None)
+        if stored is not None:
+            return len(stored)
+        source_ref = getattr(self, "_source_model_ref", None)
+        if source_ref is None or source_ref() is None:
+            return None
         return len(self.uncalled_modules)
 
     @property

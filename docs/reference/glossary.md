@@ -842,6 +842,30 @@ one exact `other_neurons` row.
   `summary(...)` and `tl.utils.flop_count(...)`; the removed `count_fma_as_two=`
   spelling refuses typed naming it.
 
+**Autograd-saved bytes**
+: `Op.autograd_memory` / `Op.num_autograd_tensors` count the tensors the captured forward's
+  autograd saved for that op's backward (each storage once within the op; a view counts in full),
+  and `Layer.total_autograd_memory`, `ModuleCall.autograd_memory`,
+  `Module.total_autograd_memory` and `Trace.total_autograd_memory` sum those per-op bands, so a
+  tensor two ops save counts twice. Capture runs floating Parameters with `requires_grad=True`
+  unless `backward_ready=True`, so on frozen Parameters these and `Trace.pinned_autograd_memory`
+  exceed what an eager forward saves; with `backward_ready=True` they match eager.
+
+**Module and call counts**
+: `ModuleCall.num_ops` counts the call's pass-qualified Ops (the root call included: a Layer it
+  runs twice counts twice) and `ModuleCall.num_layers` the distinct Layers among them.
+  `Trace.num_buffer_layers` counts distinct buffer Layers, not their passes. `Param.num_calls` is
+  the number of Ops that consumed the parameter (0 for a never-called module's parameters).
+  `Trace.num_uncalled_modules` is recorded when the capture finishes, so it survives the source
+  model being collected; it reads `None` when it cannot be known (a loaded or unpickled trace
+  whose model is gone), never 0.
+
+**Conditional depth**
+: `Op.conditional_depth` and `Layer.conditional_depth` count the distinct conditionals the record
+  takes a direct role in (evaluating the condition or running in an arm), as listed in
+  `in_conditionals`; an op nested in two `if` bodies has a role only in the inner one. Nesting
+  depth is `len(conditional_branch_stack)`.
+
 **Lookup and reentrancy errors**
 : `tl.AmbiguousOpLookupError` is raised when a bare Op lookup matches multiple
   pass-qualified Ops; `tl.ReentrantTraceError` when a trace is started while another

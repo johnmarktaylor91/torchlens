@@ -48,6 +48,7 @@ from ..data_classes.prehook import ModuleInputSnapshot, PreHookEffect
 from ..ir.container_registry import _iter_tensor_leaves
 from ..quantities import Bytes, Duration, Flops
 from ..utils._torch_symbols import torch_attr
+from ._module_census import bind_layer_conditional_roles, op_space_labels, uncalled_module_addresses
 
 if TYPE_CHECKING:
     from ..data_classes.layer import Layer
@@ -102,7 +103,7 @@ def _finalize_param_logs(self: "Trace") -> None:
     - Adds the Op label to each Param's used_by_ops list.
     - Adds the Layer label to each Param's used_by_layers list.
     - Links params that co-occur in the same operation (co_parent_params).
-    - Sets num_calls = max(1, len(used_by_ops)).
+    - Sets num_calls = len(used_by_ops) (0 for a parameter no op consumed).
 
     Then clears actual Parameter tensor references (parent_params) from
     Op entries to reduce memory. Param._param_ref is released after the
@@ -146,7 +147,7 @@ def _finalize_param_logs(self: "Trace") -> None:
 
     # Populate num_calls: how many times this parameter was used in the forward pass
     for pl in self.param_logs:
-        pl.num_calls = max(1, len(pl.used_by_ops))
+        pl.num_calls = len(pl.used_by_ops)
         pl.source_trace = self
 
     # Adopt the finished Param rows into the per-trace kind table (M8): each
@@ -252,10 +253,10 @@ def _build_root_module_log(
         address="self",
         call_index=1,
         call_label="self:1",
-        ops=root_layers,
+        ops=[op.label for op in self.layer_list],  # Op space, as on every other call
         input_layers=_layer_space_labels(self, self.input_layers),
         output_layers=_layer_space_labels(self, self.output_layers),
-        output_ops=list(self.output_layers),
+        output_ops=op_space_labels(self, self.output_layers),
         output_structure=_first_output_structure(self, list(self.output_layers)),
         inputs_before_pre_hooks=root_pre_hook_provenance[0],
         inputs_after_pre_hooks=root_pre_hook_provenance[1],
@@ -1031,6 +1032,7 @@ def _build_module_logs(self: "Trace") -> None:
         adopt_records(_core, "module_call", pass_dict.values())
 
     rebuild_trace_accessors(self, module_dict, module_order, pass_dict)
+    self._module_capture_ws.uncalled_module_addresses = uncalled_module_addresses(self)
 
     # Clean up temporary build state to free memory. These dicts are only
     # needed during construction and are not part of the user-facing API.
@@ -1465,6 +1467,7 @@ def _build_conditional_records(self: "Trace") -> None:
             )
         else:
             layer.terminal_bool_for = None
+    bind_layer_conditional_roles(self, roles_by_label)
 
     self.conditionals = ConditionalAccessor(conditionals)
 

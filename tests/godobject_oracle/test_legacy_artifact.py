@@ -159,18 +159,12 @@ def test_legacy_runnable_artifact_runs_verified() -> None:
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "pre-fix stored scalar: an artifact written before the root module call "
-        "counted as a saved module call (AGT-2362) persists num_saved_module_calls "
-        "without the root, and the loader does not refresh it, so it trails the "
-        "live saved_module_calls accessor by one; fix the loader, then re-record "
-        "legacy_baseline_cnn_loaded.json"
-    ),
-)
 def test_legacy_artifact_saved_module_call_count_matches_live_accessor() -> None:
-    """A loaded artifact's stored saved-call count equals the live accessor."""
+    """A loaded artifact's stored saved-call count equals the live accessor.
+
+    The artifact predates the root call counting among saved module calls
+    (AGT-2362); the loader re-derives the stored scalar.
+    """
 
     with expect_bundle_minor_version_mismatch():
         loaded = tl.load(str(_ANALYSIS_ARTIFACT))

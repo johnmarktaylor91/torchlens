@@ -741,6 +741,20 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
                 param_log._lazy_at_prep = True  # type: ignore[attr-defined]
             param_logs[param_address] = param_log
 
+    # ``model.modules()`` yields a module object once, so a module registered
+    # under a second name (``self.tied2 = self.tied``) never reaches the alias
+    # branch above; the duplicate-keeping walk supplies those addresses.
+    for alias_address, param in model.named_parameters(remove_duplicate=False):
+        primary_address = param_id_to_address.get(id(param))
+        if primary_address is None:
+            continue
+        param_log = param_logs[primary_address]
+        if alias_address not in param_log.all_addresses:
+            param_log.all_addresses.append(alias_address)
+        alias_module_address = alias_address.rpartition(".")[0] or "self"
+        if alias_module_address not in param_log.all_module_addresses:
+            param_log.all_module_addresses.append(alias_module_address)
+
     trace._param_log_by_pid = param_id_to_address
     trace._session_param_inventory = stamped_params
     trace.param_logs = ParamAccessor(param_logs)
