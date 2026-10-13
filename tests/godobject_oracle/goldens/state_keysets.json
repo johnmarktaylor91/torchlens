@@ -99,6 +99,7 @@
    "visualizer_path"
   ],
   "module": [
+   "_attribute_writes",
    "_buffer_accessor",
    "_source_trace_ref",
    "address",
@@ -780,6 +781,7 @@
    "visualizer_path"
   ],
   "module": [
+   "_attribute_writes",
    "_buffer_accessor",
    "_source_trace_ref",
    "address",
@@ -2152,6 +2154,7 @@
    "visualizer_path"
   ],
   "module": [
+   "_attribute_writes",
    "_buffer_accessor",
    "_source_trace_ref",
    "address",

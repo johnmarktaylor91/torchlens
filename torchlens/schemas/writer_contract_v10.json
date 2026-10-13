@@ -354,6 +354,7 @@
     "_source_ref": "weakref_strip"
    },
    "torchlens.data_classes.module.Module": {
+    "_attribute_writes": "drop",
     "_buffer_accessor": "drop",
     "_facets_cache": "drop",
     "_source_trace_ref": "weakref_strip",
@@ -362,6 +363,7 @@
     "address_depth": "keep",
     "address_parent": "keep",
     "all_addresses": "keep",
+    "attribute_writes": "drop",
     "backward_duration": "keep",
     "backward_hooks": "keep",
     "backward_pre_hooks": "keep",
@@ -2150,6 +2152,7 @@
     "aliases": [],
     "class": "torchlens.data_classes.module.Module",
     "field_policies": {
+     "_attribute_writes": "drop",
      "_buffer_accessor": "drop",
      "_facets_cache": "drop",
      "_source_trace_ref": "weakref_strip",
@@ -2158,6 +2161,7 @@
      "address_depth": "keep",
      "address_parent": "keep",
      "all_addresses": "keep",
+     "attribute_writes": "drop",
      "backward_duration": "keep",
      "backward_hooks": "keep",
      "backward_pre_hooks": "keep",
@@ -4071,5 +4075,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "bf5407227d5a7eff18ce1fbf195272919287c66542022b48b682daccc0ac4b8f"
+ "writer_contract_digest": "909598f3d81c4648adee47a382105d2128f0e9722212d5034a3806d4bc8dbaa3"
 }

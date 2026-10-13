@@ -349,3 +349,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 470f77239fc0da496b0048f25219f1480225a7bf (dirty)
 recorded: 2026-10-13T04:48:17.698429+00:00
+---
+generator: tests/test_state_keyset_contract.py
+flag: TORCHLENS_UPDATE_STATE_KEYSET_ORACLE=1
+reason: AGT-2360 (JMT ruling 2026-10-12, batch-2 lane OBSERVER): Module records gain the session-time attribute_writes field (DROP, never persisted)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 3abe59625acdb0f1b6aea4fe9fc71e2ed30ccc36 (dirty)
+recorded: 2026-10-13T05:59:44.291266+00:00
+---
+generator: tests/godobject_oracle legacy
+flag: TORCHLENS_UPDATE_LEGACY_ARTIFACT_ORACLE=1
+reason: AGT-2360 (JMT ruling 2026-10-12, batch-2 lane OBSERVER): Module records gain the session-time attribute_writes field (DROP, never persisted)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 3abe59625acdb0f1b6aea4fe9fc71e2ed30ccc36 (dirty)
+recorded: 2026-10-13T05:59:50.932214+00:00

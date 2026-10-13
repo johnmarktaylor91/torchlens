@@ -763,3 +763,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 470f77239fc0da496b0048f25219f1480225a7bf (clean)
 recorded: 2026-10-13T04:48:09.644454+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: AGT-2360 (JMT ruling 2026-10-12, batch-2 lane OBSERVER): Module records gain the session-time attribute_writes field (DROP, never persisted)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 3abe59625acdb0f1b6aea4fe9fc71e2ed30ccc36 (clean)
+recorded: 2026-10-13T05:59:36.409075+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: AGT-2360 (JMT ruling 2026-10-12, batch-2 lane OBSERVER): Module records gain the session-time attribute_writes field (DROP, never persisted)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 3abe59625acdb0f1b6aea4fe9fc71e2ed30ccc36 (clean)
+recorded: 2026-10-13T05:59:36.439328+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: AGT-2360 (JMT ruling 2026-10-12, batch-2 lane OBSERVER): Module records gain the session-time attribute_writes field (DROP, never persisted)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 3abe59625acdb0f1b6aea4fe9fc71e2ed30ccc36 (clean)
+recorded: 2026-10-13T05:59:36.467394+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: AGT-2360 (JMT ruling 2026-10-12, batch-2 lane OBSERVER): Module records gain the session-time attribute_writes field (DROP, never persisted)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 3abe59625acdb0f1b6aea4fe9fc71e2ed30ccc36 (clean)
+recorded: 2026-10-13T05:59:36.494118+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: AGT-2360 (JMT ruling 2026-10-12, batch-2 lane OBSERVER): Module records gain the session-time attribute_writes field (DROP, never persisted)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 3abe59625acdb0f1b6aea4fe9fc71e2ed30ccc36 (clean)
+recorded: 2026-10-13T05:59:36.520055+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: AGT-2360 (JMT ruling 2026-10-12, batch-2 lane OBSERVER): Module records gain the session-time attribute_writes field (DROP, never persisted)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 3abe59625acdb0f1b6aea4fe9fc71e2ed30ccc36 (clean)
+recorded: 2026-10-13T05:59:36.552600+00:00

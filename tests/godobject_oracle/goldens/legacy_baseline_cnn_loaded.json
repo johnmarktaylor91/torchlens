@@ -2126,6 +2126,7 @@
    "all_addresses": [
     "conv"
    ],
+   "attribute_writes": null,
    "backward_duration": "<measured>",
    "backward_hooks": [],
    "backward_pre_hooks": [],
@@ -2341,6 +2342,7 @@
    "all_addresses": [
     "head"
    ],
+   "attribute_writes": null,
    "backward_duration": "<measured>",
    "backward_hooks": [],
    "backward_pre_hooks": [],
@@ -2530,6 +2532,7 @@
    "all_addresses": [
     "self"
    ],
+   "attribute_writes": null,
    "backward_duration": "<measured>",
    "backward_hooks": [],
    "backward_pre_hooks": [],

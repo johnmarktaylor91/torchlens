@@ -12585,6 +12585,7 @@
     "all_addresses": [
      "encoder"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -13002,6 +13003,7 @@
     "all_addresses": [
      "encoder.dropout"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -13187,6 +13189,7 @@
     "all_addresses": [
      "encoder.dropout1"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -13372,6 +13375,7 @@
     "all_addresses": [
      "encoder.dropout2"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -13557,6 +13561,7 @@
     "all_addresses": [
      "encoder.linear1"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -13747,6 +13752,7 @@
     "all_addresses": [
      "encoder.linear2"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -13937,6 +13943,7 @@
     "all_addresses": [
      "encoder.norm1"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -14130,6 +14137,7 @@
     "all_addresses": [
      "encoder.norm2"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -14325,6 +14333,7 @@
     "all_addresses": [
      "encoder.self_attn"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -14645,6 +14654,7 @@
     "all_addresses": [
      "self"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -48457,6 +48467,7 @@
     "all_addresses": [
      "encoder"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -48874,6 +48885,7 @@
     "all_addresses": [
      "encoder.dropout"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -49059,6 +49071,7 @@
     "all_addresses": [
      "encoder.dropout1"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -49244,6 +49257,7 @@
     "all_addresses": [
      "encoder.dropout2"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -49429,6 +49443,7 @@
     "all_addresses": [
      "encoder.linear1"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -49619,6 +49634,7 @@
     "all_addresses": [
      "encoder.linear2"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -49809,6 +49825,7 @@
     "all_addresses": [
      "encoder.norm1"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -50002,6 +50019,7 @@
     "all_addresses": [
      "encoder.norm2"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -50197,6 +50215,7 @@
     "all_addresses": [
      "encoder.self_attn"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -50517,6 +50536,7 @@
     "all_addresses": [
      "self"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -84381,6 +84401,7 @@
     "all_addresses": [
      "encoder"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -84798,6 +84819,7 @@
     "all_addresses": [
      "encoder.dropout"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -84983,6 +85005,7 @@
     "all_addresses": [
      "encoder.dropout1"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -85168,6 +85191,7 @@
     "all_addresses": [
      "encoder.dropout2"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -85353,6 +85377,7 @@
     "all_addresses": [
      "encoder.linear1"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -85543,6 +85568,7 @@
     "all_addresses": [
      "encoder.linear2"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -85733,6 +85759,7 @@
     "all_addresses": [
      "encoder.norm1"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -85926,6 +85953,7 @@
     "all_addresses": [
      "encoder.norm2"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -86121,6 +86149,7 @@
     "all_addresses": [
      "encoder.self_attn"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -86441,6 +86470,7 @@
     "all_addresses": [
      "self"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -120249,6 +120279,7 @@
     "all_addresses": [
      "encoder"
     ],
+    "attribute_writes": null,
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -120666,6 +120697,7 @@
     "all_addresses": [
      "encoder.dropout"
     ],
+    "attribute_writes": null,
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -120851,6 +120883,7 @@
     "all_addresses": [
      "encoder.dropout1"
     ],
+    "attribute_writes": null,
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -121036,6 +121069,7 @@
     "all_addresses": [
      "encoder.dropout2"
     ],
+    "attribute_writes": null,
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -121221,6 +121255,7 @@
     "all_addresses": [
      "encoder.linear1"
     ],
+    "attribute_writes": null,
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -121411,6 +121446,7 @@
     "all_addresses": [
      "encoder.linear2"
     ],
+    "attribute_writes": null,
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -121601,6 +121637,7 @@
     "all_addresses": [
      "encoder.norm1"
     ],
+    "attribute_writes": null,
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -121794,6 +121831,7 @@
     "all_addresses": [
      "encoder.norm2"
     ],
+    "attribute_writes": null,
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -121989,6 +122027,7 @@
     "all_addresses": [
      "encoder.self_attn"
     ],
+    "attribute_writes": null,
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -122309,6 +122348,7 @@
     "all_addresses": [
      "self"
     ],
+    "attribute_writes": null,
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],

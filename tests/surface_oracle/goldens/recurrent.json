@@ -1632,6 +1632,7 @@
     "all_addresses": [
      "cell"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -1793,6 +1794,7 @@
     "all_addresses": [
      "self"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -8128,6 +8130,7 @@
     "all_addresses": [
      "cell"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -8289,6 +8292,7 @@
     "all_addresses": [
      "self"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -14623,6 +14627,7 @@
     "all_addresses": [
      "cell"
     ],
+    "attribute_writes": null,
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -14784,6 +14789,7 @@
     "all_addresses": [
      "self"
     ],
+    "attribute_writes": null,
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -21051,6 +21057,7 @@
     "all_addresses": [
      "cell"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -21212,6 +21219,7 @@
     "all_addresses": [
      "self"
     ],
+    "attribute_writes": "<builtins.mappingproxy>",
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -27544,6 +27552,7 @@
     "all_addresses": [
      "cell"
     ],
+    "attribute_writes": null,
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
@@ -27705,6 +27714,7 @@
     "all_addresses": [
      "self"
     ],
+    "attribute_writes": null,
     "backward_duration": "<measured>",
     "backward_hooks": [],
     "backward_pre_hooks": [],
