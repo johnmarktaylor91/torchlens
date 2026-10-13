@@ -67,6 +67,22 @@ def _same(left: Any, right: Any) -> bool:
     return bool(left == right)
 
 
+#: Trace fields ``tl.save``'s source-privacy policy rewrites (compared separately).
+_SOURCE_FILE_FIELDS = {
+    "class_source_file",
+    "init_source_file",
+    "forward_source_file",
+    "backward_source_file",
+}
+_PRIVACY_FIELDS = _SOURCE_FILE_FIELDS | {
+    "init_signature",
+    "forward_signature",
+    "backward_signature",
+    "annotations",
+    "_source_code_blob",
+}
+
+
 def _keep(record: str) -> set[str]:
     """KEEP-policy field names of one writer-contract record."""
 
@@ -107,8 +123,23 @@ def test_trace_round_trips_through_safetensors(tmp_path: Path) -> None:
     for name in _keep("trace") & set(trace_state):
         in_fields = name in loaded.trace_fields
         assert in_fields != (name in loaded.omitted["trace"]), name
-        if in_fields:
-            assert _same(loaded.trace_fields[name], trace_state[name]), name
+        if not in_fields or name in _PRIVACY_FIELDS:
+            continue
+        assert _same(loaded.trace_fields[name], trace_state[name]), name
+    for name in _SOURCE_FILE_FIELDS & set(loaded.trace_fields):
+        raw = trace_state[name]
+        assert loaded.trace_fields[name] == (Path(raw).name if raw else raw), name
+
+
+def test_export_embeds_no_host_path(tmp_path: Path) -> None:
+    """tl.save's source-privacy policy applies: no absolute path reaches the file."""
+
+    path = tl.export.safetensors(_trace(), tmp_path / "trace.safetensors")
+    data = path.read_bytes()
+    (header_len,) = struct.unpack("<Q", data[:8])
+    header_text = data[8 : 8 + header_len].decode("utf-8")
+    for host_path in (str(Path(__file__).resolve().parent), str(Path.home())):
+        assert host_path not in header_text
 
 
 def test_export_file_is_pure_safetensors_with_no_pickle(tmp_path: Path) -> None:
@@ -152,7 +183,8 @@ def _rewrite_header(path: Path, **changes: Any) -> None:
 
     with safe_open(str(path), framework="pt") as handle:
         document = json.loads(handle.metadata()["torchlens"])
-        tensors = {name: handle.get_tensor(name) for name in handle.keys()}
+        names = list(handle.keys())
+        tensors = {name: handle.get_tensor(name) for name in names}
     document.update(changes)
     save_file(tensors, str(path), metadata={"torchlens": json.dumps(document)})
 

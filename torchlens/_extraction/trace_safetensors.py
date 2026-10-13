@@ -7,6 +7,8 @@ document in the safetensors header. ``tl.io.read_safetensors(path)`` reads it
 back. The file holds no pickle: safetensors stores raw tensor bytes plus a
 string header, so reading it never executes code.
 
+Source metadata passes through ``tl.save``'s own source-privacy policy (at
+its default: paths reduced to basenames), so no host path reaches the file.
 Metadata follows the writer contract of record (``writer_contract()``): for
 the ``trace`` record and every ``op`` record, each KEEP-policy field whose
 value has an exact JSON encoding is written, and every KEEP field without
@@ -362,6 +364,47 @@ def _storable(tensor: Any) -> bool:
     )
 
 
+def _portable_trace_state(trace: Any) -> dict[str, Any]:
+    """Return the Trace's state under ``tl.save``'s source-privacy policy.
+
+    The same policy bodies a portable save applies (at its default,
+    ``include_source=True``): source-file paths reduce to bare basenames,
+    signature defaults lose absolute-path literals, capture advisories lose
+    their absolute locations, and the source-code blob is re-made
+    path-free. The live Trace is never mutated (``annotations`` is copied
+    before the advisory policy rebuilds its rows).
+
+    Parameters
+    ----------
+    trace:
+        The Trace being exported.
+
+    Returns
+    -------
+    dict[str, Any]
+        A shallow state copy with the privacy policy applied.
+    """
+
+    from .._io._source_privacy import (
+        _apply_advisory_source_policy,
+        _apply_source_metadata_policy,
+        _apply_trace_blob_policy,
+    )
+    from .._io.scrub import _ScrubOptions
+    from ..data_classes._state_adapter import state_items
+
+    state = dict(state_items(trace))
+    if isinstance(state.get("annotations"), dict):
+        state["annotations"] = dict(state["annotations"])
+    options = _ScrubOptions(
+        include_outs=False, include_grads=False, include_saved_args=False, include_rng_states=False
+    )
+    _apply_advisory_source_policy(state, options)
+    _apply_source_metadata_policy(state, options)
+    _apply_trace_blob_policy(state, options)
+    return state
+
+
 def write_trace_safetensors(trace: Any, path: str | Path) -> Path:
     """Export one Trace to a single safetensors file (no pickle).
 
@@ -401,7 +444,7 @@ def write_trace_safetensors(trace: Any, path: str | Path) -> Path:
         )
     contract = writer_contract()
     trace_fields, trace_omitted = _encode_record(
-        dict(state_items(trace)), _keep_fields(contract, "trace")
+        _portable_trace_state(trace), _keep_fields(contract, "trace")
     )
     op_keep = _keep_fields(contract, "op")
     ops: dict[str, Any] = {}
@@ -429,6 +472,7 @@ def write_trace_safetensors(trace: Any, path: str | Path) -> Path:
         "writer_contract_digest": writer_contract_digest(contract),
         "torchlens_version": __version__,
         "records": ["trace", "op"],
+        "source_policy": "tl.save default: source text kept, source paths reduced to basenames",
         "capture_honesty": capture_honesty_facts(trace),
         "op_labels": list(trace.op_labels),
         "trace": trace_fields,

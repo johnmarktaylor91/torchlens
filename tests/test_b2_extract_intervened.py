@@ -278,9 +278,7 @@ def test_pre_r208_manifest_still_loads_and_resumes(tmp_path: Path) -> None:
     (tmp_path / MANIFEST_FILENAME).write_text(json.dumps(manifest), encoding="utf-8")
     assert torch.equal(open_extraction(tmp_path).materialize()["d"], full["d"])
     _interrupt_after(tmp_path, 2)
-    manifest = _manifest(tmp_path)
-    del manifest[HARVEST_BLOCK_KEY]
-    (tmp_path / MANIFEST_FILENAME).write_text(json.dumps(manifest), encoding="utf-8")
+    assert HARVEST_BLOCK_KEY not in _manifest(tmp_path)
     extract_dataset(model, _stimuli(), _LAYERS, resume=True, **kwargs)
     resumed = open_extraction(tmp_path).materialize()
     assert all(torch.equal(resumed[key], full[key]) for key in full)
