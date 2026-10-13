@@ -804,6 +804,11 @@ def capture_with_rescue(
         # disabling every later rescue on it.
         _thread_local.rescue_active = True
         set_rng_from_saved_states(rng_snapshot)
+        # The re-run starts from the plain-attribute state the first forward
+        # started from (the capture observer's snapshot), never from what the
+        # first forward left; buffers keep the R16-2 refusal above.
+        if _state._capture_attribute_rewind is not None:
+            _state._capture_attribute_rewind()
         # The rescue run's own capture-failed advisory is deferred too: its
         # exception never propagates (the primary's error or trace does), so
         # an advisory pointing at ITS exc.partial_log would always be untrue.

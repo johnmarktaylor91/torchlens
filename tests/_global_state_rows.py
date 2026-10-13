@@ -13,6 +13,11 @@ obvious from the name.
 
 _SCOPED_CAPTURE_STATE = frozenset(
     {
+        # Capture observer's attribute rewind (AGT-2360): set by
+        # capture_observer_bracket for the capture it wraps and restored to the
+        # enclosing value in its finally; the escape-rescue re-run calls it. A
+        # survivor would let a later rescue rewind a finished capture's model.
+        ("torchlens/_state.py", "_capture_attribute_rewind"),
         # torch.ops recorder suppression depth: incremented/decremented in the
         # census redispatch's own try/finally; a survivor would silently stop
         # recording user torch.ops calls.

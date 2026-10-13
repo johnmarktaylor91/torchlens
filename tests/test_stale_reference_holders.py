@@ -47,6 +47,7 @@ from torchlens.backends.torch import rescue
 from torchlens.backends.torch._tl import is_decorated_function
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.options import CaptureOptions
+from torchlens.types import AttributeWrite
 
 _PROVENANCE = "no graph/source provenance"
 _Acts = namedtuple("_Acts", ["first"])
@@ -251,10 +252,13 @@ def test_unrebindable_stale_reference_is_disclosed_and_rescued(
     with pytest.warns(UserWarning, match=r"adopted at module exit inner\.act"):
         trace = tl.trace(model, torch.randn(2, 4))
 
-    assert forward_runs(trace, model) == 2
+    # Two forwards ran (the disclosure says so), but the re-run started from the
+    # pre-capture attributes, so the record holds ONE forward's write.
+    assert forward_runs(trace, model) == 1
     assert "gelu" in [op.func_name for op in trace.ops]
     assert "internalsource" not in [layer.layer_type for layer in trace.layer_list]
     assert trace.rescue_rerun is not None and trace.rescue_rerun["recovered"] is True
+    assert trace.rescue_rerun["forward_runs"] == 2
     assert trace.capture_verified is False
     assert trace.capture_verification_reason == "mode_rescue_rerun"
 
@@ -400,6 +404,47 @@ def test_aliased_holders_stay_aliased_during_the_capture(raw: types.SimpleNamesp
     assert stashed(trace, "seen") == [True]
     assert [op.func_name for op in trace.ops].count("gelu") == 2
     assert model.a is held and model.b is held
+
+
+class _CounterBranchEscape(nn.Module):
+    """Takes the escaping branch only on its first call (a counter-driven branch)."""
+
+    def __init__(self, raw: types.SimpleNamespace) -> None:
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+        self.act = _BoxHolder(raw.gelu)  # unrebindable holder: escapes, forces the rescue
+        self.calls = 0
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        self.calls += 1
+        h = self.fc(x)
+        return self.act(h) if self.calls == 1 else torch.tanh(h)
+
+
+@pytest.mark.parametrize("carry", [False, True], ids=["default", "carry_state"])
+def test_rescue_rerun_starts_from_the_pre_capture_attribute_state(
+    raw: types.SimpleNamespace, carry: bool
+) -> None:
+    """The rescue's second forward sees the attributes the first forward started from.
+
+    Without the rewind the re-run saw ``calls == 1`` left by the first forward,
+    took the other branch and returned a ``tanh`` graph no single forward from
+    the pre-capture state produces. ``carry_state=True`` ends with exactly one
+    forward's writes.
+    """
+
+    model = _CounterBranchEscape(raw)
+    wrap_torch()
+    options = {"capture": CaptureOptions(carry_state=True)} if carry else {}
+    with pytest.warns(UserWarning, match=r"adopted at module exit act"):
+        trace = tl.trace(model, torch.randn(2, 4), **options)
+
+    func_names = [op.func_name for op in trace.ops]
+    assert "gelu" in func_names and "tanh" not in func_names
+    assert trace.rescue_rerun is not None and trace.rescue_rerun["recovered"] is True
+    assert trace.rescue_rerun["forward_runs"] == 2
+    assert trace.modules["self"].attribute_writes["calls"] == AttributeWrite("replaced", 1)
+    assert model.calls == (1 if carry else 0)
 
 
 class _Editing(nn.Module):

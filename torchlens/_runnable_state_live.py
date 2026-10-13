@@ -328,6 +328,27 @@ def attach_attribute_writes(
 
 
 @contextmanager
+def _attribute_rewind(attrs: tuple[ModuleAttrSnapshot, ...]) -> Iterator[None]:
+    """Publish the rewind the escape-rescue re-run calls before its second forward.
+
+    The rewind restores plain attributes to ``attrs`` (the pre-forward
+    snapshot); a slot it cannot restore is retried, and disclosed, by the
+    bracket's own settle after the capture.
+    """
+
+    def rewind() -> None:
+        with _state.pause_logging(), torch.no_grad():
+            settle_module_attrs(attrs, restore=True)
+
+    previous = _state._capture_attribute_rewind
+    _state._capture_attribute_rewind = rewind
+    try:
+        yield
+    finally:
+        _state._capture_attribute_rewind = previous
+
+
+@contextmanager
 def capture_observer_bracket(
     model: Any, *, carry_state: bool, on_failure: Callable[[], None] | None = None
 ) -> Iterator[CaptureObserverHandle]:
@@ -352,19 +373,22 @@ def capture_observer_bracket(
         modules = _observed_modules(model)
         with _state.pause_logging(), torch.no_grad():
             attrs = snapshot_module_attrs(modules)
-        try:
-            yield handle
-        except BaseException:
-            if on_failure is not None:
-                on_failure()
-            raise
+        with _attribute_rewind(attrs):
+            try:
+                yield handle
+            except BaseException:
+                if on_failure is not None:
+                    on_failure()
+                raise
+        # Success only: a raising forward propagates past this point.
         with _state.pause_logging(), torch.no_grad():
             writes, _failed = settle_module_attrs(attrs, restore=False)
         attach_attribute_writes(handle.trace, tuple(modules), writes)
         return
     snapshot = snapshot_capture_observer_state(model)
     try:
-        yield handle
+        with _attribute_rewind(snapshot.attrs):
+            yield handle
     except BaseException as exc:
         restore_capture_observer_state(snapshot, handle.trace or getattr(exc, "partial_log", None))
         if on_failure is not None:

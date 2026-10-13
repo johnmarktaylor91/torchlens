@@ -108,6 +108,15 @@ this to know *where* to record tensor operations.  Always None outside a
 logging session.
 """
 
+_capture_attribute_rewind: Any | None = None
+"""Puts plain module attributes back to the capture's pre-forward snapshot.
+
+Set by the capture observer bracket (``_runnable_state_live``) for the capture
+it wraps and restored in its ``finally``; the escape-rescue re-run calls it
+before the second forward, so the re-run starts from the state the first
+forward started from. ``None`` outside a ``tl.trace`` capture.
+"""
+
 _active_fast_run_collector: Any | None = None
 """Explicit fast-run collector active around one native live-model forward.
 
