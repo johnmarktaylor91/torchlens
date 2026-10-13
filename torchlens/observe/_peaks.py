@@ -81,14 +81,14 @@ def pass_peak_facts(trace: Any, which: str = "forward") -> PassPeakFacts:
     if not backend or backend == "unknown" or peak is None:
         # forks.13: a CPU forward delta of 0 is recorded as None WITH the
         # reason (naming measure_python_peak_memory=True); surface it verbatim.
+        # The reason explains a CPU measurement only, never an unknown backend.
         reason = getattr(trace, f"{which}_peak_memory_reason", None)
+        explained = backend == "cpu" and isinstance(reason, str) and bool(reason)
         return PassPeakFacts(
             which=which,
             backend=backend if isinstance(backend, str) else None,
             value_bytes=None,
-            meaning=reason
-            if isinstance(reason, str) and reason
-            else "not measured on this capture",
+            meaning=reason if explained else "not measured on this capture",
             ratio_eligible=False,
             caveat="",
         )

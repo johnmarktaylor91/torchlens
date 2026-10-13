@@ -140,13 +140,16 @@ class GraphBreakReport(DebugReport):
 
     breaks: tuple[GraphBreak, ...]
 
-    def _report_subject(self) -> str:
-        return "compiled model"
+    _subject_text = "compiled model"
 
     def _report_status(self) -> str:
+        """The verdict token on the card's lead line."""
+
         return f"{len(self.breaks)} breaks" if self.breaks else "no_breaks"
 
     def _report_findings(self) -> list[str]:
+        """One-line findings for the card, most severe first."""
+
         return [
             f"{item.reason} at {item.source_file}:{item.line_number}"
             if item.source_file is not None
@@ -155,6 +158,8 @@ class GraphBreakReport(DebugReport):
         ]
 
     def _report_rows(self) -> list[dict[str, Any]] | None:
+        """The natural table rows behind ``to_pandas()``."""
+
         return rows_of(self.breaks)
 
     def __len__(self) -> int:

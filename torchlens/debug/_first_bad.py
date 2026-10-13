@@ -85,12 +85,18 @@ class FirstBadThing(FoundReport):
     message: str = ""
 
     def _report_subject(self) -> str:
+        """What this report examined (the card's subject)."""
+
         return str(self.tool)
 
     def _report_coverage(self) -> str | None:
+        """What this report did and did not examine."""
+
         return str(self.coverage) or None
 
     def _report_findings(self) -> list[str]:
+        """One-line findings for the card, most severe first."""
+
         findings = [self.message] if self.message else []
         if self.label is not None:
             findings.append(f"first bad: {self.label} ({self.kind}) at {self.source_line}")

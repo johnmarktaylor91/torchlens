@@ -51,17 +51,25 @@ class LineageResult(DebugReport):
     message: str
 
     def _report_subject(self) -> str:
+        """What this report examined (the card's subject)."""
+
         return f"{self.start_label} ({self.direction})"
 
     def _report_status(self) -> str:
+        """The verdict token on the card's lead line."""
+
         return f"{len(self.nodes)} nodes" if self.nodes else "empty"
 
     def _report_findings(self) -> list[str]:
+        """One-line findings for the card, most severe first."""
+
         findings = [self.message] if self.message else []
         findings.extend(f"{node[0]} (depth {node[1]})" for node in self.nodes)
         return findings
 
     def _report_rows(self) -> list[dict[str, Any]] | None:
+        """The natural table rows behind ``to_pandas()``."""
+
         names = ("label", "depth", "func_name", "shape", "module")
         return [dict(zip(names, node, strict=False)) for node in self.nodes]
 

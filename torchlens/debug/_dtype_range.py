@@ -37,15 +37,23 @@ class DTypeRangeAudit(DebugReport):
     _prints_repr = True
 
     def _report_status(self) -> str:
+        """The verdict token on the card's lead line."""
+
         return f"{len(self.findings)} findings" if self.findings else "clean"
 
     def _report_coverage(self) -> str | None:
+        """What this report did and did not examine."""
+
         return f"{self.n_ops_audited} of {self.n_ops_total} ops audited"
 
     def _report_findings(self) -> list[str]:
+        """One-line findings for the card, most severe first."""
+
         return [f"[{item.severity}] {item.check}: {item.message}" for item in self.findings]
 
     def _report_rows(self) -> list[dict[str, Any]] | None:
+        """The natural table rows behind ``to_pandas()``."""
+
         return rows_of(self.findings)
 
     @property

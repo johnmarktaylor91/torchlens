@@ -53,14 +53,20 @@ class FlopsCrossCheck(DebugReport):
     coverage_notes: tuple[str, ...] = ()
 
     def _report_subject(self) -> str:
+        """What this report examined (the card's subject)."""
+
         return f"torch {self.torch_version}, {self.convention}"
 
     def _report_status(self) -> str:
+        """The verdict token on the card's lead line."""
+
         if self.delta is None:
             return "incomparable"
         return "agree" if self.delta == 0 else "disagree"
 
     def _report_findings(self) -> list[str]:
+        """One-line findings for the card, most severe first."""
+
         findings = [
             f"torchlens_total={self.torchlens_total}, native_total={self.native_total}, "
             f"delta={self.delta}"

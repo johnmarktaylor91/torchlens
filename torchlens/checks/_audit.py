@@ -50,15 +50,23 @@ class ParamAudit(DebugReport):
     _prints_repr = True
 
     def _report_subject(self) -> str:
+        """What this report examined (the card's subject)."""
+
         return f"{len(self.rows)} tensors"
 
     def _report_status(self) -> str:
+        """The verdict token on the card's lead line."""
+
         return f"{len(self.findings)} findings" if self.findings else "clean"
 
     def _report_findings(self) -> list[str]:
+        """One-line findings for the card, most severe first."""
+
         return [f"[{item.severity}] {item.check}: {item.message}" for item in self.findings]
 
     def _report_rows(self) -> list[dict[str, Any]] | None:
+        """The natural table rows behind ``to_pandas()``."""
+
         return [finding.to_dict() for finding in self.findings]
 
     def to_dict(self) -> dict[str, Any]:

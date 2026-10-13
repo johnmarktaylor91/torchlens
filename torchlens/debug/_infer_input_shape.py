@@ -88,8 +88,7 @@ class InferInputShapeResult(FoundReport):
     trace: Trace | None
     message: str
 
-    def _report_subject(self) -> str:
-        return f"input shape ({self.strategy})"
+    _subject_text = "input shape"
 
 
 @dataclass(frozen=True)

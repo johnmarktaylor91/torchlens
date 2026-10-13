@@ -70,18 +70,26 @@ class TraceAudit(DebugReport):
     _prints_repr = True
 
     def _report_status(self) -> str:
+        """The verdict token on the card's lead line."""
+
         return f"{len(self.findings)} findings" if self.findings else "clean"
 
     def _report_severity_counts(self) -> dict[str, int]:
+        """Finding counts by severity for the lead line."""
+
         counts: dict[str, int] = {}
         for finding in self.findings:
             counts[str(finding.severity)] = counts.get(str(finding.severity), 0) + 1
         return counts
 
     def _report_findings(self) -> list[str]:
+        """One-line findings for the card, most severe first."""
+
         return [f"[{item.severity}] {item.check}: {item.message}" for item in self.findings]
 
     def _report_rows(self) -> list[dict[str, Any]] | None:
+        """The natural table rows behind ``to_pandas()``."""
+
         return rows_of(self.findings)
 
     def __repr__(self) -> str:

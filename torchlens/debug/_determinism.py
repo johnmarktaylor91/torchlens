@@ -118,12 +118,18 @@ class DeterminismReport(DebugReport):
     message: str = ""
 
     def _report_subject(self) -> str:
+        """What this report examined (the card's subject)."""
+
         return f"{self.runs} runs, seed={self.seed}"
 
     def _report_status(self) -> str:
+        """The verdict token on the card's lead line."""
+
         return str(self.verdict)
 
     def _report_findings(self) -> list[str]:
+        """One-line findings for the card, most severe first."""
+
         findings = [self.message] if self.message else []
         findings.extend(f"divergent op: {label}" for label in self.divergent_ops)
         findings.extend(f"non-finite op: {label}" for label in self.nonfinite_ops)

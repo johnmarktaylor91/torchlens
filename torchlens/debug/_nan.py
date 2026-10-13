@@ -117,6 +117,8 @@ class FindNanResult(FoundReport):
     _prints_repr = True
 
     def _report_subject(self) -> str:
+        """What this report examined (the card's subject)."""
+
         return str(self.scope)
 
     @property
@@ -679,18 +681,26 @@ class NanReport(DebugReport):
     defer_recipe: str = _DETECT_ANOMALY_RECIPE
 
     def _report_subject(self) -> str:
+        """What this report examined (the card's subject)."""
+
         return f"{self.phase} pass"
 
     def _report_status(self) -> str:
+        """The verdict token on the card's lead line."""
+
         return "found" if self.found else "not_found"
 
     def _report_coverage(self) -> str | None:
+        """What this report did and did not examine."""
+
         return (
             f"{self.checked} checked, {self.unchecked} unchecked, "
             f"{self.unexamined} unexamined (basis: {self.coverage_basis})"
         )
 
     def _report_findings(self) -> list[str]:
+        """One-line findings for the card, most severe first."""
+
         findings = []
         if self.origin_label is not None:
             findings.append(f"origin: {self.origin_label} ({self.kind})")

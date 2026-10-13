@@ -45,7 +45,7 @@ def _require_pandas() -> Any:
 
     try:
         import pandas as pd
-    except ImportError as exc:  # pragma: no cover - pandas ships in the test extra
+    except ImportError as exc:
         raise ImportError(
             "DebugReport.to_pandas() requires pandas. Install with `pip install torchlens[tabular]`."
         ) from exc
@@ -133,6 +133,9 @@ class DebugReport:
     #: keep printing it; the card is then available as :meth:`card`.
     _prints_repr = False
 
+    #: The subject a report prints when it does not compute one.
+    _subject_text = "trace"
+
     @property
     def report_type(self) -> str:
         """The report's type name (the lead's first token)."""
@@ -152,9 +155,9 @@ class DebugReport:
         return str(self._report_status())
 
     def _report_subject(self) -> str:
-        """Return the subject; subclasses override."""
+        """Return the subject; subclasses override or set ``_subject_text``."""
 
-        return "trace"
+        return self._subject_text
 
     def _report_status(self) -> str:
         """Return the verdict token; subclasses override."""
@@ -262,9 +265,13 @@ class FoundReport(DebugReport):
     __slots__ = ()
 
     def _report_status(self) -> str:
+        """The verdict token on the card's lead line."""
+
         return "found" if getattr(self, "found", False) else "not_found"
 
     def _report_findings(self) -> list[str]:
+        """One-line findings for the card, most severe first."""
+
         message = getattr(self, "message", "")
         return [str(message)] if message else []
 
@@ -300,12 +307,18 @@ class _TableReport(DebugReport):
         return self.helper
 
     def _report_subject(self) -> str:
+        """What this report examined (the card's subject)."""
+
         return self.subject_text
 
     def _report_status(self) -> str:
+        """The verdict token on the card's lead line."""
+
         return "empty" if len(self.frame) == 0 else f"{len(self.frame)} rows"
 
     def _report_findings(self) -> list[str]:
+        """One-line findings for the card, most severe first."""
+
         columns = [column for column in self.finding_columns if column in self.frame.columns]
         findings = []
         for record in self.frame[columns].to_dict(orient="records"):

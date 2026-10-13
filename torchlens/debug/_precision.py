@@ -105,6 +105,8 @@ class BisectPrecisionResult(FoundReport):
     message: str
 
     def _report_findings(self) -> list[str]:
+        """One-line findings for the card, most severe first."""
+
         findings = [self.message] if self.message else []
         findings.extend(
             f"{row.label}: max_abs_err={row.max_abs_err:.4g}" for row in self.rows if row.diverged
@@ -112,6 +114,8 @@ class BisectPrecisionResult(FoundReport):
         return findings
 
     def _report_rows(self) -> list[dict[str, Any]] | None:
+        """The natural table rows behind ``to_pandas()``."""
+
         return rows_of(self.rows)
 
 
