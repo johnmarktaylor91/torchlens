@@ -31,14 +31,26 @@ class _PtrProbe:
 
     def __init__(self) -> None:
         self.seen_ptrs: list[int] = []
-        # Held so no observed storage is freed and its address reused while
-        # the tests compare pointers.
+
+    def __call__(self, t: torch.Tensor) -> torch.Tensor:
+        self.seen_ptrs.append(t.untyped_storage().data_ptr())
+        return t.detach().float().sum().unsqueeze(0)
+
+
+class _HoldingPtrProbe(_PtrProbe):
+    """Pointer probe that also keeps every tensor it saw alive.
+
+    For the copy-path test only: a converted copy freed after the reducer could
+    hand its address to a later live output, a false overlap.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
         self.seen: list[torch.Tensor] = []
 
     def __call__(self, t: torch.Tensor) -> torch.Tensor:
         self.seen.append(t)
-        self.seen_ptrs.append(t.untyped_storage().data_ptr())
-        return t.detach().float().sum().unsqueeze(0)
+        return super().__call__(t)
 
 
 class TestCloneSkipTrace:
@@ -158,7 +170,7 @@ class TestCloneSkipFastlog:
             live_ptrs.append(output.untyped_storage().data_ptr())
 
         handles = [m.register_forward_hook(hook) for m in model]
-        probe = _PtrProbe()
+        probe = _HoldingPtrProbe()
         try:
             tl.record(
                 model,

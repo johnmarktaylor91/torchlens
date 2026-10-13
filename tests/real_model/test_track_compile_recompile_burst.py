@@ -116,8 +116,22 @@ _BUILDS: dict[str, Callable[[], tuple[nn.Module, torch.Tensor]]] = {
 _CHILD_SCRIPT = (
     "import json, runpy, sys; "
     "ns = runpy.run_path(sys.argv[1]); "
-    "print(json.dumps({'bursts': ns['_measure_bursts'](sys.argv[2])}))"
+    "print(json.dumps({'bursts': ns['_child_main'](sys.argv[2])}))"
 )
+
+
+def _child_main(build_name: str) -> list[int]:
+    """Child-process entry: the suite session's warmup capture, then the measurement.
+
+    tests/conftest.py captures once at session start, so torch is already
+    wrapped when a suite test compiles; the child does the same so the bursts
+    are measured under the conditions the bounds were recorded in.
+    """
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        tl.trace(nn.Linear(2, 2), torch.zeros(1, 2)).cleanup()
+    return _measure_bursts(build_name)
 
 
 def _measure_bursts(build_name: str) -> list[int]:
