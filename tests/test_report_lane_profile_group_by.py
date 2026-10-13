@@ -7,6 +7,7 @@ measurement, so every additive column sums to the ungrouped op view.
 from __future__ import annotations
 
 import inspect
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -41,9 +42,13 @@ def _line_of(marker: str) -> int:
 
 
 @pytest.fixture(scope="module")
-def two_line_trace() -> Any:
+def two_line_trace() -> Iterator[Any]:
     torch.manual_seed(0)
-    return tl.trace(_TwoLineModel(), torch.randn(2, 4))
+    captured = tl.trace(_TwoLineModel(), torch.randn(2, 4))
+    try:
+        yield captured
+    finally:
+        captured.cleanup()
 
 
 def test_grouped_activation_bytes_sum_to_the_ungrouped_view(two_line_trace) -> None:

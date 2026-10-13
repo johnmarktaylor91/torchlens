@@ -9,7 +9,7 @@ break is the return type only.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import Any
 
 import pytest
@@ -47,15 +47,22 @@ def x() -> torch.Tensor:
 
 
 @pytest.fixture(scope="module")
-def trace(model: nn.Module, x: torch.Tensor) -> Any:
-    return tl.trace(model, x)
+def trace(model: nn.Module, x: torch.Tensor) -> Iterator[Any]:
+    captured = tl.trace(model, x)
+    try:
+        yield captured
+    finally:
+        captured.cleanup()
 
 
 @pytest.fixture(scope="module")
-def grad_trace(model: nn.Module, x: torch.Tensor) -> Any:
+def grad_trace(model: nn.Module, x: torch.Tensor) -> Iterator[Any]:
     captured = tl.trace(model, x, capture=CaptureOptions(save_grads=True))
     captured.log_backward(captured[captured.output_layers[0]].out.sum())
-    return captured
+    try:
+        yield captured
+    finally:
+        captured.cleanup()
 
 
 def _helper_calls() -> dict[str, Callable[[dict[str, Any]], Any]]:
