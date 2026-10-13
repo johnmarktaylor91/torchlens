@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -158,13 +158,18 @@ def _discharged_structure_only_trace() -> tl.Trace:
 
 
 @pytest.fixture(scope="module")
-def planted() -> dict[str, tl.Trace]:
-    """Both planted captures, keyed by family."""
+def planted() -> Iterator[dict[str, tl.Trace]]:
+    """Both planted captures, keyed by family, released at teardown."""
 
-    return {
+    traces = {
         "disclosing": _planted_disclosing_trace(),
         "structure_only": _discharged_structure_only_trace(),
     }
+    try:
+        yield traces
+    finally:
+        for trace in traces.values():
+            trace.cleanup()
 
 
 def _enumerated_facts(planted: dict[str, tl.Trace]) -> dict[str, tuple[str, Any]]:

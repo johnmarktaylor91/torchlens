@@ -9,6 +9,7 @@ output, in the artifact's node metadata and in the sidecar.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -68,19 +69,29 @@ def _deep(seed: int) -> nn.Module:
 
 
 @pytest.fixture(scope="module")
-def pair() -> tuple[tl.Trace, tl.Trace]:
+def pair() -> Iterator[tuple[tl.Trace, tl.Trace]]:
     """Subject and reference captures of one MLP architecture, different weights."""
 
     x = torch.randn(2, 3, generator=torch.Generator().manual_seed(7))
-    return tl.trace(_mlp(0), x), tl.trace(_mlp(1), x)
+    traces = (tl.trace(_mlp(0), x), tl.trace(_mlp(1), x))
+    try:
+        yield traces
+    finally:
+        for trace in traces:
+            trace.cleanup()
 
 
 @pytest.fixture(scope="module")
-def deep_pair() -> tuple[tl.Trace, tl.Trace]:
+def deep_pair() -> Iterator[tuple[tl.Trace, tl.Trace]]:
     """Subject and reference captures of the nested model."""
 
     x = torch.randn(2, 4, generator=torch.Generator().manual_seed(7))
-    return tl.trace(_deep(0), x), tl.trace(_deep(1), x)
+    traces = (tl.trace(_deep(0), x), tl.trace(_deep(1), x))
+    try:
+        yield traces
+    finally:
+        for trace in traces:
+            trace.cleanup()
 
 
 def _all_nodes(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:

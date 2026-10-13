@@ -9,6 +9,7 @@ skips it there while an explicit ``attachment=True`` still refuses.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -53,11 +54,15 @@ class _Net(nn.Module):
 
 
 @pytest.fixture(scope="module")
-def log() -> tl.Trace:
-    """One small capture shared by the module."""
+def log() -> Iterator[tl.Trace]:
+    """One small capture shared by the module, released at teardown."""
 
     torch.manual_seed(0)
-    return tl.trace(_Net(), torch.randn(2, 4))
+    trace = tl.trace(_Net(), torch.randn(2, 4))
+    try:
+        yield trace
+    finally:
+        trace.cleanup()
 
 
 def _companion(path: Path) -> Path:
