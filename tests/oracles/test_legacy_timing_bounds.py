@@ -180,9 +180,11 @@ class _DispatchCount(TorchDispatchMode):
     def __init__(self) -> None:
         super().__init__()
         self.count = 0
+        self.scalar_reads = 0  # tensor-to-Python reads (``if t:``, ``.item()``)
 
     def __torch_dispatch__(self, func, types, args=(), kwargs=None):
         self.count += 1
+        self.scalar_reads += str(func) == "aten._local_scalar_dense.default"
         return func(*args, **(kwargs or {}))
 
 
