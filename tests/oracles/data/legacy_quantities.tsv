@@ -267,6 +267,7 @@ Trace.num_saved_ops	int	quantity	num_saved_ops	green	tests/backend_parity/test_b
 Trace.num_tensors	int	quantity	num_tensors	red-needs-oracle	-	-
 Trace.num_uncalled_modules	int	quantity	num_uncalled_modules	red-needs-oracle	-	-
 Trace.overhead_duration	Duration	quantity	overhead_duration	red-needs-oracle	-	-
+Trace.pinned_autograd_memory	Bytes	quantity	pinned_autograd_memory	red-needs-oracle	-	R2-37 disclosure of autograd bytes the attached saved activations keep alive; added after the part-A base; autograd family (part B)
 Trace.random_seed	int	identifier	-	-	-	seed echo
 Trace.saved_activation_memory	Bytes	quantity	saved_activation_memory	green	tests/test_brainpipe_byte_model.py::test_saved_activation_memory_equals_real_retained_bytes (I1)	-
 Trace.saved_gradient_memory	Bytes	quantity	saved_gradient_memory	red-needs-oracle	-	-

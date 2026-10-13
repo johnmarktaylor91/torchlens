@@ -94,7 +94,9 @@ class Mixed(nn.Module):
 @pytest.fixture(scope="module")
 def graph_trace():
     torch.manual_seed(0)
-    trace = tl.trace(Graph().eval(), (torch.randn(2, 4), torch.randn(2, 4)))
+    # Hold the model: uncalled_modules reads the live source model.
+    model = Graph().eval()
+    trace = tl.trace(model, (torch.randn(2, 4), torch.randn(2, 4)))
     yield trace
     trace.cleanup()
 
@@ -129,7 +131,8 @@ def grad_trace():
 @pytest.fixture(scope="module")
 def mixed_trace():
     torch.manual_seed(0)
-    trace = tl.trace(Mixed().eval(), torch.randn(2, 4))
+    model = Mixed().eval()
+    trace = tl.trace(model, torch.randn(2, 4))
     yield trace
     trace.cleanup()
 
