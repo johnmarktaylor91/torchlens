@@ -1371,7 +1371,15 @@ def _grad_fn_forward_op(site: Any) -> Any:
 
 
 def _grad_fn_boundary_aliases(site: Any) -> tuple[Any, ...]:
-    """Return input/output alias ops sharing a GradFn identity with ``site``.
+    """Return every other op sharing a GradFn identity with ``site``.
+
+    One autograd node can back several captured ops: synthetic input/output
+    ops, and identity calls that return their input tensor itself (``dropout``
+    in eval mode, a no-op ``contiguous`` or ``to``), whose output IS the
+    paired op's output. A forward selector naming any of them names that
+    tensor's gradient, so each one is a matching subject (a module whose
+    output op is an eval-mode dropout matched no GradFn before, and its
+    gradient edit was a silent no-op).
 
     Parameters
     ----------
@@ -1381,23 +1389,40 @@ def _grad_fn_boundary_aliases(site: Any) -> tuple[Any, ...]:
     Returns
     -------
     tuple[Any, ...]
-        Synthetic input/output ops whose ``grad_fn_object_id`` equals the
-        GradFn's object id, excluding the already-paired op.
+        Ops whose ``grad_fn_object_id`` equals the GradFn's object id,
+        excluding the already-paired op.
     """
 
     trace = site.source_trace
     if trace is None:
         return ()
     paired_label = site.op_label
+    paired = _grad_fn_forward_op(site)
+    # Identity is proved, never assumed from a shared ``id()``: a recorded id
+    # could in principle be reused by an unrelated node after its first owner
+    # was freed. An identity call's input is alive while it runs, so a child
+    # of an already-accepted op that shares the node IS the same tensor.
+    accepted = {str(paired_label)}
+    if paired is not None and int(getattr(paired, "num_passes", 1) or 1) <= 1:
+        accepted.add(str(getattr(paired, "label", paired_label)))
+    paired_parents = (
+        {str(parent) for parent in getattr(paired, "parents", ()) or ()}
+        if paired is not None and int(getattr(paired, "num_passes", 1) or 1) <= 1
+        else set()
+    )
     aliases: list[Any] = []
     for layer in getattr(trace, "layer_list", ()):
         if getattr(layer, "layer_label", None) == paired_label:
             continue
         if getattr(layer, "grad_fn_object_id", None) != site.grad_fn_object_id:
             continue
-        if not (getattr(layer, "is_input", False) or getattr(layer, "is_output", False)):
+        parents = {str(parent) for parent in getattr(layer, "parents", ()) or ()}
+        names = {str(getattr(layer, name, "")) for name in ("label", "layer_label")}
+        boundary = getattr(layer, "is_input", False) or getattr(layer, "is_output", False)
+        if not (boundary or parents & accepted or names & paired_parents):
             continue
         aliases.append(layer)
+        accepted.update(str(getattr(layer, name, "")) for name in ("label", "layer_label"))
     return tuple(aliases)
 
 
