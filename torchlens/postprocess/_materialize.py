@@ -1474,6 +1474,12 @@ def _buffer_write_fields(
         if producer_label_raw in op_event_labels:
             fields["parents"] = [producer_label_raw]
             fields["parent_arg_positions"] = {"args": {0: producer_label_raw}, "kwargs": {}}
+            # A version node is logged like a source tensor, but once its
+            # producer is attached it has a parent, and an internal source is
+            # a parentless non-input node (the IR rule in op_record_scatter).
+            # Capture drops the node from internal_source_ops at the same
+            # point (BufferWriteTracker._log_buffer_version_node).
+            fields["is_internal_source"] = False
         by_label[label_raw] = fields
     return by_label
 

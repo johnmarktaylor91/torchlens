@@ -1205,7 +1205,7 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
+    "is_internal_source": false,
     "is_module_input": false,
     "is_orphan": false,
     "is_output": false,
@@ -1979,7 +1979,7 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
+    "is_internal_source": false,
     "is_module_input": false,
     "is_orphan": false,
     "is_output": false,
@@ -2244,7 +2244,7 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
+    "is_internal_source": false,
     "is_module_input": false,
     "is_orphan": false,
     "is_output": false,
@@ -5354,10 +5354,12 @@
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": [
-      "\"buffer_2\""
+      "\"buffer_1\""
      ]
     },
-    "internal_source_parents": [],
+    "internal_source_parents": [
+     "add_1_1"
+    ],
     "intervention_replaced": false,
     "interventions": [],
     "io_role": null,
@@ -5372,8 +5374,8 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
-    "is_internally_initialized": true,
+    "is_internal_source": false,
+    "is_internally_initialized": false,
     "is_module_input": false,
     "is_module_output": false,
     "is_orphan": false,
@@ -6401,10 +6403,13 @@
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": [
-      "\"buffer_5\""
+      "\"buffer_3\"",
+      "\"buffer_4\""
      ]
     },
-    "internal_source_parents": [],
+    "internal_source_parents": [
+     "batchnorm_1_2"
+    ],
     "intervention_replaced": false,
     "interventions": [],
     "io_role": null,
@@ -6419,8 +6424,8 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
-    "is_internally_initialized": true,
+    "is_internal_source": false,
+    "is_internally_initialized": false,
     "is_module_input": false,
     "is_module_output": false,
     "is_orphan": false,
@@ -6777,10 +6782,13 @@
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": [
-      "\"buffer_6\""
+      "\"buffer_3\"",
+      "\"buffer_4\""
      ]
     },
-    "internal_source_parents": [],
+    "internal_source_parents": [
+     "batchnorm_1_2"
+    ],
     "intervention_replaced": false,
     "interventions": [],
     "io_role": null,
@@ -6795,8 +6803,8 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
-    "is_internally_initialized": true,
+    "is_internal_source": false,
+    "is_internally_initialized": false,
     "is_module_input": false,
     "is_module_output": false,
     "is_orphan": false,
@@ -8926,11 +8934,8 @@
    "internal_source_layers": "<torchlens.data_classes.layer.LayerAccessor>",
    "internal_source_ops": [
     "buffer_1:1",
-    "buffer_2:1",
     "buffer_3:1",
-    "buffer_4:1",
-    "buffer_5:1",
-    "buffer_6:1"
+    "buffer_4:1"
    ],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
@@ -9576,8 +9581,8 @@
    "num_input_ops": 1,
    "num_internal_sink_layers": 3,
    "num_internal_sink_ops": 3,
-   "num_internal_source_layers": 6,
-   "num_internal_source_ops": 6,
+   "num_internal_source_layers": 3,
+   "num_internal_source_ops": 3,
    "num_layer_edges": 9,
    "num_layers": 11,
    "num_layers_with_params": 1,
@@ -9603,8 +9608,8 @@
    "num_saved_grad_modules": 0,
    "num_saved_grad_ops": 0,
    "num_saved_layers": 11,
-   "num_saved_module_calls": 1,
-   "num_saved_modules": 1,
+   "num_saved_module_calls": 2,
+   "num_saved_modules": 2,
    "num_saved_ops": 11,
    "num_tensors": 11,
    "num_uncalled_modules": 0,
@@ -10981,7 +10986,7 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
+    "is_internal_source": false,
     "is_module_input": false,
     "is_orphan": false,
     "is_output": false,
@@ -11755,7 +11760,7 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
+    "is_internal_source": false,
     "is_module_input": false,
     "is_orphan": false,
     "is_output": false,
@@ -12020,7 +12025,7 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
+    "is_internal_source": false,
     "is_module_input": false,
     "is_orphan": false,
     "is_output": false,
@@ -15130,10 +15135,12 @@
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": [
-      "\"buffer_2\""
+      "\"buffer_1\""
      ]
     },
-    "internal_source_parents": [],
+    "internal_source_parents": [
+     "add_1_1"
+    ],
     "intervention_replaced": false,
     "interventions": [],
     "io_role": null,
@@ -15148,8 +15155,8 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
-    "is_internally_initialized": true,
+    "is_internal_source": false,
+    "is_internally_initialized": false,
     "is_module_input": false,
     "is_module_output": false,
     "is_orphan": false,
@@ -16177,10 +16184,13 @@
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": [
-      "\"buffer_5\""
+      "\"buffer_3\"",
+      "\"buffer_4\""
      ]
     },
-    "internal_source_parents": [],
+    "internal_source_parents": [
+     "batchnorm_1_2"
+    ],
     "intervention_replaced": false,
     "interventions": [],
     "io_role": null,
@@ -16195,8 +16205,8 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
-    "is_internally_initialized": true,
+    "is_internal_source": false,
+    "is_internally_initialized": false,
     "is_module_input": false,
     "is_module_output": false,
     "is_orphan": false,
@@ -16553,10 +16563,13 @@
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": [
-      "\"buffer_6\""
+      "\"buffer_3\"",
+      "\"buffer_4\""
      ]
     },
-    "internal_source_parents": [],
+    "internal_source_parents": [
+     "batchnorm_1_2"
+    ],
     "intervention_replaced": false,
     "interventions": [],
     "io_role": null,
@@ -16571,8 +16584,8 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
-    "is_internally_initialized": true,
+    "is_internal_source": false,
+    "is_internally_initialized": false,
     "is_module_input": false,
     "is_module_output": false,
     "is_orphan": false,
@@ -18690,11 +18703,8 @@
    "internal_source_layers": "<torchlens.data_classes.layer.LayerAccessor>",
    "internal_source_ops": [
     "buffer_1:1",
-    "buffer_2:1",
     "buffer_3:1",
-    "buffer_4:1",
-    "buffer_5:1",
-    "buffer_6:1"
+    "buffer_4:1"
    ],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
@@ -19340,8 +19350,8 @@
    "num_input_ops": 1,
    "num_internal_sink_layers": 3,
    "num_internal_sink_ops": 3,
-   "num_internal_source_layers": 6,
-   "num_internal_source_ops": 6,
+   "num_internal_source_layers": 3,
+   "num_internal_source_ops": 3,
    "num_layer_edges": 9,
    "num_layers": 11,
    "num_layers_with_params": 1,
@@ -19367,8 +19377,8 @@
    "num_saved_grad_modules": 0,
    "num_saved_grad_ops": 0,
    "num_saved_layers": 11,
-   "num_saved_module_calls": 1,
-   "num_saved_modules": 1,
+   "num_saved_module_calls": 2,
+   "num_saved_modules": 2,
    "num_saved_ops": 11,
    "num_tensors": 11,
    "num_uncalled_modules": 0,
@@ -20733,7 +20743,7 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
+    "is_internal_source": false,
     "is_module_input": false,
     "is_orphan": false,
     "is_output": false,
@@ -21507,7 +21517,7 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
+    "is_internal_source": false,
     "is_module_input": false,
     "is_orphan": false,
     "is_output": false,
@@ -21772,7 +21782,7 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
+    "is_internal_source": false,
     "is_module_input": false,
     "is_orphan": false,
     "is_output": false,
@@ -24882,10 +24892,12 @@
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": [
-      "\"buffer_2\""
+      "\"buffer_1\""
      ]
     },
-    "internal_source_parents": [],
+    "internal_source_parents": [
+     "add_1_1"
+    ],
     "intervention_replaced": false,
     "interventions": [],
     "io_role": null,
@@ -24900,8 +24912,8 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
-    "is_internally_initialized": true,
+    "is_internal_source": false,
+    "is_internally_initialized": false,
     "is_module_input": false,
     "is_module_output": false,
     "is_orphan": false,
@@ -25929,10 +25941,13 @@
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": [
-      "\"buffer_5\""
+      "\"buffer_3\"",
+      "\"buffer_4\""
      ]
     },
-    "internal_source_parents": [],
+    "internal_source_parents": [
+     "batchnorm_1_2"
+    ],
     "intervention_replaced": false,
     "interventions": [],
     "io_role": null,
@@ -25947,8 +25962,8 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
-    "is_internally_initialized": true,
+    "is_internal_source": false,
+    "is_internally_initialized": false,
     "is_module_input": false,
     "is_module_output": false,
     "is_orphan": false,
@@ -26305,10 +26320,13 @@
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": [
-      "\"buffer_6\""
+      "\"buffer_3\"",
+      "\"buffer_4\""
      ]
     },
-    "internal_source_parents": [],
+    "internal_source_parents": [
+     "batchnorm_1_2"
+    ],
     "intervention_replaced": false,
     "interventions": [],
     "io_role": null,
@@ -26323,8 +26341,8 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
-    "is_internally_initialized": true,
+    "is_internal_source": false,
+    "is_internally_initialized": false,
     "is_module_input": false,
     "is_module_output": false,
     "is_orphan": false,
@@ -28394,11 +28412,8 @@
    "internal_source_layers": "<torchlens.data_classes.layer.LayerAccessor>",
    "internal_source_ops": [
     "buffer_1:1",
-    "buffer_2:1",
     "buffer_3:1",
-    "buffer_4:1",
-    "buffer_5:1",
-    "buffer_6:1"
+    "buffer_4:1"
    ],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
@@ -29044,8 +29059,8 @@
    "num_input_ops": 1,
    "num_internal_sink_layers": 3,
    "num_internal_sink_ops": 3,
-   "num_internal_source_layers": 6,
-   "num_internal_source_ops": 6,
+   "num_internal_source_layers": 3,
+   "num_internal_source_ops": 3,
    "num_layer_edges": 9,
    "num_layers": 11,
    "num_layers_with_params": 1,
@@ -29071,8 +29086,8 @@
    "num_saved_grad_modules": 0,
    "num_saved_grad_ops": 0,
    "num_saved_layers": 11,
-   "num_saved_module_calls": 1,
-   "num_saved_modules": 1,
+   "num_saved_module_calls": 2,
+   "num_saved_modules": 2,
    "num_saved_ops": 11,
    "num_tensors": 11,
    "num_uncalled_modules": 0,
@@ -30443,7 +30458,7 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
+    "is_internal_source": false,
     "is_module_input": false,
     "is_orphan": false,
     "is_output": false,
@@ -31217,7 +31232,7 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
+    "is_internal_source": false,
     "is_module_input": false,
     "is_orphan": false,
     "is_output": false,
@@ -31482,7 +31497,7 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
+    "is_internal_source": false,
     "is_module_input": false,
     "is_orphan": false,
     "is_output": false,
@@ -34592,10 +34607,12 @@
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": [
-      "\"buffer_2\""
+      "\"buffer_1\""
      ]
     },
-    "internal_source_parents": [],
+    "internal_source_parents": [
+     "add_1_1"
+    ],
     "intervention_replaced": false,
     "interventions": [],
     "io_role": null,
@@ -34610,8 +34627,8 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
-    "is_internally_initialized": true,
+    "is_internal_source": false,
+    "is_internally_initialized": false,
     "is_module_input": false,
     "is_module_output": false,
     "is_orphan": false,
@@ -35639,10 +35656,13 @@
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": [
-      "\"buffer_5\""
+      "\"buffer_3\"",
+      "\"buffer_4\""
      ]
     },
-    "internal_source_parents": [],
+    "internal_source_parents": [
+     "batchnorm_1_2"
+    ],
     "intervention_replaced": false,
     "interventions": [],
     "io_role": null,
@@ -35657,8 +35677,8 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
-    "is_internally_initialized": true,
+    "is_internal_source": false,
+    "is_internally_initialized": false,
     "is_module_input": false,
     "is_module_output": false,
     "is_orphan": false,
@@ -36015,10 +36035,13 @@
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": [
-      "\"buffer_6\""
+      "\"buffer_3\"",
+      "\"buffer_4\""
      ]
     },
-    "internal_source_parents": [],
+    "internal_source_parents": [
+     "batchnorm_1_2"
+    ],
     "intervention_replaced": false,
     "interventions": [],
     "io_role": null,
@@ -36033,8 +36056,8 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
-    "is_internally_initialized": true,
+    "is_internal_source": false,
+    "is_internally_initialized": false,
     "is_module_input": false,
     "is_module_output": false,
     "is_orphan": false,
@@ -38164,11 +38187,8 @@
    "internal_source_layers": "<torchlens.data_classes.layer.LayerAccessor>",
    "internal_source_ops": [
     "buffer_1:1",
-    "buffer_2:1",
     "buffer_3:1",
-    "buffer_4:1",
-    "buffer_5:1",
-    "buffer_6:1"
+    "buffer_4:1"
    ],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
@@ -38814,8 +38834,8 @@
    "num_input_ops": 1,
    "num_internal_sink_layers": 3,
    "num_internal_sink_ops": 3,
-   "num_internal_source_layers": 6,
-   "num_internal_source_ops": 6,
+   "num_internal_source_layers": 3,
+   "num_internal_source_ops": 3,
    "num_layer_edges": 9,
    "num_layers": 11,
    "num_layers_with_params": 1,
@@ -38841,8 +38861,8 @@
    "num_saved_grad_modules": 0,
    "num_saved_grad_ops": 0,
    "num_saved_layers": 11,
-   "num_saved_module_calls": 1,
-   "num_saved_modules": 1,
+   "num_saved_module_calls": 2,
+   "num_saved_modules": 2,
    "num_saved_ops": 11,
    "num_tensors": 11,
    "num_uncalled_modules": 0,
@@ -40205,7 +40225,7 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
+    "is_internal_source": false,
     "is_module_input": false,
     "is_orphan": false,
     "is_output": false,
@@ -40979,7 +40999,7 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
+    "is_internal_source": false,
     "is_module_input": false,
     "is_orphan": false,
     "is_output": false,
@@ -41244,7 +41264,7 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
+    "is_internal_source": false,
     "is_module_input": false,
     "is_orphan": false,
     "is_output": false,
@@ -44257,10 +44277,12 @@
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": [
-      "\"buffer_2\""
+      "\"buffer_1\""
      ]
     },
-    "internal_source_parents": [],
+    "internal_source_parents": [
+     "add_1_1"
+    ],
     "intervention_replaced": false,
     "interventions": [],
     "io_role": null,
@@ -44275,8 +44297,8 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
-    "is_internally_initialized": true,
+    "is_internal_source": false,
+    "is_internally_initialized": false,
     "is_module_input": false,
     "is_module_output": false,
     "is_orphan": false,
@@ -45278,10 +45300,13 @@
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": [
-      "\"buffer_5\""
+      "\"buffer_3\"",
+      "\"buffer_4\""
      ]
     },
-    "internal_source_parents": [],
+    "internal_source_parents": [
+     "batchnorm_1_2"
+    ],
     "intervention_replaced": false,
     "interventions": [],
     "io_role": null,
@@ -45296,8 +45321,8 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
-    "is_internally_initialized": true,
+    "is_internal_source": false,
+    "is_internally_initialized": false,
     "is_module_input": false,
     "is_module_output": false,
     "is_orphan": false,
@@ -45634,10 +45659,13 @@
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": [
-      "\"buffer_6\""
+      "\"buffer_3\"",
+      "\"buffer_4\""
      ]
     },
-    "internal_source_parents": [],
+    "internal_source_parents": [
+     "batchnorm_1_2"
+    ],
     "intervention_replaced": false,
     "interventions": [],
     "io_role": null,
@@ -45652,8 +45680,8 @@
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
-    "is_internal_source": true,
-    "is_internally_initialized": true,
+    "is_internal_source": false,
+    "is_internally_initialized": false,
     "is_module_input": false,
     "is_module_output": false,
     "is_orphan": false,
@@ -47656,11 +47684,8 @@
    "internal_source_layers": "<torchlens.data_classes.layer.LayerAccessor>",
    "internal_source_ops": [
     "buffer_1:1",
-    "buffer_2:1",
     "buffer_3:1",
-    "buffer_4:1",
-    "buffer_5:1",
-    "buffer_6:1"
+    "buffer_4:1"
    ],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
@@ -48306,8 +48331,8 @@
    "num_input_ops": 1,
    "num_internal_sink_layers": 3,
    "num_internal_sink_ops": 3,
-   "num_internal_source_layers": 6,
-   "num_internal_source_ops": 6,
+   "num_internal_source_layers": 3,
+   "num_internal_source_ops": 3,
    "num_layer_edges": 9,
    "num_layers": 11,
    "num_layers_with_params": 1,
@@ -48333,8 +48358,8 @@
    "num_saved_grad_modules": 0,
    "num_saved_grad_ops": 0,
    "num_saved_layers": 11,
-   "num_saved_module_calls": 1,
-   "num_saved_modules": 1,
+   "num_saved_module_calls": 2,
+   "num_saved_modules": 2,
    "num_saved_ops": 11,
    "num_tensors": 11,
    "num_uncalled_modules": 0,

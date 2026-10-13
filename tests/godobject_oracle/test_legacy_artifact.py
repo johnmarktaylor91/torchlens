@@ -157,3 +157,21 @@ def test_legacy_runnable_artifact_runs_verified() -> None:
         "changed-input legacy replay must report not_applicable, never a "
         "cross-build byte attestation verdict"
     )
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "pre-fix stored scalar: an artifact written before the root module call "
+        "counted as a saved module call (AGT-2362) persists num_saved_module_calls "
+        "without the root, and the loader does not refresh it, so it trails the "
+        "live saved_module_calls accessor by one; fix the loader, then re-record "
+        "legacy_baseline_cnn_loaded.json"
+    ),
+)
+def test_legacy_artifact_saved_module_call_count_matches_live_accessor() -> None:
+    """A loaded artifact's stored saved-call count equals the live accessor."""
+
+    with expect_bundle_minor_version_mismatch():
+        loaded = tl.load(str(_ANALYSIS_ARTIFACT))
+    assert int(loaded.num_saved_module_calls) == len(loaded.saved_module_calls)

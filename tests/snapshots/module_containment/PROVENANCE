@@ -265,3 +265,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 20c14e9e35d94b7d037c46e2904fd8e5ac95401c (dirty)
 recorded: 2026-10-12T22:49:24.197809+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: AGT-2362: written buffer versions with a producer are not internal sources
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: d86a11a5d32752f26f96a753bf3eb529d4f1e0e9 (dirty)
+recorded: 2026-10-13T05:40:25.659935+00:00

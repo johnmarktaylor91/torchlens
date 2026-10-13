@@ -715,3 +715,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 1d6e2af8000c5aa36b9a778720d9be0411dd2037 (clean)
 recorded: 2026-10-13T04:11:46.935761+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: AGT-2362: root module call counted among saved module calls; written buffer versions with a producer are not internal sources
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 470f77239fc0da496b0048f25219f1480225a7bf (clean)
+recorded: 2026-10-13T04:48:09.439412+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: AGT-2362: root module call counted among saved module calls; written buffer versions with a producer are not internal sources
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 470f77239fc0da496b0048f25219f1480225a7bf (clean)
+recorded: 2026-10-13T04:48:09.477044+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: AGT-2362: root module call counted among saved module calls; written buffer versions with a producer are not internal sources
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 470f77239fc0da496b0048f25219f1480225a7bf (clean)
+recorded: 2026-10-13T04:48:09.518961+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: AGT-2362: root module call counted among saved module calls; written buffer versions with a producer are not internal sources
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 470f77239fc0da496b0048f25219f1480225a7bf (clean)
+recorded: 2026-10-13T04:48:09.557603+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: AGT-2362: root module call counted among saved module calls; written buffer versions with a producer are not internal sources
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 470f77239fc0da496b0048f25219f1480225a7bf (clean)
+recorded: 2026-10-13T04:48:09.600921+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: AGT-2362: root module call counted among saved module calls; written buffer versions with a producer are not internal sources
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 470f77239fc0da496b0048f25219f1480225a7bf (clean)
+recorded: 2026-10-13T04:48:09.644454+00:00
