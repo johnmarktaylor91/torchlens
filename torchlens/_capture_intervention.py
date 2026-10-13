@@ -274,3 +274,41 @@ def _merge_intervention_spec_hooks(
         records=list(destination.records),
         metadata=dict(destination.metadata),
     )
+
+
+def intervene_selector_fired_nowhere(trace: Trace, selector: Any, direction: str) -> bool:
+    """Return whether a capture-time ``intervene=`` selector edited nothing.
+
+    A forward (or both-direction) edit counts its forward fires. A gradient
+    edit on a forward selector arms at backward time through the paired
+    forward op, so no forward fire counts it: its zero-match fact is the
+    selector resolving to no captured op (the same site lifecycle the
+    backward match evaluates). Backward selectors defer to the after-backward
+    check and never reach here.
+
+    Parameters
+    ----------
+    trace:
+        Completed capture.
+    selector:
+        Capture-time ``intervene=`` selector.
+    direction:
+        The rule's signal direction.
+
+    Returns
+    -------
+    bool
+        ``True`` when the selector matched zero sites.
+    """
+
+    if direction in {"forward", "both"}:
+        return int(getattr(trace, "_tl_intervene_selector_fire_count", 0)) == 0
+    if direction != "backward":
+        return False
+    from .intervention.errors import SiteResolutionError
+
+    fanout = len(getattr(trace, "layer_list", ()) or ()) + 1
+    try:
+        return not trace.resolve_sites(selector, max_fanout=fanout)
+    except SiteResolutionError:
+        return True
