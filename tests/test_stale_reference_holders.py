@@ -37,6 +37,7 @@ from collections.abc import Callable, Iterator
 
 import pytest
 import torch
+from _stale_holders import forward_runs
 from torch import nn
 
 import torchlens as tl
@@ -176,7 +177,7 @@ class _Counted(nn.Module):
 
     The count is a forward-time write, so a default (pure-observer) capture
     restores ``calls`` to ``[0]`` and the count is read from the trace record
-    (:func:`_forward_runs`).
+    (``tests/_stale_holders.py::forward_runs``).
     """
 
     def __init__(self, inner: nn.Module) -> None:
@@ -189,18 +190,6 @@ class _Counted(nn.Module):
 
         self.calls[0] += 1
         return self.inner(x)
-
-
-def _forward_runs(trace: tl.Trace, model: _Counted) -> int:
-    """Forward runs the capture made, read from the trace's attribute-write record.
-
-    Also checks the observer contract: the module's own counter is back at 0.
-    """
-
-    assert model.calls == [0]
-    write = trace.modules["self"].attribute_writes["calls"]
-    assert write.kind == "replaced"
-    return int(write.value[0])
 
 
 def _module_global_module(env: types.SimpleNamespace) -> nn.Module:
@@ -243,7 +232,7 @@ def test_rebindable_stale_reference_captures_in_one_forward(
         warnings.simplefilter("error", UserWarning)
         trace = tl.trace(model, torch.randn(2, 4))
 
-    assert _forward_runs(trace, model) == 1
+    assert forward_runs(trace, model) == 1
     assert "gelu" in [op.func_name for op in trace.ops]
     assert "internalsource" not in [layer.layer_type for layer in trace.layer_list]
     assert trace.rescue_rerun is None
@@ -261,7 +250,7 @@ def test_unrebindable_stale_reference_is_disclosed_and_rescued(
     with pytest.warns(UserWarning, match=r"adopted at module exit inner\.act"):
         trace = tl.trace(model, torch.randn(2, 4))
 
-    assert _forward_runs(trace, model) == 2
+    assert forward_runs(trace, model) == 2
     assert "gelu" in [op.func_name for op in trace.ops]
     assert "internalsource" not in [layer.layer_type for layer in trace.layer_list]
     assert trace.rescue_rerun is not None and trace.rescue_rerun["recovered"] is True
@@ -346,7 +335,7 @@ def test_transformers_activation_built_before_capture_needs_no_rescue(
         warnings.simplefilter("error", UserWarning)
         trace = tl.trace(model, torch.randn(2, 4))
 
-    assert _forward_runs(trace, model) == 1
+    assert forward_runs(trace, model) == 1
     assert [op.func_name for op in trace.ops].count("gelu") == 1
     assert trace.rescue_rerun is None
     assert act.act is held_before

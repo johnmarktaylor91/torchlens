@@ -25,7 +25,12 @@ class OpaqueCallable:
 
 
 class CountedRoot(nn.Module):
-    """Root wrapper counting how many times a capture ran the forward."""
+    """Root wrapper counting how many times a capture ran the forward.
+
+    The count is a forward-time write: a default (pure-observer) capture puts
+    ``calls`` back to ``[0]``, and the count is read from the trace's
+    attribute-write record with :func:`forward_runs`.
+    """
 
     def __init__(self, inner: nn.Module) -> None:
         super().__init__()
@@ -37,6 +42,18 @@ class CountedRoot(nn.Module):
 
         self.calls[0] += 1
         return self.inner(*args)
+
+
+def forward_runs(trace: Any, model: nn.Module) -> int:
+    """Forward runs a capture made, read from the trace's attribute-write record.
+
+    Also checks the observer contract: the root's own counter is back at 0.
+    """
+
+    assert model.calls == [0]
+    write = trace.modules["self"].attribute_writes["calls"]
+    assert write.kind == "replaced"
+    return int(write.value[0])
 
 
 def provenance_warnings(caught: list[Any]) -> list[str]:

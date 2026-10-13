@@ -22,7 +22,7 @@ from typing import Any
 
 import pytest
 import torch
-from _stale_holders import CountedRoot, OpaqueCallable, provenance_warnings
+from _stale_holders import CountedRoot, OpaqueCallable, forward_runs, provenance_warnings
 from torch import nn
 
 import torchlens as tl
@@ -387,7 +387,7 @@ def test_attribute_held_originals_are_rebound_and_validate(
         trace = tl.trace(model, torch.randn(3, 4))
     func_names = [op.func_name for op in trace.ops]
     assert "relu" in func_names
-    assert model.calls == [1]
+    assert forward_runs(trace, model) == 1
     assert provenance_warnings(caught) == []
     assert trace.rescue_rerun is None
     assert _validate(build(), grad=grad), tl.validation.last_validation_failure()

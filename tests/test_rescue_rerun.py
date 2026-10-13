@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 import torch
-from _stale_holders import CountedRoot, OpaqueCallable
+from _stale_holders import CountedRoot, OpaqueCallable, forward_runs
 from torch import nn
 
 import torchlens as tl
@@ -1052,6 +1052,6 @@ def test_closure_held_original_is_rebound_without_rescue() -> None:
     model = CountedRoot(_stale_closure_model(raw))
     trace = tl.trace(model, torch.tensor([0.25, 0.5]))
 
-    assert model.calls == [1]
+    assert forward_runs(trace, model) == 1
     assert trace.rescue_rerun is None
     assert [op.func_name for op in trace.ops].count("cos") == 1
