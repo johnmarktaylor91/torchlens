@@ -83,9 +83,9 @@
       "\"add_1_2:1\""
      ]
     },
-    "flops_backward": 4,
+    "flops_backward": 0,
     "flops_forward": 4,
-    "flops_total": 8,
+    "flops_total": 4,
     "func": "<callable TensorBase.__add__>",
     "func_config": {},
     "func_duration": "<measured>",
@@ -256,9 +256,9 @@
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
-    "total_flops_backward": 4,
+    "total_flops_backward": 0,
     "total_flops_forward": 4,
-    "total_flops_total": 8,
+    "total_flops_total": 4,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
     "total_macs_backward": null,
@@ -343,9 +343,9 @@
       "\"gt_1_4:1\""
      ]
     },
-    "flops_backward": 1,
+    "flops_backward": 0,
     "flops_forward": 1,
-    "flops_total": 2,
+    "flops_total": 1,
     "func": "<callable TensorBase.__gt__>",
     "func_config": {},
     "func_duration": "<measured>",
@@ -499,9 +499,9 @@
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
-    "total_flops_backward": 1,
+    "total_flops_backward": 0,
     "total_flops_forward": 1,
-    "total_flops_total": 2,
+    "total_flops_total": 1,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
     "total_macs_backward": null,
@@ -1360,9 +1360,9 @@
       "\"sigmoid_1_5:1\""
      ]
     },
-    "flops_backward": 24,
+    "flops_backward": 0,
     "flops_forward": 16,
-    "flops_total": 40,
+    "flops_total": 16,
     "func": "<callable _VariableFunctionsClass.sigmoid>",
     "func_config": {},
     "func_duration": "<measured>",
@@ -1525,9 +1525,9 @@
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
-    "total_flops_backward": 24,
+    "total_flops_backward": 0,
     "total_flops_forward": 16,
-    "total_flops_total": 40,
+    "total_flops_total": 16,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
     "total_macs_backward": null,
@@ -1623,9 +1623,9 @@
       "\"sum_1_3:1\""
      ]
     },
-    "flops_backward": 4,
+    "flops_backward": 0,
     "flops_forward": 4,
-    "flops_total": 8,
+    "flops_total": 4,
     "func": "<callable TensorBase.sum>",
     "func_config": {},
     "func_duration": "<measured>",
@@ -1781,9 +1781,9 @@
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
-    "total_flops_backward": 4,
+    "total_flops_backward": 0,
     "total_flops_forward": 4,
-    "total_flops_total": 8,
+    "total_flops_total": 4,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
     "total_macs_backward": null,
@@ -2137,8 +2137,8 @@
     "recursive_params": "<torchlens.data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
-    "total_flops": 58,
-    "total_flops_backward": 33,
+    "total_flops": 25,
+    "total_flops_backward": 0,
     "total_flops_forward": 25,
     "total_forward_duration": "<measured>",
     "total_func_calls_duration": "<measured>",
@@ -2255,9 +2255,9 @@
      ]
     },
     "facets": "<torchlens.semantic.facets.FacetView>",
-    "flops_backward": 4,
+    "flops_backward": 0,
     "flops_forward": 4,
-    "flops_total": 8,
+    "flops_total": 4,
     "func": "<callable TensorBase.__add__>",
     "func_autocast_state": {
      "\"__execution__\"": {
@@ -2641,9 +2641,9 @@
      ]
     },
     "facets": "<torchlens.semantic.facets.FacetView>",
-    "flops_backward": 1,
+    "flops_backward": 0,
     "flops_forward": 1,
-    "flops_total": 2,
+    "flops_total": 1,
     "func": "<callable TensorBase.__gt__>",
     "func_autocast_state": {
      "\"__execution__\"": {
@@ -4072,9 +4072,9 @@
      ]
     },
     "facets": "<torchlens.semantic.facets.FacetView>",
-    "flops_backward": 24,
+    "flops_backward": 0,
     "flops_forward": 16,
-    "flops_total": 40,
+    "flops_total": 16,
     "func": "<callable _VariableFunctionsClass.sigmoid>",
     "func_autocast_state": {
      "\"__execution__\"": {
@@ -4452,9 +4452,9 @@
      ]
     },
     "facets": "<torchlens.semantic.facets.FacetView>",
-    "flops_backward": 4,
+    "flops_backward": 0,
     "flops_forward": 4,
-    "flops_total": 8,
+    "flops_total": 4,
     "func": "<callable TensorBase.sum>",
     "func_autocast_state": {
      "\"__execution__\"": {
@@ -5143,12 +5143,12 @@
    "factcore": "<torchlens.report._factcore.FactCore>",
    "flops_by_op_type": {
     "\"add\"": {
-     "\"backward\"": 4,
+     "\"backward\"": 0,
      "\"count\"": 1,
      "\"forward\"": 4
     },
     "\"gt\"": {
-     "\"backward\"": 1,
+     "\"backward\"": 0,
      "\"count\"": 1,
      "\"forward\"": 1
     },
@@ -5168,12 +5168,12 @@
      "\"forward\"": 0
     },
     "\"sigmoid\"": {
-     "\"backward\"": 24,
+     "\"backward\"": 0,
      "\"count\"": 1,
      "\"forward\"": 16
     },
     "\"sum\"": {
-     "\"backward\"": 4,
+     "\"backward\"": 0,
      "\"count\"": 1,
      "\"forward\"": 4
     }
@@ -5863,8 +5863,8 @@
    "total_autograd_memory": "<measured>",
    "total_backward_duration": "<measured>",
    "total_backward_memory": "<measured>",
-   "total_flops": 58,
-   "total_flops_backward": 33,
+   "total_flops": 25,
+   "total_flops_backward": 0,
    "total_flops_forward": 25,
    "total_gradient_memory": "<measured>",
    "total_macs": null,
@@ -5968,9 +5968,9 @@
       "\"add_1_2:1\""
      ]
     },
-    "flops_backward": 4,
+    "flops_backward": 0,
     "flops_forward": 4,
-    "flops_total": 8,
+    "flops_total": 4,
     "func": "<callable TensorBase.__add__>",
     "func_config": {},
     "func_duration": "<measured>",
@@ -6141,9 +6141,9 @@
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
-    "total_flops_backward": 4,
+    "total_flops_backward": 0,
     "total_flops_forward": 4,
-    "total_flops_total": 8,
+    "total_flops_total": 4,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
     "total_macs_backward": null,
@@ -6228,9 +6228,9 @@
       "\"gt_1_4:1\""
      ]
     },
-    "flops_backward": 1,
+    "flops_backward": 0,
     "flops_forward": 1,
-    "flops_total": 2,
+    "flops_total": 1,
     "func": "<callable TensorBase.__gt__>",
     "func_config": {},
     "func_duration": "<measured>",
@@ -6384,9 +6384,9 @@
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
-    "total_flops_backward": 1,
+    "total_flops_backward": 0,
     "total_flops_forward": 1,
-    "total_flops_total": 2,
+    "total_flops_total": 1,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
     "total_macs_backward": null,
@@ -7245,9 +7245,9 @@
       "\"sigmoid_1_5:1\""
      ]
     },
-    "flops_backward": 24,
+    "flops_backward": 0,
     "flops_forward": 16,
-    "flops_total": 40,
+    "flops_total": 16,
     "func": "<callable _VariableFunctionsClass.sigmoid>",
     "func_config": {},
     "func_duration": "<measured>",
@@ -7410,9 +7410,9 @@
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
-    "total_flops_backward": 24,
+    "total_flops_backward": 0,
     "total_flops_forward": 16,
-    "total_flops_total": 40,
+    "total_flops_total": 16,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
     "total_macs_backward": null,
@@ -7508,9 +7508,9 @@
       "\"sum_1_3:1\""
      ]
     },
-    "flops_backward": 4,
+    "flops_backward": 0,
     "flops_forward": 4,
-    "flops_total": 8,
+    "flops_total": 4,
     "func": "<callable TensorBase.sum>",
     "func_config": {},
     "func_duration": "<measured>",
@@ -7666,9 +7666,9 @@
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
-    "total_flops_backward": 4,
+    "total_flops_backward": 0,
     "total_flops_forward": 4,
-    "total_flops_total": 8,
+    "total_flops_total": 4,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
     "total_macs_backward": null,
@@ -8022,8 +8022,8 @@
     "recursive_params": "<torchlens.data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
-    "total_flops": 58,
-    "total_flops_backward": 33,
+    "total_flops": 25,
+    "total_flops_backward": 0,
     "total_flops_forward": 25,
     "total_forward_duration": "<measured>",
     "total_func_calls_duration": "<measured>",
@@ -8140,9 +8140,9 @@
      ]
     },
     "facets": "<torchlens.semantic.facets.FacetView>",
-    "flops_backward": 4,
+    "flops_backward": 0,
     "flops_forward": 4,
-    "flops_total": 8,
+    "flops_total": 4,
     "func": "<callable TensorBase.__add__>",
     "func_autocast_state": {
      "\"__execution__\"": {
@@ -8526,9 +8526,9 @@
      ]
     },
     "facets": "<torchlens.semantic.facets.FacetView>",
-    "flops_backward": 1,
+    "flops_backward": 0,
     "flops_forward": 1,
-    "flops_total": 2,
+    "flops_total": 1,
     "func": "<callable TensorBase.__gt__>",
     "func_autocast_state": {
      "\"__execution__\"": {
@@ -9957,9 +9957,9 @@
      ]
     },
     "facets": "<torchlens.semantic.facets.FacetView>",
-    "flops_backward": 24,
+    "flops_backward": 0,
     "flops_forward": 16,
-    "flops_total": 40,
+    "flops_total": 16,
     "func": "<callable _VariableFunctionsClass.sigmoid>",
     "func_autocast_state": {
      "\"__execution__\"": {
@@ -10337,9 +10337,9 @@
      ]
     },
     "facets": "<torchlens.semantic.facets.FacetView>",
-    "flops_backward": 4,
+    "flops_backward": 0,
     "flops_forward": 4,
-    "flops_total": 8,
+    "flops_total": 4,
     "func": "<callable TensorBase.sum>",
     "func_autocast_state": {
      "\"__execution__\"": {
@@ -11017,12 +11017,12 @@
    "factcore": "<torchlens.report._factcore.FactCore>",
    "flops_by_op_type": {
     "\"add\"": {
-     "\"backward\"": 4,
+     "\"backward\"": 0,
      "\"count\"": 1,
      "\"forward\"": 4
     },
     "\"gt\"": {
-     "\"backward\"": 1,
+     "\"backward\"": 0,
      "\"count\"": 1,
      "\"forward\"": 1
     },
@@ -11042,12 +11042,12 @@
      "\"forward\"": 0
     },
     "\"sigmoid\"": {
-     "\"backward\"": 24,
+     "\"backward\"": 0,
      "\"count\"": 1,
      "\"forward\"": 16
     },
     "\"sum\"": {
-     "\"backward\"": 4,
+     "\"backward\"": 0,
      "\"count\"": 1,
      "\"forward\"": 4
     }
@@ -11740,8 +11740,8 @@
    "total_autograd_memory": "<measured>",
    "total_backward_duration": "<measured>",
    "total_backward_memory": "<measured>",
-   "total_flops": 58,
-   "total_flops_backward": 33,
+   "total_flops": 25,
+   "total_flops_backward": 0,
    "total_flops_forward": 25,
    "total_gradient_memory": "<measured>",
    "total_macs": null,
@@ -11845,9 +11845,9 @@
       "\"add_1_2:1\""
      ]
     },
-    "flops_backward": 4,
+    "flops_backward": 0,
     "flops_forward": 4,
-    "flops_total": 8,
+    "flops_total": 4,
     "func": "<callable TensorBase.__add__>",
     "func_config": {},
     "func_duration": "<measured>",
@@ -12018,9 +12018,9 @@
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
-    "total_flops_backward": 4,
+    "total_flops_backward": 0,
     "total_flops_forward": 4,
-    "total_flops_total": 8,
+    "total_flops_total": 4,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
     "total_macs_backward": null,
@@ -12105,9 +12105,9 @@
       "\"gt_1_4:1\""
      ]
     },
-    "flops_backward": 1,
+    "flops_backward": 0,
     "flops_forward": 1,
-    "flops_total": 2,
+    "flops_total": 1,
     "func": "<callable TensorBase.__gt__>",
     "func_config": {},
     "func_duration": "<measured>",
@@ -12261,9 +12261,9 @@
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
-    "total_flops_backward": 1,
+    "total_flops_backward": 0,
     "total_flops_forward": 1,
-    "total_flops_total": 2,
+    "total_flops_total": 1,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
     "total_macs_backward": null,
@@ -13122,9 +13122,9 @@
       "\"sigmoid_1_5:1\""
      ]
     },
-    "flops_backward": 24,
+    "flops_backward": 0,
     "flops_forward": 16,
-    "flops_total": 40,
+    "flops_total": 16,
     "func": "<callable _VariableFunctionsClass.sigmoid>",
     "func_config": {},
     "func_duration": "<measured>",
@@ -13287,9 +13287,9 @@
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
-    "total_flops_backward": 24,
+    "total_flops_backward": 0,
     "total_flops_forward": 16,
-    "total_flops_total": 40,
+    "total_flops_total": 16,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
     "total_macs_backward": null,
@@ -13385,9 +13385,9 @@
       "\"sum_1_3:1\""
      ]
     },
-    "flops_backward": 4,
+    "flops_backward": 0,
     "flops_forward": 4,
-    "flops_total": 8,
+    "flops_total": 4,
     "func": "<callable TensorBase.sum>",
     "func_config": {},
     "func_duration": "<measured>",
@@ -13543,9 +13543,9 @@
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
-    "total_flops_backward": 4,
+    "total_flops_backward": 0,
     "total_flops_forward": 4,
-    "total_flops_total": 8,
+    "total_flops_total": 4,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
     "total_macs_backward": null,
@@ -13899,8 +13899,8 @@
     "recursive_params": "<torchlens.data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
-    "total_flops": 58,
-    "total_flops_backward": 33,
+    "total_flops": 25,
+    "total_flops_backward": 0,
     "total_flops_forward": 25,
     "total_forward_duration": "<measured>",
     "total_func_calls_duration": "<measured>",
@@ -14017,9 +14017,9 @@
      ]
     },
     "facets": "<torchlens.semantic.facets.FacetView>",
-    "flops_backward": 4,
+    "flops_backward": 0,
     "flops_forward": 4,
-    "flops_total": 8,
+    "flops_total": 4,
     "func": null,
     "func_autocast_state": {
      "\"__execution__\"": {
@@ -14403,9 +14403,9 @@
      ]
     },
     "facets": "<torchlens.semantic.facets.FacetView>",
-    "flops_backward": 1,
+    "flops_backward": 0,
     "flops_forward": 1,
-    "flops_total": 2,
+    "flops_total": 1,
     "func": null,
     "func_autocast_state": {
      "\"__execution__\"": {
@@ -15834,9 +15834,9 @@
      ]
     },
     "facets": "<torchlens.semantic.facets.FacetView>",
-    "flops_backward": 24,
+    "flops_backward": 0,
     "flops_forward": 16,
-    "flops_total": 40,
+    "flops_total": 16,
     "func": null,
     "func_autocast_state": {
      "\"__execution__\"": {
@@ -16214,9 +16214,9 @@
      ]
     },
     "facets": "<torchlens.semantic.facets.FacetView>",
-    "flops_backward": 4,
+    "flops_backward": 0,
     "flops_forward": 4,
-    "flops_total": 8,
+    "flops_total": 4,
     "func": null,
     "func_autocast_state": {
      "\"__execution__\"": {
@@ -16905,12 +16905,12 @@
    "factcore": "<torchlens.report._factcore.FactCore>",
    "flops_by_op_type": {
     "\"add\"": {
-     "\"backward\"": 4,
+     "\"backward\"": 0,
      "\"count\"": 1,
      "\"forward\"": 4
     },
     "\"gt\"": {
-     "\"backward\"": 1,
+     "\"backward\"": 0,
      "\"count\"": 1,
      "\"forward\"": 1
     },
@@ -16930,12 +16930,12 @@
      "\"forward\"": 0
     },
     "\"sigmoid\"": {
-     "\"backward\"": 24,
+     "\"backward\"": 0,
      "\"count\"": 1,
      "\"forward\"": 16
     },
     "\"sum\"": {
-     "\"backward\"": 4,
+     "\"backward\"": 0,
      "\"count\"": 1,
      "\"forward\"": 4
     }
@@ -17619,8 +17619,8 @@
    "total_autograd_memory": "<measured>",
    "total_backward_duration": "<measured>",
    "total_backward_memory": "<measured>",
-   "total_flops": 58,
-   "total_flops_backward": 33,
+   "total_flops": 25,
+   "total_flops_backward": 0,
    "total_flops_forward": 25,
    "total_gradient_memory": "<measured>",
    "total_macs": null,
@@ -17724,9 +17724,9 @@
       "\"add_1_2:1\""
      ]
     },
-    "flops_backward": 4,
+    "flops_backward": 0,
     "flops_forward": 4,
-    "flops_total": 8,
+    "flops_total": 4,
     "func": "<callable TensorBase.__add__>",
     "func_config": {},
     "func_duration": "<measured>",
@@ -17897,9 +17897,9 @@
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
-    "total_flops_backward": 4,
+    "total_flops_backward": 0,
     "total_flops_forward": 4,
-    "total_flops_total": 8,
+    "total_flops_total": 4,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
     "total_macs_backward": null,
@@ -17984,9 +17984,9 @@
       "\"gt_1_4:1\""
      ]
     },
-    "flops_backward": 1,
+    "flops_backward": 0,
     "flops_forward": 1,
-    "flops_total": 2,
+    "flops_total": 1,
     "func": "<callable TensorBase.__gt__>",
     "func_config": {},
     "func_duration": "<measured>",
@@ -18140,9 +18140,9 @@
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
-    "total_flops_backward": 1,
+    "total_flops_backward": 0,
     "total_flops_forward": 1,
-    "total_flops_total": 2,
+    "total_flops_total": 1,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
     "total_macs_backward": null,
@@ -19001,9 +19001,9 @@
       "\"sigmoid_1_5:1\""
      ]
     },
-    "flops_backward": 24,
+    "flops_backward": 0,
     "flops_forward": 16,
-    "flops_total": 40,
+    "flops_total": 16,
     "func": "<callable _VariableFunctionsClass.sigmoid>",
     "func_config": {},
     "func_duration": "<measured>",
@@ -19166,9 +19166,9 @@
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
-    "total_flops_backward": 24,
+    "total_flops_backward": 0,
     "total_flops_forward": 16,
-    "total_flops_total": 40,
+    "total_flops_total": 16,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
     "total_macs_backward": null,
@@ -19264,9 +19264,9 @@
       "\"sum_1_3:1\""
      ]
     },
-    "flops_backward": 4,
+    "flops_backward": 0,
     "flops_forward": 4,
-    "flops_total": 8,
+    "flops_total": 4,
     "func": "<callable TensorBase.sum>",
     "func_config": {},
     "func_duration": "<measured>",
@@ -19422,9 +19422,9 @@
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
-    "total_flops_backward": 4,
+    "total_flops_backward": 0,
     "total_flops_forward": 4,
-    "total_flops_total": 8,
+    "total_flops_total": 4,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
     "total_macs_backward": null,
@@ -19778,8 +19778,8 @@
     "recursive_params": "<torchlens.data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
-    "total_flops": 58,
-    "total_flops_backward": 33,
+    "total_flops": 25,
+    "total_flops_backward": 0,
     "total_flops_forward": 25,
     "total_forward_duration": "<measured>",
     "total_func_calls_duration": "<measured>",
@@ -19896,9 +19896,9 @@
      ]
     },
     "facets": "<torchlens.semantic.facets.FacetView>",
-    "flops_backward": 4,
+    "flops_backward": 0,
     "flops_forward": 4,
-    "flops_total": 8,
+    "flops_total": 4,
     "func": "<callable TensorBase.__add__>",
     "func_autocast_state": {
      "\"__execution__\"": {
@@ -20282,9 +20282,9 @@
      ]
     },
     "facets": "<torchlens.semantic.facets.FacetView>",
-    "flops_backward": 1,
+    "flops_backward": 0,
     "flops_forward": 1,
-    "flops_total": 2,
+    "flops_total": 1,
     "func": "<callable TensorBase.__gt__>",
     "func_autocast_state": {
      "\"__execution__\"": {
@@ -21713,9 +21713,9 @@
      ]
     },
     "facets": "<torchlens.semantic.facets.FacetView>",
-    "flops_backward": 24,
+    "flops_backward": 0,
     "flops_forward": 16,
-    "flops_total": 40,
+    "flops_total": 16,
     "func": "<callable _VariableFunctionsClass.sigmoid>",
     "func_autocast_state": {
      "\"__execution__\"": {
@@ -22093,9 +22093,9 @@
      ]
     },
     "facets": "<torchlens.semantic.facets.FacetView>",
-    "flops_backward": 4,
+    "flops_backward": 0,
     "flops_forward": 4,
-    "flops_total": 8,
+    "flops_total": 4,
     "func": "<callable TensorBase.sum>",
     "func_autocast_state": {
      "\"__execution__\"": {
@@ -22784,12 +22784,12 @@
    "factcore": "<torchlens.report._factcore.FactCore>",
    "flops_by_op_type": {
     "\"add\"": {
-     "\"backward\"": 4,
+     "\"backward\"": 0,
      "\"count\"": 1,
      "\"forward\"": 4
     },
     "\"gt\"": {
-     "\"backward\"": 1,
+     "\"backward\"": 0,
      "\"count\"": 1,
      "\"forward\"": 1
     },
@@ -22809,12 +22809,12 @@
      "\"forward\"": 0
     },
     "\"sigmoid\"": {
-     "\"backward\"": 24,
+     "\"backward\"": 0,
      "\"count\"": 1,
      "\"forward\"": 16
     },
     "\"sum\"": {
-     "\"backward\"": 4,
+     "\"backward\"": 0,
      "\"count\"": 1,
      "\"forward\"": 4
     }
@@ -23512,8 +23512,8 @@
    "total_autograd_memory": "<measured>",
    "total_backward_duration": "<measured>",
    "total_backward_memory": "<measured>",
-   "total_flops": 58,
-   "total_flops_backward": 33,
+   "total_flops": 25,
+   "total_flops_backward": 0,
    "total_flops_forward": 25,
    "total_gradient_memory": "<measured>",
    "total_macs": null,
@@ -23617,9 +23617,9 @@
       "\"add_1_2:1\""
      ]
     },
-    "flops_backward": 4,
+    "flops_backward": 0,
     "flops_forward": 4,
-    "flops_total": 8,
+    "flops_total": 4,
     "func": null,
     "func_config": {},
     "func_duration": "<measured>",
@@ -23790,9 +23790,9 @@
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
-    "total_flops_backward": 4,
+    "total_flops_backward": 0,
     "total_flops_forward": 4,
-    "total_flops_total": 8,
+    "total_flops_total": 4,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
     "total_macs_backward": null,
@@ -23877,9 +23877,9 @@
       "\"gt_1_4:1\""
      ]
     },
-    "flops_backward": 1,
+    "flops_backward": 0,
     "flops_forward": 1,
-    "flops_total": 2,
+    "flops_total": 1,
     "func": null,
     "func_config": {},
     "func_duration": "<measured>",
@@ -24033,9 +24033,9 @@
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
-    "total_flops_backward": 1,
+    "total_flops_backward": 0,
     "total_flops_forward": 1,
-    "total_flops_total": 2,
+    "total_flops_total": 1,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
     "total_macs_backward": null,
@@ -24883,9 +24883,9 @@
       "\"sigmoid_1_5:1\""
      ]
     },
-    "flops_backward": 24,
+    "flops_backward": 0,
     "flops_forward": 16,
-    "flops_total": 40,
+    "flops_total": 16,
     "func": null,
     "func_config": {},
     "func_duration": "<measured>",
@@ -25048,9 +25048,9 @@
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
-    "total_flops_backward": 24,
+    "total_flops_backward": 0,
     "total_flops_forward": 16,
-    "total_flops_total": 40,
+    "total_flops_total": 16,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
     "total_macs_backward": null,
@@ -25146,9 +25146,9 @@
       "\"sum_1_3:1\""
      ]
     },
-    "flops_backward": 4,
+    "flops_backward": 0,
     "flops_forward": 4,
-    "flops_total": 8,
+    "flops_total": 4,
     "func": null,
     "func_config": {},
     "func_duration": "<measured>",
@@ -25304,9 +25304,9 @@
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
-    "total_flops_backward": 4,
+    "total_flops_backward": 0,
     "total_flops_forward": 4,
-    "total_flops_total": 8,
+    "total_flops_total": 4,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
     "total_macs_backward": null,
@@ -25660,8 +25660,8 @@
     "recursive_params": "<torchlens.data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
-    "total_flops": 58,
-    "total_flops_backward": 33,
+    "total_flops": 25,
+    "total_flops_backward": 0,
     "total_flops_forward": 25,
     "total_forward_duration": "<measured>",
     "total_func_calls_duration": "<measured>",
@@ -25778,9 +25778,9 @@
      ]
     },
     "facets": "<torchlens.semantic.facets.FacetView>",
-    "flops_backward": 4,
+    "flops_backward": 0,
     "flops_forward": 4,
-    "flops_total": 8,
+    "flops_total": 4,
     "func": null,
     "func_autocast_state": {
      "\"__execution__\"": {
@@ -26137,9 +26137,9 @@
      ]
     },
     "facets": "<torchlens.semantic.facets.FacetView>",
-    "flops_backward": 1,
+    "flops_backward": 0,
     "flops_forward": 1,
-    "flops_total": 2,
+    "flops_total": 1,
     "func": null,
     "func_autocast_state": {
      "\"__execution__\"": {
@@ -27513,9 +27513,9 @@
      ]
     },
     "facets": "<torchlens.semantic.facets.FacetView>",
-    "flops_backward": 24,
+    "flops_backward": 0,
     "flops_forward": 16,
-    "flops_total": 40,
+    "flops_total": 16,
     "func": null,
     "func_autocast_state": {
      "\"__execution__\"": {
@@ -27875,9 +27875,9 @@
      ]
     },
     "facets": "<torchlens.semantic.facets.FacetView>",
-    "flops_backward": 4,
+    "flops_backward": 0,
     "flops_forward": 4,
-    "flops_total": 8,
+    "flops_total": 4,
     "func": null,
     "func_autocast_state": {
      "\"__execution__\"": {
@@ -28542,12 +28542,12 @@
    "factcore": "<torchlens.report._factcore.FactCore>",
    "flops_by_op_type": {
     "\"add\"": {
-     "\"backward\"": 4,
+     "\"backward\"": 0,
      "\"count\"": 1,
      "\"forward\"": 4
     },
     "\"gt\"": {
-     "\"backward\"": 1,
+     "\"backward\"": 0,
      "\"count\"": 1,
      "\"forward\"": 1
     },
@@ -28567,12 +28567,12 @@
      "\"forward\"": 0
     },
     "\"sigmoid\"": {
-     "\"backward\"": 24,
+     "\"backward\"": 0,
      "\"count\"": 1,
      "\"forward\"": 16
     },
     "\"sum\"": {
-     "\"backward\"": 4,
+     "\"backward\"": 0,
      "\"count\"": 1,
      "\"forward\"": 4
     }
@@ -29256,8 +29256,8 @@
    "total_autograd_memory": "<measured>",
    "total_backward_duration": "<measured>",
    "total_backward_memory": "<measured>",
-   "total_flops": 58,
-   "total_flops_backward": 33,
+   "total_flops": 25,
+   "total_flops_backward": 0,
    "total_flops_forward": 25,
    "total_gradient_memory": "<measured>",
    "total_macs": null,
