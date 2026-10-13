@@ -146,6 +146,9 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
             raise
 
     if isinstance(ix, str):
+        from .._trace_selector_helpers import canonical_module_site_key
+
+        ix = canonical_module_site_key(self, ix) or ix
         if ix in self.layer_logs:
             return self.layer_logs[ix]
 

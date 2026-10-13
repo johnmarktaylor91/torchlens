@@ -12,6 +12,16 @@ import torchlens as tl
 
 log = tl.trace(model, x, save=tl.func("relu"))
 activation = log["relu_1_2"].out
+# Module and stage names resolve to that module's output at every selector door,
+# including timm stage names (FeatureGetterNet's "blocks.9" for "model.blocks.9").
+backbone = torch.nn.Sequential()
+backbone.add_module("layer1", torch.nn.Linear(4, 4))
+backbone.add_module("layer2", torch.nn.Linear(4, 2))
+stages = tl.extract(backbone, torch.randn(1, 4), ["layer1", "layer2"])
+stage_log = tl.trace(backbone, torch.randn(1, 4), save=["layer1", "layer2"])  # list form
+stage_log["layer2"].out
+# Appliances hang off one door: trace.using(name), registered with
+# torchlens.accessors.register_appliance(name, factory) (spellings DOCUMENTED-UNSTABLE).
 print(log.summary())
 print(tl.report.explain(log))
 log.draw(order_siblings=True)  # default: verified sibling ordering for dot/unrolled graphs

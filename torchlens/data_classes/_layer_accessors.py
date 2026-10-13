@@ -222,9 +222,10 @@ class LayerAccessor(Accessor["Layer"]):
         if len(matches) == 1:
             return matches[0]
         if len(matches) > 1:
+            listed = _layer_candidates(matches)
             raise AmbiguousOpLookupError(
-                f"Layer lookup '{key}' is ambiguous across {len(matches)} Layers. "
-                "Use the full Layer label."
+                f"Layer lookup '{key}' is ambiguous across {len(matches)} Layers: {listed}. "
+                f"Use the full Layer label, e.g. {matches[0].layer_label!r}."
             )
         return None
 
@@ -367,3 +368,14 @@ class LayerAccessor(Accessor["Layer"]):
 # (the legacy-artifact golden pins it; the unpickle allowlist accepts both).
 OpAccessor.__module__ = "torchlens.data_classes.layer"
 LayerAccessor.__module__ = "torchlens.data_classes.layer"
+
+
+def _layer_candidates(layers: list["Layer"]) -> str:
+    """List each candidate Layer once, with its exact pass count when above one."""
+
+    parts = []
+    for layer in layers:
+        passes = int(getattr(layer, "num_passes", 1) or 1)
+        suffix = f" ({passes} passes)" if passes > 1 else ""
+        parts.append(f"{layer.layer_label}{suffix}")
+    return ", ".join(parts)

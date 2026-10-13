@@ -117,10 +117,6 @@
       "lookup_keys": [
         "-1",
         "4",
-        "child",
-        "child.proj",
-        "child.proj:1",
-        "child:1",
         "output",
         "output_1",
         "output_1:1",
@@ -447,10 +443,6 @@
       "lookup_keys": [
         "-1",
         "4",
-        "child",
-        "child.proj",
-        "child.proj:1",
-        "child:1",
         "output",
         "output_1",
         "output_1",

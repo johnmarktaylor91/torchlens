@@ -672,6 +672,7 @@ def expand_facet_hook_entries(
             raise SiteResolutionError(
                 f"facet selector {selector!r} matched 0 write-capable facets."
             )
+        written: list[tuple[str, str]] = []
         for facet_name, spec in specs:
             try:
                 mask = spec.write_mask().detach().clone()
@@ -686,6 +687,7 @@ def expand_facet_hook_entries(
             home_label = _facet_home_label(spec)
             _check_facet_write_conflicts(claimed, home_label=home_label, mask=mask)
             claimed.append((home_label, mask, facet_name))
+            written.append((home_label, facet_name))
             metadata = {
                 **entry.metadata,
                 "facet_write": True,
@@ -705,7 +707,80 @@ def expand_facet_hook_entries(
                     metadata=MappingProxyType(metadata),
                 )
             )
+        _warn_facet_fanout(log, selector, written)
     return expanded
+
+
+def _warn_facet_fanout(log: Any, selector: FacetSelector, written: list[tuple[str, str]]) -> None:
+    """Say how many sites a facet selector writes when it writes more than one (forks.9).
+
+    Coded ``facet_selector_fanout``; ``fields["site_count"]`` carries the number.
+
+    ``tl.head(5)`` keeps its broadcast meaning: it writes head 5 of every
+    matching facet in every module. The count is the number of installed
+    facet writes (one per home op and facet slice, after de-duplication), so it
+    equals the slices the run edits.
+
+    Parameters
+    ----------
+    log:
+        Trace whose modules own the facet views.
+    selector:
+        The facet selector as the caller spelled it.
+    written:
+        ``(home op label, facet name)`` for every installed write.
+    """
+
+    if len(written) <= 1:
+        return
+    import warnings
+
+    from ..errors import TorchLensWarning
+
+    homes = list(dict.fromkeys(_display_label(log, home) for home, _ in written))
+    facet_names = ", ".join(dict.fromkeys(name for _, name in written))
+    shown = ", ".join(homes[:4]) + (f" and {len(homes) - 4} more" if len(homes) > 4 else "")
+    scope = _facet_owner_address(log, selector, homes[0], written[0][1])
+    narrower = (
+        f"{selector!r}.in_module({scope!r})"
+        if scope is not None and selector.module_address is None
+        else "a narrower facet selector"
+    )
+    warnings.warn(
+        TorchLensWarning(
+            f"selector {selector!r} writes {len(written)} sites ({facet_names} at "
+            f"{len(homes)} home ops: {shown}). Remedy: to write fewer, scope it, "
+            f"e.g. {narrower}",
+            code="facet_selector_fanout",
+            site_count=len(written),
+        ),
+        stacklevel=4,
+    )
+
+
+def _display_label(log: Any, home_label: str) -> str:
+    """Return the final layer label behind a raw home-op hook label, for messages."""
+
+    try:
+        return str(log[home_label].layer_label)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return home_label
+
+
+def _facet_owner_address(log: Any, selector: FacetSelector, home_label: str, facet: str) -> Any:
+    """Return the innermost module address owning ``facet`` at ``home_label``, if any."""
+
+    try:
+        home = log[home_label]
+        modules = getattr(log, "modules", None)
+        for call_label in reversed(list(getattr(home, "modules", ()) or ())):
+            address = str(call_label).rsplit(":", 1)[0]
+            view = getattr(modules[address], "facets", None) if modules is not None else None
+            if view is not None and view.has(facet):
+                return address
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return None
+    return None
 
 
 def _normalize_value_specs(value_specs: Sequence[TargetValueSpec]) -> list[NormalizedHookEntry]:

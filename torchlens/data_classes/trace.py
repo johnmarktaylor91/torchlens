@@ -992,6 +992,18 @@ class Trace(
 
         return audit_trace(self)
 
+    def using(self, name: str) -> Any:
+        """Return the appliance registered as ``name``, bound to this trace.
+
+        The one accessor door for appliances (DOCUMENTED-UNSTABLE); register with
+        ``torchlens.accessors.register_appliance``. An unknown name refuses typed
+        (``appliance_unknown``) and lists the registered names.
+        """
+
+        from ..accessors._appliances import open_appliance
+
+        return open_appliance(self, name)
+
     def __getattr__(self, name: str) -> Any:
         """Explain common missing memory attributes before raising.
 

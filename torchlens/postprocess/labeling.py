@@ -913,12 +913,22 @@ def _add_lookup_keys_for_layer_entry(
         if (layer_entry.module is None) and len(layer_entry.modules) > 0:
             layer_entry.module = layer_entry.modules[-1]
 
-    # Allow indexing by modules exited as well:
+    # Allow indexing by modules exited as well. A model-output alias node
+    # inherits the module calls of the op it aliases (graph_traversal copies
+    # them); it never re-claims a module key an op already holds, so a module
+    # whose output is also a model output (timm features_only stages, resnet
+    # ``fc``) resolves to its own output op instead of turning ambiguous. The
+    # alias stays reachable through its own labels and its ``output`` role key.
+    is_output_alias = bool(layer_entry.is_output)
     for module_pass in layer_entry.output_of_module_calls:
         module_name, _ = module_pass.rsplit(":", 1)
-        lookup_keys_for_tensor.append(f"{module_pass}")
+        module_keys = [module_pass]
         if self._module_capture_ws.module_build_data["module_num_calls"][module_name] == 1:
-            lookup_keys_for_tensor.append(f"{module_name}")
+            module_keys.append(module_name)
+        for module_key in module_keys:
+            if is_output_alias and module_key in self.layer_dict_all_keys:
+                continue
+            lookup_keys_for_tensor.append(module_key)
 
     # Allow using buffer/input/output address as key, too:
     if layer_entry.is_buffer:

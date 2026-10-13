@@ -179,10 +179,6 @@
       "lookup_keys": [
         "-1",
         "6",
-        "negative",
-        "negative.2",
-        "negative.2:1",
-        "negative:1",
         "output",
         "output_1",
         "output_1:1",
@@ -673,10 +669,6 @@
       "lookup_keys": [
         "-1",
         "6",
-        "negative",
-        "negative.2",
-        "negative.2:1",
-        "negative:1",
         "output",
         "output_1",
         "output_1",

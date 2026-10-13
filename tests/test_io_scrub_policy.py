@@ -344,6 +344,8 @@ def test_intervention_ready_accessor_sweep_still_saves(tmp_path: Path) -> None:
 #: pre-save sweep; "we forgot" is not representable in this table.
 _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "annotate": "user annotation writer (mutates trace annotations by contract)",
+    "using": "appliance door: returns what a registered factory builds; it writes nothing "
+    "on the trace (each appliance's own reads are its owner's to sweep)",
     "with_annotations": "user annotation writer (mutating fluent spelling)",
     "add_node_overlay": "mutates the overlay table consumed by draw",
     "attach_hooks": "mutates the live model's hook registry",

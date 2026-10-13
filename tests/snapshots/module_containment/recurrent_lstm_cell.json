@@ -203,9 +203,7 @@
         "output",
         "output_1",
         "output_1:1",
-        "output_1_raw",
-        "readout",
-        "readout:1"
+        "output_1_raw"
       ],
       "module": null,
       "module_call_depth": 0,
@@ -811,9 +809,7 @@
         "output_1",
         "output_1:1",
         "output_1:1",
-        "output_1_raw",
-        "readout",
-        "readout:1"
+        "output_1_raw"
       ],
       "module": null,
       "module_entry_arg_keys": {},

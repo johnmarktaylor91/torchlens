@@ -94,8 +94,6 @@
       "label": "output_1",
       "lookup_keys": [
         "-1",
-        "1",
-        "1:1",
         "3",
         "output",
         "output_1",
@@ -379,8 +377,6 @@
       "label": "output_1:1",
       "lookup_keys": [
         "-1",
-        "1",
-        "1:1",
         "3",
         "output",
         "output_1",

@@ -96,6 +96,7 @@ from ._trace_selector_helpers import (
     _layers_to_save_needs_final_resolution,
     _make_layers_to_save_predicate,
     _predicate_cache_key,
+    _route_save_label_selection,
     _split_save_options_and_predicate,
     _stable_cache_fragment,
 )
@@ -2536,7 +2537,13 @@ def trace(
     save_mode: SaveMode | MissingType = MISSING,
     reconstruction_ready: bool | MissingType = MISSING,
     capture: CaptureOptions | None = None,
-    save: SaveOptions | PredicateFn | BaseSelector | None = None,
+    save: SaveOptions
+    | PredicateFn
+    | BaseSelector
+    | str
+    | list[Any]
+    | tuple[Any, ...]
+    | None = None,
     intervene: InterventionPredicate | None = None,
     halt: HaltPredicateFn | None = None,
     lookback: int = 0,
@@ -2938,7 +2945,13 @@ def _trace_torch_model(
     compute_input_output_distances: bool | MissingType = MISSING,
     recurrence_detection: bool | MissingType = MISSING,
     capture: CaptureOptions | None = None,
-    save: SaveOptions | PredicateFn | BaseSelector | None = None,
+    save: SaveOptions
+    | PredicateFn
+    | BaseSelector
+    | str
+    | list[Any]
+    | tuple[Any, ...]
+    | None = None,
     intervene: InterventionPredicate | None = None,
     halt: HaltPredicateFn | None = None,
     lookback: int = 0,
@@ -3123,7 +3136,10 @@ def _trace_torch_model(
         input_kwargs,
         admit_meta=bool(capture_options.structure_only),
     )
-    grouped_save_options, save_predicate = _split_save_options_and_predicate(save)
+    routed_save, capture_options = _route_save_label_selection(
+        save, capture, capture_options, model
+    )
+    grouped_save_options, save_predicate = _split_save_options_and_predicate(routed_save)
     if intervene is not None and not callable(intervene):
         raise ArgumentTypeError(
             f"intervene received non-callable type {type(intervene).__name__}",

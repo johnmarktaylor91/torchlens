@@ -8,7 +8,7 @@ import hashlib
 import re
 import types
 from collections.abc import Iterable
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from ._errors import ArgumentTypeError
 from .backends.registry import PUBLIC_OPTION_SPINE_TRACE_OPTIONS
@@ -17,6 +17,9 @@ from .fastlog.options import PredicateFn
 from .fastlog.types import RecordContext
 from .intervention.selectors import BaseSelector
 from .options import SaveOptions
+
+if TYPE_CHECKING:
+    from .options import CaptureOptions
 
 
 def _split_save_options_and_predicate(
@@ -44,16 +47,149 @@ def _split_save_options_and_predicate(
     if callable(save_value):
         return None, cast(PredicateFn, save_value)
     raise ArgumentTypeError(
-        f"save must be a SaveOptions instance, predicate callable, selector, or None; "
+        f"save must be a layer list or string, SaveOptions instance, predicate callable, "
+        f"selector, or None; "
         f"received {type(save_value).__name__}",
         code="save_predicate_type_invalid",
         remedy=(
-            "pass a SaveOptions instance, a predicate such as tl.func(...), or None; "
-            "to save every layer use layers_to_save='all', not save='all'"
+            "pass a list of layer names or module addresses such as save=['layer1'], "
+            "a selector such as save=tl.func('relu'), save='all', or a SaveOptions instance"
         ),
         argument="save",
         received_type=type(save_value).__name__,
     )
+
+
+def _is_save_label_selection(save_value: object) -> bool:
+    """Return whether ``save=`` holds the documented label/module/index list form.
+
+    Parameters
+    ----------
+    save_value
+        Value supplied to the public ``save`` parameter.
+
+    Returns
+    -------
+    bool
+        ``True`` for a string or a list/tuple of strings and integers.
+    """
+
+    if isinstance(save_value, str):
+        return True
+    if isinstance(save_value, (list, tuple)):
+        return all(
+            isinstance(item, (str, int)) and not isinstance(item, bool) for item in save_value
+        )
+    return False
+
+
+def _route_save_label_selection(
+    save_value: object,
+    capture: Any,
+    capture_options: CaptureOptions,
+    model: Any = None,
+) -> tuple[Any, CaptureOptions]:
+    """Route ``save=[...]`` / ``save='...'`` into the ``layers_to_save`` selection.
+
+    The list form documented on ``tl.trace`` (layer names, pass-qualified labels,
+    module addresses, integer indexes, substrings, ``'all'``/``'none'``) selects
+    exactly what ``capture=CaptureOptions(layers_to_save=...)`` selects.
+
+    Parameters
+    ----------
+    save_value
+        Value supplied to the public ``save`` parameter.
+    capture
+        The caller's ``capture=`` object, or ``None``.
+    capture_options
+        Merged capture options for this call.
+    model
+        The model being traced, used to map dot-flattened stage names.
+
+    Returns
+    -------
+    tuple[Any, CaptureOptions]
+        ``(save value left for predicate/SaveOptions splitting, capture options)``.
+
+    Raises
+    ------
+    ArgumentConflictError
+        ``save_selection_conflict`` when ``capture=`` also sets ``layers_to_save``.
+    """
+
+    if not _is_save_label_selection(save_value):
+        return save_value, _flatten_stage_names_in_options(capture_options, model)
+    from ._errors import ArgumentConflictError
+    from ._option_receipt import _field_is_explicit
+    from .options import merge_capture_options
+
+    if capture is not None and _field_is_explicit(capture, "layers_to_save"):
+        raise ArgumentConflictError(
+            "save= and capture=CaptureOptions(layers_to_save=...) both select layers",
+            code="save_selection_conflict",
+            remedy=(
+                f"keep one selection: tl.trace(model, x, save={save_value!r}) without "
+                "capture.layers_to_save, or tl.trace(model, x, capture=CaptureOptions("
+                f"layers_to_save={capture.layers_to_save!r}))"
+            ),
+            arguments=("save", "capture.layers_to_save"),
+        )
+    selection = save_value if isinstance(save_value, str) else list(cast(Iterable[Any], save_value))
+    merged = merge_capture_options(capture=capture_options, layers_to_save=selection)
+    return None, _flatten_stage_names_in_options(merged, model)
+
+
+def _flatten_stage_names_in_options(capture_options: CaptureOptions, model: Any) -> CaptureOptions:
+    """Rewrite dotted stage names registered with dots flattened to their module address.
+
+    timm ``FeatureListNet`` registers stage ``"stages.0"`` as module ``"stages_0"``;
+    a selection naming ``"stages.0"`` matches no address as a substring, so it is
+    rewritten to ``"stages_0"`` before capture. Only dotted strings that are no
+    substring of any module address and whose flattened form is an exact address
+    change; everything else is left as written.
+
+    Parameters
+    ----------
+    capture_options
+        Merged capture options for this call.
+    model
+        The model being traced (anything without ``named_modules`` is skipped).
+
+    Returns
+    -------
+    CaptureOptions
+        ``capture_options``, or a copy with the rewritten ``layers_to_save``.
+    """
+
+    selection = getattr(capture_options, "layers_to_save", None)
+    named_modules = getattr(model, "named_modules", None)
+    if not callable(named_modules) or not isinstance(selection, (str, list, tuple)):
+        return capture_options
+    addresses = [name for name, _module in named_modules() if name]
+    items = [selection] if isinstance(selection, str) else list(selection)
+    rewritten = [_flattened_stage_name(item, addresses) for item in items]
+    if rewritten == items:
+        return capture_options
+    from ._option_receipt import _explicit_fields
+
+    values = capture_options.as_dict()
+    values["layers_to_save"] = rewritten[0] if isinstance(selection, str) else rewritten
+    return cast(
+        "CaptureOptions",
+        type(capture_options)().from_values(values, _explicit_fields(capture_options)),
+    )
+
+
+def _flattened_stage_name(item: Any, addresses: list[str]) -> Any:
+    """Return the flattened module address a dotted stage name means, else ``item``."""
+
+    if not isinstance(item, str) or "." not in item:
+        return item
+    base, call_suffix = _split_call_suffix(item)
+    if any(base in address for address in addresses):
+        return item
+    flattened = base.replace(".", "_")
+    return f"{flattened}{call_suffix}" if flattened in addresses else item
 
 
 def _is_selective_label_save(value: object) -> bool:
@@ -591,3 +727,98 @@ _TRACE_OPTION_FILTERED_NAMES = (
     "jax_static_argnums",
     "grad_options",
 )
+
+
+def _trace_module_addresses(trace: Any) -> list[str]:
+    """Return the module addresses recorded on ``trace`` (root excluded)."""
+
+    try:
+        keys = list(trace.modules.keys())
+    except (AttributeError, TypeError):
+        return []
+    return [key for key in keys if isinstance(key, str) and key != "self"]
+
+
+def canonical_module_site_key(trace: Any, name: object) -> str | None:
+    """Map a module or stage name that is not a lookup key to the address it names.
+
+    A module name resolves to that module's output at every selector door
+    (DOCUMENTED-UNSTABLE rule). Exact module addresses are already lookup keys;
+    this adds the two spellings wrappers teach their users: a name relative to
+    a wrapped inner model (timm ``FeatureGetterNet`` reports ``"blocks.9"`` for
+    the module at ``"model.blocks.9"``) and a dotted name whose module was
+    registered with dots flattened to underscores (timm ``FeatureListNet``
+    registers ``"stages.0"`` as ``"stages_0"``). A ``":<call>"`` suffix is kept.
+
+    Parameters
+    ----------
+    trace
+        Finished trace whose module addresses and lookup keys are searched.
+    name
+        Requested selector string.
+
+    Returns
+    -------
+    str | None
+        The canonical lookup key (``"<address>"`` or ``"<address>:<call>"``), or
+        ``None`` when ``name`` is already a key or names no unique module.
+
+    Raises
+    ------
+    AmbiguousOpLookupError
+        When a relative name ends more than one module address; the message
+        lists every candidate address.
+    """
+
+    if not isinstance(name, str) or not name or name.startswith("."):
+        return None
+    try:
+        keys = trace.layer_dict_all_keys or {}
+        ambiguous = trace._ambiguous_lookup_keys or {}
+    except AttributeError:
+        return None
+    if name in keys or name in ambiguous:
+        return None
+    base, call_suffix = _split_call_suffix(name)
+    addresses = _trace_module_addresses(trace)
+    if not addresses or base in addresses:
+        return None
+    address = _unique_module_for_name(name, base, addresses)
+    if address is None:
+        return None
+    key = f"{address}{call_suffix}"
+    return key if key in keys or key in ambiguous else None
+
+
+def _split_call_suffix(name: str) -> tuple[str, str]:
+    """Split ``"address:3"`` into ``("address", ":3")``; other names keep an empty suffix."""
+
+    base, separator, call_index = name.rpartition(":")
+    if separator and call_index.isdigit():
+        return base, f":{call_index}"
+    return name, ""
+
+
+def _unique_module_for_name(name: str, base: str, addresses: list[str]) -> str | None:
+    """Return the one module address a relative or dot-flattened ``base`` names.
+
+    Raises
+    ------
+    AmbiguousOpLookupError
+        When ``base`` ends more than one module address.
+    """
+
+    from ._errors import AmbiguousOpLookupError
+
+    candidates = [address for address in addresses if address.endswith(f".{base}")]
+    flattened = base.replace(".", "_")
+    if not candidates and flattened != base and flattened in addresses:
+        candidates = [flattened]
+    if len(candidates) > 1:
+        listed = ", ".join(repr(address) for address in candidates[:10])
+        more = f" (and {len(candidates) - 10} more)" if len(candidates) > 10 else ""
+        raise AmbiguousOpLookupError(
+            f"Module name {name!r} ends {len(candidates)} module addresses: {listed}{more}. "
+            "Use the full module address."
+        )
+    return candidates[0] if candidates else None
