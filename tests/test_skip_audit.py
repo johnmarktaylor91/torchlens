@@ -74,6 +74,16 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
     "depyf": (OPTIONAL_PREVIEW, "depyf extra; real-package bridge leg in nightly.yml bridges-real"),
     "dialz": (OPTIONAL_PREVIEW, "dialz extra; real-package bridge leg in nightly.yml bridges-real"),
     "inseq": (OPTIONAL_PREVIEW, "inseq extra; real-package bridge leg in nightly.yml bridges-real"),
+    "aim": (
+        OPTIONAL_PREVIEW,
+        "Aim tracker export (no declared extra); real-package tracker leg, "
+        "tests/test_track_export_parity_real.py",
+    ),
+    "comet_ml": (
+        OPTIONAL_PREVIEW,
+        "Comet offline experiment for CometSink (no declared extra); real-package tracker leg, "
+        "tests/test_track_sinks_mlflow_comet_real.py",
+    ),
     "mlflow": (
         OPTIONAL_PREVIEW,
         "MLflow tracker export (no declared extra); nightly.yml bridges-real track leg",
@@ -371,6 +381,12 @@ DYNAMIC_IMPORTORSKIP_SITES = frozenset(
 
 # Every unconditional skip in tests/ (scanner key -> dated justification).
 UNCONDITIONAL_SKIP_LEDGER: dict[str, str] = {
+    "real_model/test_track_compile_recompile_burst.py::_recompile_limit": (
+        "[2026-10-12] reached only when the loop above finds neither Dynamo "
+        "recompile-limit name (feature check, never a version parse): with no "
+        "limit to bound against the burst assertion has no contract; every "
+        "supported stance-capable torch exposes one, so it is dark in practice"
+    ),
     "test_io_integration.py::test_data_parallel_and_ddp_streaming_case_is_explicitly_skipped": (
         "[2026-08-15] deliberate placeholder: torchlens is single-process by design, "
         "so no DataParallel/DDP streaming capture exists to test; the entry documents "
@@ -1020,6 +1036,12 @@ _CUDA_DARK = (
 )
 
 DEVICE_GATED_SKIPIF_LEDGER: dict[str, str] = {
+    "test_track_explorer_gate_rows.py::test_op_tier_overhead_row_cuda_gpt2": (
+        "[2026-10-12] explorer D25 op-tier gate row (watch(grain='op')): the "
+        "per-step A/B needs two gpt2 replicas training on CUDA; dark on CPU-only "
+        "CI, executed by the funded explorer GPU hour (its CPU structural sibling "
+        "runs everywhere)"
+    ),
     "test_validation_index_domain_in_range.py::test_tiny_vjepa2_validates_on_cuda_without_a_device_assert": (
         "[2026-10-12] CUDA-only regression for the index-domain in-domain retry "
         "(an out-of-domain perturbed index fired a device-side assert on GPU); "

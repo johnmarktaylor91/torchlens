@@ -80,7 +80,8 @@ class EnvFlagSpec:
     kind:
         ``"bool"`` (parsed by :func:`closed_bool_env` or a ledgered inline
         closed-vocabulary parser), ``"enum"`` (closed value set in
-        ``values``), or ``"path"`` (filesystem path, no boolean semantics).
+        ``values``), ``"path"`` (filesystem path, no boolean semantics),
+        ``"list"`` (comma-separated values) or ``"int"`` (an integer).
     reader:
         Dotted module path of the consuming module (documentation, not
         dispatch).
@@ -225,6 +226,46 @@ ENV_FLAG_REGISTRY: dict[str, EnvFlagSpec] = {
             kind="bool",
             reader="torchlens.validation.consolidated",
             description="TRUE additionally measures peak memory during validation runs.",
+        ),
+        EnvFlagSpec(
+            name="TORCHLENS_WATCH_EVERY",
+            kind="int",
+            reader="torchlens.trackers._callback_config",
+            description=(
+                "Configuration only (never activation): the scalar cadence an "
+                "explicitly constructed watch callback uses when its every= is "
+                "not passed; the callback prints the source."
+            ),
+        ),
+        EnvFlagSpec(
+            name="TORCHLENS_WATCH_HIST_EVERY",
+            kind="int",
+            reader="torchlens.trackers._callback_config",
+            description=(
+                "Configuration only (never activation): the histogram cadence "
+                "(or 'none') an explicit watch callback uses when hist_every= "
+                "is not passed; the callback prints the source."
+            ),
+        ),
+        EnvFlagSpec(
+            name="TORCHLENS_WATCH_SELECT",
+            kind="list",
+            reader="torchlens.trackers._callback_config",
+            description=(
+                "Configuration only (never activation): comma list of site "
+                "prefixes an explicit watch callback uses when select= is not "
+                "passed; the callback prints the source."
+            ),
+        ),
+        EnvFlagSpec(
+            name="TORCHLENS_WATCH_SIGNALS",
+            kind="list",
+            reader="torchlens.trackers._callback_config",
+            description=(
+                "Configuration only (never activation): comma list of watch "
+                "signals an explicit watch callback uses when signals= is not "
+                "passed; the callback prints the source."
+            ),
         ),
         EnvFlagSpec(
             name="TORCHLENS_WATCH_DISABLE",

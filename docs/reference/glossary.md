@@ -1390,6 +1390,67 @@ shim owed*
   training flag and the RNG state are restored. Rank zero only; the report
   stays on `.report`; a rejected sample warns `lightning_summary_skipped`.
 
+**LayerProfilerCallback run_id / disclosure (torchlens.callbacks.lightning)** — *unstable — no deprecation shim owed*
+: Every JSONL record carries `run_id` (fresh at each Lightning `setup`, or
+  fixed by `LayerProfilerCallback(..., run_id=...)`) and `disclosure`
+  (`PROFILE_DISCLOSURE`: one extra forward per profiled batch, eval mode,
+  no_grad, training flags restored). A batch the forward cannot take is
+  skipped with a `lightning_profile_skipped` warning; training continues.
+
+**MLflowSink, CometSink (torchlens.trackers)** — *unstable — no deprecation shim owed*
+: Forward-watch sinks over a run or experiment the user created (never
+  started or ended by the sink). `MLflowSink(client=None, *, run_id=None)`
+  takes the fluent module, an `MlflowClient` + `run_id`, or nothing; keeps the
+  caller's step; raw histograms are exact JSON artifacts. `CometSink(experiment)`
+  takes an `Experiment` or `OfflineExperiment`; scalars and text only (Comet
+  re-bins histograms, so `raw_histogram` is not advertised).
+
+**tl.export.mlflow / tl.export.aim parity keys** — *unstable — no deprecation shim owed*
+: Both exporters log the per-layer table, the report and every honesty fact as
+  a string tag (wandb-export parity) and return `table`, `report`, `tags`
+  (and `artifacts` for MLflow) beside the summary metrics and `capture_honesty`.
+
+**watch(grain="op", allow_forward_wrap=True) (torchlens.trackers)** — *unstable — no deprecation shim owed*
+: Op-grain (tier O) watching: per-op activations from the Route-B op-tier
+  collector during ordinary training. Needs `signals=("activations",)`,
+  `select=` (module path prefixes or a selector-algebra object) and
+  `example_input=`; refuses `watch_forward_wrap_consent_required` without
+  `allow_forward_wrap=True`, the consent to wrap the root module's forward.
+  Attach calibrates the wrap (plain vs wrapped forward, RNG and buffers
+  restored) into `session.collector.calibration` and discloses it in
+  `plan_report()`, the `torchlens/meta/op_grain_calibration` and
+  `torchlens/run/op_grain_overhead_median_x` rows and one
+  `watch_op_grain_cost_disclosed` warning. `facets={op_label: splitter}`
+  adds per-facet series under `<op label>/<facet>`. Unknown `grain=` refuses
+  `watch_grain_invalid`.
+
+**Watch callback environment configuration (TORCHLENS_WATCH_SIGNALS, _SELECT, _EVERY, _HIST_EVERY)** — *unstable — no deprecation shim owed*
+: An explicitly constructed `HFTrainerWatchCallback` / `LightningWatchCallback`
+  takes settings it was not given from these variables (configuration only;
+  the environment never activates instrumentation) and prints each setting's
+  source at attach through `print_fn=`: `[argument]`, `[env NAME]`,
+  `[derived: logging_steps=N]` or `[default]`. Resolved values and sources stay
+  on `callback.settings`; `hist_every=` is a constructor argument too. A
+  malformed variable refuses `watch_env_config_invalid`.
+
+**StepBlockRecord.trace_ref (torchlens.observability)** — *unstable — no deprecation shim owed*
+: Nullable pointer (path or URI) from a history step block to a retained
+  `Trace` for that step; there is no raw-tensor snapshot tier. History schema
+  version 2 (`HISTORY_SCHEMA_VERSION`); version-1 artifacts load with
+  `trace_ref=None`; a non-string or empty pointer refuses
+  `history_trace_ref_invalid`. `OpTierCollector.settle_open_block(...)`
+  sets it (and the optimizer truth) for the open op-tier block;
+  `OpTierCollector.instrumented_forward(...)` runs the per-step pass without
+  committing a block.
+
+**WatchSettings(sketch_embeddings=, artifact_budget_bytes=) (torchlens.observability)** — *unstable — no deprecation shim owed*
+: `sketch_embeddings=False` (default) reduces embedding-table parameters with
+  at least `EMBEDDING_SKETCH_CAP_NUMEL` (2**20) elements spine-only and says
+  so in the plan table; `True` sketches them. `artifact_budget_bytes` (default
+  256 MiB, `None` disables) caps the disk history artifact: the block that
+  would cross it refuses `history_artifact_budget_exceeded` before any of its
+  bytes are written.
+
 **show_legend=None AUTO value** — *unstable — no deprecation shim owed*
 : The tri-state AUTO value on the stable `show_legend` kwarg: no legend unless
   an encoding channel is active, then a channel-only disclosure legend.

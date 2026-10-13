@@ -35,7 +35,7 @@ import torch
 from .. import _state
 from ._artifact import CommittedBlock, HistoryWriter, RamRing
 from ._chassis import EventStream, ObserverEvent
-from ._errors import WatchLifecycleError, WatchPlanError
+from ._errors import HistoryArtifactError, WatchLifecycleError, WatchPlanError
 from ._kernels import (
     DEFAULT_DESCRIPTOR,
     SPINE_SLOTS,
@@ -68,6 +68,17 @@ UPDATE_SAMPLE_SIZE = 4096
 #: Bytes per observation row estimate for the plan table: spine slots at
 #: float64 plus identity/disclosure strings, and the sketch cells at int64.
 _SPINE_ROW_BYTES = SPINE_SLOTS * 8 + 64
+
+#: D21 embedding-class sketch exclusion: a parameter owned by an embedding
+#: table module with at least this many elements reduces spine-only unless
+#: ``WatchSettings(sketch_embeddings=True)`` asks for its sketch. On gpt2 the
+#: token table alone is 69% of a naive preset's reduction elements for the
+#: tensor that moves least and is least diagnostic per byte.
+EMBEDDING_SKETCH_CAP_NUMEL = 1 << 20
+
+#: D22 default history-artifact byte budget (gate-ratified build value): the
+#: serialized-size accountant refuses BEFORE the block that would cross it.
+DEFAULT_ARTIFACT_BUDGET_BYTES = 256 * 1024 * 1024
 
 _BlockKey = tuple[str, str, str]
 
@@ -136,6 +147,8 @@ class WatchSettings:
     ram_policy: str = "refuse"
     event_stream: EventStream | None = None
     update_sample_size: int = UPDATE_SAMPLE_SIZE
+    sketch_embeddings: bool = False
+    artifact_budget_bytes: int | None = DEFAULT_ARTIFACT_BUDGET_BYTES
 
 
 @dataclass(frozen=True)
@@ -153,6 +166,22 @@ class StepTruth:
     unscaled: str = "unknown"
     clipped: str = "unknown"
     micro_batches: int | None = None
+
+
+_EMBEDDING_NOTE = "embedding-class: spine only (WatchSettings(sketch_embeddings=True) sketches it)"
+
+
+def _embedding_class_params(model: torch.nn.Module) -> set[str]:
+    """Names of giant embedding-table parameters (D21), as ``named_parameters`` spells them."""
+
+    owners = {
+        id(param)
+        for module in model.modules()
+        if isinstance(module, (torch.nn.Embedding, torch.nn.EmbeddingBag))
+        for param in module.parameters(recurse=False)
+        if param.numel() >= EMBEDDING_SKETCH_CAP_NUMEL
+    }
+    return {name for name, param in model.named_parameters() if id(param) in owners}
 
 
 def _site_seed(run_id: str, site_id: str) -> int:
@@ -284,6 +313,12 @@ class HistoryCollector:
         self._implicit_counter = 0
         self._update_samples: dict[str, torch.Tensor] = {}
         self._sample_index_cache: dict[str, torch.Tensor] = {}
+        #: D21: embedding-class parameter names reduced spine-only.
+        self._spine_only_params: set[str] = set()
+        #: D22: accounted serialized bytes of committed blocks, and the
+        #: per-block upper bound the admission check adds before opening.
+        self._artifact_bytes = 0
+        self._block_bytes_bound = 0
 
     def _normalize_cadence(
         self, cadence: int | Mapping[str, int] | None, *, default: int | None
@@ -403,6 +438,8 @@ class HistoryCollector:
 
         if not any(s.startswith("param") for s in self.streams):
             return
+        if not self.settings.sketch_embeddings:
+            self._spine_only_params = _embedding_class_params(self.model)
         for name, param in self.model.named_parameters():
             if self.requested_sites is not None and not any(
                 name.startswith(prefix) for prefix in self.requested_sites
@@ -455,6 +492,7 @@ class HistoryCollector:
         rows: list[PlanRow] = []
         total_elements = 0
         total_bytes = 0
+        self._block_bytes_bound = 0
         sketch_cells = 2 * self.descriptor.bins_per_side + 8
         for site in self._sites_by_id.values():
             streams = (
@@ -474,7 +512,11 @@ class HistoryCollector:
                 else:
                     elements = numel
                     note = ""
+                if site.param_name in self._spine_only_params:
+                    sketch = None
+                    note = _EMBEDDING_NOTE
                 bytes_per = _SPINE_ROW_BYTES + (sketch_cells * 8 if sketch else 0)
+                self._block_bytes_bound += bytes_per
                 rows.append(
                     PlanRow(
                         site_id=site.site_id,
@@ -689,9 +731,39 @@ class HistoryCollector:
         finally:
             self._commit_block()
 
+    def _admit_artifact_bytes(self) -> None:
+        """D22: refuse BEFORE the block that would cross the artifact budget.
+
+        Applies to the disk archive (``output_dir=``); the RAM-only ring has
+        its own capacity refusal. The committed artifact stays readable: the
+        refusal lands before any byte of the next block is written.
+        """
+
+        budget = self.settings.artifact_budget_bytes
+        if self.writer is None or budget is None:
+            return
+        if self._artifact_bytes + self._block_bytes_bound <= budget:
+            return
+        raise HistoryArtifactError(
+            f"The next StepBlock (up to {self._block_bytes_bound} bytes) would "
+            f"push the history artifact past its byte budget ({budget} bytes; "
+            f"{self._artifact_bytes} committed). Nothing was dropped or degraded "
+            "(D20); the artifact is readable up to the last committed block.",
+            code="history_artifact_budget_exceeded",
+            budget=budget,
+            committed=self._artifact_bytes,
+            next_block_bound=self._block_bytes_bound,
+            remedy=(
+                "Raise WatchSettings(artifact_budget_bytes=...) (None disables "
+                "the budget), raise the cadence, narrow the observed sites, or "
+                "drop the sketch tier."
+            ),
+        )
+
     def _open_block(self, global_step: int, *, provenance: str) -> None:
         """Open one StepBlock and reset the staging buffers."""
 
+        self._admit_artifact_bytes()
         self._block_open = True
         self._block_step = global_step
         self._block_provenance = provenance
@@ -805,7 +877,7 @@ class HistoryCollector:
                     key = (site_id, "param_grad", "pre_step")
                     grad_entries.append((key, spine_vector(param.grad.detach())))
                     self._block_grad_scale[key] = "unknown"
-                    if sketch_grad:
+                    if sketch_grad and name not in self._spine_only_params:
                         sketch_entries.append(
                             (key, sketch_vector(param.grad.detach(), self.descriptor))
                         )
@@ -934,6 +1006,11 @@ class HistoryCollector:
         self.ring.admit(committed)
         if self.writer is not None:
             self.writer.append_block(committed)
+            sketch_bytes = (2 * self.descriptor.bins_per_side + 8) * 8
+            self._artifact_bytes += sum(
+                _SPINE_ROW_BYTES + (sketch_bytes if obs.sketch is not None else 0)
+                for obs in observations
+            )
         if self.event_stream is not None:
             self.event_stream.publish(
                 ObserverEvent(
@@ -953,6 +1030,8 @@ class HistoryCollector:
 
 
 __all__ = [
+    "DEFAULT_ARTIFACT_BUDGET_BYTES",
+    "EMBEDDING_SKETCH_CAP_NUMEL",
     "ROUTE_A_STREAMS",
     "UPDATE_SAMPLE_SIZE",
     "HistoryCollector",

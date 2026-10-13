@@ -10,8 +10,9 @@ built from:
   merge with the documented stable pairwise algorithm and are never called
   "exact" (D8's language rule).
 - :class:`Histogram` -- ONE immutable, universal, SIGNED log2 grid (D9): no
-  collapsing store, no rebinning, ever. Provisional defaults ``bpo=4``,
-  window ``[2^-48, 2^16]`` per sign. Specials (exact zero, per-side
+  collapsing store, no rebinning, ever. Gate-ratified build values
+  ``bpo=4``, window ``[2^-48, 2^16]`` per sign (the numeric gate may retune
+  them; a retune is a value change). Specials (exact zero, per-side
   under/overflow, NaN, +/-inf) stay EXACT integer counts, so out-of-range
   forensics survive the window choice. The full descriptor travels with
   every result, making resolution/range a VALUE change forever, never a
@@ -164,7 +165,9 @@ class HistogramDescriptor:
         return tuple(2.0 ** (self.lo_exp + i / bpo) for i in range(self.bins_per_side + 1))
 
 
-#: The provisional default grid (D9): bpo=4, window [2^-48, 2^16] per sign.
+#: The default grid (D9), gate-ratified build values: bpo=4, window
+#: [2^-48, 2^16] per sign. The numeric gate may retune them; because the full
+#: descriptor travels with every result, a retune is a value change.
 DEFAULT_DESCRIPTOR = HistogramDescriptor()
 
 

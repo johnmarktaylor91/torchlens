@@ -564,6 +564,7 @@ docs-md	docs/agent-reference/conventions.md	41,
 docs-md	docs/agent-reference/conventions.md	42
 docs-md	docs/agent-reference/critical-invariants.md	10
 docs-md	docs/agent-reference/critical-invariants.md	10.
+docs-md	docs/agent-reference/critical-invariants.md	10_
 docs-md	docs/agent-reference/critical-invariants.md	11.
 docs-md	docs/agent-reference/critical-invariants.md	12.
 docs-md	docs/agent-reference/critical-invariants.md	13.
@@ -580,6 +581,7 @@ docs-md	docs/agent-reference/critical-invariants.md	2.16
 docs-md	docs/agent-reference/critical-invariants.md	2.31.0
 docs-md	docs/agent-reference/critical-invariants.md	2.31.0,
 docs-md	docs/agent-reference/critical-invariants.md	2.32.4
+docs-md	docs/agent-reference/critical-invariants.md	2.33
 docs-md	docs/agent-reference/critical-invariants.md	260
 docs-md	docs/agent-reference/critical-invariants.md	30
 docs-md	docs/agent-reference/critical-invariants.md	33
@@ -669,6 +671,7 @@ docs-md	docs/agent-reference/keep-the-glossary-docs-in-lockstep-with-code-locked
 docs-md	docs/agent-reference/keep-the-glossary-docs-in-lockstep-with-code-locked.md	71
 docs-md	docs/agent-reference/known-gotchas.md	1.7
 docs-md	docs/agent-reference/known-gotchas.md	12
+docs-md	docs/agent-reference/known-gotchas.md	18
 docs-md	docs/agent-reference/known-gotchas.md	2.5
 docs-md	docs/agent-reference/known-gotchas.md	2.6
 docs-md	docs/agent-reference/known-gotchas.md	256
@@ -1182,6 +1185,7 @@ docs-md	docs/reference/debug.md	128
 docs-md	docs/reference/debug.md	128,
 docs-md	docs/reference/debug.md	15
 docs-md	docs/reference/debug.md	16
+docs-md	docs/reference/debug.md	18
 docs-md	docs/reference/debug.md	2.0
 docs-md	docs/reference/debug.md	2.6
 docs-md	docs/reference/debug.md	20,000
@@ -1302,6 +1306,7 @@ docs-md	docs/reference/error_refusal_contract.md	90
 docs-md	docs/reference/experiment_ledger.md	144
 docs-md	docs/reference/export.md	0.1.32
 docs-md	docs/reference/export.md	10
+docs-md	docs/reference/export.md	5000
 docs-md	docs/reference/export.md	9.2.2
 docs-md	docs/reference/glossary.md	0.25,
 docs-md	docs/reference/glossary.md	1.1,
@@ -1737,7 +1742,7 @@ docs-md	docs/reference/trackers.md	0,1,2
 docs-md	docs/reference/trackers.md	0.28.2,
 docs-md	docs/reference/trackers.md	0.30.0
 docs-md	docs/reference/trackers.md	1.1
-docs-md	docs/reference/trackers.md	10.4
+docs-md	docs/reference/trackers.md	12,
 docs-md	docs/reference/trackers.md	151
 docs-md	docs/reference/trackers.md	1639
 docs-md	docs/reference/trackers.md	18
@@ -1747,11 +1752,11 @@ docs-md	docs/reference/trackers.md	2.21.0,
 docs-md	docs/reference/trackers.md	200
 docs-md	docs/reference/trackers.md	2284
 docs-md	docs/reference/trackers.md	2625
-docs-md	docs/reference/trackers.md	34
-docs-md	docs/reference/trackers.md	35.0
 docs-md	docs/reference/trackers.md	3701
+docs-md	docs/reference/trackers.md	3_12
 docs-md	docs/reference/trackers.md	48
 docs-md	docs/reference/trackers.md	497
+docs-md	docs/reference/trackers.md	50
 docs-md	docs/reference/trackers.md	50,
 docs-md	docs/reference/trackers.md	512
 docs-md	docs/reference/trackers.md	5135
@@ -1959,6 +1964,7 @@ error-strings	torchlens/observability/_artifact.py	20
 error-strings	torchlens/observability/_artifact.py	256
 error-strings	torchlens/observability/_chassis.py	4.2
 error-strings	torchlens/observability/_chassis.py	4.7
+error-strings	torchlens/observability/_collector.py	20
 error-strings	torchlens/observability/_collector.py	24
 error-strings	torchlens/observability/_overhead.py	11
 error-strings	torchlens/observability/_schema.py	12
@@ -2120,6 +2126,7 @@ package-docstrings	torchlens/_extraction/views.py	14
 package-docstrings	torchlens/_extraction_provenance.py	10
 package-docstrings	torchlens/_extraction_provenance.py	43
 package-docstrings	torchlens/_fast_run.py	35
+package-docstrings	torchlens/_input_coerce.py	11.2
 package-docstrings	torchlens/_input_coerce.py	3.10
 package-docstrings	torchlens/_input_walk.py	1.0
 package-docstrings	torchlens/_input_walk.py	11.1
@@ -2328,8 +2335,11 @@ package-docstrings	torchlens/_io/tlspec.py	256
 package-docstrings	torchlens/_io/tlspec.py	4.4
 package-docstrings	torchlens/_io/tlspec.py	59
 package-docstrings	torchlens/_io/tlspec.py	8601
+package-docstrings	torchlens/_io/writer_contract.py	10
+package-docstrings	torchlens/_io/writer_contract.py	10,
 package-docstrings	torchlens/_io/writer_contract.py	2.33.0
 package-docstrings	torchlens/_io/writer_contract.py	2.34.1
+package-docstrings	torchlens/_io/writer_contract.py	22.3
 package-docstrings	torchlens/_io/writer_contract.py	256
 package-docstrings	torchlens/_io/writer_contract.py	3.1
 package-docstrings	torchlens/_io/writer_contract.py	3.3
@@ -2617,6 +2627,7 @@ package-docstrings	torchlens/attribution/_text.py	16
 package-docstrings	torchlens/attribution/_text.py	17
 package-docstrings	torchlens/attribution/_text.py	22
 package-docstrings	torchlens/attribution/_text.py	23
+package-docstrings	torchlens/attribution/_text.py	23.3
 package-docstrings	torchlens/attribution/_text.py	24
 package-docstrings	torchlens/attribution/_text.py	24,
 package-docstrings	torchlens/attribution/_text.py	25
@@ -2772,6 +2783,7 @@ package-docstrings	torchlens/backends/torch/_op_markers.py	13
 package-docstrings	torchlens/backends/torch/_op_markers.py	14
 package-docstrings	torchlens/backends/torch/_op_markers.py	2.2
 package-docstrings	torchlens/backends/torch/_op_markers.py	27
+package-docstrings	torchlens/backends/torch/_op_markers.py	35.3
 package-docstrings	torchlens/backends/torch/_ops_arguments.py	10
 package-docstrings	torchlens/backends/torch/_ops_arguments.py	75
 package-docstrings	torchlens/backends/torch/_ops_arguments.py	77
@@ -2797,6 +2809,7 @@ package-docstrings	torchlens/backends/torch/_ops_predicate_events.py	31
 package-docstrings	torchlens/backends/torch/_ops_predicate_events.py	78
 package-docstrings	torchlens/backends/torch/_ops_predicate_events.py	79
 package-docstrings	torchlens/backends/torch/_ops_retention.py	34
+package-docstrings	torchlens/backends/torch/_pinned_graph.py	37
 package-docstrings	torchlens/backends/torch/_quantized_flops.py	43
 package-docstrings	torchlens/backends/torch/_tl.py	2.13
 package-docstrings	torchlens/backends/torch/_tl.py	2.7.1
@@ -2811,6 +2824,7 @@ package-docstrings	torchlens/backends/torch/_weightsfree_ctx.py	1.4
 package-docstrings	torchlens/backends/torch/_weightsfree_ctx.py	11
 package-docstrings	torchlens/backends/torch/_weightsfree_transparency.py	24,
 package-docstrings	torchlens/backends/torch/_weightsfree_transparency.py	291
+package-docstrings	torchlens/backends/torch/backend.py	35.2
 package-docstrings	torchlens/backends/torch/backward.py	1.2
 package-docstrings	torchlens/backends/torch/backward.py	10
 package-docstrings	torchlens/backends/torch/backward.py	2.13
@@ -3319,6 +3333,7 @@ package-docstrings	torchlens/dataset_extraction.py	16
 package-docstrings	torchlens/dataset_extraction.py	19
 package-docstrings	torchlens/dataset_extraction.py	32
 package-docstrings	torchlens/debug/_compile_counter.py	12
+package-docstrings	torchlens/debug/_compile_counter.py	18
 package-docstrings	torchlens/debug/_compile_counter.py	2026
 package-docstrings	torchlens/debug/_compile_counter.py	64
 package-docstrings	torchlens/debug/_cost.py	2.2
@@ -3396,6 +3411,8 @@ package-docstrings	torchlens/export/__init__.py	16,
 package-docstrings	torchlens/export/__init__.py	17
 package-docstrings	torchlens/export/__init__.py	18
 package-docstrings	torchlens/export/__init__.py	24
+package-docstrings	torchlens/export/_common.py	09.2,
+package-docstrings	torchlens/export/_common.py	10.5
 package-docstrings	torchlens/export/_common.py	18
 package-docstrings	torchlens/export/_graphs.py	14
 package-docstrings	torchlens/export/_graphs.py	15
@@ -3757,6 +3774,7 @@ package-docstrings	torchlens/observability/_collector.py	16
 package-docstrings	torchlens/observability/_collector.py	17
 package-docstrings	torchlens/observability/_collector.py	17,
 package-docstrings	torchlens/observability/_collector.py	21
+package-docstrings	torchlens/observability/_collector.py	22
 package-docstrings	torchlens/observability/_collector.py	256
 package-docstrings	torchlens/observability/_join.py	19
 package-docstrings	torchlens/observability/_join.py	2.0
@@ -3787,6 +3805,7 @@ package-docstrings	torchlens/observability/_op_tier.py	125
 package-docstrings	torchlens/observability/_op_tier.py	14
 package-docstrings	torchlens/observability/_op_tier.py	15
 package-docstrings	torchlens/observability/_op_tier.py	16
+package-docstrings	torchlens/observability/_op_tier.py	17
 package-docstrings	torchlens/observability/_op_tier.py	21
 package-docstrings	torchlens/observability/_op_tier.py	25
 package-docstrings	torchlens/observability/_op_tier.py	567
@@ -3958,6 +3977,7 @@ package-docstrings	torchlens/postprocess/loop_detection.py	63
 package-docstrings	torchlens/postprocess/loop_grouping_adapter.py	1,024
 package-docstrings	torchlens/postprocess/loop_grouping_adapter.py	2048
 package-docstrings	torchlens/postprocess/loop_grouping_adapter.py	29
+package-docstrings	torchlens/postprocess/saved_summary.py	37
 package-docstrings	torchlens/preprocessing/_authorities.py	0.17
 package-docstrings	torchlens/preprocessing/_diagnostics.py	16
 package-docstrings	torchlens/preprocessing/_imagenet_default.py	02.4
@@ -4243,6 +4263,7 @@ package-docstrings	torchlens/stats/_streaming.py	20
 package-docstrings	torchlens/stats/_streaming.py	20,
 package-docstrings	torchlens/stats/_streaming.py	2019
 package-docstrings	torchlens/stats/_streaming.py	25
+package-docstrings	torchlens/stats/_streaming.py	25.2
 package-docstrings	torchlens/stats/_streaming.py	256
 package-docstrings	torchlens/stats/_streaming.py	50
 package-docstrings	torchlens/stats/_streaming.py	64
@@ -4259,12 +4280,16 @@ package-docstrings	torchlens/trackers/_amp.py	1.6
 package-docstrings	torchlens/trackers/_amp.py	2.14
 package-docstrings	torchlens/trackers/_amp.py	23
 package-docstrings	torchlens/trackers/_amp.py	3.11
+package-docstrings	torchlens/trackers/_callback_config.py	34.2
 package-docstrings	torchlens/trackers/_callbacks.py	10
 package-docstrings	torchlens/trackers/_callbacks.py	100
 package-docstrings	torchlens/trackers/_callbacks.py	100,
 package-docstrings	torchlens/trackers/_callbacks.py	3.16,
 package-docstrings	torchlens/trackers/_callbacks.py	3.8
 package-docstrings	torchlens/trackers/_callbacks.py	500
+package-docstrings	torchlens/trackers/_comet.py	1.1
+package-docstrings	torchlens/trackers/_comet.py	12,
+package-docstrings	torchlens/trackers/_comet.py	20,
 package-docstrings	torchlens/trackers/_errors.py	26
 package-docstrings	torchlens/trackers/_errors.py	3.13
 package-docstrings	torchlens/trackers/_graph.py	151
@@ -4306,6 +4331,8 @@ package-docstrings	torchlens/trackers/_watch.py	3.5
 package-docstrings	torchlens/trackers/_watch.py	3.7
 package-docstrings	torchlens/trackers/_watch.py	3.8
 package-docstrings	torchlens/trackers/_watch.py	3.9
+package-docstrings	torchlens/trackers/_watch.py	32.1
+package-docstrings	torchlens/trackers/_watch.py	34.1
 package-docstrings	torchlens/trackers/_watch.py	497
 package-docstrings	torchlens/transforms/_context.py	1.5
 package-docstrings	torchlens/transforms/_context.py	12
@@ -4395,6 +4422,7 @@ package-docstrings	torchlens/user_funcs.py	1_1
 package-docstrings	torchlens/user_funcs.py	2132
 package-docstrings	torchlens/user_funcs.py	256
 package-docstrings	torchlens/user_funcs.py	28
+package-docstrings	torchlens/user_funcs.py	35.2
 package-docstrings	torchlens/user_funcs.py	41
 package-docstrings	torchlens/utils/__init__.py	1,900
 package-docstrings	torchlens/utils/__init__.py	3,000
@@ -4417,6 +4445,9 @@ package-docstrings	torchlens/utils/_callable_safety.py	43
 package-docstrings	torchlens/utils/_callable_safety.py	47
 package-docstrings	torchlens/utils/_callable_safety.py	49
 package-docstrings	torchlens/utils/_callable_safety.py	55
+package-docstrings	torchlens/utils/_exception_notes.py	3.10
+package-docstrings	torchlens/utils/_exception_notes.py	3.11.
+package-docstrings	torchlens/utils/_exception_notes.py	678
 package-docstrings	torchlens/utils/_multipass_access.py	12
 package-docstrings	torchlens/utils/_rng_channels.py	051
 package-docstrings	torchlens/utils/_rng_channels.py	2.16
@@ -5099,6 +5130,7 @@ test-docstrings	tests/real_model/registry.py	20
 test-docstrings	tests/real_model/registry.py	256
 test-docstrings	tests/real_model/registry.py	4.2
 test-docstrings	tests/real_model/registry.py	4.3
+test-docstrings	tests/real_model/test_track_compile_recompile_burst.py	18
 test-docstrings	tests/semantic/test_facets.py	64
 test-docstrings	tests/semantic/test_facets_p4.py	76
 test-docstrings	tests/semantic/test_facets_p4.py	77
@@ -5219,6 +5251,7 @@ test-docstrings	tests/test_attrib_methods_text.py	1.80
 test-docstrings	tests/test_attrib_methods_text.py	128
 test-docstrings	tests/test_attrib_methods_text.py	16
 test-docstrings	tests/test_attrib_methods_text.py	17
+test-docstrings	tests/test_attrib_methods_text.py	23.3
 test-docstrings	tests/test_attrib_methods_text.py	26
 test-docstrings	tests/test_attrib_methods_text.py	28
 test-docstrings	tests/test_attrib_methods_text.py	29
@@ -5582,6 +5615,7 @@ test-docstrings	tests/test_explorer_watch_gates.py	25
 test-docstrings	tests/test_explorer_watch_riders.py	25
 test-docstrings	tests/test_exports.py	0.1.32
 test-docstrings	tests/test_exports.py	240
+test-docstrings	tests/test_exports.py	35.3
 test-docstrings	tests/test_exports.py	53
 test-docstrings	tests/test_exports.py	62
 test-docstrings	tests/test_exports.py	80
@@ -5670,6 +5704,7 @@ test-docstrings	tests/test_file_size_ratchet.py	43
 test-docstrings	tests/test_fixa_escrow_spill.py	13
 test-docstrings	tests/test_fixa_escrow_spill.py	16
 test-docstrings	tests/test_fixa_escrow_spill.py	18
+test-docstrings	tests/test_fixa_escrow_spill.py	27.1
 test-docstrings	tests/test_fixa_escrow_spill.py	32
 test-docstrings	tests/test_fixa_escrow_spill.py	50
 test-docstrings	tests/test_fixa_escrow_spill.py	64
@@ -5722,6 +5757,19 @@ test-docstrings	tests/test_grind_b4_lane_p.py	402
 test-docstrings	tests/test_grind_b4_lane_p.py	52
 test-docstrings	tests/test_grind_b4_lane_p.py	9.6
 test-docstrings	tests/test_hash_determinism.py	21
+test-docstrings	tests/test_hon_attribution_refusals.py	20.5
+test-docstrings	tests/test_hon_attribution_refusals.py	21.5
+test-docstrings	tests/test_hon_capture_refusals.py	11.2
+test-docstrings	tests/test_hon_capture_refusals.py	31.4
+test-docstrings	tests/test_hon_capture_refusals.py	35.2
+test-docstrings	tests/test_hon_capture_refusals.py	35.3
+test-docstrings	tests/test_hon_capture_refusals.py	53.3
+test-docstrings	tests/test_hon_crash_notes.py	3.10
+test-docstrings	tests/test_hon_export_refusals.py	09.2
+test-docstrings	tests/test_hon_export_refusals.py	10.5
+test-docstrings	tests/test_hon_export_refusals.py	33.2
+test-docstrings	tests/test_hon_summary_honesty.py	35.1
+test-docstrings	tests/test_hon_xarray_export.py	18
 test-docstrings	tests/test_identity_shims.py	56
 test-docstrings	tests/test_import_hygiene.py	10
 test-docstrings	tests/test_import_hygiene.py	30
@@ -6006,6 +6054,7 @@ test-docstrings	tests/test_modelexplorer_real.py	40
 test-docstrings	tests/test_modelexplorer_real.py	50
 test-docstrings	tests/test_modelexplorer_real.py	75
 test-docstrings	tests/test_module_containment_equality.py	2.7.1
+test-docstrings	tests/test_module_containment_save_load.py	10
 test-docstrings	tests/test_module_focus.py	25
 test-docstrings	tests/test_module_import_isolation.py	470
 test-docstrings	tests/test_module_log.py	10
@@ -6205,6 +6254,8 @@ test-docstrings	tests/test_persist_honesty_real_model.py	18
 test-docstrings	tests/test_persist_honesty_real_model.py	19
 test-docstrings	tests/test_persist_honesty_streamed_settlement.py	18
 test-docstrings	tests/test_persist_honesty_streamed_settlement.py	20
+test-docstrings	tests/test_pinned_autograd_memory.py	32
+test-docstrings	tests/test_pinned_autograd_memory.py	56
 test-docstrings	tests/test_postprocess_contract_arming.py	13
 test-docstrings	tests/test_postprocess_contract_arming.py	20
 test-docstrings	tests/test_postprocess_contract_arming.py	36
@@ -6229,6 +6280,7 @@ test-docstrings	tests/test_postprocess_r14a_regressions.py	52
 test-docstrings	tests/test_postprocess_retention_epilogue.py	16
 test-docstrings	tests/test_postprocess_retention_epilogue.py	23
 test-docstrings	tests/test_prebump_roundtrip_acceptance.py	10
+test-docstrings	tests/test_prebump_roundtrip_acceptance.py	11
 test-docstrings	tests/test_prehook_provenance.py	10
 test-docstrings	tests/test_prehook_provenance.py	11
 test-docstrings	tests/test_prehook_provenance.py	12
@@ -6584,6 +6636,10 @@ test-docstrings	tests/test_schema_lockstep.py	3.0
 test-docstrings	tests/test_schema_lockstep.py	3.10
 test-docstrings	tests/test_schema_lockstep.py	3.11
 test-docstrings	tests/test_schema_lockstep.py	53
+test-docstrings	tests/test_schema_v10_contract_and_goldens.py	10
+test-docstrings	tests/test_schema_v10_contract_and_goldens.py	2.34.1
+test-docstrings	tests/test_schema_v10_contract_and_goldens.py	22.3
+test-docstrings	tests/test_schema_v10_contract_and_goldens.py	36
 test-docstrings	tests/test_schema_v9_c07x_episode.py	10
 test-docstrings	tests/test_schema_v9_c07x_episode.py	40
 test-docstrings	tests/test_schema_v9_c07x_episode.py	42
@@ -7045,6 +7101,13 @@ test-docstrings	tests/test_trace_core_substrate.py	11
 test-docstrings	tests/test_trace_core_substrate.py	2002
 test-docstrings	tests/test_trace_core_substrate.py	32
 test-docstrings	tests/test_trace_field_invariant.py	10
+test-docstrings	tests/test_track_callback_env_config.py	34.2
+test-docstrings	tests/test_track_collector_embedding_budget.py	21
+test-docstrings	tests/test_track_explorer_gate_rows.py	124
+test-docstrings	tests/test_track_explorer_gate_rows.py	128,
+test-docstrings	tests/test_track_export_parity_real.py	3.29
+test-docstrings	tests/test_track_watch_op_grain.py	32.1
+test-docstrings	tests/test_track_watch_op_grain.py	34.1
 test-docstrings	tests/test_trackers_sinks_callbacks.py	3.8
 test-docstrings	tests/test_trackers_sinks_delivery.py	11
 test-docstrings	tests/test_trackers_sinks_delivery.py	3.12
@@ -7057,6 +7120,7 @@ test-docstrings	tests/test_trackers_sinks_records.py	3.4
 test-docstrings	tests/test_trackers_sinks_records.py	3.5
 test-docstrings	tests/test_trackers_sinks_watch.py	3.11
 test-docstrings	tests/test_trackers_sinks_watch.py	3.13
+test-docstrings	tests/test_trackers_sinks_watch.py	32.1
 test-docstrings	tests/test_train_mode/test_edge_cases.py	10
 test-docstrings	tests/test_train_mode/test_edge_cases.py	2026
 test-docstrings	tests/test_train_mode/test_no_bare_detach.py	24
@@ -7260,6 +7324,7 @@ test-docstrings	tests/test_w051_honesty_facts.py	10
 test-docstrings	tests/test_w051_honesty_hf_default_config.py	051
 test-docstrings	tests/test_w051_honesty_live_output_contract.py	051
 test-docstrings	tests/test_w051_honesty_live_output_contract.py	2_5
+test-docstrings	tests/test_w051_io_artifact_anchors.py	10
 test-docstrings	tests/test_w051_io_artifact_anchors.py	2.34.1
 test-docstrings	tests/test_w051_mechinterp_dla.py	300
 test-docstrings	tests/test_w051_mechinterp_flops_report.py	3.12
@@ -7550,6 +7615,8 @@ test-names	tests/test_runnable_r36_regressions.py	24
 test-names	tests/test_runnable_r36_regressions.py	25
 test-names	tests/test_runnable_r36_regressions.py	26
 test-names	tests/test_runnable_r36_regressions.py	27
+test-names	tests/test_schema_v10_contract_and_goldens.py	10_
+test-names	tests/test_schema_v10_contract_and_goldens.py	216_
 test-names	tests/test_site_join.py	18_
 test-names	tests/test_site_key.py	2_4
 test-names	tests/test_snoop_real_model.py	18_
@@ -7614,6 +7681,7 @@ test-names	tests/test_tlspec_runnable_r79_seed_typing.py	79_
 test-names	tests/test_tlspec_runnable_r79_session_leak.py	79_
 test-names	tests/test_tlspec_runnable_slice_literal.py	71
 test-names	tests/test_tlspec_unified.py	18_
+test-names	tests/test_track_collector_embedding_budget.py	256_
 test-names	tests/test_trackers_sinks_callbacks.py	100_
 test-names	tests/test_transforms_lib_fidelity.py	14_
 test-names	tests/test_transforms_lib_pooling.py	32
@@ -7636,6 +7704,7 @@ test-names	tests/test_validation_hardening.py	35_
 test-names	tests/test_validation_perturbation_units.py	64_
 test-names	tests/test_vizr_flat800.py	800_
 test-names	tests/test_w051_agent_cli.py	256_
+test-names	tests/test_w051_io_artifact_anchors.py	10
 test-names	tests/test_w051_semantic_norm_half.py	16_
 test-names	tests/test_w051_semantic_norm_half.py	32_
 test-names	tests/test_w1f6_facet_scatter_spec_compat.py	2_16_

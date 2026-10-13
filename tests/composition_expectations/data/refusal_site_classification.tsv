@@ -201,6 +201,7 @@ torchlens.observability._chassis:ObserverEvent.__post_init__:ObserverEventError:
 torchlens.observability._chassis:ObserverEvent.__post_init__:ObserverEventError::5	CONTRACTED	observer_event_invalid	new C06 observability-substrate site contracted in its own change: typed teaching refusal with contract-doc row (lane C06)
 torchlens.observability._chassis:ObserverEvent.__post_init__:ObserverEventError::6	CONTRACTED	observer_event_invalid	new C06 observability-substrate site contracted in its own change: typed teaching refusal with contract-doc row (lane C06)
 torchlens.observability._chassis:ObserverEvent.__post_init__:ObserverEventError::7	CONTRACTED	observer_event_invalid	new C06 observability-substrate site contracted in its own change: typed teaching refusal with contract-doc row (lane C06)
+torchlens.observability._collector:HistoryCollector._admit_artifact_bytes:HistoryArtifactError::1	CONTRACTED	history_artifact_budget_exceeded	D22 artifact byte budget refused before the block that would cross it (explorer sign-off 5); contract-doc row in the same change
 torchlens.observability._collector:HistoryCollector.__init__:WatchPlanError::1	CONTRACTED	watch_plan_invalid	new C06 observability-substrate site contracted in its own change: typed teaching refusal with contract-doc row (lane C06)
 torchlens.observability._collector:HistoryCollector._normalize_cadence:WatchPlanError::1	CONTRACTED	watch_plan_invalid	new C06 observability-substrate site contracted in its own change: typed teaching refusal with contract-doc row (lane C06)
 torchlens.observability._collector:HistoryCollector.attach:WatchLifecycleError::1	CONTRACTED	watch_lifecycle_invalid	new C06 observability-substrate site contracted in its own change: typed teaching refusal with contract-doc row (lane C06)
@@ -219,6 +220,7 @@ torchlens.observability._schema:ObservationRecord.__post_init__:HistorySchemaErr
 torchlens.observability._schema:ObservationRecord.__post_init__:HistorySchemaError::3	CONTRACTED	history_vocab_invalid	new C06 observability-substrate site contracted in its own change: typed teaching refusal with contract-doc row (lane C06)
 torchlens.observability._schema:RunRecord.__post_init__:HistorySchemaError::1	CONTRACTED	history_vocab_invalid	new C06 observability-substrate site contracted in its own change: typed teaching refusal with contract-doc row (lane C06)
 torchlens.observability._schema:RunRecord.__post_init__:HistorySchemaError::2	CONTRACTED	history_vocab_invalid	new C06 observability-substrate site contracted in its own change: typed teaching refusal with contract-doc row (lane C06)
+torchlens.observability._schema:StepBlockRecord.__post_init__:HistorySchemaError::1	CONTRACTED	history_trace_ref_invalid	nullable trace_ref pointer (explorer sign-off 4) refused typed when not a nonempty string; contract-doc row in the same change
 torchlens.observability._schema:_require_token:HistorySchemaError::1	CONTRACTED	history_vocab_invalid	new C06 observability-substrate site contracted in its own change: typed teaching refusal with contract-doc row (lane C06)
 torchlens.observability._schema:merge_histogram_results:StatKernelError::1	CONTRACTED	sketch_descriptor_mismatch	new C06 observability-substrate site contracted in its own change: typed teaching refusal with contract-doc row (lane C06)
 torchlens.observability._schema:merge_observations:HistorySchemaError::1	CONTRACTED	history_merge_incompatible	new C06 observability-substrate site contracted in its own change: typed teaching refusal with contract-doc row (lane C06)
@@ -1057,10 +1059,21 @@ torchlens.trackers._watch:WatchSession.step:WatchRuntimeError::2	CONTRACTED	watc
 torchlens.trackers._watch:WatchSession._enforce_phases:WatchRuntimeError::1	CONTRACTED	watch_phase_missing	coded + contract row; demotable via allow_missing_phases
 torchlens.trackers._watch:WatchSession.close:WatchRuntimeError::1	CONTRACTED	watch_close_empty	coded + contract row; suppressed while a user exception unwinds
 torchlens.trackers._watch:_validate_signals:WatchConfigError::1	CONTRACTED	watch_signals_invalid	coded + contract row; closed signal vocabulary
-torchlens.trackers._watch:_validate_signals:WatchConfigError::2	CONTRACTED	watch_tier_unavailable	coded + contract row; op-grain shed refusal with the halt-lever teaching
-torchlens.trackers._watch:_validate_signals:WatchConfigError::3	CONTRACTED	watch_tier_unavailable	coded + contract row; activation_grads awaits the F24 seam
-torchlens.trackers._watch:_validate_signals:WatchConfigError::4	CONTRACTED	watch_signals_invalid	coded + contract row; NO default activation selector (measured basis)
-torchlens.trackers._watch:_validate_signals:WatchConfigError::5	CONTRACTED	watch_signals_invalid	coded + contract row; activations need example_input= for attach-time discovery
+torchlens.trackers._watch:_validate_signals:WatchConfigError::2	CONTRACTED	watch_tier_unavailable	coded + contract row; activation_grads awaits the F24 seam
+torchlens.trackers._watch:_validate_signals:WatchConfigError::3	CONTRACTED	watch_signals_invalid	coded + contract row; NO default activation selector (measured basis)
+torchlens.trackers._watch:_validate_signals:WatchConfigError::4	CONTRACTED	watch_signals_invalid	coded + contract row; activations need example_input= for attach-time discovery
+torchlens.export._trackers:_mlflow_bind:KeywordConflictError::1	CONTRACTED	tracker_mlflow_run_id_unsupported	MLflow export parity (U54.1): run_id= given to a client whose method takes none; coded + contract row
+torchlens.export._trackers:_mlflow_bind_tag:KeywordConflictError::1	CONTRACTED	tracker_mlflow_run_id_unsupported	MLflow export parity (U54.1): tag binding for a client shape that cannot take run_id; coded + contract row
+torchlens.trackers._comet:CometSink.__init__:SinkProtocolError::1	CONTRACTED	tracker_sink_invalid	Comet sink (U54.3): not an existing comet_ml experiment; coded + contract row
+torchlens.trackers._comet:CometSink.emit_histogram:SinkProtocolError::1	CONTRACTED	tracker_sink_capability_missing	Comet sink (U54.3): raw histograms not carried (Comet re-bins); coded + contract row
+torchlens.trackers._mlflow:_mlflow_module:SinkProtocolError::1	CONTRACTED	tracker_sink_unavailable	MLflow sink (U54.2): mlflow not installed; coded + contract row
+torchlens.trackers._mlflow:_mlflow_key:TagGrammarError::1	CONTRACTED	tracker_tag_unsafe	MLflow sink (U54.2): a tag MLflow cannot store refuses rather than being rewritten; coded + contract row
+torchlens.trackers._mlflow:MLflowSink.__init__:SinkProtocolError::1	CONTRACTED	tracker_sink_invalid	MLflow sink (U54.2): not a live MLflow run target; coded + contract row
+torchlens.trackers._callback_config:_refuse:WatchConfigError::1	CONTRACTED	watch_env_config_invalid	coded + contract row; a malformed TORCHLENS_WATCH_* configuration variable refuses naming it (U34.2)
+torchlens.trackers._op_grain:refuse_without_consent:WatchConfigError::1	CONTRACTED	watch_forward_wrap_consent_required	coded + contract row; op grain needs explicit consent to the disclosed forward wrap (U34.1)
+torchlens.trackers._op_grain:validate_grain_request:WatchConfigError::1	CONTRACTED	watch_grain_invalid	coded + contract row; closed grain vocabulary (None or 'op')
+torchlens.trackers._op_grain:validate_grain_request:WatchConfigError::2	CONTRACTED	watch_signals_invalid	coded + contract row; facets=/allow_forward_wrap= without grain='op' would be silently ignored
+torchlens.trackers._op_grain:validate_grain_request:WatchConfigError::3	CONTRACTED	watch_signals_invalid	coded + contract row; op grain watches activations only
 torchlens.trackers._watch:watch:WatchConfigError::1	CONTRACTED	tracker_namespace_collision	coded + contract row; G7 foreign-watcher detection with the namespace= remedy
 torchlens.trackers._watch:_discover_without_forward:WatchConfigError::1	CONTRACTED	watch_signals_invalid	coded + contract row; the param-only door is parameter-streams-only
 torchlens.trackers._watch:_discover_without_forward:WatchConfigError::2	CONTRACTED	watch_selector_matched_no_sites	coded + contract row; tier-P zero-match refusal at attach

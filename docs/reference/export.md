@@ -355,11 +355,17 @@ Output:
 
 ### `mlflow`
 
-`tl.export.mlflow(log, client=None, prefix="torchlens", *, run_id=None)` prepares summary
-metrics and sends them through an optional MLflow client; it returns the metrics either way.
-Pass the fluent `mlflow` module to log into the active run, or an `mlflow.MlflowClient` together
-with `run_id=` (its `log_metric(run_id, key, value)` needs a run; without `run_id=` it raises
-`TypeError`). Any other object exposing `log_metric(key, value)` also works.
+`tl.export.mlflow(log, client=None, prefix="torchlens", *, run_id=None)` logs, to an existing
+run: the three summary metrics, the per-layer statistics table as the artifact
+`<prefix>/layers.json`, the report (honesty preamble, fact block, trace summary) as the text
+artifact `<prefix>/report.txt`, and every capture-honesty fact as a string run tag
+`<prefix>.capture_honesty.<fact>` (strings verbatim, other facts as compact sorted JSON; a tag
+over MLflow's 5000-character limit is replaced by a marker naming the report). Pass the fluent
+`mlflow` module to log into the active run (or `run_id=` of another run), or an
+`mlflow.MlflowClient` together with `run_id=`. The client must offer `log_metric`, `log_table`,
+`log_text` and `set_tag`, or the call raises `TypeError` before writing anything. It returns the
+metrics plus `table`, `report`, `tags`, `artifacts` and `capture_honesty`, with or without a
+client.
 
 ```python
 import torch
@@ -373,13 +379,18 @@ print(sorted(metrics))
 Output:
 
 ```text
-['num_layers', 'num_saved_ops', 'total_activation_memory']
+['artifacts', 'capture_honesty', 'num_layers', 'num_saved_ops', 'report', 'table', 'tags', 'total_activation_memory']
 ```
 
 ### `aim`
 
-`tl.export.aim(log, run=None, prefix="torchlens")` prepares summary metrics and sends them to an
-optional existing object with `track`; it returns the metrics either way.
+`tl.export.aim(log, run=None, prefix="torchlens")` tracks the three summary metrics on an
+existing run, writes the per-layer table as the run param `<prefix>.layers` (one dict per layer)
+and as one series per numeric column (`<prefix>.layers.<column>`, context `{"table": "layers"}`,
+step = row index), the report as the run param `<prefix>.report`, the full fact block as
+`<prefix>.capture_honesty` and each fact as a run tag `<prefix>.capture_honesty.<fact>=<value>`.
+The run must offer `track`, `add_tag` and item assignment. It returns the metrics plus `table`,
+`report`, `tags` and `capture_honesty`.
 
 ```python
 import torch
@@ -393,5 +404,5 @@ print(sorted(metrics))
 Output:
 
 ```text
-['num_layers', 'num_saved_ops', 'total_activation_memory']
+['capture_honesty', 'num_layers', 'num_saved_ops', 'report', 'table', 'tags', 'total_activation_memory']
 ```

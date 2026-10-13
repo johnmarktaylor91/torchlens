@@ -61,10 +61,13 @@
   `torch.compiler.set_stance("force_eager")` scoped to the forward (entered inside
   `prepare_compiled_capture`; skipped when `torch._dynamo` was never imported), so compiled plain
   attributes and free functions run their ORIGINAL eager Python: interiors are fully logged with
-  ordinary verified semantics, zero compiles happen during capture, compiled caches survive with at
-  most ONE bounded recompile on the next compiled call afterward (wrapper install/uninstall guard
-  invalidation), and the plain-attribute pause-logging bypass is NOT installed. The paragraph below
-  is the torch < 2.6 / no-stance fallback, pinned byte-for-byte by the `_no_stance` tamper tests in
+  ordinary verified semantics, zero compiles happen during capture, compiled caches survive with a
+  one-time bounded burst of recompilations on the first compiled call after each capture, then
+  steady state (wrapper install/uninstall guard invalidation and graph breaks around TorchLens's own
+  wrapper; measured by `tests/real_model/test_track_compile_recompile_burst.py`: zero on
+  `resnet18`, six to seven frames on a tiny GPT-2, never above Dynamo's recompile limit), and the
+  plain-attribute pause-logging bypass is NOT installed. The paragraph below is the torch < 2.6 /
+  no-stance fallback, pinned byte-for-byte by the `_no_stance` tamper tests in
   `test_dynamo_fake_guard.py`.
 - A Dynamo-traced region reached during capture is bypassed in the wrapper (see
   `_is_inside_dynamo_compilation`), warning once per forward and setting

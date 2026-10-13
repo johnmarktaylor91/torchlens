@@ -20,6 +20,11 @@ tier rows: `present` native emitters, `bridge` foreign-peer writers).
   `mlflow` tells the fluent module from an `MlflowClient` by
   `log_metric`'s first parameter (`run_id`): a client needs `run_id=`
   (typed `TypeError` otherwise); the fluent module gets it as a keyword.
+  Both `mlflow` and `aim` also log a per-layer table, the report and the
+  honesty facts as string tags (wandb-export parity); a client or run missing
+  a required method refuses `TypeError` before anything is written; the
+  fluent MLflow `set_tag` takes no run id, so with `run_id=` tags route
+  through `module.MlflowClient()`.
 - Model viewers: `model_explorer`, `netron`.
 
 ## The netron subsystem (F14; kwarg spellings DOCUMENTED-UNSTABLE)

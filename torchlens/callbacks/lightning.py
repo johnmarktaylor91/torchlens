@@ -8,6 +8,7 @@ Lightning package (``lightning`` or the standalone ``pytorch_lightning``).
 from __future__ import annotations
 
 import json
+import uuid
 import warnings
 from collections.abc import Callable
 from pathlib import Path
@@ -48,6 +49,13 @@ def _lightning_callback_base() -> type[Any]:
     return cast(type[Any], Callback)
 
 
+#: The per-record disclosure of what profiling a batch costs and changes.
+PROFILE_DISCLOSURE = (
+    "one extra forward per profiled batch, in eval mode under torch.no_grad(); "
+    "every module's training flag is restored afterwards"
+)
+
+
 class _LayerProfilerCallbackMixin:
     """Log TorchLens layer summaries from Lightning batch hooks."""
 
@@ -58,6 +66,7 @@ class _LayerProfilerCallbackMixin:
         every_n_batches: int = 1,
         input_getter: Any | None = None,
         layers_to_save: str = "all",
+        run_id: str | None = None,
     ) -> None:
         """Initialize the callback.
 
@@ -71,6 +80,10 @@ class _LayerProfilerCallbackMixin:
             Optional callable mapping a Lightning batch to model input.
         layers_to_save:
             ``trace`` layer-save policy.
+        run_id:
+            Identifier stamped on every record. ``None`` mints a fresh one at
+            each Lightning ``setup`` (each fit, validate, test or predict run),
+            so records from several runs appended to one file stay separable.
         """
 
         if every_n_batches < 1:
@@ -81,6 +94,24 @@ class _LayerProfilerCallbackMixin:
         self.input_getter = input_getter
         self.layers_to_save = layers_to_save
         self.records: list[dict[str, Any]] = []
+        self._fixed_run_id = run_id
+        self.run_id: str | None = run_id
+
+    def setup(self, trainer: Any, pl_module: Any, stage: str) -> None:
+        """Start a new run id for this Lightning run (unless one was fixed).
+
+        Parameters
+        ----------
+        trainer:
+            Lightning trainer.
+        pl_module:
+            Lightning module.
+        stage:
+            Lightning stage name.
+        """
+
+        del trainer, pl_module, stage
+        self.run_id = self._fixed_run_id or uuid.uuid4().hex
 
     def on_train_batch_end(
         self,
@@ -222,30 +253,18 @@ class _LayerProfilerCallbackMixin:
         if batch_idx % self.every_n_batches != 0:
             return
 
-        from torchlens import trace
-        from torchlens.options import CaptureOptions
-
-        model_input = self._model_input(batch)
-        # Snapshot every submodule's flag: ``pl_module.train()`` afterwards
-        # would flip a frozen (eval-mode) backbone back into train mode.
-        training_flags = [(module, module.training) for _, module in pl_module.named_modules()]
-        pl_module.eval()
-        try:
-            with torch.no_grad():
-                log = trace(
-                    pl_module,
-                    model_input,
-                    capture=CaptureOptions(layers_to_save=self.layers_to_save),
-                )
-        finally:
-            for module, was_training in training_flags:
-                module.training = was_training
-
+        log = self._trace_batch(pl_module, batch, stage, batch_idx)
+        if log is None:
+            return
+        if self.run_id is None:
+            self.run_id = self._fixed_run_id or uuid.uuid4().hex
         try:
             record = {
+                "run_id": self.run_id,
                 "stage": stage,
                 "batch_idx": batch_idx,
                 "global_step": getattr(trainer, "global_step", None),
+                "disclosure": PROFILE_DISCLOSURE,
                 "num_layers": len(getattr(log, "layer_list", [])),
                 "layer_labels": [
                     str(layer.layer_label) for layer in getattr(log, "layer_list", [])
@@ -257,6 +276,74 @@ class _LayerProfilerCallbackMixin:
                 file.write(json.dumps(record, sort_keys=True) + "\n")
         finally:
             log.cleanup()
+
+    def _trace_batch(self, pl_module: Any, batch: Any, stage: str, batch_idx: int) -> Any:
+        """Trace one batch in eval mode under no_grad; ``None`` when it was skipped.
+
+        A batch the forward cannot take (a guessed input of the wrong shape,
+        arity or type) or a TorchLens refusal skips this batch with a
+        ``lightning_profile_skipped`` warning; training continues.
+
+        Parameters
+        ----------
+        pl_module:
+            Lightning module.
+        batch:
+            Lightning batch.
+        stage:
+            Lightning stage label.
+        batch_idx:
+            Batch index.
+
+        Returns
+        -------
+        Any
+            The trace, or ``None`` when the batch was skipped.
+        """
+
+        from torchlens import trace
+        from torchlens.errors import TorchLensError, TorchLensWarning
+        from torchlens.options import CaptureOptions
+
+        # Snapshot every submodule's flag: ``pl_module.train()`` afterwards
+        # would flip a frozen (eval-mode) backbone back into train mode.
+        training_flags = [(module, module.training) for _, module in pl_module.named_modules()]
+        pl_module.eval()
+        try:
+            model_input = self._model_input(batch)
+            with torch.no_grad():
+                return trace(
+                    pl_module,
+                    model_input,
+                    capture=CaptureOptions(layers_to_save=self.layers_to_save),
+                )
+        # Training must never die for a profile (disclosed below). These are what
+        # a forward fed a guessed input raises plus every TorchLens refusal.
+        except (
+            TorchLensError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+            LookupError,
+            AttributeError,
+        ) as exc:
+            warnings.warn(
+                TorchLensWarning(
+                    f"LayerProfilerCallback skipped {stage} batch {batch_idx}: tracing "
+                    f"{type(pl_module).__name__}.forward on it raised "
+                    f"{type(exc).__name__}: {exc}. Training continues. "
+                    "Remedy: pass input_getter= mapping a batch to the forward input",
+                    code="lightning_profile_skipped",
+                    stage=stage,
+                    batch_idx=batch_idx,
+                    error_type=type(exc).__name__,
+                ),
+                stacklevel=2,
+            )
+            return None
+        finally:
+            for module, was_training in training_flags:
+                module.training = was_training
 
     def _model_input(self, batch: Any) -> Any:
         """Extract the model input from a Lightning batch.
@@ -443,7 +530,16 @@ def _build_layer_profiler_callback() -> type[_LayerProfilerCallbackMixin]:
     callback_base = _lightning_callback_base()
 
     class LayerProfilerCallback(_LayerProfilerCallbackMixin, callback_base):  # type: ignore[misc, valid-type]
-        """Log TorchLens layer summaries from Lightning batch hooks."""
+        """Log TorchLens layer summaries from Lightning batch hooks.
+
+        Every ``every_n_batches``-th batch is traced with ONE extra forward,
+        run in eval mode under ``torch.no_grad()`` (every module's training
+        flag is restored afterwards), so the profile does not see training
+        gradients or train-mode dropout/BatchNorm behavior. Each JSONL record
+        carries ``run_id`` (fresh per Lightning run unless fixed with
+        ``run_id=``) and that ``disclosure``. A batch the forward cannot take
+        skips with a ``lightning_profile_skipped`` warning; training goes on.
+        """
 
     LayerProfilerCallback.__module__ = __name__
     return LayerProfilerCallback
