@@ -2714,11 +2714,10 @@ def trace(
     backend:
         Explicit backend name. ``None`` preserves legacy auto-resolution.
     on_zero_fire:
-        What a capture-time ``intervene=`` that fired at zero sites does after the
-        fact is recorded (``trace.annotations["unmatched_capture_selectors"]`` and
-        the intervention audit): ``"warn"`` (default) emits a ``trace_zero_fire``
-        coded warning, ``"error"`` raises ``trace_zero_fire``, ``"disclose"``
-        records only. The same knob as ``spec.bind`` and ``Trace.run``
+        What a capture-time ``intervene=`` that fired at zero sites does once the fact
+        is recorded (``annotations["unmatched_capture_selectors"]``, intervention audit):
+        ``"warn"``, used when not passed, warns ``trace_zero_fire``; ``"error"`` raises
+        it; ``"disclose"`` records only. Same knob as ``spec.bind`` and ``Trace.run``
         (spelling DOCUMENTED-UNSTABLE).
     **forward_kwargs:
         Never accepted -- unknown keywords refuse typed with

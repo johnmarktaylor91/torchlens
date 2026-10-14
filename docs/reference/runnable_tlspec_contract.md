@@ -1165,6 +1165,14 @@ runnable descriptor would replay a truncated program while claiming faithfulness
 forward. Analysis-level saves of halted captures remain allowed; the refusal surfaces as
 `RunnablePreflightError` at `tl.save(level="runnable")` entry.
 
+`user_intervention_not_replayable` is also the RUN-time ceiling diagnostic (stage
+`hooked_run_unverified`, details `pristine=false`) of a hooked run: `trace.run(inputs=...,
+fast=True)` on a live trace that applies its staged hooks or value replacements returns an
+edited forward, not the model's own, and no hook-aware check exists yet, so the report settles
+`unverifiable` (poisoned, never `verified`) and the trace is no longer pristine. A run with
+nothing staged keeps its verdict; the ordinary `run(inputs=)` keeps refusing staged edits it
+would not apply (`run_staged_spec_unapplied`).
+
 `user_intervention_not_replayable` is the SAVE-time producer refusal (stage
 `producer_user_intervention`) for a capture whose taken path carries at least one
 user-intervention-replaced op (`trace(intervene=...)`, `set`, or a raw forward hook that

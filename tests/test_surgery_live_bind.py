@@ -594,11 +594,11 @@ def _real_generate_gate(model_name: str, steer_site: str, ids: torch.Tensor) -> 
     assert excinfo.value.fields["code"] == "bind_zero_fire"
     assert zero_bound.last_report.status == "no_fire"
 
-    # GATE: two-edit misfire -- the refusal names exactly the unfired rule
+    # GATE: two-edit misfire -- the refusal (on_zero_fire='error') names exactly the unfired rule
     two = tl.when(tl.module(steer_site), tl.scale(1.1)) & tl.when(
         tl.func("hardshrink"), tl.zero_ablate()
     )
-    two_bound = two.bind(model)
+    two_bound = two.bind(model, on_zero_fire="error")
     with pytest.raises(BindingRuntimeError) as excinfo:
         two_bound.generate(ids, max_new_tokens=2, do_sample=False)
     counts = two_bound.last_report.rule_fire_counts

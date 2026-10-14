@@ -398,3 +398,45 @@ of `trace.ops` now cover only the ops `trace.num_ops` counts, so
 that view. Code that read `trace.ops` as every row should read `trace.layer_list`
 (or use `len(trace)` and `trace[int]`). `trace.input_ops`, `trace.output_ops`,
 `trace.saved_ops` and `trace.saved_grad_ops` are unchanged.
+
+## Zero-fire rules warn by default on every intervention door (2026-10-14, default flip)
+
+`spec.bind(model)` and `torchlens.intervention.steer_generate(...)` no longer raise
+`bind_zero_fire` by default when a rule never fires. The default `on_zero_fire` is now
+`"warn"` at every door: the rule is recorded on `.last_report.zero_fire_rule_ids` and a
+`TorchLensWarning` with code `bind_zero_fire` is emitted. Code that relied on the refusal
+passes `on_zero_fire="error"`, which raises `BindingRuntimeError` (`bind_zero_fire`) after
+the call exactly as before. `on_zero_fire="disclose"` keeps recording without a warning.
+
+## `on_zero_fire` on `tl.trace` and `Trace.run` (2026-10-14, new keyword)
+
+`tl.trace(..., intervene=..., on_zero_fire=...)` and `Trace.run(..., on_zero_fire=...)`
+take the same knob as `spec.bind`. A capture-time `intervene=` that fired nowhere now warns
+with code `trace_zero_fire` (it was an uncoded `UserWarning` with the same message start),
+and a rerun hook entry that fired nowhere keeps warning `rerun_zero_fire`. `"error"` raises
+`SiteResolutionError` with the same code; `"disclose"` records only. Rerun edits that cannot
+fire live still refuse `rerun_selector_unmatchable_live` whatever the knob says.
+
+## `bind_zero_fire_policy_invalid` renamed to `zero_fire_policy_invalid` (2026-10-14, code rename)
+
+An `on_zero_fire` value outside `"warn"`, `"error"` and `"disclose"` now refuses with code
+`zero_fire_policy_invalid` at every door, raised as `InvalidArgumentError` (a `ValueError`)
+instead of `BindingPreflightError`. Branch on the new code; `"warn"` is now a valid value.
+
+## A hooked `run(inputs=..., fast=True)` reports `unverifiable` (2026-10-14, verdict change)
+
+`trace.run(inputs=..., fast=True)` on a live trace that applies its staged hooks or value
+replacements used to report `path_faithfulness=verified`. Its output is an edited forward,
+not the model's own, and no hook-aware check exists yet, so the report now reads
+`unverifiable` (`poisoned=True`) with a `user_intervention_not_replayable` diagnostic
+(stage `hooked_run_unverified`, detail `pristine=false`). Runs with nothing staged keep
+their verdicts.
+
+## Unarmed capture verification reads "not checked" (2026-10-14, wording)
+
+`tl.report.explain` and the export honesty preamble now say "not checked" (was "not
+recorded") for a default capture's `capture_verified=None`. The preamble header token
+`verified=not_recorded` is unchanged. A default capture that builds a tensor from host data
+(`torch.from_numpy`, `torch.from_dlpack`, `torch.frombuffer`, `torch.as_tensor` on
+non-tensor data) also records a `host_tensor_source` row in
+`trace.annotations["capture_advisories"]`.

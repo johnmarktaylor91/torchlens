@@ -18,6 +18,7 @@ trace.jax_static_argnums=missing
 trace.lookback=explicit
 trace.lookback_payload_policy=explicit
 trace.model=explicit
+trace.on_zero_fire=missing
 trace.profile=missing
 trace.recipes=missing
 trace.reconstruction_ready=missing

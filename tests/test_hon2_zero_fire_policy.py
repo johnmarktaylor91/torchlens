@@ -246,8 +246,8 @@ class _Steerable(nn.Module):
         return self.head(self.block(x))
 
 
-def _fast_zero_fire_case() -> tuple[tl.Trace, Callable[[int], torch.Tensor]]:
-    """A steered trace whose fast-run hook plan carries an entry that never fires."""
+def _fast_steered_case() -> tuple[nn.Module, tl.Trace, Callable[[int], torch.Tensor]]:
+    """A steered trace for the fast door (the caller keeps the model alive)."""
 
     torch.manual_seed(0)
     model = _Steerable().eval()
@@ -257,16 +257,17 @@ def _fast_zero_fire_case() -> tuple[tl.Trace, Callable[[int], torch.Tensor]]:
 
     spec = tl.when(tl.module("block"), tl.steer(torch.randn(_DIM), magnitude=3.0, feature_axis=-1))
     trace = tl.trace(model, x_of(0), save=tl.module("block") | tl.module("head"), intervene=spec)
-    return trace, x_of
+    return model, trace, x_of
 
 
 @pytest.mark.parametrize("policy", _POLICIES)
 def test_fast_run_door_policy_knob_is_accepted(policy: str) -> None:
     """The fast door takes the same knob; a fully fired run stays silent at every value."""
 
-    trace, x_of = _fast_zero_fire_case()
+    model, trace, x_of = _fast_steered_case()
     with _caught() as caught:
         trace.run(inputs=x_of(1), fast=True, on_zero_fire=policy)
+    del model
     assert trace.last_run["hooks_unfired"] == 0
     assert not [c for c in _codes(caught) if c.endswith("zero_fire")]
 

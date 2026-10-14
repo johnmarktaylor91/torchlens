@@ -389,12 +389,24 @@ one exact `other_neurons` row.
   `generate` output under `torchlens.intervention.steer_generate`, whose report must settle
   before it returns.
 
+**Zero-fire policy (`on_zero_fire`)** *(spelling documented-unstable)*
+: One knob on every intervention door: `spec.bind`, `torchlens.intervention.steer_generate`,
+  `tl.trace(intervene=)` and `Trace.run`. An intervention that fires at zero sites is always
+  recorded on the door's own record (the bind report's `zero_fire_rule_ids`, the capture's
+  `annotations["unmatched_capture_selectors"]` and intervention audit, the rerun's
+  `last_run["hooks_unfired"]`). The knob then decides the same way everywhere: `"warn"`
+  (default) emits the door's coded warning (`bind_zero_fire`, `trace_zero_fire`,
+  `rerun_zero_fire`), `"error"` raises the door's typed refusal with that code, and
+  `"disclose"` records only. Any other value refuses `zero_fire_policy_invalid`. A rerun edit
+  that cannot fire live (`rerun_selector_unmatchable_live`) is refused before the policy runs,
+  whatever the knob says.
+
 **Bound intervention executor** *(spelling documented-unstable)*
 : `spec.bind(model)` pairs an `InterventionSpec` with a base model as a capture-free callable.
   It runs the model with the spec's edits held live, returns the model's own output, records
   only a firing report (`.last_report`), and supports HF `generate` with the KV cache on or off.
-  It is not an `nn.Module` and bindings never nest; zero firings fail closed unless
-  `on_zero_fire="disclose"`. `torchlens.intervention.steer_generate` is one-call sugar for
+  It is not an `nn.Module` and bindings never nest; a rule that never fires is recorded on
+  `.last_report` and settles by `on_zero_fire` (see **Zero-fire policy**). `torchlens.intervention.steer_generate` is one-call sugar for
   `spec.bind(model).generate(...)`. Decode steps: the binding counts root forwards, so
   `torchlens.intervention.at_step(k)` on a bound call or `generate` names the k-th forward
   (step 0 is the prefill), on op-level rules and as `tl.module(address) & at_step(...)`
@@ -799,7 +811,10 @@ one exact `other_neurons` row.
   `clear_hooks()` on a steered capture, so the capture engine reruns once to record the current
   plan, or
   `<divergence code>:fast_live_call_fingerprint` for a structural change); `hooks_fired` / `hooks_unfired` count the staged plans that fired, and a plan that
-  never fired warns `rerun_zero_fire`. Output leaves (the model's and each saved module's) are paired
+  never fired settles by `on_zero_fire` (default: warns `rerun_zero_fire`). Through
+  `run(inputs=..., fast=True)` a run that applies staged edits reports `unverifiable`, never
+  `verified` (diagnostic `user_intervention_not_replayable`, stage `hooked_run_unverified`):
+  it is an edited forward, and no hook-aware check exists yet. Output leaves (the model's and each saved module's) are paired
   with the captured output ops by container path through capture's own output walker, so a
   stock Hugging Face forward returning a `DynamicCache` of per-layer key/value tensors reruns
   fast; a changed leaf count or an unmatched path still refuses
