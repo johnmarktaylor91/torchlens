@@ -1,4 +1,4 @@
-"""Memory-planned whole-model extraction: plan, table, run, npz (F20).
+"""Planned whole-model extraction: plan, table, run, npz (F20).
 
 The brainpipe centerpiece (memo section 3): a two-phase plan-then-run API
 whose extraction-PLAN table prints measured bytes, measured peaks, and
