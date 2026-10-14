@@ -992,6 +992,24 @@ shims, by declared contract. Each carries the same tag at its definition.
   separated by them (`firm`). `table()` gives the plain-text report and
   `to_dict()` the data form.
 
+**neuro.compare (`tl.neuro.compare`; needs no extra)** — *unstable — no deprecation shim owed*
+: One call that scores every site of one extraction against one target with
+  several descriptive analyses: `tl.neuro.compare(source, target,
+  analyses=("rsa", "ridge", "cka"))`. Each site's activations are read once
+  from what `source` (a Trace with saved activations, an extraction, or a
+  `{site: array}` mapping) already holds; the model is never re-run. `"rsa"`
+  is `rdm_compare` over `rdm(site)` and `rdm(target)` (`rdm_metric`,
+  `rsa_method`); `"ridge"` is a cross-validated ridge score (a seeded
+  `n_folds` split, the penalty per fold chosen from `ridge_alphas` by exact
+  leave-one-out on the training fold, then the mean over target columns of
+  the Pearson r between out-of-fold predictions and the target); `"cka"` is
+  linear CKA. `n_resamples=` adds a `ScoreInterval` per score. The returned
+  report has `scores`, `intervals`, `settings`, `ridge_alphas_chosen`,
+  `similarity_repository_ids`, `table()`, `disagreement()` (a
+  `MetricDisagreement`) and `to_dict()`. Descriptive only: inference,
+  variance partitioning, voxel maps and stacked fits stay with rsatoolbox,
+  himalaya, scikit-learn and Net2Brain.
+
 **site_key (`Op.site_key`)** — *unstable — no deprecation shim owed*
 : The portable structural-position identity of one retained op
   (`site_key_v1`): a `"s1|"`-prefixed string of the pass-free module address
