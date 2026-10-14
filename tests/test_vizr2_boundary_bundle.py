@@ -110,6 +110,10 @@ def test_bundle_keeps_scored_plan_and_emitted_counts_equal(mode: str) -> None:
         assert result.visible_count == plan_count
         if result.scored_k is not None:
             assert result.scored_k == plan_count
+        if result.segments:
+            # Segment plans are emitted through renderer attributes, not the
+            # predicate; the existing parity gate skips this leg for them too.
+            return
         selected = set(result.selected)
         emitted = collapse_plan_for_trace(
             trace,
