@@ -32,7 +32,7 @@ MAX_HEATMAP_POSITIONS = 48
 TOKEN_CLIP = 7
 
 #: Font size (points) for cell text, tick labels and the footer.
-_FONT = 9
+_FONT = 10
 
 _VALUES = ("top_prob", "target_prob")
 
@@ -262,10 +262,10 @@ def render_logit_lens_heatmap(  # noqa: PLR0913 -- addressing, labeling and outp
     require_matplotlib()
     labels = [_clip(str(tokens[p]))[0] if tokens is not None else str(p) for p in columns]
     longest = max(len(label) for label in labels)
-    label_room = 0.45 + (0.08 * longest if tokens is not None else 0.0)
-    footer_room = 0.16 * len(disclosures) + 0.05
-    height = 0.32 * n_layers + 0.6 + label_room + footer_room
-    fig = figure(width=0.58 * len(columns) + 2.6, height=height)
+    label_room = 0.5 + (0.09 * longest if tokens is not None else 0.0)
+    footer_room = 0.18 * len(disclosures) + 0.05
+    height = 0.36 * n_layers + 0.65 + label_room + footer_room
+    fig = figure(width=0.68 * len(columns) + 2.9, height=height)
     fig.subplots_adjust(bottom=(label_room + footer_room) / height, top=1 - 0.45 / height)
     ax = fig.add_subplot(111)
     mesh = ax.pcolormesh(values, cmap=ATTENTION_CMAP, vmin=0.0, vmax=1.0, rasterized=False)
