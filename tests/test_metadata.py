@@ -652,7 +652,7 @@ def test_exhaustive_saved_layer_count_uses_finalized_layer_list() -> None:
     expected = len(
         {
             op.layer_label
-            for op in trace.ops
+            for op in trace.layer_list
             if op.has_saved_activation and not getattr(op, "is_orphan", False)
         }
     )

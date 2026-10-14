@@ -67,7 +67,7 @@ def build_sites_table(trace: Trace) -> pd.DataFrame:
 
     pd = _require_pandas()
     ops = list(trace.layer_list)
-    keyed = [op for op in ops if getattr(op, "site_key", None) is not None]
+    keyed = [(key, op) for op in ops if (key := getattr(op, "site_key", None)) is not None]
     if ops and not keyed:
         raise InvalidArgumentError(
             "This trace's ops carry no site keys: it was captured/saved "
@@ -78,8 +78,7 @@ def build_sites_table(trace: Trace) -> pd.DataFrame:
         )
 
     sites: OrderedDict[str, dict[str, Any]] = OrderedDict()
-    for op in keyed:
-        key = op.site_key
+    for key, op in keyed:
         entry = sites.get(key)
         if entry is None:
             module_site, layer_type, output_slot, call_ordinal = parse_site_key(key)

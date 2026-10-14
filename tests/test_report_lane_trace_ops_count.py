@@ -57,8 +57,9 @@ def test_alias_rows_stay_addressable_but_uncounted() -> None:
     assert trace.ops[input_label].is_input
     assert trace.ops[output_label].is_output
     assert input_label in trace.ops and output_label in trace.ops
-    assert input_label not in trace.ops.keys()
-    assert output_label not in trace.ops.keys()
+    counted_labels = trace.ops.keys()  # a list: membership here differs from ``in trace.ops``
+    assert input_label not in counted_labels
+    assert output_label not in counted_labels
     assert trace.layer_list[0].is_input and trace.layer_list[-1].is_output
 
 

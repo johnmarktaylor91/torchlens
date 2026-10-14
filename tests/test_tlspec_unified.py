@@ -489,7 +489,7 @@ def test_current_bundle_preserves_none_backend_address(tmp_path: Path) -> None:
     """Current manifests must not apply the v4 backend-address repair."""
 
     trace = tl.trace(UnifiedPlainAttributeBufferModel(), torch.ones(2, 3))
-    plain_buffer_op = next(op for op in trace.ops if op.is_buffer and op.address == "scale")
+    plain_buffer_op = next(op for op in trace.layer_list if op.is_buffer and op.address == "scale")
     assert plain_buffer_op.backend_address is None
     assert trace[plain_buffer_op.layer_label].backend_address is None
 

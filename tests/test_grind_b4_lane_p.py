@@ -485,14 +485,16 @@ def test_accessor_caches_invalidate_on_rebind_resize_and_invalidator(tmp_path: P
     model = nn.Sequential(nn.Linear(2, 2), nn.ReLU())
     trace = tl.trace(model, torch.ones(1, 2))
     ops_before = trace.ops
-    first_two = list(trace.layer_list[:2])
+    # Rows 1 and 2 are the two counted ops (linear, relu); row 0 is the input
+    # row, which the counted ``trace.ops`` view leaves out (sumfam F1).
+    first_two = list(trace.layer_list[1:3])
 
     # Unchanged containers re-serve the memo (identity-stable, O(1) key).
     assert trace.ops is ops_before
 
     # Equal-length in-place swap + the explicit invalidator (the supported
     # spelling for direct in-place edits of trace build products).
-    trace.layer_list[0], trace.layer_list[1] = trace.layer_list[1], trace.layer_list[0]
+    trace.layer_list[1], trace.layer_list[2] = trace.layer_list[2], trace.layer_list[1]
     _invalidate_trace_op_layer_accessor_caches(trace)
     swapped = trace.ops
     assert swapped is not ops_before
