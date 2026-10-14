@@ -23,7 +23,9 @@ import torchlens as tl
 torch.manual_seed(0)
 d = torch.randn(8)
 d = d / d.norm()
-model = nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 2))
+model = nn.Sequential(
+    nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 16), nn.ReLU(), nn.Linear(16, 2)
+)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 train_x = torch.randn(512, 8)
 train_y = (train_x @ d > 0).long()
@@ -41,14 +43,13 @@ RESULT = accuracy > 0.9
 ## 1. Learn the CAV at a layer
 
 Concept examples carry the direction; random examples do not. The CAV is the
-unit normal of a linear classifier separating their activations at site `"0"`
-(the first Linear layer's output, before the ReLU). At the ReLU output the
-class logit is linear in the activation, so its gradient is the same for every
-input and the score could only be 0 or 1.
+unit normal of a linear classifier separating their activations at site `"1"`
+(the first ReLU output). Concept examples are inputs drawn from the data
+distribution that point strongly along `d`; random examples are plain draws.
 
 ```python
 # recipe-test: tool=torchlens expected=True
-SITE = "0"
+SITE = "1"
 
 
 def site_activations(x):
@@ -70,7 +71,8 @@ def learn_cav(positive, negative, steps=300):
     return (w / w.norm()).detach()
 
 
-concept_x = 0.5 * torch.randn(100, 8) + 2.5 * d
+pool = torch.randn(4000, 8)
+concept_x = pool[pool @ d > 1.0][:100]  # in-distribution examples of the concept
 random_x = torch.randn(100, 8)
 cav = learn_cav(site_activations(concept_x), site_activations(random_x))
 RESULT = cav.shape == (16,)
