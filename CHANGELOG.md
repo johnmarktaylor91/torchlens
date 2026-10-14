@@ -1,6 +1,16 @@
 # CHANGELOG
 
 
+## Unreleased
+
+### Behavior changes
+
+- **repgeom**: `tl.repgeom.rdm(metric="gaussian")` now computes `1 - exp(-D / mean(D))`, the
+  thingsvision bandwidth it credits, instead of `1 - exp(-D / (2 * mean(D)))`, so every gaussian
+  RDM value differs from every earlier release (for 1-D points 0, 1, 3: 0.148, 0.765, 0.474 become
+  0.275, 0.945, 0.724).
+
+
 ## v2.34.1 (2026-08-10)
 
 ### Bug Fixes
