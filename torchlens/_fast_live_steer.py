@@ -36,7 +36,7 @@ from . import _runnable_execution as _execution
 from ._errors import TorchLensWarning
 from ._runnable_execution import _INPUT_CHECK_UNAVAILABLE, _contract_check
 from .errors import RunCapabilityUnavailableError
-from .runnable import ContractCheck, RunnableErrorCode
+from .runnable import ContractCheck, RunnableDiagnostic, RunnableErrorCode
 
 #: Op fields a native forward cannot refresh for unsaved ops; after a
 #: shape-varied run they read ``None`` instead of the capture-time numbers.
@@ -184,6 +184,54 @@ def stages_user_entries(trace: Any) -> bool:
 
     spec = trace._intervention_spec
     return bool(_staged_user_hook_specs(trace)) or bool(getattr(spec, "target_value_specs", None))
+
+
+def hooked_run_diagnostic(trace: Any) -> RunnableDiagnostic | None:
+    """Return the ceiling diagnostic for a run that applies staged user edits, else ``None``.
+
+    A run that applies the trace's staged hooks or value replacements returns an
+    edited forward, not the model's own. No check yet compares an edited run with
+    what the edit should produce, so such a run settles ``unverifiable``, never
+    ``verified``, and the trace it refreshes is no longer pristine.
+
+    Parameters
+    ----------
+    trace:
+        Live trace whose staged spec the run applies.
+
+    Returns
+    -------
+    RunnableDiagnostic | None
+        A ``user_intervention_not_replayable`` diagnostic (detection stage
+        ``hooked_run_unverified``) when the trace stages a user entry.
+    """
+
+    if not stages_user_entries(trace):
+        return None
+    hooks = len(_staged_user_hook_specs(trace))
+    values = len(getattr(trace._intervention_spec, "target_value_specs", None) or ())
+    return RunnableDiagnostic(
+        code=RunnableErrorCode.USER_INTERVENTION_NOT_REPLAYABLE,
+        message=(
+            f"This run applied the trace's staged edits ({hooks} hook(s), {values} value "
+            "replacement(s)), so its output is an edited forward, not the model's own. No "
+            "hook-aware check exists yet, so the run is unverifiable, and the trace it "
+            "refreshed is not pristine. Detach the staged edits (trace.clear_hooks()) for "
+            "a verified run."
+        ),
+        registry_id=None,
+        affected_op_labels=(),
+        recorded_runtime=None,
+        current_runtime=None,
+        detection_stage="hooked_run_unverified",
+        resolver_provenance=None,
+        analysis_load_available=True,
+        details=(
+            ("staged_hooks", str(hooks)),
+            ("staged_value_replacements", str(values)),
+            ("pristine", "false"),
+        ),
+    )
 
 
 def _staged_entries(trace: Any) -> tuple[Any, ...]:
