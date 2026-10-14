@@ -2411,3 +2411,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 57bdffce8397e94f378bfc962346746994c1d666 (dirty)
 recorded: 2026-10-14T05:29:36.266081+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: harness bundles phase 2: new _token_spans.py, members render and the v9 kind gate read row kind/params; bundle-container loaders moved to _io/bundle_container.py
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: a84ceb8a1ed34c9d3e7e07d6813081aad2bf1705 (dirty)
+recorded: 2026-10-14T09:18:45.941032+00:00

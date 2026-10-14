@@ -171,6 +171,7 @@ EMISSION_SITES: Mapping[str, tuple[str, str]] = {
     "torchlens.visualization._bundle_graph:_add_bundle_backward_graph": ("n4hp5k6wshg7", "VS01"),
     "torchlens.visualization._bundle_graph:_add_bundle_forward_edges": ("soscguz66n7t", "VS01"),
     "torchlens.visualization._bundle_graph:_add_bundle_forward_nodes": ("mogicagnvxzf", "VS01"),
+    "torchlens.visualization._bundle_graph:_add_bundle_member_graph": ("44y4ikv4cbja", "VS01"),
     "torchlens.visualization._edge_multiplicity:_rewrite_emitted_edge": ("zyh6ke2dsty5", "VE03"),
     "torchlens.visualization._encoding:_color_legend_rows": ("dgigytrddnl2", "VK06"),
     "torchlens.visualization._encoding:_non_color_legend_rows": ("2tfcaefbtjl3", "VK06"),
