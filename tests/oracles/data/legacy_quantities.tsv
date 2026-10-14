@@ -11,7 +11,7 @@ Buffer.buffer_pass	int	identifier	-	-	-	pass ordinal
 Buffer.call_index	int	identifier	-	-	-	id/index/line
 Buffer.gradient_memory	Bytes	quantity	gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_on_layers_modules_and_buffers (I2)	-
 Buffer.num_overwrites	int	quantity	num_overwrites	green	tests/test_buffer_datamodel.py::test_recurrent_cell_reassignment_does_not_break_loop_detection (I2)	-
-CaptureFacts.advisories	int	quantity	advisories	red-needs-oracle	-	-
+CaptureFacts.advisories	int	quantity	advisories	green	tests/oracles/test_legacy_advisories_and_grad_storage.py::test_capture_advisories_match_the_planted_kinds_and_counts (I2)	-
 Layer.activation_memory	Bytes	quantity	activation_memory	green	tests/test_bug_fixes_phase14.py::test_view_mutation_output_recomputes_transformed_payload_metadata (I1)	-
 Layer.autograd_memory	Bytes	quantity	autograd_memory	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
 Layer.conditional_depth	int	quantity	conditional_depth	green	tests/oracles/test_legacy_module_counts.py::test_conditional_counts (I2)	-
@@ -53,7 +53,7 @@ Layer.total_param_memory	Bytes	quantity	param_memory	green	tests/oracles/test_le
 Layer.type_index	int	identifier	-	-	-	id/index/line
 Module.address_depth	int	quantity	address_depth	green	tests/test_module_log.py::TestModuleLogFields::test_address_depth (I2)	-
 Module.call_depth	int	quantity	call_depth	green	tests/test_module_log.py::TestModuleLogFields::test_call_depth (I2)	-
-Module.collapse_score	float	quantity	collapse_score	red-needs-oracle	-	-
+Module.collapse_score	float	quantity	collapse_score	green	tests/oracles/test_legacy_collapse_priority.py::test_collapse_priority_matches_the_hand_ranking (I2)	-
 Module.forward_duration	Duration	quantity	forward_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_module_and_call_durations_are_bounded (I1)	-
 Module.func_calls_duration	Duration	quantity	func_calls_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_module_and_call_durations_are_bounded (I1)	-
 Module.internal_param_memory	Bytes	quantity	internal_param_memory	green	tests/oracles/test_legacy_closed_forms.py::test_activation_parameter_and_input_bytes (I2)	-
@@ -183,7 +183,7 @@ SummaryTotals.params_total	int	quantity	num_params	green	tests/oracles/test_lega
 SummaryTotals.params_trainable	int	quantity	num_params_trainable	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 SummaryTotals.params_unexecuted	int	quantity	num_params_unexecuted	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 SummaryTotals.retained_now_bytes	int	quantity	retained_now_bytes	green	tests/oracles/test_legacy_payload_bytes.py::test_payload_byte_totals_at_capture_and_now (I2)	-
-Trace.backward_peak_memory	Bytes	quantity	backward_peak_memory	red-needs-oracle	-	-
+Trace.backward_peak_memory	Bytes	quantity	backward_peak_memory	green	tests/oracles/test_legacy_peak_memory_bounds.py::test_cpu_backward_peak_is_the_largest_pass_peak (I1)	-
 Trace.branching_factor	float	quantity	branching_factor	green	tests/test_edge_counts.py::test_linear_chain_edge_counts (I2)	-
 Trace.capture_duration	Duration	quantity	capture_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_phase_durations_are_bounded_by_an_outside_clock (I1)	-
 Trace.capture_end_time	float	identifier	-	-	-	wall-clock timestamp
@@ -201,7 +201,7 @@ Trace.completeness_witness_unaccounted_count	int	quantity	completeness_witness_u
 Trace.escape_detector_callback_ns	int	quantity	escape_detector_callback_ns	green	tests/oracles/test_legacy_timing_bounds.py::test_witness_and_detector_event_counts_match_a_recount (I1)	-
 Trace.escape_detector_event_count	int	quantity	escape_detector_event_count	green	tests/oracles/test_legacy_timing_bounds.py::test_witness_and_detector_event_counts_match_a_recount (I1)	-
 Trace.forward_duration	Duration	quantity	forward_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_phase_durations_are_bounded_by_an_outside_clock (I1)	-
-Trace.forward_peak_memory	Bytes	quantity	forward_peak_memory	red-needs-oracle	-	-
+Trace.forward_peak_memory	Bytes	quantity	forward_peak_memory	green	tests/oracles/test_legacy_peak_memory_bounds.py::test_cpu_forward_peak_includes_a_buffer_freed_inside_the_forward (I1)	-
 Trace.forward_source_line	int	identifier	-	-	-	id/index/line
 Trace.func_calls_duration	Duration	quantity	func_calls_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_phase_durations_are_bounded_by_an_outside_clock (I1)	-
 Trace.init_source_line	int	identifier	-	-	-	id/index/line
@@ -276,7 +276,7 @@ Trace.tlspec_version	int	identifier	-	-	-	format version
 Trace.total_activation_memory	Bytes	quantity	activation_memory	green	tests/oracles/test_legacy_quantity_doors.py::test_activation_bytes_on_every_compute_door (I2)	-
 Trace.total_autograd_memory	Bytes	quantity	autograd_memory	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
 Trace.total_backward_duration	Duration	quantity	backward_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_backward_durations_are_bounded_by_an_outside_clock (I1)	-
-Trace.total_backward_memory	Bytes	quantity	backward_memory	red-needs-oracle	-	-
+Trace.total_backward_memory	Bytes	quantity	backward_memory	green	tests/oracles/test_legacy_advisories_and_grad_storage.py::test_total_backward_memory_counts_unique_storage_bytes (I2)	-
 Trace.total_flops	Flops	quantity	flops_total	green	tests/oracles/test_legacy_closed_forms.py::test_backward_and_total_flops (I2)	-
 Trace.total_flops_backward	Flops	quantity	flops_backward	green	tests/oracles/test_legacy_closed_forms.py::test_backward_flops_follow_the_backward_that_runs (I2)	-
 Trace.total_flops_forward	Flops	quantity	flops_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
