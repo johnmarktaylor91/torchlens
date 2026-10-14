@@ -19,7 +19,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.intervention.types import HelperSpec
+from torchlens.intervention.types import Edit
 from torchlens.selection import SelectionError
 
 _replay_module = importlib.import_module("torchlens.intervention.replay")
@@ -49,10 +49,15 @@ def log():
         trace.cleanup()
 
 
-def test_edit_is_public_type_and_helper_spec_is_alias():
-    """tl.Edit is the public edit-object type; HelperSpec the deprecated alias."""
+def test_edit_is_the_public_type_and_the_old_spelling_is_gone():
+    """tl.Edit is the public edit-object type; the old class spelling is removed (U00)."""
 
-    assert tl.Edit is HelperSpec
+    import torchlens.intervention as intervention
+    import torchlens.intervention.types as types
+
+    assert tl.Edit is Edit
+    old = "Helper" + "Spec"  # the removed spelling, built so the old-name grep stays clean
+    assert not hasattr(types, old) and not hasattr(intervention, old) and not hasattr(tl, old)
     assert isinstance(tl.zero_ablate(), tl.Edit)
 
 
@@ -208,14 +213,14 @@ def test_mask_never_enters_keep_fields_and_recipe_policy(log):
     hook_specs = [
         entry.helper for entry in spec.hook_specs if getattr(entry, "helper", None) is not None
     ]
-    assert hook_specs, "the derived edit must ride the hook plan as a HelperSpec"
+    assert hook_specs, "the derived edit must ride the hook plan as a Edit"
     derived = hook_specs[-1]
     assert derived.helper_name == "zero_ablate"  # helper identity preserved
     assert derived.selection_recipe is not None
     assert derived.selection_recipe["resolve_digest"]
     # the mask lives only in the runtime factory closure, which never persists
-    assert HelperSpec.PORTABLE_STATE_SPEC["factory"].name == "DROP"
-    assert HelperSpec.PORTABLE_STATE_SPEC["selection_recipe"].name == "BLOB_RECURSIVE"
+    assert Edit.PORTABLE_STATE_SPEC["factory"].name == "DROP"
+    assert Edit.PORTABLE_STATE_SPEC["selection_recipe"].name == "BLOB_RECURSIVE"
 
     def _no_tensor_leaves(value):
         if isinstance(value, torch.Tensor):

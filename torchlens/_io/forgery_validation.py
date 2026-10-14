@@ -625,13 +625,13 @@ def _selection_recipes(trace: Trace) -> tuple[tuple[str, Mapping[str, Any]], ...
                 continue
             if not isinstance(recipe, Mapping):
                 _audit_invalid(
-                    f"HelperSpec.selection_recipe must be a mapping, got {type(recipe).__name__}",
+                    f"Edit.selection_recipe must be a mapping, got {type(recipe).__name__}",
                     "recipe_type",
                 )
             helper_name = getattr(helper, "helper_name", None)
             if not isinstance(helper_name, str):
                 _audit_invalid(
-                    "HelperSpec.selection_recipe has no string helper_name anchor",
+                    "Edit.selection_recipe has no string helper_name anchor",
                     "recipe_helper_name",
                 )
             recipes.append((helper_name, recipe))
@@ -667,7 +667,7 @@ def _validate_intervention_audit(trace: Trace) -> None:
         recipes_by_anchor.setdefault((helper_name, kind, target), set()).add(digest)
     if not recipe_digests <= audit_digests:
         _audit_invalid(
-            "HelperSpec.selection_recipe contains resolve digests absent from "
+            "Edit.selection_recipe contains resolve digests absent from "
             f"Trace.intervention_audit: {sorted(recipe_digests - audit_digests)!r}",
             "recipe_relation",
         )
@@ -676,7 +676,7 @@ def _validate_intervention_audit(trace: Trace) -> None:
             anchored_digests = recipes_by_anchor.get((edit, kind, target))
             if anchored_digests is not None and digest not in anchored_digests:
                 _audit_invalid(
-                    f"audit digest {digest!r} disagrees with the HelperSpec.selection_recipe "
+                    f"audit digest {digest!r} disagrees with the Edit.selection_recipe "
                     f"rows anchored to edit={edit!r}, {kind} target={target!r}",
                     "digest_relation",
                 )

@@ -225,7 +225,9 @@ def test_display_address_and_backend_address_are_decoupled(tmp_path: Path) -> No
     """
 
     trace = _capture(_Nested(), torch.randn(2, 4, 8, 8))
-    by_address = {op.address: op for op in trace.ops if op.is_buffer and op.address is not None}
+    by_address = {
+        op.address: op for op in trace.layer_list if op.is_buffer and op.address is not None
+    }
 
     assert by_address["child.q"].backend_address is None, "plain-attr has no backend address"
     assert by_address["child.cb"].backend_address == "child.cb", "registered keeps both"
@@ -236,7 +238,7 @@ def test_display_address_and_backend_address_are_decoupled(tmp_path: Path) -> No
     trace.save(path)
     loaded = tl.load(path)
     loaded_by_address = {
-        op.address: op for op in loaded.ops if op.is_buffer and op.address is not None
+        op.address: op for op in loaded.layer_list if op.is_buffer and op.address is not None
     }
     assert loaded_by_address["child.q"].backend_address is None
     assert loaded_by_address["child.cb"].backend_address == "child.cb"

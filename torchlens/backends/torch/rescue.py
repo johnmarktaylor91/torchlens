@@ -322,7 +322,7 @@ def _op_name_counts(trace: Trace) -> Counter[str]:
 
     return Counter(
         _canonical_op_name(name)
-        for op in getattr(trace, "ops", ())
+        for op in getattr(trace, "layer_list", ())
         if (name := getattr(op, "func_name", None)) and name != "none"
     )
 
@@ -378,7 +378,7 @@ def _buffer_write_labels(trace: Trace) -> tuple[str, ...]:
     """
 
     labels: list[str] = []
-    for op in getattr(trace, "ops", ()) or ():
+    for op in getattr(trace, "layer_list", ()) or ():  # buffer rows included
         if getattr(op, "buffer_write_kind", None) is None:
             continue
         if getattr(op, "buffer_value_changed", None) is False:

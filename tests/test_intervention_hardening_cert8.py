@@ -36,7 +36,7 @@ from torchlens.intervention._metrics import (
     relative_l1_scalar,
 )
 from torchlens.intervention.errors import NonExecutableSpecError, UntrustedCallableError
-from torchlens.intervention.helpers import HelperSpec, helper_from_serialized
+from torchlens.intervention.helpers import Edit, helper_from_serialized
 from torchlens.intervention.save import (
     LazyImportRef,
     SaveLevel,
@@ -181,7 +181,7 @@ def test_bwd_hook_callable_arg_roundtrips_at_default_save_level() -> None:
     serialized = _serialize_value(helper, SaveLevel.EXECUTABLE_WITH_CALLABLES, state)
     loaded = _deserialize_value(serialized, {})
 
-    assert isinstance(loaded, HelperSpec)
+    assert isinstance(loaded, Edit)
     assert loaded.name == "bwd_hook"
     (arg,) = loaded.args
     assert not isinstance(arg, dict), "callable arg decoded as a raw wrapper dict"
@@ -235,12 +235,12 @@ def test_audit_opaque_helper_arg_fails_loudly_not_silent(tmp_path: Path) -> None
     serialized = _serialize_value(helper, SaveLevel.AUDIT, state)
     loaded = _deserialize_value(serialized, {})
 
-    assert isinstance(loaded, HelperSpec)
+    assert isinstance(loaded, Edit)
     assert loaded.portability == "opaque_audit"
     assert dict(loaded.metadata).get("executable") is False
     # Firing raises a clear, specific error -- NOT a masked TypeError downstream.
     try:
-        loaded()  # HelperSpec.__call__ -> factory()
+        loaded()  # Edit.__call__ -> factory()
     except NonExecutableSpecError as exc:
         assert "non-executable" in str(exc).lower()
         assert "splice_module" in str(exc)
@@ -265,7 +265,7 @@ def test_helper_from_serialized_uses_full_codec_for_opaque_args() -> None:
         import_resolver=_resolve_import_ref,
         value_decoder=lambda item: _deserialize_value(item, {}),
     )
-    assert isinstance(result, HelperSpec)
+    assert isinstance(result, Edit)
     assert result.portability == "opaque_audit"
     try:
         result()

@@ -199,7 +199,7 @@ def test_all_matches_frozen_target_ledger() -> None:
     The L6 selection algebra (feature work, DOCUMENTED-UNSTABLE pending
     naming-session ratification) adds `Selection`, `ResolvedSelection`,
     `units`, `params`, and `random_selection` = 102; its stage 2 adds
-    `Edit` (public edit-object type; HelperSpec is the deprecated alias)
+    `Edit` (public edit-object type)
     and `patch_from` = 104. The L6 producer wave adds the value-based and
     statistical selection producers (DOCUMENTED-UNSTABLE) `top_k`,
     `top_fraction`, `threshold`, `sign`, `dead`, `saturated`, and

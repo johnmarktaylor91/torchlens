@@ -71,9 +71,11 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   values. Every plain module attribute is restored too: a rebound or removed attribute gets its
   original object back, a tensor or builtin `list`/`dict`/`set` changed in place is restored in
   place, and attributes the forward added are removed; what the forward wrote is read from the
-  trace (`Module.attribute_writes`). Objects without a value snapshot (custom objects, containers
-  over 128 items or 64 levels) are tracked by identity: a rebinding is undone, a change inside
-  them is not. Lazy modules are left as their materializing forward leaves them.
+  trace (`Module.attribute_writes`). Builtin containers are snapshotted at any size (a tensor inside
+  one is cloned whatever its size); custom objects are tracked by identity: a rebinding is undone,
+  a change inside them is neither undone nor recorded. A container nested more than 256 levels
+  deep is tracked by identity below that level and named in a `capture_state_restore_incomplete`
+  warning. Lazy modules are left as their materializing forward leaves them.
   `CaptureOptions(carry_state=True)` opts into forward-equivalent state: buffers, modes and
   plain attributes advance exactly as one direct `model(x)` would, and the attribute writes are
   recorded the same way, the same spelling as `trace.run(inputs=..., carry_state=True)`. No capture advances the caller's random streams
@@ -725,7 +727,8 @@ one exact `other_neurons` row.
 : `tl.zero_ablate`, `tl.scale`, `tl.add`, `tl.clamp`, `tl.noise` (Gaussian noise),
   `tl.mean_ablate` (replace with a source mean), `torchlens.intervention.scramble_elements`
   (elementwise iid scramble from a flattened source -- the honest rename of
-  the removed `resample_ablate` spelling; for coherent donor patching use
+  the removed `resample_ablate` spelling, which a saved spec may not name either: it refuses
+  `intervention_helper_renamed`; for coherent donor patching use
   `tl.patch_from`), `tl.replace_with` (fixed value), `tl.swap_with` (another
   site's tensor), `tl.steer` (add a scaled steering direction), `tl.project_onto` /
   `tl.project_off` (keep or remove the component along a direction), and
@@ -768,9 +771,11 @@ one exact `other_neurons` row.
   (`Trace.set(label, ...)`, `attach_hooks(tl.label(...))`) can never fire during a live
   forward, so a rerun refuses it up front with `rerun_staged_label_unmatchable` (trace
   unchanged). A staged edit whose selector matches sites on the trace but fires at none
-  during a rerun of the same graph on the same inputs (a `tl.where` predicate on
-  `p.layer_label`) refuses with `rerun_selector_unmatchable_live` (trace unchanged); on new
-  inputs it still warns `rerun_zero_fire`. The rerun divergence check (`ControlFlowDivergenceWarning`, or
+  during a rerun of the same graph on the same inputs refuses with
+  `rerun_selector_unmatchable_live` (trace unchanged), and so does, on any inputs, a
+  `tl.where` predicate that matches sites on the rerun's own trace but fired at none during
+  its forward (a predicate on `p.layer_label`, which exists only after postprocess). A
+  predicate that matches nothing on the new inputs warns `rerun_zero_fire`. The rerun divergence check (`ControlFlowDivergenceWarning`, or
   `ControlFlowDivergenceError` with `strict=True`) compares raw op order, edges and shapes with
   each value-only edit node folded into the op it replaces, so a staged edit is never
   reported as control-flow divergence while a changed op, edge, shape or batch size still is.
@@ -1065,7 +1070,7 @@ Spellings below shipped ahead of their naming-session/S2 ratification under
 the provisional-name protocol: they may rename WITHOUT deprecation
 shims, by declared contract. Each carries the same tag at its definition.
 
-**similarity_repository_id (`rdm_evolution(...).similarity_repository_id`, `tl.stats.CKA.similarity_repository_id`, the `neuro.rdms()` source-mode descriptor)** — *unstable — no deprecation shim owed*
+**similarity_repository_id (`rdm_evolution(...).similarity_repository_id`, `tl.stats.CKA.similarity_repository_id`, the `SimilarityScore` that `tl.stats.cka` and `tl.stats.CKA.result()` return, `ScoreInterval.similarity_repository_id`, the `neuro.rdms()` source-mode descriptor)** — *unstable — no deprecation shim owed*
 : The similarity-repository catalogue identifier of the exact measure variant a
   TorchLens result computed, with `*` for the implementing repository (for
   example `measure/*/cka-kernel=linear-hsic=gretton-score` for linear CKA,
@@ -1074,12 +1079,23 @@ shims, by declared contract. Each carries the same tag at its definition.
   `neuro.rdms()` descriptor is then absent. The full table is in
   [the brain-benchmarking seam](brain_benchmarking_seam.md).
 
+**SimilarityScore (`tl.stats.SimilarityScore`; returned by `tl.stats.cka` and `tl.stats.CKA.result()`)** — *unstable — no deprecation shim owed*
+: A `float` subclass: the score itself (arithmetic, comparison, `repr` and JSON
+  encoding are a float's; arithmetic returns a plain `float`) plus
+  `similarity_repository_id`, the exact measure variant it computes
+  (`measure/*/cka-kernel=linear-hsic=gretton-score` for linear CKA). `to_dict()`
+  is the serialized form that keeps the identifier
+  (`{"score": ..., "similarity_repository_id": ...}`); pickling keeps it too.
+
 **ScoreInterval (`tl.repgeom.ScoreInterval`; returned by `tl.repgeom.rdm_compare_interval` and `tl.repgeom.cka_interval`)** — *unstable — no deprecation shim owed*
 : A TorchLens score with a descriptive uncertainty interval beside it:
   `score` (the unchanged estimator on all stimuli), `low` and `high` (a
   percentile bootstrap over stimuli), `confidence`, `n_resamples`, `n_valid`
-  (resamples with a finite score), `seed` and `basis` (how the interval was
-  made, in words), plus `width` and `to_dict()`. `rdm_compare_interval(rdm_a,
+  (resamples with a finite score), `seed`, `basis` (how the interval was
+  made, in words) and `similarity_repository_id` (the measure variant `score`
+  computes: the linear CKA identifier from `cka_interval`, `None` from
+  `rdm_compare_interval`, whose precomputed RDMs do not name their metric),
+  plus `width` and `to_dict()` (every field). `rdm_compare_interval(rdm_a,
   rdm_b, method, n_resamples=1000, seed=0, confidence=0.95)` resamples
   stimuli and recomputes `rdm_compare`, dropping self-pairs; `cka_interval(a,
   b, ...)` does the same for linear CKA. Descriptive, not a test; inference
@@ -1498,8 +1514,8 @@ shim owed; S2-gated*
 
 **tl.Edit / do(selection, edit)** — *Edit ratified (slate 5.5, subject to D7
 default-keep); mask-application semantics documented-unstable*
-: `tl.Edit` is the public edit-object type; `HelperSpec` is its deprecated
-  alias (stable surface, no removal scheduled). `repr(edit)` prints the
+: `tl.Edit` is the public edit-object type (the old class
+  spelling is removed, U00 clean break). `repr(edit)` prints the
   public spelling: a builtin edit prints as the public call that builds it
   (`tl.grad_scale(2.0)`, default-valued keywords omitted; evaluating it
   rebuilds an equal edit), any other edit as `tl.Edit('name', kind=...,
@@ -2108,3 +2124,15 @@ deprecation shim owed*
   `""`) and `sha256` over the canonical bytes with that field excluded.
   `to_canonical_json()` renders the attested bytes (sorted keys, compact,
   ASCII).
+
+**trace.ops counting (`len(trace.ops) == trace.num_ops`)** — *unstable — no deprecation shim owed*
+: `len`, iteration, integer indexing, `keys()`/`values()`/`items()` and
+  `to_pandas()` of `trace.ops` cover the ops `trace.num_ops` counts (no
+  input, output or buffer rows; sumfam F1). Label lookup still resolves every
+  row: `trace.ops["input_1"]` returns the input row and `"input_1" in
+  trace.ops` is true although the label is not in `trace.ops.keys()`. The
+  every-row sequence (inputs, outputs and buffers included) is
+  `trace.layer_list`; `len(trace)`, `trace[int]` and `trace[slice]` index it.
+  Only `trace.ops` is the counted view: `input_ops`, `output_ops`,
+  `saved_ops`, `saved_grad_ops`, `compute_ops` and `ops_with_params` list
+  exactly their rows, boundary rows included.

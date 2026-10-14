@@ -126,7 +126,7 @@ def _trace_with_provenance_warning(model: nn.Module) -> tl.Trace:
 
 
 def _op_names(trace: tl.Trace) -> list[str]:
-    return [op.func_name for op in trace.ops]
+    return [op.func_name for op in trace.layer_list]
 
 
 def _escape_count(trace: tl.Trace) -> int:

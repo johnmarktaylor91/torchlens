@@ -199,8 +199,19 @@ def test_to_dict_carries_every_field() -> None:
         "n_valid",
         "seed",
         "basis",
+        "similarity_repository_id",
     }
     assert data["width"] == data["high"] - data["low"]
+    # Precomputed RDMs do not name their RDM metric, so no RSA variant is claimed.
+    assert data["similarity_repository_id"] is None
+
+
+def test_cka_interval_names_the_cka_variant_in_its_result_and_dict() -> None:
+    x, y = _features(8, n=10)
+    result = cka_interval(x, y, n_resamples=10, seed=0)
+    expected = "measure/*/cka-kernel=linear-hsic=gretton-score"
+    assert result.similarity_repository_id == expected
+    assert result.to_dict()["similarity_repository_id"] == expected
 
 
 def test_spearman_resample_with_ties_equals_hand_recomputation() -> None:

@@ -842,7 +842,7 @@ def _is_torchlens_appliance_module(module: str) -> bool:
 # to a logic module) that (a) is NOT instance-callable and (b) carries NO custom
 # ``__reduce__`` / ``__reduce_ex__``, then EXCLUDING live-view / error / exception
 # classes (``Facet`` / ``FacetView`` / ``MissingFacet`` / ``*Error`` / ...) that never
-# appear in scrubbed metadata. ``HelperSpec`` is the single vetted instance-callable
+# appear in scrubbed metadata. ``Edit`` is the single vetted instance-callable
 # exception (``__call__`` takes no attacker args; its ``factory`` is scrubbed to
 # ``None`` before pickling, so it is not a reduce-invocable import sink). The result
 # was cross-checked against the torchlens types the real unpickler resolves across the
@@ -924,7 +924,7 @@ _SAFE_TORCHLENS_TYPES: frozenset[tuple[str, str]] = frozenset(
         ("torchlens.intervention._super.super_op", "SuperOpAccessor"),
         ("torchlens.intervention._super.super_op", "TraceAccessor"),
         # Intervention-spec DATA types (portable recipe descriptors, not runtime
-        # callables). ``HelperSpec`` is instance-callable but INERT: ``__call__``
+        # callables). ``Edit`` is instance-callable but INERT: ``__call__``
         # takes no attacker args and its ``factory`` is scrubbed to ``None`` before
         # pickling, so it is not a reduce-invocable import sink.
         ("torchlens.intervention.types", "CapturedArgTemplate"),
@@ -936,7 +936,7 @@ _SAFE_TORCHLENS_TYPES: frozenset[tuple[str, str]] = frozenset(
         ("torchlens.intervention.types", "FrozenTargetSpec"),
         ("torchlens.intervention.types", "FrozenTargetValueSpec"),
         ("torchlens.intervention.types", "FunctionRegistryKey"),
-        ("torchlens.intervention.types", "HelperSpec"),
+        ("torchlens.intervention.types", "Edit"),
         ("torchlens.intervention.types", "HookSpec"),
         ("torchlens.intervention.types", "InterventionDecision"),
         ("torchlens.intervention.types", "InterventionSpec"),

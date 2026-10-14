@@ -57,7 +57,7 @@ from ..selection import (
     edge_address_of,
 )
 from .masked_edit import _validate_edited
-from .types import HelperSpec
+from .types import Edit
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
@@ -164,10 +164,10 @@ def _current_edge_value(
     return _consumed_value(trace, parent_op, child_op)
 
 
-def _edit_hook(edit: Any, site_label: str) -> tuple[Any, HelperSpec | None, str]:
+def _edit_hook(edit: Any, site_label: str) -> tuple[Any, Edit | None, str]:
     """Normalize the edit into a hook callable + disclosure identity."""
 
-    if isinstance(edit, HelperSpec):
+    if isinstance(edit, Edit):
         if edit.factory is None:
             raise _apply_invalid(
                 "not_maskable",

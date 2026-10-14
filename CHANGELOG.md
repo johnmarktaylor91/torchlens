@@ -5,6 +5,12 @@
 
 ### Behavior changes
 
+- **trace.ops**: `len`, iteration, integer indexing, `keys()`/`values()`/`items()` and
+  `to_pandas()` of `trace.ops` now cover only the ops `trace.num_ops` counts, so
+  `len(trace.ops) == trace.num_ops`. Input, output and buffer rows are no longer in that
+  sequence (label lookup such as `trace.ops["input_1"]` still finds them). Code that read
+  `trace.ops` as every captured row should read `trace.layer_list`, which `len(trace)`,
+  `trace[int]` and `trace[slice]` index.
 - **repgeom**: `tl.repgeom.rdm(metric="gaussian")` now computes `1 - exp(-D / mean(D))`, the
   thingsvision bandwidth it credits, instead of `1 - exp(-D / (2 * mean(D)))`, so every gaussian
   RDM value differs from every earlier release (for 1-D points 0, 1, 3: 0.148, 0.765, 0.474 become

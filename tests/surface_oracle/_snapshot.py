@@ -309,7 +309,10 @@ def snapshot_trace_surface(trace: Trace) -> dict[str, Any]:
         "trace": snapshot_object(trace),
     }
     families = {
-        "ops": trace.ops,
+        # Every row, keyed by label as ``trace.ops.items()`` was before sumfam
+        # F1: the counted ``trace.ops`` view leaves out input, output and
+        # buffer rows, and the surface oracle snapshots every record.
+        "ops": {op.label: op for op in trace.layer_list},
         "layers": trace.layers,
         "modules": trace.modules,
         "module_calls": trace.module_calls,

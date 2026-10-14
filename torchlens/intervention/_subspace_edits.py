@@ -27,7 +27,7 @@ import torch
 from .._errors import InvalidArgumentError
 from .errors import HookValueError
 from .hooks import HookContext
-from .types import HelperSpec
+from .types import Edit
 
 _MODES = ("zero", "mean", "resample")
 
@@ -121,7 +121,7 @@ def subspace_ablate(
     feature_axis: int = -1,
     mean: torch.Tensor | None = None,
     seed: int | None = None,
-) -> HelperSpec:
+) -> Edit:
     """Create an edit that ablates a site's component inside a k-dim subspace.
 
     Parameters
@@ -142,7 +142,7 @@ def subspace_ablate(
 
     Returns
     -------
-    HelperSpec
+    Edit
         The subspace edit.
 
     Raises
@@ -211,7 +211,7 @@ def subspace_interchange(
     source: Any,
     *,
     feature_axis: int = -1,
-) -> HelperSpec:
+) -> Edit:
     """Create an edit writing the source trace's in-subspace component over the target's.
 
     The target keeps its component orthogonal to the span; the in-span
@@ -231,7 +231,7 @@ def subspace_interchange(
 
     Returns
     -------
-    HelperSpec
+    Edit
         The interchange edit.
     """
 

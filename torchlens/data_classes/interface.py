@@ -140,7 +140,7 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
 
     if isinstance(ix, int):
         try:
-            return self.ops[ix]
+            return self.layer_list[ix]  # every row, like the slice form above
         except IndexError:
             _give_user_feedback_about_lookup_key(self, ix, "get_one_item")
             raise
@@ -184,7 +184,14 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
             self.grad_fns,
         ):
             try:
-                for key in accessor.keys():
+                # ``ops.keys()`` lists the counted ops only; a
+                # case-insensitive label still reaches every row.
+                keys = (
+                    [op.label for op in self.layer_list]
+                    if accessor is self.ops
+                    else accessor.keys()
+                )
+                for key in keys:
                     if str(key).lower() == lower_ix:
                         return accessor[key]
             except (AttributeError, KeyError, ValueError, TypeError):

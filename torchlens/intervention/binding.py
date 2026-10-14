@@ -242,7 +242,7 @@ def _rule_plan_problem(rule: Any) -> tuple[str, str] | None:
         ``(reason, remedy)`` for a refusal, or ``None`` when the rule lowers.
     """
 
-    from .types import HelperSpec
+    from .types import Edit
 
     decision = rule.decision
     if decision is None or decision.hook is None:
@@ -254,7 +254,7 @@ def _rule_plan_problem(rule: Any) -> tuple[str, str] | None:
         )
     hook = decision.hook
     edits_gradients = decision.direction in ("backward", "both") or (
-        isinstance(hook, HelperSpec) and (hook.kind == "backward" or hook.direction == "backward")
+        isinstance(hook, Edit) and (hook.kind == "backward" or hook.direction == "backward")
     )
     if edits_gradients:
         return (
@@ -292,7 +292,7 @@ class _RulePlan:
         """
 
         from .hooks import normalize_hook
-        from .types import HelperSpec
+        from .types import Edit
 
         decision = rule.decision
         problem = _rule_plan_problem(rule)
@@ -304,7 +304,7 @@ class _RulePlan:
                 remedy=remedy,
             )
         self.rule = rule
-        self.helper_spec = decision.hook if isinstance(decision.hook, HelperSpec) else None
+        self.helper_spec = decision.hook if isinstance(decision.hook, Edit) else None
         self.hook_callable = normalize_hook(decision.hook, direction="forward")
         self.display_name = (
             self.helper_spec.helper_name

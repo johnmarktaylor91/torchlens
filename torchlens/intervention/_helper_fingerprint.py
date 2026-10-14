@@ -24,7 +24,7 @@ from typing import Any
 import torch
 
 from .._state import pause_logging
-from .types import HelperSpec
+from .types import Edit
 
 #: HookSpec metadata key holding the staged helper's tensor digests.
 DIGEST_KEY = "helper_tensor_digests"
@@ -50,7 +50,7 @@ def _collect(value: Any, found: list[torch.Tensor]) -> None:
             _collect(item, found)
 
 
-def helper_of(entry_hook: Any, helper: Any = None) -> HelperSpec | None:
+def helper_of(entry_hook: Any, helper: Any = None) -> Edit | None:
     """Return the helper spec behind a hook entry, if it came from a helper.
 
     Parameters
@@ -62,16 +62,16 @@ def helper_of(entry_hook: Any, helper: Any = None) -> HelperSpec | None:
 
     Returns
     -------
-    HelperSpec | None
+    Edit | None
         The helper spec, or ``None`` for a plain callable.
     """
 
-    if isinstance(helper, HelperSpec):
+    if isinstance(helper, Edit):
         return helper
-    return entry_hook if isinstance(entry_hook, HelperSpec) else None
+    return entry_hook if isinstance(entry_hook, Edit) else None
 
 
-def helper_digests(helper: HelperSpec | None) -> tuple[str, ...] | None:
+def helper_digests(helper: Edit | None) -> tuple[str, ...] | None:
     """Return the content digests of the tensors a helper closes over.
 
     Parameters
@@ -101,7 +101,7 @@ def helper_digests(helper: HelperSpec | None) -> tuple[str, ...] | None:
         return tuple(content(tensor) for tensor in tensors)
 
 
-def helper_versions(helper: HelperSpec | None) -> tuple[int, ...] | None:
+def helper_versions(helper: Edit | None) -> tuple[int, ...] | None:
     """Return the version counters of the tensors a helper closes over.
 
     Parameters
