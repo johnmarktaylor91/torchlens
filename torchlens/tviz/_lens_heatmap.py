@@ -226,6 +226,8 @@ def _text_color(cmap: Any, value: float) -> str:
     red, green, blue, _ = cmap(value)
 
     def linear(channel: float) -> float:
+        """Undo the sRGB gamma curve for one color channel."""
+
         return channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
 
     luminance = 0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue)
