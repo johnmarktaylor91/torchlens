@@ -20,7 +20,7 @@ until bound to the token streams they index. A member's binding is a
 sidecar family on that member (``trace.annotations["sidecar"]``): which
 captured stream (``"input"``: the first integer-dtype input tensor;
 ``"output"``: the first integer-dtype output tensor), the batch row, the row
-length, the SHA-256 digest of the row's token ids, the member's own
+length, the content digest of the row's token ids, the member's own
 completion range inside that stream, the token ids outside the eligible set
 (padding, special tokens), and the tokenizer and template identity when known.
 TorchLens derives the descriptor from retained ids when it can (batch of one,
@@ -227,7 +227,7 @@ if TOKEN_BOUNDARY_FAMILY_ID not in list_sidecar_families():
 
 
 def ids_digest(ids: Sequence[int]) -> str:
-    """Return the ``sha256:`` digest of one token-id row (int64 little-endian)."""
+    """Return the prefixed hex digest of one token-id row (eight-byte little-endian ints)."""
 
     hasher = hashlib.sha256(b"token_ids_v1:")
     for token in ids:
@@ -335,6 +335,10 @@ def check_span_bounds(
                     f"fed_by token_spans row {list(span)!r} reaches {side} position "
                     f"{span[lo_index + 1]}, past the {side} stream length {length}.",
                     code="bundle_relation_span_out_of_bounds",
+                    remedy=(
+                        "index the member's bound token stream (its token_boundary_v1 "
+                        "length), or bind the stream the coordinates really index"
+                    ),
                     row_index=row_index,
                     row_kind=FED_BY_KIND,
                     side=side,
@@ -411,9 +415,9 @@ def settle_fed_by_params(
     spans = settled.get("token_spans") or []
     check_span_bounds(spans, reader, source, row_index=row_index)
     claimed = settled.get("basis")
-    if claimed not in EARNED_BASES and not (assess_unclaimed and claimed is None):
+    if not spans or (claimed not in EARNED_BASES and not (assess_unclaimed and claimed is None)):
         return settled
-    if assess_unclaimed and claimed is None and spans:
+    if claimed is None:
         bind_member(source)
         bind_member(reader)
     state, coverage, reason = assess_spans(spans, reader, source)
@@ -422,6 +426,10 @@ def settle_fed_by_params(
             f"fed_by row claims basis {claimed!r} but its evidence disagrees: {reason}. "
             "A verified correspondence must re-check against the members it names.",
             code="bundle_relation_span_unverified",
+            remedy=(
+                "drop the claimed basis so the row records a declaration, or fix the "
+                "spans or bindings so the token ids agree"
+            ),
             row_index=row_index,
             row_kind=FED_BY_KIND,
             claimed_basis=claimed,

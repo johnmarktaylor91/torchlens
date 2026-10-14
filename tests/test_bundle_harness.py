@@ -4,7 +4,7 @@ Covers the grammar and direction of ``fed_by`` (the later member's prompt
 contains the earlier member's output), the positional ``relate`` spelling,
 the token-stream binding that decides whether a row is ``verified`` or only
 ``declared``, the upstream/downstream walks, the member-scoped ``node``, the
-comparison gate on the delta family, empty bundles, and the tlspec-v10
+comparison gate on the delta family, empty bundles, and the current tlspec
 round trip with spans. Every protective claim tries the forbidden thing.
 """
 

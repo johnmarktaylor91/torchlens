@@ -32,7 +32,7 @@ def _bundle_relate(
     """Append S6 relation rows, installing a NEW validated table (R4).
 
     Two spellings. The POSITIONAL form reads as the sentence it records:
-    ``b.relate("fed_by", "critique", "draft", token_spans=[[0, 5, 12, 17]])``
+    ``b.relate("fed_by", "critique", "draft", token_spans=[[3, 7, 3, 7]])``
     is "critique fed_by draft" (kind, then the LATER member, then the EARLIER
     one; a MEMBER kind such as ``episode_member`` names one member). The ROW
     form passes ``MemberRelationRow`` instances or payload mappings.
@@ -79,6 +79,7 @@ def _bundle_relate(
             "keyword params belong to the positional spelling "
             "relate(kind, later, earlier, **params).",
             code="bundle_relation_schema_invalid",
+            remedy="put the params inside each row, or use the positional spelling",
         )
     rows_only = cast("tuple[MemberRelationRow | Mapping[str, Any], ...]", rows)
     self._member_relations = self._build_relation_table(self._member_relations.rows, rows_only)
@@ -94,6 +95,7 @@ def _positional_row(names: tuple[str, ...], params: Mapping[str, Any]) -> dict[s
             "Bundle.relate positional form takes member NAMES after the kind; "
             "do not mix it with row objects.",
             code="bundle_relation_schema_invalid",
+            remedy="pass relate(kind, later, earlier, **params) with member names",
         )
     if params.get("token_spans") == "auto":
         raise BundleRelationError(
@@ -101,6 +103,7 @@ def _positional_row(names: tuple[str, ...], params: Mapping[str, Any]) -> dict[s
             "the later prompt) is not available yet. Declare the spans as "
             "[src_start, src_end, dst_start, dst_end] rows, or omit token_spans.",
             code="bundle_relation_auto_spans_unavailable",
+            remedy="declare token_spans rows, or omit token_spans",
             row_kind=kind,
         )
     if kind in MEMBER_ROW_KINDS and len(members) == 1:
@@ -110,6 +113,7 @@ def _positional_row(names: tuple[str, ...], params: Mapping[str, Any]) -> dict[s
             f"Bundle.relate({kind!r}, ...) takes two member names (later, earlier) "
             f"for a pair kind or one for a member kind; got {len(members)}.",
             code="bundle_relation_schema_invalid",
+            remedy="name the later member, then the earlier member",
             row_kind=kind,
         )
     return {"kind": kind, "from": members[0], "to": members[1], "params": dict(params)}

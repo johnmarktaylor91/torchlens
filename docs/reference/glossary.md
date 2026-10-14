@@ -427,7 +427,88 @@ one exact `other_neurons` row.
 
 **Bundle**
 : A named collection of aligned Traces, constructed with `tl.bundle(...)` or `tl.Bundle(...)`, for
-  cross-run comparison.
+  cross-run comparison. `tl.Bundle()` with no members builds an empty bundle to fill later with
+  `add`; an empty bundle saves and loads like any other.
+
+**Bundle.member_relations** *(spelling documented-unstable)*
+: The bundle's typed, directed relation rows between members, read as an immutable tuple of
+  `MemberRelationRow` (plus `OpaqueRelationRow` for unknown namespaced kinds loaded from an
+  artifact). Pair kinds: `alternative_of` (peers; still comparable), `forked_from`,
+  `successor_of`, `escalates`, `fed_by`; member kind: `episode_member`. Each kind's params are a
+  closed set; rows persist in `bundle.json` and every load re-checks them. On a pair row `from` is
+  always the LATER member. Rows are ordering and topology claims: members joined by a directed
+  path of ordering kinds are not comparison operands.
+
+**Bundle.relate** *(spelling documented-unstable)*
+: Appends relation rows and returns the bundle. Positional form, read as the sentence it records:
+  `b.relate("fed_by", "critique", "draft", token_spans=[[3, 7, 3, 7]], label="critique")` is
+  "critique fed_by draft" (kind, the later member, the earlier member, then the kind's params; a
+  member kind names one member). Row form: `b.relate(MemberRelationRow(...))` or payload mappings.
+  Refusals carry stable codes (`bundle_relation_schema_invalid`, `bundle_relation_member_missing`,
+  `bundle_relation_auto_spans_unavailable`, `bundle_relation_span_out_of_bounds`,
+  `bundle_relation_span_unverified`); a refusal leaves the table unchanged.
+
+**fed_by** *(relation kind; spelling documented-unstable)*
+: "B fed_by A": the later member B's prompt contains the earlier member A's output. Content
+  provenance only: a router whose decision selects a call without its output entering that call's
+  prompt is not `fed_by`; record that order with `successor_of` and keep the route decision in
+  your own metadata (TorchLens has no control-dependency kind). Optional params: `token_spans`
+  (rows of four ints, half-open: source start, source end, destination start, destination end),
+  `basis` (`declared`, `verified`, `matched`), `coverage` (a fraction in [0, 1]) and `label` (free
+  human text such as `"critique"` or `"judge"`; nothing in TorchLens interprets it).
+  `token_spans="auto"` (automatic matching) refuses `bundle_relation_auto_spans_unavailable`
+  until it lands. `fed_by` is an ordering kind for the comparison gate.
+
+**Token-stream binding** *(`token_boundary_v1`; spelling documented-unstable)*
+: What makes `fed_by` spans checkable: a per-member descriptor in the reserved
+  `torchlens.boundary_facts` sidecar family naming the captured stream the coordinates index
+  (`"input"`, the first integer-dtype input; or `"output"`), the `batch_row`, the row `length`,
+  the `ids_digest` of its token ids, optionally the member's own `completion` range, the
+  `excluded_ids` outside the eligible set (padding, special tokens), and `tokenizer` /
+  `template` identity strings. `relate` derives a default descriptor for a batch-of-one capture
+  whose ids are retained; attach a richer one with `torchlens.io.attach_sidecar` before relating.
+  A row reads `basis="verified"` only when both members are bound, each digest matches the
+  retained ids, every source span lies inside the source completion, and the token ids agree span
+  by span; anything less is `declared`. A claimed `verified`/`matched` row re-checks at every door
+  (relate, constructor, load): missing evidence makes it `declared`, contradicting evidence refuses
+  `bundle_relation_span_unverified`. `coverage` on a verified row is computed: covered eligible
+  source tokens over all eligible ones, where the eligible set is the bound completion range minus
+  `excluded_ids` (no bound completion range, no coverage).
+
+**Bundle.upstream / Bundle.downstream** *(spelling documented-unstable)*
+: `b.upstream(name)` lists every member `name` transitively came after (what fed it), and
+  `b.downstream(name)` every member that came after it, nearest first, over the ordering kinds
+  (`fed_by`, `successor_of`, `forked_from`, `escalates`). Bundle helper-table methods, like
+  `compare`.
+
+**Bundle.node** *(members= spelling documented-unstable)*
+: `b.node(site, members=None)` returns a `SuperOp` view of one site across the members, or across
+  the named subset, gated pairwise inside that subset (`same_param_shapes` floor), so one foreign
+  member no longer disables the view for the rest.
+
+**Bundle delta family** *(`delta_map`, `norm_delta`, `output_delta`, `compare`)*
+: Per-node and per-output distances from a baseline member (the configured baseline, else the
+  first member). Every (baseline, member) pair goes through the comparison gate first, the same
+  predicates as `compare_at`: no ordering path between them, a shared graph, and proven-equal
+  input values; otherwise the read refuses with the gate's `bundle_gate_*` code.
+
+**Bundle.derive_episode_status** *(spelling documented-unstable)*
+: `b.derive_episode_status(episode_id, *, ledger=None)` folds the outcomes of the members named by
+  `episode_member` rows into a derived episode status (`EpisodeFoldResult`). A derivation, never
+  a stored Bundle outcome; without a ledger the ledger-only arms degrade to `episode_unknown`.
+
+**Bundle.why / Bundle.provenance** *(spelling documented-unstable)*
+: `b.why(member, relative_to=None)` returns a `WhyReport`: the exact-or-refused ancestry of a
+  member against the baseline (or `relative_to`), with lineage status, payload fidelity, value
+  residual and comparability reported as separate axes. `b.provenance()` is the per-member list of
+  the same facts. Both are derived views; nothing is stored. Reference:
+  `docs/reference/experiment_ledger.md`.
+
+**Bundle.vary** *(spelling documented-unstable)*
+: `b.vary(mapping, *, unmentioned=None)` applies one explicit intervention spec (or `None`, the
+  identity) per named member, refusing incomplete coverage before any member changes; a mid-apply
+  failure refuses `vary_partial_failure` and discloses what completed (no rollback). Broadcast
+  `do()` is unchanged.
 
 **Parameter value basis** *(spelling documented-unstable)*
 : The derived, read-time, persisted-nowhere disclosure `Param.value_basis` of where a parameter
