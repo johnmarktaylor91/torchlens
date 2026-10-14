@@ -12,6 +12,8 @@ from __future__ import annotations
 __all__ = [
     "AXES_WORDING",
     "JOINT_EFFECT_WORDING",
+    "KV_GROUP_RECEIPT_WORDING",
+    "KV_JOINT_EFFECT_WORDING",
     "KV_GROUP_WORDING",
     "MEASURED_N_OF_M",
     "NOT_ADDITIVE_WORDING",
@@ -57,6 +59,20 @@ OUTPUT_EQUIVALENT_WORDING = "output-equivalent counterfactual"
 #: GQA header disclosure (tviz memo D15): shared KV storage is never
 #: presented as independent per-query-head measurement.
 KV_GROUP_WORDING = "kv group {group} of {n_groups}, shared by query heads {first}-{last}"
+
+#: Receipt-grid disclosure for key/value-site ablations under grouped-query
+#: attention: a cell is a shared group, never one query head's effect.
+KV_GROUP_RECEIPT_WORDING = (
+    "kv-group receipt: each cell ablates one key/value group shared by "
+    "{per_group} query heads ({n_query} query heads over {n_groups} groups); "
+    "no cell is a per-query-head effect"
+)
+
+#: The joint-measurement line for kv-group receipt grids.
+KV_JOINT_EFFECT_WORDING = (
+    "joint effect of ablating all {n} measured kv groups together: {joint:+.4g} "
+    "(sum of single-group cells: {cell_sum:+.4g}; single-group effects are not additive)"
+)
 
 #: Provenance wording for reconstructed (fused-path) attention patterns.
 PROVENANCE_RECONSTRUCTED = "reconstructed from fused-kernel inputs (read-only)"

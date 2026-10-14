@@ -127,6 +127,26 @@ gpt2 layer 0: one head `+13.27` alone, all twelve together `-0.68`), so
 every grid prints the joint measurement beside the cell sum. Unmeasured
 cells are blank, never zero, and the figure prints "measured N of M".
 
+Under grouped-query attention a key or value site holds one tensor per KV
+group, read by several query heads, so a grid over that site
+(`mi.grid(..., sites="v", axes=("layer", "head"))`) measures groups, not
+query heads. Pass the grouping and the receipt becomes a kv-group receipt:
+
+```python
+gqa = tviz.GqaInfo(n_query_heads=14, n_kv_heads=2)
+receipt = tviz.receipt_from_patch_grid(
+    v_grid, layer="model.layers.0.self_attn", negative_control=neg,
+    positive_control=pos, joint_effect=joint, kv_groups=gqa,
+)
+receipt.sharing_lines()  # ("kv group 1 of 2, shared by query heads 0-6", ...)
+tviz.render_receipt_grid(receipt, "kv_receipts.pdf")
+```
+
+The grid labels each column `kv g` over its query-head range and prints that
+no cell is a per-query-head effect. `Annotation.from_receipt` refuses a
+kv-group receipt (`tv_annotation_invalid`): attention panels are per query
+head, and one group's effect is not any single query head's.
+
 Annotation kinds are a closed set of four -- `descriptive_head_score`,
 `additive_logit_contribution`, `screening_estimate`, `intervention_effect`
 -- each with its own glyph and legend section; only a valid `CausalReceipt`
@@ -213,9 +233,9 @@ Episode/generation views: `EpisodeCoordinates` (step / role / completion /
 member) lands on the records from day one, so per-step sheets and the
 staircase render against the episode substrate without recomputation.
 Per-query-head GQA receipts at the value site are **not measurable** (a KV
-group is shared storage); wave 1 renders the honest kv-group disclosure
-("kv group g of G, shared by query heads a-b") and the op-level interceptor
-is the wave-2 buyer.
+group is shared storage); kv-group receipts (above) render the honest
+disclosure ("kv group g of G, shared by query heads a-b"), and an op-level
+per-query-head interceptor is still to come.
 
 ## Refusal codes
 

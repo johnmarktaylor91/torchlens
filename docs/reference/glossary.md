@@ -1971,6 +1971,18 @@ deprecation shim owed*
   wider than 48 positions refuse `tv_record_invalid` until `positions=`
   names the columns; nothing is cropped silently. Returns an `Artifact`.
 
+**kv-group receipts (torchlens.tviz)** — *unstable — no deprecation shim owed*
+: `tviz.receipt_from_patch_grid(grid, ..., kv_groups=tviz.GqaInfo(...))`
+  builds a `CausalReceipt` whose cells are grouped-query KV groups, for
+  grids over a key or value site. The receipt's `kv_groups` field holds the
+  grouping, `unit` reads `"kv group"`, and `sharing_lines()` names each
+  group's query heads; `render_receipt_grid` labels the columns by group
+  and prints that no cell is a per-query-head effect. `GqaInfo` gains
+  `query_heads(group)` and `group_header(group)`. A grid whose head axis
+  exceeds the group count refuses `tv_record_invalid`; mixing kv-group and
+  query-head rows refuses `tv_receipt_invalid`; `Annotation.from_receipt`
+  refuses a kv-group receipt `tv_annotation_invalid`.
+
 **Summary columns (`summary(columns=...)`)** — *unstable — no deprecation shim owed*
 : The column registry of `tl.summary` / `trace.summary`: `name`, `input`,
   `output`, `kernel_size`, `groups`, `params`, `params_pct`,
