@@ -41,6 +41,7 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 from .._trace_state import TraceState
+from ..backends._intervention_evidence import records_intervention_evidence
 
 #: First tlspec version whose writer persists the intervention event audit.
 PRISTINE_EVIDENCE_MIN_TLSPEC = 9
@@ -129,7 +130,7 @@ def derive_pristine(trace: Any) -> bool | None:
 def _evidence_recorded(trace: Any) -> bool:
     """Return whether this trace's producer persists the full touch evidence."""
 
-    if str(trace.backend) != "torch":
+    if not records_intervention_evidence(str(trace.backend)):
         return False
     version = trace.tlspec_version
     return isinstance(version, int) and version >= PRISTINE_EVIDENCE_MIN_TLSPEC
@@ -166,6 +167,3 @@ def _spec_has_entries(spec: Any) -> bool:
     if spec is None:
         return False
     return bool(spec.hook_specs or spec.target_value_specs)
-
-
-__all__ = ["derive_pristine", "pristine_touch_evidence"]

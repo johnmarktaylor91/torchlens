@@ -53,4 +53,6 @@ Five technical-preview backends live beside `torch/`, each Tier-1 standalone
 Shared preview plumbing: `_finalize.py` / `_recurrence.py` (single-pass trace
 finalization and the neutral recurrence grouper), `_options.py` (per-backend
 kwarg and trace-option refusal policies), and `_selective_save.py` /
-`_validation_shared.py`.
+`_validation_shared.py`. `_intervention_evidence.py` names the backends whose
+interventions write the trace evidence `Trace.pristine` is derived from (torch
+only; the others read `None`, not recorded).

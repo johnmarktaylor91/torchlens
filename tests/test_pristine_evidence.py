@@ -22,6 +22,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._trace_state import TraceState
+from torchlens.backends import registered_backend_specs
+from torchlens.backends._intervention_evidence import records_intervention_evidence
 from torchlens.data_classes._trace_pristine import derive_pristine, pristine_touch_evidence
 from torchlens.intervention.errors import BaselineUndeterminedError
 from torchlens.options import CaptureOptions
@@ -242,6 +244,24 @@ def test_derivation_rule(backend: str, version: int, history: list[Any], expecte
         layer_list=[],
     )
     assert derive_pristine(stub) is expected
+
+
+def test_non_torch_backends_read_not_recorded_never_pristine() -> None:
+    names = {spec.name for spec in registered_backend_specs()}
+    assert "torch" in names and len(names) > 1
+    for name in sorted(names):
+        stub = SimpleNamespace(
+            backend=name,
+            tlspec_version=10,
+            state_history=[],
+            intervention_audit=[],
+            state=TraceState.PRISTINE,
+            _has_direct_writes=False,
+            layer_list=[],
+        )
+        expected = True if name == "torch" else None
+        assert records_intervention_evidence(name) is (name == "torch")
+        assert derive_pristine(stub) is expected, name
 
 
 @pytest.mark.parametrize(
