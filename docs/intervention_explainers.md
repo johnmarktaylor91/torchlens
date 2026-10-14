@@ -52,7 +52,8 @@ executed_out = executed.find_sites(head).first().out
 # bind: no trace at all; the edit runs as a hook on every call.
 bound_out = spec.bind(model)(x)
 
-expected = model[2](torch.zeros(3, 8))  # the head sees an all-zero ReLU output
+head_layer = model[2]
+expected = head_layer(torch.zeros(3, 8))  # the head sees an all-zero ReLU output
 RESULT = [
     torch.equal(live_out, expected),
     torch.equal(pushed_out, expected),
@@ -97,7 +98,8 @@ clean = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=
 before = clean.find_sites(tl.module("2")).first().out.clone()
 
 candidate = clean.fork("candidate")
-candidate.attach_hooks(tl.func("relu"), tl.zero_ablate()).push()
+candidate.attach_hooks(tl.func("relu"), tl.zero_ablate())
+candidate.push()
 
 # The fork changed; the trace it came from did not.
 RESULT = torch.equal(clean.find_sites(tl.module("2")).first().out, before)

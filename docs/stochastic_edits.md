@@ -119,7 +119,7 @@ direction = torch.tensor([1.0, -1.0, 0.0, 0.5])
 unit = direction / direction.norm()
 directed = trace.fork("directed")
 directed.do(site, set_direction_mean(direction, evidence, feature_axis=1))
-mean_coefficient = (evidence.members @ unit).mean()
+mean_coefficient = (torch.stack(evidence.members) @ unit).mean()
 oracle = clean - (clean @ unit)[:, None] * unit + mean_coefficient * unit
 
 RESULT = [

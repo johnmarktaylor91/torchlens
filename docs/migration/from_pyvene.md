@@ -98,7 +98,8 @@ patched = tl.trace(
     base_ids,
     intervene=tl.when(site, tl.patch_from(source, positions={3: 2})),
 )
-logits = patched[patched.output_layers[0]].out.logits
+output = patched[patched.output_layers[0]].out
+logits = output.logits if hasattr(output, "logits") else output
 
 # The same patch with plain hooks: copy source position 3 into base position 2.
 # A GPT-2 block returns its hidden state alone or first in a tuple, by version.
