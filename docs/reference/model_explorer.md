@@ -103,7 +103,7 @@ missing values are coverage, never zero.
 
 Exports (when given a `Trace`) and calls the public pinned
 `model_explorer.visualize(...)` -- `reuse_server=`, `host=`, `port=` forward
-verbatim. Needs `pip install 'ai-edge-model-explorer>=0.1.33,<0.2'`
+verbatim. Needs `pip install "torchlens[model-explorer]"` (`ai-edge-model-explorer>=0.1.33,<0.2`)
 (`model_explorer_serve_unavailable` teaches this at the point of failure).
 
 ## Validation report vocabulary

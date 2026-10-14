@@ -126,7 +126,7 @@ def model_explorer_serve(source: Any, **kwargs: Any) -> Path:
     Thin deferred door over
     :func:`torchlens.export._model_explorer.model_explorer_serve` (L8 bridge,
     loaded on first call; requires the ``ai-edge-model-explorer`` app package:
-    ``pip install 'ai-edge-model-explorer>=0.1.33,<0.2'``).
+    ``pip install "torchlens[model-explorer]"``).
 
     Parameters
     ----------

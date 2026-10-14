@@ -1411,14 +1411,14 @@ jobs:
   model-explorer-contract:
     # F15 (modelexplorer memo B11; packaging_requests 2026-08-28, landed by
     # D05 as the scheduled tier): the vendor contract executes against the
-    # pinned ai-edge-model-explorer 0.1.32 (installed --no-deps: its server
+    # pinned ai-edge-model-explorer 0.1.33 (installed --no-deps: its server
     # stack is not the contract; the dataclasses + worker are) with node >= 20
     # for the worker oracle. EXACT executed-count expectation: every row in
     # both files executes and NONE skips (skip fraction 0.0) -- the
     # importorskip defect the request names. The drift step compares the
     # PyPI and npm latest against the pins and reports in the job summary
     # (this workflow has no issues:write; drift never moves a release gate).
-    name: Model Explorer vendor contract (pinned 0.1.32)
+    name: Model Explorer vendor contract (pinned 0.1.33)
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -1445,7 +1445,7 @@ jobs:
             -e ".[dev,test,tabular]" \
             "torch==2.13.0+cpu" \
             "torchvision==0.28.0+cpu"
-          uv pip install --system --no-deps "ai-edge-model-explorer==0.1.32"
+          uv pip install --system --no-deps "ai-edge-model-explorer==0.1.33"
           # `import model_explorer` imports server.py, whose module-level imports
           # (flask, portpicker, IPython, termcolor, watchdog; dacite via
           # ndp_runner) no longer arrive transitively through the [test] extra.
@@ -1469,10 +1469,10 @@ jobs:
           npm_latest="$(npm view ai-edge-model-explorer-visualizer version)"
           {
             echo "## Model Explorer vendor drift"
-            echo "- PyPI ai-edge-model-explorer: pinned 0.1.32, latest $pypi_latest"
+            echo "- PyPI ai-edge-model-explorer: pinned 0.1.33, latest $pypi_latest"
             echo "- npm ai-edge-model-explorer-visualizer: pinned 0.1.2, latest $npm_latest"
           } >> "$GITHUB_STEP_SUMMARY"
-          if [ "$pypi_latest" != "0.1.32" ] || [ "$npm_latest" != "0.1.2" ]; then
+          if [ "$pypi_latest" != "0.1.33" ] || [ "$npm_latest" != "0.1.2" ]; then
             echo "vendor drift detected (see summary): open an intentional contract-profile update, never move a release gate"
             exit 1
           fi
