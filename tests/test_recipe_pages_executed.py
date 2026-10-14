@@ -164,3 +164,41 @@ def test_every_recipe_fence_is_headed(page: str) -> None:
             continue
         assert header is not None, f"{page} fence {index} has no recipe-test header"
         assert header.group("tool") == PAGES[page], (page, index, header.group("tool"))
+
+
+def test_lrp_page_states_the_patent_notice_and_points_to_lxt() -> None:
+    """The LRP recipe warns of patents and keeps LRP a recipe, not a product feature."""
+
+    text = (REPO / "docs/recipes/lrp_epsilon_litmus.md").read_text("utf-8")
+    assert "LRP methods may be patent-encumbered for commercial" in text
+    assert "keeps LRP a recipe, not a product feature" in text
+    assert "(lrp_transformers_lxt.md)" in text
+
+
+def test_cornet_showpiece_uses_the_pinned_checkout_not_torch_hub() -> None:
+    """CORnet ships no hub entry point: the page pins a checkout and imports it."""
+
+    text = (REPO / "docs/neuroai/journey.md").read_text("utf-8")
+    assert "torch.hub.load" not in text
+    assert (
+        "git+https://github.com/dicarlolab/CORnet@d0cc17d4b34ad44dedb01683b70eafd15515adad" in text
+    )
+
+
+def test_token_result_save_line_names_a_real_method() -> None:
+    """The attribution reference's save-to-file line calls a method that exists."""
+
+    from torchlens.attribution import TokenAttributionPayload, TokenAttributionResult
+
+    text = (REPO / "docs/reference/attribution.md").read_text("utf-8")
+    assert 'open("tokens.html", "w").write(result.payload().to_html())' in text
+    assert callable(TokenAttributionResult.payload)
+    assert callable(TokenAttributionPayload.to_html)
+
+
+def test_roadmap_names_the_quantized_summary_footer() -> None:
+    """The bits-per-weight footer and flax-tabulate recipe are a roadmap note."""
+
+    text = (REPO / "ROADMAP.md").read_text("utf-8")
+    assert "bits-per-weight footer" in text
+    assert "coming from flax\n  `tabulate`" in text
