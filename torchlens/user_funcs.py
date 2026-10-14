@@ -153,6 +153,7 @@ from .fastlog.options import HaltPredicateFn, PredicateFn, RecordingOptions
 from .fastlog.types import CaptureSpec
 from .intervention import injection as _injection, model_door as _model_door
 from .intervention._module_alias_guard import refuse_model_alias_spellings
+from .intervention._zero_fire import settle_capture_zero_fire, zero_fire_policy_scope
 from .intervention.errors import ChunkedForwardConfigError
 from .intervention.hooks import normalize_hook_plan
 from .intervention.predicates import InterventionPredicate
@@ -1386,11 +1387,10 @@ def _warn_zero_match_capture_selectors(
             and intervene_selector_fired_nowhere(trace, intervene_selector, intervene_direction)
         ):
             _record_unmatched("intervene", intervene_selector, intervene_direction)
-            warnings.warn(
+            settle_capture_zero_fire(
                 f"Capture-time intervention selector {intervene_selector!r} matched zero sites; "
                 "no intervention fired.",
-                UserWarning,
-                stacklevel=3,
+                selector=repr(intervene_selector),
             )
         if isinstance(halt_selector, BaseSelector) and not bool(getattr(trace, "halted", False)):
             _record_unmatched("halt", halt_selector)
@@ -2570,6 +2570,7 @@ def trace(
     chunk_paths: Iterable[Any] | None | MissingType = MISSING,
     backend: BackendName | None = None,
     input_size: Any | None = None,
+    on_zero_fire: str | MissingType = MISSING,
     **forward_kwargs: Any,
 ) -> Trace:
     """Run a forward pass through *model*, log every operation, and return a Trace.
@@ -2712,6 +2713,13 @@ def trace(
         Torch-only episode capture declaration (``EpisodeSpec``).
     backend:
         Explicit backend name. ``None`` preserves legacy auto-resolution.
+    on_zero_fire:
+        What a capture-time ``intervene=`` that fired at zero sites does after the
+        fact is recorded (``trace.annotations["unmatched_capture_selectors"]`` and
+        the intervention audit): ``"warn"`` (default) emits a ``trace_zero_fire``
+        coded warning, ``"error"`` raises ``trace_zero_fire``, ``"disclose"``
+        records only. The same knob as ``spec.bind`` and ``Trace.run``
+        (spelling DOCUMENTED-UNSTABLE).
     **forward_kwargs:
         Never accepted -- unknown keywords refuse typed with
         ``trace_forward_kwargs_unrouted`` naming the ``input_kwargs=`` routing.
@@ -2734,114 +2742,118 @@ def trace(
     Trace
         A ``Trace`` containing layer outs (if requested) and full metadata.
     """
-    _reject_unrouted_forward_kwargs(forward_kwargs)
-    del forward_kwargs  # must never ride the ladder's locals() snapshot below
-    _reject_non_mapping_input_kwargs(input_kwargs)
-    model, intervene = _model_door.resolve_trace_operands(model, intervene)
-    if input_size is not None or input_args is None:
-        model = _reject_non_module_ladder_root(model)
-        # Quickstart input ladder (F17, memo D2/D4): declared/inferred rungs
-        # resolve BEFORE any capture machinery, then re-enter trace() as gold.
-        ladder_kwargs = locals().copy()
-        for consumed in ("model", "input_args", "input_kwargs", "input_size"):
-            ladder_kwargs.pop(consumed)
-        from .quickstart._ladder import _trace_via_ladder
+    # on_zero_fire scopes the capture; a re-entrant trace() inherits the caller's policy.
+    with zero_fire_policy_scope(None if on_zero_fire is MISSING else on_zero_fire):
+        _reject_unrouted_forward_kwargs(forward_kwargs)
+        del forward_kwargs  # must never ride the ladder's locals() snapshot below
+        _reject_non_mapping_input_kwargs(input_kwargs)
+        model, intervene = _model_door.resolve_trace_operands(model, intervene)
+        if input_size is not None or input_args is None:
+            model = _reject_non_module_ladder_root(model)
+            # Quickstart input ladder (F17, memo D2/D4): declared/inferred rungs
+            # resolve BEFORE any capture machinery, then re-enter trace() as gold.
+            ladder_kwargs = locals().copy()
+            for consumed in ("model", "input_args", "input_kwargs", "input_size"):
+                ladder_kwargs.pop(consumed)
+            from .quickstart._ladder import _trace_via_ladder
 
-        return _trace_via_ladder(model, input_args, input_kwargs, input_size, ladder_kwargs)
-    if not isinstance(model, nn.Module) and is_dynamo_compiled_callable(model):
-        raise InvalidArgumentError(
-            "TorchLens cannot capture a torch.compile-produced plain callable because it is "
-            "not an nn.Module",
-            code="compiled_callable_unsupported",
-            remedy=(
-                "pass the original eager nn.Module instead of the compiled callable; to "
-                "inspect what torch.compile generated, use tl.bridge.depyf.dump(fn, x, path)"
-            ),
-            argument="model",
+            return _trace_via_ladder(model, input_args, input_kwargs, input_size, ladder_kwargs)
+        if not isinstance(model, nn.Module) and is_dynamo_compiled_callable(model):
+            raise InvalidArgumentError(
+                "TorchLens cannot capture a torch.compile-produced plain callable because it is "
+                "not an nn.Module",
+                code="compiled_callable_unsupported",
+                remedy=(
+                    "pass the original eager nn.Module instead of the compiled callable; to "
+                    "inspect what torch.compile generated, use tl.bridge.depyf.dump(fn, x, path)"
+                ),
+                argument="model",
+            )
+        _reject_extra_positional_input(grad_transform)
+        public_trace_kwargs = locals().copy()
+        public_trace_kwargs.pop("backend")
+        public_trace_kwargs.pop("input_size")  # ladder-consumed; always None here
+        # Settled by the zero_fire_policy_scope above, never a backend option.
+        public_trace_kwargs.pop("on_zero_fire")
+        # grouping= (UNSTABLE, keyword-only; L1 wave 0): closed-vocabulary knob.
+        # Only "structural" (today's grouping, the default) is entry-legal;
+        # "strict_shapes" waits on its own reviewed design and "fold_sites" on
+        # an affirmative D1 ruling (the flip PR) / the episode capture kind.
+        public_trace_kwargs.pop("grouping")
+        if grouping is not MISSING:
+            from .postprocess._grouping_stamp import validate_grouping_knob
+
+            validate_grouping_knob(grouping)
+        if echo is not None and echo is not False:
+            # Entry-time echo refusals (bad spellings, finalized-label selectors)
+            # fire BEFORE any capture work on every backend path.
+            from .snoop import normalize_echo
+
+            normalize_echo(echo)
+        if chunk_paths is not MISSING and chunk_paths is not None and chunk_size in (MISSING, None):
+            raise ChunkedForwardConfigError("chunk_paths requires chunk_size.")
+        if backend is None and (jax_static_argnums is not MISSING or grad_options is not MISSING):
+            raise BackendUnsupportedError(
+                "jax_static_argnums is only supported with backend='jax'; grad_options is "
+                "only supported with backend='jax', backend='mlx', backend='tinygrad', "
+                "backend='paddle', or backend='tf'."
+            )
+        explicit_backend_spec = None
+        if backend is not None:
+            explicit_backend_spec = get_backend_spec(str(backend))
+            _filter_trace_kwargs_for_backend(public_trace_kwargs, explicit_backend_spec)
+            explicit_backend_spec = resolve_backend_spec(backend, model, input_args, input_kwargs)
+        if (
+            backend is None
+            and chunk_size in (MISSING, None)
+            and (capture is None or not capture.is_field_explicit("transform"))
+        ):
+            from . import autoroute
+
+            # Only the surviving public kwargs are forwarded: capture knobs travel
+            # inside the grouped ``capture=`` object, so re-entrant trace() calls
+            # inside detectors receive exactly what the user could have passed.
+            autoroute_kwargs = {
+                "input_kwargs": input_kwargs,
+                "grad_transform": grad_transform,
+                "save_mode": save_mode,
+                "reconstruction_ready": reconstruction_ready,
+                "capture": capture,
+                "save": save,
+                "intervene": intervene,
+                "halt": halt,
+                "lookback": lookback,
+                "lookback_payload_policy": lookback_payload_policy,
+                "storage": storage,
+                "streaming": streaming,
+                "profile": profile,
+                "recipes": recipes,
+                "episode": episode,
+                "grouping": grouping,
+                "echo": echo,
+            }
+            for detector in autoroute.input.iter_by_priority():
+                result = detector(model, input_args, **autoroute_kwargs)
+                if result is not None:
+                    return cast("Trace", result)
+        if closed_bool_env("TORCHLENS_AUTO"):
+            raise CaptureContextError(
+                "TORCHLENS_AUTO requested an unsupported implicit capture mode",
+                code="auto_environment_unsupported",
+                remedy="unset TORCHLENS_AUTO and call auto_capture() explicitly",
+                environment_variable="TORCHLENS_AUTO",
+            )
+        resolved_spec = explicit_backend_spec or resolve_backend_spec(
+            backend, model, input_args, input_kwargs
         )
-    _reject_extra_positional_input(grad_transform)
-    public_trace_kwargs = locals().copy()
-    public_trace_kwargs.pop("backend")
-    public_trace_kwargs.pop("input_size")  # ladder-consumed; always None here
-    # grouping= (UNSTABLE, keyword-only; L1 wave 0): closed-vocabulary knob.
-    # Only "structural" (today's grouping, the default) is entry-legal;
-    # "strict_shapes" waits on its own reviewed design and "fold_sites" on
-    # an affirmative D1 ruling (the flip PR) / the episode capture kind.
-    public_trace_kwargs.pop("grouping")
-    if grouping is not MISSING:
-        from .postprocess._grouping_stamp import validate_grouping_knob
+        from .snoop._entry import refuse_echo_non_torch
 
-        validate_grouping_knob(grouping)
-    if echo is not None and echo is not False:
-        # Entry-time echo refusals (bad spellings, finalized-label selectors)
-        # fire BEFORE any capture work on every backend path.
-        from .snoop import normalize_echo
-
-        normalize_echo(echo)
-    if chunk_paths is not MISSING and chunk_paths is not None and chunk_size in (MISSING, None):
-        raise ChunkedForwardConfigError("chunk_paths requires chunk_size.")
-    if backend is None and (jax_static_argnums is not MISSING or grad_options is not MISSING):
-        raise BackendUnsupportedError(
-            "jax_static_argnums is only supported with backend='jax'; grad_options is "
-            "only supported with backend='jax', backend='mlx', backend='tinygrad', "
-            "backend='paddle', or backend='tf'."
-        )
-    explicit_backend_spec = None
-    if backend is not None:
-        explicit_backend_spec = get_backend_spec(str(backend))
-        _filter_trace_kwargs_for_backend(public_trace_kwargs, explicit_backend_spec)
-        explicit_backend_spec = resolve_backend_spec(backend, model, input_args, input_kwargs)
-    if (
-        backend is None
-        and chunk_size in (MISSING, None)
-        and (capture is None or not capture.is_field_explicit("transform"))
-    ):
-        from . import autoroute
-
-        # Only the surviving public kwargs are forwarded: capture knobs travel
-        # inside the grouped ``capture=`` object, so re-entrant trace() calls
-        # inside detectors receive exactly what the user could have passed.
-        autoroute_kwargs = {
-            "input_kwargs": input_kwargs,
-            "grad_transform": grad_transform,
-            "save_mode": save_mode,
-            "reconstruction_ready": reconstruction_ready,
-            "capture": capture,
-            "save": save,
-            "intervene": intervene,
-            "halt": halt,
-            "lookback": lookback,
-            "lookback_payload_policy": lookback_payload_policy,
-            "storage": storage,
-            "streaming": streaming,
-            "profile": profile,
-            "recipes": recipes,
-            "episode": episode,
-            "grouping": grouping,
-            "echo": echo,
-        }
-        for detector in autoroute.input.iter_by_priority():
-            result = detector(model, input_args, **autoroute_kwargs)
-            if result is not None:
-                return cast("Trace", result)
-    if closed_bool_env("TORCHLENS_AUTO"):
-        raise CaptureContextError(
-            "TORCHLENS_AUTO requested an unsupported implicit capture mode",
-            code="auto_environment_unsupported",
-            remedy="unset TORCHLENS_AUTO and call auto_capture() explicitly",
-            environment_variable="TORCHLENS_AUTO",
-        )
-    resolved_spec = explicit_backend_spec or resolve_backend_spec(
-        backend, model, input_args, input_kwargs
-    )
-    from .snoop._entry import refuse_echo_non_torch
-
-    # Never a silent no-op: echo= is torch-only in wave 1 (typed refusal).
-    refuse_echo_non_torch(echo, resolved_spec)
-    _filter_trace_kwargs_for_backend(public_trace_kwargs, resolved_spec)
-    _enforce_capability_option_gates(public_trace_kwargs, resolved_spec)
-    _refuse_non_torch_episode(public_trace_kwargs, resolved_spec)
-    return cast("Trace", resolved_spec.capture_trace(**public_trace_kwargs))
+        # Never a silent no-op: echo= is torch-only in wave 1 (typed refusal).
+        refuse_echo_non_torch(echo, resolved_spec)
+        _filter_trace_kwargs_for_backend(public_trace_kwargs, resolved_spec)
+        _enforce_capability_option_gates(public_trace_kwargs, resolved_spec)
+        _refuse_non_torch_episode(public_trace_kwargs, resolved_spec)
+        return cast("Trace", resolved_spec.capture_trace(**public_trace_kwargs))
 
 
 def _refuse_non_torch_episode(public_trace_kwargs: dict[str, Any], resolved_spec: Any) -> None:

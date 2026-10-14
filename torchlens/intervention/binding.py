@@ -31,18 +31,25 @@ from __future__ import annotations
 
 import threading
 import time
+import warnings
 from collections import defaultdict
 from collections.abc import Callable, Generator, Iterator
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Literal, NoReturn
 
-from .._errors import InvalidArgumentError
+from .._errors import InvalidArgumentError, TorchLensWarning
 from ._bind_step import ACTIVE_BIND_SESSION, active_bind_decode_step
 from ._helper_fingerprint import helper_versions
 from ._module_alias_guard import (
     bare_module_address,
     model_module_aliases,
     refuse_module_alias_spellings,
+)
+from ._zero_fire import (
+    DEFAULT_ZERO_FIRE_POLICY,
+    check_zero_fire_policy,
+    external_stacklevel,
+    settle_zero_fire,
 )
 from .audit import EXECUTION_EFFECTS, build_fire_record, rules_payload
 from .errors import BindingPreflightError, BindingRuntimeError
@@ -82,8 +89,6 @@ _TRAINING_SURFACE_NAMES: frozenset[str] = frozenset(
         "register_full_backward_hook",
     }
 )
-
-_ZERO_FIRE_POLICIES: frozenset[str] = frozenset({"error", "disclose"})
 
 #: The engine-set execution-effect value for this lane (foldA D17).
 _BIND_EXECUTION_EFFECT = "values_replaced_after_execution"
@@ -1127,7 +1132,8 @@ class BoundInterventionExecutor:
     forwards run while the caller iterates; the ledger is out-of-band on
     ``.last_report``; ``.spec``/``.base_model`` are read-only; runtime state
     installs and removes atomically on success or exception; zero-fire rules
-    fail closed after the call by default (FOLD-A3); there is no binding
+    settle by the ``on_zero_fire`` policy after the call (default ``"warn"``:
+    a coded warning plus the recorded fact); there is no binding
     serialization. A bound executor reads the helper's tensor at each call;
     in-place changes apply to the next call (``.last_report`` records each
     helper tensor's version counter).
@@ -1234,8 +1240,10 @@ class BoundInterventionExecutor:
         ------
         BindingPreflightError
             ``bind_spec_invalid`` / ``bind_spec_empty`` /
-            ``bind_model_invalid`` / ``bind_zero_fire_policy_invalid`` /
-            ``bind_static_anchor_unresolved`` / ``bind_rule_unsupported``.
+            ``bind_model_invalid`` / ``bind_static_anchor_unresolved`` /
+            ``bind_rule_unsupported``.
+        InvalidArgumentError
+            ``zero_fire_policy_invalid`` (the same refusal at every door).
         """
 
         import torch
@@ -1251,17 +1259,11 @@ class BoundInterventionExecutor:
             )
         if not spec.rules:
             raise BindingPreflightError(
-                "bind() refuses an empty spec: zero rules means zero fires by "
-                "construction, and zero-fire rules fail closed",
+                "bind() refuses an empty spec: zero rules means zero fires by construction",
                 code="bind_spec_empty",
                 remedy="add at least one tl.when(...) clause before binding",
             )
-        if self._on_zero_fire not in _ZERO_FIRE_POLICIES:
-            raise BindingPreflightError(
-                f"on_zero_fire must be 'error' or 'disclose', got {self._on_zero_fire!r}",
-                code="bind_zero_fire_policy_invalid",
-                remedy="pass on_zero_fire='error' (fail-closed default) or 'disclose'",
-            )
+        check_zero_fire_policy(self._on_zero_fire)
         if not isinstance(model, torch.nn.Module):
             hint = ""
             if callable(model) and getattr(model, "__self__", None) is not None:
@@ -1383,27 +1385,48 @@ class BoundInterventionExecutor:
         return report
 
     def _refuse_zero_fire(self, report: BindReport) -> None:
-        """Apply the fail-closed zero-fire policy to one settled report.
+        """Apply the zero-fire policy to one settled report (the fact is on the report).
 
         Raises
         ------
         BindingRuntimeError
             ``bind_zero_fire`` when a rule never fired and the policy is
-            ``"error"``.
+            ``"error"``; the default ``"warn"`` emits a coded warning instead.
         """
 
-        if self._on_zero_fire == "error" and report.zero_fire_rule_ids:
-            names = ", ".join(report.zero_fire_rule_ids)
+        if not report.zero_fire_rule_ids:
+            return
+        names = ", ".join(report.zero_fire_rule_ids)
+
+        def _raise() -> NoReturn:
             raise BindingRuntimeError(
                 f"rule(s) [{names}] never fired during this bound {report.door}; "
-                "zero-fire rules fail closed after the call (the model's side "
+                "on_zero_fire='error' refuses after the call (the model's side "
                 "effects may already have occurred; the full report is retained "
                 "on .last_report)",
                 code="bind_zero_fire",
-                remedy="fix the WHERE terms so every rule fires, or opt into "
-                "disclosure-only settlement with "
-                "spec.bind(model, on_zero_fire='disclose')",
+                remedy="fix the WHERE terms so every rule fires, or settle with the "
+                "default spec.bind(model, on_zero_fire='warn') or 'disclose'",
             )
+
+        def _warn() -> None:
+            warnings.warn(
+                TorchLensWarning(
+                    f"rule(s) [{names}] never fired during this bound {report.door}; the "
+                    "call returned the model's output with those rules unapplied "
+                    "(recorded on .last_report.zero_fire_rule_ids). Remedy: fix the WHERE "
+                    "terms, or pass on_zero_fire='disclose' to record without warning",
+                    code="bind_zero_fire",
+                    zero_fire_rule_ids=list(report.zero_fire_rule_ids),
+                ),
+                stacklevel=external_stacklevel(),
+            )
+
+        settle_zero_fire(
+            self._on_zero_fire,  # type: ignore[arg-type]
+            warn=_warn,
+            raise_error=_raise,
+        )
 
     def _settle(self, session: _BindSession, *, door: str, error: str | None) -> BindReport:
         """Build the out-of-band ledger for one finished (or failed) call."""
@@ -1446,7 +1469,7 @@ class BoundInterventionExecutor:
 
 
 def bind_spec_to_model(
-    spec: InterventionSpec, model: Any, *, on_zero_fire: str = "error"
+    spec: InterventionSpec, model: Any, *, on_zero_fire: str = DEFAULT_ZERO_FIRE_POLICY
 ) -> BoundInterventionExecutor:
     """The bind door: funnel the model operand, then construct the executor.
 
@@ -1460,7 +1483,8 @@ def bind_spec_to_model(
         re-bind the same base model, which is refused here explicitly --
         bindings never nest.
     on_zero_fire:
-        Zero-fire settlement policy (``"error"`` default per FOLD-A3).
+        Zero-fire settlement policy: ``"warn"`` (default), ``"error"`` or
+        ``"disclose"``; the same knob at every intervention door.
     """
 
     resolution = resolve_model_operand(model, door="bind")

@@ -4,7 +4,7 @@ Covers the amended lane brief's bind-side surface (foldA D12 / surgery memo
 3.3 items 4, 7, 8, 9 and the bind-side half of 13): the serial non-reentrant
 capture-free callable, transparency, real HF ``generate`` (KV cache on/off),
 ``.last_report``, read-only surface, atomic install/removal on success and
-exception, FOLD-A3 zero-fire fail-closed settlement, the two-edit misfire
+exception, zero-fire settlement by on_zero_fire, the two-edit misfire
 disclosure naming the unfired rule, the OP2 model-door funnel (BOTH arms
 behind one switch), the closed engine-set ``execution_effect`` vocabulary,
 and the bind-side turnkey steer wrapper.
@@ -207,15 +207,15 @@ def test_bind_pass_qualified_boundary_target() -> None:
 
 
 # ---------------------------------------------------------------------------
-# zero-fire settlement (FOLD-A3) + the two-edit misfire disclosure
+# zero-fire settlement (on_zero_fire; default warn) + the two-edit misfire disclosure
 # ---------------------------------------------------------------------------
 
 
-def test_bind_zero_fire_fail_closed_default(toy) -> None:
-    """A never-firing rule raises AFTER the call; the report is retained."""
+def test_bind_zero_fire_error_policy(toy) -> None:
+    """Under ``on_zero_fire='error'`` a never-firing rule raises AFTER the call."""
 
     model, x = toy
-    bound = tl.when(tl.func("sigmoid"), tl.zero_ablate()).bind(model)
+    bound = tl.when(tl.func("sigmoid"), tl.zero_ablate()).bind(model, on_zero_fire="error")
     with pytest.raises(BindingRuntimeError) as excinfo:
         bound(x)
     assert excinfo.value.fields["code"] == "bind_zero_fire"
@@ -245,7 +245,7 @@ def test_bind_two_edit_misfire_names_only_the_unfired_rule(toy) -> None:
     fired_rule = tl.when(tl.func("relu"), tl.scale(1.1))
     unfired_rule = tl.when(tl.func("hardshrink"), tl.zero_ablate())
     spec = fired_rule & unfired_rule
-    bound = spec.bind(model)
+    bound = spec.bind(model, on_zero_fire="error")
     with pytest.raises(BindingRuntimeError) as excinfo:
         bound(x)
     assert excinfo.value.fields["code"] == "bind_zero_fire"
@@ -276,9 +276,9 @@ def test_bind_preflight_refusals(toy) -> None:
     assert excinfo.value.fields["code"] == "bind_spec_empty"
 
     spec = tl.when(tl.func("relu"), tl.zero_ablate())
-    with pytest.raises(BindingPreflightError) as excinfo:
-        spec.bind(model, on_zero_fire="warn")
-    assert excinfo.value.fields["code"] == "bind_zero_fire_policy_invalid"
+    with pytest.raises(ValueError) as excinfo:
+        spec.bind(model, on_zero_fire="ignore")
+    assert excinfo.value.fields["code"] == "zero_fire_policy_invalid"
 
     with pytest.raises(BindingPreflightError) as excinfo:
         spec.bind(lambda x: x)
@@ -587,8 +587,8 @@ def _real_generate_gate(model_name: str, steer_site: str, ids: torch.Tensor) -> 
     assert bound.last_report.door == "call" and bound.last_report.fire_count >= 1
     assert out_call.logits.shape[1] == ids.shape[1]
 
-    # zero fires during a real generate fail closed and retain the report
-    zero_bound = tl.when(tl.func("hardshrink"), tl.zero_ablate()).bind(model)
+    # zero fires during a real generate refuse under 'error' and retain the report
+    zero_bound = tl.when(tl.func("hardshrink"), tl.zero_ablate()).bind(model, on_zero_fire="error")
     with pytest.raises(BindingRuntimeError) as excinfo:
         zero_bound.generate(ids, max_new_tokens=2, do_sample=False)
     assert excinfo.value.fields["code"] == "bind_zero_fire"

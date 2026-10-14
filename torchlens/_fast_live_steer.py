@@ -473,10 +473,17 @@ class SteerPlan:
         return tuple(unfired)
 
     def warn_unfired(self) -> tuple[str, ...]:
-        """Emit the rerun contract's ``rerun_zero_fire`` warning for unfired entries."""
+        """Disclose unfired entries by the run's ``on_zero_fire`` policy (``rerun_zero_fire``).
+
+        ``"warn"`` (default) emits the coded warning here; ``"disclose"`` records
+        only; ``"error"`` defers to the door, which refuses after the run is
+        recorded (``refuse_unfired_fast_run``).
+        """
+
+        from .intervention._zero_fire import current_zero_fire_policy, external_stacklevel
 
         unfired = self.unfired_plan_ids()
-        if unfired:
+        if unfired and current_zero_fire_policy() == "warn":
             warnings.warn(
                 TorchLensWarning(
                     "Rerun hook plan entries fired at zero sites on the new inputs: "
@@ -486,7 +493,7 @@ class SteerPlan:
                     code="rerun_zero_fire",
                     unfired_plan_ids=list(unfired),
                 ),
-                stacklevel=4,
+                stacklevel=external_stacklevel(),
             )
         return unfired
 
@@ -585,3 +592,32 @@ def output_dtype_and_rank(value: Any) -> tuple[str | None, int | None]:
     if isinstance(value, torch.Tensor):
         return str(value.dtype), value.ndim
     return None, None
+
+
+def refuse_unfired_fast_run(trace: Any) -> None:
+    """Refuse a recorded fast run whose staged entries fired nowhere, under ``"error"``.
+
+    The fast engine refreshes the live trace in place, so the refusal comes after
+    the run and its ``last_run`` record (``hooks_unfired``) are settled: the
+    refusal carries the fact, and the trace holds the run that happened.
+
+    Raises
+    ------
+    SiteResolutionError
+        ``rerun_zero_fire`` when the run's policy is ``"error"`` and an entry
+        fired at zero sites.
+    """
+
+    from .intervention._zero_fire import current_zero_fire_policy, raise_rerun_zero_fire
+
+    record = getattr(trace, "last_run", None) or {}
+    if record.get("engine") != "guarded_fast" or not record.get("hooks_unfired"):
+        return
+    if current_zero_fire_policy() != "error":
+        return
+    count = int(record["hooks_unfired"])
+    raise_rerun_zero_fire(
+        f"{count} rerun hook plan entr{'y' if count == 1 else 'ies'} fired at zero sites "
+        "on the new inputs (recorded on trace.last_run['hooks_unfired']).",
+        [],
+    )

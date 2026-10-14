@@ -23,6 +23,12 @@ from ._rerun_predicate import (
     refuse_unmatchable_staged_labels,
     settle_predicate_rerun,
 )
+from ._zero_fire import (
+    current_zero_fire_policy,
+    external_stacklevel,
+    raise_rerun_zero_fire,
+    settle_zero_fire,
+)
 from .errors import (
     AppendBatchDependenceError,
     AppendMismatchError,
@@ -1339,22 +1345,33 @@ def _reconcile_rerun_hook_fires(
     if unfired:
         _refuse_source_matched_zero_fire(source_log, new_log, hook_plan, unfired)
     if unfired:
-        # First CONTRACTED S-18 row (compo wave 0): the one warning standing
+        # First CONTRACTED S-18 row (compo wave 0): the disclosure standing
         # between a user and a silently un-applied intervention carries a
         # stable machine-readable code and a structured remedy -- consumers
-        # branch on ``fields["code"]``, never on message text.
-        warnings.warn(
-            TorchLensWarning(
-                "Rerun hook plan entries fired at zero sites on the new inputs: "
-                f"{unfired!r}. The rerun completed, but those interventions were "
-                "no-ops. Remedy: resolve the target sites against the rerun trace "
-                "(trace.resolve_sites) before re-applying, or route the edit "
-                "through the push engine (fork().do(...)), which validates sites "
-                "at plan time",
-                code="rerun_zero_fire",
-                unfired_plan_ids=list(unfired),
-            ),
-            stacklevel=3,
+        # branch on ``fields["code"]``, never on message text. The typed
+        # refusals above fire first, whatever the on_zero_fire policy says;
+        # the policy settles the rest (default: this coded warning). Under
+        # "error" the refusal raises here, before the swap, so the trace is
+        # unchanged.
+        message = (
+            "Rerun hook plan entries fired at zero sites on the new inputs: "
+            f"{unfired!r}. The rerun completed, but those interventions were "
+            "no-ops. Remedy: resolve the target sites against the rerun trace "
+            "(trace.resolve_sites) before re-applying, or route the edit "
+            "through the push engine (fork().do(...)), which validates sites "
+            "at plan time"
+        )
+
+        def _warn() -> None:
+            warnings.warn(
+                TorchLensWarning(message, code="rerun_zero_fire", unfired_plan_ids=list(unfired)),
+                stacklevel=external_stacklevel(),
+            )
+
+        settle_zero_fire(
+            current_zero_fire_policy(),
+            warn=_warn,
+            raise_error=lambda: raise_rerun_zero_fire(message, list(unfired)),
         )
     return total_fired, tuple(unfired)
 
