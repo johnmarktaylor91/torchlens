@@ -104,7 +104,7 @@ class OrphanAccessor(Accessor[Op]):
 
 
 def _is_counted_op(op: Op) -> bool:
-    """Whether an op row counts toward ``Trace.num_ops`` (sumfam F1).
+    """Whether an op row counts toward ``Trace.num_ops``.
 
     The count excludes the input, output and buffer rows, the definition in
     ``backends/_finalize.py``; those rows are aliases of a tensor, not ops.
@@ -121,7 +121,7 @@ class TraceOpAccessor(Accessor[Op]):
     """Trace-level accessor for type-strict Op lookups.
 
     The trace's own accessor (``Trace.ops``, built with ``counted_view=True``)
-    counts and iterates the ops ``Trace.num_ops`` counts (sumfam F1): ``len``,
+    counts and iterates the ops ``Trace.num_ops`` counts: ``len``,
     iteration, integer indexing, ``keys``/``values``/``items`` and
     ``to_pandas`` skip the input, output and buffer rows, so
     ``len(trace.ops) == trace.num_ops``. Label lookup still resolves EVERY

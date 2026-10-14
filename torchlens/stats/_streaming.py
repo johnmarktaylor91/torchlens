@@ -583,7 +583,7 @@ LINEAR_CKA_ID = "measure/*/cka-kernel=linear-hsic=gretton-score"
 
 
 class SimilarityScore(float):
-    """A similarity score that names the exact measure variant it computes (U56.3).
+    """A similarity score that names the exact measure variant it computes.
 
     It is a ``float`` (arithmetic, comparison, ``repr`` and JSON encoding are a
     float's) with one extra attribute, ``similarity_repository_id``: the

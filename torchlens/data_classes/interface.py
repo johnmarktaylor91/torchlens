@@ -184,7 +184,7 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
             self.grad_fns,
         ):
             try:
-                # ``ops.keys()`` lists the counted ops only (sumfam F1); a
+                # ``ops.keys()`` lists the counted ops only; a
                 # case-insensitive label still reaches every row.
                 keys = (
                     [op.label for op in self.layer_list]

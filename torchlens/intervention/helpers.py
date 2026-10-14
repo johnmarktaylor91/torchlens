@@ -1278,7 +1278,7 @@ def rebuild_builtin_helper(name: str, args: tuple[Any, ...], kwargs: Mapping[str
     InvalidArgumentError
         ``intervention_helper_unknown`` if ``name`` is not a known builtin
         helper; ``intervention_helper_renamed`` if it is the old name of a
-        renamed one (U00 clean break: a saved spec naming it no longer loads).
+        renamed one (a clean break: a saved spec naming it no longer loads).
     """
 
     constructors = _builtin_constructors()
