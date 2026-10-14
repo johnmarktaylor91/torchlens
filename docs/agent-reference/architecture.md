@@ -94,8 +94,17 @@ Key entry points:
   (thingsvision convention, credited), `rank_transform_rdm`,
   `rdm_node_spec(display=)`. cka contract published (linear/biased/CPU-f64,
   pinned literals). brain_score bridge: default `sites=` survives partially
-  saved traces, buffers never scored, module dotted paths accepted. Doc:
-  `docs/reference/neuro.md`.
+  saved traces, buffers never scored, module dotted paths accepted;
+  `per_layer` returns `ScoreParts` per layer (`raw` always named,
+  `ceiling_normalised`/`ceiling`/`error` beside it; `score_parts(score)`
+  reads one Brain-Score `Score`). Reliable comparison (neuro.1):
+  `tl.neuro.compare(source, target, analyses=("rsa", "ridge", "cka"))` is
+  ungated and numpy-only, reads each site once (never re-runs the model),
+  and returns descriptive scores plus `table()`/`disagreement()`/`to_dict()`;
+  `n_resamples=` adds `tl.repgeom.ScoreInterval`s (stimulus bootstrap, also
+  standalone as `tl.repgeom.rdm_compare_interval` / `cka_interval`);
+  `tl.repgeom.metric_disagreement(scores)` ranks sites per metric and flags
+  opposite orders. Doc: `docs/reference/neuro.md`.
 - Transformer pictures (`torchlens.tviz`; every spelling DOCUMENTED-UNSTABLE
   pending the naming session): typed session-only display records
   (`AttentionView`/`TokenScores`/`PredictionTrajectory`/`PredictionTable`/
