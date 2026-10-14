@@ -34,6 +34,9 @@ PLANT = 8 * 2**20  # float64 elements
 PLANT_BYTES = PLANT * 8  # 67,108,864
 PY_PLANT_BYTES = 32 * 2**20  # 33,554,432
 MARGIN = 2**20
+#: In-forward samples live outside the module: a default trace restores
+#: module attributes after the forward (pure observer).
+SAMPLES: dict[str, int] = {}
 
 procfs = pytest.mark.skipif(
     not (Path("/proc/self/statm").exists() and os.access("/proc/self/clear_refs", os.W_OK)),
@@ -61,12 +64,11 @@ class Transient(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         self.fc = nn.Linear(4, 4)
-        self.samples: dict[str, int] = {}
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        self.samples["entry"] = _rss()
+        SAMPLES["entry"] = _rss()
         buffer = np.ones(PLANT)
-        self.samples["alive"] = _rss()
+        SAMPLES["alive"] = _rss()
         del buffer
         return self.fc(x)
 
@@ -77,12 +79,11 @@ class PyTransient(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         self.fc = nn.Linear(4, 4)
-        self.samples: dict[str, int] = {}
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        self.samples["entry"] = tracemalloc.get_traced_memory()[0]
+        SAMPLES["entry"] = tracemalloc.get_traced_memory()[0]
         buffer = bytearray(PY_PLANT_BYTES)
-        self.samples["alive"] = tracemalloc.get_traced_memory()[0]
+        SAMPLES["alive"] = tracemalloc.get_traced_memory()[0]
         del buffer
         return self.fc(x)
 
@@ -92,12 +93,13 @@ def test_cpu_forward_peak_includes_a_buffer_freed_inside_the_forward() -> None:
     torch.manual_seed(0)
     tl.trace(Transient().eval(), torch.randn(2, 4)).cleanup()  # warm the wrappers
     model = Transient().eval()
+    SAMPLES.clear()
     before = _rss()
     trace = tl.trace(model, torch.randn(2, 4))
     high_water = _hwm()
     try:
         assert trace.forward_memory_backend == "cpu"
-        outside = model.samples["alive"] - model.samples["entry"]
+        outside = SAMPLES["alive"] - SAMPLES["entry"]
         assert outside >= PLANT_BYTES - MARGIN
         assert trace.forward_peak_memory is not None
         reported = int(trace.forward_peak_memory)
@@ -112,11 +114,12 @@ def test_cpu_forward_peak_includes_a_buffer_freed_inside_the_forward() -> None:
 def test_cpu_forward_python_peak_includes_a_freed_bytearray() -> None:
     torch.manual_seed(0)
     model = PyTransient().eval()
+    SAMPLES.clear()
     trace = tl.trace(
         model, torch.randn(2, 4), capture=CaptureOptions(measure_python_peak_memory=True)
     )
     try:
-        outside = model.samples["alive"] - model.samples["entry"]
+        outside = SAMPLES["alive"] - SAMPLES["entry"]
         assert outside >= PY_PLANT_BYTES
         assert trace.forward_peak_memory is not None
         assert int(trace.forward_peak_memory) >= outside - MARGIN
