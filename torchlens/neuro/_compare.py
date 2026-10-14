@@ -147,10 +147,14 @@ def _pearson_columns(predicted: np.ndarray, target: np.ndarray) -> np.ndarray:
 
     centred_p = predicted - predicted.mean(axis=0)
     centred_t = target - target.mean(axis=0)
-    denominator = np.sqrt(np.sum(centred_p**2, axis=0) * np.sum(centred_t**2, axis=0))
-    numerator = np.sum(centred_p * centred_t, axis=0)
-    safe = np.where(denominator > 0.0, denominator, 1.0)
-    return np.where(denominator > 0.0, numerator / safe, np.nan)
+    ss_p, ss_t = np.sum(centred_p**2, axis=0), np.sum(centred_t**2, axis=0)
+    # Rounding residue of a constant column is not variance (relative 1e-24
+    # on the squared scale, as tl.repgeom's bootstrap correlations use).
+    constant = (ss_p <= 1e-24 * np.sum(predicted**2, axis=0)) | (
+        ss_t <= 1e-24 * np.sum(target**2, axis=0)
+    )
+    safe = np.where(constant, 1.0, np.sqrt(ss_p * ss_t))
+    return np.where(constant, np.nan, np.sum(centred_p * centred_t, axis=0) / safe)
 
 
 def _mean_column_r(predicted: np.ndarray, target: np.ndarray) -> float:
@@ -161,13 +165,26 @@ def _mean_column_r(predicted: np.ndarray, target: np.ndarray) -> float:
     return float(finite.mean()) if finite.size else math.nan
 
 
-def _loo_alpha(features: np.ndarray, target: np.ndarray, alphas: Sequence[float]) -> float:
-    """Return the penalty with the smallest exact leave-one-out error.
+def loo_errors(features: np.ndarray, target: np.ndarray, alphas: Sequence[float]) -> np.ndarray:
+    """Return the exact leave-one-out mean squared error for each penalty.
 
     ``features``/``target`` are one training fold, uncentred. With an
     unpenalised intercept the ridge hat matrix is
     ``H = U diag(s^2 / (s^2 + alpha)) U^T + 11^T / n`` over the centred
-    features, and the leave-one-out residual is ``(y - H y) / (1 - h_ii)``.
+    features, and the leave-one-out residual is ``(y - H y) / (1 - h_ii)``;
+    the error is the mean over rows and target columns of its square.
+
+    Parameters
+    ----------
+    features, target:
+        One training fold.
+    alphas:
+        Penalties.
+
+    Returns
+    -------
+    np.ndarray
+        One error per penalty (``inf``/NaN where a leverage reaches 1).
     """
 
     n = features.shape[0]
@@ -175,17 +192,33 @@ def _loo_alpha(features: np.ndarray, target: np.ndarray, alphas: Sequence[float]
     centred_y = target - target.mean(axis=0)
     u, s, _vt = np.linalg.svd(centred_x, full_matrices=False)
     projected = u.T @ centred_y
-    best_alpha, best_error = float(alphas[0]), math.inf
+    errors = []
     for alpha in alphas:
         shrink = s**2 / (s**2 + alpha)
         fitted = u @ (shrink[:, None] * projected)
         leverage = (u**2) @ shrink + 1.0 / n
         with np.errstate(divide="ignore", invalid="ignore"):
             residual = (centred_y - fitted) / (1.0 - leverage)[:, None]
-            error = float(np.mean(residual**2))
-        if error < best_error:
-            best_alpha, best_error = float(alpha), error
-    return best_alpha
+            errors.append(float(np.mean(residual**2)))
+    return np.asarray(errors)
+
+
+def _loo_alpha(features: np.ndarray, target: np.ndarray, alphas: Sequence[float]) -> float:
+    """Return the penalty with the smallest exact leave-one-out error (first on ties).
+
+    Raises
+    ------
+    ValueError
+        If no penalty gives a finite leave-one-out error.
+    """
+
+    errors = loo_errors(features, target, alphas)
+    if not np.any(np.isfinite(errors)):
+        raise ValueError(
+            "neuro.compare ridge: no penalty in ridge_alphas gives a finite leave-one-out "
+            "error on a training fold; use larger penalties."
+        )
+    return float(alphas[int(np.nanargmin(np.where(np.isfinite(errors), errors, np.nan)))])
 
 
 def _ridge_fit_predict(

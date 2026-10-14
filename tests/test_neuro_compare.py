@@ -27,6 +27,7 @@ from torchlens.neuro._compare import (
     ANALYSES,
     _site_matrices,
     cross_validated_ridge,
+    loo_errors,
     ridge_folds,
 )
 from torchlens.repgeom import MetricDisagreement, ScoreInterval, rdm, rdm_compare
@@ -108,6 +109,7 @@ def test_ridge_matches_explicit_folds_and_brute_force_leave_one_out() -> None:
     for fold, held_out in enumerate(ridge_folds(18, 3, 4)):
         train = np.setdiff1d(np.arange(18), held_out)
         errors = []
+        fast = loo_errors(x[train], y[train], alphas)
         for alpha in alphas:
             residuals = []
             for leave in range(train.size):
@@ -115,6 +117,7 @@ def test_ridge_matches_explicit_folds_and_brute_force_leave_one_out() -> None:
                 guess = _explicit_ridge(x[keep], y[keep], x[train[leave]][None, :], alpha)
                 residuals.append(y[train[leave]] - guess[0])
             errors.append(float(np.mean(np.square(residuals))))
+        np.testing.assert_allclose(fast, errors, rtol=1e-10, atol=0)
         assert chosen[fold] == alphas[int(np.argmin(errors))]
         expected[held_out] = _explicit_ridge(x[train], y[train], x[held_out], chosen[fold])
     np.testing.assert_allclose(predicted, expected, rtol=0, atol=1e-10)
