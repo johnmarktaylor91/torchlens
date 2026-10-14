@@ -139,7 +139,7 @@ def derive_nonfinite_channel(trace: Trace) -> NonfiniteChannel:
     states: dict[str, str] = {}
     checked = 0
     total = 0
-    for op in trace.ops:
+    for op in trace.layer_list:
         total += 1
         try:
             payload = op.out
