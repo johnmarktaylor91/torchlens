@@ -38,7 +38,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from .._errors import InvalidArgumentError
+from .._errors import InvalidArgumentError, PayloadUnavailableError
 from ..selection_subspace import BasisProvenance, _basis_digest
 
 if TYPE_CHECKING:
@@ -331,7 +331,10 @@ def _saved_out(trace: Any, site: Any, side: str) -> torch.Tensor:
         if not isinstance(site, str):
             raise
         record = trace[site]
-    out = getattr(record, "out", None)
+    try:
+        out = getattr(record, "out", None)
+    except PayloadUnavailableError:
+        out = None
     if not isinstance(out, torch.Tensor):
         raise InvalidArgumentError(
             f"The {side} site {site!r} has no saved tensor out",
