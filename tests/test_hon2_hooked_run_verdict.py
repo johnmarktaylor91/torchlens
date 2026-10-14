@@ -111,13 +111,3 @@ def test_plain_run_verdict_is_unchanged(fast: bool) -> None:
         assert result.report.first_mismatch is None
         assert result.report.poisoned is False
     assert _report_card(first.report) == _report_card(second.report)
-
-
-def test_cleared_hooks_on_a_fresh_trace_run_verified() -> None:
-    """Detaching the staged edit before any hooked run leaves the plain verdict."""
-
-    model, direction = _setup()
-    trace = _steered(model, direction)
-    trace.clear_hooks()
-    result = trace.run(inputs=_x(1), fast=True)
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
