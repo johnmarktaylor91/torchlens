@@ -200,7 +200,7 @@ def _footer(
         lens_line = f"lens: {lens}, checked against the model's own output scores"
         rows = "the last row reproduces the model's own output scores"
     else:
-        lens_line = f"lens: {lens} (UNVALIDATED: not checked against the model's output)"
+        lens_line = f"lens: {lens} (UNVALIDATED)"
         rows = "no row is checked against the model's own output"
     facet = _FACET_WORDS.get(result.facet, f"facet {result.facet!r}")
     lines = [
