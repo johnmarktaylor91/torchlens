@@ -21,6 +21,7 @@ public surface, ``__all__``, and static types unchanged.
 
 from typing import TYPE_CHECKING, Any
 
+from ._directions import Direction, direction_from_pairs
 from ._metrics import (
     METRIC_REGISTRY as METRIC_REGISTRY,
     cosine_distance,
@@ -308,6 +309,8 @@ __all__ = [
     "compose",
     "contains",
     "cosine_distance",
+    "Direction",
+    "direction_from_pairs",
     "do",
     "facet",
     "func",

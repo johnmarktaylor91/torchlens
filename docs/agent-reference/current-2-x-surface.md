@@ -37,6 +37,14 @@
   (`trace.run(model, x)` on a module-targeted staged spec) is a fast path too: the guarded
   fast engine, about 1.5x a plain hook, with the trace's saved sites refreshed. Recipe:
   [Common Patterns](common-patterns.md), "Steering many forwards / generation".
+- Contrastive directions (DOCUMENTED-UNSTABLE):
+  `torchlens.intervention.direction_from_pairs(pos_traces, neg_traces, site, method="mean_diff"|"pca"|"logistic", *, read_token_index=-1)`
+  returns a `torchlens.intervention.Direction` (`vector`, `site`, `method`, `n_pairs`,
+  `model_type`, `provenance` as a `BasisProvenance`). `direction.steer(m)` is the native
+  steer; `direction.to_steering_vectors()` and `direction.to_repeng()` return the real
+  library objects (thin converters `tl.bridge.steering_vectors.from_direction`,
+  `tl.bridge.repeng.from_direction`; the math lives only in TorchLens). The old
+  `tl.bridge.steering_vectors.vector` and `tl.bridge.repeng.control_vector` trainers are removed.
 - `tl.record(..., save=...)` is the sparse predicate recorder; it returns `Recording`.
   `Recording.to_trace()` cooks the event stream into a full-structure `Trace`, with unsaved
   payload reads rejected explicitly. `tl.record()`/fastlog is torch-only in the backend-v1
