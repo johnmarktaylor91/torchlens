@@ -197,27 +197,25 @@ def _footer(
 
     lens = _LENS_WORDS.get(result.lens_source, f"lens {result.lens_source!r}")
     if result.validated:
-        lens_line = f"lens: {lens}, checked numerically against the model's own output scores"
+        lens_line = f"lens: {lens}, checked against the model's own output scores"
         rows = "the last row reproduces the model's own output scores"
     else:
         lens_line = f"lens: {lens} (UNVALIDATED: not checked against the model's output)"
         rows = "no row is checked against the model's own output"
     facet = _FACET_WORDS.get(result.facet, f"facet {result.facet!r}")
-    cell = (
-        "each cell: that layer's top-1 prediction for the token after its column's "
-        "input; probabilities are a softmax over the full vocabulary"
-    )
+    lines = [
+        lens_line,
+        f"each row projects one block's {facet} through that lens",
+        rows,
+        "each cell: that layer's top-1 prediction for the token after its column's input",
+        "probabilities are a softmax over the full vocabulary",
+    ]
     if target is not None:
-        cell += f"; color: probability of target token {target!r}"
+        lines.append(f"color: probability of target token {target!r}")
     text = f"batch element {batch_index} of {batch_size}; tokens drawn without surrounding spaces"
     if clipped:
         text += f", clipped to {TOKEN_CLIP} characters (~ marks a clip)"
-    return [
-        lens_line,
-        f"each row projects one block's {facet} through that lens; {rows}",
-        cell,
-        text,
-    ]
+    return [*lines, text]
 
 
 def _text_color(cmap: Any, value: float) -> str:

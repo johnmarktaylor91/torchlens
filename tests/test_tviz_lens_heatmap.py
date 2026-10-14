@@ -86,6 +86,7 @@ def test_render_writes_vector_output_with_the_footer(tmp_path: Path) -> None:
     assert "each row projects one block's output (the residual stream after the block)" in lines
     assert "prediction for the token after its column's input" in lines
     assert "softmax over the full vocabulary" in lines
+    assert max(len(line) for line in artifact.disclosure_lines) <= 100
     assert "batch element 0 of 2" in lines
     # The long token is clipped in its cell and the clip is disclosed.
     assert "clipped to 6 characters" in lines
@@ -117,7 +118,7 @@ def test_target_mode_names_the_target_and_pdf_renders(tmp_path: Path) -> None:
     assert artifact.paths[0].stat().st_size > 0
     assert any("target token 'averyverylongtoken'" in line for line in artifact.disclosure_lines)
     lines = "\n".join(artifact.disclosure_lines)
-    assert "checked numerically against the model's own output scores" in lines
+    assert "checked against the model's own output scores" in lines
     assert "the last row reproduces the model's own output scores" in lines
 
 
