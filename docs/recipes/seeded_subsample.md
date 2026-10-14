@@ -47,8 +47,9 @@ from torchlens.dataset_extraction import load_extraction
 
 loaded = load_extraction("subsample")
 (key,) = loaded.activations
+prefix = model[:2]  # conv + ReLU, the extracted site
 with torch.no_grad():
-    direct = model[:2](stimuli[torch.as_tensor(chosen)])
+    direct = prefix(stimuli[torch.as_tensor(chosen)])
 RESULT = torch.allclose(loaded.activations[key], direct)
 ```
 
