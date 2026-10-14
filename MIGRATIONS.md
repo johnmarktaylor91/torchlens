@@ -7,9 +7,16 @@ TorchLens 2.16.0 wrote two public `.tlspec` directory formats:
 - Intervention specs with `spec.json` containing `format_version`.
 - Portable `ModelLog` bundles with `manifest.json` containing `io_format_version`.
 
-These 2.16.0 formats are permanently readable. TorchLens does not auto-migrate
-them in place; readers dispatch by detected format and preserve support for the
-legacy schemas.
+TorchLens does not auto-migrate them in place; readers dispatch by detected
+format.
+
+**Erratum (2026-10-14).** This section used to say that these 2.16.0 formats
+"are permanently readable". That sentence is retracted. Current releases still
+load 2.16.0 intervention specs, but they refuse 2.16.0 portable `ModelLog`
+bundles (`tlspec_version` 2) with `tl.errors.ArtifactVersionBelowFloorError`
+(code `artifact_version_below_floor`): saved traces older than `tlspec_version`
+6 are below the rehydration floor. To read such a bundle, load it with
+TorchLens 2.17.0 (`pip install torchlens==2.17.0` in a separate environment).
 
 New writers introduced during the Phase 11 schema graduation emit the unified
 manifest format. The polymorphic loader detects the on-disk format and dispatches
