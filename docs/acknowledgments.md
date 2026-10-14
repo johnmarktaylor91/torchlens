@@ -11,8 +11,8 @@ everything else is related prior art, and nothing here implies endorsement.
 
 ## License hygiene
 
-Two upstream license situations deserve a plain statement. **baukit** is
-unlicensed and **zennit** is LGPL: from both, TorchLens takes ideas and
+Two upstream license situations deserve a plain statement. **baukit** has
+no license file (its setup file declares MIT) and **zennit** is LGPL: from both, TorchLens takes ideas and
 vocabulary only -- no source copied, ported, generated-from, or vendored.
 Permissively licensed work is different: the named CODE borrows are ported
 with a license notice in the source file -- treescope (Apache-2.0,
