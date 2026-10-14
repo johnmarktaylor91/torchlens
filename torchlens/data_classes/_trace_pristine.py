@@ -83,17 +83,20 @@ def pristine_touch_evidence(trace: Any) -> tuple[str, ...]:
         ``"state"``, ``"direct_writes"``, ``"op_marks"``, ``"staged_spec"``).
     """
 
+    # Direct reads, never ``getattr`` defaults: a renamed or missing evidence
+    # field must fail loudly, not read as "no evidence" and so as pristine.
     found: list[str] = []
-    if getattr(trace, "intervention_audit", None):
+    if trace.intervention_audit:
         found.append("intervention_audit")
-    if any(_is_touch_operation(row) for row in getattr(trace, "state_history", None) or ()):
+    if any(_is_touch_operation(row) for row in trace.state_history or ()):
         found.append("state_history")
-    if getattr(trace, "state", None) in TOUCH_STATES:
+    if trace.state in TOUCH_STATES:
         found.append("state")
-    if getattr(trace, "_has_direct_writes", False):
+    if trace._has_direct_writes:
         found.append("direct_writes")
-    if _any_op_marked(getattr(trace, "layer_list", None) or ()):
+    if _any_op_marked(trace.layer_list or ()):
         found.append("op_marks")
+    # Read the staged spec without creating one (the accessor creates it lazily).
     if _spec_has_entries(trace.__dict__.get("_intervention_spec")):
         found.append("staged_spec")
     return tuple(found)
@@ -126,9 +129,9 @@ def derive_pristine(trace: Any) -> bool | None:
 def _evidence_recorded(trace: Any) -> bool:
     """Return whether this trace's producer persists the full touch evidence."""
 
-    if str(getattr(trace, "backend", "torch")) != "torch":
+    if str(trace.backend) != "torch":
         return False
-    version = getattr(trace, "tlspec_version", None)
+    version = trace.tlspec_version
     return isinstance(version, int) and version >= PRISTINE_EVIDENCE_MIN_TLSPEC
 
 
@@ -162,7 +165,7 @@ def _spec_has_entries(spec: Any) -> bool:
 
     if spec is None:
         return False
-    return bool(getattr(spec, "hook_specs", None) or getattr(spec, "target_value_specs", None))
+    return bool(spec.hook_specs or spec.target_value_specs)
 
 
 __all__ = ["derive_pristine", "pristine_touch_evidence"]
