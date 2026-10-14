@@ -11,6 +11,7 @@ from .._errors import CaptureContextError, InvalidArgumentError, PayloadUnavaila
 from ..errors._base import TorchLensWarning
 from ..utils.display import user_stacklevel
 from . import _render_utils
+from ._boundary_bundle import bundle_member_nodes
 from ._draw_validation import _validate_draw_flag_options, _validate_draw_options
 from ._render_common import *
 from ._render_edges import *
@@ -722,6 +723,11 @@ def _populate_forward_ir(trace: "Trace", context: _ForwardRenderContext) -> _For
         show_containers=request.show_containers,
         container_max_inline=request.container_max_inline,
         pending_nodes=pending_container_collapse_nodes,
+    )
+    collapsed_container_nodes.update(
+        bundle_member_nodes(
+            trace, context.source_graph.entries_to_plot, request, request.collapse_fn
+        )
     )
     # Checked suppression (L5 M4, DEFAULT-ON): the trace-bearing prepass
     # proves which constructor-arg rows duplicate captured shapes on THIS
