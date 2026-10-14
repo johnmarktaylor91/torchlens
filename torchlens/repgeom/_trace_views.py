@@ -408,7 +408,7 @@ def _saved_pass_sites(
     for op in saved_ops:
         reason = _site_ineligibility(op, expected_counts)
         if reason is not None:
-            skipped[str(getattr(op, "label"))] = reason
+            skipped[str(op.label)] = reason
             continue
         sites.append(_op_mds_site(op, verb=verb))
     return sites

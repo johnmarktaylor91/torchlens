@@ -302,7 +302,6 @@ def _source_mode(  # noqa: PLR0913 -- mirrors the rdms() door's knob set verbati
     """
 
     from ..repgeom._geometry import activation_distance_matrix
-    from ..repgeom._similarity_ids import rdm_id
 
     if dissimilarity_measure is not None:
         raise NeuroHandoffError(
@@ -363,10 +362,56 @@ def _source_mode(  # noqa: PLR0913 -- mirrors the rdms() door's knob set verbati
     patterns, identity = _source_pattern_descriptors(computed, n_rows, obs, pattern_descriptors)
     rdm_descriptors = _source_rdm_descriptors(computed, casts, source_kind=kind, trace=trace)
 
-    sample = base_descriptors(computed[0], source_kind=kind, trace=trace)
+    descriptors = _source_stack_descriptors(
+        base_descriptors(computed[0], source_kind=kind, trace=trace),
+        resolved_metric=resolved_metric,
+        source_kind=kind,
+        identity=identity,
+    )
+
+    result = rsatoolbox.rdm.RDMs(
+        dissimilarities=np.stack(condensed_rows),
+        dissimilarity_measure=resolved_metric,
+        descriptors=descriptors,
+        rdm_descriptors=rdm_descriptors,
+        pattern_descriptors=patterns,
+    )
+    result.tl_ledger = tuple(ledger)
+    return result
+
+
+def _source_stack_descriptors(
+    sample: dict[str, Any],
+    *,
+    resolved_metric: str,
+    source_kind: str,
+    identity: str,
+) -> dict[str, Any]:
+    """Build the stack-level descriptors of a source-mode RDMs object.
+
+    Parameters
+    ----------
+    sample:
+        ``base_descriptors`` of the first computed site.
+    resolved_metric:
+        The ``tl.repgeom`` metric actually computed.
+    source_kind:
+        ``"trace"`` or the extraction kind.
+    identity:
+        Pattern-identity disclosure from the pattern-descriptor block.
+
+    Returns
+    -------
+    dict[str, Any]
+        Descriptors, including the metric's similarity-repository
+        identifier when the catalogue has an exact match (U56.3).
+    """
+
+    from ..repgeom._similarity_ids import rdm_id
+
     descriptors: dict[str, Any] = {
         "source": "torchlens",
-        "source_kind": kind,
+        "source_kind": source_kind,
         "measure_source": "computed",
         "measure_convention": _MEASURE_CONVENTIONS.get(
             resolved_metric, f"computed by tl.repgeom metric {resolved_metric!r}"
@@ -383,16 +428,7 @@ def _source_mode(  # noqa: PLR0913 -- mirrors the rdms() door's knob set verbati
         descriptors["model"] = sample["model"]
     if "tl_intervened" in sample:
         descriptors["tl_intervened"] = sample["tl_intervened"]
-
-    result = rsatoolbox.rdm.RDMs(
-        dissimilarities=np.stack(condensed_rows),
-        dissimilarity_measure=resolved_metric,
-        descriptors=descriptors,
-        rdm_descriptors=rdm_descriptors,
-        pattern_descriptors=patterns,
-    )
-    result.tl_ledger = tuple(ledger)
-    return result
+    return descriptors
 
 
 def _source_pattern_descriptors(
