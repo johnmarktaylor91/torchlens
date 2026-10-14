@@ -1279,4 +1279,17 @@
   on zero variance; pinned literals). brain_score bridge fixes: default `sites=`
   survives partially saved traces via the core stimulus-indexed filter (buffer rows
   never scored), documented ValueError contract live, `sites=` accepts module dotted
-  paths. Doc of record: `docs/reference/neuro.md`.
+  paths; `per_layer` returns `ScoreParts` per layer (`raw` always named, with
+  `ceiling_normalised`/`ceiling`/`error`/`note` beside it; `score_parts(score)` reads
+  one Brain-Score `Score`; nothing recomputed). Reliable comparison (neuro.1,
+  DOCUMENTED-UNSTABLE): `tl.neuro.compare(source, target, analyses=("rsa", "ridge",
+  "cka"))` is ungated and numpy-only, reads each site once (never re-runs the model)
+  and returns descriptive RSA, a cross-validated ridge score (seeded folds, per-fold
+  exact leave-one-out penalty, mean Pearson r over target columns) and linear CKA,
+  with `table()`/`disagreement()`/`to_dict()`; `n_resamples=` adds stimulus-bootstrap
+  `tl.repgeom.ScoreInterval`s (standalone: `tl.repgeom.rdm_compare_interval`,
+  `tl.repgeom.cka_interval`); `tl.repgeom.metric_disagreement(scores)` ranks sites per
+  metric and flags opposite orders. The neuro `compare` refusal row is gone; the
+  `bootstrap`, `ridge` and `encoding_model` refusals keep inference with rsatoolbox /
+  himalaya / Net2Brain and point to the descriptive spellings. Doc of record:
+  `docs/reference/neuro.md`.
