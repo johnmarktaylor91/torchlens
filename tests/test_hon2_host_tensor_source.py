@@ -1,10 +1,12 @@
 """The ``host_tensor_source`` advisory and the "not checked" verification wording.
 
 A default capture never arms the completeness witness, so ``capture_verified`` is
-``None``: nothing was checked. A user-code tensor built from a host buffer inside
-``forward`` (``torch.from_numpy``, ``torch.from_dlpack``, ``torch.frombuffer``,
-``torch.as_tensor`` on a NumPy array) records one ``capture_advisories`` row with
-kind ``host_tensor_source``. The row never warns and never moves a verdict.
+``None``: nothing was checked. A tensor built from host data inside ``forward``
+(``torch.from_numpy``, ``torch.from_dlpack``, ``torch.frombuffer``, ``torch.as_tensor``
+on non-tensor data) is a recorded source op with no tensor parents; the capture then
+carries one ``capture_advisories`` row of kind ``host_tensor_source``. The row is
+derived from the recorded ops: it never warns, never moves a verdict, and never
+changes the captured graph.
 """
 
 from __future__ import annotations
@@ -77,7 +79,12 @@ def test_each_named_host_source_records_one_advisory_row(name: str) -> None:
     row = rows[0]
     assert row["count"] == 1
     assert f"torch.{name}" in str(row["message"])
-    assert "test_hon2_host_tensor_source.py" in str(row["first_location"])
+    assert row["first_location"] is None or "test_hon2_host_tensor_source.py" in str(
+        row["first_location"]
+    )
+    assert [op.label for op in trace.ops] == [
+        op.label for op in tl.trace(_HostSource(_SOURCES[name]), x).ops
+    ]
     assert not [w for w in caught if "host buffer" in str(w.message)]
     facts = capture_honesty_facts(trace)
     plain_facts = capture_honesty_facts(plain)
@@ -91,20 +98,20 @@ def test_each_named_host_source_records_one_advisory_row(name: str) -> None:
     "make",
     [
         lambda: torch.as_tensor(torch.ones(2, 2)),
-        lambda: torch.as_tensor([[1.0, 1.0], [1.0, 1.0]]),
         lambda: torch.ones(2, 2),
+        lambda: torch.tensor(_ones()),
     ],
-    ids=["as_tensor_of_tensor", "as_tensor_of_list", "factory"],
+    ids=["as_tensor_of_tensor", "factory", "unnamed_source"],
 )
 def test_non_host_sources_record_nothing(make: Callable[[], torch.Tensor]) -> None:
-    """Tensors, Python lists and factories are not host buffers: no row."""
+    """A tensor argument, a factory, and a source outside the named set: no row."""
 
     trace = tl.trace(_HostSource(make), torch.randn(2, 2))
     assert _host_rows(trace) == []
 
 
-def test_plain_capture_records_nothing_and_restores_torch() -> None:
-    """A capture with no host source records nothing; the patches are removed after."""
+def test_plain_capture_records_nothing_and_leaves_torch_alone() -> None:
+    """A capture with no host source records nothing and patches nothing."""
 
     before = {name: getattr(torch, name) for name in _SOURCES}
     trace = tl.trace(_Plain(), torch.randn(2, 2))

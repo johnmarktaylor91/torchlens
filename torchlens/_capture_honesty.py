@@ -31,6 +31,11 @@ DATAFRAME_ATTRS_KEY = "torchlens_capture_honesty"
 #: Key under which capture-time advisories live in ``Trace.annotations``.
 ADVISORIES_ANNOTATIONS_KEY = "capture_advisories"
 
+#: Advisory kind recorded when a default (unwitnessed) capture built a tensor from a host
+#: buffer (``torch.from_numpy`` and friends; ``record_host_tensor_source_advisory``).
+ADVISORY_HOST_TENSOR_SOURCE = "host_tensor_source"
+#: Recorded op ``func_name`` values that build a tensor from a host buffer.
+HOST_TENSOR_SOURCE_FUNCS: tuple[str, ...] = ("from_numpy", "from_dlpack", "frombuffer", "as_tensor")
 #: ``Trace.annotations["capture_advisories"]`` kind recorded when a module boundary
 #: adopts an untagged tensor as an internal source (postprocess
 #: ``_warn_unattributed_tensor_args``).
@@ -217,6 +222,77 @@ def _step_join_fact(header: dict[str, Any]) -> str:
     if isinstance(grades, list) and any(grade == "unchecked" for grade in grades):
         return "measured_with_unchecked_joins"
     return "continuous"
+
+
+def _host_source_location(op: Any) -> str | None:
+    """Return ``file:line`` of the op's first recorded user frame, when one was kept."""
+
+    for frame in getattr(op, "code_context", None) or ():
+        file = getattr(frame, "file", None)
+        line = getattr(frame, "line_number", None)
+        if isinstance(file, str) and isinstance(line, int) and "torchlens" not in file:
+            return f"{file}:{line}"
+    return None
+
+
+def record_host_tensor_source_advisory(trace: Any) -> None:
+    """Record one ``host_tensor_source`` advisory row on a default capture, when due.
+
+    A default capture never arms the completeness witness (``capture_verified`` is
+    ``None``: not checked), so a tensor the forward built from a host buffer
+    (``torch.from_numpy``, ``torch.from_dlpack``, ``torch.frombuffer``, or
+    ``torch.as_tensor`` on non-tensor data) is a source op with no tensor parents
+    whose dependence on the buffer nothing checked. The row is derived from the
+    recorded ops after the capture: it never warns, never patches torch, and never
+    moves a verdict.
+
+    Parameters
+    ----------
+    trace:
+        Completed capture.
+    """
+
+    if getattr(trace, "capture_verified", None) is not None:
+        return
+    annotations = getattr(trace, "annotations", None)
+    if not isinstance(annotations, dict):
+        return
+    names: list[str] = []
+    count = 0
+    first_location: str | None = None
+    for op in getattr(trace, "ops", None) or ():
+        name = getattr(op, "func_name", None)
+        if name not in HOST_TENSOR_SOURCE_FUNCS:
+            continue
+        if (
+            getattr(op, "parents", None)
+            or getattr(op, "parent_params", None)
+            or getattr(op, "unattributed_tensor_args", None)
+        ):
+            continue
+        count += 1
+        if name not in names:
+            names.append(str(name))
+        if first_location is None:
+            first_location = _host_source_location(op)
+    if not count:
+        return
+    rows = annotations.setdefault(ADVISORIES_ANNOTATIONS_KEY, [])
+    if not isinstance(rows, list):
+        return
+    sources = ", ".join(f"torch.{name}" for name in names)
+    rows.append(
+        {
+            "kind": ADVISORY_HOST_TENSOR_SOURCE,
+            "count": count,
+            "first_location": first_location,
+            "message": (
+                f"tensor(s) built from a host buffer during capture ({sources}); the "
+                "dependence on that buffer is not captured and was not checked (the "
+                "completeness witness is not armed on the default capture)"
+            ),
+        }
+    )
 
 
 def capture_advisories(log: Any) -> list[dict[str, Any]]:

@@ -34,6 +34,7 @@ import torch
 from torch import nn
 
 from . import _state
+from ._capture_honesty import record_host_tensor_source_advisory
 from ._capture_intervention import (
     _backward_intervention_spec_from_predicate,
     _intervention_spec_from_hook_plan,
@@ -2210,6 +2211,7 @@ def _run_model_and_save_specified_outs(
         halt_selector=None if _halt_from_stop_after else halt_predicate,
         layers_to_save_request=_selective_layers_to_save_request,
     )
+    record_host_tensor_source_advisory(trace)
     _record_capture_intervention_event(
         trace,
         intervene_predicate

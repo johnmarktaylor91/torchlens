@@ -137,12 +137,11 @@ default capture to `False`, and tensor-to-scalar escapes (`.item()`, `int(argmax
 / `torch.as_tensor(np_array)` / `torch.from_dlpack(...)` round-trips, an `autograd.Function` whose
 forward runs in NumPy, and in-forward storage writes through `.numpy()` / `untyped_storage()`
 aliases -- leave NO ceiling on the default capture (the op is visible to a graph
-reader as an internal-source op with `parents=()`). A user-code call to `torch.from_numpy`,
-`torch.from_dlpack`, `torch.frombuffer`, or `torch.as_tensor` on a NumPy-style array during a default
-capture records one `host_tensor_source` row in `trace.annotations["capture_advisories"]` (count and
-first location; no warning, no verdict change), so the shared artifact says a host buffer entered the
-graph unchecked. A reference bound before the capture (`from torch import from_numpy`) is not observed,
-and the other host sources above record nothing. Arm the witness (or run `tl.validate`) when that
+reader as an internal-source op with `parents=()`). A default capture whose recorded ops include
+`torch.from_numpy`, `torch.from_dlpack`, `torch.frombuffer`, or `torch.as_tensor` on non-tensor data
+records one `host_tensor_source` row in `trace.annotations["capture_advisories"]` (count, sources and
+the first location when code context was kept; no warning, no verdict change), so the shared artifact
+says host data entered the graph unchecked. The other host sources above record nothing. Arm the witness (or run `tl.validate`) when that
 class of escape matters:
 
 ```python
