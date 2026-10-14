@@ -1164,6 +1164,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/features.py", "__all__"),
         ("torchlens/hash.py", "__all__"),
         ("torchlens/intervention/__init__.py", "__all__"),
+        ("torchlens/intervention/_directions.py", "__all__"),
         ("torchlens/intervention/_super/__init__.py", "__all__"),
         ("torchlens/intervention/_super/super_logs.py", "__all__"),
         ("torchlens/intervention/_super/super_op.py", "__all__"),
