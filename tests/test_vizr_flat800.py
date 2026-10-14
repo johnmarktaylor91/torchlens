@@ -11,7 +11,9 @@ takes about 5 s end to end and shows 805 nodes -- the whole graph, far above
 the readable band of 25. The default is therefore NOT readable on a flat model
 yet; what it does guarantee today is a finished render inside the time budget
 with the fallback disclosure and the FK4 expansion manifest beside the file.
-The node budget is tightened once the K_CAP flood fix (collapse item 6) lands.
+The K_CAP output-flood fix (collapse item 6) does not change this: the flat
+chain's root owns 2 units, its 800 one-op children have nothing to fold, and
+the work estimator serves the linear fallback (802 drawn nodes before and after).
 """
 
 from __future__ import annotations
