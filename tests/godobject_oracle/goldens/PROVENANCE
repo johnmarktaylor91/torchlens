@@ -412,3 +412,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: ee78dd35000f9b63fa9c3b437046c226789c7d3b (dirty)
 recorded: 2026-10-13T12:47:45.583390+00:00
+---
+generator: tests/godobject_oracle legacy
+flag: TORCHLENS_UPDATE_LEGACY_ARTIFACT_ORACLE=1
+reason: Trace.pristine: new derived public property
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9e0017f4030d09249e73524885c34e9efa56f638 (dirty)
+recorded: 2026-10-14T23:07:46.353704+00:00
