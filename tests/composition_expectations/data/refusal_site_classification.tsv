@@ -693,7 +693,7 @@ torchlens.data_classes._trace_intervention:TraceInterventionMixin._apply_selecti
 torchlens.data_classes._trace_intervention:TraceInterventionMixin._apply_selection_batch_do:InvalidArgumentError::2	CONTRACTED	selection_batch_cross_kind	F02 D33 v1 ACT-only capability refusal
 torchlens.data_classes._trace_intervention:TraceInterventionMixin._apply_selection_batch_do:InvalidArgumentError::3	CONTRACTED	selection_batch_leaf_unsupported	F02 D33 leaf sites cannot join one hook transaction in v1
 torchlens.intervention.compose:_validate_leaves:InvalidArgumentError::1	CONTRACTED	compose_empty	F02 D20 zero-leaf refusal
-torchlens.intervention.compose:_validate_leaves:InvalidArgumentError::2	CONTRACTED	compose_leaf_invalid	F02 D20 non-HelperSpec leaf
+torchlens.intervention.compose:_validate_leaves:InvalidArgumentError::2	CONTRACTED	compose_leaf_invalid	F02 D20 non-Edit leaf
 torchlens.intervention.compose:_validate_leaves:InvalidArgumentError::3	CONTRACTED	compose_leaf_invalid	F02 D20 factory-less (audit-only) leaf
 torchlens.intervention.compose:_validate_leaves:InvalidArgumentError::4	CONTRACTED	compose_unseeded_stochastic	F02 D21 unseeded stochastic leaf
 torchlens.intervention.compose:_validate_leaves:InvalidArgumentError::5	CONTRACTED	compose_shape_change_unsupported	F02 D21 shape-changing leaf refused in v1
@@ -1384,3 +1384,4 @@ torchlens.bundle._token_spans:auto_token_spans:BundleRelationError::1	CONTRACTED
 torchlens.bundle._token_spans:find_token_spans:BundleRelationError::1	CONTRACTED	bundle_relation_auto_spans_ambiguous	harness bundles phase 2: a source run with several placements (repeat or trim tie); coded, remedy, contract-doc row
 torchlens.bundle._token_spans:find_token_spans:BundleRelationError::2	CONTRACTED	bundle_relation_auto_spans_unmatched	harness bundles phase 2: no run of the source output in the reader's prompt; coded, remedy, contract-doc row
 torchlens.bundle._token_spans:find_token_spans:BundleRelationError::3	CONTRACTED	bundle_relation_auto_spans_ambiguous	harness bundles phase 2: two source runs on the same reader tokens; coded, remedy, contract-doc row
+torchlens.intervention.helpers:rebuild_builtin_helper:InvalidArgumentError::2	CONTRACTED	intervention_helper_renamed	U00 clean break: a saved spec or pickled edit naming the renamed helper resample_ablate refuses instead of loading through a silent alias; typed + code + remedy naming scramble_elements + contract-doc row

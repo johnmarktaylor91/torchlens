@@ -23,7 +23,7 @@ The D21 refusals: mixed forward/backward kinds; ANY unseeded stochastic leaf
 (the honest-draw law admits no unacknowledged RNG into a chain); ANY
 shape-changing leaf in v1 (the conditional next-leaf-declares-contract rule is
 the documented relaxation -- operationally identical today, since no
-HelperSpec declares an input contract).
+Edit declares an input contract).
 
 The D22 three-layer boundary: compose chains VALUES at one site;
 selection-batch ``do([(sel, edit), ...])`` carries MANY rules in ONE
@@ -44,7 +44,7 @@ import torch
 from .._errors import InvalidArgumentError
 from .errors import HookValueError
 from .hooks import HookContext
-from .types import HelperPortability, HelperSpec
+from .types import Edit, HelperPortability
 
 __all__ = ["compose"]
 
@@ -52,19 +52,19 @@ __all__ = ["compose"]
 _PORTABILITY_RANK: dict[str, int] = {"builtin": 0, "import_ref": 1, "opaque_audit": 2}
 
 
-def _flatten(edits: tuple[Any, ...]) -> list[HelperSpec]:
+def _flatten(edits: tuple[Any, ...]) -> list[Edit]:
     """Flatten nested compose specs into the ordered leaf list (D20)."""
 
-    leaves: list[HelperSpec] = []
+    leaves: list[Edit] = []
     for edit in edits:
-        if isinstance(edit, HelperSpec) and edit.helper_name == "compose":
-            leaves.extend(spec for spec in edit.args if isinstance(spec, HelperSpec))
+        if isinstance(edit, Edit) and edit.helper_name == "compose":
+            leaves.extend(spec for spec in edit.args if isinstance(spec, Edit))
         else:
             leaves.append(edit)
     return leaves
 
 
-def _validate_leaves(leaves: list[HelperSpec]) -> None:
+def _validate_leaves(leaves: list[Edit]) -> None:
     """Apply the D20/D21 construction refusals over the flattened leaves."""
 
     if not leaves:
@@ -75,7 +75,7 @@ def _validate_leaves(leaves: list[HelperSpec]) -> None:
             argument="edits",
         )
     for index, leaf in enumerate(leaves):
-        if not isinstance(leaf, HelperSpec):
+        if not isinstance(leaf, Edit):
             raise InvalidArgumentError(
                 f"compose leaf {index} is {type(leaf).__name__}; v1 composes "
                 "declared helper specs only (a bare callable's kind, flags, and "
@@ -132,7 +132,7 @@ def _validate_leaves(leaves: list[HelperSpec]) -> None:
         )
 
 
-def compose(*edits: Any) -> HelperSpec:
+def compose(*edits: Any) -> Edit:
     """Chain edits left-to-right into ONE composed edit at one site.
 
     ``compose(a, b, c)(x) == c(b(a(x)))``. Non-commutative by design
@@ -151,7 +151,7 @@ def compose(*edits: Any) -> HelperSpec:
 
     Returns
     -------
-    HelperSpec
+    Edit
         One composed helper: one fire, one scatter, one FireRecord, with the
         ordered leaf identities on the spec (``args``) and the AND-combined
         flags.

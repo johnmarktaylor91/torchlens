@@ -1721,16 +1721,16 @@ def build_selection_do_plan(
 
     if edit is None:
         raise ValueError(
-            "do(selection, edit) requires an edit: pass an Edit/HelperSpec "
+            "do(selection, edit) requires an edit: pass an Edit/Edit "
             "(e.g. tl.zero_ablate()), a hook callable, or a replacement tensor."
         )
     resolved = _resolve_do_target(trace, selection_like)
     _warn_if_dense_subspace_edit(resolved)
 
     from .intervention.masked_edit import _derive_masked_edit
-    from .intervention.types import HelperSpec
+    from .intervention.types import Edit
 
-    if not isinstance(edit, HelperSpec) and not callable(edit):
+    if not isinstance(edit, Edit) and not callable(edit):
         # Raw replacement TENSORS route through the shipped replace_with helper and
         # obey the scatter contract; anything else refuses with the string-label
         # path's validation (a scalar lifted through the tensor-only helper used to

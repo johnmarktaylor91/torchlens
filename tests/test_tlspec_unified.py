@@ -18,7 +18,7 @@ import torchlens as tl
 from torchlens._io import TLSPEC_VERSION, ArtifactSchemaAgeWarning, TorchLensIOError
 from torchlens._io.tlspec import _TlSpecWriter
 from torchlens.backends import BackendPayloadUnsupportedError
-from torchlens.intervention.types import FireRecord, HelperSpec, InterventionSpec
+from torchlens.intervention.types import Edit, FireRecord, InterventionSpec
 from torchlens.options import CaptureOptions
 from torchlens.validation import _SUPPORTED_JSON_SCHEMA_KEYWORDS, validate_tlspec
 
@@ -648,7 +648,7 @@ def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_pat
     assert refs
     assert isinstance(refs[0], FireRecord)
     assert refs[0].direction == "backward"
-    assert isinstance(refs[0].helper, HelperSpec)
+    assert isinstance(refs[0].helper, Edit)
 
 
 def test_unified_portable_round_trips_orphan_records(tmp_path: Path) -> None:

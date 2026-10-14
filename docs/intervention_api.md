@@ -88,7 +88,7 @@ portable selector after discovery.
 
 ## Forward Helpers
 
-Forward helpers return `HelperSpec` objects that can be passed to `set`,
+Forward helpers return `Edit` objects that can be passed to `set`,
 `attach_hooks`, `do`, live capture `hooks=...`, replay, or rerun.
 
 | Helper | Signature | Portability |

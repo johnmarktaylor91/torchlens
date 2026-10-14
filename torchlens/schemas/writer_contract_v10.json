@@ -1162,6 +1162,19 @@
     "transform_repr": "keep",
     "verbose": "keep"
    },
+   "torchlens.intervention.types.Edit": {
+    "args": "keep",
+    "batch_independent": "keep",
+    "compatible_with_append": "keep",
+    "direction": "keep",
+    "factory": "drop",
+    "helper_name": "keep",
+    "kind": "keep",
+    "kwargs": "keep",
+    "metadata": "keep",
+    "portability": "keep",
+    "selection_recipe": "blob_recursive"
+   },
    "torchlens.intervention.types.FireRecord": {
     "backward_pass_index": "keep",
     "call_index": "keep",
@@ -1182,19 +1195,6 @@
     "timestamp": "keep",
     "timing": "keep",
     "tuple_index": "keep"
-   },
-   "torchlens.intervention.types.HelperSpec": {
-    "args": "keep",
-    "batch_independent": "keep",
-    "compatible_with_append": "keep",
-    "direction": "keep",
-    "factory": "drop",
-    "helper_name": "keep",
-    "kind": "keep",
-    "kwargs": "keep",
-    "metadata": "keep",
-    "portability": "keep",
-    "selection_recipe": "blob_recursive"
    },
    "torchlens.ir.container.ContainerSpec": {
     "aux_data": "blob_recursive",
@@ -4090,5 +4090,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "d3b133da632552fd15a4e1c02ebb36939ab4e22e8925dc17d7f78967b04d2437"
+ "writer_contract_digest": "547f32be00d97fec11ae122e702c5c67c9f20266cfbafe7a77ef6d2427812639"
 }

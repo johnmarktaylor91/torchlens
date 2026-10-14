@@ -1,4 +1,4 @@
-"""Public-spelling ``repr`` for ``tl.Edit`` (the ``HelperSpec`` dataclass).
+"""Public-spelling ``repr`` for ``tl.Edit`` (the ``Edit`` dataclass).
 
 A builtin edit prints as the public constructor call that builds it, so the
 printed text is the call a user would type (``tl.grad_scale(2.0)``). Edits that
@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 if TYPE_CHECKING:
-    from .types import HelperSpec
+    from .types import Edit
 
 #: Public namespaces searched for a builtin constructor, in order, with the
 #: prefix each one prints under (``import torchlens as tl``).
@@ -25,7 +25,7 @@ _PUBLIC_NAMESPACES: tuple[tuple[str, str], ...] = (
 )
 
 
-def render_edit_repr(spec: HelperSpec) -> str:
+def render_edit_repr(spec: Edit) -> str:
     """Return the public spelling of one edit.
 
     Parameters
@@ -68,7 +68,7 @@ def render_edit_repr(spec: HelperSpec) -> str:
     return f"tl.Edit({', '.join(fields)})"
 
 
-def _public_constructor(spec: HelperSpec) -> tuple[str, Callable[..., Any]] | None:
+def _public_constructor(spec: Edit) -> tuple[str, Callable[..., Any]] | None:
     """Return the public constructor path that rebuilds ``spec``, if any.
 
     Only builtin edits qualify: their stored ``(args, kwargs)`` are exactly the

@@ -31,9 +31,9 @@ from torchlens.intervention.save import (
     save_intervention,
 )
 from torchlens.intervention.types import (
+    Edit,
     FireRecord,
     FunctionRegistryKey,
-    HelperSpec,
     InterventionSpec,
 )
 from torchlens.io import load_intervention_spec
@@ -384,7 +384,7 @@ def test_loaded_helper_import_ref_preserves_identity_and_executes_lazily(
     try:
         import side_effect_helper_mod
 
-        helper = HelperSpec(
+        helper = Edit(
             helper_name="side_effect_helper",
             portability="import_ref",
             factory=side_effect_helper_mod.make_hook,

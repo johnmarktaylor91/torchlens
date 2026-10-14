@@ -50,10 +50,10 @@ from .spec_compat import (
     check_spec_compat,
 )
 from .types import (
+    Edit,
     FireRecord,
     FrozenTargetSpec,
     FunctionRegistryKey,
-    HelperSpec,
     HookSpec,
     InterventionSpec,
     TargetSpec,
@@ -763,7 +763,7 @@ def _fire_record_key(record: FireRecord) -> tuple[Any, ...]:
     )
 
 
-def _helper_identity(helper: HelperSpec | None) -> tuple[Any, ...] | None:
+def _helper_identity(helper: Edit | None) -> tuple[Any, ...] | None:
     """Return a stable structural identity for a helper spec.
 
     Parameters
@@ -906,7 +906,7 @@ def _serialize_hook_spec(
 # tag non-plain payloads. On load, ``_deserialize_value`` decides how to interpret a
 # JSON object purely by testing for the *presence* of one of these keys, so a plain
 # user dict whose key literally equals one of them would be misread (e.g. silently
-# reconstructed as a ``HelperSpec`` for ``__opaque_audit__``). To make that impossible,
+# reconstructed as a ``Edit`` for ``__opaque_audit__``). To make that impossible,
 # ANY dict with a key in this reserved namespace is escaped through the fully-general
 # ``__dict_items__`` item-list encoding instead of the plain-object encoding, so a
 # genuine user key can never be mistaken for a wrapper tag. The reserved namespace is
@@ -973,7 +973,7 @@ def _serialize_value(value: Any, save_level: SaveLevel, state: _SerializedState)
         tensor_id = f"value_{len(state.tensor_refs)}"
         state.tensor_refs[tensor_id] = value.detach().cpu()
         return {"__tensor_ref__": tensor_id}
-    if isinstance(value, HelperSpec):
+    if isinstance(value, Edit):
         return {"__helper__": _serialize_helper(value, save_level, state)}
     if isinstance(value, TupleIndex | DictKey | HFKey | NamedField | DataclassField):
         return _serialize_output_path_component(value, save_level, state)
@@ -1076,7 +1076,7 @@ def _serialize_output_path_component(
 
 
 def _serialize_helper(
-    helper: HelperSpec,
+    helper: Edit,
     save_level: SaveLevel,
     state: _SerializedState,
 ) -> dict[str, Any]:
@@ -1260,7 +1260,7 @@ def _deserialize_intervention_spec(
             HookSpec(
                 site_target=_target_spec_from_json(item["site_target"]),
                 hook=hook,
-                helper=helper if isinstance(helper, HelperSpec) else None,
+                helper=helper if isinstance(helper, Edit) else None,
                 handle=item.get("handle"),
                 metadata=dict(item.get("metadata", {})),
             )
@@ -1321,7 +1321,7 @@ def _deserialize_fire_record(
         func_call_id=data.get("func_call_id"),
         container_path=tuple(container_path or ()),
         engine=data.get("engine"),
-        helper=helper if isinstance(helper, HelperSpec) else None,
+        helper=helper if isinstance(helper, Edit) else None,
         site_label=data.get("site_label"),
         timing=data.get("timing"),
         direction=data.get("direction"),
@@ -1445,14 +1445,14 @@ def _deserialize_value(
                 trust_custom_callables=trust_custom_callables,
                 allowed_custom_callable_modules=allowed_tuple,
             )
-        return HelperSpec(
+        return Edit(
             helper_name="opaque_audit",
             portability="opaque_audit",
             metadata=(("repr", callable_payload.get("repr", "")), ("executable", False)),
         )
     if isinstance(value, dict) and "__opaque_audit__" in value:
         payload = value["__opaque_audit__"]
-        return HelperSpec(
+        return Edit(
             helper_name=str(payload.get("type", "opaque_audit")),
             portability="opaque_audit",
             metadata=(("repr", payload.get("repr", "")), ("executable", False)),

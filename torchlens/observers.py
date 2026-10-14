@@ -429,10 +429,7 @@ def log_value(name: str, value: Any) -> None:
 
     trace = _state._active_trace
     if trace is None:
-        raise RuntimeError(
-            "torchlens.observers.log_value() (compat alias "
-            "torchlens.report.log_value) must be called during trace."
-        )
+        raise RuntimeError("torchlens.observers.log_value() must be called during trace.")
     trace.annotations.setdefault("logged_values", {})[str(name)] = value
 
 

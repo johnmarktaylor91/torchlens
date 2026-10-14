@@ -727,7 +727,8 @@ one exact `other_neurons` row.
 : `tl.zero_ablate`, `tl.scale`, `tl.add`, `tl.clamp`, `tl.noise` (Gaussian noise),
   `tl.mean_ablate` (replace with a source mean), `torchlens.intervention.scramble_elements`
   (elementwise iid scramble from a flattened source -- the honest rename of
-  the removed `resample_ablate` spelling; for coherent donor patching use
+  the removed `resample_ablate` spelling, which a saved spec may not name either: it refuses
+  `intervention_helper_renamed`; for coherent donor patching use
   `tl.patch_from`), `tl.replace_with` (fixed value), `tl.swap_with` (another
   site's tensor), `tl.steer` (add a scaled steering direction), `tl.project_onto` /
   `tl.project_off` (keep or remove the component along a direction), and
@@ -1513,8 +1514,8 @@ shim owed; S2-gated*
 
 **tl.Edit / do(selection, edit)** — *Edit ratified (slate 5.5, subject to D7
 default-keep); mask-application semantics documented-unstable*
-: `tl.Edit` is the public edit-object type; `HelperSpec` is its deprecated
-  alias (stable surface, no removal scheduled). `repr(edit)` prints the
+: `tl.Edit` is the public edit-object type (the old class
+  spelling is removed, U00 clean break). `repr(edit)` prints the
   public spelling: a builtin edit prints as the public call that builds it
   (`tl.grad_scale(2.0)`, default-valued keywords omitted; evaluating it
   rebuilds an equal edit), any other edit as `tl.Edit('name', kind=...,

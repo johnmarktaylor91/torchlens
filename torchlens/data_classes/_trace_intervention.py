@@ -1372,7 +1372,7 @@ class TraceInterventionMixin(_TraceMixinBase):
 
         if edit is None:
             raise ValueError(
-                "do(selection, edit) requires an edit: pass an Edit/HelperSpec, "
+                "do(selection, edit) requires an edit: pass an Edit/Edit, "
                 "a hook callable, or a replacement tensor."
             )
         if isinstance(lifted, ResolvedSelection):
@@ -1422,7 +1422,7 @@ class TraceInterventionMixin(_TraceMixinBase):
 
         if edit is None:
             raise ValueError(
-                "do(selection, edit) requires an edit: pass an Edit/HelperSpec, "
+                "do(selection, edit) requires an edit: pass an Edit/Edit, "
                 "a hook callable, or a replacement tensor."
             )
         if isinstance(lifted, ResolvedSelection):
@@ -1463,7 +1463,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         from ..intervention.audit import build_fire_record
         from ..intervention.hooks import make_hook_context
         from ..intervention.replay import _commit_replay_updates, _replay_site_key
-        from ..intervention.types import HelperSpec
+        from ..intervention.types import Edit
         from ..selection import _apply_invalid
 
         pending_updates: dict[str, torch.Tensor] = {}
@@ -1478,7 +1478,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                     f"leaf site {op.label!r} has no saved tensor value to edit.",
                     site=op.label,
                 )
-            if isinstance(derived, HelperSpec):
+            if isinstance(derived, Edit):
                 if derived.factory is None:
                     raise _apply_invalid(
                         "not_maskable",
@@ -1486,7 +1486,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                         site=op.label,
                     )
                 hook_callable = derived.factory()
-                helper_spec: HelperSpec | None = derived
+                helper_spec: Edit | None = derived
                 helper_name = derived.helper_name
             else:
                 hook_callable = derived

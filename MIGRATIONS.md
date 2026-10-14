@@ -83,10 +83,12 @@ Which "resample" do you mean?
 | Batch-row permutation | `torchlens.intervention.permute_batch` (shipped, lane F02) |
 | Per-row donor resampling | `torchlens.intervention.resample_rows_from` (shipped, lane F02) |
 
-Compatibility: saved intervention specs that persist the helper name
-`"resample_ablate"` keep loading (they reconstruct through the renamed
-constructor). The `resample_ablate` spelling itself is REMOVED, with no
-alias: `tl.resample_ablate`, `torchlens.intervention.resample_ablate`, and
+Saved artifacts: an intervention spec or pickled edit that persists the
+helper name `"resample_ablate"` no longer loads; it refuses with
+`intervention_helper_renamed`, whose remedy names
+`torchlens.intervention.scramble_elements`. Rebuild the edit with
+`scramble_elements(...)` (same arguments, same bytes) and save it again. The
+`resample_ablate` spelling itself is REMOVED, with no alias: `tl.resample_ablate`, `torchlens.intervention.resample_ablate`, and
 `torchlens.intervention.helpers.resample_ablate` no longer exist.
 
 | Old spelling | New spelling |

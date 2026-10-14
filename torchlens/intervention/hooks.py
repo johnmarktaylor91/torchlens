@@ -38,8 +38,8 @@ from .selectors import (
     label,
 )
 from .types import (
+    Edit,
     FrozenTargetSpec,
-    HelperSpec,
     HookSpec,
     InterventionSpec,
     TargetSpec,
@@ -50,7 +50,7 @@ HookTiming: TypeAlias = Literal["pre", "post"]
 HookDirection: TypeAlias = Literal["forward", "backward"]
 HookDirectionRequest: TypeAlias = Literal["forward", "backward", "both"]
 HookCallable: TypeAlias = Callable[..., Any]
-HookInput: TypeAlias = Callable[..., Any] | HelperSpec
+HookInput: TypeAlias = Callable[..., Any] | Edit
 _DEFAULT_HEAD_FACET_NAMES = ("q", "k", "v")
 
 _LAYER_LOG_CONTEXT_FIELDS = (
@@ -118,7 +118,7 @@ class NormalizedHookEntry:
 
     site_target: Any
     normalized_callable: HookCallable
-    helper_spec: HelperSpec | None = None
+    helper_spec: Edit | None = None
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
 
@@ -196,7 +196,7 @@ def normalize_hook(fn: HookInput, *, direction: HookDirection = "forward") -> Ho
         Signature-validated hook callable.
     """
 
-    helper_spec: HelperSpec | None = fn if isinstance(fn, HelperSpec) else None
+    helper_spec: Edit | None = fn if isinstance(fn, Edit) else None
     hook_callable = helper_spec() if helper_spec is not None else fn
     if not callable(hook_callable):
         raise HookSignatureError(f"hook object {hook_callable!r} is not callable")
@@ -237,7 +237,7 @@ def normalize_hook_plan(
     entries: list[NormalizedHookEntry] = []
     for order, (raw_site_target, hook_like) in enumerate(pairs):
         site_target = lower_record_site_target(raw_site_target)
-        helper_spec = hook_like if isinstance(hook_like, HelperSpec) else None
+        helper_spec = hook_like if isinstance(hook_like, Edit) else None
         # The escape hatch is requested by the helper's own force_shape_change
         # kwarg (e.g. tl.replace_with(t, force_shape_change=True)); it rides
         # entry metadata so a helper-requested shape change reaches
@@ -390,7 +390,7 @@ def _reject_live_incapable_selector(
 
 def _hook_directions(
     hook_like: HookInput,
-    helper_spec: HelperSpec | None,
+    helper_spec: Edit | None,
     *,
     requested_direction: HookDirectionRequest | None = None,
 ) -> tuple[HookDirection, ...]:
@@ -454,7 +454,7 @@ def _normalize_directional_hook(hook_like: HookInput, *, direction: HookDirectio
 
     if direction == "backward" and hasattr(hook_like, "record_backward"):
         return normalize_hook(getattr(hook_like, "record_backward"), direction=direction)
-    helper_spec: HelperSpec | None = hook_like if isinstance(hook_like, HelperSpec) else None
+    helper_spec: Edit | None = hook_like if isinstance(hook_like, Edit) else None
     hook_callable = normalize_hook(hook_like, direction=direction)
     if direction == "backward" and _needs_tensor_backward_adapter(hook_callable, helper_spec):
         return _adapt_tensor_backward_hook(hook_callable, helper_spec)
@@ -463,7 +463,7 @@ def _normalize_directional_hook(hook_like: HookInput, *, direction: HookDirectio
 
 def _needs_tensor_backward_adapter(
     hook_callable: HookCallable,
-    helper_spec: HelperSpec | None,
+    helper_spec: Edit | None,
 ) -> bool:
     """Return whether a backward hook expects one tensor instead of grad tuples.
 
@@ -492,7 +492,7 @@ def _needs_tensor_backward_adapter(
 
 def _adapt_tensor_backward_hook(
     hook_callable: HookCallable,
-    helper_spec: HelperSpec | None,
+    helper_spec: Edit | None,
 ) -> HookCallable:
     """Wrap a tensor-gradient hook for PyTorch ``GradFn`` tuple callbacks.
 
@@ -1126,7 +1126,7 @@ def _live_backward_context_matches(
 
 def _validate_helper_mount(
     site_target: Any,
-    helper_spec: HelperSpec | None,
+    helper_spec: Edit | None,
     *,
     direction: HookDirection,
 ) -> None:
@@ -1638,7 +1638,7 @@ def _is_hook_like(value: Any) -> bool:
         Whether the object is callable or a helper spec.
     """
 
-    return isinstance(value, HelperSpec) or callable(value)
+    return isinstance(value, Edit) or callable(value)
 
 
 def _is_single_pair(value: Any) -> bool:

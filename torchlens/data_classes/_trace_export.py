@@ -213,9 +213,9 @@ class TraceExportMixin(_TraceMixinBase):
         """Return values recorded via ``log_value`` during this capture.
 
         DOCUMENTED-UNSTABLE spelling (naming ratification pending). This is
-        the read-back for ``torchlens.observers.log_value`` (compat alias
-        ``tl.report.log_value``), which was a writer nothing read back: values
-        land in ``annotations["logged_values"]`` and persist with the trace.
+        the read-back for ``torchlens.observers.log_value``, which was a
+        writer nothing read back: values land in
+        ``annotations["logged_values"]`` and persist with the trace.
         Returns a copy -- write through ``log_value`` during capture, never by
         mutating this view.
 

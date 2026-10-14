@@ -5,7 +5,7 @@ from __future__ import annotations
 import torch
 
 import torchlens as tl
-from torchlens.report import log_value
+from torchlens.observers import log_value
 
 
 class MetricModel(torch.nn.Module):
