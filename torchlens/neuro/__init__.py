@@ -26,8 +26,10 @@ sections:
    measure.
 4. SCORE (requires the ``brainscore`` extra = brainscore-vision, Python
    >= 3.11): ``neuro.activations_extractor(model, preprocessing, ...)``
-   builds a real Brain-Score ``ActivationsExtractorHelper`` over TorchLens
-   capture, and ``neuro.get_activations_fn(model, ...)`` is the underlying
+   builds a ``PytorchWrapper``-shaped Brain-Score activations model over
+   TorchLens capture (its ``_extractor`` is a real
+   ``ActivationsExtractorHelper``; it goes into a plugin's
+   ``ModelCommitment``), and ``neuro.get_activations_fn(model, ...)`` is the underlying
    per-batch callable. Both are exposed here because the live end-to-end
    gate PASSED (2026-08-29): a real resnet18 checkpoint through a real
    ``ActivationsExtractorHelper`` and ``StimulusSet`` against a live
@@ -35,7 +37,10 @@ sections:
    presentation order, layer coordinates, logits, dotted module paths, a
    functional-op mapping, a short final batch, and CPU behavior matching
    direct torchlens extraction, plus default sites on a PARTIALLY saved
-   trace. CUDA is not claimed (no covered runner). The offline
+   trace. A plugin wrapping it in ``ModelCommitment`` was scored end to
+   end on MajajHong2015public.IT-pls and Geirhos2021colour-top1
+   (2026-10-14, brainscore-vision 2.4.1, Python 3.11, CPU). CUDA is not
+   claimed (no covered runner). The offline
    ``per_layer`` recipe deliberately gets no neuro name (a generic
    score-a-callable loop must not borrow a benchmark's authority).
 5. REFUSALS: noise ceilings, crossnobis/mahalanobis, searchlight,
@@ -122,7 +127,9 @@ _REDIRECTS: dict[str, str] = {
     "brain_score": (
         "the verified adapters are neuro.activations_extractor and "
         "neuro.get_activations_fn (live-gate verified against "
-        "brainscore-vision 2.3.22, Python 3.12, CPU); the underlying module "
+        "brainscore-vision 2.3.22, Python 3.12, CPU, and scored end to end "
+        "through a ModelCommitment plugin on brainscore-vision 2.4.1, "
+        "Python 3.11, CPU); the underlying module "
         "is tl.bridge.brain_score, and the offline per_layer recipe "
         "deliberately keeps its bridge-only spelling"
     ),

@@ -10,7 +10,8 @@ callable per batch. :func:`get_activations_fn` builds that callable over
 spelling Brain-Score users already write — OR any TorchLens lookup, including
 functional-op labels module hooks cannot address), and
 :func:`activations_extractor` wires it into a ready
-``ActivationsExtractorHelper``.
+``ActivationsExtractorHelper`` held by a ``PytorchWrapper``-shaped
+activations model, the object a model plugin's ``ModelCommitment`` takes.
 
 The wiring matches brainscore-vision 2.3.22's ``PytorchWrapper`` source
 (read directly from the published wheel): images arrive as a list of
@@ -24,6 +25,14 @@ brainscore-vision 2.3.22 install on Python 3.12 -- values, presentation
 order, layer coordinates, logits, dotted module paths, a functional-op
 mapping, a short final batch, and CPU behavior all matched direct torchlens
 extraction, and ``per_layer`` default sites ran on a PARTIALLY saved trace.
+END TO END THROUGH A PLUGIN (2026-10-14): :func:`activations_extractor`
+returns a ``PytorchWrapper``-shaped activations model, and a Brain-Score
+model plugin registering ``ModelCommitment(activations_model=...)`` over a
+resnet18 was scored by ``brainscore_vision.score`` on
+MajajHong2015public.IT-pls (neural) and Geirhos2021colour-top1 (behavioral,
+through the logits leg) against brainscore-vision 2.4.1 / brainscore-core
+2.5.0 on Python 3.11, with every committed layer and the logits equal to
+Brain-Score's hook-based ``PytorchWrapper`` on 24 stimuli.
 CUDA is not claimed (no covered runner). brainscore-vision requires
 Python >= 3.11; the verified adapters are also exposed as
 ``torchlens.neuro.activations_extractor`` / ``get_activations_fn``. Adapter
