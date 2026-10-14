@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import sys
 from unittest.mock import patch
 
@@ -81,11 +82,21 @@ def test_neuro_import_stays_inert() -> None:
 
     module = importlib.import_module("torchlens.neuro")
 
-    # F22 facade contract: __all__ advertises only dependency-present real
-    # names, resolved via find_spec WITHOUT importing the foreign packages.
-    assert set(module.__all__) <= {"datasets", "rdms"}
+    # F22 facade contract: __all__ advertises exactly the dependency-present
+    # real names, resolved via find_spec WITHOUT importing the foreign
+    # packages. ``compare`` is numpy-only, so it is always present.
+    expected = {"compare"}
+    if importlib.util.find_spec("rsatoolbox") is not None:
+        expected |= {"datasets", "rdms"}
+    if importlib.util.find_spec("brainscore_vision") is not None:
+        expected |= {"activations_extractor", "get_activations_fn"}
+    assert set(module.__all__) == expected
     assert "rsatoolbox" not in sys.modules
     assert "brainscore_core" not in sys.modules
+    # Every real name stays lazy: the package import loads no implementation
+    # module, the numpy-only ones included.
+    for implementation in ("_compare", "_datasets", "_rdms"):
+        assert f"torchlens.neuro.{implementation}" not in sys.modules
 
 
 def test_neuro_attribute_access_reports_missing_dependency() -> None:
