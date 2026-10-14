@@ -107,12 +107,14 @@ def _roster_jax() -> tuple[RosterModel, ...]:
     def build_fn() -> tuple[Any, Any]:
         import jax.numpy as jnp
 
-        weights = jnp.asarray(_WEIGHTS, dtype=jnp.float32)
+        # The jax preview contract is fn(params, *inputs): weights travel as
+        # explicit pytree leaves, never as closed-over constants.
+        params = {"w": jnp.asarray(_WEIGHTS, dtype=jnp.float32)}
 
-        def matmul_relu(x: Any) -> Any:
-            return jnp.maximum(jnp.matmul(x, weights), 0.0)
+        def matmul_relu(params: Any, x: Any) -> Any:
+            return jnp.maximum(jnp.matmul(x, params["w"]), 0.0)
 
-        return matmul_relu, jnp.asarray(_INPUT, dtype=jnp.float32)
+        return matmul_relu, (params, jnp.asarray(_INPUT, dtype=jnp.float32))
 
     def build_module() -> tuple[Any, Any]:
         import equinox as eqx
@@ -320,8 +322,14 @@ class PreviewBackendAdapter:
         return tl.trace(model, example_input, backend=self.name)
 
     def reference_output(self, model: Any, example_input: Any) -> Any:
-        """Run the model directly (the parity oracle's independent arm)."""
+        """Run the model directly (the parity oracle's independent arm).
 
+        A tuple input is positional arguments, the convention ``tl.trace``
+        applies to the same input.
+        """
+
+        if isinstance(example_input, tuple):
+            return model(*example_input)
         return model(example_input)
 
     def as_array(self, value: Any) -> Any:
