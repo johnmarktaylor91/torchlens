@@ -919,4 +919,5 @@ def test_buffer_dedup_avoids_pairwise_tensor_compares_on_distinct_values() -> No
         f"distinct-value passes (linear bound {linear_bound}) -- the pairwise "
         "sweep is back"
     )
-    assert len(trace.buffer_layers) >= num_passes
+    # buffer_layers lists each buffer Layer once; its passes carry the versions.
+    assert sum(int(trace.layers[label].num_passes) for label in trace.buffer_layers) >= num_passes
