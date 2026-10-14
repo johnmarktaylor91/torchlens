@@ -385,6 +385,10 @@ _MIGRATION_PAGES_EXECUTED = (
     "executed fence by fence by tests/test_migration_pages_executed.py (the TorchLens "
     "fences always; a third-party fence where that package is installed)"
 )
+_TEACHING_PAGES_EXECUTED = (
+    "executed fence by fence by tests/test_teaching_pages_executed.py, each against its "
+    "declared result"
+)
 
 #: r7 R81 (opus b2 MED): pages with python fences OUTSIDE the executed set,
 #: each with a reason. The executed gate covered 9 of 33 fence-bearing pages
@@ -430,7 +434,10 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "containers.md": "pending execution coverage",
     "facets.md": "pending execution coverage (semantic recipes; heavier model deps)",
     "intervention_api.md": "pending execution coverage",
-    "intervention_explainers.md": "pending execution coverage",
+    "intervention_explainers.md": _TEACHING_PAGES_EXECUTED,
+    "stochastic_edits.md": _TEACHING_PAGES_EXECUTED,
+    "guides/kv_cache.md": _TEACHING_PAGES_EXECUTED,
+    "sae_training_handoff.md": _TEACHING_PAGES_EXECUTED,
     "method_x_model_compatibility.md": "compatibility matrix stubs, not runnable programs",
     "migration/from_captum.md": "needs captum installed (weekly bridge leg env only)",
     "migration/from_fx.md": "pending execution coverage",
@@ -438,7 +445,8 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
         "executed by tests/test_migrations.py (the TorchLens side always; the nnsight "
         "side where nnsight is installed)"
     ),
-    "migration/from_pyvene.md": "needs pyvene (not a declared extra)",
+    "migration/from_pyvene.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/pyvene.md": _MIGRATION_PAGES_EXECUTED,
     "migration/from_thingsvision.md": "needs thingsvision (not a declared extra)",
     "reference/neuro.md": (
         "needs rsatoolbox (the neuro extra); every snippet's behavior is "
