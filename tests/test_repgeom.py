@@ -1055,6 +1055,43 @@ def test_rdm_evolution_recurrent_expansion_leaves_mds_refusal() -> None:
     assert len(repgeom.rdm_evolution(trace, min_n=8)) == 3
 
 
+@pytest.mark.parametrize(
+    ("metric", "expected"),
+    [
+        ("euclidean", "rdm/*/euclidean"),
+        ("cosine", "rdm/*/cosine"),
+        ("correlation", "rdm/*/correlation"),
+        ("manhattan", None),
+    ],
+)
+def test_rdm_evolution_records_similarity_repository_id(metric: str, expected: Any) -> None:
+    """U56.3: the result names its exact RDM variant in the catalogue, or None."""
+
+    trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
+
+    result = repgeom.rdm_evolution(trace, metric=metric, min_n=8)
+
+    assert result.similarity_repository_id == expected
+    assert repgeom.mds_evolution(trace, min_n=8).similarity_repository_id is None
+
+
+def test_similarity_repository_table_covers_every_metric_and_method() -> None:
+    """U56.3: every rdm metric and rdm_compare method has a decided table entry."""
+
+    from torchlens.repgeom import _similarity_ids as ids
+    from torchlens.repgeom._geometry import DistanceMetric
+
+    metrics = set(DistanceMetric.__args__)
+    assert set(ids.RDM_IDS) == metrics
+    assert set(ids.RSA_IDS) == {
+        (metric, method) for metric in metrics for method in ("pearson", "spearman", "kendall")
+    }
+    assert tl.stats.CKA.similarity_repository_id == ids.LINEAR_CKA_ID
+    for key, identifier in [*ids.RDM_IDS.items(), *ids.RSA_IDS.items()]:
+        if identifier is not None:
+            assert identifier.split("/")[1] == "*", key
+
+
 def test_rdm_evolution_recurrent_pass_qualified_selector_uses_op_key() -> None:
     """A single recurrent pass selection should read op.out and store op RDM."""
 

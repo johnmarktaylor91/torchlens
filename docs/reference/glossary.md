@@ -947,6 +947,15 @@ Spellings below shipped ahead of their naming-session/S2 ratification under
 the provisional-name protocol: they may rename WITHOUT deprecation
 shims, by declared contract. Each carries the same tag at its definition.
 
+**similarity_repository_id (`rdm_evolution(...).similarity_repository_id`, `tl.stats.CKA.similarity_repository_id`, the `tl.neuro.rdms` source-mode descriptor)** — *unstable — no deprecation shim owed*
+: The similarity-repository catalogue identifier of the exact measure variant a
+  TorchLens result computed, with `*` for the implementing repository (for
+  example `measure/*/cka-kernel=linear-hsic=gretton-score` for linear CKA,
+  `rdm/*/correlation` for a correlation RDM). On `rdm_evolution` results it is
+  `None` when the catalogue has no exact match (the `"manhattan"` metric); the
+  `tl.neuro.rdms` descriptor is then absent. The full table is in
+  [the brain-benchmarking seam](brain_benchmarking_seam.md).
+
 **site_key (`Op.site_key`)** — *unstable — no deprecation shim owed*
 : The portable structural-position identity of one retained op
   (`site_key_v1`): a `"s1|"`-prefixed string of the pass-free module address

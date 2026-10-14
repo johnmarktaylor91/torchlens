@@ -35,6 +35,7 @@ from ._geometry import (
     procrustes_align,
     scree,
 )
+from ._similarity_ids import rdm_id
 
 __tl_layer__ = "L6"
 
@@ -45,13 +46,17 @@ class _PayloadBasisDict(OrderedDict):
     F20 D-19 disclosure: geometry computed from a TRANSFORMED payload is a
     different scientific object than raw-payload geometry, so every
     evolution result records which payload fed each key on
-    ``result.payload_basis`` (``key -> "raw" | "transformed"``). Plain
-    ``OrderedDict`` semantics are unchanged; session-time only.
+    ``result.payload_basis`` (``key -> "raw" | "transformed"``).
+    ``result.similarity_repository_id`` names the exact measure variant in
+    the similarity-repository catalogue (U56.3; set by ``rdm_evolution``,
+    ``None`` when the catalogue has no exact match or the verb computes no
+    RDM). Plain ``OrderedDict`` semantics are unchanged; session-time only.
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.payload_basis: dict[str, str] = {}
+        self.similarity_repository_id: str | None = None
 
 
 def mds_evolution(
@@ -145,7 +150,10 @@ def rdm_evolution(
         expand into one RDM per saved pass automatically, in pass order, the
         same per-pass sites ``tl.neuro.rdms`` computes: the default sweep
         covers every saved pass, and a selector matching several passes of
-        one layer yields one RDM per matched pass.
+        one layer yields one RDM per matched pass. The result's
+        ``similarity_repository_id`` names the metric's RDM variant in the
+        similarity-repository catalogue (``None`` for ``"manhattan"``, which
+        it does not list).
 
     Raises
     ------
@@ -160,6 +168,7 @@ def rdm_evolution(
 
     selected = _selected_activation_sites(trace, save, verb="rdm_evolution", expand_passes=True)
     matrices_by_key: _PayloadBasisDict = _PayloadBasisDict()
+    matrices_by_key.similarity_repository_id = rdm_id(metric)
     staged: OrderedDict[str, torch.Tensor] = OrderedDict()
     for key, _site, activations, payload_kind in selected:
         matrices_by_key.payload_basis[key] = payload_kind
@@ -336,12 +345,7 @@ def _default_saved_mds_sites(
             op for op in layer.ops.values() if bool(getattr(op, "has_saved_activation", False))
         ]
         if expand_passes and int(getattr(layer, "num_passes", 1)) > 1:
-            for op in saved_ops:
-                op_reason = _site_ineligibility(op, expected_counts)
-                if op_reason is not None:
-                    skipped[str(getattr(op, "label"))] = op_reason
-                    continue
-                selected.append(_op_mds_site(op, verb=verb))
+            selected.extend(_saved_pass_sites(saved_ops, expected_counts, skipped, verb=verb))
             continue
         reason = _site_ineligibility(layer, expected_counts)
         if reason is not None:
@@ -367,6 +371,47 @@ def _default_saved_mds_sites(
             f"covering the {vocabulary['layers']} layers before calling {verb}."
         )
     return selected
+
+
+def _saved_pass_sites(
+    saved_ops: list[Any],
+    expected_counts: frozenset[int],
+    skipped: OrderedDict[str, str],
+    *,
+    verb: str,
+) -> list[tuple[str, Any, Any, str]]:
+    """Return one ``op:`` site per eligible saved pass of a recurrent layer.
+
+    Each pass is gated independently, as in the ``tl.neuro.rdms`` default
+    sweep; an ineligible pass is recorded in ``skipped`` for the summarized
+    disclosure instead of being computed.
+
+    Parameters
+    ----------
+    saved_ops:
+        The layer's saved per-pass ops, in pass order.
+    expected_counts:
+        Leading-axis sizes of the capture's input sites.
+    skipped:
+        Disclosure accumulator (op label to ineligibility reason), extended
+        in place.
+    verb:
+        Public verb name used in diagnostics.
+
+    Returns
+    -------
+    list[tuple[str, Any, Any, str]]
+        Annotation payload tuples for the eligible passes.
+    """
+
+    sites: list[tuple[str, Any, Any, str]] = []
+    for op in saved_ops:
+        reason = _site_ineligibility(op, expected_counts)
+        if reason is not None:
+            skipped[str(getattr(op, "label"))] = reason
+            continue
+        sites.append(_op_mds_site(op, verb=verb))
+    return sites
 
 
 def _saved_payload_with_kind(record: Any, label: str, *, verb: str) -> tuple[Any, str]:

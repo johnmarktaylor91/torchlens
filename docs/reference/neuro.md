@@ -107,7 +107,10 @@ The modes reject mixed arguments. `rdm_descriptors` additionally carry
 `n_features` (a Pearson-visible discrepancy produced by nothing but a
 convention), and rsatoolbox has NO cosine RDM method (ours is real and
 tested; their `calc_rdm(method="cosine")` raises `NotImplementedError`, and
-a pinned test fails loudly if that ever changes). A `chunked=` execution
+a pinned test fails loudly if that ever changes). Source mode also records
+`similarity_repository_id`, the RDM variant's identifier in the
+similarity-repository catalogue (for example `rdm/*/correlation`; absent for
+a metric the catalogue does not list; DOCUMENTED-UNSTABLE spelling). A `chunked=` execution
 seam is reserved for streaming-scale RDMs; launch is eager and any value
 refuses typed.
 
@@ -116,9 +119,12 @@ that vocabulary belongs to rsatoolbox, and the refusal rows point there.
 
 ## The Brain-Score adapters (live-gate verified)
 
-`neuro.activations_extractor(model, preprocessing, ...)` builds a real
-`brainscore_vision` `ActivationsExtractorHelper` over TorchLens capture;
-`neuro.get_activations_fn(model, ...)` is the underlying per-batch callable
+`neuro.activations_extractor(model, preprocessing, ...)` builds a Brain-Score
+activations model over TorchLens capture, shaped like Brain-Score's own
+`PytorchWrapper` (its `_extractor` is a real `brainscore_vision`
+`ActivationsExtractorHelper`), so it goes straight into a model plugin's
+`ModelCommitment(activations_model=...)` or is called with stimuli and
+layers directly; `neuro.get_activations_fn(model, ...)` is the underlying per-batch callable
 (standalone-testable; benchmark layer lists may address functional ops, not
 just modules). Exposed in neuro because the end-to-end live gate PASSED
 (2026-08-29): a real resnet18 IMAGENET1K_V1 checkpoint through a real
@@ -127,7 +133,17 @@ brainscore-vision 2.3.22 install on Python 3.12 -- values, presentation
 order, layer coordinates, logits, dotted module paths, a functional-op
 mapping, a short final batch, and CPU behavior matched direct torchlens
 extraction, and default sites ran on a PARTIALLY saved trace. CUDA is not
-claimed (no covered runner). The offline `per_layer` recipe keeps its
+claimed (no covered runner). End to end through a plugin (2026-10-14):
+a Brain-Score model plugin registering `ModelCommitment(activations_model=
+neuro.activations_extractor(resnet18, ...))` was scored by
+`brainscore_vision.score` on one neural benchmark
+(`MajajHong2015public.IT-pls`) and one behavioral benchmark
+(`Geirhos2021colour-top1`, which reads the `"logits"` layer) against
+brainscore-vision 2.4.1 / brainscore-core 2.5.0 on Python 3.11, CPU; on 24
+stimuli every committed layer and the logits matched Brain-Score's
+hook-based `PytorchWrapper` exactly. Brainscore-vision 2.4.1 pins xarray
+2022.3.0, whose backend discovery fails on Python 3.12, so score on Python
+3.11. The offline `per_layer` recipe keeps its
 bridge-only spelling: a generic score-a-callable loop must not borrow a
 benchmark's authority.
 

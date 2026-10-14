@@ -56,8 +56,9 @@ _MEASURE_CONVENTIONS: dict[str, str] = {
         "1 - cosine similarity over flattened features; rsatoolbox has no cosine RDM method"
     ),
     "gaussian": (
-        "1 - exp(-D / (2 * mean(D))) with D the squared euclidean distances "
-        "(thingsvision's bandwidth convention)"
+        "1 - exp(-D / mean(D)) with D the squared euclidean distances and "
+        "mean(D) over the full matrix (thingsvision's gaussian_kernel, "
+        "thingsvision/core/rsa/helpers.py, 2022-08-31)"
     ),
 }
 
@@ -301,6 +302,7 @@ def _source_mode(  # noqa: PLR0913 -- mirrors the rdms() door's knob set verbati
     """
 
     from ..repgeom._geometry import activation_distance_matrix
+    from ..repgeom._similarity_ids import rdm_id
 
     if dissimilarity_measure is not None:
         raise NeuroHandoffError(
@@ -373,6 +375,10 @@ def _source_mode(  # noqa: PLR0913 -- mirrors the rdms() door's knob set verbati
         "tl_version": sample["tl_version"],
         "rsatoolbox_version": sample["rsatoolbox_version"],
     }
+    similarity_id = rdm_id(resolved_metric)
+    if similarity_id is not None:
+        # U56.3: the exact RDM variant's similarity-repository identifier.
+        descriptors["similarity_repository_id"] = similarity_id
     if "model" in sample:
         descriptors["model"] = sample["model"]
     if "tl_intervened" in sample:

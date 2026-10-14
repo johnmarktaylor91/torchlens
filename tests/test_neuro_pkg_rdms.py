@@ -199,6 +199,19 @@ def test_u24_2_rdm_evolution_expands_recurrent_passes_like_rdms() -> None:
 
 
 @pytest.mark.heavy
+def test_u56_3_source_mode_records_similarity_repository_id() -> None:
+    """U56.3: source mode names the RDM variant; a metric without one omits it."""
+
+    log = _full_trace()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        correlation = rdms(log)
+        manhattan = rdms(log, metric="manhattan")
+    assert correlation.descriptors["similarity_repository_id"] == "rdm/*/correlation"
+    assert "similarity_repository_id" not in manhattan.descriptors
+
+
+@pytest.mark.heavy
 def test_source_mode_never_mutates_annotations() -> None:
     """The handoff is a treaty desk: no annotation blobs are written."""
 
