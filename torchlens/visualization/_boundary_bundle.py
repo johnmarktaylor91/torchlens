@@ -77,9 +77,7 @@ def _module_address(call: object) -> str:
 
 
 def _producer_module(trace: Trace, op: Any) -> str | None:
-    """Return the top-level module holding ``op``'s single producer, if eligible."""
-
-    from .auto_collapse import analyze_collapse
+    """Return the single-call top-level module holding ``op``'s single producer."""
 
     parents = tuple(getattr(op, "parents", ()) or ())
     if len(parents) != 1:
@@ -89,12 +87,9 @@ def _producer_module(trace: Trace, op: Any) -> str | None:
         return None
     top = _module_address(modules[0])
     module = trace.modules[top] if top in trace.modules else None
-    signal = analyze_collapse(trace).signals.get(top)
-    if module is None or signal is None or int(getattr(module, "num_calls", 1) or 1) != 1:
+    if module is None or int(getattr(module, "num_calls", 1) or 1) != 1:
         return None
-    # A structurally unique module cannot fold or segment with peers, so it
-    # renders either as its own box or expanded.
-    return top if signal.peer_count == 1 else None
+    return top
 
 
 def bundle_groups(trace: Trace, context: Any) -> dict[str, tuple[BundleGroup, ...]]:
@@ -114,13 +109,14 @@ def bundle_groups(trace: Trace, context: Any) -> dict[str, tuple[BundleGroup, ..
         producer renders as one box.
     """
 
-    if not bundles_enabled(context):
+    outputs = tuple(getattr(trace, "output_layers", ()) or ())
+    if len(outputs) < MIN_BUNDLE_LEAVES or not bundles_enabled(context):
         return {}
     from ..ir.container import TupleIndex
     from ._render_leaf import _container_component_role
 
     grouped: dict[tuple[Any, ...], list[str]] = defaultdict(list)
-    for label in getattr(trace, "output_layers", ()) or ():
+    for label in outputs:
         op = trace.ops[label]
         path = tuple(getattr(op, "container_path", ()) or ())
         if not path or getattr(op, "is_buffer", False):
@@ -140,9 +136,20 @@ def bundle_groups(trace: Trace, context: Any) -> dict[str, tuple[BundleGroup, ..
             tuple(getattr(op, "shape", ()) or ()),
         )
         grouped[key].append(str(op.label))
+    candidates = {
+        key: members for key, members in grouped.items() if len(members) >= MIN_BUNDLE_LEAVES
+    }
+    if not candidates:
+        return {}
+    from .auto_collapse import analyze_collapse
+
+    signals = analyze_collapse(trace).signals
     by_producer: dict[str, list[BundleGroup]] = defaultdict(list)
-    for (producer, container, _dtype, shape), members in grouped.items():
-        if len(members) >= MIN_BUNDLE_LEAVES:
+    for (producer, container, _dtype, shape), members in candidates.items():
+        # A structurally unique producer cannot fold or segment with peers, so
+        # it renders either as its own box or expanded.
+        signal = signals.get(producer)
+        if signal is not None and signal.peer_count == 1:
             by_producer[producer].append(BundleGroup(producer, tuple(members), container, shape))
     return {producer: tuple(groups) for producer, groups in by_producer.items()}
 
