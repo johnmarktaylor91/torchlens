@@ -29,7 +29,7 @@ def _segment_node(segment: Any, vis_mode: str, theme: Any) -> tuple[str | None, 
 
     recorder = _RenderIRDecisionBuilder()
     module_nodes: dict[str, Any] = defaultdict(dict)
-    _queue_segment_node(recorder, module_nodes, set(), segment, (vis_mode, theme))  # type: ignore[arg-type]
+    _queue_segment_node(recorder, module_nodes, set(), segment, (vis_mode, theme))
     for owner, payload in module_nodes.items():
         for args in payload.get("nodes", ()):
             return owner, dict(args)

@@ -214,8 +214,9 @@ def bundle_member_nodes(
                 by_label.setdefault(str(value), node)
     hidden: dict[str, str] = {}
     for group in (group for groups_for in groups.values() for group in groups_for):
-        nodes = [by_label.get(label) for label in group.members]
-        if any(node is None for node in nodes):
+        found = [by_label.get(label) for label in group.members]
+        nodes = [node for node in found if node is not None]
+        if len(nodes) != len(found):
             continue
         box = f"{group.producer}:1"
         absorbed = all(
