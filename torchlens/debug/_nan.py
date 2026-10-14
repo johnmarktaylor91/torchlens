@@ -790,7 +790,9 @@ def nan_report(subject: Any, x: Any = None, **trace_kwargs: Any) -> NanReport:
 
     amp_disclosure: str | None = None
     if trace is not None:
-        low_precision = {str(getattr(op, "dtype", "")) for op in getattr(trace, "ops", ())} & {
+        low_precision = {
+            str(getattr(op, "dtype", "")) for op in getattr(trace, "layer_list", ())
+        } & {
             "torch.float16",
             "torch.bfloat16",
         }

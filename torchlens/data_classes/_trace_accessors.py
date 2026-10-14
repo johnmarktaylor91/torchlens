@@ -120,16 +120,25 @@ def _is_counted_op(op: Op) -> bool:
 class TraceOpAccessor(Accessor[Op]):
     """Trace-level accessor for type-strict Op lookups.
 
-    Counting and iteration cover the ops ``Trace.num_ops`` counts (sumfam
-    F1): ``len``, iteration, integer indexing, ``keys``/``values``/``items``
-    and ``to_pandas`` skip the input, output and buffer rows, so
+    The trace's own accessor (``Trace.ops``, built with ``counted_view=True``)
+    counts and iterates the ops ``Trace.num_ops`` counts (sumfam F1): ``len``,
+    iteration, integer indexing, ``keys``/``values``/``items`` and
+    ``to_pandas`` skip the input, output and buffer rows, so
     ``len(trace.ops) == trace.num_ops``. Label lookup still resolves EVERY
     row: ``trace.ops["input_1"]`` returns the input row and ``"input_1" in
     trace.ops`` is true although the label is not in ``keys()``. The
-    alias-inclusive row sequence is ``trace.layer_list``.
+    alias-inclusive row sequence is ``trace.layer_list``. A derived accessor
+    over a chosen row list (``input_ops``, ``output_ops``, ``saved_ops``, ...)
+    keeps the default ``counted_view=False`` and lists exactly its rows.
     """
 
-    def __init__(self, ops: Sequence[Op], layer_num_calls: Mapping[str, int]) -> None:
+    def __init__(
+        self,
+        ops: Sequence[Op],
+        layer_num_calls: Mapping[str, int],
+        *,
+        counted_view: bool = False,
+    ) -> None:
         """Initialize from ordered Op records.
 
         Parameters
@@ -138,6 +147,9 @@ class TraceOpAccessor(Accessor[Op]):
             Ordered Op records.
         layer_num_calls:
             Mapping from parent Layer label to number of Op passes.
+        counted_view:
+            Count and iterate only the ops ``Trace.num_ops`` counts (the
+            ``Trace.ops`` view); ``False`` lists every row given.
         """
 
         op_lookup: OrderedDict[str, Op] = OrderedDict()
@@ -147,6 +159,7 @@ class TraceOpAccessor(Accessor[Op]):
             self._raw_index_lookup[op.raw_index] = op
         super().__init__(op_lookup, item_list=list(ops))
         self._counted_cache: list[Op] | None = None
+        self._counted_view = counted_view
         self._layer_num_calls = dict(layer_num_calls)
         # Lazily built reverse indexes for ``_resolve_substring``; see
         # ``_ensure_alias_indexes``. Lifetime is this accessor instance, whose
@@ -166,6 +179,8 @@ class TraceOpAccessor(Accessor[Op]):
         finished; mid-capture reads recompute it.
         """
 
+        if not getattr(self, "_counted_view", False):
+            return self._list
         cached = getattr(self, "_counted_cache", None)
         if cached is not None:
             return cached

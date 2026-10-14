@@ -1555,7 +1555,7 @@ def _capture_observed_cuda_device(trace: Any) -> bool | None:
     """
 
     saw_device_fact = False
-    for source in (trace, getattr(trace, "ops", None)):
+    for source in (trace, getattr(trace, "layer_list", None)):
         if source is None:
             continue
         source_saw_fact = False

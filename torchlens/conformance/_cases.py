@@ -94,8 +94,10 @@ C2_MODEL_CASES: tuple[str, ...] = (
 def _captured_op_kinds(trace: Any) -> tuple[str, ...]:
     """The captured ops' kinds (``Op.func_name``) in capture order."""
 
-    ops = trace.ops
-    rows = ops.values() if hasattr(ops, "values") else ops
+    rows = getattr(trace, "layer_list", None)
+    if rows is None:
+        ops = trace.ops
+        rows = ops.values() if hasattr(ops, "values") else ops
     return tuple(str(getattr(op, "func_name", "")) for op in rows)
 
 
