@@ -26,8 +26,14 @@ import numpy as np
 
 from ._errors import refuse
 from ._mpl import DIVERGING_CMAP, colorbar, figure, require_matplotlib, save_figure
-from ._records import Artifact, CausalReceipt
-from ._wording import JOINT_EFFECT_WORDING, MEASURED_N_OF_M, OUTPUT_EQUIVALENT_WORDING
+from ._records import Artifact, CausalReceipt, GqaInfo
+from ._wording import (
+    JOINT_EFFECT_WORDING,
+    KV_GROUP_RECEIPT_WORDING,
+    KV_JOINT_EFFECT_WORDING,
+    MEASURED_N_OF_M,
+    OUTPUT_EQUIVALENT_WORDING,
+)
 
 __all__ = ["receipt_from_patch_grid", "render_receipt_grid"]
 
@@ -42,6 +48,7 @@ def receipt_from_patch_grid(  # noqa: PLR0913 -- every mandatory D12 evidence fi
     intervention: str = "head contribution zeroed",
     metric: str = "metric",
     disclosure: str = "direct",
+    kv_groups: GqaInfo | None = None,
 ) -> CausalReceipt:
     """Build a validated receipt from a mech-interp patch grid row.
 
@@ -69,11 +76,17 @@ def receipt_from_patch_grid(  # noqa: PLR0913 -- every mandatory D12 evidence fi
         Metric wording printed on the figure.
     disclosure:
         ``"direct"`` or the output-equivalent wording for lowered engines.
+    kv_groups:
+        Pass the model's grouping for a grid over a key or value site
+        (``sites="k"`` / ``"v"``): its head axis counts shared KV groups,
+        not query heads, and the receipt then says which query heads share
+        each group. Under grouped-query attention a per-query-head effect
+        is not measurable at those sites.
 
     Returns
     -------
     CausalReceipt
-        The validated per-head receipt for ``layer``.
+        The validated per-head (or per-KV-group) receipt for ``layer``.
     """
 
     if "head" not in grid.axes:
@@ -107,6 +120,7 @@ def receipt_from_patch_grid(  # noqa: PLR0913 -- every mandatory D12 evidence fi
         negative_control=negative_control,
         positive_control=positive_control,
         joint_effect=joint_effect,
+        kv_groups=kv_groups,
     )
 
 
@@ -115,6 +129,13 @@ def _grid_matrix(receipts: list[CausalReceipt]) -> tuple[np.ndarray, tuple[int, 
 
     heads = receipts[0].heads
     for receipt in receipts[1:]:
+        if receipt.kv_groups != receipts[0].kv_groups:
+            refuse(
+                code="tv_receipt_invalid",
+                message="Receipts mix query-head and kv-group cells (or different "
+                "groupings); one grid shows one unit.",
+                remedy="render query-head and kv-group receipts as separate grids",
+            )
         if receipt.heads != heads:
             refuse(
                 code="tv_receipt_invalid",
@@ -147,7 +168,26 @@ def _joint_line(receipts: list[CausalReceipt], joint_effect: float | None) -> st
         )
     n_heads = sum(receipt.measured_n for receipt in receipts)
     cell_sum = sum(receipt.cell_sum for receipt in receipts)
-    return JOINT_EFFECT_WORDING.format(n=n_heads, joint=joint_effect, cell_sum=cell_sum)
+    wording = JOINT_EFFECT_WORDING if receipts[0].kv_groups is None else KV_JOINT_EFFECT_WORDING
+    return wording.format(n=n_heads, joint=joint_effect, cell_sum=cell_sum)
+
+
+def _kv_group_lines(receipt: CausalReceipt) -> list[str]:
+    """Return the kv-group disclosure: what a cell is, then who shares it."""
+
+    gqa = receipt.kv_groups
+    if gqa is None:
+        return []
+    lines = [
+        KV_GROUP_RECEIPT_WORDING.format(
+            per_group=gqa.n_query_heads // gqa.n_kv_heads,
+            n_query=gqa.n_query_heads,
+            n_groups=gqa.n_kv_heads,
+        )
+    ]
+    sharing = receipt.sharing_lines()
+    lines.extend("; ".join(sharing[start : start + 2]) for start in range(0, len(sharing), 2))
+    return lines
 
 
 def _receipt_disclosures(receipts: list[CausalReceipt], joint_effect: float | None) -> list[str]:
@@ -165,6 +205,7 @@ def _receipt_disclosures(receipts: list[CausalReceipt], joint_effect: float | No
         f"(tol {first.negative_control_tol:.1e}), positive {first.positive_control:+.3g}; "
         f"fires: {sum(receipt.fires for receipt in receipts)}",
         f"pattern source: {first.pattern_source}; effect source: {first.effect_source}",
+        *_kv_group_lines(first),
     ]
     if first.disclosure == OUTPUT_EQUIVALENT_WORDING:
         lines.append(
@@ -172,6 +213,18 @@ def _receipt_disclosures(receipts: list[CausalReceipt], joint_effect: float | No
             "site, never written to the reconstructed facet"
         )
     return lines
+
+
+def _column_labels(receipt: CausalReceipt) -> list[str]:
+    """Return x labels: ``h3`` for query heads, ``kv 1`` over ``q0-3`` for groups."""
+
+    if receipt.kv_groups is None:
+        return [f"h{head}" for head in receipt.heads]
+    labels = []
+    for group in receipt.heads:
+        members = receipt.kv_groups.query_heads(group)
+        labels.append(f"kv {group + 1}\nq{members[0]}-{members[-1]}")
+    return labels
 
 
 def render_receipt_grid(
@@ -248,12 +301,13 @@ def render_receipt_grid(
                     fontsize=6,
                 )
     ax.set_xticks([col + 0.5 for col in range(len(heads))])
-    ax.set_xticklabels([f"h{head}" for head in heads], fontsize=7)
+    ax.set_xticklabels(_column_labels(rows[0]), fontsize=7)
     ax.set_yticks([row_index + 0.5 for row_index in range(len(rows))])
     ax.set_yticklabels([receipt.layer for receipt in rows], fontsize=6)
     ax.tick_params(length=0)
     colorbar(fig, mesh, ax, label=f"measured effect on {rows[0].metric}")
-    fig.suptitle("measured head-ablation effects", fontsize=9)
+    unit_title = "head-ablation" if rows[0].kv_groups is None else "kv-group ablation"
+    fig.suptitle(f"measured {unit_title} effects", fontsize=9)
     fig.text(0.01, 0.01, "\n".join(disclosures), fontsize=6, va="bottom")
     written = save_figure(fig, path, svg_fonttype=svg_fonttype)
     return Artifact(

@@ -454,7 +454,7 @@ def partial_trace_card(partial: Any) -> Card:
         facts.append(CardText(f"error: {type(error).__name__}: {error}", role="notice"))
     raw_layers = list(getattr(partial, "raw_layers", ()) or ())
     facts.append(CardText(f"committed prefix: {len(raw_layers)} raw layers"))
-    frontier = [str(getattr(r, "layer_label_raw", None) or r) for r in raw_layers[-3:]]
+    frontier = [_frontier_label(record) for record in raw_layers[-3:]]
     if frontier:
         facts.append(CardText(f"frontier (last committed): {', '.join(frontier)}"))
     facts.append(CardText(_partial_nonfinite(partial)))
@@ -472,6 +472,22 @@ def partial_trace_card(partial: Any) -> Card:
         kind="partial",
         children=tuple(facts),
     )
+
+
+def _frontier_label(record: Any) -> str:
+    """Return one committed record's display label, never its full dump.
+
+    Uses the partial package's own display rule (canonical label when
+    finalized, raw identity otherwise); a record's ``str()`` prints its
+    tensor contents, which a card may never inline.
+    """
+
+    try:
+        from ..partial import _display_label
+
+        return str(_display_label(record))
+    except Exception:  # noqa: BLE001 - a display read may never raise
+        return type(record).__name__
 
 
 def _partial_nonfinite(partial: Any) -> str:

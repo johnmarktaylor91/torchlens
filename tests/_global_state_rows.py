@@ -1358,6 +1358,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/tviz/_decomp.py", "__all__"),
         ("torchlens/tviz/_errors.py", "__all__"),
         ("torchlens/tviz/_extract.py", "__all__"),
+        ("torchlens/tviz/_lens_heatmap.py", "__all__"),
         ("torchlens/tviz/_metrics.py", "__all__"),
         ("torchlens/tviz/_mpl.py", "__all__"),
         ("torchlens/tviz/_predictions.py", "__all__"),
