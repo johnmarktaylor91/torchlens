@@ -10,13 +10,12 @@ measures that head alone and leaves the other heads of its group untouched.
 
 The interceptor finds the expansion op in the captured graph (the first
 query-head-shaped descendant of the facet that is a single-parent reshape
-whose head blocks are exact copies), selects it in the rerun by its live site
-key, and patches through the ordinary rerun route of
-:func:`torchlens.mechinterp.grid`: the same fire ledger (exactly one fire per
-cell, or a refusal), the same pre-run cost line and ``budget=``, the same
-transactional model and RNG restore. Fused kernels that expand inside the
-kernel (torch SDPA with ``enable_gqa=True``) expose no expansion op and
-refuse typed.
+whose head blocks are exact copies), selects that one call in the rerun, and
+patches through the ordinary rerun route of :func:`torchlens.mechinterp.grid`:
+the same fire ledger (exactly one fire per cell, or a refusal), the same
+pre-run cost line and ``budget=``, the same transactional model and RNG
+restore. Fused kernels that expand inside the kernel (torch SDPA with
+``enable_gqa=True``) expose no expansion op and refuse typed.
 
 Spellings DOCUMENTED-UNSTABLE pending the naming session.
 """
@@ -30,7 +29,11 @@ from typing import Any
 
 import torch
 
-from ..intervention.selectors import site as site_selector
+from ..intervention.selectors import (
+    func as func_selector,
+    in_module as in_module_selector,
+    where as where_selector,
+)
 from ..semantic.patching import (
     _baseline_traces,
     _CounterfactualStateGuard,
@@ -63,7 +66,8 @@ class _Expansion:
 
     address: str
     op_label: str
-    site_key: str
+    raw_label: str
+    func_name: str
     clean_value: torch.Tensor
     n_q_heads: int
     n_kv_heads: int
@@ -327,22 +331,28 @@ def _locate_expansion(  # noqa: PLR0913 -- the module's identity plus its head c
             candidates=[str(op.label) for op in candidates],
         )
     op = candidates[0]
-    key = str(getattr(op, "site_key", None) or "")
-    matches = [row for row in corrupted_log.layer_list if key and row.site_key == key]
-    if len(matches) != 1:
+    twins = [
+        row
+        for row in corrupted_log.layer_list
+        if str(row.label) == str(op.label)
+        and str(row.raw_label) == str(op.raw_label)
+        and row.site_key == op.site_key
+    ]
+    if len(twins) != 1:
         refuse(
             code="mi_kv_expansion_ambiguous",
-            message=f"The expansion op {op.label!r} of module {address!r} matches "
-            f"{len(matches)} ops of the corrupted trace by its site key {key!r}; a "
-            "per-query-head cell needs exactly one.",
+            message=f"The expansion op {op.label!r} of module {address!r} has "
+            f"{len(twins)} counterparts in the corrupted trace; a per-query-head cell "
+            "needs exactly one.",
             remedy="use equal-length prompts that take the same path through the model",
             module=address,
-            site_key=key,
+            candidates=[str(row.label) for row in twins],
         )
     return _Expansion(
         address=address,
         op_label=str(op.label),
-        site_key=key,
+        raw_label=str(op.raw_label),
+        func_name=str(op.func_name),
         clean_value=op.out.detach().clone(),
         n_q_heads=n_q,
         n_kv_heads=n_kv,
@@ -404,6 +414,29 @@ def _is_pure_expansion(op: Any, n_kv: int) -> bool:
     return bool(torch.equal(blocks, blocks[:, :, :1].expand_as(blocks)))
 
 
+def _expansion_selector(expansion: _Expansion) -> Any:
+    """Select exactly the expansion op's call in a live rerun.
+
+    Finalized labels and site keys do not exist while a rerun's forward runs,
+    so the op is matched by its function, its module and its capture-order
+    raw label (equal in every capture of the same path; the per-cell fire
+    count check refuses anything but one match).
+    """
+
+    raw_label = expansion.raw_label
+
+    def _is_expansion(subject: Any) -> bool:
+        """Whether a live op is the located expansion call."""
+
+        return getattr(subject, "_layer_label_raw", None) == raw_label
+
+    return (
+        func_selector(expansion.func_name)
+        & in_module_selector(expansion.address)
+        & where_selector(_is_expansion, name_hint=f"expansion op {expansion.op_label}")
+    )
+
+
 def _head_hook(clean_value: torch.Tensor, heads: tuple[int, ...]) -> Any:
     """Build the hook that copies the clean ``heads`` slices into the expansion output."""
 
@@ -438,7 +471,7 @@ def _run_cell(  # noqa: PLR0913 -- the shared per-cell rerun of the grid
         model,
         corrupted_input,
         corrupted_log,
-        site_selector(expansion.site_key),
+        _expansion_selector(expansion),
         _head_hook(expansion.clean_value, heads),
         name=f"query_heads_{expansion.address}_{'_'.join(map(str, heads))}",
         guard=guard,

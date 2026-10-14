@@ -19,6 +19,7 @@ All spellings are DOCUMENTED-UNSTABLE pending the naming session.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -123,8 +124,7 @@ def receipt_from_patch_grid(  # noqa: PLR0913 -- every mandatory D12 evidence fi
             remedy="drop kv_groups=; the receipt is an ordinary query-head receipt",
             effect_site=str(effect_site),
         )
-    sources = {} if effect_site is None else {"effect_source": str(effect_site)}
-    return CausalReceipt(
+    receipt = CausalReceipt(
         layer=layer,
         heads=heads,
         effects=effects,
@@ -137,8 +137,8 @@ def receipt_from_patch_grid(  # noqa: PLR0913 -- every mandatory D12 evidence fi
         positive_control=positive_control,
         joint_effect=joint_effect,
         kv_groups=kv_groups,
-        **sources,
     )
+    return receipt if effect_site is None else replace(receipt, effect_source=str(effect_site))
 
 
 def _grid_matrix(receipts: list[CausalReceipt]) -> tuple[np.ndarray, tuple[int, ...]]:
