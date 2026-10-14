@@ -18,9 +18,9 @@
       "doc": "docs/migration/saelens.md",
       "kind": "undersell-falsehood",
       "receipt": "The historical 'deferred' row is gone, but line 6 still says 'TorchLens does not ship SAE training/inference utilities' with no mention of the shipped bridge.sae splice experiment (bridge/sae.py: reconstruction fidelity + causal effect + latents_edit).",
-      "status": "open",
-      "verified_at": "2026-08-26 (mega/A12 checkout)",
-      "owner_next": "D01 (prose truth sweep)"
+      "status": "fixed",
+      "verified_at": "2026-10-14 (the page names bridge.sae.splice in its first row; the read-latents row now states that SpliceResult carries no latents and lists the fields it does return, pinned by tests/test_migration_pages_executed.py)",
+      "owner_next": "none"
     },
     {
       "id": "fused-attention-not-visible-rows",
@@ -48,9 +48,9 @@
       "doc": "docs/migration/transformerlens.md",
       "kind": "undersell-falsehood",
       "receipt": "Historically denied component naming while enable_transformerlens_aliases ships (semantic/facets.py). The page still centers manual-eager workarounds; re-verify each row against the shipped alias/facet surface.",
-      "status": "open",
-      "verified_at": "2026-08-26 (mega/A12 checkout; page carries no alias mention)",
-      "owner_next": "D01 (prose truth sweep)"
+      "status": "fixed",
+      "verified_at": "2026-10-14 (transformerlens.md names torchlens.mechinterp.resolve_alias with 2.x, 3.x bridge-cache and 4.x canonical names; from_transformerlens.md covers the TransformerBridge refusal for 3.x and 4.x)",
+      "owner_next": "none"
     },
     {
       "id": "baukit-runningstats-missing",
@@ -87,6 +87,15 @@
       "status": "current",
       "verified_at": "2026-08-26",
       "owner_next": "none"
+    },
+    {
+      "id": "removed-run-spellings-on-comparison-pages",
+      "doc": "docs/migration/penzai.md; baukit.md; autocircuit.md; inseq.md; repe.md; pyvene.md; from_pyvene.md",
+      "kind": "structural",
+      "receipt": "Rows taught the removed replay/rerun spellings (rerun(..., append=True), replay/rerun hooks) after Trace.run and Trace.push replaced them.",
+      "status": "open",
+      "verified_at": "2026-10-14 (penzai, baukit, autocircuit, inseq and repe now spell trace.run, .push and steer_generate; pyvene.md:13 and from_pyvene.md:4 still say rerun and wait for the pyvene page refresh)",
+      "owner_next": "pyvene page refresh"
     }
   ]
 }
