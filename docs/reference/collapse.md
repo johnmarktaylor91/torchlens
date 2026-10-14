@@ -79,6 +79,17 @@ network lacks.
 They assert adjacency only: a segment is not a real module and never pretends mixed content has one
 module class.*
 
+## Output bundles
+
+A decoder that returns its cache returns one output per cached tensor, and each would otherwise
+draw as its own node. In an overview render (`collapse="auto"`, `"max"` or a level above 0,
+unrolled, without `show_containers`), three or more model outputs that share a container key and
+named role, dtype and shape draw as one node, such as `OUTPUTS: past_key_values.keys` with
+`12 tensors, 1x2x8x8 each`, when one top-level module made all of them and that module is drawn as
+one box. When the module is expanded, its outputs come from several drawn nodes and every output
+is drawn on its own again. A named single output such as `logits` or `last_hidden_state` is never
+bundled, and `collapse="none"` never bundles. The bundle counts as one node in the readable band.
+
 ## What `(xN)` and `+N more` promise
 
 These labels look similar but make different, deliberately strict promises about hidden content.
