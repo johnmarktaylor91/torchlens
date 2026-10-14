@@ -419,16 +419,20 @@ def _expansion_selector(expansion: _Expansion) -> Any:
 
     Finalized labels and site keys do not exist while a rerun's forward runs,
     so the op is matched by its function, its module and its capture-order
-    raw label (equal in every capture of the same path; the per-cell fire
-    count check refuses anything but one match).
+    raw label (equal in every capture of the same path). The predicate reads
+    the raw label from either shape of subject: a finished trace's op
+    (``raw_label``, when the hook is attached) or the live op record
+    (``_layer_label_raw``, when the rerun fires it). The per-cell fire count
+    check refuses anything but one match.
     """
 
     raw_label = expansion.raw_label
 
     def _is_expansion(subject: Any) -> bool:
-        """Whether a live op is the located expansion call."""
+        """Whether an op (finished trace) or a live op record is the expansion call."""
 
-        return getattr(subject, "_layer_label_raw", None) == raw_label
+        label = getattr(subject, "_layer_label_raw", None) or getattr(subject, "raw_label", None)
+        return label == raw_label
 
     return (
         func_selector(expansion.func_name)
