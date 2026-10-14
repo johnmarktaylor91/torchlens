@@ -183,9 +183,9 @@ def test_claims_registry_seed_is_well_formed() -> None:
     doc = json.loads(CLAIMS.read_text(encoding="utf-8"))
     assert doc["schema"] == "torchlens.migration_claims.v1"
     assert doc["wording_states"] == ["full", "narrowed_scope", "limitation"]
-    assert len(doc["claims"]) == 5
+    assert len(doc["claims"]) == 7
     assert len(doc["cross_cutting_rules"]) == 4
-    assert len(doc["tl_side_gates"]) == 3
+    assert len(doc["tl_side_gates"]) == 4
 
     row_keys = {
         "id",
