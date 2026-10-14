@@ -78,6 +78,8 @@ def _manifest_schema_ids() -> dict[str, str]:
 def _component_schema_versions() -> dict[str, Any]:
     """Versioned component-grammar constants riding inside bundles."""
 
+    from ..bundle._fed_by import TOKEN_BOUNDARY_SCHEMA_ID
+    from ..bundle._relations import MEMBER_ROW_KINDS, PAIR_ROW_KINDS
     from ..runnable import (
         LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS,
         RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
@@ -98,6 +100,10 @@ def _component_schema_versions() -> dict[str, Any]:
         "witness_family_registry": WITNESS_FAMILY_REGISTRY_VERSION,
         "state_dict_blob_family": "state_dict_v1",
         "nonpersistent_buffer_family": "runnable_nonpersistent_buffer_v1",
+        # v10 (harness bundles): the closed bundle relation-kind vocabulary
+        # (``fed_by`` joins here) and the member token-stream binding schema.
+        "bundle_relation_kinds": sorted(set(PAIR_ROW_KINDS) | set(MEMBER_ROW_KINDS)),
+        "token_boundary_schema": TOKEN_BOUNDARY_SCHEMA_ID,
     }
 
 

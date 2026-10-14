@@ -100,12 +100,23 @@ _GATE_REQUIREMENTS: dict[str, _GateRequirement] = {
         same_input=True,
     ),
 }
+# The delta family (delta_map, norm_delta, output_delta, compare) reads
+# per-node distances from a baseline member: the same claim as compare_at, so
+# the same two predicates gate its (baseline, member) operand pairs.
+_GATE_REQUIREMENTS.update(
+    dict.fromkeys(
+        ("delta_map", "norm_delta", "output_delta", "compare"), _GATE_REQUIREMENTS["compare_at"]
+    )
+)
 
 #: S6 PAIR-row kinds that order members in time/causality. Members joined by
 #: a directed path of these rows are NOT comparison operands (A-GATE item 4:
 #: the refusal keys on topology, never on relationship rank). ``alternative_of``
-#: is deliberately absent — counterfactual peers stay comparable.
-_ORDERING_RELATION_KINDS: frozenset[str] = frozenset({"successor_of", "forked_from", "escalates"})
+#: is deliberately absent — counterfactual peers stay comparable. ``fed_by``
+#: (tlspec v10) orders a reader after its source: their inputs differ by design.
+_ORDERING_RELATION_KINDS: frozenset[str] = frozenset(
+    {"successor_of", "forked_from", "escalates", "fed_by"}
+)
 
 #: Session cache for the live-derived input value digests, keyed weakly by
 #: member Trace (lifetime-safe against id reuse) with the trace's
@@ -242,7 +253,7 @@ def require_comparable(
 
     1. TOPOLOGY (comparison-grade operations only): operands joined by a
        directed path of ordering relations (``successor_of`` /
-       ``forked_from`` / ``escalates``) are not comparison operands,
+       ``forked_from`` / ``escalates`` / ``fed_by``) are not comparison operands,
        regardless of relationship rank.
     2. MODEL FLOOR: the derived relationship's model-axis rank must reach
        the operation's floor.

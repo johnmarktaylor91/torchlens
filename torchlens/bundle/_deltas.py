@@ -144,13 +144,48 @@ def _bundle_delta_map(
     dict[str, dict[str, float]]
         Mapping of supergraph node name to member-name distance values. Members
         without a tensor at a node are omitted for that node.
+
+    Raises
+    ------
+    BundleRelationshipError
+        The comparison gate's stable codes (``bundle_gate_ordering_topology``,
+        ``bundle_gate_model_axis_unmet``, ``bundle_gate_input_values_differ``,
+        ``bundle_gate_input_identity_unproven``) for any (baseline, member)
+        pair that is not a comparison operand; ``norm_delta``,
+        ``output_delta`` and ``compare`` run the same gate.
+    """
+
+    baseline_name = _gated_baseline(self, "delta_map", baseline)
+    return _delta_map_values(self, metric, baseline_name, on)
+
+
+def _gated_baseline(self: Bundle, operation: str, baseline: str | Trace | None) -> str:
+    """Resolve the delta baseline, then gate every (baseline, member) operand pair.
+
+    The baseline defaults to the configured one, then the first member; the
+    comparison gate (topology, model-axis floor, value-level input identity)
+    then refuses any pair a per-node distance would not mean anything for,
+    such as two unrelated prompts in one harness bundle.
     """
 
     baseline_name = (
         self._baseline_or_raise(baseline)
-        if baseline is not None or self.baseline_name is not None
+        if baseline is not None or self.baseline_name is not None or not self.names
         else next(iter(self.names))
     )
+    pairs = [(baseline_name, name) for name in self.names if name != baseline_name]
+    self._require_comparable(operation, pairs=pairs)
+    return baseline_name
+
+
+def _delta_map_values(
+    self: Bundle,
+    metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+    baseline_name: str,
+    on: Literal["out", "grad"],
+) -> dict[str, dict[str, float]]:
+    """Compute per-node deltas from an already-gated baseline member."""
+
     result: dict[str, dict[str, float]] = {}
     supergraph = self.supergraph
     for graph_node_label in supergraph.topological_order:
@@ -202,7 +237,7 @@ def _bundle_norm_delta(
         Per-node relative L2 distances keyed by member name.
     """
 
-    return _bundle_delta_map(self, "relative_l2", baseline=baseline, on=on)
+    return _delta_map_values(self, "relative_l2", _gated_baseline(self, "norm_delta", baseline), on)
 
 
 def _output_layer_pairs(
@@ -275,7 +310,18 @@ def _bundle_output_delta(
         Member-keyed output distance mapping.
     """
 
-    target_name = _resolve_member_name(self, target)
+    target_name = _gated_baseline(self, "output_delta", _resolve_member_name(self, target))
+    return _output_delta_values(self, target_name, metric, on)
+
+
+def _output_delta_values(
+    self: Bundle,
+    target_name: str,
+    metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+    on: Literal["out", "grad"],
+) -> dict[str, dict[str, float]]:
+    """Compute output deltas against an already-gated target member."""
+
     target_log = self[target_name]
     result: dict[str, dict[str, float]] = {}
     for member_name, member_log in self.members.items():
@@ -344,17 +390,13 @@ def _bundle_compare(
         repeated motif occurrences.
     """
 
-    baseline_name = (
-        self._baseline_or_raise(baseline)
-        if baseline is not None or self.baseline_name is not None
-        else next(iter(self.names))
-    )
+    baseline_name = _gated_baseline(self, "compare", baseline)
     return {
         "baseline": baseline_name,
         "metric": _metric_label(metric),
         "on": on,
-        "nodes": _bundle_delta_map(self, metric, baseline=baseline_name, on=on),
-        "outputs": _bundle_output_delta(self, baseline_name, metric=metric, on=on),
+        "nodes": _delta_map_values(self, metric, baseline_name, on),
+        "outputs": _output_delta_values(self, baseline_name, metric, on),
         "motifs": _bundle_motif_occurrences(self),
     }
 

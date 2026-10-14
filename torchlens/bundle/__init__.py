@@ -37,9 +37,8 @@ from ..intervention.types import Relationship
 from ._compare_gate import require_comparable
 
 # Re-exports (redundant aliases): _distance_value is imported from
-# torchlens.bundle by the cert7/cert8 hardening suites and _bundle_delta_map
-# by ._comparisons; the rest are the historical module-level surface of the
-# pre-split file.
+# torchlens.bundle by the cert7/cert8 hardening suites; the rest are the
+# historical module-level surface of the pre-split file.
 from ._deltas import (
     _bundle_aligned_pairs,
     _bundle_compare,
@@ -59,7 +58,12 @@ from ._provenance import (
     bundle_provenance as _bundle_provenance,
     bundle_why as _bundle_why,
 )
-from ._relation_carriage import _bundle_derive_episode_status, _bundle_relate
+from ._relation_carriage import (
+    _bundle_derive_episode_status,
+    _bundle_relate,
+    register_relation_walks,
+    settle_relation_rows,
+)
 from ._relations import MemberRelationRow, MemberRelationTable, OpaqueRelationRow
 from ._vary import bundle_vary as _bundle_vary
 
@@ -207,7 +211,8 @@ class Bundle:
     ----------
     members:
         Mapping of member names to ``Trace`` objects, sequence of logs,
-        or sequence of ``(name, log)`` tuples.
+        or sequence of ``(name, log)`` tuples. Empty (the default) builds an
+        empty bundle to fill later with :meth:`add`.
     names:
         Optional names for a sequence of logs.
     baseline:
@@ -239,7 +244,7 @@ class Bundle:
 
     def __init__(
         self,
-        members: Mapping[str, Trace] | Sequence[Trace] | Sequence[tuple[str, Trace]],
+        members: Mapping[str, Trace] | Sequence[Trace] | Sequence[tuple[str, Trace]] = (),
         *,
         names: Sequence[str] | None = None,
         baseline: str | Trace | None = None,
@@ -476,6 +481,7 @@ class Bundle:
             "show_diff": _bundle_show_diff,
         }
         _register_comparison_helpers(dynamic_custom_methods)
+        register_relation_walks(dynamic_custom_methods)
         helper = dynamic_custom_methods.get(name)
         if helper is None:
             from ..utils.facade import refuse_removed_member
@@ -863,8 +869,14 @@ class Bundle:
         self,
         existing_rows: Sequence[MemberRelationRow | OpaqueRelationRow],
         new_rows: Sequence[MemberRelationRow | OpaqueRelationRow | Mapping[str, Any]],
+        *,
+        assess_unclaimed: bool = False,
     ) -> MemberRelationTable:
         """Return a NEW validated relation table (existing + coerced new rows).
+
+        New ``fed_by`` rows then settle their basis against the members
+        (``settle_relation_rows``; ``assess_unclaimed`` is the positional
+        ``relate`` door, which also binds and verifies unclaimed rows).
 
         ``OpaqueRelationRow`` instances pass through unchanged (loader-side
         carriage for preserved unknown namespaced kinds); mapping payloads
@@ -900,7 +912,9 @@ class Bundle:
                 ) from exc
         table = MemberRelationTable(rows)
         table.validate_against_members(self._members.keys())
-        return table
+        return settle_relation_rows(
+            table, self._members, first_new=len(existing_rows), assess_unclaimed=assess_unclaimed
+        )
 
     def _relation_table_for_removal(
         self,
@@ -961,13 +975,17 @@ class Bundle:
 
         return self._ensure_supergraph()
 
-    def node(self, site: Any) -> SuperOp:
-        """Return a view of one resolved site across all members.
+    def node(self, site: Any, members: Sequence[str | Trace] | None = None) -> SuperOp:
+        """Return a view of one resolved site across all (or the named) members.
 
         Parameters
         ----------
         site:
             Selector-like site query.
+        members:
+            Optional member subset; the gate then checks only pairs inside it,
+            so one foreign member (a small router model) no longer disables
+            the view for the rest. ``None`` means every member.
 
         Returns
         -------
@@ -975,11 +993,14 @@ class Bundle:
             Dict-keyed view over matching layer pass records.
         """
 
-        self._require_comparable("node")
+        names = list(self._members) if members is None else self._coerce_member_name_list(members)
+        logs = {name: self[name] for name in names}
+        pairs = [(left, right) for index, left in enumerate(names) for right in names[index + 1 :]]
+        self._require_comparable("node", pairs=pairs)
         self._ensure_supergraph()
         layer_members: dict[str, Op] = {}
         failures: dict[str, str] = {}
-        for name, log in self._members.items():
+        for name, log in logs.items():
             try:
                 table = resolve_sites(log, site, max_fanout=1)
                 layer_members[name] = cast("Op", table.first())
@@ -1998,8 +2019,6 @@ class Bundle:
                         for index, log in enumerate(log_values)
                     ]
                 )
-        if not pairs:
-            raise ValueError("Bundle requires at least one Trace.")
         for member_name, log in pairs:
             cls._require_trace(log, arg_name=f"member {member_name!r}")
         # O(n) duplicate detection (r8 R52): the prior per-member full
