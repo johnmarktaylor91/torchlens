@@ -78,36 +78,30 @@ class _GateRequirement:
     same_input: bool
 
 
+#: Same-input, shared-graph claim: compare_at, most_changed, diff and the
+#: delta family (delta_map, norm_delta, output_delta, compare), which reads
+#: per-node distances from a baseline member and so gates its (baseline,
+#: member) operand pairs with the same two predicates.
+_SHARED_GRAPH_SAME_INPUT = _GateRequirement(
+    model_floor_rank=_MODEL_AXIS_RANK[Relationship.SHARED_GRAPH_SAME_INPUT],
+    model_floor_label="shared_graph",
+    same_input=True,
+)
+
 _GATE_REQUIREMENTS: dict[str, _GateRequirement] = {
     "node": _GateRequirement(
         model_floor_rank=_MODEL_AXIS_RANK[Relationship.SAME_PARAM_SHAPES],
         model_floor_label="same_param_shapes",
         same_input=False,
     ),
-    "compare_at": _GateRequirement(
-        model_floor_rank=_MODEL_AXIS_RANK[Relationship.SHARED_GRAPH_SAME_INPUT],
-        model_floor_label="shared_graph",
-        same_input=True,
-    ),
-    "most_changed": _GateRequirement(
-        model_floor_rank=_MODEL_AXIS_RANK[Relationship.SHARED_GRAPH_SAME_INPUT],
-        model_floor_label="shared_graph",
-        same_input=True,
-    ),
-    "diff": _GateRequirement(
-        model_floor_rank=_MODEL_AXIS_RANK[Relationship.SHARED_GRAPH_SAME_INPUT],
-        model_floor_label="shared_graph",
-        same_input=True,
-    ),
+    "compare_at": _SHARED_GRAPH_SAME_INPUT,
+    "most_changed": _SHARED_GRAPH_SAME_INPUT,
+    "diff": _SHARED_GRAPH_SAME_INPUT,
+    "delta_map": _SHARED_GRAPH_SAME_INPUT,
+    "norm_delta": _SHARED_GRAPH_SAME_INPUT,
+    "output_delta": _SHARED_GRAPH_SAME_INPUT,
+    "compare": _SHARED_GRAPH_SAME_INPUT,
 }
-# The delta family (delta_map, norm_delta, output_delta, compare) reads
-# per-node distances from a baseline member: the same claim as compare_at, so
-# the same two predicates gate its (baseline, member) operand pairs.
-_GATE_REQUIREMENTS.update(
-    dict.fromkeys(
-        ("delta_map", "norm_delta", "output_delta", "compare"), _GATE_REQUIREMENTS["compare_at"]
-    )
-)
 
 #: S6 PAIR-row kinds that order members in time/causality. Members joined by
 #: a directed path of these rows are NOT comparison operands (A-GATE item 4:

@@ -89,6 +89,8 @@ _LABEL_MAX_CHARS = 256
 
 
 def _is_int(value: Any) -> bool:
+    """Return whether ``value`` is a plain int (``bool`` excluded)."""
+
     return isinstance(value, int) and not isinstance(value, bool)
 
 
@@ -278,6 +280,8 @@ def _stream_op(trace: Trace, stream: str) -> Any | None:
 
 
 def _stream_shape(trace: Trace, stream: str) -> tuple[int, ...] | None:
+    """Return the shape of ``stream``'s token-id tensor, or ``None`` when absent."""
+
     op = _stream_op(trace, stream)
     shape = getattr(op, "shape", None) if op is not None else None
     return tuple(int(size) for size in shape) if shape is not None else None
