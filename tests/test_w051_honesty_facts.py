@@ -107,8 +107,8 @@ def test_fork_do_edits_are_disclosed(model_and_x) -> None:
     assert intervention_facts(trace) is None  # the source trace is untouched
 
 
-def test_default_capture_verification_reads_not_recorded(model_and_x) -> None:
-    """H4/L10: ``capture_verified=None`` renders as NOT RECORDED with the arming
+def test_default_capture_verification_reads_not_checked(model_and_x) -> None:
+    """H4/L10: ``capture_verified=None`` renders as NOT CHECKED with the arming
     instruction, never as a clean bill."""
 
     model, x = model_and_x
@@ -116,10 +116,12 @@ def test_default_capture_verification_reads_not_recorded(model_and_x) -> None:
     assert trace.capture_verified is None
     explained = tl.report.explain(trace)
     assert "no ceiling recorded" not in explained
-    assert "Capture verification: not recorded" in explained
+    assert "Capture verification: not checked" in explained
+    assert "Capture verification: not recorded" not in explained
     assert "completeness_witness=True" in explained
     preamble = honesty_preamble_lines(trace)
     assert preamble[0].endswith("verified=not_recorded")
-    assert any("not recorded" in line and "completeness witness" in line for line in preamble)
+    assert any("not checked" in line and "completeness witness" in line for line in preamble)
+    assert not any("verification not recorded" in line for line in preamble)
     guide = json.dumps(trace.to_agent_json()["guide"])
     assert "not a clean bill" in guide

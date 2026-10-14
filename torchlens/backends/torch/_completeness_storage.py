@@ -724,8 +724,17 @@ def capture_scalar_escape_warning(trace: Any) -> Iterator[None]:
             stacklevel=_external_warning_stacklevel(),
         )
 
+    # The host_tensor_source advisory rides the same plain-capture scope: it
+    # records one capture_advisories row when user code builds a tensor from a
+    # host buffer (torch.from_numpy and friends), never warns and never moves a
+    # verdict. Imported here because this body runs rebound into
+    # completeness_witness's globals (see the NOTE below); a relative import
+    # resolves through the shared package either way.
+    from ._host_tensor_source import capture_host_tensor_source_advisory
+
     try:
-        yield
+        with capture_host_tensor_source_advisory(state.trace):
+            yield
     except BaseException as inflight:
         _restore_scalar_belt()
         # b3-sol (R07 filter-hazard rollup): this advisory used to fire from an

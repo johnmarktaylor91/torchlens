@@ -394,10 +394,11 @@ def _structure_only_status_lines(facts: dict[str, Any]) -> list[str]:
 
 
 def _verification_verdict_lines(facts: dict[str, Any]) -> list[str]:
-    """Return the preamble's verification-verdict lines (header + ceiling/not-recorded).
+    """Return the preamble's verification-verdict lines (header + ceiling/not-checked).
 
     The ``capture_verified`` flag is tri-state: ``False`` names the ceiling reason,
-    ``True`` reads ``true``, and ``None`` reads ``not_recorded`` with the arming hint
+    ``True`` reads ``true``, and ``None`` reads ``not_recorded`` in the header and
+    "not checked" with the arming hint in the detail line
     (or, on a structure-only capture, the note that value-free captures are never verified).
     """
 
@@ -420,12 +421,12 @@ def _verification_verdict_lines(facts: dict[str, Any]) -> list[str]:
         lines.append(f"verification ceiling: {reason}")
     elif verified is None and facts["structure_only"]:
         lines.append(
-            "capture verification not recorded: a structure-only (value-free) capture is "
+            "capture verification not checked: a structure-only (value-free) capture is "
             "never verified, even with the completeness witness armed"
         )
     elif verified is None:
         lines.append(
-            "capture verification not recorded: the completeness witness is not armed on "
+            "capture verification not checked: the completeness witness is not armed on "
             "the default capture (wrap_torch(completeness_witness=True) or tl.validate arm it)"
         )
     return lines

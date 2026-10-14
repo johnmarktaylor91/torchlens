@@ -377,7 +377,7 @@ def _capture_verification(log: Any) -> dict[str, Any]:
     dict[str, Any]
         ``capture_status`` (the settled ``CaptureOutcome`` status value, or
         ``"unknown"`` when the log carries none), tri-state
-        ``capture_verified`` (``None`` = not recorded, witness not armed),
+        ``capture_verified`` (``None`` = not checked, witness not armed),
         ``capture_verification_reason``, and ``rescue_rerun``.
     """
 
@@ -476,7 +476,7 @@ def _capture_status_lines(log: Any) -> list[str]:
         # wrappers cannot see (from_numpy/as_tensor/from_dlpack round-trips,
         # numpy-backed autograd.Functions, storage writes) leave no ceiling here.
         lines.append(
-            "- Capture verification: not recorded (the completeness witness is not "
+            "- Capture verification: not checked (the completeness witness is not "
             "armed on the default capture; wrap_torch(completeness_witness=True) or "
             "tl.validate arm it). Absence of a ceiling is not a clean bill."
         )

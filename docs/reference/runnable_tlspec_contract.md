@@ -2558,7 +2558,7 @@ run; `wrap_torch(completeness_witness=True)` arms it for every capture; the spar
 save-time census runs it) — observable writes are caught by whole-storage byte comparison (including
 per-consumption sampling), and the only unobservable surface (a raw `data_ptr()` pointer) fails
 closed to `unverifiable`. The DEFAULT live `run()` provider does NOT arm the witness: a default
-capture whose forward wrote through such an alias carries `capture_verified=None` (not recorded,
+capture whose forward wrote through such an alias carries `capture_verified=None` (not checked,
 never a clean bill), its parent/child payloads may disagree, and the live refresh can still settle
 `verified` under oracle 1 (the fresh forward IS the model) while `tl.validate(scope="forward")`
 and the loaded-sparse provider catch the contradiction. Read `capture_verified=None` as "no
