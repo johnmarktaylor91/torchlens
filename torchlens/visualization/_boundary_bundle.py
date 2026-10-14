@@ -86,10 +86,9 @@ def _producer_module(trace: Trace, op: Any) -> str | None:
     if not modules:
         return None
     top = _module_address(modules[0])
-    module = trace.modules[top] if top in trace.modules else None
-    if module is None or int(getattr(module, "num_calls", 1) or 1) != 1:
+    if top not in trace.modules:
         return None
-    return top
+    return top if int(getattr(trace.modules[top], "num_calls", 1) or 1) == 1 else None
 
 
 def bundle_groups(trace: Trace, context: Any) -> dict[str, tuple[BundleGroup, ...]]:

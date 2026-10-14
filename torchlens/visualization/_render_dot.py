@@ -964,14 +964,7 @@ def _emit_and_finish_forward(
         from ._rank_segments import project_segments_for_rank
 
         _disclose_rank_layout_omissions(trace, context)
-        forward_render_ir = project_segments_for_rank(
-            forward_render_ir,
-            universe=context.node_universe,
-            segments=context.segments,
-            segment_lookup=context.segment_lookup,
-            vis_mode=request.vis_mode,
-            theme=context.theme,
-        )
+        forward_render_ir = project_segments_for_rank(forward_render_ir, context, request.vis_mode)
         resolved_graph_overrides = {
             key: str(val(trace)) if callable(val) else str(val)
             for key, val in overrides.graph.items()  # type: ignore[union-attr]

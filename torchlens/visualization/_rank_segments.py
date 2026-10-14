@@ -12,7 +12,7 @@ and edges that fall inside one segment dropped. The dot path is untouched.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from typing import Any
 
@@ -51,45 +51,11 @@ def _member_segments(universe: Any, segment_lookup: Any) -> dict[str, Any]:
     return members
 
 
-def project_segments_for_rank(
-    ir: RenderIR,
-    *,
-    universe: Any,
-    segments: Mapping[str, Any],
-    segment_lookup: Any,
-    vis_mode: str,
-    theme: Any,
-) -> RenderIR:
-    """Return ``ir`` with segment members folded into one node per segment.
+def _project_nodes(
+    ir: RenderIR, member_segments: Mapping[str, Any], context: Any, vis_mode: str
+) -> tuple[list[RenderIRNode], dict[str, str | None]]:
+    """Return the IR nodes with each segment's members replaced by one node."""
 
-    Parameters
-    ----------
-    ir:
-        Forward render IR built for the rank backend.
-    universe:
-        Node universe the IR was built from.
-    segments:
-        Active segment descriptors.
-    segment_lookup:
-        Segment membership index matching ``segments``.
-    vis_mode:
-        ``"unrolled"`` or ``"rolled"``.
-    theme:
-        Active visualization theme (segment colors follow it).
-
-    Returns
-    -------
-    RenderIR
-        The same IR when no segment is active; otherwise members are replaced
-        by their segment node in nodes, regions and edges.
-    """
-
-    if not segments:
-        return ir
-    member_segments = _member_segments(universe, segment_lookup)
-    if not member_segments:
-        return ir
-    target = {unit: segment.name for unit, segment in member_segments.items()}
     nodes: list[RenderIRNode] = []
     owners: dict[str, str | None] = {}
     for node in ir.nodes:
@@ -99,7 +65,7 @@ def project_segments_for_rank(
             continue
         if segment.name in owners:
             continue
-        owner, args = _segment_node(segment, vis_mode, theme)
+        owner, args = _segment_node(segment, vis_mode, context.theme)
         owners[segment.name] = owner
         name = str(args.pop("name"))
         nodes.append(
@@ -112,20 +78,26 @@ def project_segments_for_rank(
                 region_path=node.region_path,
             )
         )
-    edges = []
+    return nodes, owners
+
+
+def _reroute_edges(edges: Sequence[Any], target: Mapping[str, str]) -> list[Any]:
+    """Return ``edges`` with member endpoints moved to their segment node."""
+
+    rerouted = []
     seen: set[tuple[str, str]] = set()
-    for edge in ir.edges:
+    for edge in edges:
         source = target.get(edge.source_unit, edge.source_unit)
         head = target.get(edge.target_unit, edge.target_unit)
         if source == edge.source_unit and head == edge.target_unit:
-            edges.append(edge)
+            rerouted.append(edge)
             continue
         # A rerouted edge inside one segment, or a repeat of one already
         # rerouted, is what the dot path's segment-edge dedupe drops too.
         if source == head or (source, head) in seen:
             continue
         seen.add((source, head))
-        edges.append(
+        rerouted.append(
             replace(
                 edge,
                 source_unit=source,
@@ -134,11 +106,19 @@ def project_segments_for_rank(
                 head_name=target.get(edge.head_name or "", edge.head_name),
             )
         )
+    return rerouted
+
+
+def _project_regions(
+    regions: Sequence[Any], target: Mapping[str, str], owners: Mapping[str, str | None]
+) -> tuple[Any, ...]:
+    """Return regions listing each segment node in place of its members."""
+
     owned_by_region: dict[str, list[str]] = {}
     for name, owner in owners.items():
         if owner is not None:
             owned_by_region.setdefault(owner, []).append(name)
-    regions = tuple(
+    return tuple(
         replace(
             region,
             node_names=tuple(
@@ -148,6 +128,41 @@ def project_segments_for_rank(
                 )
             ),
         )
-        for region in ir.regions
+        for region in regions
     )
-    return replace(ir, nodes=tuple(nodes), edges=tuple(edges), regions=regions)
+
+
+def project_segments_for_rank(ir: RenderIR, context: Any, vis_mode: str) -> RenderIR:
+    """Return ``ir`` with segment members folded into one node per segment.
+
+    Parameters
+    ----------
+    ir:
+        Forward render IR built for the rank backend.
+    context:
+        Render context carrying the node universe the IR was built from, the
+        active segments, their membership index and the theme (segment
+        colors follow it).
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"``.
+
+    Returns
+    -------
+    RenderIR
+        The same IR when no segment is active; otherwise members are replaced
+        by their segment node in nodes, regions and edges.
+    """
+
+    if not context.segments:
+        return ir
+    member_segments = _member_segments(context.node_universe, context.segment_lookup)
+    if not member_segments:
+        return ir
+    target = {unit: segment.name for unit, segment in member_segments.items()}
+    nodes, owners = _project_nodes(ir, member_segments, context, vis_mode)
+    return replace(
+        ir,
+        nodes=tuple(nodes),
+        edges=tuple(_reroute_edges(ir.edges, target)),
+        regions=_project_regions(ir.regions, target, owners),
+    )
