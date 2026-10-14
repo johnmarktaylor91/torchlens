@@ -162,7 +162,7 @@ class TestBoundaryNode:
             for op in carriers
         ]
         assert len(keys) == len(set(keys)), "correlation keys must stay unique per rank"
-        output_ops = [op for op in log.ops if op.is_output]
+        output_ops = [op for op in log.layer_list if op.is_output]
         assert output_ops
         assert all(op.annotations == {} for op in output_ops)
 

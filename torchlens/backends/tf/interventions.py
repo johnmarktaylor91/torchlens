@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from ...intervention.selectors import BaseSelector
-from ...intervention.types import HelperSpec, InterventionDecision
+from ...intervention.types import Edit, InterventionDecision
 from ...ir.intervention import FireResult
 from ...ir.op_record import amend_module_exit_intervention
 from ...postprocess._selective_save import (
@@ -281,7 +281,7 @@ def _resolve_tf_hook(decision: InterventionDecision, tf: Any) -> Callable[[Any],
     """
 
     hook = decision.hook
-    if isinstance(hook, HelperSpec):
+    if isinstance(hook, Edit):
         return _tf_helper_hook(hook, tf)
     if callable(hook):
         return _tf_callable_hook(hook)
@@ -290,7 +290,7 @@ def _resolve_tf_hook(decision: InterventionDecision, tf: Any) -> Callable[[Any],
     )
 
 
-def _tf_helper_hook(spec: HelperSpec, tf: Any) -> Callable[[Any], Any]:
+def _tf_helper_hook(spec: Edit, tf: Any) -> Callable[[Any], Any]:
     """Return the TensorFlow implementation for a curated helper spec.
 
     Parameters

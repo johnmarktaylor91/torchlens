@@ -187,8 +187,12 @@ def _deep_sweep(family, impl, r0_capture):
                 " a stale key."
             )
         golden_n_ops = expected_n_ops(expected)
-        assert len(cap.trace.ops) == golden_n_ops, (
-            f"{family}/{impl}: op count {len(cap.trace.ops)} != golden"
+        # The golden counts every captured row (input, output and buffer rows
+        # included), which is ``trace.layer_list``; ``trace.ops`` counts only
+        # the counted ops since sumfam F1.
+        n_rows = len(cap.trace.layer_list)
+        assert n_rows == golden_n_ops, (
+            f"{family}/{impl}: op count {n_rows} != golden"
             f" {golden_n_ops} under an UNCHANGED resolved-config"
             " fingerprint -- the captured graph moved with no config cause."
         )

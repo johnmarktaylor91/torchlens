@@ -10,7 +10,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention.types import HelperSpec, InterventionSpec
+from torchlens.intervention.types import Edit, InterventionSpec
 from torchlens.options import CaptureOptions
 from torchlens.validation import check_spec_compat
 
@@ -238,8 +238,8 @@ def _assert_intervention_matches(
     assert fixture_spec.records == live_spec.records
     fixture_helper = fixture_spec.target_value_specs[0].value
     live_helper = live_spec.target_value_specs[0].value
-    assert isinstance(fixture_helper, HelperSpec)
-    assert isinstance(live_helper, HelperSpec)
+    assert isinstance(fixture_helper, Edit)
+    assert isinstance(live_helper, Edit)
     out = torch.randn(2, 3)
     assert torch.equal(
         fixture_helper()(out, hook=None),

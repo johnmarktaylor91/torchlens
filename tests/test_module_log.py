@@ -453,7 +453,7 @@ class TestModuleAccessorSummary:
         # Root aggregates sum over ALL ops (every recurrent pass), with no
         # double-count and no miss versus a manual sum over log.ops.
         root = log.root_module
-        all_ops = list(log.ops)
+        all_ops = list(log.layer_list)
         manual_func = sum(getattr(op, "func_duration", 0.0) or 0.0 for op in all_ops)
         manual_autograd = sum(int(getattr(op, "autograd_memory", 0) or 0) for op in all_ops)
         out_label_set = set(root.calls[0].output_ops)

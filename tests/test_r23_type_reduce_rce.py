@@ -150,7 +150,7 @@ def test_legit_data_types_and_snapshot_still_admit() -> None:
         ("torchlens.data_classes.grad_fn_call", "GradFnCall"),  # rename target
         ("torchlens.intervention._super.super_op", "SuperOp"),  # rename target
         ("torchlens.intervention.types", "InterventionSpec"),
-        ("torchlens.intervention.types", "HelperSpec"),
+        ("torchlens.intervention.types", "Edit"),
         ("torchlens.semantic.facets", "FacetRegistrySnapshot"),
         ("torchlens.ir.container_registry", "ContainerRecord"),
     ]

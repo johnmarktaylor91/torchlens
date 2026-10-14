@@ -87,7 +87,7 @@ def _real_retained_bytes(trace) -> int:
 
     seen: set[tuple[int, int]] = set()
     total = 0
-    for op in trace.ops:
+    for op in trace.layer_list:  # every row (sumfam F1: trace.ops is the counted view)
         payload = op.out
         if not isinstance(payload, torch.Tensor):
             continue

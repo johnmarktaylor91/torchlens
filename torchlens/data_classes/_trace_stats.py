@@ -610,7 +610,7 @@ class TraceStatsMixin(_TraceMixinBase):
             and cache_entry[1] == len(container)
         ):
             return cast(TraceOpAccessor, cache_entry[2])
-        accessor = TraceOpAccessor(container, self.layer_num_calls)
+        accessor = TraceOpAccessor(container, self.layer_num_calls, counted_view=True)
         self.__dict__[_TRACE_OP_ACCESSOR_ATTR] = (container, len(container), accessor)
         return accessor
 
@@ -624,7 +624,7 @@ class TraceStatsMixin(_TraceMixinBase):
             Ops whose ``is_transform`` role flag is true.
         """
 
-        return tuple(op for op in self.ops if getattr(op, "is_transform", False))
+        return tuple(op for op in self.layer_list if getattr(op, "is_transform", False))
 
     @property
     def model_profile(self: "Trace") -> ModelProfile:
@@ -894,7 +894,7 @@ class TraceStatsMixin(_TraceMixinBase):
         from ..visualization.collapse_estimator import PATHOLOGICAL_OP_MULTIPLIER
 
         ceiling = collapse_optimizer.COLLAPSE_OPTIMIZER_MAX_OPS * PATHOLOGICAL_OP_MULTIPLIER
-        if len(self.ops) > ceiling:
+        if len(self.layer_list) > ceiling:
             return []
         signals = analyze_collapse(self).signals
         largest = max((signal.hidden_ops for signal in signals.values()), default=0)
@@ -1172,7 +1172,7 @@ class TraceStatsMixin(_TraceMixinBase):
         return len(
             {
                 (op.label, resolve(child_label).label)
-                for op in self.ops
+                for op in self.layer_list
                 for child_label in op.children
             }
         )
@@ -1201,7 +1201,7 @@ class TraceStatsMixin(_TraceMixinBase):
         return len(
             {
                 (op.label, resolve(child_label).label)
-                for op in self.ops
+                for op in self.layer_list
                 for child_label in op.children
                 if op.is_buffer or resolve(child_label).is_buffer
             }

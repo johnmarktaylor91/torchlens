@@ -29,7 +29,7 @@ import uuid
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Literal
 
-from .types import FireRecord, HelperSpec
+from .types import Edit, FireRecord
 
 if TYPE_CHECKING:
     from ..data_classes.op import Op
@@ -73,7 +73,7 @@ def build_fire_record(
     func_call_id: int | None = None,
     container_path: tuple[Any, ...] = (),
     engine: str | None = None,
-    helper: HelperSpec | None = None,
+    helper: Edit | None = None,
     site_label: str | None = None,
     timing: Literal["pre", "post"] | None = None,
     direction: Literal["forward", "backward"] | None = None,

@@ -17,12 +17,12 @@ from .errors import (
     SpliceModuleDtypeError,
 )
 from .hooks import HookContext, normalize_hook
-from .types import HelperDirection, HelperPortability, HelperSpec
+from .types import Edit, HelperDirection, HelperPortability
 
 HELPER_REGISTRY_VERSION = "1"
 
 
-def zero_ablate(*, force_shape_change: bool = False) -> HelperSpec:
+def zero_ablate(*, force_shape_change: bool = False) -> Edit:
     """Create a helper that replaces an out with zeros.
 
     Parameters
@@ -32,7 +32,7 @@ def zero_ablate(*, force_shape_change: bool = False) -> HelperSpec:
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in forward helper spec.
     """
 
@@ -74,7 +74,7 @@ def mean_ablate(
     *,
     over: str = "self",
     force_shape_change: bool = False,
-) -> HelperSpec:
+) -> Edit:
     """Create a helper that fills each out with one scalar mean.
 
     Parameters
@@ -98,7 +98,7 @@ def mean_ablate(
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in forward helper spec with a DERIVED ``batch_independent``
         flag: ``True`` iff the fill value provably never reads the traced
         batch (external ``source=``), ``False`` otherwise.
@@ -159,7 +159,7 @@ def scramble_elements(
     from_: Any | None = None,
     seed: int | None = None,
     force_shape_change: bool = False,
-) -> HelperSpec:
+) -> Edit:
     """Create a helper that fills the out with elements drawn iid from a source.
 
     Every output element is independently replaced by a uniformly sampled
@@ -197,7 +197,7 @@ def scramble_elements(
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in stochastic forward helper spec.
     """
 
@@ -265,7 +265,7 @@ def steer(
     coef: float | None = None,
     feature_axis: int | None = None,
     force_shape_change: bool = False,
-) -> HelperSpec:
+) -> Edit:
     """Create a helper that adds a scaled steering direction.
 
     Parameters
@@ -284,7 +284,7 @@ def steer(
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in forward helper spec.
     """
 
@@ -321,7 +321,7 @@ def steer(
     )
 
 
-def scale(factor: float, *, force_shape_change: bool = False) -> HelperSpec:
+def scale(factor: float, *, force_shape_change: bool = False) -> Edit:
     """Create a helper that multiplies an out by ``factor``.
 
     Parameters
@@ -333,7 +333,7 @@ def scale(factor: float, *, force_shape_change: bool = False) -> HelperSpec:
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in forward helper spec.
     """
 
@@ -368,7 +368,7 @@ def clamp(
     min: float | None = None,
     max: float | None = None,
     force_shape_change: bool = False,
-) -> HelperSpec:
+) -> Edit:
     """Create a helper that clamps out values.
 
     Parameters
@@ -382,7 +382,7 @@ def clamp(
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in forward helper spec.
     """
 
@@ -419,7 +419,7 @@ def noise(
     *,
     seed: int | None = None,
     force_shape_change: bool = False,
-) -> HelperSpec:
+) -> Edit:
     """Create a helper that adds Gaussian noise.
 
     Parameters
@@ -434,7 +434,7 @@ def noise(
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in stochastic forward helper spec.
     """
 
@@ -483,7 +483,7 @@ def project_onto(
     *,
     feature_axis: int | None = None,
     force_shape_change: bool = False,
-) -> HelperSpec:
+) -> Edit:
     """Create a helper that projects outs onto a direction.
 
     Parameters
@@ -497,7 +497,7 @@ def project_onto(
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in forward helper spec.
     """
 
@@ -543,7 +543,7 @@ def project_off(
     *,
     feature_axis: int | None = None,
     force_shape_change: bool = False,
-) -> HelperSpec:
+) -> Edit:
     """Create a helper that removes the component along a direction.
 
     Parameters
@@ -557,7 +557,7 @@ def project_off(
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in forward helper spec.
     """
 
@@ -599,7 +599,7 @@ def swap_with(
     other_label: str | Any,
     *,
     force_shape_change: bool = False,
-) -> HelperSpec:
+) -> Edit:
     """Create a helper that swaps with another site's tensor.
 
     Parameters
@@ -614,7 +614,7 @@ def swap_with(
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in forward helper spec.
 
     Raises
@@ -679,7 +679,7 @@ def splice_module(
     input: str = "in",
     output: str = "out",
     force_shape_change: bool = False,
-) -> HelperSpec:
+) -> Edit:
     """Create a helper that calls a module as a black-box forward splice.
 
     Parameters
@@ -696,7 +696,7 @@ def splice_module(
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in forward helper spec.
     """
 
@@ -748,7 +748,7 @@ def splice_module(
     )
 
 
-def bwd_hook(fn: Callable[..., torch.Tensor]) -> HelperSpec:
+def bwd_hook(fn: Callable[..., torch.Tensor]) -> Edit:
     """Create a live/rerun-only backward hook helper.
 
     Parameters
@@ -759,7 +759,7 @@ def bwd_hook(fn: Callable[..., torch.Tensor]) -> HelperSpec:
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in backward helper spec.
     """
 
@@ -788,7 +788,7 @@ def bwd_hook(fn: Callable[..., torch.Tensor]) -> HelperSpec:
     )
 
 
-def grad_zero(*, force_shape_change: bool = False) -> HelperSpec:
+def grad_zero(*, force_shape_change: bool = False) -> Edit:
     """Create a live/rerun-only helper that zeros a grad tensor.
 
     Parameters
@@ -798,7 +798,7 @@ def grad_zero(*, force_shape_change: bool = False) -> HelperSpec:
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in backward helper spec.
     """
 
@@ -830,7 +830,7 @@ def grad_zero(*, force_shape_change: bool = False) -> HelperSpec:
     )
 
 
-def grad_scale(factor: float, *, force_shape_change: bool = False) -> HelperSpec:
+def grad_scale(factor: float, *, force_shape_change: bool = False) -> Edit:
     """Create a live/rerun-only helper that scales a grad tensor.
 
     Parameters
@@ -842,7 +842,7 @@ def grad_scale(factor: float, *, force_shape_change: bool = False) -> HelperSpec
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in backward helper spec.
     """
 
@@ -875,7 +875,7 @@ def grad_scale(factor: float, *, force_shape_change: bool = False) -> HelperSpec
     )
 
 
-def grad_clip(max_norm: float, norm_type: float = 2.0) -> HelperSpec:
+def grad_clip(max_norm: float, norm_type: float = 2.0) -> Edit:
     """Create a grad_fn_handle helper that clips each grad_input tensor norm.
 
     Parameters
@@ -887,7 +887,7 @@ def grad_clip(max_norm: float, norm_type: float = 2.0) -> HelperSpec:
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in backward grad_fn_handle helper spec.
     """
 
@@ -935,7 +935,7 @@ def grad_clip(max_norm: float, norm_type: float = 2.0) -> HelperSpec:
     )
 
 
-def grad_noise(std: float, *, seed: int | None = None) -> HelperSpec:
+def grad_noise(std: float, *, seed: int | None = None) -> Edit:
     """Create a grad_fn_handle helper that adds Gaussian noise to grad_input tensors.
 
     Parameters
@@ -947,7 +947,7 @@ def grad_noise(std: float, *, seed: int | None = None) -> HelperSpec:
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in backward grad_fn_handle helper spec.
     """
 
@@ -997,7 +997,7 @@ def grad_noise(std: float, *, seed: int | None = None) -> HelperSpec:
     )
 
 
-def grad_clamp(min: float | None = None, max: float | None = None) -> HelperSpec:
+def grad_clamp(min: float | None = None, max: float | None = None) -> Edit:
     """Create a grad_fn_handle helper that clamps grad_input tensors elementwise.
 
     Parameters
@@ -1009,7 +1009,7 @@ def grad_clamp(min: float | None = None, max: float | None = None) -> HelperSpec
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in backward grad_fn_handle helper spec.
     """
 
@@ -1060,8 +1060,8 @@ def _helper_spec(
     direction: HelperDirection | None = None,
     batch_independent: bool = False,
     compatible_with_append: bool = False,
-) -> HelperSpec:
-    """Build a HelperSpec with stable tuple metadata.
+) -> Edit:
+    """Build a Edit with stable tuple metadata.
 
     Parameters
     ----------
@@ -1088,11 +1088,11 @@ def _helper_spec(
 
     Returns
     -------
-    HelperSpec
+    Edit
         Helper spec.
     """
 
-    return HelperSpec(
+    return Edit(
         helper_name=helper_name,
         args=args,
         kwargs=tuple(sorted((kwargs or {}).items())),
@@ -1111,7 +1111,7 @@ def helper_from_serialized(
     *,
     import_resolver: Callable[[str], Callable[..., Any]],
     value_decoder: Callable[[Any], Any],
-) -> HelperSpec | Callable[..., Any]:
+) -> Edit | Callable[..., Any]:
     """Reconstruct a helper or callable from serialized helper data.
 
     Parameters
@@ -1134,7 +1134,7 @@ def helper_from_serialized(
 
     Returns
     -------
-    HelperSpec | Callable[..., Any]
+    Edit | Callable[..., Any]
         Runtime helper spec or import-ref callable.
     """
 
@@ -1153,14 +1153,14 @@ def helper_from_serialized(
 
             return import_resolver(import_path)()
 
-        return HelperSpec(
+        return Edit(
             helper_name=str(data.get("name", "import_ref")),
             portability="import_ref",
             factory=factory,
             metadata=(("import_path", import_path),),
         )
     if portability == "opaque_audit":
-        return HelperSpec(
+        return Edit(
             helper_name=data.get("name", "opaque_audit"),
             portability="opaque_audit",
             metadata=(("repr", data.get("repr", "")), ("executable", False)),
@@ -1183,14 +1183,15 @@ def helper_from_serialized(
     return rebuild_builtin_helper(name, args, kwargs)
 
 
-def _builtin_constructors() -> dict[str, Callable[..., HelperSpec]]:
+def _builtin_constructors() -> dict[str, Callable[..., Edit]]:
     """Return the builtin helper-name registry (name -> public constructor).
 
     Returns
     -------
-    dict[str, Callable[..., HelperSpec]]
-        Every builtin helper name a saved spec may carry, including the
-        legacy ``resample_ablate`` load alias.
+    dict[str, Callable[..., Edit]]
+        Every builtin helper name a saved spec may carry. A renamed
+        helper's old name is not here: :func:`rebuild_builtin_helper` refuses
+        it typed (``intervention_helper_renamed``).
     """
 
     # Local import: ``add``/``replace_with`` live in ``predicates`` (which
@@ -1215,10 +1216,6 @@ def _builtin_constructors() -> dict[str, Callable[..., HelperSpec]]:
         "zero_ablate": zero_ablate,
         "mean_ablate": mean_ablate,
         "scramble_elements": scramble_elements,
-        # Artifact-load compatibility: saved specs from before the honest
-        # rename persist helper name "resample_ablate"; they reconstruct
-        # through the same constructor (same bytes, honest name).
-        "resample_ablate": scramble_elements,
         "steer": steer,
         "scale": scale,
         "clamp": clamp,
@@ -1236,7 +1233,7 @@ def _builtin_constructors() -> dict[str, Callable[..., HelperSpec]]:
     }
 
 
-def builtin_helper_constructor(name: str) -> Callable[..., HelperSpec] | None:
+def builtin_helper_constructor(name: str) -> Callable[..., Edit] | None:
     """Return the public constructor registered for a builtin helper name.
 
     Parameters
@@ -1246,20 +1243,18 @@ def builtin_helper_constructor(name: str) -> Callable[..., HelperSpec] | None:
 
     Returns
     -------
-    Callable[..., HelperSpec] | None
+    Callable[..., Edit] | None
         The constructor, or ``None`` when ``name`` is not a builtin helper.
     """
 
     return _builtin_constructors().get(name)
 
 
-def rebuild_builtin_helper(
-    name: str, args: tuple[Any, ...], kwargs: Mapping[str, Any]
-) -> HelperSpec:
+def rebuild_builtin_helper(name: str, args: tuple[Any, ...], kwargs: Mapping[str, Any]) -> Edit:
     """Rebuild one builtin helper spec through its public constructor.
 
     The single builtin-name registry shared by ``.tlspec`` intervention-spec
-    loads and ``HelperSpec`` pickle restore: a builtin helper's runtime hook
+    loads and ``Edit`` pickle restore: a builtin helper's runtime hook
     factory is a local closure (never serialized), so both restore paths
     re-derive the whole spec from its stable ``(name, args, kwargs)``
     identity by re-invoking the constructor.
@@ -1275,22 +1270,38 @@ def rebuild_builtin_helper(
 
     Returns
     -------
-    HelperSpec
+    Edit
         Freshly constructed builtin helper spec.
 
     Raises
     ------
     InvalidArgumentError
-        If ``name`` is not a known builtin helper.
+        ``intervention_helper_unknown`` if ``name`` is not a known builtin
+        helper; ``intervention_helper_renamed`` if it is the old name of a
+        renamed one (a clean break: a saved spec naming it no longer loads).
     """
 
     constructors = _builtin_constructors()
-    if name not in constructors:
+    renamed_to = _RENAMED_HELPER_NAMES.get(name)
+    if name not in constructors and renamed_to is None:
         raise InvalidArgumentError(
             f"Builtin intervention helper {name!r} is unknown",
             code="intervention_helper_unknown",
             remedy=f"choose one of {', '.join(sorted(constructors))}",
             argument="name",
+        )
+    if renamed_to is not None:
+        raise InvalidArgumentError(
+            f"The saved intervention names builtin helper {name!r}, which was renamed to "
+            f"{renamed_to!r} with no load alias (the rename is a clean break), so it does "
+            "not load",
+            code="intervention_helper_renamed",
+            remedy=(
+                f"rebuild the edit with torchlens.intervention.{renamed_to}(...) (the same "
+                "helper under its new name, same arguments and bytes) and save it again"
+            ),
+            argument="name",
+            renamed_to=renamed_to,
         )
     return constructors[name](*args, **kwargs)
 
@@ -1306,11 +1317,11 @@ def _is_non_executable_placeholder(value: Any) -> bool:
     Returns
     -------
     bool
-        ``True`` when ``value`` is a HelperSpec that was reconstructed as an
+        ``True`` when ``value`` is a Edit that was reconstructed as an
         ``opaque_audit`` (audit-only, factory-less) placeholder.
     """
 
-    return isinstance(value, HelperSpec) and value.portability == "opaque_audit"
+    return isinstance(value, Edit) and value.portability == "opaque_audit"
 
 
 def _first_non_executable_arg(args: tuple[Any, ...], kwargs: Mapping[str, Any]) -> Any | None:
@@ -1362,7 +1373,7 @@ def _first_non_executable_arg(args: tuple[Any, ...], kwargs: Mapping[str, Any]) 
 
 def _non_executable_builtin_placeholder(
     name: str, opaque_arg: Any, data: Mapping[str, Any]
-) -> HelperSpec:
+) -> Edit:
     """Build a non-executable placeholder for a builtin helper with opaque args.
 
     Parameters
@@ -1377,7 +1388,7 @@ def _non_executable_builtin_placeholder(
 
     Returns
     -------
-    HelperSpec
+    Edit
         An ``opaque_audit`` spec whose factory raises ``NonExecutableSpecError``
         when fired, so a corrupted argument fails loudly at use time rather than
         several frames downstream.
@@ -1399,7 +1410,7 @@ def _non_executable_builtin_placeholder(
             "with a reconstructible argument to obtain an executable spec."
         )
 
-    return HelperSpec(
+    return Edit(
         helper_name=name,
         portability="opaque_audit",
         kind=cast(Any, data.get("kind", "forward")),
@@ -1545,7 +1556,7 @@ def _resolve_swap_value(other_label: Any) -> Any:
     ----------
     other_label:
         Tensor or Op-like object with a resolved ``out`` attribute. String
-        labels are rejected earlier, in ``swap_with``, before a ``HelperSpec``
+        labels are rejected earlier, in ``swap_with``, before a ``Edit``
         is ever built -- there is no fire-time lookup table for them.
 
     Returns
@@ -1570,6 +1581,10 @@ _RESAMPLE_ABLATE_REDIRECT = (
 #: Removed spellings: each raises the typed ``facade_redirect`` error naming
 #: its replacement (clean break, no alias).
 _REDIRECTS: dict[str, str] = {"resample_ablate": _RESAMPLE_ABLATE_REDIRECT}
+
+#: Old builtin helper names a saved spec may still carry -> the new name. A load
+#: refuses them typed (``intervention_helper_renamed``); there is no load alias.
+_RENAMED_HELPER_NAMES: dict[str, str] = {"resample_ablate": "scramble_elements"}
 
 
 # Under ``not TYPE_CHECKING`` so type checkers keep seeing the real module
@@ -1677,7 +1692,7 @@ def patch_from(
     source_site: Any = None,
     positions: Any = None,
     position_axis: int = 1,
-) -> HelperSpec:
+) -> Edit:
     """Create a helper that patches site values from another trace's capture.
 
     For each targeted site, the replacement value is the SOURCE trace's
@@ -1723,7 +1738,7 @@ def patch_from(
 
     Returns
     -------
-    HelperSpec
+    Edit
         The patch edit.
 
     DOCUMENTED-UNSTABLE spelling pending its naming-session ratification.

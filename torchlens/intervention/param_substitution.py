@@ -70,7 +70,7 @@ from ..selection import (
     _apply_invalid,
 )
 from .masked_edit import _derive_masked_edit, _validate_edited
-from .types import FireRecord, HelperSpec, LiteralTensor
+from .types import Edit, FireRecord, LiteralTensor
 
 if TYPE_CHECKING:
     from ..data_classes.param import Param
@@ -228,7 +228,7 @@ def _substituted_value(
     resolve_digest: str,
     consumed: torch.Tensor,
     site_label: str,
-) -> tuple[torch.Tensor, HelperSpec | None, str]:
+) -> tuple[torch.Tensor, Edit | None, str]:
     """Compute the substituted value under the edit-then-scatter contract.
 
     The hook receives a detached CLONE of the current parameter value, so
@@ -303,7 +303,7 @@ def apply_param_substitution_do(
     replay_module = importlib.import_module("torchlens.intervention.replay")
     replay_module._preflight_log(trace)
 
-    if not isinstance(edit, HelperSpec) and not callable(edit):
+    if not isinstance(edit, Edit) and not callable(edit):
         if not isinstance(edit, torch.Tensor):
             # Same validation as the string-label path: lifting a scalar
             # through the tensor-only replace_with helper used to crash
@@ -616,7 +616,7 @@ def _stamp_param_kind(child_op: Any, store_key: tuple[Any, ...], param_address: 
 
 def _param_fire_record(
     child_op: Any,
-    helper_spec: HelperSpec | None,
+    helper_spec: Edit | None,
     helper_name: str,
     address: tuple[Any, ...],
     meta: dict[str, Any],

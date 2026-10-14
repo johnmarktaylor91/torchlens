@@ -8,7 +8,7 @@ pattern where a fix closed one instance of a class but left siblings open:
   sentinel-wrapper keys via unguarded ``key in value`` presence checks. A plain user
   dict whose only key literally equalled one of those strings was misread on load --
   five crashed loudly, but ``{"__opaque_audit__": ...}`` was *silently* reconstructed
-  as a ``HelperSpec`` (data corruption). The fix escapes any dict carrying a reserved
+  as a ``Edit`` (data corruption). The fix escapes any dict carrying a reserved
   wrapper key (the ``__dunder__`` namespace) through the general ``__dict_items__``
   encoding so a genuine user key can never be mistaken for a wrapper tag.
 * MAJOR -- ``Bundle.most_changed`` (and its sibling ``_distance_value``) reimplemented

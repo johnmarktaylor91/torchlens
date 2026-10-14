@@ -386,8 +386,10 @@ def test_config_fingerprint_use_cache_row():
     assert fp_no_cache != fp_cache
     generator = torch.Generator().manual_seed(SEED)
     ids = torch.randint(0, VOCAB, (1, 8), generator=generator)
-    ops_no_cache = len(tl.trace(model_no_cache, (), {"input_ids": ids}).ops)
-    ops_cache = len(tl.trace(model_cache, (), {"input_ids": ids}).ops)
+    # Every captured row (layer_list): use_cache adds output rows, which the
+    # counted ``trace.ops`` view leaves out (sumfam F1).
+    ops_no_cache = len(tl.trace(model_no_cache, (), {"input_ids": ids}).layer_list)
+    ops_cache = len(tl.trace(model_cache, (), {"input_ids": ids}).layer_list)
     assert ops_no_cache != ops_cache, (
         "use_cache flipped without changing the captured graph? the"
         " config-fingerprint class lost its measured basis; re-measure"

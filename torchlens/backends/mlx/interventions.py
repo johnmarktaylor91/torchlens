@@ -22,7 +22,7 @@ from typing import Any
 
 from ...intervention.hooks import make_hook_context, normalize_hook
 from ...intervention.selectors import BaseSelector
-from ...intervention.types import HelperSpec, InterventionDecision
+from ...intervention.types import Edit, InterventionDecision
 from ...ir.selector_eval import first_selector_kind_outside, selector_contains_kind
 from ...postprocess._selective_save import _STATIC_INTERVENTION_SELECTOR_KINDS
 from ..registry import BackendUnsupportedError
@@ -240,12 +240,12 @@ def _resolve_decision_applier(decision: InterventionDecision, mx: Any) -> MLXHoo
             "MLX backend interventions require an action; tl.when(selector, None) "
             "declares no replacement to apply."
         )
-    if isinstance(hook, HelperSpec):
+    if isinstance(hook, Edit):
         return _resolve_helper_applier(hook, mx)
     return _resolve_callable_applier(hook)
 
 
-def _resolve_helper_applier(spec: HelperSpec, mx: Any) -> MLXHookApplier:
+def _resolve_helper_applier(spec: Edit, mx: Any) -> MLXHookApplier:
     """Resolve a built-in helper spec to its MLX-native applier.
 
     Parameters

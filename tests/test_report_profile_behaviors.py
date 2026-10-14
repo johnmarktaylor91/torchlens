@@ -125,11 +125,11 @@ def test_multipass_module_profile_covers_every_pass() -> None:
 
 
 def test_log_value_records_during_capture_and_refuses_outside() -> None:
-    """report.log_value stores values on the active trace and refuses idle calls."""
+    """observers.log_value stores values on the active trace and refuses idle calls."""
 
     class _LoggingModel(nn.Module):
         def forward(self, x: torch.Tensor) -> torch.Tensor:
-            tl.report.log_value("gate_mean", float(x.detach().mean().item()))
+            tl.observers.log_value("gate_mean", float(x.detach().mean().item()))
             return torch.relu(x)
 
     torch.manual_seed(9)
@@ -139,4 +139,4 @@ def test_log_value_records_during_capture_and_refuses_outside() -> None:
     assert logged["gate_mean"] == pytest.approx(float(x.mean().item()))
 
     with pytest.raises(RuntimeError, match="during trace"):
-        tl.report.log_value("outside", 1)
+        tl.observers.log_value("outside", 1)

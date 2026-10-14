@@ -81,7 +81,11 @@ implementing repository, so `similarity.make(identifier)` selects every
 catalogued implementation of that variant), in these docs and in the
 result's provenance where the result has any: `rdm_evolution(...)
 .similarity_repository_id`, the `similarity_repository_id` descriptor of
-`tl.neuro.rdms` source mode, and `tl.stats.CKA.similarity_repository_id`.
+`tl.neuro.rdms` source mode, `tl.stats.CKA.similarity_repository_id`, the
+`SimilarityScore` that `tl.stats.cka` and `tl.stats.CKA.result()` return (a
+`float` with `similarity_repository_id`; `to_dict()` keeps it), and
+`tl.repgeom.cka_interval(...).similarity_repository_id` (also in its
+`to_dict()`).
 Identifiers were taken from the repository at commit `035b3be` and checked
 numerically against its implementations; a dash means the catalogue has no
 exact match, and no near match is substituted. The attribute and

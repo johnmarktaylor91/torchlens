@@ -21,7 +21,7 @@ from torchlens.intervention.errors import (
 from torchlens.intervention.hooks import HookContext, make_hook_context, normalize_hook_plan
 from torchlens.intervention.runtime import _execute_hook
 from torchlens.intervention.sites import sites
-from torchlens.intervention.types import HelperSpec
+from torchlens.intervention.types import Edit
 from torchlens.validation import check_metadata_invariants
 
 
@@ -117,7 +117,7 @@ def test_phase3_helpers_import_and_return_specs() -> None:
         tl.grad_scale(0.5),
     ]
 
-    assert all(isinstance(spec, HelperSpec) for spec in helper_specs)
+    assert all(isinstance(spec, Edit) for spec in helper_specs)
     assert helper_specs[0].name == "zero_ablate"
     assert helper_specs[-1].kind == "backward"
     assert dict(helper_specs[-1].metadata)["live_rerun_only"] is True

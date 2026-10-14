@@ -17,11 +17,9 @@
         "fc2"
       ],
       "ops": [
-        "input_1:1",
         "linear_1_1:1",
         "relu_1_2:1",
-        "linear_2_3:1",
-        "output_1:1"
+        "linear_2_3:1"
       ],
       "params": [
         "fc1.weight",
@@ -266,13 +264,13 @@
     "param_source": "native-module"
   },
   "sha256_chunks": [
-    "e353863f",
-    "c68d3427",
-    "7c1b16e1",
-    "3bfd46a4",
-    "6911bac5",
-    "9f133383",
-    "af3d357a",
-    "b192a716"
+    "88c969cb",
+    "f51400c2",
+    "64cc0809",
+    "81a641b9",
+    "fef36166",
+    "b083068e",
+    "c5b9d4da",
+    "d3568f5a"
   ]
 }

@@ -27,7 +27,7 @@ Phase 1 (Python, your process): create and annotate evidence.
     tl.save(log, "run.tlspec")
 
 Record prompt ids, experiment labels, and share-safe token strings BEFORE
-saving (tl.report.log_value) -- never make a reader infer them from a
+saving (tl.observers.log_value) -- never make a reader infer them from a
 filename.
 
 Phase 2 (any transport): inspect the saved artifact.

@@ -107,10 +107,10 @@ def test_to_agent_json_tags_nonfinite_logged_values() -> None:
             self.fc = nn.Linear(4, 4)
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
-            tl.report.log_value("loss_nan", float("nan"))
-            tl.report.log_value("scale_inf", float("inf"))
-            tl.report.log_value("neg_inf", float("-inf"))
-            tl.report.log_value("plain", 1.5)
+            tl.observers.log_value("loss_nan", float("nan"))
+            tl.observers.log_value("scale_inf", float("inf"))
+            tl.observers.log_value("neg_inf", float("-inf"))
+            tl.observers.log_value("plain", 1.5)
             return self.fc(x)
 
     log = tl.trace(_Logs().eval(), torch.randn(2, 4, generator=torch.Generator().manual_seed(3)))
