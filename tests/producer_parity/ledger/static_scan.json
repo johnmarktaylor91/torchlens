@@ -2532,7 +2532,7 @@
   "field": "kind",
   "file": "torchlens/bundle/_relation_carriage.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 5,
   "via_getattr": false
  },
  {
@@ -2540,7 +2540,7 @@
   "field": "params",
   "file": "torchlens/bundle/_relation_carriage.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 4,
   "via_getattr": false
  },
  {

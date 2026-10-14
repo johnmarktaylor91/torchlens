@@ -203,6 +203,13 @@ def validate_descriptor(payload: Any) -> dict[str, Any]:
     digest = payload["ids_digest"]
     if not isinstance(digest, str) or not digest.startswith(_DIGEST_PREFIX):
         raise ValueError(f"token_boundary_v1 'ids_digest' must be a '{_DIGEST_PREFIX}<hex>' string")
+    _validate_descriptor_optional(payload)
+    return dict(payload)
+
+
+def _validate_descriptor_optional(payload: Mapping[str, Any]) -> None:
+    """Validate the optional descriptor keys: completion, exclusions, identities."""
+
     completion = payload.get("completion")
     if completion is not None and _int_range(completion, what="completion")[1] > payload["length"]:
         raise ValueError("token_boundary_v1 'completion' ends past the stream length")
@@ -212,7 +219,6 @@ def validate_descriptor(payload: Any) -> dict[str, Any]:
     for key in ("tokenizer", "template"):
         if payload.get(key) is not None and not isinstance(payload[key], str):
             raise ValueError(f"token_boundary_v1 {key!r} must be a string or null")
-    return dict(payload)
 
 
 if TOKEN_BOUNDARY_FAMILY_ID not in list_sidecar_families():
