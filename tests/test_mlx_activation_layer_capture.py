@@ -1,12 +1,12 @@
 """MLX activation layers are captured, and tracing leaves lazy models usable.
 
-Two defects the preview conformance pack found. The activation layers
-(``nn.ReLU``, ``nn.GELU``, ...) call the functions of
-``mlx.nn.layers.activations`` through that module's globals, most of them
-``mx.compile``'d, and only the ``mlx.nn`` attributes were wrapped: the layer's
-op was silently missing from the capture, and while ``mx.compile`` traced the
-body the wrapped ``mx`` primitives logged tracer arrays, so a model whose
-parameters were still unevaluated could not run again after the trace.
+Two defects the preview conformance pack found. Most activation layers
+(``nn.ReLU``, ``nn.Sigmoid``, ...) reach their ``mx.compile``'d function
+through a closure bound at class creation, and only a few ``mlx.nn`` function
+attributes were wrapped: the layer's op was silently missing from the capture,
+and while ``mx.compile`` traced the body the wrapped ``mx`` primitives logged
+tracer arrays, so a model whose parameters were still unevaluated could not
+run again after the trace.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ import mlx.nn as nn  # noqa: E402
 import torchlens as tl  # noqa: E402
 from torchlens.backends.mlx.wrappers import (  # noqa: E402
     mlx_activation_function_names,
+    mlx_activation_layer_classes,
     mlx_activations_module,
 )
 
@@ -54,12 +55,16 @@ def _activation_layer_classes() -> list[tuple[str, type[Any]]]:
     )
 
 
-def test_activation_function_set_is_derived_and_nonempty() -> None:
-    """The wrapped set comes from the module itself and includes relu."""
+def test_activation_sets_are_derived_and_nonempty() -> None:
+    """The wrapped functions and layers come from the module itself."""
 
-    names = mlx_activation_function_names(mlx_activations_module(nn))
+    activations = mlx_activations_module(nn)
+    names = mlx_activation_function_names(activations)
     assert "relu" in names
     assert len(names) >= 10, names
+    wrapped_layers = set(mlx_activation_layer_classes(activations, nn))
+    assert {cls for _, cls in _activation_layer_classes()} == wrapped_layers
+    assert nn.ReLU in wrapped_layers
 
 
 @pytest.mark.parametrize(
@@ -76,12 +81,22 @@ def test_every_activation_layer_records_an_op(name: str) -> None:
 
 
 def test_sequential_relu_layer_is_captured() -> None:
-    """Sequential(Linear, ReLU, Linear) records all three ops in order."""
+    """Sequential(Linear, ReLU, Linear) records its input and all three ops in order."""
 
     model = nn.Sequential(nn.Linear(4, 3), nn.ReLU(), nn.Linear(3, 2))
     mx.eval(model.parameters())
     trace = tl.trace(model, mx.ones((2, 4)), backend="mlx")
-    assert _op_kinds(trace) == ["linear", "relu", "linear"]
+    assert _op_kinds(trace) == ["input", "linear", "relu", "linear"]
+
+
+def test_functional_compiled_activation_is_captured() -> None:
+    """A compiled activation called through mlx.nn records its op."""
+
+    def leaky(x: Any) -> Any:
+        return nn.leaky_relu(mx.matmul(x, mx.ones((4, 2))))
+
+    trace = tl.trace(leaky, mx.array([[-1.0, -0.5, 0.25, 1.0]]), backend="mlx")
+    assert _op_kinds(trace)[-2:] == ["matmul", "leaky_relu"]
 
 
 def test_lazy_parameter_model_stays_usable_after_trace() -> None:
