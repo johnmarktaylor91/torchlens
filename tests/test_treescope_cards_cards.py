@@ -7,6 +7,8 @@ CONTENT, never non-emptiness -- the historical ``_repr_html_`` returned a
 
 from __future__ import annotations
 
+import re
+
 import pytest
 import torch
 from torch import nn
@@ -139,6 +141,45 @@ def test_inference_mode_capture_renders_without_raise() -> None:
     html = log._repr_html_()
     assert "TorchLens Trace" in html
     assert "Traceback" not in html and "card unavailable" not in html
+
+
+def test_partial_trace_card_renders_under_inference_mode() -> None:
+    """The failure card renders inside ``torch.inference_mode`` too.
+
+    The failure card matters most when a forward has failed, and an
+    inference-mode forward is where the banner itself once raised. The
+    frontier names committed records by label; it never inlines a
+    record's tensor dump.
+    """
+
+    class DiesInInference(nn.Module):
+        """Fixture model that fails after two committed ops."""
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.a = nn.Linear(4, 4)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Raise after the linear and relu ops are committed."""
+            torch.relu(self.a(x))
+            raise RuntimeError("inference boom")
+
+    partial = None
+    with torch.inference_mode():
+        try:
+            tl.trace(DiesInInference(), torch.randn(2, 4))
+        except RuntimeError as error:
+            partial = tl.partial.from_failed_capture(error)
+        assert partial is not None
+        html = partial._repr_html_()
+    assert "card unavailable" not in html and "Traceback" not in html
+    assert "FAILED CAPTURE" in html
+    assert "inference boom" in html
+    assert "committed prefix" in html
+    frontier = re.search(r"frontier \(last committed\): ([^<]*)<", html)
+    assert frontier is not None
+    assert "relu" in frontier.group(1)
+    assert "Tensor contents" not in html
 
 
 def test_render_side_effect_free(recurrent_log) -> None:
