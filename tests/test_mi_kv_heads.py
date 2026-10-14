@@ -140,6 +140,20 @@ def value_grid(model: LlamaForCausalLM) -> mi.PatchGrid:
     return mi.patch_query_heads_grid(model, CLEAN, CORRUPTED, logit_diff, site="v")
 
 
+@pytest.fixture(scope="module")
+def group_grid(model: LlamaForCausalLM) -> mi.PatchGrid:
+    """The ordinary value-site grid, whose head axis counts KV groups."""
+
+    return mi.grid(model, CLEAN, CORRUPTED, logit_diff, sites="v", axes=("layer", "head"))
+
+
+@pytest.fixture(scope="module")
+def joint_grid(model: LlamaForCausalLM) -> mi.PatchGrid:
+    """Whole-layer value patches: every query head of a layer at once."""
+
+    return mi.grid(model, CLEAN, CORRUPTED, logit_diff, sites="v", axes=("layer",))
+
+
 @pytest.mark.parametrize("site", ["v", "k"])
 def test_every_cell_equals_the_repeat_kv_reference(
     model: LlamaForCausalLM, value_grid: mi.PatchGrid, site: str
@@ -161,11 +175,10 @@ def test_every_cell_equals_the_repeat_kv_reference(
 
 
 def test_group_heads_together_equal_the_kv_group_cell(
-    model: LlamaForCausalLM, value_grid: mi.PatchGrid
+    model: LlamaForCausalLM, value_grid: mi.PatchGrid, group_grid: mi.PatchGrid
 ) -> None:
     """All query heads of group g together reproduce the kv-group cell; one alone does not."""
 
-    group_grid = mi.grid(model, CLEAN, CORRUPTED, logit_diff, sites="v", axes=("layer", "head"))
     assert group_grid.coordinates["head"] == (0, 1)
     for row, address in enumerate(LAYERS):
         for group in (0, 1):
@@ -238,13 +251,13 @@ def test_two_expansions_refuse_kv_expansion_ambiguous(model: LlamaForCausalLM) -
 
 
 def test_interceptor_receipt_discloses_effect_source_and_annotates(
-    model: LlamaForCausalLM, value_grid: mi.PatchGrid, tmp_path: Path
+    model: LlamaForCausalLM, value_grid: mi.PatchGrid, joint_grid: mi.PatchGrid, tmp_path: Path
 ) -> None:
     """An interceptor grid is an ordinary query-head receipt that names its op."""
 
     clean = float(_trace_metric(model, CLEAN))
     corrupted = float(_trace_metric(model, CORRUPTED))
-    joint = mi.grid(model, CLEAN, CORRUPTED, logit_diff, sites="v", axes=("layer",))
+    joint = joint_grid
     receipt = tviz.receipt_from_patch_grid(
         value_grid,
         layer=LAYERS[0],
@@ -279,7 +292,7 @@ def test_interceptor_receipt_discloses_effect_source_and_annotates(
 
 
 def test_real_gqa_value_grid_builds_a_kv_group_receipt(
-    model: LlamaForCausalLM, tmp_path: Path
+    model: LlamaForCausalLM, group_grid: mi.PatchGrid, joint_grid: mi.PatchGrid, tmp_path: Path
 ) -> None:
     """A real GQA model's value-site grid becomes a kv-group receipt naming each group."""
 
@@ -287,8 +300,7 @@ def test_real_gqa_value_grid_builds_a_kv_group_receipt(
     facets = log.modules[LAYERS[0]].facets
     gqa = tviz.GqaInfo(n_query_heads=facets.get("n_q_heads"), n_kv_heads=facets.get("n_kv_heads"))
     log.cleanup()
-    group_grid = mi.grid(model, CLEAN, CORRUPTED, logit_diff, sites="v", axes=("layer", "head"))
-    joint = mi.grid(model, CLEAN, CORRUPTED, logit_diff, sites="v", axes=("layer",))
+    joint = joint_grid
     receipt = tviz.receipt_from_patch_grid(
         group_grid,
         layer=LAYERS[1],
