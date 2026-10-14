@@ -462,18 +462,19 @@ one exact `other_neurons` row.
 **Token-stream binding** *(`token_boundary_v1`; spelling documented-unstable)*
 : What makes `fed_by` spans checkable: a per-member descriptor in the reserved
   `"torchlens.boundary_facts"` sidecar family naming the captured stream the coordinates index
-  (`"input"`, the first integer-dtype input; or `"output"`), the `batch_row`, the row `length`,
-  the `ids_digest` of its token ids, optionally the member's own `completion` range, the
-  `excluded_ids` outside the eligible set (padding, special tokens), and `tokenizer` /
-  `template` identity strings. `relate` derives a default descriptor for a batch-of-one capture
-  whose ids are retained; attach a richer one with `torchlens.io.attach_sidecar` before relating.
-  A row reads `basis="verified"` only when both members are bound, each digest matches the
-  retained ids, every source span lies inside the source completion, and the token ids agree span
-  by span; anything less is `declared`. A claimed `verified`/`matched` row re-checks at every door
-  (relate, constructor, load): missing evidence makes it `declared`, contradicting evidence refuses
-  `bundle_relation_span_unverified`. `coverage` on a verified row is computed: covered eligible
-  source tokens over all eligible ones, where the eligible set is the bound completion range minus
-  `excluded_ids` (no bound completion range, no coverage).
+  (`"input"`, the first integer-dtype input; or `"output"`), the `batch_row`, the measured
+  `length` and `ids_digest` of its token ids (filled in by `relate` when left out), the member's
+  own `completion` range, the `excluded_ids` outside the eligible set (padding, special tokens),
+  and `tokenizer` / `template` identity strings. Attach one with `torchlens.io.attach_sidecar`
+  before relating; with none, `relate` derives an input-stream binding for a batch-of-one capture
+  whose ids are retained. A row reads `basis="verified"` only when both members are bound, each
+  digest matches the retained ids, the source binding names its completion range, every source
+  span lies inside it, and the token ids agree span by span; anything less is `declared`. A
+  claimed `verified`/`matched` row re-checks at every door (relate, constructor, load): missing
+  evidence makes it `declared`, contradicting evidence refuses `bundle_relation_span_unverified`,
+  and a `matched` claim that re-checks is stored as `verified`. `coverage` on a verified row is
+  computed: covered eligible source tokens over all eligible ones (the bound completion range
+  minus `excluded_ids`).
 
 **Bundle.upstream / Bundle.downstream** *(spelling documented-unstable)*
 : `b.upstream(name)` lists every member `name` transitively came after (what fed it), and

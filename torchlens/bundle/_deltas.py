@@ -11,7 +11,7 @@ unchanged; ``torchlens.bundle`` re-exports every name.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, Literal
 
 import torch
@@ -109,7 +109,8 @@ def _resolve_member_name(bundle: Bundle, member: str | Trace | None) -> str:
     """
 
     if member is None:
-        return next(iter(bundle.names))
+        # An empty bundle has no default member: refuse typed, never StopIteration.
+        return next(iter(bundle.names)) if bundle.names else bundle._baseline_or_raise(None)
     if isinstance(member, str):
         if member not in bundle:
             raise KeyError(f"Unknown bundle member {member!r}.")
@@ -183,8 +184,13 @@ def _delta_map_values(
     metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
     baseline_name: str,
     on: Literal["out", "grad"],
+    members: Sequence[str] | None = None,
 ) -> dict[str, dict[str, float]]:
-    """Compute per-node deltas from an already-gated baseline member."""
+    """Compute per-node deltas from an already-gated baseline member.
+
+    ``members`` restricts the compared members to the gated ones (``None``:
+    every member, which the public reads gate).
+    """
 
     result: dict[str, dict[str, float]] = {}
     supergraph = self.supergraph
@@ -197,7 +203,7 @@ def _delta_map_values(
         if reference is None:
             continue
         values: dict[str, float] = {}
-        for member_name in self.names:
+        for member_name in self.names if members is None else members:
             layer = node.layer_refs.get(member_name)
             candidate = _tensor_field(layer, on) if layer is not None else None
             if candidate is None:

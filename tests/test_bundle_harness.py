@@ -18,6 +18,7 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens._io.sidecar import SidecarError
 from torchlens.bundle import Bundle
 from torchlens.bundle._fed_by import (
     TOKEN_BOUNDARY_FAMILY_ID,
@@ -80,6 +81,15 @@ def _harness(model: _TinyLM) -> Bundle:
     return Bundle({"draft": _trace(model, _DRAFT_IDS), "critique": _trace(model, _CRITIQUE_IDS)})
 
 
+def _bound_harness(model: _TinyLM) -> Bundle:
+    """The harness with the draft's completion range bound (its output is [3, 7))."""
+
+    bundle = _harness(model)
+    completion = {"stream": "input", "batch_row": 0, "completion": [3, 7]}
+    attach_sidecar(bundle["draft"], TOKEN_BOUNDARY_FAMILY_ID, completion)
+    return bundle
+
+
 def _code(excinfo: pytest.ExceptionInfo[BaseException]) -> str:
     return str(excinfo.value.fields["code"])  # type: ignore[attr-defined]
 
@@ -111,6 +121,8 @@ def test_fed_by_row_admits_exactly_its_four_params() -> None:
         [[True, 2, 5, 7]],
         [[3, 2, 5, 7]],
         [[0, 2, 7, 5]],
+        [[0, 0, 5, 7]],
+        [[0, 2, 5, 5]],
         "auto",
         [[0.0, 2, 5, 7]],
     ],
@@ -185,20 +197,37 @@ def test_positional_relate_names_one_member_for_member_kinds(model: _TinyLM) -> 
 # ---------------------------------------------------------------------------
 
 
-def test_relate_binds_both_members_and_verifies_matching_spans(model: _TinyLM) -> None:
+def test_default_bindings_without_a_completion_range_stay_declared(model: _TinyLM) -> None:
     bundle = _harness(model)
     bundle.relate("fed_by", "critique", "draft", token_spans=[_SPAN], label="critique")
     (row,) = bundle.member_relations
-    assert row.params["basis"] == "verified"
-    assert "coverage" not in row.params, "no bound completion range: eligible set unknown"
-    draft_binding = member_binding(bundle["draft"])
-    assert draft_binding == {
+    assert row.params["basis"] == "declared", "matching ids alone do not show the output fed in"
+    assert member_binding(bundle["draft"]) == {
         "stream": "input",
         "batch_row": 0,
         "length": len(_DRAFT_IDS),
         "ids_digest": ids_digest(_DRAFT_IDS),
     }
     assert member_binding(bundle["critique"])["ids_digest"] == ids_digest(_CRITIQUE_IDS)
+
+
+def test_bound_completion_verifies_and_fills_the_measured_keys(model: _TinyLM) -> None:
+    bundle = _bound_harness(model)
+    bundle.relate("fed_by", "critique", "draft", token_spans=[_SPAN], label="critique")
+    (row,) = bundle.member_relations
+    assert row.params["basis"] == "verified"
+    assert row.params["coverage"] == 1.0
+    binding = member_binding(bundle["draft"])
+    assert binding["completion"] == [3, 7]
+    assert binding["ids_digest"] == ids_digest(_DRAFT_IDS) and binding["length"] == 7
+
+
+def test_prompt_overlap_outside_the_completion_does_not_verify(model: _TinyLM) -> None:
+    bundle = Bundle({"draft": _trace(model, [1, 2, 3, 7]), "critique": _trace(model, [1, 2, 9])})
+    completion = {"stream": "input", "batch_row": 0, "completion": [3, 4]}
+    attach_sidecar(bundle["draft"], TOKEN_BOUNDARY_FAMILY_ID, completion)
+    bundle.relate("fed_by", "critique", "draft", token_spans=[[0, 2, 0, 2]])
+    assert bundle.member_relations[0].params["basis"] == "declared"
 
 
 def test_coverage_counts_the_eligible_completion_tokens(model: _TinyLM) -> None:
@@ -239,12 +268,16 @@ def test_explicit_declared_basis_skips_binding(model: _TinyLM) -> None:
 
 
 def test_claimed_verified_row_rechecks_at_every_door(model: _TinyLM) -> None:
-    bundle = _harness(model)
+    bundle = _bound_harness(model)
     bundle.relate("fed_by", "critique", "draft", token_spans=[_SPAN])  # binds both
     fresh = Bundle(
         dict(bundle.members), member_relations=[_fed_by(token_spans=[_SPAN], basis="verified")]
     )
     assert fresh.member_relations[0].params["basis"] == "verified"
+    matched = Bundle(
+        dict(bundle.members), member_relations=[_fed_by(token_spans=[_SPAN], basis="matched")]
+    )
+    assert matched.member_relations[0].params["basis"] == "verified", "no matcher ran"
     with pytest.raises(BundleRelationError) as excinfo:
         Bundle(
             dict(bundle.members),
@@ -254,7 +287,7 @@ def test_claimed_verified_row_rechecks_at_every_door(model: _TinyLM) -> None:
 
 
 def test_fork_carries_verified_rows(model: _TinyLM) -> None:
-    bundle = _harness(model)
+    bundle = _bound_harness(model)
     bundle.relate("fed_by", "critique", "draft", token_spans=[_SPAN])
     child = bundle.fork()
     assert child.member_relations[0].params["basis"] == "verified"
@@ -268,7 +301,13 @@ def test_unverifiable_claim_clamps_to_declared(model: _TinyLM) -> None:
 
 def test_forged_binding_digest_contradicts(model: _TinyLM) -> None:
     bundle = _harness(model)
-    forged = {"stream": "input", "batch_row": 0, "length": 7, "ids_digest": ids_digest([0] * 7)}
+    forged = {
+        "stream": "input",
+        "batch_row": 0,
+        "length": 7,
+        "ids_digest": ids_digest([0] * 7),
+        "completion": [3, 7],
+    }
     attach_sidecar(bundle["draft"], TOKEN_BOUNDARY_FAMILY_ID, forged)
     bundle.relate("fed_by", "critique", "draft", token_spans=[_SPAN])
     assert bundle.member_relations[0].params["basis"] == "declared"
@@ -285,6 +324,38 @@ def test_spans_past_the_stream_refuse(model: _TinyLM) -> None:
     assert excinfo.value.fields["side"] == "source"
 
 
+def test_malformed_attached_binding_refuses_typed(model: _TinyLM) -> None:
+    bundle = _harness(model)
+    with pytest.raises(SidecarError) as excinfo:
+        attach_sidecar(
+            bundle["draft"], TOKEN_BOUNDARY_FAMILY_ID, {"stream": "logits", "batch_row": 0}
+        )
+    assert _code(excinfo) == "sidecar_payload_invalid"
+
+
+def test_empty_bundle_reads_refuse_typed_or_return_empty() -> None:
+    from torchlens.intervention.errors import BaselineUndeterminedError
+
+    empty = tl.Bundle()
+    assert empty.shared_op_labels == [] and empty.divergent_op_labels == []
+    with pytest.raises(BaselineUndeterminedError):
+        empty.delta_map("relative_l2")
+
+
+def test_show_diff_gates_only_the_rendered_pair(tmp_path: Path, model: _TinyLM) -> None:
+    clean = _trace(model, [1, 2, 3])
+    bundle = Bundle(
+        {"clean": clean, "patched": clean.fork("patched"), "router": _trace(_Other(), [4, 5])},
+        baseline="clean",
+    )
+    dot = bundle.show_diff(
+        left="clean", right="patched", vis_outpath=str(tmp_path / "d"), vis_save_only=True
+    )
+    assert "clean vs patched" in dot
+    with pytest.raises(BundleRelationshipError):
+        bundle.delta_map("relative_l2")
+
+
 def test_binding_descriptor_is_closed() -> None:
     from torchlens.bundle._fed_by import validate_descriptor
 
@@ -296,7 +367,7 @@ def test_binding_descriptor_is_closed() -> None:
         {**good, "ids_digest": "md5:00"},
         {**good, "completion": [2, 9]},
         {**good, "excluded_ids": ["pad"]},
-        {key: value for key, value in good.items() if key != "length"},
+        {key: value for key, value in good.items() if key != "stream"},
     ):
         with pytest.raises(ValueError):
             validate_descriptor(bad)
@@ -416,7 +487,7 @@ def test_empty_bundle_constructs_and_round_trips(tmp_path: Path, model: _TinyLM)
 
 
 def test_v10_bundle_with_spans_round_trips(tmp_path: Path, model: _TinyLM) -> None:
-    bundle = _harness(model)
+    bundle = _bound_harness(model)
     bundle.relate("fed_by", "critique", "draft", token_spans=[_SPAN], label="critique")
     bundle.save(tmp_path / "harness.tlspec")
     manifest = json.loads((tmp_path / "harness.tlspec" / "manifest.json").read_text())
@@ -429,7 +500,7 @@ def test_v10_bundle_with_spans_round_trips(tmp_path: Path, model: _TinyLM) -> No
 
 
 def test_tampered_artifact_span_refuses_at_load(tmp_path: Path, model: _TinyLM) -> None:
-    bundle = _harness(model)
+    bundle = _bound_harness(model)
     bundle.relate("fed_by", "critique", "draft", token_spans=[_SPAN])
     source = tmp_path / "harness.tlspec"
     bundle.save(source)

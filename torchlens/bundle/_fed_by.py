@@ -23,26 +23,29 @@ captured stream (``"input"``: the first integer-dtype input tensor;
 length, the content digest of the row's token ids, the member's own
 completion range inside that stream, the token ids outside the eligible set
 (padding, special tokens), and the tokenizer and template identity when known.
-TorchLens derives the descriptor from retained ids when it can (batch of one,
-no completion range, identities unknown); users attach a richer one through
-``torchlens.io.attach_sidecar`` before relating.
+Users attach one through ``torchlens.io.attach_sidecar`` before relating and
+may leave out the measured ``length``/``ids_digest``, which the positional
+``relate`` fills from the retained ids; with no descriptor it derives a
+default input-stream binding for a batch-of-one capture. Without a bound
+completion range a source cannot verify, because TorchLens cannot tell its
+output from its prompt.
 
 BASIS. A row reads ``"verified"`` only when TorchLens checked it in this
 process: both endpoints bound, each binding's digest equal to the member's
-retained ids, every source span inside the source completion range, and the
-token ids equal span by span. Otherwise the row is ``"declared"``. A claimed
-``"verified"``/``"matched"`` row arriving through any door (relate, the
-constructor, an artifact) is re-checked: unverifiable evidence (ids not
-retained, no binding) clamps to ``"declared"``; contradicting evidence
-refuses typed (``bundle_relation_span_unverified``). ``"matched"`` is written
-by the automatic span finder, which is not available yet.
+retained ids, the source binding naming its completion range, every source
+span inside it, and the token ids equal span by span. Otherwise the row is
+``"declared"``. A claimed ``"verified"``/``"matched"`` row arriving through
+any door (relate, the constructor, an artifact) is re-checked: unverifiable
+evidence (ids not retained, no binding, no completion range) clamps to
+``"declared"``; contradicting evidence refuses typed
+(``bundle_relation_span_unverified``). ``"matched"`` is reserved for the
+automatic span finder, which is not available yet; a ``"matched"`` claim that
+re-checks settles as ``"verified"``.
 
-COVERAGE is computed on verified rows whose source binding names its
-completion range: the covered fraction of the source's eligible tokens, where
-the eligible set is that completion range minus positions whose id is listed
-in ``excluded_ids`` (padding, special tokens). Without a bound completion range
-the eligible set is unknown and a verified row carries no coverage. On declared
-rows a user-supplied coverage is a declaration.
+COVERAGE is computed on verified rows: the covered fraction of the source's
+eligible tokens, where the eligible set is the bound completion range minus
+positions whose id is listed in ``excluded_ids`` (padding, special tokens). On
+declared rows a user-supplied coverage is a declaration.
 """
 
 from __future__ import annotations
@@ -56,6 +59,7 @@ import torch
 
 from .._io.sidecar import (
     SIDECAR_ANNOTATIONS_KEY,
+    SidecarError,
     SidecarFamily,
     attach_sidecar,
     list_sidecar_families,
@@ -74,8 +78,12 @@ EARNED_BASES = frozenset({"verified", "matched"})
 TOKEN_BOUNDARY_FAMILY_ID = "torchlens.boundary_facts"
 TOKEN_BOUNDARY_SCHEMA_ID = "token_boundary_v1"
 _TOKEN_STREAMS = frozenset({"input", "output"})
-_DESCRIPTOR_REQUIRED = frozenset({"stream", "batch_row", "length", "ids_digest"})
-_DESCRIPTOR_OPTIONAL = frozenset({"completion", "excluded_ids", "tokenizer", "template"})
+_DESCRIPTOR_REQUIRED = frozenset({"stream", "batch_row"})
+#: ``length`` and ``ids_digest`` are measured: a user may omit them and
+#: ``bind_member`` completes them from the retained ids before relating.
+_DESCRIPTOR_OPTIONAL = frozenset(
+    {"length", "ids_digest", "completion", "excluded_ids", "tokenizer", "template"}
+)
 _DIGEST_PREFIX = "sha256:"
 _LABEL_MAX_CHARS = 256
 
@@ -129,8 +137,11 @@ def normalize_token_spans(value: Any) -> list[list[int]]:
                 f"fed_by token_spans row {index} must be four non-negative ints "
                 f"[src_start, src_end, dst_start, dst_end], got {row!r}"
             )
-        if row[0] > row[1] or row[2] > row[3]:
-            raise ValueError(f"fed_by token_spans row {index} has start > end: {list(row)!r}")
+        if row[0] >= row[1] or row[2] >= row[3]:
+            raise ValueError(
+                f"fed_by token_spans row {index} must have start < end on both sides "
+                f"(an empty span claims nothing): {list(row)!r}"
+            )
         rows.append([int(item) for item in row])
     return rows
 
@@ -180,7 +191,18 @@ class _TokenBoundaryFamily(SidecarFamily):
     """``torchlens.boundary_facts`` family: one ``token_boundary_v1`` descriptor."""
 
     def validate_payload(self, payload: Any) -> None:
-        validate_descriptor(payload)
+        """Refuse a malformed descriptor typed, at attach and at every read."""
+
+        try:
+            validate_descriptor(payload)
+        except ValueError as exc:
+            raise SidecarError(
+                f"Sidecar payload for family {self.family_id!r} is not a valid "
+                f"token_boundary_v1 descriptor: {exc}",
+                code="sidecar_payload_invalid",
+                family_id=self.family_id,
+                remedy="Re-attach the descriptor through torchlens.io.attach_sidecar.",
+            ) from exc
 
 
 def validate_descriptor(payload: Any) -> dict[str, Any]:
@@ -198,9 +220,9 @@ def validate_descriptor(payload: Any) -> dict[str, Any]:
     if payload["stream"] not in _TOKEN_STREAMS:
         raise ValueError(f"token_boundary_v1 'stream' must be one of {sorted(_TOKEN_STREAMS)}")
     for key in ("batch_row", "length"):
-        if not _is_int(payload[key]) or payload[key] < 0:
+        if key in payload and (not _is_int(payload[key]) or payload[key] < 0):
             raise ValueError(f"token_boundary_v1 {key!r} must be a non-negative int")
-    digest = payload["ids_digest"]
+    digest = payload.get("ids_digest", _DIGEST_PREFIX)
     if not isinstance(digest, str) or not digest.startswith(_DIGEST_PREFIX):
         raise ValueError(f"token_boundary_v1 'ids_digest' must be a '{_DIGEST_PREFIX}<hex>' string")
     _validate_descriptor_optional(payload)
@@ -211,8 +233,10 @@ def _validate_descriptor_optional(payload: Mapping[str, Any]) -> None:
     """Validate the optional descriptor keys: completion, exclusions, identities."""
 
     completion = payload.get("completion")
-    if completion is not None and _int_range(completion, what="completion")[1] > payload["length"]:
-        raise ValueError("token_boundary_v1 'completion' ends past the stream length")
+    if completion is not None:
+        end = _int_range(completion, what="completion")[1]
+        if "length" in payload and end > payload["length"]:
+            raise ValueError("token_boundary_v1 'completion' ends past the stream length")
     excluded = payload.get("excluded_ids", [])
     if not isinstance(excluded, list) or not all(_is_int(item) for item in excluded):
         raise ValueError("token_boundary_v1 'excluded_ids' must be a list of ints")
@@ -276,7 +300,13 @@ def _stream_ids(trace: Trace, stream: str, batch_row: int) -> list[int] | None:
 
 
 def member_binding(trace: Trace) -> dict[str, Any] | None:
-    """Return the member's validated ``token_boundary_v1`` descriptor, if attached."""
+    """Return the member's validated ``token_boundary_v1`` descriptor, if attached.
+
+    Raises
+    ------
+    SidecarError
+        ``sidecar_payload_invalid`` for a malformed descriptor.
+    """
 
     namespace = getattr(trace, "annotations", {}).get(SIDECAR_ANNOTATIONS_KEY)
     if not isinstance(namespace, dict) or TOKEN_BOUNDARY_FAMILY_ID not in namespace:
@@ -285,51 +315,44 @@ def member_binding(trace: Trace) -> dict[str, Any] | None:
 
 
 def bind_member(trace: Trace) -> dict[str, Any] | None:
-    """Return the member's binding, deriving and attaching a default one if possible.
+    """Return the member's binding with its measured keys filled in, if possible.
 
-    The default descriptor binds the ``"input"`` stream of a batch-of-one
-    capture whose ids are retained; anything else stays unbound.
+    An attached descriptor missing ``length``/``ids_digest`` is completed
+    from the retained ids of the stream it names. With no descriptor, the
+    default binds the ``"input"`` stream of a batch-of-one capture (no
+    completion range, identities unknown). Anything else stays as it is.
     """
 
     existing = member_binding(trace)
-    if existing is not None:
+    if existing is None:
+        shape = _stream_shape(trace, "input")
+        if shape is None or len(shape) not in (1, 2) or (len(shape) == 2 and shape[0] != 1):
+            return None
+        existing = {"stream": "input", "batch_row": 0}
+    if "length" in existing and "ids_digest" in existing:
         return existing
-    shape = _stream_shape(trace, "input")
-    if shape is None or len(shape) not in (1, 2) or (len(shape) == 2 and shape[0] != 1):
-        return None
-    ids = _stream_ids(trace, "input", 0)
+    ids = _stream_ids(trace, str(existing["stream"]), int(existing["batch_row"]))
     if ids is None:
-        return None
-    descriptor = {
-        "stream": "input",
-        "batch_row": 0,
-        "length": len(ids),
-        "ids_digest": ids_digest(ids),
-    }
-    attach_sidecar(trace, TOKEN_BOUNDARY_FAMILY_ID, descriptor)
-    return descriptor
-
-
-def _stream_length(trace: Trace, binding: Mapping[str, Any] | None) -> int | None:
-    if binding is not None:
-        return int(binding["length"])
-    shape = _stream_shape(trace, "input")
-    return shape[-1] if shape else None
+        return existing if member_binding(trace) is not None else None
+    completed = {**existing, "length": len(ids), "ids_digest": ids_digest(ids)}
+    attach_sidecar(trace, TOKEN_BOUNDARY_FAMILY_ID, dict(completed))
+    return completed
 
 
 def check_span_bounds(
     spans: Sequence[Sequence[int]], reader: Trace, source: Trace, *, row_index: int
 ) -> None:
-    """Refuse span rows outside the members' known token streams.
+    """Refuse span rows outside the members' bound token streams.
 
-    Unbound members are measured on their input stream (the teacher-forced
-    convention); a member with no readable stream length is not checked.
+    Only a binding that names its ``length`` says what the coordinates index;
+    an unbound member's coordinates are a declaration and are not measured.
     """
 
     for side, trace, lo_index in (("source", source, 0), ("destination", reader, 2)):
-        length = _stream_length(trace, member_binding(trace))
-        if length is None:
+        binding = member_binding(trace)
+        if binding is None or "length" not in binding:
             continue
+        length = int(binding["length"])
         for span in spans:
             if span[lo_index + 1] > length:
                 raise BundleRelationError(
@@ -363,6 +386,11 @@ def assess_spans(
 ) -> tuple[str, float | None, str]:
     """Check declared spans against the bound streams of both members.
 
+    Verification needs both members bound (``length`` and ``ids_digest``
+    measured) and the SOURCE binding to name its ``completion`` range: only
+    then is "the earlier output reached the later prompt" checkable, rather
+    than "two token streams share some ids".
+
     Returns
     -------
     tuple[str, float | None, str]
@@ -372,25 +400,28 @@ def assess_spans(
     """
 
     source_binding, reader_binding = member_binding(source), member_binding(reader)
-    if source_binding is None or reader_binding is None or not spans:
-        return "unverifiable", None, "an endpoint carries no token_boundary_v1 binding"
+    for binding, who in ((source_binding, "source"), (reader_binding, "destination")):
+        if binding is None or "ids_digest" not in binding or "length" not in binding:
+            return "unverifiable", None, f"the {who} carries no measured token_boundary_v1 binding"
+    source_binding, reader_binding = (
+        cast("dict[str, Any]", source_binding),
+        cast("dict[str, Any]", reader_binding),
+    )
+    completion = source_binding.get("completion")
+    if completion is None:
+        return "unverifiable", None, "the source binding names no completion range"
     source_state, source_ids = _bound_ids(source, source_binding)
     reader_state, reader_ids = _bound_ids(reader, reader_binding)
     for state, who in ((source_state, "source"), (reader_state, "destination")):
         if state != "ok":
             return state, None, f"the {who} binding is {state} against its retained ids"
     source_ids, reader_ids = cast("list[int]", source_ids), cast("list[int]", reader_ids)
-    bound_completion = source_binding.get("completion")
-    completion = bound_completion or [0, len(source_ids)]
     for src_lo, src_hi, dst_lo, dst_hi in spans:
-        if not completion[0] <= src_lo <= src_hi <= completion[1]:
+        if not completion[0] <= src_lo < src_hi <= completion[1]:
             return "contradicted", None, f"source span {[src_lo, src_hi]} leaves the completion"
         if source_ids[src_lo:src_hi] != reader_ids[dst_lo:dst_hi]:
             span = [src_lo, src_hi, dst_lo, dst_hi]
             return "contradicted", None, f"token ids differ on span {span}"
-    if bound_completion is None:
-        # No bound completion range: the eligible set is unknown, so no coverage.
-        return "verified", None, "verified"
     excluded = set(source_binding.get("excluded_ids", []))
     eligible = [p for p in range(*completion) if source_ids[p] not in excluded]
     covered = {p for src_lo, src_hi, _, _ in spans for p in range(src_lo, src_hi)}
@@ -409,18 +440,21 @@ def settle_fed_by_params(
     """Return the row's params with the basis TorchLens can stand behind.
 
     ``assess_unclaimed`` (the positional ``relate`` door with ``basis``
-    omitted) binds the members and verifies the spans when it can.
+    omitted) first binds both members (filling measured keys), then verifies
+    the spans when it can. A claimed ``matched`` that verifies settles as
+    ``verified``: TorchLens checked the spans but did not find them.
     """
 
     settled = dict(params)
     spans = settled.get("token_spans") or []
-    check_span_bounds(spans, reader, source, row_index=row_index)
     claimed = settled.get("basis")
-    if not spans or (claimed not in EARNED_BASES and not (assess_unclaimed and claimed is None)):
-        return settled
-    if claimed is None:
+    assess = bool(spans) and (claimed in EARNED_BASES or (assess_unclaimed and claimed is None))
+    if assess and claimed is None:
         bind_member(source)
         bind_member(reader)
+    check_span_bounds(spans, reader, source, row_index=row_index)
+    if not assess:
+        return settled
     state, coverage, reason = assess_spans(spans, reader, source)
     if state == "contradicted" and claimed in EARNED_BASES:
         raise BundleRelationError(
@@ -439,8 +473,7 @@ def settle_fed_by_params(
     if state != "verified":
         settled["basis"] = "declared"
         return settled
-    if claimed is None:
-        settled["basis"] = "verified"
+    settled["basis"] = "verified"
     if coverage is not None:
         settled["coverage"] = coverage
     else:

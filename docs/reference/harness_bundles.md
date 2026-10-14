@@ -39,11 +39,14 @@ critique_ids = torch.tensor([[4, 5, 6, 7, 8]])  # the critique prompt quotes the
 b = tl.Bundle()
 b.add(tl.trace(lm, draft_ids), names="draft")
 b.add(tl.trace(lm, critique_ids), names="critique")
+# Bind which tokens of the draft's stream are its output (positions 3 to 6).
+draft_output = {"stream": "input", "batch_row": 0, "completion": [3, 6]}
+tl.io.attach_sidecar(b["draft"], "torchlens.boundary_facts", draft_output)
 b.relate("fed_by", "critique", "draft", token_spans=[[3, 6, 1, 4]], label="critique")
 
 row = b.member_relations[0]
 assert (row.from_member, row.to_member) == ("critique", "draft")
-assert row.params["basis"] == "verified"
+assert row.params["basis"] == "verified" and row.params["coverage"] == 1.0
 assert b.upstream("critique") == ("draft",)
 assert b.downstream("draft") == ("critique",)
 ```
@@ -82,25 +85,29 @@ sidecar family naming
 
 - `stream`: which captured tensor the coordinates index (`"input"`, the first integer-dtype input
   of the capture; or `"output"`);
-- `batch_row` and `length` of the indexed row, and `ids_digest`, the digest of its token ids;
-- optionally `completion`, the member's own output range inside that stream; `excluded_ids`,
-  token ids outside the eligible set (padding, special tokens); and `tokenizer` / `template`
-  identity strings.
+- `batch_row`, and the measured `length` and `ids_digest` (the digest of the row's token ids),
+  which you may leave out: `relate` fills them from the retained ids;
+- `completion`, the member's own output range inside that stream, which a source needs before
+  any of its rows can verify; `excluded_ids`, token ids outside the eligible set (padding,
+  special tokens); and `tokenizer` / `template` identity strings.
 
-When you relate with `basis` omitted, TorchLens derives a default binding for a batch-of-one
-capture whose ids are retained (input stream, no completion range, identities unknown). For more,
-attach a descriptor before relating with
-`torchlens.io.attach_sidecar(trace, "torchlens.boundary_facts", {...})`.
+Attach a descriptor before relating with
+`torchlens.io.attach_sidecar(trace, "torchlens.boundary_facts", {...})`, as above. When you relate
+with `basis` omitted and a member has none, TorchLens derives a default input-stream binding for a
+batch-of-one capture whose ids are retained; it has no completion range, so a source bound only
+that way leaves its rows declared.
 
 `basis` says what the row stands on:
 
 - `"verified"`: TorchLens checked it in this process. Both members are bound, each binding's
-  digest equals the member's retained ids, every source span lies inside the source completion
-  range (the whole stream when none is bound), and the token ids agree span by span.
+  digest equals the member's retained ids, the source binding names its completion range, every
+  source span lies inside it, and the token ids agree span by span. Shared prompt tokens alone
+  never verify a feed.
 - `"declared"`: anything less. Retokenized or paraphrased text, a batch row TorchLens cannot pick,
   or ids that were not retained all leave a row declared. A row without a binding can never read
   as verified.
-- `"matched"`: reserved for automatic span finding, which is not available yet.
+- `"matched"`: reserved for automatic span finding, which is not available yet; a `"matched"`
+  claim that re-checks is stored as `"verified"`.
 
 A row claiming `"verified"` or `"matched"` is checked again wherever it enters a bundle (relate,
 the constructor, loading an artifact). Missing evidence turns it into `"declared"`; evidence that
@@ -108,9 +115,9 @@ contradicts it refuses with `bundle_relation_span_unverified`. Spans past a memb
 refuse with `bundle_relation_span_out_of_bounds`.
 
 `coverage` on a verified row is computed: the covered share of the source's eligible tokens, where
-the eligible set is the bound completion range minus `excluded_ids`. Without a bound completion
-range the eligible set is unknown and a verified row carries no coverage. On a declared row,
-`coverage` is whatever you declared.
+the eligible set is the bound completion range minus `excluded_ids`. On a declared row, `coverage`
+is whatever you declared. Span rows need start < end on both sides; spans are measured against a
+member's stream only when its binding names the length.
 
 ## Reading the graph
 

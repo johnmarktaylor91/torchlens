@@ -240,7 +240,8 @@
   Spans bind to member token streams through a `token_boundary_v1` descriptor in the reserved
   `torchlens.boundary_facts` sidecar family (stream, batch row, length, ids digest, completion
   range, excluded ids, tokenizer/template); `verified` only when both bindings match the
-  retained ids and the ids agree span by span, re-checked at every door (unverifiable clamps
+  retained ids, the source binding names its completion range, and the ids agree span by span
+  (shared prompt tokens never verify), re-checked at every door (unverifiable clamps
   to `declared`, contradicted refuses `bundle_relation_span_unverified`; out-of-range spans
   refuse `bundle_relation_span_out_of_bounds`). `fed_by` is an ordering kind for the gate.
   `b.upstream(name)` / `b.downstream(name)` (helper-table methods) walk the ordering kinds;

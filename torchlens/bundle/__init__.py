@@ -2310,9 +2310,9 @@ class Bundle:
         """
 
         member_keys = self._member_key_lists(key_fn)
-        key_sets = [set(keys) for keys in member_keys]
+        key_sets = [set(keys) for keys in member_keys] or [set()]
         shared = set.intersection(*key_sets)
-        return [key for key in member_keys[0] if key in shared]
+        return [key for key in (member_keys or [[]])[0] if key in shared]
 
     def _divergent(self, key_fn: Callable[[Trace], Sequence[Any]]) -> list[str]:
         """Return keys present in some members but not every member.
@@ -2329,7 +2329,7 @@ class Bundle:
         """
 
         member_keys = self._member_key_lists(key_fn)
-        key_sets = [set(keys) for keys in member_keys]
+        key_sets = [set(keys) for keys in member_keys] or [set()]
         shared = set.intersection(*key_sets)
         union = set.union(*key_sets)
         divergent = union - shared
