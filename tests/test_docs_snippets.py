@@ -58,6 +58,7 @@ DOC_FILE_GROUPS: dict[str, tuple[str, ...]] = {
     "reference_tooling": (
         "reference/debug.md",
         "reference/export.md",
+        "reference/harness_bundles.md",
     ),
     "reference_views": (
         "reference/attribution.md",

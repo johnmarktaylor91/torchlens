@@ -1,6 +1,14 @@
 {
  "contract": {
   "component_schema_versions": {
+   "bundle_relation_kinds": [
+    "alternative_of",
+    "episode_member",
+    "escalates",
+    "fed_by",
+    "forked_from",
+    "successor_of"
+   ],
    "nonpersistent_buffer_family": "runnable_nonpersistent_buffer_v1",
    "runnable_activation_payload": "selected_activation_v2",
    "runnable_call_recipe": "non_tensor_args_tensor_slots_context_and_obligations_v3",
@@ -11,6 +19,7 @@
     "sparse_recorded_taken_path_v1"
    ],
    "state_dict_blob_family": "state_dict_v1",
+   "token_boundary_schema": "token_boundary_v1",
    "witness_family_registry": "witness_family_registry_v2"
   },
   "component_specs": {
@@ -4081,5 +4090,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "857d68c15278e3ee5e5a3e911c352207f6221217e1ea6d6a8825fe393966292b"
+ "writer_contract_digest": "d3b133da632552fd15a4e1c02ebb36939ab4e22e8925dc17d7f78967b04d2437"
 }

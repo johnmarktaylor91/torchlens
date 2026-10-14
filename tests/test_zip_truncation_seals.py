@@ -14,7 +14,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.bundle._deltas import _output_layer_pairs
 from torchlens.errors import BundleMemberError
+from torchlens.intervention.errors import BundleRelationshipError
 
 
 class _OneOutputModel(nn.Module):
@@ -50,8 +52,13 @@ def test_bundle_output_delta_refuses_output_arity_mismatch() -> None:
     one = tl.trace(_OneOutputModel(), x, capture=tl.options.CaptureOptions(intervention_ready=True))
     bundle = tl.bundle({"baseline": two, "lost_output": one}, baseline="baseline")
 
-    with pytest.raises(BundleMemberError, match="structurally divergent"):
+    # The comparison gate now refuses the pair first (the two graphs are not
+    # one model's); the arity guard below it stays the second line of defence.
+    with pytest.raises(BundleRelationshipError) as excinfo:
         bundle.output_delta("baseline")
+    assert excinfo.value.fields["code"] == "bundle_gate_model_axis_unmet"
+    with pytest.raises(BundleMemberError, match="structurally divergent"):
+        _output_layer_pairs(two, one)
 
 
 def test_bundle_output_delta_still_works_on_matching_arity() -> None:

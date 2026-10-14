@@ -228,6 +228,26 @@
   (`member_relations=`, `Bundle.relate`, `Bundle.derive_episode_status` — a derived fold,
   never Bundle-level settlement; mutators cascade explicitly or refuse typed). Doc of record:
   `docs/reference/episode_capture.md`.
+- HARNESS BUNDLES (phase 1; every spelling DOCUMENTED-UNSTABLE; doc of record
+  `docs/reference/harness_bundles.md`): no new datatype, the Bundle plus its relation table is
+  the harness graph. Relation kind `fed_by` (tlspec v10): "critique fed_by draft", the later
+  member's prompt contains the earlier member's output; CONTENT provenance only (a router
+  decision without a text feed is `successor_of` plus application metadata; no
+  control-dependency kind). Params exactly `token_spans` (four-int half-open rows), `basis`
+  (`declared`/`verified`/`matched`), `coverage`, `label` (free text, never interpreted).
+  Positional `b.relate("fed_by", "critique", "draft", token_spans=[[3, 6, 1, 4]])` beside the
+  row form; `token_spans="auto"` refuses `bundle_relation_auto_spans_unavailable` until phase 2.
+  Spans bind to member token streams through a `token_boundary_v1` descriptor in the reserved
+  `torchlens.boundary_facts` sidecar family (stream, batch row, length, ids digest, completion
+  range, excluded ids, tokenizer/template); `verified` only when both bindings match the
+  retained ids, the source binding names its completion range, and the ids agree span by span
+  (shared prompt tokens never verify), re-checked at every door (unverifiable clamps
+  to `declared`, contradicted refuses `bundle_relation_span_unverified`; out-of-range spans
+  refuse `bundle_relation_span_out_of_bounds`). `fed_by` is an ordering kind for the gate.
+  `b.upstream(name)` / `b.downstream(name)` (helper-table methods) walk the ordering kinds;
+  `b.node(site, members=[...])` scopes the gate to a subset; `delta_map`/`norm_delta`/
+  `output_delta`/`compare` (and `store_comparison`) now run the comparison gate on every
+  (baseline, member) pair; `tl.Bundle()` builds an empty bundle that saves and loads.
 - EXPERIMENTS REMEMBER (F03; every spelling DOCUMENTED-UNSTABLE pending
   naming-session ratification; doc of record `docs/reference/experiment_ledger.md`):
   the Bundle is the MATERIAL record — persisted random `bundle_id` (never a

@@ -88,7 +88,14 @@ def bundle_diff(
 
     left_name, right_name = _resolve_side_names(bundle, left=left, right=right)
     baseline_ref = baseline if baseline is not None else left_name
-    delta_map = bundle.delta_map(metric, baseline=baseline_ref, on=on)
+    # Gate only the pairs this view renders (baseline against each side), so an
+    # unrelated third member does not refuse a two-member diff.
+    from ..bundle._deltas import _delta_map_values
+
+    baseline_name = bundle._baseline_or_raise(baseline_ref)
+    sides = sorted({left_name, right_name} - {baseline_name})
+    bundle._require_comparable("delta_map", pairs=[(baseline_name, side) for side in sides])
+    delta_map = _delta_map_values(bundle, metric, baseline_name, on, [baseline_name, *sides])
     layer_to_node = _layer_to_supergraph_node(bundle)
     pairs = _select_pairs(
         bundle.aligned_pairs(left_name, right_name),
