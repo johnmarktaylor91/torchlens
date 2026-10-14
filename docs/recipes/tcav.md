@@ -41,12 +41,14 @@ RESULT = accuracy > 0.9
 ## 1. Learn the CAV at a layer
 
 Concept examples carry the direction; random examples do not. The CAV is the
-unit normal of a linear classifier separating their activations at site `"1"`
-(the ReLU output).
+unit normal of a linear classifier separating their activations at site `"0"`
+(the first Linear layer's output, before the ReLU). At the ReLU output the
+class logit is linear in the activation, so its gradient is the same for every
+input and the score could only be 0 or 1.
 
 ```python
 # recipe-test: tool=torchlens expected=True
-SITE = "1"
+SITE = "0"
 
 
 def site_activations(x):
