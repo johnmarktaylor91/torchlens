@@ -1272,6 +1272,101 @@ jobs:
           pytest $FILES -p no:randomly --tb=short -q --junitxml="${{ runner.temp }}/bridges.junit.xml"
           python scripts/check_ci_executed_tests.py "${{ runner.temp }}/bridges.junit.xml" 0 --min-passed "$FLOOR"
 
+  peer-recipes:
+    # The executed recipe pages (tests/test_recipe_pages_executed.py) skip a
+    # third-party page when its tool is not installed, so every other leg runs
+    # only the TorchLens-only pages. This leg installs every peer at the
+    # version its page pins, sets TORCHLENS_RECIPE_PEERS=1 so a missing tool
+    # fails instead of skipping, and fails on any skip. torch, transformers
+    # and torchvision are held at the versions the base install resolved, so
+    # no peer can move them. The base install is the enforcing smoke row
+    # (py3.10, torch 2.13.0). LXT (the LRP recipe) is Clear BSD licensed,
+    # which permits this CI use.
+    name: Recipe pages with every peer installed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.10"
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Install graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+
+      - name: Install the enforcing smoke row's environment
+        run: |
+          uv venv "$RUNNER_TEMP/peer-venv" --python 3.10
+          # --index-strategy unsafe-best-match rationale: both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          uv pip install --python "$RUNNER_TEMP/peer-venv/bin/python" \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,tabular,viz]" \
+            "torch==2.13.0+cpu" \
+            "torchvision==0.28.0+cpu" \
+            numpy \
+            "pydot==4.0.1" \
+            "graphviz==0.21" \
+            "transformers==5.18.0"
+
+      - name: Install every recipe peer at its page's pin
+        run: |
+          PY="$RUNNER_TEMP/peer-venv/bin/python"
+          TV=$("$PY" -c 'import torch; print(torch.__version__.split("+")[0])')
+          TF=$("$PY" -c 'import transformers; print(transformers.__version__)')
+          TVV=$("$PY" -c 'import torchvision; print(torchvision.__version__.split("+")[0])')
+          uv pip install --python "$PY" \
+            weightwatcher==0.7.7 powerlaw==2.0.0 quantus==0.6.0 \
+            opencv-python==5.0.0.93 scikit-image==0.25.2 cachetools==7.2.1 \
+            himalaya==0.4.11 scikit-learn==1.7.2 scipy==1.15.3 \
+            "netrep @ git+https://github.com/ahwillia/netrep@0186b8a77ec1ebaf541cc8f7173cb2556df8a8f0" \
+            "torch==$TV" "transformers==$TF" "torchvision==$TVV"
+          # These three declare dependencies that would move torch or
+          # transformers; their pages install them with --no-deps too.
+          uv pip install --python "$PY" --no-deps \
+            tuned-lens==0.2.0 \
+            "cornet @ git+https://github.com/dicarlolab/CORnet@d0cc17d4b34ad44dedb01683b70eafd15515adad" \
+            "lxt @ git+https://github.com/rachtibat/LRP-eXplains-Transformers@f04344177551bfcc3665e88afe96501f43fe560b"
+          uv pip freeze --python "$PY" > "$RUNNER_TEMP/peer-freeze.txt"
+          cat "$RUNNER_TEMP/peer-freeze.txt"
+
+      - name: Run the recipe pages with the peers required
+        env:
+          TORCHLENS_RECIPE_PEERS: "1"
+          OMP_NUM_THREADS: "1"
+        run: |
+          "$RUNNER_TEMP/peer-venv/bin/python" -m pytest tests/test_recipe_pages_executed.py \
+            -rA --tb=short -p no:cacheprovider \
+            --junitxml="$RUNNER_TEMP/peer-recipes.junit.xml"
+
+      - name: Fail on any skipped recipe page
+        # A skip counts as a failure on this leg (maximum skipped fraction 0):
+        # every page's peer is installed, so a skip means a page went unrun.
+        run: |
+          "$RUNNER_TEMP/peer-venv/bin/python" scripts/check_ci_executed_tests.py \
+            "$RUNNER_TEMP/peer-recipes.junit.xml" 13 0
+
+      - name: Upload the peer freeze and junit
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nightly-peer-recipes
+          path: |
+            ${{ runner.temp }}/peer-freeze.txt
+            ${{ runner.temp }}/peer-recipes.junit.xml
+          retention-days: 30
+
   brainscore-live:
     # F20 (brainpipe memo D-23/F-2; packaging_requests 2026-08-28, landed by
     # D05): the live Brain-Score verification leg -- released brainscore-vision
