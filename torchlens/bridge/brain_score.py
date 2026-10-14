@@ -215,6 +215,51 @@ def get_activations_fn(
     return get_activations
 
 
+class _ActivationsModel:
+    """Brain-Score activations model over a TorchLens-backed extractor helper.
+
+    Mirrors only the ``PytorchWrapper`` surface Brain-Score's plugin path
+    reads (brainscore-vision 2.4.1): ``ModelCommitment.__init__`` calls
+    ``activations_model._extractor.set_visual_degrees`` (
+    ``model_helpers/brain_transformation/__init__.py:36``) and hands the
+    object to ``LayerMappedModel`` / ``LabelBehavior``, which read
+    ``.identifier`` (``brain_transformation/neural.py``) and call it with
+    stimuli and layers. ``from_paths``, ``from_stimulus_set`` and the hook
+    registrars are installed by the helper's own ``insert_attrs``, exactly as
+    ``PytorchWrapper.__init__`` does.
+
+    Parameters
+    ----------
+    extractor:
+        The ``ActivationsExtractorHelper`` serving TorchLens activations.
+    """
+
+    def __init__(self, extractor: Any) -> None:
+        """Hold the helper and install its delegating attributes."""
+
+        self._extractor = extractor
+        insert_attrs = getattr(extractor, "insert_attrs", None)
+        if callable(insert_attrs):
+            insert_attrs(self)
+
+    @property
+    def identifier(self) -> Any:
+        """Brain-Score activations identifier (stored on the helper)."""
+
+        return self._extractor.identifier
+
+    @identifier.setter
+    def identifier(self, value: Any) -> None:
+        """Set the helper's activations identifier."""
+
+        self._extractor.identifier = value
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Extract activations through the helper (stimuli, ``layers=``)."""
+
+        return self._extractor(*args, **kwargs)
+
+
 def activations_extractor(
     model: nn.Module,
     preprocessing: Callable[[Any], Any] | None,
@@ -224,12 +269,15 @@ def activations_extractor(
     device: torch.device | str | None = None,
     **extractor_kwargs: Any,
 ) -> Any:
-    """Build a Brain-Score ``ActivationsExtractorHelper`` over TorchLens capture.
+    """Build a Brain-Score activations model over TorchLens capture.
 
-    Drop-in for the extractor a Brain-Score ``PytorchWrapper`` builds
-    internally: call it with stimuli and layers, or hand it to model-commitment
-    machinery. Capture runs through TorchLens instead of forward hooks, so
-    benchmark layer lists may address functional ops, not just modules.
+    Drop-in for a Brain-Score ``PytorchWrapper``: call it with stimuli and
+    layers, or hand it to model-commitment machinery
+    (``ModelCommitment(activations_model=...)`` in a model plugin). The
+    configured ``ActivationsExtractorHelper`` is its ``_extractor``, as on
+    ``PytorchWrapper``. Capture runs through TorchLens instead of forward
+    hooks, so benchmark layer lists may address functional ops, not just
+    modules.
 
     Parameters
     ----------
@@ -254,7 +302,8 @@ def activations_extractor(
     Returns
     -------
     Any
-        A configured ``brainscore_vision.model_helpers.activations.core.
+        A ``PytorchWrapper``-shaped activations model whose ``_extractor`` is
+        a configured ``brainscore_vision.model_helpers.activations.core.
         ActivationsExtractorHelper``.
 
     Raises
@@ -274,11 +323,13 @@ def activations_extractor(
         ) from exc
 
     get_activations = get_activations_fn(model, layer_map=layer_map, device=device)
-    return ActivationsExtractorHelper(
-        identifier=identifier or model.__class__.__name__,
-        get_activations=get_activations,
-        preprocessing=preprocessing,
-        **extractor_kwargs,
+    return _ActivationsModel(
+        ActivationsExtractorHelper(
+            identifier=identifier or model.__class__.__name__,
+            get_activations=get_activations,
+            preprocessing=preprocessing,
+            **extractor_kwargs,
+        )
     )
 
 
