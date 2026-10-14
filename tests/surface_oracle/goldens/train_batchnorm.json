@@ -3540,7 +3540,7 @@
     "class_source_line": null,
     "class_source_location": null,
     "cls": null,
-    "collapse_score": "0.0",
+    "collapse_score": "1.0",
     "custom_attributes": {
      "\"affine\"": true,
      "\"eps\"": "1e-05",
@@ -9549,7 +9549,7 @@
    "module_collapse_order": [
     [
      "bn",
-     "0.0"
+     "1.0"
     ],
     [
      "self",
@@ -13324,7 +13324,7 @@
     "class_source_line": null,
     "class_source_location": null,
     "cls": null,
-    "collapse_score": "0.0",
+    "collapse_score": "1.0",
     "custom_attributes": {
      "\"affine\"": true,
      "\"eps\"": "1e-05",
@@ -19321,7 +19321,7 @@
    "module_collapse_order": [
     [
      "bn",
-     "0.0"
+     "1.0"
     ],
     [
      "self",
@@ -23084,7 +23084,7 @@
     "class_source_line": null,
     "class_source_location": null,
     "cls": null,
-    "collapse_score": "0.0",
+    "collapse_score": "1.0",
     "custom_attributes": {
      "\"affine\"": true,
      "\"eps\"": "1e-05",
@@ -29033,7 +29033,7 @@
    "module_collapse_order": [
     [
      "bn",
-     "0.0"
+     "1.0"
     ],
     [
      "self",
@@ -32802,7 +32802,7 @@
     "class_source_line": null,
     "class_source_location": null,
     "cls": null,
-    "collapse_score": "0.0",
+    "collapse_score": "1.0",
     "custom_attributes": {
      "\"affine\"": true,
      "\"eps\"": "1e-05",
@@ -38811,7 +38811,7 @@
    "module_collapse_order": [
     [
      "bn",
-     "0.0"
+     "1.0"
     ],
     [
      "self",
@@ -42559,7 +42559,7 @@
     "class_source_line": null,
     "class_source_location": null,
     "cls": null,
-    "collapse_score": "0.0",
+    "collapse_score": "1.0",
     "custom_attributes": {
      "\"affine\"": true,
      "\"eps\"": "1e-05",
@@ -48311,7 +48311,7 @@
    "module_collapse_order": [
     [
      "bn",
-     "0.0"
+     "1.0"
     ],
     [
      "self",

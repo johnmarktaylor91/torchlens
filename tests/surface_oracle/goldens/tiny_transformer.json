@@ -12667,7 +12667,7 @@
     "class_source_line": null,
     "class_source_location": null,
     "cls": null,
-    "collapse_score": "0.0",
+    "collapse_score": "1.0",
     "custom_attributes": {
      "\"activation_relu_or_gelu\"": 1,
      "\"norm_first\"": false
@@ -14366,7 +14366,7 @@
     "class_source_line": null,
     "class_source_location": null,
     "cls": null,
-    "collapse_score": "0.0",
+    "collapse_score": "0.705882",
     "custom_attributes": {
      "\"add_zero_attn\"": false,
      "\"batch_first\"": true,
@@ -35480,7 +35480,11 @@
    "module_collapse_order": [
     [
      "encoder",
-     "0.0"
+     "1.0"
+    ],
+    [
+     "encoder.self_attn",
+     "0.705882"
     ],
     [
      "encoder.dropout",
@@ -35508,10 +35512,6 @@
     ],
     [
      "encoder.norm2",
-     "0.0"
-    ],
-    [
-     "encoder.self_attn",
      "0.0"
     ],
     [
@@ -48556,7 +48556,7 @@
     "class_source_line": null,
     "class_source_location": null,
     "cls": null,
-    "collapse_score": "0.0",
+    "collapse_score": "1.0",
     "custom_attributes": {
      "\"activation_relu_or_gelu\"": 1,
      "\"norm_first\"": false
@@ -50255,7 +50255,7 @@
     "class_source_line": null,
     "class_source_location": null,
     "cls": null,
-    "collapse_score": "0.0",
+    "collapse_score": "0.705882",
     "custom_attributes": {
      "\"add_zero_attn\"": false,
      "\"batch_first\"": true,
@@ -71357,7 +71357,11 @@
    "module_collapse_order": [
     [
      "encoder",
-     "0.0"
+     "1.0"
+    ],
+    [
+     "encoder.self_attn",
+     "0.705882"
     ],
     [
      "encoder.dropout",
@@ -71385,10 +71389,6 @@
     ],
     [
      "encoder.norm2",
-     "0.0"
-    ],
-    [
-     "encoder.self_attn",
      "0.0"
     ],
     [
@@ -84497,7 +84497,7 @@
     "class_source_line": null,
     "class_source_location": null,
     "cls": null,
-    "collapse_score": "0.0",
+    "collapse_score": "1.0",
     "custom_attributes": {
      "\"activation_relu_or_gelu\"": 1,
      "\"norm_first\"": false
@@ -86196,7 +86196,7 @@
     "class_source_line": null,
     "class_source_location": null,
     "cls": null,
-    "collapse_score": "0.0",
+    "collapse_score": "0.705882",
     "custom_attributes": {
      "\"add_zero_attn\"": false,
      "\"batch_first\"": true,
@@ -107310,7 +107310,11 @@
    "module_collapse_order": [
     [
      "encoder",
-     "0.0"
+     "1.0"
+    ],
+    [
+     "encoder.self_attn",
+     "0.705882"
     ],
     [
      "encoder.dropout",
@@ -107338,10 +107342,6 @@
     ],
     [
      "encoder.norm2",
-     "0.0"
-    ],
-    [
-     "encoder.self_attn",
      "0.0"
     ],
     [
@@ -120382,7 +120382,7 @@
     "class_source_line": null,
     "class_source_location": null,
     "cls": null,
-    "collapse_score": "0.0",
+    "collapse_score": "1.0",
     "custom_attributes": {
      "\"activation_relu_or_gelu\"": 1,
      "\"norm_first\"": false
@@ -122081,7 +122081,7 @@
     "class_source_line": null,
     "class_source_location": null,
     "cls": null,
-    "collapse_score": "0.0",
+    "collapse_score": "0.705882",
     "custom_attributes": {
      "\"add_zero_attn\"": false,
      "\"batch_first\"": true,
@@ -141959,7 +141959,11 @@
    "module_collapse_order": [
     [
      "encoder",
-     "0.0"
+     "1.0"
+    ],
+    [
+     "encoder.self_attn",
+     "0.705882"
     ],
     [
      "encoder.dropout",
@@ -141987,10 +141991,6 @@
     ],
     [
      "encoder.norm2",
-     "0.0"
-    ],
-    [
-     "encoder.self_attn",
      "0.0"
     ],
     [
