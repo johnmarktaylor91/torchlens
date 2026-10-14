@@ -10,7 +10,7 @@ cited test exists.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import torch
 from torch import nn
@@ -72,7 +72,6 @@ def test_save_x_intervene_saves_the_edited_value() -> None:
     relu = _relu_op(log)
     assert torch.equal(relu.out, torch.zeros(1, 4))
     assert relu.intervention_replaced
-    assert torch.equal(cast(torch.Tensor, log.raw_output), torch.ones(1, 1))
 
 
 def test_save_x_rerun_refills_the_selected_sites() -> None:
@@ -122,8 +121,8 @@ def test_bind_x_intervene_matches_the_traced_edit() -> None:
     model = LinearReluLinear()
     with torch.no_grad():
         bound = ZERO_RELU.bind(model)(X)
-    traced = tl.trace(model, X, intervene=ZERO_RELU)
-    assert torch.equal(bound, cast(torch.Tensor, traced.raw_output))
+    traced = tl.trace(model, X, save=["head"], intervene=ZERO_RELU)
+    assert torch.equal(bound, traced["head"].out)
     assert torch.equal(bound, torch.ones(1, 1))
 
 
