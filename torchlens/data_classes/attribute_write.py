@@ -42,10 +42,11 @@ class AttributeWrite:
     -----
     Session-time only: a saved and reloaded trace has no record
     (``Module.attribute_writes`` is ``None``). Objects the capture tracks by
-    identity (custom objects, containers over 128 items or nested deeper than
-    64 levels, containers holding unsupported values) are recorded only when
-    the forward rebinds or removes them; a change inside such an object is
-    neither recorded nor undone. Rebinding to an equal immutable scalar is not
+    identity (custom objects, including those held inside a container, and the
+    levels of a container nested deeper than 256, which the capture names in a
+    ``capture_state_restore_incomplete`` warning) are recorded only when the
+    forward rebinds or removes them; a change inside such an object is neither
+    recorded nor undone. Builtin containers of any size are tracked by value. Rebinding to an equal immutable scalar is not
     a write. A capture that re-ran the forward (escape rescue) records the net
     effect of both runs.
     """

@@ -314,8 +314,9 @@ def test_edge_counters_match_unmemoized_reference() -> None:
     for name, model, trace in _traces():
         try:
             ops = trace.ops
+            rows = trace.layer_list  # every row: edges touch input/output/buffer rows too
             direct_edges = {
-                (op.label, ops[child_label].label) for op in ops for child_label in op.children
+                (op.label, ops[child_label].label) for op in rows for child_label in op.children
             }
             compute_ops = trace.compute_ops
             compute_labels = {op.label for op in compute_ops}
@@ -327,7 +328,7 @@ def test_edge_counters_match_unmemoized_reference() -> None:
             }
             direct_buffer = {
                 (op.label, ops[child_label].label)
-                for op in ops
+                for op in rows
                 for child_label in op.children
                 if op.is_buffer or ops[child_label].is_buffer
             }

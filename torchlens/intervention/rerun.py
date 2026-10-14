@@ -1279,10 +1279,13 @@ def _reconcile_rerun_hook_fires(
 ) -> tuple[int, tuple[str, ...]]:
     """Warn when sticky rerun hook entries fire nowhere on new inputs.
 
-    A zero-fire entry on a rerun of the SAME graph and the SAME inputs as
-    ``source_log`` is refused instead (see
-    :func:`_refuse_source_matched_zero_fire`): there the miss cannot be the
-    inputs, so returning the trace would hand back an un-edited result.
+    Two zero-fire cases are refused instead (see
+    :func:`_refuse_source_matched_zero_fire`), since returning the trace would
+    hand back an un-edited result: any entry on a rerun of the SAME graph and
+    the SAME inputs as ``source_log``, and, on any inputs, a ``tl.where``
+    predicate entry that matches sites on the rerun's own finished trace (it
+    reads post-capture state, such as ``p.layer_label``, a live forward cannot
+    see).
 
     Parameters
     ----------
@@ -1291,8 +1294,8 @@ def _reconcile_rerun_hook_fires(
     hook_plan:
         Hook entries planned for the rerun.
     source_log:
-        The trace the edits were staged on, for a plain rerun; ``None`` (an
-        append rerun, whose inputs are new by construction) keeps the warning.
+        The trace the edits were staged on, for a plain rerun; ``None`` for an
+        append rerun, whose inputs are new by construction.
 
     Returns
     -------
@@ -1333,7 +1336,7 @@ def _reconcile_rerun_hook_fires(
         consumed = min(shortfall, fallback_fired[base])
         fallback_fired[base] -= consumed
         unfired.extend([plan_id] * (shortfall - consumed))
-    if unfired and source_log is not None:
+    if unfired:
         _refuse_source_matched_zero_fire(source_log, new_log, hook_plan, unfired)
     if unfired:
         # First CONTRACTED S-18 row (compo wave 0): the one warning standing
@@ -1392,25 +1395,69 @@ def _same_rerun_inputs(source_log: Trace, new_log: Trace) -> bool:
     return True
 
 
+def _is_where_predicate_entry(entry: Any) -> bool:
+    """Return whether a planned entry's target contains a ``tl.where`` predicate.
+
+    Walks selector trees and their staged ``TargetSpec`` form alike (a
+    composite nests its children in ``selector_value``), iteratively.
+    """
+
+    stack: list[Any] = [getattr(entry, "site_target", None)]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, (tuple, list)):
+            stack.extend(node)
+            continue
+        kind = getattr(node, "selector_kind", None)
+        if kind is None:
+            continue
+        if kind == "predicate":
+            return True
+        stack.extend(
+            child
+            for child in (getattr(node, "selector_value", None), getattr(node, "selectors", None))
+            if child is not None
+        )
+    return False
+
+
+def _matched_site_count(log: Trace, entry: Any) -> int:
+    """Count the sites an entry's selector resolves to on a finished trace (0 if it cannot)."""
+
+    fanout = len(getattr(log, "layer_list", ()) or ()) + 1
+    try:
+        return len(log.resolve_sites(entry.site_target, max_fanout=fanout))
+    except Exception:  # noqa: BLE001 - an unresolvable target keeps the warning path
+        return 0
+
+
 def _refuse_source_matched_zero_fire(
-    source_log: Trace,
+    source_log: Trace | None,
     new_log: Trace,
     hook_plan: list[NormalizedHookEntry],
     unfired: list[str],
 ) -> None:
-    """Refuse a same-input rerun whose staged edit matched sites but fired at none.
+    """Refuse a rerun whose staged edit matched sites but fired at none.
 
-    The edit was staged against ``source_log``, where its selector resolves to
-    at least one site; the rerun replayed the same graph on the same inputs,
-    yet the entry fired nowhere. The selector reads something a live forward
-    cannot see (for example a ``tl.where`` predicate on ``p.layer_label``, a
-    finalized postprocess label), so completing would return an un-edited
-    trace that only a warning distinguishes from the requested result.
+    Two cases, both of which would return an un-edited trace that only a
+    warning distinguishes from the requested result:
+
+    - Same inputs: the rerun replayed the graph and inputs of ``source_log``,
+      where the entry's selector resolves to at least one site, yet it fired
+      nowhere. The miss cannot be the inputs.
+    - Any inputs (new ones, an append rerun): the entry is a ``tl.where``
+      predicate that resolves to at least one site on the rerun's OWN finished
+      trace, yet fired nowhere during that same forward. It reads post-capture
+      state a live forward cannot see (for example ``p.layer_label``, a
+      finalized postprocess label), so it can never fire on a rerun. A
+      predicate that matches nothing on the new trace keeps the
+      ``rerun_zero_fire`` warning: there the miss is the inputs.
 
     Parameters
     ----------
     source_log:
-        Trace the edits were staged on (unchanged by this refusal).
+        Trace the edits were staged on (unchanged by this refusal); ``None``
+        for an append rerun.
     new_log:
         Candidate rerun trace, discarded on refusal.
     hook_plan:
@@ -1421,36 +1468,38 @@ def _refuse_source_matched_zero_fire(
     Raises
     ------
     LiveModeLabelError
-        ``rerun_selector_unmatchable_live`` when an unfired entry resolves to
-        at least one site on ``source_log`` and the rerun had the same graph
-        and inputs.
+        ``rerun_selector_unmatchable_live`` in either case above.
     """
 
-    if not _same_rerun_inputs(source_log, new_log):
-        return
+    same_inputs = source_log is not None and _same_rerun_inputs(source_log, new_log)
     unfired_ids = set(unfired)
-    fanout = len(getattr(source_log, "layer_list", ()) or ()) + 1
     for entry in hook_plan:
         plan_id = _hook_plan_identifier(entry)
         if plan_id not in unfired_ids:
             continue
-        try:
-            matched = len(source_log.resolve_sites(entry.site_target, max_fanout=fanout))
-        except Exception:  # noqa: BLE001 - an unresolvable target keeps the warning path
-            matched = 0
+        if same_inputs and source_log is not None:
+            matched = _matched_site_count(source_log, entry)
+            where = "on this trace"
+            why = "the rerun replayed the same graph on the same inputs"
+        elif _is_where_predicate_entry(entry):
+            matched = _matched_site_count(new_log, entry)
+            where = "on the rerun's own trace"
+            why = "the predicate reads state that exists only after the capture"
+        else:
+            continue
         if not matched:
             continue
         if _is_gradient_edit(entry):
             _refuse_gradient_edit_rerun(plan_id, matched)
         raise LiveModeLabelError(
-            f"A staged edit ({plan_id}) matched {matched} site(s) on this trace but fired "
-            "at none during the rerun, which replayed the same graph on the same inputs, so "
-            "the rerun would return an un-edited trace. Its selector reads something a live "
-            "forward cannot see, for example a tl.where predicate on p.layer_label, which "
-            "exists only after postprocess. The rerun is refused and the trace is unchanged. "
-            "Remedy: stage the edit with a selector a live forward can match, for example "
-            "tl.module('fc2'), tl.func('relu') or tl.head(0, 'v').in_module('h.0.attn'), "
-            "or propagate it on the captured input with the push engine "
+            f"A staged edit ({plan_id}) matched {matched} site(s) {where} but fired at none "
+            f"during the rerun's forward, and {why}, so the rerun would return an un-edited "
+            "trace. Its selector reads something a live forward cannot see, for example a "
+            "tl.where predicate on p.layer_label, which exists only after postprocess. The "
+            "rerun is refused and the trace is unchanged. Remedy: stage the edit with a "
+            "selector a live forward can match, for example tl.module('fc2'), "
+            "tl.func('relu') or tl.head(0, 'v').in_module('h.0.attn'), or propagate it on "
+            "the captured input with the push engine "
             "(do(..., intervention=InterventionOptions(engine='replay')))",
             code="rerun_selector_unmatchable_live",
             unfired_plan_id=plan_id,

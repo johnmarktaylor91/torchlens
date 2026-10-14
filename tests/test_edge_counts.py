@@ -33,18 +33,22 @@ def _trace(model: nn.Module, inputs: torch.Tensor, **kwargs: object) -> tl.Trace
 
 
 def _canonical_child_edges(trace: tl.Trace) -> set[tuple[str, str]]:
-    """Return distinct graph edges by walking Op children."""
+    """Return distinct graph edges by walking every row's children (input/output rows too)."""
 
     return {
-        (op.label, trace.ops[child_label].label) for op in trace.ops for child_label in op.children
+        (op.label, trace.ops[child_label].label)
+        for op in trace.layer_list
+        for child_label in op.children
     }
 
 
 def _canonical_parent_edges(trace: tl.Trace) -> set[tuple[str, str]]:
-    """Return distinct graph edges by walking Op parents."""
+    """Return distinct graph edges by walking every row's parents (input/output rows too)."""
 
     return {
-        (trace.ops[parent_label].label, op.label) for op in trace.ops for parent_label in op.parents
+        (trace.ops[parent_label].label, op.label)
+        for op in trace.layer_list
+        for parent_label in op.parents
     }
 
 
@@ -54,12 +58,12 @@ def _assert_edge_invariants(trace: tl.Trace) -> None:
     child_edges = _canonical_child_edges(trace)
     parent_edges = _canonical_parent_edges(trace)
     assert child_edges == parent_edges
-    assert sum(len({trace.ops[child].label for child in op.children}) for op in trace.ops) == len(
-        child_edges
-    )
-    assert sum(len({trace.ops[parent].label for parent in op.parents}) for op in trace.ops) == len(
-        parent_edges
-    )
+    assert sum(
+        len({trace.ops[child].label for child in op.children}) for op in trace.layer_list
+    ) == len(child_edges)
+    assert sum(
+        len({trace.ops[parent].label for parent in op.parents}) for op in trace.layer_list
+    ) == len(parent_edges)
     assert len(child_edges) == trace.num_edges
 
 

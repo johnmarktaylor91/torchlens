@@ -45,7 +45,7 @@ from ._content_identity import (
     tensor_version,
 )
 from .predicates import as_intervention_decision
-from .types import HelperDirection, HelperSpec, InterventionDecision
+from .types import Edit, HelperDirection, InterventionDecision
 
 AddressClass = Literal["structural", "recorded", "value_dependent"]
 
@@ -117,7 +117,7 @@ def classify_where(where: Any) -> AddressClass:
 def _canonical_repr(value: Any, *, exact: bool = False) -> str:
     """Render a WHERE/action term canonically for rule identity.
 
-    ``HelperSpec`` renders as its portable ``(name, args, kwargs)`` identity
+    ``Edit`` renders as its portable ``(name, args, kwargs)`` identity
     -- two helpers differing only by an argument (``noise(std=0.1)`` vs
     ``noise(std=0.9)``) render differently BY CONSTRUCTION, which is what
     makes rule ids distinguishable (ledger memo D1d). Tensor arguments render
@@ -140,7 +140,7 @@ def _canonical_repr(value: Any, *, exact: bool = False) -> str:
         Canonical rendering.
     """
 
-    if isinstance(value, HelperSpec):
+    if isinstance(value, Edit):
         return render_helper(value, exact=exact)
     if isinstance(value, InterventionDecision):
         hook_repr = _canonical_repr(value.hook, exact=exact)

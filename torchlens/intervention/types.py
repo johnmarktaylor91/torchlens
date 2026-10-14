@@ -169,7 +169,7 @@ HelperPortability: TypeAlias = Literal["builtin", "import_ref", "opaque_audit"]
 
 
 @dataclass(frozen=True)
-class HelperSpec:
+class Edit:
     """Portable identity and hook factory for helper-built interventions."""
 
     PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
@@ -249,7 +249,7 @@ class HelperSpec:
         """
 
         if self.factory is None:
-            raise TypeError(f"HelperSpec {self.helper_name!r} has no hook factory")
+            raise TypeError(f"Edit {self.helper_name!r} has no hook factory")
         return self.factory()
 
     def __getstate__(self) -> dict[str, Any]:
@@ -290,7 +290,7 @@ class HelperSpec:
         for key, value in state.items():
             object.__setattr__(self, key, value)
 
-    def __deepcopy__(self, memo: dict[int, Any]) -> HelperSpec:
+    def __deepcopy__(self, memo: dict[int, Any]) -> Edit:
         """Field-wise deepcopy preserving factory identity.
 
         Explicit so ``copy.deepcopy`` keeps its pre-pickle-hook semantics
@@ -449,7 +449,7 @@ class FireRecord:
     func_call_id: int | None = None
     container_path: tuple[OutputPathComponent, ...] = ()
     engine: str | None = None
-    helper: HelperSpec | None = None
+    helper: Edit | None = None
     site_label: str | None = None
     timing: Literal["pre", "post"] | None = None
     direction: Literal["forward", "backward"] | None = None
@@ -546,7 +546,7 @@ class HookSpec:
 
     site_target: TargetSpec
     hook: Any
-    helper: HelperSpec | None = None
+    helper: Edit | None = None
     handle: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -574,7 +574,7 @@ class FrozenHookSpec:
 
     site_target: FrozenTargetSpec
     hook: Any
-    helper: HelperSpec | None = None
+    helper: Edit | None = None
     handle: str | None = None
     metadata: tuple[tuple[str, Any], ...] = ()
 
@@ -584,7 +584,7 @@ class InterventionSpec:
     """Mutable internal intervention recipe."""
 
     targets: list[TargetSpec] = field(default_factory=list)
-    helper: HelperSpec | None = None
+    helper: Edit | None = None
     value: Any | None = None
     hook: Any | None = None
     target_value_specs: list[TargetValueSpec] = field(default_factory=list)
@@ -625,7 +625,7 @@ class InterventionSpec:
         site_target: TargetSpec,
         hook: Any,
         *,
-        helper: HelperSpec | None = None,
+        helper: Edit | None = None,
         handle: str | None = None,
         metadata: dict[str, Any] | None = None,
         prepend: bool = False,
@@ -737,7 +737,7 @@ class FrozenInterventionSpec:
     """Immutable public intervention recipe view."""
 
     targets: tuple[FrozenTargetSpec, ...] = ()
-    helper: HelperSpec | None = None
+    helper: Edit | None = None
     value: Any | None = None
     hook: Any | None = None
     target_value_specs: tuple[FrozenTargetValueSpec, ...] = ()
@@ -918,13 +918,8 @@ def _build_op_log_fork_policy() -> dict[str, ForkFieldPolicy]:
 MODEL_LOG_FIELD_FORK_POLICY = _build_trace_fork_policy()
 LAYER_PASS_LOG_FIELD_FORK_POLICY = _build_op_log_fork_policy()
 
-#: Public edit-object type (slate 5.5, ratified subject to D7 default-keep):
-#: ``tl.Edit`` is the public spelling; ``HelperSpec`` is its deprecated alias
-#: (stable surface, no removal scheduled).
-Edit = HelperSpec
-
 # The tlspec v8 coordinated bump retired this module's S3 pre-release
-# registrations (HelperSpec.selection_recipe, FireRecord.edge_address).
+# registrations (Edit.selection_recipe, FireRecord.edge_address).
 
 __all__ = [
     "Edit",
@@ -943,7 +938,6 @@ __all__ = [
     "FunctionRegistryKey",
     "GraphShapeHash",
     "HFKey",
-    "HelperSpec",
     "InterventionAction",
     "InterventionDecision",
     "HookSpec",

@@ -19,13 +19,13 @@ import torch
 
 from .._errors import InvalidArgumentError
 from ..selection import SiteEntry, _apply_invalid, _Mask
-from .types import HelperSpec
+from .types import Edit
 
 __all__ = ["_derive_masked_edit", "_masked_factory", "_validate_edited"]
 
 
 def _row_equivariance_facts(
-    edit: HelperSpec, entry: SiteEntry, site_label: str
+    edit: Edit, entry: SiteEntry, site_label: str
 ) -> tuple[tuple[str, Any], ...]:
     """Apply the D23 mask-equivariance law to a row-coherent element-masked edit.
 
@@ -189,7 +189,7 @@ def _derive_masked_edit(edit: Any, entry: SiteEntry, digest: str, site_label: st
         "selected": entry.selected_count,
         "source": entry.provenance.source,
     }
-    if isinstance(edit, HelperSpec):
+    if isinstance(edit, Edit):
         disclosure = (
             ("selection_digest", digest),
             ("selection_site", repr(entry.site_key)),
@@ -234,6 +234,6 @@ def _derive_masked_edit(edit: Any, entry: SiteEntry, digest: str, site_label: st
 
         return _masked_factory(_plain_factory, entry._mask, site_label)()
     raise ValueError(
-        "do(selection, edit) requires an Edit/HelperSpec, a hook callable, or a "
+        "do(selection, edit) requires an Edit/Edit, a hook callable, or a "
         f"replacement tensor; got {type(edit).__name__}."
     )

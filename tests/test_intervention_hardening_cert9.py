@@ -6,7 +6,7 @@ module's public reconstruction entry point, but its own ``value_decoder`` keywor
 argument DEFAULTED to the narrow ``_decode_jsonish`` decoder (only understands the
 ``__tensor_ref__`` wrapper tag) whenever a caller omitted it. That default
 re-triggered the exact BLOCKER-2 corruption class a prior round fixed at the sole
-production call site: silently constructing a non-opaque ``HelperSpec`` whose
+production call site: silently constructing a non-opaque ``Edit`` whose
 ``module=``/args carry a raw ``{"__callable__": ...}`` wrapper dict instead of the
 resolved callable, with no exception, no ``NonExecutableSpecError``, and no
 ``opaque_audit`` flag -- corruption invisible until the hook actually fires.
@@ -39,7 +39,7 @@ def test_value_decoder_has_no_default() -> None:
 def test_omitting_value_decoder_raises_typeerror_not_silent_corruption() -> None:
     """MAJOR-1: omitting value_decoder fails loudly instead of building a corrupt spec.
 
-    Before the fix this silently built a non-opaque ``HelperSpec`` whose arg was a
+    Before the fix this silently built a non-opaque ``Edit`` whose arg was a
     raw ``{"__callable__": ...}`` dict -- exactly the BLOCKER-2 corruption class.
     """
 

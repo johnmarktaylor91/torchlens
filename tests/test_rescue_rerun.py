@@ -154,12 +154,18 @@ def _stub_trace(
     modules: list[Any] | None = None,
     **extra: Any,
 ) -> Any:
-    """Build a minimal trace stub for direct driver tests."""
+    """Build a minimal trace stub for direct driver tests.
 
+    ``ops`` and ``layer_list`` share one row list: the driver reads every row
+    through ``layer_list`` (sumfam F1), and tests append rows through ``ops``.
+    """
+
+    rows = [types.SimpleNamespace(func_name=name) for name in op_names]
     fields: dict[str, Any] = {
         "escape_diagnostics": [],
         "_had_unattributed_tensor_args": signal,
-        "ops": [types.SimpleNamespace(func_name=name) for name in op_names],
+        "ops": rows,
+        "layer_list": rows,
         "modules": modules or [],
         "capture_verification_reason": None,
     }

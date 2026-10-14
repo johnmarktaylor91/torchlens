@@ -261,7 +261,7 @@ def _evaluate_intervene_op(
         return as_intervention_decision(result)
     except TypeError as exc:
         raise PredicateError(
-            "intervene predicate must return InterventionDecision, HelperSpec, callable, "
+            "intervene predicate must return InterventionDecision, Edit, callable, "
             "or None. Remedy: return one of those values from the intervene predicate.",
             ctx=ctx,
             result=result,

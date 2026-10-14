@@ -164,7 +164,7 @@ ACCEPTANCE_COVERAGE: dict[str, frozenset[str]] = {
         }
         | {f"_TelemetryPayload.{name}" for name in ("_available", "_launches", "_relations")}
     ),
-    "l6-selection": frozenset({"HelperSpec.selection_recipe", "Trace.intervention_audit"}),
+    "l6-selection": frozenset({"Edit.selection_recipe", "Trace.intervention_audit"}),
     "l6-edges": frozenset(
         {"Op.edge_substitutions", "Op.edge_replacement_stamps", "FireRecord.edge_address"}
     ),
@@ -190,7 +190,7 @@ _OWNER_CLASSES: dict[str, str] = {
     "_AtenExecutionContext": "torchlens.ir.events",
     "KernelLaunch": "torchlens.kernel_telemetry",
     "_TelemetryPayload": "torchlens.kernel_telemetry",
-    "HelperSpec": "torchlens.intervention.types",
+    "Edit": "torchlens.intervention.types",
     "FireRecord": "torchlens.intervention.types",
 }
 

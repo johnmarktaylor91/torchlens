@@ -21,7 +21,7 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens.intervention.errors import HookValueError
 from torchlens.intervention.hooks import normalize_hook_plan
-from torchlens.intervention.types import HelperSpec
+from torchlens.intervention.types import Edit
 
 
 class _ReluNet(nn.Module):
@@ -58,7 +58,7 @@ def _relu_layer(log: tl.Trace):
     return log[key]
 
 
-_FLAG_HELPERS: dict[str, Callable[[], HelperSpec]] = {
+_FLAG_HELPERS: dict[str, Callable[[], Edit]] = {
     "zero_ablate": lambda: tl.zero_ablate(force_shape_change=True),
     "replace_with": lambda: tl.replace_with(torch.ones(1, 8), force_shape_change=True),
     "scale": lambda: tl.scale(0.5, force_shape_change=True),

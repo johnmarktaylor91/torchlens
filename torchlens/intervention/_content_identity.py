@@ -16,7 +16,7 @@ from typing import Any
 import torch
 
 from .._state import pause_logging
-from .types import HelperSpec, InterventionDecision
+from .types import Edit, InterventionDecision
 
 #: Bounded memo of tensor content tokens keyed by ``id(tensor)``. Each entry
 #: holds a WEAK reference (it never keeps a user tensor alive, and a recycled
@@ -130,7 +130,7 @@ def collect_tensors(value: Any, found: list[torch.Tensor]) -> None:
 
     if isinstance(value, torch.Tensor):
         found.append(value)
-    elif isinstance(value, HelperSpec):
+    elif isinstance(value, Edit):
         collect_tensors(value.args, found)
         collect_tensors(value.kwargs, found)
     elif isinstance(value, InterventionDecision):
@@ -167,7 +167,7 @@ def render_value(value: Any, *, exact: bool = False) -> str:
 
     if isinstance(value, torch.Tensor):
         return tensor_token(value, exact=exact)
-    if isinstance(value, HelperSpec):
+    if isinstance(value, Edit):
         nested: list[torch.Tensor] = []
         collect_tensors(value, nested)
         if nested:
@@ -184,7 +184,7 @@ def render_value(value: Any, *, exact: bool = False) -> str:
     return repr(value)
 
 
-def render_helper(helper: HelperSpec, *, exact: bool) -> str:
+def render_helper(helper: Edit, *, exact: bool) -> str:
     """Render a helper spec's portable ``(name, args, kwargs)`` identity."""
 
     args = render_value(helper.args, exact=exact)

@@ -92,10 +92,12 @@ Which "resample" do you mean?
 | Batch-row permutation | `torchlens.intervention.permute_batch` (shipped, lane F02) |
 | Per-row donor resampling | `torchlens.intervention.resample_rows_from` (shipped, lane F02) |
 
-Compatibility: saved intervention specs that persist the helper name
-`"resample_ablate"` keep loading (they reconstruct through the renamed
-constructor). The `resample_ablate` spelling itself is REMOVED, with no
-alias: `tl.resample_ablate`, `torchlens.intervention.resample_ablate`, and
+Saved artifacts: an intervention spec or pickled edit that persists the
+helper name `"resample_ablate"` no longer loads; it refuses with
+`intervention_helper_renamed`, whose remedy names
+`torchlens.intervention.scramble_elements`. Rebuild the edit with
+`scramble_elements(...)` (same arguments, same bytes) and save it again. The
+`resample_ablate` spelling itself is REMOVED, with no alias: `tl.resample_ablate`, `torchlens.intervention.resample_ablate`, and
 `torchlens.intervention.helpers.resample_ablate` no longer exist.
 
 | Old spelling | New spelling |
@@ -387,3 +389,12 @@ feature each, at 0, 1 and 3, the off-diagonal entries for the pairs (0, 1),
 (0, 3) and (1, 3) were 0.148, 0.765 and 0.474 and are now 0.275, 0.945 and
 0.724. Recompute any stored gaussian RDM, and any comparison score built on
 one, with the new release.
+
+## `trace.ops` covers only counted ops (2026-10-14, behavior change)
+
+`len`, iteration, integer indexing, `keys()`/`values()`/`items()` and `to_pandas()`
+of `trace.ops` now cover only the ops `trace.num_ops` counts, so
+`len(trace.ops) == trace.num_ops`. Input, output and buffer rows are no longer in
+that view. Code that read `trace.ops` as every row should read `trace.layer_list`
+(or use `len(trace)` and `trace[int]`). `trace.input_ops`, `trace.output_ops`,
+`trace.saved_ops` and `trace.saved_grad_ops` are unchanged.

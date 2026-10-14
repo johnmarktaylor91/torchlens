@@ -55,6 +55,11 @@ class ScoreInterval:
         Seed of the ``numpy.random.default_rng`` that drew the resamples.
     basis:
         How the interval was made, in words.
+    similarity_repository_id:
+        Similarity-repository identifier of the exact measure variant
+        ``score`` computes (``measure/*/cka-kernel=linear-hsic=gretton-score``
+        for :func:`cka_interval`); ``None`` when the caller does not name one
+        (an RSA comparison of precomputed RDMs, whose RDM metric is unknown here).
     """
 
     score: float
@@ -65,6 +70,7 @@ class ScoreInterval:
     n_valid: int
     seed: int
     basis: str = STIMULUS_BOOTSTRAP_BASIS
+    similarity_repository_id: str | None = None
 
     @property
     def width(self) -> float:
@@ -78,7 +84,7 @@ class ScoreInterval:
         Returns
         -------
         dict[str, Any]
-            Every field plus ``width``.
+            Every field (``similarity_repository_id`` included) plus ``width``.
         """
 
         return {
@@ -91,6 +97,7 @@ class ScoreInterval:
             "n_valid": self.n_valid,
             "seed": self.seed,
             "basis": self.basis,
+            "similarity_repository_id": self.similarity_repository_id,
         }
 
 
@@ -136,6 +143,8 @@ def bootstrap_interval(
     n_stimuli: int,
     score: float,
     settings: BootstrapSettings,
+    *,
+    similarity_repository_id: str | None = None,
 ) -> ScoreInterval:
     """Resample stimulus indices and summarise ``statistic`` as an interval.
 
@@ -150,6 +159,8 @@ def bootstrap_interval(
         The point score on all stimuli, recorded unchanged.
     settings:
         Resample count, seed and confidence.
+    similarity_repository_id:
+        Measure identifier recorded on the interval, or ``None``.
 
     Returns
     -------
@@ -177,6 +188,7 @@ def bootstrap_interval(
         n_resamples=int(settings.n_resamples),
         n_valid=int(finite.size),
         seed=int(settings.seed),
+        similarity_repository_id=similarity_repository_id,
     )
 
 
@@ -460,4 +472,12 @@ def cka_interval(
 
         return _gram_cka(gram_a[np.ix_(index, index)], gram_b[np.ix_(index, index)])
 
-    return bootstrap_interval(statistic, n, _gram_cka(gram_a, gram_b), settings)
+    from ._similarity_ids import LINEAR_CKA_ID
+
+    return bootstrap_interval(
+        statistic,
+        n,
+        _gram_cka(gram_a, gram_b),
+        settings,
+        similarity_repository_id=LINEAR_CKA_ID,
+    )

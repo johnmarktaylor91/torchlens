@@ -19,8 +19,9 @@ Reporting helpers over finished captures and observer metadata (`tl.report`).
   honesty rows, capture-verification banner, call tree). `forward_peak_memory`
   is NOT a profile column — it lives on the Trace itself. pandas is an optional
   dependency resolved lazily via `_require_pandas()` — never import it at module top.
-- `__init__.py` — public surface (`explain`, `TraceProfile`, `build_profile`,
-  `log_value`); `log_value(name, value)` records observer values through `_state`.
+- `__init__.py` — public surface (`explain`, `TraceProfile`, `build_profile`);
+  `log_value(name, value)` lives in `torchlens.observers` (capture-time writers live
+  with the observers; this package holds the readers).
 - `_factcore.py` / `_compute_truth.py` / `_health.py` — the C02 numbers
   substrate: FactCore (params/compute/memory/counts/identity), the canonical
   compute aggregation (the ONE reader of raw per-op compute fields), and the
