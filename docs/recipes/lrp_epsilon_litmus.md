@@ -11,6 +11,10 @@ The recipe is a *litmus*: it runs epsilon-LRP end to end on real
 architectures, emits a per-site conservation ledger, and refuses honestly at
 the exact op where its rules stop.
 
+**Patent notice.** LRP methods may be patent-encumbered for commercial
+use. Check before you ship an LRP method in a commercial product. TorchLens
+keeps LRP a recipe, not a product feature, and grants no patent rights.
+
 The code below is transcribed verbatim into
 `tests/test_attrib_methods_lrp.py`, where the blocking rows run it per
 commit; keep the two in lockstep.
@@ -223,3 +227,10 @@ refuses at the exact op label where it stops. Further relevance rules
 (alpha-beta, z-plus, gamma), composites, and canonizers are the maintained
 territory of dedicated LRP libraries — port this recipe's discipline there
 rather than asking TorchLens to referee research rules.
+
+## LRP on transformers: use LXT
+
+For transformers, use LXT (LRP-eXplains-Transformers), which maintains
+attention and normalization rules this litmus does not. The worked example
+in [LRP on transformers with LXT](lrp_transformers_lxt.md) runs LXT on a
+model TorchLens traced.
