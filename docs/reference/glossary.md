@@ -1904,7 +1904,11 @@ deprecation shim owed*
   a claim: toy inputs earn nothing, and it carries no claim string. The
   backends `run_conformance` and `resolve_adapter` accept are the same set
   (`torchlens.conformance.PREVIEW_BACKENDS` plus `torch` and `fake`); an absent
-  framework yields named skips, never an error.
+  framework yields named skips, never an error. A roster row that declares
+  `RosterModel.expected_op_kinds` (its independent op inventory: every
+  `Op.func_name` one forward performs, in order, derived from the model
+  definition) also runs `c1_op_inventory_complete`, so output parity can never
+  pass with an op missing or extra; every preview roster row declares one.
 
 **torchlens.conformance.PreviewScorecard** — *unstable — no deprecation shim owed*
 : The frozen canonical scorecard: `scorecard_version`, `backend`,
