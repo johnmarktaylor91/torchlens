@@ -9,6 +9,7 @@ no markup writes.
 
 from __future__ import annotations
 
+import itertools
 import re
 from html.parser import HTMLParser
 
@@ -67,7 +68,7 @@ def test_static_html_carries_every_value_without_script() -> None:
         seen[index] = float(cell["data-tl-value"])
         # The native tooltip says the same thing with scripts blocked.
         assert cell["title"] == f"{cell['data-tl-index']} = {cell['data-tl-value']}"
-    assert set(seen) == {tuple(i) for i in torch.cartesian_prod(*map(torch.arange, (2, 3, 4)))}
+    assert set(seen) == set(itertools.product(range(2), range(3), range(4)))
     for index, value in seen.items():
         assert abs(value - float(tensor[index])) <= 1e-6 * max(1.0, abs(float(tensor[index])))
 
