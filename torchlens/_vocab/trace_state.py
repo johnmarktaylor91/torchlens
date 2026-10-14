@@ -8,7 +8,12 @@ from enum import Enum
 
 
 class TraceState(Enum):
-    """User-visible operational state machine for intervention runs."""
+    """User-visible operational state machine for intervention runs.
+
+    ``PRISTINE`` is only the machine's start value: an assignment can set it
+    and a func-targeted ``intervene=`` capture keeps it. Whether anything ever
+    intervened on a trace is the derived ``Trace.pristine`` reading.
+    """
 
     PRISTINE = "pristine"
     SPEC_STALE = "spec_stale"
