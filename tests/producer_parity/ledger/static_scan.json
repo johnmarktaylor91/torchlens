@@ -9330,9 +9330,6 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/visualization/_bundle_graph.py",
-  "has_default": false,
-  "sites": 4,
   "file": "torchlens/visualization/_boundary_bundle.py",
   "has_default": false,
   "sites": 1,
@@ -9340,8 +9337,6 @@
  },
  {
   "ambiguous": true,
-  "field": "params",
-  "file": "torchlens/visualization/_bundle_graph.py",
   "field": "kind",
   "file": "torchlens/visualization/_boundary_bundle.py",
   "has_default": true,
@@ -9379,6 +9374,22 @@
   "has_default": true,
   "sites": 1,
   "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/visualization/_bundle_graph.py",
+  "has_default": false,
+  "sites": 4,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "params",
+  "file": "torchlens/visualization/_bundle_graph.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
  },
  {
   "ambiguous": false,
