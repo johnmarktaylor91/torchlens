@@ -163,6 +163,8 @@ def bootstrap_interval(
     values = np.array([statistic(row) for row in indices], dtype=np.float64)
     finite = values[np.isfinite(values)]
     tail = (1.0 - float(settings.confidence)) / 2.0
+    # A resample with fewer than two distinct stimuli is constant; its
+    # statistic is NaN and it is counted out of n_valid.
     if finite.size * 2 < settings.n_resamples:
         low = high = math.nan
     else:
@@ -201,10 +203,25 @@ def _pearson(a: np.ndarray, b: np.ndarray) -> float:
 
     centered_a = a - a.mean()
     centered_b = b - b.mean()
-    denominator = math.sqrt(float(np.dot(centered_a, centered_a) * np.dot(centered_b, centered_b)))
-    if denominator == 0.0:
+    ss_a = float(np.dot(centered_a, centered_a))
+    ss_b = float(np.dot(centered_b, centered_b))
+    if _is_constant(ss_a, a) or _is_constant(ss_b, b):
         return math.nan
-    return float(np.dot(centered_a, centered_b) / denominator)
+    return float(np.dot(centered_a, centered_b) / math.sqrt(ss_a * ss_b))
+
+
+#: Relative size, on squared scale, below which a centred vector or Gram
+#: counts as constant: mean subtraction on a constant input leaves
+#: rounding residue of about machine epsilon times its magnitude, and a
+#: correlation of that residue is noise, not a score.
+_CONSTANT_RELATIVE_TOLERANCE = 1e-24
+
+
+def _is_constant(centred_sum_of_squares: float, raw: np.ndarray) -> bool:
+    """Return whether a centred sum of squares is rounding residue of ``raw``."""
+
+    scale = float(np.sum(np.square(raw)))
+    return centred_sum_of_squares <= _CONSTANT_RELATIVE_TOLERANCE * scale
 
 
 def _weighted_tau_a(a: np.ndarray, b: np.ndarray, weights: np.ndarray) -> float:
@@ -368,10 +385,9 @@ def _gram_cka(gram_a: np.ndarray, gram_b: np.ndarray) -> float:
     cross = float(np.sum(centered_a * centered_b))
     self_a = float(np.sum(centered_a * centered_a))
     self_b = float(np.sum(centered_b * centered_b))
-    denominator = math.sqrt(self_a * self_b)
-    if denominator == 0.0:
+    if _is_constant(self_a, gram_a) or _is_constant(self_b, gram_b):
         return math.nan
-    return cross / denominator
+    return cross / math.sqrt(self_a * self_b)
 
 
 def _as_matrix(value: Any, name: str) -> np.ndarray:
@@ -401,7 +417,9 @@ def cka_interval(
     ``O(n^2)`` whatever the feature count. Each resample draws stimuli
     with replacement and recomputes CKA on the resampled rows. The
     interval describes the score's sensitivity to the stimulus sample; it
-    is not a permutation or subject test.
+    is not a permutation or subject test. The biased HSIC estimator rises
+    when a resample repeats rows (fewer distinct stimuli), so at small
+    stimulus counts the interval can sit above the point score.
 
     Parameters
     ----------

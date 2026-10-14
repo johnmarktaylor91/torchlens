@@ -13,9 +13,9 @@ Pins:
   200 seeds each draw 30 stimuli and a 400-resample interval at
   confidence 0.90. The interval must cover the population value in at
   least 0.90 - 3 * sqrt(0.90 * 0.10 / 200) = 0.836 of the seeds. The
-  stimulus bootstrap is known to be conservative for RDM comparisons, so
-  only the lower bound is asserted; the measured rate is recorded in the
-  lane report.
+  stimulus bootstrap is known to be conservative for RDM comparisons; an
+  upper bound of 0.90 + 0.064 = 0.964, added after the first measured rate
+  (0.915), stops an interval that covers everything from passing.
 """
 
 from __future__ import annotations
@@ -158,9 +158,15 @@ def test_population_coverage_meets_the_stated_rate() -> None:
         )
         covered += int(result.low <= truth <= result.high)
     rate = covered / n_seeds
-    floor = confidence - 3.0 * math.sqrt(confidence * (1.0 - confidence) / n_seeds)
-    print(f"population coverage: {rate:.3f} (floor {floor:.3f}, truth {truth:.4f})")
-    assert rate >= floor
+    spread = 3.0 * math.sqrt(confidence * (1.0 - confidence) / n_seeds)
+    print(
+        f"population coverage: {rate:.3f} (band {confidence - spread:.3f} to "
+        f"{confidence + spread:.3f}, truth {truth:.4f})"
+    )
+    # Lower bound pre-registered before the first run; the upper bound
+    # (an interval wide enough to cover everything fails) was added after
+    # the first measured rate, 0.915, under review.
+    assert confidence - spread <= rate <= confidence + spread
 
 
 def test_invalid_settings_refuse() -> None:
@@ -195,3 +201,50 @@ def test_to_dict_carries_every_field() -> None:
         "basis",
     }
     assert data["width"] == data["high"] - data["low"]
+
+
+def test_spearman_resample_with_ties_equals_hand_recomputation() -> None:
+    rng = np.random.default_rng(12)
+    rdm_a = rdm(np.round(rng.normal(size=(9, 2)), 0))  # rounded: tied distances
+    rdm_b = rdm(rng.normal(size=(9, 3)))
+    result = rdm_compare_interval(rdm_a, rdm_b, "spearman", n_resamples=5, seed=13)
+    indices = np.random.default_rng(13).integers(0, 9, size=(5, 9))
+    hand = []
+    for index in indices:
+        pairs = [
+            (index[i], index[j]) for i in range(9) for j in range(i + 1, 9) if index[i] != index[j]
+        ]
+        a_vals = np.array([rdm_a[p] for p in pairs])
+        b_vals = np.array([rdm_b[p] for p in pairs])
+        hand.append(rdm_compare(a_vals, b_vals, method="spearman"))
+    low, high = np.quantile(hand, [0.025, 0.975])
+    assert result.low == pytest.approx(low, abs=1e-12)
+    assert result.high == pytest.approx(high, abs=1e-12)
+
+
+def test_private_rank_and_tau_helpers_equal_the_public_estimators() -> None:
+    from torchlens.repgeom._geometry import _average_ranks, _kendall_tau_a
+    from torchlens.repgeom._uncertainty import _average_ranks_vector, _weighted_tau_a
+
+    rng = np.random.default_rng(14)
+    values = np.round(rng.normal(size=40), 1)
+    np.testing.assert_array_equal(_average_ranks_vector(values), _average_ranks(values))
+    other = rng.normal(size=40)
+    assert _weighted_tau_a(values, other, np.ones(40)) == pytest.approx(
+        _kendall_tau_a(values, other), abs=1e-15
+    )
+
+
+def test_constant_resamples_are_counted_out() -> None:
+    x = np.array([[0.0, 1.0], [1.0, 3.0], [2.0, 0.5]])
+    y = np.array([[1.0, 0.0], [0.0, 2.0], [3.0, 1.0]])
+    seeds_with_constant = [
+        seed
+        for seed in range(200)
+        if any(len(set(row)) == 1 for row in np.random.default_rng(seed).integers(0, 3, (40, 3)))
+    ]
+    seed = seeds_with_constant[0]
+    rows = np.random.default_rng(seed).integers(0, 3, (40, 3))
+    n_constant = sum(len(set(row)) == 1 for row in rows)
+    result = cka_interval(x, y, n_resamples=40, seed=seed)
+    assert result.n_valid <= 40 - n_constant
