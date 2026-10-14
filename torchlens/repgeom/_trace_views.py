@@ -35,6 +35,7 @@ from ._geometry import (
     procrustes_align,
     scree,
 )
+from ._similarity_ids import rdm_id
 
 __tl_layer__ = "L6"
 
@@ -45,13 +46,17 @@ class _PayloadBasisDict(OrderedDict):
     F20 D-19 disclosure: geometry computed from a TRANSFORMED payload is a
     different scientific object than raw-payload geometry, so every
     evolution result records which payload fed each key on
-    ``result.payload_basis`` (``key -> "raw" | "transformed"``). Plain
-    ``OrderedDict`` semantics are unchanged; session-time only.
+    ``result.payload_basis`` (``key -> "raw" | "transformed"``).
+    ``result.similarity_repository_id`` names the exact measure variant in
+    the similarity-repository catalogue (U56.3; set by ``rdm_evolution``,
+    ``None`` when the catalogue has no exact match or the verb computes no
+    RDM). Plain ``OrderedDict`` semantics are unchanged; session-time only.
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.payload_basis: dict[str, str] = {}
+        self.similarity_repository_id: str | None = None
 
 
 def mds_evolution(
@@ -141,21 +146,29 @@ def rdm_evolution(
     -------
     OrderedDict[str, np.ndarray]
         RDM arrays keyed by ``layer:<layer_label>`` for single-pass layers and
-        ``op:<op.label>`` for pass-qualified recurrent selections.
+        ``op:<op.label>`` for each pass of a recurrent layer. Recurrent layers
+        expand into one RDM per saved pass automatically, in pass order, the
+        same per-pass sites ``tl.neuro.rdms`` computes: the default sweep
+        covers every saved pass, and a selector matching several passes of
+        one layer yields one RDM per matched pass. The result's
+        ``similarity_repository_id`` names the metric's RDM variant in the
+        similarity-repository catalogue (``None`` for ``"manhattan"``, which
+        it does not list).
 
     Raises
     ------
     ValueError
         If a selected site has no saved activation, has too few stimuli, is
-        recurrent without a pass-qualified selection, or fails metric
-        preconditions.
+        a bare recurrent layer aggregate (select its passes instead), or
+        fails metric preconditions.
     """
 
     if min_n < 2:
         raise ValueError("min_n must be at least 2 for rdm_evolution.")
 
-    selected = _selected_activation_sites(trace, save, verb="rdm_evolution")
+    selected = _selected_activation_sites(trace, save, verb="rdm_evolution", expand_passes=True)
     matrices_by_key: _PayloadBasisDict = _PayloadBasisDict()
+    matrices_by_key.similarity_repository_id = rdm_id(metric)
     staged: OrderedDict[str, torch.Tensor] = OrderedDict()
     for key, _site, activations, payload_kind in selected:
         matrices_by_key.payload_basis[key] = payload_kind
@@ -234,7 +247,7 @@ def scree_evolution(
 
 
 def _selected_mds_sites(
-    trace: Any, save: Any | None, *, verb: str = "mds_evolution"
+    trace: Any, save: Any | None, *, verb: str = "mds_evolution", expand_passes: bool = False
 ) -> list[tuple[str, Any, Any, str]]:
     """Resolve the layer or op payloads that should receive annotations.
 
@@ -253,6 +266,11 @@ def _selected_mds_sites(
         Optional selector passed by the user.
     verb:
         Public verb name used in diagnostics.
+    expand_passes:
+        When true, a recurrent layer contributes one ``op:`` site per pass
+        (every saved pass in the default sweep, every matched pass-qualified
+        site in an explicit selection) instead of refusing. A bare aggregate
+        selection still refuses naming the passes.
 
     Returns
     -------
@@ -262,7 +280,7 @@ def _selected_mds_sites(
     """
 
     if save is None:
-        return _default_saved_mds_sites(trace, verb=verb)
+        return _default_saved_mds_sites(trace, verb=verb, expand_passes=expand_passes)
 
     expected_counts = _expected_stimulus_counts(trace)
     with warnings.catch_warnings():
@@ -276,15 +294,15 @@ def _selected_mds_sites(
     for layer_label, layer_sites in selected_by_layer.items():
         layer = trace.layer_logs[layer_label]
         if int(getattr(layer, "num_passes", 1)) > 1:
-            if len(layer_sites) != 1:
+            if len(layer_sites) != 1 and not expand_passes:
                 _raise_recurrent_layer_requires_pass(layer, verb=verb)
-            site = layer_sites[0]
-            if not _site_label_is_pass_qualified(site):
-                _raise_recurrent_layer_requires_pass(layer, verb=verb)
-            reason = _site_ineligibility(site, expected_counts)
-            if reason is not None:
-                _raise_ineligible_site(verb, str(getattr(site, "label", layer_label)), reason)
-            selected.append(_op_mds_site(site, verb=verb))
+            for site in layer_sites:
+                if not _site_label_is_pass_qualified(site):
+                    _raise_recurrent_layer_requires_pass(layer, verb=verb)
+                reason = _site_ineligibility(site, expected_counts)
+                if reason is not None:
+                    _raise_ineligible_site(verb, str(getattr(site, "label", layer_label)), reason)
+                selected.append(_op_mds_site(site, verb=verb))
         else:
             reason = _site_ineligibility(layer, expected_counts)
             if reason is not None:
@@ -297,9 +315,9 @@ _selected_activation_sites = _selected_mds_sites
 
 
 def _default_saved_mds_sites(
-    trace: Any, *, verb: str = "mds_evolution"
+    trace: Any, *, verb: str = "mds_evolution", expand_passes: bool = False
 ) -> list[tuple[str, Any, Any, str]]:
-    """Return saved, stimulus-indexed single-pass layer payloads.
+    """Return saved, stimulus-indexed layer payloads for a default sweep.
 
     Parameters
     ----------
@@ -307,6 +325,10 @@ def _default_saved_mds_sites(
         Captured TorchLens trace.
     verb:
         Public verb name used in diagnostics.
+    expand_passes:
+        When true, each saved pass of a recurrent layer enters as its own
+        ``op:`` site, gated independently (the ``tl.neuro.rdms`` default
+        sweep rule); when false, a saved recurrent layer refuses.
 
     Returns
     -------
@@ -322,6 +344,9 @@ def _default_saved_mds_sites(
         saved_ops = [
             op for op in layer.ops.values() if bool(getattr(op, "has_saved_activation", False))
         ]
+        if expand_passes and int(getattr(layer, "num_passes", 1)) > 1:
+            selected.extend(_saved_pass_sites(saved_ops, expected_counts, skipped, verb=verb))
+            continue
         reason = _site_ineligibility(layer, expected_counts)
         if reason is not None:
             if saved_ops:
@@ -346,6 +371,47 @@ def _default_saved_mds_sites(
             f"covering the {vocabulary['layers']} layers before calling {verb}."
         )
     return selected
+
+
+def _saved_pass_sites(
+    saved_ops: list[Any],
+    expected_counts: frozenset[int],
+    skipped: OrderedDict[str, str],
+    *,
+    verb: str,
+) -> list[tuple[str, Any, Any, str]]:
+    """Return one ``op:`` site per eligible saved pass of a recurrent layer.
+
+    Each pass is gated independently, as in the ``tl.neuro.rdms`` default
+    sweep; an ineligible pass is recorded in ``skipped`` for the summarized
+    disclosure instead of being computed.
+
+    Parameters
+    ----------
+    saved_ops:
+        The layer's saved per-pass ops, in pass order.
+    expected_counts:
+        Leading-axis sizes of the capture's input sites.
+    skipped:
+        Disclosure accumulator (op label to ineligibility reason), extended
+        in place.
+    verb:
+        Public verb name used in diagnostics.
+
+    Returns
+    -------
+    list[tuple[str, Any, Any, str]]
+        Annotation payload tuples for the eligible passes.
+    """
+
+    sites: list[tuple[str, Any, Any, str]] = []
+    for op in saved_ops:
+        reason = _site_ineligibility(op, expected_counts)
+        if reason is not None:
+            skipped[str(op.label)] = reason
+            continue
+        sites.append(_op_mds_site(op, verb=verb))
+    return sites
 
 
 def _saved_payload_with_kind(record: Any, label: str, *, verb: str) -> tuple[Any, str]:

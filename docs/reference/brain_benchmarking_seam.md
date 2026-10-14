@@ -11,7 +11,7 @@ spelling here is DOCUMENTED-UNSTABLE pending the naming sprint.
 The working surfaces behind the "we supply" column:
 
 - `torchlens.brainpipe.extraction_plan` / `ExtractionPlan.run` -- the
-  memory-planned whole-model sweep: two measured probes, a printable plan
+  planned whole-model sweep: two measured probes, a printable plan
   table (measured bytes, peak pairs with backend named, exact pass counts),
   and a run door onto the atomic, resumable extraction artifact.
 - `torchlens.brainpipe.export_npz` -- npz interchange, including
@@ -26,9 +26,12 @@ The working surfaces behind the "we supply" column:
 - `tl.stats.CKA` / `tl.stats.cka` -- one-shot and streaming linear CKA
   (memory-bounded over arbitrarily many stimuli), `device=`/`dtype=`.
 - `tl.bridge.rsatoolbox.dataset` -- the per-site rsatoolbox handoff.
-- `tl.bridge.brain_score` -- the Brain-Score `ActivationsExtractorHelper`
-  seam (live verification is CI-gated; the docstring's UNVERIFIED marker
-  leaves only when the L1/L2 job passes).
+- `tl.bridge.brain_score` -- the Brain-Score activations-model seam: a
+  `PytorchWrapper`-shaped model over an `ActivationsExtractorHelper` that a
+  model plugin hands to `ModelCommitment`; one neural and one behavioral
+  benchmark were scored end to end through such a plugin (2026-10-14,
+  brainscore-vision 2.4.1, Python 3.11, CPU). Brain-Score computes the
+  scores; TorchLens supplies the activations.
 
 | # | Net2Brain method | We supply | We refuse and point |
 |---|---|---|---|
@@ -56,3 +59,32 @@ every operation, prints a measured cost table before running, emits a
 manifest a reviewer can audit, and never silently drops a site. Coverage
 and provenance are the trade; this page names it rather than claiming
 dominance on both axes.
+
+## Which measure, exactly: similarity-repository identifiers
+
+The [similarity-repository](https://github.com/nacloos/similarity-repository)
+is the catalogue for representational-similarity measures, including the
+ones TorchLens does not ship. Each TorchLens measure below carries the
+catalogue identifier of the exact variant it computes (`*` stands for the
+implementing repository, so `similarity.make(identifier)` selects every
+catalogued implementation of that variant), in these docs and in the
+result's provenance where the result has any: `rdm_evolution(...)
+.similarity_repository_id`, the `similarity_repository_id` descriptor of
+`tl.neuro.rdms` source mode, and `tl.stats.CKA.similarity_repository_id`.
+Identifiers were taken from the repository at commit `035b3be` and checked
+numerically against its implementations; a dash means the catalogue has no
+exact match, and no near match is substituted. The attribute and
+descriptor spellings are DOCUMENTED-UNSTABLE.
+
+| TorchLens measure | Similarity-repository identifier |
+|---|---|
+| `tl.stats.cka` / `tl.stats.CKA` (linear CKA) | `measure/*/cka-kernel=linear-hsic=gretton-score` |
+| `tl.repgeom.rdm(metric="euclidean")` | `rdm/*/euclidean` |
+| `tl.repgeom.rdm(metric="cosine")` | `rdm/*/cosine` |
+| `tl.repgeom.rdm(metric="correlation")` | `rdm/*/correlation` |
+| `tl.repgeom.rdm(metric="gaussian")` | `rdm/*/gaussian` |
+| `tl.repgeom.rdm(metric="manhattan")` | - |
+| `rdm_compare` over `rdm(metric=M)` RDMs, `method="pearson"` | `measure/*/rsa-rdm=M-compare=pearson` (M = euclidean, cosine, correlation, gaussian; - for manhattan) |
+| `rdm_compare` over `rdm(metric=M)` RDMs, `method="spearman"` | `measure/*/rsa-rdm=M-compare=spearman` (same M; - for manhattan) |
+| `rdm_compare` over `rdm(metric="correlation")` RDMs, `method="kendall"` | `measure/*/rsa-rdm=correlation-compare=tau_a` |
+| `rdm_compare` over euclidean, cosine, gaussian or manhattan RDMs, `method="kendall"` | - |

@@ -593,7 +593,15 @@ class CKA:
     zero variance, ``result()`` returns NaN (warning ``cka_zero_variance``)
     because the alignment denominator is zero; a NaN or infinite batch refuses
     ``cka_input_nonfinite`` at ``update()``. This follows the linear CKA formulation of Kornblith et al. (2019).
+
+    The variant is the similarity-repository's
+    ``cka-kernel=linear-hsic=gretton-score`` (linear kernel, biased Gretton
+    HSIC); :attr:`similarity_repository_id` records it (U56.3; spelling
+    DOCUMENTED-UNSTABLE).
     """
+
+    #: Similarity-repository identifier of the exact CKA variant computed.
+    similarity_repository_id: str = "measure/*/cka-kernel=linear-hsic=gretton-score"
 
     def __init__(
         self,
@@ -673,7 +681,9 @@ def cka(a: Any, b: Any, *, device: Any = None, dtype: Any = None) -> float:
         \frac{\lVert C_{AB}\rVert_F^2}
         {\lVert C_{AA}\rVert_F\,\lVert C_{BB}\rVert_F}.
 
-    This is the linear CKA measure described by Kornblith et al. (2019).
+    This is the linear CKA measure described by Kornblith et al. (2019): the
+    similarity-repository's ``cka-kernel=linear-hsic=gretton-score`` (linear
+    kernel, biased Gretton HSIC), the same variant as :class:`CKA`.
     Inputs are treated as ``(n_observations, n_features)`` matrices; the
     default computes on CPU ``float64`` (bit-identical to the historical
     behavior). A zero-variance input produces NaN with a ``cka_zero_variance``

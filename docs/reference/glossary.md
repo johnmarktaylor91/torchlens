@@ -1036,6 +1036,15 @@ Spellings below shipped ahead of their naming-session/S2 ratification under
 the provisional-name protocol: they may rename WITHOUT deprecation
 shims, by declared contract. Each carries the same tag at its definition.
 
+**similarity_repository_id (`rdm_evolution(...).similarity_repository_id`, `tl.stats.CKA.similarity_repository_id`, the `neuro.rdms()` source-mode descriptor)** — *unstable — no deprecation shim owed*
+: The similarity-repository catalogue identifier of the exact measure variant a
+  TorchLens result computed, with `*` for the implementing repository (for
+  example `measure/*/cka-kernel=linear-hsic=gretton-score` for linear CKA,
+  `rdm/*/correlation` for a correlation RDM). On `rdm_evolution` results it is
+  `None` when the catalogue has no exact match (the `"manhattan"` metric); the
+  `neuro.rdms()` descriptor is then absent. The full table is in
+  [the brain-benchmarking seam](brain_benchmarking_seam.md).
+
 **site_key (`Op.site_key`)** — *unstable — no deprecation shim owed*
 : The portable structural-position identity of one retained op
   (`site_key_v1`): a `"s1|"`-prefixed string of the pass-free module address
@@ -1990,3 +1999,32 @@ deprecation shim owed*
 **Trace.total_backward_memory**
 : Bytes of the gradient payloads the trace retains, counted once per storage: a payload that is a
   view charges its whole base storage, an expanded gradient its smaller storage.
+**torchlens.conformance.preview_scorecard(backend, *, workdir=None)** — *unstable — no deprecation shim owed*
+: Runs the full C0-C2 conformance packs for one preview backend (`jax`, `tf`,
+  `mlx`, `tinygrad`, `paddle`; `torch` scores the reference as a baseline) on
+  that backend's own config-built roster (a function root and a module or
+  object root) and returns a `PreviewScorecard`. Every case the runner defines
+  for the roster is one cell in exactly one state: `passed` (executed, its
+  independent oracle matched: output parity against a direct run compared as
+  arrays, a repeat with the same op count, a distinct equal reload), `failed`,
+  `unsupported` (a typed `BackendUnsupportedError`) or `not_run` (framework not
+  importable, with the install remedy, or not reached after an earlier failure
+  for the same model). All cells stay in the denominator. A scorecard is never
+  a claim: toy inputs earn nothing, and it carries no claim string. The
+  backends `run_conformance` and `resolve_adapter` accept are the same set
+  (`torchlens.conformance.PREVIEW_BACKENDS` plus `torch` and `fake`); an absent
+  framework yields named skips, never an error. A roster row that declares
+  `RosterModel.expected_op_kinds` (its independent op inventory: every
+  `Op.func_name` one forward performs, in order, derived from the model
+  definition) also runs `c1_op_inventory_complete`, so output parity can never
+  pass with an op missing or extra; every preview roster row declares one.
+
+**torchlens.conformance.PreviewScorecard** — *unstable — no deprecation shim owed*
+: The frozen canonical scorecard: `scorecard_version`, `backend`,
+  `framework_version` (`""` when absent), `suite_version`,
+  `torchlens_version`, `cells` (`ScorecardCell` rows of `tier`, `case_id`,
+  `family`, `state`, `detail`), `counts` (cells per state plus `denominator`),
+  `highest_tier` (highest tier whose every cell passed, cumulative from C0, or
+  `""`) and `sha256` over the canonical bytes with that field excluded.
+  `to_canonical_json()` renders the attested bytes (sorted keys, compact,
+  ASCII).

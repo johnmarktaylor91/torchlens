@@ -234,6 +234,7 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
                 # and the figure honestly reads 0 (see docstring, R36-2).
                 live_peak = peak_after if peak_after > peak_before else 0
                 trace.forward_peak_memory = Bytes(live_peak)
+                trace.forward_peak_memory_reason = None  # forks.13: the pair moves together
             with contextlib.suppress(Exception):
                 reserved_after = int(torch_module.cuda.max_memory_reserved(cuda_device))
                 resident_peak = reserved_after if reserved_after > reserved_before else 0
