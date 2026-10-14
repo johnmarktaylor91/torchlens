@@ -22,6 +22,8 @@ from dataclasses import dataclass
 from html import escape
 from typing import Any
 
+import numpy as np
+
 from ._axis_labels import AxisLabel, axis_labels
 from ._motifs import (
     Motif,
@@ -71,22 +73,59 @@ class GridRender:
 _GRID_CSS_EMITTED_MARKER = "tl-grid"
 
 
-def _cell_html(value: Any, state: str, bounds: SignedBounds, motifs: dict[str, Motif]) -> str:
-    """Render one cell: color claim for finite values, motif otherwise."""
+def _cell_html(
+    value: Any,
+    state: str,
+    bounds: SignedBounds,
+    motifs: dict[str, Motif],
+    index: str | None,
+) -> str:
+    """Render one cell: color claim for finite values, motif otherwise.
 
+    Every real cell carries its source index and value as static
+    attributes (``title`` for the native tooltip, ``data-tl-index`` and
+    ``data-tl-value`` for the optional hover readout), so the card reads
+    completely with scripts blocked. Truncation-band cells carry no index.
+    """
+
+    hover = ""
+    if index is not None:
+        shown = f"{float(value):.6g}" if state == "finite" else motifs[state].title
+        hover = (
+            f' data-tl-index="{escape(index, quote=True)}"'
+            f' data-tl-value="{escape(shown, quote=True)}"'
+        )
     if state == "finite":
         color = value_color(float(value), bounds)
-        title = f"{float(value):.6g}"
+        title = f"{index} = {float(value):.6g}" if index is not None else f"{float(value):.6g}"
         return (
             f'<td class="tl-grid-cell" style="background:{color}" '
-            f'title="{escape(title, quote=True)}"></td>'
+            f'title="{escape(title, quote=True)}"{hover}></td>'
         )
     motif = motifs[state]
-    title = motif.title if state == "masked" else f"{motif.title}"
+    title = motif.title if index is None else f"{index} = {motif.title}"
     return (
         f'<td class="tl-grid-cell {escape(motif.css_class, quote=True)}" '
-        f'title="{escape(title, quote=True)}">{escape(motif.glyph)}</td>'
+        f'title="{escape(title, quote=True)}"{hover}>{escape(motif.glyph)}</td>'
     )
+
+
+def _source_index(
+    dest: tuple[int, ...], shape: tuple[int, ...], edges: tuple[int | None, ...]
+) -> str:
+    """Map a rendered cell position back to its index in the source tensor.
+
+    A truncated axis renders ``edge`` head cells, one band cell, then
+    ``edge`` tail cells; tail cell ``d`` reads source ``size - (2*edge+1-d)``.
+    """
+
+    parts = []
+    for position, size, edge in zip(dest, shape, edges, strict=True):
+        if edge is None or position < edge:
+            parts.append(position)
+        else:
+            parts.append(size - (2 * edge + 1 - position))
+    return "[" + ", ".join(str(part) for part in parts) + "]"
 
 
 def _badge_row(labels: tuple[AxisLabel, ...]) -> str:
@@ -175,16 +214,24 @@ def array_grid_html(
     grid_mask = mask.reshape(grid.shape)
     group_sizes = _group_sizes(values.shape)
 
+    row_shape = tuple(values.shape[:-1]) if values.ndim > 1 else ()
+    source_shape = tuple(int(dim) for dim in working.shape)
     rows_html: list[str] = []
     for row_index in range(grid.shape[0]):
         gap_level = _gap_level(row_index, group_sizes)
         style = f' style="border-top:{2 * gap_level}px solid transparent"' if gap_level else ""
+        row_dest = (
+            tuple(int(i) for i in np.unravel_index(row_index, row_shape)) if row_shape else ()
+        )
         cells = "".join(
             _cell_html(
                 grid[row_index, col],
                 _state(grid, grid_mask, row_index, col, bounds),
                 bounds,
                 motifs,
+                _source_index((*row_dest, col), source_shape, edges)
+                if bool(grid_mask[row_index, col])
+                else None,
             )
             for col in range(grid.shape[1])
         )
@@ -196,6 +243,7 @@ def array_grid_html(
     html = (
         f'<div class="tl-grid">{_badge_row(labels)}'
         f'<table class="tl-grid-table">{"".join(rows_html)}</table>'
+        '<div class="tl-grid-hover" aria-live="polite"></div>'
         f'<div class="tl-grid-disclosure">{escape(disclosure)}</div></div>'
     )
     return GridRender(html, int(values.size), total, truncated, disclosure)
