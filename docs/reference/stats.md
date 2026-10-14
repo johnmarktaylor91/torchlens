@@ -94,6 +94,9 @@ refused -- early and late shards would get different coordinates.
 
 ## Where it sits
 
+- Install both: lovely-tensors for any tensor at a REPL, TorchLens for the
+  numbers of a whole model's run (this page across a dataset, the stats line on
+  each op of a trace).
 - `tl.aggregate` captures with the ordinary verified `tl.trace` engine; for
   tight training loops that only need a few sites, `tl.fastlog.Recorder`
   (built once, `.log()` per step) is the cheaper repeated-capture door.
