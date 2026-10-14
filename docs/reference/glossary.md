@@ -2128,4 +2128,7 @@ deprecation shim owed*
   row: `trace.ops["input_1"]` returns the input row and `"input_1" in
   trace.ops` is true although the label is not in `trace.ops.keys()`. The
   every-row sequence (inputs, outputs and buffers included) is
-  `trace.layer_list`.
+  `trace.layer_list`; `len(trace)`, `trace[int]` and `trace[slice]` index it.
+  Only `trace.ops` is the counted view: `input_ops`, `output_ops`,
+  `saved_ops`, `saved_grad_ops`, `compute_ops` and `ops_with_params` list
+  exactly their rows, boundary rows included.
