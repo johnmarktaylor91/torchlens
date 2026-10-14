@@ -347,7 +347,7 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `compiled_callable_unsupported` | Compiled plain callable has no module capture surface | Pass the original eager module |
 | `compile_counts_unavailable` | `tl.debug.count_compiles()` found no Dynamo compile counters in this torch runtime (`CompileCountsUnavailableError`, `RuntimeError` lineage) | Upgrade torch or skip the verification on this runtime |
 | `determinism_runs_invalid` | `tl.debug.check_determinism(runs=N)` with `N < 2` -- one run cannot support a repeatability claim (spelling DOCUMENTED-UNSTABLE) | Pass `runs=2` or more |
-| `conformance_backend_unknown` | Conformance run named a backend outside the v1 vocabulary (`torch` plus the declared fake-provider adapters) | Pass a documented backend token; third-party adapters activate through the plugin door first |
+| `conformance_backend_unknown` | Conformance run named a backend outside the runner's vocabulary (`torch`, the declared fake-provider adapters, and the preview backends `jax`, `tf`, `mlx`, `tinygrad`, `paddle`) | Pass a documented backend token; third-party adapters activate through the plugin door first |
 | `conformance_claim_unearned` | `claim_string()` was asked for a conformance tier the run did not pass; claims follow the closed earned-claim grammar | Run the pack and pass the tier before claiming it |
 | `conformance_plant_unknown` | A fake-provider adapter was constructed with a mutation-plant name outside the closed plant vocabulary | Use a documented plant token from `torchlens.conformance` |
 | `conformance_scope_invalid` | Conformance tier request is outside the cumulative C0/C1/C2 ladder; tiers are cumulative, never cherry-picked | Request a documented cumulative tier |

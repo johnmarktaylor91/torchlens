@@ -35,16 +35,22 @@ from pathlib import Path
 from ..errors import ConfigurationError
 from ._adapters import FAKE_PLANTS, RosterModel, default_roster, resolve_adapter
 from ._cases import CaseResult, run_c0_cases, run_c1_cases, run_c2_cases
+from ._preview_adapters import PREVIEW_BACKENDS
+from ._scorecard import PreviewScorecard, ScorecardCell, preview_scorecard
 
 __tl_layer__ = "L9"
 
 __all__ = [
     "FAKE_PLANTS",
+    "PREVIEW_BACKENDS",
     "CaseResult",
     "ConformanceReport",
+    "PreviewScorecard",
     "RosterModel",
+    "ScorecardCell",
     "claim_string",
     "default_roster",
+    "preview_scorecard",
     "run_conformance",
 ]
 
@@ -175,6 +181,18 @@ def _adjudicate(
     return earned, funnel
 
 
+def _roster_for(adapter: object, roster: tuple[RosterModel, ...] | None) -> tuple[RosterModel, ...]:
+    """The explicit roster, else the adapter's own, else the smoke roster."""
+
+    if roster is not None:
+        return roster
+    adapter_roster = getattr(adapter, "default_roster", None)
+    if callable(adapter_roster):
+        rows: tuple[RosterModel, ...] = adapter_roster()
+        return rows
+    return default_roster()
+
+
 def run_conformance(
     backend: str,
     *,
@@ -189,13 +207,16 @@ def run_conformance(
     Parameters
     ----------
     backend:
-        Provider name (``"torch"`` reference or the reserved ``"fake"``).
+        Provider name: the ``"torch"`` reference, the reserved ``"fake"``, or
+        a preview backend (``"jax"``, ``"tf"``, ``"mlx"``, ``"tinygrad"``,
+        ``"paddle"``), which runs its own config-built roster.
     tiers:
         Rungs to run, cumulative from ``"C0"`` (``("C0","C1","C2")`` runs
         all three; a higher rung without its predecessors refuses typed).
     roster:
-        Model rows for C1/C2; defaults to the zero-network config-built
-        smoke roster (which can NEVER earn a claim).
+        Model rows for C1/C2; defaults to the adapter's zero-network
+        config-built roster, else the smoke roster (neither can EVER earn a
+        claim).
     workdir:
         Scratch directory for C2 artifacts; a temp dir when omitted.
     executed_floor:
@@ -227,7 +248,7 @@ def run_conformance(
             requested_tiers=list(tiers),
         )
     adapter = resolve_adapter(backend, plant=_plant)
-    model_rows = default_roster() if roster is None else roster
+    model_rows = _roster_for(adapter, roster)
     results: list[CaseResult] = []
     results.extend(run_c0_cases(adapter))
     if "C1" in tiers:

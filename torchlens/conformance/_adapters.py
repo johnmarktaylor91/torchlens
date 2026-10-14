@@ -207,8 +207,9 @@ def resolve_adapter(backend: str, *, plant: str | None = None) -> Any:
     Parameters
     ----------
     backend:
-        ``"torch"`` (the reference) or ``"fake"`` (the reserved plant
-        substrate).
+        ``"torch"`` (the reference), ``"fake"`` (the reserved plant
+        substrate), or a preview backend (``"jax"``, ``"tf"``, ``"mlx"``,
+        ``"tinygrad"``, ``"paddle"``).
     plant:
         Optional plant for the fake provider.
 
@@ -220,20 +221,23 @@ def resolve_adapter(backend: str, *, plant: str | None = None) -> Any:
     Raises
     ------
     ConfigurationError
-        ``conformance_backend_unknown`` for any other name in v1 (external
+        ``conformance_backend_unknown`` for any other name (external
         providers enter through the C0 provider-API pack once activated).
     """
 
-    factory = _ADAPTER_FACTORIES.get(backend)
+    from ._preview_adapters import PREVIEW_ADAPTER_FACTORIES
+
+    factory = _ADAPTER_FACTORIES.get(backend) or PREVIEW_ADAPTER_FACTORIES.get(backend)
     if factory is not None:
         return factory(plant)
     raise ConfigurationError(
-        f"Unknown conformance backend {backend!r}; v1 resolves 'torch' (the "
-        "reference) and 'fake' (the reserved plant substrate). External "
-        "providers are exercised after explicit activation through "
-        "torchlens.ecosystem.plugins. Remedy: pass 'torch' or 'fake'.",
+        f"Unknown conformance backend {backend!r}; the runner resolves 'torch' "
+        "(the reference), 'fake' (the reserved plant substrate) and the preview "
+        f"backends {sorted(PREVIEW_ADAPTER_FACTORIES)}. External providers are "
+        "exercised after explicit activation through torchlens.ecosystem.plugins. "
+        "Remedy: pass 'torch', 'fake' or a preview backend name.",
         code="conformance_backend_unknown",
-        remedy="pass 'torch' or 'fake'",
+        remedy="pass 'torch', 'fake' or a preview backend name",
         requested_backend=backend,
     )
 
