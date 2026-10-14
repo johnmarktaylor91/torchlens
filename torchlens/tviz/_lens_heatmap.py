@@ -32,7 +32,7 @@ MAX_HEATMAP_POSITIONS = 48
 TOKEN_CLIP = 7
 
 #: Font size (points) for cell text, tick labels and the footer.
-_FONT = 8
+_FONT = 9
 
 _VALUES = ("top_prob", "target_prob")
 
@@ -117,12 +117,12 @@ def _heatmap_cells(
 def _clip(token: str) -> tuple[str, bool]:
     """Clip one decoded token for a cell; report whether it was clipped.
 
-    A whitespace-only token prints quoted with escapes (``'\\n'``) so its
-    cell never looks empty.
+    Surrounding spaces are not drawn (the footer says so); a whitespace-only
+    token prints quoted with escapes (``'\\n'``) so its cell never looks
+    empty.
     """
 
-    if not token.strip():
-        token = repr(token)
+    token = token.strip() or repr(token)
     if len(token) <= TOKEN_CLIP:
         return token, False
     return token[: TOKEN_CLIP - 1] + "~", True
@@ -189,7 +189,8 @@ def _footer(
         "full-vocabulary denominator",
         f"{len(result.entries)} rows projected through final norm/head from facet "
         f"{result.facet!r}; none is the model's own output",
-        f"{color}; text: each cell's top-1 token; batch element {batch_index}",
+        f"{color}; text: each cell's top-1 token, surrounding spaces not shown; "
+        f"batch element {batch_index}",
     ]
     if clipped:
         lines.append(f"token text clipped to {TOKEN_CLIP} characters (~ marks a clip)")
@@ -259,10 +260,12 @@ def render_logit_lens_heatmap(  # noqa: PLR0913 -- addressing, labeling and outp
         clipped=any(clipped for line in cells for _, clipped in line),
     )
     require_matplotlib()
-    label_room = 0.85 if tokens is not None else 0.5
-    footer_room = 0.15 * len(disclosures) + 0.15
-    height = 0.3 * n_layers + 0.6 + label_room + footer_room
-    fig = figure(width=0.5 * len(columns) + 2.4, height=height)
+    labels = [_clip(str(tokens[p]))[0] if tokens is not None else str(p) for p in columns]
+    longest = max(len(label) for label in labels)
+    label_room = 0.45 + (0.08 * longest if tokens is not None else 0.0)
+    footer_room = 0.16 * len(disclosures) + 0.05
+    height = 0.32 * n_layers + 0.6 + label_room + footer_room
+    fig = figure(width=0.58 * len(columns) + 2.6, height=height)
     fig.subplots_adjust(bottom=(label_room + footer_room) / height, top=1 - 0.45 / height)
     ax = fig.add_subplot(111)
     mesh = ax.pcolormesh(values, cmap=ATTENTION_CMAP, vmin=0.0, vmax=1.0, rasterized=False)
@@ -282,7 +285,6 @@ def render_logit_lens_heatmap(  # noqa: PLR0913 -- addressing, labeling and outp
     ax.set_yticklabels(
         [f"{entry.layer_index}: {entry.address}" for entry in result.entries], fontsize=_FONT
     )
-    labels = [_clip(str(tokens[p]))[0] if tokens is not None else str(p) for p in columns]
     ax.set_xticks([col + 0.5 for col in range(len(columns))])
     ax.set_xticklabels(labels, fontsize=_FONT, rotation=90 if tokens is not None else 0)
     ax.set_xlabel(

@@ -89,6 +89,7 @@ def test_whitespace_tokens_stay_visible_and_long_tokens_clip() -> None:
     assert _clip(" ") == ("' '", False)
     assert _clip("averyverylongtoken") == ("averyv~", True)
     assert _clip("Paris") == ("Paris", False)
+    assert _clip(" located") == ("located", False)
 
 
 def test_target_mode_names_the_target_and_pdf_renders(tmp_path: Path) -> None:
