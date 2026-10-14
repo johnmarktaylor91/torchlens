@@ -14,7 +14,12 @@ import torch
 
 import torchlens.tviz as tviz
 from torchlens.semantic.logit_lens import LogitLensEntry, LogitLensResult
-from torchlens.tviz._lens_heatmap import MAX_HEATMAP_POSITIONS, _clip, _heatmap_cells
+from torchlens.tviz._lens_heatmap import (
+    MAX_HEATMAP_POSITIONS,
+    _clip,
+    _heatmap_cells,
+    _text_color,
+)
 
 VOCAB = 13
 
@@ -74,12 +79,16 @@ def test_render_writes_vector_output_with_the_footer(tmp_path: Path) -> None:
     text = artifact.paths[0].read_text()
     assert "<image" not in text
     lines = "\n".join(artifact.disclosure_lines)
-    assert "UNVALIDATED" in lines
-    assert "3 rows projected through final norm/head" in lines
-    assert "none is the model's own output" in lines
-    assert "full-vocabulary denominator" in lines
+    assert "lens: model_head (UNVALIDATED)" in lines
+    # Only a validated lens may claim the last row matches the model.
+    assert "no row is checked against the model's own output" in lines
+    assert "reproduces the model's captured logits" not in lines
+    assert "each row projects one block's 'resid_post' output" in lines
+    assert "prediction for the token after its column's input" in lines
+    assert "softmax over the full vocabulary" in lines
+    assert "batch element 0 of 2" in lines
     # The long token is clipped in its cell and the clip is disclosed.
-    assert "token text clipped to 7 characters" in lines
+    assert "clipped to 6 characters" in lines
 
 
 def test_whitespace_tokens_stay_visible_and_long_tokens_clip() -> None:
@@ -87,9 +96,10 @@ def test_whitespace_tokens_stay_visible_and_long_tokens_clip() -> None:
 
     assert _clip("\n") == ("'\\n'", False)
     assert _clip(" ") == ("' '", False)
-    assert _clip("averyverylongtoken") == ("averyv~", True)
+    assert _clip("averyverylongtoken") == ("avery~", True)
     assert _clip("Paris") == ("Paris", False)
-    assert _clip(" located") == ("located", False)
+    assert _clip(" center") == ("center", False)
+    assert _clip(" located") == ("locat~", True)
 
 
 def test_target_mode_names_the_target_and_pdf_renders(tmp_path: Path) -> None:
@@ -105,7 +115,9 @@ def test_target_mode_names_the_target_and_pdf_renders(tmp_path: Path) -> None:
     )
     assert artifact.paths[0].stat().st_size > 0
     assert any("target token 'averyverylongtoken'" in line for line in artifact.disclosure_lines)
-    assert any("numerically validated" in line for line in artifact.disclosure_lines)
+    lines = "\n".join(artifact.disclosure_lines)
+    assert "numerically validated against the captured logits" in lines
+    assert "the last row reproduces the model's captured logits" in lines
 
 
 @pytest.mark.parametrize(
@@ -118,6 +130,7 @@ def test_target_mode_names_the_target_and_pdf_renders(tmp_path: Path) -> None:
         {"tokens": ["a", "b"]},
         {"positions": [5]},
         {"positions": []},
+        {"batch_index": 2},
     ],
 )
 def test_out_of_contract_requests_refuse(tmp_path: Path, kwargs: dict) -> None:
@@ -127,6 +140,16 @@ def test_out_of_contract_requests_refuse(tmp_path: Path, kwargs: dict) -> None:
         tviz.render_logit_lens_heatmap(_result(), tmp_path / "x.png", **kwargs)
     assert caught.value.fields["code"] == "tv_record_invalid"
     assert not (tmp_path / "x.png").exists()
+
+
+def test_cell_text_color_follows_cell_luminance() -> None:
+    """Dark cells get white text and light cells black text."""
+
+    import matplotlib
+
+    cmap = matplotlib.colormaps["viridis"]
+    assert _text_color(cmap, 0.0) == "white"
+    assert _text_color(cmap, 1.0) == "black"
 
 
 def test_wide_lens_refuses_rather_than_cropping(tmp_path: Path) -> None:

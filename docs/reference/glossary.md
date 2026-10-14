@@ -1964,10 +1964,12 @@ deprecation shim owed*
 : `torchlens.tviz.render_logit_lens_heatmap(result, path)` draws a
   `LogitLensResult` as a layers-by-positions heatmap: one row per projected
   block, one column per input position, each cell printing that layer's
-  top-1 token and colored on a fixed 0-to-1 probability scale (the top-1
-  probability, or with `value="target_prob", target_token_id=...` a tracked
-  token's). The footer states the lens source, whether it was validated,
-  and that every row is projected through the final norm and head. Lenses
+  top-1 next-token prediction and colored on a fixed 0-to-1 probability
+  scale (the top-1 probability, or with `value="target_prob",
+  target_token_id=...` a tracked token's). The footer states the lens
+  source, whether it was validated, and that every row is projected through
+  the final norm and head; only a validated lens lets it say that the last
+  row reproduces the model's captured logits. Lenses
   wider than 48 positions refuse `tv_record_invalid` until `positions=`
   names the columns; nothing is cropped silently. Returns an `Artifact`.
 

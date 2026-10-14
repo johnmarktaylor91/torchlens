@@ -1,11 +1,12 @@
 """Layers-by-positions logit-lens heatmap over :class:`LogitLensResult`.
 
 The nostalgebraist picture: one row per projected block, one column per
-sequence position; each cell prints that layer's top-1 token at that
-position and is colored by a probability on the fixed [0, 1] scale (the
-top-1 probability, or a tracked target token's probability). Every row is
-a projection through the final norm and head, never the model's own
-output, and the footer says so together with the lens validation state.
+sequence position; each cell prints that layer's top-1 next-token
+prediction at that position and is colored by a probability on the fixed
+[0, 1] scale (the top-1 probability, or a tracked target token's). Every
+row is a projection through the final norm and head; the footer states the
+lens validation state, and only a validated lens lets it say that the last
+row reproduces the model's captured logits.
 
 All spellings are DOCUMENTED-UNSTABLE pending the naming session.
 """
@@ -29,7 +30,7 @@ __all__ = ["render_logit_lens_heatmap"]
 MAX_HEATMAP_POSITIONS = 48
 
 #: Characters of a decoded token printed in a cell before clipping.
-TOKEN_CLIP = 7
+TOKEN_CLIP = 6
 
 #: Font size (points) for cell text, tick labels and the footer.
 _FONT = 10
@@ -171,30 +172,75 @@ def _validate_request(
 def _footer(
     result: Any,
     *,
-    value: str,
     target: str | None,
     batch_index: int,
+    batch_size: int,
     clipped: bool,
 ) -> list[str]:
     """Return the heatmap's honesty footer lines."""
 
-    validated = "numerically validated" if result.validated else "UNVALIDATED"
-    color = (
-        "color: probability of each cell's top-1 token"
-        if value == "top_prob"
-        else f"color: probability of target token {target!r}"
+    if result.validated:
+        lens = (
+            f"lens: the model's final norm and head ({result.lens_source}), numerically "
+            "validated against the captured logits"
+        )
+        rows = "the last row reproduces the model's captured logits"
+    else:
+        lens = f"lens: {result.lens_source} (UNVALIDATED)"
+        rows = "no row is checked against the model's own output"
+    cell = (
+        "each cell: that layer's top-1 prediction for the token after its column's "
+        "input; probabilities are a softmax over the full vocabulary"
     )
-    lines = [
-        f"lens: {result.lens_source} ({validated}); probabilities use the "
-        "full-vocabulary denominator",
-        f"{len(result.entries)} rows projected through final norm/head from facet "
-        f"{result.facet!r}; none is the model's own output",
-        f"{color}; text: each cell's top-1 token, surrounding spaces not shown; "
-        f"batch element {batch_index}",
-    ]
+    if target is not None:
+        cell += f"; color: probability of target token {target!r}"
+    text = f"batch element {batch_index} of {batch_size}; tokens drawn without surrounding spaces"
     if clipped:
-        lines.append(f"token text clipped to {TOKEN_CLIP} characters (~ marks a clip)")
-    return lines
+        text += f", clipped to {TOKEN_CLIP} characters (~ marks a clip)"
+    return [
+        lens,
+        f"each row projects one block's {result.facet!r} output through that lens; {rows}",
+        cell,
+        text,
+    ]
+
+
+def _text_color(cmap: Any, value: float) -> str:
+    """Pick black or white cell text by the cell color's relative luminance."""
+
+    red, green, blue, _ = cmap(value)
+
+    def linear(channel: float) -> float:
+        return channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
+
+    luminance = 0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue)
+    # WCAG crossover: black wins contrast above about 0.179 relative luminance.
+    return "black" if luminance > 0.179 else "white"
+
+
+def _draw(
+    ax: Any,
+    values: np.ndarray,
+    cells: list[list[tuple[str, bool]]],
+    cmap: Any,
+) -> Any:
+    """Draw the colored mesh and the cell tokens; return the mesh."""
+
+    mesh = ax.pcolormesh(values, cmap=cmap, vmin=0.0, vmax=1.0, rasterized=False)
+    ax.invert_yaxis()
+    for row, line in enumerate(cells):
+        for col, (text, _) in enumerate(line):
+            ax.text(
+                col + 0.5,
+                row + 0.5,
+                text,
+                ha="center",
+                va="center",
+                fontsize=_FONT,
+                color=_text_color(cmap, float(values[row, col])),
+            )
+    ax.tick_params(length=0)
+    return mesh
 
 
 def render_logit_lens_heatmap(  # noqa: PLR0913 -- addressing, labeling and output axes
@@ -242,6 +288,13 @@ def render_logit_lens_heatmap(  # noqa: PLR0913 -- addressing, labeling and outp
     """
 
     n_positions = _validate_request(result, value, target_token_id, tokens)
+    if not 0 <= batch_index < int(result.entries[0].logits.shape[0]):
+        refuse(
+            code="tv_record_invalid",
+            message=f"batch_index={batch_index} is outside the lens batch "
+            f"({int(result.entries[0].logits.shape[0])}).",
+            remedy="pick a batch element the trace captured",
+        )
     columns = _resolve_positions(n_positions, positions)
     values, top_ids = _heatmap_cells(
         result, columns=columns, batch_index=batch_index, target_token_id=target_token_id
@@ -254,32 +307,19 @@ def render_logit_lens_heatmap(  # noqa: PLR0913 -- addressing, labeling and outp
     target = None if target_token_id is None else _decode(tokenizer, target_token_id)
     disclosures = _footer(
         result,
-        value=value,
         target=target,
         batch_index=batch_index,
+        batch_size=int(result.entries[0].logits.shape[0]),
         clipped=any(clipped for line in cells for _, clipped in line),
     )
-    require_matplotlib()
+    matplotlib = require_matplotlib()
     labels = [_clip(str(tokens[p]))[0] if tokens is not None else str(p) for p in columns]
-    label_room = 0.75
     footer_room = 0.18 * len(disclosures) + 0.05
-    height = 0.36 * n_layers + 0.65 + label_room + footer_room
+    height = 0.36 * n_layers + 1.25 + footer_room
     fig = figure(width=0.72 * len(columns) + 2.9, height=height)
-    fig.subplots_adjust(bottom=(label_room + footer_room) / height, top=1 - 0.45 / height)
+    fig.subplots_adjust(bottom=(0.6 + footer_room) / height, top=1 - 0.4 / height)
     ax = fig.add_subplot(111)
-    mesh = ax.pcolormesh(values, cmap=ATTENTION_CMAP, vmin=0.0, vmax=1.0, rasterized=False)
-    ax.invert_yaxis()
-    for row, line in enumerate(cells):
-        for col, (text, _) in enumerate(line):
-            ax.text(
-                col + 0.5,
-                row + 0.5,
-                text,
-                ha="center",
-                va="center",
-                fontsize=_FONT,
-                color="black" if values[row, col] > 0.55 else "white",
-            )
+    mesh = _draw(ax, values, cells, matplotlib.colormaps[ATTENTION_CMAP])
     ax.set_yticks([row + 0.5 for row in range(n_layers)])
     ax.set_yticklabels(
         [f"{entry.layer_index}: {entry.address}" for entry in result.entries], fontsize=_FONT
@@ -289,12 +329,12 @@ def render_logit_lens_heatmap(  # noqa: PLR0913 -- addressing, labeling and outp
     ax.set_xlabel(
         "input position" + (" (input token)" if tokens is not None else ""), fontsize=_FONT
     )
-    ax.set_ylabel("projected layer", fontsize=_FONT)
-    ax.tick_params(length=0)
-    bar = colorbar(fig, mesh, ax, label="probability (full-vocabulary denominator)")
+    ax.set_ylabel("block (output projected)", fontsize=_FONT)
+    label = "probability of the top-1 token" if target is None else f"probability of {target!r}"
+    bar = colorbar(fig, mesh, ax, label=label)
     bar.ax.tick_params(labelsize=_FONT)
     bar.ax.yaxis.label.set_size(_FONT)
-    fig.suptitle("logit lens: top-1 token per layer and position", fontsize=10)
+    ax.set_title("logit lens: top-1 next-token prediction per layer and position", fontsize=10)
     fig.text(0.01, 0.01, "\n".join(disclosures), fontsize=_FONT - 0.5, va="bottom")
     written = save_figure(fig, path, svg_fonttype=svg_fonttype)
     return Artifact(
