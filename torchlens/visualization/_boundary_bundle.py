@@ -116,7 +116,8 @@ def bundle_groups(trace: Trace, context: Any) -> dict[str, tuple[BundleGroup, ..
 
     if not bundles_enabled(context):
         return {}
-    from ._render_leaf import _container_component_role, _container_path_label
+    from ..ir.container import TupleIndex
+    from ._render_leaf import _container_component_role
 
     grouped: dict[tuple[Any, ...], list[str]] = defaultdict(list)
     for label in getattr(trace, "output_layers", ()) or ():
@@ -127,16 +128,20 @@ def bundle_groups(trace: Trace, context: Any) -> dict[str, tuple[BundleGroup, ..
         producer = _producer_module(trace, op)
         if producer is None:
             continue
+        # The role is the last NAMED component (``keys``/``values``); tuple
+        # positions are where a leaf sits, not what it is.
+        named = [part for part in path[1:] if not isinstance(part, TupleIndex)]
+        role = _container_component_role(named[-1]) if named else ""
+        container = _container_component_role(path[0]) + (f".{role}" if role else "")
         key = (
             producer,
-            _container_path_label(path[:1]),
-            _container_component_role(path[-1]),
+            container,
             str(getattr(op, "dtype", None)),
             tuple(getattr(op, "shape", ()) or ()),
         )
         grouped[key].append(str(op.label))
     by_producer: dict[str, list[BundleGroup]] = defaultdict(list)
-    for (producer, container, _role, _dtype, shape), members in grouped.items():
+    for (producer, container, _dtype, shape), members in grouped.items():
         if len(members) >= MIN_BUNDLE_LEAVES:
             by_producer[producer].append(BundleGroup(producer, tuple(members), container, shape))
     return {producer: tuple(groups) for producer, groups in by_producer.items()}

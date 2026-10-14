@@ -139,6 +139,7 @@ def test_bundle_draws_one_node_in_both_backends(tmp_path: Path, engine: str) -> 
     finally:
         trace.cleanup()
     assert source.count("OUTPUTS: ") == 1
+    assert "OUTPUTS: cache" in source
     assert "6 tensors, 2x4 each" in source
     assert "OUTPUTS: " not in plain
     assert _node_count(plain) - _node_count(source) == 5
@@ -170,3 +171,28 @@ def test_output_flood_past_k_cap_no_longer_empties_the_frontier() -> None:
     assert result.root_own_units <= 2
     assert "body" in result.selected
     assert result.visible_count < 15
+
+
+def test_gpt2_lm_head_cache_bundles_when_the_transformer_is_one_box(tmp_path: Path) -> None:
+    """GPT-2 LM head with the cache on: one box makes every KV leaf, so they bundle."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.GPT2Config(
+        n_layer=4, n_head=2, n_embd=16, n_positions=16, n_ctx=16, vocab_size=100
+    )
+    torch.manual_seed(0)
+    model = transformers.GPT2LMHeadModel(config).eval()
+    trace = tl.trace(model, torch.randint(0, 100, (1, 8)))
+    try:
+        overview = RenderContext(collapse="auto")
+        boxed = count(collapse_plan_for_trace(trace, _boxes("transformer"), {}, overview))
+        unbundled = count(
+            collapse_plan_for_trace(trace, _boxes("transformer"), {}, RenderContext())
+        )
+        # 8 KV leaves: keys and values bundle separately (4 each), so 8 -> 2.
+        assert unbundled - boxed == 6
+        source = _dot(trace, tmp_path, "gpt2", collapse="auto", collapse_fn=_boxes("transformer"))
+        assert "OUTPUTS: past_key_values.keys" in source
+        assert "OUTPUTS: past_key_values.values" in source
+        assert "OUTPUTS: logits" not in source
+    finally:
+        trace.cleanup()
