@@ -1,0 +1,29 @@
+# An installable example TorchLens provider distribution.
+#
+# It declares one entry point in an approved TorchLens group. Installing it
+# runs no provider code: torchlens.ecosystem.plugins.discover() reads this
+# declaration from the installed metadata, and only an explicit
+# activate("torchlens-example-provider") imports the module and commits the
+# factory's result through the export-target door.
+#
+# Build a wheel:      python -m pip wheel --no-deps -w dist examples/provider_package
+# Editable install:   python -m pip install --no-deps -e examples/provider_package
+# Exercised by tests/test_example_provider_package.py (both install modes).
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "torchlens-example-provider"
+version = "0.1.0"
+description = "Example TorchLens provider: one export target registered through an entry point"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["torchlens"]
+
+[project.entry-points."torchlens.export_targets"]
+example_summary = "torchlens_example_provider:export_target"
+
+[tool.setuptools.packages.find]
+where = ["src"]

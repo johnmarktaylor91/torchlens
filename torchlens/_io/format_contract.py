@@ -67,8 +67,13 @@ __tl_layer__ = "L1"
 # before its writer lands, so no further version bump follows), the corrected
 # floor text in the writer contract (2.31.0, the first tlspec-6 writer; v9
 # froze the false "2.33"), and the reserved generation step-score vocabulary
-# credited to inseq (``RESERVED_STEP_SCORE_NAMES``). The v9 contract of record
-# stays frozen byte-for-byte beside the v10 one.
+# credited to inseq (``RESERVED_STEP_SCORE_NAMES``). The v10 window also admits
+# the ``fed_by`` bundle relation kind (harness bundles: the later member's
+# prompt contains the earlier member's output; optional ``token_spans`` /
+# ``basis`` / ``coverage`` / ``label`` params) and the ``token_boundary_v1``
+# member binding in the reserved ``torchlens.boundary_facts`` sidecar family;
+# a v9 reader refuses the bare kind, as the loader doctrine requires. The v9
+# contract of record stays frozen byte-for-byte beside the v10 one.
 TLSPEC_VERSION = 10
 
 # Rehydration floor: artifacts older than tlspec_version 6 refuse to load

@@ -37,20 +37,20 @@ from ..intervention.types import Relationship
 from ._compare_gate import require_comparable
 
 # Re-exports (redundant aliases): _distance_value is imported from
-# torchlens.bundle by the cert7/cert8 hardening suites and _bundle_delta_map
-# by ._comparisons; the rest are the historical module-level surface of the
-# pre-split file.
+# torchlens.bundle by the cert7/cert8 hardening suites; the rest are the
+# historical module-level surface of the pre-split file.
 from ._deltas import (
-    _bundle_aligned_pairs,
-    _bundle_compare,
-    _bundle_delta_map,
-    _bundle_norm_delta,
-    _bundle_output_delta,
-    _bundle_show_diff,
+    _bundle_aligned_pairs as _bundle_aligned_pairs,
+    _bundle_compare as _bundle_compare,
+    _bundle_delta_map as _bundle_delta_map,
+    _bundle_norm_delta as _bundle_norm_delta,
+    _bundle_output_delta as _bundle_output_delta,
+    _bundle_show_diff as _bundle_show_diff,
     _distance_value as _distance_value,
     _metric_label as _metric_label,
     _resolve_member_name as _resolve_member_name,
     _tensor_field as _tensor_field,
+    dynamic_bundle_methods,
 )
 from ._lineage import BundleOperation, MemberEffectTable, mint_bundle_id
 from ._outcome_fold import _fold_member_outcomes
@@ -59,7 +59,11 @@ from ._provenance import (
     bundle_provenance as _bundle_provenance,
     bundle_why as _bundle_why,
 )
-from ._relation_carriage import _bundle_derive_episode_status, _bundle_relate
+from ._relation_carriage import (
+    _bundle_derive_episode_status,
+    _bundle_relate,
+    settle_relation_rows,
+)
 from ._relations import MemberRelationRow, MemberRelationTable, OpaqueRelationRow
 from ._vary import bundle_vary as _bundle_vary
 
@@ -207,7 +211,8 @@ class Bundle:
     ----------
     members:
         Mapping of member names to ``Trace`` objects, sequence of logs,
-        or sequence of ``(name, log)`` tuples.
+        or sequence of ``(name, log)`` tuples. Empty (the default) builds an
+        empty bundle to fill later with :meth:`add`.
     names:
         Optional names for a sequence of logs.
     baseline:
@@ -239,7 +244,7 @@ class Bundle:
 
     def __init__(
         self,
-        members: Mapping[str, Trace] | Sequence[Trace] | Sequence[tuple[str, Trace]],
+        members: Mapping[str, Trace] | Sequence[Trace] | Sequence[tuple[str, Trace]] = (),
         *,
         names: Sequence[str] | None = None,
         baseline: str | Trace | None = None,
@@ -465,24 +470,18 @@ class Bundle:
             If ``name`` is not a dynamic bundle helper.
         """
 
-        from ._comparisons import _register_comparison_helpers
-
-        dynamic_custom_methods: dict[str, Callable[..., Any]] = {
-            "aligned_pairs": _bundle_aligned_pairs,
-            "compare": _bundle_compare,
-            "delta_map": _bundle_delta_map,
-            "norm_delta": _bundle_norm_delta,
-            "output_delta": _bundle_output_delta,
-            "show_diff": _bundle_show_diff,
-        }
-        _register_comparison_helpers(dynamic_custom_methods)
-        helper = dynamic_custom_methods.get(name)
+        helper = dynamic_bundle_methods().get(name)
         if helper is None:
             from ..utils.facade import refuse_removed_member
 
             refuse_removed_member("Bundle", name, _REMOVED_BUNDLE_MEMBERS)
             raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
         return helper.__get__(self, type(self))
+
+    def __dir__(self) -> list[str]:
+        """List the class attributes plus the dynamic helper-table methods."""
+
+        return sorted({*super().__dir__(), *dynamic_bundle_methods()})
 
     @property
     def names(self) -> list[str]:
@@ -863,8 +862,14 @@ class Bundle:
         self,
         existing_rows: Sequence[MemberRelationRow | OpaqueRelationRow],
         new_rows: Sequence[MemberRelationRow | OpaqueRelationRow | Mapping[str, Any]],
+        *,
+        assess_unclaimed: bool = False,
     ) -> MemberRelationTable:
         """Return a NEW validated relation table (existing + coerced new rows).
+
+        New ``fed_by`` rows then settle their basis against the members
+        (``settle_relation_rows``; ``assess_unclaimed`` is the positional
+        ``relate`` door, which also binds and verifies unclaimed rows).
 
         ``OpaqueRelationRow`` instances pass through unchanged (loader-side
         carriage for preserved unknown namespaced kinds); mapping payloads
@@ -900,7 +905,9 @@ class Bundle:
                 ) from exc
         table = MemberRelationTable(rows)
         table.validate_against_members(self._members.keys())
-        return table
+        return settle_relation_rows(
+            table, self._members, first_new=len(existing_rows), assess_unclaimed=assess_unclaimed
+        )
 
     def _relation_table_for_removal(
         self,
@@ -961,13 +968,17 @@ class Bundle:
 
         return self._ensure_supergraph()
 
-    def node(self, site: Any) -> SuperOp:
-        """Return a view of one resolved site across all members.
+    def node(self, site: Any, members: Sequence[str | Trace] | None = None) -> SuperOp:
+        """Return a view of one resolved site across all (or the named) members.
 
         Parameters
         ----------
         site:
             Selector-like site query.
+        members:
+            Optional member subset; the gate then checks only pairs inside it,
+            so one foreign member (a small router model) no longer disables
+            the view for the rest. ``None`` means every member.
 
         Returns
         -------
@@ -975,11 +986,14 @@ class Bundle:
             Dict-keyed view over matching layer pass records.
         """
 
-        self._require_comparable("node")
+        names = list(self._members) if members is None else self._coerce_member_name_list(members)
+        logs = {name: self[name] for name in names}
+        pairs = [(left, right) for index, left in enumerate(names) for right in names[index + 1 :]]
+        self._require_comparable("node", pairs=pairs)
         self._ensure_supergraph()
         layer_members: dict[str, Op] = {}
         failures: dict[str, str] = {}
-        for name, log in self._members.items():
+        for name, log in logs.items():
             try:
                 table = resolve_sites(log, site, max_fanout=1)
                 layer_members[name] = cast("Op", table.first())
@@ -1998,8 +2012,6 @@ class Bundle:
                         for index, log in enumerate(log_values)
                     ]
                 )
-        if not pairs:
-            raise ValueError("Bundle requires at least one Trace.")
         for member_name, log in pairs:
             cls._require_trace(log, arg_name=f"member {member_name!r}")
         # O(n) duplicate detection (r8 R52): the prior per-member full
@@ -2298,9 +2310,9 @@ class Bundle:
         """
 
         member_keys = self._member_key_lists(key_fn)
-        key_sets = [set(keys) for keys in member_keys]
+        key_sets = [set(keys) for keys in member_keys] or [set()]
         shared = set.intersection(*key_sets)
-        return [key for key in member_keys[0] if key in shared]
+        return [key for key in (member_keys or [[]])[0] if key in shared]
 
     def _divergent(self, key_fn: Callable[[Trace], Sequence[Any]]) -> list[str]:
         """Return keys present in some members but not every member.
@@ -2317,7 +2329,7 @@ class Bundle:
         """
 
         member_keys = self._member_key_lists(key_fn)
-        key_sets = [set(keys) for keys in member_keys]
+        key_sets = [set(keys) for keys in member_keys] or [set()]
         shared = set.intersection(*key_sets)
         union = set.union(*key_sets)
         divergent = union - shared

@@ -2311,7 +2311,9 @@ def test_auto_collapse_run_fold_splits_same_spatial_channel_steps(tmp_path: Path
         auto_source = _draw_source(trace, tmp_path, "dim_step_stage_boundary_auto", "auto")
         folds = resolve_repeat_folds(trace, _select_blocks_child)
 
-        assert _collapsed_exact_label_count(auto_source, "blocks.1") == 1
+        # Re-pinned with the collapse gate fix: a block whose only child (``net``)
+        # hides the same ops is not a box candidate, so the box takes the inner name.
+        assert _collapsed_exact_label_count(auto_source, "blocks.1.net") == 1
         assert "runfoldellipsis" not in auto_source
         assert "... +" not in auto_source
         assert "shapes " not in auto_source
