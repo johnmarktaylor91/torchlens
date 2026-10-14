@@ -58,10 +58,13 @@ def test_ceiled_score_puts_raw_beside_normalised() -> None:
     }
 
 
-def test_score_without_ceiling_stays_raw() -> None:
-    assert score_parts(0.42) == ScoreParts(raw=0.42)
+_NO_CEILING = "the result carries no 'ceiling' attribute, so it is reported as raw"
+
+
+def test_score_without_ceiling_stays_raw_and_says_so() -> None:
+    assert score_parts(0.42) == ScoreParts(raw=0.42, note=_NO_CEILING)
     behavioral = score_parts(_FakeScore(0.95, {"error": _FakeScore(0.2), "raw": "per-trial"}))
-    assert behavioral == ScoreParts(raw=0.95, error=0.2)
+    assert behavioral == ScoreParts(raw=0.95, error=0.2, note=_NO_CEILING)
 
 
 def test_ceiled_score_with_per_item_raw_names_the_gap() -> None:
@@ -69,6 +72,38 @@ def test_ceiled_score_with_per_item_raw_names_the_gap() -> None:
     assert parts.raw is None
     assert parts.ceiling_normalised == 0.5
     assert parts.note is not None and "attrs['raw']" in parts.note
+    no_ceiling_value = score_parts(_FakeScore(0.5, {"ceiling": np.ones(3), "raw": 0.4}))
+    assert no_ceiling_value.ceiling is None and no_ceiling_value.raw == 0.4
+    assert no_ceiling_value.note is not None and "attrs['ceiling']" in no_ceiling_value.note
+
+
+class _AggregatedScore:
+    """A Brain-Score 1.x-style score: aggregation=[center, error], attrs beside it."""
+
+    dims = ("aggregation",)
+
+    def __init__(self, center: float, error: float, attrs: dict[str, Any] | None = None) -> None:
+        self._parts = {"center": center, "error": error}
+        self.attrs = attrs or {}
+        self.values = np.array([center, error])
+
+    def sel(self, aggregation: str) -> _FakeScore:
+        return _FakeScore(self._parts[aggregation])
+
+
+def test_aggregation_dimension_reads_center_and_error() -> None:
+    ceiled = _AggregatedScore(
+        _NORMALISED,
+        0.02,
+        {"raw": _AggregatedScore(_RAW, 0.03), "ceiling": _AggregatedScore(_CEILING, 0.01)},
+    )
+    parts = score_parts(ceiled)
+    assert (parts.raw, parts.ceiling_normalised, parts.ceiling, parts.error) == (
+        _RAW,
+        _NORMALISED,
+        _CEILING,
+        0.02,
+    )
 
 
 def test_non_scalar_score_refuses() -> None:

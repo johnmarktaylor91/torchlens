@@ -76,7 +76,9 @@ class ScoreParts:
         The ceiling-normalised score, or ``None`` when the result carries
         no ceiling (nothing was normalised).
     ceiling:
-        The ceiling the benchmark normalised by, or ``None``.
+        The ceiling the benchmark normalised by, or ``None`` (when the
+        result carries a ceiling attribute that is not one number, ``note``
+        says so).
     error:
         The benchmark's reported error of the score, or ``None``.
     note:
@@ -107,12 +109,25 @@ class ScoreParts:
         }
 
 
+def _aggregation_part(value: Any, part: str) -> Any:
+    """Select ``part`` of an older Brain-Score ``aggregation`` dimension, if present.
+
+    Brain-Score 1.x scores carried ``aggregation=["center", "error"]``;
+    2.x scores are scalar with the error in ``attrs``. Either reads here.
+    """
+
+    dims = getattr(value, "dims", ())
+    if "aggregation" in dims and hasattr(value, "sel"):
+        return value.sel(aggregation=part)
+    return value
+
+
 def _scalar_or_none(value: Any) -> float | None:
     """Return ``value`` as a float when it holds exactly one number, else ``None``."""
 
     if value is None:
         return None
-    raw_values = getattr(value, "values", value)
+    raw_values = getattr(_aggregation_part(value, "center"), "values", value)
     try:
         array = torch.as_tensor(raw_values, dtype=torch.float64)
     except (TypeError, ValueError, RuntimeError):
@@ -159,21 +174,27 @@ def score_parts(score: Any) -> ScoreParts:
         )
     attrs = attrs if isinstance(attrs, Mapping) else {}
     error = _scalar_or_none(attrs.get("error"))
+    if error is None and "aggregation" in getattr(score, "dims", ()):
+        error = _scalar_or_none(_aggregation_part(score, "error"))
     if "ceiling" not in attrs:
-        return ScoreParts(raw=value, error=error)
-    raw = _scalar_or_none(attrs.get("raw"))
-    note = None
-    if raw is None:
-        note = (
-            "the result carries a ceiling but its 'raw' attribute is not a single number; "
-            "read score.attrs['raw'] for the per-item raw values"
+        return ScoreParts(
+            raw=value,
+            error=error,
+            note="the result carries no 'ceiling' attribute, so it is reported as raw",
         )
+    raw = _scalar_or_none(attrs.get("raw"))
+    ceiling = _scalar_or_none(attrs.get("ceiling"))
+    gaps = [
+        f"its {name!r} attribute is not a single number; read score.attrs[{name!r}]"
+        for name, part in (("raw", raw), ("ceiling", ceiling))
+        if part is None
+    ]
     return ScoreParts(
         raw=raw,
         ceiling_normalised=value,
-        ceiling=_scalar_or_none(attrs.get("ceiling")),
+        ceiling=ceiling,
         error=error,
-        note=note,
+        note="the result carries a ceiling but " + "; ".join(gaps) if gaps else None,
     )
 
 
