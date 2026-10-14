@@ -30,8 +30,6 @@ from torchlens.errors.episode import BundleRelationError
 from torchlens.intervention.errors import BundleRelationshipError
 from torchlens.io import attach_sidecar
 
-pytestmark = pytest.mark.smoke
-
 _VOCAB = 32
 
 
