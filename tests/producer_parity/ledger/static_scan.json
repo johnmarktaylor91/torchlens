@@ -16,6 +16,30 @@
   "via_getattr": true
  },
  {
+  "ambiguous": false,
+  "field": "parent_params",
+  "file": "torchlens/_capture_honesty.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/_capture_honesty.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "unattributed_tensor_args",
+  "file": "torchlens/_capture_honesty.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": true,
   "field": "modules",
   "file": "torchlens/_capture_state_helpers.py",
@@ -4542,6 +4566,14 @@
   "has_default": true,
   "sites": 1,
   "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/intervention/_zero_fire.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
  },
  {
   "ambiguous": false,
