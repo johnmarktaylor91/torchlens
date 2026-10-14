@@ -147,10 +147,7 @@ _RUNNABLE_ACTIVATION_KIND = "runnable_activation"
 _RENAMED_PICKLE_GLOBALS: dict[tuple[str, str], tuple[str, str]] = {
     # U00 clean break: the edit-object class was renamed to ``Edit``; artifacts
     # written before the rename (tlspec 6-9) pickle it under its old name.
-    ("torchlens.intervention.types", "HelperSpec"): (
-        "torchlens.intervention.types",
-        "Edit",
-    ),
+    ("torchlens.intervention.types", "HelperSpec"): ("torchlens.intervention.types", "Edit"),
     ("torchlens.data_classes.model_log", "ModelLog"): (
         "torchlens.data_classes.trace",
         "Trace",
