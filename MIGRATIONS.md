@@ -149,6 +149,26 @@ gone: `trace.summary()` mid-forward now raises `CaptureContextError`
 | `flop_count(model, x, count_fma_as_two=True)` | `flop_count(model, x, flop_convention="fma2")` (the default) |
 | `flop_count(model, x, count_fma_as_two=False)` | `flop_count(model, x, flop_convention="fma1")` |
 
+## Steering bridges become converters (clean break, no aliases)
+
+The contrastive direction math lives in TorchLens only:
+`torchlens.intervention.direction_from_pairs(pos_traces, neg_traces, site, method=)` returns
+a `Direction`, and the steering-vectors and repeng bridges only convert it. The old trainers
+are removed; calling them raises `AttributeError`.
+
+| Old spelling | New spelling |
+|---|---|
+| `tl.bridge.steering_vectors.vector(log_pos, site, negative_log=log_neg)["vector"]` | `torchlens.intervention.direction_from_pairs(log_pos, log_neg, site).vector` |
+| `tl.bridge.steering_vectors.vector(..., layer=i)["steering_vector"]` | `direction_from_pairs(log_pos, log_neg, site).to_steering_vectors(layer=i)` |
+| `tl.bridge.steering_vectors.vector(..., trainer=sv.pca_aggregator())` | `direction_from_pairs(..., method="pca")` |
+| `tl.bridge.repeng.control_vector(log_pos, site, negative_log=log_neg, layer=i)["control_vector"]` | `direction_from_pairs(log_pos, log_neg, site, method="pca").to_repeng(layer=i)` |
+
+The native `"pca"` is the uncentered first principal axis of the paired differences (the
+steering-vectors `pca_aggregator` definition), not repeng's centered `pca_diff`, so a repeng
+vector built the old way and the new one differ; `pca_center` and `umap` have no
+replacement. The explicit `attention_mask=` / `negative_attention_mask=` arguments are gone:
+the builder reads each trace's saved `attention_mask` input.
+
 ## Removed member spellings name their replacement (typed redirect)
 
 The alias members and public subpackage names deleted by the 2026-10-01

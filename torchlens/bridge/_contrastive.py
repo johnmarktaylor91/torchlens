@@ -1,10 +1,10 @@
-"""Shared helpers for the contrastive steering bridges.
+"""Private helpers for the dialz bridge.
 
-``steering_vectors``, ``repeng`` and ``dialz`` all train from the same layout:
-one positive and one negative row per prompt pair, read at one token per
-prompt. This module reads those rows from saved TorchLens outs (padding-aware)
-and replicates the direction math of repeng's ``read_representations``, which
-dialz forked.
+The dialz bridge trains from one positive and one negative row per prompt
+pair, read at one token per prompt. This module reads those rows from saved
+TorchLens outs (padding-aware) and replicates the direction math of dialz's
+``read_representations`` (a fork of repeng's). The steering-vectors and repeng
+bridges are converters over ``torchlens.intervention.Direction`` instead.
 """
 
 from __future__ import annotations
@@ -26,8 +26,7 @@ ReadIndex = int | Sequence[int] | None
 class _ContrastiveRead:
     """How the contrastive bridges read rows: the negative trace, token and masks.
 
-    ``steering_vectors.vector``, ``repeng.control_vector`` and ``dialz.vector``
-    take these four keywords with the same meaning and forward them unchanged.
+    ``dialz.vector`` takes these four keywords and forwards them unchanged.
 
     Parameters
     ----------

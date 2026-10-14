@@ -158,8 +158,8 @@ optional dependency.
   dumps nothing raises `RuntimeError` naming `torch.compiler.reset()`
   (extra: `torchlens[depyf]`).
 - `dialz.py`: `analyze()` (extra: `torchlens[dialz]`).
-- `repeng.py`: `control_vector()` (extra: `torchlens[repeng]`).
-- `steering_vectors.py`: `vector()` (extra: `torchlens[steering]`).
+- `repeng.py`: `from_direction()` (extra: `torchlens[repeng]`).
+- `steering_vectors.py`: `from_direction()` (extra: `torchlens[steering]`).
 
 ## Optional-dependency gating pattern
 - Never import an optional dependency at module top level. The pattern is a
