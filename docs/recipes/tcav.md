@@ -85,7 +85,7 @@ directional derivative along the CAV at the site. TorchLens saves the site's
 gradient during one backward pass.
 
 ```python
-# recipe-test: tool=torchlens expected=True
+# recipe-test: tool=torchlens expected=(True, True)
 def tcav_score(direction, x, target=1):
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=True))
     logits = trace[trace.output_layers[0]].out
@@ -102,14 +102,20 @@ null_scores = [
     tcav_score(learn_cav(site_activations(torch.randn(100, 8)), site_activations(random_x)), class_x)
     for _ in range(5)
 ]
-RESULT = score > 0.9 and score > max(null_scores)
+RESULT = (score > 0.9, any(null > 0.9 for null in null_scores))
 ```
+
+The concept CAV scores near 1, but so does at least one random CAV on this
+model: the gradient field at this layer points the same way for most
+directions, and the score alone does not separate the concept from noise.
+That is why the causal check follows.
 
 ## 3. The causal check
 
 Steer the site along the CAV and read the class margin (class-1 logit minus
 class-0 logit). If the concept matters, adding the CAV raises the margin and
-subtracting it lowers it; a random direction of the same norm moves it less.
+subtracting it lowers it; a random direction of the same norm moves it much
+less (here, less than a third as far).
 
 ```python
 # recipe-test: tool=torchlens expected=True
@@ -125,7 +131,7 @@ random_direction = torch.randn(16)
 random_direction = random_direction / random_direction.norm()
 random_shift = abs(mean_margin(random_direction, 2.0, class_x) - margins[0.0])
 cav_shift = margins[2.0] - margins[0.0]
-RESULT = margins[-2.0] < margins[0.0] < margins[2.0] and cav_shift > random_shift
+RESULT = margins[-2.0] < margins[0.0] < margins[2.0] and cav_shift > 3 * random_shift
 ```
 
 ## Limits
