@@ -1969,7 +1969,8 @@ deprecation shim owed*
   target_token_id=...` a tracked token's). The footer states the lens
   source, whether it was validated, and that every row is projected through
   the final norm and head; only a validated lens lets it say that the last
-  row reproduces the model's captured logits. Lenses
+  row reproduces the model's own output scores. `title=` prefixes the
+  figure title with a subject such as the model's name. Lenses
   wider than 48 positions refuse `tv_record_invalid` until `positions=`
   names the columns; nothing is cropped silently. Returns an `Artifact`.
 

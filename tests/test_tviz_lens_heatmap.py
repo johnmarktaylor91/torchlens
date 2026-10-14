@@ -79,11 +79,11 @@ def test_render_writes_vector_output_with_the_footer(tmp_path: Path) -> None:
     text = artifact.paths[0].read_text()
     assert "<image" not in text
     lines = "\n".join(artifact.disclosure_lines)
-    assert "lens: model_head (UNVALIDATED)" in lines
+    assert "lens: the model's own final norm and unembedding (UNVALIDATED" in lines
     # Only a validated lens may claim the last row matches the model.
     assert "no row is checked against the model's own output" in lines
-    assert "reproduces the model's captured logits" not in lines
-    assert "each row projects one block's 'resid_post' output" in lines
+    assert "reproduces the model's own output scores" not in lines
+    assert "each row projects one block's output (the residual stream after the block)" in lines
     assert "prediction for the token after its column's input" in lines
     assert "softmax over the full vocabulary" in lines
     assert "batch element 0 of 2" in lines
@@ -112,12 +112,13 @@ def test_target_mode_names_the_target_and_pdf_renders(tmp_path: Path) -> None:
         target_token_id=3,
         tokenizer=_Tokenizer(),
         positions=[-2, -1],
+        title="toy model",
     )
     assert artifact.paths[0].stat().st_size > 0
     assert any("target token 'averyverylongtoken'" in line for line in artifact.disclosure_lines)
     lines = "\n".join(artifact.disclosure_lines)
-    assert "numerically validated against the captured logits" in lines
-    assert "the last row reproduces the model's captured logits" in lines
+    assert "checked numerically against the model's own output scores" in lines
+    assert "the last row reproduces the model's own output scores" in lines
 
 
 @pytest.mark.parametrize(

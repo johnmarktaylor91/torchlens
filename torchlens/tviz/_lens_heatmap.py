@@ -169,6 +169,22 @@ def _validate_request(
     return n_positions
 
 
+#: Plain wording for the lens sources ``logit_lens`` records.
+_LENS_WORDS = {
+    "model_head": "the model's own final norm and unembedding",
+    "classifier_head": "the model's own final norm and classifier head",
+    "contrastive_head": "the model's own contrastive image head",
+    "user": "a user-supplied lens",
+}
+
+#: Plain wording for the hidden-state facets a lens projects.
+_FACET_WORDS = {
+    "resid_post": "output (the residual stream after the block)",
+    "resid_pre": "input (the residual stream before the block)",
+    "resid_mid": "mid-block residual stream",
+}
+
+
 def _footer(
     result: Any,
     *,
@@ -177,17 +193,16 @@ def _footer(
     batch_size: int,
     clipped: bool,
 ) -> list[str]:
-    """Return the heatmap's honesty footer lines."""
+    """Return the heatmap's honesty footer lines, in plain words."""
 
+    lens = _LENS_WORDS.get(result.lens_source, f"lens {result.lens_source!r}")
     if result.validated:
-        lens = (
-            f"lens: the model's final norm and head ({result.lens_source}), numerically "
-            "validated against the captured logits"
-        )
-        rows = "the last row reproduces the model's captured logits"
+        lens_line = f"lens: {lens}, checked numerically against the model's own output scores"
+        rows = "the last row reproduces the model's own output scores"
     else:
-        lens = f"lens: {result.lens_source} (UNVALIDATED)"
+        lens_line = f"lens: {lens} (UNVALIDATED: not checked against the model's output)"
         rows = "no row is checked against the model's own output"
+    facet = _FACET_WORDS.get(result.facet, f"facet {result.facet!r}")
     cell = (
         "each cell: that layer's top-1 prediction for the token after its column's "
         "input; probabilities are a softmax over the full vocabulary"
@@ -198,8 +213,8 @@ def _footer(
     if clipped:
         text += f", clipped to {TOKEN_CLIP} characters (~ marks a clip)"
     return [
-        lens,
-        f"each row projects one block's {result.facet!r} output through that lens; {rows}",
+        lens_line,
+        f"each row projects one block's {facet} through that lens; {rows}",
         cell,
         text,
     ]
@@ -253,6 +268,7 @@ def render_logit_lens_heatmap(  # noqa: PLR0913 -- addressing, labeling and outp
     tokens: Sequence[str] | None = None,
     tokenizer: Any | None = None,
     batch_index: int = 0,
+    title: str | None = None,
     svg_fonttype: str = "path",
 ) -> Artifact:
     """Render the layers-by-positions logit-lens heatmap.
@@ -278,6 +294,9 @@ def render_logit_lens_heatmap(  # noqa: PLR0913 -- addressing, labeling and outp
         Optional tokenizer used to decode the predicted token ids.
     batch_index:
         Batch element to draw.
+    title:
+        Optional subject (for example the model's name) printed before
+        the fixed figure title; the lens result carries no model identity.
     svg_fonttype:
         ``'path'`` (default) or ``'none'``.
 
@@ -334,7 +353,8 @@ def render_logit_lens_heatmap(  # noqa: PLR0913 -- addressing, labeling and outp
     bar = colorbar(fig, mesh, ax, label=label)
     bar.ax.tick_params(labelsize=_FONT)
     bar.ax.yaxis.label.set_size(_FONT)
-    ax.set_title("logit lens: top-1 next-token prediction per layer and position", fontsize=10)
+    heading = "logit lens: top-1 next-token prediction per layer and position"
+    ax.set_title(f"{title}: {heading}" if title else heading, fontsize=10)
     fig.text(0.01, 0.01, "\n".join(disclosures), fontsize=_FONT - 0.5, va="bottom")
     written = save_figure(fig, path, svg_fonttype=svg_fonttype)
     return Artifact(
