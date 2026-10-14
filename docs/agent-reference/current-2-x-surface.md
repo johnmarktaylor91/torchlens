@@ -228,7 +228,7 @@
   (`member_relations=`, `Bundle.relate`, `Bundle.derive_episode_status` — a derived fold,
   never Bundle-level settlement; mutators cascade explicitly or refuse typed). Doc of record:
   `docs/reference/episode_capture.md`.
-- HARNESS BUNDLES (phase 1; every spelling DOCUMENTED-UNSTABLE; doc of record
+- HARNESS BUNDLES (phases 1 and 2; every spelling DOCUMENTED-UNSTABLE; doc of record
   `docs/reference/harness_bundles.md`): no new datatype, the Bundle plus its relation table is
   the harness graph. Relation kind `fed_by` (tlspec v10): "critique fed_by draft", the later
   member's prompt contains the earlier member's output; CONTENT provenance only (a router
@@ -236,7 +236,12 @@
   control-dependency kind). Params exactly `token_spans` (four-int half-open rows), `basis`
   (`declared`/`verified`/`matched`), `coverage`, `label` (free text, never interpreted).
   Positional `b.relate("fed_by", "critique", "draft", token_spans=[[3, 6, 1, 4]])` beside the
-  row form; `token_spans="auto"` refuses `bundle_relation_auto_spans_unavailable` until phase 2.
+  row form; `token_spans="auto"` finds the spans by exact token-id runs of the source's bound
+  completion inside the reader's prompt (up to two boundary tokens trimmed per side) and writes
+  `basis="matched"`; repeats/ties refuse `bundle_relation_auto_spans_ambiguous`, no hit
+  `bundle_relation_auto_spans_unmatched`, missing evidence `bundle_relation_auto_spans_unavailable`.
+  A `matched` row is attested by re-derivation at every door (spans verify AND the matcher re-finds
+  them, else it settles `verified`).
   Spans bind to member token streams through a `token_boundary_v1` descriptor in the reserved
   `torchlens.boundary_facts` sidecar family (stream, batch row, length, ids digest, completion
   range, excluded ids, tokenizer/template); `verified` only when both bindings match the
@@ -248,6 +253,13 @@
   `b.node(site, members=[...])` scopes the gate to a subset; `delta_map`/`norm_delta`/
   `output_delta`/`compare` (and `store_comparison`) now run the comparison gate on every
   (baseline, member) pair; `tl.Bundle()` builds an empty bundle that saves and loads.
+  `b.token_pairs("critique", "draft")` (helper-table method, relate's argument order) is the one
+  verified alignment read: `.pairs` of `(source_pos, reader_pos)`, `.source_positions`,
+  `.reader_positions`, `.coverage`, `.excluded` (dicts with side/start/end/reason/row_index);
+  only re-verified one-to-one positions pair, declared/retokenized spans stay correspondences.
+  Slicing is a docs recipe: `b["draft"][site].out[0, pairs.source_positions]`.
+  `tl.show_bundle_graph(b, nodes="members")` draws members and relation rows;
+  `tl.load(path, lazy=True)` reaches bundle members.
 - EXPERIMENTS REMEMBER (F03; every spelling DOCUMENTED-UNSTABLE pending
   naming-session ratification; doc of record `docs/reference/experiment_ledger.md`):
   the Bundle is the MATERIAL record — persisted random `bundle_id` (never a

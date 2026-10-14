@@ -106,8 +106,7 @@ that way leaves its rows declared.
 - `"declared"`: anything less. Retokenized or paraphrased text, a batch row TorchLens cannot pick,
   or ids that were not retained all leave a row declared. A row without a binding can never read
   as verified.
-- `"matched"`: reserved for automatic span finding, which is not available yet; a `"matched"`
-  claim that re-checks is stored as `"verified"`.
+- `"matched"`: TorchLens found the spans itself (`token_spans="auto"`, below) and they verify.
 
 A row claiming `"verified"` or `"matched"` is checked again wherever it enters a bundle (relate,
 the constructor, loading an artifact). Missing evidence turns it into `"declared"`; evidence that
@@ -119,23 +118,367 @@ the eligible set is the bound completion range minus `excluded_ids`. On a declar
 is whatever you declared. Span rows need start < end on both sides; spans are measured against a
 member's stream only when its binding names the length.
 
+## Finding the spans automatically
+
+`b.relate("fed_by", "critique", "draft", token_spans="auto")` asks TorchLens to find the draft's
+output inside the critique's prompt, by integer token ids only (no tokenizer is involved):
+
+- The source's eligible output is its bound `completion` range minus `excluded_ids`, split into
+  runs wherever an excluded id sits. Each run is searched as an exact run of ids in the reader's
+  prompt: the reader's bound stream before its own `completion`, when its binding names one.
+- A run that is not found whole is retried with up to two boundary tokens trimmed per side, fewest
+  trimmed tokens first (a quoted output often retokenizes at its edges). A trimmed run keeps at
+  least two tokens and at least half its length; trimmed tokens are simply not covered, and the
+  row's `coverage` says so.
+- At the first trim level with any hit there must be exactly one placement. A repeated quote, or a
+  tie between two trims, refuses `bundle_relation_auto_spans_ambiguous`: declare the spans
+  yourself. No placement at all refuses `bundle_relation_auto_spans_unmatched`; missing evidence
+  (no source completion range, token ids not retained) refuses
+  `bundle_relation_auto_spans_unavailable`.
+- The row is written with `basis="matched"` and a computed `coverage`. `basis` and `coverage`
+  cannot be passed alongside `"auto"`.
+
+A `matched` row is attested by re-derivation wherever it enters a bundle (relate, the constructor,
+fork, loading an artifact): its spans must verify exactly like `verified` spans, and the matcher,
+re-run over the members' retained token ids, must return the same spans. Spans that verify but are
+not what the matcher finds are stored as `verified` (checked, but not found by TorchLens); spans
+that contradict the ids refuse `bundle_relation_span_unverified`; missing evidence leaves the row
+`declared`. Saved bundles keep each member's token-id input and its binding, so a matched row
+re-attests after `tl.save` and `tl.load`, lazy or not.
+
+## Reading aligned activations
+
+`b.token_pairs(reader, source)` is the one verified alignment read. Its arguments follow `relate`:
+the reader (the later call) first, then the source. It returns index pairs
+`(source_pos, reader_pos)` for token positions TorchLens established one to one, and reports
+everything else:
+
+- Only spans of `verified` or `matched` rows that re-check now are paired.
+- Declared spans stay span correspondences and are never converted to pairs. Two source tokens
+  that became one reader token, or a reader token that fuses a template delimiter with copied
+  text, are both declared spans and show up in `excluded` with a reason.
+- Excluded ids (padding, special tokens), positions claimed by two spans, and streams whose
+  bindings name different tokenizers are reported, not paired.
+- Equal lengths are never evidence of matching meaning; only equal ids at checked positions are.
+- `coverage` is the paired share of the source's eligible tokens; every eligible source token left
+  unpaired appears in `excluded`.
+
+Slicing is yours: index each member's activations with the pair positions.
+
+```python
+import torch
+
+import torchlens as tl
+
+
+class TinyLM(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.embed = torch.nn.Embedding(32, 8)
+        self.block = torch.nn.Linear(8, 8)
+        self.head = torch.nn.Linear(8, 32)
+
+    def forward(self, ids: torch.Tensor) -> torch.Tensor:
+        return self.head(torch.relu(self.block(self.embed(ids))))
+
+
+torch.manual_seed(0)
+lm = TinyLM()
+draft = tl.trace(lm, torch.tensor([[1, 2, 3, 7, 8, 9, 10]]))  # prompt, then the output 7..10
+binding = {"stream": "input", "batch_row": 0, "completion": [3, 7]}
+tl.io.attach_sidecar(draft, "torchlens.boundary_facts", binding)
+critique = tl.trace(lm, torch.tensor([[4, 5, 6, 7, 8, 9, 10, 11]]))
+b = tl.Bundle({"draft": draft, "critique": critique})
+b.relate("fed_by", "critique", "draft", token_spans="auto", label="critique")
+assert b.member_relations[0].params["basis"] == "matched"
+
+pairs = b.token_pairs("critique", "draft")
+assert pairs.pairs == ((3, 3), (4, 4), (5, 5), (6, 6)) and pairs.coverage == 1.0
+in_draft = b["draft"]["block"].out[0, pairs.source_positions]
+in_critique = b["critique"]["block"].out[0, pairs.reader_positions]
+per_token = torch.nn.functional.cosine_similarity(in_draft, in_critique, dim=-1)
+assert per_token.shape == (4,)
+
+# A retokenized quote: source tokens 7, 8 became one reader token (29). Declared, never paired.
+merged = tl.trace(lm, torch.tensor([[4, 5, 29, 9, 10, 11]]))
+b.add(merged, names="merged")
+b.relate("fed_by", "merged", "draft", token_spans=[[3, 5, 2, 3]], basis="declared")
+assert b.token_pairs("merged", "draft").pairs == ()
+# Averaging the two source tokens is YOUR reduction: a descriptive comparison, not an alignment.
+group_mean = b["draft"]["block"].out[0, 3:5].mean(dim=0)
+descriptive = torch.nn.functional.cosine_similarity(group_mean, b["merged"]["block"].out[0, 2], dim=0)
+```
+
+Any reduction over a many-to-one group (a mean, a sum, the last token) is a choice you make; name
+it where you report the number and call the result a descriptive comparison.
+
 ## Reading the graph
 
 - `b.upstream(name)` / `b.downstream(name)`: transitive walks over the ordering kinds (`fed_by`,
   `successor_of`, `forked_from`, `escalates`), nearest member first.
 - `b.node(site, members=["a", "b"])`: one site across a subset of members, so a foreign member such
   as a small router model does not disable the view for the rest.
+- `tl.show_bundle_graph(b, nodes="members")`: one node per member and one edge per relation row,
+  drawn from the earlier member to the later one and labelled with the kind, the row's `label` and,
+  on `fed_by`, its basis and coverage. Solid edges carry token spans TorchLens checked
+  (`verified` or `matched`); every other row is dashed. `nodes="ops"` (the default) keeps the
+  bundle's union op graph.
 - Comparisons: members joined by an ordering path (including `fed_by`) are not comparison
   operands, and `delta_map`, `norm_delta`, `output_delta` and `compare` run the same comparison
   gate as `compare_at`. Two calls on different prompts refuse `bundle_gate_input_values_differ`
   instead of reporting distances between unrelated inputs.
+- `tl.load(path, lazy=True)` on a saved bundle loads every member lazily (tensors stay on disk
+  until read); `map_location` and `materialize_nested` reach the members too.
 
-## Not available yet
+Artifacts carrying `fed_by` rows need a reader of tlspec 10 or later; earlier readers refuse the
+kind, and an artifact stamped with an earlier version that carries a `fed_by` row refuses
+`bundle_relation_schema_invalid` (no writer of that version could have produced it).
 
-- `token_spans="auto"` (finding the earlier output inside the later prompt) refuses with
-  `bundle_relation_auto_spans_unavailable`.
-- A members-level picture of the harness graph.
-- Lazy loading that reaches bundle members.
+## Four harnesses
 
-Artifacts carrying `fed_by` rows need a reader of the current tlspec version; earlier readers
-refuse the kind.
+Each recipe generates natively, then captures one teacher-forced forward over prompt plus output:
+generation runs at native speed (TorchLens's wrappers pass straight through when nothing is being
+logged), and the capture costs one forward's overhead. The captured activations are those of a
+cache-free forward over the same tokens: for a causal decoder that is the same computation as the
+generation loop, not the same bytes. When per-step decode internals matter, capture the episode
+instead (`docs/reference/episode_capture.md`).
+
+The recipes use a tokenizer-free stand-in model so they run anywhere; with a real model and
+tokenizer, `generate` is `model.generate` and the template text goes through the tokenizer. The
+helper `run_and_trace` binds each member's completion range, which is what makes its output
+findable and verifiable.
+
+### Self-consistency voting
+
+```python
+from collections import Counter
+
+import torch
+
+import torchlens as tl
+
+
+class TinyLM(torch.nn.Module):
+    def __init__(self, vocab: int = 256) -> None:
+        super().__init__()
+        self.embed = torch.nn.Embedding(vocab, 16)
+        self.block = torch.nn.Linear(16, 16)
+        self.head = torch.nn.Linear(16, vocab)
+
+    def forward(self, ids: torch.Tensor) -> torch.Tensor:
+        return self.head(torch.relu(self.block(self.embed(ids))))
+
+
+def generate(lm, ids, *, seed, n=6):  # native sampling; TorchLens is not logging here
+    rng = torch.Generator().manual_seed(seed)
+    for _ in range(n):
+        probs = torch.softmax(lm(ids)[:, -1], dim=-1)
+        ids = torch.cat([ids, torch.multinomial(probs, 1, generator=rng)], dim=1)
+    return ids
+
+
+def run_and_trace(lm, prompt, *, seed):
+    out = generate(lm, prompt, seed=seed)
+    trace = tl.trace(lm, out)  # one teacher-forced forward over prompt + output
+    binding = {"stream": "input", "batch_row": 0, "completion": [prompt.shape[1], out.shape[1]]}
+    tl.io.attach_sidecar(trace, "torchlens.boundary_facts", binding)
+    return out, trace
+
+
+torch.manual_seed(0)
+lm, question = TinyLM(), torch.tensor([[11, 12, 13, 14]])
+outs, members = {}, {}
+for k in range(4):
+    outs[f"s{k}"], members[f"s{k}"] = run_and_trace(lm, question, seed=k)
+b = tl.Bundle(members)
+for k in range(1, 4):
+    b.relate("alternative_of", f"s{k}", "s0")  # peers: not an ordering kind, so still comparable
+answers = {name: int(out[0, -1]) % 3 for name, out in outs.items()}  # your parser
+winner = Counter(answers.values()).most_common(1)[0][0]
+for name in b.names:
+    b[name].annotations["harness"] = {"answer": answers[name], "with_majority": answers[name] == winner}
+
+# The shared prompt is a free determinism check: every sample saw the same four tokens.
+prompt_acts = [b[name]["block"].out[0, :4] for name in b.names]
+assert all(torch.allclose(prompt_acts[0], acts) for acts in prompt_acts[1:])
+b.save(f"{DOCS_TMPDIR}/vote.tlspec")
+loaded = tl.load(f"{DOCS_TMPDIR}/vote.tlspec", lazy=True)
+assert loaded["s2"].annotations["harness"] == b["s2"].annotations["harness"]
+```
+
+### Critique and revise
+
+```python
+import torch
+
+import torchlens as tl
+
+
+class TinyLM(torch.nn.Module):
+    def __init__(self, vocab: int = 256) -> None:
+        super().__init__()
+        self.embed = torch.nn.Embedding(vocab, 16)
+        self.block = torch.nn.Linear(16, 16)
+        self.head = torch.nn.Linear(16, vocab)
+
+    def forward(self, ids: torch.Tensor) -> torch.Tensor:
+        return self.head(torch.relu(self.block(self.embed(ids))))
+
+
+def generate(lm, ids, *, seed, n=6):
+    rng = torch.Generator().manual_seed(seed)
+    for _ in range(n):
+        probs = torch.softmax(lm(ids)[:, -1], dim=-1)
+        ids = torch.cat([ids, torch.multinomial(probs, 1, generator=rng)], dim=1)
+    return ids
+
+
+def run_and_trace(lm, prompt, *, seed):
+    out = generate(lm, prompt, seed=seed)
+    trace = tl.trace(lm, out)
+    binding = {"stream": "input", "batch_row": 0, "completion": [prompt.shape[1], out.shape[1]]}
+    tl.io.attach_sidecar(trace, "torchlens.boundary_facts", binding)
+    return out, trace
+
+
+def chat(*parts):  # stand-in for a chat template: role tokens around quoted text
+    return torch.cat([torch.tensor([[1, 2]]), *parts, torch.tensor([[3]])], dim=1)
+
+
+torch.manual_seed(0)
+lm, q = TinyLM(), torch.tensor([[20, 21, 22]])
+d_out, draft = run_and_trace(lm, chat(q), seed=1)
+draft_text = d_out[:, chat(q).shape[1] :]
+c_out, critique = run_and_trace(lm, chat(q, torch.tensor([[4]]), draft_text), seed=2)
+critique_text = c_out[:, c_out.shape[1] - 6 :]
+r_prompt = chat(q, torch.tensor([[4]]), draft_text, torch.tensor([[5]]), critique_text)
+_, revise = run_and_trace(lm, r_prompt, seed=3)
+
+b = tl.Bundle({"draft": draft, "critique": critique, "revise": revise})
+b.relate("fed_by", "critique", "draft", token_spans="auto", label="critique")
+b.relate("fed_by", "revise", "draft", token_spans="auto")
+b.relate("fed_by", "revise", "critique", token_spans="auto", label="revision")
+assert b.downstream("draft") == ("critique", "revise")
+assert all(row.params["basis"] == "matched" for row in b.member_relations)
+
+# Does the critic encode the draft the way the drafter did? Same model, aligned tokens only.
+pairs = b.token_pairs("critique", "draft")
+assert pairs.coverage == 1.0
+drafted = b["draft"]["block"].out[0, pairs.source_positions]
+read = b["critique"]["block"].out[0, pairs.reader_positions]
+similarity = torch.nn.functional.cosine_similarity(drafted, read, dim=-1)
+```
+
+### Router with tool use
+
+```python
+import torch
+
+import torchlens as tl
+
+
+class TinyLM(torch.nn.Module):
+    def __init__(self, vocab: int = 256) -> None:
+        super().__init__()
+        self.embed = torch.nn.Embedding(vocab, 16)
+        self.block = torch.nn.Linear(16, 16)
+        self.head = torch.nn.Linear(16, vocab)
+
+    def forward(self, ids: torch.Tensor) -> torch.Tensor:
+        return self.head(torch.relu(self.block(self.embed(ids))))
+
+
+class Router(torch.nn.Module):  # a small, different model: ids in, two route scores out
+    def __init__(self) -> None:
+        super().__init__()
+        self.embed = torch.nn.Embedding(256, 4)
+        self.score = torch.nn.Linear(4, 2)
+
+    def forward(self, ids: torch.Tensor) -> torch.Tensor:
+        return self.score(self.embed(ids).mean(dim=1))
+
+
+torch.manual_seed(0)
+big, router, q = TinyLM(), Router(), torch.tensor([[30, 31, 32]])
+route = tl.trace(router, q)
+choice = int(route.output_ops[0].out.argmax())  # the decision; no router TEXT reaches the answer
+tools = {0: torch.tensor([[200, 201]]), 1: torch.tensor([[210]])}  # Python tools, not members
+answer = tl.trace(big, torch.cat([torch.tensor([[1]]), q, tools[choice]], dim=1))
+
+b = tl.Bundle({"route": route, "answer": answer})
+b.relate("successor_of", "answer", "route")  # chronology, not content
+b["answer"].annotations["harness"] = {"route_from": "route", "route": choice}
+assert b.upstream("answer") == ("route",)
+# The tool's tokens in the answer prompt are covered by no span: text from outside any traced
+# call. Reads scoped with b.node(site, members=[...]) skip the foreign router model.
+```
+
+### Two-agent debate, then a judge
+
+```python
+import torch
+
+import torchlens as tl
+
+
+class TinyLM(torch.nn.Module):
+    def __init__(self, vocab: int = 256) -> None:
+        super().__init__()
+        self.embed = torch.nn.Embedding(vocab, 16)
+        self.block = torch.nn.Linear(16, 16)
+        self.head = torch.nn.Linear(16, vocab)
+
+    def forward(self, ids: torch.Tensor) -> torch.Tensor:
+        return self.head(torch.relu(self.block(self.embed(ids))))
+
+
+def generate(lm, ids, *, seed, n=6):
+    rng = torch.Generator().manual_seed(seed)
+    for _ in range(n):
+        probs = torch.softmax(lm(ids)[:, -1], dim=-1)
+        ids = torch.cat([ids, torch.multinomial(probs, 1, generator=rng)], dim=1)
+    return ids
+
+
+def run_and_trace(lm, prompt, *, seed):
+    out = generate(lm, prompt, seed=seed)
+    trace = tl.trace(lm, out)
+    binding = {"stream": "input", "batch_row": 0, "completion": [prompt.shape[1], out.shape[1]]}
+    tl.io.attach_sidecar(trace, "torchlens.boundary_facts", binding)
+    return out, trace
+
+
+def debate_prompt(role_token, history):  # every earlier turn, quoted between separators
+    parts = [torch.tensor([[role_token]])]
+    for _, text in history:
+        parts += [torch.tensor([[9]]), text]
+    return torch.cat(parts, dim=1)
+
+
+torch.manual_seed(0)
+lm, turns, history = TinyLM(), {}, [("question", torch.tensor([[40, 41, 42]]))]
+for r in range(2):
+    for side, role in (("A", 5), ("B", 6)):
+        prompt = debate_prompt(role, history)
+        out, turns[f"{side}{r}"] = run_and_trace(lm, prompt, seed=10 * r + role)
+        history.append((f"{side}{r}", out[:, prompt.shape[1] :]))
+_, turns["judge"] = run_and_trace(lm, debate_prompt(7, history), seed=99)
+
+b = tl.Bundle(turns)
+names = list(turns)
+for i, name in enumerate(names[1:], start=1):
+    for earlier in names[:i]:
+        label = "judge" if name == "judge" else None
+        params = {"label": label} if label else {}
+        b.relate("fed_by", name, earlier, token_spans="auto", **params)
+assert set(b.upstream("judge")) == {"A0", "B0", "A1", "B1"}
+assert all(row.params["basis"] == "matched" for row in b.member_relations)
+# How B encodes A's argument, against A's own encoding of it (same model, aligned tokens only).
+pairs = b.token_pairs("B1", "A1")
+a_side = b["A1"]["block"].out[0, pairs.source_positions]
+b_side = b["B1"]["block"].out[0, pairs.reader_positions]
+```
+
+## Capture overhead
+
+MEASUREMENT_PLACEHOLDER

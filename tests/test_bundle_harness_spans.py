@@ -175,7 +175,7 @@ def test_auto_spans_refuse_without_the_evidence(model: _TinyLM) -> None:
 
 
 def test_auto_spans_refuse_when_ids_are_not_retained(model: _TinyLM) -> None:
-    options = tl.options.CaptureOptions(layers_to_save=None)
+    options = tl.options.CaptureOptions(layers_to_save=[])
     draft = tl.trace(model, torch.tensor([_DRAFT_IDS]), capture=options)
     attach_sidecar(
         draft, TOKEN_BOUNDARY_FAMILY_ID, {"stream": "input", "batch_row": 0, "completion": [3, 7]}

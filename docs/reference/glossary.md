@@ -445,7 +445,8 @@ one exact `other_neurons` row.
   "critique fed_by draft" (kind, the later member, the earlier member, then the kind's params; a
   member kind names one member). Row form: `b.relate(MemberRelationRow(...))` or payload mappings.
   Refusals carry stable codes (`bundle_relation_schema_invalid`, `bundle_relation_member_missing`,
-  `bundle_relation_auto_spans_unavailable`, `bundle_relation_span_out_of_bounds`,
+  `bundle_relation_auto_spans_unavailable`, `bundle_relation_auto_spans_ambiguous`,
+  `bundle_relation_auto_spans_unmatched`, `bundle_relation_span_out_of_bounds`,
   `bundle_relation_span_unverified`); a refusal leaves the table unchanged.
 
 **fed_by** *(relation kind; spelling documented-unstable)*
@@ -456,8 +457,14 @@ one exact `other_neurons` row.
   (rows of four ints, half-open: source start, source end, destination start, destination end),
   `basis` (`declared`, `verified`, `matched`), `coverage` (a fraction in [0, 1]) and `label` (free
   human text such as `"critique"` or `"judge"`; nothing in TorchLens interprets it).
-  `token_spans="auto"` (automatic matching) refuses `bundle_relation_auto_spans_unavailable`
-  until it lands. `fed_by` is an ordering kind for the comparison gate.
+  `token_spans="auto"` asks TorchLens to find the spans: the source's eligible output (its bound
+  completion range minus `excluded_ids`) is searched as exact runs of token ids in the reader's
+  prompt, trimming up to two boundary tokens per side when a run is not found whole, and the row
+  is written with `basis="matched"` and a computed `coverage`. Several placements (a repeated
+  quote, or a tie between two trims) refuse `bundle_relation_auto_spans_ambiguous`; no placement
+  refuses `bundle_relation_auto_spans_unmatched`; missing evidence (no source completion range,
+  ids not retained) refuses `bundle_relation_auto_spans_unavailable`. `fed_by` is an ordering kind
+  for the comparison gate.
 
 **Token-stream binding** *(`token_boundary_v1`; spelling documented-unstable)*
 : What makes `fed_by` spans checkable: a per-member descriptor in the reserved
@@ -471,8 +478,10 @@ one exact `other_neurons` row.
   digest matches the retained ids, the source binding names its completion range, every source
   span lies inside it, and the token ids agree span by span; anything less is `declared`. A
   claimed `verified`/`matched` row re-checks at every door (relate, constructor, load): missing
-  evidence makes it `declared`, contradicting evidence refuses `bundle_relation_span_unverified`,
-  and a `matched` claim that re-checks is stored as `verified`. `coverage` on a verified row is
+  evidence makes it `declared`, contradicting evidence refuses `bundle_relation_span_unverified`.
+  A `matched` row also re-runs the matcher on the members and keeps `matched` only when it finds
+  the same spans; spans that check out but are not what the matcher finds are stored as
+  `verified`. `coverage` on a verified or matched row is
   computed: covered eligible source tokens over all eligible ones (the bound completion range
   minus `excluded_ids`).
 
@@ -481,6 +490,21 @@ one exact `other_neurons` row.
   `b.downstream(name)` every member that came after it, nearest first, over the ordering kinds
   (`fed_by`, `successor_of`, `forked_from`, `escalates`). Bundle helper-table methods, like
   `compare`.
+
+**Bundle.token_pairs** *(spelling documented-unstable)*
+: `b.token_pairs(reader, source)` returns the verified one-to-one token positions of "reader
+  fed_by source", arguments in `relate`'s order (the later member, then the earlier one). The
+  result's `pairs` are `(source_pos, reader_pos)` tuples, each position at most once, with
+  `source_positions` / `reader_positions` lists for indexing activations; `coverage` is the paired
+  share of the source's eligible tokens (`None` without a bound completion range); `excluded`
+  lists what was not paired, each entry a dict with `side`, `start`, `end`, `reason` and
+  `row_index`. Only spans of `verified` or `matched` rows that re-check at call time pair.
+  Declared spans (retokenized many-to-many text, a token mixing a template delimiter with copied
+  text), excluded ids, positions claimed twice, streams whose bindings name different tokenizers,
+  and eligible source tokens no verified span covers are reported, never paired. Equal lengths are
+  never evidence of matching meaning. A verified row whose evidence now contradicts it refuses
+  `bundle_relation_span_unverified`. A Bundle helper-table method; any reduction over a
+  many-to-one group is the caller's own descriptive comparison.
 
 **Bundle.node** *(members= spelling documented-unstable)*
 : `b.node(site, members=None)` returns a `SuperOp` view of one site across the members, or across
@@ -911,7 +935,12 @@ one exact `other_neurons` row.
 : `tl.fastlog` is the sparse predicate-recording namespace behind `tl.record`;
   `tl.facets` is the semantic facet namespace (canonical home `torchlens.semantic`);
   `tl.export` holds static export helpers; `tl.bundle(...)` / `tl.Bundle` build aligned
-  Trace collections and `tl.show_bundle_graph` renders a bundle's graph.
+  Trace collections and `tl.show_bundle_graph` renders a bundle's graph:
+  `nodes="ops"` (default) the union op graph, `nodes="members"` (spelling documented-unstable)
+  one node per member and one edge per relation row, from the earlier member to the later one,
+  labelled with the kind, the row's `label` and, on `fed_by`, its basis and coverage; solid edges
+  carry token spans TorchLens checked, every other row is dashed. `tl.load(path, lazy=True)` on a
+  saved bundle passes `lazy` (with `map_location` and `materialize_nested`) to every member.
 
 **Appliance door (`Trace.using`)** *(spelling documented-unstable)*
 : `trace.using(name)` returns the appliance registered as `name`, bound to that trace (for
