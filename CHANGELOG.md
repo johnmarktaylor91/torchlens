@@ -15060,7 +15060,8 @@ RenderIREdge (source/target units, originals, owner_cluster, occurrence key, pro
 Remove the v1 greedy selector, engine switch/env override, scoring weights, and lexical crutches
   plus their pinned tests; the shared analysis/run-fold substrate stays. Public
   collapse_score/module_collapse_order now report v2-selection diagnostics with the same shape
-  (values differ by design; glossary note pending). Byte-identical on the render harness.
+  (values differ by design; since superseded: both report the eligibility priority
+  the glossary defines). Byte-identical on the render harness.
 
 ### Testing
 

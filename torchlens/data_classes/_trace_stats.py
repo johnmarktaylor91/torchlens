@@ -872,17 +872,43 @@ class TraceStatsMixin(_TraceMixinBase):
 
     @property
     def module_collapse_order(self: "Trace") -> list[tuple[str, float]]:
-        """Canonical smart-collapse module ranking.
+        """Every module's smart-collapse priority (``Module.collapse_score``), highest first.
+
+        The priority is the module's hidden-op count (its subtree's distinct
+        ops minus one) over the largest hidden-op count of any module in the
+        trace, rounded to 6 places; a module the renderer never collapses (the
+        root, one with at most one Layer, or one whose single child hides the
+        same ops) reads 0.0. It ranks candidates and does not depend on the
+        plan the optimizer selects (``collapse_plan()``), which may skip a
+        high-priority module. Past the pathological-input pre-gate (20x
+        ``COLLAPSE_OPTIMIZER_MAX_OPS`` ops) the ranking is empty.
 
         Returns
         -------
         list[tuple[str, float]]
-            ``(module_address, rounded_score)`` sorted by ``(-score, address)``.
+            ``(module_address, priority)`` sorted by ``(-priority, address)``.
         """
 
-        from ..visualization.auto_collapse import collapse_order
+        from ..visualization import collapse_optimizer
+        from ..visualization.auto_collapse import analyze_collapse
+        from ..visualization.collapse_estimator import PATHOLOGICAL_OP_MULTIPLIER
 
-        return collapse_order(self)
+        ceiling = collapse_optimizer.COLLAPSE_OPTIMIZER_MAX_OPS * PATHOLOGICAL_OP_MULTIPLIER
+        if len(self.ops) > ceiling:
+            return []
+        signals = analyze_collapse(self).signals
+        largest = max((signal.hidden_ops for signal in signals.values()), default=0)
+        scores: dict[str, float] = {}
+        for module in self.modules:
+            address, signal = module.address, signals[module.address]
+            children = list(getattr(module, "address_children", ()) or ())
+            only = signals.get(children[0]) if len(children) == 1 else None
+            same_child = only is not None and only.hidden_ops == signal.hidden_ops
+            # ``eligible`` covers the root and <=1-Layer gates; its single-child
+            # gate misses parents built before their child, so it is applied here.
+            ranked = signal.eligible and not same_child and largest > 0
+            scores[address] = round(signal.hidden_ops / largest, 6) if ranked else 0.0
+        return sorted(scores.items(), key=lambda item: (-item[1], item[0]))
 
     def collapse_order(
         self: "Trace",

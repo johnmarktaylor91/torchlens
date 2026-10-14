@@ -485,6 +485,13 @@ one exact `other_neurons` row.
   (`collapse_plan_unavailable`); `Trace.collapse_schedule()` degrades to its single
   full-graph step).
 
+**Module.collapse_score / Trace.module_collapse_order** — *unstable — no deprecation shim owed*
+: A module's smart-collapse priority: its hidden ops (distinct subtree ops minus one) over the
+  largest submodule's, rounded to 6 places; 0.0 for the root, a module of at most one Layer, or one
+  whose single child hides the same ops. It ranks candidates and never reads the selected plan
+  (`Trace.collapse_plan()` may skip a high-priority module); `module_collapse_order` lists every
+  module's priority, highest first. Computed at access, never persisted.
+
 **Run folding**
 : `fold_repeats=True` replaces eligible runs of distinct same-class sibling modules with a
   representative and an honest `+N more` label. It differs from recurrence, where `(xN)` means the
