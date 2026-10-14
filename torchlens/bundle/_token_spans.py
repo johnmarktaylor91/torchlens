@@ -9,8 +9,9 @@ prompt. The source's eligible output (its bound ``completion`` range minus
 run of ids in the reader's prompt (the reader's bound stream before its own
 completion, when it names one). A run that is not found is retried with up to
 ``_MAX_TRIM`` boundary tokens trimmed per side (a quoted output often
-retokenizes at its edges), fewest trimmed tokens first; a trimmed core keeps
-at least two tokens and at least half its run. At the first trim level with
+retokenizes at its edges), fewest trimmed tokens first; a matched run keeps
+at least two tokens (a single-token run is never matched, only left
+uncovered) and a trimmed core at least half its run. At the first trim level with
 any hit, exactly one placement must exist: several placements (a repeated
 quote, or a tie between two trims) refuse ``bundle_relation_auto_spans_ambiguous``
 and the remedy is to declare the spans. No hit for any run refuses
@@ -63,8 +64,10 @@ if TYPE_CHECKING:
 
 #: Boundary tokens the matcher may trim per side of a run.
 _MAX_TRIM = 2
-#: A trimmed core keeps at least this many tokens (and at least half its run).
-_MIN_TRIMMED_CORE = 2
+#: A matched run, trimmed or not, keeps at least this many tokens (a trimmed
+#: core also keeps at least half its run): one shared token id is too likely
+#: a chance hit in a templated prompt to count as found.
+_MIN_CORE = 2
 _ITEM_BYTES = array("q").itemsize
 
 
@@ -103,12 +106,14 @@ def _placements(core: Sequence[int], haystack: bytes, *, limit: int = 2) -> list
 def _trims(length: int) -> list[list[tuple[int, int]]]:
     """Return the allowed ``(left, right)`` trims grouped by total, fewest first."""
 
+    if length < _MIN_CORE:
+        return []
     levels: list[list[tuple[int, int]]] = [[(0, 0)]]
     for total in range(1, 2 * _MAX_TRIM + 1):
         level = []
         for left in range(max(0, total - _MAX_TRIM), min(total, _MAX_TRIM) + 1):
             core = length - total
-            if core >= _MIN_TRIMMED_CORE and 2 * core >= length:
+            if core >= _MIN_CORE and 2 * core >= length:
                 level.append((left, total - left))
         if level:
             levels.append(level)
@@ -349,73 +354,114 @@ def _tokenizers_conflict(reader: Trace, source: Trace) -> bool:
     return None not in names and names[0] != names[1]
 
 
-def _row_candidates(
-    index: int,
-    row: MemberRelationRow,
-    reader: Trace,
-    source: Trace,
-    excluded: list[dict[str, Any]],
-) -> list[tuple[int, int]]:
-    """Return the checked one-step candidates of one row; record what it excludes."""
+@dataclass
+class _Claims:
+    """What the rows between one reader and one source claim (built per read)."""
+
+    candidates: list[tuple[int, int]]
+    excluded: list[dict[str, Any]]
+    #: Positions an unpaired (declared or unverifiable) span touches: they veto
+    #: any verified pair on the same token, which then has two conflicting claims.
+    vetoed_source: set[int]
+    vetoed_reader: set[int]
+
+
+def _unpaired_spans(
+    claims: _Claims, index: int, spans: Sequence[Sequence[int]], reason: Callable[..., str]
+) -> None:
+    """Record spans that stay correspondences, and veto the tokens they touch."""
+
+    for span in spans:
+        claims.excluded.append(_segment("source", span[0], span[1], reason(span), index))
+        claims.excluded.append(_segment("reader", span[2], span[3], reason(span), index))
+        claims.vetoed_source.update(range(span[0], span[1]))
+        claims.vetoed_reader.update(range(span[2], span[3]))
+
+
+def _add_row_claims(
+    claims: _Claims, index: int, row: MemberRelationRow, reader: Trace, source: Trace
+) -> None:
+    """Fold one ``fed_by`` row into ``claims``; refuse a row its members now contradict."""
 
     spans = row.params.get("token_spans") or []
     if not spans:
-        excluded.append(_segment("source", None, None, "fed_by row declares no spans", index))
-        return []
+        claims.excluded.append(
+            _segment("source", None, None, "fed_by row declares no spans", index)
+        )
+        return
     if row.params.get("basis") not in EARNED_BASES:
-        for span in spans:
-            excluded.append(_segment("source", span[0], span[1], _declared_reason(span), index))
-            excluded.append(_segment("reader", span[2], span[3], _declared_reason(span), index))
-        return []
-    candidates: list[tuple[int, int]] = []
-    for span in spans:
-        state, _, reason = assess_spans([span], reader, source)
-        if state == "contradicted":
-            raise BundleRelationError(
-                f"fed_by row {index} reads basis {row.params['basis']!r} but its span "
-                f"{list(span)} no longer re-checks: {reason}.",
-                code="bundle_relation_span_unverified",
-                remedy="re-relate the members from their captures, or drop the row",
-                row_index=index,
-                row_kind=FED_BY_KIND,
-                reason=reason,
-            )
-        if state != "verified":
-            excluded.append(_segment("source", span[0], span[1], f"unverifiable: {reason}", index))
-            continue
-        candidates.extend(zip(range(span[0], span[1]), range(span[2], span[3])))
-    return candidates
+        _unpaired_spans(claims, index, spans, _declared_reason)
+        return
+    state, _, reason = assess_spans(spans, reader, source)
+    if state == "contradicted":
+        raise BundleRelationError(
+            f"fed_by row {index} reads basis {row.params['basis']!r} but its spans no "
+            f"longer re-check: {reason}.",
+            code="bundle_relation_span_unverified",
+            remedy="re-relate the members from their captures, or drop the row",
+            row_index=index,
+            row_kind=FED_BY_KIND,
+            reason=reason,
+        )
+    if state != "verified":
+        _unpaired_spans(claims, index, spans, lambda _span: f"unverifiable: {reason}")
+        return
+    for src_lo, src_hi, dst_lo, dst_hi in spans:
+        claims.candidates.extend(zip(range(src_lo, src_hi), range(dst_lo, dst_hi)))
+
+
+def _pair_reason(
+    pair: tuple[int, int],
+    claims: _Claims,
+    by_source: Mapping[int, set[int]],
+    by_reader: Mapping[int, set[int]],
+    excluded_ids: set[int],
+    source_ids: Sequence[int] | None,
+) -> str | None:
+    """Return why one verified candidate cannot pair, or ``None`` when it pairs."""
+
+    source_pos, reader_pos = pair
+    if source_ids is not None and source_ids[source_pos] in excluded_ids:
+        return "excluded id (padding or special token)"
+    if source_pos in claims.vetoed_source or reader_pos in claims.vetoed_reader:
+        return "also claimed by a declared or unverifiable span"
+    if len(by_source[source_pos]) > 1:
+        return "source token maps to several reader tokens"
+    if len(by_reader[reader_pos]) > 1:
+        return "its reader token is claimed by several source tokens"
+    return None
 
 
 def _one_to_one(
-    candidates: Sequence[tuple[int, int]], excluded: list[dict[str, Any]]
+    claims: _Claims, excluded_ids: set[int], source_ids: Sequence[int] | None
 ) -> list[tuple[int, int]]:
-    """Keep only positions claimed exactly once on both sides."""
+    """Keep the candidates established exactly once with no conflicting claim."""
 
     by_source: dict[int, set[int]] = {}
     by_reader: dict[int, set[int]] = {}
-    for source_pos, reader_pos in candidates:
+    for source_pos, reader_pos in claims.candidates:
         by_source.setdefault(source_pos, set()).add(reader_pos)
         by_reader.setdefault(reader_pos, set()).add(source_pos)
     kept: list[tuple[int, int]] = []
-    for source_pos, reader_pos in sorted(set(candidates)):
-        if len(by_source[source_pos]) > 1:
-            reason = "source token maps to several reader tokens"
-            excluded.append(_segment("source", source_pos, source_pos + 1, reason, None))
-        elif len(by_reader[reader_pos]) > 1:
-            reason = "reader token is claimed by several source tokens"
-            excluded.append(_segment("reader", reader_pos, reader_pos + 1, reason, None))
-        else:
-            kept.append((source_pos, reader_pos))
+    reported: set[tuple[str, int, str]] = set()
+    for pair in sorted(set(claims.candidates)):
+        reason = _pair_reason(pair, claims, by_source, by_reader, excluded_ids, source_ids)
+        if reason is None:
+            kept.append(pair)
+            continue
+        for side, position in (("source", pair[0]), ("reader", pair[1])):
+            if (side, position, reason) not in reported:
+                reported.add((side, position, reason))
+                claims.excluded.append(_segment(side, position, position + 1, reason, None))
     return kept
 
 
-def _uncovered_runs(eligible: Sequence[int], paired: set[int]) -> list[tuple[int, int]]:
-    """Return maximal runs of eligible source positions with no pair."""
+def _uncovered_runs(eligible: Sequence[int], skip: set[int]) -> list[tuple[int, int]]:
+    """Return maximal runs of eligible source positions outside ``skip``."""
 
     runs: list[tuple[int, int]] = []
     for position in eligible:
-        if position in paired:
+        if position in skip:
             continue
         if runs and runs[-1][1] == position:
             runs[-1] = (runs[-1][0], position + 1)
@@ -425,15 +471,36 @@ def _uncovered_runs(eligible: Sequence[int], paired: set[int]) -> list[tuple[int
 
 
 def _eligible_positions(source: Trace) -> list[int] | None:
-    """Return the source's eligible positions, or ``None`` without a completion range."""
+    """Return the source's eligible positions, or ``None`` when they are unknown."""
 
     binding = member_binding(source)
-    completion = binding.get("completion") if binding is not None else None
-    ids = retained_ids(source, binding) if binding is not None else None
-    if completion is None or ids is None:
+    if binding is None or binding.get("completion") is None:
         return None
-    excluded_ids = set(binding.get("excluded_ids", [])) if binding is not None else set()
-    return [p for p in range(int(completion[0]), int(completion[1])) if ids[p] not in excluded_ids]
+    ids = retained_ids(source, binding)
+    start, end = (int(edge) for edge in binding["completion"])
+    if ids is None or end > len(ids):
+        return None
+    excluded_ids = set(binding.get("excluded_ids", []))
+    return [position for position in range(start, end) if ids[position] not in excluded_ids]
+
+
+def _coverage(source: Trace, pairs: Sequence[tuple[int, int]], claims: _Claims) -> float | None:
+    """Return the paired share of eligible source tokens; report the uncovered ones."""
+
+    eligible = _eligible_positions(source)
+    if eligible is None:
+        return None
+    paired = {source_pos for source_pos, _ in pairs}
+    reported = {
+        position
+        for segment in claims.excluded
+        if segment["side"] == "source" and segment["start"] is not None
+        for position in range(segment["start"], segment["end"])
+    }
+    for start, end in _uncovered_runs(eligible, paired | reported):
+        reason = "no verified span covers these source tokens"
+        claims.excluded.append(_segment("source", start, end, reason, None))
+    return len(paired.intersection(eligible)) / len(eligible) if eligible else None
 
 
 def _bundle_token_pairs(self: Bundle, reader: str | Trace, source: str | Trace) -> TokenPairs:
@@ -445,10 +512,11 @@ def _bundle_token_pairs(self: Bundle, reader: str | Trace, source: str | Trace) 
     ``Bundle.token_pairs`` (spelling documented-unstable).
 
     Only spans of ``verified``/``matched`` rows from ``reader`` to ``source``
-    that re-verify now are paired; everything else is reported in
-    ``excluded`` with a reason (see :class:`TokenPairs` and the module
-    docstring). Nothing is reduced or averaged: any many-to-one reduction is
-    the caller's descriptive choice.
+    that re-verify now are paired, and only on tokens no other row between
+    the two claims differently; everything else is reported in ``excluded``
+    with a reason (see :class:`TokenPairs` and the module docstring). Nothing
+    is reduced or averaged: any many-to-one reduction is the caller's
+    descriptive choice.
 
     Raises
     ------
@@ -464,8 +532,7 @@ def _bundle_token_pairs(self: Bundle, reader: str | Trace, source: str | Trace) 
         if name not in self._members:
             raise KeyError(f"{name!r} is not a member of this Bundle; members: {self.names}")
     reader_trace, source_trace = self._members[names[0]], self._members[names[1]]
-    excluded: list[dict[str, Any]] = []
-    candidates: list[tuple[int, int]] = []
+    claims = _Claims(candidates=[], excluded=[], vetoed_source=set(), vetoed_reader=set())
     conflict = _tokenizers_conflict(reader_trace, source_trace)
     for index, row in enumerate(self._member_relations.rows):
         if not (
@@ -476,47 +543,21 @@ def _bundle_token_pairs(self: Bundle, reader: str | Trace, source: str | Trace) 
             continue
         if conflict:
             reason = "incompatible token streams: the bindings name different tokenizers"
-            excluded.append(_segment("source", None, None, reason, index))
+            claims.excluded.append(_segment("source", None, None, reason, index))
             continue
-        candidates.extend(_row_candidates(index, row, reader_trace, source_trace, excluded))
-    excluded_ids = set((member_binding(source_trace) or {}).get("excluded_ids", []))
-    source_ids = _source_ids_or_none(source_trace)
-    eligible_candidates = []
-    for source_pos, reader_pos in candidates:
-        if source_ids is not None and source_ids[source_pos] in excluded_ids:
-            reason = "excluded id (padding or special token)"
-            excluded.append(_segment("source", source_pos, source_pos + 1, reason, None))
-        else:
-            eligible_candidates.append((source_pos, reader_pos))
-    pairs = _one_to_one(eligible_candidates, excluded)
-    eligible = _eligible_positions(source_trace)
-    coverage = None
-    if eligible is not None:
-        paired = {source_pos for source_pos, _ in pairs}
-        reported = {
-            position
-            for segment in excluded
-            if segment["side"] == "source" and segment["start"] is not None
-            for position in range(segment["start"], segment["end"])
-        }
-        for start, end in _uncovered_runs(eligible, paired | reported):
-            reason = "no verified span covers these source tokens"
-            excluded.append(_segment("source", start, end, reason, None))
-        coverage = len(paired.intersection(eligible)) / len(eligible) if eligible else None
+        _add_row_claims(claims, index, row, reader_trace, source_trace)
+    source_binding = member_binding(source_trace)
+    source_ids = retained_ids(source_trace, source_binding) if source_binding else None
+    excluded_ids = set((source_binding or {}).get("excluded_ids", []))
+    pairs = _one_to_one(claims, excluded_ids, source_ids)
+    coverage = _coverage(source_trace, pairs, claims)
     return TokenPairs(
         reader=names[0],
         source=names[1],
         pairs=tuple(pairs),
-        excluded=tuple(excluded),
+        excluded=tuple(claims.excluded),
         coverage=coverage,
     )
-
-
-def _source_ids_or_none(source: Trace) -> list[int] | None:
-    """Return the source's bound token ids, or ``None`` when unbound or unretained."""
-
-    binding = member_binding(source)
-    return retained_ids(source, binding) if binding is not None else None
 
 
 def register_token_pairs(table: dict[str, Callable[..., Any]]) -> None:

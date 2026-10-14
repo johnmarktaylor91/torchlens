@@ -411,7 +411,9 @@ def assess_spans(
     Verification needs both members bound (``length`` and ``ids_digest``
     measured) and the SOURCE binding to name its ``completion`` range: only
     then is "the earlier output reached the later prompt" checkable, rather
-    than "two token streams share some ids".
+    than "two token streams share some ids". When the READER binding names
+    its own completion, destination spans must end before it (the text
+    reached the prompt, not the reader's output).
 
     Returns
     -------
@@ -438,9 +440,14 @@ def assess_spans(
         if state != "ok":
             return state, None, f"the {who} binding is {state} against its retained ids"
     source_ids, reader_ids = cast("list[int]", source_ids), cast("list[int]", reader_ids)
+    reader_completion = reader_binding.get("completion")
+    prompt_end = reader_completion[0] if reader_completion is not None else len(reader_ids)
     for src_lo, src_hi, dst_lo, dst_hi in spans:
         if not completion[0] <= src_lo < src_hi <= completion[1]:
             return "contradicted", None, f"source span {[src_lo, src_hi]} leaves the completion"
+        if dst_hi > prompt_end:
+            span = [dst_lo, dst_hi]
+            return "contradicted", None, f"destination span {span} reaches the reader's own output"
         if source_ids[src_lo:src_hi] != reader_ids[dst_lo:dst_hi]:
             span = [src_lo, src_hi, dst_lo, dst_hi]
             return "contradicted", None, f"token ids differ on span {span}"

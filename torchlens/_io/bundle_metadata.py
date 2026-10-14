@@ -132,7 +132,9 @@ def _load_gated_member_relations(
     kind that version does not admit (``fed_by`` before 10) refuses
     ``bundle_relation_schema_invalid``, exactly as a reader of the stamped
     version would refuse a bare unknown kind. ``None`` (no stamp to compare)
-    skips the check.
+    skips the check. This is a consistency check on what the stamped writer
+    could have produced, not a trust boundary: a forger can stamp 10, and
+    the members' token ids still re-check every claimed span.
 
     Returns
     -------

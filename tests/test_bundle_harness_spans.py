@@ -135,6 +135,13 @@ def test_matcher_splits_runs_at_excluded_ids_and_searches_only_the_prompt() -> N
     assert _code(excinfo) == "bundle_relation_auto_spans_ambiguous"
 
 
+def test_matcher_leaves_a_single_token_run_unmatched() -> None:
+    # Run [12] occurs once in the reader by chance (a template token): not a match.
+    source = [1, 2, 3, 7, 8, 9, _EOS, 12]
+    reader = [4, 7, 8, 9, 5, 12]
+    assert find_token_spans(source, [3, 8], reader, excluded_ids=[_EOS]) == [[3, 6, 1, 4]]
+
+
 def test_matcher_refuses_two_runs_on_the_same_reader_tokens() -> None:
     source = [1, 7, 8, _EOS, 7, 8]
     with pytest.raises(BundleRelationError) as excinfo:
@@ -340,6 +347,53 @@ def test_a_source_token_copied_twice_is_not_paired(model: _TinyLM) -> None:
     assert all("several reader tokens" in entry["reason"] for entry in pairs.excluded)
 
 
+def test_a_declared_span_vetoes_verified_pairs_on_the_tokens_it_touches(model: _TinyLM) -> None:
+    bundle = _harness(model)
+    bundle.relate("fed_by", "critique", "draft", token_spans=[[3, 7, 3, 7]])
+    bundle.relate("fed_by", "critique", "draft", token_spans=[[3, 5, 3, 4]], basis="declared")
+    pairs = bundle.token_pairs("critique", "draft")
+    assert pairs.pairs == ((5, 5), (6, 6))
+    vetoed = [e for e in pairs.excluded if e["reason"].startswith("also claimed")]
+    assert {(e["side"], e["start"]) for e in vetoed} == {
+        ("source", 3),
+        ("source", 4),
+        ("reader", 3),
+        ("reader", 4),
+    }
+
+
+def test_a_span_into_the_readers_own_output_never_verifies(model: _TinyLM) -> None:
+    reader_ids = [4, 5, 6, 7, 8, 9, 10, 11, 7, 8, 9, 10]  # the reader's output repeats it
+    bundle = _harness(model, reader_ids)
+    attach_sidecar(
+        bundle["critique"],
+        TOKEN_BOUNDARY_FAMILY_ID,
+        {"stream": "input", "batch_row": 0, "completion": [8, 12]},
+    )
+    bundle.relate("fed_by", "critique", "draft", token_spans=[[3, 7, 8, 12]])
+    assert bundle.member_relations[0].params["basis"] == "declared"
+    with pytest.raises(BundleRelationError) as excinfo:
+        Bundle(
+            dict(bundle.members),
+            member_relations=[
+                {
+                    "kind": "fed_by",
+                    "from": "critique",
+                    "to": "draft",
+                    "params": {"token_spans": [[3, 7, 8, 12]], "basis": "verified"},
+                }
+            ],
+        )
+    assert _code(excinfo) == "bundle_relation_span_unverified"
+
+
+def test_token_pairs_with_an_out_of_range_completion_reports_no_coverage(model: _TinyLM) -> None:
+    bundle = _harness(model, completion=(0, 100))  # unmeasured descriptor, never bound
+    bundle.relate("fed_by", "critique", "draft", token_spans=[[3, 7, 3, 7]], basis="declared")
+    pairs = bundle.token_pairs("critique", "draft")
+    assert (pairs.pairs, pairs.coverage) == ((), None)
+
+
 def test_token_pairs_skip_excluded_ids(model: _TinyLM) -> None:
     draft_ids = [1, 2, 3, 7, 8, 9, _EOS]
     bundle = _harness(model, [4, 7, 8, 9, _EOS, 5], draft_ids=draft_ids, excluded_ids=[_EOS])
@@ -347,7 +401,7 @@ def test_token_pairs_skip_excluded_ids(model: _TinyLM) -> None:
     pairs = bundle.token_pairs("critique", "draft")
     assert pairs.pairs == ((3, 1), (4, 2), (5, 3))
     assert pairs.coverage == 1.0
-    assert [entry["start"] for entry in pairs.excluded] == [6]
+    assert [(e["side"], e["start"]) for e in pairs.excluded] == [("source", 6), ("reader", 4)]
 
 
 def test_token_pairs_refuse_streams_from_different_tokenizers(model: _TinyLM) -> None:
@@ -393,11 +447,11 @@ def test_members_render_draws_rows_as_labelled_edges(tmp_path: Path, model: _Tin
         vis_fileformat="svg",
     )
     assert source is not None
-    for name in ("draft", "critique", "revise"):
-        assert f"member_{name} [" in source
-    fed_by_edge = _statement(source, "member_draft -> member_critique")
+    for index, name in enumerate(("draft", "critique", "revise")):
+        assert name in _statement(source, f"member_{index} [")
+    fed_by_edge = _statement(source, "member_0 -> member_1")  # draft -> critique
     assert "matched, coverage 1.00" in fed_by_edge and "style=solid" in fed_by_edge
-    successor = _statement(source, "member_critique -> member_revise")
+    successor = _statement(source, "member_1 -> member_2")  # critique -> revise
     assert "successor_of" in successor and "style=dashed" in successor
     assert "fwd_" not in source  # no op nodes in the members picture
 

@@ -259,7 +259,8 @@ def _add_bundle_member_graph(
     """Add one node per member and one edge per pair relation row.
 
     Edges run from the earlier member to the later one (the direction text
-    and time flow: ``draft -> critique`` for "critique fed_by draft"),
+    and time flow: ``draft -> critique`` for "critique fed_by draft"; peer
+    rows such as ``alternative_of`` draw without an arrowhead),
     labelled with the kind, the row's free ``label`` and, on ``fed_by``,
     its basis and coverage. Solid edges carry token spans TorchLens checked
     (``verified``/``matched``); every other row is dashed. MEMBER-kind rows
@@ -273,17 +274,20 @@ def _add_bundle_member_graph(
         their endpoints are unreadable without their kind's schema.
     """
 
+    from ..bundle._compare_gate import _ORDERING_RELATION_KINDS
     from ..bundle._relations import MemberRelationRow
     from ._render_utils import merge_edge_style, merge_node_style
 
     base_node = {"shape": "box", "style": "filled,rounded", "fillcolor": "#F7F7F7"}
     notes = _member_row_notes(bundle)
+    # Index ids, not names: a member name such as "a:b" would read as a DOT port.
+    node_ids = {name: f"member_{index}" for index, name in enumerate(bundle.names)}
     for name in bundle.names:
         member = bundle[name]
         lines = [name, str(getattr(member, "model_class_name", "") or "")]
         lines.extend(notes.get(name, []))
         attrs = merge_node_style(base_node, node_styles, name, member)
-        dot.node(f"member_{name}", label="\n".join(line for line in lines if line), **attrs)
+        dot.node(node_ids[name], label="\n".join(line for line in lines if line), **attrs)
     opaque = 0
     for row in bundle.member_relations:
         if not isinstance(row, MemberRelationRow):
@@ -294,7 +298,9 @@ def _add_bundle_member_graph(
         label, checked = _relation_edge_label(row)
         base_edge = {"color": "#333333", "fontcolor": "#333333"}
         base_edge["style"] = "solid" if checked else "dashed"
+        if row.kind not in _ORDERING_RELATION_KINDS:
+            base_edge["dir"] = "none"  # peers (alternative_of) have no direction
         edge_key = (str(row.to_member), str(row.from_member))
         attrs = merge_edge_style(base_edge, edge_styles, edge_key, row)
-        dot.edge(f"member_{edge_key[0]}", f"member_{edge_key[1]}", label=label, **attrs)
+        dot.edge(node_ids[edge_key[0]], node_ids[edge_key[1]], label=label, **attrs)
     return opaque
