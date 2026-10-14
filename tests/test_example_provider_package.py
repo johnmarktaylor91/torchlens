@@ -97,6 +97,14 @@ def _fresh_venv(root: Path) -> Path:
     parent_sites = [*site.getsitepackages(), site.getusersitepackages()]
     lines = [f"import site; site.addsitedir({path!r})" for path in parent_sites]
     (Path(own_site) / "zz_torchlens_parent_env.pth").write_text("\n".join(lines) + "\n")
+    # The build runs offline, so the setuptools backend must already be
+    # importable (ensurepip bundles it only before Python 3.12, and it is not
+    # a declared TorchLens dependency).
+    has_backend = subprocess.run(
+        [str(python), "-c", "import setuptools"], capture_output=True, timeout=120
+    )
+    if has_backend.returncode != 0:
+        pytest.skip("no setuptools importable offline for the example's build backend")
     return python
 
 
