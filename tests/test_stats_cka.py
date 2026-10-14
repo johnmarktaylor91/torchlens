@@ -162,3 +162,31 @@ def test_aggregate_grad_output_metric_raises_clear_key_error() -> None:
             target="grad",
             loss_fn=lambda output: output.sum(),
         )
+
+
+def test_cka_results_name_the_measure_variant_they_compute() -> None:
+    """One-shot cka and CKA.result carry the similarity-repository id (U56.3)."""
+
+    import json
+    import pickle
+
+    from torchlens.repgeom._similarity_ids import LINEAR_CKA_ID
+    from torchlens.stats import SimilarityScore
+
+    torch.manual_seed(0)
+    a, b = torch.randn(12, 5), torch.randn(12, 4)
+    one_shot = cka(a, b)
+    streaming = CKA()
+    streaming.update(a, b)
+    streamed = streaming.result()
+    for score in (one_shot, streamed):
+        assert isinstance(score, SimilarityScore) and isinstance(score, float)
+        assert score.similarity_repository_id == LINEAR_CKA_ID == CKA.similarity_repository_id
+        assert score.to_dict() == {"score": float(score), "similarity_repository_id": LINEAR_CKA_ID}
+        assert json.loads(json.dumps(score)) == float(score)
+        restored = pickle.loads(pickle.dumps(score))
+        assert restored == score and restored.similarity_repository_id == LINEAR_CKA_ID
+    assert math.isclose(one_shot, streamed, rel_tol=1e-9)
+    with pytest.warns(Warning, match="zero variance"):
+        degenerate = cka(torch.ones(4, 2), torch.randn(4, 2))
+    assert math.isnan(degenerate) and degenerate.similarity_repository_id == LINEAR_CKA_ID

@@ -1069,7 +1069,7 @@ Spellings below shipped ahead of their naming-session/S2 ratification under
 the provisional-name protocol: they may rename WITHOUT deprecation
 shims, by declared contract. Each carries the same tag at its definition.
 
-**similarity_repository_id (`rdm_evolution(...).similarity_repository_id`, `tl.stats.CKA.similarity_repository_id`, the `neuro.rdms()` source-mode descriptor)** — *unstable — no deprecation shim owed*
+**similarity_repository_id (`rdm_evolution(...).similarity_repository_id`, `tl.stats.CKA.similarity_repository_id`, the `SimilarityScore` that `tl.stats.cka` and `tl.stats.CKA.result()` return, `ScoreInterval.similarity_repository_id`, the `neuro.rdms()` source-mode descriptor)** — *unstable — no deprecation shim owed*
 : The similarity-repository catalogue identifier of the exact measure variant a
   TorchLens result computed, with `*` for the implementing repository (for
   example `measure/*/cka-kernel=linear-hsic=gretton-score` for linear CKA,
@@ -1078,12 +1078,23 @@ shims, by declared contract. Each carries the same tag at its definition.
   `neuro.rdms()` descriptor is then absent. The full table is in
   [the brain-benchmarking seam](brain_benchmarking_seam.md).
 
+**SimilarityScore (`tl.stats.SimilarityScore`; returned by `tl.stats.cka` and `tl.stats.CKA.result()`)** — *unstable — no deprecation shim owed*
+: A `float` subclass: the score itself (arithmetic, comparison, `repr` and JSON
+  encoding are a float's; arithmetic returns a plain `float`) plus
+  `similarity_repository_id`, the exact measure variant it computes
+  (`measure/*/cka-kernel=linear-hsic=gretton-score` for linear CKA). `to_dict()`
+  is the serialized form that keeps the identifier
+  (`{"score": ..., "similarity_repository_id": ...}`); pickling keeps it too.
+
 **ScoreInterval (`tl.repgeom.ScoreInterval`; returned by `tl.repgeom.rdm_compare_interval` and `tl.repgeom.cka_interval`)** — *unstable — no deprecation shim owed*
 : A TorchLens score with a descriptive uncertainty interval beside it:
   `score` (the unchanged estimator on all stimuli), `low` and `high` (a
   percentile bootstrap over stimuli), `confidence`, `n_resamples`, `n_valid`
-  (resamples with a finite score), `seed` and `basis` (how the interval was
-  made, in words), plus `width` and `to_dict()`. `rdm_compare_interval(rdm_a,
+  (resamples with a finite score), `seed`, `basis` (how the interval was
+  made, in words) and `similarity_repository_id` (the measure variant `score`
+  computes: the linear CKA identifier from `cka_interval`, `None` from
+  `rdm_compare_interval`, whose precomputed RDMs do not name their metric),
+  plus `width` and `to_dict()` (every field). `rdm_compare_interval(rdm_a,
   rdm_b, method, n_resamples=1000, seed=0, confidence=0.95)` resamples
   stimuli and recomputes `rdm_compare`, dropping self-pairs; `cka_interval(a,
   b, ...)` does the same for linear CKA. Descriptive, not a test; inference

@@ -21,7 +21,7 @@ Every accumulator implements the `tl.stats.StreamingStat` protocol --
 | `tl.stats.TopK(k=10)` | list | Largest k elements seen |
 | `tl.stats.Covariance()` | Tensor | Feature-space covariance (rows = observations) |
 | `tl.stats.CrossCovariance()` | Tensor | Paired `update(a, b)` |
-| `tl.stats.CKA()` | float | Paired `update(a, b)`; exact full-data linear CKA |
+| `tl.stats.CKA()` | `SimilarityScore` (a float) | Paired `update(a, b)`; exact full-data linear CKA; the result names its variant in `similarity_repository_id` |
 | `tl.stats.PCA(n_components)` | dict | Streaming PCA; `.fitted()` freezes a transform |
 | `tl.stats.Histogram(...)` | histogram | Fixed signed-log2 bins (observability kernel) |
 | `tl.stats.Spine(...)` | scalar spine | Always-on scalar summary (observability kernel) |
