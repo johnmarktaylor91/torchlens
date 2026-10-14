@@ -89,25 +89,39 @@ def _cell_html(
     """
 
     hover = ""
+    number = _number_text(value)
     if index is not None:
-        shown = f"{float(value):.6g}" if state == "finite" else motifs[state].title
+        shown = number if number is not None else motifs[state].title
         hover = (
             f' data-tl-index="{escape(index, quote=True)}"'
             f' data-tl-value="{escape(shown, quote=True)}"'
         )
     if state == "finite":
         color = value_color(float(value), bounds)
-        title = f"{index} = {float(value):.6g}" if index is not None else f"{float(value):.6g}"
+        title = f"{index} = {number}" if index is not None else f"{number}"
         return (
             f'<td class="tl-grid-cell" style="background:{color}" '
             f'title="{escape(title, quote=True)}"{hover}></td>'
         )
     motif = motifs[state]
-    title = motif.title if index is None else f"{index} = {motif.title}"
+    # Motif cells that hold a real value (NaN, Inf, out of bounds) still
+    # carry the number; only band and unknown cells have none.
+    title = motif.title
+    if index is not None:
+        title = f"{index} = {number} ({motif.title})" if number else f"{index} = {motif.title}"
     return (
         f'<td class="tl-grid-cell {escape(motif.css_class, quote=True)}" '
         f'title="{escape(title, quote=True)}"{hover}>{escape(motif.glyph)}</td>'
     )
+
+
+def _number_text(value: Any) -> str | None:
+    """Return a cell value as six significant digits, or ``None``."""
+
+    try:
+        return f"{float(value):.6g}"
+    except (TypeError, ValueError):
+        return None
 
 
 def _source_index(

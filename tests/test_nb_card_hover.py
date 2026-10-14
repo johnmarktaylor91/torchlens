@@ -65,12 +65,12 @@ def test_static_html_carries_every_value_without_script() -> None:
     seen = {}
     for cell in cells:
         index = _index(cell["data-tl-index"])
-        seen[index] = float(cell["data-tl-value"])
-        # The native tooltip says the same thing with scripts blocked.
-        assert cell["title"] == f"{cell['data-tl-index']} = {cell['data-tl-value']}"
+        seen[index] = cell["data-tl-value"]
+        # The native tooltip carries the same index and value with scripts blocked.
+        assert cell["title"].startswith(f"{cell['data-tl-index']} = {cell['data-tl-value']}")
     assert set(seen) == set(itertools.product(range(2), range(3), range(4)))
     for index, value in seen.items():
-        assert abs(value - float(tensor[index])) <= 1e-6 * max(1.0, abs(float(tensor[index])))
+        assert value == f"{float(tensor[index]):.6g}"
 
 
 def test_truncated_grid_maps_cells_to_source_indices() -> None:
@@ -86,8 +86,10 @@ def test_truncated_grid_maps_cells_to_source_indices() -> None:
     for cell in real:
         row, col = _index(cell["data-tl-index"])
         tail_seen = tail_seen or row > 150 or col > 150
-        expected = float(tensor[row, col])
-        assert abs(float(cell["data-tl-value"]) - expected) <= 1e-5 * max(1.0, abs(expected))
+        # Every real cell carries its number, including cells drawn with an
+        # out-of-bounds motif.
+        assert cell["data-tl-value"] == f"{float(tensor[row, col]):.6g}"
+        assert cell["data-tl-value"] in cell["title"]
     assert tail_seen, "tail edges must map to the end of the axis"
 
 
@@ -160,5 +162,4 @@ def test_layer_card_has_hover_values_and_readout() -> None:
     assert len(cells) == 6
     out = trace[label].out
     for cell in cells:
-        expected = float(out[_index(cell["data-tl-index"])])
-        assert abs(float(cell["data-tl-value"]) - expected) <= 1e-5 * max(1.0, abs(expected))
+        assert cell["data-tl-value"] == f"{float(out[_index(cell['data-tl-index'])]):.6g}"
