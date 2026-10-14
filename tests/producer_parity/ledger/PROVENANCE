@@ -2499,3 +2499,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 452f56f4282cae664f170a9a557048fc4bd38640 (dirty)
 recorded: 2026-10-14T17:49:14.914801+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: notebook card frontier: the PartialTrace card no longer reads layer_label_raw through getattr in notebook/cards.py (it uses the partial package display label); one site removed, none added
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: a167de38228787268321741222cb27c002dfbd7b (dirty)
+recorded: 2026-10-14T21:07:13.160933+00:00

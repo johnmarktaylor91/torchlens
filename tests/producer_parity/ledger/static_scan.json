@@ -6328,14 +6328,6 @@
   "via_getattr": true
  },
  {
-  "ambiguous": false,
-  "field": "layer_label_raw",
-  "file": "torchlens/notebook/cards.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
   "ambiguous": true,
   "field": "parents",
   "file": "torchlens/notebook/cards.py",
