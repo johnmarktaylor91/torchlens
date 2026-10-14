@@ -38,9 +38,10 @@ span inside it, and the token ids equal span by span. Otherwise the row is
 any door (relate, the constructor, an artifact) is re-checked: unverifiable
 evidence (ids not retained, no binding, no completion range) clamps to
 ``"declared"``; contradicting evidence refuses typed
-(``bundle_relation_span_unverified``). ``"matched"`` is reserved for the
-automatic span finder, which is not available yet; a ``"matched"`` claim that
-re-checks settles as ``"verified"``.
+(``bundle_relation_span_unverified``). ``"matched"`` means the automatic span
+finder (:mod:`torchlens.bundle._token_spans`) found the spans: on top of the
+``"verified"`` checks, re-running the matcher on the members must return the
+same spans, else the row settles as ``"verified"`` (checked, not found).
 
 COVERAGE is computed on verified rows: the covered fraction of the source's
 eligible tokens, where the eligible set is the bound completion range minus
@@ -293,7 +294,7 @@ def _stream_ids(trace: Trace, stream: str, batch_row: int) -> list[int] | None:
     op = _stream_op(trace, stream)
     if op is None or not getattr(op, "has_saved_activation", False):
         return None
-    payload = op.out
+    payload = op.out  # a lazily loaded member materializes its ids on this read
     if not isinstance(payload, torch.Tensor):
         return None
     if payload.ndim == 1 and batch_row == 0:
@@ -385,6 +386,42 @@ def _bound_ids(trace: Trace, binding: Mapping[str, Any]) -> tuple[str, list[int]
     return "ok", ids
 
 
+def stream_ids(trace: Trace, binding: Mapping[str, Any]) -> list[int] | None:
+    """Return the bound row's token ids when they agree with the binding, else ``None``."""
+
+    if "length" not in binding or "ids_digest" not in binding:
+        return None
+    state, ids = _bound_ids(trace, binding)
+    return ids if state == "ok" else None
+
+
+def retained_ids(trace: Trace, binding: Mapping[str, Any]) -> list[int] | None:
+    """Return the bound row's ids: checked against a measured binding, else as retained."""
+
+    if "length" in binding and "ids_digest" in binding:
+        return stream_ids(trace, binding)
+    return _stream_ids(trace, str(binding["stream"]), int(binding["batch_row"]))
+
+
+def _span_contradiction(
+    span: Sequence[int],
+    completion: Sequence[int],
+    prompt_end: int,
+    source_ids: Sequence[int],
+    reader_ids: Sequence[int],
+) -> str | None:
+    """Return why one span contradicts the bound streams, or ``None`` when it agrees."""
+
+    src_lo, src_hi, dst_lo, dst_hi = span
+    if not completion[0] <= src_lo < src_hi <= completion[1]:
+        return f"source span {[src_lo, src_hi]} leaves the completion"
+    if dst_hi > prompt_end:
+        return f"destination span {[dst_lo, dst_hi]} reaches the reader's own output"
+    if list(source_ids[src_lo:src_hi]) != list(reader_ids[dst_lo:dst_hi]):
+        return f"token ids differ on span {list(span)}"
+    return None
+
+
 def assess_spans(
     spans: Sequence[Sequence[int]], reader: Trace, source: Trace
 ) -> tuple[str, float | None, str]:
@@ -393,7 +430,9 @@ def assess_spans(
     Verification needs both members bound (``length`` and ``ids_digest``
     measured) and the SOURCE binding to name its ``completion`` range: only
     then is "the earlier output reached the later prompt" checkable, rather
-    than "two token streams share some ids".
+    than "two token streams share some ids". When the READER binding names
+    its own completion, destination spans must end before it (the text
+    reached the prompt, not the reader's output).
 
     Returns
     -------
@@ -420,12 +459,12 @@ def assess_spans(
         if state != "ok":
             return state, None, f"the {who} binding is {state} against its retained ids"
     source_ids, reader_ids = cast("list[int]", source_ids), cast("list[int]", reader_ids)
-    for src_lo, src_hi, dst_lo, dst_hi in spans:
-        if not completion[0] <= src_lo < src_hi <= completion[1]:
-            return "contradicted", None, f"source span {[src_lo, src_hi]} leaves the completion"
-        if source_ids[src_lo:src_hi] != reader_ids[dst_lo:dst_hi]:
-            span = [src_lo, src_hi, dst_lo, dst_hi]
-            return "contradicted", None, f"token ids differ on span {span}"
+    reader_completion = reader_binding.get("completion")
+    prompt_end = reader_completion[0] if reader_completion is not None else len(reader_ids)
+    for span in spans:
+        contradiction = _span_contradiction(span, completion, prompt_end, source_ids, reader_ids)
+        if contradiction is not None:
+            return "contradicted", None, contradiction
     excluded = set(source_binding.get("excluded_ids", []))
     eligible = [p for p in range(*completion) if source_ids[p] not in excluded]
     covered = {p for src_lo, src_hi, _, _ in spans for p in range(src_lo, src_hi)}
@@ -445,8 +484,9 @@ def settle_fed_by_params(
 
     ``assess_unclaimed`` (the positional ``relate`` door with ``basis``
     omitted) first binds both members (filling measured keys), then verifies
-    the spans when it can. A claimed ``matched`` that verifies settles as
-    ``verified``: TorchLens checked the spans but did not find them.
+    the spans when it can. A claimed ``matched`` that verifies stays
+    ``matched`` only when the matcher, re-run on the members, finds the same
+    spans; otherwise it settles as ``verified`` (checked, not found).
     """
 
     settled = dict(params)
@@ -477,7 +517,10 @@ def settle_fed_by_params(
     if state != "verified":
         settled["basis"] = "declared"
         return settled
-    settled["basis"] = "verified"
+    from ._token_spans import rederives_as_matched
+
+    found = claimed == "matched" and rederives_as_matched(spans, reader, source)
+    settled["basis"] = "matched" if found else "verified"
     if coverage is not None:
         settled["coverage"] = coverage
     else:

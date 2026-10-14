@@ -48,8 +48,9 @@ def _bundle_relate(
         The kind's declared params (positional form only). On ``fed_by``
         with ``basis`` omitted, TorchLens binds both members to their token
         streams and verifies the spans when the ids are retained (see
-        :mod:`torchlens.bundle._fed_by`); ``token_spans="auto"`` refuses
-        until automatic span finding lands.
+        :mod:`torchlens.bundle._fed_by`); ``token_spans="auto"`` finds the
+        spans by exact token-id runs and writes ``basis="matched"`` (see
+        :mod:`torchlens.bundle._token_spans`).
 
     Returns
     -------
@@ -61,14 +62,19 @@ def _bundle_relate(
     BundleRelationError
         ``bundle_relation_schema_invalid`` for an off-schema row or a mixed
         spelling, ``bundle_relation_member_missing`` for a row naming a
-        non-member (R1), ``bundle_relation_auto_spans_unavailable`` for
-        ``token_spans="auto"``, ``bundle_relation_span_out_of_bounds`` and
+        non-member (R1), ``bundle_relation_auto_spans_unavailable``,
+        ``bundle_relation_auto_spans_ambiguous`` and
+        ``bundle_relation_auto_spans_unmatched`` for ``token_spans="auto"``,
+        ``bundle_relation_span_out_of_bounds`` and
         ``bundle_relation_span_unverified`` for ``fed_by`` spans. On refusal
         the existing table is unchanged.
     """
 
     if rows and isinstance(rows[0], str):
-        row = _positional_row(cast("tuple[str, ...]", rows), params)
+        names = cast("tuple[str, ...]", rows)
+        row = _positional_row(names, params)
+        if params.get("token_spans") == "auto":
+            row = {**row, "params": _auto_params(self, row, params)}
         self._member_relations = self._build_relation_table(
             self._member_relations.rows, [row], assess_unclaimed=True
         )
@@ -97,13 +103,16 @@ def _positional_row(names: tuple[str, ...], params: Mapping[str, Any]) -> dict[s
             code="bundle_relation_schema_invalid",
             remedy="pass relate(kind, later, earlier, **params) with member names",
         )
-    if params.get("token_spans") == "auto":
+    if params.get("token_spans") == "auto" and (
+        kind != FED_BY_KIND or len(members) != 2 or {"basis", "coverage"} & set(params)
+    ):
         raise BundleRelationError(
-            "token_spans='auto' (automatic matching of the earlier output inside "
-            "the later prompt) is not available yet. Declare the spans as "
-            "[src_start, src_end, dst_start, dst_end] rows, or omit token_spans.",
-            code="bundle_relation_auto_spans_unavailable",
-            remedy="declare token_spans rows, or omit token_spans",
+            "token_spans='auto' asks TorchLens to find the spans of one "
+            "relate('fed_by', later, earlier) row and to compute its basis and "
+            f"coverage; got kind {kind!r} with {len(members)} member name(s) and "
+            f"params {sorted(params)}.",
+            code="bundle_relation_schema_invalid",
+            remedy="use token_spans='auto' only on fed_by, without basis or coverage",
             row_kind=kind,
         )
     if kind in MEMBER_ROW_KINDS and len(members) == 1:
@@ -117,6 +126,26 @@ def _positional_row(names: tuple[str, ...], params: Mapping[str, Any]) -> dict[s
             row_kind=kind,
         )
     return {"kind": kind, "from": members[0], "to": members[1], "params": dict(params)}
+
+
+def _auto_params(self: Bundle, row: Mapping[str, Any], params: Mapping[str, Any]) -> dict[str, Any]:
+    """Return ``params`` with ``token_spans='auto'`` replaced by the matched spans."""
+
+    from ._token_spans import auto_token_spans
+
+    later, earlier = str(row["from"]), str(row["to"])
+    for name in (later, earlier):
+        if name not in self._members:
+            raise BundleRelationError(
+                f"Bundle.relate('fed_by', {later!r}, {earlier!r}, token_spans='auto') names "
+                f"{name!r}, which is not a Bundle member (S6 R1).",
+                code="bundle_relation_member_missing",
+                remedy="add the named member before relating it",
+                row_kind=FED_BY_KIND,
+                missing_member=name,
+            )
+    spans = auto_token_spans(self._members[later], self._members[earlier])
+    return {**params, "token_spans": spans, "basis": "matched"}
 
 
 def settle_relation_rows(
@@ -210,8 +239,11 @@ def _bundle_downstream(self: Bundle, name: str | Trace) -> tuple[str, ...]:
 def register_relation_walks(table: dict[str, Callable[..., Any]]) -> None:
     """Install the walk helpers on the Bundle dynamic-method table."""
 
+    from ._token_spans import register_token_pairs
+
     table["upstream"] = _bundle_upstream
     table["downstream"] = _bundle_downstream
+    register_token_pairs(table)
 
 
 def _bundle_derive_episode_status(

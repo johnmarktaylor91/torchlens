@@ -170,7 +170,7 @@ def test_positional_relate_refusals(model: _TinyLM) -> None:
     with pytest.raises(BundleRelationError) as excinfo:
         bundle.relate("fed_by", "critique", "draft", token_spans="auto")
     assert _code(excinfo) == "bundle_relation_auto_spans_unavailable"
-    assert "not available yet" in str(excinfo.value)
+    assert "no completion range" in str(excinfo.value)  # the draft is not bound here
     with pytest.raises(BundleRelationError) as excinfo:
         bundle.relate("fed_by", "critique")
     assert _code(excinfo) == "bundle_relation_schema_invalid"
@@ -275,7 +275,8 @@ def test_claimed_verified_row_rechecks_at_every_door(model: _TinyLM) -> None:
     matched = Bundle(
         dict(bundle.members), member_relations=[_fed_by(token_spans=[_SPAN], basis="matched")]
     )
-    assert matched.member_relations[0].params["basis"] == "verified", "no matcher ran"
+    # The matcher, re-run on the members, re-derives exactly these spans.
+    assert matched.member_relations[0].params["basis"] == "matched"
     with pytest.raises(BundleRelationError) as excinfo:
         Bundle(
             dict(bundle.members),

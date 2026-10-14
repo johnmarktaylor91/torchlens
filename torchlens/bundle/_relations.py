@@ -197,6 +197,12 @@ PAIR_ROW_KINDS: dict[str, RelationKindSpec] = {
     ),
 }
 
+#: Relation kinds admitted after the first relation-carrying tlspec: kind ->
+#: the first stamped ``tlspec_version`` whose grammar has it. A loaded
+#: artifact stamped earlier carrying the kind refuses (its writer could not
+#: have produced the row, so the row was forged or hand-built).
+RELATION_KIND_ADMITTED_FROM: dict[str, int] = {FED_BY_KIND: 10}
+
 #: MEMBER-row kinds -> required/optional param-key split (closed, v2).
 MEMBER_ROW_KINDS: dict[str, RelationKindSpec] = {
     "episode_member": RelationKindSpec(frozenset({"episode_id", "at_step", "role"})),

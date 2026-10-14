@@ -110,6 +110,7 @@ def _load_gated_member_relations(
     metadata: dict[str, Any],
     *,
     unknown_relations: Literal["opaque", "refuse"] = "opaque",
+    tlspec_version: Any = None,
 ) -> tuple[Any, ...] | None:
     """Read the S6 ``member_relations`` key from bundle metadata.
 
@@ -126,6 +127,14 @@ def _load_gated_member_relations(
     a well-formed row of an unknown NAMESPACED kind loads as a preserved,
     disclosed ``OpaqueRelationRow`` (leg (a)); ``"refuse"`` restores the
     strict refusal. Bare unknown kinds refuse under both policies.
+
+    ``tlspec_version`` is the bundle manifest's stamped version: a row whose
+    kind that version does not admit (``fed_by`` before 10) refuses
+    ``bundle_relation_schema_invalid``, exactly as a reader of the stamped
+    version would refuse a bare unknown kind. ``None`` (no stamp to compare)
+    skips the check. This is a consistency check on what the stamped writer
+    could have produced, not a trust boundary: a forger can stamp 10, and
+    the members' token ids still re-check every claimed span.
 
     Returns
     -------
@@ -168,6 +177,7 @@ def _load_gated_member_relations(
             f"bundle.json 'member_relations' payload is outside the closed S6 schema: {exc}",
             code="bundle_relation_schema_invalid",
         ) from exc
+    _refuse_kinds_unadmitted_at(table.rows, tlspec_version)
     opaque_kinds = table.opaque_kinds
     if opaque_kinds:
         warnings.warn(
@@ -185,6 +195,30 @@ def _load_gated_member_relations(
             stacklevel=2,
         )
     return table.rows
+
+
+def _refuse_kinds_unadmitted_at(rows: tuple[Any, ...], tlspec_version: Any) -> None:
+    """Refuse rows whose kind the artifact's stamped tlspec version does not admit."""
+
+    if not isinstance(tlspec_version, int) or isinstance(tlspec_version, bool):
+        return
+    from ..bundle._relations import RELATION_KIND_ADMITTED_FROM
+    from ..errors.episode import BundleRelationError
+
+    for index, row in enumerate(rows):
+        admitted = RELATION_KIND_ADMITTED_FROM.get(row.kind)
+        if admitted is not None and tlspec_version < admitted:
+            raise BundleRelationError(
+                f"bundle.json member_relations row {index} has kind {row.kind!r}, which "
+                f"tlspec {admitted} introduced, but the artifact is stamped tlspec "
+                f"{tlspec_version}; no writer of that version produces the kind, so the "
+                "row is forged or hand-built.",
+                code="bundle_relation_schema_invalid",
+                remedy="re-save the bundle with a current TorchLens, or drop the row",
+                row_index=index,
+                row_kind=row.kind,
+                tlspec_version=tlspec_version,
+            )
 
 
 def _load_operation_rows(operations_payload: Any) -> list[Any]:

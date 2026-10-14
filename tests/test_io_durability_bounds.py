@@ -39,6 +39,7 @@ import torchlens as tl
 from torchlens._io import (
     _json as json_mod,
     bundle as bundle_mod,
+    bundle_container,
     manifest as manifest_mod,
     runnable as runnable_mod,
 )
@@ -187,7 +188,7 @@ def test_legacy_bundle_metadata_pkl_ceiling_refuses_oversize(tmp_path: Path, mon
     (legacy_dir / "metadata.pkl").write_bytes(pickle.dumps({"not": "a bundle"}))
     monkeypatch.setattr(bundle_mod, "_MAX_METADATA_PKL_BYTES", 16)
     with pytest.raises(TorchLensIOError, match="ceiling"):
-        bundle_mod._load_unified_bundle(legacy_dir)
+        bundle_container._load_unified_bundle(legacy_dir)
 
 
 # --------------------------------------------------------------------------- #

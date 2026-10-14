@@ -47,7 +47,7 @@ import torch
 
 import torchlens as tl
 from torchlens._io import TorchLensIOError
-from torchlens._io.bundle import (
+from torchlens._io.bundle_container import (
     _MAX_BUNDLE_NESTING_DEPTH,
     _load_unified_bundle_directory,
     _resolve_bundle_member_path,
