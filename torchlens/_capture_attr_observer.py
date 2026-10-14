@@ -182,7 +182,7 @@ def _observer_snapshot(value: Any, depth: int, ancestors: set[int], truncated: l
     ``truncated`` is marked, so the capture can name the attribute.
     """
 
-    from ._capture_state_helpers import _PlainAttrIdentitySnapshot, _snapshot_plain_attr_value
+    from ._capture_state_helpers import _PlainAttrIdentitySnapshot
 
     kind = type(value)
     if kind in _SCALAR_TYPES:
@@ -190,33 +190,45 @@ def _observer_snapshot(value: Any, depth: int, ancestors: set[int], truncated: l
     if not isinstance(value, (list, tuple, dict, set, frozenset)):
         return _snapshot_leaf(value)
     if _is_e3nn_tuple(value):
-        try:
-            return _snapshot_plain_attr_value(value, "<e3nn>")
-        except RuntimeError:
-            return _PlainAttrIdentitySnapshot(value=value, value_type_name=kind.__name__)
+        return _snapshot_e3nn(value)
     if depth >= _MAX_DEPTH or id(value) in ancestors:
         if depth >= _MAX_DEPTH:
             truncated.append(True)
         return _PlainAttrIdentitySnapshot(value=value, value_type_name=kind.__name__)
     if isinstance(value, (set, frozenset)):
         return frozenset(value)  # hashable items: a set changes by membership only
+    return _snapshot_container(value, depth, ancestors, truncated)
+
+
+def _snapshot_e3nn(value: Any) -> Any:
+    """Snapshot an e3nn ``Irreps`` tuple with the validation rules, else by identity."""
+
+    from ._capture_state_helpers import _PlainAttrIdentitySnapshot, _snapshot_plain_attr_value
+
+    try:
+        return _snapshot_plain_attr_value(value, "<e3nn>")
+    except RuntimeError:
+        return _PlainAttrIdentitySnapshot(value=value, value_type_name=type(value).__name__)
+
+
+def _snapshot_container(
+    value: list[Any] | tuple[Any, ...] | dict[Any, Any],
+    depth: int,
+    ancestors: set[int],
+    truncated: list[bool],
+) -> Any:
+    """Copy a builtin list, tuple or dict item by item (cycle-guarded by ``ancestors``)."""
+
+    def _item(item: Any) -> Any:
+        if type(item) in _SCALAR_TYPES:
+            return item
+        return _observer_snapshot(item, depth + 1, ancestors, truncated)
+
     ancestors.add(id(value))
     try:
         if isinstance(value, dict):
-            snapshot: Any = {}
-            for key, item in value.items():
-                snapshot[key] = (
-                    item
-                    if type(item) in _SCALAR_TYPES
-                    else _observer_snapshot(item, depth + 1, ancestors, truncated)
-                )
-            return snapshot
-        items = [
-            item
-            if type(item) in _SCALAR_TYPES
-            else _observer_snapshot(item, depth + 1, ancestors, truncated)
-            for item in value
-        ]
+            return {key: _item(item) for key, item in value.items()}
+        items = [_item(item) for item in value]
         # A list (tuple) subclass snapshots as a plain list (tuple) of its items.
         return items if isinstance(value, list) else tuple(items)
     finally:
@@ -225,6 +237,14 @@ def _observer_snapshot(value: Any, depth: int, ancestors: set[int], truncated: l
 
 def _observer_unchanged(value: Any, snapshot: Any, depth: int = 0) -> bool:
     """Return whether ``value`` still matches its observer snapshot (NaN-safe)."""
+
+    if isinstance(snapshot, (dict, frozenset, list, tuple)):
+        return _container_unchanged(value, snapshot, depth)
+    return _leaf_unchanged(value, snapshot)
+
+
+def _leaf_unchanged(value: Any, snapshot: Any) -> bool:
+    """Compare a value with a non-container observer snapshot."""
 
     from ._capture_state_helpers import _PlainAttrIdentitySnapshot
     from ._runnable_state import declared_slot_unchanged
@@ -239,22 +259,25 @@ def _observer_unchanged(value: Any, snapshot: Any, depth: int = 0) -> bool:
             and type(value) is type(snapshot)
             and bool(value == snapshot)
         )
+    return False
+
+
+def _container_unchanged(value: Any, snapshot: Any, depth: int) -> bool:
+    """Compare a value with a dict, frozenset, list or tuple observer snapshot."""
+
     if isinstance(snapshot, dict):
         if not isinstance(value, dict) or value.keys() != snapshot.keys():
             return False
         return all(_observer_unchanged(value[key], snapshot[key], depth + 1) for key in snapshot)
     if isinstance(snapshot, frozenset):
         return isinstance(value, (set, frozenset)) and bool(value == snapshot)
-    if isinstance(snapshot, (list, tuple)):
-        if not isinstance(value, type(snapshot)) or len(value) != len(snapshot):
-            return False
-        for item, item_snapshot in zip(value, snapshot):
-            if item is item_snapshot and type(item) in _SCALAR_TYPES:
-                continue
-            if not _observer_unchanged(item, item_snapshot, depth + 1):
-                return False
-        return True
-    return False
+    if not isinstance(value, type(snapshot)) or len(value) != len(snapshot):
+        return False
+    return all(
+        (item is item_snapshot and type(item) in _SCALAR_TYPES)
+        or _observer_unchanged(item, item_snapshot, depth + 1)
+        for item, item_snapshot in zip(value, snapshot, strict=True)
+    )
 
 
 def _skeleton(value: Any, depth: int = 0) -> Any:
