@@ -1212,10 +1212,13 @@ jobs:
             files: "tests/test_bridge_real_repeng.py"
             floor: "6"
           - leg: interop
-            extras: "dev,depyf,inseq,nnsight"
+            extras: "dev,depyf,inseq"
             pkgs: "transformers"
-            files: "tests/test_bridge_real_depyf.py tests/test_bridge_real_inseq.py tests/test_bridge_real_nnsight.py"
-            floor: "7"
+            files: "tests/test_bridge_real_depyf.py tests/test_bridge_real_inseq.py tests/test_b2_bridge_inseq.py"
+            # Floor = every row in the three files (depyf 2 + inseq 3 + b2 inseq 4).
+            # The former 7 counted the nnsight file's 2 rows, deleted with its
+            # bridge and extra (U13.2); the b2 inseq file is new real-package coverage.
+            floor: "9"
           - leg: track
             extras: "dev,trackers-relay-test"
             pkgs: "mlflow pandas"

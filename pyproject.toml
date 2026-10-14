@@ -202,7 +202,6 @@ repeng = ["repeng~=0.4"]
 # the fix-by-exclusion idiom the tinygrad extra already uses). The same two
 # members appear in all-stretch below.
 dialz = ["dialz>=0.2,<2; python_version < '3.13'", "ipython>=8.0; python_version < '3.13'"]
-nnsight = ["nnsight~=0.4"]
 # lit-nlp is bounded to the 1.3 line (LIT-panel memo item 1): `~=1.3` admitted
 # every future 1.x. lit-nlp 1.3 requires numpy<2 and shap>=0.42,<0.46; the
 # shap extra's 0.45.1 floor makes [lit,shap] resolve (nightly lit-real asserts
@@ -224,7 +223,7 @@ vision-shims = ["torchvision>=0.18,<1"]
 #     `torchlens[lit]` separately when the LIT bridge is wanted.
 #   * The framework-backend extras (jax/tf/tensorflow/paddle/mlx/tinygrad)
 #     stay excluded for conflicting pins.
-#   * Nine further extras (captum, hf, sae, nnsight, notebook, neuro,
+#   * Eight further extras (captum, hf, sae, notebook, neuro,
 #     tabular, wandb, lightning) are not rolled up, so `torchlens[all]`
 #     never meant "everything".
 # `pip install torchlens[all]` requests exactly `torchlens[all-stretch]`;
