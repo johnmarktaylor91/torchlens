@@ -38,9 +38,10 @@ span inside it, and the token ids equal span by span. Otherwise the row is
 any door (relate, the constructor, an artifact) is re-checked: unverifiable
 evidence (ids not retained, no binding, no completion range) clamps to
 ``"declared"``; contradicting evidence refuses typed
-(``bundle_relation_span_unverified``). ``"matched"`` is reserved for the
-automatic span finder, which is not available yet; a ``"matched"`` claim that
-re-checks settles as ``"verified"``.
+(``bundle_relation_span_unverified``). ``"matched"`` means the automatic span
+finder (:mod:`torchlens.bundle._token_spans`) found the spans: on top of the
+``"verified"`` checks, re-running the matcher on the members must return the
+same spans, else the row settles as ``"verified"`` (checked, not found).
 
 COVERAGE is computed on verified rows: the covered fraction of the source's
 eligible tokens, where the eligible set is the bound completion range minus
@@ -294,6 +295,10 @@ def _stream_ids(trace: Trace, stream: str, batch_row: int) -> list[int] | None:
     if op is None or not getattr(op, "has_saved_activation", False):
         return None
     payload = op.out
+    if payload is None and getattr(op, "out_ref", None) is not None:
+        # A lazy load keeps the ids on disk; read them without caching them
+        # on the op, so the read leaves the loaded member as it was.
+        payload = op.out_ref.materialize(map_location="cpu")
     if not isinstance(payload, torch.Tensor):
         return None
     if payload.ndim == 1 and batch_row == 0:
@@ -385,6 +390,23 @@ def _bound_ids(trace: Trace, binding: Mapping[str, Any]) -> tuple[str, list[int]
     return "ok", ids
 
 
+def stream_ids(trace: Trace, binding: Mapping[str, Any]) -> list[int] | None:
+    """Return the bound row's token ids when they agree with the binding, else ``None``."""
+
+    if "length" not in binding or "ids_digest" not in binding:
+        return None
+    state, ids = _bound_ids(trace, binding)
+    return ids if state == "ok" else None
+
+
+def retained_ids(trace: Trace, binding: Mapping[str, Any]) -> list[int] | None:
+    """Return the bound row's ids: checked against a measured binding, else as retained."""
+
+    if "length" in binding and "ids_digest" in binding:
+        return stream_ids(trace, binding)
+    return _stream_ids(trace, str(binding["stream"]), int(binding["batch_row"]))
+
+
 def assess_spans(
     spans: Sequence[Sequence[int]], reader: Trace, source: Trace
 ) -> tuple[str, float | None, str]:
@@ -445,8 +467,9 @@ def settle_fed_by_params(
 
     ``assess_unclaimed`` (the positional ``relate`` door with ``basis``
     omitted) first binds both members (filling measured keys), then verifies
-    the spans when it can. A claimed ``matched`` that verifies settles as
-    ``verified``: TorchLens checked the spans but did not find them.
+    the spans when it can. A claimed ``matched`` that verifies stays
+    ``matched`` only when the matcher, re-run on the members, finds the same
+    spans; otherwise it settles as ``verified`` (checked, not found).
     """
 
     settled = dict(params)
@@ -477,7 +500,10 @@ def settle_fed_by_params(
     if state != "verified":
         settled["basis"] = "declared"
         return settled
-    settled["basis"] = "verified"
+    from ._token_spans import rederives_as_matched
+
+    found = claimed == "matched" and rederives_as_matched(spans, reader, source)
+    settled["basis"] = "matched" if found else "verified"
     if coverage is not None:
         settled["coverage"] = coverage
     else:

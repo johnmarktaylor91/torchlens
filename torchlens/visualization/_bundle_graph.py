@@ -216,3 +216,85 @@ def _add_bundle_backward_graph(dot: Any, bundle: Any) -> None:
                             f"bwd_{member_name}_{next_id}",
                             color="#7A3E9D",
                         )
+
+
+def _member_row_notes(bundle: Any) -> dict[str, list[str]]:
+    """Return per-member label lines from MEMBER-kind rows (``episode_member``)."""
+
+    from ..bundle._relations import MemberRelationRow
+
+    notes: dict[str, list[str]] = {}
+    for row in bundle.member_relations:
+        if isinstance(row, MemberRelationRow) and row.member is not None:
+            params = row.params
+            notes.setdefault(str(row.member), []).append(
+                f"{row.kind} {params.get('episode_id')} step {params.get('at_step')} "
+                f"({params.get('role')})"
+            )
+    return notes
+
+
+def _relation_edge_label(row: Any) -> tuple[str, bool]:
+    """Return ``(label, checked)`` for one pair row: kind, label, basis, coverage."""
+
+    params = row.params
+    lines = [str(row.kind)]
+    if params.get("label"):
+        lines.append(str(params["label"]))
+    checked = bool(params.get("token_spans")) and params.get("basis") in {"verified", "matched"}
+    if row.kind == "fed_by":
+        spans = params.get("token_spans") or []
+        basis = params.get("basis", "declared") if spans else "no spans"
+        coverage = params.get("coverage")
+        lines.append(basis if coverage is None else f"{basis}, coverage {coverage:.2f}")
+    return "\n".join(lines), checked
+
+
+def _add_bundle_member_graph(
+    dot: Any,
+    bundle: Any,
+    node_styles: dict[str, Any] | None,
+    edge_styles: dict[tuple[str, str], Any] | None,
+) -> int:
+    """Add one node per member and one edge per pair relation row.
+
+    Edges run from the earlier member to the later one (the direction text
+    and time flow: ``draft -> critique`` for "critique fed_by draft"),
+    labelled with the kind, the row's free ``label`` and, on ``fed_by``,
+    its basis and coverage. Solid edges carry token spans TorchLens checked
+    (``verified``/``matched``); every other row is dashed. MEMBER-kind rows
+    (``episode_member``) annotate their member's node. Overrides key nodes
+    by member name and edges by ``(earlier, later)``.
+
+    Returns
+    -------
+    int
+        The number of opaque rows (unknown namespaced kinds) left undrawn:
+        their endpoints are unreadable without their kind's schema.
+    """
+
+    from ..bundle._relations import MemberRelationRow
+    from ._render_utils import merge_edge_style, merge_node_style
+
+    base_node = {"shape": "box", "style": "filled,rounded", "fillcolor": "#F7F7F7"}
+    notes = _member_row_notes(bundle)
+    for name in bundle.names:
+        member = bundle[name]
+        lines = [name, str(getattr(member, "model_class_name", "") or "")]
+        lines.extend(notes.get(name, []))
+        attrs = merge_node_style(base_node, node_styles, name, member)
+        dot.node(f"member_{name}", label="\n".join(line for line in lines if line), **attrs)
+    opaque = 0
+    for row in bundle.member_relations:
+        if not isinstance(row, MemberRelationRow):
+            opaque += 1
+            continue
+        if row.from_member is None:
+            continue
+        label, checked = _relation_edge_label(row)
+        base_edge = {"color": "#333333", "fontcolor": "#333333"}
+        base_edge["style"] = "solid" if checked else "dashed"
+        edge_key = (str(row.to_member), str(row.from_member))
+        attrs = merge_edge_style(base_edge, edge_styles, edge_key, row)
+        dot.edge(f"member_{edge_key[0]}", f"member_{edge_key[1]}", label=label, **attrs)
+    return opaque

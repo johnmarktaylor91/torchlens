@@ -810,6 +810,7 @@ def show_bundle_graph(
     vis_edge_overrides: dict[tuple[str, str], Any] | None = None,
     vis_save_only: bool = False,
     vis_fileformat: str = "pdf",
+    nodes: Literal["ops", "members"] = "ops",
 ) -> str | None:
     """Render a multi-trace bundle graph.
 
@@ -836,6 +837,15 @@ def show_bundle_graph(
         If True, save without opening a viewer.
     vis_fileformat:
         Output file format.
+    nodes:
+        What the picture's nodes are (spelling documented-unstable).
+        ``"ops"`` (default): the bundle's union op graph. ``"members"``: one
+        node per member and one edge per relation row, from the earlier
+        member to the later one, labelled with the kind, the row's
+        ``label`` and, on ``fed_by``, its basis and coverage; solid edges
+        carry token spans TorchLens checked, every other row is dashed.
+        Node overrides key by member name, edge overrides by
+        ``(earlier, later)``; ``direction`` must stay ``"forward"``.
 
     Returns
     -------
@@ -843,6 +853,10 @@ def show_bundle_graph(
         DOT source, or ``None`` when ``vis_mode='none'``.
     """
 
+    if nodes not in {"ops", "members"}:
+        raise ValueError("nodes must be 'ops' or 'members'.")
+    if nodes == "members" and direction != "forward":
+        raise ValueError("nodes='members' draws the relation graph; leave direction='forward'.")
     if vis_mode == "none":
         return None
     if vis_mode not in {"rolled", "unrolled"}:
@@ -856,6 +870,7 @@ def show_bundle_graph(
         _add_bundle_backward_graph,
         _add_bundle_forward_edges,
         _add_bundle_forward_nodes,
+        _add_bundle_member_graph,
     )
     from .visualization._render_utils import (
         direction_to_rankdir,
@@ -868,9 +883,10 @@ def show_bundle_graph(
         comment="TorchLens bundle graph",
         format=vis_fileformat,
     )
+    title = "members" if nodes == "members" else f"{vis_mode}, {direction}"
     graph_attrs = {
         "rankdir": direction_to_rankdir(vis_direction),
-        "label": f"TorchLens bundle graph ({vis_mode}, {direction})",
+        "label": f"TorchLens bundle graph ({title})",
         "labelloc": "t",
         "labeljust": "left",
         "compound": "true",
@@ -878,10 +894,14 @@ def show_bundle_graph(
     graph_attrs.update({key: str(value) for key, value in (vis_graph_overrides or {}).items()})
     dot.graph_attr.update(graph_attrs)
 
-    if direction in {"forward", "both", "overlay"}:
+    if nodes == "members":
+        opaque = _add_bundle_member_graph(dot, bundle, vis_node_overrides, vis_edge_overrides)
+        if opaque:
+            dot.graph_attr["label"] += f"\n{opaque} opaque relation row(s) not drawn"
+    elif direction in {"forward", "both", "overlay"}:
         _add_bundle_forward_nodes(dot, bundle, vis_mode, vis_node_overrides)
         _add_bundle_forward_edges(dot, bundle, vis_edge_overrides)
-    if direction in {"backward", "both", "overlay"}:
+    if nodes == "ops" and direction in {"backward", "both", "overlay"}:
         _add_bundle_backward_graph(dot, bundle)
     return render_dot_to_file(
         dot,
