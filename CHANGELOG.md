@@ -1,6 +1,18 @@
 # CHANGELOG
 
 
+## Unreleased
+
+### Behavior changes
+
+- **trace.ops**: `len`, iteration, integer indexing, `keys()`/`values()`/`items()` and
+  `to_pandas()` of `trace.ops` now cover only the ops `trace.num_ops` counts, so
+  `len(trace.ops) == trace.num_ops`. Input, output and buffer rows are no longer in that
+  sequence (label lookup such as `trace.ops["input_1"]` still finds them). Code that read
+  `trace.ops` as every captured row should read `trace.layer_list`, which `len(trace)`,
+  `trace[int]` and `trace[slice]` index.
+
+
 ## v2.34.1 (2026-08-10)
 
 ### Bug Fixes
