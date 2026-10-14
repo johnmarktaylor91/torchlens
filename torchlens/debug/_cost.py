@@ -317,7 +317,7 @@ def hot_path(trace: Trace, by: CostMetric = "flops") -> DebugReport:
     Returns
     -------
     DebugReport
-        Tabular ``tl.debug`` report (U42.2); ``.to_pandas()`` returns the
+        Tabular ``tl.debug`` report; ``.to_pandas()`` returns the
         DataFrame described here.
         Columns are ``source_file:line``, ``op_count``, ``total_cost``, and
         ``pct_total``. The number of ops excluded for missing metrics is stored

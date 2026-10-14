@@ -1,4 +1,4 @@
-"""k-dimensional subspace ablation and interchange edits (R2-25, N-IV-6).
+"""k-dimensional subspace ablation and interchange edits (N-IV-6).
 
 ``subspace_ablate(basis, mode=...)`` removes, or replaces, the component of a
 site's value inside the span of a ``[k, d]`` basis along one feature axis;

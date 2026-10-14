@@ -1780,7 +1780,7 @@ def _run_model_and_save_specified_outs(
     alias_sources = (save_predicate, intervene_predicate, halt_predicate, hooks, intervention_spec)
     deferred = (normalized_hook_plan, _deferred_retention_selector, _deferred_gradient_selector)
     refuse_model_alias_spellings(model, *alias_sources, *deferred)
-    # An output_style no detector can resolve refuses before the forward (walk U06.5).
+    # An output_style no detector can resolve refuses before the forward.
     check_output_style(output_style)
     # Auto-detect model device from its first parameter and move inputs to match.
     # This prevents silent device-mismatch errors when the model is on CUDA but
@@ -2856,7 +2856,7 @@ def _refuse_non_torch_episode(public_trace_kwargs: dict[str, Any], resolved_spec
 
 
 def _model_type_remedy(model: Any) -> str:
-    """Remedy for ``model_type_unsupported``; export products get their own (U35.2)."""
+    """Remedy for ``model_type_unsupported``; export products get their own."""
 
     exported_program = getattr(getattr(torch, "export", None), "ExportedProgram", None)
     if isinstance(exported_program, type) and isinstance(model, exported_program):
@@ -3000,8 +3000,8 @@ def _trace_torch_model(
             )
     _reject_opaque_wrappers(model)
     # grind-r5 b7 R55: ``tl.trace(model, q, k, v)`` lands ``k`` in
-    # ``input_kwargs``; trace() refuses it before dispatch for every backend
-    # (U11.2), and direct callers of this torch path get the same check.
+    # ``input_kwargs``; trace() refuses it before dispatch for every backend,
+    # and direct callers of this torch path get the same check.
     _reject_non_mapping_input_kwargs(input_kwargs)
     model = unwrap_compiled_model(model)
     model = _unwrap_data_parallel(model)
@@ -4056,7 +4056,7 @@ def _trace_torch_model(
     from .capture._episode_join import armed_capture
     from .capture._weightsfree_admission import pending_admission
 
-    # U40.1 / AGT-2360: a default capture is a pure observer. Buffers, random
+    # a default capture is a pure observer. Buffers, random
     # state, training modes and plain attributes are restored on every path,
     # failure included; CaptureOptions(carry_state=True) keeps forward-equivalent
     # state. Both record the forward's attribute writes. On failure the bracket

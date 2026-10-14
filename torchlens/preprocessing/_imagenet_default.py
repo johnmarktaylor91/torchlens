@@ -1,4 +1,4 @@
-"""The explicit ImageNet-default opt-in (walk U02.4; spelling DOCUMENTED-UNSTABLE).
+"""The explicit ImageNet-default opt-in (spelling DOCUMENTED-UNSTABLE).
 
 A PIL image whose model carries no resolvable preprocessing authority is
 REFUSED at capture entry (``preprocessing_unresolved``): TorchLens never

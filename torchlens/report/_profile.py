@@ -112,10 +112,10 @@ class TraceProfile:
     # count disclosed beside it (never a FLOP percentage).
     partition_total: int | None = None
     unknown_events: int = 0
-    # Counted attention ops: the footer carries the full-square note (U04.2).
+    # Counted attention ops: the footer carries the full-square note.
     attention_full_square_ops: int = 0
     column_additivity: dict[str, bool] = field(default_factory=dict)
-    # U53.2: the op-row grouping key (``"source_line"``), or ``None`` for
+    # the op-row grouping key (``"source_line"``), or ``None`` for
     # one row per op. DOCUMENTED-UNSTABLE spelling.
     group_by: str | None = None
 

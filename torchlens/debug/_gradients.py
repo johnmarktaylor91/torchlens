@@ -576,7 +576,7 @@ def gradient_flow_audit(  # noqa: PLR0913 -- the D17 fix-pack public surface: sh
     Returns
     -------
     DebugReport
-        Tabular ``tl.debug`` report (U42.2); ``.to_pandas()`` returns the
+        Tabular ``tl.debug`` report; ``.to_pandas()`` returns the
         DataFrame described here.
         Ranked audit rows with counts in ``df.attrs``. The optional view over
         :func:`gradient_flow_audit_rows` (the pandas-free core). New fix-pack

@@ -361,7 +361,7 @@ def _outputs_carry_autograd_history(outputs: Any) -> bool:
 def cleared_inference_only_directive(directive: object, outputs: Any) -> StopDirective | None:
     """Return the directive with ``inference_only`` cleared when the forward kept its graph.
 
-    AGT-2132: a capture entered under ``torch.no_grad()`` (or inference mode)
+    A capture entered under ``torch.no_grad()`` (or inference mode)
     implies ``inference_only=True`` because such a forward discards the
     autograd graph. A forward that re-enables grad itself (``with
     torch.enable_grad():``) still builds one, so the premise does not hold:

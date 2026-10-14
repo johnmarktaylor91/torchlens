@@ -1,4 +1,4 @@
-"""The on-request preprocessing card check (walk U24.4).
+"""The on-request preprocessing card check.
 
 :func:`check_card` compares the preprocessing a capture RECORDED
 (``Trace.input_preprocessor``) with the model's known card -- its HF image

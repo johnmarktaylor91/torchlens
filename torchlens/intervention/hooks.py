@@ -712,7 +712,7 @@ def expand_facet_hook_entries(
 
 
 def _warn_facet_fanout(log: Any, selector: FacetSelector, written: list[tuple[str, str]]) -> None:
-    """Say how many sites a facet selector writes when it writes more than one (forks.9).
+    """Say how many sites a facet selector writes when it writes more than one.
 
     Coded ``facet_selector_fanout``; ``fields["site_count"]`` carries the number.
 

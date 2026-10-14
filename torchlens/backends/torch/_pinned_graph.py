@@ -4,7 +4,7 @@ The default save keeps autograd history (``detach_saved_activations=False``):
 every saved payload is a graph-connected copy, so the tensors autograd saved
 for the backward of every op upstream of a saved site stay in memory for as
 long as the trace holds the payload. ``Trace.pinned_autograd_memory`` discloses
-those bytes (R2-37). The walk follows ``grad_fn.next_functions`` from each
+those bytes. The walk follows ``grad_fn.next_functions`` from each
 attached payload once, reads each node's saved tensors through the same
 best-effort reader the per-op ``autograd_memory`` uses, and counts every
 storage once. Parameters and views of them are excluded: the model owns

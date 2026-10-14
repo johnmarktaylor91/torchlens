@@ -1,4 +1,4 @@
-"""Where representational metrics disagree about which site scores higher (neuro.1).
+"""Where representational metrics disagree about which site scores higher.
 
 Different comparison metrics (RSA, ridge encoding, CKA, ...) can rank the
 same layers in different orders on the same extraction. This module puts
@@ -246,7 +246,7 @@ def _pair_firmness(
 def metric_disagreement(scores: Mapping[str, Mapping[str, Any]]) -> MetricDisagreement:
     """Rank sites under each metric and flag the pairs the metrics order oppositely.
 
-    DOCUMENTED-UNSTABLE (neuro.1 row 3). Higher scores rank first under
+    DOCUMENTED-UNSTABLE. Higher scores rank first under
     every metric (every TorchLens comparison score is a similarity). A pair
     of sites is flagged when one metric scores ``site_a`` higher and
     another scores ``site_b`` higher; ties and missing (NaN) scores take no

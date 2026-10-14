@@ -170,7 +170,7 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
     CPU/MPS measure a process resident-set-size (or MPS allocator) delta, which
     captures torch's C++-allocated tensor buffers for sizeable models. That
     counter is coarse: when the forward fits in already-resident heap headroom
-    the CPU delta reads 0 and is recorded as ``None`` with a reason (forks.13).
+    the CPU delta reads 0 and is recorded as ``None`` with a reason.
 
     ``CaptureOptions(measure_python_peak_memory=True)`` additionally folds in the
     stdlib ``tracemalloc`` Python-allocation peak, which stays reliably positive
@@ -234,7 +234,7 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
                 # and the figure honestly reads 0 (see docstring, R36-2).
                 live_peak = peak_after if peak_after > peak_before else 0
                 trace.forward_peak_memory = Bytes(live_peak)
-                trace.forward_peak_memory_reason = None  # forks.13: the pair moves together
+                trace.forward_peak_memory_reason = None  # the pair moves together
             with contextlib.suppress(Exception):
                 reserved_after = int(torch_module.cuda.max_memory_reserved(cuda_device))
                 resident_peak = reserved_after if reserved_after > reserved_before else 0
@@ -2027,7 +2027,7 @@ def run_and_log_inputs_through_model(
                 kind=swallowed_stop.kind,
                 boundary_label=swallowed_stop.boundary_label,
             )
-        # AGT-2132: an implied inference_only holds only if the forward discarded its graph.
+        # an implied inference_only holds only if the forward discarded its graph.
         cleared = cleared_inference_only_directive(self._stop_directive, outputs)
         if cleared is not None:  # before settlement stamps the flag on the outcome
             self.inference_only, self._stop_directive = False, cleared

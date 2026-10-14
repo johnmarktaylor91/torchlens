@@ -90,7 +90,7 @@ TLSPEC_VERSION = 10
 MIN_TLSPEC_VERSION = 6
 MIN_TORCHLENS_VERSION_TEXT = "2.31.0"
 
-# Reserved generation step-score vocabulary (U22.3), credited to inseq: the
+# Reserved generation step-score vocabulary, credited to inseq: the
 # keys of inseq's ``STEP_SCORES_MAP`` (``inseq/attr/step_functions.py``,
 # inseq 0.7.1), verbatim and in inseq's order. A name registration, not a
 # field slot: a future TorchLens generation read surface persists its

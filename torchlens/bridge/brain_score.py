@@ -59,7 +59,7 @@ _LOGITS_LOOKUP = "output_1"
 class ScoreParts:
     """A benchmark score with its raw and ceiling-normalised values named apart.
 
-    DOCUMENTED-UNSTABLE (neuro.1 row 2). Brain-Score reports a
+    DOCUMENTED-UNSTABLE. Brain-Score reports a
     ceiling-normalised score and keeps the raw score and the ceiling in its
     attributes; this record puts them side by side so the normalised value
     never stands in for the raw one. TorchLens computes none of these
@@ -140,7 +140,7 @@ def _scalar_or_none(value: Any) -> float | None:
 def score_parts(score: Any) -> ScoreParts:
     """Split a benchmark score into raw, ceiling-normalised, ceiling and error.
 
-    DOCUMENTED-UNSTABLE (neuro.1 row 2). A Brain-Score ``Score`` whose
+    DOCUMENTED-UNSTABLE. A Brain-Score ``Score`` whose
     attributes hold ``"ceiling"`` is ceiling-normalised: its own value goes
     to ``ceiling_normalised`` and its ``"raw"`` attribute to ``raw``. A
     result without a ceiling (a behavioral engineering score, or a plain

@@ -84,7 +84,7 @@ class SummaryFacts:
     params_pruned_raw: int = 0
     params_masked: int | None = None
     optimizer: OptimizerStateFacts | None = None
-    # forks.7: a NOT-CHECKED verdict on a capture that did not record every
+    # a NOT-CHECKED verdict on a capture that did not record every
     # op names the opt-in (track_nonfinite stays False by default).
     health_hint: str | None = None
 

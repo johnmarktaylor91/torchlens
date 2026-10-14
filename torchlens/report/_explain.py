@@ -768,7 +768,7 @@ def _anomaly_lines(log: Any) -> list[str]:
 
 
 def _track_nonfinite_hint_lines(log: Any) -> list[str]:
-    """The forks.7 partial-coverage hint line, while track_nonfinite is off."""
+    """The partial-coverage hint line, while track_nonfinite is off."""
 
     from ._health import nonfinite_option_hint
 

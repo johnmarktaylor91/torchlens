@@ -1248,7 +1248,7 @@ def _attach_op_grain(  # noqa: PLR0913 -- the attach inputs travel as their own 
     example_input: Any,
     budgets: Mapping[str, int] | None,
 ) -> WatchSession:
-    """Tier O attach: discover, budget, calibrate, wrap, disclose (U32.1/U34.1).
+    """Tier O attach: discover, budget, calibrate, wrap, disclose.
 
     Discovery and calibration run BEFORE the wrap is installed, on
     ``example_input``, with the model's RNG and buffers restored after; the

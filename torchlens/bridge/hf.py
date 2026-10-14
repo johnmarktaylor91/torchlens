@@ -445,7 +445,7 @@ def _trace_text_capture(
 
 
 def _meta_text_inputs(encoded: Any) -> dict[str, Any]:
-    """Return tokenized text on the meta device with an all-ones mask (U38.1).
+    """Return tokenized text on the meta device with an all-ones mask.
 
     The structure-only text policy: the token ids keep only their shape on
     meta and the mask is a meta all-ones mask. A tokenizer mask that is not
@@ -643,7 +643,7 @@ def _resolve_image_preprocessing(model: Any) -> tuple[Callable[[Any], Any], Reso
     processor fetch last, with the attempt disclosed on the record; a fetch
     failure yields ``unknown``, never a silently substituted lower tier
     (memo D8). Whatever the registry resolves is applied. When NOTHING
-    resolves the capture is refused typed (walk U02.4): TorchLens never
+    resolves the capture is refused typed: TorchLens never
     applies a recipe the model was not shown to use. The refusal names the
     explicit ImageNet-default opt-in.
 

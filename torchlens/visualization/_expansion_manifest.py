@@ -1,4 +1,4 @@
-"""Expansion manifest for over-ceiling overviews (forks.11 FK4).
+"""Expansion manifest for over-ceiling overviews.
 
 FK4 ruled the over-ceiling residual -- a graph still too large for the
 readable band after the coarse fallback grouping -- toward a bounded overview

@@ -310,7 +310,7 @@ class Recorder:
         )
         self.model = unwrapped_model
         # Gradient hooks are installed only when the caller asks for a backward
-        # up front; ``log_backward`` refuses otherwise (AGT-2132).
+        # up front; ``log_backward`` refuses otherwise.
         self._backward_requested = (
             backward_ready
             or not (save_grads is MISSING or save_grads is None or save_grads is False)

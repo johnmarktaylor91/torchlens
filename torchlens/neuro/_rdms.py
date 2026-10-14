@@ -404,7 +404,7 @@ def _source_stack_descriptors(
     -------
     dict[str, Any]
         Descriptors, including the metric's similarity-repository
-        identifier when the catalogue has an exact match (U56.3).
+        identifier when the catalogue has an exact match.
     """
 
     from ..repgeom._similarity_ids import rdm_id
@@ -422,7 +422,7 @@ def _source_stack_descriptors(
     }
     similarity_id = rdm_id(resolved_metric)
     if similarity_id is not None:
-        # U56.3: the exact RDM variant's similarity-repository identifier.
+        # the exact RDM variant's similarity-repository identifier.
         descriptors["similarity_repository_id"] = similarity_id
     if "model" in sample:
         descriptors["model"] = sample["model"]

@@ -189,7 +189,7 @@ def run_bounded_subprocess(
     (b8 R65). The doctor ``dot`` probe, by contrast, wants the raw signal
     and calls the shared seam directly. Tests monkeypatch this function to
     simulate Graphviz outcomes. Every Graphviz child renders with the bundled
-    font (forks.11 FK3; :func:`torchlens.visualization._fonts.graphviz_font_env`).
+    font (:func:`torchlens.visualization._fonts.graphviz_font_env`).
     """
 
     from ._fonts import graphviz_font_env
@@ -255,14 +255,14 @@ def relativize_visualizer_image(path: str) -> str:
     return path[separator_index + 1 :]
 
 
-#: Stem a bare ``Trace.draw()`` (no ``vis_outpath``) writes under (forks.12).
+#: Stem a bare ``Trace.draw()`` (no ``vis_outpath``) writes under.
 DEFAULT_DRAW_STEM = "modelgraph"
 
 
 def collision_safe_outpath(stem: str, fileformat: str) -> str:
     """Return a fresh output stem for a draw call that named no path.
 
-    A bare ``draw()`` must never overwrite an earlier picture (forks.12): the
+    A bare ``draw()`` must never overwrite an earlier picture: the
     first call in a directory writes ``<stem>.<format>``, later calls write
     ``<stem>-2.<format>``, ``<stem>-3.<format>`` and so on. A candidate is
     taken when either the rendered file or the bare DOT source path (Graphviz
@@ -290,7 +290,7 @@ def collision_safe_outpath(stem: str, fileformat: str) -> str:
 
 
 def announce_written_graph(path: str) -> None:
-    """Print where a bare draw wrote its picture (forks.12: always, verbose or not).
+    """Print where a bare draw wrote its picture (always, verbose or not).
 
     Parameters
     ----------

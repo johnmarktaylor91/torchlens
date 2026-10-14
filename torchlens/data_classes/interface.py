@@ -252,7 +252,7 @@ def _honesty_header_lines(self: "Trace") -> list[str]:
     if verdict == "found":
         lines.append("\tHealth: NaN/Inf FOUND (see .nonfinite_ops)")
     elif verdict == "not_checked":
-        # forks.7: track_nonfinite stays False by default (no overhead); the
+        # track_nonfinite stays False by default (no overhead); the
         # not-checked footer names the option while it is off.
         hint = (
             ""
@@ -300,7 +300,7 @@ def _str_after_pass(self: "Trace") -> str:
     s += f"\n\tRandom seed: {self.random_seed}"
     s += f"\n\tTime elapsed: {self.capture_duration} ({self.overhead_duration} spent logging)"
 
-    # Overall model structure. U35.1: an unverified capture (severed
+    # Overall model structure. An unverified capture (severed
     # provenance) may have missed ops, so it never claims "purely
     # feedforward" and its op and parameter counts read as lower bounds.
     unverified = getattr(self, "capture_verified", True) is False

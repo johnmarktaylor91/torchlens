@@ -1,4 +1,4 @@
-"""Token-position editing (U42.1 position editing, phase 2).
+"""Token-position editing.
 
 ``at_positions(edit, positions, ...)`` restricts any same-shape edit to chosen
 token positions of a ``(batch, tokens, ...)`` site value: the edit computes its

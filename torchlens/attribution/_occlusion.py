@@ -217,7 +217,7 @@ def occlusion(
     if resolved._kind != "ACT":
         raise AttributionError("occlusion currently supports ACT selections only")
     if resolved.empty:
-        # U20.5: occluding nothing scores exactly zero, which reads as a
+        # occluding nothing scores exactly zero, which reads as a
         # confident "no effect"; the resolved selection already knows it.
         raise AttributionError(
             f"occlusion selection resolved to zero elements on this trace "

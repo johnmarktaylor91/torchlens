@@ -20,7 +20,7 @@ from ._typography import DEFAULT_TYPOGRAPHY
 # malformed/huge conditional subgraph can never turn edge labelling into a hot loop.
 _BRANCH_KIND_SEARCH_LIMIT = 256
 
-# U08.5: the opt-in backward rows of the ``draw_backward`` call being rendered
+# the opt-in backward rows of the ``draw_backward`` call being rendered
 # (a ``_backward_rows.BackwardRowOptions``; ``None`` adds no rows).
 _BACKWARD_ROWS: ContextVar[Any] = ContextVar("torchlens_backward_rows", default=None)
 

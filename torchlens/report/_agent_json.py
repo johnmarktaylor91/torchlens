@@ -503,7 +503,7 @@ def build_agent_json(log: Any, *, max_ops: int | None = None) -> dict[str, Any]:
     if capture["structure_only"]:
         # The claim-status ladder and evidence envelope: an agent reading
         # ``structure_only: true`` without ``claim_status`` cannot learn that a
-        # discharge already REFUTED these shapes (R2-11 export parity).
+        # discharge already REFUTED these shapes (export parity).
         capture.update(_structure_evidence_facts(log))
     episode = episode_facts(log)
     if episode is not None:

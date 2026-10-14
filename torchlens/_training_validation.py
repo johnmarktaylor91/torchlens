@@ -50,7 +50,7 @@ def autograd_disabled_at_entry() -> bool:
 
 
 def effective_inference_only(capture_options: CaptureOptions, *, backward_requested: bool) -> bool:
-    """Resolve ``inference_only`` for one torch capture (AGT-2132).
+    """Resolve ``inference_only`` for one torch capture.
 
     An explicit value always wins. Otherwise a capture entered under
     ``torch.no_grad()`` or ``torch.inference_mode()`` builds no autograd graph,
@@ -115,7 +115,7 @@ def reject_compiled_model(model: nn.Module, *, api_name: str) -> None:
         is_optimized_module = model.__class__.__name__ == "OptimizedModule"
 
     if is_optimized_module:
-        # U31.4: typed, and the condition is stated as it is checked (any
+        # typed, and the condition is stated as it is checked (any
         # torch.compile wrapper, not only under backward_ready).
         raise InvalidArgumentError(
             f"{api_name} does not record torch.compile'd models (got an OptimizedModule "
