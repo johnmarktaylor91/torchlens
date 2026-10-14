@@ -1045,6 +1045,53 @@ shims, by declared contract. Each carries the same tag at its definition.
   `neuro.rdms()` descriptor is then absent. The full table is in
   [the brain-benchmarking seam](brain_benchmarking_seam.md).
 
+**ScoreInterval (`tl.repgeom.ScoreInterval`; returned by `tl.repgeom.rdm_compare_interval` and `tl.repgeom.cka_interval`)** — *unstable — no deprecation shim owed*
+: A TorchLens score with a descriptive uncertainty interval beside it:
+  `score` (the unchanged estimator on all stimuli), `low` and `high` (a
+  percentile bootstrap over stimuli), `confidence`, `n_resamples`, `n_valid`
+  (resamples with a finite score), `seed` and `basis` (how the interval was
+  made, in words), plus `width` and `to_dict()`. `rdm_compare_interval(rdm_a,
+  rdm_b, method, n_resamples=1000, seed=0, confidence=0.95)` resamples
+  stimuli and recomputes `rdm_compare`, dropping self-pairs; `cka_interval(a,
+  b, ...)` does the same for linear CKA. Descriptive, not a test; inference
+  stays with rsatoolbox.
+
+**ScoreParts (`tl.bridge.brain_score.ScoreParts`; returned by `tl.bridge.brain_score.score_parts` and, per layer, `tl.bridge.brain_score.per_layer`)** — *unstable — no deprecation shim owed*
+: A benchmark score split into named parts so a ceiling-normalised value
+  never stands in for the raw one: `raw`, `ceiling_normalised`, `ceiling`,
+  `error`, `note`. A Brain-Score result that carries a ceiling gives its
+  value as `ceiling_normalised` and its raw attribute as `raw`; a result
+  without one is raw and `ceiling_normalised` is `None`. TorchLens reads
+  these numbers; it computes no ceiling.
+
+**metric_disagreement (`tl.repgeom.metric_disagreement`; returns `tl.repgeom.MetricDisagreement` with `tl.repgeom.DisagreeingPair` rows)** — *unstable — no deprecation shim owed*
+: The rank order of sites (layers or models) under each comparison metric on
+  one extraction, with every pair of sites that two metrics order oppositely
+  flagged. Input is `scores[metric][site]` (a float or a `ScoreInterval`);
+  higher scores rank first, ties share their average rank, missing scores
+  take no side. Each flagged pair names the site each metric ranks higher
+  and, when the scores carry intervals, whether the opposite orders are
+  separated by them (`firm`). `table()` gives the plain-text report and
+  `to_dict()` the data form.
+
+**neuro.compare (`tl.neuro.compare`; needs no extra)** — *unstable — no deprecation shim owed*
+: One call that scores every site of one extraction against one target with
+  several descriptive analyses: `tl.neuro.compare(source, target,
+  analyses=("rsa", "ridge", "cka"))`. Each site's activations are read once
+  from what `source` (a Trace with saved activations, an extraction, or a
+  `{site: array}` mapping) already holds; the model is never re-run. `"rsa"`
+  is `rdm_compare` over `rdm(site)` and `rdm(target)` (`rdm_metric`,
+  `rsa_method`); `"ridge"` is a cross-validated ridge score (a seeded
+  `n_folds` split, the penalty per fold chosen from `ridge_alphas` by exact
+  leave-one-out on the training fold, then the mean over target columns of
+  the Pearson r between out-of-fold predictions and the target); `"cka"` is
+  linear CKA. `n_resamples=` adds a `ScoreInterval` per score. The returned
+  report has `scores`, `intervals`, `settings`, `ridge_alphas_chosen`,
+  `similarity_repository_ids`, `table()`, `disagreement()` (a
+  `MetricDisagreement`) and `to_dict()`. Descriptive only: inference,
+  variance partitioning, voxel maps and stacked fits stay with rsatoolbox,
+  himalaya, scikit-learn and Net2Brain.
+
 **site_key (`Op.site_key`)** — *unstable — no deprecation shim owed*
 : The portable structural-position identity of one retained op
   (`site_key_v1`): a `"s1|"`-prefixed string of the pass-free module address

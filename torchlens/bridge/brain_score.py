@@ -43,6 +43,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass
 from typing import Any
 
 import torch
@@ -54,13 +55,156 @@ from ._utils import tensor_layers
 _LOGITS_LOOKUP = "output_1"
 
 
+@dataclass(frozen=True)
+class ScoreParts:
+    """A benchmark score with its raw and ceiling-normalised values named apart.
+
+    DOCUMENTED-UNSTABLE (neuro.1 row 2). Brain-Score reports a
+    ceiling-normalised score and keeps the raw score and the ceiling in its
+    attributes; this record puts them side by side so the normalised value
+    never stands in for the raw one. TorchLens computes none of these
+    numbers: they are read from the benchmark's result.
+
+    Attributes
+    ----------
+    raw:
+        The raw (un-normalised) score. For a result that carries no
+        ceiling, this is the result itself. ``None`` only when the result
+        carries a ceiling but its raw attribute is not a single number
+        (``note`` says so).
+    ceiling_normalised:
+        The ceiling-normalised score, or ``None`` when the result carries
+        no ceiling (nothing was normalised).
+    ceiling:
+        The ceiling the benchmark normalised by, or ``None`` (when the
+        result carries a ceiling attribute that is not one number, ``note``
+        says so).
+    error:
+        The benchmark's reported error of the score, or ``None``.
+    note:
+        Why a field is ``None`` when the result does not explain itself.
+    """
+
+    raw: float | None
+    ceiling_normalised: float | None = None
+    ceiling: float | None = None
+    error: float | None = None
+    note: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the fields as a plain dictionary.
+
+        Returns
+        -------
+        dict[str, Any]
+            ``raw``, ``ceiling_normalised``, ``ceiling``, ``error``, ``note``.
+        """
+
+        return {
+            "raw": self.raw,
+            "ceiling_normalised": self.ceiling_normalised,
+            "ceiling": self.ceiling,
+            "error": self.error,
+            "note": self.note,
+        }
+
+
+def _aggregation_part(value: Any, part: str) -> Any:
+    """Select ``part`` of an older Brain-Score ``aggregation`` dimension, if present.
+
+    Brain-Score 1.x scores carried ``aggregation=["center", "error"]``;
+    2.x scores are scalar with the error in ``attrs``. Either reads here.
+    """
+
+    dims = getattr(value, "dims", ())
+    if "aggregation" in dims and hasattr(value, "sel"):
+        return value.sel(aggregation=part)
+    return value
+
+
+def _scalar_or_none(value: Any) -> float | None:
+    """Return ``value`` as a float when it holds exactly one number, else ``None``."""
+
+    if value is None:
+        return None
+    raw_values = getattr(_aggregation_part(value, "center"), "values", value)
+    try:
+        array = torch.as_tensor(raw_values, dtype=torch.float64)
+    except (TypeError, ValueError, RuntimeError):
+        return None
+    if array.numel() != 1:
+        return None
+    return float(array.reshape(()).item())
+
+
+def score_parts(score: Any) -> ScoreParts:
+    """Split a benchmark score into raw, ceiling-normalised, ceiling and error.
+
+    DOCUMENTED-UNSTABLE (neuro.1 row 2). A Brain-Score ``Score`` whose
+    attributes hold ``"ceiling"`` is ceiling-normalised: its own value goes
+    to ``ceiling_normalised`` and its ``"raw"`` attribute to ``raw``. A
+    result without a ceiling (a behavioral engineering score, or a plain
+    number from an offline callable) is raw: ``raw`` holds it and
+    ``ceiling_normalised`` is ``None``. Nothing is recomputed.
+
+    Parameters
+    ----------
+    score:
+        A Brain-Score ``Score`` (any object with ``values`` and ``attrs``)
+        or a plain number.
+
+    Returns
+    -------
+    ScoreParts
+        The named parts.
+
+    Raises
+    ------
+    TypeError
+        If ``score`` is neither a single number nor a ``Score``-shaped
+        object whose value is a single number.
+    """
+
+    attrs = getattr(score, "attrs", None)
+    value = _scalar_or_none(score)
+    if value is None:
+        raise TypeError(
+            f"score_parts needs a single-number score; got {type(score).__name__} "
+            "without one value."
+        )
+    attrs = attrs if isinstance(attrs, Mapping) else {}
+    error = _scalar_or_none(attrs.get("error"))
+    if error is None and "aggregation" in getattr(score, "dims", ()):
+        error = _scalar_or_none(_aggregation_part(score, "error"))
+    if "ceiling" not in attrs:
+        return ScoreParts(
+            raw=value,
+            error=error,
+            note="the result carries no 'ceiling' attribute, so it is reported as raw",
+        )
+    raw = _scalar_or_none(attrs.get("raw"))
+    ceiling = _scalar_or_none(attrs.get("ceiling"))
+    gaps = [
+        f"its {name!r} attribute is not a single number; read score.attrs[{name!r}]"
+        for name, part in (("raw", raw), ("ceiling", ceiling))
+        if part is None
+    ]
+    return ScoreParts(
+        raw=raw,
+        ceiling_normalised=value,
+        ceiling=ceiling,
+        error=error,
+        note="the result carries a ceiling but " + "; ".join(gaps) if gaps else None,
+    )
+
+
 def per_layer(
     log: Any,
     benchmark: Any,
     *,
     sites: Iterable[Any] | None = None,
     **kwargs: Any,
-) -> dict[str, Any]:
+) -> dict[str, ScoreParts]:
     """Run a Brain-Score-style benchmark independently for saved layers.
 
     This offline adapter accepts a callable benchmark fixture so tests can run
@@ -85,13 +229,16 @@ def per_layer(
 
     Returns
     -------
-    dict[str, Any]
-        Mapping from TorchLens layer label to benchmark score.
+    dict[str, ScoreParts]
+        Mapping from TorchLens layer label to the benchmark's score split
+        by :func:`score_parts`: the raw score is always named, and a
+        ceiling-normalised score sits beside it, never in its place.
 
     Raises
     ------
     TypeError
-        If ``benchmark`` is not callable.
+        If ``benchmark`` is not callable, or returns something
+        :func:`score_parts` cannot read as one number.
     ValueError
         If an explicitly requested site has no saved tensor out or is not
         stimulus-indexed.
@@ -100,13 +247,13 @@ def per_layer(
     if not callable(benchmark):
         raise TypeError("Brain-Score bridge currently requires a callable offline benchmark.")
 
-    scores: dict[str, Any] = {}
+    scores: dict[str, ScoreParts] = {}
     for layer in tensor_layers(log, sites, verb="bridge.brain_score.per_layer"):
         out = getattr(layer, "out")
         label = str(getattr(layer, "layer_label", "layer"))
         # TODO: connect the real Brain-Score Benchmark API once the offline
         # vendored fixtures are available in the launch extras matrix.
-        scores[label] = benchmark(out, layer=label, **kwargs)
+        scores[label] = score_parts(benchmark(out, layer=label, **kwargs))
     return scores
 
 
@@ -342,4 +489,10 @@ def activations_extractor(
     )
 
 
-__all__ = ["activations_extractor", "get_activations_fn", "per_layer"]
+__all__ = [
+    "ScoreParts",
+    "activations_extractor",
+    "get_activations_fn",
+    "per_layer",
+    "score_parts",
+]

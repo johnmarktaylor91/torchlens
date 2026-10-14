@@ -23,15 +23,26 @@ The working surfaces behind the "we supply" column:
 - `tl.repgeom.rdm_compare` -- DESCRIPTIVE Pearson/Spearman/Kendall tau-a
   over aligned strict upper triangles (diagonal excluded). No p-values, no
   noise ceilings: asking for them refuses naming rsatoolbox.
+- `tl.repgeom.rdm_compare_interval` / `tl.repgeom.cka_interval` -- the same
+  scores with a DESCRIPTIVE percentile bootstrap interval over stimuli
+  beside them (`ScoreInterval`: seeded, resample count a parameter). Not a
+  test and not rsatoolbox's corrected bootstrap.
 - `tl.stats.CKA` / `tl.stats.cka` -- one-shot and streaming linear CKA
   (memory-bounded over arbitrarily many stimuli), `device=`/`dtype=`.
+- `tl.neuro.compare(source, target, analyses=("rsa", "ridge", "cka"))` --
+  one call that reads each site once and scores it against one target with
+  descriptive RSA, a cross-validated ridge score and linear CKA, optional
+  bootstrap intervals, and `.disagreement()` (`tl.repgeom.metric_disagreement`)
+  for where the analyses rank sites differently. Descriptive only.
 - `tl.bridge.rsatoolbox.dataset` -- the per-site rsatoolbox handoff.
 - `tl.bridge.brain_score` -- the Brain-Score activations-model seam: a
   `PytorchWrapper`-shaped model over an `ActivationsExtractorHelper` that a
   model plugin hands to `ModelCommitment`; one neural and one behavioral
   benchmark were scored end to end through such a plugin (2026-10-14,
   brainscore-vision 2.4.1, Python 3.11, CPU). Brain-Score computes the
-  scores; TorchLens supplies the activations.
+  scores; TorchLens supplies the activations. `per_layer` and `score_parts`
+  report a ceiling-normalised score only beside its raw score
+  (`ScoreParts.raw`, `.ceiling_normalised`, `.ceiling`, `.error`).
 
 | # | Net2Brain method | We supply | We refuse and point |
 |---|---|---|---|
@@ -41,7 +52,7 @@ The working surfaces behind the "we supply" column:
 | 4 | Searchlight RSA | Model RDMs with stimulus identity; npz interchange | Brain-space neighborhoods, maps, tests -> Net2Brain `Searchlight` / rsatoolbox / nilearn |
 | 5 | CKA | One-shot + streaming linear CKA (memory-bounded; DeepJuice advertises no equivalent), `device=`/`dtype=`, convention recorded | Kernel CKA (documented non-offer), permutation/subject inference, rankings -> Net2Brain `CKA.run` / statistics tools |
 | 6 | Distributional comparison | Aligned features; streaming marginals when that accumulator lands | Binning/KDE/optimal-transport estimator choices, JSD/Wasserstein aggregation -> Net2Brain / scipy / POT |
-| 7 | Linear/ridge encoding | Aligned, ordered, site-keyed design matrices; the sweep's guaranteed row order; raw inputs for fold-local learned reductions | Splits, ridge fits, alpha selection, voxel scores -> himalaya / sklearn / Net2Brain `Encoding` |
+| 7 | Linear/ridge encoding | Aligned, ordered, site-keyed design matrices; the sweep's guaranteed row order; raw inputs for fold-local learned reductions; one DESCRIPTIVE cross-validated ridge score per site in `tl.neuro.compare` (seeded folds, per-fold leave-one-out penalty, mean Pearson r over target columns) | Encoding-model inference, alpha inference, voxel maps and per-voxel scores, banded/stacked fits -> himalaya / sklearn / Net2Brain `Encoding` |
 | 8 | veRSA | Features, plus `rdm()` accepting externally predicted responses (documented composition) | Encoding fit and veRSA orchestration -> Net2Brain veRSA / rsatoolbox |
 | 9 | Stacked encoding + variance partitioning | Multi-site banks with GUARANTEED identical row order and stable identities (the sweep's stimulus-order invariant) | Stacked fits, voxel R2, unique/shared variance, layer selection, SEM/tests -> Net2Brain / brainML / himalaya |
 

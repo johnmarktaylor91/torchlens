@@ -33,7 +33,7 @@ def test_real_names_and_dir_contract() -> None:
 
     import importlib.util
 
-    expected: list[str] = []
+    expected: list[str] = ["compare"]  # ungated: numpy-only (neuro.1 row 4)
     if importlib.util.find_spec("rsatoolbox") is not None:
         expected += ["datasets", "rdms"]
     if importlib.util.find_spec("brainscore_vision") is not None:

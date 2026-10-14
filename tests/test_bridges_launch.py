@@ -267,7 +267,8 @@ def test_brain_score_bridge_mocked_offline_fixture_matches_direct_scores() -> No
         for layer in [log.resolve_sites(site, max_fanout=1).first() for site in sites]
     }
 
-    assert bridge_scores == direct_scores
+    assert {label: parts.raw for label, parts in bridge_scores.items()} == direct_scores
+    assert all(parts.ceiling_normalised is None for parts in bridge_scores.values())
 
 
 @pytest.mark.heavy
