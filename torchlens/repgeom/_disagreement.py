@@ -33,10 +33,12 @@ class DisagreeingPair:
         Per metric, the site that metric scores higher (``None`` for a tie
         or a missing score).
     firm:
-        ``True`` when at least one metric on each side orders the pair with
-        non-overlapping intervals; ``False`` when every opposite order lies
-        within interval overlap; ``None`` when the scores carry no
-        intervals.
+        ``True`` when, on each side, at least one metric's interval for the
+        site it ranks higher lies wholly above its interval for the other
+        site; ``False`` when every side-taking metric has known intervals
+        and a side has no such metric; ``None`` when some side-taking
+        metric has no interval. Marginal intervals share one seed, so this
+        is a conservative reading, not a paired test.
     """
 
     site_a: str
@@ -193,10 +195,16 @@ def _descending_ranks(values: Mapping[str, float]) -> dict[str, float]:
     return ranks
 
 
-def _separated(first: ScoreInterval, second: ScoreInterval) -> bool:
-    """Return whether two intervals do not overlap."""
+def _ordered_apart(winner: ScoreInterval, loser: ScoreInterval) -> bool | None:
+    """Return whether ``winner``'s interval lies wholly above ``loser``'s.
 
-    return first.high < second.low or second.high < first.low
+    ``None`` when either bound is NaN (the interval is unknown).
+    """
+
+    bounds = (winner.low, winner.high, loser.low, loser.high)
+    if any(math.isnan(bound) for bound in bounds):
+        return None
+    return winner.low > loser.high
 
 
 def _pair_firmness(
@@ -205,18 +213,34 @@ def _pair_firmness(
     higher: Mapping[str, str | None],
     intervals: Mapping[str, Mapping[str, ScoreInterval]],
 ) -> bool | None:
-    """Return whether both sides of a disagreement hold outside interval overlap."""
+    """Return whether both sides of a disagreement hold outside interval overlap.
 
-    if not intervals:
-        return None
-    firm_sides = set()
+    ``True`` when, on each side, at least one metric's interval for its
+    winner lies wholly above its interval for the other site; ``False``
+    when every side-taking metric has known intervals and a side has no
+    such metric; ``None`` otherwise (some side-taking metric has no
+    interval or a NaN bound).
+    """
+
+    firm_sides: set[str] = set()
+    unknown = False
     for metric, winner in higher.items():
-        per_site = intervals.get(metric, {})
-        if winner is None or site_a not in per_site or site_b not in per_site:
+        if winner is None:
             continue
-        if _separated(per_site[site_a], per_site[site_b]):
+        loser = site_b if winner == site_a else site_a
+        per_site = intervals.get(metric, {})
+        apart = (
+            _ordered_apart(per_site[winner], per_site[loser])
+            if winner in per_site and loser in per_site
+            else None
+        )
+        if apart is None:
+            unknown = True
+        elif apart:
             firm_sides.add(winner)
-    return len(firm_sides) == 2
+    if len(firm_sides) == 2:
+        return True
+    return None if unknown else False
 
 
 def metric_disagreement(scores: Mapping[str, Mapping[str, Any]]) -> MetricDisagreement:

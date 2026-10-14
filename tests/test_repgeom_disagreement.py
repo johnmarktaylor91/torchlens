@@ -107,3 +107,43 @@ def test_too_few_metrics_or_sites_refuse() -> None:
         metric_disagreement({"rsa": {"a": 0.1, "b": 0.2}})
     with pytest.raises(ValueError, match="two sites"):
         metric_disagreement({"rsa": {"a": 0.1}, "cka": {"a": 0.2}})
+
+
+def test_separation_against_the_point_order_is_not_firm() -> None:
+    # rsa's point scores rank b higher, but its intervals sit the other way
+    # round (a percentile interval need not contain its point score).
+    odd_rsa_b = ScoreInterval(0.5, 0.10, 0.20, 0.95, 100, 100, 0)
+    scores = {
+        "rsa": {"a": _interval(0.3, 0.05), "b": odd_rsa_b},
+        "ridge": {"a": _interval(0.6, 0.05), "b": _interval(0.4, 0.05)},
+    }
+    (pair,) = metric_disagreement(scores).pairs
+    assert pair.firm is False
+
+
+def test_mixed_and_nan_intervals_read_unknown() -> None:
+    mixed = {
+        "rsa": {"a": 0.3, "b": 0.5},
+        "ridge": {"a": _interval(0.6, 0.05), "b": _interval(0.4, 0.05)},
+    }
+    (pair,) = metric_disagreement(mixed).pairs
+    assert pair.firm is None
+    nan_bound = ScoreInterval(0.5, math.nan, math.nan, 0.95, 100, 10, 0)
+    with_nan = {
+        "rsa": {"a": _interval(0.3, 0.05), "b": nan_bound},
+        "ridge": {"a": _interval(0.6, 0.05), "b": _interval(0.4, 0.05)},
+    }
+    (pair,) = metric_disagreement(with_nan).pairs
+    assert pair.firm is None
+
+
+def test_three_metric_majority_still_flags_the_minority() -> None:
+    report = metric_disagreement(
+        {
+            "rsa": {"a": 0.2, "b": 0.4},
+            "ridge": {"a": 0.1, "b": 0.3},
+            "cka": {"a": 0.9, "b": 0.8},
+        }
+    )
+    (pair,) = report.pairs
+    assert pair.higher == {"rsa": "b", "ridge": "b", "cka": "a"}
