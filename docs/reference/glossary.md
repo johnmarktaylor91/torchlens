@@ -71,9 +71,11 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   values. Every plain module attribute is restored too: a rebound or removed attribute gets its
   original object back, a tensor or builtin `list`/`dict`/`set` changed in place is restored in
   place, and attributes the forward added are removed; what the forward wrote is read from the
-  trace (`Module.attribute_writes`). Objects without a value snapshot (custom objects, containers
-  over 128 items or 64 levels) are tracked by identity: a rebinding is undone, a change inside
-  them is not. Lazy modules are left as their materializing forward leaves them.
+  trace (`Module.attribute_writes`). Builtin containers are snapshotted at any size (a tensor inside
+  one is cloned whatever its size); custom objects are tracked by identity: a rebinding is undone,
+  a change inside them is neither undone nor recorded. A container nested more than 256 levels
+  deep is tracked by identity below that level and named in a `capture_state_restore_incomplete`
+  warning. Lazy modules are left as their materializing forward leaves them.
   `CaptureOptions(carry_state=True)` opts into forward-equivalent state: buffers, modes and
   plain attributes advance exactly as one direct `model(x)` would, and the attribute writes are
   recorded the same way, the same spelling as `trace.run(inputs=..., carry_state=True)`. No capture advances the caller's random streams

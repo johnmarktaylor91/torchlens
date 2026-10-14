@@ -441,3 +441,89 @@ def test_unrestorable_state_warns_capture_state_restore_incomplete(monkeypatch):
         w.message.fields.get("code") for w in caught if isinstance(w.message, TorchLensWarning)
     ]
     assert "capture_state_restore_incomplete" in codes
+
+
+class _BigHistory(nn.Module):
+    """Writes in place into builtin containers past the old 128-item / 64-level bounds."""
+
+    def __init__(self, n_items: int = 129, depth: int = 0) -> None:
+        super().__init__()
+        self.fc = nn.Linear(1, 1)
+        self.history = [0] * n_items
+        self.table = {str(i): i for i in range(n_items)}
+        self.deep: list = [0]
+        for _ in range(depth):
+            self.deep = [self.deep]
+        self.depth = depth
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        self.history[0] += 1
+        self.table["0"] = -1
+        leaf = self.deep
+        for _ in range(self.depth):
+            leaf = leaf[0]
+        leaf[0] += 1
+        return self.fc(x)
+
+
+def _innermost(nested: list, depth: int) -> list:
+    for _ in range(depth):
+        nested = nested[0]
+    return nested
+
+
+def _restore_incomplete_messages(caught: list) -> list[str]:
+    from torchlens.errors import TorchLensWarning
+
+    return [
+        str(w.message)
+        for w in caught
+        if isinstance(w.message, TorchLensWarning)
+        and w.message.fields.get("code") == "capture_state_restore_incomplete"
+    ]
+
+
+def test_large_container_write_is_restored_and_recorded():
+    """A 129-item list and dict written in place are restored in place and recorded."""
+
+    model = _BigHistory(n_items=129)
+    history, table = model.history, model.table
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        trace = tl.trace(model, torch.ones(1, 1))
+    assert model.history is history and history[0] == 0 and len(history) == 129
+    assert model.table is table and table["0"] == 0
+    writes = trace.modules["self"].attribute_writes
+    assert writes["history"].kind == "replaced"
+    assert writes["history"].value[0] == 1 and writes["history"].value is not history
+    assert writes["table"].value["0"] == -1
+    assert _restore_incomplete_messages(caught) == []
+
+
+def test_deeply_nested_container_write_is_restored_and_recorded():
+    """A write 100 levels down (past the old 64-level bound) is restored and recorded."""
+
+    model = _BigHistory(n_items=2, depth=100)
+    inner = _innermost(model.deep, 100)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        trace = tl.trace(model, torch.ones(1, 1))
+    assert _innermost(model.deep, 100) is inner and inner == [0]
+    write = trace.modules["self"].attribute_writes["deep"]
+    assert write.kind == "replaced" and _innermost(write.value, 100) == [1]
+    assert _restore_incomplete_messages(caught) == []
+
+
+def test_nesting_past_the_observer_bound_warns_naming_the_attribute():
+    """Past the observer's depth bound the capture names the attribute; never silent."""
+
+    from torchlens._capture_attr_observer import _MAX_DEPTH
+
+    depth = _MAX_DEPTH + 10
+    model = _BigHistory(n_items=2, depth=depth)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        tl.trace(model, torch.ones(1, 1))
+    messages = _restore_incomplete_messages(caught)
+    assert len(messages) == 1 and "<root>.deep" in messages[0]
+    assert model.history[0] == 0  # the other attributes are still restored
