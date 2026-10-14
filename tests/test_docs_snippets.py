@@ -380,6 +380,12 @@ def test_collapse_reference_gallery_exists_and_is_regenerable() -> None:
     assert not missing, f"Regenerate with scripts/render_collapse_reference.py: {missing}"
 
 
+#: Reason shared by the coming-from pages whose every fence is headed and run.
+_MIGRATION_PAGES_EXECUTED = (
+    "executed fence by fence by tests/test_migration_pages_executed.py (the TorchLens "
+    "fences always; a third-party fence where that package is installed)"
+)
+
 #: r7 R81 (opus b2 MED): pages with python fences OUTSIDE the executed set,
 #: each with a reason. The executed gate covered 9 of 33 fence-bearing pages
 #: with NO drift gate, so a new page (or a new fence on an old one) shipped
@@ -428,7 +434,10 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "method_x_model_compatibility.md": "compatibility matrix stubs, not runnable programs",
     "migration/from_captum.md": "needs captum installed (weekly bridge leg env only)",
     "migration/from_fx.md": "pending execution coverage",
-    "migration/from_nnsight.md": "needs nnsight (heavyweight, deliberately dark)",
+    "migration/from_nnsight.md": (
+        "executed by tests/test_migrations.py (the TorchLens side always; the nnsight "
+        "side where nnsight is installed)"
+    ),
     "migration/from_pyvene.md": "needs pyvene (not a declared extra)",
     "migration/from_thingsvision.md": "needs thingsvision (not a declared extra)",
     "reference/neuro.md": (
@@ -438,6 +447,18 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "migration/from_torchextractor.md": "needs torchextractor (bridge shim demo)",
     "migration/from_transformerlens.md": "needs transformer_lens (heavyweight)",
     "migration/v2.0_api_changes.md": "contains deliberate 'Before:' v1 blocks that must NOT run",
+    "migration/from_bertviz_ecco.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_hf_kwargs.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_intermediate_layer_getter.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_model_zoos.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_surgeon_pytorch.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_timm_features_only.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_torchview.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_torchvision_feature_extraction.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_torchviz_hiddenlayer.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_transformers_interpret.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/multi_gpu_extraction.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/penzai.md": _MIGRATION_PAGES_EXECUTED,
     "neuroai/byo_alignment.md": (
         "the file-round-trip blocks assume a completed real-checkpoint extraction and a "
         "user-owned learned transform; the offline mechanics (extract -> manifest -> "
