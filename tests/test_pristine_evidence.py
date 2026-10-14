@@ -274,7 +274,6 @@ def test_bundle_auto_baseline_reads_the_derived_flag() -> None:
     clean = tl.trace(model, _x())
     ablated = _ablated(model)
     bundle = tl.Bundle({"clean": clean, "ablated": ablated})
-    bundle.delta_map("relative_l2")
     assert bundle.baseline_name == "clean"
     assert "pristine" in bundle.help().splitlines()[1]
     assert "pristine" not in bundle.help().splitlines()[2]
@@ -283,8 +282,9 @@ def test_bundle_auto_baseline_reads_the_derived_flag() -> None:
 def test_bundle_without_a_pristine_member_refuses_typed() -> None:
     model = _model()
     bundle = tl.Bundle({"a": _ablated(model), "b": _steered(model)})
+    assert bundle.baseline_name is None
     with pytest.raises(BaselineUndeterminedError):
-        bundle.delta_map("relative_l2")
+        bundle.most_changed()
 
 
 def test_reading_the_flag_never_changes_the_plain_run_verdict() -> None:
