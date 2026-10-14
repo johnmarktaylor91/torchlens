@@ -7,7 +7,7 @@ since August 2026. Existing penzai code keeps working; new work needs another ho
 | Penzai operation | TorchLens v2 idiom | Parity |
 | --- | --- | --- |
 | Name and select model subtrees | `tl.in_module("path")`, `tl.module("path")`, and exact labels after discovery | Similar goal; TorchLens uses PyTorch module addresses and op labels. |
-| Functional model surgery | `trace.fork()`, then `.set(site, value)` or `.attach_hooks(site, helper)`, then `.push()` (replay the recorded graph) or `.run()` (run the model again) | TorchLens edits a recorded run, not the model definition. |
+| Functional model surgery | Capture with `capture=tl.options.CaptureOptions(intervention_ready=True)`; `trace.fork()`, then `.set(site, value)` or `.attach_hooks(site, helper)`, then `.push()` (replay the recorded graph) or `.run()` (run the model again) | TorchLens edits a recorded run, not the model definition. |
 | Inspect intermediate values | `trace.find_sites(selector).first().out`, or `trace[label].out` | Equivalent for captured tensors. |
 | Patch or replace a value | `.set(site, tensor)` or `.attach_hooks(site, helper)` on a forked trace | Equivalent for visible activations. |
 | Declarative named axes | Explicit tensor shapes, plus `feature_axis=` where a helper needs it | No named-axis system. |
@@ -40,7 +40,11 @@ class Tiny(nn.Module):
         return torch.relu(self.proj(x))
 
 
-trace = tl.trace(Tiny(), torch.tensor([[2.0, 3.0]]))
+trace = tl.trace(
+    Tiny(),
+    torch.tensor([[2.0, 3.0]]),
+    capture=tl.options.CaptureOptions(intervention_ready=True),
+)
 edited = trace.fork("zeroed").set(tl.module("proj"), torch.zeros(1, 2), confirm_mutation=True)
 edited.push()
 RESULT = (
