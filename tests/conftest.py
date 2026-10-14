@@ -1538,6 +1538,7 @@ _STDLIB_ROOTS: tuple[str, ...] = tuple(
     sorted({sysconfig.get_paths()[key] + os.sep for key in ("stdlib", "platstdlib")})
 )
 _ORIGINAL_THREAD_START = threading.Thread.start
+_THREAD_EXIT_GRACE_S = 2.0  # total join wait for threads still alive at teardown
 
 
 def thread_start_site(frame: Any) -> str | None:
@@ -1605,6 +1606,13 @@ def _threads_stopped_after_test() -> Iterator[None]:
     before = set(threading.enumerate())
     yield
     leaked = owned_threads_left(before)
+    if leaked:
+        # A thread the test signalled to stop may still be returning; give it a short
+        # shared grace so the tripwire does not race a thread that is already exiting.
+        deadline = time.monotonic() + _THREAD_EXIT_GRACE_S
+        for thread in leaked:
+            thread.join(timeout=max(0.0, deadline - time.monotonic()))
+        leaked = owned_threads_left(before)
     if leaked:
         root = str(Path(__file__).resolve().parent.parent) + os.sep
         detail = "; ".join(
