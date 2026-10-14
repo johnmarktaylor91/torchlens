@@ -1399,6 +1399,8 @@ class BoundInterventionExecutor:
         names = ", ".join(report.zero_fire_rule_ids)
 
         def _raise() -> NoReturn:
+            """Refuse the call under ``on_zero_fire='error'``."""
+
             raise BindingRuntimeError(
                 f"rule(s) [{names}] never fired during this bound {report.door}; "
                 "on_zero_fire='error' refuses after the call (the model's side "
@@ -1410,6 +1412,8 @@ class BoundInterventionExecutor:
             )
 
         def _warn() -> None:
+            """Emit the coded ``bind_zero_fire`` warning under ``on_zero_fire='warn'``."""
+
             warnings.warn(
                 TorchLensWarning(
                     f"rule(s) [{names}] never fired during this bound {report.door}; the "

@@ -1363,6 +1363,8 @@ def _reconcile_rerun_hook_fires(
         )
 
         def _warn() -> None:
+            """Emit the coded ``rerun_zero_fire`` warning under ``on_zero_fire='warn'``."""
+
             warnings.warn(
                 TorchLensWarning(message, code="rerun_zero_fire", unfired_plan_ids=list(unfired)),
                 stacklevel=external_stacklevel(),

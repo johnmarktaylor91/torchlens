@@ -174,6 +174,8 @@ def settle_capture_zero_fire(message: str, **fields: Any) -> None:
     """
 
     def _warn() -> None:
+        """Emit the coded ``trace_zero_fire`` warning under ``on_zero_fire='warn'``."""
+
         warnings.warn(
             TorchLensWarning(
                 f"{message} Remedy: fix the intervene= selector so it matches a site, or "
@@ -185,6 +187,8 @@ def settle_capture_zero_fire(message: str, **fields: Any) -> None:
         )
 
     def _raise() -> NoReturn:
+        """Refuse the capture under ``on_zero_fire='error'``."""
+
         from .errors import SiteResolutionError
 
         raise SiteResolutionError(

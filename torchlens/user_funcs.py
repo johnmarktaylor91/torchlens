@@ -2741,7 +2741,6 @@ def trace(
     Trace
         A ``Trace`` containing layer outs (if requested) and full metadata.
     """
-    # on_zero_fire scopes the capture; a re-entrant trace() inherits the caller's policy.
     with zero_fire_policy_scope(None if on_zero_fire is MISSING else on_zero_fire):
         _reject_unrouted_forward_kwargs(forward_kwargs)
         del forward_kwargs  # must never ride the ladder's locals() snapshot below
@@ -2830,6 +2829,7 @@ def trace(
                 "episode": episode,
                 "grouping": grouping,
                 "echo": echo,
+                "on_zero_fire": on_zero_fire,
             }
             for detector in autoroute.input.iter_by_priority():
                 result = detector(model, input_args, **autoroute_kwargs)
