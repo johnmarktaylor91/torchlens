@@ -140,16 +140,36 @@ compute.
 
 Pass-qualified sites make recurrent dynamics one extraction, not a custom
 hook harness -- the representational geometry of each timestep of a reused
-block:
+block. CORnet ships no `torch.hub` entry point, so install a pinned checkout
+and import it directly:
+
+```text
+pip install "git+https://github.com/dicarlolab/CORnet@d0cc17d4b34ad44dedb01683b70eafd15515adad"
+```
+
+`cornet.cornet_s()` returns the network inside `nn.DataParallel` (its
+published checkpoint is keyed that way), so load first and trace `.module`.
+`pretrained=True` downloads the published weights (about 200 MB); the
+example below runs the same mechanics on the random initialization.
 
 ```python
-model = torch.hub.load("dicarlolab/CORnet", "cornet_s", pretrained=True).eval()
-sites = inv.list_sites(model, example_batch)
-v4_passes = [r.selector for r in sites if r.module_address == "module.V4.output"]
-# ['module.V4.output:1', 'module.V4.output:2', ..] -- one per timestep
+# recipe-test: tool=cornet expected=(4, 4)
+import cornet
+import torch
 
-log = tl.trace(model, batch, save=tl.in_module("module.V4"))
-tl.repgeom.rdm_evolution(log, save=tl.in_module("module.V4"))
+import torchlens as tl
+import torchlens.inventory as inv
+
+model = cornet.cornet_s(pretrained=False).module.eval()  # pretrained=True: published weights
+torch.manual_seed(0)
+batch = torch.randn(6, 3, 64, 64)
+sites = inv.list_sites(model, batch[:1])
+v4_passes = [r.selector for r in sites if r.module_address == "V4.output"]
+# ['V4.output:1', 'V4.output:2', 'V4.output:3', 'V4.output:4'] -- one per timestep
+
+log = tl.trace(model, batch, save=tl.in_module("V4"))
+rdms = tl.repgeom.rdm_evolution(log, save=v4_passes)  # one RDM per timestep
+RESULT = (len(v4_passes), len(rdms))
 ```
 
 ## Showpiece: whole-network geometry in one pass
