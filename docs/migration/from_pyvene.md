@@ -25,21 +25,39 @@ page.
 | `unit_locations` | `positions=` on `tl.patch_from`, or `tl.units(label, indices)` |
 | Saving the configuration | `trace.save_intervention(path, level=...)` writes a `.tlspec/` recipe |
 
-Pyvene side, for comparison only (pyvene is not a TorchLens test dependency, so this fence is
-not run; check the arguments against the pyvene version you have):
+## Zero-ablate a site
 
-```text
+Pyvene side, for comparison only. Pyvene is not a TorchLens test dependency, so this fence is
+collected but never run; check the arguments against the pyvene version you have:
+
+```python
+# migration-test: tool=pyvene expected=[[0.0, 0.0]]
 import pyvene as pv
+import torch
+from torch import nn
+
+
+class Tiny(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.proj = nn.Linear(2, 2)
+        with torch.no_grad():
+            self.proj.weight.copy_(torch.eye(2))
+            self.proj.bias.copy_(torch.tensor([0.5, -0.5]))
+
+    def forward(self, x):
+        return torch.relu(self.proj(x))
+
 
 config = pv.IntervenableConfig(
-    representations=[{"layer": 0, "component": "block_output",
-                      "intervention_type": pv.ZeroIntervention}]
+    representations=[{"component": "proj.output", "intervention_type": pv.ZeroIntervention}]
 )
-intervenable = pv.IntervenableModel(config, model=model)
-_, counterfactual = intervenable(base={"input_ids": ids})
+intervenable = pv.IntervenableModel(config, model=Tiny())
+_, counterfactual = intervenable(base=torch.tensor([[2.0, 3.0]]))
+RESULT = counterfactual.detach().tolist()
 ```
 
-## Zero-ablate a site
+The TorchLens side:
 
 ```python
 # migration-test: tool=torchlens expected=[[0.0, 0.0]]

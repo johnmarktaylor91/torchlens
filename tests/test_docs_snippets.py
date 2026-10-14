@@ -577,12 +577,15 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
         "and parity gates execute offline in tests/test_weightsfree_*.py"
     ),
     # Teaching pages and the pyvene migration pages (teaching-pass rows): every fence
-    # on them is headed and executed by the named test.
+    # on them is headed, and the named test runs every TorchLens fence.
     "intervention_explainers.md": _TEACHING_PAGES_EXECUTED,
     "stochastic_edits.md": _TEACHING_PAGES_EXECUTED,
     "guides/kv_cache.md": _TEACHING_PAGES_EXECUTED,
     "sae_training_handoff.md": _TEACHING_PAGES_EXECUTED,
-    "migration/from_pyvene.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_pyvene.md": (
+        "executed by tests/test_migrations.py (the TorchLens side always; the pyvene "
+        "comparison fence is collected and skipped)"
+    ),
     "migration/pyvene.md": _MIGRATION_PAGES_EXECUTED,
 }
 
