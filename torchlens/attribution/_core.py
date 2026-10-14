@@ -836,6 +836,17 @@ def saliency(
 ) -> AttributionResult:
     """Compute absolute input gradients for a scalar target.
 
+    Saliency is UNSIGNED: every value is ``|d target / d input|``, so it says
+    how strongly the target responds to a feature, never in which direction.
+    There is no ``signed=`` switch; for a signed reading use
+    :func:`input_x_grad`, :func:`integrated_gradients` or
+    ``guided_backprop(..., absolute=False)``. A raw gradient is a local
+    reading: it is noisy, and it reads near zero for a feature whose effect
+    has saturated (a ReLU in its flat region, a saturated sigmoid) even when
+    removing that feature would change the output. Average over input noise
+    with :func:`smoothgrad`, or integrate along a path with
+    :func:`integrated_gradients`, before reading a map as evidence.
+
     Parameters
     ----------
     model
@@ -877,6 +888,13 @@ def input_x_grad(
     target: _AttributionTarget,
 ) -> AttributionResult:
     """Compute gradient times input for a scalar target.
+
+    The result is SIGNED: under the local linear approximation, a positive
+    value means the feature pushes the target up. Its reference point is the
+    all-zeros input, so it carries an implicit zeros baseline; when zero is
+    not a neutral input (normalized images, token embeddings), use
+    :func:`integrated_gradients` with an explicit ``baseline=``, which also
+    reports how far the attributions fall short of the output change.
 
     Parameters
     ----------
@@ -1071,7 +1089,21 @@ def integrated_gradients(
 
     The default baseline is ``torch.zeros_like`` for each attributed leaf.
     Baseline choice changes the interpretation of the result, so callers should
-    pass domain-meaningful baselines when zeros are not appropriate.
+    pass domain-meaningful baselines when zeros are not appropriate. The
+    baseline actually used is returned in ``extra["baseline"]``; report it next
+    to any figure made from the values, because the same input attributed
+    against a different baseline answers a different question.
+
+    Quadrature: the path integral is approximated by the midpoint Riemann rule,
+    sampling the path at ``(k + 0.5) / n_steps`` for ``k`` in
+    ``range(n_steps)``. Captum's default is Gauss-Legendre, so the two
+    libraries give close but not identical values at the same ``n_steps``;
+    compare them through the completeness fields, not element by element.
+    ``extra["completeness_residual"]`` is ``attribution_sum - target_delta``
+    and ``extra["residual_rel"]`` is its size relative to
+    ``extra["target_delta_abs"]``: raise ``n_steps`` until ``residual_rel`` is
+    small. A small relative residual over a near-zero ``target_delta_abs``
+    certifies nothing, which is why the denominator is always reported.
 
     Parameters
     ----------
@@ -1227,6 +1259,10 @@ def smoothgrad(
     seed: int | None = None,
 ) -> AttributionResult:
     """Average saliency over Gaussian-noised copies of an input.
+
+    Like :func:`saliency`, the result is unsigned: each sample is
+    absolute-valued before the mean. ``noise_level`` is an absolute standard
+    deviation in input units, so scale it to the input's range.
 
     Parameters
     ----------

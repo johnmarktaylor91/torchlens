@@ -427,6 +427,15 @@ def guided_backprop(
     ``clamp(grad, min=0) * (input > 0)`` at each site. Results are SIGNED by
     default.
 
+    Read a guided map with care. Guided backpropagation and deconvolution
+    produce sharp, image-like maps that change little when the model's
+    upper-layer weights are randomized or the labels are scrambled (Adebayo
+    et al., 2018, "Sanity Checks for Saliency Maps"); Nie et al. (2018) show
+    both methods largely reconstruct the input. Much of what a map shows is
+    the input's own edges, not what the model uses. Before reading a map
+    as evidence about the model, run it again on a copy whose weights are
+    re-initialized and check that the map changes.
+
     Parameters
     ----------
     model
@@ -475,6 +484,9 @@ def deconvolution(
     Every executed exact-ReLU op is rewritten; the backward passes
     ``clamp(grad, min=0)`` at each site (no forward mask -- the defining
     difference from guided backpropagation). Results are SIGNED by default.
+    The same caution as :func:`guided_backprop` applies: deconvolution maps
+    largely reconstruct the input, so check that a map changes when the
+    model's weights are re-initialized before reading it as model evidence.
 
     Parameters
     ----------

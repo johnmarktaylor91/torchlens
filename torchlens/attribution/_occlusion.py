@@ -192,6 +192,17 @@ def occlusion(
     counterfactual questions. Occlusion runs through ``Trace.fork().do(...)`` so
     it inherits Selection masking and the shipped edit-then-scatter contract.
 
+    Zero is the easiest baseline and often the least neutral one: an
+    activation of exactly zero may never occur on real inputs, so a large
+    delta can measure the model's reaction to an off-distribution value
+    rather than the region's contribution. ``"mean"`` stays closer to the
+    data. To ask "what if this region held another input's value", patch from
+    a donor trace instead: ``trace.fork().do(selection, tl.patch_from(donor))``
+    with the donor captured on that other input, or the population-based
+    replacements in ``torchlens.intervention`` (``mean_from``,
+    ``sample_from``, ``resample_rows_from``). The baseline used is always
+    returned in ``extra["baseline"]``; report it with the score.
+
     Parameters
     ----------
     trace
@@ -518,7 +529,10 @@ def occlusion_map(
         Strides over the same axes; defaults to the window (non-overlapping).
     baseline_value
         Replacement policy: ``"zeros"`` (default), ``"mean"``, a scalar, or a
-        broadcastable tensor.
+        broadcastable tensor. Zeros is rarely a neutral input (a normalized
+        image's zero is mean grey, a token embedding's zero is no token), so
+        choose the value whose absence you mean to measure and report it; the
+        policy rides ``extra["replacement_policy"]``.
     overlap
         ``"average"`` (default; per-element mean over covering windows) or
         ``"sum"``.

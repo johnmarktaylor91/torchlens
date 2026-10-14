@@ -290,6 +290,54 @@ Output:
 AttributionResult(method='layer_activation_x_grad', values=Tensor(shape=(1, 2), dtype=torch.float32, device='cpu'), target_repr='index=0', extra_keys=['layer'])
 ```
 
+## Reading attribution results honestly
+
+An attribution map answers a narrower question than it appears to. Five habits keep a reading
+honest:
+
+- **Know whether the method is signed.** `saliency` and `smoothgrad` return absolute gradients
+  and have no `signed=` switch, so they say how strongly the target responds to a feature, never
+  in which direction. `input_x_grad`, `integrated_gradients`, the layer methods and
+  `guided_backprop`/`deconvolution` (with the default `absolute=False`) are signed.
+- **Name the baseline.** `input_x_grad` measures against an implicit all-zeros input,
+  `integrated_gradients` defaults to a zeros baseline, and `occlusion` and `occlusion_map` default
+  to filling with zeros. Zero is often not a neutral input (a normalized image's zero is mean
+  grey, a zero token embedding is no token), so a large score can measure the model's reaction to
+  an off-distribution value. Pass the baseline you mean, prefer `"mean"` or a donor patch
+  (`trace.fork().do(selection, tl.patch_from(donor))`, or the population edits on the
+  [stochastic and population edits](../stochastic_edits.md) page) over zeros, and report the
+  baseline with the figure: it rides `extra["baseline"]` (`extra["replacement_policy"]` for
+  `occlusion_map`).
+- **Check the quadrature.** Path methods approximate an integral with the midpoint Riemann rule
+  at `n_steps` points. Captum's default rule is Gauss-Legendre, so the two libraries give close
+  but not identical values at the same `n_steps`. Compare them, and choose `n_steps`, through the
+  completeness fields: `extra["residual_rel"]` is the gap between the attributions' sum and the
+  output change, relative to `extra["target_delta_abs"]`. A small ratio over a near-zero
+  `target_delta_abs` certifies nothing.
+- **Sanity-check guided maps.** Guided backpropagation and deconvolution give sharp maps that
+  change little when the model's weights are randomized (Adebayo et al., 2018, "Sanity Checks
+  for Saliency Maps"). Re-run the method on a copy with re-initialized weights; if the map does
+  not change, it shows the input, not the model.
+- **Read the logit lens by depth.** Projecting early layers through the final norm and
+  unembedding reads them in a basis trained for the last layer, so early-layer top tokens are
+  weak evidence; see [the logit lens](../facets.md#unembedding-head-and-logit-lens).
+
+The completeness residual shrinks as `n_steps` grows:
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+torch.manual_seed(0)
+model = nn.Sequential(nn.Linear(3, 8), nn.Tanh(), nn.Linear(8, 2)).eval()
+x = torch.randn(1, 3)
+coarse = tl.attribution.integrated_gradients(model, x, target=0, n_steps=2)
+fine = tl.attribution.integrated_gradients(model, x, target=0, n_steps=64)
+assert fine.extra["residual_rel"] < coarse.extra["residual_rel"]
+assert coarse.extra["baseline"].abs().sum() == 0  # the default zeros baseline, disclosed
+```
+
 ## One-backward reads (`read`, `seed`, `ReadTable`, `load_read_table`)
 
 `tl.attribution.read(trace, target=..., within=..., frozen=..., method=...,
