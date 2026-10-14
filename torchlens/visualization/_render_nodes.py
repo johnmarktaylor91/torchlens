@@ -2011,10 +2011,7 @@ def compute_default_node_lines(
         selected_lines = _compute_selected_node_lines(
             layer_log, node_address, vis_mode, node_label_fields
         )
-        overlay = overlay_line(layer_log, node_overlay)
-        if overlay is not None:
-            selected_lines.append(overlay)
-            append_overlay_notes(selected_lines, layer_log, node_overlay)
+        append_overlay_lines(selected_lines, layer_log, node_overlay)
         return selected_lines
 
     annotation = _rolling_annotation(layer_log, vis_mode)
@@ -2075,9 +2072,7 @@ def compute_default_node_lines(
     address_line = format_module_path(node_address)
     if address_line is not None:
         lines.append(address_line)
-    if (overlay := overlay_line(layer_log, node_overlay)) is not None:
-        lines.append(overlay)
-        append_overlay_notes(lines, layer_log, node_overlay)
+    append_overlay_lines(lines, layer_log, node_overlay)
     return lines
 
 

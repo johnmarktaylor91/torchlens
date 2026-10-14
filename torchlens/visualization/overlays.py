@@ -315,11 +315,19 @@ def overlay_line(
     return format_overlay_value("overlay", value)
 
 
-def append_overlay_notes(
+def append_overlay_lines(
     lines: list[str], node: Any, overlay: str | OverlayScores | Callable[[Any], Any] | None
 ) -> None:
-    """Append the disclosure rows an overlay line needs (the attention FLOP note)."""
+    """Append the overlay row for ``node``, then any disclosure row it needs.
 
+    Nothing is appended when the overlay has no value for the node. The
+    ``"flops"`` overlay adds the attention FLOP note under an attention op.
+    """
+
+    row = overlay_line(node, overlay)
+    if row is None:
+        return
+    lines.append(row)
     if isinstance(overlay, str) and normalize_overlay_name(overlay) == "flops":
         append_attention_note(lines, node)
 
