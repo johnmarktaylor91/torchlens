@@ -961,8 +961,17 @@ def _emit_and_finish_forward(
     overrides = cast(VisualizationOverrides, request.overrides)
     if context.engine == "rank":
         from ._rank_layout_internal.layout import render_rank_layout
+        from ._rank_segments import project_segments_for_rank
 
         _disclose_rank_layout_omissions(trace, context)
+        forward_render_ir = project_segments_for_rank(
+            forward_render_ir,
+            universe=context.node_universe,
+            segments=context.segments,
+            segment_lookup=context.segment_lookup,
+            vis_mode=request.vis_mode,
+            theme=context.theme,
+        )
         resolved_graph_overrides = {
             key: str(val(trace)) if callable(val) else str(val)
             for key, val in overrides.graph.items()  # type: ignore[union-attr]
