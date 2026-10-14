@@ -1917,3 +1917,32 @@ deprecation shim owed*
 **Trace.total_backward_memory**
 : Bytes of the gradient payloads the trace retains, counted once per storage: a payload that is a
   view charges its whole base storage, an expanded gradient its smaller storage.
+**torchlens.conformance.preview_scorecard(backend, *, workdir=None)** — *unstable — no deprecation shim owed*
+: Runs the full C0-C2 conformance packs for one preview backend (`jax`, `tf`,
+  `mlx`, `tinygrad`, `paddle`; `torch` scores the reference as a baseline) on
+  that backend's own config-built roster (a function root and a module or
+  object root) and returns a `PreviewScorecard`. Every case the runner defines
+  for the roster is one cell in exactly one state: `passed` (executed, its
+  independent oracle matched: output parity against a direct run compared as
+  arrays, a repeat with the same op count, a distinct equal reload), `failed`,
+  `unsupported` (a typed `BackendUnsupportedError`) or `not_run` (framework not
+  importable, with the install remedy, or not reached after an earlier failure
+  for the same model). All cells stay in the denominator. A scorecard is never
+  a claim: toy inputs earn nothing, and it carries no claim string. The
+  backends `run_conformance` and `resolve_adapter` accept are the same set
+  (`torchlens.conformance.PREVIEW_BACKENDS` plus `torch` and `fake`); an absent
+  framework yields named skips, never an error. A roster row that declares
+  `RosterModel.expected_op_kinds` (its independent op inventory: every
+  `Op.func_name` one forward performs, in order, derived from the model
+  definition) also runs `c1_op_inventory_complete`, so output parity can never
+  pass with an op missing or extra; every preview roster row declares one.
+
+**torchlens.conformance.PreviewScorecard** — *unstable — no deprecation shim owed*
+: The frozen canonical scorecard: `scorecard_version`, `backend`,
+  `framework_version` (`""` when absent), `suite_version`,
+  `torchlens_version`, `cells` (`ScorecardCell` rows of `tier`, `case_id`,
+  `family`, `state`, `detail`), `counts` (cells per state plus `denominator`),
+  `highest_tier` (highest tier whose every cell passed, cumulative from C0, or
+  `""`) and `sha256` over the canonical bytes with that field excluded.
+  `to_canonical_json()` renders the attested bytes (sorted keys, compact,
+  ASCII).
