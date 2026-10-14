@@ -137,7 +137,12 @@ def _roster_jax() -> tuple[RosterModel, ...]:
 
         return ConformanceMlp(), jnp.asarray(_INPUT[0], dtype=jnp.float32)
 
-    return _rows(build_fn, build_module)
+    return _rows(
+        build_fn,
+        build_module,
+        fn_ops=("dot_general", "max"),
+        module_ops=("dot_general", "add", "max", "dot_general", "add"),
+    )
 
 
 def _roster_tf() -> tuple[RosterModel, ...]:
@@ -169,7 +174,9 @@ def _roster_tf() -> tuple[RosterModel, ...]:
 
         return ConformanceMlp(), tf.constant(_INPUT, dtype=tf.float32)
 
-    return _rows(build_fn, build_module)
+    return _rows(
+        build_fn, build_module, fn_ops=("matmul", "relu"), module_ops=("matmul", "relu", "matmul")
+    )
 
 
 def _roster_mlx() -> tuple[RosterModel, ...]:
@@ -193,7 +200,12 @@ def _roster_mlx() -> tuple[RosterModel, ...]:
         model = mlx_nn.Sequential(mlx_nn.Linear(4, 3), mlx_nn.ReLU(), mlx_nn.Linear(3, 2))
         return model, mx.array(_INPUT)
 
-    return _rows(build_fn, build_module)
+    return _rows(
+        build_fn,
+        build_module,
+        fn_ops=("matmul", "maximum"),
+        module_ops=("linear", "relu", "linear"),
+    )
 
 
 def _roster_tinygrad() -> tuple[RosterModel, ...]:
@@ -228,7 +240,9 @@ def _roster_tinygrad() -> tuple[RosterModel, ...]:
 
         return ConformanceMlp(), Tensor(_INPUT)
 
-    return _rows(build_fn, build_module)
+    return _rows(
+        build_fn, build_module, fn_ops=("matmul", "relu"), module_ops=("linear", "relu", "linear")
+    )
 
 
 def _roster_paddle() -> tuple[RosterModel, ...]:
@@ -253,17 +267,37 @@ def _roster_paddle() -> tuple[RosterModel, ...]:
         )
         return model, paddle.to_tensor(_INPUT, dtype="float32")
 
-    return _rows(build_fn, build_module)
+    return _rows(
+        build_fn, build_module, fn_ops=("matmul", "relu"), module_ops=("linear", "relu", "linear")
+    )
 
 
 def _rows(
-    build_fn: Callable[[], tuple[Any, Any]], build_module: Callable[[], tuple[Any, Any]]
+    build_fn: Callable[[], tuple[Any, Any]],
+    build_module: Callable[[], tuple[Any, Any]],
+    *,
+    fn_ops: tuple[str, ...],
+    module_ops: tuple[str, ...],
 ) -> tuple[RosterModel, ...]:
-    """The two config-built roster rows every preview pack runs."""
+    """The two config-built roster rows every preview pack runs.
+
+    ``fn_ops`` and ``module_ops`` are each model's independent op inventory:
+    the op kinds its definition performs, in order, in the backend's naming.
+    """
 
     return (
-        RosterModel(family="matmul_relu_function", realism="config_built", build=build_fn),
-        RosterModel(family="mlp_module", realism="config_built", build=build_module),
+        RosterModel(
+            family="matmul_relu_function",
+            realism="config_built",
+            build=build_fn,
+            expected_op_kinds=fn_ops,
+        ),
+        RosterModel(
+            family="mlp_module",
+            realism="config_built",
+            build=build_module,
+            expected_op_kinds=module_ops,
+        ),
     )
 
 

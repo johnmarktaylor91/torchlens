@@ -82,11 +82,38 @@ C1_MODEL_CASES: tuple[str, ...] = (
     "c1_reference_parity",
     "c1_deterministic_repeat",
 )
+#: The op-completeness case, run for every roster row that declares an inventory.
+C1_INVENTORY_CASE = "c1_op_inventory_complete"
 C2_MODEL_CASES: tuple[str, ...] = (
     "c2_roundtrip_completes",
     "c2_reload_is_distinct",
     "c2_structure_equal",
 )
+
+
+def _captured_op_kinds(trace: Any) -> tuple[str, ...]:
+    """The captured ops' kinds (``Op.func_name``) in capture order."""
+
+    ops = trace.ops
+    rows = ops.values() if hasattr(ops, "values") else ops
+    return tuple(str(getattr(op, "func_name", "")) for op in rows)
+
+
+def _op_inventory_case(trace: Any, model: RosterModel) -> CaseResult:
+    """Op completeness against the roster's independent inventory.
+
+    Output parity alone passes when the capture drops an op whose effect still
+    reaches the output (the op ran, it just was not recorded); comparing every
+    captured op kind with the inventory derived from the model definition
+    fails that, and any extra op, in either direction.
+    """
+
+    expected = model.expected_op_kinds or ()
+    captured = _captured_op_kinds(trace)
+    if captured == expected:
+        return _passed(C1_INVENTORY_CASE, "C1", model)
+    detail = f"captured op kinds {list(captured)} != declared inventory {list(expected)}"
+    return _failed(C1_INVENTORY_CASE, "C1", detail[:300], model)
 
 
 def _failure_detail(exc: Exception) -> str:
@@ -98,6 +125,14 @@ def _failure_detail(exc: Exception) -> str:
     if isinstance(exc, BackendUnsupportedError):
         return f"{UNSUPPORTED_DETAIL_PREFIX}[{exc.code}]: {text}"
     return text
+
+
+def model_case_ids(model: RosterModel, tier: str, model_cases: tuple[str, ...]) -> tuple[str, ...]:
+    """The per-model case ids one rung defines for ``model``, in report order."""
+
+    if tier == "C1" and model.expected_op_kinds is not None:
+        return (model_cases[0], C1_INVENTORY_CASE, *model_cases[1:])
+    return model_cases
 
 
 def _unavailable_rows(
@@ -127,7 +162,7 @@ def _unavailable_rows(
             detail=reason,
         )
         for model in roster
-        for case_id in model_cases
+        for case_id in model_case_ids(model, tier, model_cases)
     ]
     rows.extend(
         CaseResult(case_id=case_id, tier=tier, outcome="skipped", detail=reason)
@@ -254,6 +289,8 @@ def run_c1_cases(adapter: Any, roster: tuple[RosterModel, ...]) -> list[CaseResu
             )
             continue
         results.append(_passed("c1_capture_completes", "C1", model))
+        if model.expected_op_kinds is not None:
+            results.append(_op_inventory_case(trace, model))
         if _parity_holds(trace, reference, adapter):
             results.append(_passed("c1_reference_parity", "C1", model))
         else:

@@ -30,8 +30,8 @@ from importlib import metadata
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ._adapters import resolve_adapter
-from ._cases import C1_MODEL_CASES, C2_MODEL_CASES, UNSUPPORTED_DETAIL_PREFIX
+from ._adapters import RosterModel, resolve_adapter
+from ._cases import C1_MODEL_CASES, C2_MODEL_CASES, UNSUPPORTED_DETAIL_PREFIX, model_case_ids
 
 if TYPE_CHECKING:
     from . import ConformanceReport
@@ -153,14 +153,18 @@ def _canonical_json(card: PreviewScorecard, *, include_digest: bool) -> str:
 
 
 def _expected_slots(
-    report: ConformanceReport, families: tuple[str, ...]
+    report: ConformanceReport, roster: tuple[RosterModel, ...]
 ) -> list[tuple[str, str, str]]:
-    """Every (tier, case_id, family) slot a full run over ``families`` defines."""
+    """Every (tier, case_id, family) slot a full run over ``roster`` defines."""
 
     slots = [("C0", row.case_id, "") for row in report.results if row.tier == "C0"]
-    slots += [("C1", case_id, family) for family in families for case_id in C1_MODEL_CASES]
+    slots += [
+        ("C1", case_id, model.family)
+        for model in roster
+        for case_id in model_case_ids(model, "C1", C1_MODEL_CASES)
+    ]
     slots.append(("C1", "c1_capabilities_consumed", ""))
-    slots += [("C2", case_id, family) for family in families for case_id in C2_MODEL_CASES]
+    slots += [("C2", case_id, model.family) for model in roster for case_id in C2_MODEL_CASES]
     return slots
 
 
@@ -186,7 +190,7 @@ def _cell_for(
 
 
 def scorecard_from_report(
-    report: ConformanceReport, families: tuple[str, ...], *, framework_version: str
+    report: ConformanceReport, roster: tuple[RosterModel, ...], *, framework_version: str
 ) -> PreviewScorecard:
     """Fold one full C0-C2 conformance report into a scorecard.
 
@@ -194,8 +198,8 @@ def scorecard_from_report(
     ----------
     report:
         A report from ``run_conformance(..., tiers=("C0", "C1", "C2"))``.
-    families:
-        The roster families the run covered, in roster order.
+    roster:
+        The roster the run covered, in roster order.
     framework_version:
         Installed framework version (``""`` when absent).
 
@@ -209,7 +213,7 @@ def scorecard_from_report(
     for row in report.results:
         if row.outcome != "passed":
             stopped_at.setdefault((row.tier, row.family), row.case_id)
-    cells = tuple(_cell_for(slot, report, stopped_at) for slot in _expected_slots(report, families))
+    cells = tuple(_cell_for(slot, report, stopped_at) for slot in _expected_slots(report, roster))
     counts = {state: sum(1 for cell in cells if cell.state == state) for state in CELL_STATES}
     counts["denominator"] = len(cells)
     highest = ""
@@ -271,8 +275,4 @@ def preview_scorecard(backend: str, *, workdir: str | Path | None = None) -> Pre
 
     roster = _roster_for(resolve_adapter(backend), None)
     report = run_conformance(backend, tiers=_TIERS, roster=roster, workdir=workdir)
-    return scorecard_from_report(
-        report,
-        tuple(model.family for model in roster),
-        framework_version=_framework_version(backend),
-    )
+    return scorecard_from_report(report, roster, framework_version=_framework_version(backend))

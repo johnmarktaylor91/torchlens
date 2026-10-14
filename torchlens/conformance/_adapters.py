@@ -51,12 +51,18 @@ class RosterModel:
         Zero-arg factory returning ``(model, example_input)``.
     checkpoint_evidence:
         Pinned checkpoint revision/digest for pretrained rows, else ``""``.
+    expected_op_kinds:
+        The independent op inventory: every op kind (``Op.func_name``) one
+        forward of this model performs, in execution order, derived from the
+        model definition. When declared, C1 runs ``c1_op_inventory_complete``
+        so output parity can never pass with an op missing or extra.
     """
 
     family: str
     realism: str
     build: Callable[[], tuple[Any, Any]]
     checkpoint_evidence: str = ""
+    expected_op_kinds: tuple[str, ...] | None = None
 
 
 class TorchReferenceAdapter:

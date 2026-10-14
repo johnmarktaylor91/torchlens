@@ -35,6 +35,8 @@ from torchlens.errors import ConfigurationError
 
 #: Cells a full run over a two-family roster defines: 3 C0, 2x3 + 1 C1, 2x3 C2.
 _FULL_DENOMINATOR = 16
+#: The preview rosters also declare op inventories: one more C1 cell per family.
+_PREVIEW_DENOMINATOR = _FULL_DENOMINATOR + 2
 
 #: SHA-256 of the complete canonical bytes of the golden scorecard below, and
 #: the digest the scorecard embeds (over its digest-free form). Both were
@@ -103,7 +105,10 @@ def _golden_report() -> ConformanceReport:
 def test_golden_scorecard_canonical_bytes() -> None:
     """The canonical bytes and the embedded digest match the independent derivation."""
 
-    card = scorecard_from_report(_golden_report(), ("fn", "mod"), framework_version="1.2.3")
+    roster = tuple(
+        RosterModel(family, "config_built", lambda: (abs, -1.0)) for family in ("fn", "mod")
+    )
+    card = scorecard_from_report(_golden_report(), roster, framework_version="1.2.3")
     text = card.to_canonical_json()
     assert hashlib.sha256(text.encode("utf-8")).hexdigest() == _GOLDEN_BYTES_SHA256
     assert card.sha256 == _GOLDEN_EMBEDDED_SHA256
@@ -139,13 +144,13 @@ def test_absent_framework_skips_every_case_and_scores_not_run(
     model_rows = [row for row in report.results if row.tier != "C0"]
     assert model_rows and all(row.outcome == "skipped" for row in model_rows)
     assert all("install torchlens[paddle]" in row.detail for row in model_rows)
-    assert report.funnel["skipped"] == len(model_rows) == _FULL_DENOMINATOR - 3
+    assert report.funnel["skipped"] == len(model_rows) == _PREVIEW_DENOMINATOR - 3
     assert report.earned_tier == "C0"
     assert "conformant" not in claim_string(report)
 
     card = preview_scorecard("paddle", workdir=tmp_path)
-    assert card.counts["not_run"] == _FULL_DENOMINATOR - 3
-    assert card.counts["denominator"] == _FULL_DENOMINATOR
+    assert card.counts["not_run"] == _PREVIEW_DENOMINATOR - 3
+    assert card.counts["denominator"] == _PREVIEW_DENOMINATOR
     assert card.highest_tier == "C0"
     assert "conformant" not in card.to_canonical_json().lower()
 
@@ -191,7 +196,7 @@ def test_typed_backend_refusal_scores_unsupported() -> None:
         environment={},
         attestation_sha256="",
     )
-    card = scorecard_from_report(report, ("mod",), framework_version="")
+    card = scorecard_from_report(report, roster, framework_version="")
     states = {(cell.tier, cell.case_id): cell.state for cell in card.cells}
     assert states[("C1", "c1_capture_completes")] == "unsupported"
     assert states[("C1", "c1_reference_parity")] == "not_run"
@@ -206,7 +211,7 @@ def _assert_full_ladder(card: PreviewScorecard, backend: str) -> None:
     assert card.framework_version
     failing = [cell for cell in card.cells if cell.state != "passed"]
     assert not failing, failing
-    assert card.counts["denominator"] == _FULL_DENOMINATOR
+    assert card.counts["denominator"] == _PREVIEW_DENOMINATOR
     assert card.highest_tier == "C2"
     assert "conformant" not in card.to_canonical_json().lower()
 
@@ -231,15 +236,6 @@ def test_tf_pack_full_ladder(tmp_path: Path) -> None:
 
 @pytest.mark.heavy
 @pytest.mark.backend_mlx
-@pytest.mark.xfail(
-    raises=AssertionError,
-    reason=(
-        "MLX backend defect found by this pack: tracing an mlx.nn.Sequential(Linear, ReLU, "
-        "Linear) whose parameters are still unevaluated leaves the model unusable; the "
-        "direct call after the trace raises '[eval] Attempting to eval an array without a "
-        "primitive' (c1_capture_completes on mlp_module). Remove this marker with the fix."
-    ),
-)
 def test_mlx_pack_full_ladder(tmp_path: Path) -> None:
     """The mlx pack passes C0-C2 on its config-built roster."""
 
