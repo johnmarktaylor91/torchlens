@@ -406,8 +406,11 @@
   `weights=` parameter was removed -- collapse memo D9, clean-v2). These are
   not portable fields and must not be added to `*_FIELD_ORDER` without an explicit schema change.
 - `Trace.forward_peak_memory` is a real runtime measurement, never a portable fact. CUDA
-  reports the device peak; CPU/MPS report only the cheap host RSS (or MPS allocator) delta,
-  which legitimately reads `0` when a forward fits in already-resident heap headroom.
+  reports the device peak; CPU reports the host resident high-water growth over the forward
+  (a buffer freed inside the forward counts; a forward that grew nothing reads `None` with
+  `forward_peak_memory_reason`); MPS reports the allocator delta. `backward_peak_memory` is
+  the largest peak above a pass's starting baseline (CPU: largest pass; CUDA: device
+  high-water growth), and `total_backward_memory` counts retained gradient storage once.
   `CaptureOptions(measure_python_peak_memory=True)` additionally folds in a `tracemalloc`
   Python-allocation peak, which stays positive for tiny models. It is OFF by default because
   the allocator hook costs 1.7x-2.5x total capture time on real CNNs/ViTs. The flag is a
