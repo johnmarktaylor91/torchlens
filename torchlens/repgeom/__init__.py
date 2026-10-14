@@ -34,11 +34,14 @@ from ._trace_views import (
     rdm_evolution,
     scree_evolution,
 )
+from ._uncertainty import ScoreInterval, cka_interval, rdm_compare_interval
 
 __tl_layer__ = "FACADE"
 
 __all__ = [
+    "ScoreInterval",
     "activation_distance_matrix",
+    "cka_interval",
     "classical_mds",
     "effective_dimensionality",
     "mds_evolution",
@@ -47,6 +50,7 @@ __all__ = [
     "rank_transform_rdm",
     "rdm",
     "rdm_compare",
+    "rdm_compare_interval",
     "rdm_evolution",
     "rdm_node_spec",
     "scree",
