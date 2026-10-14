@@ -682,7 +682,10 @@ def _resolve_image_preprocessing(model: Any) -> tuple[Callable[[Any], Any], Reso
         "trained with.",
         code="preprocessing_unresolved",
         remedy=(
-            "pass your loader's own transform, e.g. "
+            "record the weights the model was built with, e.g. "
+            "tl.preprocessing.attach_authority(model, weights) (torchvision models "
+            "keep no handle to their weights preset); or pass your loader's own "
+            "transform, e.g. "
             "capture=tl.options.CaptureOptions(transform=weights.transforms()); "
             "or opt in to the ImageNet default (resize 256, center-crop 224, "
             "ImageNet mean/std) with "
