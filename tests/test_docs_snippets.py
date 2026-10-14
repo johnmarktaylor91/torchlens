@@ -385,6 +385,11 @@ _MIGRATION_PAGES_EXECUTED = (
     "executed fence by fence by tests/test_migration_pages_executed.py (the TorchLens "
     "fences always; a third-party fence where that package is installed)"
 )
+#: Reason shared by the teaching pages whose every fence is headed and run.
+_TEACHING_PAGES_EXECUTED = (
+    "executed fence by fence by tests/test_teaching_pages_executed.py, each against its "
+    "declared result"
+)
 
 #: Reason shared by the recipe pages whose every fence is headed and run.
 _RECIPE_PAGES_EXECUTED = (
@@ -437,7 +442,6 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "containers.md": "pending execution coverage",
     "facets.md": "pending execution coverage (semantic recipes; heavier model deps)",
     "intervention_api.md": "pending execution coverage",
-    "intervention_explainers.md": "pending execution coverage",
     "method_x_model_compatibility.md": "compatibility matrix stubs, not runnable programs",
     "migration/from_captum.md": "needs captum installed (weekly bridge leg env only)",
     "migration/from_fx.md": "pending execution coverage",
@@ -445,7 +449,6 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
         "executed by tests/test_migrations.py (the TorchLens side always; the nnsight "
         "side where nnsight is installed)"
     ),
-    "migration/from_pyvene.md": "needs pyvene (not a declared extra)",
     "migration/from_thingsvision.md": "needs thingsvision (not a declared extra)",
     "reference/neuro.md": (
         "needs rsatoolbox (the neuro extra); every snippet's behavior is "
@@ -592,6 +595,17 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
         "fetches a gated Llama-3.1-8B config from the Hub; the meta-substrate admission "
         "and parity gates execute offline in tests/test_weightsfree_*.py"
     ),
+    # Teaching pages and the pyvene migration pages (teaching-pass rows): every fence
+    # on them is headed, and the named test runs every TorchLens fence.
+    "intervention_explainers.md": _TEACHING_PAGES_EXECUTED,
+    "stochastic_edits.md": _TEACHING_PAGES_EXECUTED,
+    "guides/kv_cache.md": _TEACHING_PAGES_EXECUTED,
+    "sae_training_handoff.md": _TEACHING_PAGES_EXECUTED,
+    "migration/from_pyvene.md": (
+        "executed by tests/test_migrations.py (the TorchLens side always; the pyvene "
+        "comparison fence is collected and skipped)"
+    ),
+    "migration/pyvene.md": _MIGRATION_PAGES_EXECUTED,
 }
 
 

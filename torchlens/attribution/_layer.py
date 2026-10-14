@@ -1087,7 +1087,9 @@ def layer_integrated_gradients(
         Optional baseline tree matching attributed input leaves. A bare tensor is
         accepted when there is exactly one attributed leaf.
     n_steps
-        Number of midpoint Riemann samples along the straight input path.
+        Number of midpoint Riemann samples along the straight input path
+        (Captum's default rule is Gauss-Legendre, so values at equal
+        ``n_steps`` differ slightly; see :func:`integrated_gradients`).
     step_batch_size
         Optional number of path points stacked per forward/backward; ``None``
         (default) and ``1`` run sequentially. Strictly opt-in throughput.
@@ -1193,7 +1195,9 @@ def layer_conductance(
         Optional baseline tree matching attributed input leaves. A bare tensor is
         accepted when there is exactly one attributed leaf.
     n_steps
-        Number of midpoint Riemann samples along the straight input path.
+        Number of midpoint Riemann samples along the straight input path
+        (Captum's default rule is Gauss-Legendre, so values at equal
+        ``n_steps`` differ slightly; see :func:`integrated_gradients`).
     step_batch_size
         Optional number of path points stacked per forward/backward; ``None``
         (default) and ``1`` run sequentially. Strictly opt-in throughput.

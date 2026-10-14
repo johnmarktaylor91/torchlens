@@ -332,7 +332,27 @@ assert torch.count_nonzero(patched.find_sites(tl.func("relu")).first().out) == 0
 ```
 
 Use `intervene=` when the edited value must affect downstream execution. For post-hoc experiments
-on an existing trace, prefer `trace.fork()`, `set(...)` or `attach_hooks(...)`, and `replay()`.
+on an existing trace, prefer `trace.fork()`, `set(...)` or `attach_hooks(...)`, and `push()`
+(which engine fits which question: [intervention explainers](intervention_explainers.md#which-engine-when)).
+
+## Long sequences and long contexts
+
+Saved activations grow with sequence length at every op, and attention probabilities grow with
+its square: one layer's `(batch, heads, q, kv)` matrix for a 4096-token sequence with 32 heads in
+bfloat16 is 32 x 4096 x 4096 x 2 bytes, 1 GiB, so a 32-layer model's set is 32 GiB. Plan what
+to keep before the first long capture:
+
+- Name the sites with `save=` (`tl.module("model.layers.20")`, `tl.func("linear") &
+  tl.in_module("model.layers.20")`) instead of the whole-graph default.
+- `CaptureOptions(save_budget=...)` (default `"auto"`) caps saved bytes; an exceeded budget
+  raises `SaveBudgetExceededError` rather than exhausting memory, and `output_device="cpu"` keeps
+  saved activations in host memory.
+- For a logit-lens sweep over many positions, `torchlens.semantic.logit_lens_predictions`
+  projects one layer at a time and keeps only top-k summaries.
+- For many forwards or generation, a bound spec or `steer_generate` saves nothing at all; editing
+  the cached past of a long prompt is the [KV-cache recipe](guides/kv_cache.md).
+- For a dataset of long sequences, `tl.extract_dataset(..., output_dir=...)` writes the named
+  layers to disk batch by batch.
 
 ## When another tool is faster
 

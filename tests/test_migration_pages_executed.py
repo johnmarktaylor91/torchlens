@@ -36,6 +36,7 @@ PAGES: dict[str, frozenset[str]] = {
     "migration/from_hf_kwargs.md": frozenset({"torchlens"}),
     "migration/from_model_zoos.md": frozenset({"torchlens"}),
     "migration/penzai.md": frozenset({"torchlens"}),
+    "migration/pyvene.md": frozenset({"torchlens"}),
 }
 
 #: Tool key -> modules that must import for the fence to run.

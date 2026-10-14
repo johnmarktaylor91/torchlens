@@ -93,9 +93,9 @@
       "doc": "docs/migration/penzai.md; baukit.md; autocircuit.md; inseq.md; repe.md; pyvene.md; from_pyvene.md",
       "kind": "structural",
       "receipt": "Rows taught the removed replay/rerun spellings (rerun(..., append=True), replay/rerun hooks) after Trace.run and Trace.push replaced them.",
-      "status": "open",
-      "verified_at": "2026-10-14 (penzai, baukit, autocircuit, inseq and repe now spell trace.run, .push and steer_generate; pyvene.md:13 and from_pyvene.md:4 still say rerun and wait for the pyvene page refresh)",
-      "owner_next": "pyvene page refresh"
+      "status": "fixed",
+      "verified_at": "2026-10-14 (penzai, baukit, autocircuit, inseq and repe now spell trace.run, .push and steer_generate; the refreshed pyvene.md and from_pyvene.md spell trace.run, trace.push, do() and steer_generate, keep rerun and replay only in the removed-spellings sentence of intervention_explainers.md, and every example runs in tests/test_migration_pages_executed.py)",
+      "owner_next": "none"
     }
   ]
 }

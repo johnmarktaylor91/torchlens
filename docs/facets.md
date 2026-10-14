@@ -403,6 +403,14 @@ your own callable (or per-address mapping, e.g. a tuned lens), and `layers=` /
 facet recipes producing the same facet names -- the appliance never special
 cases architectures.
 
+Validation proves only that the reconstruction reproduces the LAST layer; it says nothing about
+how faithful the projection is at depth. The final norm and unembedding were trained on the last
+layer's residual stream, and earlier layers do not use that basis, so early-layer top tokens are
+weak evidence and often look like noise even when the layer carries the information
+(Belrose et al., 2023, introduced the tuned lens for this reason). Read the lens as a trend
+across depth, compare it with a probe or a tuned lens passed as `lens=`, and do not read one early
+layer's top token as what that layer "thinks".
+
 `torchlens.semantic.logit_lens_predictions` is the streaming reduction of the
 same sweep: it projects ONE layer at a time, keeps only per-position top-k
 values, the full-vocabulary `logsumexp`, and requested-token logits /
