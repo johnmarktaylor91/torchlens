@@ -105,6 +105,8 @@ def _roster_jax() -> tuple[RosterModel, ...]:
     """Function root plus an equinox MLP for the jax pack."""
 
     def build_fn() -> tuple[Any, Any]:
+        """Build the function root and its example input."""
+
         import jax.numpy as jnp
 
         # The jax preview contract is fn(params, *inputs): weights travel as
@@ -112,11 +114,15 @@ def _roster_jax() -> tuple[RosterModel, ...]:
         params = {"w": jnp.asarray(_WEIGHTS, dtype=jnp.float32)}
 
         def matmul_relu(params: Any, x: Any) -> Any:
+            """Matmul then relu, the function root's whole computation."""
+
             return jnp.maximum(jnp.matmul(x, params["w"]), 0.0)
 
         return matmul_relu, (params, jnp.asarray(_INPUT, dtype=jnp.float32))
 
     def build_module() -> tuple[Any, Any]:
+        """Build the module root and its example input."""
+
         import equinox as eqx
         import jax
         import jax.numpy as jnp
@@ -149,16 +155,22 @@ def _roster_tf() -> tuple[RosterModel, ...]:
     """Function root plus a tf.Module for the tf pack."""
 
     def build_fn() -> tuple[Any, Any]:
+        """Build the function root and its example input."""
+
         import tensorflow as tf
 
         weights = tf.constant(_WEIGHTS, dtype=tf.float32)
 
         def matmul_relu(x: Any) -> Any:
+            """Matmul then relu, the function root's whole computation."""
+
             return tf.nn.relu(tf.matmul(x, weights))
 
         return matmul_relu, tf.constant(_INPUT, dtype=tf.float32)
 
     def build_module() -> tuple[Any, Any]:
+        """Build the module root and its example input."""
+
         import tensorflow as tf
 
         class ConformanceMlp(tf.Module):
@@ -186,16 +198,22 @@ def _roster_mlx() -> tuple[RosterModel, ...]:
     """Function root plus an mlx.nn MLP for the mlx pack."""
 
     def build_fn() -> tuple[Any, Any]:
+        """Build the function root and its example input."""
+
         import mlx.core as mx
 
         weights = mx.array(_WEIGHTS)
 
         def matmul_relu(x: Any) -> Any:
+            """Matmul then relu, the function root's whole computation."""
+
             return mx.maximum(mx.matmul(x, weights), 0.0)
 
         return matmul_relu, mx.array(_INPUT)
 
     def build_module() -> tuple[Any, Any]:
+        """Build the module root and its example input."""
+
         import mlx.core as mx
         import mlx.nn as mlx_nn
 
@@ -215,16 +233,22 @@ def _roster_tinygrad() -> tuple[RosterModel, ...]:
     """Function root plus an object-tree model for the tinygrad pack."""
 
     def build_fn() -> tuple[Any, Any]:
+        """Build the function root and its example input."""
+
         from tinygrad import Tensor
 
         weights = Tensor(_WEIGHTS)
 
         def matmul_relu(x: Any) -> Any:
+            """Matmul then relu, the function root's whole computation."""
+
             return (x @ weights).relu()
 
         return matmul_relu, Tensor(_INPUT)
 
     def build_module() -> tuple[Any, Any]:
+        """Build the module root and its example input."""
+
         from tinygrad import Tensor, nn
 
         class ConformanceMlp:
@@ -327,16 +351,22 @@ def _roster_paddle() -> tuple[RosterModel, ...]:
     """Function root plus a paddle.nn MLP for the paddle pack."""
 
     def build_fn() -> tuple[Any, Any]:
+        """Build the function root and its example input."""
+
         import paddle
 
         weights = paddle.to_tensor(_WEIGHTS, dtype="float32")
 
         def matmul_relu(x: Any) -> Any:
+            """Matmul then relu, the function root's whole computation."""
+
             return paddle.nn.functional.relu(paddle.matmul(x, weights))
 
         return matmul_relu, paddle.to_tensor(_INPUT, dtype="float32")
 
     def build_module() -> tuple[Any, Any]:
+        """Build the module root and its example input."""
+
         import paddle
 
         paddle.seed(0)
@@ -476,6 +506,8 @@ def _adapter_factory(backend: str) -> Callable[[str | None], Any]:
     """Factory for one preview adapter (plants belong to the fake provider only)."""
 
     def factory(plant: str | None) -> Any:
+        """Build this backend's preview adapter."""
+
         return PreviewBackendAdapter(backend)
 
     return factory
