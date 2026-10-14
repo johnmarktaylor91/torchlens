@@ -128,6 +128,11 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
     ),
     "PIL": (TEST_EXTRA, "pillow (also a core torchlens dependency)"),
     "brainscore_core": (OPTIONAL_PREVIEW, "neuro extra (brain-score dist)"),
+    "brainscore_core.metrics": (
+        OPTIONAL_PREVIEW,
+        "brainscore extra; the real Score object whose raw and ceiling attrs "
+        "score_parts reads (tests/test_bridge_brain_score_parts.py)",
+    ),
     "brainscore_vision": (
         OPTIONAL_PREVIEW,
         "neuro extra; the ActivationsExtractorHelper adapter contract. The wheel "
