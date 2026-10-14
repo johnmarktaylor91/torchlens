@@ -25,6 +25,7 @@ import torch
 from ... import _state
 from ..._deprecations import MISSING, MissingType
 from ..._state import pause_logging
+from ...capture.peak_memory import peak_rss_bytes, process_rss_bytes, reset_peak_rss
 from ...data_classes.backward_pass import BackwardPass
 from ...data_classes.func_call_location import FuncCallLocation
 from ...data_classes.grad_fn import GradFn
@@ -1360,7 +1361,7 @@ class _BackwardFoldState:
     starts: dict[int, BackwardPassStart] = field(default_factory=dict)
     ends: dict[int, BackwardPassEnd] = field(default_factory=dict)
     per_object_ordinals: dict[int, int] = field(default_factory=dict)
-    unique_payload_ids: set[int] = field(default_factory=set)
+    unique_payload_ids: set[Any] = field(default_factory=set)
     total_gradient_memory: int = 0
     total_backward_memory: int = 0
     saved_grad_labels: set[str] = field(default_factory=set)
@@ -1894,12 +1895,11 @@ def _fold_op_grad_events(
         op.transformed_grad_dtype = _dtype_or_none(transformed_payload)
         op.transformed_gradient_memory = _memory_or_none(transformed_payload)
         state.saved_grad_labels.add(op.layer_label)
-        for payload_ref, payload_memory in _retained_grad_payload_refs(
+        for payload_key, payload_memory in _retained_grad_payload_refs(
             payload, transformed_payload, raw_memory=event.memory
         ):
-            payload_id = id(payload_ref)
-            if payload_id not in state.unique_payload_ids:
-                state.unique_payload_ids.add(payload_id)
+            if payload_key not in state.unique_payload_ids:
+                state.unique_payload_ids.add(payload_key)
                 state.total_backward_memory += payload_memory
         state.total_gradient_memory += int(event.memory or 0)
     # Assign a copy: the live hook path also mutates trace._saved_grad_labels
@@ -2039,14 +2039,26 @@ def _retained_grad_payload_refs(
     *,
     raw_memory: int | None,
 ) -> list[tuple[Any, int]]:
-    """Return retained gradient payload refs paired with their memory cost."""
+    """Return a dedupe key and retained bytes for each retained gradient payload.
+
+    Tensors are charged their whole storage once per storage (a slice keeps its
+    base alive; an expanded view holds less than its logical size), keyed by
+    device and data pointer (``id`` when it is 0); non-tensors keep
+    ``_memory_or_none``.
+    """
 
     payloads: list[tuple[Any, int]] = []
-    if raw_payload is not None:
-        payloads.append((raw_payload, int(raw_memory or 0)))
-    transformed_memory = _memory_or_none(transformed_payload)
-    if transformed_payload is not None and transformed_memory is not None:
-        payloads.append((transformed_payload, int(transformed_memory)))
+    for payload in (raw_payload, transformed_payload):
+        if isinstance(payload, torch.Tensor):
+            try:
+                storage = payload.untyped_storage()
+                pointer, nbytes = storage.data_ptr(), int(storage.nbytes())
+            except (RuntimeError, NotImplementedError):
+                pointer, nbytes = 0, int(_memory_or_none(payload) or raw_memory or 0)
+            key = (str(payload.device), pointer) if pointer else ("id", id(payload))
+            payloads.append((key, nbytes))
+        elif payload is not None and (memory := _memory_or_none(payload)) is not None:
+            payloads.append((("id", id(payload)), int(memory)))
     return payloads
 
 
@@ -2592,11 +2604,7 @@ def _memory_snapshot(device: torch.device) -> tuple[str, int]:
         return "cuda", int(torch.cuda.max_memory_allocated(device))
     if device.type == "mps" and hasattr(torch, "mps"):
         return "mps", int(torch.mps.current_allocated_memory())
-    try:
-        import psutil
-    except ImportError:
-        return "cpu", 0
-    return "cpu", int(psutil.Process().memory_info().rss)
+    return "cpu", max(process_rss_bytes(), peak_rss_bytes())  # VmHWM: a freed buffer counts
 
 
 def _peak_memory_baseline(device: torch.device) -> tuple[str, int]:
@@ -2607,7 +2615,9 @@ def _peak_memory_baseline(device: torch.device) -> tuple[str, int]:
     The baseline is now the pre-existing ``max_memory_allocated`` snapshot:
     a backward that pushes a new device peak reports the exact excess over
     the prior high-water mark, and one that stays under it honestly reads
-    ``0`` (the same contract as the forward bracket and the CPU/MPS deltas).
+    ``0``. CPU first resets the process ``VmHWM`` to the current RSS (Linux;
+    see ``capture.peak_memory.reset_peak_rss`` for the process-wide effect),
+    so its baseline is the pass-start RSS and its end reading the pass peak.
 
     Parameters
     ----------
@@ -2619,6 +2629,8 @@ def _peak_memory_baseline(device: torch.device) -> tuple[str, int]:
     tuple[str, int]
         Backend label and starting memory snapshot in bytes.
     """
+    if device.type not in {"cuda", "mps"}:
+        reset_peak_rss()
     return _memory_snapshot(device)
 
 
@@ -3483,7 +3495,11 @@ def _run_backward_with_capture(
         except BaseException as exc:
             cleanup_error = cleanup_error if cleanup_error is not None else exc
         trace.backward_memory_backend = backend
-        trace.backward_peak_memory += Bytes(peak_delta)
+        # Largest peak over a pass baseline: CPU max; CUDA high-water excesses sum.
+        prior = int(trace.backward_peak_memory)
+        trace.backward_peak_memory = Bytes(
+            max(prior, peak_delta) if backend == "cpu" else prior + peak_delta
+        )
         trace.backward_durations.append(Duration(duration))
         trace.total_param_gradient_memory = Bytes(
             sum(int(param_log.gradient_memory) for param_log in getattr(trace, "param_logs", []))

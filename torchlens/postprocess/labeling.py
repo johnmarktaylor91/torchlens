@@ -1000,14 +1000,15 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
     ]
     for field in layer_list_fields_to_rename:
         tensor_labels = getattr(self, field)
-        setattr(
-            self,
-            field,
-            [
-                self._raw_graph_ws.raw_layer_dict[tensor_label].layer_label
-                for tensor_label in tensor_labels
-            ],
-        )
+        final_labels = [
+            self._raw_graph_ws.raw_layer_dict[tensor_label].layer_label
+            for tensor_label in tensor_labels
+        ]
+        # A buffer Layer's passes (a looped read or each written version) share
+        # one Layer label: list each buffer Layer once, in first-seen order.
+        if field == "buffer_layers":
+            final_labels = list(dict.fromkeys(final_labels))
+        setattr(self, field, final_labels)
 
     # Remap halt provenance from raw to final labels, exactly as the special
     # layer lists above. `halt_reason`/`halt_frontier` are set to a raw op label

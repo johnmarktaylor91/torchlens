@@ -1648,13 +1648,13 @@ class Module:
 
     @property
     def collapse_score(self) -> float:
-        """Canonical smart-collapse score for this Module.
+        """Smart-collapse priority: hidden ops over the trace's largest (``module_collapse_order``).
 
         Returns
         -------
         float
-            Rounded default-policy score, or ``0.0`` when the module is not
-            eligible for renderer collapse.
+            Hidden ops (subtree distinct ops minus one) over the largest module's,
+            rounded to 6 places; ``0.0`` when the renderer never collapses it.
         """
 
         from ..visualization.auto_collapse import module_collapse_score

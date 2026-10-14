@@ -1028,7 +1028,7 @@ def _synthetic_child_condensed_flow_graph(
 
 
 def module_collapse_score(module: Module) -> float:
-    """Return the canonical default collapse score for a module.
+    """Return a module's smart-collapse priority (``Trace.module_collapse_order``).
 
     Parameters
     ----------
@@ -1038,13 +1038,14 @@ def module_collapse_score(module: Module) -> float:
     Returns
     -------
     float
-        Rounded canonical score, or ``0.0`` for ineligible/unbound modules.
+        Hidden ops over the trace's largest module hidden-op count, or ``0.0``
+        for a module the renderer never collapses (or an unbound module).
     """
 
     trace = module.trace
     if trace is None:
         return 0.0
-    return dict(collapse_order(trace)).get(module.address, 0.0)
+    return dict(trace.module_collapse_order).get(module.address, 0.0)
 
 
 # The structural-fingerprint family moved to ._collapse_signatures with

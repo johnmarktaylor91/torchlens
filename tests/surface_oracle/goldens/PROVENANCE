@@ -992,3 +992,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: ee78dd35000f9b63fa9c3b437046c226789c7d3b (dirty)
 recorded: 2026-10-13T12:47:34.478834+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: AGT-2362 RED5: collapse_score/module_collapse_order are the eligibility priority; buffer_layers lists each buffer Layer once
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 3bc02f75bbc1098212c6af1bd2cdecd3996dbe57 (dirty)
+recorded: 2026-10-14T02:55:34.691952+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: AGT-2362 RED5: collapse_score/module_collapse_order are the eligibility priority; buffer_layers lists each buffer Layer once
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 3bc02f75bbc1098212c6af1bd2cdecd3996dbe57 (dirty)
+recorded: 2026-10-14T02:55:34.765658+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: AGT-2362 RED5: collapse_score/module_collapse_order are the eligibility priority; buffer_layers lists each buffer Layer once
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 3bc02f75bbc1098212c6af1bd2cdecd3996dbe57 (dirty)
+recorded: 2026-10-14T02:55:34.867059+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: AGT-2362 RED5: collapse_score/module_collapse_order are the eligibility priority; buffer_layers lists each buffer Layer once
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 3bc02f75bbc1098212c6af1bd2cdecd3996dbe57 (dirty)
+recorded: 2026-10-14T02:55:34.931578+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: AGT-2362 RED5: collapse_score/module_collapse_order are the eligibility priority; buffer_layers lists each buffer Layer once
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 3bc02f75bbc1098212c6af1bd2cdecd3996dbe57 (dirty)
+recorded: 2026-10-14T02:55:35.028179+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: AGT-2362 RED5: collapse_score/module_collapse_order are the eligibility priority; buffer_layers lists each buffer Layer once
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 3bc02f75bbc1098212c6af1bd2cdecd3996dbe57 (dirty)
+recorded: 2026-10-14T02:55:35.116782+00:00

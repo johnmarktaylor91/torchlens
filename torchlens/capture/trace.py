@@ -48,6 +48,7 @@ from ..backends import (
 from ..fastlog._halt import HaltSignal
 from ..ir.container_registry import ModelSite, Phase, Role, walk_container
 from ..quantities import Bytes, Duration
+from . import peak_memory
 from .config import InternalCaptureConfig
 from .outcome import (
     CapturePhase,
@@ -324,9 +325,6 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
                 after = process_rss_bytes()
         rss_delta = max(0, after - before)
         trace.forward_memory_backend = backend_label
-        record_forward_peak(
-            trace, backend_label, max(rss_delta, int(traced_peak)), tracemalloc_module
-        )
         # F20 peak PAIR (brainpipe D-7). ``live`` is a Python-allocation peak
         # and exists only when the tracemalloc opt-in paid for it; ``None``
         # means unmeasured, never zero. ``resident`` is the host high-water
@@ -337,18 +335,17 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
             peak_rss_after = peak_rss_bytes()
             if peak_rss_after > 0 and rss_before > 0:
                 resident_growth = max(0, peak_rss_after - rss_before)
-        # ``resident_basis`` must disclose WHY ``resident`` is ``None`` rather than
-        # silently repeating whatever ``rss_peak_scoped`` says: the pre-forward RSS
-        # baseline (``rss_before``, read via ``psutil``) is 0 whenever psutil is not
-        # installed, which zeroes ``resident_growth`` REGARDLESS of whether the VmHWM
-        # reset succeeded -- reporting "per_capture"/"process_lifetime" there would
-        # claim a scoped-or-unscoped MEASUREMENT that never happened. "unavailable"
-        # is the typed disclosure for that case (see ``psutil_available``); it is
-        # reported whenever ``resident`` could not be computed, from any cause.
+        # ``resident_basis`` discloses WHY ``resident`` is ``None`` (an unreadable
+        # baseline: no psutil and no procfs) instead of claiming a scoped or unscoped
+        # measurement that never happened; see ``process_rss_bytes``.
         if resident_growth is None:
             resident_basis = "unavailable"
         else:
             resident_basis = "per_capture" if rss_peak_scoped else "process_lifetime"
+        measured = peak_memory.host_forward_peak(
+            backend_label, rss_delta, int(traced_peak), resident_growth, resident_basis
+        )
+        record_forward_peak(trace, backend_label, measured, tracemalloc_module)
         trace._forward_peak_memory_pair = {
             "live": int(traced_peak) if tracemalloc_module is not None else None,
             "resident": resident_growth,

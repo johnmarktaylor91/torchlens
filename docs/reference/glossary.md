@@ -485,6 +485,13 @@ one exact `other_neurons` row.
   (`collapse_plan_unavailable`); `Trace.collapse_schedule()` degrades to its single
   full-graph step).
 
+**Module.collapse_score / Trace.module_collapse_order** — *unstable — no deprecation shim owed*
+: A module's smart-collapse priority: its hidden ops (distinct subtree ops minus one) over the
+  largest submodule's, rounded to 6 places; 0.0 for the root, a module of at most one Layer, or one
+  whose single child hides the same ops. It ranks candidates and never reads the selected plan
+  (`Trace.collapse_plan()` may skip a high-priority module); `module_collapse_order` lists every
+  module's priority, highest first. Computed at access, never persisted.
+
 **Run folding**
 : `fold_repeats=True` replaces eligible runs of distinct same-class sibling modules with a
   representative and an honest `+N more` label. It differs from recurrence, where `(xN)` means the
@@ -1890,11 +1897,23 @@ deprecation shim owed*
   never set) and takes the weights-free summary path, so it needs
   `input_size=` or meta inputs. Requires `transformers`.
 
+**Trace.forward_peak_memory / Trace.backward_peak_memory**
+: The largest memory growth above a bracket's starting baseline, including memory freed before the
+  bracket ends. CPU reads the process resident high-water mark, reset at each bracket on Linux (the
+  reset also resets a caller's own `VmHWM` and `ru_maxrss` readings); CUDA reads the device
+  allocator peak. `backward_peak_memory` is the largest peak above a pass's starting baseline over
+  all backward passes (CUDA: the growth of the device high-water mark).
+
 **Trace.forward_peak_memory_reason** — *unstable — no deprecation shim owed*
-: Why `Trace.forward_peak_memory` is `None`: on CPU a forward RSS delta of 0
-  is recorded as `None` with this reason, which names
+: Why `Trace.forward_peak_memory` is `None`: a CPU forward that measured zero
+  (resident high-water growth, end-of-forward RSS delta and, when opted in, the
+  Python-allocation peak all 0) is recorded as `None` with this reason, which names
   `CaptureOptions(measure_python_peak_memory=True)` (forks.13). `None` when a
   value was measured, and on artifacts that predate the field. Persisted
   (KEEP); a loaded reason beside a number refuses
   `artifact_forward_peak_memory_invalid`. CUDA, MPS and the backward peak keep
   their numeric semantics.
+
+**Trace.total_backward_memory**
+: Bytes of the gradient payloads the trace retains, counted once per storage: a payload that is a
+  view charges its whole base storage, an expanded gradient its smaller storage.

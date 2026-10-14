@@ -3420,7 +3420,7 @@
   "field": "modules",
   "file": "torchlens/data_classes/_trace_stats.py",
   "has_default": false,
-  "sites": 3,
+  "sites": 4,
   "via_getattr": false
  },
  {

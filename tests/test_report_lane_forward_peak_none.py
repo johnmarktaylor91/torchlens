@@ -41,6 +41,8 @@ def _rss(monkeypatch: pytest.MonkeyPatch, *readings: int) -> None:
         return last[0]
 
     monkeypatch.setattr(capture_trace, "process_rss_bytes", fake_rss)
+    # The CPU peak also reads the resident high-water: serve the largest reading.
+    monkeypatch.setattr(capture_trace, "peak_rss_bytes", lambda: max(readings))
 
 
 def _capture(**kwargs: Any) -> Any:
