@@ -82,6 +82,10 @@ traj = tviz.prediction_trajectory(preds, tokenizer=tok, target_token_id=answer_i
 tviz.render_prediction_ribbon(traj, "ribbon.pdf")
 tviz.render_answer_trajectory(traj, "answer.pdf")
 
+# Layers-by-positions heatmap over the full logit-lens result
+from torchlens.semantic.logit_lens import logit_lens
+tviz.render_logit_lens_heatmap(logit_lens(log), "lens.pdf", tokens=tokens, tokenizer=tok)
+
 # Loss + entropy strips from ONE logits source (alignment proof travels)
 loss, entropy = tviz.token_metrics(logits, input_ids[0], token_strings)
 tviz.render_metric_strip(loss, "loss.pdf")

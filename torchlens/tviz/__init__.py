@@ -25,6 +25,7 @@ from ._bridge import bertviz_tuple, circuitsvis_attention, circuitsvis_payload
 from ._decomp import render_neuron_card, score_decomposition
 from ._errors import TvizError
 from ._extract import attention_view, attention_views
+from ._lens_heatmap import render_logit_lens_heatmap
 from ._metrics import metric_strip, render_metric_strip, token_metrics
 from ._predictions import (
     prediction_table,
@@ -87,6 +88,7 @@ __all__ = [
     "render_answer_trajectory",
     "render_attention",
     "render_attention_atlas",
+    "render_logit_lens_heatmap",
     "render_metric_strip",
     "render_neuron_card",
     "render_prediction_ribbon",
