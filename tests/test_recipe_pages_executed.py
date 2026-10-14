@@ -202,3 +202,17 @@ def test_roadmap_names_the_quantized_summary_footer() -> None:
     text = (REPO / "ROADMAP.md").read_text("utf-8")
     assert "bits-per-weight footer" in text
     assert "coming from flax\n  `tabulate`" in text
+
+
+def test_neuro_refusal_homes_have_recipe_pages() -> None:
+    """The netrep and himalaya refusals in torchlens.neuro land on executed recipe pages."""
+
+    from torchlens import neuro
+
+    source = Path(neuro.__file__).read_text("utf-8")
+    assert "live in netrep and documented" in source
+    assert "belongs to himalaya" in source
+    text = (REPO / "docs/reference/neuro.md").read_text("utf-8")
+    for page in ("neuroai/netrep.md", "neuroai/himalaya.md"):
+        assert f"(../{page})" in text
+        assert f"docs/{page}" in PAGES
