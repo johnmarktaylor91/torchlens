@@ -2014,6 +2014,7 @@ def compute_default_node_lines(
         overlay = overlay_line(layer_log, node_overlay)
         if overlay is not None:
             selected_lines.append(overlay)
+            append_overlay_notes(selected_lines, layer_log, node_overlay)
         return selected_lines
 
     annotation = _rolling_annotation(layer_log, vis_mode)
@@ -2076,6 +2077,7 @@ def compute_default_node_lines(
         lines.append(address_line)
     if (overlay := overlay_line(layer_log, node_overlay)) is not None:
         lines.append(overlay)
+        append_overlay_notes(lines, layer_log, node_overlay)
     return lines
 
 

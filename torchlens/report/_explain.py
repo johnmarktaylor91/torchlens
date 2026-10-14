@@ -17,6 +17,7 @@ from .._capture_honesty import (
     poison_facts,
     refuse_presenter_subject,
 )
+from ._summary_columns import attention_full_square_line, counted_attention_ops
 
 Audience = Literal["researcher", "practitioner", "auto"]
 
@@ -597,6 +598,9 @@ def _model_summary_lines(log: Any) -> list[str]:
             f" LOWER BOUND: {core.compute.coverage.unknown} op(s) carry no cost rule "
             "(see trace.unknown_flop_ops)."
         )
+    if attention_ops := counted_attention_ops(core.compute):
+        note = attention_full_square_line(attention_ops)
+        flops_line += f" {note[:1].upper()}{note[1:]}."
     lines.append(flops_line)
     lines.append(f"- Modules represented: {_format_count(core.counts.modules)}.")
     return lines

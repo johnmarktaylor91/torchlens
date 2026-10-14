@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 from ..utils._multipass_access import is_multipass_layer
+from ._summary_columns import attention_full_square_line, counted_attention_ops
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -111,6 +112,8 @@ class TraceProfile:
     # count disclosed beside it (never a FLOP percentage).
     partition_total: int | None = None
     unknown_events: int = 0
+    # Counted attention ops: the footer carries the full-square note (U04.2).
+    attention_full_square_ops: int = 0
     column_additivity: dict[str, bool] = field(default_factory=dict)
     # U53.2: the op-row grouping key (``"source_line"``), or ``None`` for
     # one row per op. DOCUMENTED-UNSTABLE spelling.
@@ -221,6 +224,8 @@ class TraceProfile:
             footer_parts.append(
                 f"unknown-cost ops: {self.unknown_events} (event count; see unknown_flop_ops)"
             )
+        if self.attention_full_square_ops:
+            footer_parts.append(attention_full_square_line(self.attention_full_square_ops))
         footer = "\n".join(footer_parts)
         parts = [part for part in (banner, table, footer) if part]
         return "\n".join(parts)
@@ -1022,6 +1027,7 @@ def build_profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, as
         structure_only=structure_only,
         partition_total=partition_total,
         unknown_events=aggregation.coverage.unknown,
+        attention_full_square_ops=counted_attention_ops(aggregation),
         column_additivity=additivity,
         group_by=group_by,
     )

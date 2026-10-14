@@ -108,7 +108,7 @@ from .node_spec import (
     make_intervention_node_spec_fn,
     render_lines_to_html,
 )
-from .overlays import OverlayScores, overlay_border_attrs, overlay_line
+from .overlays import OverlayScores, append_overlay_notes, overlay_border_attrs, overlay_line
 from .render_ir import (
     RenderIRDotStatement,
     RenderIROrderingConstraint,
@@ -884,6 +884,7 @@ __all__ = [
     "_timed_phase",
     "_vprint",
     "apply_theme_to_spec",
+    "append_overlay_notes",
     "base64",
     "build_render_ir",
     "finalize_forward_regions",
@@ -915,6 +916,7 @@ __all__ = [
     "os",
     "overlay_border_attrs",
     "overlay_line",
+    "append_overlay_notes",
     "projected_antiparallel_endpoint_pairs",
     "quote_dot_id",
     "re",
