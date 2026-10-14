@@ -521,3 +521,27 @@ def _bundle_show_diff(
     from ..visualization.bundle_diff import bundle_diff
 
     return bundle_diff(self, metric=metric, layout=layout, **kwargs)
+
+
+def dynamic_bundle_methods() -> dict[str, Callable[..., Any]]:
+    """Return the Bundle helper-table methods (the budget-preserving dynamic methods).
+
+    ``Bundle.__getattr__`` binds them on lookup and ``Bundle.__dir__`` lists
+    them, so they resolve and show like methods without counting against the
+    Bundle method budget.
+    """
+
+    from ._comparisons import _register_comparison_helpers
+    from ._relation_carriage import register_relation_walks
+
+    table: dict[str, Callable[..., Any]] = {
+        "aligned_pairs": _bundle_aligned_pairs,
+        "compare": _bundle_compare,
+        "delta_map": _bundle_delta_map,
+        "norm_delta": _bundle_norm_delta,
+        "output_delta": _bundle_output_delta,
+        "show_diff": _bundle_show_diff,
+    }
+    _register_comparison_helpers(table)
+    register_relation_walks(table)
+    return table

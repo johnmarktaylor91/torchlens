@@ -132,9 +132,10 @@ trace.json True
 ### `chrome_trace_diff`
 
 `tl.export.chrome_trace_diff(bundle, path)` writes one Chrome timeline comparing the members of a
-TorchLens `Bundle`. Its per-node deltas come from `bundle.norm_delta()`, so the members must pass the
-Bundle comparison gate (one shared graph, equal input values); members captured on different
-inputs refuse with `bundle_gate_input_values_differ`.
+TorchLens `Bundle`. Its per-node deltas come from `bundle.norm_delta()`, so they need members that pass the
+Bundle comparison gate (one shared graph, equal input values). Members that do not still export
+their timelines; only the deltas are refused: every event's `delta` is `None` and
+`metadata["deltas"]` records the gate's code (for example `bundle_gate_input_values_differ`).
 
 ```python
 from pathlib import Path

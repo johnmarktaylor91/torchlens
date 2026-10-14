@@ -324,6 +324,13 @@ def test_walk_methods_resolve_on_an_instance(model: _TinyLM) -> None:
     assert callable(bundle.upstream) and callable(bundle.downstream)
 
 
+def test_dir_lists_the_helper_table_methods(model: _TinyLM) -> None:
+    names = dir(_harness(model))
+    table = ("upstream", "downstream", "delta_map", "norm_delta", "output_delta", "compare")
+    for name in (*table, "show_diff", "aligned_pairs", "store_comparison", "relate"):
+        assert name in names, name
+
+
 def test_node_scoped_to_members_skips_a_foreign_member(model: _TinyLM) -> None:
     torch.manual_seed(1)
     ids = [1, 2, 3]
@@ -371,6 +378,22 @@ def test_delta_family_refuses_fed_by_members_on_topology(model: _TinyLM) -> None
     with pytest.raises(BundleRelationshipError) as excinfo:
         bundle.delta_map("relative_l2")
     assert _code(excinfo) == "bundle_gate_ordering_topology"
+
+
+def test_chrome_trace_diff_keeps_the_timeline_and_refuses_only_the_deltas(
+    tmp_path: Path, model: _TinyLM
+) -> None:
+    unrelated = Bundle({"draft": _trace(model, [1, 2, 3]), "critique": _trace(model, [4, 5, 6])})
+    payload = json.loads(tl.export.chrome_trace_diff(unrelated, tmp_path / "a.json").read_text())
+    status = payload["metadata"]["deltas"]
+    assert status["status"] == "refused"
+    assert status["code"] == "bundle_gate_input_values_differ"
+    spans = [event for event in payload["traceEvents"] if event["ph"] == "X"]
+    assert spans and all(event["args"]["delta"] is None for event in spans)
+    same = Bundle({"a": _trace(model, [1, 2, 3]), "b": _trace(model, [1, 2, 3])}, baseline="a")
+    payload = json.loads(tl.export.chrome_trace_diff(same, tmp_path / "b.json").read_text())
+    assert payload["metadata"]["deltas"]["status"] == "computed"
+    assert any(event["args"].get("delta") is not None for event in payload["traceEvents"])
 
 
 # ---------------------------------------------------------------------------

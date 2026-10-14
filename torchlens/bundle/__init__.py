@@ -40,16 +40,17 @@ from ._compare_gate import require_comparable
 # torchlens.bundle by the cert7/cert8 hardening suites; the rest are the
 # historical module-level surface of the pre-split file.
 from ._deltas import (
-    _bundle_aligned_pairs,
-    _bundle_compare,
-    _bundle_delta_map,
-    _bundle_norm_delta,
-    _bundle_output_delta,
-    _bundle_show_diff,
+    _bundle_aligned_pairs as _bundle_aligned_pairs,
+    _bundle_compare as _bundle_compare,
+    _bundle_delta_map as _bundle_delta_map,
+    _bundle_norm_delta as _bundle_norm_delta,
+    _bundle_output_delta as _bundle_output_delta,
+    _bundle_show_diff as _bundle_show_diff,
     _distance_value as _distance_value,
     _metric_label as _metric_label,
     _resolve_member_name as _resolve_member_name,
     _tensor_field as _tensor_field,
+    dynamic_bundle_methods,
 )
 from ._lineage import BundleOperation, MemberEffectTable, mint_bundle_id
 from ._outcome_fold import _fold_member_outcomes
@@ -61,7 +62,6 @@ from ._provenance import (
 from ._relation_carriage import (
     _bundle_derive_episode_status,
     _bundle_relate,
-    register_relation_walks,
     settle_relation_rows,
 )
 from ._relations import MemberRelationRow, MemberRelationTable, OpaqueRelationRow
@@ -470,25 +470,18 @@ class Bundle:
             If ``name`` is not a dynamic bundle helper.
         """
 
-        from ._comparisons import _register_comparison_helpers
-
-        dynamic_custom_methods: dict[str, Callable[..., Any]] = {
-            "aligned_pairs": _bundle_aligned_pairs,
-            "compare": _bundle_compare,
-            "delta_map": _bundle_delta_map,
-            "norm_delta": _bundle_norm_delta,
-            "output_delta": _bundle_output_delta,
-            "show_diff": _bundle_show_diff,
-        }
-        _register_comparison_helpers(dynamic_custom_methods)
-        register_relation_walks(dynamic_custom_methods)
-        helper = dynamic_custom_methods.get(name)
+        helper = dynamic_bundle_methods().get(name)
         if helper is None:
             from ..utils.facade import refuse_removed_member
 
             refuse_removed_member("Bundle", name, _REMOVED_BUNDLE_MEMBERS)
             raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
         return helper.__get__(self, type(self))
+
+    def __dir__(self) -> list[str]:
+        """List the class attributes plus the dynamic helper-table methods."""
+
+        return sorted({*super().__dir__(), *dynamic_bundle_methods()})
 
     @property
     def names(self) -> list[str]:
