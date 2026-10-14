@@ -454,10 +454,11 @@ def test_lazy_pool_captures_never_verify_across_repeats() -> None:
     ceilinged on capture 0 (worker born in-window) and VERIFIED on captures 1 and 2 (same
     worker, now 'foreign'). Every capture must now be non-verified."""
 
-    # Every pool any instance builds, not only ``model._pool``: the capture also runs
-    # the forward on its own model copies, each of which builds a pool. A pool left
-    # running is freed by a later garbage collection, and its worker then exits inside
-    # an unrelated test's capture window (``owner_thread_tripwire_changed`` there).
+    # Every pool the forward builds, not only ``model._pool``: the capture restores the
+    # forward's attribute writes, so ``_pool`` reads None again after each capture and
+    # the next capture builds a new pool. A pool left running is freed by a later
+    # garbage collection, and its worker then exits inside an unrelated test's capture
+    # window (``owner_thread_tripwire_changed`` there).
     pools: list[ThreadPoolExecutor] = []
 
     class _LazyPool(nn.Module):
