@@ -5,8 +5,11 @@ Pins:
 - The Gaussian/RBF RDM metric matches thingsvision's published convention
   EXACTLY (reference implementation transcribed below, credited): squared
   euclidean distances, bandwidth = mean(D) over the full matrix, kernel
-  ``exp(-D / (2 * mean(D)))``, dissimilarity ``1 - kernel``. All-identical
-  stimuli refuse typed where the reference would silently NaN.
+  ``exp(-D / mean(D))``, dissimilarity ``1 - kernel``. All-identical
+  stimuli refuse typed where the reference would silently NaN. The
+  similarity-repository oracle (U56.3) checked the same equality against
+  the catalogued ``rdm/*/gaussian``; an analytic literal pin keeps it from
+  drifting back to the earlier ``2 * mean(D)`` bandwidth.
 - ``rank_transform_rdm``: the Nili et al. 2014 display convention --
   average ranks for ties, percentile scaling to exactly 100, symmetric
   zero-diagonal output, display-only validation refusals.
@@ -30,14 +33,15 @@ from torchlens.stats import cka
 def _thingsvision_gaussian_rdm(features: np.ndarray) -> np.ndarray:
     """Reference implementation transcribed from thingsvision (credited).
 
-    ``thingsvision.core.rsa.helpers`` computes the RSM as
-    ``exp(-squared_dists(F) / (2 * mean(squared_dists(F))))`` and the RDM
-    as ``1 - rsm``; the bandwidth denominator is the mean over the FULL
-    matrix including the zero diagonal.
+    ``gaussian_kernel`` in ``thingsvision/core/rsa/helpers.py`` (unchanged
+    upstream since 2022-08-31) computes the RSM as
+    ``exp(-squared_dists(F) / mean(squared_dists(F)))`` and the RDM as
+    ``1 - rsm``; the bandwidth denominator is the mean over the FULL matrix
+    including the zero diagonal.
     """
 
     squared = ((features[:, None, :] - features[None, :, :]) ** 2).sum(axis=-1)
-    return 1.0 - np.exp(-squared / (2.0 * squared.mean()))
+    return 1.0 - np.exp(-squared / squared.mean())
 
 
 def test_gaussian_metric_matches_thingsvision_reference() -> None:
@@ -51,6 +55,25 @@ def test_gaussian_metric_matches_thingsvision_reference() -> None:
     assert np.allclose(ours, ours.T)
     assert np.allclose(np.diagonal(ours), 0.0)
     assert float(ours.max()) < 1.0
+
+
+def test_gaussian_metric_analytic_literal_pin() -> None:
+    """Hand-derived values for 1-D points 0, 1, 3 (U56.3 oracle-matched).
+
+    Squared distances are 1, 9 and 4; their full-matrix mean (zero
+    diagonal included) is ``2 * (1 + 9 + 4) / 9 = 28 / 9``, so each
+    dissimilarity is ``1 - exp(-d * 9 / 28)``.
+    """
+
+    ours = rdm(np.array([[0.0], [1.0], [3.0]]), metric="gaussian")
+    expected = np.array(
+        [
+            [0.0, 1.0 - math.exp(-9 / 28), 1.0 - math.exp(-81 / 28)],
+            [1.0 - math.exp(-9 / 28), 0.0, 1.0 - math.exp(-36 / 28)],
+            [1.0 - math.exp(-81 / 28), 1.0 - math.exp(-36 / 28), 0.0],
+        ]
+    )
+    np.testing.assert_allclose(ours, expected, rtol=0, atol=1e-12)
 
 
 @pytest.mark.smoke
