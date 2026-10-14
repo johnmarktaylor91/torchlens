@@ -140,8 +140,8 @@ def _roster_jax() -> tuple[RosterModel, ...]:
     return _rows(
         build_fn,
         build_module,
-        fn_ops=("dot_general", "max"),
-        module_ops=("dot_general", "add", "max", "dot_general", "add"),
+        fn_ops=("input", "input", "dot_general", "max"),
+        module_ops=("input", "dot_general", "add", "max", "dot_general", "add"),
     )
 
 
@@ -175,7 +175,10 @@ def _roster_tf() -> tuple[RosterModel, ...]:
         return ConformanceMlp(), tf.constant(_INPUT, dtype=tf.float32)
 
     return _rows(
-        build_fn, build_module, fn_ops=("matmul", "relu"), module_ops=("matmul", "relu", "matmul")
+        build_fn,
+        build_module,
+        fn_ops=("input", "MatMul", "Relu"),
+        module_ops=("input", "MatMul", "Relu", "MatMul"),
     )
 
 
@@ -203,8 +206,8 @@ def _roster_mlx() -> tuple[RosterModel, ...]:
     return _rows(
         build_fn,
         build_module,
-        fn_ops=("matmul", "maximum"),
-        module_ops=("linear", "relu", "linear"),
+        fn_ops=("input", "matmul", "maximum"),
+        module_ops=("input", "linear", "relu", "linear"),
     )
 
 
@@ -240,8 +243,83 @@ def _roster_tinygrad() -> tuple[RosterModel, ...]:
 
         return ConformanceMlp(), Tensor(_INPUT)
 
+    # tinygrad records its lazy-graph decomposition: each matmul is
+    # reshape/expand/mul/reduce, relu is cmplt/where, a bias is add, and the
+    # const/buffer/copy/_mop ops materialize the fixed weights.
     return _rows(
-        build_fn, build_module, fn_ops=("matmul", "relu"), module_ops=("linear", "relu", "linear")
+        build_fn,
+        build_module,
+        fn_ops=(
+            "input",
+            "const",
+            "_mop",
+            "const",
+            "const",
+            "_mop",
+            "buffer",
+            "const",
+            "const",
+            "reshape",
+            "expand",
+            "buffer",
+            "reshape",
+            "copy",
+            "_mop",
+            "_mop",
+            "_mop",
+            "mul",
+            "reduce",
+            "reshape",
+            "cmplt",
+            "where",
+        ),
+        module_ops=(
+            "input",
+            "const",
+            "_mop",
+            "const",
+            "const",
+            "_mop",
+            "buffer",
+            "const",
+            "const",
+            "reshape",
+            "expand",
+            "buffer",
+            "reshape",
+            "copy",
+            "_mop",
+            "_mop",
+            "_mop",
+            "_mop",
+            "mul",
+            "reduce",
+            "reshape",
+            "buffer",
+            "copy",
+            "_mop",
+            "_mop",
+            "add",
+            "cmplt",
+            "where",
+            "reshape",
+            "expand",
+            "buffer",
+            "reshape",
+            "copy",
+            "_mop",
+            "_mop",
+            "_mop",
+            "_mop",
+            "mul",
+            "reduce",
+            "reshape",
+            "buffer",
+            "copy",
+            "_mop",
+            "_mop",
+            "add",
+        ),
     )
 
 
@@ -268,7 +346,10 @@ def _roster_paddle() -> tuple[RosterModel, ...]:
         return model, paddle.to_tensor(_INPUT, dtype="float32")
 
     return _rows(
-        build_fn, build_module, fn_ops=("matmul", "relu"), module_ops=("linear", "relu", "linear")
+        build_fn,
+        build_module,
+        fn_ops=("input", "matmul", "functional.relu"),
+        module_ops=("input", "functional.linear", "functional.relu", "functional.linear"),
     )
 
 
@@ -282,7 +363,9 @@ def _rows(
     """The two config-built roster rows every preview pack runs.
 
     ``fn_ops`` and ``module_ops`` are each model's independent op inventory:
-    the op kinds its definition performs, in order, in the backend's naming.
+    its input ops and the op kinds its definition performs, in capture order,
+    in the backend's naming (``Op.func_name``). Each list was checked against
+    the model definition; a missing op is a capture defect, never a list edit.
     """
 
     return (
