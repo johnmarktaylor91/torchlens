@@ -3,7 +3,9 @@
 This is the canonical user-facing catalog of TorchLens limitations. Each row says exactly when an
 edge can occur, what you can observe, and what to do. Run
 `tl.compat.report(model, inputs).to_markdown()` before capture for model-specific findings. For a
-new or surprising case, include that report and a minimal reproducer in a bug report.
+new or surprising case, include that report and a minimal reproducer in a bug report. Jobs
+TorchLens leaves to other tools on purpose (training-data influence, attack suites, remote
+execution, serving engines) are listed on [What TorchLens does not do](../non_goals.md).
 
 ## Start here: wrap before references escape
 
@@ -75,6 +77,7 @@ A tensor argument with no recorded graph or source provenance fails forward vali
 | A module's forward was installed by `torch.cuda.make_graphed_callables`, or capture runs inside `torch.cuda.graph()`. | Graph replay runs recorded kernels without Python, so no op is captured from the replay; this path is not verified on any venue. `tl.compat.report` row `cuda_graphs` reads `not_tested`. | Trace an eager copy built without `make_graphed_callables`, outside any stream capture. |
 | The model carries GPTQ or AWQ packed-int weights. | Capture is not verified on any venue: counts, bytes, FLOPs and weight attribution describe the packed `qweight`/`qzeros`/`scales` buffers. `tl.compat.report` row `gptq_awq_quantized` reads `not_tested`. | Trace the unquantized checkpoint when exact weights, counts or FLOPs matter. |
 | The model is served by vLLM or SGLang. | Out of capture scope: fused kernels, paged KV caches and CUDA graphs run outside eager PyTorch. `tl.compat.report` row `serving_engine` reads `scope`. | Capture the Hugging Face twin (same model id and revision through `transformers`); see `deployment_envelope.md`. |
+| The model runs on another machine, behind a remote-execution or hosted-inference service. | Out of capture scope: TorchLens has no remote-execution service and records only the forward that runs in its own Python process. | Run TorchLens where the model runs; move experiments as `.tlspec/` recipes (`trace.save_intervention(...)`). |
 | `nn.DataParallel` or DDP wraps the model. | The `.module` is unwrapped; threaded replicas are not captured as one concurrent Trace. | Capture the inner module directly when replica-local detail matters. |
 | A tensor subclass implements custom `__torch_function__`. | Capture may run with reduced subclass-specific metadata fidelity. | Prefer plain tensors for the captured run. |
 | Module nesting exceeds Python's recursion limit. | Traversal may raise `RecursionError`. | Flatten the hierarchy or deliberately raise `sys.setrecursionlimit`. |

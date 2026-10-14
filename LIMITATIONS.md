@@ -14,6 +14,15 @@ TorchLens is single-threaded by design. Capture depends on process-global loggin
 ordered operation counters, so running captures concurrently in multiple Python threads or child
 processes can corrupt ordering assumptions. Use TorchLens from the main process.
 
+## Remote Execution and Serving Engines
+
+TorchLens records the forward that runs in its own Python process. It has no remote-execution
+service, so a model running on another machine or behind a hosted-inference API is out of
+capture scope; run TorchLens where the model runs and move experiments as `.tlspec/` recipes.
+Serving engines such as vLLM and SGLang run fused kernels, paged KV caches and CUDA graphs outside
+eager PyTorch; trace the eager Hugging Face twin of the same checkpoint instead. The full list of
+jobs TorchLens leaves to other tools is [What TorchLens does not do](docs/non_goals.md).
+
 ## Dynamic Control Flow
 
 Eager dynamic control flow is a feature, not a limitation. TorchLens records the branch, loop, and
