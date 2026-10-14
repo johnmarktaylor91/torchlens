@@ -367,6 +367,8 @@ def _analysis_runners(
     target_gram = target @ target.T
 
     def rsa(matrix: np.ndarray) -> tuple[Any, None]:
+        """Score one site by RSA against the target RDM, with its interval if asked."""
+
         site_rdm = rdm(matrix, settings["rdm_metric"])
         if bootstrap is None:
             return rdm_compare(site_rdm, target_rdm, method=settings["rsa_method"]), None
@@ -380,18 +382,24 @@ def _analysis_runners(
         ), None
 
     def cka(matrix: np.ndarray) -> tuple[Any, None]:
+        """Score one site by linear CKA against the target, with its interval if asked."""
+
         gram = matrix @ matrix.T
         point = _gram_cka(gram, target_gram)
         if bootstrap is None:
             return point, None
 
         def statistic(index: np.ndarray) -> float:
+            """Return linear CKA on the resampled stimuli ``index``."""
+
             sub = np.ix_(index, index)
             return _gram_cka(gram[sub], target_gram[sub])
 
         return bootstrap_interval(statistic, matrix.shape[0], point, bootstrap), None
 
     def ridge(matrix: np.ndarray) -> tuple[Any, list[float]]:
+        """Score one site by cross-validated ridge; also return each fold's penalty."""
+
         predicted, chosen = cross_validated_ridge(
             matrix,
             target,
@@ -404,6 +412,8 @@ def _analysis_runners(
             return point, chosen
 
         def statistic(index: np.ndarray) -> float:
+            """Return the mean per-column r on the resampled stimuli ``index``."""
+
             return _mean_column_r(predicted[index], target[index])
 
         return bootstrap_interval(statistic, matrix.shape[0], point, bootstrap), chosen
