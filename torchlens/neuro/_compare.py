@@ -268,17 +268,21 @@ def _as_rows(value: Any, name: str) -> np.ndarray:
     return matrix
 
 
+def _mapping_matrices(source: Mapping[Any, Any], sites: Any) -> OrderedDict[str, np.ndarray]:
+    """Read the requested keys of a ``{site: array}`` mapping once each."""
+
+    selected = list(source) if sites is None else list(sites)
+    missing = [site for site in selected if site not in source]
+    if missing:
+        raise ValueError(f"neuro.compare: sites {missing} are not keys of the source mapping.")
+    return OrderedDict((str(site), _as_rows(source[site], f"site {site!r}")) for site in selected)
+
+
 def _site_matrices(source: Any, sites: Any) -> OrderedDict[str, np.ndarray]:
     """Read each site's activations once, keyed by site."""
 
     if isinstance(source, Mapping):
-        selected = list(source) if sites is None else [str(site) for site in sites]
-        missing = [site for site in selected if site not in source]
-        if missing:
-            raise ValueError(f"neuro.compare: sites {missing} are not keys of the source mapping.")
-        return OrderedDict(
-            (str(site), _as_rows(source[site], f"site {site!r}")) for site in selected
-        )
+        return _mapping_matrices(source, sites)
     from ._handoff import _source_kind, enumerate_extraction_sites, enumerate_trace_sites
 
     if _source_kind(source) == "trace":

@@ -249,42 +249,67 @@ def metric_disagreement(scores: Mapping[str, Mapping[str, Any]]) -> MetricDisagr
     metrics = tuple(str(metric) for metric in scores)
     if len(metrics) < 2:
         raise ValueError("metric_disagreement needs at least two metrics to compare.")
-    sites: list[str] = []
-    for per_site in scores.values():
-        sites.extend(str(site) for site in per_site if str(site) not in sites)
+    sites = _collect_sites(scores)
     if len(sites) < 2:
         raise ValueError("metric_disagreement needs at least two sites to order.")
     points = {
         metric: {site: _point(scores[metric].get(site)) for site in sites} for metric in metrics
     }
-    intervals = {
-        metric: {
-            str(site): value
-            for site, value in scores[metric].items()
-            if isinstance(value, ScoreInterval)
-        }
-        for metric in metrics
-    }
-    intervals = {metric: values for metric, values in intervals.items() if values}
-    pairs = []
-    for site_a, site_b in combinations(sites, 2):
-        higher: dict[str, str | None] = {}
-        for metric in metrics:
-            a, b = points[metric][site_a], points[metric][site_b]
-            higher[metric] = (
-                None if math.isnan(a) or math.isnan(b) or a == b else (site_a if a > b else site_b)
-            )
-        if {site_a, site_b} <= set(higher.values()):
-            pairs.append(
-                DisagreeingPair(
-                    site_a, site_b, higher, _pair_firmness(site_a, site_b, higher, intervals)
-                )
-            )
+    intervals = _interval_table(scores)
     return MetricDisagreement(
         metrics=metrics,
-        sites=tuple(sites),
+        sites=sites,
         scores=points,
         ranks={metric: _descending_ranks(points[metric]) for metric in metrics},
-        pairs=tuple(pairs),
+        pairs=_disagreeing_pairs(sites, points, intervals),
         intervals=intervals,
     )
+
+
+def _collect_sites(scores: Mapping[str, Mapping[str, Any]]) -> tuple[str, ...]:
+    """Return every site name in first-seen order across metrics."""
+
+    sites: dict[str, None] = {}
+    for per_site in scores.values():
+        sites.update(dict.fromkeys(str(site) for site in per_site))
+    return tuple(sites)
+
+
+def _interval_table(
+    scores: Mapping[str, Mapping[str, Any]],
+) -> dict[str, dict[str, ScoreInterval]]:
+    """Return the ScoreInterval scores per metric (metrics without any omitted)."""
+
+    table: dict[str, dict[str, ScoreInterval]] = {}
+    for metric, per_site in scores.items():
+        found = {str(s): v for s, v in per_site.items() if isinstance(v, ScoreInterval)}
+        if found:
+            table[str(metric)] = found
+    return table
+
+
+def _higher_site(site_a: str, site_b: str, a: float, b: float) -> str | None:
+    """Return the site with the higher score, or ``None`` for a tie or NaN."""
+
+    if math.isnan(a) or math.isnan(b) or a == b:
+        return None
+    return site_a if a > b else site_b
+
+
+def _disagreeing_pairs(
+    sites: tuple[str, ...],
+    points: Mapping[str, Mapping[str, float]],
+    intervals: Mapping[str, Mapping[str, ScoreInterval]],
+) -> tuple[DisagreeingPair, ...]:
+    """Return every pair of sites that two metrics order oppositely."""
+
+    pairs = []
+    for site_a, site_b in combinations(sites, 2):
+        higher = {
+            metric: _higher_site(site_a, site_b, values[site_a], values[site_b])
+            for metric, values in points.items()
+        }
+        if {site_a, site_b} <= set(higher.values()):
+            firm = _pair_firmness(site_a, site_b, higher, intervals)
+            pairs.append(DisagreeingPair(site_a, site_b, higher, firm))
+    return tuple(pairs)
