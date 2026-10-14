@@ -454,6 +454,12 @@ def test_lazy_pool_captures_never_verify_across_repeats() -> None:
     ceilinged on capture 0 (worker born in-window) and VERIFIED on captures 1 and 2 (same
     worker, now 'foreign'). Every capture must now be non-verified."""
 
+    # Every pool any instance builds, not only ``model._pool``: the capture also runs
+    # the forward on its own model copies, each of which builds a pool. A pool left
+    # running is freed by a later garbage collection, and its worker then exits inside
+    # an unrelated test's capture window (``owner_thread_tripwire_changed`` there).
+    pools: list[ThreadPoolExecutor] = []
+
     class _LazyPool(nn.Module):
         def __init__(self) -> None:
             super().__init__()
@@ -463,6 +469,7 @@ def test_lazy_pool_captures_never_verify_across_repeats() -> None:
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             if self._pool is None:
                 self._pool = ThreadPoolExecutor(max_workers=1)
+                pools.append(self._pool)
             return self.lin(x) * (1.0 + (self._pool.submit(time.time).result() % 1.0))
 
     model = _LazyPool().eval()
@@ -474,8 +481,8 @@ def test_lazy_pool_captures_never_verify_across_repeats() -> None:
             )._runnable
             assert seam.host_rng_unreplayable or seam.rng_monitor_uncertain, index
     finally:
-        if model._pool is not None:
-            model._pool.shutdown(wait=True)
+        for pool in pools:
+            pool.shutdown(wait=True)
 
 
 @pytest.mark.heavy  # measured 7.1-11.5s across CI rows (round-2 CI triage, 2026-10-01):
