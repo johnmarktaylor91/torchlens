@@ -15,10 +15,12 @@ CPU threads) is ``rare``: run it explicitly with ``-m rare``.
 
 The front-door rows: a ``tl.where`` predicate on ``p.layer_label`` resolves
 on the saved trace (the push engine ablates with it) but cannot match during
-a live forward. A rerun of the same graph on the same inputs therefore
-refuses typed (``rerun_selector_unmatchable_live``) and leaves the trace
-unchanged, instead of completing un-ablated behind a warning; a rerun on NEW
-inputs keeps the ``rerun_zero_fire`` warning.
+a live forward. A rerun therefore refuses typed
+(``rerun_selector_unmatchable_live``) and leaves the trace unchanged, instead
+of completing un-ablated behind a warning, on the same inputs and on NEW
+inputs alike (U40.6: close the gap before launch). Only a predicate that
+matches nothing on the rerun's own trace keeps the ``rerun_zero_fire``
+warning, since there the miss is the inputs.
 """
 
 from __future__ import annotations
@@ -207,13 +209,29 @@ def test_layer_label_predicate_rerun_on_same_inputs_refuses_typed() -> None:
     assert torch.count_nonzero(member[label].out) > 0
 
 
-def test_layer_label_predicate_rerun_on_new_inputs_keeps_the_warning() -> None:
+def test_layer_label_predicate_rerun_on_new_inputs_refuses_typed() -> None:
     model, x, baseline, label = _mlp_case()
     predicate = tl.where(lambda p: p.layer_label == label)
+    member = baseline.fork()
+    before = member[label].out.clone()
+    with pytest.raises(LiveModeLabelError) as excinfo:
+        _rerun(member, predicate, model, x + 1.0)
+    assert excinfo.value.fields["code"] == "rerun_selector_unmatchable_live"
+    assert excinfo.value.fields["source_site_count"] == 1
+    assert torch.equal(member[label].out, before)
+
+
+def test_input_dependent_predicate_miss_on_new_inputs_keeps_the_warning() -> None:
+    model, x, baseline, _label = _mlp_case()
+    # Matches the captured batch size only: on a new batch size it matches no
+    # site, live or post hoc, so the miss is the inputs and the rerun warns.
+    predicate = tl.func("relu") & tl.where(
+        lambda p: p.shape is not None and tuple(p.shape)[:1] == (2,)
+    )
     with pytest.warns(UserWarning, match="fired at zero sites on the new inputs"):
-        result = _rerun(baseline, predicate, model, x + 1.0)
+        result = _rerun(baseline, predicate, model, torch.randn(3, 16))
     assert result.last_run["hooks_fired"] == 0
-    assert result.last_run["hooks_unfired"] == 1
+    assert result.last_run["hooks_unfired"] > 0
 
 
 def test_label_and_head_spellings_and_plain_capture_are_unchanged() -> None:

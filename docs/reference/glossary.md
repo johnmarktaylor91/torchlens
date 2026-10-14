@@ -770,9 +770,11 @@ one exact `other_neurons` row.
   (`Trace.set(label, ...)`, `attach_hooks(tl.label(...))`) can never fire during a live
   forward, so a rerun refuses it up front with `rerun_staged_label_unmatchable` (trace
   unchanged). A staged edit whose selector matches sites on the trace but fires at none
-  during a rerun of the same graph on the same inputs (a `tl.where` predicate on
-  `p.layer_label`) refuses with `rerun_selector_unmatchable_live` (trace unchanged); on new
-  inputs it still warns `rerun_zero_fire`. The rerun divergence check (`ControlFlowDivergenceWarning`, or
+  during a rerun of the same graph on the same inputs refuses with
+  `rerun_selector_unmatchable_live` (trace unchanged), and so does, on any inputs, a
+  `tl.where` predicate that matches sites on the rerun's own trace but fired at none during
+  its forward (a predicate on `p.layer_label`, which exists only after postprocess). A
+  predicate that matches nothing on the new inputs warns `rerun_zero_fire`. The rerun divergence check (`ControlFlowDivergenceWarning`, or
   `ControlFlowDivergenceError` with `strict=True`) compares raw op order, edges and shapes with
   each value-only edit node folded into the op it replaces, so a staged edit is never
   reported as control-flow divergence while a changed op, edge, shape or batch size still is.
