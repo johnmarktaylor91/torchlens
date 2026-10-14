@@ -421,6 +421,32 @@ class TraceValidationMixin(_TraceMixinBase):
             return ValidationReplayStatus.unavailable_unsupported(backend=backend)
         return ValidationReplayStatus.available_live(backend=backend)
 
+    @property
+    def pristine(self: "Trace") -> bool | None:
+        """Whether nothing ever intervened on this trace, read from its saved evidence.
+
+        Derived at read time from records that persist with the trace (the
+        intervention audit, the operation history, mutation states, direct
+        writes and op intervention marks), so it survives ``tl.save`` /
+        ``tl.load`` and no reset makes a touched trace read pristine again.
+        It is a reading, never a verdict: it does not change validation or
+        any run report. Distinct from ``Trace.state`` (``TraceState.PRISTINE``
+        is an operational state an assignment can set) and from validation's
+        pristine-torch oracle (unwrapped torch functions).
+
+        Returns
+        -------
+        bool | None
+            ``False`` when any touch evidence is found; ``None`` when the
+            trace cannot carry the evidence (an artifact older than tlspec 9,
+            or a non-torch backend), which means no evidence and is never a
+            pristine reading; otherwise ``True``.
+        """
+
+        from ._trace_pristine import derive_pristine
+
+        return derive_pristine(self)
+
     def push(
         self: "Trace",
         replay: ReplayOptions | None = None,

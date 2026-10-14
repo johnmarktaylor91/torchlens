@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import torch
 
-from .._trace_state import TraceState
 from ..errors.episode import BundleRelationError
 from ..intervention._metrics import is_scalar_like, relative_l1_scalar, resolve_metric
 from ..intervention._super.super_logs import (
@@ -1882,11 +1881,7 @@ class Bundle:
             parts = []
             if name == self._baseline_name:
                 parts.append("baseline")
-            pristine = (
-                getattr(member, "_spec_revision", None) == 0
-                and getattr(member, "state", None) is TraceState.PRISTINE
-            )
-            if pristine:
+            if getattr(member, "pristine", None) is True:
                 parts.append("pristine")
             parts.append(f"intervention_ready={getattr(member, 'intervention_ready', False)}")
             parts.append(f"state={getattr(getattr(member, 'state', None), 'name', None)}")
@@ -2245,6 +2240,9 @@ class Bundle:
     def _auto_detect_baseline(self) -> str | None:
         """Auto-detect a pristine baseline when exactly one candidate exists.
 
+        A member is a candidate only when ``Trace.pristine`` reads ``True``;
+        ``None`` (no evidence recorded) never counts as pristine.
+
         Returns
         -------
         str | None
@@ -2254,8 +2252,7 @@ class Bundle:
         candidates = [
             name
             for name, member in self._members.items()
-            if getattr(member, "_spec_revision", None) == 0
-            and getattr(member, "state", None) is TraceState.PRISTINE
+            if getattr(member, "pristine", None) is True
         ]
         return candidates[0] if len(candidates) == 1 else None
 
