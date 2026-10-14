@@ -374,10 +374,7 @@ def _expansion_candidates(
     attention kernel, a scores matmul) mixes heads and is not a copy.
     """
 
-    index: dict[str, list[Any]] = {}
-    for op in log.layer_list:
-        for key in {str(op.label), str(op.layer_label)}:
-            index.setdefault(key, []).append(op)
+    index = _op_index(log)
     queue = deque(index.get(home_label, []))
     seen: set[str] = set()
     candidates = []
@@ -386,15 +383,40 @@ def _expansion_candidates(
         if str(op.label) in seen:
             continue
         seen.add(str(op.label))
-        shape = tuple(op.shape or ())
-        if len(shape) >= 3 and shape[1] == n_q and str(op.label) != home_label:
+        if _reaches_query_heads(op, n_q) and str(op.label) != home_label:
             if _is_pure_expansion(op, n_kv):
                 candidates.append(op)
             continue
-        for child_label in op.children:
-            children = index.get(str(child_label), [])
-            queue.extend(child for child in children if _inside(child, address))
+        queue.extend(_children_inside(op, index, address))
     return candidates
+
+
+def _op_index(log: Any) -> dict[str, list[Any]]:
+    """Map every final and layer label to its op records (several for multi-pass layers)."""
+
+    index: dict[str, list[Any]] = {}
+    for op in log.layer_list:
+        for key in {str(op.label), str(op.layer_label)}:
+            index.setdefault(key, []).append(op)
+    return index
+
+
+def _reaches_query_heads(op: Any, n_q: int) -> bool:
+    """Whether ``op``'s output is head-major at the query-head count."""
+
+    shape = tuple(op.shape or ())
+    return len(shape) >= 3 and shape[1] == n_q
+
+
+def _children_inside(op: Any, index: dict[str, list[Any]], address: str) -> list[Any]:
+    """Return ``op``'s child op records that ran inside the module ``address``."""
+
+    return [
+        child
+        for child_label in op.children
+        for child in index.get(str(child_label), [])
+        if _inside(child, address)
+    ]
 
 
 def _inside(op: Any, address: str) -> bool:
