@@ -293,15 +293,25 @@ class GqaInfo:
     def header(self, query_head: int) -> str:
         """Return the rendered KV-group header line for one query head."""
 
-        from ._wording import KV_GROUP_WORDING
+        return self.group_header(self.group_of(query_head))
+
+    def query_heads(self, group: int) -> tuple[int, ...]:
+        """Return the query heads that read KV group ``group`` (zero-based)."""
 
         per_group = self.n_query_heads // self.n_kv_heads
-        group = self.group_of(query_head)
+        return tuple(range(group * per_group, (group + 1) * per_group))
+
+    def group_header(self, group: int) -> str:
+        """Return the rendered sharing line for one zero-based KV group."""
+
+        from ._wording import KV_GROUP_WORDING
+
+        members = self.query_heads(group)
         return KV_GROUP_WORDING.format(
             group=group + 1,
             n_groups=self.n_kv_heads,
-            first=group * per_group,
-            last=(group + 1) * per_group - 1,
+            first=members[0],
+            last=members[-1],
         )
 
 
@@ -951,6 +961,11 @@ class CausalReceipt:
         a TWO-RUN figure and says so).
     fingerprints:
         Content fingerprints for the joined artifacts.
+    kv_groups:
+        Grouped-query disclosure for a KEY/VALUE-site receipt: when set,
+        ``heads`` are zero-based KV group indices, each cell ablates one
+        shared group, and every rendering names the query heads that
+        read it. ``None`` means ``heads`` are query heads.
     """
 
     layer: str
@@ -969,9 +984,10 @@ class CausalReceipt:
     pattern_source: str = "captured"
     effect_source: str = "capture route"
     fingerprints: dict[str, str] = field(default_factory=dict)
+    kv_groups: GqaInfo | None = None
 
     def __post_init__(self) -> None:
-        """Validate alignment, finiteness, and both mandatory controls."""
+        """Validate alignment, finiteness, both controls and KV group range."""
 
         _require(
             len(self.effects) == len(self.heads),
@@ -986,6 +1002,27 @@ class CausalReceipt:
                     remedy="a non-finite metric is a failed measurement; re-run the cell",
                 )
         _validate_receipt_controls(self)
+        if self.kv_groups is not None:
+            _require(
+                all(0 <= head < self.kv_groups.n_kv_heads for head in self.heads),
+                f"kv-group receipt names groups {self.heads} but the model has "
+                f"{self.kv_groups.n_kv_heads} kv groups.",
+                "build kv-group receipts from a key/value-site grid, whose head axis "
+                "counts kv groups",
+            )
+
+    @property
+    def unit(self) -> str:
+        """Return what one cell ablates: ``"head"`` or ``"kv group"``."""
+
+        return "head" if self.kv_groups is None else "kv group"
+
+    def sharing_lines(self) -> tuple[str, ...]:
+        """Return the per-group sharing disclosure (empty for query heads)."""
+
+        if self.kv_groups is None:
+            return ()
+        return tuple(self.kv_groups.group_header(group) for group in self.heads)
 
     @property
     def measured_n(self) -> int:
@@ -1060,8 +1097,20 @@ class Annotation:
 
     @classmethod
     def from_receipt(cls, receipt: CausalReceipt) -> Annotation:
-        """Mint the ``intervention_effect`` annotation from a valid receipt."""
+        """Mint the ``intervention_effect`` annotation from a valid receipt.
 
+        A kv-group receipt refuses: attention panels are per query head,
+        and one group's effect is not any single query head's effect.
+        """
+
+        if receipt.kv_groups is not None:
+            refuse(
+                code="tv_annotation_invalid",
+                message="A kv-group receipt cannot annotate per-query-head attention panels: "
+                "each cell ablates one shared key/value group, so its effect belongs to "
+                "every query head reading that group, not to any one of them.",
+                remedy="render it with render_receipt_grid, which names each group's query heads",
+            )
         return cls(
             kind="intervention_effect",
             heads=receipt.heads,
