@@ -14,7 +14,7 @@ import torch
 
 import torchlens.tviz as tviz
 from torchlens.semantic.logit_lens import LogitLensEntry, LogitLensResult
-from torchlens.tviz._lens_heatmap import MAX_HEATMAP_POSITIONS, _heatmap_cells
+from torchlens.tviz._lens_heatmap import MAX_HEATMAP_POSITIONS, _clip, _heatmap_cells
 
 VOCAB = 13
 
@@ -79,7 +79,16 @@ def test_render_writes_vector_output_with_the_footer(tmp_path: Path) -> None:
     assert "none is the model's own output" in lines
     assert "full-vocabulary denominator" in lines
     # The long token is clipped in its cell and the clip is disclosed.
-    assert "token text clipped to 8 characters" in lines
+    assert "token text clipped to 7 characters" in lines
+
+
+def test_whitespace_tokens_stay_visible_and_long_tokens_clip() -> None:
+    """A newline or space prediction never renders as an empty cell."""
+
+    assert _clip("\n") == ("'\\n'", False)
+    assert _clip(" ") == ("' '", False)
+    assert _clip("averyverylongtoken") == ("averyv~", True)
+    assert _clip("Paris") == ("Paris", False)
 
 
 def test_target_mode_names_the_target_and_pdf_renders(tmp_path: Path) -> None:
