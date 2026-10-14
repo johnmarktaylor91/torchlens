@@ -93,3 +93,36 @@ def test_sparse_direction_do_stays_silent() -> None:
     mask = selection.resolve(log)[0].mask
     assert bool((fork["relu_1_2"].out[mask] == 0).all())
     assert torch.equal(fork["relu_1_2"].out[~mask], log["relu_1_2"].out[~mask])
+
+
+def test_dense_direction_warning_names_the_shipped_projection_helpers() -> None:
+    """The remedy points at the projection-valued edits that ship, each a
+    real callable at its named spelling, and never calls them unshipped."""
+
+    import importlib
+
+    log = _trace()
+    fork = log.fork()
+    selection = tl.subspace("relu_1_2", torch.ones(_D), origin="dense probe")
+    with pytest.warns(TorchLensWarning) as caught:
+        fork.do(selection, tl.zero_ablate())
+    (warning,) = [
+        item.message
+        for item in caught
+        if isinstance(item.message, TorchLensWarning)
+        and item.message.fields.get("code") == "dense_subspace_full_axis_edit"
+    ]
+    message = str(warning)
+    remedy = warning.fields["remedy"]
+    assert "not a shipped capability" not in message
+    named = {
+        "tl.project_off": (tl, "project_off"),
+        "tl.project_onto": (tl, "project_onto"),
+        "torchlens.intervention.set_direction_mean": (
+            importlib.import_module("torchlens.intervention"),
+            "set_direction_mean",
+        ),
+    }
+    for spelling, (namespace, attribute) in named.items():
+        assert spelling in message and spelling in remedy, spelling
+        assert callable(getattr(namespace, attribute)), spelling
