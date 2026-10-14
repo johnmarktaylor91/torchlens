@@ -212,10 +212,12 @@ def _footer(
     ]
     if target is not None:
         lines.append(f"color: probability of target token {target!r}")
-    text = f"batch element {batch_index} of {batch_size}; tokens drawn without surrounding spaces"
+    lines.append(
+        f"batch element {batch_index} of {batch_size}; tokens drawn without surrounding spaces"
+    )
     if clipped:
-        text += f", clipped to {TOKEN_CLIP} characters (~ marks a clip)"
-    return [*lines, text]
+        lines.append(f"tokens clipped to {TOKEN_CLIP} characters (~ marks a clip)")
+    return lines
 
 
 def _text_color(cmap: Any, value: float) -> str:
