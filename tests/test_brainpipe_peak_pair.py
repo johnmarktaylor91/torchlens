@@ -87,20 +87,12 @@ def test_multi_capture_resident_peak_is_non_degenerate() -> None:
     every capture after the first read 0 -- useless for policing a
     hundred-capture sweep (brainpipe memo D-12 finding).
 
-    The pre-forward RSS baseline is read via ``psutil`` (``process_rss_bytes``),
-    an optional dependency deliberately absent from the lean per-PR smoke
-    install (``.[dev,tabular,viz]`` in ``tests.yml``) while present in the
-    nightly "Coverage floor" job's ``.[dev,test,tabular]`` install -- both are
-    real, intentional CI environments, not a worker artifact. This oracle
-    branches on the capability via ``psutil_available`` (never silently
-    skips): where psutil is importable it proves the sweep-scale fix measures
-    a real positive resident delta; where it is not, it proves the typed
-    "unavailable" disclosure fires instead of a basis/value mismatch (the
-    pre-fix bug the brainpipe memo's instrument defect would otherwise hide
-    behind).
+    The pre-forward RSS baseline (``process_rss_bytes``) reads ``psutil`` where
+    it is installed (the nightly "Coverage floor" job's ``.[dev,test,tabular]``)
+    and ``/proc/self/statm`` where it is not (the lean per-PR smoke install
+    ``.[dev,tabular,viz]``), so on Linux it is always readable: every capture
+    is per-capture scoped and the last one measures a real positive delta.
     """
-
-    from torchlens.capture.peak_memory import psutil_available
 
     # Escalating widths, then one capture whose every activation is a fresh
     # mapping. A warm allocator legitimately reads 0 growth when a capture
@@ -125,12 +117,8 @@ def test_multi_capture_resident_peak_is_non_degenerate() -> None:
         pair = log.forward_peak_memory_pair
         assert pair is not None
         readings.append((pair["resident"], pair["resident_basis"]))
-    if psutil_available():
-        assert all(basis == "per_capture" for _, basis in readings)
-        assert readings[-1][0] is not None and readings[-1][0] > 0
-    else:
-        assert all(basis == "unavailable" for _, basis in readings)
-        assert all(resident is None for resident, _ in readings)
+    assert all(basis == "per_capture" for _, basis in readings)
+    assert readings[-1][0] is not None and readings[-1][0] > 0
 
 
 _INFERENCE_ONLY_SCRIPT = textwrap.dedent(

@@ -11,47 +11,36 @@ from __future__ import annotations
 from typing import Any
 
 
-def psutil_available() -> bool:
-    """Whether ``psutil`` can be imported (capability probe, not torch-specific).
-
-    ``process_rss_bytes`` is the host-resident-set baseline the CPU/MPS forward-peak
-    bracket reads BEFORE the forward pass; without psutil that baseline is always 0,
-    so the bracket can never compute a resident delta no matter how the VmHWM
-    high-water mark itself behaves. Callers (the bracket's ``resident_basis``
-    disclosure, this module's test suite) use this probe to distinguish "psutil
-    missing" from "measured, zero growth" instead of reporting a misleading basis
-    label alongside an unexplained ``None``.
-
-    Returns
-    -------
-    bool
-        ``True`` when ``import psutil`` succeeds.
-    """
-
-    try:
-        import psutil  # noqa: F401
-    except ImportError:
-        return False
-    return True
-
-
 def process_rss_bytes() -> int:
     """Return the current process resident-set size in bytes, or 0 if unavailable.
 
-    Used as a coarse host-memory proxy for the CPU forward-pass peak. psutil is an
-    optional dependency; absence degrades to 0 rather than raising.
+    The baseline of the CPU forward and backward peak brackets. psutil is an
+    optional dependency; without it Linux reads ``/proc/self/statm`` (resident
+    pages times the page size), and other platforms degrade to 0 rather than
+    raising.
 
     Returns
     -------
     int
-        Resident-set size in bytes, or 0 when psutil is unavailable.
+        Resident-set size in bytes, or 0 when neither psutil nor procfs is usable.
     """
 
     try:
         import psutil
     except ImportError:
-        return 0
+        try:
+            import os
+
+            with open("/proc/self/statm") as handle:
+                return int(handle.read().split()[1]) * os.sysconf("SC_PAGE_SIZE")
+        except (OSError, ValueError, IndexError):
+            return 0
     return int(psutil.Process().memory_info().rss)
+
+
+#: The one switch for the process-wide ``VmHWM`` reset: every reset (the forward
+#: bracket and each CPU backward pass) goes through :func:`reset_peak_rss`.
+RESET_HOST_PEAK = True
 
 
 def reset_peak_rss() -> bool:
@@ -62,7 +51,12 @@ def reset_peak_rss() -> bool:
     the process-lifetime maximum (which reads 0 for every capture after the
     first -- the brainpipe memo's sweep-scale instrument defect). Only the
     peak-RSS counter is touched; no page state relevant to correctness
-    changes.
+    changes. The reset is process-wide and cannot be undone: after a capture
+    (forward bracket) or a CPU ``log_backward`` (each pass), a caller's own
+    ``VmHWM`` and ``ru_maxrss`` reads report the high-water since that bracket
+    began, not since process start. Nothing in TorchLens reads it across
+    brackets. With :data:`RESET_HOST_PEAK` off nothing is written and the
+    peaks fall back to the unscoped (process-lifetime) basis.
 
     Returns
     -------
@@ -70,6 +64,8 @@ def reset_peak_rss() -> bool:
         Whether the reset succeeded (Linux with a writable procfs).
     """
 
+    if not RESET_HOST_PEAK:
+        return False
     try:
         with open("/proc/self/clear_refs", "w") as handle:
             handle.write("5")
@@ -169,7 +165,7 @@ def forward_peak_value(
     backend:
         The measurement backend (``"cpu"``, ``"mps"``, ...).
     measured:
-        ``max(rss_delta, python_peak)`` in bytes.
+        The measured host peak in bytes (:func:`host_forward_peak`).
     python_peak_measured:
         Whether the opt-in tracemalloc probe ran.
 
@@ -188,6 +184,40 @@ def forward_peak_value(
     return None, CPU_ZERO_PEAK_REASON
 
 
+def host_forward_peak(
+    backend: str, rss_delta: int, traced_peak: int, resident_growth: int | None, basis: str
+) -> int:
+    """Return the host forward peak in bytes before the CPU-zero rule.
+
+    CPU uses the largest of the end-of-forward RSS delta, the opt-in
+    tracemalloc peak and, when the ``VmHWM`` reset scoped it to this
+    bracket (``basis == "per_capture"``), the resident high-water growth: a
+    buffer the forward allocates and frees before it returns is part of its
+    peak. MPS keeps the allocator delta (the resident pair is host memory).
+
+    Parameters
+    ----------
+    backend:
+        ``"cpu"`` or ``"mps"``.
+    rss_delta:
+        End-of-forward RSS (or MPS allocator) minus the bracket baseline.
+    traced_peak:
+        Opt-in tracemalloc peak over its baseline, else 0.
+    resident_growth:
+        ``VmHWM`` after the forward minus the baseline RSS, when computable.
+    basis:
+        The pair's ``resident_basis``.
+
+    Returns
+    -------
+    int
+        The measured peak in bytes.
+    """
+
+    scoped = resident_growth if backend == "cpu" and basis == "per_capture" else None
+    return max(rss_delta, traced_peak, scoped or 0)
+
+
 def record_forward_peak(trace: Any, backend: str, measured: int, python_probe: Any) -> None:
     """Write ``forward_peak_memory`` and its reason onto ``trace`` (forks.13).
 
@@ -198,7 +228,7 @@ def record_forward_peak(trace: Any, backend: str, measured: int, python_probe: A
     backend:
         The measurement backend label.
     measured:
-        ``max(rss_delta, python_peak)`` in bytes.
+        The measured host peak in bytes (:func:`host_forward_peak`).
     python_probe:
         The tracemalloc module when the opt-in probe ran, else ``None``.
     """
