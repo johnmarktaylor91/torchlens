@@ -7,14 +7,17 @@ vendor-contract pin, the same shape as the ``netron`` extra.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
 
-try:
+if sys.version_info >= (3, 11):
     import tomllib
-except ModuleNotFoundError:  # pragma: no cover - py<3.11
-    tomllib = pytest.importorskip("tomli", reason="need tomllib or tomli to parse pyproject.toml")
+else:  # pragma: no cover - exercised on the py3.10 CI leg when tomli is present
+    tomllib = pytest.importorskip(
+        "tomli", reason="need tomllib (py>=3.11) or tomli (py<3.11) to parse pyproject.toml"
+    )
 
 PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
 
