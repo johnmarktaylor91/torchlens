@@ -260,10 +260,63 @@ def test_committed_ledger_passes_its_check(path: str) -> None:
 Edit = Callable[[str], str]
 
 
-def _replace(old: str, new: str) -> Edit:
+def _neighbours(lines: list[str], pattern: str) -> tuple[int, int]:
+    """Index the first two consecutive lines that both match ``pattern``."""
+
+    hits = [index for index, line in enumerate(lines) if re.fullmatch(pattern, line)]
+    pairs = [(a, b) for a, b in zip(hits, hits[1:]) if b == a + 1]
+    assert pairs, f"no two neighbouring rows match {pattern!r}"
+    return pairs[0]
+
+
+def _bump(pattern: str, row: int, delta: int, comment: str = "") -> Edit:
+    """Add ``delta`` to the count ending row ``row`` (0 or 1) of the first neighbouring pair.
+
+    Rows are picked by shape, never by value, so the scenario survives every
+    re-trued count; ``comment`` adds a line above the row, as a ceiling raise does.
+    """
+
     def edit(text: str) -> str:
-        assert old in text, f"scenario anchor missing: {old!r}"
-        return text.replace(old, new, 1)
+        lines = text.split("\n")
+        index = _neighbours(lines, pattern)[row]
+        lines[index] = re.sub(r"\d+(?=,?$)", lambda m: str(int(m.group()) + delta), lines[index])
+        if comment:
+            lines.insert(index, comment)
+        return "\n".join(lines)
+
+    return edit
+
+
+def _bump_first(pattern: str, delta: int) -> Edit:
+    """Add ``delta`` to the count on the first line matching ``pattern``."""
+
+    def edit(text: str) -> str:
+        lines = text.split("\n")
+        index = next(i for i, line in enumerate(lines) if re.fullmatch(pattern, line))
+        lines[index] = re.sub(r"\d+(?=,?$)", lambda m: str(int(m.group()) + delta), lines[index])
+        return "\n".join(lines)
+
+    return edit
+
+
+def _relabel(pattern: str, cell: int, label: str, sep: str) -> Edit:
+    """Prefix cell ``cell`` of the first line matching ``pattern`` with ``label``."""
+
+    def edit(text: str) -> str:
+        lines = text.split("\n")
+        index = next(i for i, line in enumerate(lines) if re.fullmatch(pattern, line))
+        cells = lines[index].split(sep)
+        cells[cell] = f"{label}{cells[cell]}" if sep == "\t" else f" {label}{cells[cell]}"
+        lines[index] = sep.join(cells)
+        return "\n".join(lines)
+
+    return edit
+
+
+def _insert_after_first(line: str, extra: str) -> Edit:
+    def edit(text: str) -> str:
+        index = text.index(line) + len(line)
+        return text[:index] + extra + text[index:]
 
     return edit
 
@@ -314,88 +367,90 @@ _JSON_ROW = (
     ' {{\n  "ambiguous": false,\n  "field": "zz_{lane}",\n  "file": "torchlens/__init__.py",\n'
     '  "has_default": false,\n  "sites": {sites},\n  "via_getattr": false\n }},\n'
 )
-_SIZE = '    "tests/example_models.py": 5500,\n'
-_RUFF = '    "B904": 17,\n'
+_COUNT_ROW = r"[^#\t][^\t]*\t\d+"
+_DICT_ROW = r'    "[^"]+": \d+,'
+_TSV_ROW = r"(?!site_key\t|name\t)[^#\t][^\t]*\t.+"
+_CODE_ROW = r"\| `[a-z0-9_]+` \|.*"
 
 #: (scenario id, file, our edit, their edit): the concurrent edits each check exists for.
 CORRUPTING_MERGES = (
     (
         "count-tsv-same-key",
         f"{_DATA}/diagnostic_ratchets.tsv",
-        _replace("s17_total_sites\t3545", "s17_total_sites\t3546"),
-        _replace("s17_total_sites\t3545", "s17_total_sites\t3547"),
+        _bump(_COUNT_ROW, 0, 1),
+        _bump(_COUNT_ROW, 0, 2),
     ),
     (
         "count-tsv-neighbouring-keys",
         f"{_DATA}/diagnostic_ratchets.tsv",
-        _replace("s17_total_sites\t3545", "s17_total_sites\t3546"),
-        _replace("s17_uncoded_sites\t1738", "s17_uncoded_sites\t1739"),
+        _bump(_COUNT_ROW, 0, 1),
+        _bump(_COUNT_ROW, 1, 1),
     ),
     (
         "cardinality-same-key",
         f"{_DATA}/universe_cardinalities.tsv",
-        _replace("U-BACKENDS\t6", "U-BACKENDS\t7"),
-        _replace("U-BACKENDS\t6", "U-BACKENDS\t8"),
+        _bump(_COUNT_ROW, 0, 1),
+        _bump(_COUNT_ROW, 0, 2),
     ),
     (
         "harvest-same-key",
         f"{_DATA}/harvest_counts.tsv",
-        _replace("harvest_python_fences\t281", "harvest_python_fences\t282"),
-        _replace("harvest_python_fences\t281", "harvest_python_fences\t283"),
+        _bump(_COUNT_ROW, 0, 1),
+        _bump(_COUNT_ROW, 0, 2),
     ),
     (
         "refusal-class-same-row",
         f"{_DATA}/refusal_site_classification.tsv",
-        _replace("LiveModeLabelError::1\tKNOWN-GAP\t", "LiveModeLabelError::1\tCONTRACTED\ta"),
-        _replace("LiveModeLabelError::1\tKNOWN-GAP\t", "LiveModeLabelError::1\tCONTRACTED\tb"),
+        _relabel(_TSV_ROW, 1, "lane-a-", "\t"),
+        _relabel(_TSV_ROW, 1, "lane-b-", "\t"),
     ),
     (
         "surface-same-name",
         f"{_ORACLES}/surface_module_classification.tsv",
-        _replace("ActivationLookup\tdeclared", "ActivationLookup\tundeclared"),
-        _replace("ActivationLookup\tdeclared", "ActivationLookup\tlicensed"),
+        _relabel(_TSV_ROW, 1, "lane-a-", "\t"),
+        _relabel(_TSV_ROW, 1, "lane-b-", "\t"),
     ),
     (
         "error-contract-same-row",
         "docs/reference/error_refusal_contract.md",
-        _replace("| `activation_not_saved` | ", "| `activation_not_saved` | lane A: "),
-        _replace("| `activation_not_saved` | ", "| `activation_not_saved` | lane B: "),
+        _relabel(_CODE_ROW, 2, "lane A:", "|"),
+        _relabel(_CODE_ROW, 2, "lane B:", "|"),
     ),
     (
         "warning-contract-same-row",
         "docs/reference/warning_contract.md",
-        _replace("| `collapse_expansion_manifest` | ", "| `collapse_expansion_manifest` | A: "),
-        _replace("| `collapse_expansion_manifest` | ", "| `collapse_expansion_manifest` | B: "),
+        _relabel(_CODE_ROW, 2, "lane A:", "|"),
+        _relabel(_CODE_ROW, 2, "lane B:", "|"),
     ),
     (
         "size-ratchet-same-key",
         "tests/test_file_size_ratchet.py",
-        _replace(_SIZE, "    # lane A.\n" + _SIZE.replace("5500", "5550")),
-        _replace(_SIZE, "    # lane B.\n" + _SIZE.replace("5500", "5600")),
+        _bump(_DICT_ROW, 0, 50, "    # raised by lane A."),
+        _bump(_DICT_ROW, 0, 100, "    # raised by lane B."),
     ),
     (
         "size-ratchet-neighbouring-keys",
         "tests/test_file_size_ratchet.py",
-        _replace(_SIZE, _SIZE.replace("5500", "5450")),
-        _replace('_models.py": 5200,', '_models.py": 5150,'),
+        _bump(_DICT_ROW, 0, -50),
+        _bump(_DICT_ROW, 1, -50),
     ),
     (
         "ruff-ratchet-neighbouring-keys",
         "tests/test_ruff_ratchet_governance.py",
-        _replace(_RUFF, _RUFF.replace("17", "16")),
-        _replace('    "B018": 14,\n', '    "B018": 13,\n'),
+        _bump(_DICT_ROW, 0, -1),
+        _bump(_DICT_ROW, 1, -1),
     ),
     (
         "static-scan-two-new-rows",
         f"{_LEDGER}/static_scan.json",
-        _replace("[\n", "[\n" + _JSON_ROW.format(lane="a", sites=1)),
-        _replace("[\n", "[\n" + _JSON_ROW.format(lane="b", sites=2)),
+        _insert_after_first("[\n", _JSON_ROW.format(lane="a", sites=1)),
+        _insert_after_first("[\n", _JSON_ROW.format(lane="b", sites=2)),
     ),
     (
         "static-scan-same-row-count",
         f"{_LEDGER}/static_scan.json",
-        _replace('  "sites": 1,\n', '  "sites": 2,\n'),
-        _replace('  "sites": 1,\n', '  "sites": 3,\n'),
+        _bump_first(r'  "sites": \d+,', 1),
+        _bump_first(r'  "sites": \d+,', 2),
     ),
     (
         "provenance-two-appends",
