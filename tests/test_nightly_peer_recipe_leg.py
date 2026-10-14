@@ -63,6 +63,8 @@ def test_peer_recipe_job_requires_peers_and_fails_on_any_skip() -> None:
     assert len(runs) == 1, "exactly one step runs the recipe pages"
     assert runs[0].get("env", {}).get("TORCHLENS_RECIPE_PEERS") == "1"
     assert "-rA" in runs[0]["run"] and "--junitxml=" in runs[0]["run"]
+    # No marker expression: heavy recipe pages (HEAVY_PAGES) must run here too.
+    assert " -m " not in runs[0]["run"]
     check = re.search(
         r"check_ci_executed_tests\.py\s+\\?\s*"
         r"\"\$RUNNER_TEMP/peer-recipes\.junit\.xml\"\s+(\d+)\s+(\S+)",
