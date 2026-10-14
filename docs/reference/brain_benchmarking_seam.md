@@ -35,7 +35,9 @@ The working surfaces behind the "we supply" column:
   model plugin hands to `ModelCommitment`; one neural and one behavioral
   benchmark were scored end to end through such a plugin (2026-10-14,
   brainscore-vision 2.4.1, Python 3.11, CPU). Brain-Score computes the
-  scores; TorchLens supplies the activations.
+  scores; TorchLens supplies the activations. `per_layer` and `score_parts`
+  report a ceiling-normalised score only beside its raw score
+  (`ScoreParts.raw`, `.ceiling_normalised`, `.ceiling`, `.error`).
 
 | # | Net2Brain method | We supply | We refuse and point |
 |---|---|---|---|

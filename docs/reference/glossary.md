@@ -974,6 +974,14 @@ shims, by declared contract. Each carries the same tag at its definition.
   b, ...)` does the same for linear CKA. Descriptive, not a test; inference
   stays with rsatoolbox.
 
+**ScoreParts (`tl.bridge.brain_score.ScoreParts`; returned by `tl.bridge.brain_score.score_parts` and, per layer, `tl.bridge.brain_score.per_layer`)** — *unstable — no deprecation shim owed*
+: A benchmark score split into named parts so a ceiling-normalised value
+  never stands in for the raw one: `raw`, `ceiling_normalised`, `ceiling`,
+  `error`, `note`. A Brain-Score result that carries a ceiling gives its
+  value as `ceiling_normalised` and its raw attribute as `raw`; a result
+  without one is raw and `ceiling_normalised` is `None`. TorchLens reads
+  these numbers; it computes no ceiling.
+
 **site_key (`Op.site_key`)** — *unstable — no deprecation shim owed*
 : The portable structural-position identity of one retained op
   (`site_key_v1`): a `"s1|"`-prefixed string of the pass-free module address

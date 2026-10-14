@@ -171,6 +171,19 @@ comparison, noise ceilings) stays with `rsatoolbox.inference`; asking
 interval. The stimulus bootstrap is known to be conservative for RDM
 comparisons (it tends to cover more often than its nominal rate).
 
+## Raw beside ceiling-normalised scores
+
+TorchLens computes no ceilings. Where the Brain-Score bridge reports a
+ceiling-normalised score, the raw score sits beside it under its own name:
+`tl.bridge.brain_score.per_layer(...)` returns, per layer, a `ScoreParts`
+record (`raw`, `ceiling_normalised`, `ceiling`, `error`, `note`), and
+`tl.bridge.brain_score.score_parts(score)` reads one Brain-Score `Score` the
+same way. A result that carries a ceiling attribute is ceiling-normalised:
+its value goes to `ceiling_normalised` and its `"raw"` attribute to `raw`. A
+result without one (a behavioral engineering score, or a plain number from
+an offline callable) is raw, and `ceiling_normalised` is `None`. Nothing is
+recomputed; Brain-Score's normalisation is its own.
+
 ## The CKA method contract (published)
 
 | Function | Estimator | Precision | Inputs | Degenerate case |
