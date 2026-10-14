@@ -70,6 +70,19 @@ _SITE = "model.layers.1"
 _COEFF = 4.0
 
 
+def _per_prompt_logits(call: Any, ids: torch.Tensor) -> torch.Tensor:
+    """Run one prompt per forward and stack the logits.
+
+    repeng 0.4's ``ControlModule`` builds its padding mask from the decoder
+    layer's ``position_ids``, which this transformers passes as ``[1, seq]``,
+    so a batch of several prompts fails its reshape; one prompt per forward
+    is the case it supports.
+    """
+
+    with torch.no_grad():
+        return torch.cat([call(ids[i : i + 1]).logits for i in range(ids.shape[0])])
+
+
 @pytest.mark.parametrize("method", ["mean_diff", "pca", "logistic"])
 def test_converted_control_vector_reproduces_native_steer_logits(
     stack: dict[str, Any], method: str
@@ -81,21 +94,18 @@ def test_converted_control_vector_reproduces_native_steer_logits(
     converted = direction.to_repeng()
     assert isinstance(converted, repeng.ControlVector)
     assert converted.model_type == "llama" and list(converted.directions) == [1]
-    with torch.no_grad():
-        plain = model(ids).logits
-        native = tl.when(tl.module(_SITE), direction.steer(_COEFF)).bind(model)(ids).logits
+    plain = _per_prompt_logits(model, ids)
+    native = _per_prompt_logits(tl.when(tl.module(_SITE), direction.steer(_COEFF)).bind(model), ids)
     control = repeng.ControlModel(model, layer_ids=[1])
     try:
         control.set_control(converted, coeff=_COEFF)
-        with torch.no_grad():
-            library = control(ids).logits
+        library = _per_prompt_logits(control, ids)
     finally:
         control.reset()
         control.unwrap()
     assert not torch.allclose(native, plain, atol=1e-5, rtol=0)
     torch.testing.assert_close(library, native, atol=1e-5, rtol=0)
-    with torch.no_grad():
-        torch.testing.assert_close(model(ids).logits, plain, atol=0, rtol=0)
+    torch.testing.assert_close(_per_prompt_logits(model, ids), plain, atol=0, rtol=0)
 
 
 def test_explicit_layer_and_model_type(stack: dict[str, Any]) -> None:

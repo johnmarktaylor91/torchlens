@@ -66,14 +66,16 @@ def _trace(model: nn.Module, ids: torch.Tensor, mask: torch.Tensor | None = None
     return tl.trace(model, (), input_kwargs=kwargs, capture=capture)
 
 
-def _hooked_rows(model: nn.Module, ids: torch.Tensor, positions: torch.Tensor) -> torch.Tensor:
+def _hooked_rows(
+    model: nn.Module, ids: torch.Tensor, positions: torch.Tensor, mask: torch.Tensor | None = None
+) -> torch.Tensor:
     """Read ``layers[1]``'s output at one position per row with a forward hook."""
 
     seen: list[torch.Tensor] = []
     handle = model.layers[1].register_forward_hook(lambda _m, _a, out: seen.append(out.detach()))
     try:
         with torch.no_grad():
-            model(ids)
+            model(ids, mask)
     finally:
         handle.remove()
     return seen[0][torch.arange(ids.shape[0]), positions]
@@ -216,16 +218,7 @@ def test_padded_rows_read_the_last_real_token(stack: dict[str, Any]) -> None:
         pos.cleanup()
         neg.cleanup()
     last = mask.sum(dim=1) - 1
-    rows = []
-    for ids in (stack["pos_ids"], stack["neg_ids"]):
-        seen: list[torch.Tensor] = []
-        handle = model.layers[1].register_forward_hook(lambda _m, _a, out: seen.append(out))
-        try:
-            with torch.no_grad():
-                model(ids, mask)
-        finally:
-            handle.remove()
-        rows.append(seen[0][torch.arange(6), last])
+    rows = [_hooked_rows(model, ids, last, mask) for ids in (stack["pos_ids"], stack["neg_ids"])]
     assert torch.equal(direction.vector, (rows[0] - rows[1]).mean(dim=0))
 
 
@@ -290,9 +283,7 @@ def test_to_repeng_wraps_the_vector(stack: dict[str, Any], monkeypatch: pytest.M
     assert result.model_type == "tiny" and list(result.directions) == [1]
     assert result.directions[1].dtype.name == "float32"
     assert torch.equal(torch.from_numpy(result.directions[1]), direction.vector)
-    with pytest.raises(InvalidArgumentError) as info:
-        direction.to_repeng()
-    assert info.value.code == "direction_model_type_unknown"
+    assert _code(direction.to_repeng) == "direction_model_type_unknown"
 
 
 def _code(call: Any) -> str:
@@ -300,8 +291,10 @@ def _code(call: Any) -> str:
 
     with pytest.raises(InvalidArgumentError) as info:
         call()
-    assert info.value.remedy
-    return str(info.value.code)
+    fields = info.value.fields
+    assert fields["remedy"]
+    assert str(info.value).rstrip().endswith(f"{fields['remedy']}.")
+    return str(fields["code"])
 
 
 def test_builder_refusals(stack: dict[str, Any]) -> None:
