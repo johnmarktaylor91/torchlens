@@ -982,6 +982,16 @@ shims, by declared contract. Each carries the same tag at its definition.
   without one is raw and `ceiling_normalised` is `None`. TorchLens reads
   these numbers; it computes no ceiling.
 
+**metric_disagreement (`tl.repgeom.metric_disagreement`; returns `tl.repgeom.MetricDisagreement` with `tl.repgeom.DisagreeingPair` rows)** — *unstable — no deprecation shim owed*
+: The rank order of sites (layers or models) under each comparison metric on
+  one extraction, with every pair of sites that two metrics order oppositely
+  flagged. Input is `scores[metric][site]` (a float or a `ScoreInterval`);
+  higher scores rank first, ties share their average rank, missing scores
+  take no side. Each flagged pair names the site each metric ranks higher
+  and, when the scores carry intervals, whether the opposite orders are
+  separated by them (`firm`). `table()` gives the plain-text report and
+  `to_dict()` the data form.
+
 **site_key (`Op.site_key`)** — *unstable — no deprecation shim owed*
 : The portable structural-position identity of one retained op
   (`site_key_v1`): a `"s1|"`-prefixed string of the pass-free module address

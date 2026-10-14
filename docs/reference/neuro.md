@@ -184,6 +184,22 @@ result without one (a behavioral engineering score, or a plain number from
 an offline callable) is raw, and `ceiling_normalised` is `None`. Nothing is
 recomputed; Brain-Score's normalisation is its own.
 
+## Where metrics disagree
+
+`tl.repgeom.metric_disagreement(scores)` takes `scores[metric][site]` (floats
+or `ScoreInterval`s from one extraction) and returns a `MetricDisagreement`:
+per-metric ranks (1 is the highest score), the pairs of sites that two
+metrics order oppositely, `table()` for a plain-text report and `to_dict()`
+for data. When the scores carry intervals, each flagged pair says whether the
+opposite orders are separated by the intervals or lie within their overlap.
+
+```python
+report = tl.repgeom.metric_disagreement(
+    {"rsa": {"layer1": 0.31, "layer2": 0.52}, "cka": {"layer1": 0.74, "layer2": 0.69}}
+)
+print(report.table())
+```
+
 ## The CKA method contract (published)
 
 | Function | Estimator | Precision | Inputs | Degenerate case |

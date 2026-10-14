@@ -7,6 +7,7 @@ visuals in ``_trace_views``; this facade re-exports every historical spelling.
 
 from __future__ import annotations
 
+from ._disagreement import DisagreeingPair, MetricDisagreement, metric_disagreement
 from ._geometry import (  # noqa: F401 -- public type aliases re-exported
     DistanceMetric,
     EffectiveDimensionalityInfo,
@@ -39,6 +40,8 @@ from ._uncertainty import ScoreInterval, cka_interval, rdm_compare_interval
 __tl_layer__ = "FACADE"
 
 __all__ = [
+    "DisagreeingPair",
+    "MetricDisagreement",
     "ScoreInterval",
     "activation_distance_matrix",
     "cka_interval",
@@ -46,6 +49,7 @@ __all__ = [
     "effective_dimensionality",
     "mds_evolution",
     "mds_scatter_node_spec",
+    "metric_disagreement",
     "procrustes_align",
     "rank_transform_rdm",
     "rdm",
