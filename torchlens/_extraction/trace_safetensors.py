@@ -1,4 +1,4 @@
-"""Safetensors export of a Trace (R2-08; spellings DOCUMENTED-UNSTABLE).
+"""Safetensors export of a Trace (spellings DOCUMENTED-UNSTABLE).
 
 ``tl.export.safetensors(trace, path)`` writes ONE ``.safetensors`` file: every
 tensor-valued op payload (``out``, ``transformed_out``, ``grad``,

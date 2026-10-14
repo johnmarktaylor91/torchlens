@@ -1160,7 +1160,7 @@ def _speculative_render_for(
 ) -> SpeculativeRender | None:
     """Return speculative-render state when the final render can reuse a verifier layout.
 
-    U07.5: the sibling-order verifier's ordered layout is the same layout the
+    The sibling-order verifier's ordered layout is the same layout the
     final render would run again; reuse needs the plain ``dot`` engine and a
     direct (not code-panel-composed) artifact.
 
@@ -1252,7 +1252,7 @@ def _publish_forward_render(
                         speculative.reusable_for(final_source) if speculative is not None else None
                     )
                     if reusable is not None:
-                        # U07.5: the verifier already laid out exactly this
+                        # the verifier already laid out exactly this
                         # source and wrote the format; publish that artifact.
                         shutil.move(reusable, temp_rendered_path)
                         stderr_text: Any = cast(SpeculativeRender, speculative).last_stderr
@@ -1467,7 +1467,7 @@ def draw(
         from ._encoding import raise_encoding_dagua_refusal
 
         raise_encoding_dagua_refusal(request.encoding.active_channels())
-    # forks.12: a bare draw (no vis_outpath) writes a collision-safe file and
+    # a bare draw (no vis_outpath) writes a collision-safe file and
     # always prints where; an explicit path is written exactly, as before.
     announce_path = vis_outpath is None
     resolved_outpath = (

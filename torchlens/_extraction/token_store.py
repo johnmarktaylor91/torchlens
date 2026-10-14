@@ -1,4 +1,4 @@
-"""The token SAE store (R2-08; spellings DOCUMENTED-UNSTABLE).
+"""The token SAE store (spellings DOCUMENTED-UNSTABLE).
 
 SAE and transcoder training reads activations one TOKEN per row, not one
 stimulus per row. Three pieces serve that pattern over the existing

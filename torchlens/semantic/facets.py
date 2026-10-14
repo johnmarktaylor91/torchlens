@@ -1162,7 +1162,7 @@ class FacetView(Mapping[FacetKey, Any]):
         return value
 
     def _absent_reason(self, name: FacetKey) -> AbsenceReason:
-        """Describe a facet no registered recipe produces here, naming what exists (U36.1)."""
+        """Describe a facet no registered recipe produces here, naming what exists."""
 
         record = self._record
         owner = getattr(record, "address", None) or getattr(record, "label", None) or "record"

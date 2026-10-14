@@ -1,4 +1,4 @@
-"""Opt-in label rows for backward nodes (U08.5; ``draw_backward`` keywords).
+"""Opt-in label rows for backward nodes (``draw_backward`` keywords).
 
 ``draw_backward(show_module_paths=True)`` adds the owning module (or, on
 AccumulateGrad nodes, the parameter) to each backward node;
@@ -23,7 +23,7 @@ __all__ = ["BackwardRowOptions", "backward_opt_in_rows", "backward_rows_for"]
 
 @dataclass(frozen=True)
 class BackwardRowOptions:
-    """Opt-in label rows for backward nodes (U08.5; ``draw_backward`` keywords).
+    """Opt-in label rows for backward nodes (``draw_backward`` keywords).
 
     Parameters
     ----------
@@ -75,7 +75,7 @@ def backward_opt_in_rows(
     call: Any | None,
     rows: BackwardRowOptions,
 ) -> list[str]:
-    """Return the requested opt-in rows (U08.5) for one backward node.
+    """Return the requested opt-in rows for one backward node.
 
     Parameters
     ----------

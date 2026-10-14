@@ -51,7 +51,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class SpeculativeRender:
-    """Final-format output produced inside the verifier's ordered layouts (U07.5).
+    """Final-format output produced inside the verifier's ordered layouts.
 
     The sibling-order verifier lays out the ordered DOT with ``dot -Tplain``
     and the final render then laid out the SAME source again. With a
@@ -88,7 +88,7 @@ class SpeculativeRender:
         return None
 
 
-#: The speculative render active for the ORDERED layout in progress (U07.5);
+#: The speculative render active for the ORDERED layout in progress;
 #: the baseline layout runs without one. A context variable keeps the
 #: ``_layout_dot_plain(source, rankdir, captured_edges)`` seam unchanged.
 _SPECULATIVE_RENDER: ContextVar[SpeculativeRender | None] = ContextVar(
@@ -142,7 +142,7 @@ def _verify_and_apply_sibling_ordering(
 ) -> tuple[str, SiblingOrderDecision]:
     """Verify sibling rank chains and return final DOT source.
 
-    ``speculative`` (U07.5) makes every ORDERED layout also write the final
+    ``speculative`` makes every ORDERED layout also write the final
     format, so the caller can reuse the artifact of the source returned here.
     """
 
@@ -429,7 +429,7 @@ def _dot_opened_scope(line: str) -> tuple[str | None] | None:
     return None
 
 
-#: The only characters ``_dot_line_is_complete`` acts on (U07.5): the scan
+#: The only characters ``_dot_line_is_complete`` acts on: the scan
 #: jumps between them instead of stepping through every character of the
 #: long HTML-label lines, the top Python self-time row of a default draw.
 _DOT_LINE_SPECIAL = re.compile(r'["\\<>]')
@@ -443,7 +443,7 @@ def _dot_line_is_complete(line: str) -> bool:
     plain text; outside, the ``>`` of an ``->`` edge operator opens nothing.
 
     Only ``"``, backslash, ``<`` and ``>`` change the scan state, so the loop
-    visits those positions alone (U07.5).
+    visits those positions alone.
     """
 
     in_quote = False

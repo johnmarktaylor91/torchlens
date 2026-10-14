@@ -1280,6 +1280,31 @@ def _einsum_flops(
     return 2 * output_numel * contraction_size
 
 
+#: Ops whose FLOP rule counts the full query x key square even when a mask
+#: or ``is_causal`` zeroes part of it (``_sdpa_flops`` below).
+ATTENTION_FULL_SQUARE_FUNCS: frozenset[str] = frozenset({"scaled_dot_product_attention"})
+
+#: The disclosure every attention FLOP line carries: summary, flops_report,
+#: profile, explain and graph labels all print this one wording.
+ATTENTION_FULL_SQUARE_NOTE = (
+    "attention FLOPs count the full query x key square; "
+    "attention masks and is_causal are not discounted"
+)
+
+
+def is_attention_full_square(node: object) -> bool:
+    """Whether ``node`` (an op or layer) is counted by the full-square rule."""
+
+    return getattr(node, "func_name", None) in ATTENTION_FULL_SQUARE_FUNCS
+
+
+def append_attention_note(lines: list[str], node: object) -> None:
+    """Append the note under an attention node's FLOP row, once per node label."""
+
+    if is_attention_full_square(node) and ATTENTION_FULL_SQUARE_NOTE not in lines:
+        lines.append(ATTENTION_FULL_SQUARE_NOTE)
+
+
 def _sdpa_flops(
     output_shape: Shape | None,
     param_shapes: ParamShapes,

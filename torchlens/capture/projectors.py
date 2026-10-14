@@ -595,7 +595,7 @@ class RefreshProjector:
         (``True`` from a mode-sensitive norm call whose every recorded mode
         claim says train, plus its in-place counter in the same module call)
         pass: a default run restores the declared state it
-        changed and a capture is a pure observer (U40.1), so every run starts
+        changed and a capture is a pure observer, so every run starts
         from the state the target was captured from. Only ``trace.run()``
         admits them (``train_mode_norm_writers_eligible``); the legacy
         ``save_new_outs`` refresh restores nothing and keeps refusing.

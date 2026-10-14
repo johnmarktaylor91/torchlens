@@ -1258,7 +1258,7 @@ def smoothgrad(
 
     _validate_positive_int("n_samples", n_samples)
     if noise_level <= 0:
-        # U21.5: zero noise averages n_samples identical saliency maps -- a
+        # zero noise averages n_samples identical saliency maps -- a
         # pointless loop dressed as SmoothGrad -- so it refuses with negatives.
         raise AttributionError(
             f"smoothgrad noise_level must be positive; got {noise_level!r}. "

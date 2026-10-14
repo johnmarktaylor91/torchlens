@@ -635,7 +635,7 @@ def render_surgery(trace: Trace, **user_kwargs: Any) -> Any:
     if not user_kwargs.get("return_graph", False):
         outpath = user_kwargs.get("vis_outpath")
         if outpath is None:
-            # A bare draw chose a collision-safe name (forks.12): the census
+            # A bare draw chose a collision-safe name: the census
             # rides beside the file that was actually written.
             from ._render_utils import DEFAULT_DRAW_STEM
 

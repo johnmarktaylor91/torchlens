@@ -78,7 +78,7 @@ class HFTrainerWatchCallback:
     construction (typed refusal otherwise).
     """
 
-    def __init__(  # noqa: PLR0913 -- each knob is a documented, separately sourced watch setting (U34.2 prints the source of each)
+    def __init__(  # noqa: PLR0913 -- each knob is a documented, separately sourced watch setting (the repr prints the source of each)
         self,
         *,
         to: Any,
@@ -168,7 +168,7 @@ class LightningWatchCallback:
     start through ``print_fn``. Requires lightning at construction.
     """
 
-    def __init__(  # noqa: PLR0913 -- each knob is a documented, separately sourced watch setting (U34.2 prints the source of each)
+    def __init__(  # noqa: PLR0913 -- each knob is a documented, separately sourced watch setting (the repr prints the source of each)
         self,
         *,
         to: Any,

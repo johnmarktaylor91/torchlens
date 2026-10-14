@@ -534,7 +534,7 @@ class CrossCovariance:
 
 
 def _refuse_nonfinite_cka_input(matrix: torch.Tensor, argument: str) -> None:
-    """Refuse NaN/Inf CKA input typed, matching ``tl.repgeom.rdm`` (U25.2).
+    """Refuse NaN/Inf CKA input typed, matching ``tl.repgeom.rdm``.
 
     Parameters
     ----------
@@ -596,7 +596,7 @@ class CKA:
 
     The variant is the similarity-repository's
     ``cka-kernel=linear-hsic=gretton-score`` (linear kernel, biased Gretton
-    HSIC); :attr:`similarity_repository_id` records it (U56.3; spelling
+    HSIC); :attr:`similarity_repository_id` records it (spelling
     DOCUMENTED-UNSTABLE).
     """
 

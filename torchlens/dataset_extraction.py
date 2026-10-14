@@ -170,7 +170,7 @@ def _refuse_disk_only_options(kwargs_in_memory: dict[str, Any]) -> None:
 def _resolve_token_and_intervention(
     intervene: Any, store_input_ids: Any, layers: Any
 ) -> tuple[InterventionPlan | None, bool]:
-    """Resolve the R2-08 ``intervene=`` and ``store_input_ids=`` slots.
+    """Resolve the ``intervene=`` and ``store_input_ids=`` slots.
 
     Parameters
     ----------
@@ -437,7 +437,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         artifact carries ``unknown_v1_prefix_semantics: true`` permanently.
     intervene:
         Optional :class:`torchlens.intervention.spec.InterventionSpec`
-        (``tl.when(selector, helper)``; DOCUMENTED-UNSTABLE, R2-08): every
+        (``tl.when(selector, helper)``; DOCUMENTED-UNSTABLE): every
         batch is captured with the spec armed, so stored rows are the
         INTERVENED activations. Batch zero freezes the structural sites the
         spec fired at; a batch firing nowhere or elsewhere refuses typed.
@@ -450,7 +450,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         ``layers=`` only.
     store_input_ids:
         Store each batch's token ids as the ordinary ``input_ids`` key
-        (DOCUMENTED-UNSTABLE, R2-08 token store), trimmed by the batch mask
+        (DOCUMENTED-UNSTABLE, token store), trimmed by the batch mask
         under ``ragged="trim"`` like the token-axis activations; read token
         rows back with ``open_extraction(...).token_rows()``.
 

@@ -25,7 +25,7 @@ def _nvtx_host_available() -> bool:
 
 
 def refuse_unavailable_nvtx(emit_nvtx: bool) -> None:
-    """Refuse ``emit_nvtx=True`` on a host without CUDA, as torch does (U35.3).
+    """Refuse ``emit_nvtx=True`` on a host without CUDA, as torch does.
 
     ``torch.autograd.profiler.emit_nvtx()`` refuses on such a host; before this
     check every TorchLens range push was silently swallowed, so the option

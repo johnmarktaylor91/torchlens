@@ -1,4 +1,4 @@
-"""Hub-name input form for ``tl.summary`` (U04.4; spelling DOCUMENTED-UNSTABLE).
+"""Hub-name input form for ``tl.summary`` (spelling DOCUMENTED-UNSTABLE).
 
 ``tl.summary("gpt2", input_size=(1, 8))`` fetches the model's CONFIG only,
 builds the architecture on the meta device (no weights are downloaded or

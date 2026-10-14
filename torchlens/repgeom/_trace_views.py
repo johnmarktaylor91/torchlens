@@ -48,7 +48,7 @@ class _PayloadBasisDict(OrderedDict):
     evolution result records which payload fed each key on
     ``result.payload_basis`` (``key -> "raw" | "transformed"``).
     ``result.similarity_repository_id`` names the exact measure variant in
-    the similarity-repository catalogue (U56.3; set by ``rdm_evolution``,
+    the similarity-repository catalogue (set by ``rdm_evolution``,
     ``None`` when the catalogue has no exact match or the verb computes no
     RDM). Plain ``OrderedDict`` semantics are unchanged; session-time only.
     """

@@ -928,7 +928,7 @@ class Recording(CapturedRun):
 
         # A record without a backward opt-in installed no gradient hooks, and a
         # forward under no_grad / inference_mode implied inference_only and built
-        # no autograd graph: either backward would capture nothing (AGT-2132).
+        # no autograd graph: either backward would capture nothing.
         state = getattr(self, "_recording_state", None)
         runtime_trace = getattr(state, "runtime_trace", None)
         if getattr(runtime_trace, "inference_only", False):

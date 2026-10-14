@@ -140,7 +140,7 @@ def read_peak_pair(trace: Any) -> dict[str, Any] | None:
     return dict(pair) if pair is not None else None
 
 
-#: The recorded reason for a CPU forward peak of ``None`` (forks.13): the host
+#: The recorded reason for a CPU forward peak of ``None``: the host
 #: RSS delta read 0, which says only that the forward fit in already-resident
 #: heap headroom, never that it allocated nothing.
 CPU_ZERO_PEAK_REASON = (
@@ -158,7 +158,7 @@ CPU_ZERO_PEAK_WITH_PYTHON_REASON = (
 def forward_peak_value(
     backend: str, measured: int, *, python_peak_measured: bool
 ) -> tuple[int | None, str | None]:
-    """Return the forward peak to record and its reason (forks.13).
+    """Return the forward peak to record and its reason.
 
     Parameters
     ----------
@@ -219,7 +219,7 @@ def host_forward_peak(
 
 
 def record_forward_peak(trace: Any, backend: str, measured: int, python_probe: Any) -> None:
-    """Write ``forward_peak_memory`` and its reason onto ``trace`` (forks.13).
+    """Write ``forward_peak_memory`` and its reason onto ``trace``.
 
     Parameters
     ----------

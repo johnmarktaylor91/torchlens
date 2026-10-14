@@ -1,4 +1,4 @@
-"""Bootstrap uncertainty for TorchLens's own representational scores (neuro.1).
+"""Bootstrap uncertainty for TorchLens's own representational scores.
 
 Every interval here is a percentile bootstrap over STIMULI: the stimulus
 set is resampled with replacement, the score is recomputed on each
@@ -292,7 +292,7 @@ def rdm_compare_interval(  # noqa: PLR0913 -- the spec'd row-1 door: two RDMs, t
 ) -> ScoreInterval:
     """Return :func:`rdm_compare` with a stimulus-bootstrap interval beside it.
 
-    DOCUMENTED-UNSTABLE (neuro.1). The point ``score`` is exactly
+    DOCUMENTED-UNSTABLE. The point ``score`` is exactly
     ``tl.repgeom.rdm_compare(rdm_a, rdm_b, method)``. Each resample draws
     stimuli with replacement, takes the strict upper triangle of both
     resampled RDMs, drops the entries that pair a stimulus with a copy of
@@ -410,7 +410,7 @@ def cka_interval(
 ) -> ScoreInterval:
     """Return linear CKA with a stimulus-bootstrap interval beside it.
 
-    DOCUMENTED-UNSTABLE (neuro.1). The point ``score`` is linear CKA with
+    DOCUMENTED-UNSTABLE. The point ``score`` is linear CKA with
     the biased Gretton HSIC, the variant ``tl.stats.cka`` computes
     (similarity-repository ``measure/*/cka-kernel=linear-hsic=gretton-score``),
     evaluated through stimulus Gram matrices so each resample costs

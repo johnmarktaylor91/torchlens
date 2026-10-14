@@ -326,7 +326,7 @@ def _validate_capture_values(values: Mapping[str, Any]) -> None:
             argument="distributed_witness",
         )
     if not isinstance(values["raise_on_nan"], bool):
-        # U31.4: a falsy non-bool (0.0, None, "") silently disabled the NaN
+        # a falsy non-bool (0.0, None, "") silently disabled the NaN
         # tripwire; only a real boolean selects the behaviour.
         raise ArgumentTypeError(
             f"Capture option raise_on_nan must be a bool, got "

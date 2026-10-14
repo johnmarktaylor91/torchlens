@@ -1,4 +1,4 @@
-"""The one typed ``tl.debug`` report object (U42.2; spelling DOCUMENTED-UNSTABLE).
+"""The one typed ``tl.debug`` report object (spelling DOCUMENTED-UNSTABLE).
 
 Every report-shaped ``tl.debug`` result is a :class:`DebugReport`: the typed
 results (``TraceAudit``, ``DeterminismReport``, ``NanReport``, ...) subclass
@@ -289,7 +289,7 @@ def rows_of(records: Sequence[Any]) -> list[dict[str, Any]]:
 
 @dataclasses.dataclass(frozen=True, eq=False, repr=False)
 class _TableReport(DebugReport):
-    """A tabular ``tl.debug`` result: the report HAS the frame (U42.2).
+    """A tabular ``tl.debug`` result: the report HAS the frame.
 
     ``to_pandas()`` returns a copy of the frame the helper used to return
     (its ``attrs`` included). Never forwards DataFrame methods.

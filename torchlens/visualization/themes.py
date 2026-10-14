@@ -9,7 +9,7 @@ ramp (low/mid/high, so a diverging map is later a mapping change, not a
 schema change), and the declared NEUTRAL "aggregate, not encoded" fill
 (N17) for collapsed boxes under an active channel.
 
-FORK-2 (the palette flip to Okabe-Ito) is resolved (R2-29, after the N10 budget
+FORK-2 (the palette flip to Okabe-Ito) is resolved (after the N10 budget
 resolver landed in 6ca8a37b4): the DEFAULT ``torchlens`` skin renders the
 Okabe-Ito semantic set; the other shipped skins keep their historical palettes.
 """
@@ -26,7 +26,7 @@ from ._typography import DEFAULT_TYPOGRAPHY, HIGH_CONTRAST_TYPOGRAPHY, Typograph
 from .node_spec import NodeSpec
 
 #: The Okabe-Ito semantic role palette (memo FORK-2 branch A set), live on the
-#: default ``torchlens`` skin since R2-29; the CVD accessibility gate measures it.
+#: default ``torchlens`` skin; the CVD accessibility gate measures it.
 OKABE_ITO_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
     {
         "input": "#009E73",
@@ -43,7 +43,7 @@ OKABE_ITO_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
 
 #: The historical semantic role palette: the identity mapping of the rendered
 #: constants. The non-default skins keep it (pixel-identical history); the
-#: default skin moved to Okabe-Ito at R2-29.
+#: default skin moved to Okabe-Ito.
 LEGACY_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
     {
         "input": "#98FB98",
@@ -166,7 +166,7 @@ THEME_PRESETS: dict[str, VisualizationTheme] = {
         default_fill="white",
         default_border="black",
         default_font="black",
-        # R2-29 (FORK-2 branch A): the default skin renders the Okabe-Ito set.
+        # The default skin renders the Okabe-Ito set.
         semantic_palette=OKABE_ITO_SEMANTIC_PALETTE,
         ramp=("#F2F2F2", "#79A8CC", "#0072B2"),
         neutral_aggregate_fill="#E8EEF2",
