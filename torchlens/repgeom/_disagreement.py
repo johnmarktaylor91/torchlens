@@ -160,7 +160,8 @@ def _pair_line(pair: DisagreeingPair) -> str:
         f"{', '.join(metrics)} rank {winner} higher" for winner, metrics in by_winner.items()
     )
     firmness = {True: " (separated by the intervals)", False: " (within interval overlap)"}
-    return f"  {pair.site_a} vs {pair.site_b}: {sides}{firmness.get(pair.firm, '')}"
+    suffix = "" if pair.firm is None else firmness[pair.firm]
+    return f"  {pair.site_a} vs {pair.site_b}: {sides}{suffix}"
 
 
 def _point(value: Any) -> float:
