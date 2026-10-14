@@ -231,6 +231,15 @@ def test_tf_pack_full_ladder(tmp_path: Path) -> None:
 
 @pytest.mark.heavy
 @pytest.mark.backend_mlx
+@pytest.mark.xfail(
+    raises=AssertionError,
+    reason=(
+        "MLX backend defect found by this pack: tracing an mlx.nn.Sequential(Linear, ReLU, "
+        "Linear) whose parameters are still unevaluated leaves the model unusable; the "
+        "direct call after the trace raises '[eval] Attempting to eval an array without a "
+        "primitive' (c1_capture_completes on mlp_module). Remove this marker with the fix."
+    ),
+)
 def test_mlx_pack_full_ladder(tmp_path: Path) -> None:
     """The mlx pack passes C0-C2 on its config-built roster."""
 

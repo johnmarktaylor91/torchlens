@@ -150,7 +150,7 @@ def test_non_cumulative_tier_requests_refuse(tiers: tuple[str, ...]) -> None:
 
 
 def test_unknown_backend_refuses_typed() -> None:
-    """v1 resolves exactly 'torch' and 'fake'; anything else refuses."""
+    """Names outside torch, fake and the preview backends refuse typed."""
 
     with pytest.raises(ConfigurationError) as excinfo:
         run_conformance("mystery-provider")
