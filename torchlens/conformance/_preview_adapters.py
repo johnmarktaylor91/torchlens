@@ -347,8 +347,16 @@ class PreviewBackendAdapter:
         return tl.load(str(path))
 
 
+def _adapter_factory(backend: str) -> Callable[[str | None], Any]:
+    """Factory for one preview adapter (plants belong to the fake provider only)."""
+
+    def factory(plant: str | None) -> Any:
+        return PreviewBackendAdapter(backend)
+
+    return factory
+
+
 #: Preview adapter factories, dispatched as data by ``resolve_adapter``.
 PREVIEW_ADAPTER_FACTORIES: dict[str, Callable[[str | None], Any]] = {
-    backend: (lambda plant, _backend=backend: PreviewBackendAdapter(_backend))
-    for backend in PREVIEW_BACKENDS
+    backend: _adapter_factory(backend) for backend in PREVIEW_BACKENDS
 }
