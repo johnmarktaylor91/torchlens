@@ -5,6 +5,10 @@ download) is the subject. The oracle is an independent hand-written
 reference: it swaps ``transformers``' own ``repeat_kv`` for a version that
 splices the clean copy into one query head, so it never touches TorchLens's
 hooks, selectors or traces. Grid cells must equal it exactly.
+
+Measured on one CPU core of a Linux worker (python 3.10, torch 2.13.0): each grid costs
+about 1 s per patched rerun, so the grid tests are ``heavy`` (5-20 s with
+their module-scoped grid fixtures); the three refusal tests run in about 1 s.
 """
 
 from __future__ import annotations
@@ -154,6 +158,7 @@ def joint_grid(model: LlamaForCausalLM) -> mi.PatchGrid:
     return mi.grid(model, CLEAN, CORRUPTED, logit_diff, sites="v", axes=("layer",))
 
 
+@pytest.mark.heavy
 @pytest.mark.parametrize("site", ["v", "k"])
 def test_every_cell_equals_the_repeat_kv_reference(
     model: LlamaForCausalLM, value_grid: mi.PatchGrid, site: str
@@ -174,6 +179,7 @@ def test_every_cell_equals_the_repeat_kv_reference(
     assert not torch.equal(grid.values, corrupted.expand_as(grid.values))
 
 
+@pytest.mark.heavy
 def test_group_heads_together_equal_the_kv_group_cell(
     model: LlamaForCausalLM, value_grid: mi.PatchGrid, group_grid: mi.PatchGrid
 ) -> None:
@@ -192,6 +198,7 @@ def test_group_heads_together_equal_the_kv_group_cell(
                 assert float(value_grid.values[row, head]) != together, (address, head)
 
 
+@pytest.mark.heavy
 def test_one_fire_per_cell_and_clean_into_clean_moves_nothing(
     model: LlamaForCausalLM, value_grid: mi.PatchGrid
 ) -> None:
@@ -250,6 +257,7 @@ def test_two_expansions_refuse_kv_expansion_ambiguous(model: LlamaForCausalLM) -
     assert len(excinfo.value.fields["candidates"]) == 2
 
 
+@pytest.mark.heavy
 def test_interceptor_receipt_discloses_effect_source_and_annotates(
     model: LlamaForCausalLM, value_grid: mi.PatchGrid, joint_grid: mi.PatchGrid, tmp_path: Path
 ) -> None:
@@ -291,6 +299,7 @@ def test_interceptor_receipt_discloses_effect_source_and_annotates(
     assert excinfo.value.fields["code"] == "tv_receipt_invalid"
 
 
+@pytest.mark.heavy
 def test_real_gqa_value_grid_builds_a_kv_group_receipt(
     model: LlamaForCausalLM, group_grid: mi.PatchGrid, joint_grid: mi.PatchGrid, tmp_path: Path
 ) -> None:
