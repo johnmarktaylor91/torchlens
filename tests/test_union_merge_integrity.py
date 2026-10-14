@@ -168,7 +168,7 @@ def check_dict_literal_keys(text: str, name: str) -> None:
         if not isinstance(node, ast.Dict):
             continue
         seen: dict[object, tuple[int, str]] = {}
-        for key, value in zip(node.keys, node.values):
+        for key, value in zip(node.keys, node.values, strict=True):
             if not isinstance(key, ast.Constant):
                 continue
             shown = ast.unparse(value)
@@ -183,6 +183,7 @@ def check_dict_literal_keys(text: str, name: str) -> None:
 
 
 _TABLE_CELL_SPLIT = re.compile(r"(?<!\\)\|")
+_CODE_SPAN = re.compile(r"`[^`]*`")
 _CODE_CELL = re.compile(r"^`([a-z0-9_]+)`$")
 
 
@@ -195,7 +196,10 @@ def check_contract_tables(text: str, name: str) -> None:
         if not line.startswith("|"):
             width = 0
             continue
-        cells = [cell.strip() for cell in _TABLE_CELL_SPLIT.split(line.strip())[1:-1]]
+        # A pipe inside a code span is cell content here (the error contract writes the
+        # selector operator as code); only bare pipes split cells.
+        masked = _CODE_SPAN.sub(lambda span: span.group(0).replace("|", "\0"), line.strip())
+        cells = [cell.strip().replace("\0", "|") for cell in _TABLE_CELL_SPLIT.split(masked)[1:-1]]
         if width == 0:
             width = len(cells)
         assert len(cells) == width, f"{name}:{number}: {len(cells)} cells, header has {width}"
@@ -264,7 +268,7 @@ def _neighbours(lines: list[str], pattern: str) -> tuple[int, int]:
     """Index the first two consecutive lines that both match ``pattern``."""
 
     hits = [index for index, line in enumerate(lines) if re.fullmatch(pattern, line)]
-    pairs = [(a, b) for a, b in zip(hits, hits[1:]) if b == a + 1]
+    pairs = [(a, b) for a, b in zip(hits, hits[1:], strict=False) if b == a + 1]
     assert pairs, f"no two neighbouring rows match {pattern!r}"
     return pairs[0]
 
