@@ -193,6 +193,10 @@ and does not refit). `result.similarity_repository_ids` names the catalogued
 variant of each analysis (ridge has none). Inference, voxel maps, variance
 partitioning and stacked fits stay with rsatoolbox, himalaya, scikit-learn
 and Net2Brain; this call makes no claim of matching any of them.
+The refused analyses have recipe pages: [TorchLens to netrep](../neuroai/netrep.md)
+(Procrustes, CCA and the shape-metric family) and
+[TorchLens to himalaya](../neuroai/himalaya.md) (banded ridge over a multi-site
+feature bank).
 
 ## Uncertainty on TorchLens's own scores
 

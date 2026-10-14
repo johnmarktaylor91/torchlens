@@ -391,6 +391,13 @@ _TEACHING_PAGES_EXECUTED = (
     "declared result"
 )
 
+#: Reason shared by the recipe pages whose every fence is headed and run.
+_RECIPE_PAGES_EXECUTED = (
+    "executed fence by fence by tests/test_recipe_pages_executed.py (a TorchLens-only "
+    "page always; a third-party page where that package is installed, and always in "
+    "the peer-recipe leg)"
+)
+
 #: r7 R81 (opus b2 MED): pages with python fences OUTSIDE the executed set,
 #: each with a reason. The executed gate covered 9 of 33 fence-bearing pages
 #: with NO drift gate, so a new page (or a new fence on an old one) shipped
@@ -462,15 +469,27 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "migration/from_transformers_interpret.md": _MIGRATION_PAGES_EXECUTED,
     "migration/multi_gpu_extraction.md": _MIGRATION_PAGES_EXECUTED,
     "migration/penzai.md": _MIGRATION_PAGES_EXECUTED,
+    "recipes/lrp_transformers_lxt.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/seeded_subsample.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/training_ribbon.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/tcav.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/generation_step_attribution.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/trainable_backbone.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/tuned_lens.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/weightwatcher.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/quantus.md": _RECIPE_PAGES_EXECUTED,
+    "neuroai/netrep.md": _RECIPE_PAGES_EXECUTED,
+    "neuroai/himalaya.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/byo_alignment.md": (
         "the file-round-trip blocks assume a completed real-checkpoint extraction and a "
         "user-owned learned transform; the offline mechanics (extract -> manifest -> "
         "torchlens-free reload) execute in tests/test_tvscope_export_acceptance.py"
     ),
     "neuroai/journey.md": (
-        "journey cells name real checkpoints (ResNet50 V2 weights, CORnet-S via torch.hub) "
-        "for the docs/nightly execution tier; the same mechanics execute offline against "
-        "config-built fixtures in tests/test_tvscope_*.py"
+        "journey cells name real checkpoints (ResNet50 V2 weights) for the docs/nightly "
+        "execution tier; the same mechanics execute offline against config-built fixtures "
+        "in tests/test_tvscope_*.py, and the CORnet-S showpiece (pinned checkout, direct "
+        "import) runs in tests/test_recipe_pages_executed.py"
     ),
     "neuroai/loaders.md": (
         "loader rows fetch real checkpoints (HF, timm pretrained, open_clip) by design; "

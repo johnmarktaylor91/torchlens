@@ -438,6 +438,10 @@ result = tl.attribution.text(model, tokenizer, "The Eiffel Tower is in", target=
 result.show()
 ```
 
+To save the rendering to a file, write the payload's HTML:
+`open("tokens.html", "w").write(result.payload().to_html())`. Per-step attribution over
+generated text is a recipe: [per-step attribution for generated text](../recipes/generation_step_attribution.md).
+
 Input Integrated Gradients through HF `inputs_embeds` with every integer input held fixed;
 signed per-token scores sum-reduce the embedding width so completeness accounting survives.
 `baseline="auto"` is TASK-AWARE and always resolves to a printed concrete baseline: decoders
