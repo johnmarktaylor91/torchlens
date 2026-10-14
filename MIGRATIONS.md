@@ -16,7 +16,9 @@ load 2.16.0 intervention specs, but they refuse 2.16.0 portable `ModelLog`
 bundles (`tlspec_version` 2) with `tl.errors.ArtifactVersionBelowFloorError`
 (code `artifact_version_below_floor`): saved traces older than `tlspec_version`
 6 are below the rehydration floor. To read such a bundle, load it with
-TorchLens 2.17.0 (`pip install torchlens==2.17.0` in a separate environment).
+TorchLens 2.17.0 (`pip install torchlens==2.17.0` in a separate environment), the
+verified reader for that format; `torchlens.ecosystem.compat_window()` lists the
+verified reader for each retired format.
 
 New writers introduced during the Phase 11 schema graduation emit the unified
 manifest format. The polymorphic loader detects the on-disk format and dispatches
