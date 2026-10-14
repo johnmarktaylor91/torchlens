@@ -6,9 +6,18 @@
 | Remove a direction | `tl.project_off(direction)` | Equivalent helper. |
 | Project onto a direction | `tl.project_onto(direction)` | Equivalent helper. |
 | Choose layer/token positions | Discover the activation site, then use tensor-shaped directions or custom hooks | Equivalent when shape is visible; no named token abstraction. |
-| Run controlled generations | Capture/rerun the generation loop under hooks | Partial; high-level generation wrappers are external. |
+| Run controlled generations | `torchlens.intervention.steer_generate(model, ids, spec)` steers every decoding step, KV cache included | Equivalent for local generation; see `docs/guides/fast_paths.md`. |
 | Compare control strengths | Fork logs or use `Bundle.joint_metric` across steered variants | Equivalent analysis pattern. |
 | Save steering recipe | `.tlspec/` portable save when direction tensors and built-ins are used | Equivalent publication path. |
 | Train/read representation directions | `tl.bridge.repeng.control_vector(log_pos, "model.layers.<i>", negative_log=log_neg, layer=i)` returns a real `repeng.ControlVector` from saved last-token activations (`tl.bridge.dialz.vector` and `tl.bridge.steering_vectors.vector` do the same for dialz and steering-vectors) | Equivalent: bit-identical to `ControlVector.train` with `batch_size=1` (trace with `use_cache=False`; the last layer reads `"model.norm"`). Padded batches of unequal-length prompts read the last real token, as repeng does, when the trace saved its `attention_mask` input or you pass `attention_mask=` (and `negative_attention_mask=`); without a mask, `read_token_index=-1` reads the last position, a pad token on right-padded rows. |
-| Batch evaluation | `rerun(..., append=True)` when append constraints hold | Equivalent for compatible chunks. |
+| Batch evaluation | `tl.when(site, action).bind(model)` to steer many forwards, or `trace.run(inputs=batch)` per batch | Equivalent; see `docs/guides/fast_paths.md`. |
 | Intervene inside fused attention | Default fused SDPA load: by-head and by-pattern patching through `torchlens.mechinterp.lowered_counterfactual` (no eager reload); eager-attention load: the softmax and score ops are ordinary intervention sites | Head-level and pattern-level edits work on fused models; other edits inside the fused kernel need an eager recapture. |
+
+## Other steering tools
+
+- **Ember** (Goodfire) is a hosted alternative: a hosted API that steers a model through
+  its learned features, with the model running on Goodfire's servers. Its Python SDK repository
+  (`goodfire-ai/goodfire-sdk`) is archived.
+- **EasySteer** is the serving-speed path: steering inside vLLM. Build and check a
+  steering vector in TorchLens (where every site is visible and the effect can be
+  measured), then serve it in EasySteer when generation speed matters.
