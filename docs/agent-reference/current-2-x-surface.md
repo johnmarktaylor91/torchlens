@@ -1066,7 +1066,10 @@
   v2.33.0-cannot-load-v2.34.1 class), `migrate` (tl.migrate v1,
   `MigrationReport`/`MigrationStep`), and `plugins` (entry-point discovery
   that NEVER executes third-party code at discovery; kill switch).
-  `torchlens.conformance` holds the C0-C2 packs.
+  `torchlens.conformance` holds the C0-C2 packs, plus the preview-backend
+  scorecard (DOCUMENTED-UNSTABLE): `preview_scorecard`, `PreviewScorecard`,
+  `ScorecardCell`, `PREVIEW_BACKENDS`, and `RosterModel.expected_op_kinds`
+  (the op-inventory check that fails when a backend silently drops an op).
 - LIVE NARRATION (F28; DOCUMENTED-UNSTABLE): `echo=` on `tl.trace`/`tl.record`
   streams compact per-op narration (the torchsnooper niche on the capture
   substrate, 3-4x cheaper than settrace); `torchlens.snoop` owns
@@ -1093,11 +1096,15 @@
   `notebooks/sae_splice_tutorial.ipynb`). `bridge.brain_score` additionally serves Brain-Score's
   `ActivationsExtractorHelper` seam: `get_activations_fn(model)` is the offline
   per-batch callable (module dotted paths or any TorchLens lookup; `"logits"` = model
-  output) and `activations_extractor(...)` wires it into the real helper (requires
+  output) and `activations_extractor(...)` wires it into the real helper, returned inside a
+  `PytorchWrapper`-shaped activations model (`._extractor` is the helper) so a Brain-Score
+  model plugin hands it to `ModelCommitment(activations_model=...)` (requires
   `brainscore_vision`, Python >= 3.11; LIVE-GATE VERIFIED 2026-08-29 against a running
   brainscore-vision 2.3.22 install on py3.12/CPU -- resnet18 through a real helper +
   StimulusSet with value/order/coordinate/logits/functional-op/short-batch parity and
-  default sites on a partially saved trace; also exposed as `tl.neuro.activations_extractor`
+  default sites on a partially saved trace; SCORED END TO END 2026-10-14 through such a
+  plugin on MajajHong2015public.IT-pls and Geirhos2021colour-top1, brainscore-vision 2.4.1,
+  py3.11/CPU; also exposed as `tl.neuro.activations_extractor`
   / `get_activations_fn`, gated on brainscore_vision alone). `torchlens.bridge.mcp` (extra `torchlens[mcp]`,
   mcp>=2.0; DOCUMENTED-UNSTABLE) is the Model Context Protocol stdio server (`python -m
   torchlens.bridge.mcp`): read-only tools over saved `.tlspec` artifacts + environment
@@ -1127,7 +1134,7 @@
   tensors plus a JSON header of the writer contract's KEEP fields, honesty facts and the
   contract digest); `tl.io.read_safetensors(path)` reads it back bit-equal.
 - BRAINPIPE (F20; every spelling DOCUMENTED-UNSTABLE): `torchlens.brainpipe` is the
-  memory-planned whole-model extraction planner over the extraction artifact --
+  whole-model extraction planner over the extraction artifact --
   `extraction_plan(model, probe_inputs, sites=, n_stimuli=, batch_size=, transform=,
   memory_budget=, engine="trace")` runs one unmeasured warm-up + TWO measured probes
   (batch b and 2b), fits per-site bytes linearly (batch-invariant sites detected, never
@@ -1228,8 +1235,14 @@
   dependency-present names. Brain-Score alias branch LIVE (gate passed):
   `tl.neuro.activations_extractor`/`get_activations_fn` gated on brainscore_vision
   alone (extras split D17: neuro = rsatoolbox, never Brain-Score; new `brainscore` extra, filed).
-  repgeom riders: `rdm(metric="gaussian")` (thingsvision bandwidth convention,
-  credited), `rank_transform_rdm` + `rdm_node_spec(display="rank"|"percentile")`.
+  repgeom riders: `rdm(metric="gaussian")` (thingsvision's `1 - exp(-D / mean(D))`,
+  credited; fixed 2026-10-14 from a `2 * mean(D)` bandwidth), `rank_transform_rdm` +
+  `rdm_node_spec(display="rank"|"percentile")`. `rdm_evolution` expands recurrent layers
+  into one `op:` RDM per saved pass (default sweep and multi-pass selectors), as
+  `tl.neuro.rdms` does; its result, the `tl.neuro.rdms` source-mode descriptors and
+  `tl.stats.CKA` carry `similarity_repository_id` (the similarity-repository identifier of
+  the exact variant, e.g. `measure/*/cka-kernel=linear-hsic=gretton-score`; table in
+  docs/reference/brain_benchmarking_seam.md; DOCUMENTED-UNSTABLE).
   `tl.stats.cka` contract published (linear, biased, CPU float64, matched rows, NaN
   on zero variance; pinned literals). brain_score bridge fixes: default `sites=`
   survives partially saved traces via the core stimulus-indexed filter (buffer rows
