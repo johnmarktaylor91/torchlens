@@ -294,11 +294,7 @@ def _stream_ids(trace: Trace, stream: str, batch_row: int) -> list[int] | None:
     op = _stream_op(trace, stream)
     if op is None or not getattr(op, "has_saved_activation", False):
         return None
-    payload = op.out
-    if payload is None and getattr(op, "out_ref", None) is not None:
-        # A lazy load keeps the ids on disk; read them without caching them
-        # on the op, so the read leaves the loaded member as it was.
-        payload = op.out_ref.materialize(map_location="cpu")
+    payload = op.out  # a lazily loaded member materializes its ids on this read
     if not isinstance(payload, torch.Tensor):
         return None
     if payload.ndim == 1 and batch_row == 0:
