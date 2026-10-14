@@ -372,3 +372,16 @@ disclosure, input-preprocessing block, per-site identity with L1 site keys).
 v1 artifacts remain readable through `load_extraction`/`open_extraction`;
 resume continuation across the version boundary refuses typed
 (`extraction_resume_*`) rather than grafting mixed-manifest shards.
+
+## Gaussian RDM values changed: `repgeom.rdm(metric="gaussian")` now matches thingsvision (2026-10-14, numeric fix)
+
+`torchlens.repgeom.rdm(features, metric="gaussian")` now returns
+`1 - exp(-D / mean(D))`, where `D` is the squared Euclidean distance between
+stimuli and `mean(D)` is its mean over the whole matrix. This is the formula
+thingsvision's `gaussian_kernel` uses and the one the docstring always cited.
+Earlier releases divided by `2 * mean(D)`, so every gaussian RDM value differs
+from earlier releases; other metrics are unchanged. For three stimuli with one
+feature each, at 0, 1 and 3, the off-diagonal entries for the pairs (0, 1),
+(0, 3) and (1, 3) were 0.148, 0.765 and 0.474 and are now 0.275, 0.945 and
+0.724. Recompute any stored gaussian RDM, and any comparison score built on
+one, with the new release.
