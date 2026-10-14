@@ -105,6 +105,32 @@ def test_rdm_resample_equals_hand_recomputation() -> None:
     assert result.high == pytest.approx(high, abs=1e-12)
 
 
+def test_kendall_resample_never_compares_copies_of_one_pair() -> None:
+    x, y = _features(8, n=8)
+    rdm_a, rdm_b = rdm(x), rdm(y)
+    result = rdm_compare_interval(rdm_a, rdm_b, "kendall", n_resamples=4, seed=5)
+    indices = np.random.default_rng(5).integers(0, 8, size=(4, 8))
+    hand = []
+    for index in indices:
+        copies: dict[tuple[int, int], int] = {}
+        for i in range(8):
+            for j in range(i + 1, 8):
+                if index[i] != index[j]:
+                    key = (min(index[i], index[j]), max(index[i], index[j]))
+                    copies[key] = copies.get(key, 0) + 1
+        keys = sorted(copies)
+        num = den = 0.0
+        for p_index, p in enumerate(keys):
+            for q in keys[p_index + 1 :]:
+                weight = copies[p] * copies[q]
+                num += weight * np.sign(rdm_a[p] - rdm_a[q]) * np.sign(rdm_b[p] - rdm_b[q])
+                den += weight
+        hand.append(num / den)
+    low, high = np.quantile(hand, [0.025, 0.975])
+    assert result.low == pytest.approx(low, abs=1e-12)
+    assert result.high == pytest.approx(high, abs=1e-12)
+
+
 def test_cka_point_and_resamples_match_tl_stats_cka() -> None:
     x, y = _features(5, n=15, d=40)
     result = cka_interval(x, y, n_resamples=6, seed=2)

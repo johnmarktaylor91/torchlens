@@ -23,6 +23,10 @@ The working surfaces behind the "we supply" column:
 - `tl.repgeom.rdm_compare` -- DESCRIPTIVE Pearson/Spearman/Kendall tau-a
   over aligned strict upper triangles (diagonal excluded). No p-values, no
   noise ceilings: asking for them refuses naming rsatoolbox.
+- `tl.repgeom.rdm_compare_interval` / `tl.repgeom.cka_interval` -- the same
+  scores with a DESCRIPTIVE percentile bootstrap interval over stimuli
+  beside them (`ScoreInterval`: seeded, resample count a parameter). Not a
+  test and not rsatoolbox's corrected bootstrap.
 - `tl.stats.CKA` / `tl.stats.cka` -- one-shot and streaming linear CKA
   (memory-bounded over arbitrarily many stimuli), `device=`/`dtype=`.
 - `tl.bridge.rsatoolbox.dataset` -- the per-site rsatoolbox handoff.

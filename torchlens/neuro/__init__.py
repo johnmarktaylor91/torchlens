@@ -44,7 +44,9 @@ sections:
    ``per_layer`` recipe deliberately gets no neuro name (a generic
    score-a-callable loop must not borrow a benchmark's authority).
 5. REFUSALS: noise ceilings, crossnobis/mahalanobis, searchlight,
-   bootstrap/permutation/model fitting, encoding models, CCA/SVCCA/PWCCA,
+   inferential bootstrap/permutation/model fitting (descriptive intervals
+   are tl.repgeom.rdm_compare_interval / cka_interval), encoding-model
+   inference, CCA/SVCCA/PWCCA,
    non-metric MDS, model zoos, and brain data itself are deliberately NOT
    here. Each attempted name raises a teaching refusal naming the owning
    neighbour, the missing ingredient, and the torchlens spelling that
@@ -149,7 +151,9 @@ _REFUSALS: dict[str, str] = {
     "bootstrap": (
         "bootstrap inference over stimuli/subjects belongs to "
         "rsatoolbox.inference; torchlens hands it descriptor-complete RDMs "
-        "via neuro.rdms()"
+        "via neuro.rdms(). For a DESCRIPTIVE stimulus-bootstrap interval on "
+        "torchlens's own scores, use tl.repgeom.rdm_compare_interval or "
+        "tl.repgeom.cka_interval (needs no extra)"
     ),
     "permutation_test": (
         "permutation-based hypothesis inference belongs to "

@@ -94,32 +94,48 @@ class ScoreInterval:
         }
 
 
-def _check_bootstrap_args(n_resamples: int, confidence: float, seed: int) -> None:
-    """Validate the shared bootstrap keywords.
+@dataclass(frozen=True)
+class BootstrapSettings:
+    """Validated stimulus-bootstrap settings shared by every interval.
+
+    Attributes
+    ----------
+    n_resamples:
+        Resamples to draw (at least 2).
+    seed:
+        Seed for ``numpy.random.default_rng``.
+    confidence:
+        Nominal coverage, strictly between 0 and 1.
 
     Raises
     ------
     ValueError
-        If ``n_resamples`` is below 2, ``confidence`` is outside (0, 1), or
-        ``seed`` is not an integer.
+        On an invalid setting.
     """
 
-    if isinstance(n_resamples, bool) or not isinstance(n_resamples, int) or n_resamples < 2:
-        raise ValueError(f"n_resamples must be an integer >= 2; got {n_resamples!r}.")
-    if not 0.0 < float(confidence) < 1.0:
-        raise ValueError(f"confidence must lie strictly between 0 and 1; got {confidence!r}.")
-    if isinstance(seed, bool) or not isinstance(seed, (int, np.integer)):
-        raise ValueError(f"seed must be an integer; got {seed!r}.")
+    n_resamples: int = 1000
+    seed: int = 0
+    confidence: float = 0.95
+
+    def __post_init__(self) -> None:
+        """Validate the settings."""
+
+        n_resamples, seed = self.n_resamples, self.seed
+        if isinstance(n_resamples, bool) or not isinstance(n_resamples, int) or n_resamples < 2:
+            raise ValueError(f"n_resamples must be an integer >= 2; got {n_resamples!r}.")
+        if not 0.0 < float(self.confidence) < 1.0:
+            raise ValueError(
+                f"confidence must lie strictly between 0 and 1; got {self.confidence!r}."
+            )
+        if isinstance(seed, bool) or not isinstance(seed, (int, np.integer)):
+            raise ValueError(f"seed must be an integer; got {seed!r}.")
 
 
 def bootstrap_interval(
     statistic: Callable[[np.ndarray], float],
     n_stimuli: int,
-    *,
     score: float,
-    n_resamples: int,
-    seed: int,
-    confidence: float,
+    settings: BootstrapSettings,
 ) -> ScoreInterval:
     """Resample stimulus indices and summarise ``statistic`` as an interval.
 
@@ -132,8 +148,8 @@ def bootstrap_interval(
         Number of stimuli.
     score:
         The point score on all stimuli, recorded unchanged.
-    n_resamples, seed, confidence:
-        Bootstrap settings (see :class:`ScoreInterval`).
+    settings:
+        Resample count, seed and confidence.
 
     Returns
     -------
@@ -142,13 +158,12 @@ def bootstrap_interval(
         resamples gave a finite score.
     """
 
-    _check_bootstrap_args(n_resamples, confidence, seed)
-    rng = np.random.default_rng(int(seed))
-    indices = rng.integers(0, n_stimuli, size=(n_resamples, n_stimuli))
+    rng = np.random.default_rng(int(settings.seed))
+    indices = rng.integers(0, n_stimuli, size=(settings.n_resamples, n_stimuli))
     values = np.array([statistic(row) for row in indices], dtype=np.float64)
     finite = values[np.isfinite(values)]
-    tail = (1.0 - float(confidence)) / 2.0
-    if finite.size * 2 < n_resamples:
+    tail = (1.0 - float(settings.confidence)) / 2.0
+    if finite.size * 2 < settings.n_resamples:
         low = high = math.nan
     else:
         low, high = (float(v) for v in np.quantile(finite, [tail, 1.0 - tail]))
@@ -156,10 +171,10 @@ def bootstrap_interval(
         score=float(score),
         low=low,
         high=high,
-        confidence=float(confidence),
-        n_resamples=int(n_resamples),
+        confidence=float(settings.confidence),
+        n_resamples=int(settings.n_resamples),
         n_valid=int(finite.size),
-        seed=int(seed),
+        seed=int(settings.seed),
     )
 
 
@@ -190,6 +205,26 @@ def _pearson(a: np.ndarray, b: np.ndarray) -> float:
     if denominator == 0.0:
         return math.nan
     return float(np.dot(centered_a, centered_b) / denominator)
+
+
+def _weighted_tau_a(a: np.ndarray, b: np.ndarray, weights: np.ndarray) -> float:
+    """Return Kendall tau-a over distinct entries carrying multiplicities.
+
+    A resample repeats some stimulus pairs; copies of one pair are the same
+    observation, so they are never compared with each other (comparing them
+    would add artificial ties that pull tau-a below 1 even for identical
+    RDMs). Every other comparison counts ``w_p * w_q`` times. With all
+    weights 1 this is plain tau-a.
+    """
+
+    sign_a = np.sign(a[:, None] - a[None, :])
+    sign_b = np.sign(b[:, None] - b[None, :])
+    upper = np.triu_indices(a.size, k=1)
+    pair_weights = (weights[:, None] * weights[None, :])[upper]
+    total = float(np.sum(pair_weights))
+    if total == 0.0:
+        return math.nan
+    return float(np.sum(pair_weights * sign_a[upper] * sign_b[upper])) / total
 
 
 def _vector_compare(a: np.ndarray, b: np.ndarray, method: str) -> float:
@@ -229,7 +264,7 @@ def _square_rdm(value: Any, name: str) -> np.ndarray:
     return array
 
 
-def rdm_compare_interval(
+def rdm_compare_interval(  # noqa: PLR0913 -- the spec'd row-1 door: two RDMs, the rdm_compare method, and the three bootstrap knobs, documented one-to-one
     rdm_a: Any,
     rdm_b: Any,
     method: str = "spearman",
@@ -255,7 +290,10 @@ def rdm_compare_interval(
         the same order.
     method:
         ``"spearman"`` (default), ``"pearson"``, or ``"kendall"`` (tau-a;
-        quadratic in the number of pairs per resample).
+        quadratic in the number of pairs per resample). For kendall, the
+        copies of one stimulus pair that a resample repeats are never
+        compared with each other (they are one observation); every other
+        comparison is weighted by the copies' multiplicities.
     n_resamples:
         Bootstrap resamples (at least 2).
     seed:
@@ -278,6 +316,7 @@ def rdm_compare_interval(
 
     from ._geometry import rdm_compare
 
+    settings = BootstrapSettings(n_resamples=n_resamples, seed=seed, confidence=confidence)
     square_a = _square_rdm(rdm_a, "rdm_a")
     square_b = _square_rdm(rdm_b, "rdm_b")
     if square_a.shape != square_b.shape:
@@ -300,18 +339,18 @@ def rdm_compare_interval(
         left = index[rows]
         right = index[cols]
         keep = left != right
-        return _vector_compare(
-            square_a[left[keep], right[keep]], square_b[left[keep], right[keep]], method
-        )
+        left, right = left[keep], right[keep]
+        if method == "kendall":
+            codes, weights = np.unique(
+                np.minimum(left, right) * n + np.maximum(left, right), return_counts=True
+            )
+            first, second = np.divmod(codes, n)
+            return _weighted_tau_a(
+                square_a[first, second], square_b[first, second], weights.astype(np.float64)
+            )
+        return _vector_compare(square_a[left, right], square_b[left, right], method)
 
-    return bootstrap_interval(
-        statistic,
-        n,
-        score=score,
-        n_resamples=n_resamples,
-        seed=seed,
-        confidence=confidence,
-    )
+    return bootstrap_interval(statistic, n, score, settings)
 
 
 def _gram_cka(gram_a: np.ndarray, gram_b: np.ndarray) -> float:
@@ -384,6 +423,7 @@ def cka_interval(
         input, or invalid bootstrap settings.
     """
 
+    settings = BootstrapSettings(n_resamples=n_resamples, seed=seed, confidence=confidence)
     matrix_a = _as_matrix(a, "a")
     matrix_b = _as_matrix(b, "b")
     if matrix_a.shape[0] != matrix_b.shape[0]:
@@ -402,11 +442,4 @@ def cka_interval(
 
         return _gram_cka(gram_a[np.ix_(index, index)], gram_b[np.ix_(index, index)])
 
-    return bootstrap_interval(
-        statistic,
-        n,
-        score=_gram_cka(gram_a, gram_b),
-        n_resamples=n_resamples,
-        seed=seed,
-        confidence=confidence,
-    )
+    return bootstrap_interval(statistic, n, _gram_cka(gram_a, gram_b), settings)

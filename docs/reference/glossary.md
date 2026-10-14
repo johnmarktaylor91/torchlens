@@ -963,6 +963,17 @@ shims, by declared contract. Each carries the same tag at its definition.
   `neuro.rdms()` descriptor is then absent. The full table is in
   [the brain-benchmarking seam](brain_benchmarking_seam.md).
 
+**ScoreInterval (`tl.repgeom.ScoreInterval`; returned by `tl.repgeom.rdm_compare_interval` and `tl.repgeom.cka_interval`)** — *unstable — no deprecation shim owed*
+: A TorchLens score with a descriptive uncertainty interval beside it:
+  `score` (the unchanged estimator on all stimuli), `low` and `high` (a
+  percentile bootstrap over stimuli), `confidence`, `n_resamples`, `n_valid`
+  (resamples with a finite score), `seed` and `basis` (how the interval was
+  made, in words), plus `width` and `to_dict()`. `rdm_compare_interval(rdm_a,
+  rdm_b, method, n_resamples=1000, seed=0, confidence=0.95)` resamples
+  stimuli and recomputes `rdm_compare`, dropping self-pairs; `cka_interval(a,
+  b, ...)` does the same for linear CKA. Descriptive, not a test; inference
+  stays with rsatoolbox.
+
 **site_key (`Op.site_key`)** — *unstable — no deprecation shim owed*
 : The portable structural-position identity of one retained op
   (`site_key_v1`): a `"s1|"`-prefixed string of the pass-free module address

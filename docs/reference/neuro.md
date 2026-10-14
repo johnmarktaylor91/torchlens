@@ -28,7 +28,9 @@ accessing an unadvertised name teaches the exact install command.
 4. **Score** (`brainscore` extra): `neuro.activations_extractor(...)`,
    `neuro.get_activations_fn(...)` -- live-gate verified (below).
 5. **Refusals**: noise ceilings, crossnobis/mahalanobis, searchlight,
-   bootstrap/permutation/model fitting, encoding models, CCA/SVCCA/PWCCA,
+   inferential bootstrap/permutation/model fitting (descriptive intervals on
+   TorchLens's own scores are `tl.repgeom.rdm_compare_interval` /
+   `cka_interval`), encoding-model inference, CCA/SVCCA/PWCCA,
    non-metric MDS, model zoos, brain data. Each attempted name raises a
    teaching refusal naming the owner, the missing ingredient, and the
    torchlens spelling that feeds it.
@@ -146,6 +148,28 @@ hook-based `PytorchWrapper` exactly. Brainscore-vision 2.4.1 pins xarray
 3.11. The offline `per_layer` recipe keeps its
 bridge-only spelling: a generic score-a-callable loop must not borrow a
 benchmark's authority.
+
+## Uncertainty on TorchLens's own scores
+
+`tl.repgeom.rdm_compare_interval(rdm_a, rdm_b, method, n_resamples=1000,
+seed=0, confidence=0.95)` and `tl.repgeom.cka_interval(a, b, ...)` return a
+`ScoreInterval`: the unchanged point score (exactly `rdm_compare`; linear CKA
+as `tl.stats.cka` computes it) with a percentile bootstrap interval over
+stimuli beside it, plus the settings that made it (`n_resamples`, `n_valid`,
+`seed`, `confidence`, `basis`). RDM resamples drop the entries that pair a
+stimulus with a copy of itself; CKA resamples reindex the stimulus Gram
+matrices, so each resample costs O(n^2) whatever the feature count. The same
+seed gives the same interval, and identical inputs give a zero-width
+interval at 1.0.
+
+These intervals are descriptive: they say how much TorchLens's score moves
+when the stimulus sample changes. They are not hypothesis tests, they do not
+model subjects or measurement noise, and they make no claim of parity with
+rsatoolbox's bootstrap. Inferential RSA (corrected bootstraps, model
+comparison, noise ceilings) stays with `rsatoolbox.inference`; asking
+`tl.neuro` for `bootstrap` still refuses and points here for the descriptive
+interval. The stimulus bootstrap is known to be conservative for RDM
+comparisons (it tends to cover more often than its nominal rate).
 
 ## The CKA method contract (published)
 
