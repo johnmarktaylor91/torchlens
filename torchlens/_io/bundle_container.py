@@ -29,6 +29,10 @@ from .bundle_metadata import (
 if TYPE_CHECKING:
     from ..bundle import Bundle
 
+#: Split out of ``_io.bundle`` and loading through it, so it sits in the same
+#: stratum (the layer map's ``_io.bundle`` row).
+__tl_layer__ = "L3"
+
 
 class BundleLoadContext(NamedTuple):
     """What ``tl.load`` threads into a bundle container besides its path.
