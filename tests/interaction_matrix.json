@@ -1,0 +1,2239 @@
+{
+ "schema": "interaction-matrix/1",
+ "features": {
+  "save": {
+   "summary": "Selective capture: which ops keep payloads (save=, CaptureOptions, save_mode, lookback)",
+   "trace_kwargs": [
+    "save",
+    "save_mode",
+    "lookback",
+    "lookback_payload_policy",
+    "capture",
+    "reconstruction_ready"
+   ],
+   "options": [
+    "CaptureOptions"
+   ]
+  },
+  "intervene": {
+   "summary": "Capture-time edits: intervene=tl.when(site, action)",
+   "trace_kwargs": [
+    "intervene"
+   ],
+   "options": [
+    "InterventionOptions"
+   ]
+  },
+  "halt": {
+   "summary": "Stop the forward early at a site (halt=)",
+   "trace_kwargs": [
+    "halt"
+   ],
+   "options": []
+  },
+  "storage": {
+   "summary": "Payloads streamed or written to disk (storage=tl.to_disk, streaming=, chunking)",
+   "trace_kwargs": [
+    "storage",
+    "streaming",
+    "chunk_size",
+    "chunk_paths"
+   ],
+   "options": [
+    "SaveOptions",
+    "StreamingOptions",
+    "to_disk"
+   ]
+  },
+  "backward": {
+   "summary": "Gradient capture: backward_ready, save_grads, grad options, log_backward",
+   "trace_kwargs": [
+    "grad_transform",
+    "grad_options"
+   ],
+   "options": []
+  },
+  "episode": {
+   "summary": "Multi-step episode capture (episode=EpisodeSpec)",
+   "trace_kwargs": [
+    "episode"
+   ],
+   "options": [
+    "EpisodeSpec"
+   ]
+  },
+  "backend": {
+   "summary": "Non-torch backends (backend=, JAX static args)",
+   "trace_kwargs": [
+    "backend",
+    "jax_static_argnums"
+   ],
+   "options": []
+  },
+  "reporting": {
+   "summary": "Capture-time reporting: profile, echo, grouping",
+   "trace_kwargs": [
+    "profile",
+    "echo",
+    "grouping"
+   ],
+   "options": [
+    "EchoOptions"
+   ]
+  },
+  "recipes": {
+   "summary": "Recipes applied at capture (recipes=)",
+   "trace_kwargs": [
+    "recipes"
+   ],
+   "options": []
+  },
+  "draw": {
+   "summary": "Graph rendering (Trace.draw, VisualizationOptions)",
+   "trace_kwargs": [],
+   "options": [
+    "VisualizationOptions"
+   ]
+  },
+  "rerun": {
+   "summary": "Rerun a trace on new input (Trace.run, ReplayOptions)",
+   "trace_kwargs": [],
+   "options": [
+    "ReplayOptions"
+   ]
+  },
+  "fast_run": {
+   "summary": "Guarded fast rerun engine (run(..., fast=True))",
+   "trace_kwargs": [],
+   "options": []
+  },
+  "fork_do": {
+   "summary": "Post-hoc edits on a fork (Trace.fork, do, push)",
+   "trace_kwargs": [],
+   "options": []
+  },
+  "index": {
+   "summary": "Lookup by label, module name, pass (trace[...])",
+   "trace_kwargs": [],
+   "options": []
+  },
+  "multipass": {
+   "summary": "Modules or functions called more than once (passes)",
+   "trace_kwargs": [],
+   "options": []
+  },
+  "record": {
+   "summary": "Sparse recording path (tl.record, Recording.to_trace)",
+   "trace_kwargs": [],
+   "options": []
+  },
+  "extract": {
+   "summary": "Feature extraction path (tl.extract)",
+   "trace_kwargs": [],
+   "options": []
+  },
+  "bind": {
+   "summary": "Capture-free executor (tl.when(...).bind(model), generate)",
+   "trace_kwargs": [],
+   "options": []
+  },
+  "bundle": {
+   "summary": "Many traces together (tl.Bundle, sweep, vary)",
+   "trace_kwargs": [],
+   "options": []
+  },
+  "validate": {
+   "summary": "Validation replay (tl.validate)",
+   "trace_kwargs": [],
+   "options": []
+  },
+  "export": {
+   "summary": "Tabular and array exports (to_pandas, xarray)",
+   "trace_kwargs": [],
+   "options": []
+  }
+ },
+ "plain_trace_kwargs": [
+  "model",
+  "input_args",
+  "input_kwargs",
+  "input_size"
+ ],
+ "plain_options": [
+  "OptionReceiptEntry",
+  "option_receipt",
+  "suppress_mutate_warnings"
+ ],
+ "cells": [
+  {
+   "a": "backend",
+   "b": "backward",
+   "status": "asymmetry",
+   "asymmetry": "A01",
+   "confidence": "high",
+   "note": "Preview backends give derived gradients (grad_options, trace.derived_grads); true backward capture is torch only."
+  },
+  {
+   "a": "backend",
+   "b": "bind",
+   "status": "refuses",
+   "evidence": "docs/reference/error_refusal_contract.md",
+   "code": "bind_model_invalid",
+   "confidence": "medium",
+   "note": "bind accepts only an nn.Module, so function-root preview backends (jax, tinygrad, mlx, paddle, tf) cannot be bound."
+  },
+  {
+   "a": "backend",
+   "b": "bundle",
+   "status": "independent",
+   "reason": "A Bundle holds finished Trace objects and never looks at which backend produced them.",
+   "confidence": "low"
+  },
+  {
+   "a": "backend",
+   "b": "draw",
+   "status": "composes",
+   "evidence": "tests/test_jax_backend_capture.py::test_jax_region_summary_pandas_and_draw_work",
+   "confidence": "high"
+  },
+  {
+   "a": "backend",
+   "b": "episode",
+   "status": "refuses",
+   "evidence": "docs/reference/error_refusal_contract.md",
+   "code": "backend_unsupported",
+   "confidence": "medium",
+   "note": "Episode capture is torch only and raises BackendUnsupportedError; docs/reference/episode_capture.md lists non-torch backends under episode_declaration_invalid, which disagrees with the code."
+  },
+  {
+   "a": "backend",
+   "b": "export",
+   "status": "composes",
+   "evidence": "tests/backends/test_tf_capture.py::test_tf_trace_to_pandas_smoke",
+   "confidence": "high"
+  },
+  {
+   "a": "backend",
+   "b": "extract",
+   "status": "asymmetry",
+   "asymmetry": "A02",
+   "confidence": "medium",
+   "note": "tl.trace takes backend=; tl.extract has no backend keyword and runs the torch trace."
+  },
+  {
+   "a": "backend",
+   "b": "fast_run",
+   "status": "asymmetry",
+   "asymmetry": "A03",
+   "confidence": "medium",
+   "note": "Fast rerun and runnable replay are torch only; preview backends report unsupported_backend_replay."
+  },
+  {
+   "a": "backend",
+   "b": "fork_do",
+   "status": "asymmetry",
+   "asymmetry": "A04",
+   "confidence": "medium",
+   "note": "fork().do needs an intervention_ready capture, which previews refuse via capture=."
+  },
+  {
+   "a": "backend",
+   "b": "halt",
+   "status": "asymmetry",
+   "asymmetry": "A05",
+   "confidence": "high",
+   "note": "Paddle and MLX accept halt=; jax, tinygrad and tf refuse it typed."
+  },
+  {
+   "a": "backend",
+   "b": "index",
+   "status": "composes",
+   "evidence": "tests/test_jax_backend_capture.py::test_jax_trace_preserves_output_pytree_paths",
+   "confidence": "medium"
+  },
+  {
+   "a": "backend",
+   "b": "intervene",
+   "status": "asymmetry",
+   "asymmetry": "A06",
+   "confidence": "high",
+   "note": "torch full; MLX and eager TF static-label only; Paddle a helper subset; jax and tinygrad refuse; graph-only TF refuses."
+  },
+  {
+   "a": "backend",
+   "b": "multipass",
+   "status": "composes",
+   "evidence": "tests/test_mlx_recurrence_grouping.py::test_mlx_grouping_relabel_keeps_lookups_and_edges_coherent",
+   "confidence": "high",
+   "note": "All four eager previews group recurrent calls through the shared grouper."
+  },
+  {
+   "a": "backend",
+   "b": "recipes",
+   "status": "asymmetry",
+   "asymmetry": "A07",
+   "confidence": "high",
+   "note": "Paddle attaches facet recipes; tf and the other previews refuse recipes= typed."
+  },
+  {
+   "a": "backend",
+   "b": "record",
+   "status": "refuses",
+   "evidence": "docs/guides/fast_paths.md",
+   "code": "backend_unsupported",
+   "confidence": "high",
+   "note": "tl.record is torch only; tests/test_jax_backend_hardening.py::test_jax_record_backend_jax_rejected pins the refusal."
+  },
+  {
+   "a": "backend",
+   "b": "reporting",
+   "status": "refuses",
+   "evidence": "docs/reference/error_refusal_contract.md",
+   "code": "echo_backend_unsupported",
+   "confidence": "high",
+   "note": "echo= is torch only; profile=True is also unsupported on previews (tests/test_snoop_refusals.py::test_echo_on_non_torch_backend_refuses_typed)."
+  },
+  {
+   "a": "backend",
+   "b": "rerun",
+   "status": "asymmetry",
+   "asymmetry": "A08",
+   "confidence": "medium",
+   "note": "Trace.run and runnable replay are torch only; a loaded non-torch artifact reports unsupported_backend_replay."
+  },
+  {
+   "a": "backend",
+   "b": "save",
+   "status": "asymmetry",
+   "asymmetry": "A09",
+   "confidence": "high",
+   "note": "Previews accept static-label save= only, applied after a full capture, so memory is not reduced; value-dependent predicates refuse."
+  },
+  {
+   "a": "backend",
+   "b": "storage",
+   "status": "refuses",
+   "evidence": "docs/reference/limitations.md",
+   "code": "backend_unsupported",
+   "confidence": "high",
+   "note": "Every non-torch backend refuses storage=, streaming= and chunk_size; tests/test_paddle_backend_interventions.py::test_paddle_streaming_still_refuses_typed."
+  },
+  {
+   "a": "backend",
+   "b": "validate",
+   "status": "composes",
+   "evidence": "tests/test_jax_backend_validation.py::test_jax_decision_replay_kinds_validate_recorded_control_points",
+   "confidence": "high",
+   "note": "Live validation works per backend; a loaded non-torch artifact cannot replay-validate (limitations.md)."
+  },
+  {
+   "a": "backward",
+   "b": "bind",
+   "status": "refuses",
+   "evidence": "docs/reference/error_refusal_contract.md",
+   "code": "bind_rule_unsupported",
+   "confidence": "medium",
+   "note": "The capture-free lane replaces forward values only; a rule that edits gradients is refused at bind time."
+  },
+  {
+   "a": "backward",
+   "b": "bundle",
+   "status": "composes",
+   "evidence": "tests/test_multi_trace_followons.py::test_bundle_backward_regression_path",
+   "confidence": "high"
+  },
+  {
+   "a": "backward",
+   "b": "draw",
+   "status": "composes",
+   "evidence": "tests/test_backward_visualization.py::test_draw_backward_renders",
+   "confidence": "high",
+   "note": "Backward drawing without a captured backward graph refuses backward_graph_unavailable."
+  },
+  {
+   "a": "backward",
+   "b": "episode",
+   "status": "composes",
+   "evidence": "docs/reference/episode_capture.md",
+   "confidence": "low",
+   "note": "Not listed in the episode option table; the doc says every capability gate (N1-N5, backward included) applies verbatim to the episode product."
+  },
+  {
+   "a": "backward",
+   "b": "export",
+   "status": "composes",
+   "evidence": "tests/test_to_pandas_field_coverage.py::test_backward_pass_to_pandas_covers_field_order",
+   "confidence": "high"
+  },
+  {
+   "a": "backward",
+   "b": "extract",
+   "status": "composes",
+   "evidence": "tests/test_save_path_detach_matrix.py::test_extract_knob_returns_attached_outs_on_request",
+   "confidence": "medium",
+   "note": "detach_saved_activations=False returns graph-connected outs that backpropagate into the parameters."
+  },
+  {
+   "a": "backward",
+   "b": "fast_run",
+   "status": "composes",
+   "evidence": "tests/test_fast_until.py::test_resnet18_until_fast_gradients_equal_hand_truncated_eager",
+   "confidence": "high"
+  },
+  {
+   "a": "backward",
+   "b": "fork_do",
+   "status": "composes",
+   "evidence": "tests/test_intervention_phase6.py::test_differentiable_replay_patching_captures_backward_grads",
+   "confidence": "high",
+   "note": "ReplayOptions(differentiable=True); a fork does not inherit gradient state."
+  },
+  {
+   "a": "backward",
+   "b": "halt",
+   "status": "composes",
+   "evidence": "tests/test_capture_outcome_gates.py::test_halted_backward_stays_allowed",
+   "confidence": "high",
+   "note": "A halted Trace keeps the prefix autograd graph; a halted Recording refuses (see backward x record)."
+  },
+  {
+   "a": "backward",
+   "b": "index",
+   "status": "composes",
+   "evidence": "docs/backward.md",
+   "confidence": "medium",
+   "note": "Gradients are read through trace[label].grad."
+  },
+  {
+   "a": "backward",
+   "b": "intervene",
+   "status": "composes",
+   "evidence": "tests/test_tlspec_runnable_forward_intervention.py::test_backward_grad_intervention_still_verifies",
+   "confidence": "medium",
+   "note": "Backward-direction rules edit gradients on a live trace; a staged gradient edit refuses on rerun (rerun_gradient_edit_unsupported)."
+  },
+  {
+   "a": "backward",
+   "b": "multipass",
+   "status": "composes",
+   "evidence": "tests/test_backward.py::test_validate_backward_multipass_weight_tied",
+   "confidence": "medium",
+   "note": "A gradient query that spans several backward passes needs bwd= (gradient_pass_ambiguous)."
+  },
+  {
+   "a": "backward",
+   "b": "recipes",
+   "status": "independent",
+   "reason": "Facet recipes read forward structure at finalization while gradient capture hooks autograd; neither reads the other.",
+   "confidence": "low"
+  },
+  {
+   "a": "backward",
+   "b": "record",
+   "status": "asymmetry",
+   "asymmetry": "A10",
+   "confidence": "high",
+   "note": "tl.record installs gradient hooks only when asked and refuses log_backward on a halted Recording; the Trace path allows both."
+  },
+  {
+   "a": "backward",
+   "b": "reporting",
+   "status": "independent",
+   "reason": "echo, profile and grouping act on the forward op stream; gradient capture uses autograd hooks.",
+   "confidence": "low"
+  },
+  {
+   "a": "backward",
+   "b": "rerun",
+   "status": "composes",
+   "evidence": "tests/test_run_until_backbone_grad.py::test_full_run_backward_without_carry_state_matches_eager",
+   "confidence": "medium",
+   "note": "A staged gradient edit refuses on rerun (rerun_gradient_edit_unsupported)."
+  },
+  {
+   "a": "backward",
+   "b": "save",
+   "status": "composes",
+   "evidence": "tests/test_backward_grad_integrity.py::test_selective_save_grads_consults_predicate_for_params",
+   "confidence": "high"
+  },
+  {
+   "a": "backward",
+   "b": "storage",
+   "status": "asymmetry",
+   "asymmetry": "A11",
+   "confidence": "high",
+   "note": "Gradients stream to disk on log_backward, but backward_ready=True refuses disk saves and a disk-only record refuses save_grads."
+  },
+  {
+   "a": "backward",
+   "b": "validate",
+   "status": "composes",
+   "evidence": "tests/test_backward.py::test_validate_backward_pass_correct",
+   "confidence": "high"
+  },
+  {
+   "a": "bind",
+   "b": "bundle",
+   "status": "independent",
+   "reason": "A binding runs the model without capture and keeps no Trace for a Bundle to hold.",
+   "confidence": "medium"
+  },
+  {
+   "a": "bind",
+   "b": "draw",
+   "status": "independent",
+   "reason": "A binding returns the model output and builds no Trace to draw.",
+   "confidence": "medium"
+  },
+  {
+   "a": "bind",
+   "b": "episode",
+   "status": "refuses",
+   "evidence": "docs/reference/error_refusal_contract.md",
+   "code": "model_door_binding_refused",
+   "confidence": "medium",
+   "note": "episode= is a tl.trace option; tl.trace refuses a bound executor and prints the canonical spelling (base_model plus intervene=binding.spec)."
+  },
+  {
+   "a": "bind",
+   "b": "export",
+   "status": "independent",
+   "reason": "A binding keeps no Trace, so there is nothing to export.",
+   "confidence": "medium"
+  },
+  {
+   "a": "bind",
+   "b": "extract",
+   "status": "independent",
+   "reason": "extract_dataset takes its own intervene= spec; it does not take a binding.",
+   "confidence": "low"
+  },
+  {
+   "a": "bind",
+   "b": "fast_run",
+   "status": "independent",
+   "reason": "Both are cheap steering paths (fast_paths.md) but a binding has no Trace to rerun.",
+   "confidence": "medium"
+  },
+  {
+   "a": "bind",
+   "b": "fork_do",
+   "status": "independent",
+   "reason": "A binding has no recorded graph to fork or edit post hoc.",
+   "confidence": "medium"
+  },
+  {
+   "a": "bind",
+   "b": "halt",
+   "status": "refuses",
+   "evidence": "docs/reference/error_refusal_contract.md",
+   "code": "model_door_binding_refused",
+   "confidence": "medium",
+   "note": "halt= is a tl.trace option; the binding is capture-free and tl.trace refuses it as the model."
+  },
+  {
+   "a": "bind",
+   "b": "index",
+   "status": "independent",
+   "reason": "A binding returns model output; there is no trace[...] to index.",
+   "confidence": "medium"
+  },
+  {
+   "a": "bind",
+   "b": "intervene",
+   "status": "composes",
+   "evidence": "tests/test_interaction_battery.py::test_bind_x_intervene_matches_the_traced_edit",
+   "confidence": "high"
+  },
+  {
+   "a": "bind",
+   "b": "multipass",
+   "status": "composes",
+   "evidence": "tests/test_surgery_live_bind.py::test_bind_pass_qualified_boundary_target",
+   "confidence": "medium"
+  },
+  {
+   "a": "bind",
+   "b": "recipes",
+   "status": "refuses",
+   "evidence": "docs/reference/error_refusal_contract.md",
+   "code": "model_door_binding_refused",
+   "confidence": "low",
+   "note": "recipes= is a tl.trace option; a binding passed to tl.trace is refused."
+  },
+  {
+   "a": "bind",
+   "b": "record",
+   "status": "independent",
+   "reason": "tl.record and bind are alternative steering paths; only trace, release_model and bind are wired model doors, so a binding passed to tl.record is unclassified.",
+   "confidence": "low"
+  },
+  {
+   "a": "bind",
+   "b": "reporting",
+   "status": "refuses",
+   "evidence": "docs/reference/error_refusal_contract.md",
+   "code": "model_door_binding_refused",
+   "confidence": "low",
+   "note": "echo, profile and grouping are tl.trace options; the binding keeps its own BindReport instead."
+  },
+  {
+   "a": "bind",
+   "b": "rerun",
+   "status": "independent",
+   "reason": "A binding is called per input; there is no Trace to rerun.",
+   "confidence": "medium"
+  },
+  {
+   "a": "bind",
+   "b": "save",
+   "status": "refuses",
+   "evidence": "docs/reference/error_refusal_contract.md",
+   "code": "model_door_binding_refused",
+   "confidence": "medium",
+   "note": "A binding records nothing, so save= has nothing to select; to keep activations use tl.record(save=, intervene=) or tl.trace."
+  },
+  {
+   "a": "bind",
+   "b": "storage",
+   "status": "refuses",
+   "evidence": "docs/reference/error_refusal_contract.md",
+   "code": "model_door_binding_refused",
+   "confidence": "medium",
+   "note": "A binding writes no payloads; storage= is a tl.trace option and tl.trace refuses a binding."
+  },
+  {
+   "a": "bind",
+   "b": "validate",
+   "status": "independent",
+   "reason": "tl.validate builds its own capture from a model and inputs; a binding shares neither.",
+   "confidence": "low"
+  },
+  {
+   "a": "bundle",
+   "b": "draw",
+   "status": "composes",
+   "evidence": "tests/test_multi_trace_followons.py::test_show_bundle_graph_rolled_and_backward_modes",
+   "confidence": "high"
+  },
+  {
+   "a": "bundle",
+   "b": "episode",
+   "status": "composes",
+   "evidence": "tests/test_bundle_relations.py::test_fold_arm2_episode_complete_via_bundle_ledger",
+   "confidence": "high",
+   "note": "The episode floor is per-step Bundles with episode_member relation rows (episode_capture.md)."
+  },
+  {
+   "a": "bundle",
+   "b": "export",
+   "status": "asymmetry",
+   "asymmetry": "A12",
+   "confidence": "medium",
+   "note": "Trace has to_pandas and xarray exports; Bundle has none and bundle summary and agent_json refuse untyped with AttributeError."
+  },
+  {
+   "a": "bundle",
+   "b": "extract",
+   "status": "independent",
+   "reason": "Extraction artifacts and Bundles are separate containers with no shared state.",
+   "confidence": "low"
+  },
+  {
+   "a": "bundle",
+   "b": "fast_run",
+   "status": "composes",
+   "evidence": "docs/intervention_api.md",
+   "confidence": "low",
+   "note": "bundle.run(model, x) applies to each member; whether fast= is forwarded is not documented."
+  },
+  {
+   "a": "bundle",
+   "b": "fork_do",
+   "status": "composes",
+   "evidence": "docs/intervention_api.md",
+   "confidence": "high",
+   "note": "bundle.do, attach_hooks, push and fork broadcast over members; M1 matrix marks bundle fork WORKS."
+  },
+  {
+   "a": "bundle",
+   "b": "halt",
+   "status": "composes",
+   "evidence": "tests/test_bundle_outcome_authority.py::test_both_doors_save_a_halted_bundle",
+   "confidence": "high"
+  },
+  {
+   "a": "bundle",
+   "b": "index",
+   "status": "composes",
+   "evidence": "tests/test_intervention_phase9.py::test_bundle_construction_shapes_and_member_indexing",
+   "confidence": "high"
+  },
+  {
+   "a": "bundle",
+   "b": "intervene",
+   "status": "composes",
+   "evidence": "tests/test_ledger_exp_events_sweep.py::test_sweep_over_specs_include_baseline",
+   "confidence": "high",
+   "note": "tl.sweep and bundle.vary apply one InterventionSpec per member."
+  },
+  {
+   "a": "bundle",
+   "b": "multipass",
+   "status": "composes",
+   "evidence": "tests/test_multi_trace_followons.py::test_show_bundle_graph_rolled_and_backward_modes",
+   "confidence": "low",
+   "note": "Rolled graphs are shown; multi-pass specific Bundle reads are not separately documented."
+  },
+  {
+   "a": "bundle",
+   "b": "recipes",
+   "status": "independent",
+   "reason": "Facet recipes are captured per trace and a Bundle only collects finished traces.",
+   "confidence": "low"
+  },
+  {
+   "a": "bundle",
+   "b": "record",
+   "status": "refuses",
+   "evidence": "docs/reference/error_refusal_contract.md",
+   "code": "bundle_member_type_invalid",
+   "confidence": "medium",
+   "note": "Members must be Trace or PartialTrace; a sparse Recording must go through to_trace() first."
+  },
+  {
+   "a": "bundle",
+   "b": "reporting",
+   "status": "independent",
+   "reason": "echo, profile and grouping act during one capture; a Bundle combines finished traces.",
+   "confidence": "low"
+  },
+  {
+   "a": "bundle",
+   "b": "rerun",
+   "status": "composes",
+   "evidence": "docs/intervention_api.md",
+   "confidence": "medium",
+   "note": "bundle.run(model, x) re-executes each member; the old Bundle.rerun name redirects (facade_redirect)."
+  },
+  {
+   "a": "bundle",
+   "b": "save",
+   "status": "composes",
+   "evidence": "docs/reference/error_refusal_contract.md",
+   "confidence": "medium",
+   "note": "Cross-member reads need retained payloads and refuse typed otherwise (bundle_member_payload_missing, bundle_stack_incomplete)."
+  },
+  {
+   "a": "bundle",
+   "b": "storage",
+   "status": "asymmetry",
+   "asymmetry": "A13",
+   "confidence": "high",
+   "note": "tl.save(bundle) accepts only level and overwrite; per-trace payload options refuse bundle_save_option_unsupported."
+  },
+  {
+   "a": "bundle",
+   "b": "validate",
+   "status": "independent",
+   "reason": "tl.validate takes a model and inputs and builds its own capture; a Bundle holds finished traces.",
+   "confidence": "low"
+  },
+  {
+   "a": "draw",
+   "b": "episode",
+   "status": "composes",
+   "evidence": "docs/reference/capture_outcomes.md",
+   "confidence": "low",
+   "note": "An episode product is a Trace; draw, explain and inspection are open on every settled product."
+  },
+  {
+   "a": "draw",
+   "b": "export",
+   "status": "independent",
+   "reason": "Both only read a finished Trace and neither changes it.",
+   "confidence": "medium"
+  },
+  {
+   "a": "draw",
+   "b": "extract",
+   "status": "independent",
+   "reason": "extract returns tensors and keeps no Trace to draw.",
+   "confidence": "medium"
+  },
+  {
+   "a": "draw",
+   "b": "fast_run",
+   "status": "independent",
+   "reason": "draw reads the graph as it stands; a fast run only refreshes saved payloads.",
+   "confidence": "low"
+  },
+  {
+   "a": "draw",
+   "b": "fork_do",
+   "status": "composes",
+   "evidence": "docs/intervention_api.md",
+   "confidence": "medium",
+   "note": "Trace.draw(vis_intervention_mode=...) shows planned and applied interventions."
+  },
+  {
+   "a": "draw",
+   "b": "halt",
+   "status": "composes",
+   "evidence": "docs/reference/capture_outcomes.md",
+   "confidence": "high",
+   "note": "Capability table: draw, report.explain and inspection are allowed on HALTED."
+  },
+  {
+   "a": "draw",
+   "b": "index",
+   "status": "independent",
+   "reason": "draw renders the whole graph (or a module= focus); trace[...] is a separate read accessor.",
+   "confidence": "low"
+  },
+  {
+   "a": "draw",
+   "b": "intervene",
+   "status": "asymmetry",
+   "asymmetry": "A14",
+   "confidence": "high",
+   "note": "Intervention marks draw on the dot layout; the rank layout omits standalone intervention hook nodes and warns."
+  },
+  {
+   "a": "draw",
+   "b": "multipass",
+   "status": "composes",
+   "evidence": "tests/test_feature_maps_c2.py::test_rolled_draw_with_annotations_survives_multipass_layers",
+   "confidence": "high",
+   "note": "Rolled versus unrolled views, fold_repeats and stack_by all exist for multi-pass layers."
+  },
+  {
+   "a": "draw",
+   "b": "recipes",
+   "status": "independent",
+   "reason": "Facet recipes label modules; draw reads graph structure and does not require facets.",
+   "confidence": "low"
+  },
+  {
+   "a": "draw",
+   "b": "record",
+   "status": "asymmetry",
+   "asymmetry": "A15",
+   "confidence": "medium",
+   "note": "Recording.draw renders a flat event graph; Trace.draw takes VisualizationOptions, collapse and encodings."
+  },
+  {
+   "a": "draw",
+   "b": "reporting",
+   "status": "composes",
+   "evidence": "docs/reference/error_refusal_contract.md",
+   "confidence": "medium",
+   "note": "draw device_time channels need the profile join and refuse device_time_unavailable without it."
+  },
+  {
+   "a": "draw",
+   "b": "rerun",
+   "status": "independent",
+   "reason": "draw reads whatever graph the trace holds; rerun does not change the draw door.",
+   "confidence": "low"
+  },
+  {
+   "a": "draw",
+   "b": "save",
+   "status": "composes",
+   "evidence": "docs/agent-reference/common-patterns.md",
+   "confidence": "medium",
+   "note": "The pattern doc draws the same trace it captured with save=tl.func('relu')."
+  },
+  {
+   "a": "draw",
+   "b": "storage",
+   "status": "independent",
+   "reason": "draw renders graph metadata; storage only decides where payloads live.",
+   "confidence": "low"
+  },
+  {
+   "a": "draw",
+   "b": "validate",
+   "status": "independent",
+   "reason": "tl.validate builds its own capture; draw renders an existing Trace.",
+   "confidence": "low"
+  },
+  {
+   "a": "episode",
+   "b": "export",
+   "status": "composes",
+   "evidence": "tests/test_vizx_model_explorer_episode_remedy.py::test_following_the_remedy_exports_the_full_graph",
+   "confidence": "medium",
+   "note": "Model Explorer export emits per-step graphs for episodes; tabular exports are not separately documented."
+  },
+  {
+   "a": "episode",
+   "b": "extract",
+   "status": "asymmetry",
+   "asymmetry": "A02",
+   "confidence": "medium",
+   "note": "tl.extract has no episode= keyword."
+  },
+  {
+   "a": "episode",
+   "b": "fast_run",
+   "status": "composes",
+   "evidence": "tests/test_episode_differential_oracle.py::test_gap9_guarded_fast_rerun_token_identity",
+   "confidence": "medium",
+   "note": "The fast tier reproduces wrapped tokens; episode_capture.md says a functional save predicate is needed, current-2-x-surface.md says save-all captures reach it, so the docs disagree."
+  },
+  {
+   "a": "episode",
+   "b": "fork_do",
+   "status": "composes",
+   "evidence": "tests/test_episode_truth_travel_policy.py::test_plain_fork_is_not_a_fresh_execution_and_carries_the_ledger",
+   "confidence": "medium",
+   "note": "A do() edit quarantines the inherited ledger (episode_evidence_dropped_perturbed_replay)."
+  },
+  {
+   "a": "episode",
+   "b": "halt",
+   "status": "composes",
+   "evidence": "tests/composition_expectations/test_proofnet_episode_options.py::test_episode_x_halt_is_coupled_via_step_status_rows",
+   "confidence": "high"
+  },
+  {
+   "a": "episode",
+   "b": "index",
+   "status": "composes",
+   "evidence": "docs/reference/episode_capture.md",
+   "confidence": "medium",
+   "note": "Every op carries an Op.episode_step stamp; at_step selects by step."
+  },
+  {
+   "a": "episode",
+   "b": "intervene",
+   "status": "composes",
+   "evidence": "tests/composition_expectations/test_proofnet_episode_options.py::test_episode_x_intervene_runs_coupled_with_evidence",
+   "confidence": "high",
+   "note": "Runs coupled: fire counts and an intervention digest on the ledger."
+  },
+  {
+   "a": "episode",
+   "b": "multipass",
+   "status": "composes",
+   "evidence": "docs/reference/episode_capture.md",
+   "confidence": "high",
+   "note": "Pass indices are per-site occurrence counters, not episode steps; a cross-pass window warns episode_pass_window_occurrence_axis."
+  },
+  {
+   "a": "episode",
+   "b": "recipes",
+   "status": "independent",
+   "reason": "Episode grouping keys on calls of the stepped module; facet recipes label modules and share no state.",
+   "confidence": "low"
+  },
+  {
+   "a": "episode",
+   "b": "record",
+   "status": "asymmetry",
+   "asymmetry": "A16",
+   "confidence": "high",
+   "note": "tl.record has no episode arm; episode= is refused with an untyped TypeError (ledgered gap)."
+  },
+  {
+   "a": "episode",
+   "b": "reporting",
+   "status": "composes",
+   "evidence": "docs/agent-reference/current-2-x-surface.md",
+   "confidence": "low",
+   "note": "Not in the episode option table; grouping values other than structural may refuse grouping_policy_unavailable."
+  },
+  {
+   "a": "episode",
+   "b": "rerun",
+   "status": "asymmetry",
+   "asymmetry": "A17",
+   "confidence": "high",
+   "note": "A plain episode reruns as a fresh execution and drops the ledger; a coupled episode (with intervene=) refuses run() on both engines."
+  },
+  {
+   "a": "episode",
+   "b": "save",
+   "status": "composes",
+   "evidence": "tests/composition_expectations/test_proofnet_episode_options.py::test_episode_x_save_predicate_retaining_source_is_orthogonal",
+   "confidence": "high",
+   "note": "A value-free save policy under tokens or digest evidence refuses episode_declaration_invalid."
+  },
+  {
+   "a": "episode",
+   "b": "storage",
+   "status": "refuses",
+   "evidence": "docs/reference/error_refusal_contract.md",
+   "code": "episode_declaration_invalid",
+   "confidence": "medium",
+   "note": "Refused when chunking or a disk-only/value-free save policy drops the evidence source (tests/composition_expectations/test_proofnet_episode_options.py::test_episode_x_disk_storage_with_dropped_source_refuses); step_output_kind='none' admits value-free saves."
+  },
+  {
+   "a": "episode",
+   "b": "validate",
+   "status": "composes",
+   "evidence": "docs/reference/capture_outcomes.md",
+   "confidence": "low",
+   "note": "Validation entry is allowed on settled products; no episode-specific validation test found."
+  },
+  {
+   "a": "export",
+   "b": "extract",
+   "status": "composes",
+   "evidence": "docs/agent-reference/current-2-x-surface.md",
+   "confidence": "medium",
+   "note": "features.as_matrix feeds the rsatoolbox and xarray adapters; file and in-memory routes agree numerically."
+  },
+  {
+   "a": "export",
+   "b": "fast_run",
+   "status": "independent",
+   "reason": "Exports read a finished Trace; a fast run only refreshes its saved payloads.",
+   "confidence": "low"
+  },
+  {
+   "a": "export",
+   "b": "fork_do",
+   "status": "composes",
+   "evidence": "tests/test_netron_export_serve.py::test_c10_serve_works_on_forked_intervened_trace",
+   "confidence": "medium"
+  },
+  {
+   "a": "export",
+   "b": "halt",
+   "status": "composes",
+   "evidence": "tests/test_netron_export_compositions.py::test_c3_halted_capture_carries_the_outcome_marker",
+   "confidence": "high",
+   "note": "Failed, aborted and unknown products refuse exports (N1); halted ones export with an outcome marker."
+  },
+  {
+   "a": "export",
+   "b": "index",
+   "status": "independent",
+   "reason": "Exports iterate the whole trace; trace[...] is a separate lookup.",
+   "confidence": "low"
+  },
+  {
+   "a": "export",
+   "b": "intervene",
+   "status": "composes",
+   "evidence": "tests/test_netron_export_compositions.py::test_c2_intervened_ops_visibly_marked",
+   "confidence": "high"
+  },
+  {
+   "a": "export",
+   "b": "multipass",
+   "status": "composes",
+   "evidence": "tests/test_exports.py::test_recurrent_static_graph_exports_use_unique_pass_qualified_ids",
+   "confidence": "high"
+  },
+  {
+   "a": "export",
+   "b": "recipes",
+   "status": "independent",
+   "reason": "Tabular and array exports do not read facet recipes.",
+   "confidence": "low"
+  },
+  {
+   "a": "export",
+   "b": "record",
+   "status": "asymmetry",
+   "asymmetry": "A18",
+   "confidence": "medium",
+   "note": "Recording.to_pandas gives event columns; xarray and agent_json are not offered (agent_json refuses with an untyped AttributeError)."
+  },
+  {
+   "a": "export",
+   "b": "reporting",
+   "status": "independent",
+   "reason": "Exports read stored trace fields; echo, profile and grouping settings do not change export code.",
+   "confidence": "low"
+  },
+  {
+   "a": "export",
+   "b": "rerun",
+   "status": "independent",
+   "reason": "Exports read the trace as it stands; rerun does not change the export door.",
+   "confidence": "low"
+  },
+  {
+   "a": "export",
+   "b": "save",
+   "status": "composes",
+   "evidence": "tests/test_hon_xarray_export.py::test_partial_resnet_trace_exports_buffers_and_discloses_skipped_layers",
+   "confidence": "high",
+   "note": "A selective save exports and discloses skipped layers; mismatched leading sizes refuse xarray_presentation_mismatch."
+  },
+  {
+   "a": "export",
+   "b": "storage",
+   "status": "composes",
+   "evidence": "docs/reference/limitations.md",
+   "confidence": "medium",
+   "note": "Disk-backed activations are reported as unexamined and not materialized implicitly; call op.materialize_out() first."
+  },
+  {
+   "a": "export",
+   "b": "validate",
+   "status": "independent",
+   "reason": "tl.validate builds its own capture and exports read an existing Trace.",
+   "confidence": "low"
+  },
+  {
+   "a": "extract",
+   "b": "fast_run",
+   "status": "independent",
+   "reason": "tl.extract runs one selective capture and returns tensors; it does not rerun a trace.",
+   "confidence": "low"
+  },
+  {
+   "a": "extract",
+   "b": "fork_do",
+   "status": "independent",
+   "reason": "tl.extract returns tensors and keeps no Trace to fork.",
+   "confidence": "low"
+  },
+  {
+   "a": "extract",
+   "b": "halt",
+   "status": "asymmetry",
+   "asymmetry": "A02",
+   "confidence": "medium",
+   "note": "tl.extract has no halt= and always runs the full forward."
+  },
+  {
+   "a": "extract",
+   "b": "index",
+   "status": "composes",
+   "evidence": "docs/agent-reference/common-patterns.md",
+   "confidence": "high",
+   "note": "extract resolves layer and module names through the same selector door as trace[...]."
+  },
+  {
+   "a": "extract",
+   "b": "intervene",
+   "status": "composes",
+   "evidence": "tests/test_b2_extract_intervened.py::test_intervened_disk_artifact_records_the_counterfactual",
+   "confidence": "high",
+   "note": "extract_dataset(intervene=) only; the batch-independent action rule and no-fire refusals apply."
+  },
+  {
+   "a": "extract",
+   "b": "multipass",
+   "status": "composes",
+   "evidence": "docs/agent-reference/common-patterns.md",
+   "confidence": "low",
+   "note": "No extract-specific multi-pass document found."
+  },
+  {
+   "a": "extract",
+   "b": "recipes",
+   "status": "asymmetry",
+   "asymmetry": "A02",
+   "confidence": "medium",
+   "note": "tl.extract has no recipes= keyword."
+  },
+  {
+   "a": "extract",
+   "b": "record",
+   "status": "refuses",
+   "evidence": "docs/reference/error_refusal_contract.md",
+   "code": "extraction_engine_unsupported",
+   "confidence": "medium",
+   "note": "brainpipe extraction_plan refuses a non-trace engine because fastlog records a strict subset of sites."
+  },
+  {
+   "a": "extract",
+   "b": "reporting",
+   "status": "asymmetry",
+   "asymmetry": "A02",
+   "confidence": "medium",
+   "note": "tl.extract has no echo, profile or grouping keywords."
+  },
+  {
+   "a": "extract",
+   "b": "rerun",
+   "status": "independent",
+   "reason": "extract_dataset resume continues a disk artifact; it is not Trace.run.",
+   "confidence": "low"
+  },
+  {
+   "a": "extract",
+   "b": "save",
+   "status": "composes",
+   "evidence": "tests/test_interaction_battery.py::test_extract_x_save_reads_the_same_module_outputs",
+   "confidence": "high"
+  },
+  {
+   "a": "extract",
+   "b": "storage",
+   "status": "composes",
+   "evidence": "tests/test_b2_extract_intervened.py::test_intervened_disk_artifact_records_the_counterfactual",
+   "confidence": "high",
+   "note": "Disk mode is extract_dataset(output_dir=); disk-only options without output_dir refuse extraction_disk_only_option."
+  },
+  {
+   "a": "extract",
+   "b": "validate",
+   "status": "independent",
+   "reason": "tl.validate builds its own capture; extract reads layer outputs.",
+   "confidence": "low"
+  },
+  {
+   "a": "fast_run",
+   "b": "fork_do",
+   "status": "composes",
+   "evidence": "tests/test_fast_rerun_target_contract.py::test_fast_door_on_a_fork_applies_a_module_target_after_one_recapture",
+   "confidence": "high"
+  },
+  {
+   "a": "fast_run",
+   "b": "halt",
+   "status": "asymmetry",
+   "asymmetry": "A19",
+   "confidence": "high",
+   "note": "A halted live trace refuses run(fast=True) (N5); a loaded sparse artifact still runs its recorded prefix."
+  },
+  {
+   "a": "fast_run",
+   "b": "index",
+   "status": "independent",
+   "reason": "A fast run refreshes saved payloads; trace[...] only reads them.",
+   "confidence": "low"
+  },
+  {
+   "a": "fast_run",
+   "b": "intervene",
+   "status": "asymmetry",
+   "asymmetry": "A20",
+   "confidence": "high",
+   "note": "Module-selector specs take the fast engine; function targets refuse fast_rerun_target_unsupported on the explicit fast door and value replacements use the capture engine."
+  },
+  {
+   "a": "fast_run",
+   "b": "multipass",
+   "status": "composes",
+   "evidence": "tests/test_save_path_detach_matrix.py::test_detach_choice_holds_on_every_save_path",
+   "confidence": "medium",
+   "note": "The fixture reuses one ReLU per block, a shape that used to refuse the fast path."
+  },
+  {
+   "a": "fast_run",
+   "b": "recipes",
+   "status": "independent",
+   "reason": "The fast engine hooks module exits and refreshes saved sites; facet recipes are not consulted.",
+   "confidence": "low"
+  },
+  {
+   "a": "fast_run",
+   "b": "record",
+   "status": "independent",
+   "reason": "tl.record is a one-shot sparse capture; fast run reruns an existing Trace.",
+   "confidence": "low"
+  },
+  {
+   "a": "fast_run",
+   "b": "reporting",
+   "status": "independent",
+   "reason": "echo, profile and grouping act during capture; a fast run does not re-arm them.",
+   "confidence": "low"
+  },
+  {
+   "a": "fast_run",
+   "b": "rerun",
+   "status": "asymmetry",
+   "asymmetry": "A21",
+   "confidence": "high",
+   "note": "fast= exists only on the unified run(inputs=...) door; the legacy run(model, x) door refuses run_fast_requires_inputs and carry_state is unified-only."
+  },
+  {
+   "a": "fast_run",
+   "b": "save",
+   "status": "composes",
+   "evidence": "tests/test_save_path_detach_matrix.py::test_detach_choice_holds_on_every_save_path",
+   "confidence": "high",
+   "note": "Tested on save-all, tl.module and tl.in_module saves; docs/guides/fast_paths.md still says a save-everything capture refuses, which is stale."
+  },
+  {
+   "a": "fast_run",
+   "b": "storage",
+   "status": "composes",
+   "evidence": "docs/reference/limitations.md",
+   "confidence": "low",
+   "note": "A loaded runnable artifact needs one verified ordinary run before fast runs are admitted."
+  },
+  {
+   "a": "fast_run",
+   "b": "validate",
+   "status": "independent",
+   "reason": "The fast engine has its own faithfulness witnesses; tl.validate is a separate replay.",
+   "confidence": "low"
+  },
+  {
+   "a": "fork_do",
+   "b": "halt",
+   "status": "asymmetry",
+   "asymmetry": "A22",
+   "confidence": "high",
+   "note": "fork works on a halted trace but do and push refuse (N5)."
+  },
+  {
+   "a": "fork_do",
+   "b": "index",
+   "status": "composes",
+   "evidence": "tests/test_interaction_battery.py::test_fork_do_x_index_edits_the_fork_only",
+   "confidence": "high"
+  },
+  {
+   "a": "fork_do",
+   "b": "intervene",
+   "status": "composes",
+   "evidence": "tests/test_intervention_spec_pickle.py::test_intervened_fork_pickles",
+   "confidence": "medium"
+  },
+  {
+   "a": "fork_do",
+   "b": "multipass",
+   "status": "composes",
+   "evidence": "tests/composition_expectations/test_proofnet_deep_chains.py::test_chain_multipass_pass_qualified_edit_is_exact",
+   "confidence": "high",
+   "note": "A bare layer label on a multi-pass layer refuses multipass_bare_label_ambiguous; pass-qualified labels work."
+  },
+  {
+   "a": "fork_do",
+   "b": "recipes",
+   "status": "composes",
+   "evidence": "docs/facets.md",
+   "confidence": "high",
+   "note": "Facet edits reuse fork, attach_hooks and rerun; overlapping writes refuse before rerun."
+  },
+  {
+   "a": "fork_do",
+   "b": "record",
+   "status": "asymmetry",
+   "asymmetry": "A23",
+   "confidence": "high",
+   "note": "A Recording has no fork or do; fork refuses with an untyped AttributeError (ledgered gap)."
+  },
+  {
+   "a": "fork_do",
+   "b": "reporting",
+   "status": "independent",
+   "reason": "Post-hoc edits replay saved payloads and do not re-arm echo, profile or grouping.",
+   "confidence": "low"
+  },
+  {
+   "a": "fork_do",
+   "b": "rerun",
+   "status": "asymmetry",
+   "asymmetry": "A24",
+   "confidence": "high",
+   "note": "Edge, parameter and region edits work on the replay/push engine only; the rerun engine refuses them."
+  },
+  {
+   "a": "fork_do",
+   "b": "save",
+   "status": "composes",
+   "evidence": "tests/test_intervention_error_catalog.py::test_intervention_ready_composes_with_deferred_selective_grads",
+   "confidence": "low",
+   "note": "do() needs an intervention_ready capture, which is heavier than a plain selective save."
+  },
+  {
+   "a": "fork_do",
+   "b": "storage",
+   "status": "asymmetry",
+   "asymmetry": "A25",
+   "confidence": "medium",
+   "note": "A batch-coherent edit on a chunk_size trace refuses chunked_replay_batch_coupling; unchunked traces accept it."
+  },
+  {
+   "a": "fork_do",
+   "b": "validate",
+   "status": "composes",
+   "evidence": "tests/validation_goldens/test_validation_exemption_hardening.py::test_validation_status_cache_invalidated_on_fork",
+   "confidence": "high"
+  },
+  {
+   "a": "halt",
+   "b": "index",
+   "status": "composes",
+   "evidence": "docs/reference/capture_outcomes.md",
+   "confidence": "medium",
+   "note": "Inspection and lookup stay open on a halted trace; ops that never ran are absent."
+  },
+  {
+   "a": "halt",
+   "b": "intervene",
+   "status": "composes",
+   "evidence": "tests/test_capture_unification_p3b.py::test_layers_to_save_supports_intervene_halt_and_save_predicate",
+   "confidence": "high"
+  },
+  {
+   "a": "halt",
+   "b": "multipass",
+   "status": "composes",
+   "evidence": "tests/test_capture_outcome_characterization.py::test_recorder_mixed_multipass_halt_pins",
+   "confidence": "medium"
+  },
+  {
+   "a": "halt",
+   "b": "recipes",
+   "status": "independent",
+   "reason": "Recipes run at finalization over what executed; a halt only shortens the forward.",
+   "confidence": "low"
+  },
+  {
+   "a": "halt",
+   "b": "record",
+   "status": "composes",
+   "evidence": "tests/test_fastlog_halt.py::test_record_halt_predicate_stops_after_save_decision",
+   "confidence": "high",
+   "note": "The record twin refuses non-callable halt with recording_halt_predicate_type_invalid."
+  },
+  {
+   "a": "halt",
+   "b": "reporting",
+   "status": "composes",
+   "evidence": "tests/test_snoop_refusals.py::test_halt_only_fast_path_declines_when_echo_is_armed",
+   "confidence": "medium"
+  },
+  {
+   "a": "halt",
+   "b": "rerun",
+   "status": "asymmetry",
+   "asymmetry": "A26",
+   "confidence": "high",
+   "note": "Live rerun of a halted trace refuses (N5); a loaded sparse artifact run() executes exactly the recorded prefix."
+  },
+  {
+   "a": "halt",
+   "b": "save",
+   "status": "composes",
+   "evidence": "tests/test_trace_halt.py::test_trace_halt_supports_selective_layers_to_save",
+   "confidence": "high",
+   "note": "Analysis-level save works on a halted trace; runnable save refuses halted_capture_not_runnable."
+  },
+  {
+   "a": "halt",
+   "b": "storage",
+   "status": "asymmetry",
+   "asymmetry": "A27",
+   "confidence": "high",
+   "note": "halt works with streaming to disk, but chunk_size refuses halt (and stop_after refuses chunking)."
+  },
+  {
+   "a": "halt",
+   "b": "validate",
+   "status": "composes",
+   "evidence": "docs/reference/capture_outcomes.md",
+   "confidence": "medium",
+   "note": "Validation entry is allowed on HALTED with the halted output block skipped."
+  },
+  {
+   "a": "index",
+   "b": "intervene",
+   "status": "composes",
+   "evidence": "tests/test_interaction_battery.py::test_intervene_x_rerun_applies_the_edit_once",
+   "confidence": "low",
+   "note": "Intervention records are read from the indexed op (op.interventions)."
+  },
+  {
+   "a": "index",
+   "b": "multipass",
+   "status": "asymmetry",
+   "asymmetry": "A28",
+   "confidence": "high",
+   "note": "trace['label'] returns a Layer for a multi-pass layer; a bare label in do() and attach_hooks refuses multipass_bare_label_ambiguous, while pass-qualified labels (label:2) work."
+  },
+  {
+   "a": "index",
+   "b": "recipes",
+   "status": "composes",
+   "evidence": "docs/facets.md",
+   "confidence": "medium",
+   "note": "record.facets[...] item access serves structural and recipe facets."
+  },
+  {
+   "a": "index",
+   "b": "record",
+   "status": "composes",
+   "evidence": "tests/composition_expectations/test_proofnet_m1_product_verb.py::test_m1_cell_matches_declared_state",
+   "confidence": "medium",
+   "note": "len and contains work on a Recording; Recording[key] returns an ActivationRecord or a list, not a Layer or Op."
+  },
+  {
+   "a": "index",
+   "b": "reporting",
+   "status": "independent",
+   "reason": "echo, profile and grouping act at capture; trace[...] reads the finished trace.",
+   "confidence": "low"
+  },
+  {
+   "a": "index",
+   "b": "rerun",
+   "status": "asymmetry",
+   "asymmetry": "A29",
+   "confidence": "medium",
+   "note": "Label addressing reads fine after a rerun, but a staged edit addressed by a finalized label cannot be applied on rerun (rerun_staged_label_unmatchable); predicate selectors can."
+  },
+  {
+   "a": "index",
+   "b": "save",
+   "status": "composes",
+   "evidence": "docs/agent-reference/common-patterns.md",
+   "confidence": "high",
+   "note": "log['relu_1_2'].out after save=tl.func('relu'); an unsaved site refuses activation_not_saved."
+  },
+  {
+   "a": "index",
+   "b": "storage",
+   "status": "composes",
+   "evidence": "docs/reference/limitations.md",
+   "confidence": "medium",
+   "note": "Disk-backed payloads load lazily on read; op.materialize_out() forces it."
+  },
+  {
+   "a": "index",
+   "b": "validate",
+   "status": "independent",
+   "reason": "tl.validate builds its own capture; indexing reads an existing trace.",
+   "confidence": "low"
+  },
+  {
+   "a": "intervene",
+   "b": "multipass",
+   "status": "composes",
+   "evidence": "docs/agent-reference/current-2-x-surface.md",
+   "confidence": "medium",
+   "note": "Pass-qualified replay edits exactly the addressed pass; predicate selectors fan out across passes."
+  },
+  {
+   "a": "intervene",
+   "b": "recipes",
+   "status": "composes",
+   "evidence": "docs/facets.md",
+   "confidence": "medium",
+   "note": "Facet selectors such as tl.head and tl.facet address recipe-provided sites."
+  },
+  {
+   "a": "intervene",
+   "b": "record",
+   "status": "composes",
+   "evidence": "tests/test_interaction_battery.py::test_record_x_intervene_returns_the_edited_output",
+   "confidence": "high"
+  },
+  {
+   "a": "intervene",
+   "b": "reporting",
+   "status": "composes",
+   "evidence": "docs/reference/error_refusal_contract.md",
+   "confidence": "low",
+   "note": "echo narrates separately from the intervention runtime; routing EchoOptions into hooks= refuses echo_via_hooks_unsupported."
+  },
+  {
+   "a": "intervene",
+   "b": "rerun",
+   "status": "composes",
+   "evidence": "tests/test_interaction_battery.py::test_intervene_x_rerun_applies_the_edit_once",
+   "confidence": "high",
+   "note": "The unified run(inputs=...) door refuses a staged spec (run_staged_spec_unapplied); the legacy run(model, x) door and fast=True apply it."
+  },
+  {
+   "a": "intervene",
+   "b": "save",
+   "status": "composes",
+   "evidence": "tests/test_interaction_battery.py::test_save_x_intervene_saves_the_edited_value",
+   "confidence": "high"
+  },
+  {
+   "a": "intervene",
+   "b": "storage",
+   "status": "asymmetry",
+   "asymmetry": "A30",
+   "confidence": "high",
+   "note": "intervene works with streaming to disk; chunk_size refuses intervene (codeless ChunkedForwardConfigError)."
+  },
+  {
+   "a": "intervene",
+   "b": "validate",
+   "status": "composes",
+   "evidence": "tests/test_validate_consolidated.py::test_validate_intervention_scope_returns_report",
+   "confidence": "high"
+  },
+  {
+   "a": "multipass",
+   "b": "recipes",
+   "status": "independent",
+   "reason": "Facet recipes match module structure and do not depend on call count.",
+   "confidence": "low"
+  },
+  {
+   "a": "multipass",
+   "b": "record",
+   "status": "asymmetry",
+   "asymmetry": "A31",
+   "confidence": "medium",
+   "note": "tl.record captures repeated calls, but Recording.to_trace() refuses a multi-pass Recording (recording_multipass_not_convertible)."
+  },
+  {
+   "a": "multipass",
+   "b": "reporting",
+   "status": "composes",
+   "evidence": "tests/test_snoop_core.py::test_recorder_resets_per_pass_and_marks_passes",
+   "confidence": "medium"
+  },
+  {
+   "a": "multipass",
+   "b": "rerun",
+   "status": "composes",
+   "evidence": "tests/test_save_new_activations.py::test_save_new_outs_recurrent",
+   "confidence": "medium"
+  },
+  {
+   "a": "multipass",
+   "b": "save",
+   "status": "composes",
+   "evidence": "tests/test_capture_unification_p3a.py::test_selective_save_oracle_matches_full_trace_for_recurrent_passes",
+   "confidence": "high"
+  },
+  {
+   "a": "multipass",
+   "b": "storage",
+   "status": "composes",
+   "evidence": "tests/test_io_determinism_fixes.py::test_save_succeeds_for_multi_pass_recurrent_trace",
+   "confidence": "medium"
+  },
+  {
+   "a": "multipass",
+   "b": "validate",
+   "status": "composes",
+   "evidence": "tests/test_backward.py::test_validate_backward_multipass_weight_tied",
+   "confidence": "medium"
+  },
+  {
+   "a": "recipes",
+   "b": "record",
+   "status": "asymmetry",
+   "asymmetry": "A32",
+   "confidence": "medium",
+   "note": "tl.record has no recipes= keyword; recipes attach on tl.trace only."
+  },
+  {
+   "a": "recipes",
+   "b": "reporting",
+   "status": "independent",
+   "reason": "Facet recipes and echo, profile or grouping act on different capture outputs.",
+   "confidence": "low"
+  },
+  {
+   "a": "recipes",
+   "b": "rerun",
+   "status": "composes",
+   "evidence": "docs/facets.md",
+   "confidence": "medium",
+   "note": "Facet interventions reuse the rerun path; overlapping facet writes raise before rerun."
+  },
+  {
+   "a": "recipes",
+   "b": "save",
+   "status": "composes",
+   "evidence": "docs/facets.md",
+   "confidence": "medium",
+   "note": "Declared facets that need payloads a selective save did not keep are omitted (tv_payload_missing names the recapture plan)."
+  },
+  {
+   "a": "recipes",
+   "b": "storage",
+   "status": "independent",
+   "reason": "Recipes read structure at finalization; storage decides where payloads live.",
+   "confidence": "low"
+  },
+  {
+   "a": "recipes",
+   "b": "validate",
+   "status": "independent",
+   "reason": "tl.validate builds its own capture and does not take recipes.",
+   "confidence": "low"
+  },
+  {
+   "a": "record",
+   "b": "reporting",
+   "status": "composes",
+   "evidence": "tests/test_snoop_core.py::test_record_echo_true_narrates_and_keeps_nothing",
+   "confidence": "high",
+   "note": "echo works on both doors; profile and grouping are tl.trace only."
+  },
+  {
+   "a": "record",
+   "b": "rerun",
+   "status": "independent",
+   "reason": "tl.record is one-shot and returns a Recording; rerunning means calling record again.",
+   "confidence": "low"
+  },
+  {
+   "a": "record",
+   "b": "save",
+   "status": "composes",
+   "evidence": "tests/test_interaction_battery.py::test_record_x_save_matches_the_trace",
+   "confidence": "high"
+  },
+  {
+   "a": "record",
+   "b": "storage",
+   "status": "asymmetry",
+   "asymmetry": "A33",
+   "confidence": "medium",
+   "note": "trace streams to disk asynchronously by default; tl.record streaming stays synchronous and refuses an explicit async_writes=True."
+  },
+  {
+   "a": "record",
+   "b": "validate",
+   "status": "independent",
+   "reason": "tl.validate builds its own capture and does not take a Recording.",
+   "confidence": "low"
+  },
+  {
+   "a": "reporting",
+   "b": "rerun",
+   "status": "independent",
+   "reason": "A rerun does not re-arm echo, profile or grouping; they belong to the original capture.",
+   "confidence": "low"
+  },
+  {
+   "a": "reporting",
+   "b": "save",
+   "status": "composes",
+   "evidence": "tests/test_snoop_core.py::test_save_scope_and_echo_scope_are_independent",
+   "confidence": "high",
+   "note": "Also tests/test_trace_profile_audit.py::test_trace_profile_sparse_save_preserves_honest_availability."
+  },
+  {
+   "a": "reporting",
+   "b": "storage",
+   "status": "refuses",
+   "evidence": "docs/reference/error_refusal_contract.md",
+   "code": "echo_chunked_unsupported",
+   "confidence": "medium",
+   "note": "Only the chunk_size face of storage is documented as refused (tests/test_snoop_refusals.py::test_chunked_forward_with_echo_refuses); echo with streaming to disk is not documented."
+  },
+  {
+   "a": "reporting",
+   "b": "validate",
+   "status": "independent",
+   "reason": "tl.validate builds its own capture and does not take echo, profile or grouping.",
+   "confidence": "low"
+  },
+  {
+   "a": "rerun",
+   "b": "save",
+   "status": "composes",
+   "evidence": "tests/test_interaction_battery.py::test_save_x_rerun_refills_the_selected_sites",
+   "confidence": "high"
+  },
+  {
+   "a": "rerun",
+   "b": "storage",
+   "status": "composes",
+   "evidence": "tests/test_chunk_size.py::test_rerun_chunk_size_matches_manual_append_loop",
+   "confidence": "medium"
+  },
+  {
+   "a": "rerun",
+   "b": "validate",
+   "status": "composes",
+   "evidence": "tests/validation_goldens/test_validation_exemption_hardening.py::test_validation_status_cache_invalidated_after_same_shape_rerun",
+   "confidence": "medium"
+  },
+  {
+   "a": "save",
+   "b": "storage",
+   "status": "composes",
+   "evidence": "tests/test_interaction_battery.py::test_save_x_storage_reads_back_the_saved_values",
+   "confidence": "high",
+   "note": "Exhaustive layers_to_save='all' with disk storage keeps payloads in RAM until postprocess and still counts against save_budget."
+  },
+  {
+   "a": "save",
+   "b": "validate",
+   "status": "composes",
+   "evidence": "tests/test_validate_save_options.py::test_intervention_scope_honors_save_options",
+   "confidence": "high"
+  },
+  {
+   "a": "storage",
+   "b": "validate",
+   "status": "independent",
+   "reason": "tl.validate builds its own capture and exposes no storage option.",
+   "confidence": "low"
+  }
+ ],
+ "asymmetries": [
+  {
+   "id": "A01",
+   "pair": [
+    "backend",
+    "backward"
+   ],
+   "summary": "Preview backends give derived gradients through grad_options and trace.derived_grads (tf graph-only captures refuse grad_options; grad_options cannot combine with intervene on paddle, tf or mlx), while true backward capture exists only on torch.",
+   "evidence": "docs/backends.md",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A02",
+   "pair": [],
+   "summary": "tl.extract is a thin sugar with keywords model, x, layers and detach_saved_activations only: it takes no backend, halt, recipes, echo, profile, grouping or episode, while tl.trace takes all of them (extract_dataset adds intervene and disk output). Cells citing this: backend x extract, episode x extract, extract x halt, extract x recipes, extract x reporting.",
+   "evidence": "torchlens/__init__.py::extract",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A03",
+   "pair": [
+    "backend",
+    "fast_run"
+   ],
+   "summary": "run(inputs=, fast=True) and runnable replay work on torch; preview backends and loaded non-torch artifacts report unsupported_backend_replay.",
+   "evidence": "docs/reference/runnable_tlspec_contract.md",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A04",
+   "pair": [
+    "backend",
+    "fork_do"
+   ],
+   "summary": "fork().do needs capture=CaptureOptions(intervention_ready=True), and preview backends refuse the capture= keyword, so post-hoc edits exist on torch only.",
+   "evidence": "docs/backends.md",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A05",
+   "pair": [
+    "backend",
+    "halt"
+   ],
+   "summary": "halt= works on torch, Paddle (live) and MLX (static-label) but jax, tinygrad and tf refuse it typed.",
+   "evidence": "docs/backends.md",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A06",
+   "pair": [
+    "backend",
+    "intervene"
+   ],
+   "summary": "intervene= works fully on torch, as static-label rules on MLX and eager TF, as a helper subset (zero_ablate, scale, add, replace_with) on Paddle, and is refused by jax, tinygrad and graph-only TF.",
+   "evidence": "docs/backends.md",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A07",
+   "pair": [
+    "backend",
+    "recipes"
+   ],
+   "summary": "recipes= attaches facet recipes on torch and Paddle; tf (and jax, tinygrad, mlx) refuse it typed.",
+   "evidence": "docs/agent-reference/current-2-x-surface.md",
+   "recommendation": "close",
+   "ruling": "pending"
+  },
+  {
+   "id": "A08",
+   "pair": [
+    "backend",
+    "rerun"
+   ],
+   "summary": "Trace.run (re-execution) works on torch; preview traces cannot rerun and loaded non-torch artifacts cannot replay-validate.",
+   "evidence": "docs/reference/limitations.md",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A09",
+   "pair": [
+    "backend",
+    "save"
+   ],
+   "summary": "Preview backends accept static-label save= selectors only, applied as a filter after a full capture (no memory saving); value-dependent predicates, lookback and save_budget are refused.",
+   "evidence": "docs/reference/limitations.md",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A10",
+   "pair": [
+    "backward",
+    "record"
+   ],
+   "summary": "On the Trace path log_backward works after a halt and by default; tl.record installs gradient hooks only with backward_ready, save_grads or default_grad, refuses log_backward without them (recording_backward_not_requested), refuses it on a halted Recording (recording_backward_halted), and rejects save_grads with a disk-only store.",
+   "evidence": "docs/reference/capture_outcomes.md",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A11",
+   "pair": [
+    "backward",
+    "storage"
+   ],
+   "summary": "Gradient payloads stream to disk on trace.log_backward, but backward_ready=True refuses disk saves (backward_ready_conflict), chunk_size refuses backward capture, and a disk-only record refuses save_grads (predicate_storage_conflict).",
+   "evidence": "tests/test_backward_streaming.py::test_streamed_bundle_honors_per_call_save_grads_override",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A12",
+   "pair": [
+    "bundle",
+    "export"
+   ],
+   "summary": "Trace has to_pandas and xarray exports; Bundle offers none, and Bundle summary and agent_json refuse untyped with AttributeError (explain refuses typed with report_subject_unsupported).",
+   "evidence": "tests/composition_expectations/test_proofnet_m1_product_verb.py",
+   "recommendation": "close",
+   "ruling": "pending"
+  },
+  {
+   "id": "A13",
+   "pair": [
+    "bundle",
+    "storage"
+   ],
+   "summary": "tl.save on a Trace accepts per-trace payload options and streaming storage; tl.save on a Bundle accepts only level and overwrite and refuses the rest (bundle_save_option_unsupported).",
+   "evidence": "docs/reference/error_refusal_contract.md",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A14",
+   "pair": [
+    "draw",
+    "intervene"
+   ],
+   "summary": "Intervention marks draw on the dot layout; the rank layout (explicit or the automatic choice on high-cost graphs) omits standalone intervention hook nodes and warns.",
+   "evidence": "docs/reference/limitations.md",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A15",
+   "pair": [
+    "draw",
+    "record"
+   ],
+   "summary": "Recording.draw renders a flat event graph and takes bare kwargs; Trace.draw takes VisualizationOptions, collapse, encodings and layouts. Cooked structure needs Recording.to_trace().",
+   "evidence": "torchlens/fastlog/types.py",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A16",
+   "pair": [
+    "episode",
+    "record"
+   ],
+   "summary": "episode= is a tl.trace option; tl.record has no episode arm and refuses it with an untyped TypeError, which the composition table ledgers as a gap.",
+   "evidence": "tests/composition_expectations/test_proofnet_episode_options.py::test_episode_kwarg_on_record_is_a_ledgered_untyped_refusal",
+   "recommendation": "close",
+   "ruling": "pending"
+  },
+  {
+   "id": "A17",
+   "pair": [
+    "episode",
+    "rerun"
+   ],
+   "summary": "A plain episode product reruns as a fresh execution that drops the ledger to a travel note; a coupled product (episode with intervene) refuses run() on both engines with episode_coupled_replay_underivable.",
+   "evidence": "docs/reference/episode_capture.md",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A18",
+   "pair": [
+    "export",
+    "record"
+   ],
+   "summary": "Recording.to_pandas returns event columns; xarray, agent_json and analysis save are not offered on a Recording (agent_json and save refuse untyped).",
+   "evidence": "tests/composition_expectations/test_proofnet_m1_product_verb.py",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A19",
+   "pair": [
+    "fast_run",
+    "halt"
+   ],
+   "summary": "run(fast=True) on a halted live trace refuses (N5; it silently succeeded before the gate); a loaded sparse artifact's run() still executes exactly the recorded prefix.",
+   "evidence": "docs/reference/capture_outcomes.md",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A20",
+   "pair": [
+    "fast_run",
+    "intervene"
+   ],
+   "summary": "The guarded fast rerun applies staged module-selector (tl.module) specs; value replacements and non-module targets use the capture engine, and the explicit fast door refuses function targets (fast_rerun_target_unsupported).",
+   "evidence": "docs/guides/fast_paths.md",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A21",
+   "pair": [
+    "fast_run",
+    "rerun"
+   ],
+   "summary": "fast= and carry_state exist only on the unified run(inputs=...) door; legacy run(model, x) refuses fast=True (run_fast_requires_inputs) and mixing option families refuses run_legacy_options_conflict.",
+   "evidence": "docs/reference/error_refusal_contract.md",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A22",
+   "pair": [
+    "fork_do",
+    "halt"
+   ],
+   "summary": "fork() works on a halted trace but do() and push refuse (N5) because replay needs the full graph.",
+   "evidence": "tests/composition_expectations/test_proofnet_edit_product.py",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A23",
+   "pair": [
+    "fork_do",
+    "record"
+   ],
+   "summary": "Trace has fork and do; a Recording has neither and fork refuses with an untyped AttributeError (ledgered gap).",
+   "evidence": "tests/composition_expectations/test_proofnet_m1_product_verb.py",
+   "recommendation": "close",
+   "ruling": "pending"
+  },
+  {
+   "id": "A24",
+   "pair": [
+    "fork_do",
+    "rerun"
+   ],
+   "summary": "do() on the replay/push engine handles activation, edge, parameter and region edits; the rerun engine refuses edge, parameter and region edits (edge_intervention_engine_unsupported, param_substitution_engine_unsupported, region_engine_unsupported).",
+   "evidence": "docs/reference/error_refusal_contract.md",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A25",
+   "pair": [
+    "fork_do",
+    "storage"
+   ],
+   "summary": "A batch-coherent edit (permute_batch, self-sourced mean_fill) refuses chunked_replay_batch_coupling on a trace captured with chunk_size; the same edit is accepted on an unchunked trace.",
+   "evidence": "docs/reference/error_refusal_contract.md",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A26",
+   "pair": [
+    "halt",
+    "rerun"
+   ],
+   "summary": "Live rerun, refresh, push and run of a halted trace refuse (N5); loaded sparse run() is allowed and executes exactly the recorded prefix.",
+   "evidence": "docs/reference/capture_outcomes.md",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A27",
+   "pair": [
+    "halt",
+    "storage"
+   ],
+   "summary": "halt= composes with streaming to disk (tests/test_fastlog_halt.py::test_fastlog_halt_finalizes_disk_storage) but chunk_size refuses halt with a codeless ChunkedForwardConfigError, and stop_after refuses chunking (stop_after_chunked_conflict).",
+   "evidence": "tests/test_chunk_size.py::test_chunk_size_guarded_combinations",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A28",
+   "pair": [
+    "index",
+    "multipass"
+   ],
+   "summary": "A bare label works on single-pass layers; on a multi-pass layer trace['label'] returns a Layer, op-level reads need a pass qualifier, and do and attach_hooks refuse the bare label (multipass_bare_label_ambiguous).",
+   "evidence": "tests/test_replay_pass_qualified.py::test_bare_multipass_label_refuses_in_do_and_resolve_sites",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A29",
+   "pair": [
+    "index",
+    "rerun"
+   ],
+   "summary": "Finalized labels address ops for reads after a rerun, but a staged edit addressed by a postprocess label cannot be applied on rerun (rerun_staged_label_unmatchable) because live capture matches selectors before labels exist.",
+   "evidence": "docs/reference/error_refusal_contract.md",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A30",
+   "pair": [
+    "intervene",
+    "storage"
+   ],
+   "summary": "intervene= composes with streaming to disk (tests/test_surgery_live_injections.py::test_streamed_to_disk_intervene_capture_settles_and_loads) but chunk_size refuses intervene with a codeless ChunkedForwardConfigError.",
+   "evidence": "tests/test_chunk_size.py::test_chunk_size_guarded_combinations",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A31",
+   "pair": [
+    "multipass",
+    "record"
+   ],
+   "summary": "tl.record captures repeated calls, but Recording.to_trace() refuses a multi-pass Recording (recording_multipass_not_convertible), so recurrent models cannot be cooked into a Trace.",
+   "evidence": "docs/reference/error_refusal_contract.md",
+   "recommendation": "close",
+   "ruling": "pending"
+  },
+  {
+   "id": "A32",
+   "pair": [
+    "recipes",
+    "record"
+   ],
+   "summary": "tl.trace takes recipes=; tl.record takes no recipes keyword, so facet recipes cannot be attached on the sparse path.",
+   "evidence": "torchlens/fastlog/_record_one_shot.py",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A33",
+   "pair": [
+    "record",
+    "storage"
+   ],
+   "summary": "trace(storage=tl.to_disk(...)) writes asynchronously by default and honors async_writes; tl.record streaming stays synchronous and refuses an explicit async_writes=True.",
+   "evidence": "docs/agent-reference/current-2-x-surface.md",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A34",
+   "pair": [],
+   "summary": "The same disk option is spelled storage= and streaming= on tl.trace and tl.record; both together refuse storage_argument_conflict, and a silent conflict case is ledgered (accepted then discarded).",
+   "evidence": "tests/composition_expectations/data/composition_ledger.md",
+   "recommendation": "close",
+   "ruling": "pending"
+  },
+  {
+   "id": "A35",
+   "pair": [],
+   "summary": "The same capture concepts (random_seed, backward_ready, save_grads, detach_saved_activations) are flat keywords on tl.record but live inside capture=CaptureOptions(...) on tl.trace, and save= takes a selector, list or SaveOptions on trace but a predicate on record.",
+   "evidence": "docs/agent-reference/current-2-x-surface.md",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A36",
+   "pair": [],
+   "summary": "The model input is spelled input_args on trace, record and validate, x on extract and legacy run(model, x), inputs= on the unified run, and input_size= for declared shapes.",
+   "evidence": "docs/agent-reference/common-patterns.md",
+   "recommendation": "close",
+   "ruling": "pending"
+  },
+  {
+   "id": "A37",
+   "pair": [],
+   "summary": "Which sites to keep is spelled save= on trace and record, layers on extract, and layers_to_save in CaptureOptions; using both save= and layers_to_save refuses save_selection_conflict.",
+   "evidence": "docs/reference/error_refusal_contract.md",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A38",
+   "pair": [],
+   "summary": "Predicate type errors are twin codes with different lineages: tl.trace halt_predicate_type_invalid (ArgumentTypeError, TypeError) and intervention_predicate_type_invalid, versus tl.record recording_halt_predicate_type_invalid and recording_intervention_predicate_type_invalid (InvalidArgumentError, ValueError).",
+   "evidence": "docs/reference/error_refusal_contract.md",
+   "recommendation": "close",
+   "ruling": "pending"
+  },
+  {
+   "id": "A39",
+   "pair": [],
+   "summary": "Early stop has two spellings: halt= (a predicate) and stop_after= (a selector or site); setting both refuses stop_after_halt_conflict, and only stop_after refuses chunking with its own code.",
+   "evidence": "docs/reference/error_refusal_contract.md",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A40",
+   "pair": [],
+   "summary": "Disk output is spelled storage=tl.to_disk(path) on trace and record, output_dir= on extract_dataset, and bundle_path inside streaming options.",
+   "evidence": "docs/agent-reference/current-2-x-surface.md",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A41",
+   "pair": [],
+   "summary": "Rerun has two doors with different option sets: legacy run(model, x) applies a staged spec and re-arms capture predicates, unified run(inputs=...) refuses a staged spec (run_staged_spec_unapplied) unless fast=True, and carry_state, fast and until are unified-only.",
+   "evidence": "docs/guides/fast_paths.md",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A42",
+   "pair": [],
+   "summary": "`grad_transform` is both a `tl.trace` keyword and a field of `SaveOptions` and `RecordingOptions`, so one setting has two doors on the same call.",
+   "evidence": "surface inventory option heuristics",
+   "recommendation": "close",
+   "ruling": "pending"
+  },
+  {
+   "id": "A43",
+   "pair": [],
+   "summary": "`show_model_graph`, `draw_backward` and `draw_combined` take `VisualizationOptions` and also flat keywords of the same names (`collapse`, `depth`, `node_style`, `view` ...).",
+   "evidence": "surface inventory option heuristics",
+   "recommendation": "document",
+   "ruling": "pending"
+  },
+  {
+   "id": "A44",
+   "pair": [],
+   "summary": "`draw_combined` takes `show_buffer_layers` where `VisualizationOptions` and `Trace.draw` spell the setting `show_buffers`.",
+   "evidence": "surface inventory option heuristics",
+   "recommendation": "close",
+   "ruling": "pending"
+  },
+  {
+   "id": "A45",
+   "pair": [],
+   "summary": "Gradient saving is `save_grads` on `CaptureOptions` and `RecordingOptions` but `save_raw_gradients` on `SaveOptions` and `RecordingOptions`.",
+   "evidence": "surface inventory option heuristics",
+   "recommendation": "close",
+   "ruling": "pending"
+  },
+  {
+   "id": "A46",
+   "pair": [],
+   "summary": "Every options class is passed through a slot named after its group (`capture=`, `save=`, `replay=`, `streaming=`, `visualization=`) except `EchoOptions`, which `EchoSession` takes as `options=`; and `RecordingOptions` and `ReportOptions` are public option classes that `tl.options` does not export.",
+   "evidence": "surface inventory option heuristics",
+   "recommendation": "close",
+   "ruling": "pending"
+  }
+ ]
+}
