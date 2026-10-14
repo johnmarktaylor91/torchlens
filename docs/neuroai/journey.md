@@ -167,8 +167,8 @@ sites = inv.list_sites(model, batch[:1])
 v4_passes = [r.selector for r in sites if r.module_address == "V4.output"]
 # ['V4.output:1', 'V4.output:2', 'V4.output:3', 'V4.output:4'] -- one per timestep
 
-log = tl.trace(model, batch, save=tl.in_module("V4"))
-rdms = tl.repgeom.rdm_evolution(log, save=v4_passes)  # one RDM per timestep
+log = tl.trace(model, batch, save=tl.module("V4.output"))
+rdms = tl.repgeom.rdm_evolution(log)  # one RDM per timestep
 RESULT = (len(v4_passes), len(rdms))
 ```
 
