@@ -238,7 +238,7 @@ def test_display_address_and_backend_address_are_decoupled(tmp_path: Path) -> No
     trace.save(path)
     loaded = tl.load(path)
     loaded_by_address = {
-        op.address: op for op in loaded.ops if op.is_buffer and op.address is not None
+        op.address: op for op in loaded.layer_list if op.is_buffer and op.address is not None
     }
     assert loaded_by_address["child.q"].backend_address is None
     assert loaded_by_address["child.cb"].backend_address == "child.cb"

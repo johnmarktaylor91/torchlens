@@ -120,7 +120,7 @@ def test_bill_of_materials_reports_captured_facts() -> None:
     assert bom["parameters"]["num_params"] == trace.num_params
     assert bom["parameters"]["num_param_tensors"] == len(trace.params)
     assert bom["buffers"]["num_buffer_tensors"] == len(trace.buffers)
-    saved = [op for op in trace.ops if op.has_saved_activation]
+    saved = [op for op in trace.layer_list if op.has_saved_activation]
     # Payload-scope law (C02; sumfam D8): BOM's byte figures are
     # retained_now; the at_capture facts print BESIDE them.
     assert bom["activations"]["payload_scope"] == "retained_now"

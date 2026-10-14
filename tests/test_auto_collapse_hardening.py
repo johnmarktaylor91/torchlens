@@ -1654,8 +1654,8 @@ def test_surfaced_exit_op_not_double_represented(tmp_path):
     ]
     standalone_raw = sum(isinstance(node, RawOp) for node in plan.nodes)
     label_total = sum(int(count) for count in box_counts) + sum(seg_counts) + standalone_raw
-    assert label_total == len(list(trace.ops)), (
-        f"total label op-count {label_total} != real op count {len(list(trace.ops))}"
+    assert label_total == len(trace.layer_list), (
+        f"total label op-count {label_total} != real op count {len(trace.layer_list)}"
     )
     assert _svg_node_group_count(str(out) + ".svg") == plan.total == result.visible_count
 
