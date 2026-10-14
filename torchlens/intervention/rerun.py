@@ -1396,11 +1396,29 @@ def _same_rerun_inputs(source_log: Trace, new_log: Trace) -> bool:
 
 
 def _is_where_predicate_entry(entry: Any) -> bool:
-    """Return whether a planned entry's selector contains a ``tl.where`` predicate."""
+    """Return whether a planned entry's target contains a ``tl.where`` predicate.
 
-    from ..ir.selector_eval import selector_contains_kind
+    Walks selector trees and their staged ``TargetSpec`` form alike (a
+    composite nests its children in ``selector_value``), iteratively.
+    """
 
-    return selector_contains_kind(getattr(entry, "site_target", None), "predicate", unwrap=True)
+    stack: list[Any] = [getattr(entry, "site_target", None)]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, (tuple, list)):
+            stack.extend(node)
+            continue
+        kind = getattr(node, "selector_kind", None)
+        if kind is None:
+            continue
+        if kind == "predicate":
+            return True
+        stack.extend(
+            child
+            for child in (getattr(node, "selector_value", None), getattr(node, "selectors", None))
+            if child is not None
+        )
+    return False
 
 
 def _matched_site_count(log: Trace, entry: Any) -> int:
