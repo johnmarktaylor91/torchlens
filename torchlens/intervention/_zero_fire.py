@@ -23,7 +23,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
-from typing import Literal, NoReturn
+from typing import Any, Literal, NoReturn
 
 from .._errors import InvalidArgumentError, TorchLensWarning
 
@@ -157,7 +157,7 @@ def current_zero_fire_policy() -> ZeroFirePolicy:
     return _CAPTURE_POLICY.get()
 
 
-def settle_capture_zero_fire(message: str, **fields: object) -> None:
+def settle_capture_zero_fire(message: str, **fields: Any) -> None:
     """Settle a capture-time ``intervene=`` that fired nowhere (code ``trace_zero_fire``).
 
     Parameters

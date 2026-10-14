@@ -1423,7 +1423,7 @@ class BoundInterventionExecutor:
             )
 
         settle_zero_fire(
-            self._on_zero_fire,  # type: ignore[arg-type]
+            self._on_zero_fire,
             warn=_warn,
             raise_error=_raise,
         )
