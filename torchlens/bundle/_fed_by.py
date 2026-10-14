@@ -403,6 +403,25 @@ def retained_ids(trace: Trace, binding: Mapping[str, Any]) -> list[int] | None:
     return _stream_ids(trace, str(binding["stream"]), int(binding["batch_row"]))
 
 
+def _span_contradiction(
+    span: Sequence[int],
+    completion: Sequence[int],
+    prompt_end: int,
+    source_ids: Sequence[int],
+    reader_ids: Sequence[int],
+) -> str | None:
+    """Return why one span contradicts the bound streams, or ``None`` when it agrees."""
+
+    src_lo, src_hi, dst_lo, dst_hi = span
+    if not completion[0] <= src_lo < src_hi <= completion[1]:
+        return f"source span {[src_lo, src_hi]} leaves the completion"
+    if dst_hi > prompt_end:
+        return f"destination span {[dst_lo, dst_hi]} reaches the reader's own output"
+    if list(source_ids[src_lo:src_hi]) != list(reader_ids[dst_lo:dst_hi]):
+        return f"token ids differ on span {list(span)}"
+    return None
+
+
 def assess_spans(
     spans: Sequence[Sequence[int]], reader: Trace, source: Trace
 ) -> tuple[str, float | None, str]:
@@ -442,15 +461,10 @@ def assess_spans(
     source_ids, reader_ids = cast("list[int]", source_ids), cast("list[int]", reader_ids)
     reader_completion = reader_binding.get("completion")
     prompt_end = reader_completion[0] if reader_completion is not None else len(reader_ids)
-    for src_lo, src_hi, dst_lo, dst_hi in spans:
-        if not completion[0] <= src_lo < src_hi <= completion[1]:
-            return "contradicted", None, f"source span {[src_lo, src_hi]} leaves the completion"
-        if dst_hi > prompt_end:
-            span = [dst_lo, dst_hi]
-            return "contradicted", None, f"destination span {span} reaches the reader's own output"
-        if source_ids[src_lo:src_hi] != reader_ids[dst_lo:dst_hi]:
-            span = [src_lo, src_hi, dst_lo, dst_hi]
-            return "contradicted", None, f"token ids differ on span {span}"
+    for span in spans:
+        contradiction = _span_contradiction(span, completion, prompt_end, source_ids, reader_ids)
+        if contradiction is not None:
+            return "contradicted", None, contradiction
     excluded = set(source_binding.get("excluded_ids", []))
     eligible = [p for p in range(*completion) if source_ids[p] not in excluded]
     covered = {p for src_lo, src_hi, _, _ in spans for p in range(src_lo, src_hi)}

@@ -15,7 +15,7 @@ import json
 import os
 import pickle
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 from ..data_classes.trace import Trace
 from . import TorchLensIOError, _json, bundle as _bundle_module
@@ -28,6 +28,20 @@ from .bundle_metadata import (
 
 if TYPE_CHECKING:
     from ..bundle import Bundle
+
+
+class BundleLoadContext(NamedTuple):
+    """What ``tl.load`` threads into a bundle container besides its path.
+
+    ``member_load_options`` (``lazy`` / ``map_location`` /
+    ``materialize_nested``) reach each member's own ``tl.load``; ``None``
+    loads members eagerly on CPU. ``tlspec_version`` is the bundle manifest's
+    stamped version: relation kinds that version does not admit refuse.
+    """
+
+    member_load_options: dict[str, Any] | None = None
+    tlspec_version: Any = None
+
 
 # SECURITY (secF-2). Hard cap on nested-bundle recursion depth. Nested bundles are
 # shallow by construction; a deep chain is a hand-edited attacker artifact. The
@@ -43,8 +57,7 @@ def _load_unified_bundle(
     *,
     bundle_visited: frozenset[Path] | None = None,
     unknown_relations: Literal["opaque", "refuse"] = "opaque",
-    member_load_options: dict[str, Any] | None = None,
-    tlspec_version: Any = None,
+    context: BundleLoadContext | None = None,
 ) -> Bundle:
     """Load a unified ``Bundle`` payload.
 
@@ -60,12 +73,9 @@ def _load_unified_bundle(
         Loader-doctrine policy for unknown NAMESPACED member-relation kinds:
         ``"opaque"`` (default) preserves them as opaque rows, ``"refuse"``
         rejects the artifact typed. Bare unknown kinds always refuse.
-    member_load_options:
-        ``lazy`` / ``map_location`` / ``materialize_nested`` passed to each
-        member's own ``tl.load``; ``None`` loads members eagerly on CPU.
-    tlspec_version:
-        The bundle manifest's stamped ``tlspec_version``; relation kinds the
-        stamped version does not admit refuse.
+    context:
+        Member load options and the stamped tlspec version
+        (:class:`BundleLoadContext`); ``None`` is the default context.
 
     Returns
     -------
@@ -86,8 +96,7 @@ def _load_unified_bundle(
             metadata_path,
             bundle_visited=bundle_visited,
             unknown_relations=unknown_relations,
-            member_load_options=member_load_options,
-            tlspec_version=tlspec_version,
+            context=context,
         )
 
     legacy_pickle_path = bundle_path / "metadata.pkl"
@@ -226,8 +235,7 @@ def _load_unified_bundle_directory(
     *,
     bundle_visited: frozenset[Path] | None = None,
     unknown_relations: Literal["opaque", "refuse"] = "opaque",
-    member_load_options: dict[str, Any] | None = None,
-    tlspec_version: Any = None,
+    context: BundleLoadContext | None = None,
 ) -> Bundle:
     """Load a unified bundle container from nested member specs.
 
@@ -246,11 +254,9 @@ def _load_unified_bundle_directory(
         Loader-doctrine policy for unknown NAMESPACED member-relation kinds:
         ``"opaque"`` (default) preserves them as opaque rows, ``"refuse"``
         rejects the artifact typed. Bare unknown kinds always refuse.
-    member_load_options:
-        Load options passed to each member's ``tl.load`` (see
-        :func:`_load_bundle_member_traces`).
-    tlspec_version:
-        The bundle manifest's stamped ``tlspec_version``, threaded to the
+    context:
+        Member load options and the stamped tlspec version
+        (:class:`BundleLoadContext`), threaded to the members and to the
         relation parser.
 
     Returns
@@ -289,8 +295,9 @@ def _load_unified_bundle_directory(
     if not isinstance(raw_members, list):
         raise TorchLensIOError("Unified bundle metadata must include a members list.")
 
+    context = context or BundleLoadContext()
     members = _load_bundle_member_traces(
-        bundle_path, raw_members, next_visited, member_load_options
+        bundle_path, raw_members, next_visited, context.member_load_options
     )
 
     from ..bundle import Bundle
@@ -300,7 +307,7 @@ def _load_unified_bundle_directory(
         raise TorchLensIOError("Unified bundle baseline_name must be a string or null.")
     preserved_sections = _partition_bundle_sections(metadata)
     member_relations = _load_gated_member_relations(
-        metadata, unknown_relations=unknown_relations, tlspec_version=tlspec_version
+        metadata, unknown_relations=unknown_relations, tlspec_version=context.tlspec_version
     )
     lineage = _load_lineage_sections(metadata, member_names=list(members))
     loaded_bundle = Bundle(

@@ -360,6 +360,9 @@ class _Claims:
 
     candidates: list[tuple[int, int]]
     excluded: list[dict[str, Any]]
+    #: The source's retained ids (``None`` when unbound) and its excluded ids.
+    source_ids: list[int] | None
+    excluded_ids: set[int]
     #: Positions an unpaired (declared or unverifiable) span touches: they veto
     #: any verified pair on the same token, which then has two conflicting claims.
     vetoed_source: set[int]
@@ -407,7 +410,7 @@ def _add_row_claims(
         _unpaired_spans(claims, index, spans, lambda _span: f"unverifiable: {reason}")
         return
     for src_lo, src_hi, dst_lo, dst_hi in spans:
-        claims.candidates.extend(zip(range(src_lo, src_hi), range(dst_lo, dst_hi)))
+        claims.candidates.extend(zip(range(src_lo, src_hi), range(dst_lo, dst_hi), strict=True))
 
 
 def _pair_reason(
@@ -415,13 +418,11 @@ def _pair_reason(
     claims: _Claims,
     by_source: Mapping[int, set[int]],
     by_reader: Mapping[int, set[int]],
-    excluded_ids: set[int],
-    source_ids: Sequence[int] | None,
 ) -> str | None:
     """Return why one verified candidate cannot pair, or ``None`` when it pairs."""
 
     source_pos, reader_pos = pair
-    if source_ids is not None and source_ids[source_pos] in excluded_ids:
+    if claims.source_ids is not None and claims.source_ids[source_pos] in claims.excluded_ids:
         return "excluded id (padding or special token)"
     if source_pos in claims.vetoed_source or reader_pos in claims.vetoed_reader:
         return "also claimed by a declared or unverifiable span"
@@ -432,9 +433,7 @@ def _pair_reason(
     return None
 
 
-def _one_to_one(
-    claims: _Claims, excluded_ids: set[int], source_ids: Sequence[int] | None
-) -> list[tuple[int, int]]:
+def _one_to_one(claims: _Claims) -> list[tuple[int, int]]:
     """Keep the candidates established exactly once with no conflicting claim."""
 
     by_source: dict[int, set[int]] = {}
@@ -445,7 +444,7 @@ def _one_to_one(
     kept: list[tuple[int, int]] = []
     reported: set[tuple[str, int, str]] = set()
     for pair in sorted(set(claims.candidates)):
-        reason = _pair_reason(pair, claims, by_source, by_reader, excluded_ids, source_ids)
+        reason = _pair_reason(pair, claims, by_source, by_reader)
         if reason is None:
             kept.append(pair)
             continue
@@ -532,7 +531,15 @@ def _bundle_token_pairs(self: Bundle, reader: str | Trace, source: str | Trace) 
         if name not in self._members:
             raise KeyError(f"{name!r} is not a member of this Bundle; members: {self.names}")
     reader_trace, source_trace = self._members[names[0]], self._members[names[1]]
-    claims = _Claims(candidates=[], excluded=[], vetoed_source=set(), vetoed_reader=set())
+    source_binding = member_binding(source_trace)
+    claims = _Claims(
+        candidates=[],
+        excluded=[],
+        source_ids=retained_ids(source_trace, source_binding) if source_binding else None,
+        excluded_ids=set((source_binding or {}).get("excluded_ids", [])),
+        vetoed_source=set(),
+        vetoed_reader=set(),
+    )
     conflict = _tokenizers_conflict(reader_trace, source_trace)
     for index, row in enumerate(self._member_relations.rows):
         if not (
@@ -546,10 +553,7 @@ def _bundle_token_pairs(self: Bundle, reader: str | Trace, source: str | Trace) 
             claims.excluded.append(_segment("source", None, None, reason, index))
             continue
         _add_row_claims(claims, index, row, reader_trace, source_trace)
-    source_binding = member_binding(source_trace)
-    source_ids = retained_ids(source_trace, source_binding) if source_binding else None
-    excluded_ids = set((source_binding or {}).get("excluded_ids", []))
-    pairs = _one_to_one(claims, excluded_ids, source_ids)
+    pairs = _one_to_one(claims)
     coverage = _coverage(source_trace, pairs, claims)
     return TokenPairs(
         reader=names[0],

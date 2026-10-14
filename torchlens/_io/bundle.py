@@ -2155,18 +2155,18 @@ def _load_unified_tlspec(
             setattr(loaded_trace, "_source_bundle_model_fingerprint", model_fingerprint)
         return loaded_trace
     if kind == "bundle":
-        from .bundle_container import _load_unified_bundle
+        from .bundle_container import BundleLoadContext, _load_unified_bundle
 
+        member_options = {
+            "lazy": lazy,
+            "map_location": map_location,
+            "materialize_nested": materialize_nested,
+        }
         return _load_unified_bundle(
             bundle_path,
             bundle_visited=bundle_visited,
             unknown_relations=unknown_relations,
-            member_load_options={
-                "lazy": lazy,
-                "map_location": map_location,
-                "materialize_nested": materialize_nested,
-            },
-            tlspec_version=manifest.get("tlspec_version"),
+            context=BundleLoadContext(member_options, manifest.get("tlspec_version")),
         )
     raise TorchLensIOError(f"Unsupported unified tlspec kind={kind!r}.")
 

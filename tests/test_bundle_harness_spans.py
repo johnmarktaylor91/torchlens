@@ -193,6 +193,18 @@ def test_auto_spans_refuse_when_ids_are_not_retained(model: _TinyLM) -> None:
     assert _code(excinfo) == "bundle_relation_auto_spans_unavailable"
 
 
+def test_auto_spans_work_with_a_selection_that_names_the_input(model: _TinyLM) -> None:
+    options = tl.options.CaptureOptions(layers_to_save=["input_1", "block"])
+    draft = tl.trace(model, torch.tensor([_DRAFT_IDS]), capture=options)
+    attach_sidecar(
+        draft, TOKEN_BOUNDARY_FAMILY_ID, {"stream": "input", "batch_row": 0, "completion": [3, 7]}
+    )
+    critique = tl.trace(model, torch.tensor([_CRITIQUE_IDS]), capture=options)
+    bundle = Bundle({"draft": draft, "critique": critique})
+    bundle.relate("fed_by", "critique", "draft", token_spans="auto")
+    assert bundle.member_relations[0].params["basis"] == "matched"
+
+
 @pytest.mark.parametrize(
     "args,params",
     [
@@ -481,7 +493,7 @@ def test_lazy_load_reaches_bundle_members(tmp_path: Path, model: _TinyLM) -> Non
     for name in ("draft", "critique"):
         assert lazy[name].payload_load_status == "loaded_lazy"
         assert eager[name].payload_load_status != "loaded_lazy"
-        pairs = zip(lazy[name].layer_list, eager[name].layer_list)
+        pairs = zip(lazy[name].layer_list, eager[name].layer_list, strict=True)
         lazy_op, eager_op = next((a, b) for a, b in pairs if a.has_saved_activation)
         assert lazy_op.out_ref is not None  # the payload stayed on disk until read
         assert torch.equal(lazy_op.out, eager_op.out)
