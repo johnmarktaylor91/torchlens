@@ -389,3 +389,12 @@ feature each, at 0, 1 and 3, the off-diagonal entries for the pairs (0, 1),
 (0, 3) and (1, 3) were 0.148, 0.765 and 0.474 and are now 0.275, 0.945 and
 0.724. Recompute any stored gaussian RDM, and any comparison score built on
 one, with the new release.
+
+## `trace.ops` covers only counted ops (2026-10-14, behavior change)
+
+`len`, iteration, integer indexing, `keys()`/`values()`/`items()` and `to_pandas()`
+of `trace.ops` now cover only the ops `trace.num_ops` counts, so
+`len(trace.ops) == trace.num_ops`. Input, output and buffer rows are no longer in
+that view. Code that read `trace.ops` as every row should read `trace.layer_list`
+(or use `len(trace)` and `trace[int]`). `trace.input_ops`, `trace.output_ops`,
+`trace.saved_ops` and `trace.saved_grad_ops` are unchanged.
