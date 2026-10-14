@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 from .._errors import InvalidArgumentError
 from ..errors._base import TorchLensWarning
 from ..utils.display import user_stacklevel
+from . import _boundary_bundle as _bundle
 from ._collapse_disclosures import _warn_budget_fallback
 from ._collapse_frontier import (
     K_CAP,
@@ -2374,9 +2375,10 @@ def _frontier_for_module(
     signal = state.analysis.signals.get(address)
     if signal is None:
         return ()
+    shift = len(_bundle.expanded_members(state.trace, state.context, address))
     key = _memo_key(state, signal)
     if key in memo:
-        return memo[key]
+        return _bundle.shift_expanded_points(memo[key], shift)
     points: list[_DecisionPoint] = []
     if address != "self" and _eligible_module_box(state, address, signal):
         box_cost = _cached_box_cost(state.trace, signal, state)
@@ -2398,7 +2400,7 @@ def _frontier_for_module(
     points.extend(_expanded_points(address, state, memo))
     frontier = _prune_frontier(points)
     memo[key] = frontier
-    return frontier
+    return _bundle.shift_expanded_points(frontier, shift)
 
 
 def _module_box_k(state: _OptimizerState, address: str) -> int:
@@ -2483,7 +2485,7 @@ def _expanded_structure(
                 label
                 for child in child_addresses
                 for label in state.analysis.signals.get(child, signal).subtree_ops
-            }
+            } | _bundle.bundle_member_labels(state.trace, state.context)
             own_ops = tuple(
                 op.label
                 for op in state.trace.ops
@@ -3058,7 +3060,9 @@ def _module_box_plan_nodes(
         return (ModuleBox(f"{address}:1"),)
     calls, kept = units
     nodes: list[PlanNode] = [ModuleBox(module_call) for module_call in calls]
-    nodes.extend(RawOp(label) for label in kept)
+    nodes.extend(
+        RawOp(label) for label in (*kept, *_bundle.box_representatives(trace, context, address))
+    )
     if not nodes:
         return (ModuleBox(f"{address}:1"),)
     return tuple(nodes)
@@ -3095,6 +3099,9 @@ def _instantiate_module(
         nodes: list[PlanNode] = [OpSegment(tuple(str(op).rsplit(":", 1)[0] for op in own_ops))]
     else:
         nodes = [RawOp(op) for op in own_ops]
+    nodes.extend(
+        RawOp(label) for label in _bundle.expanded_members(state.trace, state.context, address)
+    )
     selected: set[str] = set()
     folds: list[ModuleRepeatFold] = []
     box_costs: list[float] = []
@@ -3696,7 +3703,7 @@ def _root_own_unit_count(
         label
         for child in top_level
         for label in getattr(analysis.signals.get(child), "subtree_ops", ())
-    }
+    } | _bundle.bundle_member_labels(trace, context)
     return sum(
         1 for op in trace.ops if op.label not in child_ops and not getattr(op, "is_buffer", False)
     )

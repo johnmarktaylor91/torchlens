@@ -2419,3 +2419,8 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: a84ceb8a1ed34c9d3e7e07d6813081aad2bf1705 (dirty)
 recorded: 2026-10-14T09:18:45.941032+00:00
+reason: visualization phase 2: new read sites in the boundary bundle (_boundary_bundle.py) and the rank segment projection (_rank_segments.py)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 73a72be981348e2c344e0411b705cce1911b9981 (dirty)
+recorded: 2026-10-14T08:42:16.953722+00:00

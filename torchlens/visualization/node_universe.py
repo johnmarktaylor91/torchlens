@@ -212,6 +212,7 @@ def build_node_universe(
     """
 
     del segments, containers
+    from ._boundary_bundle import bundle_member_nodes
     from ._render_flow import (
         _collapsed_container_leaf_nodes,
         _enumerate_base_rendered_node_emissions,
@@ -230,6 +231,11 @@ def build_node_universe(
         show_containers=request.show_containers,
         container_max_inline=request.container_max_inline,
         pending_nodes=[],
+    )
+    # Boundary bundles (collapse memo D3): members project onto nothing and
+    # their edges reroute to the representative, like a collapsed container.
+    collapsed_containers.update(
+        bundle_member_nodes(trace, source_graph.entries_to_plot, request, collapse_fn)
     )
     base_emissions = _enumerate_base_rendered_node_emissions(
         trace,

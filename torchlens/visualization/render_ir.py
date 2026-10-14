@@ -370,6 +370,11 @@ def build_render_ir(
         )
         for unit in universe.units
     )
+    from ._boundary_bundle import bundle_labels, relabel_bundle_nodes
+
+    entries = universe.source_graph.entries_to_plot
+    labels = bundle_labels(trace, entries, resolved_context, collapse_fn)
+    nodes = relabel_bundle_nodes(nodes, labels)
     edges = _build_forward_edges_from_universe(universe)
     regions = _build_regions(trace, nodes, edges)
     _warn_if_render_exceeds_disclosure_ceiling(len(nodes), len(edges))

@@ -279,14 +279,31 @@ class ParallelBranch(torch.nn.Module):
         return self.net(x)
 
 
+class FlatParallelBranch(torch.nn.Module):
+    """``ParallelBranch`` without the wrapped ``Sequential``: the branch owns its ops."""
+
+    def __init__(self, width: int = 4) -> None:
+        """Initialize the branch."""
+
+        super().__init__()
+        self.conv1 = torch.nn.Conv2d(width, width, 1)
+        self.act = torch.nn.ReLU()
+        self.conv2 = torch.nn.Conv2d(width, width, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the branch."""
+
+        return self.conv2(self.act(self.conv1(x)))
+
+
 class UniqueWideFanHead(torch.nn.Module):
     """One-off four-way fan head with a visible concat junction."""
 
-    def __init__(self, width: int = 4) -> None:
+    def __init__(self, width: int = 4, branch: type[torch.nn.Module] = ParallelBranch) -> None:
         """Initialize the fan head."""
 
         super().__init__()
-        self.branches = torch.nn.ModuleList([ParallelBranch(width) for _ in range(4)])
+        self.branches = torch.nn.ModuleList([branch(width) for _ in range(4)])
         self.project = torch.nn.Conv2d(width * 4, width, 1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -322,13 +339,13 @@ class StemmedUniqueWideFanModel(torch.nn.Module):
     different class so the stem pair is a role component of its own.
     """
 
-    def __init__(self, width: int = 4) -> None:
+    def __init__(self, width: int = 4, branch: type[torch.nn.Module] = ParallelBranch) -> None:
         """Initialize the stemmed unique fan model."""
 
         super().__init__()
         self.stem = torch.nn.Conv2d(width, width, 1)
         self.stem2 = torch.nn.Conv2d(width, width, 1)
-        self.head = UniqueWideFanHead(width)
+        self.head = UniqueWideFanHead(width, branch)
         self.out = torch.nn.BatchNorm2d(width)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -1245,22 +1262,48 @@ def test_gpt2_small_config_auto_collapses_blocks_without_landmark_swallows() -> 
         trace.cleanup()
 
 
+#: Auto-collapse pins per Transformers major version: (visible count, selected boxes).
+#: v4 (the declared ~=4.45 range): BERT 23, DistilBERT 18. v5's "Bert-based Models Attention
+#: Refactor" (HF commit 155f7e2e / #38301, 2025-09-19) changed the BERT/DistilBERT program
+#: graph, an upstream model-graph change rather than a TorchLens collapse regression; the v5
+#: rows were re-recorded in the pinned environment (transformers 5.18.0, torch 2.13.0) after
+#: the boundary bundle landed (ruling forks.4), equal at the batch-2 base and at the bundle tip.
+_BERT_FAMILY_AUTO_PINS: dict[int, dict[str, tuple[int, set[str]]]] = {
+    4: {
+        "bert": (23, {"encoder.layer.0", "encoder.layer.1"}),
+        "distilbert": (
+            18,
+            {
+                "embeddings",
+                "transformer.layer.0.attention",
+                "transformer.layer.0.ffn",
+                "transformer.layer.1.attention",
+                "transformer.layer.1.ffn",
+            },
+        ),
+    },
+    5: {
+        "bert": (21, {"encoder.layer.0", "encoder.layer.1"}),
+        "distilbert": (
+            35,
+            {
+                "transformer.layer.0.attention",
+                "transformer.layer.0.ffn",
+                "transformer.layer.1.ffn",
+            },
+        ),
+    },
+}
+
+
 def test_bert_and_distilbert_small_config_auto_cuts_stay_pinned() -> None:
     """BERT-family small-config cuts do not move while freeing GPT-2 blocks."""
 
     transformers = _require_transformers()
-    # The pinned visible counts (BERT 23, DistilBERT 18) are calibrated for the DECLARED
-    # supported Transformers range (transformers~=4.45, i.e. >=4.45,<5.0). Transformers v5's
-    # "Bert-based Models Attention Refactor" (HF commit 155f7e2e / #38301, 2025-09-19) changed
-    # the BERT/DistilBERT program graph, legitimately shifting the honest collapse cut (BERT ->
-    # 21). That is an upstream model-graph change, NOT a TorchLens collapse regression (renders
-    # verified honest at both counts), so this version-sensitive golden is scoped to the
-    # supported range rather than rebaselined.
-    if int(transformers.__version__.split(".")[0]) >= 5:
-        pytest.skip(
-            f"BERT/DistilBERT collapse pins are calibrated for transformers<5.0; installed "
-            f"{transformers.__version__} changes the upstream model graph (HF #38301)."
-        )
+    major = int(transformers.__version__.split(".")[0])
+    if major not in _BERT_FAMILY_AUTO_PINS:
+        pytest.skip(f"no BERT/DistilBERT collapse pins for transformers {transformers.__version__}")
+    pins = _BERT_FAMILY_AUTO_PINS[major]
     bert_config = transformers.BertConfig(
         num_hidden_layers=2,
         hidden_size=16,
@@ -1272,11 +1315,7 @@ def test_bert_and_distilbert_small_config_auto_cuts_stay_pinned() -> None:
     bert_trace = _trace(transformers.BertModel(bert_config), torch.randint(0, 100, (1, 8)))
     try:
         bert_result = select_collapse_plan(bert_trace, RenderContext(), mode="auto")
-        assert bert_result.visible_count == 23
-        assert bert_result.selected == {
-            "encoder.layer.0",
-            "encoder.layer.1",
-        }
+        assert (bert_result.visible_count, set(bert_result.selected)) == pins["bert"]
     finally:
         bert_trace.cleanup()
 
@@ -1294,14 +1333,7 @@ def test_bert_and_distilbert_small_config_auto_cuts_stay_pinned() -> None:
     )
     try:
         distil_result = select_collapse_plan(distil_trace, RenderContext(), mode="auto")
-        assert distil_result.visible_count == 18
-        assert distil_result.selected == {
-            "embeddings",
-            "transformer.layer.0.attention",
-            "transformer.layer.0.ffn",
-            "transformer.layer.1.attention",
-            "transformer.layer.1.ffn",
-        }
+        assert (distil_result.visible_count, set(distil_result.selected)) == pins["distilbert"]
     finally:
         distil_trace.cleanup()
 
@@ -1449,10 +1481,13 @@ def test_max_dp_segments_legal_prefix_and_keeps_fanout_tail_visible() -> None:
         trace.cleanup()
 
 
-def test_max_salience_floor_fires_on_synthetic_unique_wide_fan() -> None:
+@pytest.mark.parametrize("branch", [FlatParallelBranch, ParallelBranch], ids=["flat", "wrapped"])
+def test_max_salience_floor_fires_on_synthetic_unique_wide_fan(
+    branch: type[torch.nn.Module],
+) -> None:
     """Max mode keeps a parallel-fan hint for a unique wide head."""
 
-    trace = _trace(StemmedUniqueWideFanModel(), torch.randn(1, 4, 8, 8))
+    trace = _trace(StemmedUniqueWideFanModel(branch=branch), torch.randn(1, 4, 8, 8))
     try:
         context = RenderContext()
         state = _optimizer_state_for_floor(trace, context)
@@ -1463,8 +1498,12 @@ def test_max_salience_floor_fires_on_synthetic_unique_wide_fan() -> None:
         assert _max_box_salience_score("head", signal, state) == MAX_SALIENCE_FLOOR
         assert not _eligible_module_box(state, "head", signal)
         assert "head" not in result.selected
-        assert any(isinstance(node, RepeatFold) for node in result.plan.nodes)
         assert any("head.branches" in repr(node) for node in result.plan.nodes)
+        folds = any(isinstance(node, RepeatFold) for node in result.plan.nodes)
+        # Re-pinned with the collapse gate fix: a wrapped branch (its only child,
+        # ``net``, hides the same ops) is not a box candidate; the nets are cousins,
+        # not siblings, so the four wrapped branches stop folding.
+        assert folds is (branch is FlatParallelBranch)
     finally:
         trace.cleanup()
 
@@ -1474,7 +1513,9 @@ def test_max_salience_floor_fold_representative_uses_single_instance_stats(
 ) -> None:
     """Max-mode parallel fold representatives display single-instance stats."""
 
-    trace = _trace(StemmedUniqueWideFanModel(), torch.randn(1, 4, 8, 8))
+    # Re-pinned with the collapse gate fix: wrapped branches no longer fold (see
+    # the salience-floor test), so the fold under test is the flat-branch fan.
+    trace = _trace(StemmedUniqueWideFanModel(branch=FlatParallelBranch), torch.randn(1, 4, 8, 8))
     try:
         result = select_collapse_plan(trace, RenderContext(), mode="max")
         source = str(

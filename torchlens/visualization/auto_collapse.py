@@ -1785,6 +1785,9 @@ def _compute_signal_skeleton(
             for address in parent_set - child_set:
                 output_edges[address].add(edge)
 
+    # Every hidden count exists before any gate runs: the single-child rule
+    # reads a child that is built after its parent.
+    hidden_ops_by_module = {a: max(len(set(ops)) - 1, 0) for a, ops in op_labels_by_module.items()}
     signals: dict[str, ModuleCollapseSignals] = {}
     for module in trace.modules:
         address = module.address
@@ -1817,7 +1820,7 @@ def _compute_signal_skeleton(
             structural_digest="",
             peer_count=1,
             hidden_ops=hidden_ops,
-            eligible=_gate_module(module, hidden_ops, signals),
+            eligible=_gate_module(module, hidden_ops, hidden_ops_by_module),
         )
     return signals
 
@@ -1825,7 +1828,7 @@ def _compute_signal_skeleton(
 def _gate_module(
     module: Module,
     hidden_ops: int,
-    partial_signals: Mapping[str, ModuleCollapseSignals],
+    hidden_ops_by_module: Mapping[str, int],
 ) -> bool:
     """Return whether a module mirrors renderer collapse eligibility."""
 
@@ -1834,11 +1837,8 @@ def _gate_module(
     if int(getattr(module, "num_layers", 0) or 0) <= 1:
         return False
     child_addresses = list(getattr(module, "address_children", ()) or ())
-    if len(child_addresses) == 1:
-        child_signal = partial_signals.get(child_addresses[0])
-        if child_signal is not None and child_signal.hidden_ops == hidden_ops:
-            return False
-    return True
+    single = len(child_addresses) == 1
+    return not (single and hidden_ops_by_module.get(child_addresses[0]) == hidden_ops)
 
 
 def _compute_structural_digests(
