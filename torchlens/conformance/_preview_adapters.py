@@ -232,7 +232,7 @@ def _roster_tinygrad() -> tuple[RosterModel, ...]:
 
             def __init__(self) -> None:
                 self.fc1 = nn.Linear(4, 3)
-                self.fc1.weight = Tensor([list(row) for row in zip(*_WEIGHTS)])
+                self.fc1.weight = Tensor([list(row) for row in zip(*_WEIGHTS, strict=True)])
                 self.fc1.bias = Tensor([0.0, 0.1, -0.1])
                 self.fc2 = nn.Linear(3, 2)
                 self.fc2.weight = Tensor([[1.0, 0.5, -0.25], [-1.0, 0.5, 2.0]])
