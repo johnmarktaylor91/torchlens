@@ -589,6 +589,23 @@ one exact `other_neurons` row.
   positively verified, for example `mode_rescue_rerun`, `escape_rescue_unrecovered`,
   `owner_thread_tripwire_changed`, or `dynamo_region_not_logged`.
 
+**Pristine (`Trace.pristine`)** *(spelling documented-unstable)*
+: Whether nothing ever intervened on the trace, read from the evidence it carries: `True`,
+  `False`, or `None`. It is derived at read time from records that persist with the trace (the
+  intervention audit, the operation history, mutation states, direct writes and op intervention
+  marks), never stored as a flag, so it survives `tl.save`/`tl.load`, pickle and `fork()`, and no
+  reset makes a touched trace read `True` again. `False` means some touch was recorded: a
+  capture-time `intervene=` (including one that fired nowhere), a staged hook or value
+  replacement (even after `clear_hooks()`), `do()`, `set()`, a region edit, a hooked rerun or run,
+  a direct write. Plain reruns, plain runs, forks and `clear_hooks()` on an untouched trace are
+  not touches. `None` means no evidence: the artifact predates tlspec 9 or the backend is not
+  torch, and it is never a pristine reading. Bundle's pristine label and baseline
+  auto-detection count a member only when it reads `True`. It is a reading, not a verdict: it
+  never changes validation or a run report. Not `Trace.state`: `TraceState.PRISTINE` is an
+  operational state that an assignment can set and that a func-targeted `intervene=` capture
+  keeps. Not validation's pristine-torch oracle, which means running on unwrapped torch
+  functions.
+
 **Rescue re-run**
 : A single disclosed second forward under a `TorchFunctionMode` net that redirects detected stale
   pre-wrap torch references to their wrappers. The trace records `trace.rescue_rerun` and reason
