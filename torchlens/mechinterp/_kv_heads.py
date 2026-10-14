@@ -53,6 +53,9 @@ _EXPANSION_FUNCS = frozenset({"reshape", "view", "flatten", "repeat_interleave",
 
 _SITE_WORDS = {"k": "key", "v": "value"}
 
+#: Suffix live op records carry on their capture-order raw label.
+_RAW_SUFFIX = "_raw"
+
 _UNAVAILABLE_REMEDY = (
     'load the model with attn_implementation="eager", or switch it to the registered '
     '"torchlens" attention backend (tl.bridge.hf.register_attention(model)); both expand '
@@ -422,8 +425,8 @@ def _expansion_selector(expansion: _Expansion) -> Any:
     raw label (equal in every capture of the same path). The predicate reads
     the raw label from either shape of subject: a finished trace's op
     (``raw_label``, when the hook is attached) or the live op record
-    (``_layer_label_raw``, when the rerun fires it). The per-cell fire count
-    check refuses anything but one match.
+    (``_label_raw``, suffixed ``_raw``, when the rerun fires it). The
+    per-cell fire count check refuses anything but one match.
     """
 
     raw_label = expansion.raw_label
@@ -431,8 +434,11 @@ def _expansion_selector(expansion: _Expansion) -> Any:
     def _is_expansion(subject: Any) -> bool:
         """Whether an op (finished trace) or a live op record is the expansion call."""
 
-        label = getattr(subject, "_layer_label_raw", None) or getattr(subject, "raw_label", None)
-        return label == raw_label
+        for name in ("raw_label", "_label_raw"):
+            label = getattr(subject, name, None)
+            if isinstance(label, str) and label:
+                return label.removesuffix(_RAW_SUFFIX) == raw_label
+        return False
 
     return (
         func_selector(expansion.func_name)
