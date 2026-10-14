@@ -220,6 +220,7 @@ def _snapshot_container(
     """Copy a builtin list, tuple or dict item by item (cycle-guarded by ``ancestors``)."""
 
     def _item(item: Any) -> Any:
+        """Keep a scalar item as is; snapshot any other item one level deeper."""
         if type(item) in _SCALAR_TYPES:
             return item
         return _observer_snapshot(item, depth + 1, ancestors, truncated)
