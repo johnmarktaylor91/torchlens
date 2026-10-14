@@ -238,11 +238,7 @@ def ids_digest(ids: Sequence[int]) -> str:
 def _stream_op(trace: Trace, stream: str) -> Any | None:
     """Return the first integer-dtype input (or output) op of ``trace``, if any."""
 
-    try:
-        ops = list(trace.input_ops if stream == "input" else trace.output_ops)
-    except Exception:  # noqa: BLE001 - an unreadable stream is simply unbound
-        return None
-    for op in ops:
+    for op in trace.input_ops if stream == "input" else trace.output_ops:
         dtype = getattr(op, "dtype", None)
         if dtype is not None and not (
             dtype.is_floating_point or dtype.is_complex or dtype is torch.bool
@@ -263,13 +259,12 @@ def _stream_ids(trace: Trace, stream: str, batch_row: int) -> list[int] | None:
     op = _stream_op(trace, stream)
     if op is None or not getattr(op, "has_saved_activation", False):
         return None
-    try:
-        payload: torch.Tensor = op.out
-    except Exception:  # noqa: BLE001 - unretained ids leave the row unverifiable
+    payload = op.out
+    if not isinstance(payload, torch.Tensor):
         return None
-    if getattr(payload, "ndim", None) == 1 and batch_row == 0:
+    if payload.ndim == 1 and batch_row == 0:
         return [int(token) for token in payload.tolist()]
-    if getattr(payload, "ndim", None) == 2 and batch_row < int(payload.shape[0]):
+    if payload.ndim == 2 and batch_row < int(payload.shape[0]):
         return [int(token) for token in payload[batch_row].tolist()]
     return None
 

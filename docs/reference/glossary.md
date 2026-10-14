@@ -461,7 +461,7 @@ one exact `other_neurons` row.
 
 **Token-stream binding** *(`token_boundary_v1`; spelling documented-unstable)*
 : What makes `fed_by` spans checkable: a per-member descriptor in the reserved
-  `torchlens.boundary_facts` sidecar family naming the captured stream the coordinates index
+  `"torchlens.boundary_facts"` sidecar family naming the captured stream the coordinates index
   (`"input"`, the first integer-dtype input; or `"output"`), the `batch_row`, the row `length`,
   the `ids_digest` of its token ids, optionally the member's own `completion` range, the
   `excluded_ids` outside the eligible set (padding, special tokens), and `tokenizer` /

@@ -253,6 +253,13 @@ def test_claimed_verified_row_rechecks_at_every_door(model: _TinyLM) -> None:
     assert _code(excinfo) == "bundle_relation_span_unverified"
 
 
+def test_fork_carries_verified_rows(model: _TinyLM) -> None:
+    bundle = _harness(model)
+    bundle.relate("fed_by", "critique", "draft", token_spans=[_SPAN])
+    child = bundle.fork()
+    assert child.member_relations[0].params["basis"] == "verified"
+
+
 def test_unverifiable_claim_clamps_to_declared(model: _TinyLM) -> None:
     bundle = _harness(model)  # no bindings attached
     bundle.relate(_fed_by(token_spans=[_SPAN], basis="verified"))
