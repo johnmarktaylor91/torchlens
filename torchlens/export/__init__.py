@@ -126,7 +126,7 @@ def model_explorer_serve(source: Any, **kwargs: Any) -> Path:
     Thin deferred door over
     :func:`torchlens.export._model_explorer.model_explorer_serve` (L8 bridge,
     loaded on first call; requires the ``ai-edge-model-explorer`` app package:
-    ``pip install 'ai-edge-model-explorer>=0.1.33,<0.2'``).
+    ``pip install "torchlens[model-explorer]"``).
 
     Parameters
     ----------
@@ -680,7 +680,7 @@ def xarray(log: Any) -> Any:
     presentation_count: int | None = None
     for layer in _iter_layers(log):
         label = _layer_label(layer)
-        # U28.2: a partial trace's unsaved placeholders raise on ``.out``;
+        # a partial trace's unsaved placeholders raise on ``.out``;
         # skip them and disclose the skip in ``attrs``.
         if getattr(layer, "has_saved_activation", None) is False:
             skipped_unsaved.append(label)
@@ -1187,7 +1187,7 @@ def _safe_id(value: str) -> str:
 
 
 def safetensors(log: Any, path: str | Path) -> Path:
-    """Export one Trace to a single safetensors file (R2-08; DOCUMENTED-UNSTABLE).
+    """Export one Trace to a single safetensors file (DOCUMENTED-UNSTABLE).
 
     Every tensor-valued op payload (``out``, ``transformed_out``, ``grad``,
     ``transformed_grad``) is a tensor entry; the metadata is one JSON

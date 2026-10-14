@@ -928,7 +928,7 @@ class ExtractionReader:
         return out
 
     # ------------------------------------------------------------------
-    # Token rows (R2-08 token SAE store; DOCUMENTED-UNSTABLE)
+    # Token rows (token SAE store; DOCUMENTED-UNSTABLE)
     # ------------------------------------------------------------------
 
     def token_batch(self, shard_index: int, keys: list[str] | None = None) -> TokenRows:
@@ -1265,7 +1265,7 @@ def open_extraction(
     rows = read_trusted_rows(container)
     check_layout_coherence(manifest, rows)
     if HARVEST_BLOCK_KEY in manifest:
-        # R2-08: the counterfactual record parses fail-closed; a torn or
+        # the counterfactual record parses fail-closed; a torn or
         # foreign block never half-loads (absent = written before the schema).
         validate_harvest_block(manifest[HARVEST_BLOCK_KEY])
     if manifest.get("status") == "complete":

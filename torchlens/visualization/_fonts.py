@@ -1,4 +1,4 @@
-"""Bundled open font delivery for Graphviz renders (forks.11 FK3).
+"""Bundled open font delivery for Graphviz renders.
 
 The typography record pins the family name ``"Helvetica"`` (vizmech D29), but
 which face a machine's fontconfig resolves that name to used to depend on the

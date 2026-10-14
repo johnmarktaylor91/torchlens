@@ -625,7 +625,7 @@ def resolve_collapse_fn(
 
         result = select_collapse_plan(trace, resolved_context, mode=collapse)
         if result.declined and "collapse_ops_ceiling" in (result.reason or ""):
-            # forks.11 FK4: past the pathological pre-gate the render is a
+            # Past the pathological pre-gate the render is a
             # bounded top-level overview plus an expansion manifest, never an
             # uncollapsed wall (a flat trace with no child modules has no
             # coarser legal plan and stays as it is, disclosed by the skip).

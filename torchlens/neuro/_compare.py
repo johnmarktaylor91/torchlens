@@ -1,4 +1,4 @@
-"""One call: RSA, cross-validated ridge and linear CKA on one extraction (neuro.1 row 4).
+"""One call: RSA, cross-validated ridge and linear CKA on one extraction.
 
 ``neuro.compare(source, target, analyses=("rsa", "ridge", "cka"))`` reads
 each site's saved activations ONCE (it never re-runs the model) and scores
@@ -432,7 +432,7 @@ def _repository_ids(
     return {name: known[name] for name in analyses}
 
 
-def compare(  # noqa: PLR0913 -- the spec'd neuro.1 one-call door: source, target, the analysis list, and each analysis's documented knob
+def compare(  # noqa: PLR0913 -- the one-call door: source, target, the analysis list, and each analysis's documented knob
     source: Any,
     target: Any,
     *,
@@ -448,7 +448,7 @@ def compare(  # noqa: PLR0913 -- the spec'd neuro.1 one-call door: source, targe
 ) -> Comparison:
     """Score every site against one target with RSA, ridge and CKA in one call.
 
-    DOCUMENTED-UNSTABLE (neuro.1 row 4). Each site's activations are read
+    DOCUMENTED-UNSTABLE. Each site's activations are read
     once from what ``source`` already holds and reused by every analysis;
     the model is never re-run. All scores are descriptive similarities on
     these stimuli, not tests.

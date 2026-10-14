@@ -1,4 +1,4 @@
-"""The ``"mi"`` appliance behind ``trace.using("mi")`` (forks.8).
+"""The ``"mi"`` appliance behind ``trace.using("mi")``.
 
 A thin trace-bound view over kit functions that already exist: every method
 calls the module-level function with this trace, so

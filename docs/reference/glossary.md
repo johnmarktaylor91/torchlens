@@ -1992,11 +1992,15 @@ deprecation shim owed*
   tensors, their raw element count, and the mask zeros (`masked=None` when
   the capture retained no mask values).
 
-**FlopsReport.attention_full_square_ops** — *unstable — no deprecation shim owed*
-: The count of `scaled_dot_product_attention` ops in a `flops_report`
-  forward total; when non-zero the report prints that attention FLOPs
-  count the full query x key square and masks / `is_causal` are not
-  discounted.
+**FlopsReport.attention_full_square_ops / TraceProfile.attention_full_square_ops** — *unstable — no deprecation shim owed*
+: The count of `scaled_dot_product_attention` ops in the forward FLOP total
+  of a `flops_report` or a `trace.profile()`; when non-zero the report or the
+  profile footer prints that attention FLOPs count the full query x key
+  square and masks / `is_causal` are not discounted. Every attention FLOP
+  line carries the same note: the `tl.summary` FLOP cells (marked, with the
+  note as a legend), the `explain` FLOPs line, and graph labels, where an
+  attention node's `flops` label field or `flops` overlay row is followed by
+  the note.
 
 **`output_style_unknown`** — *unstable — no deprecation shim owed*
 : The typed refusal (an `InvalidArgumentError`) for a

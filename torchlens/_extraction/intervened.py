@@ -1,4 +1,4 @@
-"""Intervened dataset extraction (R2-08; spellings DOCUMENTED-UNSTABLE).
+"""Intervened dataset extraction (spellings DOCUMENTED-UNSTABLE).
 
 ``extract_dataset(..., intervene=spec)`` runs every batch through the live
 capture door with the spec armed (``tl.trace(..., intervene=spec)``), so the

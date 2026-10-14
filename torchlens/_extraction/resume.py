@@ -313,7 +313,7 @@ def build_signature(plan: _RunPlan, model_identity_record: dict[str, Any]) -> di
 
 
 def _signature_layer_plan(plan: _RunPlan) -> dict[str, str]:
-    """Return the signature's layer plan, naming the stored ids key (R2-08).
+    """Return the signature's layer plan, naming the stored ids key.
 
     A VALUE-level extension of the existing D16 ``layer_plan`` field (the
     tvscope B5 precedent): runs without ``store_input_ids=True`` keep the
@@ -340,11 +340,11 @@ def _signature_layer_plan(plan: _RunPlan) -> dict[str, str]:
 
 
 def _signature_model_mode(plan: _RunPlan) -> Any:
-    """Return the signature's model mode, naming the intervention (R2-08).
+    """Return the signature's model mode, naming the intervention.
 
     A VALUE-level extension of the existing D16 ``model_mode`` field: a
     clean run keeps the historical ``"eval_no_grad"`` byte-for-byte, so a
-    pre-R2-08 artifact resumes under a clean run, while an intervened run
+    pre-intervention artifact resumes under a clean run, while an intervened run
     records its intervention identity there, so every resuming release
     (including ones that predate intervened extraction) refuses to continue
     an intervened artifact clean, or a clean one intervened.
@@ -521,7 +521,7 @@ def _base_manifest(
         "run": {},
         "totals": None,
         "ledger_digest": None,
-        # R2-08: a clean run declares policy="none" explicitly, so a reader
+        # a clean run declares policy="none" explicitly, so a reader
         # can tell "no intervention" from "written before the schema".
         # Intervened runs write their block at the batch-zero freeze.
         **(

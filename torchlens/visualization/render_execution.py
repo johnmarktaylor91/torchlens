@@ -198,9 +198,9 @@ def surface_layout_stderr(stderr: str | bytes | None, *, engine: str) -> str:
 
 
 def warn_oversize_vector(record: RenderGeometryRecord) -> None:
-    """Warn, and keep the file, when a vector page exceeds the page ceiling (FK1).
+    """Warn, and keep the file, when a vector page exceeds the page ceiling.
 
-    forks.11 FK1 rules warn-and-obey over a typed refusal: an explicit
+    The ruling is warn-and-obey over a typed refusal: an explicit
     full-graph request in SVG or PDF is rendered exactly as asked, and the
     warning gives the page size, the ceiling, and the ways to a readable
     picture. Rasters are covered by the cairo clamp disclosure instead.

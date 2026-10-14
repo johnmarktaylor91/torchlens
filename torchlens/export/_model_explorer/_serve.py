@@ -52,9 +52,9 @@ def model_explorer_serve(
         raise MissingDependencyError(
             "Serving requires the Model Explorer app package, which is not installed",
             code="model_explorer_serve_unavailable",
-            remedy="pip install 'ai-edge-model-explorer>=0.1.33,<0.2'",
+            remedy='pip install "torchlens[model-explorer]"',
             dependency="ai-edge-model-explorer",
-            install="pip install 'ai-edge-model-explorer>=0.1.33,<0.2'",
+            install='pip install "torchlens[model-explorer]"',
         ) from exc
     if isinstance(source, (str, Path)):
         destination = Path(source)

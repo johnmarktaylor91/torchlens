@@ -106,7 +106,7 @@ __all__.sort()
 
 #: Real active names (facade step 4), each behind its own dependency gate.
 _LAZY_ATTRS: dict[str, tuple[str, str | None]] = {
-    # Ungated: numpy-only, so it needs no extra (neuro.1 row 4).
+    # Ungated: numpy-only, so it needs no extra.
     "compare": ("torchlens.neuro._compare", "compare"),
     "datasets": ("torchlens.neuro._datasets", "datasets"),
     "rdms": ("torchlens.neuro._rdms", "rdms"),

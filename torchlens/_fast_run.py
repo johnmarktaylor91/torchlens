@@ -1298,7 +1298,7 @@ class _FastLiveSession:
     def run(self, inputs: Any, *, seed: int | None, until: Any = None) -> RunResult:
         """Execute one native forward and enforce the cached static graph guard.
 
-        ``until`` names a saved module the forward stops after (U26.3): the
+        ``until`` names a saved module the forward stops after: the
         prefix keeps every per-call guard, the cut is disclosed as a
         ``RunTruncation``, and the call fingerprint (a whole-forward guard)
         cannot be compared, so the verdict is ``unverifiable``.

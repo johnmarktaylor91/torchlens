@@ -45,7 +45,7 @@ class RenderTarget:
         Maximum layout-execution time in seconds.
     announce_path:
         Print the written path even when the trace is not verbose. Set for a
-        bare draw whose path TorchLens chose (forks.12).
+        bare draw whose path TorchLens chose.
     """
 
     outpath: str = "modelgraph"

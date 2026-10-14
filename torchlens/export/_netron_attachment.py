@@ -202,7 +202,7 @@ def write_attachment(
         Optional extra-rows provider (the deferred saved-tensor statistics
         seam; rows must satisfy the same guards). Defaults to none.
     extra_metadata:
-        Optional extra metadata rows (the U09.5 per-node diff facts; rows
+        Optional extra metadata rows (the per-node diff facts; rows
         must satisfy the same guards). Defaults to none.
 
     Returns

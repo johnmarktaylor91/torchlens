@@ -2491,3 +2491,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: a84ceb8a1ed34c9d3e7e07d6813081aad2bf1705 (dirty)
 recorded: 2026-10-14T09:18:45.941032+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: rulefix-b row 15: the attention-op count moved the one kind read site from report/_flops_report.py into the shared helper counted_attention_ops in report/_summary_columns.py; no site added or removed
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 452f56f4282cae664f170a9a557048fc4bd38640 (dirty)
+recorded: 2026-10-14T17:49:14.914801+00:00

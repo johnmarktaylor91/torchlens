@@ -1483,7 +1483,7 @@ _OUTPUT_ATTRIBUTION_REMEDY = (
 
 
 def output_attribution_remedy(trace: Any) -> str:
-    """Remedy for ``output_attribution_failed``, aimed at export products (U35.2).
+    """Remedy for ``output_attribution_failed``, aimed at export products.
 
     An fx ``GraphModule`` root (``torch.export.export(...).module()`` or
     ``torch.fx.symbolic_trace``) runs generated code whose call targets were

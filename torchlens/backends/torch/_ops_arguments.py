@@ -93,7 +93,7 @@ def _literal_value_supported(value: Any) -> bool:
         True when the value can be stored directly in an argument template.
     """
 
-    # ``...`` (U16.1): ``x[..., :n]`` indexing (rotary halves, Gemma-class
+    # ``...``: ``x[..., :n]`` indexing (rotary halves, Gemma-class
     # attention) is a plain singleton literal; the runnable literal encoder and
     # the safe unpickler already admit it, so replay stores it directly.
     return value is Ellipsis or isinstance(

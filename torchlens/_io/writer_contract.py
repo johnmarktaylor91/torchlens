@@ -108,7 +108,7 @@ def _component_schema_versions() -> dict[str, Any]:
 
 
 def _reserved_vocabularies() -> dict[str, Any]:
-    """Name vocabularies reserved for future persisted families (v10, U22.3).
+    """Name vocabularies reserved for future persisted families (v10).
 
     A reservation freezes the NAMES with the contract of record before any
     writer exists; it declares no field slot and changes no load behaviour.

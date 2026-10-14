@@ -15,20 +15,30 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from ..capture.flops import ATTENTION_FULL_SQUARE_FUNCS, ATTENTION_FULL_SQUARE_NOTE
+
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
 
 Shape = tuple[int, ...]
 
-#: Ops whose FLOP rule counts the full query x key square even when a mask
-#: or ``is_causal`` zeroes part of it (capture/flops.py ``_sdpa_flops``).
-ATTENTION_FULL_SQUARE_FUNCS: frozenset[str] = frozenset({"scaled_dot_product_attention"})
 
-#: The disclosure every attention FLOP line carries (walk ruling U04.2 (b)).
-ATTENTION_FULL_SQUARE_NOTE = (
-    "attention FLOPs count the full query x key square; "
-    "attention masks and is_causal are not discounted"
-)
+def counted_attention_ops(aggregation: Any) -> int:
+    """Attention op rows of a FLOP aggregation whose FLOPs were counted."""
+
+    return sum(
+        1
+        for row in aggregation.rows
+        if row.kind == "op"
+        and row.func_name in ATTENTION_FULL_SQUARE_FUNCS
+        and row.flops_fma2 is not None
+    )
+
+
+def attention_full_square_line(count: int) -> str:
+    """The whole-capture disclosure line for ``count`` counted attention ops."""
+
+    return f"attention: {count} op(s) counted; {ATTENTION_FULL_SQUARE_NOTE}"
 
 
 def shape_tuple(shape: Any) -> Shape | None:

@@ -141,11 +141,11 @@ class _RunPlan:
         Whether the input path runs an opaque (identification-only)
         callable; opaque input runs refuse resume continuation.
     intervention:
-        The resolved ``intervene=`` spec (R2-08), or ``None`` for a clean
+        The resolved ``intervene=`` spec, or ``None`` for a clean
         run; intervened runs capture through the live intervention door.
     store_input_ids:
         Whether each batch's token ids are stored as the ordinary
-        ``input_ids`` key (R2-08 token store), bypassing pool, transform,
+        ``input_ids`` key (token store), bypassing pool, transform,
         and save-dtype casts.
     """
 
@@ -799,7 +799,7 @@ def _capture_outputs(
             None,
         )
     if plan.intervention is not None:
-        # R2-08: the intervened capture runs the live intervention door and
+        # the intervened capture runs the live intervention door and
         # ledgers its fire receipt; batch zero freezes the fired sites.
         trace = _tl.trace(
             plan.model,
@@ -1755,7 +1755,7 @@ def _continuation_run_state(
     dict[str, Any]
         Run state holding the adopted selector plan, the frozen D4 ragged
         state, the frozen intervention sites, and the prefix's per-shard
-        fire counts (R2-08).
+        fire counts.
     """
 
     run_state: dict[str, Any] = {}
@@ -1802,7 +1802,7 @@ def _shard_row_facts(
     -------
     dict[str, Any]
         Per-key facts, id/input digests, position source, the mask geometry
-        when present, and the fire receipt on intervened runs (R2-08).
+        when present, and the fire receipt on intervened runs.
     """
 
     key_facts, input_digest = batch_facts

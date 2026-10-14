@@ -1,4 +1,4 @@
-"""Environment configuration for the explicit watch callbacks, with sources (U34.2).
+"""Environment configuration for the explicit watch callbacks, with sources.
 
 An explicitly constructed callback may read its CONFIGURATION from the
 environment (cluster users configure jobs that way); the environment can

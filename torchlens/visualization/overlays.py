@@ -10,6 +10,7 @@ from typing import Any
 import torch
 
 from .._errors import InvalidArgumentError
+from ..capture.flops import append_attention_note
 from ..errors._base import TorchLensWarning
 from ..utils._multipass_access import get_multipass_attr
 from ..utils.display import format_flops, human_readable_size
@@ -312,6 +313,23 @@ def overlay_line(
         return format_overlay_value(normalize_overlay_name(overlay), value)
     value = external_overlay_value(node, overlay)
     return format_overlay_value("overlay", value)
+
+
+def append_overlay_lines(
+    lines: list[str], node: Any, overlay: str | OverlayScores | Callable[[Any], Any] | None
+) -> None:
+    """Append the overlay row for ``node``, then any disclosure row it needs.
+
+    Nothing is appended when the overlay has no value for the node. The
+    ``"flops"`` overlay adds the attention FLOP note under an attention op.
+    """
+
+    row = overlay_line(node, overlay)
+    if row is None:
+        return
+    lines.append(row)
+    if isinstance(overlay, str) and normalize_overlay_name(overlay) == "flops":
+        append_attention_note(lines, node)
 
 
 def overlay_border_attrs(

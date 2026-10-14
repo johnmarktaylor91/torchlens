@@ -3,7 +3,7 @@
 The default live ``run()`` snapshots the model's declared state (parameters and
 buffers) before executing and restores it afterwards (``_runnable_state``
 takes the snapshot; this module restores it). A default ``tl.trace`` is a pure
-observer (U40.1): ``capture_observer_bracket`` snapshots buffers, random state,
+observer: ``capture_observer_bracket`` snapshots buffers, random state,
 training modes and plain attributes and restores them after the capture, recording
 what the forward wrote to attributes on the trace;
 ``CaptureOptions(carry_state=True)`` opts into forward-equivalent state.
@@ -152,7 +152,7 @@ def restore_live_declared_state(snapshot: LiveDeclaredStateSnapshot, trace: Any 
 
 
 # ---------------------------------------------------------------------------
-# Capture observer bracket (U40.1): a default ``tl.trace`` is a pure observer.
+# Capture observer bracket: a default ``tl.trace`` is a pure observer.
 # ---------------------------------------------------------------------------
 
 
@@ -350,7 +350,7 @@ def _attribute_rewind(attrs: tuple[ModuleAttrSnapshot, ...]) -> Iterator[None]:
 def capture_observer_bracket(
     model: Any, *, carry_state: bool, on_failure: Callable[[], None] | None = None
 ) -> Iterator[CaptureObserverHandle]:
-    """Run a capture as a pure observer unless ``carry_state`` opts out (U40.1).
+    """Run a capture as a pure observer unless ``carry_state`` opts out.
 
     The default snapshots buffers (persistent and non-persistent), every
     module's ``training`` flag, every plain instance attribute and the global

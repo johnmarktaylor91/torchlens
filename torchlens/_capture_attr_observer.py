@@ -1,4 +1,4 @@
-"""Plain-attribute leg of the capture observer bracket (U40.1, AGT-2360).
+"""Plain-attribute leg of the capture observer bracket.
 
 A default ``tl.trace`` is a full pure observer: after the capture every plain
 instance attribute of every (non-lazy) module holds the object it held before

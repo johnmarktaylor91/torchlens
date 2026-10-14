@@ -24,7 +24,7 @@ __tl_layer__ = "L5"
 __all__ = ["as_torch_dataset", "feature_matrix", "shuffled_batches"]
 
 
-def shuffled_batches(  # noqa: PLR0913 - the public view's knob surface (R2-08 adds two keywords)
+def shuffled_batches(  # noqa: PLR0913 - the public view's knob surface (token rows add two keywords)
     reader: Any,
     batch_size: int,
     *,
@@ -37,7 +37,7 @@ def shuffled_batches(  # noqa: PLR0913 - the public view's knob surface (R2-08 a
 
     The SAE/CLT access pattern: SHARD order is shuffled, then the shuffle
     buffer holds ``buffer_shards`` consecutive shards of that order at once
-    and shuffles rows ACROSS them (the cross-shard mixing buffer, R2-08) —
+    and shuffles rows ACROSS them (the cross-shard mixing buffer) —
     each shard is still touched exactly once. ``buffer_shards=1`` (the
     default) shuffles within one shard at a time.
 
@@ -52,11 +52,11 @@ def shuffled_batches(  # noqa: PLR0913 - the public view's knob surface (R2-08 a
     keys:
         Optional output-key subset.
     buffer_shards:
-        Shards mixed per shuffle buffer (DOCUMENTED-UNSTABLE; R2-08). Peak
+        Shards mixed per shuffle buffer (DOCUMENTED-UNSTABLE). Peak
         memory is that many shards of the selected keys.
     tokens:
-        Yield TOKEN rows instead of stimulus rows (DOCUMENTED-UNSTABLE;
-        R2-08): every selected key is read through
+        Yield TOKEN rows instead of stimulus rows (DOCUMENTED-UNSTABLE):
+        every selected key is read through
         ``reader.token_batch`` and must share one token axis.
 
     Yields

@@ -1,4 +1,4 @@
-"""Similarity-repository identifiers for TorchLens's own geometry measures (U56.3).
+"""Similarity-repository identifiers for TorchLens's own geometry measures.
 
 The similarity-repository (``nacloos/similarity-repository``) is the
 catalogue of representational-similarity measures: each implementation is

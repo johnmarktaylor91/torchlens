@@ -1,4 +1,4 @@
-"""Source-line grouping for ``Trace.profile(group_by="source_line")`` (U53.2).
+"""Source-line grouping for ``Trace.profile(group_by="source_line")``.
 
 The grouped view folds the op-level profile rows into one row per user
 source line, so the activation bytes, FLOPs and instrumented time of every

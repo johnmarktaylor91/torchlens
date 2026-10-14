@@ -1,4 +1,4 @@
-"""Per-node diff facts for the netron baseline slot (ruling U09.5).
+"""Per-node diff facts for the netron baseline slot.
 
 ``tl.export.netron(subject, path, baseline=reference)`` fills the reserved
 ``torchlens.baseline`` slot (netron #1544) from TorchLens' own guarded

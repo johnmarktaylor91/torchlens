@@ -524,7 +524,7 @@ class TraceValidationMixin(_TraceMixinBase):
             loaded provider performs one ordinary verified run, then reuses staged state
             and compiled argument binders. Unlike the default transactional provider, later
             fast iterations reuse one result Trace in place. With ``until=`` a live fast
-            run cuts the native forward right after that saved site (U26.3).
+            run cuts the native forward right after that saved site.
         carry_state:
             PROVISIONAL spelling (documented-unstable). Default ``False``: the
             live provider snapshot-restores the model's declared state (named
@@ -754,7 +754,7 @@ class TraceValidationMixin(_TraceMixinBase):
                 and loaded_provider in {RunProvider.LOADED_SPARSE, RunProvider.LOADED_ANALYSIS}
             ):
                 # The live fast tier stops its native forward at a saved
-                # module (U26.3); a loaded artifact's fast tier compiles the
+                # module; a loaded artifact's fast tier compiles the
                 # full recorded path.
                 raise InvalidArgumentError(
                     "until= combines with fast=True only on a live trace; a loaded "

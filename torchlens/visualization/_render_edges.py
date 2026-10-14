@@ -1863,7 +1863,7 @@ def _label_rolled_call_indexs(
     says which ops it applies to, e.g. ``"Out 1,3"`` / ``"In 2,4"``, using
     ``int_list_to_compact_str`` for concise ranges (``"1-3"``).
 
-    forks.11 FK5 (lean B): the annotations compose into ONE midpoint ``label``
+    The annotations compose into ONE midpoint ``label``
     whenever the caller vouches the slot is free (``allow_midpoint_merge``: no
     conditional label set, no argument label coming). Graphviz reserves layout
     space for a midpoint label (a dummy node), so it never collides with a
@@ -1900,8 +1900,8 @@ def _label_rolled_call_indexs(
         else None
     )
 
-    # forks.11 FK5 (lean B, decided on the post-sink-fix numbers: stock GPT-2
-    # rolled, 97 -> 59 hard label violations at 1.008x page area): every
+    # Decided on the post-sink-fix numbers (stock GPT-2 rolled, 97 -> 59
+    # hard label violations at 1.008x page area): every
     # rolled In/Out annotation the caller vouches for -- no conditional label
     # set, no argument label coming -- composes into ONE midpoint ``label``,
     # which Graphviz reserves layout space for (a dummy node), so it clears
