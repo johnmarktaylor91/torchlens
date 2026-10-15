@@ -2563,3 +2563,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: fa5065886746698ac557f96bbff1ab0aca9db193 (clean)
 recorded: 2026-10-15T04:47:03.105661+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: attribution evaluation: the causal audit reads trace.modules (attribution/_audit_claims.py, 2 sites) to ground a layer claim at one module call, and _causal_audit.py names a result field kind (3 sites, not a trace read); no other site moved
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 4f9ee1cd2c34078a7f84d204c5f2ffe9e42a1ad6 (dirty)
+recorded: 2026-10-15T10:35:19.366201+00:00

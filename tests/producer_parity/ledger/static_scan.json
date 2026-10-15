@@ -641,10 +641,26 @@
  },
  {
   "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/attribution/_audit_claims.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "parents",
   "file": "torchlens/attribution/_cam_grid.py",
   "has_default": false,
   "sites": 8,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/attribution/_causal_audit.py",
+  "has_default": false,
+  "sites": 3,
   "via_getattr": false
  },
  {
