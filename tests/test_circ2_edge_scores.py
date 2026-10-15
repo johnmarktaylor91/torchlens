@@ -280,3 +280,22 @@ def test_bad_settings_refuse_typed(kwargs, code) -> None:
     with pytest.raises(tl.mechinterp.MechInterpError) as caught:
         tl.mechinterp.edge_scores(Fixture().eval(), CLEAN, **call)
     assert caught.value.fields["code"] == code
+
+
+def test_shared_norm_and_unshiftable_input_refuse_typed() -> None:
+    """A norm feeding two receiver modules, and an embedding write that is no module output."""
+
+    from types import SimpleNamespace
+
+    from torchlens.mechinterp import _eap
+
+    receivers = {
+        "a0.h0<q>": SimpleNamespace(norm_address="ln", module_address="attn"),
+        "m0": SimpleNamespace(norm_address="ln", module_address="mlp"),
+    }
+    with pytest.raises(tl.mechinterp.MechInterpError) as caught:
+        _eap._refuse_shared_norms(SimpleNamespace(receivers=receivers))
+    assert caught.value.fields["code"] == "mi_edge_scores_shared_norm"
+    with pytest.raises(tl.mechinterp.MechInterpError) as caught:
+        _eap._input_write_module(None, SimpleNamespace(_input_writes=()))
+    assert caught.value.fields["code"] == "mi_edge_scores_input_unresolvable"
