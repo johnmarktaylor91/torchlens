@@ -1054,16 +1054,19 @@ def _shared_or_cloned_state_entry(
     """
 
     candidate = source_state.get(name)
-    if _same_clone_layout(value, candidate):
+    bits = _SAME_WIDTH_INT.get(value.element_size()) if isinstance(value, torch.Tensor) else None
+    if bits is not None and _same_clone_layout(value, candidate):
         try:
-            same = torch.equal(
-                value.reshape(-1).view(torch.uint8), candidate.reshape(-1).view(torch.uint8)
-            )
+            same = torch.equal(value.view(bits), candidate.view(bits))
         except (RuntimeError, TypeError):
             same = False
         if same:
             return candidate
     return value.detach().clone()
+
+
+#: Integer dtype of each element width: viewing both tensors as it compares raw bytes.
+_SAME_WIDTH_INT = {1: torch.uint8, 2: torch.int16, 4: torch.int32, 8: torch.int64}
 
 
 def _same_clone_layout(value: Any, candidate: Any) -> bool:
