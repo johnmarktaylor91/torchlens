@@ -2888,30 +2888,16 @@ def _model_type_remedy(model: Any) -> str:
     )
 
 
-def _resolve_stats_save_level(
-    save: Any,
-    *,
-    activation_transform: Any,
-    save_raw_activations: Any,
-) -> Any:
+def _resolve_stats_save_level(save: Any) -> Any:
     """Turn ``save="stats"`` into the reduce-and-discard ``SaveOptions``.
 
     ``"stats"`` is a save level beside ``"all"`` and ``"none"``: every site's
-    out folds into a ``Spine`` during the forward and no payload is kept.
-    It owns the activation transform, so an explicit transform refuses.
+    out folds into a ``Spine`` during the forward (the summary-transform seam
+    with ``save_raw_activations=False``) and no payload is kept.
     """
 
     if not (isinstance(save, str) and save.lower() == "stats"):
         return save
-    if activation_transform is not MISSING or save_raw_activations is not MISSING:
-        raise ArgumentConflictError(
-            "save='stats' folds each out into a Spine through its own reducer, so it cannot "
-            "be combined with activation_transform= or save_raw_activations=",
-            code="save_stats_conflict",
-            remedy="drop activation_transform=/save_raw_activations=: "
-            "tl.trace(model, x, save='stats'), or keep payloads with save='all'",
-            argument="save",
-        )
     from .stats._capture_stats import stats_reducer
 
     return SaveOptions(activation_transform=stats_reducer(), save_raw_activations=False)
@@ -3150,9 +3136,7 @@ def _trace_torch_model(
         input_kwargs,
         admit_meta=bool(capture_options.structure_only),
     )
-    save = _resolve_stats_save_level(
-        save, activation_transform=activation_transform, save_raw_activations=save_raw_activations
-    )
+    save = _resolve_stats_save_level(save)
     routed_save, capture_options = _route_save_label_selection(
         save, capture, capture_options, model
     )

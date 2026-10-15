@@ -292,6 +292,9 @@ class _TrajectoryFolder:
                 validate=validate and not self.checked,
                 rtol=1e-4,
                 atol=1e-5,
+                # warn -> _check_user_lens -> _prepare_lens -> fold_batch ->
+                # measure_trajectory -> the user's frame.
+                warn_stacklevel=5,
             )
             self.checked = True
             self._start(setup.addresses, setup.lens_source, setup.validated)

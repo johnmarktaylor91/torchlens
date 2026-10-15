@@ -283,7 +283,7 @@ def test_logit_lens_predictions_mask_input_refuses_embeddings() -> None:
     trace = _capture(model, torch.randn(1, SEQ, D_MODEL, dtype=torch.float64))
     with pytest.raises(tl.errors.TorchLensError) as info:
         logit_lens_predictions(trace, mask_input=True)
-    assert getattr(info.value, "code", None) == "logit_lens_mask_input_unavailable"
+    assert info.value.fields["code"] == "logit_lens_mask_input_unavailable"
     rows = logit_lens_predictions(trace).rows
     assert rows
 
@@ -322,7 +322,7 @@ def test_trajectory_refusals(case: str, code: str) -> None:
     }
     with pytest.raises(tl.errors.TorchLensError) as info:
         calls[case]()
-    assert getattr(info.value, "code", None) == code
+    assert info.value.fields["code"] == code
 
 
 def test_trajectory_spines_save_and_reload(tmp_path: Any) -> None:

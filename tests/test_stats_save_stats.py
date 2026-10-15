@@ -155,7 +155,7 @@ def test_payload_read_refuses_with_working_spelling() -> None:
     label = str(trace.ops[1].label)
     with pytest.raises(tl.errors.TorchLensError) as info:
         _ = trace[label].out
-    assert getattr(info.value, "code", None) == "activation_reduced_to_stats"
+    assert info.value.fields["code"] == "activation_reduced_to_stats"
     assert "tl.stats.site_spines(trace)[label]" in str(info.value)
     assert tl.stats.site_spines(trace)[label].result().count_total > 0
     assert isinstance(tl.trace(model, x, save="all")[label].out, torch.Tensor)
@@ -167,21 +167,12 @@ def test_validation_and_replay_refuse() -> None:
     model, x = _model_and_input("mlp", 4)
     trace = tl.trace(model, x, save="stats")
     with pytest.raises(tl.errors.TorchLensError) as info:
-        trace.validate_forward_pass()
-    assert getattr(info.value, "code", None) == "stats_capture_not_replayable"
+        trace.validate_forward_pass(model(x))
+    assert info.value.fields["code"] == "stats_capture_not_replayable"
     with pytest.raises(tl.errors.TorchLensError) as info:
         trace.run(x)
-    assert getattr(info.value, "code", None) == "stats_capture_not_replayable"
+    assert info.value.fields["code"] == "stats_capture_not_replayable"
     assert tl.validate(model, x) is not None
-
-
-def test_save_stats_conflicts_with_transform() -> None:
-    """``save='stats'`` owns the transform; an explicit one refuses."""
-
-    model, x = _model_and_input("mlp", 4)
-    with pytest.raises(tl.errors.TorchLensError) as info:
-        tl.trace(model, x, save="stats", activation_transform=torch.abs)
-    assert getattr(info.value, "code", None) == "save_stats_conflict"
 
 
 def test_site_spines_refuses_full_trace() -> None:
@@ -190,7 +181,7 @@ def test_site_spines_refuses_full_trace() -> None:
     model, x = _model_and_input("mlp", 4)
     with pytest.raises(tl.errors.TorchLensError) as info:
         tl.stats.site_spines(tl.trace(model, x))
-    assert getattr(info.value, "code", None) == "stats_capture_not_reduced"
+    assert info.value.fields["code"] == "stats_capture_not_reduced"
     assert "save='stats'" in str(info.value)
 
 

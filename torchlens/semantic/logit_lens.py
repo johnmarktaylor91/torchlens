@@ -560,11 +560,14 @@ def _prepare_lens(
     validate: bool,
     rtol: float,
     atol: float,
+    warn_stacklevel: int = 4,
 ) -> _LensSetup:
     """Resolve the head, the layers and the lens, and check the lens once.
 
     The one home of the lens rule for :func:`logit_lens`,
     :func:`logit_lens_predictions` and ``tl.stats.measure_trajectory``.
+    ``warn_stacklevel`` attributes the unverified-lens warning to the public
+    caller's frame (4 when a public function here calls this directly).
     """
 
     head = _find_default_head(trace)
@@ -574,7 +577,9 @@ def _prepare_lens(
         addresses = _resolve_layer_addresses(trace, facet=facet, layers=layers)
         lens_by_address = _user_lens_by_address(lens, addresses)
         if validate:
-            _check_user_lens(trace, lens, lens_by_address, head, (rtol, atol))
+            _check_user_lens(
+                trace, lens, lens_by_address, head, (rtol, atol), stacklevel=warn_stacklevel
+            )
         lens_source, validated = "user", False
     else:
         if head is None:
@@ -1213,6 +1218,8 @@ def _check_user_lens(
     lens_by_address: Mapping[str, LensFunc],
     head: _DefaultHead | None,
     tolerance: tuple[float, float],
+    *,
+    stacklevel: int = 3,
 ) -> None:
     """Refuse a user lens built for another model; warn when it is unverified.
 
@@ -1247,7 +1254,7 @@ def _check_user_lens(
             "the check",
             code="logit_lens_identity_unrecorded",
         ),
-        stacklevel=3,
+        stacklevel=stacklevel,
     )
 
 

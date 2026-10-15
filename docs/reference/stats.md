@@ -232,6 +232,113 @@ with tempfile.TemporaryDirectory() as folder:
     print(torch.equal(first["relu_1_2"].values, again["relu_1_2"].values))
 ```
 
+## Reduce and discard: `save="stats"`
+
+`tl.trace(model, x, save="stats")` is a save level beside `"all"` and
+`"none"`: each op's out is folded into a `tl.stats.Spine` while the forward
+runs, and no activation payload is kept. The capture logs the same graph as a
+full capture (the reducer's own torch calls never enter it), makes no raw
+copy of an out, and keeps one fixed 16-number float64 vector (128 bytes) per
+op whatever the batch size. `tl.stats.site_spines(trace)` returns
+`{op label: Spine}` in capture order; the statistics equal
+`Spine().update(out)` on the full capture's out field by field, counts,
+extrema, sums and moments alike, because the reducer runs that same kernel.
+The returned spines are live accumulators: `merge` folds another batch's
+spines in and `tl.stats.save_fitted` saves them.
+
+A stats trace keeps nothing to read back or replay from, so it refuses
+instead of answering with an empty value: reading an op's `out` refuses
+`activation_reduced_to_stats` (the remedy names `site_spines` and
+`save="all"`), and replay or validation on the trace (`run`,
+`validate_forward_pass`, `save_new_outs`, `push`) refuses
+`stats_capture_not_replayable`; `tl.validate(model, x)` still works because
+it runs its own full capture. `site_spines` on a trace captured any other
+way refuses `stats_capture_not_reduced`.
+
+```python
+x = torch.rand(2, 3, 16, 16)
+reduced = tl.trace(model, x, save="stats")
+spines = tl.stats.site_spines(reduced)
+label = next(iter(spines))
+print(label, spines[label].result().count_total, spines[label].result().mean)
+
+full = tl.trace(model, x)
+reference = tl.stats.Spine()
+reference.update(full[label].out)
+print(reference.result() == spines[label].result())
+```
+
+## Trajectory statistics: `tl.stats.measure_trajectory`
+
+`tl.stats.measure_trajectory(model, data)` measures the logit-lens
+trajectory: each block's hidden state projected through the model's own
+final norm and head (the lens `torchlens.semantic.logit_lens` builds and
+validates, or a user `lens=` such as a tuned lens), one distribution per
+layer and position. It traces each batch, projects one layer at a time,
+reduces it to the named statistics and drops it, so only one
+`[batch, positions, vocab]` projection is alive at once. The statistics
+(natural log) are `entropy`, `kl_to_final` (KL from the final output
+distribution to the layer's), `max_prob`, and, when a batch is
+`(input_ids, target_ids)`, `cross_entropy` and `target_rank` of the target
+token (rank 1 is the top token; tied logits share the smallest rank). The
+result is a `tl.stats.TrajectoryStats`: `position_means[statistic]` is a
+float64 `[layers, positions]` tensor of means over every example, and
+`spines[statistic][layer]` is a `Spine` pooled over examples and positions
+(`summary(statistic)` returns their results). `mask_input=True` bans each
+row's own input tokens before every reduction, final output included; the
+same knob on `logit_lens_predictions` masks before its top-k and
+`logsumexp`, which cannot be undone afterwards. Refusals carry
+`stats_trajectory_*` codes (targets missing for a targeted statistic, an
+unknown statistic name, batches of different lengths, `mask_input=True` on
+a model fed embeddings, no batches).
+
+```python
+from torch import nn
+from torchlens.semantic import FacetSpec
+from torchlens.semantic.recipes._helpers import parameter_spec
+
+class DocBlock(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.lin = nn.Linear(8, 8)
+    def forward(self, h):
+        return h + torch.tanh(self.lin(h))
+
+class DocLM(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.embed, self.ln_f = nn.Embedding(20, 8), nn.LayerNorm(8)
+        self.blocks = nn.Sequential(DocBlock(), DocBlock())
+        self.lm_head = nn.Linear(8, 20, bias=False)
+    def forward(self, ids):
+        return self.lm_head(self.ln_f(self.blocks(self.embed(ids))))
+
+@tl.facets.register(class_name="DocBlock", target_scope="module", facets=("resid_post",))
+def doc_block(module):
+    return {"resid_post": FacetSpec.from_home(module.trace.ops[module.calls[0].output_ops[0]])}
+
+@tl.facets.register(class_name="DocLM", target_scope="module", facets=(
+    "logits", "unembed_weight", "final_norm_kind", "final_norm_eps",
+    "final_norm_gamma", "final_norm_beta"))
+def doc_head(module):
+    head, norm = module.trace.modules["lm_head"], module.trace.modules["ln_f"]
+    return {
+        "logits": FacetSpec.from_home(module.trace.ops[head.calls[0].output_ops[0]]),
+        "unembed_weight": parameter_spec(head, "weight", "doc_head"),
+        "final_norm_kind": "layer_norm", "final_norm_eps": 1e-5,
+        "final_norm_gamma": parameter_spec(norm, "weight", "doc_head"),
+        "final_norm_beta": parameter_spec(norm, "bias", "doc_head"),
+    }
+
+lm = DocLM().eval()
+ids = torch.randint(0, 20, (4, 6))
+data = [(ids, ids.roll(-1, dims=1))]          # (input_ids, next-token targets)
+traj = tl.stats.measure_trajectory(lm, data, mask_input=False)
+print(traj)
+print(traj.position_means["entropy"].shape)    # [layers, positions]
+print(traj.summary("target_rank")["blocks.1"].mean)
+```
+
 ## Where it sits
 
 - Install both: lovely-tensors for any tensor at a REPL, TorchLens for the

@@ -426,6 +426,15 @@ preds.rows[3].top_ids                         # one layer's top-k token ids
 preds.rows[-1].provenance                     # "native output" for captured logits
 ```
 
+`mask_input=True` bans the model input's own token ids from every row (each
+batch row's input tokens get `-inf` logits before the top-k, the `logsumexp`
+denominator, probabilities and ranks are taken), the one masking that cannot be
+redone on the retained rows afterwards; the trace's first input must be a saved
+integer token-id tensor (`logit_lens_mask_input_unavailable` otherwise). For
+entropy, KL to the final output, cross-entropy and rank along the trajectory in
+one call, see `tl.stats.measure_trajectory` in
+[docs/reference/stats.md](reference/stats.md).
+
 It shares `facet=` / `layers=` / `lens=` / `validate=` semantics (and the
 fail-closed lens validation) with `logit_lens`. Probabilities always use the
 full-vocabulary softmax denominator. `include_native=True` (the default)

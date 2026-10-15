@@ -368,7 +368,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   the list form (layer names, pass-qualified labels, module addresses, integer indexes,
   substrings, `'all'`, `'none'`), which selects exactly what
   `capture=CaptureOptions(layers_to_save=[...])` selects; passing both refuses
-  `save_selection_conflict`.
+  `save_selection_conflict`. `save="stats"` is a third level beside `'all'` and `'none'`:
+  reduce and discard, one `tl.stats.Spine` per op and no payload (see Streaming
+  statistics).
 
 **Lookback**
 : A bounded window of earlier metadata or detached payloads retained so a later temporal predicate
@@ -1073,7 +1075,19 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   latents, with ties broken toward the lowest example id, then position;
   `encoder=` maps each batch (for example through an SAE encoder) before it is
   folded; `TopK.update(..., example_ids=...)` names examples outside
-  `tl.aggregate`. Doc of record: [docs/reference/stats.md](stats.md).
+  `tl.aggregate`. Reduce and discard (DOCUMENTED-UNSTABLE): `tl.trace(model, x,
+  save="stats")` folds every op's out into a `tl.stats.Spine` during the forward and
+  keeps no payload (one 16-slot float64 vector per op); `tl.stats.site_spines(trace)`
+  returns `{op label: Spine}`, payload reads refuse `activation_reduced_to_stats`, and
+  replay or validation on the trace refuses `stats_capture_not_replayable`. Trajectory
+  statistics (DOCUMENTED-UNSTABLE): `tl.stats.measure_trajectory(model, data, *,
+  statistics=None, facet="resid_post", layers=None, lens=None, mask_input=False,
+  validate=True)` traces each batch and folds the logit-lens trajectory's `entropy`,
+  `kl_to_final`, `max_prob` and, for `(input_ids, target_ids)` batches,
+  `cross_entropy` and `target_rank` into a `tl.stats.TrajectoryStats`
+  (`position_means[statistic]`, a float64 `[layers, positions]` tensor;
+  `spines[statistic][layer]`; `summary(statistic)`). Doc of record:
+  [docs/reference/stats.md](stats.md).
 
 ## Quantities and typed errors
 
@@ -2053,7 +2067,13 @@ deprecation shim owed*
   record): a differing measured identity refuses
   `logit_lens_identity_mismatch` unless `validate=False`; a lens with no
   comparable identity warns `logit_lens_identity_unrecorded` when its
-  last-layer decode misses the captured logits. See [facets](../facets.md).
+  last-layer decode misses the captured logits. Its streaming sibling
+  `logit_lens_predictions(trace, ...)` keeps only per-layer top-k, `logsumexp`
+  and requested-token values; its keyword-only `mask_input=True` bans the
+  model input's own token ids before those reductions (the trace's first input
+  must be saved integer token ids, else `logit_lens_mask_input_unavailable`).
+  Trajectory statistics over many batches: `tl.stats.measure_trajectory`. See
+  [facets](../facets.md).
 
 **render_logit_lens_heatmap (torchlens.tviz)** — *unstable — no deprecation shim owed*
 : `torchlens.tviz.render_logit_lens_heatmap(result, path)` draws a
