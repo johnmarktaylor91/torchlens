@@ -31,6 +31,23 @@
   `.steer(m)` edit and `.to_steering_vectors()` / `.to_repeng()` converters whose library
   objects reproduce the native steer's logits.
 
+### Bug Fixes
+
+- **intervention**: the `dense_subspace_full_axis_edit` warning no longer says projection-valued
+  edits are unshipped; its remedy names `tl.project_off`, `tl.project_onto` and
+  `torchlens.intervention.set_direction_mean`, and the glossary subspace entry links to them.
+
+### Changed
+
+- **model wrappers**: the `model_wrapper_uninstrumentable` refusal for a TransformerLens
+  `TransformerBridge` now leads with reloading the HF model fresh and offers a `HookedTransformer`
+  only while you still use one.
+
+### Continuous Integration
+
+- A nightly `peer-recipes` job runs the executed recipe pages with every peer installed and fails
+  on any skip.
+
 ## v2.34.1 (2026-08-10)
 
 ### Bug Fixes
