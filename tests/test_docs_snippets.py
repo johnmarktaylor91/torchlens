@@ -478,6 +478,7 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "recipes/tuned_lens.md": _RECIPE_PAGES_EXECUTED,
     "recipes/conditional_steering.md": _RECIPE_PAGES_EXECUTED,
     "recipes/weightwatcher.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/torchcam.md": _RECIPE_PAGES_EXECUTED,
     "recipes/quantus.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/netrep.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/himalaya.md": _RECIPE_PAGES_EXECUTED,
