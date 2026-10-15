@@ -420,6 +420,12 @@ class CapturedArgTemplate:
     notes: tuple[str, ...] = ()
 
 
+#: The frozen replay-template records; a rerun refresh rebuilds these field by field.
+REPLAY_TEMPLATE_TYPES: frozenset[type] = frozenset(
+    {ParentRef, LiteralTensor, LiteralValue, Unsupported, CapturedArgTemplate}
+)
+
+
 @dataclass(frozen=True)
 class FireRecord:
     """Runtime record for one intervention firing."""

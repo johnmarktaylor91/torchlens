@@ -27,6 +27,7 @@ Key design patterns:
 """
 
 import copy
+import dataclasses
 import difflib
 import inspect
 import json
@@ -172,6 +173,10 @@ else:
     from ._trace_viz import TraceVisualizationMixin
 
 
+#: Values ``copy.deepcopy`` returns unchanged, so a rerun refresh hands them over as they are.
+_ATOMIC_RERUN_VALUE_TYPES: frozenset[type] = frozenset(
+    {type(None), bool, int, float, complex, str, bytes, torch.dtype, torch.device}
+)
 _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "grouping": "structural",
     "grouping_policy": None,
@@ -3596,10 +3601,11 @@ class Trace(
         preserved_user_annotations = self._copy_user_annotations(
             getattr(layer, "annotations", None)
         )
+        copies: dict[str, Any] = {}  # fields both loops below write are copied once
         for field_name in LAYER_PASS_LOG_FIELD_ORDER:
             if field_name in preserved_fields:
                 continue
-            value = self._copy_rerun_value(new_layer_state.get(field_name))
+            value = copies[field_name] = self._copy_rerun_value(new_layer_state.get(field_name))
             if field_name == "annotations":
                 value = self._merge_user_annotations(value, preserved_user_annotations)
             layer._internal_set(
@@ -3621,7 +3627,9 @@ class Trace(
             "_edge_uses",
         ):
             if hasattr(new_layer, field_name):
-                value = self._copy_rerun_value(new_layer_state.get(field_name))
+                if field_name not in copies:
+                    copies[field_name] = self._copy_rerun_value(new_layer_state.get(field_name))
+                value = copies[field_name]
                 if field_name == "annotations":
                     value = self._merge_user_annotations(value, preserved_user_annotations)
                 layer._internal_set(
@@ -3767,7 +3775,7 @@ class Trace(
             copying would be incorrect or unnecessary.
         """
 
-        if isinstance(value, torch.Tensor):
+        if isinstance(value, torch.Tensor) or type(value) in _ATOMIC_RERUN_VALUE_TYPES:
             return value
         if isinstance(value, list):
             return [self._copy_rerun_value(item) for item in value]
@@ -3778,8 +3786,13 @@ class Trace(
                 self._copy_rerun_value(key): self._copy_rerun_value(item)
                 for key, item in value.items()
             }
+        from ..intervention.types import REPLAY_TEMPLATE_TYPES
         from ..utils.fail_open import fail_open
 
+        if type(value) in REPLAY_TEMPLATE_TYPES:
+            # Field by field, so a parameter literal keeps its identity (a deep copy cloned it).
+            names = [field.name for field in dataclasses.fields(value)]
+            return type(value)(**{n: self._copy_rerun_value(getattr(value, n)) for n in names})
         return fail_open(lambda: copy.deepcopy(value), lambda _error: value)
 
     def append_state_from(self, new_log: "Trace") -> None:

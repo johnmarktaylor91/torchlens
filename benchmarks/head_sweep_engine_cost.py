@@ -27,8 +27,10 @@ Subcommands
     Deterministic counters for a few heads per engine from an aten-level
     dispatch counter and wall-clock wrappers on named phase functions: aten
     ops executed, aten clone/copy bytes, Python profile events inside the
-    host RNG monitor window, hooks planned and fired, replay hook
-    applications and ops re-executed, plus the cost split by phase.
+    host RNG monitor window, calls into the monitor's per-event classifiers,
+    ``copy.deepcopy`` calls and clone bytes inside the rerun state refresh,
+    hooks planned and fired, replay hook applications and ops re-executed,
+    plus the cost split by phase.
 
 Every subcommand prints one JSON document on stdout (and writes it to
 ``--out`` when given). The model is the config-built gpt2-124M architecture
@@ -39,6 +41,7 @@ weights: gpt2-124M's op count, no network, no checkpoint.
 from __future__ import annotations
 
 import argparse
+import copy
 import gc
 import json
 import os
@@ -338,6 +341,15 @@ def _environment() -> dict[str, Any]:
         "seed": SEED,
         "seq_len": SEQ_LEN,
         "model": f"GPT2Config(n_layer={N_LAYER}, n_head={N_HEAD}, n_embd={N_EMBD}) random",
+        # Thread and determinism settings: float results of a CPU matmul can
+        # depend on them, so every parity record carries them.
+        "torch_threads": torch.get_num_threads(),
+        "torch_interop_threads": torch.get_num_interop_threads(),
+        "deterministic_algorithms": torch.are_deterministic_algorithms_enabled(),
+        "thread_env": {
+            name: os.environ.get(name)
+            for name in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "MKL_DYNAMIC", "OMP_DYNAMIC")
+        },
     }
 
 
@@ -557,6 +569,9 @@ class AtenCounter(TorchDispatchMode):
         self.ops: Counter[str] = Counter()
         self.clone_bytes = 0
         self.clone_calls = 0
+        self.refresh_clone_bytes = 0
+        #: Set by :class:`PhaseTimer` while the rerun state refresh runs.
+        self.in_refresh = False
 
     def __torch_dispatch__(self, func: Any, types: Any, args: Any = (), kwargs: Any = None) -> Any:
         """Count and forward one aten call."""
@@ -566,7 +581,10 @@ class AtenCounter(TorchDispatchMode):
         self.ops[name] += 1
         if name in self.CLONE_OPS and isinstance(out, torch.Tensor):
             self.clone_calls += 1
-            self.clone_bytes += out.numel() * out.element_size()
+            nbytes = out.numel() * out.element_size()
+            self.clone_bytes += nbytes
+            if self.in_refresh:
+                self.refresh_clone_bytes += nbytes
         return out
 
 
@@ -593,6 +611,16 @@ PHASES: dict[str, tuple[str, str]] = {
     "push_hook_apply": ("torchlens.intervention.replay", "_apply_replay_hooks"),
 }
 
+#: The host RNG monitor's per-event classifier helpers; a call into one is
+#: counted as one classifier call (the profile hook's own fast exits are not).
+MONITOR_CLASSIFIERS = (
+    "_classify_c_call",
+    "_classify_call",
+    "_snapshot_numpy_frame_rngs",
+    "_compare_numpy_frame_rngs",
+    "_snapshot_returned_numpy_rngs",
+)
+
 
 def _restorer(owner: Any, attr: str, original: Any, owned: bool) -> Callable[[], None]:
     """Return a callable that undoes one patch (deleting an inherited override)."""
@@ -616,6 +644,9 @@ class PhaseTimer:
         self.seconds: Counter[str] = Counter()
         self.cone_sizes: list[int] = []
         self.profile_events = 0
+        self.classifier_calls = 0
+        self.refresh_deepcopy_calls = 0
+        self.counter: AtenCounter | None = None
         self._restores: list[Callable[[], None]] = []
 
     def _wrap(self, phase: str, original: Callable[..., Any]) -> Callable[..., Any]:
@@ -624,17 +655,61 @@ class PhaseTimer:
         timer = self
 
         def wrapper(*args: Any, **kwargs: Any) -> Any:
+            refresh = phase == "rerun_refresh_state"
+            if refresh:
+                timer._enter_refresh()
             start = time.perf_counter()
             try:
                 result = original(*args, **kwargs)
             finally:
                 timer.calls[phase] += 1
                 timer.seconds[phase] += time.perf_counter() - start
+                if refresh:
+                    timer._exit_refresh()
             if phase == "push_cone" and isinstance(result, list):
                 timer.cone_sizes.append(len(result))
             return result
 
         return wrapper
+
+    def _enter_refresh(self) -> None:
+        """Count ``copy.deepcopy`` calls and clone bytes until the refresh ends."""
+
+        original = copy.deepcopy
+        timer = self
+
+        def counting_deepcopy(*args: Any, **kwargs: Any) -> Any:
+            timer.refresh_deepcopy_calls += 1
+            return original(*args, **kwargs)
+
+        copy.deepcopy = counting_deepcopy  # type: ignore[assignment]
+        self._deepcopy_original = original
+        if self.counter is not None:
+            self.counter.in_refresh = True
+
+    def _exit_refresh(self) -> None:
+        """Undo :meth:`_enter_refresh`."""
+
+        copy.deepcopy = self._deepcopy_original  # type: ignore[assignment]
+        if self.counter is not None:
+            self.counter.in_refresh = False
+
+    def _install_classifier_counters(self) -> None:
+        """Count calls into the monitor's per-event classifier helpers."""
+
+        import torchlens.utils.rng as rng
+
+        cls = rng.host_nondeterminism_monitor
+        timer = self
+        for name in MONITOR_CLASSIFIERS:
+            original = cls.__dict__[name]
+
+            def counted(*args: Any, _orig: Any = original, **kwargs: Any) -> Any:
+                timer.classifier_calls += 1
+                return _orig(*args, **kwargs)
+
+            setattr(cls, name, counted)
+            self._restores.append(_restorer(cls, name, original, True))
 
     def _install_window_close(self) -> None:
         """Pair the monitor's ``__exit__`` with its ``__enter__`` to time the window."""
@@ -695,6 +770,7 @@ class PhaseTimer:
                 setattr(owner, attr, self._wrap(phase, original))
             self._restores.append(_restorer(owner, attr, original, owned))
         self._install_window_close()
+        self._install_classifier_counters()
         return self
 
     def __exit__(self, *exc: Any) -> None:
@@ -723,6 +799,7 @@ def _count_one(
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         with PhaseTimer() as phases, counter:
+            phases.counter = counter
             start = time.perf_counter()
             member = ablate(baseline, site, engine, model, x)
             total_s = time.perf_counter() - start
@@ -735,6 +812,9 @@ def _count_one(
         "aten_clone_like_bytes": counter.clone_bytes,
         "aten_top": counter.ops.most_common(12),
         "python_profile_events_in_rng_window": phases.profile_events,
+        "monitor_classifier_calls": phases.classifier_calls,
+        "refresh_deepcopy_calls": phases.refresh_deepcopy_calls,
+        "refresh_clone_like_bytes": counter.refresh_clone_bytes,
         "hooks_planned": last_run.get("hooks"),
         "hooks_fired": last_run.get("hooks_fired"),
         "replay_hook_applications": phases.calls["push_hook_apply"],
@@ -787,6 +867,7 @@ def cmd_counters(args: argparse.Namespace) -> dict[str, Any]:
             "aten_ops_executed": sum(capture_counter.ops.values()),
             "aten_clone_like_bytes": capture_counter.clone_bytes,
             "python_profile_events_in_rng_window": capture_phases.profile_events,
+            "monitor_classifier_calls": capture_phases.classifier_calls,
             "phases": capture_phases.report(),
         },
         "rows": rows,
