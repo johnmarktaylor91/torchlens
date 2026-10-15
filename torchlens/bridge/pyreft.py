@@ -39,7 +39,7 @@ import hashlib
 import json
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import torch
 
@@ -198,11 +198,15 @@ def _config(directory: Path) -> dict[str, Any]:
 def _one_loreft(config: Mapping[str, Any]) -> tuple[str, list[Any], int]:
     """Return ``(key, representation, dimension)`` of the one LoReFT intervention."""
 
-    keys = config.get("sorted_keys")
-    kinds = config.get("intervention_types")
-    representations = config.get("representations")
-    dimensions = config.get("intervention_dimensions")
-    fields = (keys, kinds, representations, dimensions)
+    fields = [
+        config.get(name)
+        for name in (
+            "sorted_keys",
+            "intervention_types",
+            "representations",
+            "intervention_dimensions",
+        )
+    ]
     if not all(isinstance(value, list) for value in fields):
         raise _refusal(
             "config.json lacks the sorted_keys, intervention_types, representations "
@@ -210,8 +214,7 @@ def _one_loreft(config: Mapping[str, Any]) -> tuple[str, list[Any], int]:
             code="pyreft_artifact_invalid",
             file="config.json",
         )
-    assert isinstance(keys, list) and isinstance(kinds, list)
-    assert isinstance(representations, list) and isinstance(dimensions, list)
+    keys, kinds, representations, dimensions = (cast("list[Any]", value) for value in fields)
     if len(keys) != 1 or not (len(kinds) == len(representations) == len(dimensions) == 1):
         raise _refusal(
             f"the artifact holds {len(keys)} interventions; this reader reads exactly one",
