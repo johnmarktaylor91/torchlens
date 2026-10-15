@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from itertools import islice
@@ -395,6 +395,59 @@ def _distinct_terminals(terminals: Iterable[_TerminalState]) -> tuple[_TerminalS
     return tuple(dict.fromkeys(terminals))
 
 
+_WalkKey: TypeAlias = tuple[str, _AxisSets, bool]
+_WalkStep: TypeAlias = Generator[
+    tuple["Op", _AxisSets, bool], tuple[_TerminalState, ...], tuple[_TerminalState, ...]
+]
+
+
+def _run_memoized_walk(
+    body: Callable[[Op, _AxisSets, bool], _WalkStep],
+    op: Op,
+    sets: _AxisSets,
+    exact: bool,
+    memo: dict[_WalkKey, tuple[_TerminalState, ...]],
+) -> tuple[_TerminalState, ...]:
+    """Drive a hop-by-hop graph walk on an explicit stack.
+
+    ``body(op, sets, exact)`` is a generator for one hop: it yields one
+    ``(next_op, next_sets, next_exact)`` request per branch, receives that
+    branch's terminal tuple back, and returns the hop's own terminal tuple.
+    This driver is the recursion ``f(op, sets, exact) = memo or body(...)``
+    with every pending hop kept on a list instead of the interpreter stack,
+    so the walk's depth is bounded by memory rather than the recursion limit.
+    Branches are visited in yield order and each finishes before the next
+    starts, so ``memo`` gains its ``(label, sets, exact)`` keys and the
+    terminal tuples keep their first-occurrence order exactly as the
+    recursion produced them.
+    """
+    key: _WalkKey = (op.label, sets, exact)
+    cached = memo.get(key)
+    if cached is not None:
+        return cached
+    stack: list[tuple[_WalkKey, _WalkStep]] = [(key, body(op, sets, exact))]
+    sent: tuple[_TerminalState, ...] | None = None
+    while True:
+        frame_key, step = stack[-1]
+        try:
+            request = next(step) if sent is None else step.send(sent)
+        except StopIteration as finished:
+            stack.pop()
+            memo[frame_key] = finished.value
+            if not stack:
+                return finished.value
+            sent = finished.value
+            continue
+        next_op, next_sets, next_exact = request
+        next_key: _WalkKey = (next_op.label, next_sets, next_exact)
+        cached = memo.get(next_key)
+        if cached is not None:
+            sent = cached
+            continue
+        stack.append((next_key, body(next_op, next_sets, next_exact)))
+        sent = None
+
+
 def _walk_to_input(
     op: Op,
     output_sets: _AxisSets,
@@ -402,26 +455,25 @@ def _walk_to_input(
     ancestry: frozenset[str],
     by_reference: Mapping[str, Op],
     exact: bool,
-    memo: dict[tuple[str, _AxisSets, bool], tuple[_TerminalState, ...]],
+    memo: dict[_WalkKey, tuple[_TerminalState, ...]],
 ) -> tuple[_TerminalState, ...]:
-    """Recursively map a joint axis-set state to one requested model input.
+    """Map a joint axis-set state to one requested model input.
 
     The walk enumerates paths, so a merge-heavy graph re-derives the same
     ``(operation, axis-set state)`` subwalk once per path that reaches it --
     exponential in the number of merges. ``memo`` caches that pure subresult
     for the duration of one query. It is plain memoization of a pure function:
-    the cached tuple is exactly what the recursion would rebuild. Terminal
-    de-duplication is a separate step; see :func:`_distinct_terminals`.
+    the cached tuple is exactly what a fresh walk would rebuild. Terminal
+    de-duplication is a separate step; see :func:`_distinct_terminals`. The
+    hops run on :func:`_run_memoized_walk`'s explicit stack, so a model of any
+    depth walks without reaching the interpreter's recursion limit.
     """
-    key = (op.label, output_sets, exact)
-    cached = memo.get(key)
-    if cached is not None:
-        return cached
-    terminals_for_key = _walk_body(
-        op, output_sets, input_label, ancestry, by_reference, exact, memo
-    )
-    memo[key] = terminals_for_key
-    return terminals_for_key
+
+    def body(item: Op, sets: _AxisSets, item_exact: bool) -> _WalkStep:
+        """Start one receptive hop from ``item`` toward this query's input."""
+        return _walk_body(item, sets, input_label, ancestry, by_reference, item_exact)
+
+    return _run_memoized_walk(body, op, output_sets, exact, memo)
 
 
 def _walk_body(
@@ -431,9 +483,12 @@ def _walk_body(
     ancestry: frozenset[str],
     by_reference: Mapping[str, Op],
     exact: bool,
-    memo: dict[tuple[str, _AxisSets, bool], tuple[_TerminalState, ...]],
-) -> tuple[_TerminalState, ...]:
-    """Map one joint axis-set state across a single reverse hop."""
+) -> _WalkStep:
+    """Map one joint axis-set state across a single reverse hop.
+
+    Yields one request per live parent branch and receives that branch's
+    terminals; see :func:`_run_memoized_walk`.
+    """
     if op.label == input_label:
         clipped = tuple(
             None if item is None else item.clipped(int(op.shape[axis]))
@@ -463,14 +518,12 @@ def _walk_body(
             )
         )
         terminals.extend(
-            _walk_to_input(
-                parent,
-                bounded,
-                input_label,
-                ancestry,
-                by_reference,
-                exact and hop_exact and all(item is None or item.exact for item in parent_sets),
-                memo,
+            (
+                yield (
+                    parent,
+                    bounded,
+                    exact and hop_exact and all(item is None or item.exact for item in parent_sets),
+                )
             )
         )
     return _distinct_terminals(terminals)
