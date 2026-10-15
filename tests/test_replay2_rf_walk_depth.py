@@ -125,7 +125,9 @@ def test_deep_chain_validate_forward_pass_completes() -> None:
     model = _DeepConvChain(DEPTH)
     x = torch.randn(1, 1, LENGTH)
     trace = tl.trace(model, x)
-    passed = trace.validate_forward_pass(x)
+    with torch.no_grad():
+        expected = model(x)
+    passed = trace.validate_forward_pass(expected)
     failure = tl.validation.last_validation_failure()
     assert passed, failure.summary() if failure is not None else "no failure record"
 
