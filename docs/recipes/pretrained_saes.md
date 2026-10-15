@@ -171,7 +171,7 @@ SAELens transcoder goes in the same place; the stand-in below is an SAELens
 # recipe-test: tool=sae_lens expected=(True, True)
 from sae_lens import Transcoder, TranscoderConfig
 
-transcoder = Transcoder(TranscoderConfig(d_in=16, d_sae=48, d_out=16))
+transcoder = Transcoder(TranscoderConfig(d_in=16, d_sae=48, d_out=16, apply_b_dec_to_input=False))
 with torch.no_grad():
     for parameter in transcoder.parameters():
         parameter.copy_(0.3 * torch.randn(parameter.shape, generator=torch.Generator().manual_seed(2)))
