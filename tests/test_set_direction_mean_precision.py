@@ -7,8 +7,6 @@ the float32 unit and coefficient it always used, bit for bit.
 
 from __future__ import annotations
 
-import copy
-
 import torch
 from torch import nn
 
@@ -39,16 +37,19 @@ def _inputs(dtype: torch.dtype) -> tuple[torch.Tensor, torch.Tensor]:
 
 
 def _edited_and_grad(dtype: torch.dtype) -> tuple[torch.Tensor, torch.Tensor, nn.Module]:
+    """Edit ``lin1``'s output on a replay fork; return the site value and the weight grad."""
+
     model = _Net(dtype).eval()
     x, donors = _inputs(dtype)
     edit = set_direction_mean(
         _DIRECTION.to(dtype), reference(donors, origin="donors"), feature_axis=-1
     )
-    trace = tl.trace(model, x, intervene=tl.when(tl.module("lin1"), edit))
-    output = trace[trace.output_layers[0]].out
-    output.sum().backward()
+    ready = tl.options.CaptureOptions(intervention_ready=True)
+    fork = tl.trace(model, x, capture=ready).fork()
+    fork.do("linear_1_1", edit)
+    fork[fork.output_layers[0]].out.sum().backward()
     assert model.lin1.weight.grad is not None
-    return trace["linear_1_1"].out.detach(), model.lin1.weight.grad.clone(), model
+    return fork["linear_1_1"].out.detach(), model.lin1.weight.grad.clone(), model
 
 
 def test_float64_site_matches_float64_hand_value_and_gradient() -> None:
@@ -90,9 +91,10 @@ def test_recorded_coefficient_is_the_one_applied() -> None:
     unit32 = _DIRECTION.float() / _DIRECTION.float().norm()
     per_member = [(member.float() * unit32).sum(dim=-1).mean() for member in donors]
     assert coefficient == float(torch.stack(per_member).mean())
-    model = copy.deepcopy(_Net(torch.float64)).eval()
-    trace = tl.trace(model, x, intervene=tl.when(tl.module("lin1"), edit))
+    ready = tl.options.CaptureOptions(intervention_ready=True)
+    fork = tl.trace(_Net(torch.float64).eval(), x, capture=ready).fork()
+    fork.do("linear_1_1", edit)
     unit = _DIRECTION / _DIRECTION.norm()
-    along = (trace["linear_1_1"].out @ unit).detach()
+    along = (fork["linear_1_1"].out @ unit).detach()
     expected = float((donors * unit).sum(dim=-1).mean())
     assert torch.allclose(along, torch.full_like(along, expected), rtol=0.0, atol=1e-12)
