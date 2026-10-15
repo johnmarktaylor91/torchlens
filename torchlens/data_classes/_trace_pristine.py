@@ -41,7 +41,6 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 from .._trace_state import TraceState
-from ..backends._intervention_evidence import records_intervention_evidence
 
 #: First tlspec version whose writer persists the intervention event audit.
 PRISTINE_EVIDENCE_MIN_TLSPEC = 9
@@ -129,6 +128,9 @@ def derive_pristine(trace: Any) -> bool | None:
 
 def _evidence_recorded(trace: Any) -> bool:
     """Return whether this trace's producer persists the full touch evidence."""
+
+    # Deferred: backends sit above data_classes in the layer map.
+    from ..backends._intervention_evidence import records_intervention_evidence
 
     if not records_intervention_evidence(str(trace.backend)):
         return False
