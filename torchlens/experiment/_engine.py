@@ -156,12 +156,19 @@ def _resolve_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candi
         # are (layer_label, pass_index) tuples; the structural L1 key rides
         # structural_site_key and the label backstop derives it.
         labels = tuple(str(entry.site_key[0]) for entry in resolved)
+        parts = tuple(_unit_digest_part(entry) for entry in resolved)
+        units_selected = any(isinstance(part, tuple) for part in parts)
         return _Candidate(
             candidate_id=candidate_id,
             where=where,
-            execution_where=_site_key_term(baseline, candidate_id, labels),
+            # A unit selection (a partial mask at some site) executes as spelled,
+            # so its edit reaches only the selected units; whole-site entries
+            # lower to structural site keys as before.
+            execution_where=(
+                where if units_selected else _site_key_term(baseline, candidate_id, labels)
+            ),
             resolved_site_count=len(labels),
-            resolution_digest=_digest(("selection",) + tuple(sorted(labels))),
+            resolution_digest=_digest(("selection",) + tuple(sorted(parts, key=repr))),
         )
     if isinstance(where, str):
         from ..intervention.resolver import resolve_sites
@@ -188,6 +195,23 @@ def _resolve_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candi
         resolved_site_count=len(labels),
         resolution_digest=_digest(("sites",) + tuple(sorted(labels))),
     )
+
+
+def _unit_digest_part(entry: Any) -> Any:
+    """Digest part of one resolved selection entry: its label, plus its units if partial.
+
+    A whole-site entry contributes its label alone, so a whole-site unit
+    selection stays the same candidate as the bare site. A partial mask also
+    contributes its shape and a digest of its bytes, so distinct units at one
+    site are distinct candidates and identical units are still duplicates.
+    """
+
+    label = str(entry.site_key[0])
+    mask = entry.mask
+    if bool(mask.all()):
+        return label
+    packed = mask.reshape(-1).cpu().numpy().tobytes()
+    return (label, tuple(mask.shape), hashlib.sha256(packed).hexdigest())
 
 
 def _site_key_term(baseline: Trace, candidate_id: str, labels: tuple[str, ...]) -> Any:
@@ -424,7 +448,7 @@ def _preflight_candidates(
         if prior is not None and not replicates:
             raise BundleExperimentError(
                 f"site_sweep candidates {prior!r} and {candidate.candidate_id!r} "
-                "resolve to the same sites; pass replicates=True if the "
+                "resolve to the same sites and units; pass replicates=True if the "
                 "duplication is a deliberate replicate.",
                 code="site_sweep_duplicate_candidates",
                 first=prior,
