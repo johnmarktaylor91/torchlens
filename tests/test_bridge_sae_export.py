@@ -119,7 +119,7 @@ def test_dashboard_top_examples_over_a_dataset_equal_a_hand_topk(setup, tmp_path
         expected = _hand_topk(hand, unit, 3)
         got = [(s["original_index"], s["qualifying_token_index"]) for s in group["seq_data"]]
         assert got == [(example, position) for example, position, _ in expected]
-        for record, (example, position, value) in zip(group["seq_data"], expected):
+        for record, (example, position, value) in zip(group["seq_data"], expected, strict=True):
             assert record["token_ids"] == tokens[example].tolist()
             acts = [0.0] * tokens.shape[1]
             acts[position] = round(value, 4)
@@ -147,7 +147,7 @@ def test_dashboard_from_one_spliced_batch_carries_every_token(setup, tmp_path: P
         assert [(s["original_index"], s["qualifying_token_index"]) for s in group["seq_data"]] == [
             (example, position) for example, position, _ in expected
         ]
-        for record, (example, _, _) in zip(group["seq_data"], expected):
+        for record, (example, _, _) in zip(group["seq_data"], expected, strict=True):
             assert record["feat_acts"] == [round(v, 4) for v in latents[example, :, unit].tolist()]
         column = latents[..., unit].reshape(-1)
         assert data["feature_stats"]["max"][index] == pytest.approx(float(column.max()))
@@ -163,7 +163,7 @@ def _read_delphi(folder: Path) -> tuple[set[tuple[int, int, int]], dict, list[Pa
         start = int(file.stem.split("_")[0])
         split = safetensors_numpy.load_file(str(file))
         for (example, position, latent), value in zip(
-            split["locations"].astype("int64").tolist(), split["activations"].tolist()
+            split["locations"].astype("int64").tolist(), split["activations"].tolist(), strict=True
         ):
             entries[(example, position, latent + start)] = value
     return set(entries), entries, files
@@ -181,7 +181,8 @@ def test_delphi_cache_holds_every_nonzero_activation(setup, tmp_path: Path) -> N
     keys, values, files = _read_delphi(folder)
     bounds = torch.linspace(0, 10, steps=4).long().tolist()
     assert [f.name for f in files] == [
-        f"{start}_{stop - 1}.safetensors" for start, stop in zip(bounds[:-1], bounds[1:])
+        f"{start}_{stop - 1}.safetensors"
+        for start, stop in zip(bounds[:-1], bounds[1:], strict=True)
     ]
     expected = {tuple(i) for i in torch.nonzero(hand.abs() > 1e-5).tolist()}
     assert keys == expected

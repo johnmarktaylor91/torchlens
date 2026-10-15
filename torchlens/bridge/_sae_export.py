@@ -232,7 +232,7 @@ def write_delphi(  # noqa: PLR0913 -- the two subjects plus the cache's where (s
     folder = Path(directory) / str(site)
     folder.mkdir(parents=True, exist_ok=True)
     boundaries = torch.linspace(0, width, steps=int(n_splits) + 1).long()
-    for start, stop in zip(boundaries[:-1].tolist(), (boundaries[1:] - 1).tolist()):
+    for start, stop in zip(boundaries[:-1].tolist(), (boundaries[1:] - 1).tolist(), strict=True):
         mask = (locations[:, 2] >= start) & (locations[:, 2] <= stop)
         split = locations[mask].clone()
         split[:, 2] -= start
@@ -414,7 +414,10 @@ def write_sae_dashboard(  # noqa: PLR0913 -- the two subjects plus what (latent 
     for unit in chosen:
         sequences = []
         for value, example, position in zip(
-            top.values[unit].tolist(), top.example_ids[unit].tolist(), _positions(top, unit)
+            top.values[unit].tolist(),
+            top.example_ids[unit].tolist(),
+            _positions(top, unit),
+            strict=True,
         ):
             if example < 0 or math.isnan(value):
                 continue

@@ -132,7 +132,7 @@ def test_sae_dashboard_loads_and_renders_the_dense_export(setup, tmp_path: Path)
         assert [(s.original_index, s.qualifying_token_index) for s in group.seq_data] == [
             (example, position) for example, position, _ in expected
         ]
-        for record, (example, position, value) in zip(group.seq_data, expected):
+        for record, (example, position, value) in zip(group.seq_data, expected, strict=True):
             assert record.token_ids == tokens[example].tolist()
             assert record.feat_acts[position] == pytest.approx(value, abs=5e-5)
     html = tmp_path / "dash.html"
@@ -189,7 +189,9 @@ def test_delphi_reads_the_cache_and_builds_latent_records(setup, tmp_path: Path,
     read: dict[tuple[int, int, int], float] = {}
     for buffer in dataset.buffers:
         locations, activations, _ = buffer.load()
-        for (example, position, latent), value in zip(locations.tolist(), activations.tolist()):
+        for (example, position, latent), value in zip(
+            locations.tolist(), activations.tolist(), strict=True
+        ):
             read[(example, position, latent)] = value
     if source == "dense":
         expected = {tuple(i) for i in torch.nonzero(hand.abs() > 1e-5).tolist()}
