@@ -261,3 +261,90 @@ class TreeGPT2:
             if on_receiver is not None:
                 on_receiver(receiver, n, time.perf_counter() - started)
         return effects
+
+
+def scores_in_subprocess(
+    model: torch.nn.Module,
+    clean: torch.Tensor,
+    corrupt: torch.Tensor,
+    *,
+    last: torch.Tensor,
+    answer: torch.Tensor,
+    distractor: torch.Tensor,
+    cases: list[tuple[str, int]],
+    workdir,
+) -> dict[tuple[str, int], dict[str, float]]:
+    """Run :meth:`TreeGPT2.edge_scores` in a fresh interpreter that never imports torchlens.
+
+    The metric is the logit difference ``logits[row, last, answer] -
+    logits[row, last, distractor]``. Returns ``{(method, steps): scores}``.
+    """
+
+    import json
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    workdir = Path(workdir)
+    payload = workdir / "eap_reference_in.pt"
+    result = workdir / "eap_reference_out.json"
+    torch.save(
+        {
+            "config": model.config.to_dict(),
+            "state": {k: v.detach().cpu() for k, v in model.state_dict().items()},
+            "dtype": str(next(model.parameters()).dtype),
+            "clean": clean,
+            "corrupt": corrupt,
+            "last": last,
+            "answer": answer,
+            "distractor": distractor,
+            "cases": cases,
+        },
+        payload,
+    )
+    completed = subprocess.run(
+        [sys.executable, str(Path(__file__).resolve()), str(payload), str(result)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr[-4000:]
+    raw = json.loads(result.read_text())
+    return {(entry["method"], entry["steps"]): entry["scores"] for entry in raw}
+
+
+def _main(payload_path: str, result_path: str) -> None:
+    """Subprocess entry: rebuild the model from the payload and score every case."""
+
+    import json
+
+    from transformers import GPT2Config, GPT2LMHeadModel
+
+    assert "torchlens" not in __import__("sys").modules
+    payload = torch.load(payload_path, weights_only=False)
+    dtype = getattr(torch, payload["dtype"].removeprefix("torch."))
+    config = GPT2Config.from_dict(payload["config"])
+    model = GPT2LMHeadModel(config).to(dtype).eval()
+    model.load_state_dict(payload["state"])
+    rows = torch.arange(payload["clean"].shape[0])
+    last, answer, distractor = payload["last"], payload["answer"], payload["distractor"]
+
+    def metric(logits: torch.Tensor) -> torch.Tensor:
+        return logits[rows, last, answer] - logits[rows, last, distractor]
+
+    tree = TreeGPT2(model)
+    out = []
+    for method, steps in payload["cases"]:
+        scores = tree.edge_scores(
+            payload["clean"], payload["corrupt"], metric, method=method, steps=steps
+        )
+        out.append({"method": method, "steps": steps, "scores": scores})
+    assert "torchlens" not in __import__("sys").modules
+    with open(result_path, "w", encoding="utf-8") as handle:
+        json.dump(out, handle)
+
+
+if __name__ == "__main__":
+    import sys as _sys
+
+    _main(_sys.argv[1], _sys.argv[2])

@@ -19,8 +19,8 @@ carry an RMSNorm class name so the graph builder classifies them as the
 pre-norms they stand in for.
 
 A tiny random GPT-2 checks the same definitions against an independent
-plain-PyTorch implementation (``tests/support/eap_reference.py``) computed
-with torch unwrapped; the real GPT-2 small bar (CIRC-2a) is in
+plain-PyTorch implementation (``tests/support/eap_reference.py``) run in a
+fresh interpreter that never imports torchlens; the real GPT-2 small bar (CIRC-2a) is in
 ``tests/real_model/r1/test_circ2_edge_scores_real.py``.
 """
 
@@ -210,26 +210,29 @@ def _logit_difference(logits: torch.Tensor) -> torch.Tensor:
     return logits[:, -1, 1] - logits[:, -1, 2]
 
 
-def test_tiny_gpt2_matches_the_independent_reference() -> None:
-    """EAP and EAP-IG (m = 1, 5) equal the plain-PyTorch treeified reference per edge."""
+def test_tiny_gpt2_matches_the_independent_reference(tmp_path) -> None:
+    """EAP and EAP-IG (m = 1, 5) equal the plain-PyTorch treeified reference per edge.
 
-    from support.eap_reference import TreeGPT2, edge_names
+    The reference runs in a fresh interpreter that never imports torchlens.
+    """
 
-    from torchlens.backends.torch.wrappers import unwrap_torch
+    from support.eap_reference import edge_names, scores_in_subprocess
 
     model, clean, corrupt = _tiny_gpt2()
-    unwrap_torch()
-    tree = TreeGPT2(model)
-    cases = (("eap", None), ("eap_ig", 1), ("eap_ig", 5))
-    want = {
-        case: tree.edge_scores(
-            clean, corrupt, _logit_difference, method=case[0], steps=case[1] or 1
-        )
-        for case in cases
-    }
+    cases = [("eap", 1), ("eap_ig", 1), ("eap_ig", 5)]
+    want = scores_in_subprocess(
+        model,
+        clean,
+        corrupt,
+        last=torch.full((3,), 5),
+        answer=torch.full((3,), 1),
+        distractor=torch.full((3,), 2),
+        cases=cases,
+        workdir=tmp_path,
+    )
     assert len(want[cases[0]]) == len(edge_names(2, 2))
     for method, steps in cases:
-        extra = {} if steps is None else {"steps": steps}
+        extra = {} if method == "eap" else {"steps": steps}
         table = tl.mechinterp.edge_scores(
             model, clean, corrupted=corrupt, metric=_logit_difference, method=method, **extra
         )

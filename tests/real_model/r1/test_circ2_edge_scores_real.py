@@ -5,8 +5,8 @@ the first 8 rows of the pinned ``mib-bench/ioi`` train split kept by MIB's
 tokenisation filter (the vendored rows beside this file; clean prompt and its
 ``s2_io_flip_counterfactual``), float64, ``tl.mechinterp.edge_scores`` with
 EAP and with EAP-IG at ``m`` in {1, 5} equals a plain-PyTorch implementation
-on the Hugging Face model (``tests/support/eap_reference.py``, computed with
-torch unwrapped, no TorchLens code path) within 1e-8 relative plus 1e-10
+on the Hugging Face model (``tests/support/eap_reference.py``, run in a fresh
+interpreter that never imports torchlens) within 1e-8 relative plus 1e-10
 absolute on every edge. Metric: the logit difference, logit(indirect object)
 minus logit(subject), at each prompt's last token. Prompts are right-padded
 with EOS (causal attention: the padding never reaches a scored position).
@@ -50,11 +50,10 @@ def _ioi_batch(tokenizer, n: int):
     return padded(clean), padded(corrupt), last, answer, distractor
 
 
-def test_edge_scores_match_the_independent_reference_on_gpt2_small(r1_loader) -> None:
-    from support.eap_reference import TreeGPT2, edge_names
+def test_edge_scores_match_the_independent_reference_on_gpt2_small(r1_loader, tmp_path) -> None:
+    from support.eap_reference import edge_names, scores_in_subprocess
 
     import torchlens as tl
-    from torchlens.backends.torch.wrappers import unwrap_torch
 
     loaded = r1_loader("r1-gpt2")
     model = copy.deepcopy(loaded["model"]).to(torch.float64).eval()
@@ -65,16 +64,20 @@ def test_edge_scores_match_the_independent_reference_on_gpt2_small(r1_loader) ->
     def logit_difference(logits: torch.Tensor) -> torch.Tensor:
         return logits[rows, last, answer] - logits[rows, last, distractor]
 
-    unwrap_torch()
-    tree = TreeGPT2(model)
-    cases = (("eap", None), ("eap_ig", 1), ("eap_ig", 5))
-    want = {
-        case: tree.edge_scores(clean, corrupt, logit_difference, method=case[0], steps=case[1] or 1)
-        for case in cases
-    }
+    cases = [("eap", 1), ("eap_ig", 1), ("eap_ig", 5)]
+    want = scores_in_subprocess(
+        model,
+        clean,
+        corrupt,
+        last=last,
+        answer=answer,
+        distractor=distractor,
+        cases=cases,
+        workdir=tmp_path,
+    )
     assert len(want[cases[0]]) == len(edge_names(12, 12)) == 32_491
     for method, steps in cases:
-        extra = {} if steps is None else {"steps": steps}
+        extra = {} if method == "eap" else {"steps": steps}
         table = tl.mechinterp.edge_scores(
             model, clean, corrupted=corrupt, metric=logit_difference, method=method, **extra
         )
