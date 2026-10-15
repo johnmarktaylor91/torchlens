@@ -12,7 +12,8 @@ Split from ``torchlens.utils.rng`` under the R43 file-size ratchet. This module 
   monitor UNCERTAINTY exactly when the owner joined another thread in-window;
 * the Python / NumPy GLOBAL-engine state surface (W051 / AUD-CODE 2.17): module-attr
   rows for ``random.getstate/setstate/seed`` and ``numpy.random.get_state/set_state/
-  seed`` plus the held-reference ``c_call`` prefixes, all ``replayable_read``-class.
+  seed`` plus the held-reference ``c_call`` prefixes, all ``replayable_read``-class;
+* the positional-arity decoder for a held-reference ``c_call`` site.
 
 ``rng.py`` keeps the monitor itself and thin delegates; nothing here is public surface.
 
@@ -36,6 +37,7 @@ engines, generator draws on shared engines) stay thread-agnostic and never route
 
 from __future__ import annotations
 
+import dis as _dis_module
 import importlib
 import random as _random_module
 import sys as _sys_module
@@ -800,3 +802,44 @@ def _replayable_wrapper(monitor: host_nondeterminism_monitor, original: Any, cha
         return original(*args, **kwargs)
 
     return wrapper
+
+
+def call_site_argcount(frame: Any) -> int | None:
+    """Decode the positional argument count of a profile-observed ``c_call`` site.
+
+    Reads the caller frame's bytecode at ``f_lasti``. A plain ``CALL`` instruction
+    on Python 3.11+ and ``CALL_FUNCTION`` (plain call) or ``CALL_METHOD``
+    (attribute-style ``obj.method(...)`` call) on Python 3.10 carry the exact
+    positional argument count in their oparg. The monitored implicit-now
+    converters reject keywords, so these opcodes fully determine arity for every
+    valid call. Omitting ``CALL_METHOD`` previously left a py3.10 held-ref alias
+    invoked as a method (e.g. a captured ``datetime`` reader) undecodable, so a
+    call passing the explicit-time argument still fail-closed-MARKED, falsely
+    ceilinging an otherwise-verifiable capture.
+
+    Parameters
+    ----------
+    frame:
+        Caller frame supplied by the ``c_call`` profile event.
+
+    Returns
+    -------
+    int | None
+        Positional argument count for a plain ``CALL`` site; ``None`` for any other
+        opcode (``CALL_FUNCTION_EX`` star-calls) or decode failure, so callers mark
+        fail-closed (over-marking, never under-marking).
+    """
+
+    try:
+        lasti = frame.f_lasti
+        for instruction in _dis_module.get_instructions(frame.f_code):
+            if instruction.offset == lasti:
+                if (
+                    instruction.opname in {"CALL", "CALL_FUNCTION", "CALL_METHOD"}
+                    and instruction.arg is not None
+                ):
+                    return int(instruction.arg)
+                return None
+        return None
+    except Exception:
+        return None

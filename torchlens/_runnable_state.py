@@ -6,7 +6,7 @@ import math
 import sys
 import warnings
 from collections import defaultdict
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, replace
@@ -144,13 +144,18 @@ def snapshot_capture_state(model: object) -> Mapping[str, torch.Tensor] | None:
     # Pending lazy slots refuse TYPED (quickstart memo 4.5): a pending slot
     # passes the Tensor mapping check above but has no bytes to baseline.
     raise_if_pending_state_slots(state)
-    # The clone loop sits INSIDE its guard: unclonable values are exactly
-    # the "cannot provide a tensor-only state mapping" None-contract case.
+    # The clone loop sits INSIDE its guard (unclonable values are the None-contract
+    # case). A rerun installs CAPTURE_STATE_CLONE to share its source's byte-equal clones.
+    clone = CAPTURE_STATE_CLONE.get() or (lambda _name, value: value.detach().clone())
     try:
         with _state.pause_logging():
-            return MappingProxyType({name: value.detach().clone() for name, value in state.items()})
+            return MappingProxyType({name: clone(name, value) for name, value in state.items()})
     except Exception:
         return None
+
+
+CAPTURE_STATE_CLONE: ContextVar[Callable[[str, torch.Tensor], torch.Tensor] | None]
+CAPTURE_STATE_CLONE = ContextVar("torchlens_capture_state_clone", default=None)
 
 
 def snapshot_persistent_buffer_universe(model: object) -> dict[str, dict[str, Any]] | None:

@@ -15,9 +15,9 @@ import pytest
 import torch
 
 from torchlens.utils import rng as rngmod
+from torchlens.utils._rng_channels import call_site_argcount
 from torchlens.utils.rng import (
     AutocastRestore,
-    _call_site_argcount,
     execute_with_restored_rng_autocast,
     host_nondeterminism_monitor,
     log_current_autocast_state,
@@ -231,7 +231,7 @@ def test_h6_honest_model_generator_still_found():
 
 
 # ---------------------------------------------------------------------------
-# F4 -- _call_site_argcount must decode CALL_METHOD (py3.10 attribute call), not
+# F4 -- call_site_argcount must decode CALL_METHOD (py3.10 attribute call), not
 # fail-closed-mark it as undecodable.
 # ---------------------------------------------------------------------------
 def _decode_method_call_site():
@@ -248,7 +248,7 @@ def _decode_method_call_site():
                 (i.opname for i in dis.get_instructions(frame.f_code) if i.offset == frame.f_lasti),
                 None,
             )
-            captured["argcount"] = _call_site_argcount(frame)
+            captured["argcount"] = call_site_argcount(frame)
 
     def target():
         holder = []

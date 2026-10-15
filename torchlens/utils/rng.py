@@ -1894,47 +1894,6 @@ _SINGLE_PUSH_LOAD_OPNAMES = frozenset(
 _CALL_BOOKKEEPING_OPNAMES = frozenset({"PRECALL"})
 
 
-def _call_site_argcount(frame: Any) -> int | None:
-    """Decode the positional argument count of a profile-observed ``c_call`` site.
-
-    Reads the caller frame's bytecode at ``f_lasti``. A plain ``CALL`` instruction
-    on Python 3.11+ and ``CALL_FUNCTION`` (plain call) or ``CALL_METHOD``
-    (attribute-style ``obj.method(...)`` call) on Python 3.10 carry the exact
-    positional argument count in their oparg. The monitored implicit-now
-    converters reject keywords, so these opcodes fully determine arity for every
-    valid call. Omitting ``CALL_METHOD`` previously left a py3.10 held-ref alias
-    invoked as a method (e.g. a captured ``datetime`` reader) undecodable, so a
-    call passing the explicit-time argument still fail-closed-MARKED, falsely
-    ceilinging an otherwise-verifiable capture.
-
-    Parameters
-    ----------
-    frame:
-        Caller frame supplied by the ``c_call`` profile event.
-
-    Returns
-    -------
-    int | None
-        Positional argument count for a plain ``CALL`` site; ``None`` for any other
-        opcode (``CALL_FUNCTION_EX`` star-calls) or decode failure, so callers mark
-        fail-closed (over-marking, never under-marking).
-    """
-
-    try:
-        lasti = frame.f_lasti
-        for instruction in _dis_module.get_instructions(frame.f_code):
-            if instruction.offset == lasti:
-                if (
-                    instruction.opname in {"CALL", "CALL_FUNCTION", "CALL_METHOD"}
-                    and instruction.arg is not None
-                ):
-                    return int(instruction.arg)
-                return None
-        return None
-    except Exception:
-        return None
-
-
 def _call_site_explicit_time_value(frame: Any, time_arg_index: int) -> bool:
     """Return whether a held-alias ``c_call`` site passes an explicit non-None time.
 
@@ -1973,7 +1932,7 @@ def _call_site_explicit_time_value(frame: Any, time_arg_index: int) -> bool:
     # flow additionally distinguishes ``"unknown"`` -- unresolvable value --
     # as monitor uncertainty; this boolean conflates it with the mark-worthy
     # outcomes, which is exactly the unit-pinned fail-closed contract).
-    argcount = _call_site_argcount(frame)
+    argcount = _rng_channels.call_site_argcount(frame)
     if argcount is None or argcount <= time_arg_index:
         return False
     return _call_site_time_arg_proof(frame, argcount, time_arg_index) == "transform"
@@ -3052,7 +3011,7 @@ class host_nondeterminism_monitor:
                     # unknown opcode) marks fail-closed; a literal ``None`` marks; a
                     # computed argument flags uncertainty (runtime-dependent value:
                     # neither a clock-draw claim nor a clean pass is provable).
-                    argcount = _call_site_argcount(frame)
+                    argcount = _rng_channels.call_site_argcount(frame)
                     if argcount is None or argcount <= time_arg_index:
                         self._mark(held_channel)
                     else:
@@ -3208,7 +3167,16 @@ class host_nondeterminism_monitor:
                     self._flag_uncertain("profile_classifier_error")
             try:
                 if event == "c_call":
-                    self._classify_c_call(frame, arg)
+                    # The classifier's own first exits, inlined: a call that is not a
+                    # held reference and whose receiver is absent or one of the exact
+                    # inert built-in types returns without classifying. Everything
+                    # else enters the unchanged classifier.
+                    receiver = getattr(arg, "__self__", None)
+                    if id(arg) in self._held_ref_marks or (
+                        receiver is not None
+                        and type(receiver) not in _INERT_PROFILE_C_CALL_RECEIVER_TYPES
+                    ):
+                        self._classify_c_call(frame, arg)
                 elif event == "call":
                     # Avoid two Python helper calls for the overwhelmingly common
                     # internal frame whose cached digest scope is false. Cache misses
@@ -3228,7 +3196,21 @@ class host_nondeterminism_monitor:
                 elif event == "return":
                     if id(frame) in self._numpy_frame_rng_states:
                         self._compare_numpy_frame_rngs(frame)
-                    self._snapshot_returned_numpy_rngs(frame, arg)
+                    # Same cached scope test as the ``call`` branch, applied to the
+                    # caller the value returns into: a cached implementation caller
+                    # is exactly the helper's own early return.
+                    if _NUMPY_RNG_METHODS_NEED_FRAME_DIGEST:
+                        caller = frame.f_back
+                        if caller is not None:
+                            caller_scope = self._numpy_frame_digest_scope_cache.get(
+                                id(caller.f_code)
+                            )
+                            if (
+                                caller_scope is None
+                                or caller_scope[0] is not caller.f_code
+                                or caller_scope[1] is not False
+                            ):
+                                self._snapshot_returned_numpy_rngs(frame, arg)
             except Exception:
                 self._flag_uncertain("profile_classifier_error")
             if predecessor is not None:

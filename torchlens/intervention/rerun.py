@@ -5,7 +5,9 @@ from __future__ import annotations
 import time
 import warnings
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -17,6 +19,7 @@ from .._input_coerce import _coerce_input_args
 from .._trace_state import TraceState
 from ..data_classes._trace_accessors import boundary_label_rows
 from ..options import ReplayOptions, merge_replay_options
+from ..utils._torch_compat import tensor_has_named_dims
 from ..utils.hashing import compute_graph_shape_hash
 from ._helper_fingerprint import refuse_changed_staged_helpers
 from ._rerun_predicate import (
@@ -145,7 +148,9 @@ def run(
     fast_refresh = False
     if divergence_count == 0:
         fast_refresh = log._refresh_matching_rerun_state_from(new_log)
-    if not fast_refresh:
+    if fast_refresh:
+        _merge_rerun_host_rng_verdict(log, new_log)
+    else:
         log.replace_state_from(new_log)
     log.is_appended = False
     log._append_sequence_id = 0
@@ -917,45 +922,176 @@ def _capture_with_active_spec(
     check_model_and_input_variants(model, x, {})
     save_grads_policy = getattr(log, "save_grads", None)
     grads_to_save = "all" if save_grads_policy is True else save_grads_policy
-    return _run_model_and_save_specified_outs(
-        model=model,
-        input_args=x,
-        input_kwargs={},
-        output_device=getattr(log, "output_device", "same"),
-        activation_transform=getattr(log, "activation_transform", None),
-        grad_transform=getattr(log, "grad_transform", None),
-        save_raw_activations=getattr(log, "save_raw_activations", True),
-        save_raw_gradients=getattr(log, "save_raw_gradients", True),
-        save_mode=getattr(log, "save_mode", "copy"),
-        capture_tensor_grad_hooks=getattr(log, "capture_tensor_grad_hooks", True),
-        mark_layer_depths=getattr(log, "mark_layer_depths", False),
-        detach_saved_activations=getattr(log, "detach_saved_activations", False),
-        save_arg_values=getattr(log, "save_arg_values", False),
-        save_grads=save_grads_policy not in (None, False),
-        grads_to_save=grads_to_save,
-        random_seed=getattr(log, "random_seed", None),
-        num_context_lines=getattr(log, "num_context_lines", 7),
-        optimizer=getattr(log, "_optimizer", None),
-        save_code_context=getattr(log, "save_code_context", False),
-        save_rng_states=getattr(log, "save_rng_states", False),
-        recurrence_detection=getattr(log, "recurrence_detection", True),
-        # Inherit the source trace's readiness: forcing ``True`` armed the host
-        # RNG monitor (most of a rerun's cost) and minted replay templates the
-        # source never had. The rerun divergence detector
-        # (``_raw_event_shape_hash``) is computed for every capture regardless.
-        intervention_ready=bool(getattr(log, "intervention_ready", False)),
-        intervention_spec=intervention_spec,
-        normalized_hook_plan=hook_plan,
-        verbose=getattr(log, "verbose", False),
-        backward_ready=getattr(log, "backward_ready", False),
-        # An intervention rerun retains payloads like any capture; inherit the
-        # source log's configured budget rather than silently rebudgeting at
-        # the default.
-        save_budget=getattr(log, "save_budget", "auto"),
-        output_transform=output_transform,
-        save_raw_output=getattr(log, "save_raw_output", "small"),
-        intervene_predicate=intervene_predicate,
-        **_rerun_save_kwargs(log),
+    with _share_source_state_clones(log):
+        return _run_model_and_save_specified_outs(
+            model=model,
+            input_args=x,
+            input_kwargs={},
+            output_device=getattr(log, "output_device", "same"),
+            activation_transform=getattr(log, "activation_transform", None),
+            grad_transform=getattr(log, "grad_transform", None),
+            save_raw_activations=getattr(log, "save_raw_activations", True),
+            save_raw_gradients=getattr(log, "save_raw_gradients", True),
+            save_mode=getattr(log, "save_mode", "copy"),
+            capture_tensor_grad_hooks=getattr(log, "capture_tensor_grad_hooks", True),
+            mark_layer_depths=getattr(log, "mark_layer_depths", False),
+            detach_saved_activations=getattr(log, "detach_saved_activations", False),
+            save_arg_values=getattr(log, "save_arg_values", False),
+            save_grads=save_grads_policy not in (None, False),
+            grads_to_save=grads_to_save,
+            random_seed=getattr(log, "random_seed", None),
+            num_context_lines=getattr(log, "num_context_lines", 7),
+            optimizer=getattr(log, "_optimizer", None),
+            save_code_context=getattr(log, "save_code_context", False),
+            save_rng_states=getattr(log, "save_rng_states", False),
+            recurrence_detection=getattr(log, "recurrence_detection", True),
+            # Inherit the source trace's readiness: forcing ``True`` armed the host
+            # RNG monitor (most of a rerun's cost) and minted replay templates the
+            # source never had. The rerun divergence detector
+            # (``_raw_event_shape_hash``) is computed for every capture regardless.
+            intervention_ready=bool(getattr(log, "intervention_ready", False)),
+            intervention_spec=intervention_spec,
+            normalized_hook_plan=hook_plan,
+            verbose=getattr(log, "verbose", False),
+            backward_ready=getattr(log, "backward_ready", False),
+            # An intervention rerun retains payloads like any capture; inherit the
+            # source log's configured budget rather than silently rebudgeting at
+            # the default.
+            save_budget=getattr(log, "save_budget", "auto"),
+            output_transform=output_transform,
+            save_raw_output=getattr(log, "save_raw_output", "small"),
+            intervene_predicate=intervene_predicate,
+            **_rerun_save_kwargs(log),
+        )
+
+
+_HOST_RNG_FLAG_FIELDS = ("host_rng_consumed", "host_rng_unreplayable", "rng_monitor_uncertain")
+_HOST_RNG_TUPLE_FIELDS = (
+    "host_rng_channels",
+    "host_rng_replayable_reads",
+    "rng_monitor_uncertain_detail",
+)
+
+
+def _merge_rerun_host_rng_verdict(log: Trace, new_log: Trace) -> None:
+    """Make a fast-refreshed trace's host-RNG verdict cover the rerun that refreshed it.
+
+    The fast refresh copies the rerun's op payloads into ``log`` but keeps
+    ``log``'s own runnable record, whose host-RNG verdict describes only the
+    source capture. A rerun that drew host RNG (a hook calling
+    ``random.random()``, say) would then leave a verdict saying no host RNG
+    was read. The merged verdict is the union of both: a flag is set when
+    either capture set it, and each channel, replayable read and uncertainty
+    reason of either capture is listed once, source entries first. A field
+    neither capture recorded stays ``None``.
+
+    Parameters
+    ----------
+    log:
+        Trace whose ops were just refreshed from ``new_log``.
+    new_log:
+        The rerun's own fresh trace.
+    """
+
+    source = log._runnable
+    rerun = new_log._runnable
+    if source is None or rerun is None:
+        return
+    for name in _HOST_RNG_FLAG_FIELDS:
+        flags = [flag for flag in (getattr(source, name), getattr(rerun, name)) if flag is not None]
+        setattr(source, name, any(flags) if flags else None)
+    for name in _HOST_RNG_TUPLE_FIELDS:
+        first, second = getattr(source, name), getattr(rerun, name)
+        if first is None and second is None:
+            continue
+        merged = list(first or ())
+        for item in second or ():
+            if item not in merged:
+                merged.append(item)
+        setattr(source, name, tuple(merged))
+
+
+@contextmanager
+def _share_source_state_clones(log: Trace) -> Iterator[None]:
+    """Let the rerun's state snapshot reuse the source snapshot's byte-equal clones.
+
+    An intervention-ready capture clones the whole model state before the
+    forward pass. A rerun re-executes the model its source captured, whose
+    state is usually unchanged since then, so a second full clone would copy
+    bytes the source's immutable snapshot already holds. Inside this scope each
+    snapshot entry whose live tensor is byte-for-byte equal to the source's
+    clone of the same name shares that clone, and every other entry is cloned
+    as before: the rerun's snapshot holds exactly the bytes a fresh clone holds.
+
+    Parameters
+    ----------
+    log:
+        Source trace of the rerun.
+    """
+
+    from .._runnable_state import CAPTURE_STATE_CLONE
+
+    source_state = getattr(log._runnable, "capture_state", None)
+    if not isinstance(source_state, Mapping):
+        yield
+        return
+    token = CAPTURE_STATE_CLONE.set(partial(_shared_or_cloned_state_entry, source_state))
+    try:
+        yield
+    finally:
+        CAPTURE_STATE_CLONE.reset(token)
+
+
+def _shared_or_cloned_state_entry(
+    source_state: Mapping[str, torch.Tensor], name: str, value: torch.Tensor
+) -> torch.Tensor:
+    """Return ``source_state[name]`` when it equals a fresh clone of ``value``, else a clone.
+
+    The shared clone must be indistinguishable from ``value.detach().clone()``:
+    both plain dense contiguous tensors with the same dtype, shape, strides and
+    device, no lazy conjugate or negative bit, no autograd, and identical bytes
+    (compared as raw bytes, so NaN payloads and signed zeros count).
+    """
+
+    candidate = source_state.get(name)
+    bits = _SAME_WIDTH_INT.get(value.element_size()) if isinstance(value, torch.Tensor) else None
+    if (
+        bits is not None
+        and isinstance(candidate, torch.Tensor)
+        and _same_clone_layout(value, candidate)
+    ):
+        try:
+            same = torch.equal(value.view(bits), candidate.view(bits))
+        except (RuntimeError, TypeError):
+            same = False
+        if same:
+            return candidate
+    return value.detach().clone()
+
+
+#: Integer dtype of each element width: viewing both tensors as it compares raw bytes.
+_SAME_WIDTH_INT = {1: torch.uint8, 2: torch.int16, 4: torch.int32, 8: torch.int64}
+
+
+def _same_clone_layout(value: Any, candidate: Any) -> bool:
+    """Whether ``candidate`` has the exact tensor layout a clone of ``value`` would have."""
+
+    if type(value) is not torch.Tensor or type(candidate) is not torch.Tensor:
+        return False
+    return (
+        value.layout is torch.strided
+        and candidate.layout is torch.strided
+        and value.dtype == candidate.dtype
+        and value.device == candidate.device
+        and value.device.type != "meta"
+        and value.shape == candidate.shape
+        and value.stride() == candidate.stride()
+        and value.is_contiguous()
+        and candidate.is_contiguous()
+        and not (value.is_conj() or candidate.is_conj())
+        and not (value.is_neg() or candidate.is_neg())
+        and not (value.requires_grad or candidate.requires_grad)
+        and not tensor_has_named_dims(value)
     )
 
 

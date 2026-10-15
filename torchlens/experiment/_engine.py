@@ -85,6 +85,10 @@ class _Candidate:
     execution_where: Any
     resolved_site_count: int | None
     resolution_digest: str
+    #: Resolved entries of a unit selection (a partial mask at some site); each
+    #: executes as its structural site key plus the edit masked to its units.
+    unit_entries: tuple[Any, ...] | None = None
+    unit_digest: str = ""
 
 
 def _candidate_pairs(candidates: Any) -> list[tuple[str, Any]]:
@@ -156,12 +160,19 @@ def _resolve_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candi
         # are (layer_label, pass_index) tuples; the structural L1 key rides
         # structural_site_key and the label backstop derives it.
         labels = tuple(str(entry.site_key[0]) for entry in resolved)
+        parts = tuple(_unit_digest_part(entry) for entry in resolved)
+        units_selected = any(isinstance(part, tuple) for part in parts)
         return _Candidate(
             candidate_id=candidate_id,
             where=where,
             execution_where=_site_key_term(baseline, candidate_id, labels),
             resolved_site_count=len(labels),
-            resolution_digest=_digest(("selection",) + tuple(sorted(labels))),
+            resolution_digest=_digest(("selection",) + tuple(sorted(parts, key=repr))),
+            # A unit selection's edit must reach only the selected units, exactly
+            # as ``fork.do(selection, edit)`` masks it; whole-site entries keep
+            # the plain structural lowering.
+            unit_entries=tuple(resolved) if units_selected else None,
+            unit_digest=str(getattr(resolved, "resolve_digest", "")),
         )
     if isinstance(where, str):
         from ..intervention.resolver import resolve_sites
@@ -188,6 +199,48 @@ def _resolve_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candi
         resolved_site_count=len(labels),
         resolution_digest=_digest(("sites",) + tuple(sorted(labels))),
     )
+
+
+def _candidate_spec(baseline: Trace, candidate: _Candidate, edit: Any) -> Any:
+    """The intervention spec one candidate executes: its WHERE term with the edit.
+
+    A unit candidate gets one rule per resolved site: the site's structural key
+    with the edit masked to the selected units by the same derivation
+    ``fork.do(selection, edit)`` uses, so the sweep's member equals a direct
+    fork of the same selection edit.
+    """
+
+    from ..intervention.spec import InterventionSpec, when
+
+    if candidate.unit_entries is None:
+        return when(candidate.execution_where, edit)
+    from ..intervention.masked_edit import _derive_masked_edit
+
+    rules: list[Any] = []
+    for entry in candidate.unit_entries:
+        label = str(entry.site_key[0])
+        term = _site_key_term(baseline, candidate.candidate_id, (label,))
+        op_label = str(baseline.ops[label].label)
+        masked = _derive_masked_edit(edit, entry, candidate.unit_digest, op_label)
+        rules.extend(when(term, masked).rules)
+    return InterventionSpec(rules=tuple(rules))
+
+
+def _unit_digest_part(entry: Any) -> Any:
+    """Digest part of one resolved selection entry: its label, plus its units if partial.
+
+    A whole-site entry contributes its label alone, so a whole-site unit
+    selection stays the same candidate as the bare site. A partial mask also
+    contributes its shape and a digest of its bytes, so distinct units at one
+    site are distinct candidates and identical units are still duplicates.
+    """
+
+    label = str(entry.site_key[0])
+    mask = entry.mask
+    if bool(mask.all()):
+        return label
+    packed = mask.reshape(-1).cpu().numpy().tobytes()
+    return (label, tuple(mask.shape), hashlib.sha256(packed).hexdigest())
 
 
 def _site_key_term(baseline: Trace, candidate_id: str, labels: tuple[str, ...]) -> Any:
@@ -424,7 +477,7 @@ def _preflight_candidates(
         if prior is not None and not replicates:
             raise BundleExperimentError(
                 f"site_sweep candidates {prior!r} and {candidate.candidate_id!r} "
-                "resolve to the same sites; pass replicates=True if the "
+                "resolve to the same sites and units; pass replicates=True if the "
                 "duplication is a deliberate replicate.",
                 code="site_sweep_duplicate_candidates",
                 first=prior,
@@ -723,8 +776,6 @@ def site_sweep(
     baseline_value = _measure(metric, baseline, "baseline")
 
     # ---- serial execution, stable order -----------------------------------
-    from ..intervention.spec import when
-
     bundle = Bundle({"baseline": baseline}, baseline="baseline")
     state = _SweepState(
         bundle=bundle,
@@ -751,7 +802,7 @@ def site_sweep(
     for candidate, reason in refused:
         state.record_refusal(candidate, reason)
     for candidate in resolved:
-        spec = when(candidate.execution_where, edit)
+        spec = _candidate_spec(baseline, candidate, edit)
         member: Any = None
         try:
             member, value = _execute_and_measure(state, candidate, spec)
@@ -923,17 +974,20 @@ def bundle_measure_members(
 
     Released candidates are NOT silently re-scored: the report separates
     ``values`` (live members) from ``unmeasured`` (effect-table candidates
-    with no retained member). ``order="member"`` is the one v1 ordering;
-    an explicit chain order refuses typed until F-CHAIN lands (foldB
-    brief-delta: chain-keyed output arrives with the chain reader, never by
-    insertion-order guess).
+    with no retained member). ``order="member"`` (default) keys the values
+    by member; ``order="chain"`` also returns ``chain``, the members ordered
+    by the bundle's hash-chained operation ledger (each row: ``seq``,
+    ``operation_id``, ``kind``, ``member``, ``value``; members of one
+    operation in the order it added them), after validating that chain, and
+    ``unchained``, the members no operation recorded (the baseline, members
+    added by hand), which are never placed by a guessed position.
     """
 
-    if order != "member":
+    if order not in ("member", "chain"):
         raise BundleExperimentError(
-            f"measure_members(order={order!r}) is not available: v1 is "
-            "per-member only; chain-keyed ordering arrives with the F-CHAIN "
-            "reader (insertion order is never guessed as chronology).",
+            f"measure_members(order={order!r}) is not available: use "
+            "order='member' (per member) or order='chain' (by the bundle's "
+            "operation ledger).",
             code="measure_members_order_unavailable",
             order=order,
         )
@@ -950,4 +1004,41 @@ def bundle_measure_members(
                 continue
             if row.member_name is None or row.member_name not in bundle._members:
                 unmeasured.append(row.candidate_id)
-    return {"values": values, "unmeasured": sorted(set(unmeasured)), "order": "member"}
+    report: dict[str, Any] = {"values": values, "unmeasured": sorted(set(unmeasured))}
+    if order == "chain":
+        report.update(_chain_keyed_values(bundle, values))
+    report["order"] = order
+    return report
+
+
+def _chain_keyed_values(bundle: Bundle, values: Mapping[str, Any]) -> dict[str, Any]:
+    """Order measured members by the validated operation chain (``measure_members``)."""
+
+    from ..bundle._lineage import validate_operation_chain
+
+    operations = bundle.operations
+    validate_operation_chain(operations)
+    by_id = {operation.operation_id: operation for operation in operations}
+    construction = bundle.member_construction
+    chained: list[tuple[int, int, str]] = []
+    unchained: list[str] = []
+    for position, name in enumerate(values):
+        operation_id = construction.get(name, {}).get("operation_id")
+        operation = by_id.get(operation_id) if isinstance(operation_id, str) else None
+        if operation is None:
+            unchained.append(name)
+        else:
+            chained.append((operation.seq, position, name))
+    chain = []
+    for _seq, _position, name in sorted(chained):
+        operation = by_id[construction[name]["operation_id"]]
+        chain.append(
+            {
+                "seq": operation.seq,
+                "operation_id": operation.operation_id,
+                "kind": operation.kind,
+                "member": name,
+                "value": values[name],
+            }
+        )
+    return {"chain": chain, "unchained": unchained}

@@ -57,13 +57,22 @@ to destroy are the user's scientific choices.
 Candidates ENUMERATE however spelled (labels, Selections, scoped facet
 selectors) and EXECUTE in structural site-key coordinates; an undeclared
 multi-site candidate (including the unscoped `tl.head(i)` broadcast) is a
-REFUSED table row, never a silently-wide member. The complete per-candidate
+REFUSED table row, never a silently-wide member. A unit selection
+(`tl.units(site, mask)`) executes at its site's structural key with the edit
+masked to the selected units, exactly as `trace.fork().do(selection, edit)`
+masks it, and its identity includes the units: distinct units at one site are
+distinct candidates, and the same units spelled twice (a mask or coordinate
+tuples) refuse as `site_sweep_duplicate_candidates` unless `replicates=True`.
+The complete per-candidate
 effect table — released, refused, and failed rows included — persists in the
 bundle artifact (`member_effect_table_v1`) and survives member release and
 save/load. `bundle.effects()` serves it; `.most_changed()` is the MEMBER
 axis; `.top(k).selection()` is the explicit tier-c conversion (session-only);
 `bundle.measure_members(metric=)` recomputes a NEW metric over members that
-still exist and names the unmeasured.
+still exist and names the unmeasured; `order="chain"` also returns the
+members ordered by the bundle's validated operation chain (`chain`, one row
+per member with its operation's `seq`, `operation_id` and `kind`) and lists
+the members no operation recorded apart (`unchained`).
 
 `torchlens.experiment.head_ablation_candidates(baseline, module, heads=)` is
 the head-ablation sugar: mandatory module scoping, v-facet lowering gated on
