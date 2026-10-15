@@ -602,6 +602,35 @@ def gpt2_attention(module: Any) -> dict[str, Any]:
     )
 
 
+@register(class_name="GPTNeoXAttention", target_scope="module", facets=_ATTENTION_FACETS)
+def gpt_neox_attention(module: Any) -> dict[str, Any]:
+    """Return facets for GPT-NeoX (Pythia) fused-QKV attention modules.
+
+    ``query_key_value`` packs each head's q, k and v together: its output is
+    viewed as ``(B, S, n_heads, 3 * d_head)`` and chunked on the last axis, so
+    the per-head q/k/v are the three ``d_head`` sections of each head's slot
+    (the GPT-2 ``c_attn`` layout, three whole-width blocks, does not apply).
+    q and k are read before the rotary embedding, as on every rotary row.
+    """
+
+    n_q_heads, n_kv_heads, d_head = _attention_config(module)
+    qkv_out = child_output_spec(module, "query_key_value", "gpt_neox_attention")
+    result: dict[str, Any] = {}
+    if isinstance(qkv_out, FacetSpec) and n_q_heads is not None and d_head is not None:
+        q_heads, k_heads, v_heads = qkv_out.heads(n_q_heads, 3 * d_head).split(3, dim=-1)
+        add_if_present(result, "q", q_heads)
+        add_if_present(result, "k", k_heads)
+        add_if_present(result, "v", v_heads)
+    elif isinstance(qkv_out, AbsenceReason):
+        add_if_present(result, "q", qkv_out)
+        add_if_present(result, "k", qkv_out)
+        add_if_present(result, "v", qkv_out)
+    add_if_present(result, "attn_out", child_output_spec(module, "dense", "gpt_neox_attention"))
+    return _with_attention_common(
+        result, module, (n_q_heads, n_kv_heads, d_head), query_child="query_key_value"
+    )
+
+
 @register(
     class_name=("BertSelfAttention", "BertSdpaSelfAttention"),
     target_scope="module",

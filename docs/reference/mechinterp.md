@@ -1,10 +1,10 @@
 # The mech-interp kit (`torchlens.mechinterp`)
 
 TransformerLens's daily-driver analysis tools rebuilt on torchlens: residual
-decomposition, direct logit contributions (DLA), per-head results, patching
-grids, head-taxonomy scores, prompt utilities, an alias layer, and retention
-plans -- derived from the captured graph (no architecture registry), with
-verification IN the API, not only in CI. Every spelling is
+decomposition, direct logit contributions (DLA), per-head results, the
+component edge graph, patching grids, head-taxonomy scores, prompt
+utilities, an alias layer, and retention plans -- derived from the captured
+graph (no architecture registry), with verification IN the API, not only in CI. Every spelling is
 DOCUMENTED-UNSTABLE pending the naming sprint; the facade name is a
 placeholder.
 
@@ -102,6 +102,70 @@ Fused attention (torch SDPA) needs
 `capture=CaptureOptions(save_arg_values=True)` for reconstructed
 pattern/z/result reads; the facets stay READ-only -- edits are the lowered
 counterfactual's job, or an eager recapture.
+
+## The component graph
+
+`component_graph(trace)` returns the circuit-discovery graph of a pre-norm
+additive-residual language model, in the vocabulary of the MIB circuit track
+and EAP-IG. Nodes are the residual writers: `input` (the embedding sum),
+`a{L}.h{H}` (one head's output, without the attention output bias), `b{L}`
+(layer L's attention output bias, a node of its own so the decomposition
+never drops it) and `m{L}` (one MLP's output, bias included). Receivers are
+the residual readers: `a{L}.h{H}<q>`, `<k>` and `<v>`, `m{L}` and `logits`.
+An edge `sender->receiver` exists when the sender wrote into the residual
+state the receiver reads, and its `contribution` is the sender's output per
+batch row and position.
+
+A receiver's input is the tensor entering its pre-norm, never the norm's
+output: the norm is not linearised, and on an additive residual stream that
+tensor is exactly the sum of the receiver's incoming contributions. The
+builder checks that identity for every receiver before it returns
+(`graph.identity_receipt`). Which receivers read which writers comes from
+the captured dataflow, so on a parallel-block model (GPT-NeoX, Pythia) MLP L
+reads the same state as attention L and receives no edge from layer L's
+heads. The vocabulary edge count excludes the bias nodes: count the edges
+whose `sender.kind` is not `"bias"`.
+
+Capture with every op saved and eager attention (the per-head `result`
+view). A stream that is not additive under this decomposition (a
+renormalized or rescaled residual, a writer that is not an embedding, head
+or MLP) refuses `mi_edge_graph_nonadditive`; grouped-query attention refuses
+`mi_edge_graph_gqa_unsupported`.
+
+```python
+import torch
+from transformers import GPT2Config, GPT2LMHeadModel
+
+import torchlens as tl
+
+config = GPT2Config(
+    n_layer=2, n_head=2, n_embd=8, vocab_size=32, n_positions=16, attn_implementation="eager"
+)
+model = GPT2LMHeadModel(config).eval()
+ids = torch.randint(0, 32, (1, 5))
+trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(layers_to_save="all"))
+graph = tl.mechinterp.component_graph(trace)
+
+receiver = graph.receivers["a1.h1<q>"]
+print([node.name for node in receiver.senders])  # input, a0.h0, a0.h1, b0, m0
+total = sum(node.value for node in receiver.senders)
+assert torch.allclose(total, receiver.value, atol=1e-5)
+edge = graph.edges["m0->a1.h1<q>"]
+assert edge.contribution is graph.nodes["m0"].value
+trace.cleanup()
+```
+
+Edges are intervention selections. `graph.edges["m0->logits"]` passed to
+`trace.do` addresses the receiver's pre-norm input edge (an EDGE selection,
+edge substitution on the replay engine); an edge into `a{L}.h{H}<q>` (or
+`<k>`, `<v>`) addresses head H's slice of that layer's projection output (an
+ACT selection), because the heads and roles of one layer share their norm.
+`patch_edges(trace, edges, corrupt=corrupt_graph)` builds the matching value
+and returns a fork in which the edges' one receiver reads `clean input -
+sum(s_clean) + sum(s_corrupt)`; every receiver that is not downstream of it
+reads exactly what it read before. Patching needs a trace captured with
+`intervention_ready=True`; edges into several receivers refuse
+`mi_edge_patch_receivers_mixed`.
 
 ## Refusal vocabulary
 

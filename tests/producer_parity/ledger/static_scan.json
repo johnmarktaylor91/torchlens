@@ -6145,6 +6145,46 @@
  },
  {
   "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/mechinterp/_edge_patch.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/mechinterp/_edge_patch.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/mechinterp/_edge_sources.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/mechinterp/_edges.py",
+  "has_default": false,
+  "sites": 7,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/mechinterp/_edges.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/mechinterp/_grids.py",
   "has_default": false,
