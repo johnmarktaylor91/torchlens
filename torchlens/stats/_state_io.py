@@ -274,7 +274,7 @@ class _Decoder:
         if node["t"] == "dataclass":
             return cls(**{name: self.node(item) for name, item in node["fields"]})
         attrs = {name: self.node(item) for name, item in node["attrs"]}
-        obj = object.__new__(cls)
+        obj: Any = object.__new__(cls)
         obj.__dict__.update(attrs)
         return obj
 

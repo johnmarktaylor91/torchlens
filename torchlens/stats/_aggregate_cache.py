@@ -373,7 +373,7 @@ def _run_key(
     payload = {
         "schema": CACHE_KEY_SCHEMA,
         "torchlens": str(torchlens.__version__),
-        "torch": str(torch.__version__),
+        "torch": str(torch.version.__version__),
         "model": repr(_module_key(model)),
         "metrics": repr(_metrics_key(metrics)),
         "target": target,
