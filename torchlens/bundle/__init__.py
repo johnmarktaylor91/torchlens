@@ -33,6 +33,7 @@ from ..intervention.errors import (
 )
 from ..intervention.resolver import resolve_sites
 from ..intervention.types import Relationship
+from ._aligned_sites import aligned_site_labels, resolve_aligned_site
 from ._compare_gate import require_comparable
 
 # Re-exports (redundant aliases): _distance_value is imported from
@@ -1768,6 +1769,9 @@ class Bundle:
         the answer to "where did the bundle diverge", never "which member
         mattered" (the member axis lives on the effect table).
 
+        Sites pair through the structural alignment (:attr:`supergraph`), not
+        by literal label; a site some member lacks is not scored.
+
         Parameters
         ----------
         baseline:
@@ -1802,14 +1806,19 @@ class Bundle:
         baseline_log = self._members[baseline_name]
         metric_fn = resolve_metric(metric)
         scored: list[tuple[str, float]] = []
-        for site in getattr(baseline_log, "layer_list", []):
-            try:
-                view = self.node(site.layer_label)
-            except BundleMemberError:
+        baseline_sites = list(getattr(baseline_log, "layer_list", []))
+        if baseline_sites:  # node()'s model-floor gate, once instead of per site
+            names = list(self._members)
+            pairs = [(a, b) for i, a in enumerate(names) for b in names[i + 1 :]]
+            self._require_comparable("node", pairs=pairs)
+        aligned = aligned_site_labels(self._ensure_supergraph(), baseline_name)
+        for site in baseline_sites:
+            members = resolve_aligned_site(self._members, str(site.layer_label), aligned)
+            if members is None:
                 continue
             outs = {
                 name: getattr(member, "out", None)
-                for name, member in view.members.items()
+                for name, member in members.items()
                 if getattr(member, "has_saved_activation", False)
             }
             base = outs.get(baseline_name)
@@ -1921,7 +1930,8 @@ class Bundle:
         Returns
         -------
         list[tuple[str, float]]
-            ``(site_label, relative_l1)`` rows for common labels.
+            ``(site_label, distance)`` rows for sites both members have,
+            paired through the structural alignment (:attr:`supergraph`).
         """
 
         left_log = self._members[left_name]
@@ -1933,10 +1943,12 @@ class Bundle:
         # relative_l1_scalar silently truncates each site to its first element.
         metric_fn = resolve_metric("cosine")
         rows: list[tuple[str, float]] = []
+        aligned = aligned_site_labels(self._ensure_supergraph(), left_name)
         for left_site in getattr(left_log, "layer_list", []):
             label = str(left_site.layer_label)
+            right_label = aligned.get(label, {}).get(right_name, label)
             try:
-                right_site = resolve_sites(right_log, label, max_fanout=1).first()
+                right_site = resolve_sites(right_log, right_label, max_fanout=1).first()
             except Exception:  # noqa: BLE001 - missing sites are not common sites
                 continue
             left_out = getattr(left_site, "out", None)

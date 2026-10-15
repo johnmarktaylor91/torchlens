@@ -157,9 +157,19 @@ finally:
     handle.remove()
 ```
 
-If a raw hook returns a new tensor, TorchLens instruments that replacement and
-marks the corresponding layer pass with `intervention_replaced=True`, so
-downstream op-level graph structure remains available.
+If a raw hook returns a new tensor, TorchLens instruments that replacement, so
+downstream op-level graph structure remains available: torch ops the hook runs
+are traced as ordinary ops, and a tensor with no traceable provenance is
+recorded as an `interventionreplacement_*` op marked `intervention_replaced=True`.
+
+A capture-time module edit (`intervene=tl.when(tl.module("block"), ...)`) is
+always recorded as its own `interventionreplacement_*` op, with
+`intervention_replaced=True` and its fire records on `.interventions`, placed
+between the module's last op and that op's consumers. The module's last op keeps
+the value it computed, before the edit. The edited value is the replacement
+op's `.out`, and it is what `tl.module("block")` reads as the module's output.
+Every later op is renumbered (a label's last number is its position), so compare
+traces through `Bundle` site reads, which pair ops by structure, not by label.
 
 ## Capture-Time Recording
 
@@ -241,6 +251,11 @@ Common operations:
 | `bundle.joint_metric(fn)` | Apply a metric to the whole bundle. |
 | `bundle.do(...)`, `bundle.attach_hooks(...)`, `bundle.push()`, `bundle.run(model, x)` | Apply mutator/propagation calls to each member (the former `replay`/`rerun` aliases are removed). |
 | `bundle.fork(name=None)` | Fork all members into a new bundle. |
+
+Site reads (`most_changed`, `diff_pair`) pair ops across members through the
+bundle's structural alignment, not by literal label, so an op renumbered by an
+inserted edit op still meets its counterpart. A site that only some members have
+(such as the replacement op a module edit inserts) is not scored.
 
 Relationship gates are intentional, and they check two predicates separately:
 a model-axis floor (`node` needs `same_param_shapes`; comparison reads need
