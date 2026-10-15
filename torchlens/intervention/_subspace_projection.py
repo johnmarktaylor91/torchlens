@@ -94,61 +94,73 @@ def _unsupported(
     )
 
 
+_NESTED_WHY = (
+    "it is itself a projection edit, so nesting it in a subspace selection would project twice"
+)
+_GENERIC_REFUSAL = (
+    "the verb is not one of the coordinate or value verbs listed for subspace edits",
+    "pass a hook callable, which receives the coordinates: "
+    "fork.do(tl.subspace(site, basis, origin=...), lambda c, *, hook: c * 0)",
+)
+# verb -> (why it has no coordinate meaning, working spelling); ``{verb}`` is filled in.
+_REFUSALS: dict[str, tuple[str, str]] = {
+    "set_direction_mean": (
+        _NESTED_WHY,
+        "set the component to the population mean with "
+        "fork.do(tl.subspace(site, basis, origin=...), tl.intervention.mean_from(ref))",
+    ),
+    **dict.fromkeys(
+        sorted(_NESTED_PROJECTIONS - {"set_direction_mean"}),
+        (
+            _NESTED_WHY,
+            "edit the component with a plain verb, e.g. "
+            "fork.do(tl.subspace(site, basis, origin=...), tl.zero_ablate()), or apply "
+            "tl.intervention.{verb}(...) to the site label without a subspace",
+        ),
+    ),
+    "compose": (
+        "a composed edit mixes verbs with different coordinate meanings",
+        "apply the edits one at a time: fork.do(selection, first) then fork.do(selection, second)",
+    ),
+    "at_positions": (
+        "positions are chosen by the selection, not by the edit",
+        "restrict positions through within=, e.g. tl.subspace(tl.units(site, mask), "
+        "basis, origin=...) with mask True on every feature of the chosen positions",
+    ),
+    **dict.fromkeys(
+        ("mean_ablate", "scramble_elements"),
+        (
+            "source= is an activation-space value whose elements are not coordinates",
+            "drop source= (tl.{verb}() acts on the component itself), or write a "
+            "source's component with tl.replace_with(source_tensor)",
+        ),
+    ),
+    "splice_module": (
+        "input='in' runs the module on the call inputs, which have no coordinates",
+        "pass input='out' so the module maps the coordinates [..., k] to [..., k]",
+    ),
+}
+
+
 def _refusal_for(verb: str, *, code: str = "subspace_edit_unsupported") -> InvalidArgumentError:
     """Return the refusal (with its working spelling) for an unsupported verb."""
 
     del code  # spelled at the raise site for the refusal census; always the same code
+    why, remedy = _REFUSALS.get(verb, _GENERIC_REFUSAL)
+    return _unsupported(verb, why, remedy.format(verb=verb))
 
-    if verb == "set_direction_mean":
-        return _unsupported(
-            verb,
-            "it is itself a projection edit, so nesting it in a subspace selection "
-            "would project twice",
-            "set the component to the population mean with "
-            "fork.do(tl.subspace(site, basis, origin=...), tl.intervention.mean_from(ref))",
-        )
-    if verb in _NESTED_PROJECTIONS:
-        return _unsupported(
-            verb,
-            "it is itself a projection edit, so nesting it in a subspace selection "
-            "would project twice",
-            "edit the component with a plain verb, e.g. "
-            "fork.do(tl.subspace(site, basis, origin=...), tl.zero_ablate()), or apply "
-            f"tl.intervention.{verb}(...) to the site label without a subspace",
-        )
-    if verb == "compose":
-        return _unsupported(
-            verb,
-            "a composed edit mixes verbs with different coordinate meanings",
-            "apply the edits one at a time: fork.do(selection, first) then "
-            "fork.do(selection, second)",
-        )
-    if verb == "at_positions":
-        return _unsupported(
-            verb,
-            "positions are chosen by the selection, not by the edit",
-            "restrict positions through within=, e.g. tl.subspace(tl.units(site, mask), "
-            "basis, origin=...) with mask True on every feature of the chosen positions",
-        )
-    if verb in {"mean_ablate", "scramble_elements"}:
-        return _unsupported(
-            verb,
-            "source= is an activation-space value whose elements are not coordinates",
-            f"drop source= (tl.{verb}() acts on the component itself), or write a "
-            "source's component with tl.replace_with(source_tensor)",
-        )
-    if verb == "splice_module":
-        return _unsupported(
-            verb,
-            "input='in' runs the module on the call inputs, which have no coordinates",
-            "pass input='out' so the module maps the coordinates [..., k] to [..., k]",
-        )
-    return _unsupported(
-        verb,
-        "the verb is not one of the coordinate or value verbs listed for subspace edits",
-        "pass a hook callable, which receives the coordinates: "
-        "fork.do(tl.subspace(site, basis, origin=...), lambda c, *, hook: c * 0)",
-    )
+
+# Verbs whose coordinate meaning depends on their arguments: "coordinates",
+# "value", or None (refused with the verb's working spelling).
+_CONDITIONAL_MEANINGS: dict[str, Callable[[Edit, dict[str, Any]], str | None]] = {
+    "add": lambda edit, _kw: "value" if isinstance(edit.args[0], torch.Tensor) else "coordinates",
+    "mean_fill": lambda _edit, kw: "value" if "population_identity" in kw else "coordinates",
+    "mean_ablate": lambda edit, _kw: "coordinates" if edit.args and edit.args[0] is None else None,
+    "scramble_elements": lambda edit, _kw: (
+        "coordinates" if edit.args and edit.args[0] is None else None
+    ),
+    "splice_module": lambda _edit, kw: "coordinates" if kw.get("input") == "out" else None,
+}
 
 
 def _verb_meaning(edit: Any) -> str:
@@ -157,7 +169,6 @@ def _verb_meaning(edit: Any) -> str:
     if not isinstance(edit, Edit):
         return "coordinates"
     verb = edit.helper_name
-    kwargs = dict(edit.kwargs)
     if edit.kind != "forward" or edit.direction == "backward":
         raise _unsupported(
             verb,
@@ -166,19 +177,13 @@ def _verb_meaning(edit: Any) -> str:
             "intervene=tl.when(tl.module(name), tl.grad_zero()))",
             code="subspace_edit_unsupported",
         )
-    if verb in _COORDINATE_VERBS:
-        return "coordinates"
-    if verb in _VALUE_VERBS:
-        return "value"
-    if verb == "add":
-        return "value" if isinstance(edit.args[0], torch.Tensor) else "coordinates"
-    if verb == "mean_fill":
-        return "value" if "population_identity" in kwargs else "coordinates"
-    if verb in {"mean_ablate", "scramble_elements"} and edit.args and edit.args[0] is None:
-        return "coordinates"
-    if verb == "splice_module" and kwargs.get("input") == "out":
-        return "coordinates"
-    raise _refusal_for(verb, code="subspace_edit_unsupported")
+    if verb in _COORDINATE_VERBS or verb in _VALUE_VERBS:
+        return "coordinates" if verb in _COORDINATE_VERBS else "value"
+    classify = _CONDITIONAL_MEANINGS.get(verb)
+    meaning = None if classify is None else classify(edit, dict(edit.kwargs))
+    if meaning is None:
+        raise _refusal_for(verb, code="subspace_edit_unsupported")
+    return meaning
 
 
 def _move_coords(value: torch.Tensor, rows: torch.Tensor, axis: int) -> torch.Tensor:

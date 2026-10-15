@@ -56,7 +56,6 @@ def _detached_error(call: Any) -> InvalidArgumentError:
     return caught.value
 
 
-@pytest.mark.smoke
 def test_keep_grad_on_a_transparent_edit_changes_nothing() -> None:
     plain, plain_model = _capture(scale(2.0))
     kept, kept_model = _capture(keep_grad(scale(2.0)))
@@ -66,7 +65,6 @@ def test_keep_grad_on_a_transparent_edit_changes_nothing() -> None:
     assert torch.equal(plain_model.lin1.weight.grad, kept_model.lin1.weight.grad)
 
 
-@pytest.mark.smoke
 def test_keep_grad_zero_ablate_raises_and_scale_zero_keeps_the_graph() -> None:
     error = _detached_error(lambda: _capture(keep_grad(zero_ablate())))
     assert error.fields["site"] == "lin1:1"  # the capture-time label of the selected module

@@ -107,7 +107,6 @@ def test_component_matches_hand_and_complement_is_bit_unchanged(rank: str, verb:
     assert not torch.equal(component, base_component)
 
 
-@pytest.mark.smoke
 def test_audit_record_states_the_projection_and_keeps_the_basis_provenance() -> None:
     _out, fork = _edited(_BASES["rank1"], tl.zero_ablate())
     (site,) = fork.intervention_audit[-1]["sites"]
@@ -159,7 +158,6 @@ def _das_interchange(model: _Mlp, base: torch.Tensor, source: torch.Tensor, basi
             handle.remove()
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("rank", sorted(_BASES))
 def test_patch_from_is_the_das_interchange(rank: str) -> None:
     basis = _BASES[rank]

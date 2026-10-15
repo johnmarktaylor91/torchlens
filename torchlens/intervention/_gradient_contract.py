@@ -45,10 +45,14 @@ def _site_label(hook: Any) -> str:
 
 
 def _refusal(
-    verb: str, site: str, reason: str, why: str, remedy: str, *, code: str
+    where: tuple[str, str], reason: str, why: str, remedy: str, *, code: str
 ) -> InvalidArgumentError:
-    """Build the connectivity refusal (``code`` is spelled at each raise site)."""
+    """Build the connectivity refusal for ``where`` = (verb, site label).
 
+    ``code`` is spelled at each raise site so the refusal census sees it.
+    """
+
+    verb, site = where
     return InvalidArgumentError(
         f"keep_grad({verb}) at {site!r}: {why}",
         code=code,
@@ -73,11 +77,10 @@ def _check(out: Any, result: Any, hook: Any, verb: str) -> None:
 
     if not isinstance(out, torch.Tensor) or not isinstance(result, torch.Tensor):
         return
-    site = _site_label(hook)
+    where = (verb, _site_label(hook))
     if not torch.is_grad_enabled():
         raise _refusal(
-            verb,
-            site,
+            where,
             "grad_disabled",
             "the edit fired with gradients disabled (torch.no_grad, inference_mode or "
             "an inference-only capture), so no gradient can flow",
@@ -86,8 +89,7 @@ def _check(out: Any, result: Any, hook: Any, verb: str) -> None:
         )
     if not out.requires_grad:
         raise _refusal(
-            verb,
-            site,
+            where,
             "site_has_no_graph",
             "the site value carries no autograd graph (no parameter or input upstream "
             "requires grad, or the saved activations were detached)",
@@ -97,8 +99,7 @@ def _check(out: Any, result: Any, hook: Any, verb: str) -> None:
         )
     if not result.requires_grad:
         raise _refusal(
-            verb,
-            site,
+            where,
             "edit_detached",
             "the edit wrote values computed without the site's graph, so no gradient "
             "reaches the parameters upstream of the edited elements",
