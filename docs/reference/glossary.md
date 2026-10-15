@@ -310,6 +310,8 @@ documented unstable and may be renamed or removed without a compatibility alias.
 | Integer-input evidence | `integer_input_layers` | unstable -- no deprecation shim owed |
 | Evaluation curves | `deletion_curve`, `insertion_curve`, `CurveResult`, `CurveStep`, `fractions`, `scores`, `area`, `aopc`, `steps`, `features`, `patch_size`, `auto`, `elements`, `pixels`, `patches`, `tokens`, `n_features`, `index`, `fraction`, `inputs`, `input_kwargs`, `baseline_mask`, `intervention` | unstable -- no deprecation shim owed |
 | Randomization test | `randomization_test`, `RandomizationResult`, `RandomizationStep`, `randomization`, `cascading`, `independent`, `layers`, `seed`, `keep_maps`, `original_attribution`, `randomized`, `similarity`, `similarities`, `spearman`, `spearman_abs`, `ssim`, `values` | unstable -- no deprecation shim owed |
+| ROAD curve | `road_curve`, `ranking`, `most_relevant_first`, `least_relevant_first`, `noise_std`, `seed`, `road` | unstable -- no deprecation shim owed |
+| Causal audit | `causal_audit`, `CausalAuditResult`, `CausalAuditUnit`, `CausalAuditSet`, `claim`, `k`, `ablation`, `zero`, `mean`, `controls`, `top`, `bottom`, `random`, `random_draws`, `per_unit`, `layer`, `site`, `original_score`, `units`, `sets`, `rank_agreement`, `set_of`, `unit`, `claimed_effect`, `measured_effect`, `kind`, `draw`, `intervention` | unstable -- no deprecation shim owed |
 
 <!-- ATTRIBUTION-KIT-UNSTABLE-INDEX:END -->
 
@@ -321,7 +323,10 @@ of the model output; layer methods given only integer inputs start their input p
 embedding output. `deletion_curve` and `insertion_curve` score an attribution by removing or
 revealing its most-attributed input features in steps (each step a recorded intervention), and
 `randomization_test` checks that a method's maps change when the model's layers are
-re-initialized. The callable/index/site annotation used inside `torchlens.attribution` is
+re-initialized. `road_curve` is ROAD, the deletion curve with removed pixels filled by noisy
+linear imputation from their neighbours. `causal_audit` grades an internal (layer) attribution by ablating the hidden
+units it ranks, through forks of an intervention-ready trace, and comparing the measured
+effects with the claim. The callable/index/site annotation used inside `torchlens.attribution` is
 privately named `_AttributionTarget`; `TargetSpec` refers only to the intervention selector record and is not an
 attribution-target alias. See the [attribution reference](attribution.md).
 
@@ -340,8 +345,23 @@ is documented unstable and may be renamed or removed without a compatibility ali
 | Alias table generation value | `generation="4.x"` (TransformerBridge canonical hook names) | unstable -- no deprecation shim owed |
 | Appliance on the `trace.using` door | `trace.using("mi")`, `head_scores`, `qk_circuit`, `ov_circuit` | unstable -- no deprecation shim owed |
 | Per-query-head patching under grouped-query attention | `patch_query_heads_grid`, `site`, `heads`, `effect_site` | unstable -- no deprecation shim owed |
+| Component edge graph (heads and MLPs as nodes, q/k/v split receivers) | `component_graph`, `ComponentGraph`, `ComponentNode`, `ComponentReceiver`, `ComponentEdge`, `nodes`, `receivers`, `edges`, `layer_index`, `head`, `senders`, `contribution`, `identity_receipt`, `input_label`, `norm_address`, `patch_edges`, `corrupt` | unstable -- no deprecation shim owed |
 
 <!-- MECHINTERP-KIT-UNSTABLE-INDEX:END -->
+
+`component_graph(trace)` returns a `ComponentGraph`: read-only `nodes`, `receivers` and `edges`
+keyed by MIB/EAP-IG vocabulary name (`input`, `a{L}.h{H}`, `b{L}`, `m{L}`; receivers
+`a{L}.h{H}<q|k|v>`, `m{L}`, `logits`; edges `"<sender>-><receiver>"`). Each `ComponentReceiver`
+holds the captured pre-norm input (`value`, from the op `input_label` entering the norm at
+`norm_address`) and its `senders`. Nodes and receivers carry `layer_index` (transformer block
+index) and `head` (head index), each `None` where it does not apply. Each `ComponentEdge` exposes
+the sender's output as its `contribution`. `identity_receipt` records the in-API check that every receiver input equals the
+sum of its contributions. Each attention output bias is its own node `b{L}`. A `ComponentEdge` is
+also a selection (`__selection__`): an EDGE selection of the pre-norm input edge for `m{L}` and
+`logits` receivers, an ACT selection of one head's q, k or v projection slice otherwise.
+`patch_edges(trace, edges, *, corrupt)` returns a fork of `trace` in which the one receiver those
+edges enter reads `clean input - sum(s_clean) + sum(s_corrupt)` (`corrupt` is the corrupted
+input's `ComponentGraph`); the trace needs `intervention_ready=True`.
 
 `qk_circuit(trace, attention)` and `ov_circuit(trace, attention)` return a `FactoredMatrix` of
 shape `[n_q_heads, d_model, d_model]` built from `head_weight_views` (TransformerLens's
@@ -455,6 +475,22 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : k-dimensional basis interchange: `x - P x + P s`, with `s` the source trace's value at the
   same site (same-site donor resolution as `tl.patch_from`); applies a learned rotation the
   user trained elsewhere.
+
+**torchlens.intervention.keep_grad(edit)** — *documented-unstable*
+: Returns the same forward edit (an `Edit` or a hook callable) with the gradient-connectivity
+  check: at fire time it raises `InvalidArgumentError` / `edit_detached_from_graph` (with the
+  site label, a `reason` of `edit_detached`, `site_has_no_graph` or `grad_disabled`, and a
+  spelling that keeps the graph) when the edit writes values carrying no autograd graph, when
+  the site value has none, or when gradients are disabled. `keep_grad(tl.scale(0.0))` is the
+  graph-keeping zero; `keep_grad(tl.intervention.compose(tl.scale(0.0), tl.add(value)))` the
+  graph-keeping fixed value. A wrapped `Edit` carries `("keep_grad", True)` in its metadata and
+  `portability="opaque_audit"`. A backward edit or a non-edit refuses `keep_grad_edit_invalid`.
+  Which verbs keep the graph under which door: docs/gradient_contract.md.
+
+**InterventionDecision.keep_grad** — *documented-unstable*
+: `True` runs the same check as `torchlens.intervention.keep_grad(edit)` on the decision's hook
+  (`edit_detached_from_graph` at fire time when the written values carry no graph). `False`, the
+  default, checks nothing. MLX refuses `keep_grad=True`.
 
 **torchlens.intervention.at_positions(edit, positions, *, mask=None, assume_no_padding=False, axis=1)** — *documented-unstable*
 : Restricts a same-shape edit to chosen token positions of a `(batch, tokens, ...)` site value
@@ -1610,18 +1646,22 @@ deprecation shim owed*
   lives on — probe directions, steering vectors, PCA components, SAE
   decoder rows. `subspace(within, basis, *, origin=, method=None, dim=-1,
   tol=0.0)` takes one direction `[d]` or a stack `[k, d]` (canonicalized to
-  float64) and resolves to the basis's SUPPORT SET: every element whose
-  coordinate on the bound axis carries weight `|w| > tol` in at least one
-  basis vector, expanded across the site's other axes. SET, NOT PROJECTION
-  (the normative boundary): a Selection denotes sets, masks are exact as
-  sets, and `do()` is elementwise — the weights are disclosed but never
-  carried, a dense direction supports the WHOLE axis, and
-  `do(subspace(...), edit)` edits every supported element, never "the
-  component along the direction" (projection-valued selections are a named
-  design fork, not a promise). To edit the component along a direction, apply
-  `tl.project_off` / `tl.project_onto` or
-  `torchlens.intervention.set_direction_mean` to the site instead
-  (docs/intervention_explainers.md, "Set, not projection"). BASIS PROVENANCE IS MANDATORY: `origin=` is
+  float64). Under `do()` the edit acts on the COMPONENT along the span of the
+  basis rows: with `Q` the rows, on the coordinates `c = Q x`, written back as
+  `x + Q^T (edit(c) - c)`; the orthogonal complement is unchanged. Coordinate
+  verbs (`zero_ablate`, `scale`, `clamp`, `noise`, `mean_ablate()`, hook
+  callables, ...) act on `c`; value verbs (`patch_from`, the interchange;
+  `replace_with`, `steer`, ...) write a value's component; other verbs refuse
+  `subspace_edit_unsupported`. An orthonormal basis is used as given; any
+  other full-rank basis is orthonormalised (Gram-Schmidt in row order, signs
+  kept). A subspace combined with set operators, or resolved, refuses in
+  `do()` (`subspace_projection_composed`); `within=` restricts positions
+  (a partial-axis mask refuses `subspace_projection_partial_axis`).
+  `resolve()` reports the basis's SUPPORT SET: every element whose coordinate
+  on the bound axis carries weight `|w| > tol` in at least one basis vector,
+  expanded across the site's other axes (a dense direction supports the WHOLE
+  axis) (docs/intervention_explainers.md, "Subspace edits: the component along
+  a basis"). BASIS PROVENANCE IS MANDATORY: `origin=` is
   a required non-empty account of where the basis came from; origin,
   optional `method=`, geometry, and the basis's sha256 content digest are
   stamped into every resolved entry's `provenance.source` (and therefore

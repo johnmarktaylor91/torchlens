@@ -64,6 +64,7 @@ DOC_FILE_GROUPS: dict[str, tuple[str, ...]] = {
         "reference/attribution.md",
         "reference/collapse.md",
         "reference/lenses.md",
+        "reference/mechinterp.md",
         "reference/summary.md",
     ),
 }
@@ -607,6 +608,7 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "stochastic_edits.md": _TEACHING_PAGES_EXECUTED,
     "guides/kv_cache.md": _TEACHING_PAGES_EXECUTED,
     "sae_training_handoff.md": _TEACHING_PAGES_EXECUTED,
+    "gradient_contract.md": _TEACHING_PAGES_EXECUTED,
     "migration/from_pyvene.md": (
         "executed by tests/test_migrations.py (the TorchLens side always; the pyvene "
         "comparison fence is collected and skipped)"

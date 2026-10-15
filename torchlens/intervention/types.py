@@ -322,7 +322,11 @@ class InterventionDecision:
     template_ref:
         Optional template reference associated with the intervention.
     keep_grad:
-        Whether the replacement should preserve gradient connectivity when possible.
+        Whether the caller needs the gradient through the edit. ``True`` runs the
+        connectivity check of :func:`torchlens.intervention.keep_grad`: the hook
+        raises ``edit_detached_from_graph`` at fire time when the values it
+        writes carry no autograd graph (or the site value has none, or
+        gradients are disabled). ``False`` (the default) checks nothing.
     isolate:
         Whether backend isolation is required before applying the action.
     """

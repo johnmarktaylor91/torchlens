@@ -7,19 +7,22 @@ components, and SAE feature directions. One producer,
 that composes with the full ``| & - ~`` algebra and resolves explicitly
 against one trace.
 
-SET, NOT PROJECTION (the normative boundary): a Selection denotes a
-(touched-site family, selected-element set) pair, masks are exact AS SETS,
-and ``do()`` applies edits elementwise — so this producer resolves to the
-basis's SUPPORT SET: the elements whose coordinate carries weight
-``|w| > tol`` in at least one basis vector. The WEIGHTS themselves are
-deliberately NOT carried on the selection (a weighted mask would be a new
-denotation level: boolean operators are set algebra while subspaces compose
-linearly, the provenance lattice speaks subset relations, and the do()
-engine's edit-then-scatter contract is elementwise substitution, not a
-linear operator). A dense direction therefore resolves to the WHOLE feature
-axis — ``do(subspace(...), zero_ablate())`` ablates every supported
-element, NEVER "just the direction's component". Projection-valued
-selections/edits are a named design fork, not a promise.
+PROJECTION UNDER do(), SUPPORT UNDER resolve() (the normative boundary):
+``do(subspace(within, basis, origin=...), edit)`` edits the COMPONENT of
+each site value inside the span of the basis rows. With ``Q`` the
+(orthonormal) basis rows, the edit acts on the coordinates ``c = Q x`` and
+writes back ``x + Q^T (edit(c) - c)``; the orthogonal complement is
+unchanged. Which verbs have a coordinate meaning, how a non-orthonormal
+basis is orthonormalised, and the refusals are in
+:mod:`torchlens.intervention._subspace_projection`. ``resolve()`` still
+answers a SET question: the basis's SUPPORT SET, the elements whose
+coordinate carries weight ``|w| > tol`` in at least one basis vector, which
+is where the edit can land (a dense direction supports the whole axis). The
+selection stays a (touched-site family, selected-element set) pair, so the
+``| & - ~`` algebra composes support sets for reading; a subspace combined
+with set operators, or already resolved, has no single basis to edit
+through, so ``do()`` refuses it (``subspace_projection_composed``) and the
+restriction goes through ``within=``.
 
 BASIS PROVENANCE IS MANDATORY: a direction without a recorded origin is an
 unreproducible result. ``origin=`` is a REQUIRED non-empty description of
@@ -171,14 +174,11 @@ def _basis_digest(canonical: torch.Tensor) -> str:
 
 #: Provenance-source marker for a basis whose support is the ENTIRE bound
 #: axis. It rides every resolved entry's ``provenance.source`` (and therefore
-#: every ``do()`` audit record), and ``do()`` reads it to fire the
-#: point-of-use disclosure: editing a dense direction's support set is
-#: FULL-AXIS ablation under the documented set semantics, never a projection
-#: along the direction -- the wrong-intent case the walkthrough flagged.
+#: every ``do()`` audit record): the resolved SET is the whole axis, while
+#: ``do()`` edits only the component along the basis span.
 DENSE_SUPPORT_NOTE = (
-    " [dense direction: support is the ENTIRE axis -- do() edits every "
-    "element of the axis (set semantics), never the component along the "
-    "direction]"
+    " [dense direction: support is the ENTIRE axis -- resolve() selects every "
+    "element of the axis; do() edits only the component along the basis span]"
 )
 
 
@@ -250,14 +250,16 @@ def subspace(
 
     ``basis`` is one direction ``[d]`` or a stack ``[k, d]`` (probe
     directions, steering vectors, PCA components, SAE decoder rows),
-    canonicalized to float64. The resolved mask is the basis's SUPPORT SET —
-    every element whose coordinate on the bound axis carries weight
-    ``|w| > tol`` in at least one basis vector — expanded across the site's
-    other axes. This is a SET claim, not a projection: the weights are
-    disclosed (via the provenance record) but never carried on the
-    selection, and a dense direction supports the whole axis, so
-    ``do(subspace(...), edit)`` edits every supported element, never "the
-    component along the direction".
+    canonicalized to float64. Under ``do()`` the edit acts on the component
+    along the span of the basis rows (coordinates ``c = Q x``, written back
+    as ``x + Q^T (edit(c) - c)``; the orthogonal complement is unchanged),
+    which is distributed-alignment-search style addressing: zero, mean,
+    scale, clamp and noise act on the coordinates, and
+    ``tl.patch_from(source)`` writes the source run's component (the
+    interchange). The resolved mask is the basis's SUPPORT SET (every element
+    whose coordinate on the bound axis carries weight ``|w| > tol`` in at
+    least one basis vector, expanded across the site's other axes): where
+    the edit can land, disclosed with the weights' provenance.
 
     ``within`` is REQUIRED (a direction is minted for a specific
     representation space): a site label, ``Op``/``Layer`` handle, or any ACT
