@@ -646,7 +646,6 @@ class PhaseTimer:
         self.profile_events = 0
         self.classifier_calls = 0
         self.refresh_deepcopy_calls = 0
-        self.fork_python_calls = 0
         self.counter: AtenCounter | None = None
         self._restores: list[Callable[[], None]] = []
 
@@ -659,8 +658,6 @@ class PhaseTimer:
             refresh = phase == "rerun_refresh_state"
             if refresh:
                 timer._enter_refresh()
-            if phase == "fork":
-                timer._enter_fork_profile()
             start = time.perf_counter()
             try:
                 result = original(*args, **kwargs)
@@ -669,24 +666,11 @@ class PhaseTimer:
                 timer.seconds[phase] += time.perf_counter() - start
                 if refresh:
                     timer._exit_refresh()
-                if phase == "fork":
-                    sys.setprofile(None)
             if phase == "push_cone" and isinstance(result, list):
                 timer.cone_sizes.append(len(result))
             return result
 
         return wrapper
-
-    def _enter_fork_profile(self) -> None:
-        """Count Python and C function calls made inside ``Trace.fork``."""
-
-        timer = self
-
-        def count(_frame: Any, event: str, _arg: Any) -> None:
-            if event in ("call", "c_call"):
-                timer.fork_python_calls += 1
-
-        sys.setprofile(count)
 
     def _enter_refresh(self) -> None:
         """Count ``copy.deepcopy`` calls and clone bytes until the refresh ends."""
@@ -806,6 +790,31 @@ class PhaseTimer:
         }
 
 
+def fork_python_calls(baseline: tl.Trace) -> int:
+    """Python and C function calls made by one ``baseline.fork()`` (untimed pass).
+
+    A warm-up fork runs first, so one-time imports and caches are not counted;
+    the counted fork is discarded. The count is deterministic for a given
+    trace and TorchLens version.
+    """
+
+    baseline.fork()  # warm-up
+    calls = 0
+
+    def count(_frame: Any, event: str, _arg: Any) -> None:
+        nonlocal calls
+        if event in ("call", "c_call"):
+            calls += 1
+
+    sys.setprofile(count)
+    try:
+        member = baseline.fork()
+    finally:
+        sys.setprofile(None)
+    del member
+    return calls
+
+
 def _count_one(
     baseline: tl.Trace, site: Any, engine: str, model: nn.Module, x: Any
 ) -> dict[str, Any]:
@@ -830,7 +839,7 @@ def _count_one(
         "python_profile_events_in_rng_window": phases.profile_events,
         "monitor_classifier_calls": phases.classifier_calls,
         "refresh_deepcopy_calls": phases.refresh_deepcopy_calls,
-        "fork_python_calls": phases.fork_python_calls,
+        "fork_python_calls": fork_python_calls(baseline),
         "refresh_clone_like_bytes": counter.refresh_clone_bytes,
         "hooks_planned": last_run.get("hooks"),
         "hooks_fired": last_run.get("hooks_fired"),
