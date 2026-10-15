@@ -76,7 +76,7 @@ class RandomizationResult:
         ``"cascading"`` or ``"independent"``.
     layers
         Randomized modules, top (output side) first.
-    original
+    original_attribution
         The attribution of the unrandomized model.
     steps
         One :class:`RandomizationStep` per layer, in ``layers`` order.
@@ -88,7 +88,7 @@ class RandomizationResult:
 
     randomization: str
     layers: tuple[str, ...]
-    original: Tensor
+    original_attribution: Tensor
     steps: tuple[RandomizationStep, ...]
     settings: dict[str, Any]
     extra: dict[str, Any]
@@ -359,7 +359,7 @@ def randomization_test(  # noqa: PLR0913 - public door: keyword-only test settin
     return RandomizationResult(
         randomization=randomization,
         layers=tuple(names),
-        original=original,
+        original_attribution=original,
         steps=tuple(steps),
         settings={
             "randomization": randomization,

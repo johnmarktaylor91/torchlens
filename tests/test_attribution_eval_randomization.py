@@ -87,7 +87,7 @@ def test_parameter_ignoring_method_shows_no_fall() -> None:
     for measure in ("spearman", "spearman_abs", "ssim"):
         values = result.similarity(measure)
         assert all(value == pytest.approx(1.0, abs=1e-12) for value in values), measure
-    assert all(torch.equal(step.values, result.original) for step in result.steps)
+    assert all(torch.equal(step.values, result.original_attribution) for step in result.steps)
 
 
 def test_caller_model_and_random_state_untouched() -> None:
@@ -153,7 +153,7 @@ def test_randomization_accepts_grad_cam_results(family: str) -> None:
         method_kwargs=kwargs,
         layers=layers,
     )
-    assert result.original.shape == (1, 1, *x.shape[-2:])
+    assert result.original_attribution.shape == (1, 1, *x.shape[-2:])
     assert len(result.steps) == len(result.layers) >= 3
     assert all(value is not None for value in result.similarity("ssim"))
     assert all(value is not None for value in result.similarity("spearman_abs"))
@@ -215,7 +215,7 @@ def test_similarity_measures_match_independent_computation() -> None:
     result = attribution.randomization_test(
         model, x, target=0, method=attribution.saliency, layers=["head"]
     )
-    original = result.original[0]
+    original = result.original_attribution[0]
     randomized = result.steps[0].values[0]
     tied_original = torch.round(original / original.abs().max() * 4) / 4
     tied_randomized = torch.round(randomized / randomized.abs().max() * 4) / 4

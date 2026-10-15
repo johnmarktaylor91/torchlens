@@ -160,7 +160,7 @@ _DOCUMENTED_UNSTABLE_TOKENS = {
     "layers",
     "seed",
     "keep_maps",
-    "original",
+    "original_attribution",
     "randomized",
     "similarity",
     "spearman",
