@@ -25,6 +25,7 @@ PAGES: tuple[str, ...] = (
     "stochastic_edits.md",
     "guides/kv_cache.md",
     "sae_training_handoff.md",
+    "gradient_contract.md",
 )
 
 HEADER_RE = re.compile(r"# docs-test: expected=(?P<expected>.+)")

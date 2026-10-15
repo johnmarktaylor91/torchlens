@@ -115,16 +115,73 @@ intervention recipe. TorchLens marks the owning trace `DIRECT_WRITE_DIRTY` and w
 push overlays recipe state; it does not treat the direct write as a portable, auditable
 intervention. Use `set`, `attach_hooks` or `do` when the edit should be part of the recipe.
 
-## Set, not projection
+## Subspace edits: the component along a basis
 
-A `tl.subspace(...)` selection is a set of elements: `do(subspace(...), edit)` edits every element
-the direction has weight on, and a dense direction covers the whole axis. It never edits "the
-component along the direction". When you mean the component, use a helper that projects:
+`do(tl.subspace(site, basis, origin=...), edit)` edits the component of the site's value inside
+the span of the basis rows and leaves the orthogonal complement unchanged. With `Q` the basis
+rows, the edit acts on the coordinates `c = Q x` (one per row) and the site gets
+`x + Q^T (edit(c) - c)`. This is the addressing distributed alignment search uses.
 
-- `tl.project_off(direction, feature_axis=...)` removes the component along `direction`.
-- `tl.project_onto(direction, feature_axis=...)` keeps only that component.
-- `torchlens.intervention.set_direction_mean(direction, population, feature_axis=...)` replaces
-  the component with the population's mean coefficient, keeping the orthogonal part.
+- Coordinate verbs act on `c`: `tl.zero_ablate()`, `tl.scale(...)`, `tl.clamp(...)`,
+  `tl.noise(...)`, `tl.mean_ablate()`, `mean_fill(over=...)` without `ref=`,
+  `scramble_elements(seed=...)` without `source=`, `tl.add(scalar)`,
+  `splice_module(module, input="out")`, and any hook callable `fn(c, *, hook)`, which receives
+  the coordinates with the bound axis resized to `k`.
+- Value verbs compute a value in activation space and write its component: `tl.patch_from(source)`
+  is the interchange (the component becomes the source run's), and likewise `swap_with`,
+  `replace_with`, `tl.add(tensor)`, `steer`, `permute_batch`, `resample_rows_from`, `mean_from` and
+  `mean_fill(ref, ...)`.
+- Every other verb refuses `subspace_edit_unsupported` and names the spelling that works: the
+  projection edits themselves (`project_off`, `project_onto`, `set_direction_mean`,
+  `subspace_ablate`, `subspace_interchange`), `compose` (apply the edits one at a time),
+  `at_positions` (restrict positions through `within=`), a `source=` that is an activation value,
+  `splice_module(input="in")` and the backward verbs.
+
+An orthonormal basis is used exactly as given, so the coordinates are yours. Any other full-rank
+basis is orthonormalised by Gram-Schmidt in row order with each row's sign kept, so one direction
+`v` edits the component along `v / |v|`; the audit record says when that happened. A
+rank-deficient basis refuses `subspace_basis_invalid`. Weights at or below `tol=` are dropped
+first.
+
+`resolve()` still answers a set question: the basis's support set, the elements a nonzero weight
+touches, which is where the edit can land (a dense direction supports the whole axis). Restrict
+positions with `within=`, for example `tl.subspace(tl.units(site, mask), basis, origin=...)` with
+`mask` True on every feature of the chosen positions; a mask that covers only part of the support
+at a position refuses `subspace_projection_partial_axis`. A subspace combined with `| & - ~`, or
+already resolved, refuses `subspace_projection_composed`; to edit the support set itself, pass
+`tl.units(site, resolved[0].mask)`. Every subspace `do()` stamps the projection, the basis origin
+and its sha256 into the audit record.
+
+```python
+# docs-test: expected=[True, True, True]
+import torch
+from torch import nn
+import torchlens as tl
+
+torch.manual_seed(0)
+model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
+options = tl.options.CaptureOptions(intervention_ready=True)
+base = tl.trace(model, torch.randn(3, 4), capture=options)
+source = tl.trace(model, torch.randn(3, 4), capture=options)
+site = "linear_1_1"
+basis = torch.tensor([[1.0, 1.0, 0.0, 0.0]]) / 2**0.5  # one unit direction
+
+fork = base.fork()
+fork.do(tl.subspace(site, basis, origin="hand-picked direction"), tl.patch_from(source))
+x, s, edited = base[site].out, source[site].out, fork[site].out
+projector = basis.T @ basis
+
+RESULT = [
+    # The component along the direction is the source run's (the interchange) ...
+    torch.allclose(edited @ projector, s @ projector, atol=1e-6),
+    # ... and the orthogonal complement is the base run's.
+    torch.allclose(edited - edited @ projector, x - x @ projector, atol=1e-6),
+    "projection" in fork.intervention_audit[-1]["sites"][0]["source"],
+]
+```
+
+For a fixed direction without a selection, `tl.project_off(direction, feature_axis=...)` removes
+the component and `tl.project_onto(direction, feature_axis=...)` keeps only it:
 
 ```python
 # docs-test: expected=[True, True]
@@ -150,6 +207,9 @@ RESULT = [
     torch.allclose(off, clean - (clean @ unit)[:, None] * unit, atol=1e-6),
 ]
 ```
+
+Which verbs keep the autograd graph, under which door, is the
+[gradient contract](gradient_contract.md).
 
 The population-based edits, `set_direction_mean` among them, are on the
 [stochastic and population edits](stochastic_edits.md) page.

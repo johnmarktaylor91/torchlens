@@ -174,8 +174,8 @@ Key entry points:
   (cross-pass range/variance on recurrent layers, pass-qualified, >= 2
   window passes per layer or `population_too_small`, masks land on every
   window pass-site); subspace producer `tl.subspace(within, basis, *,
-  origin=, method=, dim=, tol=)` (direction/subspace SUPPORT-SET selection —
-  set, not projection; mandatory basis provenance with sha256 digest riding
+  origin=, method=, dim=, tol=)` (do() edits the COMPONENT along the basis
+  span, resolve() reports the SUPPORT SET; mandatory basis provenance with sha256 digest riding
   `provenance.source` and do() audits; extent mismatch on the bound axis
   refuses `basis_dim_mismatch`, never broadcast/truncate; geometry-only
   resolution, unsaved sites resolve).

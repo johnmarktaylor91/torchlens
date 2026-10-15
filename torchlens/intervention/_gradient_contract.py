@@ -31,8 +31,8 @@ __all__ = ["keep_grad"]
 _GUIDE = "see docs/gradient_contract.md"
 _ZERO_REMEDY = "tl.intervention.keep_grad(tl.scale(0.0)) writes zeros and keeps the graph"
 _FIXED_REMEDY = (
-    "tl.intervention.keep_grad(tl.compose(tl.scale(0.0), tl.add(value))) writes a fixed "
-    "value and keeps the graph with a zero gradient"
+    "tl.intervention.keep_grad(tl.intervention.compose(tl.scale(0.0), tl.add(value))) "
+    "writes a fixed value and keeps the graph with a zero gradient"
 )
 
 

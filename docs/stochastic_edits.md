@@ -129,9 +129,10 @@ RESULT = [
 ```
 
 `set_direction_mean` is the edit to reach for when you mean "the component along a direction".
-A `tl.subspace(...)` selection never projects: it selects the elements the direction has weight
-on (see [Set, not projection](intervention_explainers.md#set-not-projection)). `tl.project_off`
-and `tl.project_onto` are the projection helpers without a population.
+Under a `tl.subspace(...)` selection, `mean_from(ref)` sets the component in the basis span to the
+population mean's component (see
+[Subspace edits](intervention_explainers.md#subspace-edits-the-component-along-a-basis)).
+`tl.project_off` and `tl.project_onto` are the projection helpers without a population.
 
 ## Whole-event donors
 

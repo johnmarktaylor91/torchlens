@@ -61,6 +61,8 @@ _X2 = torch.randn(*_SHAPE, generator=torch.Generator().manual_seed(2), dtype=tor
 _CONST = torch.randn(*_SHAPE, generator=torch.Generator().manual_seed(3), dtype=torch.float64)
 _V = torch.tensor([1.0, 2.0, -1.0, 0.5], dtype=torch.float64)
 _V_HAT = _V / _V.norm()
+# set_direction_mean builds its unit direction in float32 (its own canonical form).
+_V_HAT32 = (_V.float() / _V.float().norm()).double()
 _Q = 0.5 * torch.tensor([[1, 1, 1, 1], [1, -1, 1, -1]], dtype=torch.float64)
 _P = _Q.T @ _Q
 _UNITS = torch.zeros(*_SHAPE, dtype=torch.bool)
@@ -106,7 +108,8 @@ def _site_donors() -> Any:
 
 
 def _row_donors() -> Any:
-    return reference(_CONST.reshape(6, 3, 4)[:3], origin="row donors")
+    rows = torch.randn(3, 3, 4, generator=torch.Generator().manual_seed(4), dtype=torch.float64)
+    return reference(rows, origin="row donors")
 
 
 def _source_value() -> torch.Tensor:
@@ -187,7 +190,7 @@ _VERBS: dict[str, tuple[Callable[[], Any], Callable[[torch.Tensor], torch.Tensor
     ),
     "set_direction_mean": (
         lambda: set_direction_mean(_V, _site_donors(), feature_axis=-1),
-        lambda out: out - (out @ _V_HAT)[..., None] * _V_HAT,
+        lambda out: out - (out @ _V_HAT32)[..., None] * _V_HAT32,
         "refused",
     ),
     "subspace_ablate": (lambda: subspace_ablate(_Q), lambda out: out - out @ _P, "refused"),
@@ -220,11 +223,11 @@ def _ready(model: nn.Module) -> Any:
 
 
 def _door_capture(model: nn.Module, edit: Any) -> torch.Tensor:
-    return _out(tl.trace(model, _X, intervene=tl.when(tl.label(_SITE), edit)))
+    return _out(tl.trace(model, _X, intervene=tl.when(tl.module("lin1"), edit)))
 
 
 def _door_hooks(model: nn.Module, edit: Any) -> torch.Tensor:
-    options = tl.options.CaptureOptions(hooks={tl.label(_SITE): edit})
+    options = tl.options.CaptureOptions(hooks={tl.module("lin1"): edit})
     return _out(tl.trace(model, _X, capture=options))
 
 
@@ -274,7 +277,7 @@ def _door_decision(model: nn.Module, edit: Any) -> torch.Tensor:
     keep = bool(getattr(edit, "_matrix_keep", False))
     inner = getattr(edit, "_matrix_inner", edit)
     decision = InterventionDecision(action="add_hook", hook=inner, keep_grad=keep)
-    return _out(tl.trace(model, _X, intervene=tl.when(tl.label(_SITE), decision)))
+    return _out(tl.trace(model, _X, intervene=tl.when(tl.module("lin1"), decision)))
 
 
 def _plain(f: Callable[[torch.Tensor], torch.Tensor]) -> Callable[[torch.Tensor], torch.Tensor]:

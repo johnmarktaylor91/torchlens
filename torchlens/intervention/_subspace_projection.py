@@ -155,7 +155,7 @@ def _verb_meaning(edit: Any) -> str:
             verb,
             "backward-direction verbs edit gradients, not the forward component",
             "attach the gradient verb at capture time: tl.trace(model, x, "
-            "intervene=tl.when(tl.intervention.label(site), tl.grad_zero()))",
+            "intervene=tl.when(tl.module(name), tl.grad_zero()))",
         )
     if verb in _COORDINATE_VERBS:
         return "coordinates"

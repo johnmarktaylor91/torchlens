@@ -256,7 +256,7 @@ def _run_remedy(target: Any, edit: Any) -> None:
     if target != "capture":
         _trace().fork().do(target, edit)
         return
-    trace = tl.trace(_Mlp(), _COORDS @ _H, intervene=tl.when(tl.intervention.label(_SITE), edit))
+    trace = tl.trace(_Mlp(), _COORDS @ _H, intervene=tl.when(tl.module("lin1"), edit))
     trace[trace.output_layers[0]].out.sum().backward()
 
 
