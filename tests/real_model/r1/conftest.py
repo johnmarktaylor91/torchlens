@@ -48,6 +48,7 @@ _HEAD_CLASS_BY_ARTIFACT = {
     "r1-mamba-130m-hf": "AutoModelForCausalLM",
     "r1-switch-base-8": "AutoModelForSeq2SeqLM",
     "r1-videomae-small-kinetics": "VideoMAEForVideoClassification",
+    "r1-pythia-70m": "AutoModelForCausalLM",
 }
 #: Rows with no tokenizer (pixel or video inputs); the loader returns ``None``.
 _NO_TOKENIZER = frozenset({"r1-videomae-small-kinetics"})

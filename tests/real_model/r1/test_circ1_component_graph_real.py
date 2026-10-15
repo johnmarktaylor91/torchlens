@@ -9,13 +9,14 @@ oracle count (GPT-2 small 32,491; Pythia-70m 3,580), and each layer's
 attention output bias is its own node. Inputs: the first 8 rows of the
 pinned ``mib-bench/ioi`` train split kept by MIB's tokenisation filter (the
 vendored rows beside this file) plus 8 prompts of 16 uniformly random
-tokens (torch seed 0). Models load through their registry rows with eager
-attention. Runs only in the preflighted offline venue (GATE-ID
+tokens (torch seed 0). Models load through the R1 registry loader; each test switches a private
+copy to eager attention. Runs only in the preflighted offline venue (GATE-ID
 R1_OFFLINE_VENUE), where it can never skip.
 """
 
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 
@@ -41,15 +42,17 @@ _MODELS = {
 }
 
 
-def _load(artifact_registry, artifact_id: str, dtype: torch.dtype):
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+def _load(r1_loader, artifact_id: str, dtype: torch.dtype):
+    """A private eager-attention copy of the registry-loaded checkpoint in ``dtype``.
 
-    row = artifact_registry.checkpoint_evidence(artifact_id)
-    model = AutoModelForCausalLM.from_pretrained(
-        row.model_id, revision=row.revision, dtype=dtype, attn_implementation="eager"
-    ).eval()
-    tokenizer = AutoTokenizer.from_pretrained(row.model_id, revision=row.revision)
-    return model, tokenizer
+    The loader caches one float32 model per session, so the cast and the
+    attention switch happen on a deep copy and never leak into other tests.
+    """
+
+    loaded = r1_loader(artifact_id)
+    model = copy.deepcopy(loaded["model"]).to(dtype).eval()
+    model.set_attn_implementation("eager")
+    return model, loaded["tokenizer"]
 
 
 def _inputs(tokenizer, key: str, vocab_size: int) -> dict[str, torch.Tensor]:
@@ -85,12 +88,12 @@ def _bar_ratio(graph) -> float:
 
 @pytest.mark.parametrize("dtype", [torch.float64, torch.float32], ids=["float64", "float32"])
 @pytest.mark.parametrize("artifact_id", sorted(_MODELS))
-def test_component_graph_bar(artifact_registry, artifact_id, dtype) -> None:
+def test_component_graph_bar(r1_loader, artifact_id, dtype) -> None:
     import torchlens as tl
     import torchlens.mechinterp as mi
 
     key, n_layers, n_heads, parallel, oracle_count = _MODELS[artifact_id]
-    model, tokenizer = _load(artifact_registry, artifact_id, dtype)
+    model, tokenizer = _load(r1_loader, artifact_id, dtype)
     ceiling = 1e-10 if dtype == torch.float64 else 1e-3
     for name, ids in _inputs(tokenizer, key, model.config.vocab_size).items():
         trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(layers_to_save="all"))
@@ -117,13 +120,13 @@ def test_component_graph_bar(artifact_registry, artifact_id, dtype) -> None:
             trace.cleanup()
 
 
-def test_edge_patch_runs_on_gpt2_small(artifact_registry) -> None:
+def test_edge_patch_runs_on_gpt2_small(r1_loader) -> None:
     """One logits edge and one q edge patched on the first IOI row; the effect is recorded."""
 
     import torchlens as tl
     import torchlens.mechinterp as mi
 
-    model, tokenizer = _load(artifact_registry, "r1-gpt2", torch.float32)
+    model, tokenizer = _load(r1_loader, "r1-gpt2", torch.float32)
     row = _ROWS["rows"]["gpt2"][0]
     clean_ids = tokenizer(row["prompt"], return_tensors="pt")["input_ids"]
     corrupt_ids = tokenizer(row["s2_io_flip_counterfactual"], return_tensors="pt")["input_ids"]
