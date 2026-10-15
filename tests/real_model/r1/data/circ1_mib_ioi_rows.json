@@ -1,0 +1,237 @@
+{
+ "file": "train.json",
+ "license": "MIT",
+ "provenance": "dataset revision and train.json sha256 are pinned in test_circ1_component_graph_real.py",
+ "rows": {
+  "gpt2": [
+   {
+    "index": 0,
+    "indirect_object": "Maria",
+    "prompt": "As Carl and Maria left the consulate, Carl gave a fridge to",
+    "s2_io_flip_counterfactual": "As Carl and Maria left the consulate, Maria gave a fridge to",
+    "subject": "Carl"
+   },
+   {
+    "index": 1,
+    "indirect_object": "Bob",
+    "prompt": "After Kevin and Bob spent some time at the racecourse, Kevin offered a duster to",
+    "s2_io_flip_counterfactual": "After Kevin and Bob spent some time at the racecourse, Bob offered a duster to",
+    "subject": "Kevin"
+   },
+   {
+    "index": 2,
+    "indirect_object": "Matt",
+    "prompt": "After Brian and Matt spent some time at the vet, Brian offered a button to",
+    "s2_io_flip_counterfactual": "After Brian and Matt spent some time at the vet, Matt offered a button to",
+    "subject": "Brian"
+   },
+   {
+    "index": 3,
+    "indirect_object": "Louis",
+    "prompt": "After Brad and Louis went to the room, Brad gave a picture frame to",
+    "s2_io_flip_counterfactual": "After Brad and Louis went to the room, Louis gave a picture frame to",
+    "subject": "Brad"
+   },
+   {
+    "index": 4,
+    "indirect_object": "Martin",
+    "prompt": "While Jean and Martin were working at the meeting, Jean gave a plant to",
+    "s2_io_flip_counterfactual": "While Jean and Martin were working at the meeting, Martin gave a plant to",
+    "subject": "Jean"
+   },
+   {
+    "index": 5,
+    "indirect_object": "Louis",
+    "prompt": "While James and Louis were working at the plaza, James gave a rug to",
+    "s2_io_flip_counterfactual": "While James and Louis were working at the plaza, Louis gave a rug to",
+    "subject": "James"
+   },
+   {
+    "index": 6,
+    "indirect_object": "Rose",
+    "prompt": "As Matthew and Rose left the port, Matthew gave a bottle of glue to",
+    "s2_io_flip_counterfactual": "As Matthew and Rose left the port, Rose gave a bottle of glue to",
+    "subject": "Matthew"
+   },
+   {
+    "index": 7,
+    "indirect_object": "Brian",
+    "prompt": "At the hallway, Jean and Brian found a piece of sandpaper. Jean gave it to",
+    "s2_io_flip_counterfactual": "At the hallway, Jean and Brian found a piece of sandpaper. Brian gave it to",
+    "subject": "Jean"
+   },
+   {
+    "index": 8,
+    "indirect_object": "Brad",
+    "prompt": "While Maria and Brad were commuting to the furniture store, Maria gave a zipper to",
+    "s2_io_flip_counterfactual": "While Maria and Brad were commuting to the furniture store, Brad gave a zipper to",
+    "subject": "Maria"
+   },
+   {
+    "index": 9,
+    "indirect_object": "John",
+    "prompt": "After Nick and John spent some time at the car dealership, Nick offered a nail to",
+    "s2_io_flip_counterfactual": "After Nick and John spent some time at the car dealership, John offered a nail to",
+    "subject": "Nick"
+   },
+   {
+    "index": 10,
+    "indirect_object": "Doug",
+    "prompt": "At the bookstore, Patrick and Doug found a piece of sandpaper. Patrick gave it to",
+    "s2_io_flip_counterfactual": "At the bookstore, Patrick and Doug found a piece of sandpaper. Doug gave it to",
+    "subject": "Patrick"
+   },
+   {
+    "index": 11,
+    "indirect_object": "Mel",
+    "prompt": "While Taylor and Mel were working at the auditorium, Taylor gave a watch to",
+    "s2_io_flip_counterfactual": "While Taylor and Mel were working at the auditorium, Mel gave a watch to",
+    "subject": "Taylor"
+   },
+   {
+    "index": 12,
+    "indirect_object": "Anderson",
+    "prompt": "Just as Mary and Anderson were leaving the fairground, Mary offered a walnut to",
+    "s2_io_flip_counterfactual": "Just as Mary and Anderson were leaving the fairground, Anderson offered a walnut to",
+    "subject": "Mary"
+   },
+   {
+    "index": 13,
+    "indirect_object": "April",
+    "prompt": "After Matthew and April went to the pool, Matthew gave a pair of gloves to",
+    "s2_io_flip_counterfactual": "After Matthew and April went to the pool, April gave a pair of gloves to",
+    "subject": "Matthew"
+   },
+   {
+    "index": 14,
+    "indirect_object": "Wilson",
+    "prompt": "After Richard and Wilson spent some time at the hostel, Richard offered a bone to",
+    "s2_io_flip_counterfactual": "After Richard and Wilson spent some time at the hostel, Wilson offered a bone to",
+    "subject": "Richard"
+   },
+   {
+    "index": 15,
+    "indirect_object": "Nick",
+    "prompt": "As London and Nick left the terminal, London gave a piece of chalk to",
+    "s2_io_flip_counterfactual": "As London and Nick left the terminal, Nick gave a piece of chalk to",
+    "subject": "London"
+   }
+  ],
+  "pythia-70m": [
+   {
+    "index": 0,
+    "indirect_object": "Maria",
+    "prompt": "As Carl and Maria left the consulate, Carl gave a fridge to",
+    "s2_io_flip_counterfactual": "As Carl and Maria left the consulate, Maria gave a fridge to",
+    "subject": "Carl"
+   },
+   {
+    "index": 1,
+    "indirect_object": "Bob",
+    "prompt": "After Kevin and Bob spent some time at the racecourse, Kevin offered a duster to",
+    "s2_io_flip_counterfactual": "After Kevin and Bob spent some time at the racecourse, Bob offered a duster to",
+    "subject": "Kevin"
+   },
+   {
+    "index": 2,
+    "indirect_object": "Matt",
+    "prompt": "After Brian and Matt spent some time at the vet, Brian offered a button to",
+    "s2_io_flip_counterfactual": "After Brian and Matt spent some time at the vet, Matt offered a button to",
+    "subject": "Brian"
+   },
+   {
+    "index": 3,
+    "indirect_object": "Louis",
+    "prompt": "After Brad and Louis went to the room, Brad gave a picture frame to",
+    "s2_io_flip_counterfactual": "After Brad and Louis went to the room, Louis gave a picture frame to",
+    "subject": "Brad"
+   },
+   {
+    "index": 4,
+    "indirect_object": "Martin",
+    "prompt": "While Jean and Martin were working at the meeting, Jean gave a plant to",
+    "s2_io_flip_counterfactual": "While Jean and Martin were working at the meeting, Martin gave a plant to",
+    "subject": "Jean"
+   },
+   {
+    "index": 5,
+    "indirect_object": "Louis",
+    "prompt": "While James and Louis were working at the plaza, James gave a rug to",
+    "s2_io_flip_counterfactual": "While James and Louis were working at the plaza, Louis gave a rug to",
+    "subject": "James"
+   },
+   {
+    "index": 6,
+    "indirect_object": "Rose",
+    "prompt": "As Matthew and Rose left the port, Matthew gave a bottle of glue to",
+    "s2_io_flip_counterfactual": "As Matthew and Rose left the port, Rose gave a bottle of glue to",
+    "subject": "Matthew"
+   },
+   {
+    "index": 7,
+    "indirect_object": "Brian",
+    "prompt": "At the hallway, Jean and Brian found a piece of sandpaper. Jean gave it to",
+    "s2_io_flip_counterfactual": "At the hallway, Jean and Brian found a piece of sandpaper. Brian gave it to",
+    "subject": "Jean"
+   },
+   {
+    "index": 8,
+    "indirect_object": "Brad",
+    "prompt": "While Maria and Brad were commuting to the furniture store, Maria gave a zipper to",
+    "s2_io_flip_counterfactual": "While Maria and Brad were commuting to the furniture store, Brad gave a zipper to",
+    "subject": "Maria"
+   },
+   {
+    "index": 9,
+    "indirect_object": "John",
+    "prompt": "After Nick and John spent some time at the car dealership, Nick offered a nail to",
+    "s2_io_flip_counterfactual": "After Nick and John spent some time at the car dealership, John offered a nail to",
+    "subject": "Nick"
+   },
+   {
+    "index": 10,
+    "indirect_object": "Doug",
+    "prompt": "At the bookstore, Patrick and Doug found a piece of sandpaper. Patrick gave it to",
+    "s2_io_flip_counterfactual": "At the bookstore, Patrick and Doug found a piece of sandpaper. Doug gave it to",
+    "subject": "Patrick"
+   },
+   {
+    "index": 11,
+    "indirect_object": "Mel",
+    "prompt": "While Taylor and Mel were working at the auditorium, Taylor gave a watch to",
+    "s2_io_flip_counterfactual": "While Taylor and Mel were working at the auditorium, Mel gave a watch to",
+    "subject": "Taylor"
+   },
+   {
+    "index": 12,
+    "indirect_object": "Anderson",
+    "prompt": "Just as Mary and Anderson were leaving the fairground, Mary offered a walnut to",
+    "s2_io_flip_counterfactual": "Just as Mary and Anderson were leaving the fairground, Anderson offered a walnut to",
+    "subject": "Mary"
+   },
+   {
+    "index": 13,
+    "indirect_object": "April",
+    "prompt": "After Matthew and April went to the pool, Matthew gave a pair of gloves to",
+    "s2_io_flip_counterfactual": "After Matthew and April went to the pool, April gave a pair of gloves to",
+    "subject": "Matthew"
+   },
+   {
+    "index": 14,
+    "indirect_object": "Wilson",
+    "prompt": "After Richard and Wilson spent some time at the hostel, Richard offered a bone to",
+    "s2_io_flip_counterfactual": "After Richard and Wilson spent some time at the hostel, Wilson offered a bone to",
+    "subject": "Richard"
+   },
+   {
+    "index": 15,
+    "indirect_object": "Nick",
+    "prompt": "As London and Nick left the terminal, London gave a piece of chalk to",
+    "s2_io_flip_counterfactual": "As London and Nick left the terminal, Nick gave a piece of chalk to",
+    "subject": "London"
+   }
+  ]
+ },
+ "selection": "first 16 rows in file order kept by MIB's IOI tokenisation filter (HFEAPDataset.filter_dataset: ' '+indirect_object, ' '+subject and ' '+random_c tokenise to the same length, no special tokens)",
+ "source": "mib-bench/ioi (Hugging Face dataset)"
+}

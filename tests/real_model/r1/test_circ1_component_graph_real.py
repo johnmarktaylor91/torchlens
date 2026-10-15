@@ -26,6 +26,14 @@ pytestmark = [pytest.mark.real_model, pytest.mark.real_checkpoint, pytest.mark.s
 
 _ROWS = json.loads((Path(__file__).parent / "data" / "circ1_mib_ioi_rows.json").read_text())
 
+#: Provenance of the vendored rows: the ``mib-bench/ioi`` dataset revision and
+#: the sha256 of its ``train.json`` (the Hub LFS oid), checked when the rows
+#: were extracted.
+IOI_DATASET_REVISION = "e5f3468f3af4c0883be35cd3bced8c711c95d286"  # pragma: allowlist secret
+IOI_TRAIN_SHA256 = (
+    "2ee41861d725eee2b71da3846872d5e5ea29d9d8c9aa3a8954f8430584b2f243"  # pragma: allowlist secret
+)
+
 #: artifact id -> (vendored-row key, layers, heads, parallel block, oracle edge count)
 _MODELS = {
     "r1-gpt2": ("gpt2", 12, 12, False, 32_491),
