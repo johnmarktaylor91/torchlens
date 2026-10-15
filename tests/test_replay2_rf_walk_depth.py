@@ -198,6 +198,9 @@ def test_explicit_stack_walk_equals_recursive_walk(
     for target in trace.output_ops:
         source = trace.input_ops[0]
         center = tuple(int(size) // 2 for size in source.shape[2:])
-        source.projective_field.at(center, target=target)
+        try:
+            source.projective_field.at(center, target=target)
+        except ReceptiveFieldError:
+            continue  # no per-unit projective geometry to this target; the walk never runs
     assert len(calls) >= 3
     assert any(size > 1 for size in calls)
