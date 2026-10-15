@@ -29,8 +29,6 @@ from torch import Tensor
 import torchlens as tl
 import torchlens.attribution as attribution
 
-pytestmark = pytest.mark.heavy
-
 PAIR_CLEAN, PAIR_CORRUPT = torch.tensor([[0], [0]]), torch.tensor([[1], [1]])
 _CAPTURE = tl.options.CaptureOptions(layers_to_save="all", intervention_ready=True)
 
@@ -193,6 +191,7 @@ def test_fixture_rows_without_a_score_are_reported_apart() -> None:
     assert [row.unit for row in audit.units] == [(0,), (2,), (3,), (4,)]
 
 
+@pytest.mark.heavy
 def test_patch_edges_resolves_layer_zero_receivers() -> None:
     """A receiver reading the embedding output (a layer-0 receiver) is patched, not refused."""
 
@@ -276,6 +275,7 @@ QKV_EDGES = [
 ]
 
 
+@pytest.mark.heavy
 def test_tiny_gpt2_q_k_v_patches_replay_to_their_measured_effects() -> None:
     """Head-slice patches (q, k, v), MLP and logits receivers, and a bias row replay exactly."""
 
