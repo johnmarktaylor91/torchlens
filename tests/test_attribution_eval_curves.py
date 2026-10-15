@@ -307,6 +307,43 @@ def test_curve_refuses_bad_settings_and_remedies_run(setting: str, value: Any) -
     assert isinstance(fixed, attribution.CurveResult)
 
 
+class _TraceWithForeignInput:
+    """Stand-in trace whose only input layer holds a tensor no curve evaluated."""
+
+    input_layers = ("input_1",)
+
+    class _Layer:
+        """Layer record exposing ``out``."""
+
+        out = torch.zeros(1, 3, 8, 8)
+
+    def __getitem__(self, name: str) -> Any:
+        """Return the input layer's record."""
+
+        return self._Layer()
+
+
+def test_curve_step_refuses_unmatched_input_layer_and_its_remedy_runs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A step whose input cannot be found among the input layers refuses; ``step.inputs`` scores."""
+
+    torch.manual_seed(0)
+    model = SmallCnn().eval()
+    x = torch.randn(1, 3, 8, 8)
+    result = attribution.saliency(model, x, target=1)
+    curve = attribution.deletion_curve(model, x, target=1, attribution=result, n_steps=2)
+    step = curve.steps[1]
+    monkeypatch.setattr(tl, "trace", lambda *args, **kwargs: _TraceWithForeignInput())
+    with pytest.raises(attribution.AttributionError) as excinfo:
+        _ = step.intervention
+    assert excinfo.value.fields.get("code") == "attribution_curve_input_unmatched"
+    found = re.search(r"e\.g\. (model\(step\.inputs\))\.", str(excinfo.value))
+    assert found is not None, str(excinfo.value)
+    output = eval(found.group(1), {"model": model, "step": step})  # noqa: S307
+    assert torch.allclose(output[:, 1].detach().to(torch.float64), step.score, atol=1e-6)
+
+
 def test_curve_refuses_site_target() -> None:
     """Curves score the model output, so a ``SiteTarget`` refuses with a code."""
 

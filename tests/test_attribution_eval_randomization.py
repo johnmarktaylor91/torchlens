@@ -261,6 +261,30 @@ def test_randomization_refuses_bad_settings_and_remedies_run(
     assert isinstance(fixed, attribution.RandomizationResult)
 
 
+def test_randomization_refuses_a_map_that_changes_shape() -> None:
+    """A method whose map layout changes after randomizing refuses with a code."""
+
+    torch.manual_seed(0)
+    model = SmallCnn()
+    x = torch.randn(1, 3, 12, 12)
+    calls: list[int] = []
+
+    def _shifting_layout(
+        model: nn.Module, inputs: Tensor, input_kwargs: Any, *, target: Any
+    ) -> Tensor:
+        """Return the input on the first call and a cropped map afterwards."""
+
+        calls.append(1)
+        return inputs if len(calls) == 1 else inputs[..., 1:]
+
+    with pytest.raises(attribution.AttributionError) as excinfo:
+        attribution.randomization_test(model, x, target=0, method=_shifting_layout)
+    assert excinfo.value.fields.get("code") == "attribution_randomization_map_changed"
+    message = str(excinfo.value)
+    assert "(1, 3, 12, 12)" in message and "(1, 3, 12, 11)" in message
+    assert "method_kwargs={'layer': ...}" in message
+
+
 def test_kept_maps_past_the_size_guard_warn_once_and_name_keep_maps_false(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
