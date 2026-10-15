@@ -36,8 +36,6 @@ from torchlens.intervention import (
 from torchlens.intervention._position_edits import at_positions
 from torchlens.intervention._subspace_projection import PROJECTION_NOTE
 
-pytestmark = pytest.mark.smoke
-
 _H = 0.5 * torch.tensor(
     [[1, 1, 1, 1], [1, -1, 1, -1], [1, 1, -1, -1], [1, -1, -1, 1]], dtype=torch.float64
 )
@@ -109,6 +107,7 @@ def test_component_matches_hand_and_complement_is_bit_unchanged(rank: str, verb:
     assert not torch.equal(component, base_component)
 
 
+@pytest.mark.smoke
 def test_audit_record_states_the_projection_and_keeps_the_basis_provenance() -> None:
     _out, fork = _edited(_BASES["rank1"], tl.zero_ablate())
     (site,) = fork.intervention_audit[-1]["sites"]
@@ -160,6 +159,7 @@ def _das_interchange(model: _Mlp, base: torch.Tensor, source: torch.Tensor, basi
             handle.remove()
 
 
+@pytest.mark.smoke
 @pytest.mark.parametrize("rank", sorted(_BASES))
 def test_patch_from_is_the_das_interchange(rank: str) -> None:
     basis = _BASES[rank]
@@ -313,3 +313,47 @@ def test_shape_changing_callable_refuses() -> None:
     with pytest.raises(InvalidArgumentError) as caught:
         fork.do(_subspace_sel(), lambda c, *, hook: c.sum(dim=-1))
     assert caught.value.fields["code"] == "subspace_edit_unsupported"
+
+
+def _random_mlp() -> _Mlp:
+    torch.manual_seed(0)
+    model = _Mlp().eval()
+    with torch.no_grad():
+        model.lin1.weight.copy_(torch.randn(4, 4, dtype=torch.float64))
+        model.lin2.weight.copy_(torch.randn(3, 4, dtype=torch.float64))
+    return model
+
+
+@pytest.mark.parametrize("rank", sorted(_BASES))
+@pytest.mark.parametrize("verb", ["scale", "patch_from"])
+def test_gradient_reaches_upstream_through_the_component_edit(rank: str, verb: str) -> None:
+    """``lin1.weight.grad`` through the subspace edit equals the eager hand version."""
+
+    basis = _BASES[rank]
+    x = torch.randn(5, 4, dtype=torch.float64, generator=torch.Generator().manual_seed(7))
+    source_x = torch.randn(5, 4, dtype=torch.float64, generator=torch.Generator().manual_seed(8))
+    options = tl.options.CaptureOptions(intervention_ready=True)
+    model = _random_mlp()
+    source = tl.trace(_random_mlp(), source_x, capture=options)
+    edit = tl.scale(2.0) if verb == "scale" else tl.patch_from(source)
+    fork = tl.trace(model, x, capture=options).fork()
+    fork.do(tl.subspace(_SITE, basis, origin="rows"), edit)
+    fork[fork.output_layers[0]].out.sum().backward()
+    got = model.lin1.weight.grad
+
+    eager = _random_mlp()
+    with torch.no_grad():
+        donor = eager.lin1(source_x)
+
+    def _hand(_module: Any, _args: Any, out: torch.Tensor) -> torch.Tensor:
+        coords = out @ basis.T
+        new = 2.0 * coords if verb == "scale" else donor @ basis.T
+        return out + (new - coords) @ basis
+
+    handle = eager.lin1.register_forward_hook(_hand)
+    try:
+        eager(x).sum().backward()
+    finally:
+        handle.remove()
+    assert got is not None
+    torch.testing.assert_close(got, eager.lin1.weight.grad, rtol=1e-12, atol=1e-12)
