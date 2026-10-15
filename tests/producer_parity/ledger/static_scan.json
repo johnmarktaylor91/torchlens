@@ -4041,6 +4041,22 @@
  },
  {
   "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/experiment/_engine.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "seq",
+  "file": "torchlens/experiment/_engine.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/experiment/_head_sugar.py",
   "has_default": false,
