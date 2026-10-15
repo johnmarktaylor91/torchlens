@@ -1355,3 +1355,33 @@
   output; refusals `attribution_site_not_found`, `attribution_site_unit_invalid`,
   `attribution_site_firing_invalid`, `attribution_site_independent_of_input`,
   `attribution_site_target_unsupported`. Doc of record: `docs/reference/attribution.md`.
+- Attribution evaluation (DOCUMENTED-UNSTABLE): `tl.attribution.deletion_curve` and
+  `tl.attribution.insertion_curve(model, inputs, input_kwargs=None, *, target, attribution,
+  baseline="zeros", n_steps=20, features="auto", patch_size=8)` remove or reveal the
+  most-attributed input features (elements, pixels, patches or tokens) in steps and return a
+  `tl.attribution.CurveResult` (`fractions`, `scores`, `area`, `aopc`, `steps`); every
+  `tl.attribution.CurveStep.intervention` holds `(tl.units(...), tl.replace_with(...))` pairs,
+  replayed by `trace.fork().do(selection, edit)`. `tl.attribution.road_curve(model, inputs,
+  input_kwargs=None, *, target, attribution, ranking="most_relevant_first", n_steps=20,
+  features="auto", patch_size=8, noise_std=0.01, seed=0)` is ROAD (Rong et al., 2022): the
+  deletion curve with removed pixels filled by noisy linear imputation from their 8 neighbours,
+  `metric="road"`, every step's `intervention` holding its imputed values; image inputs only.
+  `tl.attribution.randomization_test(model, inputs, input_kwargs=None, *, target, method,
+  method_kwargs=None, randomization="cascading", layers=None, seed=0, keep_maps=True)`
+  re-initializes layers top down on deep copies and reports Spearman and SSIM similarity per
+  step (`tl.attribution.RandomizationResult`, `tl.attribution.RandomizationStep`). Both accept
+  `grad_cam` results. Refusals `attribution_eval_map_misaligned`,
+  `attribution_eval_setting_invalid`, `attribution_randomization_layer_invalid`,
+  `attribution_randomization_map_changed`; warning `attribution_randomization_maps_large`. Doc
+  of record: `docs/reference/attribution.md`.
+- Causal audit (DOCUMENTED-UNSTABLE): `tl.attribution.causal_audit(model, inputs,
+  input_kwargs=None, *, claim, target, k=5, ablation="zero", controls=("bottom", "random"),
+  random_draws=10, per_unit=True, seed=0)` grades a layer attribution (also one computed for a
+  `tl.attribution.SiteTarget`) at its hidden site: each unit ablated alone, then the top-k
+  claimed units together beside bottom-k and seeded random-k controls, one
+  `trace.fork().do(...)` each; returns `tl.attribution.CausalAuditResult` (`units`, `sets`,
+  `rank_agreement` (Spearman), `original_score`, `site`) whose `tl.attribution.CausalAuditUnit`
+  and `tl.attribution.CausalAuditSet` rows carry `claimed`, `measured` and a replayable
+  `intervention`. Refusals `attribution_audit_claim_unsupported`,
+  `attribution_audit_claim_misaligned`, `attribution_eval_setting_invalid`; warning
+  `attribution_audit_units_many`. Doc of record: `docs/reference/attribution.md`.
