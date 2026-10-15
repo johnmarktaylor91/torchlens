@@ -3208,7 +3208,19 @@ class host_nondeterminism_monitor:
                     self._flag_uncertain("profile_classifier_error")
             try:
                 if event == "c_call":
-                    self._classify_c_call(frame, arg)
+                    # The classifier's own first exits, inlined: a call that is not a
+                    # held reference and whose receiver is absent or one of the exact
+                    # inert built-in types returns without classifying. Everything
+                    # else enters the unchanged classifier.
+                    if id(arg) in self._held_ref_marks:
+                        self._classify_c_call(frame, arg)
+                    else:
+                        receiver = getattr(arg, "__self__", None)
+                        if (
+                            receiver is not None
+                            and type(receiver) not in _INERT_PROFILE_C_CALL_RECEIVER_TYPES
+                        ):
+                            self._classify_c_call(frame, arg)
                 elif event == "call":
                     # Avoid two Python helper calls for the overwhelmingly common
                     # internal frame whose cached digest scope is false. Cache misses
@@ -3228,7 +3240,21 @@ class host_nondeterminism_monitor:
                 elif event == "return":
                     if id(frame) in self._numpy_frame_rng_states:
                         self._compare_numpy_frame_rngs(frame)
-                    self._snapshot_returned_numpy_rngs(frame, arg)
+                    # Same cached scope test as the ``call`` branch, applied to the
+                    # caller the value returns into: a cached implementation caller
+                    # is exactly the helper's own early return.
+                    if _NUMPY_RNG_METHODS_NEED_FRAME_DIGEST:
+                        caller = frame.f_back
+                        if caller is not None:
+                            caller_scope = self._numpy_frame_digest_scope_cache.get(
+                                id(caller.f_code)
+                            )
+                            if (
+                                caller_scope is None
+                                or caller_scope[0] is not caller.f_code
+                                or caller_scope[1] is not False
+                            ):
+                                self._snapshot_returned_numpy_rngs(frame, arg)
             except Exception:
                 self._flag_uncertain("profile_classifier_error")
             if predecessor is not None:
