@@ -91,13 +91,14 @@
       "id": "claim-2-intervention-as-object",
       "competitor": "pyvene (primary); nnsight (model.edit nuance)",
       "version_range": "as verified 2026-08-21 (pyvene README/pyvene_101/interventions.py)",
-      "neutral_fact": "Only pyvene treats interventions as durable objects (dict configs, IntervenableModel.save with Hub push, pyreft built on it). pyvene is NOT modelcard-locked: raw string component paths are an escape hatch -- but they are UNVERIFIED strings (no site keys, no structural verification, no drift refusal). pyvene HAS reads (CollectIntervention), site-scoped collection only. pyvene has no past tense: every intervention executes inside a live forward. nnsight model.edit() is a persistent in-memory binding, not a serializable artifact.",
+      "neutral_fact": "Only pyvene treats interventions as durable objects (dict configs, IntervenableModel.save with Hub push, pyreft built on it). pyvene is NOT modelcard-locked: raw string component paths are an escape hatch -- but they are UNVERIFIED strings (no site keys, no structural verification, no drift refusal). pyvene HAS reads (CollectIntervention), site-scoped collection only. pyvene has no past tense: every intervention executes inside a live forward. nnsight model.edit() is a persistent in-memory binding, not a serializable artifact. TorchLens reads one trained pyreft artifact kind, a single LoreftIntervention directory, with tl.bridge.pyreft.read and applies it as a portable subspace edit (tl.intervention.affine_source under tl.subspace); it trains nothing (added 2026-10-15).",
       "allowed_public_wording": "Only pyvene treats an intervention as a durable object -- serializable configs, trained interventions you can push to the Hub -- and we respect that. But a pyvene address is either a hand-maintained per-family alias or a bare attribute-path string; there is no structural verification and nothing that notices drift. And pyvene has no past tense: it can collect activations at a site, but there is no recording -- every question costs a live forward, and nothing is captured for audit.",
       "narrowed_scope_wording": "none needed -- wording rule permanently in force (no gate).",
       "limitation_wording": "Credit pyvene's artifact story without the contrast sentence.",
       "required_credit": "pyvene intervention-as-artifact + trainable interventions + Hub culture.",
       "evidence_refs": [
         "PARITY-INTERVENTIONS claim 2",
+        "tests/test_bridge_pyreft.py",
         "maintainer review record (private)"
       ],
       "scenario_ids": [],

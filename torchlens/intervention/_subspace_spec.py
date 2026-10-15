@@ -10,7 +10,12 @@ it builds anything: a malformed field refuses ``subspace_spec_invalid``, rows
 whose bytes no longer match their digest refuse ``subspace_spec_basis_tampered``,
 and rows that are not orthonormal refuse ``subspace_spec_basis_not_orthonormal``.
 A rotation learned elsewhere (DAS, ReFT) travels this way: its first ``k`` rows
-are the basis. The digest check detects corruption and hand edits of the rows;
+are the basis. An edit restricted by a ``within=`` element mask (LoReFT's one
+position) also stores the dense bool ``mask`` and its ``mask_sha256``; a
+malformed mask refuses ``subspace_spec_invalid`` and a mask whose bytes no
+longer match its digest refuses ``subspace_spec_mask_tampered``. Any stored
+keyword this loader does not know refuses ``subspace_spec_invalid``, so a spec
+is never rebuilt with part of its meaning dropped. The digest check detects corruption and hand edits of the rows;
 it is not a signature, so a forger who also recomputes the digest is not caught
 (the spec is trusted data, like every builtin helper argument).
 
@@ -24,8 +29,14 @@ from typing import Any
 import torch
 
 from .._errors import InvalidArgumentError
+from ..selection import _Mask
 from ..selection_subspace import _basis_digest
-from ._subspace_projection import _ORTHONORMAL_TOL, SubspaceProjection
+from ._subspace_projection import (
+    _ORTHONORMAL_TOL,
+    SubspaceProjection,
+    _mask_digest,
+    masked_subspace_edit,
+)
 from .types import Edit
 
 __all__ = ["rebuild_subspace_edit"]
@@ -135,12 +146,61 @@ def _checked_rows(rows: torch.Tensor, basis_sha256: str) -> None:
         )
 
 
+def _checked_mask(mask: Any, digest: Any, projection: SubspaceProjection) -> _Mask:
+    """Return the stored element mask, refusing a malformed or tampered one."""
+
+    if not isinstance(mask, torch.Tensor) or mask.dtype != torch.bool or mask.ndim < 1:
+        kind = f"{mask.dtype} tensor" if isinstance(mask, torch.Tensor) else type(mask).__name__
+        raise _invalid("mask", f"expected a bool tensor, got {kind}", code="subspace_spec_invalid")
+    if mask.layout != torch.strided or mask.device.type == "meta":
+        raise _invalid(
+            "mask",
+            f"expected a dense mask with data, got {mask.layout} on {mask.device}",
+            code="subspace_spec_invalid",
+        )
+    axis = projection.dim % mask.ndim if -mask.ndim <= projection.dim < mask.ndim else None
+    width = int(projection.rows.shape[1])
+    if axis is None or int(mask.shape[axis]) != width:
+        raise _invalid(
+            "mask",
+            f"its shape {tuple(mask.shape)!r} has no axis {projection.dim} of the basis "
+            f"width {width}",
+            code="subspace_spec_invalid",
+        )
+    if not _is_text(digest):
+        raise _invalid(
+            "mask_sha256",
+            f"expected a non-empty string beside the mask, got {digest!r}",
+            code="subspace_spec_invalid",
+        )
+    dense = mask.detach().cpu().contiguous()
+    if _mask_digest(dense) != digest:
+        raise InvalidArgumentError(
+            "the saved subspace edit's mask no longer matches its recorded sha256 "
+            f"{str(digest)[:16]}...: the mask was changed after saving, so the "
+            "positions it would edit are not the ones recorded",
+            code="subspace_spec_mask_tampered",
+            remedy=_RESAVE,
+            argument="mask",
+        )
+    if projection.partial_along_support(dense):
+        raise _invalid(
+            "mask",
+            "it keeps only part of the basis support at some position, which a saved "
+            "subspace edit never stores",
+            code="subspace_spec_invalid",
+        )
+    return _Mask(shape=tuple(dense.shape), form="dense", dense=dense)
+
+
 _REQUIRED = ("basis", "axis", "basis_sha256", "origin")
 _OPTIONAL: dict[str, Any] = {
     "method": None,
     "origin_sha256": None,
     "source_dtype": "float64",
     "orthonormalised": False,
+    "mask": None,
+    "mask_sha256": None,
 }
 
 
@@ -157,8 +217,10 @@ def rebuild_subspace_edit(edit: Any, **stored: Any) -> Edit:
         (digest of ``basis``: shape header plus float64 bytes), ``origin`` and
         optionally ``method`` (the ``tl.subspace`` provenance), ``origin_sha256``
         (digest of the caller's basis; default ``basis_sha256``),
-        ``source_dtype`` (dtype of the caller's basis; default ``"float64"``)
-        and ``orthonormalised`` (default ``False``).
+        ``source_dtype`` (dtype of the caller's basis; default ``"float64"``),
+        ``orthonormalised`` (default ``False``), and ``mask`` with
+        ``mask_sha256`` (the ``within=`` element mask; default ``None``, the
+        whole site).
 
     Returns
     -------
@@ -169,8 +231,8 @@ def rebuild_subspace_edit(edit: Any, **stored: Any) -> Edit:
     Raises
     ------
     InvalidArgumentError
-        ``subspace_spec_invalid``, ``subspace_spec_basis_tampered`` or
-        ``subspace_spec_basis_not_orthonormal``.
+        ``subspace_spec_invalid``, ``subspace_spec_basis_tampered``,
+        ``subspace_spec_basis_not_orthonormal`` or ``subspace_spec_mask_tampered``.
     """
 
     if not isinstance(edit, Edit) or edit.portability != "builtin":
@@ -203,4 +265,13 @@ def rebuild_subspace_edit(edit: Any, **stored: Any) -> Edit:
         method=fields["method"],
         source_dtype=str(fields["source_dtype"]),
     )
-    return projection.wrap(edit)
+    if fields["mask"] is None:
+        if fields["mask_sha256"] is not None:
+            raise _invalid(
+                "mask_sha256",
+                "a mask digest was stored without its mask",
+                code="subspace_spec_invalid",
+            )
+        return projection.wrap(edit)
+    mask = _checked_mask(fields["mask"], fields["mask_sha256"], projection)
+    return masked_subspace_edit(projection.wrap(edit), mask, "the saved subspace edit's site")

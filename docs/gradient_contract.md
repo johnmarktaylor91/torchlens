@@ -90,7 +90,9 @@ layer's weight a gradient, equal to the gradient of the same edit applied by han
 forward hook; `cut` means it gives none. `raises:<code>` is a typed refusal. Under
 `do(tl.subspace(...))` the verbs act on the subspace coordinates or write a value's component (see
 [subspace edits](intervention_explainers.md#subspace-edits-the-component-along-a-basis)), and the
-projection edits refuse `subspace_edit_unsupported` there. Every `push(differentiable=True)` cell
+projection edits refuse `subspace_edit_unsupported` there. `affine_source` is a source verb: it
+keeps the graph under `do(tl.subspace(...))` (its new coordinates `W x + b` are a function of the
+site value) and refuses `affine_source_needs_subspace` at every other door. Every `push(differentiable=True)` cell
 reads `cut` because the replay frontier re-leafs the edited value; each of its `keep_grad` cells
 that does not raise also carries the `keep_grad_replay_frontier` warning, and the test checks it.
 
@@ -122,6 +124,7 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | capture intervene= | `subspace_ablate` | reaches | reaches |
 | capture intervene= | `subspace_ablate(resample)` | reaches | reaches |
 | capture intervene= | `subspace_interchange` | reaches | reaches |
+| capture intervene= | `affine_source` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
 | capture intervene= | `compose` | reaches | reaches |
 | capture intervene= | `at_positions` | reaches | reaches |
 | capture intervene= | `hook callable` | reaches | reaches |
@@ -151,6 +154,7 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | capture hooks= | `subspace_ablate` | reaches | reaches |
 | capture hooks= | `subspace_ablate(resample)` | reaches | reaches |
 | capture hooks= | `subspace_interchange` | reaches | reaches |
+| capture hooks= | `affine_source` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
 | capture hooks= | `compose` | reaches | reaches |
 | capture hooks= | `at_positions` | reaches | reaches |
 | capture hooks= | `hook callable` | reaches | reaches |
@@ -180,6 +184,7 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | capture InterventionDecision | `subspace_ablate` | reaches | reaches |
 | capture InterventionDecision | `subspace_ablate(resample)` | reaches | reaches |
 | capture InterventionDecision | `subspace_interchange` | reaches | reaches |
+| capture InterventionDecision | `affine_source` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
 | capture InterventionDecision | `compose` | reaches | reaches |
 | capture InterventionDecision | `at_positions` | reaches | reaches |
 | capture InterventionDecision | `hook callable` | reaches | reaches |
@@ -209,6 +214,7 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | fork.do (replay) | `subspace_ablate` | reaches | reaches |
 | fork.do (replay) | `subspace_ablate(resample)` | reaches | reaches |
 | fork.do (replay) | `subspace_interchange` | reaches | reaches |
+| fork.do (replay) | `affine_source` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
 | fork.do (replay) | `compose` | reaches | reaches |
 | fork.do (replay) | `at_positions` | reaches | reaches |
 | fork.do (replay) | `hook callable` | reaches | reaches |
@@ -238,6 +244,7 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | do(model=, x=) (rerun) | `subspace_ablate` | reaches | reaches |
 | do(model=, x=) (rerun) | `subspace_ablate(resample)` | reaches | reaches |
 | do(model=, x=) (rerun) | `subspace_interchange` | reaches | reaches |
+| do(model=, x=) (rerun) | `affine_source` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
 | do(model=, x=) (rerun) | `compose` | reaches | reaches |
 | do(model=, x=) (rerun) | `at_positions` | reaches | reaches |
 | do(model=, x=) (rerun) | `hook callable` | reaches | reaches |
@@ -267,6 +274,7 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | attach_hooks + run | `subspace_ablate` | reaches | reaches |
 | attach_hooks + run | `subspace_ablate(resample)` | reaches | reaches |
 | attach_hooks + run | `subspace_interchange` | reaches | reaches |
+| attach_hooks + run | `affine_source` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
 | attach_hooks + run | `compose` | reaches | reaches |
 | attach_hooks + run | `at_positions` | reaches | reaches |
 | attach_hooks + run | `hook callable` | reaches | reaches |
@@ -296,6 +304,7 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | spec.bind(model) | `subspace_ablate` | reaches | reaches |
 | spec.bind(model) | `subspace_ablate(resample)` | reaches | reaches |
 | spec.bind(model) | `subspace_interchange` | reaches | reaches |
+| spec.bind(model) | `affine_source` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
 | spec.bind(model) | `compose` | reaches | reaches |
 | spec.bind(model) | `at_positions` | reaches | reaches |
 | spec.bind(model) | `hook callable` | reaches | reaches |
@@ -325,6 +334,7 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | push(differentiable=True) | `subspace_ablate` | cut | cut |
 | push(differentiable=True) | `subspace_ablate(resample)` | cut | cut |
 | push(differentiable=True) | `subspace_interchange` | cut | cut |
+| push(differentiable=True) | `affine_source` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
 | push(differentiable=True) | `compose` | cut | cut |
 | push(differentiable=True) | `at_positions` | cut | cut |
 | push(differentiable=True) | `hook callable` | cut | cut |
@@ -354,6 +364,7 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | do(tl.units(...)) | `subspace_ablate` | reaches | reaches |
 | do(tl.units(...)) | `subspace_ablate(resample)` | reaches | reaches |
 | do(tl.units(...)) | `subspace_interchange` | reaches | reaches |
+| do(tl.units(...)) | `affine_source` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
 | do(tl.units(...)) | `compose` | reaches | reaches |
 | do(tl.units(...)) | `at_positions` | reaches | reaches |
 | do(tl.units(...)) | `hook callable` | reaches | reaches |
@@ -383,6 +394,7 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | do(tl.subspace(...)) | `subspace_ablate` | raises:subspace_edit_unsupported | raises:subspace_edit_unsupported |
 | do(tl.subspace(...)) | `subspace_ablate(resample)` | raises:subspace_edit_unsupported | raises:subspace_edit_unsupported |
 | do(tl.subspace(...)) | `subspace_interchange` | raises:subspace_edit_unsupported | raises:subspace_edit_unsupported |
+| do(tl.subspace(...)) | `affine_source` | reaches | reaches |
 | do(tl.subspace(...)) | `compose` | raises:subspace_edit_unsupported | raises:subspace_edit_unsupported |
 | do(tl.subspace(...)) | `at_positions` | raises:subspace_edit_unsupported | raises:subspace_edit_unsupported |
 | do(tl.subspace(...)) | `hook callable` | reaches | reaches |

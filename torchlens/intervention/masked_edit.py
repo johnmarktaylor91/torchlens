@@ -179,8 +179,12 @@ def _derive_masked_edit(edit: Any, entry: SiteEntry, digest: str, site_label: st
     masks wrap the hook factory with the engine scatter; the derived spec's
     factory is session-time (``FieldPolicy.DROP``) — the mask never enters
     a persisted KEEP field, and the recipe rides the DROP-gated
-    ``selection_recipe`` family.
+    ``selection_recipe`` family. The one exception is a builtin
+    ``subspace_edit`` (a projected builtin verb): it stores the dense mask and
+    its sha256 among its own arguments and stays portable.
     """
+
+    from ._subspace_projection import SUBSPACE_EDIT_NAME, masked_subspace_edit
 
     recipe = {
         "resolve_digest": digest,
@@ -209,6 +213,13 @@ def _derive_masked_edit(edit: Any, entry: SiteEntry, digest: str, site_label: st
             )
         if dict(edit.metadata).get("row_coherent"):
             disclosure = disclosure + _row_equivariance_facts(edit, entry, site_label)
+        if edit.helper_name == SUBSPACE_EDIT_NAME and edit.portability == "builtin":
+            # A projected builtin verb stores its mask, so it stays portable.
+            return dataclasses.replace(
+                masked_subspace_edit(edit, entry._mask, site_label),
+                metadata=tuple(edit.metadata) + disclosure,
+                selection_recipe=recipe,
+            )
         return dataclasses.replace(
             edit,
             factory=_masked_factory(edit.factory, entry._mask, site_label),

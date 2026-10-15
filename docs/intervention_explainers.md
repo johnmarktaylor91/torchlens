@@ -131,6 +131,8 @@ rows, the edit acts on the coordinates `c = Q x` (one per row) and the site gets
   is the interchange (the component becomes the source run's), and likewise `swap_with`,
   `replace_with`, `tl.add(tensor)`, `steer`, `permute_batch`, `resample_rows_from`, `mean_from` and
   `mean_fill(ref, ...)`.
+- A source verb maps the whole site value to new coordinates: `tl.intervention.affine_source(W,
+  bias=b)` sets them to `W x + b` (LoReFT; see "A learned affine source" below).
 - Every other verb refuses `subspace_edit_unsupported` and names the spelling that works: the
   projection edits themselves (`project_off`, `project_onto`, `set_direction_mean`,
   `subspace_ablate`, `subspace_interchange`), `compose` (apply the edits one at a time),
@@ -259,6 +261,97 @@ RESULT = [
     torch.equal(reloaded[site].out, fork[site].out),  # the same interchange, bit for bit
     helper.helper_name == "subspace_edit",
     dict(helper.kwargs)["origin"] == "DAS rotation trained elsewhere",
+]
+```
+
+### A learned affine source: LoReFT
+
+LoReFT (pyreft) learns a rotation `R` (`[d, k]`, orthonormal columns) and an affine map `W h + b`
+(`W` is `[k, d]`), and writes `h + R (W h + b - R^T h)`: the coordinates along `R` become an affine
+function of the whole site value `h`. That is a source verb:
+`tl.intervention.affine_source(W, bias=b)` under `tl.subspace(site, R.T, origin=...)`. The
+projection hands it the site value and it returns the new `k` coordinates, so the site gets
+`x + Q^T (W x + b - Q x)` with `Q = R^T`. The basis rows and `W` must have the same shape `[k, d]`
+(else `affine_source_invalid`, as for a non-finite or non-float argument). Outside a subspace a
+`[k, d]` map has no meaning, so the verb refuses `affine_source_needs_subspace` with this spelling.
+
+```python
+# docs-test: expected=[True, True]
+import torch
+from torch import nn
+import torchlens as tl
+
+torch.manual_seed(0)
+model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).double().eval()
+options = tl.options.CaptureOptions(intervention_ready=True)
+x = torch.randn(3, 4, dtype=torch.float64)
+site = "linear_1_1"
+rotation = torch.linalg.qr(torch.randn(4, 2, dtype=torch.float64))[0]  # R, [d, k]
+weight, bias = torch.randn(2, 4, dtype=torch.float64), torch.randn(2, dtype=torch.float64)
+
+base = tl.trace(model, x, capture=options)
+fork = base.fork()
+fork.do(
+    tl.subspace(site, rotation.T, origin="LoReFT trained elsewhere", method="loreft"),
+    tl.intervention.affine_source(weight, bias=bias),
+)
+h = base[site].out
+loreft = h + (h @ weight.T + bias - h @ rotation) @ rotation.T
+
+RESULT = [
+    torch.allclose(fork.push()[site].out, loreft, rtol=0.0, atol=1e-12),  # LoReFT, by hand
+    fork.intervention_audit[-1]["edit"] == "affine_source",
+]
+```
+
+LoReFT edits one position (pyreft's `unit_locations`, usually the last prompt token). Restrict the
+subspace with `within=tl.units(site, mask)`, `mask` True on every feature of that position. A
+subspace edit with a builtin verb stores its mask and the mask's sha256, so a one-position edit
+still saves at `level="portable"` and reloads as the same edit; a stored mask that is malformed
+refuses `subspace_spec_invalid` at load and one changed after saving refuses
+`subspace_spec_mask_tampered`. Other masked edits keep their own portability.
+`tl.bridge.pyreft.read(directory)` reads a saved pyreft artifact into these two pieces
+(`artifact.subspace(site, positions=...)` and `artifact.edit`); see
+[from pyvene](migration/from_pyvene.md#reading-a-pyreft-loreft-artifact).
+
+```python
+# docs-test: expected=[True, True, True]
+import tempfile
+from pathlib import Path
+
+import torch
+from torch import nn
+import torchlens as tl
+
+torch.manual_seed(0)
+model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).double().eval()
+options = tl.options.CaptureOptions(intervention_ready=True)
+tokens = torch.randn(1, 5, 4, dtype=torch.float64)  # [batch, positions, features]
+site = "linear_1_1"
+rotation = torch.linalg.qr(torch.randn(4, 2, dtype=torch.float64))[0]
+weight, bias = torch.randn(2, 4, dtype=torch.float64), torch.randn(2, dtype=torch.float64)
+last = torch.zeros(1, 5, 4, dtype=torch.bool)
+last[:, -1, :] = True  # every feature of the last position
+
+base = tl.trace(model, tokens, capture=options)
+fork = base.fork()
+fork.do(
+    tl.subspace(tl.units(site, last), rotation.T, origin="LoReFT trained elsewhere"),
+    tl.intervention.affine_source(weight, bias=bias),
+)
+edited = fork.push()
+path = Path(tempfile.mkdtemp()) / "loreft.tlspec"
+tl.io.save_intervention(fork, path, level="portable")
+
+spec = tl.io.load_intervention_spec(path)
+fresh = tl.trace(model, tokens, capture=options).fork()
+for hook_spec in spec.hook_specs:
+    fresh.attach_hooks(hook_spec.site_target, hook_spec.helper, confirm_mutation=True)
+
+RESULT = [
+    torch.equal(fresh.push()[site].out, edited[site].out),  # the same edit, bit for bit
+    torch.equal(edited[site].out[:, :-1], base[site].out[:, :-1]),  # other positions untouched
+    spec.hook_specs[0].helper.portability == "builtin",
 ]
 ```
 

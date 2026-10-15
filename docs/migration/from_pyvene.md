@@ -22,6 +22,7 @@ page.
 | `CollectIntervention` | a `save=` selector on `tl.trace` or `tl.record` |
 | SAE features as the intervention basis | `torchlens.bridge.sae.splice(..., latents_edit=...)` |
 | Trainable interventions (`RotatedSpaceIntervention`, DAS, pyreft) | your own training loop over a bound spec; TorchLens ships no trainer |
+| A trained pyreft `LoreftIntervention` (`ReftModel.save` directory) | `tl.bridge.pyreft.read(directory)`, then `fork.do(artifact.subspace(site, positions=mask), artifact.edit)` |
 | `unit_locations` | `positions=` on `tl.patch_from`, or `tl.units(label, indices)` |
 | Saving the configuration | `trace.save_intervention(path, level=...)` writes a `.tlspec/` recipe |
 
@@ -299,6 +300,69 @@ RESULT = [
 
 The same hook trains inside `tl.trace(..., intervene=...)` when you also want the graph of one
 step, but a trace per step costs far more than the bound call.
+
+## Reading a pyreft LoReFT artifact
+
+TorchLens does not train a LoReFT intervention, but it reads one pyreft trained and applies it.
+`tl.bridge.pyreft.read(directory)` takes the directory `ReftModel.save` wrote (`config.json` plus
+`intkey_<key>.bin`, under the key's dotted or underscored name) and returns a `LoreftArtifact`
+with `R`, `W` and `b` as saved, the layer and component pyreft names, and the provenance: each
+file's sha256, each tensor's dtype, and the `repo=` and `revision=` you pass. It imports neither
+pyreft nor pyvene. LoReFT's `h + R (W h + b - R^T h)` is then
+`fork.do(artifact.subspace(site, positions=mask), artifact.edit)`: a `tl.subspace` over `R.T`
+restricted to pyreft's `unit_locations`, with `tl.intervention.affine_source(W, bias=b)`. pyreft
+trains `R` in float32, orthonormal to about `1e-7`, so the subspace orthonormalises it once in
+float64 and the saved edit records both the digest of `R` as read and that of the rows applied. The
+edit saves at `level="portable"`. A directory that is not one LoReFT intervention refuses
+`pyreft_artifact_invalid` or `pyreft_artifact_unsupported`.
+
+The example writes a stand-in artifact in pyreft's file layout; with a real one, `directory` is the
+folder pyreft saved (for example a Hugging Face snapshot) and `site` is the label of the decoder
+layer's output that pyreft's `block_output` names.
+
+```python
+# migration-test: tool=torchlens expected=[True, True, True]
+import json
+import tempfile
+from pathlib import Path
+
+import torch
+from torch import nn
+import torchlens as tl
+
+torch.manual_seed(0)
+key = "layer.0.comp.block_output.unit.pos.nunit.1#0"
+directory = Path(tempfile.mkdtemp())
+(directory / "config.json").write_text(json.dumps({
+    "intervention_types": ["<class 'pyreft.interventions.LoreftIntervention'>"],
+    "representations": [[0, "block_output", "pos", 1, 2]],
+    "sorted_keys": [key],
+    "intervention_dimensions": [4],
+}))
+rotation = torch.linalg.qr(torch.randn(4, 2))[0]  # float32, as pyreft trains it
+weight, bias = torch.randn(2, 4).bfloat16(), torch.randn(2).bfloat16()
+torch.save({"weight": weight, "bias": bias, "rotate_layer": rotation}, directory / f"intkey_{key}.bin")
+
+artifact = tl.bridge.pyreft.read(directory, repo="example/loreft", revision="0" * 40)
+model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).double().eval()
+tokens = torch.randn(1, 5, 4, dtype=torch.float64)
+site = "linear_1_1"
+positions = torch.zeros(1, 5, dtype=torch.bool)
+positions[:, -1] = True  # pyreft's unit_locations: the last token
+
+base = tl.trace(model, tokens, capture=tl.options.CaptureOptions(intervention_ready=True))
+fork = base.fork()
+fork.do(artifact.subspace(site, positions=positions), artifact.edit)
+h, edited = base[site].out[0, -1], fork.push()[site].out
+R, W, b = rotation.double(), weight.double(), bias.double()
+
+RESULT = [
+    # LoReFT at the last token (R orthonormalised in float64 moves it by float32 rounding) ...
+    torch.allclose(edited[0, -1], h + R @ (W @ h + b - R.T @ h), atol=1e-5),
+    torch.equal(edited[0, :-1], base[site].out[0, :-1]),  # ... and nothing elsewhere
+    artifact.provenance["source_dtype"]["rotation"] == "float32",
+]
+```
 
 ## Batched evaluation over a dataset
 

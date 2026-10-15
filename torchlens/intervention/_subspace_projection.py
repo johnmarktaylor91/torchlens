@@ -16,7 +16,7 @@ positive diagonal), so for one direction ``v`` the coordinate is the
 component along ``v / |v|``; the audit record says so. A rank-deficient basis
 refuses ``subspace_basis_invalid``.
 
-Each edit verb has one of three meanings here:
+Each edit verb has one of four meanings here:
 
 * coordinate verbs run on ``c`` itself (``zero_ablate``, ``scale``,
   ``clamp``, ``noise``, ``mean_ablate()``, ``mean_fill`` without ``ref=``,
@@ -27,6 +27,9 @@ Each edit verb has one of three meanings here:
   value's component (``patch_from``, the interchange; ``swap_with``,
   ``replace_with``, ``add`` of a tensor, ``steer``, ``permute_batch``,
   ``resample_rows_from``, ``mean_from``, ``mean_fill(ref)``);
+* source verbs map the full site value ``x`` to new coordinates
+  ``[..., k]`` (``tl.intervention.affine_source(weight, bias=b)``, so
+  ``x + Q^T (W x + b - Q x)``, the LoReFT form);
 * every other verb refuses ``subspace_edit_unsupported`` with the spelling
   that works.
 
@@ -40,6 +43,9 @@ and a malformed, tampered or non-orthonormal stored basis refuses at load.
 This is how a rotation learned elsewhere (DAS, ReFT) travels: its first
 ``k`` rows are the basis. A projected edit whose inner verb is not builtin
 (``patch_from``, population verbs, hook callables) stays ``opaque_audit``.
+A subspace restricted by a ``within=`` element mask (one position, as LoReFT
+acts) stores that mask and its sha256 too, so it also saves portably; any
+other masked edit keeps its own portability.
 
 DOCUMENTED-UNSTABLE semantics.
 """
@@ -47,20 +53,23 @@ DOCUMENTED-UNSTABLE semantics.
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 from collections.abc import Callable
 from typing import Any
 
 import torch
 
 from .._errors import InvalidArgumentError
-from ..selection import ResolvedSelection, Selection, SiteEntry, _Combinator, _lift
+from ..selection import ResolvedSelection, Selection, SiteEntry, _Combinator, _lift, _Mask
 from ..selection_subspace import _basis_digest, _SubspaceTerm
+from ._affine_source import AFFINE_SOURCE_NAME, SourceCall, check_source_shape
 from ._subspace_edits import _orthonormal_rows
 from .types import Edit
 
 __all__ = [
     "PROJECTION_NOTE",
     "SubspaceProjection",
+    "masked_subspace_edit",
     "subspace_projection_of",
 ]
 
@@ -182,7 +191,7 @@ _CONDITIONAL_MEANINGS: dict[str, Callable[[Edit, dict[str, Any]], str | None]] =
 
 
 def _verb_meaning(edit: Any) -> str:
-    """Classify an edit as ``"coordinates"`` or ``"value"``, refusing the rest."""
+    """Classify an edit as ``"coordinates"``, ``"value"`` or ``"source"``, refusing the rest."""
 
     if not isinstance(edit, Edit):
         return "coordinates"
@@ -195,6 +204,8 @@ def _verb_meaning(edit: Any) -> str:
             "intervene=tl.when(tl.module(name), tl.grad_zero()))",
             code="subspace_edit_unsupported",
         )
+    if verb == AFFINE_SOURCE_NAME:
+        return "source"
     if verb in _COORDINATE_VERBS or verb in _VALUE_VERBS:
         return "coordinates" if verb in _COORDINATE_VERBS else "value"
     classify = _CONDITIONAL_MEANINGS.get(verb)
@@ -294,10 +305,8 @@ class SubspaceProjection:
         """Refuse a population that keeps only part of the support along the axis."""
 
         dense = entry._mask._dense_ro()
-        axis = self.dim % dense.ndim
-        support = (self.rows.abs() > 0).any(dim=0)
-        along = torch.movedim(dense, axis, -1)[..., support]
-        if bool((along.any(dim=-1) & ~along.all(dim=-1)).any()):
+        if self.partial_along_support(dense):
+            axis = self.dim % dense.ndim
             raise InvalidArgumentError(
                 f"the subspace population at {site_label!r} selects only part of the basis "
                 f"support along axis {axis}; editing a component needs every supported "
@@ -311,6 +320,23 @@ class SubspaceProjection:
                 site=site_label,
             )
 
+    def partial_along_support(self, dense: torch.Tensor) -> bool:
+        """Return whether a mask keeps only part of the basis support at some position."""
+
+        axis = self.dim % dense.ndim
+        support = (self.rows.abs() > 0).any(dim=0)
+        along = torch.movedim(dense, axis, -1)[..., support]
+        return bool((along.any(dim=-1) & ~along.all(dim=-1)).any())
+
+    def _inner_factory(self, edit: Edit, meaning: str) -> Callable[[], Any]:
+        """Return the verb's hook factory (a source verb's weight must match these rows)."""
+
+        if meaning == "source":
+            check_source_shape(edit, self.rows)
+        if edit.factory is None:
+            raise _refusal_for(edit.helper_name, code="subspace_edit_unsupported")
+        return edit.factory
+
     def derive(self, edit: Any, entry: SiteEntry, site_label: str) -> Any:
         """Return ``edit`` rewritten to act on this site's subspace component."""
 
@@ -318,9 +344,7 @@ class SubspaceProjection:
         meaning = _verb_meaning(edit)
         verb = edit.helper_name if isinstance(edit, Edit) else "hook callable"
         if isinstance(edit, Edit):
-            if edit.factory is None:
-                raise _refusal_for(verb, code="subspace_edit_unsupported")
-            inner_factory: Callable[[], Any] = edit.factory
+            inner_factory: Callable[[], Any] = self._inner_factory(edit, meaning)
         else:
 
             def inner_factory() -> Any:
@@ -347,9 +371,7 @@ class SubspaceProjection:
         """Return the builtin ``subspace_edit`` for a builtin verb (the reload path)."""
 
         meaning = _verb_meaning(edit)
-        if edit.factory is None:
-            raise _refusal_for(edit.helper_name, code="subspace_edit_unsupported")
-        factory = self._factory(edit.factory, meaning, edit.helper_name)
+        factory = self._factory(self._inner_factory(edit, meaning), meaning, edit.helper_name)
         return self._portable_edit(edit, factory, self._disclosure(meaning))
 
     def _disclosure(self, meaning: str) -> tuple[tuple[str, Any], ...]:
@@ -408,6 +430,10 @@ class SubspaceProjection:
                 if meaning == "coordinates":
                     edited = _checked(inner(coords, hook=hook), coords, verb, "coordinates")
                     delta = edited - coords
+                elif meaning == "source":
+                    source = inner(torch.movedim(out, axis, -1), hook=SourceCall(hook))
+                    moved = torch.movedim(source, -1, axis)
+                    delta = _checked(moved, coords, verb, "coordinates") - coords
                 else:
                     value = _checked(inner(out, hook=hook), out, verb, "site value")
                     delta = _move_coords(value, rows, axis) - coords
@@ -416,6 +442,43 @@ class SubspaceProjection:
             return _hook
 
         return factory
+
+
+def _mask_digest(mask: torch.Tensor) -> str:
+    """Return the sha256 of a bool element mask (shape header plus bytes)."""
+
+    digest = hashlib.sha256()
+    digest.update(repr(tuple(mask.shape)).encode())
+    digest.update(mask.to(torch.uint8).contiguous().numpy().tobytes())
+    return digest.hexdigest()
+
+
+def masked_subspace_edit(edit: Edit, mask: _Mask, site_label: str) -> Edit:
+    """Return a builtin ``subspace_edit`` restricted to ``mask``, still portable.
+
+    The stored keywords gain ``mask`` (the dense bool element mask) and
+    ``mask_sha256``, and the hook scatters only the masked elements, exactly as
+    the session-time masked edit does, so a reload applies bit-identically.
+    """
+
+    from .masked_edit import _masked_factory
+
+    if edit.factory is None:
+        raise _refusal_for(edit.helper_name, code="subspace_edit_unsupported")
+    dense = mask.to_dense().cpu().contiguous()
+    stored = dict(edit.kwargs)
+    if isinstance(stored.get("mask"), torch.Tensor):
+        # A reloaded masked edit under another mask: the session scatters through
+        # both, which is the intersection, so that is the one mask stored.
+        if tuple(stored["mask"].shape) != tuple(dense.shape):
+            raise _refusal_for(edit.helper_name, code="subspace_edit_unsupported")
+        dense = dense & stored["mask"]
+    kwargs = tuple(item for item in edit.kwargs if item[0] not in ("mask", "mask_sha256"))
+    return dataclasses.replace(
+        edit,
+        kwargs=kwargs + (("mask", dense), ("mask_sha256", _mask_digest(dense))),
+        factory=_masked_factory(edit.factory, mask, site_label),
+    )
 
 
 def _contains_subspace(node: Any) -> bool:

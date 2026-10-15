@@ -29,6 +29,7 @@ from torchlens.intervention import (
     InterventionDecision,
     _gradient_contract,
     add,
+    affine_source,
     clamp,
     compose,
     keep_grad,
@@ -65,6 +66,9 @@ _V = torch.tensor([1.0, 2.0, -1.0, 0.5], dtype=torch.float64)
 _V_HAT = _V / _V.norm()
 _Q = 0.5 * torch.tensor([[1, 1, 1, 1], [1, -1, 1, -1]], dtype=torch.float64)
 _P = _Q.T @ _Q
+# The affine source's weight is shaped like the basis rows.
+_AW = torch.randn(2, 4, generator=torch.Generator().manual_seed(6), dtype=torch.float64)
+_AB = torch.randn(2, generator=torch.Generator().manual_seed(7), dtype=torch.float64)
 _UNITS = torch.zeros(*_SHAPE, dtype=torch.bool)
 _UNITS[:, 0, :] = True
 
@@ -130,7 +134,8 @@ def _cut(value: Callable[[torch.Tensor], torch.Tensor]) -> Callable[[torch.Tenso
 
 # name -> (edit factory, hand edit on the site value, meaning under a subspace door)
 # Meanings: "coord" acts on the coordinates, "value" takes a value's component,
-# "refused" refuses subspace_edit_unsupported.
+# "refused" refuses subspace_edit_unsupported, "source" sets the coordinates
+# from the whole site value (and refuses affine_source_needs_subspace elsewhere).
 _VERBS: dict[str, tuple[Callable[[], Any], Callable[[torch.Tensor], torch.Tensor], str]] = {
     "zero_ablate": (zero_ablate, _cut(torch.zeros_like), "coord"),
     "mean_ablate": (mean_ablate, lambda out: torch.zeros_like(out) + out.mean(), "coord"),
@@ -192,6 +197,11 @@ _VERBS: dict[str, tuple[Callable[[], Any], Callable[[torch.Tensor], torch.Tensor
         lambda: set_direction_mean(_V, _site_donors(), feature_axis=-1),
         lambda out: out - (out @ _V_HAT)[..., None] * _V_HAT,
         "refused",
+    ),
+    "affine_source": (
+        lambda: affine_source(_AW, bias=_AB),
+        lambda out: out @ _AW.T + _AB,
+        "source",
     ),
     "subspace_ablate": (lambda: subspace_ablate(_Q), lambda out: out - out @ _P, "refused"),
     "subspace_ablate(resample)": (
@@ -331,6 +341,8 @@ def _subspace_hand(verb: str) -> Callable[[torch.Tensor], torch.Tensor] | None:
         return lambda out: out + ((f(out @ _Q.T) - out @ _Q.T) @ _Q)
     if meaning == "value":
         return lambda out: out + (f(out) - out) @ _P
+    if meaning == "source":
+        return lambda out: out + (f(out) - out @ _Q.T) @ _Q
     return None
 
 
