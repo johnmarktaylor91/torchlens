@@ -214,6 +214,8 @@
   `tl.mechinterp.head_scores(..., kind=tl.mechinterp.FixedPeriodInduction(period=n))` scores
   fixed-period induction on repeated sequences; recipe page `docs/recipes/acdc_ioi.md` (ACDC as a
   driver loop over edge substitution and the experiment ledger). Documented unstable.
+- **bundle**: `Bundle.measure_members(order="chain")` orders members by the bundle's validated
+  operation chain and lists members no operation recorded apart.
 
 ### Bug Fixes
 
@@ -256,6 +258,24 @@
   label, such as every layer-0 receiver.
 - **bundle**: `Bundle.most_changed` and `Bundle.diff_pair` pair ops by graph structure, so ops a
   module intervention renumbers are no longer dropped from the comparison.
+- **rerun**: After a rerun that refreshed a fork in place, the fork's host-RNG verdict now also
+  covers the rerun's own forward pass; a rerun hook that drew host RNG was previously reported as
+  not drawing any.
+- **experiment**: `torchlens.experiment.site_sweep` runs a `tl.units(site, mask)` candidate on the
+  selected units only (it previously ablated the whole site), and distinct units at one site are
+  distinct candidates.
+
+### Performance Improvements
+
+- **rerun**: A rerun no longer copies every model parameter into the refreshed trace: on a 12-layer
+  GPT-2 head sweep each rerun clones about 0.7 GB instead of 2.3 GB, and the host RNG monitor's
+  profile hook does about 88 % less classifier work with the same verdicts.
+- **rerun**: A rerun no longer clones the model state again when it is unchanged since the source
+  capture: its pre-forward snapshot shares the source's byte-identical tensors, so on a 12-layer
+  GPT-2 head sweep each rerun copies about 54 MB instead of about 706 MB.
+- **fork**: `Trace.fork()` copies the trace's large label tables directly instead of element by
+  element; on a 12-layer GPT-2 trace a fork makes about 419,000 Python calls instead of about
+  580,000.
 
 ### Changed
 
@@ -266,6 +286,9 @@
 - **mechinterp**: tl.mechinterp.head_scores scores attention patterns in their own dtype when
   float32 or wider; float64 traces previously had their patterns cast to float32, so their scores
   now carry full float64 precision.
+- **rerun**: After a rerun, the refreshed trace's replay templates hold the live parameters, as the
+  source trace and every push fork already did; an in-place edit of a model parameter now affects
+  later pushes on a rerun fork the same way it affects the source.
 
 ### Continuous Integration
 
