@@ -95,23 +95,25 @@ class _StatsReducer:
         return STATS_REDUCER_REPR
 
 
-#: Values per float64 working chunk for the squared, absolute and centred
-#: sums (8 MiB of float64): bounds the reducer's transient memory per op.
-_CHUNK = 1 << 20
+#: Values per working chunk (512 KiB as float64, 64 KiB per boolean mask):
+#: bounds the reducer's transient memory per op whatever the out's size.
+_CHUNK = 1 << 16
 
 
 def lean_spine(value: Any) -> Spine:
     """Fold one tensor into a fresh ``Spine`` with bounded working memory.
 
-    Produces the state ``Spine().update(value)`` produces. Counts, extrema,
-    the sum and the mean are computed over the whole tensor exactly as
-    ``Spine.update`` does (bit-equal for float64 outs; for float32 outs the
-    sum accumulates in float64 without a converted copy, so it can differ
-    in the last bits). The sum of squares, sum of absolute values and M2
-    are summed over float64 chunks of ``_CHUNK`` values: bit-equal for outs
-    up to that size, otherwise equal within float64 reduction-order rounding.
-    ``Spine.update`` instead materializes several full-size float64 copies,
-    which would make a reduce-and-discard capture peak above a full one.
+    Produces the state ``Spine().update(value)`` produces. ``Spine.update``
+    holds full-size boolean masks and several full-size float64 copies at
+    once, which would make a reduce-and-discard capture peak above a full
+    one; here every count, extremum and moment is folded over chunks of
+    ``_CHUNK`` values, so no working tensor is larger than one chunk. Counts
+    and extrema are exact. The sum is one whole-tensor reduction, as in
+    ``Spine.update``, so for a float64 out the sum and the mean are
+    bit-equal (a float32 out's sum accumulates in float64 without a
+    converted copy and can differ in the last bits). The sum of squares, the
+    sum of absolute values and M2 are bit-equal for outs up to one chunk and
+    otherwise equal within float64 reduction-order rounding.
     """
 
     tensor, dtype_tag = _as_reduction_tensor("Spine", value)
@@ -120,31 +122,46 @@ def lean_spine(value: Any) -> Spine:
     n = int(tensor.numel())
     if n == 0:
         return spine
-    n_nan = int(torch.isnan(tensor).sum().item())
-    n_posinf = int((tensor == math.inf).sum().item())
-    n_neginf = int((tensor == -math.inf).sum().item())
-    finite = tensor[torch.isfinite(tensor)] if (n_nan or n_posinf or n_neginf) else tensor
+    nan = posinf = neginf = 0
+    for start in range(0, n, _CHUNK):
+        chunk = tensor[start : start + _CHUNK]
+        nan += int(torch.isnan(chunk).sum().item())
+        posinf += int((chunk == math.inf).sum().item())
+        neginf += int((chunk == -math.inf).sum().item())
+    finite = tensor[torch.isfinite(tensor)] if (nan or posinf or neginf) else tensor
     n_finite = int(finite.numel())
     spine._count_total, spine._count_finite = n, n_finite
-    spine._count_nan, spine._count_posinf, spine._count_neginf = n_nan, n_posinf, n_neginf
+    spine._count_nan, spine._count_posinf, spine._count_neginf = nan, posinf, neginf
     if n_finite == 0:
         return spine
-    spine._count_zero = int((finite == 0).sum().item())
-    spine._count_negative = int((finite < 0).sum().item())
-    low, high = torch.aminmax(finite)
-    spine._finite_min, spine._finite_max = float(low.item()), float(high.item())
-    spine._finite_absmax = max(abs(spine._finite_min), abs(spine._finite_max))
+    _fold_finite(spine, finite)
+    return spine
+
+
+def _fold_finite(spine: Spine, finite: torch.Tensor) -> None:
+    """Fill a fresh spine's finite-value fields from a flat all-finite tensor."""
+
+    n_finite = int(finite.numel())
     total = finite.sum() if finite.dtype == torch.float64 else finite.sum(dtype=torch.float64)
     spine._sum = float(total.item())
     spine._mean = spine._sum / n_finite
+    zero = negative = 0
+    low, high = math.inf, -math.inf
     squares = absolutes = centred = 0.0
     for start in range(0, n_finite, _CHUNK):
-        chunk = finite[start : start + _CHUNK].to(torch.float64)
-        squares += float((chunk * chunk).sum().item())
-        absolutes += float(chunk.abs().sum().item())
-        centred += float(((chunk - spine._mean) ** 2).sum().item())
+        chunk = finite[start : start + _CHUNK]
+        zero += int((chunk == 0).sum().item())
+        negative += int((chunk < 0).sum().item())
+        chunk_low, chunk_high = torch.aminmax(chunk)
+        low, high = min(low, float(chunk_low.item())), max(high, float(chunk_high.item()))
+        chunk64 = chunk.to(torch.float64)
+        squares += float((chunk64 * chunk64).sum().item())
+        absolutes += float(chunk64.abs().sum().item())
+        centred += float(((chunk64 - spine._mean) ** 2).sum().item())
+    spine._count_zero, spine._count_negative = zero, negative
+    spine._finite_min, spine._finite_max = low, high
+    spine._finite_absmax = max(abs(low), abs(high))
     spine._sum_squares, spine._sum_abs, spine._m2 = squares, absolutes, centred
-    return spine
 
 
 def stats_save_options() -> Any:

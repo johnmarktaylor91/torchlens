@@ -246,3 +246,52 @@ def test_chunked_reducer_tolerance(monkeypatch: pytest.MonkeyPatch) -> None:
             assert getattr(got, field) == getattr(want, field), (label, field)
         for field in ("sum_squares", "sum_abs", "m2"):
             assert getattr(got, field) == pytest.approx(getattr(want, field), rel=1e-12, abs=1e-12)
+
+
+def _largest_new_allocation(fn: Any, value: torch.Tensor) -> int:
+    """Bytes of the largest fresh storage any torch op allocates while ``fn(value)`` runs."""
+
+    from torch.utils._python_dispatch import TorchDispatchMode
+
+    largest = [0]
+
+    class _Counter(TorchDispatchMode):
+        def __torch_dispatch__(
+            self, func: Any, types: Any, args: Any = (), kwargs: Any = None
+        ) -> Any:
+            out = func(*args, **(kwargs or {}))
+            inputs = {
+                a.untyped_storage().data_ptr()
+                for a in torch.utils._pytree.tree_leaves((args, kwargs))
+                if isinstance(a, torch.Tensor)
+            }
+            for leaf in torch.utils._pytree.tree_leaves(out):
+                if (
+                    isinstance(leaf, torch.Tensor)
+                    and leaf.untyped_storage().data_ptr() not in inputs
+                ):
+                    largest[0] = max(largest[0], leaf.untyped_storage().nbytes())
+            return out
+
+    with _Counter():
+        fn(value)
+    return largest[0]
+
+
+def test_reducer_working_memory_is_bounded() -> None:
+    """Counter: the reducer's largest working tensor is one chunk, not the out's size."""
+
+    from torchlens.stats import _capture_stats
+
+    out = torch.randn(1 << 20)  # 4 MiB float32
+    lean = _largest_new_allocation(_capture_stats.lean_spine, out)
+    naive = _largest_new_allocation(lambda v: tl.stats.Spine().update(v), out)
+    assert lean <= _capture_stats._CHUNK * 8
+    assert naive >= out.numel() * 8
+    assert _capture_stats.lean_spine(out).result().counts() == _spine_counts(out)
+
+
+def _spine_counts(value: torch.Tensor) -> dict[str, int]:
+    spine = tl.stats.Spine()
+    spine.update(value)
+    return spine.result().counts()
