@@ -12,7 +12,6 @@ logits. Runs only in the preflighted offline venue (GATE-ID R1_OFFLINE_VENUE).
 from __future__ import annotations
 
 import copy
-import random
 import time
 
 import pytest
@@ -37,8 +36,9 @@ def test_a_gpt2_small_circuit_runs_as_one_call_and_matches_plain_hooks(r1_loader
     try:
         graph = tl.mechinterp.component_graph(clean)
         corrupt = tl.mechinterp.component_graph(corrupt_trace)
-        rng = random.Random(0)
-        edges = [edge for edge in graph.edges.values() if rng.random() >= 0.05]
+        from test_circ3_multi_receiver_patch import _outside_random_circuit
+
+        edges = _outside_random_circuit(graph, keep=0.05)
         assert len({edge.receiver.name for edge in edges}) == len(graph.receivers) == 445
         started = time.perf_counter()
         patched = tl.mechinterp.patch_edges(clean, edges, corrupt=corrupt)

@@ -49,11 +49,17 @@ class MechInterpAppliance:
         measure: str = "mul",
         layers: Any = None,
         pattern_source: Any = None,
+        period: int | None = None,
     ) -> HeadScoreResult:
         """Score every head against one taxonomy mask (see :func:`head_scores`)."""
 
         return head_scores(
-            self._trace, kind=kind, measure=measure, layers=layers, pattern_source=pattern_source
+            self._trace,
+            kind=kind,
+            measure=measure,
+            layers=layers,
+            pattern_source=pattern_source,
+            period=period,
         )
 
     def qk_circuit(self, attention: Any) -> FactoredMatrix:

@@ -9,6 +9,14 @@ conventions so numbers are comparable. Reads only, so FUSED attention is
 fully supported -- TLens needs an eager reload to find induction heads on a
 fused model. Empty-eligible rows are masked and reported, never scored zero.
 
+``period=n`` (induction only) swaps the token-equality mask for the fixed
+repeat of a sequence with period ``n``: destination ``i`` is scored on the
+one source ``i - n + 1`` and counts only when its token equals the token at
+``i - n``. On ``[bos] + R + R`` with ``len(R) = n`` this is the usual
+repeated-random-token induction score, and a token that repeats inside
+``R`` adds no extra source. Patterns are scored in their own dtype when it
+is float32 or wider (float64 stays float64).
+
 The seeded repeated-random-token prompt is a diagnostic INPUT and test
 fixture, not part of these definitions. ``pattern_source=`` is the socket
 through which SSM pseudo-patterns arrive later.
@@ -85,13 +93,20 @@ def _token_ids(trace: Any, seq_len: int) -> torch.Tensor:
     raise AssertionError("unreachable")
 
 
-def _mask_for(kind: str, tokens: torch.Tensor, size: int) -> torch.Tensor:
-    """Build the [batch, dst, src] token-equality mask for one kind."""
+def _mask_for(
+    kind: str, tokens: torch.Tensor, size: int, period: int | None = None
+) -> torch.Tensor:
+    """Build the [batch, dst, src] mask for one kind (token-equality, or a fixed period)."""
 
     batch = tokens.shape[0]
     dst = torch.arange(size).reshape(1, size, 1)
     src = torch.arange(size).reshape(1, 1, size)
     causal = src <= dst
+    if period is not None:
+        repeated = torch.zeros(batch, size, dtype=torch.bool)
+        if period < size:
+            repeated[:, period:] = tokens[:, period:] == tokens[:, : size - period]
+        return (src == dst - period + 1) & repeated.reshape(batch, size, 1)
     if kind == "previous_token":
         return ((src == dst - 1) & causal).expand(batch, size, size)
     equal = tokens.reshape(batch, size, 1) == tokens.reshape(batch, 1, size)
@@ -126,6 +141,23 @@ def _score_layer(
     return tuple(layer_scores)
 
 
+def _check_period(kind: str, period: Any) -> None:
+    """Refuse a ``period=`` that is not a positive int or is given with a non-induction kind."""
+
+    if period is None:
+        return
+    if kind != "induction" or isinstance(period, bool) or not isinstance(period, int) or period < 1:
+        refuse(
+            code="mi_head_score_period_invalid",
+            message=f"head_scores got period={period!r} with kind={kind!r}; period is a "
+            "positive int and applies to kind='induction' only.",
+            remedy="pass kind='induction' with period=<the repeated sequence's length>, or "
+            "drop period= for the token-equality mask",
+            period=period,
+            kind=kind,
+        )
+
+
 def head_scores(
     trace: Any,
     *,
@@ -133,6 +165,7 @@ def head_scores(
     measure: str = "mul",
     layers: Any = None,
     pattern_source: Any = None,
+    period: int | None = None,
 ) -> HeadScoreResult:
     """Score every head against one taxonomy mask (mikit section 8).
 
@@ -151,6 +184,11 @@ def head_scores(
     pattern_source:
         Optional callable ``module -> [b, head, dst, src]`` pattern override
         (the SSM pseudo-pattern socket); default reads the ``pattern`` facet.
+    period:
+        Optional, ``kind="induction"`` only: score the fixed repeat of a
+        sequence with this period (destination ``i`` on source ``i - period
+        + 1``, counted when its token equals the token at ``i - period``)
+        instead of the token-equality mask.
 
     Returns
     -------
@@ -171,6 +209,7 @@ def head_scores(
             message=f"Unknown head-score measure {measure!r}.",
             remedy=f"choose among {list(_MEASURES)}",
         )
+    _check_period(kind, period)
     modules = _attention_modules(trace)
     if layers is not None:
         from ._heads import _select_layers
@@ -201,10 +240,10 @@ def head_scores(
                 "fused SDPA needs capture=CaptureOptions(save_arg_values=True)",
                 analysis="head_scores",
             )
-        pattern = pattern.detach().to(torch.float32)
+        pattern = pattern.detach().to(torch.promote_types(pattern.dtype, torch.float32))
         batch, n_heads, dst_len, src_len = pattern.shape
         tokens = _token_ids(trace, src_len)
-        mask = _mask_for(kind, tokens, src_len).to(torch.float32)  # [b, dst, src]
+        mask = _mask_for(kind, tokens, src_len, period).to(pattern.dtype)  # [b, dst, src]
         row_eligible = mask.sum(dim=-1) > 0  # [b, dst]
         n_eligible = int(row_eligible.sum())
         addresses.append(str(getattr(module, "address", "")))
@@ -221,7 +260,9 @@ def head_scores(
         scores=tuple(all_scores),
         eligible_rows=tuple(eligible_counts),
         provenance={
-            "mask_definition": "token-equality (TLens head_detector conventions, credited)",
+            "mask_definition": "token-equality (TLens head_detector conventions, credited)"
+            if period is None
+            else f"fixed period {period} (repeated-sequence induction)",
             "pattern_source": "facet/pattern" if pattern_source is None else "user_callable",
         },
     )

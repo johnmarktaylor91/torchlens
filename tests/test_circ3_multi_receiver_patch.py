@@ -76,6 +76,18 @@ def _patched_map(edges) -> dict[str, list[str]]:
     return out
 
 
+def _outside_random_circuit(graph, *, keep: float) -> list:
+    """Every edge outside a seeded random kept set; every receiver keeps at least one patched edge."""
+
+    rng = random.Random(0)
+    kept = {name for name in graph.edges if rng.random() < keep}
+    for receiver in graph.receivers.values():
+        names = [f"{sender.name}->{receiver.name}" for sender in receiver.senders]
+        if all(name in kept for name in names):
+            kept.discard(names[0])
+    return [edge for name, edge in graph.edges.items() if name not in kept]
+
+
 def _reference(model, spec, clean_ids, corrupt_ids, edges):
     hooked = HookedPatch(model, spec)
     corrupt_nodes, _ = hooked.run(corrupt_ids)
@@ -103,9 +115,7 @@ def _patch_edges_single_receiver(trace, edges, *, corrupt):
 
 def test_a_circuit_runs_as_one_call_and_matches_plain_hooks(tiny) -> None:
     model, clean_ids, corrupt_ids, clean, graph, corrupt = tiny
-    rng = random.Random(0)
-    kept = {name for name in graph.edges if rng.random() < 0.4}
-    edges = [edge for name, edge in graph.edges.items() if name not in kept]
+    edges = _outside_random_circuit(graph, keep=0.4)
     assert len({edge.receiver.name for edge in edges}) == len(graph.receivers)
     patched = mi.patch_edges(clean, edges, corrupt=corrupt)
     want = _reference(model, gpt2_spec(model), clean_ids, corrupt_ids, edges)
@@ -142,10 +152,10 @@ def test_one_receiver_through_the_multi_path_is_bitwise_the_single_path(tiny, re
     edges = [edge for edge in graph.edges.values() if edge.receiver.name == receiver][:3]
     new = mi.patch_edges(clean, edges, corrupt=corrupt)
     old = _patch_edges_single_receiver(clean, edges, corrupt=corrupt)
-    for label in clean.ops:
-        a, b = new.ops[label].out, old.ops[label].out
+    for op in clean.ops:
+        a, b = new.ops[op.label].out, old.ops[op.label].out
         if isinstance(a, torch.Tensor):
-            assert torch.equal(a, b), label
+            assert torch.equal(a, b), op.label
 
 
 def test_no_edges_returns_an_unpatched_fork(tiny) -> None:
