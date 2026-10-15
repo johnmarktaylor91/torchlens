@@ -1332,20 +1332,15 @@ jobs:
             himalaya==0.4.11 scikit-learn==1.7.2 scipy==1.15.3 \
             sae-lens==6.54.0 eai-sparsify==1.3.3 "nnsight>=0.6" wandb \
             timm fancy-einsum open_clip_torch line_profiler \
-            "dataclasses-json>=0.6.4,<0.7" "eindex-callum>=0.1.0,<0.2" \
-            matplotlib "typer<0.13" orjson fire blobfile faiss-cpu sentence-transformers \
-            asyncer aiofiles "anyio>=4.8.0" \
             "netrep @ git+https://github.com/ahwillia/netrep@0186b8a77ec1ebaf541cc8f7173cb2556df8a8f0" \
             "torch==$TV" "transformers==$TF" "torchvision==$TVV"
           # These declare dependencies that would move torch, transformers or
           # numpy (torchcam pins numpy<2); their pages install them with
-          # --no-deps too. The SAE consumers, dictionary_learning and
-          # ViT-Prisma would pull vllm or a transformers ceiling.
+          # --no-deps too. dictionary_learning and ViT-Prisma would pull vllm
+          # or a transformers ceiling.
           uv pip install --python "$PY" --no-deps \
             tuned-lens==0.2.0 \
             torchcam==0.4.0 \
-            sae-dashboard==0.8.0 \
-            eai-delphi==0.1.3 \
             "dictionary_learning @ git+https://github.com/science-of-finetuning/crosscoder_learning@d1fd6f3fea41fc1123699cc09f4cdad47ca35160" \
             "vit-prisma @ git+https://github.com/Prisma-Multimodal/ViT-Prisma@771494b8181a0f7779fab19adb5342688f95c724" \
             "cornet @ git+https://github.com/dicarlolab/CORnet@d0cc17d4b34ad44dedb01683b70eafd15515adad" \
@@ -1359,7 +1354,6 @@ jobs:
           OMP_NUM_THREADS: "1"
         run: |
           "$RUNNER_TEMP/peer-venv/bin/python" -m pytest tests/test_recipe_pages_executed.py \
-            tests/test_bridge_real_sae_export.py \
             -rA --tb=short -p no:cacheprovider \
             --junitxml="$RUNNER_TEMP/peer-recipes.junit.xml"
 
@@ -1368,7 +1362,40 @@ jobs:
         # every page's peer is installed, so a skip means a page went unrun.
         run: |
           "$RUNNER_TEMP/peer-venv/bin/python" scripts/check_ci_executed_tests.py \
-            "$RUNNER_TEMP/peer-recipes.junit.xml" 48 0
+            "$RUNNER_TEMP/peer-recipes.junit.xml" 49 0
+
+      # The SAE export consumers install last and run in their own step: one
+      # of them ships a top-level ``tests`` package that shadows the repo's,
+      # so nothing that imports from ``tests`` may run after this install.
+      - name: Install the SAE export consumers
+        run: |
+          PY="$RUNNER_TEMP/peer-venv/bin/python"
+          TV=$("$PY" -c 'import torch; print(torch.__version__.split("+")[0])')
+          TF=$("$PY" -c 'import transformers; print(transformers.__version__)')
+          TVV=$("$PY" -c 'import torchvision; print(torchvision.__version__.split("+")[0])')
+          uv pip install --python "$PY" \
+            "dataclasses-json>=0.6.4,<0.7" "eindex-callum>=0.1.0,<0.2" \
+            matplotlib "typer<0.13" orjson fire blobfile faiss-cpu sentence-transformers \
+            asyncer aiofiles "anyio>=4.8.0" \
+            "torch==$TV" "transformers==$TF" "torchvision==$TVV"
+          # Their declared dependencies would pull vllm or a transformers ceiling.
+          uv pip install --python "$PY" --no-deps \
+            sae-dashboard==0.8.0 \
+            eai-delphi==0.1.3
+          uv pip freeze --python "$PY" > "$RUNNER_TEMP/peer-consumers-freeze.txt"
+
+      - name: Run the SAE export consumers
+        env:
+          OMP_NUM_THREADS: "1"
+        run: |
+          "$RUNNER_TEMP/peer-venv/bin/python" -m pytest tests/test_bridge_real_sae_export.py \
+            -rA --tb=short -p no:cacheprovider \
+            --junitxml="$RUNNER_TEMP/peer-consumers.junit.xml"
+
+      - name: Fail on any skipped SAE export consumer
+        run: |
+          "$RUNNER_TEMP/peer-venv/bin/python" scripts/check_ci_executed_tests.py \
+            "$RUNNER_TEMP/peer-consumers.junit.xml" 4 0
 
       - name: Upload the peer freeze and junit
         if: always()
@@ -1378,6 +1405,8 @@ jobs:
           path: |
             ${{ runner.temp }}/peer-freeze.txt
             ${{ runner.temp }}/peer-recipes.junit.xml
+            ${{ runner.temp }}/peer-consumers-freeze.txt
+            ${{ runner.temp }}/peer-consumers.junit.xml
           retention-days: 30
 
   brainscore-live:

@@ -62,7 +62,8 @@ optional dependency.
   `tokens=` the first output shaped `tokens.shape + (vocab,)` is the logits:
   `ce_loss_clean`/`_spliced`/`_zero_ablated`, `ce_loss_recovered`,
   `kl_divergence`; without it they are `None` with a reason. Metric math lives
-  in `_sae_metrics.py`. Recipe: `docs/recipes/pretrained_saes.md`.
+  in `_sae_metrics.py`. Recipes: `docs/recipes/pretrained_saes.md`; an SAE latent
+  as a feature-visualisation objective, `docs/recipes/feature_visualisation.md`.
 - `_sae_export.py` (exported by `sae.py`): `write_sae_dashboard(latents, tokens, *,
   latent_ids=None, k=20, path)` and `write_delphi(latents, tokens, *, site, model_name,
   n_splits=5, directory)` write the files SAEDashboard 0.8.0 (`SaeVisData.load_json`)

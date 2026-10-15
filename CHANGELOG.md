@@ -203,6 +203,11 @@
   sha256s and dtypes); apply with `fork.do(artifact.subspace(site, positions=mask), artifact.edit)`.
   No pyreft import, no extra. Refuses `pyreft_artifact_invalid`, `pyreft_artifact_unsupported`,
   `pyreft_positions_invalid`. DOCUMENTED-UNSTABLE.
+- **docs**: a feature-visualisation recipe (`docs/recipes/feature_visualisation.md`): optimisation
+  at any TorchLens site (an op label, a channel or unit, an SAE latent; vision and non-vision
+  models), native PyTorch through a capture-free binding.
+- **docs**: a CLIP-Dissect network dissection recipe (`docs/recipes/dissection.md`) built on
+  `tl.extract_dataset` and `tl.stats.TopK`, with the paper's soft-WPMI score.
 
 ### Bug Fixes
 
