@@ -427,13 +427,15 @@ def _run_memoized_walk(
         return cached
     stack: list[tuple[_WalkKey, _WalkStep]] = [(key, body(op, sets, exact))]
     sent: tuple[_TerminalState, ...] | None = None
-    while stack:
+    while True:
         frame_key, step = stack[-1]
         try:
             request = next(step) if sent is None else step.send(sent)
         except StopIteration as finished:
             stack.pop()
             memo[frame_key] = finished.value
+            if not stack:
+                return finished.value
             sent = finished.value
             continue
         next_op, next_sets, next_exact = request
@@ -444,8 +446,6 @@ def _run_memoized_walk(
             continue
         stack.append((next_key, body(next_op, next_sets, next_exact)))
         sent = None
-    assert sent is not None
-    return sent
 
 
 def _walk_to_input(
@@ -470,6 +470,7 @@ def _walk_to_input(
     """
 
     def body(item: Op, sets: _AxisSets, item_exact: bool) -> _WalkStep:
+        """Start one receptive hop from ``item`` toward this query's input."""
         return _walk_body(item, sets, input_label, ancestry, by_reference, item_exact)
 
     return _run_memoized_walk(body, op, output_sets, exact, memo)
