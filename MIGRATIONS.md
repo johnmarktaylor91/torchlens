@@ -534,3 +534,10 @@ them `intervention_helper_unknown`. Code that reads fire-record helper names for
 Specs saved with a `subspace_edit` or an `affine_source` helper need this release to load; an older
 TorchLens refuses them `intervention_helper_unknown` (and a `subspace_edit` carrying `mask` refuses
 `subspace_spec_invalid` on a reader that predates it).
+
+## Edge patching into several receivers (2026-10-15)
+
+`tl.mechinterp.patch_edges` no longer refuses edges into several receivers
+(`mi_edge_patch_receivers_mixed` is removed); an empty edge list returns an unpatched fork. Code
+that caught `mi_edge_patch_receivers_mixed` to split a circuit into per-receiver calls can pass the
+whole edge list in one call.

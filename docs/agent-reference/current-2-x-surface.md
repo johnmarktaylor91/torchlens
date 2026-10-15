@@ -1076,7 +1076,9 @@
   against TransformerLens oracles -- `residual_accumulation` /
   `residual_decomposition` / `full_decomposition` (bitwise-closed),
   `direct_logit_contributions` (DLA), `attention_head_contributions`,
-  `head_scores`, `patch_heads_grid` / `patch_residual_grid` (turnkey
+  `head_scores` (pass `tl.mechinterp.FixedPeriodInduction` as
+  `kind=FixedPeriodInduction(period=n)` to score fixed-period induction on
+  repeated sequences), `patch_heads_grid` / `patch_residual_grid` (turnkey
   `PatchGrid` results), `patch_query_heads_grid` (per-query-head k/v
   patching under grouped-query attention at the op that expands each
   key/value group; SDPA with `enable_gqa` refuses typed),
@@ -1095,7 +1097,10 @@
   and `head`); every receiver's pre-norm input is
   checked equal to the sum of its edges' contributions in the API, and an edge
   is an intervention selection. `tl.mechinterp.patch_edges(trace, edges, *,
-  corrupt)` patches edges into one receiver on the replay engine.
+  corrupt)` patches edges into one receiver or several in one call on the
+  replay engine; with several, each receiver reads its patched senders'
+  corrupted values while every other sender carries its value in the patched
+  forward (the MIB convention), so a circuit runs as one call.
   Edge attribution patching: `tl.mechinterp.edge_scores(model, inputs, *,
   corrupted, metric, method="eap_ig", steps=None, example_reduction="mean")`
   scores every graph edge, `(s_corrupt - s_clean) . dM/d(input of t)` summed

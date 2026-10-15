@@ -208,6 +208,12 @@
   models), native PyTorch through a capture-free binding.
 - **docs**: a CLIP-Dissect network dissection recipe (`docs/recipes/dissection.md`) built on
   `tl.extract_dataset` and `tl.stats.TopK`, with the paper's soft-WPMI score.
+- **mechinterp**: `tl.mechinterp.patch_edges` patches edges into several receivers in one call (the
+  MIB circuit-track convention: each patched receiver sees its patched senders' corrupted values
+  while every other sender carries its value in the patched forward), so a circuit runs as one call;
+  `tl.mechinterp.head_scores(..., kind=tl.mechinterp.FixedPeriodInduction(period=n))` scores
+  fixed-period induction on repeated sequences; recipe page `docs/recipes/acdc_ioi.md` (ACDC as a
+  driver loop over edge substitution and the experiment ledger). Documented unstable.
 
 ### Bug Fixes
 
@@ -257,6 +263,9 @@
 - **model wrappers**: the `model_wrapper_uninstrumentable` refusal for a TransformerLens
   `TransformerBridge` now leads with reloading the HF model fresh and offers a `HookedTransformer`
   only while you still use one.
+- **mechinterp**: tl.mechinterp.head_scores scores attention patterns in their own dtype when
+  float32 or wider; float64 traces previously had their patterns cast to float32, so their scores
+  now carry full float64 precision.
 
 ### Continuous Integration
 
