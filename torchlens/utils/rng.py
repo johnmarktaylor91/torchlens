@@ -3212,15 +3212,12 @@ class host_nondeterminism_monitor:
                     # held reference and whose receiver is absent or one of the exact
                     # inert built-in types returns without classifying. Everything
                     # else enters the unchanged classifier.
-                    if id(arg) in self._held_ref_marks:
+                    receiver = getattr(arg, "__self__", None)
+                    if id(arg) in self._held_ref_marks or (
+                        receiver is not None
+                        and type(receiver) not in _INERT_PROFILE_C_CALL_RECEIVER_TYPES
+                    ):
                         self._classify_c_call(frame, arg)
-                    else:
-                        receiver = getattr(arg, "__self__", None)
-                        if (
-                            receiver is not None
-                            and type(receiver) not in _INERT_PROFILE_C_CALL_RECEIVER_TYPES
-                        ):
-                            self._classify_c_call(frame, arg)
                 elif event == "call":
                     # Avoid two Python helper calls for the overwhelmingly common
                     # internal frame whose cached digest scope is false. Cache misses
