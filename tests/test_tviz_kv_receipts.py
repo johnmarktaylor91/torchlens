@@ -27,7 +27,13 @@ def _grid(n_heads: int) -> PatchGrid:
         axes=("layer", "head"),
         coordinates={"layer": ("blk.0.attn", "blk.1.attn"), "head": tuple(range(n_heads))},
         values=torch.arange(2 * n_heads, dtype=torch.float32).reshape(2, n_heads) / 4 - 0.5,
-        receipts={"engine": "rerun", "fires": 2 * n_heads, "metric_provenance": "logit_diff"},
+        receipts={
+            "engine": "rerun",
+            "fires": 2 * n_heads,
+            "metric_provenance": "logit_diff",
+            "clean_metric": 1.0,
+            "corrupted_metric": 0.0,
+        },
     )
 
 
@@ -82,16 +88,18 @@ def test_grid_figure_discloses_the_sharing(tmp_path: Path) -> None:
     )
     lines = "\n".join(artifact.disclosure_lines)
     assert (
-        "kv-group receipt: each cell ablates one key/value group shared by 4 query heads "
+        "kv-group receipt: each cell intervenes on one key/value group shared by 4 query heads "
         "(8 query heads over 2 groups); no cell is a per-query-head effect"
     ) in lines
     assert (
         "kv group 1 of 2, shared by query heads 0-3; kv group 2 of 2, shared by query heads 4-7"
     ) in lines
-    assert "joint effect of ablating all 4 measured kv groups together: -0.2" in lines
+    assert (
+        "joint effect of the same intervention on all 4 measured kv groups together: -0.2" in lines
+    )
     assert "measured heads" not in lines
     svg = artifact.paths[0].read_text()
-    for label in ("kv 1", "q0-3", "kv 2", "q4-7", "measured kv-group ablation effects"):
+    for label in ("kv 1", "q0-3", "kv 2", "q4-7", "measured kv-group effects on logit_diff"):
         assert label in svg, label
 
 

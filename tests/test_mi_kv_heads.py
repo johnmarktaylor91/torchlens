@@ -221,6 +221,31 @@ def test_one_fire_per_cell_and_clean_into_clean_moves_nothing(
     assert control.receipts["fires"] == 8
     assert control.receipts["identical_fires"] == 8
     assert torch.equal(control.values - clean, torch.zeros_like(control.values))
+    # The self-patch receipt reads exactly zero: effects subtract the corrupted baseline.
+    assert control.receipts["corrupted_metric"] == float(clean)
+    receipt = tviz.receipt_from_patch_grid(
+        control, layer=LAYERS[0], negative_control=0.0, positive_control=1.0, joint_effect=0.0
+    )
+    assert receipt.effects == (0.0, 0.0, 0.0, 0.0)
+
+
+@pytest.mark.heavy
+def test_query_head_grid_records_both_unpatched_baselines(
+    model: LlamaForCausalLM, value_grid: mi.PatchGrid
+) -> None:
+    """The receipts carry the clean and corrupted metrics of plain, unhooked forwards."""
+
+    with torch.no_grad():
+        clean = _from_logits(model(CLEAN).logits).to(torch.float32)
+        corrupted = _from_logits(model(CORRUPTED).logits).to(torch.float32)
+    assert value_grid.receipts["clean_metric"] == float(clean)
+    assert value_grid.receipts["corrupted_metric"] == float(corrupted)
+    receipt = tviz.receipt_from_patch_grid(
+        value_grid, layer=LAYERS[1], negative_control=0.0, positive_control=1.0
+    )
+    expected = tuple(float(value) - float(corrupted) for value in value_grid.values[1])
+    assert receipt.effects == expected
+    assert receipt.intervention == "clean activation of one head patched into the corrupted run"
 
 
 def test_sdpa_gqa_refuses_kv_expansion_unavailable() -> None:
@@ -271,7 +296,7 @@ def test_interceptor_receipt_discloses_effect_source_and_annotates(
         layer=LAYERS[0],
         negative_control=0.0,
         positive_control=clean - corrupted,
-        joint_effect=float(joint.values[0]),
+        joint_effect=float(joint.values[0]) - joint.receipts["corrupted_metric"],
         intervention="clean value copy patched into one query head",
     )
     assert receipt.unit == "head"
@@ -315,13 +340,15 @@ def test_real_gqa_value_grid_builds_a_kv_group_receipt(
         layer=LAYERS[1],
         negative_control=0.0,
         positive_control=float(_trace_metric(model, CLEAN) - _trace_metric(model, CORRUPTED)),
-        joint_effect=float(joint.values[1]),
+        joint_effect=float(joint.values[1]) - joint.receipts["corrupted_metric"],
         intervention="kv group value patched",
         kv_groups=gqa,
     )
     assert receipt.unit == "kv group"
     assert receipt.heads == (0, 1)
-    assert receipt.effects == tuple(float(value) for value in group_grid.values[1])
+    baseline = group_grid.receipts["corrupted_metric"]
+    assert receipt.effects == tuple(float(value) - baseline for value in group_grid.values[1])
+    assert receipt.baseline_metric == baseline
     assert receipt.effect_source == "capture route"
     assert receipt.sharing_lines() == (
         "kv group 1 of 2, shared by query heads 0-1",

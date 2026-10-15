@@ -21,6 +21,8 @@ __all__ = [
     "PANELS_NOT_COMPARABLE",
     "PROVENANCE_RECONSTRUCTED",
     "PROVENANCE_USER_SUPPLIED",
+    "RECEIPT_CELL_NO_BASELINE_WORDING",
+    "RECEIPT_CELL_WORDING",
     "ROUTING_FOOTER",
     "UNMARKED_MASK_WORDING",
 ]
@@ -45,8 +47,19 @@ NOT_ADDITIVE_WORDING = "single-head effects are not additive"
 
 #: The joint-measurement line template for receipt grids (tviz memo D13).
 JOINT_EFFECT_WORDING = (
-    "joint effect of ablating all {n} measured heads together: {joint:+.4g} "
+    "joint effect of the same intervention on all {n} measured heads together: {joint:+.4g} "
     "(sum of single-head cells: {cell_sum:+.4g}; " + NOT_ADDITIVE_WORDING + ")"
+)
+
+#: What one receipt-grid cell is: an effect, measured from the unpatched
+#: baseline run's metric (never the raw metric after the intervention).
+RECEIPT_CELL_WORDING = (
+    "each cell: change in {metric} from the unpatched baseline run ({baseline:+.4g}); 0 = no change"
+)
+
+#: The same line for a receipt built without a recorded baseline value.
+RECEIPT_CELL_NO_BASELINE_WORDING = (
+    "each cell: change in {metric} under the intervention (baseline value not recorded)"
 )
 
 #: Coverage disclosure on annotated figures (tviz memo D16).
@@ -63,14 +76,15 @@ KV_GROUP_WORDING = "kv group {group} of {n_groups}, shared by query heads {first
 #: Receipt-grid disclosure for key/value-site ablations under grouped-query
 #: attention: a cell is a shared group, never one query head's effect.
 KV_GROUP_RECEIPT_WORDING = (
-    "kv-group receipt: each cell ablates one key/value group shared by "
+    "kv-group receipt: each cell intervenes on one key/value group shared by "
     "{per_group} query heads ({n_query} query heads over {n_groups} groups); "
     "no cell is a per-query-head effect"
 )
 
 #: The joint-measurement line for kv-group receipt grids.
 KV_JOINT_EFFECT_WORDING = (
-    "joint effect of ablating all {n} measured kv groups together: {joint:+.4g} "
+    "joint effect of the same intervention on all {n} measured kv groups together: "
+    "{joint:+.4g} "
     "(sum of single-group cells: {cell_sum:+.4g}; single-group effects are not additive)"
 )
 
