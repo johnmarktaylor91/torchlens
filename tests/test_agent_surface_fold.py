@@ -16,6 +16,7 @@ from torch import nn
 
 import torchlens as tl
 from tests.test_agent_surface_helpers import RepeatedBlockNet, deterministic_input
+from torchlens.agent._budgets import OVERVIEW_MAX_TOKENS
 from torchlens.agent._fold import FOLD_KEY_VERSION, fold_trace, normalize_module_path
 
 
@@ -183,7 +184,7 @@ def test_fold_is_flat_across_the_gpt2_depth_series(tmp_path) -> None:
             tl.save(log, artifact)
             envelope = call_tool("torchlens_overview", {"path": str(artifact)})
             served = estimate_tokens(canonical_dumps(json_safe(envelope)))
-            assert served <= 4_000, f"served overview is ~{served} tokens"
+            assert served <= OVERVIEW_MAX_TOKENS, f"served overview is ~{served} tokens"
             truncation = envelope.get("truncation")
             assert truncation is None or truncation["omitted"] > 0
         del model, log
