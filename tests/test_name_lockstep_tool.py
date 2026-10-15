@@ -426,6 +426,11 @@ def test_gate_items_use_documented_meaning_over_a_leaf_index_row(
     assert bare["reference_source"] == "none" and bare["doc_first_line"] is None
     assert items["param:area"]["reference_source"] == "doc:tl.Curve Attributes"
     assert gate_input._context_terms(head["param:area"]) == ["Curve", "make_curve"]
+    made_by = gate_input.producers(head)
+    assert made_by["Curve"] == {"make_curve"}
+    area_row = head["member:doclens_pkg.core:Curve.area"]
+    assert gate_input._context_terms(area_row, made_by) == ["Curve", "make_curve"]
+    assert area["snippet"].splitlines()[-1] == "c.area"
 
 
 def test_snippet_prefers_a_hit_near_the_owner() -> None:

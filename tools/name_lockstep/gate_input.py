@@ -44,24 +44,55 @@ def _kind_text(row: dict[str, Any]) -> str:
     return f"{row.get('subkind') or row['kind']}, {_KIND_TEXT.get(row['kind'], row['kind'])}"
 
 
-def _context_terms(row: dict[str, Any]) -> list[str]:
+_RETURNS = re.compile(r"->\s*['\"]?(?:[A-Za-z_][\w]*\.)*([A-Za-z_]\w*)['\"]?\s*$")
+
+
+def producers(head_rows: dict[str, dict[str, Any]]) -> dict[str, set[str]]:
+    """Map each class name to the leaf names of the functions and methods that return it.
+
+    Parameters
+    ----------
+    head_rows
+        Head inventory keyed on id.
+
+    Returns
+    -------
+    dict[str, set[str]]
+        Class name to producer leaf names, read from each signature's return annotation.
+    """
+
+    found: dict[str, set[str]] = {}
+    for row in head_rows.values():
+        match = _RETURNS.search(str(row.get("signature") or ""))
+        if match and row["kind"] != "param":
+            found.setdefault(match.group(1), set()).add(str(row["path"]).rsplit(".", 1)[-1])
+    return found
+
+
+def _context_terms(row: dict[str, Any], made_by: dict[str, set[str]] | None = None) -> list[str]:
     """Return the words that place a contextual hit in this name's own context.
 
-    A member's context is its owner class; a keyword's is a callable that takes it.
+    A member's context is its owner class and the calls that return it; a keyword's is
+    a callable that takes it.
 
     Parameters
     ----------
     row
         Head row.
+    made_by
+        ``producers`` of the head inventory (optional).
 
     Returns
     -------
     list[str]
-        Owner class names (members) or callable leaf names (keywords); empty otherwise.
+        Owner class and producer names (members) or callable leaf names (keywords);
+        empty otherwise.
     """
 
+    made_by = made_by or {}
     if row["kind"] == "member":
-        return sorted({*row.get("owner_names", ()), str(row["path"]).split(".")[0]})
+        owners = {*row.get("owner_names", ()), str(row["path"]).split(".")[0]}
+        return sorted(owners.union(*(made_by.get(owner, set()) for owner in owners)))
     if row["kind"] == "param":
         return sorted({str(use).rsplit(".", 1)[-1] for use in row.get("uses", ())})
     return []
@@ -97,7 +128,9 @@ def _best_hit(
     return min(ranked)
 
 
-def _snippets(row: dict[str, Any], corpus: Corpus) -> list[dict[str, Any]]:
+def _snippets(
+    row: dict[str, Any], corpus: Corpus, made_by: dict[str, set[str]] | None = None
+) -> list[dict[str, Any]]:
     """Return up to three call-site snippets from different files.
 
     Parameters
@@ -106,17 +139,20 @@ def _snippets(row: dict[str, Any], corpus: Corpus) -> list[dict[str, Any]]:
         Head row.
     corpus
         Texts of the snippet places (``snippets`` key: tests, examples, docs).
+    made_by
+        ``producers`` of the head inventory (optional).
 
     Returns
     -------
     list[dict[str, Any]]
         ``{"path", "line", "text"}`` per snippet; qualified spellings first, then
-        contextual spellings near the owner class (members) or a callable that takes the
+        contextual spellings near the owner class or a call that returns it (members) or a
+        callable that takes the
         keyword (keywords), then other contextual spellings.
     """
 
     patterns = spelling.spellings(row)
-    terms = _context_terms(row)
+    terms = _context_terms(row, made_by)
     found: list[tuple[int, dict[str, Any]]] = []
     for path, text in corpus.files.get("snippets", []):
         strengths = (spelling.QUALIFIED, spelling.CONTEXTUAL)
@@ -197,8 +233,9 @@ def gate_items(surface_diff: SurfaceDiff, head_rows: dict[str, dict[str, Any]], 
     rows = [(row, "new", None) for row in surface_diff.new]
     rows += [(head_rows[r.new_id], "renamed", r.old_id) for r in surface_diff.renamed]
     items = []
+    made_by = producers(head_rows)
     for row, change, old_id in rows:
-        snippets = _snippets(row, corpus)
+        snippets = _snippets(row, corpus, made_by)
         reference, source = _reference(row, corpus)
         items.append(
             {
