@@ -209,7 +209,7 @@ def _reads(trace: Any, graph: ComponentGraph) -> dict[str, _Read]:
     return reads
 
 
-def _output_cotangent(trace: Any, graph: ComponentGraph, metric: Callable[..., Any]) -> Any:
+def _output_cotangent(trace: Any, metric: Callable[..., Any]) -> Any:
     """Return ``(logits label, dM/dlogits, per-example M)`` for one evaluation point."""
 
     from ._anchors import resolve_lm_head
@@ -308,23 +308,23 @@ def _point_gradients(
     """Every receiver's own gradient at one evaluation point."""
 
     reads = _reads(trace, graph)
-    logits_label, cotangent, values = _output_cotangent(trace, graph, metric)
+    logits_label, cotangent, values = _output_cotangent(trace, metric)
     seed_labels = sorted({read.seed_label for read in reads.values()})
     at_seeds = _site_gradients(trace, logits_label, cotangent, seed_labels)
     grouped: dict[tuple[str, str], list[tuple[str, torch.Tensor]]] = {}
     names: dict[tuple[str, str], list[str]] = {}
-    zero_reads: list[str] = []
+    unreached: list[str] = []
     for name, read in reads.items():
         grad = at_seeds.get(read.seed_label)
         if grad is None:
-            zero_reads.append(name)
+            unreached.append(name)
             continue
         if read.spec is not None:
             grad = read.spec.scatter_update(torch.zeros_like(grad), read.spec.apply(grad))
         key = (read.input_label, read.seed_label)
         grouped.setdefault(key, []).append((read.seed_label, grad))
         names.setdefault(key, []).append(name)
-    gradients: dict[str, torch.Tensor | None] = dict.fromkeys(zero_reads)
+    gradients: dict[str, torch.Tensor | None] = dict.fromkeys(unreached)
     for key, seeds in grouped.items():
         pulled = _local_pullbacks(trace, seeds, key[0])
         gradients.update(zip(names[key], pulled))
