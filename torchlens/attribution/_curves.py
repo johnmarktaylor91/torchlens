@@ -13,9 +13,12 @@ the area over the most-relevant-first perturbation curve of Samek et al.
 start.
 
 Each step is a recorded intervention: ``CurveStep.intervention`` is the
-``tl.when(...)`` spec that replaces the evaluated input with that step's
-perturbed input, so ``tl.trace(model, inputs, intervene=step.intervention)``
-replays the step and reproduces its score.
+``tl.when(...)`` spec that replaces each evaluated input layer with that
+step's perturbed value, so ``trace.fork().do(step.intervention)`` on a
+replay-ready trace of the original inputs reproduces the step's score. The
+scores themselves come from direct no-grad forward passes (the fast engine
+``occlusion_map`` uses); the replay is the same computation through the
+intervention engine.
 """
 
 from __future__ import annotations
@@ -70,6 +73,10 @@ class _CurvePlan:
     rank
         ``(N, F)`` position of each feature in its example's ranking (0 is the
         most attributed).
+    model
+        The evaluated model (traced once, lazily, to name the input sites).
+    labels
+        Cache of the input-layer labels.
     """
 
     kind: str
@@ -78,6 +85,26 @@ class _CurvePlan:
     baselines: tuple[Tensor, ...]
     groups: tuple[Tensor, ...]
     rank: Tensor
+    model: Module
+    labels: dict[str, tuple[str, ...]] = field(default_factory=dict, compare=False)
+
+    def input_labels(self) -> tuple[str, ...]:
+        """Return the trace label of each evaluated input, traced once on first use.
+
+        Returns
+        -------
+        tuple[str, ...]
+            Input-layer labels (``"input_1"``, ...), one per leaf.
+
+        Raises
+        ------
+        AttributionError
+            If an evaluated input cannot be matched to an input layer.
+        """
+
+        if "labels" not in self.labels:
+            self.labels["labels"] = _match_input_labels(self)
+        return self.labels["labels"]
 
     def baseline_masks(self, n_features: int) -> tuple[Tensor, ...]:
         """Return, per leaf, the elements holding the baseline at a step.
@@ -168,9 +195,13 @@ class CurveStep:
     def intervention(self) -> Any:
         """The recorded edit of this step, as an intervention spec.
 
-        ``tl.trace(model, inputs, intervene=step.intervention)`` replays the
-        step: it replaces each evaluated input with this step's perturbed
-        value, so the replayed output's target score equals ``score``.
+        A ``tl.when(tl.label(<input layer>), tl.replace_with(<step input>))``
+        spec (one rule per evaluated input). Replay it on a replay-ready trace
+        of the original inputs: ``trace = tl.trace(model, x,
+        capture=tl.options.CaptureOptions(intervention_ready=True))``, then
+        ``fork = trace.fork(); fork.do(step.intervention)``; the fork's output
+        scores ``score``. The first access traces the model once to name its
+        input layers.
         """
 
         return _step_intervention(self._plan, self._plan.step_leaves(self.n_features))
@@ -273,52 +304,71 @@ def _step_intervention(plan: _CurvePlan, leaves: tuple[Tensor, ...]) -> Any:
     Returns
     -------
     Any
-        A ``tl.when(...)`` intervention spec.
+        An ``InterventionSpec`` replacing each evaluated input layer's value.
     """
 
     from torchlens.intervention.predicates import replace_with
-    from torchlens.intervention.selectors import input_at
+    from torchlens.intervention.selectors import label
     from torchlens.intervention.spec import InterventionRule, InterventionSpec
 
-    rules = []
-    for path, leaf in zip(_leaf_paths(plan.prepared), leaves, strict=True):
-        rules.append(InterventionRule(input_at(*path), replace_with(leaf.clone())))
-    return InterventionSpec(rules=tuple(rules))
+    rules = tuple(
+        InterventionRule(label(name), replace_with(leaf.clone()))
+        for name, leaf in zip(plan.input_labels(), leaves, strict=True)
+    )
+    return InterventionSpec(rules=rules)
 
 
-def _leaf_paths(prepared: _PreparedInputs) -> list[tuple[Any, ...]]:
-    """Return the input path of each attributed leaf, traversal order.
+def _match_input_labels(plan: _CurvePlan) -> tuple[str, ...]:
+    """Trace the model once and match each evaluated input to its input layer.
 
     Parameters
     ----------
-    prepared
-        Normalized inputs.
+    plan
+        The curve plan.
 
     Returns
     -------
-    list[tuple[Any, ...]]
-        Paths into the positional arguments, then keyword arguments.
+    tuple[str, ...]
+        One input-layer label per leaf, matched by equal value.
+
+    Raises
+    ------
+    AttributionError
+        If a leaf matches no input layer.
     """
 
-    originals = {id(leaf) for leaf in prepared.attributed_leaves}
-    found: dict[int, tuple[Any, ...]] = {}
+    import torchlens as tl
 
-    def _walk(tree: Any, path: tuple[Any, ...]) -> None:
-        if isinstance(tree, Tensor):
-            if id(tree) in originals:
-                found.setdefault(id(tree), path)
-        elif isinstance(tree, (tuple, list)):
-            for index, item in enumerate(tree):
-                _walk(item, (*path, index))
-        elif isinstance(tree, dict):
-            for key, item in tree.items():
-                _walk(item, (*path, key))
-
-    for index, item in enumerate(prepared.positional):
-        _walk(item, (index,))
-    for key, item in prepared.kwargs.items():
-        _walk(item, (key,))
-    return [found[id(leaf)] for leaf in prepared.attributed_leaves]
+    inputs, kwargs = _rebuild_inputs(plan.prepared, plan.leaves)
+    positional = (inputs,) if plan.prepared.is_single_tensor else tuple(inputs)
+    with _temporarily_eval(plan.model), torch.no_grad():
+        trace = tl.trace(plan.model, list(positional), input_kwargs=kwargs or None)
+    candidates = [(name, trace[name].out) for name in trace.input_layers]
+    used: set[str] = set()
+    labels: list[str] = []
+    for leaf in plan.leaves:
+        match = next(
+            (
+                name
+                for name, value in candidates
+                if name not in used
+                and isinstance(value, Tensor)
+                and value.shape == leaf.shape
+                and torch.equal(value.detach().to(leaf.device), leaf)
+            ),
+            None,
+        )
+        if match is None:
+            raise AttributionError(
+                f"curve step replay could not find the input layer holding an evaluated "
+                f"input of shape {tuple(leaf.shape)} (input layers: {list(trace.input_layers)}). "
+                "Remedy: replay the step on its perturbed inputs directly, e.g. "
+                f"model(step.inputs). {_DOCS_POINTER}",
+                code="attribution_curve_input_unmatched",
+            )
+        used.add(match)
+        labels.append(match)
+    return tuple(labels)
 
 
 def _resolve_features(features: str, leaves: tuple[Tensor, ...], method: str) -> str:
@@ -598,7 +648,7 @@ def _curve(
     order = torch.sort(combined, dim=1, descending=True, stable=True).indices
     rank = torch.empty_like(order)
     rank.scatter_(1, order, torch.arange(offset, device=order.device).expand_as(order))
-    plan = _CurvePlan(kind, prepared, leaves, baselines, tuple(groups), rank)
+    plan = _CurvePlan(kind, prepared, leaves, baselines, tuple(groups), rank, model)
     counts = _validated_steps(n_steps, offset, method)
 
     step_scores: list[Tensor] = []

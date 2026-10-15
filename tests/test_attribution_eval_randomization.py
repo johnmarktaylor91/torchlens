@@ -17,6 +17,7 @@ from torch import Tensor, nn
 
 import torchlens as tl
 import torchlens.attribution as attribution
+from torchlens.attribution._result import AttributionWarning
 
 
 class SmallCnn(nn.Module):
@@ -208,8 +209,8 @@ def test_similarity_measures_match_independent_computation() -> None:
     )
     original = result.original[0]
     randomized = result.steps[0].values[0]
-    tied_original = torch.round(original * 4) / 4
-    tied_randomized = torch.round(randomized * 4) / 4
+    tied_original = torch.round(original / original.abs().max() * 4) / 4
+    tied_randomized = torch.round(randomized / randomized.abs().max() * 4) / 4
 
     from torchlens.attribution._eval_maps import _spearman, _ssim, _ssim_plane
 
@@ -271,7 +272,7 @@ def test_kept_maps_past_the_size_guard_warn_once_and_name_keep_maps_false(
     torch.manual_seed(0)
     model = SmallCnn()
     x = torch.randn(1, 3, 12, 12)
-    with pytest.warns(attribution.AttributionWarning) as record:
+    with pytest.warns(AttributionWarning) as record:
         result = attribution.randomization_test(model, x, target=0, method=attribution.saliency)
     coded = [w for w in record if getattr(w.message, "fields", {}).get("code")]
     assert [w.message.fields["code"] for w in coded] == ["attribution_randomization_maps_large"]

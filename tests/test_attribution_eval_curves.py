@@ -1,7 +1,7 @@
 """Deletion and insertion curves with AOPC (``tl.attribution.deletion_curve``).
 
 A tiny linear model's curves equal the closed form exactly; on a small CNN
-every recorded step replays through the intervention engine to its score; on
+every recorded step replays through the intervention engine (``fork().do``) to its score; on
 a model whose true ranking is known, the attribution's AOPC beats random
 rankings; ``grad_cam`` results (a CNN and a tiny ViT) run through both curves.
 """
@@ -108,7 +108,7 @@ def test_curve_equals_closed_form_on_linear_model(kind: str) -> None:
 
 @pytest.mark.parametrize("kind", ["deletion", "insertion"])
 def test_curve_steps_replay_to_their_scores_on_small_cnn(kind: str) -> None:
-    """Every recorded step, replayed through ``tl.trace(..., intervene=)``, gives its score."""
+    """Every recorded step, replayed by ``trace.fork().do(step.intervention)``, gives its score."""
 
     torch.manual_seed(0)
     model = SmallCnn().eval()
@@ -119,10 +119,13 @@ def test_curve_steps_replay_to_their_scores_on_small_cnn(kind: str) -> None:
 
     assert curve.settings["features"] == "pixels"
     assert len(curve.steps) == 9
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     for step in curve.steps:
-        replayed = tl.trace(model, x, intervene=step.intervention)
-        output = replayed[replayed.output_layers[0]].out
+        fork = trace.fork()
+        fork.do(step.intervention)
+        output = fork[fork.output_layers[0]].out
         assert torch.allclose(output[:, 1].to(torch.float64), step.score, atol=1e-6)
+        fork.cleanup()
         direct = model(step.inputs)[:, 1].detach().to(torch.float64)
         assert torch.allclose(direct, step.score, atol=1e-6)
         held = step.baseline_mask
