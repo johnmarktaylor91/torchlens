@@ -97,6 +97,14 @@ refusal (`worst_element`).
 - `head_scores` / `inspect_prompt` / `test_prompt`: taxonomy masks with
   TLens-compatible conventions (credited), structured prompt records with
   explicit BOS disclosure and teacher-forced multi-token scoring.
+  `head_scores(trace, kind="induction", period=n)` scores the fixed repeat
+  of a sequence with period `n` instead of the token-equality mask:
+  destination `i` on the one source `i - n + 1`, counted when its token
+  equals the token at `i - n`, so a token that repeats inside the sequence
+  adds nothing. On GPT-2 small with `[bos] + R + R` (`R` 50 random tokens,
+  seed 0, batch 8) it equals an independent Hugging Face eager-attention
+  oracle within 1e-9 in float64 for all 144 heads, top 5 heads 5.5, 6.9,
+  7.10, 5.1, 7.2 (measured numbers below in the circuit section).
 
 Fused attention (torch SDPA) needs
 `capture=CaptureOptions(save_arg_values=True)` for reconstructed
