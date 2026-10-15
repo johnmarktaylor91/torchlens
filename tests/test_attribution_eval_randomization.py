@@ -36,9 +36,15 @@ class SmallCnn(nn.Module):
 
 
 def _input_itself(model: nn.Module, inputs: Tensor, input_kwargs: Any, *, target: Any) -> Tensor:
-    """A stub explanation that ignores the parameters: the input is the map."""
+    """A stub explanation that ignores the parameters: the input is the map.
 
-    del model, input_kwargs, target
+    It still runs the model (and discards the output) so the default layer
+    discovery, which watches one method call, sees every parameterized layer.
+    """
+
+    del input_kwargs, target
+    with torch.no_grad():
+        model(inputs)
     return inputs.detach().clone()
 
 
@@ -76,6 +82,8 @@ def test_parameter_ignoring_method_shows_no_fall() -> None:
     model = SmallCnn()
     x = torch.randn(1, 3, 12, 12)
     result = attribution.randomization_test(model, x, target=0, method=_input_itself)
+    assert result.layers == ("head", "conv2", "conv1")
+    assert len(result.steps) == 3
     for measure in ("spearman", "spearman_abs", "ssim"):
         values = result.similarity(measure)
         assert all(value == pytest.approx(1.0, abs=1e-12) for value in values), measure
@@ -267,15 +275,17 @@ def test_randomization_refuses_a_map_that_changes_shape() -> None:
     torch.manual_seed(0)
     model = SmallCnn()
     x = torch.randn(1, 3, 12, 12)
-    calls: list[int] = []
+    head_weight = model.head.weight.detach().clone()
 
     def _shifting_layout(
         model: nn.Module, inputs: Tensor, input_kwargs: Any, *, target: Any
     ) -> Tensor:
-        """Return the input on the first call and a cropped map afterwards."""
+        """Return the input while the head is untouched, a cropped map once it is randomized."""
 
-        calls.append(1)
-        return inputs if len(calls) == 1 else inputs[..., 1:]
+        with torch.no_grad():
+            model(inputs)
+        untouched = torch.equal(model.head.weight, head_weight)
+        return inputs if untouched else inputs[..., 1:]
 
     with pytest.raises(attribution.AttributionError) as excinfo:
         attribution.randomization_test(model, x, target=0, method=_shifting_layout)
