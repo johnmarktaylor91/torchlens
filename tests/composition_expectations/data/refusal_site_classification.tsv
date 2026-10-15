@@ -6,8 +6,8 @@
 # ratchet IN THE SAME CHANGE. Site keys are line-number-free (module:scope:class:factory:ordinal).
 # classification: CONTRACTED | INTERNAL | KNOWN-GAP
 site_key	classification	code	justification
-torchlens.attribution._audit_claims:_claim_layer:AttributionError:_unsupported:1	CONTRACTED	attribution_audit_claim_unsupported	attribution evaluation battery: the causal audit of internal attributions; coded with a runnable Remedy and a contract-doc row
-torchlens.attribution._audit_claims:_claim_layer:AttributionError:_unsupported:2	CONTRACTED	attribution_audit_claim_unsupported	attribution evaluation battery: the causal audit of internal attributions; coded with a runnable Remedy and a contract-doc row
+torchlens.attribution._audit_claims:_claim_layer:AttributionError:_unsupported_claim:1	CONTRACTED	attribution_audit_claim_unsupported	attribution evaluation battery: the causal audit of internal attributions; coded with a runnable Remedy and a contract-doc row
+torchlens.attribution._audit_claims:_claim_layer:AttributionError:_unsupported_claim:2	CONTRACTED	attribution_audit_claim_unsupported	attribution evaluation battery: the causal audit of internal attributions; coded with a runnable Remedy and a contract-doc row
 torchlens.attribution._audit_claims:_edit_factory:AttributionError:_setting_error:1	CONTRACTED	attribution_eval_setting_invalid	attribution evaluation battery: the causal audit of internal attributions; coded with a runnable Remedy and a contract-doc row
 torchlens.attribution._audit_claims:_plan_audit:AttributionError:_misaligned:1	CONTRACTED	attribution_audit_claim_misaligned	attribution evaluation battery: the causal audit of internal attributions; coded with a runnable Remedy and a contract-doc row
 torchlens.attribution._audit_claims:_plan_audit:AttributionError:_misaligned:2	CONTRACTED	attribution_audit_claim_misaligned	attribution evaluation battery: the causal audit of internal attributions; coded with a runnable Remedy and a contract-doc row
