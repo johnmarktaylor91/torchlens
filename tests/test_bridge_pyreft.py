@@ -220,7 +220,22 @@ def _not_a_weight_file(directory: Path) -> None:
     (directory / f"intkey_{_KEY}.bin").write_bytes(b"not a torch file")
 
 
+def _not_orthonormal(directory: Path) -> None:
+    _write(directory, tensors={"rotate_layer": _ROTATION * 1.5})
+
+
+def _key_outside_the_directory(directory: Path) -> None:
+    _write(directory, sorted_keys=["../" + _KEY])
+
+
+def _another_class(directory: Path) -> None:
+    _write(directory, intervention_types=["<class 'mine.MyLoreftIntervention'>"])
+
+
 _MALFORMED = {
+    "not-orthonormal": (_not_orthonormal, "pyreft_artifact_invalid"),
+    "key-outside-the-directory": (_key_outside_the_directory, "pyreft_artifact_invalid"),
+    "another-class": (_another_class, "pyreft_artifact_unsupported"),
     "two-interventions": (_two_interventions, "pyreft_artifact_unsupported"),
     "not-loreft": (_not_loreft, "pyreft_artifact_unsupported"),
     "no-config": (_no_config, "pyreft_artifact_invalid"),

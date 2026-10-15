@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import io
 import json
 from collections.abc import Mapping
 from pathlib import Path
@@ -48,6 +49,10 @@ from .._errors import InvalidArgumentError
 __all__ = ["LoreftArtifact", "read"]
 
 _LOREFT = "LoreftIntervention"
+#: pyreft trains R through an orthogonal parametrization, so its columns are
+#: orthonormal to float32 rounding (about 1e-7); a Gram error above this is
+#: not a LoReFT rotation as trained.
+_ROTATION_GRAM_LIMIT = 1e-4
 _REMEDY = (
     "point read() at the directory pyreft saved with reft_model.save(directory), "
     "which holds config.json and intkey_<key>.bin for one LoreftIntervention: "
@@ -170,8 +175,8 @@ class LoreftArtifact:
         return affine_source(self.weight.to(torch.float64), bias=self.bias.to(torch.float64))
 
 
-def _config(directory: Path) -> dict[str, Any]:
-    """Return the parsed ``config.json``, refusing a missing or unreadable one."""
+def _config(directory: Path) -> tuple[dict[str, Any], str]:
+    """Return the parsed ``config.json`` and its sha256, refusing a missing or unreadable one."""
 
     path = directory / "config.json"
     if not path.is_file():
@@ -181,7 +186,8 @@ def _config(directory: Path) -> dict[str, Any]:
             file="config.json",
         )
     try:
-        config = json.loads(path.read_text(encoding="utf-8"))
+        data = path.read_bytes()
+        config = json.loads(data.decode("utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise _refusal(
             f"config.json is not readable JSON ({exc})",
@@ -192,7 +198,7 @@ def _config(directory: Path) -> dict[str, Any]:
         raise _refusal(
             "config.json is not a JSON object", code="pyreft_artifact_invalid", file="config.json"
         )
-    return config
+    return config, hashlib.sha256(data).hexdigest()
 
 
 def _one_loreft(config: Mapping[str, Any]) -> tuple[str, list[Any], int]:
@@ -221,7 +227,8 @@ def _one_loreft(config: Mapping[str, Any]) -> tuple[str, list[Any], int]:
             code="pyreft_artifact_unsupported",
             file="config.json",
         )
-    if not str(kinds[0]).rstrip("'>").endswith(_LOREFT):
+    kind = str(kinds[0]).rstrip("'>")
+    if kind != _LOREFT and not kind.endswith("." + _LOREFT):
         raise _refusal(
             f"the intervention is {kinds[0]!r}, not a {_LOREFT}",
             code="pyreft_artifact_unsupported",
@@ -249,6 +256,12 @@ def _weight_file(directory: Path, key: str) -> Path:
     """Return the intervention's weight file, under the dotted or underscored name."""
 
     names = (f"intkey_{key}.bin", f"intkey_{key.replace('.', '_')}.bin")
+    if any(Path(name).name != name or "\\" in name for name in names) or ".." in key:
+        raise _refusal(
+            f"the intervention key {key!r} is not a plain file-name part",
+            code="pyreft_artifact_invalid",
+            file="config.json",
+        )
     for name in names:
         if (directory / name).is_file():
             return directory / name
@@ -259,11 +272,11 @@ def _weight_file(directory: Path, key: str) -> Path:
     )
 
 
-def _tensors(path: Path, rank: int, dimension: int) -> dict[str, torch.Tensor]:
-    """Return ``weight``, ``bias`` and ``rotate_layer``, refusing a malformed file."""
+def _tensors(path: Path, data: bytes, rank: int, dimension: int) -> dict[str, torch.Tensor]:
+    """Return ``weight``, ``bias`` and ``rotate_layer`` from ``data``, refusing a malformed file."""
 
     try:
-        state = torch.load(path, map_location="cpu", weights_only=True)
+        state = torch.load(io.BytesIO(data), map_location="cpu", weights_only=True)
     except Exception as exc:  # torch raises several unrelated types for a bad file
         raise _refusal(
             f"{path.name!r} is not a torch weight file ({type(exc).__name__}: {exc})",
@@ -272,7 +285,7 @@ def _tensors(path: Path, rank: int, dimension: int) -> dict[str, torch.Tensor]:
         ) from exc
     expected = {"weight": (rank, dimension), "bias": (rank,), "rotate_layer": (dimension, rank)}
     if not isinstance(state, Mapping) or set(state) != set(expected):
-        found = sorted(state) if isinstance(state, Mapping) else type(state).__name__
+        found = sorted(map(str, state)) if isinstance(state, Mapping) else type(state).__name__
         raise _refusal(
             f"{path.name!r} holds {found!r}, not LoReFT's weight, bias and rotate_layer",
             code="pyreft_artifact_invalid",
@@ -325,7 +338,7 @@ def read(
     root = Path(directory)
     if not root.is_dir():
         raise _refusal(f"{str(directory)!r} is not a directory", code="pyreft_artifact_invalid")
-    config = _config(root)
+    config, config_sha256 = _config(root)
     key, representation, dimension = _one_loreft(config)
     layer, component, unit, units_per_example, rank = representation[:5]
     if not all(
@@ -338,12 +351,22 @@ def read(
             file="config.json",
         )
     weight_path = _weight_file(root, key)
-    tensors = _tensors(weight_path, int(rank), dimension)
+    weight_bytes = weight_path.read_bytes()
+    tensors = _tensors(weight_path, weight_bytes, int(rank), dimension)
     rotation = tensors["rotate_layer"]
     gram = rotation.to(torch.float64).T @ rotation.to(torch.float64)
+    gram_error = float((gram - torch.eye(int(rank), dtype=torch.float64)).abs().max())
+    if gram_error > _ROTATION_GRAM_LIMIT:
+        raise _refusal(
+            f"{weight_path.name!r} rotate_layer columns are not orthonormal (largest Gram "
+            f"error {gram_error:.3g}); pyreft trains an orthogonal rotation, so this is not "
+            "a LoReFT artifact as saved",
+            code="pyreft_artifact_invalid",
+            file=weight_path.name,
+        )
     files = {
-        path.name: hashlib.sha256(path.read_bytes()).hexdigest()
-        for path in (root / "config.json", weight_path)
+        "config.json": config_sha256,
+        weight_path.name: hashlib.sha256(weight_bytes).hexdigest(),
     }
     provenance = {
         "repo": repo,
@@ -362,9 +385,7 @@ def read(
             "W": _float64_sha256(tensors["weight"]),
             "b": _float64_sha256(tensors["bias"]),
         },
-        "orthonormality_max_abs": float(
-            (gram - torch.eye(int(rank), dtype=torch.float64)).abs().max()
-        ),
+        "orthonormality_max_abs": gram_error,
     }
     return LoreftArtifact(
         rotation=rotation,

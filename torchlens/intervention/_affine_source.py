@@ -85,7 +85,8 @@ def _checked_tensor(value: Any, argument: str, ndim: int) -> torch.Tensor:
         )
     if not bool(torch.isfinite(value).all()):
         raise _invalid(argument, "it contains NaN or Inf", code="affine_source_invalid")
-    return value.detach()
+    # A copy: a later in-place change to the caller's tensor never changes the edit.
+    return value.detach().clone()
 
 
 def needs_subspace(

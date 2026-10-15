@@ -466,9 +466,17 @@ def masked_subspace_edit(edit: Edit, mask: _Mask, site_label: str) -> Edit:
     if edit.factory is None:
         raise _refusal_for(edit.helper_name, code="subspace_edit_unsupported")
     dense = mask.to_dense().cpu().contiguous()
+    stored = dict(edit.kwargs)
+    if isinstance(stored.get("mask"), torch.Tensor):
+        # A reloaded masked edit under another mask: the session scatters through
+        # both, which is the intersection, so that is the one mask stored.
+        if tuple(stored["mask"].shape) != tuple(dense.shape):
+            raise _refusal_for(edit.helper_name, code="subspace_edit_unsupported")
+        dense = dense & stored["mask"]
+    kwargs = tuple(item for item in edit.kwargs if item[0] not in ("mask", "mask_sha256"))
     return dataclasses.replace(
         edit,
-        kwargs=tuple(edit.kwargs) + (("mask", dense), ("mask_sha256", _mask_digest(dense))),
+        kwargs=kwargs + (("mask", dense), ("mask_sha256", _mask_digest(dense))),
         factory=_masked_factory(edit.factory, mask, site_label),
     )
 

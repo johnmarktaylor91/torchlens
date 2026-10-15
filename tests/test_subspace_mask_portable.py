@@ -106,6 +106,24 @@ def test_one_position_subspace_edit_saves_portable_and_reapplies_bit_identically
     assert torch.equal(reapplied[_SITE].out[untouched], _ready()[_SITE].out[untouched])
 
 
+def test_reloaded_masked_edit_under_another_mask_stores_the_intersection(tmp_path: Path) -> None:
+    """The session scatters through both masks; the saved edit stores their intersection."""
+
+    session = _session(tl.intervention.affine_source(_W, bias=_B))
+    staged = session.push()
+    loaded = _save_load(session, tmp_path / "first.tlspec").hook_specs[0].helper
+    wider = _mask(3) | _mask(4)
+    fork = _ready().fork()
+    fork.do(tl.units(_SITE, wider), loaded)
+    twice = fork.push()
+    assert torch.equal(twice[_SITE].out, staged[_SITE].out)
+    again = _save_load(fork, tmp_path / "second.tlspec")
+    kwargs = dict(again.hook_specs[0].helper.kwargs)
+    assert torch.equal(kwargs["mask"], _mask(3))
+    assert [key for key, _ in again.hook_specs[0].helper.kwargs].count("mask") == 1
+    assert torch.equal(_apply(again)[_SITE].out, staged[_SITE].out)
+
+
 def test_other_masked_edits_keep_their_portability(tmp_path: Path) -> None:
     """A masked plain verb (no subspace) stays opaque_audit, exactly as before."""
 
