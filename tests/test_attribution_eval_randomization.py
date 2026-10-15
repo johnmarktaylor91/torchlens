@@ -226,13 +226,13 @@ def test_similarity_measures_match_independent_computation() -> None:
         _spearman_by_hand(tied_original.reshape(-1).tolist(), tied_randomized.reshape(-1).tolist()),
         abs=1e-12,
     )
-    assert result.steps[0].similarity["spearman"] == pytest.approx(
+    assert result.steps[0].similarities["spearman"] == pytest.approx(
         _spearman_by_hand(original.reshape(-1).tolist(), randomized.reshape(-1).tolist()),
         abs=1e-12,
     )
     plane_a, plane_b = _ssim_plane(original), _ssim_plane(randomized)
     assert plane_a is not None and plane_b is not None
-    assert result.steps[0].similarity["ssim"] == pytest.approx(
+    assert result.steps[0].similarities["ssim"] == pytest.approx(
         _ssim_by_hand(plane_a, plane_b), abs=1e-10
     )
     assert _ssim(plane_a, plane_b) == pytest.approx(_ssim_by_hand(plane_a, plane_b), abs=1e-10)
