@@ -31,7 +31,7 @@ from ._forward_query import box_for_source_unit
 from ._gradient import gradient_for_unit
 from ._gradient_forward import _select_targets, projective_gradient_for_unit
 from ._path import resolve_graph_point
-from ._query import _windowed_axes_in_unit_order, box_for_unit
+from ._query import _shared_query_scope, _windowed_axes_in_unit_order, box_for_unit
 from ._types import (
     GradientReceptiveField,
     ReceptiveField,
@@ -1135,6 +1135,15 @@ def _check_solution_metadata(
     """Check cheap descriptor and box invariants for one directional solution."""
 
     ops_by_label = {op.label: op for op in trace.layer_list}
+    with _shared_query_scope():
+        _check_descriptors(solution, ops_by_label, direction)
+
+
+def _check_descriptors(
+    solution: Any, ops_by_label: dict[str, Op], direction: ReceptiveFieldDirection
+) -> None:
+    """Check every descriptor of one solution; see :func:`_check_solution_metadata`."""
+
     for (op_label, role), descriptor in solution.descriptors.items():
         state = solution.states[(op_label, role)]
         if state.taint is not None:

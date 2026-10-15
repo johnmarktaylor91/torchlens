@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
+import threading
+from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from dataclasses import dataclass
 from fractions import Fraction
 from itertools import islice
@@ -49,6 +51,54 @@ class _Progression:
     def values(self) -> range:
         """Return a lazy range over all represented indices."""
         return range(self.start, self.stop + 1, self.step)
+
+
+def _canonical_progression(start: int, step: int, count: int) -> _Progression:
+    """Return the run :meth:`_IndexSet.from_values` derives for one progression's values.
+
+    A single value is the run ``(value, 1, 1)``; two or more equally spaced values
+    are one run with their spacing.
+    """
+    return _Progression(start, step if count > 1 else 1, count)
+
+
+def _progression_sumset(first: _Progression, second: _Progression) -> _Progression | None:
+    """Return ``{a + b : a in first, b in second}`` when it is one progression, else ``None``.
+
+    With steps ``g <= G`` and counts ``c`` (for ``g``) and ``C``: when ``G`` is a
+    multiple ``q * g`` with ``q <= c``, the sums ``g * (i + q * j)`` for
+    ``0 <= i < c`` and ``0 <= j < C`` cover every multiple of ``g`` from ``0`` to
+    ``g * (c - 1 + q * (C - 1))`` with no gap. Any other combination returns
+    ``None`` and the caller enumerates instead, so the result is always the set
+    the enumeration would produce.
+    """
+    start = first.start + second.start
+    if first.count == 1 or second.count == 1:
+        other = second if first.count == 1 else first
+        return _canonical_progression(start, other.step, other.count)
+    small, large = sorted((first, second), key=lambda item: (item.step, item.count))
+    if small.step <= 0 or large.step % small.step:
+        return None
+    ratio = large.step // small.step
+    if ratio > small.count:
+        return None
+    return _Progression(start, small.step, small.count + ratio * (large.count - 1))
+
+
+def _clipped_progression(item: _Progression, extent: int, *, exact: bool) -> _IndexSet:
+    """Intersect one progression with ``[0, extent)`` in closed form.
+
+    Equals ``_IndexSet._from_sorted_unique`` over the surviving values: the
+    survivors of an ascending progression are one contiguous run of its terms.
+    """
+    first = max(0, -(item.start // item.step)) if item.start < 0 else 0
+    last = min(item.count - 1, (extent - 1 - item.start) // item.step)
+    if last < first:
+        return _IndexSet.empty(exact=exact)
+    return _IndexSet(
+        (_canonical_progression(item.start + item.step * first, item.step, last - first + 1),),
+        exact,
+    )
 
 
 @dataclass(frozen=True)
@@ -157,6 +207,8 @@ class _IndexSet:
             # Nothing is dropped, so recompressing would rebuild this exact
             # canonical decomposition with this exact ``exact`` flag.
             return self
+        if len(progressions) == 1:
+            return _clipped_progression(progressions[0], extent, exact=self.exact)
         return _IndexSet._from_sorted_unique(
             [value for value in self.values() if 0 <= value < extent], exact=self.exact
         )
@@ -178,6 +230,95 @@ class _IndexSet:
 
 
 _AxisSets: TypeAlias = tuple[_IndexSet | None, ...]
+
+
+class _SharedQueryState(threading.local):
+    """Per-thread facts shared by the per-unit queries inside one :func:`_shared_query_scope`.
+
+    Each query derives the solved operations, their reference index and the
+    endpoint's path slice from the trace and solution alone, and its walk asks
+    the engine for every operation's local rule result. Those are pure functions
+    of the trace, the solution and the rule-registry epoch (which the engine's
+    rule memo re-checks), so queries issued back to back over one solution can
+    share them. Outside a scope nothing is cached and every query derives its
+    own, exactly as before.
+    """
+
+    def __init__(self) -> None:
+        """Start this thread with no open scope."""
+
+        self.depth = 0
+        self.graphs: dict[int, tuple[object, object, tuple[Op, ...], dict[str, Op]]] = {}
+        self.reach: dict[tuple[str, int, str], tuple[object, frozenset[str]]] = {}
+
+
+_SHARED_QUERY_STATE = _SharedQueryState()
+
+
+@contextmanager
+def _shared_query_scope() -> Iterator[None]:
+    """Share graph facts and rule results across the per-unit queries run inside it.
+
+    The always-on metadata invariants query one box per solved operation; on a
+    chain of ``n`` operations each query re-derived ``O(n)`` graph facts and
+    ``O(n)`` rule results. Inside this scope they are derived once per solution
+    (graph facts) and once per operation (rule results, through one enclosing
+    engine memo scope). Every query still walks its own path, so the boxes are
+    unchanged.
+    """
+
+    state = _SHARED_QUERY_STATE
+    with _engine._geometry_memo():
+        state.depth += 1
+        try:
+            yield
+        finally:
+            state.depth -= 1
+            if not state.depth:
+                state.graphs.clear()
+                state.reach.clear()
+
+
+def _query_graph(trace: Any, solution: Any) -> tuple[tuple[Op, ...], dict[str, Op]]:
+    """Return the solved operations in trace order and their label index."""
+
+    state = _SHARED_QUERY_STATE
+    if state.depth:
+        cached = state.graphs.get(id(solution))
+        if cached is not None and cached[0] is solution and cached[1] is trace:
+            return cached[2], cached[3]
+    operations = tuple(item for item in trace.layer_list if item.label in solution.per_op)
+    by_reference = {
+        reference: item
+        for item in operations
+        for reference in (item.label, item.layer_label, item._layer_label_raw)
+    }
+    if state.depth:
+        state.graphs[id(solution)] = (solution, trace, operations, by_reference)
+    return operations, by_reference
+
+
+def _shared_reach(
+    kind: str, solution: Any, label: str, derive: Callable[[], frozenset[str]]
+) -> frozenset[str]:
+    """Return ``derive()``, shared per ``(kind, solution, label)`` inside a scope."""
+
+    state = _SHARED_QUERY_STATE
+    if not state.depth:
+        return derive()
+    key = (kind, id(solution), label)
+    cached = state.reach.get(key)
+    if cached is not None and cached[0] is solution:
+        return cached[1]
+    value = derive()
+    state.reach[key] = (solution, value)
+    return value
+
+
+def _query_memo_scope() -> AbstractContextManager[None]:
+    """Return the per-query engine memo scope, or the enclosing shared one."""
+
+    return nullcontext() if _SHARED_QUERY_STATE.depth else _engine._geometry_memo()
 
 
 @dataclass(frozen=True)
@@ -233,18 +374,18 @@ def box_for_unit(
     _validate_descriptor_for_query(descriptor)
     coordinates = _normalize_unit(op, descriptor, unit)
     initial = _initial_axis_sets(op, descriptor, coordinates, complete_unit=complete_unit)
-    trace = op.source_trace
-    operations = tuple(item for item in trace.layer_list if item.label in solution.per_op)
-    by_reference = {
-        reference: item
-        for item in operations
-        for reference in (item.label, item.layer_label, item._layer_label_raw)
-    }
-    ancestry = _ancestor_labels(descriptor.input_op_label, operations, by_reference)
+    operations, by_reference = _query_graph(op.source_trace, solution)
+    ancestry = _shared_reach(
+        "receptive",
+        solution,
+        descriptor.input_op_label,
+        lambda: _ancestor_labels(descriptor.input_op_label, operations, by_reference),
+    )
     # The walk enumerates paths, so it revisits each operation once per path
     # through it, re-deriving per-operation facts that are linear in that
-    # operation's parents. Memoize them for this one query.
-    with _engine._geometry_memo():
+    # operation's parents. Memoize them for this one query (or for every query
+    # of an enclosing shared scope).
+    with _query_memo_scope():
         terminals = _walk_to_input(
             op,
             initial,
@@ -599,7 +740,21 @@ def _map_window(
 def _standard_window_index_set(
     output_set: _IndexSet, *, kernel: int, stride: int, padding: int, dilation: int
 ) -> _IndexSet:
-    """Map a standard affine window while retaining dilation residue structure."""
+    """Map a standard affine window while retaining dilation residue structure.
+
+    A one-progression output set whose window image is again one progression
+    (every stride-1 window over an interval) is mapped in closed form; anything
+    else enumerates. Both yield the same canonical set.
+    """
+    progressions = output_set.progressions
+    if len(progressions) == 1 and kernel > 0 and stride > 0 and dilation > 0:
+        item = progressions[0]
+        image = _progression_sumset(
+            _Progression(stride * item.start - padding, stride * item.step, item.count),
+            _Progression(0, dilation, kernel),
+        )
+        if image is not None:
+            return _IndexSet((image,), output_set.exact)
     values = (
         stride * output_index - padding + dilation * tap
         for output_index in output_set.values()
@@ -840,6 +995,19 @@ def map_transposed_convolution_index_set(
     padding_value = paddings[axis]
     dilation_value = dilations[axis]
     extent = extents[axis]
+    progressions = output_set.progressions
+    if len(progressions) == 1 and stride_value == 1 and kernel_value > 0 and dilation_value > 0:
+        # Stride 1: every output/tap pair is integral, so the feasible inputs are
+        # the sumset of the outputs (shifted by the padding) and the negated taps,
+        # clipped to the input extent; computed in closed form when it is one
+        # progression, else enumerated below.
+        item = progressions[0]
+        image = _progression_sumset(
+            _Progression(item.start + padding_value, item.step, item.count),
+            _Progression(-dilation_value * (kernel_value - 1), dilation_value, kernel_value),
+        )
+        if image is not None:
+            return _clipped_progression(image, extent, exact=output_set.exact), True
     feasible: list[int] = []
     divisor = gcd(stride_value, dilation_value)
     for output_index in output_set.values():
