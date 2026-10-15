@@ -486,6 +486,16 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `subspace_basis_dim_mismatch` at fire time. Zero mode on the span of class-mean differences
   is the LEACE mean-equalizing erasure.
 
+**torchlens.intervention.affine_source(weight, *, bias=None)** — *documented-unstable*
+: Source verb for a subspace edit: under `do(tl.subspace(site, R.T, origin=...), affine_source(W,
+  bias=b))` the new coordinates are `W x + b` of the whole site value `x`, so the site gets
+  `x + Q^T (W x + b - Q x)` with `Q` the basis rows (LoReFT, `h + R (W h + b - R^T h)`). `weight` is
+  a finite real `[k, d]` tensor shaped like the basis rows, `bias` `None` or a finite real `[k]`
+  tensor; anything else refuses `affine_source_invalid`. Outside a subspace (a site label,
+  `tl.units`, a capture or replay hook) it refuses `affine_source_needs_subspace`. Builtin: it
+  saves inside the `subspace_edit` payload, `weight` and `bias` as tensor sidecars. TorchLens
+  applies a LoReFT edit trained elsewhere and never fits one.
+
 **torchlens.intervention.subspace_interchange(basis, source, *, feature_axis=-1)** — *documented-unstable*
 : k-dimensional basis interchange: `x - P x + P s`, with `s` the source trace's value at the
   same site (same-site donor resolution as `tl.patch_from`); applies a learned rotation the
@@ -1728,7 +1738,13 @@ deprecation shim owed*
   `subspace_spec_basis_not_orthonormal`. A verb that is not builtin
   (`patch_from`, population verbs, hook callables) keeps the edit
   `opaque_audit`. `BasisProvenance.source_dtype` is the dtype of the caller's
-  basis before the float64 canonicalisation.
+  basis before the float64 canonicalisation. A subspace restricted by a
+  `within=` element mask (one position, as LoReFT edits) stores the dense
+  `mask` and its `mask_sha256` too, so it still saves portably; a malformed
+  stored mask refuses `subspace_spec_invalid` and one changed after saving
+  refuses `subspace_spec_mask_tampered`; any other masked edit keeps its
+  portability. A stored keyword the loader does not know refuses
+  `subspace_spec_invalid`.
 
 **SelectionError / selection refusal codes** — *unstable — no deprecation
 shim owed; S2-gated*
@@ -1986,6 +2002,28 @@ shim owed*
   `authority=`), returns the field-level `PreprocessingAudit`, and warns
   `preprocessing_card_mismatch` when a field disagrees. Nothing runs it
   automatically. An opaque record compares as unknown, never as a match.
+
+**torchlens.bridge.pyreft.read(directory, *, repo=None, revision=None)** — *documented-unstable*
+: Read a pyreft LoReFT artifact (the directory `ReftModel.save` writes: `config.json` plus
+  `intkey_<key>.bin`, under the key's dotted or underscored name) into a
+  `torchlens.bridge.pyreft.LoreftArtifact`; never imports pyreft or pyvene and never fits
+  anything. Apply it with `fork.do(artifact.subspace(site, positions=mask), artifact.edit)`, which
+  is `tl.subspace(tl.units(site, ...), R.T, origin=..., method="loreft")` with
+  `tl.intervention.affine_source(W, bias=b)`. pyreft trains `R` in float32 (orthonormal to about
+  `1e-7`), so the subspace orthonormalises it once in float64 and the saved edit records
+  `origin_sha256` (R as read), `basis_sha256` (rows applied), `orthonormalised=True` and
+  `source_dtype="float32"`. Refuses `pyreft_artifact_invalid` (missing or malformed file) and
+  `pyreft_artifact_unsupported` (not exactly one `LoreftIntervention`).
+
+**torchlens.bridge.pyreft.LoreftArtifact** — *documented-unstable*
+: Frozen record of one LoReFT intervention as read: `rotation` (`R`, `[d, k]`), `weight` (`W`,
+  `[k, d]`), `bias` (`b`, `[k]`) in their saved dtypes; `layer`, `component`, `unit` and
+  `units_per_example` as pyreft names the site (for example layer 8, `"block_output"`, `"pos"`,
+  1); `rank`; `origin` (the subspace `origin=` text); `provenance` (repo, revision, each file's
+  sha256, the weight file name, each tensor's source dtype, the float64 sha256 of `R`, `W`, `b`,
+  and `orthonormality_max_abs`). `subspace(site, *, positions=None)` returns the selection
+  (`positions` a bool mask over the site's axes except the feature axis; `None` is every position;
+  a non-bool mask refuses `pyreft_positions_invalid`); `edit` is the float64 `affine_source`.
 
 **torchlens.bridge.huggingface.from_hub(repo_id, *, path_in_repo, revision, token, api)** — *unstable — no deprecation shim owed*
 : Downloads the gzipped `.tlspec` tar that `push_to_hub` uploads, checks

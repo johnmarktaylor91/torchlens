@@ -96,6 +96,15 @@
       "status": "fixed",
       "verified_at": "2026-10-14 (penzai, baukit, autocircuit, inseq and repe now spell trace.run, .push and steer_generate; the refreshed pyvene.md and from_pyvene.md spell trace.run, trace.push, do() and steer_generate, keep rerun and replay only in the removed-spellings sentence of intervention_explainers.md, and every example runs in tests/test_migration_pages_executed.py)",
       "owner_next": "none"
+    },
+    {
+      "id": "pyreft-loreft-reader-missing",
+      "doc": "docs/migration/from_pyvene.md",
+      "kind": "missing-row",
+      "receipt": "The 'Trainable interventions' row named only a training loop of your own; a LoReFT artifact trained with pyreft had no way into TorchLens. tl.bridge.pyreft.read now reads one (config.json plus intkey_<key>.bin, dotted or underscored name) into tl.subspace with tl.intervention.affine_source, and the page's 'Reading a pyreft LoReFT artifact' example runs in tests/test_migration_pages_executed.py on a stand-in artifact in pyreft's file layout.",
+      "status": "fixed",
+      "verified_at": "2026-10-15 (tests/test_bridge_pyreft.py and the page example)",
+      "owner_next": "none"
     }
   ]
 }
