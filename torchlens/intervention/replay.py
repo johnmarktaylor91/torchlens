@@ -247,6 +247,12 @@ def _run_differentiable_replay(
         source_cone_labels=tuple(_disclosure_label(site) for site in source_cone),
     )
     _reset_backward_projection(replay_log)
+    # Hooks firing inside this replay see the door in their run context, so
+    # keep_grad can disclose that the frontier re-leafs the edited value.
+    replay_log.last_run = {
+        **(replay_log.last_run if isinstance(replay_log.last_run, dict) else {}),
+        "differentiable": True,
+    }
     _run_replay(
         replay_log,
         [replay_log.layer_dict_all_keys[_replay_site_key(origin)] for origin in origins],

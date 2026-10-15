@@ -1400,6 +1400,20 @@ def mean_fill(
 # ----------------------------------------------------------------------
 # directional dataset mean (D12 of the roster): set_direction_mean
 # ----------------------------------------------------------------------
+def _direction_mean_coefficient64(
+    members: Sequence[torch.Tensor], axes: Sequence[int], unit64: torch.Tensor
+) -> float:
+    """Return the mean coefficient of ``members`` along ``unit64``, in float64."""
+
+    per_member = []
+    for member, axis in zip(members, axes, strict=True):
+        shape = [1] * member.ndim
+        shape[axis] = int(unit64.shape[0])
+        wide = member.detach().to("cpu", torch.float64)
+        per_member.append((wide * unit64.reshape(shape)).sum(dim=axis).mean())
+    return float(torch.stack(per_member).mean())
+
+
 def set_direction_mean(
     direction: torch.Tensor,
     ref: Reference,
@@ -1412,8 +1426,12 @@ def set_direction_mean(
     along ``direction`` is replaced by the population's MEAN coefficient
     along the same direction -- a composition of the shipped project/steer
     semantics with the D3 reducer (the mean coefficient is computed eagerly
-    at construction, in float32, and enters the hook as a detached constant).
+    at construction and enters the hook as a detached constant).
     Gradients flow through the orthogonal component only (D37).
+
+    Precision follows the site: a float64 site value uses a unit direction
+    and mean coefficient computed in float64; any other floating dtype uses
+    the float32 unit and coefficient, cast to the site's dtype and device.
 
     DOCUMENTED-UNSTABLE spelling pending naming-session ratification.
 
@@ -1445,9 +1463,12 @@ def set_direction_mean(
     explicit_axis = _require_explicit_axis(feature_axis, "set_direction_mean")
     host_direction = direction.detach().to("cpu", torch.float32)
     unit = host_direction / host_direction.norm()
+    host_direction64 = direction.detach().to("cpu", torch.float64)
+    unit64 = host_direction64 / host_direction64.norm()
     members = ref._tensor_members("set_direction_mean")
     extent = int(unit.shape[0])
     coefs: list[torch.Tensor] = []
+    axes: list[int] = []
     for index, member in enumerate(members):
         axis = explicit_axis % member.ndim if -member.ndim <= explicit_axis < member.ndim else None
         if axis is None or member.shape[axis] != extent:
@@ -1464,7 +1485,9 @@ def set_direction_mean(
         shape[axis] = extent
         aligned = unit.reshape(shape)
         coefs.append((member.detach().to(torch.float32) * aligned).sum(dim=axis))
+        axes.append(axis)
     mean_coef = float(torch.stack([coef.mean() for coef in coefs]).mean())
+    mean_coef64 = _direction_mean_coefficient64(members, axes, unit64)
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime directional mean-setting hook."""
@@ -1484,7 +1507,12 @@ def set_direction_mean(
                 )
             shape = [1] * out.ndim
             shape[fire_axis] = extent
-            aligned = unit.to(device=out.device, dtype=out.dtype).reshape(shape)
+            # The site's precision: float64 sites get the float64 unit and
+            # coefficient; other dtypes keep the float32 forms, cast.
+            wide = out.dtype == torch.float64
+            site_unit = unit64 if wide else unit
+            site_coef = mean_coef64 if wide else mean_coef
+            aligned = site_unit.to(device=out.device, dtype=out.dtype).reshape(shape)
             projection = (out * aligned).sum(dim=fire_axis, keepdim=True) * aligned
             _record_sampling(
                 hook,
@@ -1503,13 +1531,13 @@ def set_direction_mean(
                     "replacement_mode": "direction_mean",
                     "donor_grad": "orthogonal_component_only",
                     "recomputation": bool(hook.run_ctx.get("recomputation", False)),
-                    "mean_coefficient": mean_coef,
+                    "mean_coefficient": site_coef,
                 },
             )
             # Gradients through the orthogonal component only (D37): the
             # projection subtraction stays graph-connected; the added mean
             # term is a detached constant.
-            return out - projection + mean_coef * aligned
+            return out - projection + site_coef * aligned
 
         return _hook
 

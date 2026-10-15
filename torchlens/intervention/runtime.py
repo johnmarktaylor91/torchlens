@@ -204,6 +204,7 @@ def _execute_hook(
     try:
         inspect.signature(hook_callable).bind(out, hook=hook_context)
     except TypeError as exc:
+        _refuse_gradient_edit_on_forward(hook_callable, hook_context)
         raise HookSignatureError(
             f"hook {hook_context.name!r} could not be called at "
             f"{_site_name(hook_context)} with signature (out, *, hook)"
@@ -246,6 +247,65 @@ def _execute_hook(
         out,
         hook_context=hook_context,
         force_shape_change=force_shape_change,
+    )
+
+
+#: Keyword arguments of the normalized gradient-tuple callback every backward
+#: edit is mounted as (``hooks._adapt_tensor_backward_hook`` and the
+#: ``grad_fn_handle`` helpers).
+_GRADIENT_CALLBACK_PARAMETERS = frozenset(
+    {"grad_output", "grad_fn_handle", "call_index", "run_ctx"}
+)
+
+
+def _refuse_gradient_edit_on_forward(hook_callable: Any, hook_context: HookContext) -> None:
+    """Refuse a gradient edit reached by a forward-only engine (replay, push).
+
+    A backward edit (``tl.grad_zero()``, ``tl.bwd_hook(fn)``, ...) is normalized
+    to the gradient-tuple callback, whose ``grad_output``, ``grad_fn_handle``,
+    ``call_index`` and ``run_ctx`` arguments a forward value can never supply
+    (this runs only after the forward bind failed). The replay engine recomputes forward values only, so
+    such an edit has no gradient to edit there.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``replay_gradient_edit_unsupported`` when the callable is a gradient
+        callback and the context is a forward one; otherwise returns.
+    """
+
+    if hook_context.direction != "forward":
+        return
+    try:
+        parameters = inspect.signature(hook_callable).parameters
+    except (TypeError, ValueError):
+        return
+    if not _GRADIENT_CALLBACK_PARAMETERS.issubset(parameters):
+        return
+    from .._errors import InvalidArgumentError
+
+    site = _site_name(hook_context)
+    address = hook_context.layer_log.get("address")
+    module = str(address) if isinstance(address, str) and address else "<module>"
+    verb = hook_context.name
+    engine = hook_context.run_ctx.get("engine") or "forward"
+    raise InvalidArgumentError(
+        f"The gradient edit {verb!r} at site {site!r} reached the {engine} engine, "
+        "which recomputes forward values only and never runs a backward pass, so "
+        "the edit has no gradient to edit there. Nothing was changed. Remedy: "
+        "capture the backward pass live and edit the gradient there: "
+        f"trace = tl.trace(model, x, capture=tl.options.CaptureOptions("
+        f"backward_ready=True), intervene=tl.when(tl.module({module!r}), edit)); "
+        "trace.backward(loss)",
+        code="replay_gradient_edit_unsupported",
+        remedy=(
+            "tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True), "
+            f"intervene=tl.when(tl.module({module!r}), edit)) then trace.backward(loss)"
+        ),
+        argument="value_or_hook",
+        verb=verb,
+        site=site,
+        engine=engine,
     )
 
 

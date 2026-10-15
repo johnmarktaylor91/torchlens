@@ -208,6 +208,60 @@ RESULT = [
 ]
 ```
 
+### A rotation learned elsewhere
+
+TorchLens applies a rotation you trained elsewhere (distributed alignment search, ReFT); it does
+not fit one. The first `k` rows of the learned rotation `R` are the basis, so
+`do(tl.subspace(site, R[:k], origin=...), edit)` edits the learned subspace. With a builtin verb
+the staged edit is the builtin `subspace_edit`, which stores the verb, the float64 orthonormal rows
+it applies, the bound axis, the rows' sha256 and the basis provenance (`origin`, `method`, the
+original basis digest and its dtype). `tl.io.save_intervention(trace, path, level="portable")`
+saves it, and the loaded spec rebuilds the same projection, never the plain verb over the whole
+site. A stored basis that is malformed refuses `subspace_spec_invalid` at load, rows changed after
+saving refuse `subspace_spec_basis_tampered`, and rows that are not orthonormal refuse
+`subspace_spec_basis_not_orthonormal`. The portable interchange is `tl.replace_with(value)` with
+the source run's value at the site; `tl.patch_from(source)` and hook callables are session-time
+and save only at the audit level.
+
+```python
+# docs-test: expected=[True, True, True]
+import tempfile
+from pathlib import Path
+
+import torch
+from torch import nn
+import torchlens as tl
+
+torch.manual_seed(0)
+model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
+options = tl.options.CaptureOptions(intervention_ready=True)
+x, x_source = torch.randn(3, 4), torch.randn(3, 4)
+site = "linear_1_1"
+rotation = torch.linalg.qr(torch.randn(4, 4))[0].T  # stands in for a learned rotation
+source_value = tl.trace(model, x_source, capture=options)[site].out
+
+fork = tl.trace(model, x, capture=options).fork()
+fork.do(
+    tl.subspace(site, rotation[:2], origin="DAS rotation trained elsewhere", method="das"),
+    tl.replace_with(source_value),
+)
+path = Path(tempfile.mkdtemp()) / "rotation.tlspec"
+tl.io.save_intervention(fork, path, level="portable")
+
+spec = tl.io.load_intervention_spec(path)
+fresh = tl.trace(model, x, capture=options).fork()
+for hook_spec in spec.hook_specs:
+    fresh.attach_hooks(hook_spec.site_target, hook_spec.helper, confirm_mutation=True)
+reloaded = fresh.push()
+helper = spec.hook_specs[0].helper
+
+RESULT = [
+    torch.equal(reloaded[site].out, fork[site].out),  # the same interchange, bit for bit
+    helper.helper_name == "subspace_edit",
+    dict(helper.kwargs)["origin"] == "DAS rotation trained elsewhere",
+]
+```
+
 Which verbs keep the autograd graph, under which door, is the
 [gradient contract](gradient_contract.md).
 

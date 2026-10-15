@@ -1208,6 +1208,7 @@ def _builtin_constructors() -> dict[str, Callable[..., Edit]]:
     # portability="builtin" specs like every entry below, and their absence
     # here made a saved/pickled spec a dead artifact (R10-1: save succeeded,
     # load raised intervention_helper_unknown).
+    from ._subspace_spec import rebuild_subspace_edit
     from .compose import compose
     from .predicates import add, replace_with
     from .stochastic import mean_fill, permute_batch
@@ -1239,6 +1240,8 @@ def _builtin_constructors() -> dict[str, Callable[..., Edit]]:
         "grad_noise": grad_noise,
         "grad_zero": grad_zero,
         "grad_scale": grad_scale,
+        # Projection-valued subspace edit (a learned rotation's rows travel here).
+        "subspace_edit": rebuild_subspace_edit,
     }
 
 

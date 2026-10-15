@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import copy
 import re
+import warnings
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.intervention import (
     InterventionDecision,
+    _gradient_contract,
     add,
     clamp,
     compose,
@@ -61,8 +63,6 @@ _X2 = torch.randn(*_SHAPE, generator=torch.Generator().manual_seed(2), dtype=tor
 _CONST = torch.randn(*_SHAPE, generator=torch.Generator().manual_seed(3), dtype=torch.float64)
 _V = torch.tensor([1.0, 2.0, -1.0, 0.5], dtype=torch.float64)
 _V_HAT = _V / _V.norm()
-# set_direction_mean builds its unit direction in float32 (its own canonical form).
-_V_HAT32 = (_V.float() / _V.float().norm()).double()
 _Q = 0.5 * torch.tensor([[1, 1, 1, 1], [1, -1, 1, -1]], dtype=torch.float64)
 _P = _Q.T @ _Q
 _UNITS = torch.zeros(*_SHAPE, dtype=torch.bool)
@@ -190,7 +190,7 @@ _VERBS: dict[str, tuple[Callable[[], Any], Callable[[torch.Tensor], torch.Tensor
     ),
     "set_direction_mean": (
         lambda: set_direction_mean(_V, _site_donors(), feature_axis=-1),
-        lambda out: out - (out @ _V_HAT32)[..., None] * _V_HAT32,
+        lambda out: out - (out @ _V_HAT)[..., None] * _V_HAT,
         "refused",
     ),
     "subspace_ablate": (lambda: subspace_ablate(_Q), lambda out: out - out @ _P, "refused"),
@@ -256,8 +256,19 @@ def _door_bind(model: nn.Module, edit: Any) -> torch.Tensor:
 
 
 def _door_push_differentiable(model: nn.Module, edit: Any) -> torch.Tensor:
+    """Differentiable replay; a keep_grad edit that keeps the graph also discloses the frontier."""
+
     replay = tl.options.ReplayOptions(hooks={tl.label(_SITE): edit}, differentiable=True)
-    return _out(_ready(model).push(replay=replay))
+    _gradient_contract._WARNED_CODES.clear()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        output = _out(_ready(model).push(replay=replay))
+    codes = {getattr(record.message, "fields", {}).get("code") for record in caught}
+    kept = dict(getattr(edit, "metadata", ())).get("keep_grad") or getattr(
+        edit, "_torchlens_keep_grad", False
+    )
+    assert ("keep_grad_replay_frontier" in codes) == bool(kept), (codes, kept)
+    return output
 
 
 def _door_units(model: nn.Module, edit: Any) -> torch.Tensor:
