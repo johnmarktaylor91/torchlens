@@ -199,9 +199,10 @@ class _Positions:
         stack = [tree]
         while stack:
             node = stack.pop()
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
-                if self.old in _local_bindings(node):
-                    continue
+            if isinstance(
+                node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+            ) and self.old in _local_bindings(node):
+                continue
             if isinstance(node, ast.Name) and node.id == self.old:
                 self.at(node.lineno, node.col_offset)
             stack.extend(ast.iter_child_nodes(node))
@@ -342,12 +343,16 @@ def _definite_member(row: dict[str, Any], tree: ast.Module, pos: _Positions) -> 
                     if isinstance(target, ast.Name) and target.id == pos.old:
                         pos.at(target.lineno, target.col_offset)
         for sub in ast.walk(node):
-            if isinstance(sub, ast.Attribute) and sub.attr == pos.old:
-                if isinstance(sub.value, ast.Name) and sub.value.id in ("self", "cls"):
-                    end = sub.end_col_offset or 0
-                    line = pos.lines[(sub.end_lineno or sub.lineno) - 1]
-                    start = _char_offset(line, end) - len(pos.old)
-                    pos.found.add((sub.end_lineno or sub.lineno, start))
+            if (
+                isinstance(sub, ast.Attribute)
+                and sub.attr == pos.old
+                and isinstance(sub.value, ast.Name)
+                and sub.value.id in ("self", "cls")
+            ):
+                end = sub.end_col_offset or 0
+                line = pos.lines[(sub.end_lineno or sub.lineno) - 1]
+                start = _char_offset(line, end) - len(pos.old)
+                pos.found.add((sub.end_lineno or sub.lineno, start))
 
 
 def _definite_param(row: dict[str, Any], tree: ast.Module, pos: _Positions) -> None:
@@ -371,9 +376,11 @@ def _definite_param(row: dict[str, Any], tree: ast.Module, pos: _Positions) -> N
                     key = (node.name, "__init__") if item.name == "__init__" else None
                     if (node.name, item.name) in targets or (key and (None, node.name) in targets):
                         pos.names(item)
-        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            if (None, node.name) in targets:
-                pos.names(node)
+        elif (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and (None, node.name) in targets
+        ):
+            pos.names(node)
 
 
 def _use_key(path: str) -> tuple[str | None, str]:
