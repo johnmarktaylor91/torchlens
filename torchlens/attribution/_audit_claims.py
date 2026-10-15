@@ -185,7 +185,9 @@ def _output_labels(trace: Any, layer: str) -> list[str] | None:
     return list(module.calls[0].output_ops)
 
 
-def _unsupported(request: _AuditRequest, trace: Any, what: str, *, code: str) -> AttributionError:
+def _unsupported_claim(
+    request: _AuditRequest, trace: Any, what: str, *, code: str
+) -> AttributionError:
     """Build the coded refusal for a claim the audit cannot ground at one hidden site."""
 
     candidates = _single_call_layers(request, trace)
@@ -224,10 +226,10 @@ def _claim_layer(request: _AuditRequest, trace: Any) -> tuple[str, str]:
             if isinstance(claim, AttributionResult)
             else f"a {type(claim).__name__}"
         )
-        raise _unsupported(request, trace, kind, code="attribution_audit_claim_unsupported")
+        raise _unsupported_claim(request, trace, kind, code="attribution_audit_claim_unsupported")
     labels = _output_labels(trace, layer)
     if labels is None or len(labels) != 1:
-        raise _unsupported(
+        raise _unsupported_claim(
             request,
             trace,
             f"a claim at {layer!r}, which does not run exactly once with one output",
