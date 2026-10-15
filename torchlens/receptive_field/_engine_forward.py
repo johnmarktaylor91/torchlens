@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 from ._engine import (
     _concatenation_offsets,
+    _empty_axis_seed,
     _geometry_memo,
     _graph_revision,
     _merge_states,
@@ -214,6 +215,8 @@ def _seed_target(op: Op) -> _InputState:
 
     shape = tuple(op.shape)
     role = op.io_role or op.label
+    if 0 in shape:
+        return _empty_axis_seed(op, shape, role, "target_identity")
     identity = _identity_map()
     return _InputState(
         input_op_label=op.label,
