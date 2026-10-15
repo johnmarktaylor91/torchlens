@@ -789,7 +789,17 @@
   CONTRACT: `tl.intervention.keep_grad(edit)` (and
   `InterventionDecision(keep_grad=True)`) raise `edit_detached_from_graph`
   when an edit writes values with no autograd graph; the verb x door matrix
-  is `docs/gradient_contract.md`. BASIS PROVENANCE MANDATORY:
+  is `docs/gradient_contract.md`; under differentiable replay a passing
+  keep_grad warns `keep_grad_replay_frontier` once per session (no
+  upstream gradient there). PORTABLE ROTATION: with a builtin verb the
+  staged edit is the builtin `subspace_edit` (verb, float64 orthonormal
+  rows, `axis`, `basis_sha256`, `origin`, `method`, `origin_sha256`,
+  `source_dtype`, `orthonormalised`), so a portable
+  `tl.io.save_intervention` reloads the same projection; a learned
+  rotation `R` (DAS, ReFT) is applied as `tl.subspace(site, R[:k],
+  origin=...)`, never fitted; load refuses `subspace_spec_invalid`,
+  `subspace_spec_basis_tampered`, `subspace_spec_basis_not_orthonormal`.
+  BASIS PROVENANCE MANDATORY:
   `origin=` required non-empty; origin/method/geometry/sha256 content
   digest ride `provenance.source` and `do()` audit records
   (`selection_subspace.BasisProvenance` is the programmatic face).
