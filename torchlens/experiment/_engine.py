@@ -85,6 +85,10 @@ class _Candidate:
     execution_where: Any
     resolved_site_count: int | None
     resolution_digest: str
+    #: Resolved entries of a unit selection (a partial mask at some site); each
+    #: executes as its structural site key plus the edit masked to its units.
+    unit_entries: tuple[Any, ...] | None = None
+    unit_digest: str = ""
 
 
 def _candidate_pairs(candidates: Any) -> list[tuple[str, Any]]:
@@ -161,14 +165,14 @@ def _resolve_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candi
         return _Candidate(
             candidate_id=candidate_id,
             where=where,
-            # A unit selection (a partial mask at some site) executes as spelled,
-            # so its edit reaches only the selected units; whole-site entries
-            # lower to structural site keys as before.
-            execution_where=(
-                where if units_selected else _site_key_term(baseline, candidate_id, labels)
-            ),
+            execution_where=_site_key_term(baseline, candidate_id, labels),
             resolved_site_count=len(labels),
             resolution_digest=_digest(("selection",) + tuple(sorted(parts, key=repr))),
+            # A unit selection's edit must reach only the selected units, exactly
+            # as ``fork.do(selection, edit)`` masks it; whole-site entries keep
+            # the plain structural lowering.
+            unit_entries=tuple(resolved) if units_selected else None,
+            unit_digest=str(getattr(resolved, "resolve_digest", "")),
         )
     if isinstance(where, str):
         from ..intervention.resolver import resolve_sites
@@ -195,6 +199,31 @@ def _resolve_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candi
         resolved_site_count=len(labels),
         resolution_digest=_digest(("sites",) + tuple(sorted(labels))),
     )
+
+
+def _candidate_spec(baseline: Trace, candidate: _Candidate, edit: Any) -> Any:
+    """The intervention spec one candidate executes: its WHERE term with the edit.
+
+    A unit candidate gets one rule per resolved site: the site's structural key
+    with the edit masked to the selected units by the same derivation
+    ``fork.do(selection, edit)`` uses, so the sweep's member equals a direct
+    fork of the same selection edit.
+    """
+
+    from ..intervention.spec import InterventionSpec, when
+
+    if candidate.unit_entries is None:
+        return when(candidate.execution_where, edit)
+    from ..intervention.masked_edit import _derive_masked_edit
+
+    rules: list[Any] = []
+    for entry in candidate.unit_entries:
+        label = str(entry.site_key[0])
+        term = _site_key_term(baseline, candidate.candidate_id, (label,))
+        op_label = str(baseline.ops[label].label)
+        masked = _derive_masked_edit(edit, entry, candidate.unit_digest, op_label)
+        rules.extend(when(term, masked).rules)
+    return InterventionSpec(rules=tuple(rules))
 
 
 def _unit_digest_part(entry: Any) -> Any:
@@ -747,8 +776,6 @@ def site_sweep(
     baseline_value = _measure(metric, baseline, "baseline")
 
     # ---- serial execution, stable order -----------------------------------
-    from ..intervention.spec import when
-
     bundle = Bundle({"baseline": baseline}, baseline="baseline")
     state = _SweepState(
         bundle=bundle,
@@ -775,7 +802,7 @@ def site_sweep(
     for candidate, reason in refused:
         state.record_refusal(candidate, reason)
     for candidate in resolved:
-        spec = when(candidate.execution_where, edit)
+        spec = _candidate_spec(baseline, candidate, edit)
         member: Any = None
         try:
             member, value = _execute_and_measure(state, candidate, spec)

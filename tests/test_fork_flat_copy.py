@@ -87,7 +87,7 @@ def test_nested_shared_containers_keep_their_aliasing() -> None:
 
 
 def test_everything_else_takes_the_deepcopy_path() -> None:
-    memo, _, _ = _memo_with_shell()
+    memo, parent, _ = _memo_with_shell()  # parent stays alive, so its id is never reused
     for value in (
         {("tuple", "key"): 1},
         {"a": _Record()},
@@ -96,23 +96,25 @@ def test_everything_else_takes_the_deepcopy_path() -> None:
         [[[["too deep"]]]],
     ):
         assert _flat(value, memo) is trace_fork._NO_FLAT_COPY
+    assert id(parent) in memo
 
 
 def test_a_fork_with_the_flat_copy_equals_one_without(monkeypatch: pytest.MonkeyPatch) -> None:
     torch.manual_seed(0)
     model = nn.Sequential(nn.Linear(4, 3), nn.ReLU(), nn.Linear(3, 2))
-    x = torch.randn(2, 4)
-    trace = tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
-    twin = tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
-    with_flat = trace.fork()
+    trace = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(intervention_ready=True))
+    original = trace_fork._flat_container_copy
     monkeypatch.setattr(trace_fork, "_flat_container_copy", lambda *_args: trace_fork._NO_FLAT_COPY)
-    without = twin.fork()
-    shells = {id(op): op.layer_label for op in with_flat.layer_list}
-    shells.update({id(op): op.layer_label for op in without.layer_list})
+    control, without = trace.fork(), trace.fork()
+    monkeypatch.setattr(trace_fork, "_flat_container_copy", original)
+    with_flat = trace.fork()
+    labels = {}
+    for fork in (control, without, with_flat):
+        labels.update({id(op): op.layer_label for op in fork.layer_list})
 
     def normalize(item: Any) -> Any:
-        if id(item) in shells:
-            return ("op", shells[id(item)])
+        if id(item) in labels:
+            return ("op", labels[id(item)])
         if type(item) in (dict, OrderedDict):
             return (type(item), [(k, normalize(v)) for k, v in item.items()])
         if type(item) in (list, tuple):
@@ -123,13 +125,17 @@ def test_a_fork_with_the_flat_copy_equals_one_without(monkeypatch: pytest.Monkey
             return item
         return type(item)
 
-    first = dict(state_items(with_flat))
-    second = dict(state_items(without))
-    assert set(first) == set(second)
-    for name in sorted(first):
-        if name in ("trace_label", "state_history"):
-            continue
-        assert normalize(first[name]) == normalize(second[name]), name
+    states = [dict(state_items(fork)) for fork in (control, without, with_flat)]
+    assert set(states[0]) == set(states[1]) == set(states[2])
+    # Fields that differ between two forks built the same way (fork names, the
+    # parent's growing history) are not the flat copy's doing; every other
+    # field must be identical with and without it.
+    stable = [
+        name for name in states[0] if normalize(states[0][name]) == normalize(states[1][name])
+    ]
+    assert len(stable) > len(states[0]) - 5
+    for name in stable:
+        assert normalize(states[2][name]) == normalize(states[1][name]), name
     # Isolation: the fork's tables are its own.
     assert with_flat.layer_dict_all_keys is not trace.layer_dict_all_keys
     with_flat.layer_dict_all_keys["probe"] = None

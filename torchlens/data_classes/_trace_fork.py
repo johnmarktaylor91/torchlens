@@ -319,29 +319,29 @@ def _flat_container_copy(value: Any, memo: dict[Any, Any], depth: int) -> Any:
     known = memo.get(id(value), _NO_FLAT_COPY)
     if known is not _NO_FLAT_COPY:
         return known
-    if cls is dict or cls is OrderedDict:
-        pairs = []
-        for key, item in value.items():
-            if type(key) not in _ATOMIC_COPY_TYPES:
-                return _NO_FLAT_COPY
-            copied = _flat_element_copy(item, memo, depth)
-            if copied is _NO_FLAT_COPY:
-                return _NO_FLAT_COPY
-            pairs.append((key, copied))
-        result: Any = cls(pairs)
-    else:
-        items = []
-        for item in value:
-            copied = _flat_element_copy(item, memo, depth)
-            if copied is _NO_FLAT_COPY:
-                return _NO_FLAT_COPY
-            items.append(copied)
-        if cls is tuple and all(new is old for new, old in zip(items, value)):
-            return value
-        result = cls(items)
-    memo[id(value)] = result
-    memo.setdefault(id(memo), []).append(value)  # deepcopy's keep-alive list
+    result = _flat_copy_contents(value, cls, memo, depth)
+    if result is not _NO_FLAT_COPY and result is not value:
+        memo[id(value)] = result
+        memo.setdefault(id(memo), []).append(value)  # deepcopy's keep-alive list
     return result
+
+
+def _flat_copy_contents(value: Any, cls: type, memo: dict[Any, Any], depth: int) -> Any:
+    """Build the copy for :func:`_flat_container_copy`, or return ``_NO_FLAT_COPY``."""
+
+    mapping = cls is dict or cls is OrderedDict
+    if mapping and any(type(key) not in _ATOMIC_COPY_TYPES for key in value):
+        return _NO_FLAT_COPY
+    items = [
+        _flat_element_copy(item, memo, depth) for item in (value.values() if mapping else value)
+    ]
+    if any(item is _NO_FLAT_COPY for item in items):
+        return _NO_FLAT_COPY
+    if mapping:
+        return cls(zip(value, items, strict=True))
+    if cls is tuple and all(new is old for new, old in zip(items, value, strict=True)):
+        return value
+    return cls(items)
 
 
 def _flat_element_copy(item: Any, memo: dict[Any, Any], depth: int) -> Any:

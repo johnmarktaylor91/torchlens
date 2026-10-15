@@ -1055,7 +1055,11 @@ def _shared_or_cloned_state_entry(
 
     candidate = source_state.get(name)
     bits = _SAME_WIDTH_INT.get(value.element_size()) if isinstance(value, torch.Tensor) else None
-    if bits is not None and _same_clone_layout(value, candidate):
+    if (
+        bits is not None
+        and isinstance(candidate, torch.Tensor)
+        and _same_clone_layout(value, candidate)
+    ):
         try:
             same = torch.equal(value.view(bits), candidate.view(bits))
         except (RuntimeError, TypeError):
