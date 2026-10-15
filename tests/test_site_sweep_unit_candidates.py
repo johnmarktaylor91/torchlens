@@ -52,7 +52,7 @@ def _unit_mask(units: tuple[int, ...]) -> torch.Tensor:
 _UNITS = {"u0": (0,), "u1": (1,), "u23": (2, 3)}
 
 
-@pytest.mark.parametrize("engine", ["replay", "live_hook"])
+@pytest.mark.parametrize("engine", ["replay", pytest.param("live_hook", marks=pytest.mark.heavy)])
 def test_distinct_units_at_one_site_are_distinct_candidates(engine: str) -> None:
     model, x, baseline, label = _setup()
     candidates = {name: tl.units(label, _unit_mask(units)) for name, units in _UNITS.items()}
