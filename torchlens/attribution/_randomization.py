@@ -239,6 +239,38 @@ def _validate_layers(model: Module, layers: Any) -> list[str]:
     return named
 
 
+def _no_layers_ran(model: Module, *, code: str) -> AttributionError:
+    """Build the refusal for a method under which no parameterized module ran.
+
+    Parameters
+    ----------
+    model
+        The caller's model.
+    code
+        The refusal code (``attribution_randomization_layer_invalid``).
+
+    Returns
+    -------
+    AttributionError
+        The coded refusal, naming ``layers=``.
+    """
+
+    candidates = [
+        name
+        for name, module in model.named_modules()
+        if any(True for _ in module.parameters(recurse=False))
+    ]
+    example = candidates[-1] if candidates else "fc"
+    return AttributionError(
+        "randomization_test found no module with parameters of its own that ran while the "
+        "method computed its map, so nothing would be randomized and the test would pass "
+        f"vacuously (modules with parameters: {candidates}). Remedy: name the modules to "
+        "randomize, top first, e.g. tl.attribution.randomization_test(model, x, target=0, "
+        f"method=method, layers=[{example!r}]). {_DOCS_POINTER}",
+        code=code,
+    )
+
+
 def _map_of(result: Any) -> Tensor:
     """Return the map an explanation method produced.
 
@@ -318,8 +350,9 @@ def randomization_test(  # noqa: PLR0913 - public door: keyword-only test settin
     Raises
     ------
     AttributionError
-        On an unknown order, a non-callable method, or layers that are not
-        parameterized modules.
+        On an unknown order, a non-callable method, layers that are not
+        parameterized modules, or (with ``layers=None``) no parameterized module
+        running while the method computes its map.
     """
 
     if randomization not in ("cascading", "independent"):
@@ -352,6 +385,8 @@ def randomization_test(  # noqa: PLR0913 - public door: keyword-only test settin
         original = _run(trained)
         if layers is None:
             names = _parameterized_layers_top_down(trained, _run)
+            if not names:
+                raise _no_layers_ran(model, code="attribution_randomization_layer_invalid")
         else:
             names = _validate_layers(model, layers)
         plan = _RandomizationPlan(tuple(names), randomization, keep_maps)
