@@ -157,6 +157,11 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         "model-explorer export-bridge demo dependency, no declared extra",
     ),
     "dagua": (UNAVAILABLE_OK, "unreleased in-development layout engine"),
+    "delphi.latents.loader": (
+        UNAVAILABLE_OK,
+        "SAE latent-export consumer (eai-delphi, installed --no-deps by the SAE "
+        "export round-trip leg), no declared extra",
+    ),
     "e3nn.o3": (
         UNAVAILABLE_OK,
         "research-model dependency for real-world coverage, deliberately undeclared",
@@ -273,6 +278,11 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
     "pytorch_lightning": (TEST_EXTRA, "ships inside the 'lightning' distribution"),
     "rsatoolbox": (OPTIONAL_PREVIEW, "neuro extra"),
     "sae_lens": (OPTIONAL_PREVIEW, "sae extra"),
+    "sae_dashboard.sae_vis_data": (
+        UNAVAILABLE_OK,
+        "SAE latent-export consumer (sae-dashboard, installed --no-deps by the SAE "
+        "export round-trip leg), no declared extra",
+    ),
     "semantic_release": (
         UNAVAILABLE_OK,
         "python-semantic-release, deliberately in no dev extra; release-environment-"
@@ -1278,6 +1288,12 @@ OPTIONAL_INTEGRATION_TARGETS: dict[str, str] = {
     ),
     "dacite": "model-explorer export-bridge demo dependency",
     "dagua": "unreleased in-development layout engine",
+    "delphi.latents.loader": (
+        "tests/test_bridge_real_sae_export.py loads write_delphi's cache with "
+        "delphi's own LatentDataset; the dep-free format checks in "
+        "tests/test_bridge_sae_export.py run everywhere, so absence costs the "
+        "consumer round trip only"
+    ),
     "e3nn.o3": "research-model real-world coverage, deliberately undeclared",
     "fvcore.nn": (
         "supplementary FLOP-counter cross-oracle (A07); the closed-form and "
@@ -1286,6 +1302,12 @@ OPTIONAL_INTEGRATION_TARGETS: dict[str, str] = {
     "git": "release-environment-only (hash-locked release-defenses job installs it)",
     "model_explorer": "export-bridge integration target with no declared extra",
     "pennylane": "quantum-ML research-model coverage, deliberately undeclared",
+    "sae_dashboard.sae_vis_data": (
+        "tests/test_bridge_real_sae_export.py loads and renders "
+        "write_sae_dashboard's JSON with SAEDashboard; the dep-free format "
+        "checks in tests/test_bridge_sae_export.py run everywhere, so absence "
+        "costs the consumer round trip only"
+    ),
     "semantic_release": "release-environment-only (release-defenses job)",
     "tensorboard": "export-bridge integration target with no declared extra",
     "tomli": "py<3.11 tomllib backport, only conditionally needed",

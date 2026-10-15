@@ -18,14 +18,13 @@ from pathlib import Path
 
 import pytest
 import torch
+from safetensors import numpy as safetensors_numpy
 from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens.bridge import _sae_export, sae as sae_bridge
 from torchlens.errors import TorchLensWarning
-
-safetensors_numpy = pytest.importorskip("safetensors.numpy")
 
 
 class _TinyLM(nn.Module):
