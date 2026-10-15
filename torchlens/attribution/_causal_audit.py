@@ -149,8 +149,9 @@ class CausalAuditResult:
     settings
         The resolved audit policy.
     extra
-        Claim method, number of units, and the mean measured effect of the
-        random draws.
+        Method-specific extras: the audited claim's method name
+        (``claim_method``), the number of audited units (``n_units``) and the
+        mean measured effect of the random draws (``random_measured_mean``).
     """
 
     layer: str
