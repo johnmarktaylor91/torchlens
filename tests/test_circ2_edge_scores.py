@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import pytest
 import torch
-from torch import nn
+from support.eap_fixture import CLEAN, CORRUPT, Fixture, fixture_metric
 
 import torchlens as tl
 
@@ -88,60 +88,6 @@ LEFT_RIEMANN = {
         "input->h2": -1.2571934395329925,
     },
 }
-
-
-class FixtureEmbedding(nn.Embedding):
-    """Token 0 embeds ``e_clean``, token 1 ``e_corrupt``."""
-
-
-class FixtureRMSNorm(nn.Module):
-    """An identity pre-norm (the fixture reads the residual state unnormalized)."""
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x * 1.0
-
-
-class FixtureMLP(nn.Module):
-    """A bias-free linear sender ``u = A e``."""
-
-    def __init__(self, a: list[list[float]]) -> None:
-        super().__init__()
-        self.proj = nn.Linear(2, 2, bias=False, dtype=torch.float64)
-        with torch.no_grad():
-            self.proj.weight.copy_(torch.tensor(a, dtype=torch.float64))
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.proj(x)
-
-
-class Fixture(nn.Module):
-    """``r = e + A1 e + A2 e``; logits ``V r`` (the bar's fixture as a module)."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.embed = FixtureEmbedding(2, 2, dtype=torch.float64)
-        with torch.no_grad():
-            self.embed.weight.copy_(torch.tensor([[1.0, 0.5], [-1.0, 0.25]]))
-        self.norm1, self.norm2, self.norm_f = FixtureRMSNorm(), FixtureRMSNorm(), FixtureRMSNorm()
-        self.h1 = FixtureMLP([[1.5, 0.0], [0.0, 0.0]])
-        self.h2 = FixtureMLP([[0.0, 0.0], [0.5, 2.0]])
-        self.lm_head = nn.Linear(2, 2, bias=False, dtype=torch.float64)
-        with torch.no_grad():
-            self.lm_head.weight.copy_(torch.tensor([[1.0, 0.5], [-0.5, 1.0]]))
-
-    def forward(self, ids: torch.Tensor) -> torch.Tensor:
-        e = self.embed(ids)
-        r = e + self.h1(self.norm1(e)) + self.h2(self.norm2(e))
-        return self.lm_head(self.norm_f(r))
-
-
-def fixture_metric(logits: torch.Tensor) -> torch.Tensor:
-    """``M = 1.0 tanh(l_0) + 2.0 tanh(l_1)`` at the last position, per example."""
-
-    return 1.0 * torch.tanh(logits[:, -1, 0]) + 2.0 * torch.tanh(logits[:, -1, 1])
-
-
-CLEAN, CORRUPT = torch.tensor([[0]]), torch.tensor([[1]])
 
 
 def _fixture_scores(**kwargs) -> dict[str, float]:

@@ -311,7 +311,7 @@ documented unstable and may be renamed or removed without a compatibility alias.
 | Evaluation curves | `deletion_curve`, `insertion_curve`, `CurveResult`, `CurveStep`, `fractions`, `scores`, `area`, `aopc`, `steps`, `features`, `patch_size`, `auto`, `elements`, `pixels`, `patches`, `tokens`, `n_features`, `index`, `fraction`, `inputs`, `input_kwargs`, `baseline_mask`, `intervention` | unstable -- no deprecation shim owed |
 | Randomization test | `randomization_test`, `RandomizationResult`, `RandomizationStep`, `randomization`, `cascading`, `independent`, `layers`, `seed`, `keep_maps`, `original_attribution`, `randomized`, `similarity`, `similarities`, `spearman`, `spearman_abs`, `ssim`, `values` | unstable -- no deprecation shim owed |
 | ROAD curve | `road_curve`, `ranking`, `most_relevant_first`, `least_relevant_first`, `noise_std`, `seed`, `road` | unstable -- no deprecation shim owed |
-| Causal audit | `causal_audit`, `CausalAuditResult`, `CausalAuditUnit`, `CausalAuditSet`, `claim`, `k`, `ablation`, `zero`, `mean`, `controls`, `top`, `bottom`, `random`, `random_draws`, `per_unit`, `layer`, `site`, `original_score`, `units`, `sets`, `rank_agreement`, `set_of`, `unit`, `claimed_effect`, `measured_effect`, `kind`, `draw`, `intervention`, `component`, `claim_kind`, `constant_row`, `rows_not_audited` | unstable -- no deprecation shim owed |
+| Causal audit | `causal_audit`, `CausalAuditResult`, `CausalAuditUnit`, `CausalAuditSet`, `claim`, `k`, `ablation`, `zero`, `mean`, `controls`, `top`, `bottom`, `random`, `random_draws`, `per_unit`, `layer`, `site`, `original_score`, `units`, `sets`, `rank_agreement`, `set_of`, `unit`, `claimed_effect`, `measured_effect`, `kind`, `draw`, `intervention`, `component`, `claim_kind`, `constant_row`, `rows_not_audited`, `corrupted`, `metric`, `edges`, `edge_table`, `edge_patch`, `example_reduction`, `logits_site`, `sets_not_measured`, `reason`, `trace` | unstable -- no deprecation shim owed |
 
 <!-- ATTRIBUTION-KIT-UNSTABLE-INDEX:END -->
 
@@ -327,7 +327,10 @@ re-initialized. `road_curve` is ROAD, the deletion curve with removed pixels fil
 linear imputation from their neighbours. `causal_audit` grades an internal attribution (a layer attribution, a direct-logit-attribution
 table or a one-backward read table) by ablating the units it ranks, through forks of an
 intervention-ready trace, and comparing the measured effects with the claim; each row names its
-`site` and its `component`, and a direct-logit table's `constant_row` is reported apart. The callable/index/site annotation used inside `torchlens.attribution` is
+`site` and its `component`, and a direct-logit table's `constant_row` is reported apart. An EDGE table
+from `tl.mechinterp.edge_scores` is audited by patching each edge alone with the `corrupted` inputs and
+`metric` it was scored with (`edges` names a subset); a set spanning several receivers is listed in
+`sets_not_measured` with its `reason`. The callable/index/site annotation used inside `torchlens.attribution` is
 privately named `_AttributionTarget`; `TargetSpec` refers only to the intervention selector record and is not an
 attribution-target alias. See the [attribution reference](attribution.md).
 
@@ -1264,6 +1267,26 @@ shims, by declared contract. Each carries the same tag at its definition.
   Replaces the removed `decode(log, site, sae)`, which passed the activation
   to `sae.decode` as if it were latents. `tl.bridge.sae_lens.encode(log, site,
   sae)` gives the latents.
+
+**write_delphi (`tl.bridge.sae.write_delphi(latents, tokens, *, site, model_name, n_splits=5, directory)`)** — *unstable — no deprecation shim owed*
+: Writes SAE latents as the latent cache delphi's `LatentDataset` loads
+  (eai-delphi 0.1.3): `directory/site/{start}_{end}.safetensors` splits with
+  `locations` (example, position, latent), `float16` `activations` and the
+  `tokens`, plus a `config.json` naming `model_name`. `latents` is dense
+  (`SpliceResult.latents`, every activation above delphi's 1e-5) or the
+  `UnitTopK` of `tl.stats.TopK(k, unit_axis=-1, encoder=sae.encode)` over a
+  dataset (only the retained top entries). Recipe:
+  `docs/recipes/sae_latent_export.md`.
+
+**write_sae_dashboard (`tl.bridge.sae.write_sae_dashboard(latents, tokens, *, latent_ids=None, k=20, path)`)** — *unstable — no deprecation shim owed*
+: Writes SAE latents and each latent's top examples as the JSON SAEDashboard's
+  `SaeVisData.load_json` loads (sae-dashboard 0.8.0): one "TOP ACTIVATIONS"
+  group of whole sequences per latent, ranked by activation, then lowest
+  example, then lowest position (the `tl.stats.TopK` order). Dense latents
+  carry every token's activation and give `feature_stats` `max` and
+  `frac_nonzero`; a dataset `UnitTopK` carries the ranked token's value only.
+  `latent_ids` defaults to every latent that fired; `sae_export_dashboard_large`
+  warns once past 256 MiB. Recipe: `docs/recipes/sae_latent_export.md`.
 
 **similarity_repository_id (`rdm_evolution(...).similarity_repository_id`, `tl.stats.CKA.similarity_repository_id`, the `SimilarityScore` that `tl.stats.cka` and `tl.stats.CKA.result()` return, `ScoreInterval.similarity_repository_id`, the `neuro.rdms()` source-mode descriptor)** — *unstable — no deprecation shim owed*
 : The similarity-repository catalogue identifier of the exact measure variant a

@@ -174,6 +174,15 @@
   `ReadTable` of `EDGE` rows addressed by edge name. `tl.mechinterp.circuit_performance_ratio` and
   `tl.mechinterp.circuit_model_difference`: the MIB circuit track's CPR and CMD areas over a
   faithfulness curve. Documented unstable.
+- **bridge**: `tl.bridge.sae.write_sae_dashboard(latents, tokens, path=...)` and
+  `tl.bridge.sae.write_delphi(latents, tokens, site=..., model_name=..., directory=...)` write SAE
+  latents and each latent's top examples as the files SAEDashboard 0.8.0 and delphi 0.1.3 load, from
+  one splice's `latents` or a dataset's `tl.stats.TopK(k, unit_axis=-1, encoder=sae.encode)` result
+  (DOCUMENTED-UNSTABLE).
+- **docs**: New recipes: training an SAE on extracted activations with dictionary_learning and
+  sparsify and splicing it back (`docs/recipes/sae_trainers.md`); model diffing with a crosscoder on
+  two traces (`docs/recipes/sae_crosscoder_diff.md`); Prisma CLIP SAEs
+  (`docs/recipes/prisma_clip_sae.md`); latent export (`docs/recipes/sae_latent_export.md`).
 
 ### Bug Fixes
 

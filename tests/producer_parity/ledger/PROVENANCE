@@ -2659,3 +2659,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 963910241fded6dfc8892e55f5bf7cf9fb326508 (dirty)
 recorded: 2026-10-15T16:52:53.612901+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: b2-ATTR-6: the causal audit of EDGE tables (new torchlens/attribution/_audit_edges.py) reads existing ReadRow and component-graph record fields
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 0d8e9523eeb166f79f0b9fef90d0037cbbda52d8 (dirty)
+recorded: 2026-10-15T19:16:24.150253+00:00

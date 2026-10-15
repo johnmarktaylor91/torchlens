@@ -12,11 +12,13 @@ an activation-times-gradient claim (a unit that supports the target has a
 positive claim and a positive effect). Rank agreement is the Spearman
 correlation of the claimed and measured per-unit effects.
 
-The same audit grades the two internal claims that span sites: a
+The same audit grades the internal claims that span sites: a
 direct-logit-attribution table (one component per site; see
-``_audit_logits``) and a one-backward read table (one site, or each element
-of it, per row; see ``_audit_reads``). Their plan (``_audit_sites``) keeps
-every unit with its own site.
+``_audit_logits``), a one-backward read table (one site, or each element
+of it, per row; see ``_audit_reads``) and an EDGE table of edge attribution
+patching scores (one component-graph edge per row, measured by patching the
+edge rather than ablating a site; see ``_audit_edges``). Their plan
+(``_audit_sites``) keeps every unit with its own site.
 
 Every ablation runs through the intervention engine on an intervention-ready
 trace (``trace.fork().do(tl.units(label, mask), edit)``, the replay engine of
@@ -29,6 +31,7 @@ from __future__ import annotations
 
 import math
 import warnings
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -40,11 +43,13 @@ from torchlens.attribution._audit_claims import (
     _AUDIT_DOCS_POINTER,
     _AuditPlan,
     _AuditRequest,
+    _call_prefix,
     _plan_audit,
     _setting_error,
     _trace_once,
     _validate_settings,
 )
+from torchlens.attribution._audit_edges import EDGES_REMEDY, _is_edge_table, _plan_edge_audit
 from torchlens.attribution._audit_logits import _is_contribution_table, _plan_logit_audit
 from torchlens.attribution._audit_reads import _is_read_table, _plan_read_audit
 from torchlens.attribution._audit_sites import _SitesPlan
@@ -54,6 +59,7 @@ from torchlens.attribution._result import AttributionWarning
 
 # Single-unit ablations past this count warn once and name per_unit=False.
 _PER_UNIT_WARN_COUNT = 1024
+_PER_UNIT_REMEDY = "pass per_unit=False to measure only the top-k and control sets"
 
 _Plan = _AuditPlan | _SitesPlan
 
@@ -69,19 +75,25 @@ class CausalAuditUnit:
         the batch axis (``(3,)`` is unit 3 of a linear output, ``(3, 1, 2)``
         one position of a convolution channel); for a direct-logit table, the
         row (``(2,)``); for a read table, the row, then for an element-grain
-        read the position after the batch axis (``(1, 0)``).
+        read the position after the batch axis (``(1, 0)``); for an EDGE
+        table, the row (``(7,)``).
     claimed_effect
         The claim's score for the unit, summed over the batch (and, for a
-        direct-logit row, over its positions and tokens).
+        direct-logit row, over its positions and tokens; an EDGE row's score
+        as the table reduced it over examples).
     measured_effect
         ``score(original) - score(ablated)`` with this unit ablated in every
-        example.
+        example; for an EDGE row ``M(patched) - M(clean)``, the metric with
+        the edge patched minus the clean metric, reduced over examples as the
+        table was (the quantity an edge score estimates).
     site
-        Op label of the site the unit lives at (the label the edit selects).
+        Op label of the site the unit lives at (the label the edit selects;
+        for an EDGE row, the op whose value the patch writes into the
+        receiver).
     component
         The claim's name for the unit's component: the layer of a layer
         claim, the row label of a direct-logit table (``"blocks.0.mlp"``),
-        the site of a read row.
+        the site of a read row, the edge of an EDGE row (``"a0.h1->m2"``).
     """
 
     unit: tuple[int, ...]
@@ -127,7 +139,8 @@ class CausalAuditSet:
         effects add).
     measured_effect
         ``score(original) - score(ablated)`` with every unit in ``units``
-        ablated together.
+        ablated together (for EDGE rows, ``M(patched) - M(clean)`` with every
+        edge patched together).
     draw
         Index of the random draw (``0`` for ``"top"`` and ``"bottom"``).
     """
@@ -175,7 +188,8 @@ class CausalAuditResult:
         ``per_unit=False``).
     sets
         The top-k set, then the controls in ``controls`` order (one set per
-        random draw).
+        random draw); for an EDGE table only the sets whose edges all enter
+        one receiver (the others are in ``extra["sets_not_measured"]``).
     rank_agreement
         Spearman correlation of claimed and measured per-unit effects
         (``None`` with ``per_unit=False`` or when either is constant).
@@ -183,13 +197,19 @@ class CausalAuditResult:
         The resolved audit policy.
     extra
         Method-specific extras: the claim kind (``claim_kind``: ``"layer"``,
-        ``"direct_logit"`` or ``"read_table"``), the audited claim's method
+        ``"direct_logit"``, ``"read_table"`` or ``"edge_table"``), the audited claim's method
         name (``claim_method``), the number of audited units (``n_units``) and
         the mean measured effect of the random draws (``random_measured_mean``);
         for a direct-logit table also ``constant_row`` (the claimed constant,
         which has no site and is not ablated), ``native_score`` and
         ``logits_site``; for a read table ``target_id``, ``grain`` and
-        ``rows_not_audited`` (``(site, status)`` of rows without a score).
+        ``rows_not_audited`` (``(site, status)`` of rows without a score);
+        for an EDGE table ``example_reduction`` (``"mean"`` or ``"sum"``),
+        ``logits_site``, ``rows_not_audited`` (``(edge, status)``),
+        ``sets_not_measured`` (each set spanning several receivers: its
+        ``kind``, ``draw``, ``units``, ``edges``, ``claimed_effect`` and the
+        ``reason``) and ``trace`` (the clean intervention-ready trace the edges
+        were patched on; the recorded patches replay on its forks).
     """
 
     layer: str | None
@@ -224,6 +244,9 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
     *,
     claim: Any,
     target: Any = None,
+    corrupted: Any = None,
+    metric: Callable[[Tensor], Tensor] | None = None,
+    edges: Any = None,
     k: int = 5,
     ablation: str | float | Tensor = "zero",
     controls: tuple[str, ...] = ("bottom", "random"),
@@ -233,7 +256,7 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
 ) -> CausalAuditResult:
     """Ablate the units an internal attribution ranks and measure each effect.
 
-    Three claim kinds are audited. A layer attribution (``layer_attribution``,
+    Four claim kinds are audited. A layer attribution (``layer_attribution``,
     ``layer_integrated_gradients``, ``layer_conductance``), possibly computed
     against a :class:`SiteTarget`, scores the units of one hidden site. A
     ``tl.mechinterp.direct_logit_contributions`` table scores components,
@@ -242,7 +265,11 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
     unembedding head (after the model's logits are checked against the
     table's native logits). A ``tl.attribution.read`` table of
     activation-times-gradient ``ACT`` rows scores sites, or their elements,
-    for one seeded target; each is ablated and that target is measured.
+    for one seeded target; each is ablated and that target is measured. A
+    ``tl.mechinterp.edge_scores`` table of ``EDGE`` rows scores
+    component-graph edges; each edge is patched alone with
+    ``tl.mechinterp.patch_edges`` (its sender's value from the corrupted
+    run) and the metric is measured, ``M(patched) - M(clean)``.
 
     Each unit is ablated alone, then the top-k claimed units together,
     beside a bottom-k and a seeded random-k control; every effect is
@@ -268,12 +295,24 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
         class index, a callable ``output -> scalar``, or a
         :class:`SiteTarget`; for a read table the ``tl.attribution.seed(...)``
         it was read for. Left out for a direct-logit table, which fixes its
-        own logits.
+        own logits, and for an EDGE table, whose target is ``metric``.
+    corrupted
+        For an EDGE table only: the corrupted inputs it was scored with
+        (``edge_scores``' ``corrupted=``), the same shape as ``inputs``.
+    metric
+        For an EDGE table only: the metric it was scored with
+        (``edge_scores``' ``metric=``, ``logits -> values``, one value per
+        example or one scalar).
+    edges
+        For an EDGE table only: the edge names (or ``ComponentEdge``
+        objects) of the rows to audit; ``None`` (default) audits every ``ok``
+        row.
     k
         Units per ablated set (default 5).
     ablation
         ``"zero"`` (default), ``"mean"`` (each unit's mean over the batch), or
-        a number or tensor (the baseline activation, broadcast to the site).
+        a number or tensor (the baseline activation, broadcast to the site);
+        an EDGE table is patched, not ablated, and takes only the default.
     controls
         Control sets beside the top-k set: ``"bottom"`` and ``"random"``
         (default both).
@@ -282,7 +321,7 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
     per_unit
         Ablate every unit alone for the per-unit table and rank agreement
         (default ``True``); past 1024 units the audit warns once and names
-        ``per_unit=False``.
+        ``per_unit=False`` (and ``edges=`` for an EDGE table).
     seed
         Seed of the random draws (a local generator; the global random state
         is restored).
@@ -311,6 +350,9 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
         controls=controls,
         random_draws=random_draws,
         seed=seed,
+        corrupted=corrupted,
+        metric=metric,
+        edges=edges,
     )
     devices = [torch.cuda.current_device()] if torch.cuda.is_available() else []
     with torch.random.fork_rng(devices=devices):
@@ -318,7 +360,7 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
         plan = _plan_any(request)
         original = plan.score(plan.trace)
         rows = _unit_rows(plan, original) if per_unit else ()
-        sets = _ablated_sets(plan, original, request)
+        sets, unmeasured = _ablated_sets(plan, original, request)
     claimed = torch.tensor([row.claimed_effect for row in rows], dtype=torch.float64)
     measured = torch.tensor([row.measured_effect for row in rows], dtype=torch.float64)
     agreement = _spearman(claimed, measured) if len(rows) > 1 else None
@@ -348,6 +390,7 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
                 sum(random_effects) / len(random_effects) if random_effects else None
             ),
             **plan.extra,
+            **({"sets_not_measured": unmeasured} if plan.claim_kind == "edge_table" else {}),
         },
     )
 
@@ -355,21 +398,47 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
 def _plan_any(request: _AuditRequest) -> _Plan:
     """Ground the claim by its kind; refuse a set size larger than the units."""
 
-    if not (_is_contribution_table(request.claim) or _is_read_table(request.claim)):
-        return _plan_audit(request)
-    trace = _trace_once(request)
-    if _is_contribution_table(request.claim):
-        plan: _Plan = _plan_logit_audit(request, trace)
+    plan: _Plan
+    if _is_edge_table(request.claim):
+        plan = _plan_edge_audit(request)
     else:
-        plan = _plan_read_audit(request, trace)
+        _refuse_edge_inputs(request)
+        if not (_is_contribution_table(request.claim) or _is_read_table(request.claim)):
+            return _plan_audit(request)
+        trace = _trace_once(request)
+        if _is_contribution_table(request.claim):
+            plan = _plan_logit_audit(request, trace)
+        else:
+            plan = _plan_read_audit(request, trace)
     if request.k > len(plan.units):
-        target = "" if request.target is None else ", target=target"
         raise _setting_error(
             f"k={request.k} exceeds the {len(plan.units)} audited units of the claim",
-            f"tl.attribution.causal_audit(model, x, claim=claim{target}, k={max(1, len(plan.units))})",
+            f"{_call_prefix(request)}, k={max(1, len(plan.units))})",
             code="attribution_eval_setting_invalid",
         )
     return plan
+
+
+def _refuse_edge_inputs(request: _AuditRequest) -> None:
+    """Refuse ``corrupted=``, ``metric=`` or ``edges=`` for a claim that is not an EDGE table."""
+
+    given = [
+        name
+        for name, value in (
+            ("corrupted", request.corrupted),
+            ("metric", request.metric),
+            ("edges", request.edges),
+        )
+        if value is not None
+    ]
+    if given:
+        target = "" if request.target is None else ", target=target"
+        raise _setting_error(
+            f"got {', '.join(f'{name}=' for name in given)}, which only an EDGE table from "
+            "tl.mechinterp.edge_scores takes",
+            f"tl.attribution.causal_audit(model, x, claim=claim{target})",
+            code="attribution_eval_setting_invalid",
+        )
 
 
 def _unit_rows(plan: _Plan, original: float) -> tuple[CausalAuditUnit, ...]:
@@ -392,8 +461,8 @@ def _unit_rows(plan: _Plan, original: float) -> tuple[CausalAuditUnit, ...]:
         warnings.warn(
             AttributionWarning(
                 f"causal_audit is ablating each of the {len(plan.units)} units of "
-                f"{plan.layer or 'the claim'!r} alone ({len(plan.units)} replays). Remedy: pass "
-                "per_unit=False to measure only the top-k and control sets. "
+                f"{plan.layer or 'the claim'!r} alone ({len(plan.units)} replays). Remedy: "
+                f"{EDGES_REMEDY if plan.claim_kind == 'edge_table' else _PER_UNIT_REMEDY}. "
                 f"{_AUDIT_DOCS_POINTER}",
                 code="attribution_audit_units_many",
             ),
@@ -404,7 +473,7 @@ def _unit_rows(plan: _Plan, original: float) -> tuple[CausalAuditUnit, ...]:
         CausalAuditUnit(
             unit=unit,
             claimed_effect=plan.claimed_of(unit),
-            measured_effect=original - scores[unit],
+            measured_effect=plan.effect(original, scores[unit]),
             site=plan.site_of(unit),
             component=plan.component_of(unit),
             _plan=plan,
@@ -415,7 +484,7 @@ def _unit_rows(plan: _Plan, original: float) -> tuple[CausalAuditUnit, ...]:
 
 def _ablated_sets(
     plan: _Plan, original: float, request: _AuditRequest
-) -> tuple[CausalAuditSet, ...]:
+) -> tuple[tuple[CausalAuditSet, ...], tuple[dict[str, Any], ...]]:
     """Ablate the top-k set and the controls jointly, one fork each.
 
     Parameters
@@ -429,8 +498,10 @@ def _ablated_sets(
 
     Returns
     -------
-    tuple[CausalAuditSet, ...]
-        Top first, then the controls in ``controls`` order.
+    tuple[tuple[CausalAuditSet, ...], tuple[dict[str, Any], ...]]
+        The measured sets, top first, then the controls in ``controls``
+        order; and the sets the plan cannot measure (an EDGE set spanning
+        several receivers), each with its reason, never a sum of unit effects.
     """
 
     order = sorted(
@@ -447,14 +518,31 @@ def _ablated_sets(
         for draw in range(request.random_draws):
             picks = torch.randperm(len(plan.units), generator=generator)[: request.k].tolist()
             chosen.append(("random", draw, tuple(plan.units[index] for index in sorted(picks))))
-    return tuple(
-        CausalAuditSet(
-            kind=kind,
-            units=units,
-            claimed_effect=math.fsum(plan.claimed_of(unit) for unit in units),
-            measured_effect=original - plan.ablated_score(units),
-            draw=draw,
-            _plan=plan,
+    measured: list[CausalAuditSet] = []
+    unmeasured: list[dict[str, Any]] = []
+    for kind, draw, units in chosen:
+        claimed = math.fsum(plan.claimed_of(unit) for unit in units)
+        reason = plan.unmeasured_reason(units)
+        if reason is not None:
+            unmeasured.append(
+                {
+                    "kind": kind,
+                    "draw": draw,
+                    "units": units,
+                    "edges": tuple(plan.component_of(unit) for unit in units),
+                    "claimed_effect": claimed,
+                    "reason": reason,
+                }
+            )
+            continue
+        measured.append(
+            CausalAuditSet(
+                kind=kind,
+                units=units,
+                claimed_effect=claimed,
+                measured_effect=plan.effect(original, plan.ablated_score(units)),
+                draw=draw,
+                _plan=plan,
+            )
         )
-        for kind, draw, units in chosen
-    )
+    return tuple(measured), tuple(unmeasured)

@@ -642,15 +642,17 @@ is 1, so the score falls from 60 to `60 - 5 * 4 + 5 * 1 = 45`.
 
 ### Auditing internal attributions (`causal_audit`)
 
-`tl.attribution.causal_audit(model, inputs, input_kwargs=None, *, claim, target=None, k=5,
-ablation="zero", controls=("bottom", "random"), random_draws=10, per_unit=True, seed=0)` tests
-an internal attribution causally. The `claim` is one of three kinds: a layer attribution
-(`layer_attribution`, `layer_integrated_gradients`, `layer_conductance`), for a model output
-target or for a [`SiteTarget`](#site-targets-sitetarget), whose values score every unit of one
-hidden site; a direct-logit-attribution table from `tl.mechinterp.direct_logit_contributions`
-([below](#direct-logit-attribution-tables)); or a one-backward read table from
-`tl.attribution.read` ([below](#one-backward-read-tables)). A layer claim needs the `target=`
-it was computed for.
+`tl.attribution.causal_audit(model, inputs, input_kwargs=None, *, claim, target=None,
+corrupted=None, metric=None, edges=None, k=5, ablation="zero", controls=("bottom", "random"),
+random_draws=10, per_unit=True, seed=0)` tests an internal attribution causally. The `claim` is
+one of four kinds: a layer attribution (`layer_attribution`, `layer_integrated_gradients`,
+`layer_conductance`), for a model output target or for a [`SiteTarget`](#site-targets-sitetarget),
+whose values score every unit of one hidden site; a direct-logit-attribution table from
+`tl.mechinterp.direct_logit_contributions` ([below](#direct-logit-attribution-tables)); a
+one-backward read table from `tl.attribution.read` ([below](#one-backward-read-tables)); or an
+EDGE table of edge attribution patching scores from `tl.mechinterp.edge_scores`
+([below](#edge-tables-edge-attribution-patching)). A layer claim needs the `target=` it was
+computed for; an EDGE table needs the `corrupted=` and `metric=` it was scored with.
 The audit ablates each unit alone (unit ablation, Meyes et al., 2019) and measures the target's
 change, `score(original) - score(ablated)`, the same sign as an activation-times-gradient claim.
 It then ablates the `k` units with the largest claimed magnitude together, beside two controls:
@@ -724,14 +726,16 @@ nonlinear model the gap between a set's claimed sum and its measured effect is t
   caller's model and the global random state are unchanged.
 
 Each row also names its `site` (the op label the edit selects) and its `component` (the
-claim's own name for it: the layer here, a row label of a direct-logit table, a read row's site).
+claim's own name for it: the layer here, a row label of a direct-logit table, a read row's site,
+an EDGE row's edge).
 
 A claim the audit cannot ground refuses `attribution_audit_claim_unsupported`: a plain tensor, an
 input-level result, a site whose module runs more than once, a direct-logit row with no captured
 site, and the read tables described below. A claim whose values do not have the site's output
 shape on these inputs, that was computed for another target, or whose logits are not this run's,
 refuses `attribution_audit_claim_misaligned`; bad `k`, `ablation`, `controls` or `random_draws`
-refuse `attribution_eval_setting_invalid`. Each refusal names a spelling that works.
+refuse `attribution_eval_setting_invalid`, and so do `corrupted=`, `metric=` and `edges=` given
+for a claim that is not an EDGE table. Each refusal names a spelling that works.
 
 #### Direct-logit-attribution tables
 
@@ -821,8 +825,8 @@ taken for; pass that target as `target=`, the same `tl.attribution.seed(...)`. A
   `(site, status)` and not ablated.
 - `grad` and `activation` reads, and site reductions other than `"sum"`, refuse
   `attribution_audit_claim_unsupported`: they are not estimates of an ablation effect.
-- `EDGE` rows refuse `attribution_audit_claim_unsupported`: an edge is tested by patching it,
-  with `tl.mechinterp.patch_edges(trace, edges, corrupt=graph)`; the remedy audits the site rows.
+- A table of `EDGE` rows is audited by patching each edge ([below](#edge-tables-edge-attribution-patching));
+  a table that mixes `EDGE` rows into site reads refuses `attribution_audit_claim_unsupported`.
 
 ```python
 import torch
@@ -853,6 +857,112 @@ output_1:1 0.106 0.106
 Zero-ablating a site of this ReLU network moves the target by exactly its activation times
 gradient (a ReLU passes a zeroed input through as zero), so every row agrees; on a model with
 smooth nonlinearities, or a read with a frozen linearization, the gap is the finding.
+
+#### EDGE tables (edge attribution patching)
+
+A `ReadTable` from `tl.mechinterp.edge_scores(model, inputs, *, corrupted, metric)` holds one
+`EDGE` row per edge `s->t` of the component graph, addressed by the edge's name
+(`"a0.h1->m1"`). Its score, `(s_corrupt - s_clean) . dM/d(input of t)` summed over positions and
+reduced over examples (EAP, or EAP-IG along the input path), estimates what patching the edge
+does to the metric: receiver `t` reads `clean input - s_clean + s_corrupt`. The audit does that
+patch. Each `ok` row's edge is patched alone with `tl.mechinterp.patch_edges` on a fork of the
+audit's clean trace, with the sender's value from the corrupted run, and the metric is read from
+the unembedding output of the fork. The measured effect is `M(patched) - M(clean)`, reduced over
+examples as the table was (`extra["example_reduction"]`: `"mean"` or `"sum"`), the same sign as
+the score. A unit is `(row,)`, the row's index in `table.rows()`; its `component` is the edge
+name and its `site` the op whose value the patch writes (the receiver's input, or for a q, k or v
+receiver one head's slice of the projection output).
+
+- Alignment: an EDGE table records neither its corrupted inputs nor its metric (its rows cannot
+  be re-scored), so pass the `corrupted=` and `metric=` that `edge_scores` was given; they keep
+  `edge_scores`' meanings. The audit rebuilds the component graph on these inputs and checks what
+  the table does record: its example count, its method and reduction, every `ok` row's edge name
+  and sender shape. A missing `corrupted=` or `metric=`, corrupted inputs of another shape, a
+  metric that does not return one value per example or one scalar, a table scored on other inputs,
+  an edge name the graph does not have, or a `target=` refuses `attribution_audit_claim_misaligned`.
+  The audit cannot check that `metric=` is the very function the table was scored with; a wrong
+  one shows up as a gap between claims and effects.
+- Rows whose status is not `ok` (a receiver the metric does not reach) carry no score; they are
+  listed in `extra["rows_not_audited"]` as `(edge, status)` and not patched. Bias-sender rows
+  (`b{L}->...`) score exactly zero and are audited like any other row: their patch changes
+  nothing, so they measure zero up to rounding, and they enter rank agreement.
+- Sets: `tl.mechinterp.patch_edges` patches edges into one receiver per call, so a top-k, bottom-k
+  or random-k set is measured only when all its edges enter one receiver. Every other set is listed
+  in `extra["sets_not_measured"]` with its `kind`, `draw`, `units`, `edges`, `claimed_effect` and
+  the `reason`, never measured as a sum of single-edge effects.
+- `edges=` audits only the named rows (edge names or `ComponentEdge` objects; default every `ok`
+  row). A GPT-2 small table has 34,957 rows, and one patch there costs 0.5 to 8 s on 4 CPU cores,
+  so past 1024 rows the audit warns once (`attribution_audit_units_many`) and names `edges=` with
+  the largest rows, or `per_unit=False`. `ablation=` does not apply: an edge is patched, not
+  ablated (`settings["ablation"]` is `"edge_patch"`).
+- Each row's and set's `intervention` is the `(selection, value)` pair `patch_edges` writes (the
+  EDGE selection of the receiver's input edge, or the ACT selection of one head's projection
+  slice). An EDGE selection addresses its edge by the call ids of one capture, so the pairs replay
+  on forks of the audit's own clean trace, `extra["trace"]`:
+  `fork = audit.extra["trace"].fork(); fork.do(*pair)` reproduces the measured effect exactly.
+
+```python
+import torch
+import transformers
+import torchlens as tl
+
+torch.manual_seed(0)
+config = transformers.GPT2Config(n_layer=1, n_head=2, n_embd=16, vocab_size=64, n_positions=32)
+model = transformers.GPT2LMHeadModel(config).eval()
+model.set_attn_implementation("eager")
+clean, corrupted = torch.randint(0, 64, (3, 6)), torch.randint(0, 64, (3, 6))
+
+
+def metric(logits):
+    return logits[:, -1, 1] - logits[:, -1, 2]
+
+
+claim = tl.mechinterp.edge_scores(model, clean, corrupted=corrupted, metric=metric)
+largest = sorted(claim.rows(), key=lambda row: -abs(row.score))[:6]
+audit = tl.attribution.causal_audit(
+    model,
+    clean,
+    claim=claim,
+    corrupted=corrupted,
+    metric=metric,
+    edges=[row.address[0] for row in largest],
+    k=2,
+    random_draws=2,
+)
+for row in audit.units:
+    print(row.component, round(row.claimed_effect, 4), round(row.measured_effect, 4))
+print(round(audit.rank_agreement, 3), len(audit.sets), len(audit.extra["sets_not_measured"]))
+```
+
+Output:
+
+```text
+input->a0.h1<v> 0.0009 0.0014
+input->m0 -0.0025 0.0012
+input->logits -0.0284 -0.0142
+a0.h0->logits -0.0006 0.0005
+a0.h1->logits 0.001 0.0014
+m0->logits -0.0029 0.0019
+0.314 2 2
+```
+
+Here the audit takes the six edges with the largest scores of a random one-layer model. The
+largest, `input->logits`, is claimed at -0.0284 and moves the metric by -0.0142, half as much;
+three of the six (`input->m0`, `a0.h0->logits`, `m0->logits`) move it the opposite way to their
+claim, and rank agreement over the six is 0.314. Of the four sets (top-2, bottom-2 and two random
+draws), two have both their edges in one receiver and are measured; the other two are listed in
+`extra["sets_not_measured"]`.
+
+Measured on two larger checks. On the deterministic nonlinear fixture of the edge-scoring tests
+(two linear MLP senders that read the embedding, a tanh metric), every measured effect equals its
+patch effect computed by hand, exactly in float64. There EAP-IG with 5 steps claims -0.066 for
+both edges through the first MLP while patching either one moves the metric by +0.150, so the
+claim has the wrong sign, and rank agreement over the five edges is 0.65. On GPT-2 small (16
+indirect-object prompts, float32, CPU), 200 edges (the 100 with the largest EAP-IG scores and 100
+drawn at random) measured by this audit match an independent plain-PyTorch brute-force patcher
+within 1.2e-5 per edge, and the EAP-IG claims reach rank agreement 0.886 with the measured
+effects. Those 200 patches took 792 s on 2 CPU cores, about 4 s each; all 12 sets spanned several
+receivers and were listed in `extra["sets_not_measured"]`.
 
 ## Reading attribution results honestly
 

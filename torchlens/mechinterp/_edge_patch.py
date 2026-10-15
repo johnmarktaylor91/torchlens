@@ -38,7 +38,7 @@ def _input_edge_record(trace: Any, receiver: Any) -> Any:
     matches = [
         record
         for record in trace.edges
-        if str(record.parent_label) == receiver.input_label
+        if str(trace.ops[str(record.parent_label)].label) == receiver.input_label
         and _innermost_module(trace.ops[str(record.child_label)]) == receiver.norm_address
     ]
     if len(matches) != 1:
