@@ -57,7 +57,13 @@ to destroy are the user's scientific choices.
 Candidates ENUMERATE however spelled (labels, Selections, scoped facet
 selectors) and EXECUTE in structural site-key coordinates; an undeclared
 multi-site candidate (including the unscoped `tl.head(i)` broadcast) is a
-REFUSED table row, never a silently-wide member. The complete per-candidate
+REFUSED table row, never a silently-wide member. A unit selection
+(`tl.units(site, mask)`) executes at its site's structural key with the edit
+masked to the selected units, exactly as `trace.fork().do(selection, edit)`
+masks it, and its identity includes the units: distinct units at one site are
+distinct candidates, and the same units spelled twice (a mask or coordinate
+tuples) refuse as `site_sweep_duplicate_candidates` unless `replicates=True`.
+The complete per-candidate
 effect table — released, refused, and failed rows included — persists in the
 bundle artifact (`member_effect_table_v1`) and survives member release and
 save/load. `bundle.effects()` serves it; `.most_changed()` is the MEMBER

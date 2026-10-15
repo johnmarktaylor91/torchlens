@@ -239,6 +239,12 @@ every captured op, and from an intervention-ready source it also runs under
 the host RNG monitor, so its cost is the same for every site; push cost grows
 with the edited site's downstream cone. Prefer push for many edits on one
 captured input, and use rerun when the edit must see a fresh execution.
+A rerun from an intervention-ready source also snapshots the model state
+before its forward pass, as every intervention-ready capture does; each state
+entry whose bytes are unchanged since the source capture shares the source's
+snapshot instead of being cloned again, so on this sweep a rerun copies about
+54 MB of tensors instead of about 706 MB, and an entry that changed (an
+in-place weight edit, say) is cloned afresh.
 
 `Trace.draw(vis_intervention_mode=...)` visualizes the planned intervention
 recipe stored on an intervention-ready trace, such as sites registered with
