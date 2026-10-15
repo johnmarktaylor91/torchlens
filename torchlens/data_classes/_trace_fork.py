@@ -284,7 +284,75 @@ def _copy_fork_value(value: Any, memo: dict[Any, Any] | None = None) -> Any:
         return value
     if isinstance(value, (str, bytes, int, float, bool, type(None))):
         return value
+    if memo is not None:
+        flat = _flat_container_copy(value, memo, _FLAT_COPY_DEPTH)
+        if flat is not _NO_FLAT_COPY:
+            return flat
     return _memoized_deep_copy(value, memo, on_failure=copy.copy)
+
+
+_NO_FLAT_COPY = object()
+_FLAT_COPY_DEPTH = 2
+_ATOMIC_COPY_TYPES = frozenset({str, bytes, int, float, bool, complex, type(None)})
+_FLAT_COPY_TYPES = frozenset({dict, OrderedDict, list, tuple, set, frozenset})
+
+
+def _flat_container_copy(value: Any, memo: dict[Any, Any], depth: int) -> Any:
+    """Copy a flat container exactly as ``copy.deepcopy(value, memo)`` would, without recursing.
+
+    The trace-side fields are mostly large label tables (thousands of string
+    keys mapping to strings, ints or records), where deepcopy's per-element
+    dispatch is most of the fork's fixed cost. This handles exact built-in
+    ``dict``, attribute-free ``OrderedDict``, ``list``, ``tuple``, ``set`` and
+    ``frozenset`` values whose every key and element is atomic (deepcopy
+    returns it unchanged), already in the fork memo (deepcopy returns the
+    memo's copy, a record shell), or itself such a container up to ``depth``
+    levels. The copy is registered in the memo and the original kept alive,
+    as deepcopy does, so later references alias it; an all-identical tuple is
+    returned as itself, as deepcopy returns it. Anything else returns
+    ``_NO_FLAT_COPY`` and takes the ordinary deepcopy path.
+    """
+
+    cls = type(value)
+    if cls not in _FLAT_COPY_TYPES or (cls is OrderedDict and vars(value)):
+        return _NO_FLAT_COPY
+    known = memo.get(id(value), _NO_FLAT_COPY)
+    if known is not _NO_FLAT_COPY:
+        return known
+    if cls is dict or cls is OrderedDict:
+        pairs = []
+        for key, item in value.items():
+            if type(key) not in _ATOMIC_COPY_TYPES:
+                return _NO_FLAT_COPY
+            copied = _flat_element_copy(item, memo, depth)
+            if copied is _NO_FLAT_COPY:
+                return _NO_FLAT_COPY
+            pairs.append((key, copied))
+        result: Any = cls(pairs)
+    else:
+        items = []
+        for item in value:
+            copied = _flat_element_copy(item, memo, depth)
+            if copied is _NO_FLAT_COPY:
+                return _NO_FLAT_COPY
+            items.append(copied)
+        if cls is tuple and all(new is old for new, old in zip(items, value)):
+            return value
+        result = cls(items)
+    memo[id(value)] = result
+    memo.setdefault(id(memo), []).append(value)  # deepcopy's keep-alive list
+    return result
+
+
+def _flat_element_copy(item: Any, memo: dict[Any, Any], depth: int) -> Any:
+    """Copy one element for :func:`_flat_container_copy`, or return ``_NO_FLAT_COPY``."""
+
+    if type(item) in _ATOMIC_COPY_TYPES:
+        return item
+    known = memo.get(id(item), _NO_FLAT_COPY)
+    if known is not _NO_FLAT_COPY or depth <= 1:
+        return known
+    return _flat_container_copy(item, memo, depth - 1)
 
 
 def _default_fork_policy(value: Any) -> ForkFieldPolicy:
