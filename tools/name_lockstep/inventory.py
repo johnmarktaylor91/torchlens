@@ -26,11 +26,15 @@ from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any
 
+from name_lockstep import docsections
+
 PACKAGE = "torchlens"
 ALIAS = "tl"
 #: Bump when the row shape changes; ``load_inventory`` refuses other versions.
 SCHEMA = "name-lockstep-inventory/1"
 _SKIPPED_PARAMS = frozenset({"self", "cls"})
+#: Distinct documented meanings shown on one keyword row's doc line.
+MAX_PARAM_MEANINGS = 3
 
 
 def _doc_first_line(obj: object) -> str:
@@ -432,6 +436,12 @@ def _new_member_row(
     signature = _signature(target) if subkind.endswith("method") else None
     sig_text = str(signature) if signature is not None else None
     doc = _doc_first_line(target) if subkind != "field" else ""
+    doc_source = "docstring" if doc else ""
+    if not doc:
+        doc, doc_source = docsections.field_meaning(defining, name)
+    # A meaning read from the owner's sections stays out of the fingerprint, so rename
+    # pairing is the same as before those meanings were read.
+    fingerprint_doc = doc if doc_source == "docstring" else ""
     return {
         "id": row_id,
         "kind": "member",
@@ -443,7 +453,8 @@ def _new_member_row(
         "module": defining.__module__,
         "signature": sig_text,
         "doc_first_line": doc,
-        "fingerprint": _fingerprint("member", owner, subkind, sig_text, doc),
+        "doc_source": doc_source,
+        "fingerprint": _fingerprint("member", owner, subkind, sig_text, fingerprint_doc),
     }
 
 
@@ -493,6 +504,7 @@ def _param_rows(callables: Iterable[tuple[str, object]]) -> dict[str, dict[str, 
     """
 
     uses: dict[str, set[str]] = {}
+    docs: dict[str, dict[str, tuple[str, str]]] = {}
     for path, target in callables:
         signature = _signature(target)
         if signature is None:
@@ -503,6 +515,9 @@ def _param_rows(callables: Iterable[tuple[str, object]]) -> dict[str, dict[str, 
             if param.name in _SKIPPED_PARAMS or param.name.startswith("_"):
                 continue
             uses.setdefault(param.name, set()).add(path)
+            meaning, section = docsections.param_meaning(target, param.name)
+            if meaning:
+                docs.setdefault(param.name, {})[path] = (meaning, section)
     return {
         f"param:{name}": {
             "id": f"param:{name}",
@@ -513,11 +528,48 @@ def _param_rows(callables: Iterable[tuple[str, object]]) -> dict[str, dict[str, 
             "owner": "(grouped)",
             "module": None,
             "signature": None,
-            "doc_first_line": "",
+            **_param_doc(docs.get(name, {})),
             "uses": sorted(paths),
             "fingerprint": _fingerprint("param", sorted(paths)),
         }
         for name, paths in uses.items()
+    }
+
+
+def _param_doc(found: dict[str, tuple[str, str]]) -> dict[str, Any]:
+    """Return a keyword row's doc line and its sources from the callables that take it.
+
+    Parameters
+    ----------
+    found
+        Callable path to ``(meaning, section)`` for each use that documents the keyword.
+
+    Returns
+    -------
+    dict[str, Any]
+        ``doc_first_line`` (one meaning, or up to ``MAX_PARAM_MEANINGS`` distinct ones
+        each prefixed with the first callable that states it), ``doc_source`` and
+        ``param_docs`` (every documenting use, sorted).
+    """
+
+    by_meaning: dict[str, list[str]] = {}
+    for path in sorted(found):
+        by_meaning.setdefault(found[path][0], []).append(path)
+    if not by_meaning:
+        return {"doc_first_line": "", "doc_source": "", "param_docs": []}
+    if len(by_meaning) == 1:
+        line = next(iter(by_meaning))
+    else:
+        shown = list(by_meaning.items())[:MAX_PARAM_MEANINGS]
+        line = " | ".join(f"{paths[0]}(): {meaning}" for meaning, paths in shown)
+    first = min(found)
+    return {
+        "doc_first_line": line,
+        "doc_source": f"{first} {found[first][1]}",
+        "param_docs": [
+            {"use": path, "meaning": found[path][0], "section": found[path][1]}
+            for path in sorted(found)
+        ],
     }
 
 
