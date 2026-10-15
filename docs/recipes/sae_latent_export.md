@@ -111,12 +111,12 @@ write_delphi(top, tokens, site="hidden", model_name="gpt2", directory="dataset/l
 
 with torch.no_grad():
     every = sae.encode(torch.relu(model.hidden(model.embed(tokens))))  # [examples, positions, latents]
-unit = 0
+data = json.loads(Path("dataset/dashboard.json").read_text())
+unit = int(next(iter(data["feature_data_dict"])))  # the first latent that fired
 ranked = sorted(
     ((float(every[e, p, unit]), e, p) for e in range(8) for p in range(8)),
     key=lambda item: (-item[0], item[1], item[2]),
 )[:3]
-data = json.loads(Path("dataset/dashboard.json").read_text())
 seqs = data["feature_data_dict"][str(unit)]["sequence_data"]["seq_group_data"][0]["seq_data"]
 split = load_file("dataset/latents/hidden/0_1.safetensors")
 RESULT = (

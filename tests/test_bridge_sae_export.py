@@ -186,7 +186,7 @@ def test_delphi_cache_holds_every_nonzero_activation(setup, tmp_path: Path) -> N
     expected = {tuple(i) for i in torch.nonzero(hand.abs() > 1e-5).tolist()}
     assert keys == expected
     for example, position, latent in expected:
-        want = float(torch.tensor(hand[example, position, latent]).half())
+        want = float(hand[example, position, latent].half())
         assert values[(example, position, latent)] == want
     split = safetensors_numpy.load_file(str(files[0]))
     assert split["locations"].dtype.name == "uint16"

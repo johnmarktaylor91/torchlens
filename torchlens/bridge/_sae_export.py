@@ -274,11 +274,12 @@ def _warn_large_dashboard(latents: int, k: int, sequence: int) -> None:
 
     from .sae import _warn_once
 
+    code = "sae_export_dashboard_large"
     estimate = latents * k * sequence * 24
     if estimate <= _DASHBOARD_WARN_BYTES:
         return
     _warn_once(
-        "sae_export_dashboard_large",
+        code,
         f"write_sae_dashboard writes {latents} latents x {k} sequences x {sequence} tokens, "
         f"about {estimate / 1024**2:.0f} MiB of JSON, above the "
         f"{_DASHBOARD_WARN_BYTES // 1024**2} MiB guard; every latent is written. This warning "
