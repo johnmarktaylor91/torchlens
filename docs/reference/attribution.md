@@ -938,7 +938,22 @@ input->a1.h1<v> -0.0028 -0.0028
 1 5
 ```
 
-DOC_PROSE_PENDING
+On this random two-layer model the scores rank the 57 edges much as the patches do (rank
+agreement 0.945), while single edges differ in size: the largest, `input->logits`, is claimed at
+-0.0107 and moves the metric by -0.0081. Of the six sets (top-2, bottom-2 and four random
+draws), one has both its edges in one receiver and is measured; the other five are listed in
+`extra["sets_not_measured"]`.
+
+Measured on two larger checks. On the deterministic nonlinear fixture of the edge-scoring tests
+(two linear MLP senders that read the embedding, a tanh metric), every measured effect equals its
+patch effect computed by hand, exactly in float64. There EAP-IG with 5 steps claims -0.066 for
+both edges through the first MLP while patching either one moves the metric by +0.150, so the
+claim has the wrong sign, and rank agreement over the five edges is 0.65. On GPT-2 small (16
+indirect-object prompts, float32, CPU), 200 edges (the 100 with the largest EAP-IG scores and 100
+drawn at random) measured by this audit match an independent plain-PyTorch brute-force patcher
+within 1.2e-5 per edge, and the EAP-IG claims reach rank agreement 0.886 with the measured
+effects. Those 200 patches took 792 s on 2 CPU cores, about 4 s each; all 12 sets spanned several
+receivers and were listed in `extra["sets_not_measured"]`.
 
 ## Reading attribution results honestly
 
