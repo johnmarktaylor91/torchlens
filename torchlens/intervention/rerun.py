@@ -993,8 +993,8 @@ def _merge_rerun_host_rng_verdict(log: Trace, new_log: Trace) -> None:
         The rerun's own fresh trace.
     """
 
-    source = getattr(log, "_runnable", None)
-    rerun = getattr(new_log, "_runnable", None)
+    source = log._runnable
+    rerun = new_log._runnable
     if source is None or rerun is None:
         return
     for name in _HOST_RNG_FLAG_FIELDS:
@@ -1031,7 +1031,7 @@ def _share_source_state_clones(log: Trace) -> Iterator[None]:
 
     from .._runnable_state import CAPTURE_STATE_CLONE
 
-    source_state = getattr(getattr(log, "_runnable", None), "capture_state", None)
+    source_state = getattr(log._runnable, "capture_state", None)
     if not isinstance(source_state, Mapping):
         yield
         return
