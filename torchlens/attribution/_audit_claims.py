@@ -9,9 +9,10 @@ per unit, the edit, and the target score of any trace or fork.
 
 from __future__ import annotations
 
+import dataclasses
 import itertools
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import torch
@@ -61,6 +62,30 @@ class _AuditPlan:
     ablation_name: str
     edit: Callable[[], Any]
     score: Callable[[Any], float]
+    claim_method: str = ""
+    target_repr: str = ""
+    claim_kind: str = "layer"
+    extra: dict[str, Any] = field(default_factory=dict)
+
+    def claimed_of(self, unit: tuple[int, ...]) -> float:
+        """Return the claim's score for one unit, summed over the batch."""
+
+        return float(self.claimed[unit])
+
+    def site_of(self, unit: tuple[int, ...]) -> str:
+        """Return the op label every unit of a layer claim lives at."""
+
+        return self.label
+
+    def component_of(self, unit: tuple[int, ...]) -> str:
+        """Return the claim's layer, the component every unit belongs to."""
+
+        return self.layer
+
+    def unit_scores(self) -> dict[tuple[int, ...], float]:
+        """Score every unit ablated alone, one fork each."""
+
+        return {unit: self.ablated_score((unit,)) for unit in self.units}
 
     def intervention(self, units: tuple[tuple[int, ...], ...]) -> tuple[tuple[Any, Any], ...]:
         """Return the ``(tl.units(label, mask), edit)`` pair ablating ``units``."""
@@ -119,7 +144,8 @@ def _is_count(value: Any) -> bool:
 def _validate_settings(request: _AuditRequest) -> None:
     """Refuse an invalid ``k``, ``ablation``, ``controls`` or ``random_draws``."""
 
-    base = f"tl.attribution.causal_audit(model, x, claim=claim, {_target_spelling(request.target)}"
+    target = "" if request.target is None else f", {_target_spelling(request.target)}"
+    base = f"tl.attribution.causal_audit(model, x, claim=claim{target}"
     code = "attribution_eval_setting_invalid"
     if not _is_count(request.k):
         raise _setting_error(
@@ -192,8 +218,8 @@ def _unsupported(request: _AuditRequest, trace: Any, what: str, *, code: str) ->
     example = candidates[-1] if candidates else "fc"
     return AttributionError(
         f"causal_audit cannot audit {what}: it audits a layer attribution at one hidden site "
-        "(a module that runs once with one output), whose values have that output's shape; "
-        "direct-logit-attribution rows and one-backward read tables are not audited yet. "
+        "(a module that runs once with one output) whose values have that output's shape, a "
+        "tl.mechinterp.direct_logit_contributions table, or a tl.attribution.read table. "
         f"Remedy: audit a layer attribution, e.g. {_remedy_call(request.target, example)}. "
         f"{_AUDIT_DOCS_POINTER}",
         code=code,
@@ -289,11 +315,21 @@ def _edit_factory(request: _AuditRequest, site: Tensor) -> tuple[str, Callable[[
 
 
 def _plan_audit(request: _AuditRequest) -> _AuditPlan:
-    """Validate the request, trace once, and ground the claim at its site."""
+    """Trace once and ground a layer claim at its site (settings already validated)."""
 
-    _validate_settings(request)
     trace = _trace_once(request)
     layer, label = _claim_layer(request, trace)
+    if request.target is None:
+        recorded = str(getattr(request.claim, "target_repr", ""))
+        index = recorded.removeprefix("index=")
+        if recorded.startswith("index=") and index.lstrip("-").isdigit():
+            request = dataclasses.replace(request, target=int(index))
+        raise _misaligned(
+            request,
+            layer,
+            "a layer attribution needs the target= it was computed for",
+            code="attribution_audit_claim_misaligned",
+        )
     site = trace[label].out
     values = request.claim.values
     if tuple(values.shape) != tuple(site.shape):
@@ -331,4 +367,6 @@ def _plan_audit(request: _AuditRequest) -> _AuditPlan:
         ablation_name=name,
         edit=edit,
         score=_target_scorer(request, trace, layer),
+        claim_method=request.claim.method,
+        target_repr=request.claim.target_repr,
     )
