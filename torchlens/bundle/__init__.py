@@ -826,9 +826,9 @@ class Bundle:
         """Recompute a NEW metric over members that still exist — and say so.
 
         Released candidates are reported ``unmeasured``, never silently
-        re-scored; ``order`` stays per-member until the chain reader lands
-        (an explicit chain request refuses typed — insertion order is never
-        guessed as chronology).
+        re-scored. ``order="chain"`` also orders the members by the bundle's
+        validated operation chain; members no operation recorded are listed
+        apart as ``unchained``, never placed by a guessed position.
         """
 
         from ..experiment._engine import bundle_measure_members

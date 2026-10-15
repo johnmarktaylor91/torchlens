@@ -251,7 +251,7 @@ def test_effect_table_survives_save_load_and_unarmed_ledger(tmp_path) -> None:
     assert excinfo.value.fields["code"] == "effects_selection_unavailable"
 
 
-def test_measure_members_reports_unmeasured_and_refuses_chain_order() -> None:
+def test_measure_members_reports_unmeasured_and_orders_by_the_chain() -> None:
     torch.manual_seed(0)
     model = _Tiny().eval()
     x = torch.randn(2, 3)
@@ -268,8 +268,23 @@ def test_measure_members_reports_unmeasured_and_refuses_chain_order() -> None:
     report = bundle.measure_members(metric=lambda member: len(member.op_labels))
     assert set(report["values"]) == set(bundle.names)
     assert len(report["unmeasured"]) == 1  # the released candidate, named
+    chained = bundle.measure_members(metric=_output_metric, order="chain")
+    assert chained["order"] == "chain"
+    assert chained["values"] == bundle.measure_members(metric=_output_metric)["values"]
+    (operation,) = bundle.operations
+    (retained,) = [name for name in bundle.names if name != "baseline"]
+    assert chained["chain"] == [
+        {
+            "seq": operation.seq,
+            "operation_id": operation.operation_id,
+            "kind": "site_sweep",
+            "member": retained,
+            "value": chained["values"][retained],
+        }
+    ]
+    assert chained["unchained"] == ["baseline"]
     with pytest.raises(BundleExperimentError) as excinfo:
-        bundle.measure_members(metric=_output_metric, order="chain")
+        bundle.measure_members(metric=_output_metric, order="time")
     assert excinfo.value.fields["code"] == "measure_members_order_unavailable"
 
 

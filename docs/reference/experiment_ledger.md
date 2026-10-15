@@ -69,7 +69,10 @@ bundle artifact (`member_effect_table_v1`) and survives member release and
 save/load. `bundle.effects()` serves it; `.most_changed()` is the MEMBER
 axis; `.top(k).selection()` is the explicit tier-c conversion (session-only);
 `bundle.measure_members(metric=)` recomputes a NEW metric over members that
-still exist and names the unmeasured.
+still exist and names the unmeasured; `order="chain"` also returns the
+members ordered by the bundle's validated operation chain (`chain`, one row
+per member with its operation's `seq`, `operation_id` and `kind`) and lists
+the members no operation recorded apart (`unchained`).
 
 `torchlens.experiment.head_ablation_candidates(baseline, module, heads=)` is
 the head-ablation sugar: mandatory module scoping, v-facet lowering gated on

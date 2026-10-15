@@ -974,17 +974,20 @@ def bundle_measure_members(
 
     Released candidates are NOT silently re-scored: the report separates
     ``values`` (live members) from ``unmeasured`` (effect-table candidates
-    with no retained member). ``order="member"`` is the one v1 ordering;
-    an explicit chain order refuses typed until F-CHAIN lands (foldB
-    brief-delta: chain-keyed output arrives with the chain reader, never by
-    insertion-order guess).
+    with no retained member). ``order="member"`` (default) keys the values
+    by member; ``order="chain"`` also returns ``chain``, the members ordered
+    by the bundle's hash-chained operation ledger (each row: ``seq``,
+    ``operation_id``, ``kind``, ``member``, ``value``; members of one
+    operation in the order it added them), after validating that chain, and
+    ``unchained``, the members no operation recorded (the baseline, members
+    added by hand), which are never placed by a guessed position.
     """
 
-    if order != "member":
+    if order not in ("member", "chain"):
         raise BundleExperimentError(
-            f"measure_members(order={order!r}) is not available: v1 is "
-            "per-member only; chain-keyed ordering arrives with the F-CHAIN "
-            "reader (insertion order is never guessed as chronology).",
+            f"measure_members(order={order!r}) is not available: use "
+            "order='member' (per member) or order='chain' (by the bundle's "
+            "operation ledger).",
             code="measure_members_order_unavailable",
             order=order,
         )
@@ -1001,4 +1004,40 @@ def bundle_measure_members(
                 continue
             if row.member_name is None or row.member_name not in bundle._members:
                 unmeasured.append(row.candidate_id)
-    return {"values": values, "unmeasured": sorted(set(unmeasured)), "order": "member"}
+    report: dict[str, Any] = {"values": values, "unmeasured": sorted(set(unmeasured))}
+    if order == "chain":
+        report.update(_chain_keyed_values(bundle, values))
+    report["order"] = order
+    return report
+
+
+def _chain_keyed_values(bundle: Bundle, values: Mapping[str, Any]) -> dict[str, Any]:
+    """Order measured members by the validated operation chain (``measure_members``)."""
+
+    from ..bundle._lineage import validate_operation_chain
+
+    operations = bundle.operations
+    validate_operation_chain(operations)
+    by_id = {operation.operation_id: operation for operation in operations}
+    construction = bundle.member_construction
+    chained: list[tuple[int, int, str]] = []
+    unchained: list[str] = []
+    for position, name in enumerate(values):
+        operation = by_id.get(construction.get(name, {}).get("operation_id"))
+        if operation is None:
+            unchained.append(name)
+        else:
+            chained.append((operation.seq, position, name))
+    chain = []
+    for _seq, _position, name in sorted(chained):
+        operation = by_id[construction[name]["operation_id"]]
+        chain.append(
+            {
+                "seq": operation.seq,
+                "operation_id": operation.operation_id,
+                "kind": operation.kind,
+                "member": name,
+                "value": values[name],
+            }
+        )
+    return {"chain": chain, "unchained": unchained}
