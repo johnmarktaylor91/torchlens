@@ -33,6 +33,7 @@ from typing import Any
 
 import torch
 
+from .._io._json import loads_bounded
 from ._fitted import FittedArtifactError
 
 __tl_layer__ = "L5"
@@ -121,6 +122,7 @@ class _Encoder:
         self._classes = _classes()
 
     def _tensor(self, tensor: torch.Tensor) -> str:
+        """Store a tensor in the side table and return its key."""
         key = f"t{len(self.tensors)}"
         self.tensors[key] = tensor.detach().to("cpu").contiguous().clone()
         return key
@@ -171,6 +173,7 @@ class _Encoder:
         return None
 
     def _sequence(self, value: list[Any] | tuple[Any, ...], path: str) -> Any:
+        """Encode a list or tuple; a long run of floats is stored as one tensor."""
         kind = "tuple" if isinstance(value, tuple) else "list"
         if len(value) >= _FLOAT_LIST_TENSOR_MIN and all(type(item) is float for item in value):
             key = self._tensor(torch.tensor(value, dtype=torch.float64))
@@ -181,6 +184,7 @@ class _Encoder:
         }
 
     def _object(self, value: Any, path: str) -> Any:
+        """Encode an allow-listed accumulator object attribute by attribute."""
         cls = type(value)
         if self._classes.get(cls.__name__) is not cls:
             raise FittedArtifactError(
@@ -223,6 +227,7 @@ class _Decoder:
         self._classes = _classes()
 
     def _tensor(self, key: str) -> torch.Tensor:
+        """Return the side-table tensor stored under ``key``."""
         return self.tensors[key]
 
     def node(self, node: Mapping[str, Any]) -> Any:
@@ -236,40 +241,50 @@ class _Decoder:
         return getattr(self, _READERS[kind])(node)
 
     def _read_tensor(self, node: Mapping[str, Any]) -> torch.Tensor:
+        """Rebuild a tensor on its saved device."""
         return self._tensor(node["key"]).to(node["device"])
 
     def _read_dtype(self, node: Mapping[str, Any]) -> torch.dtype:
+        """Rebuild a dtype from its saved name."""
         return _DTYPES[str(node["v"])]
 
     def _read_device(self, node: Mapping[str, Any]) -> torch.device:
+        """Rebuild a device from its saved name."""
         return torch.device(node["v"])
 
     def _read_generator(self, node: Mapping[str, Any]) -> torch.Generator:
+        """Rebuild a torch random generator with its saved state."""
         generator = torch.Generator(device=node["device"])
         generator.set_state(self._tensor(node["key"]))
         return generator
 
     def _read_pyrandom(self, node: Mapping[str, Any]) -> random.Random:
+        """Rebuild a Python random stream with its saved state."""
         stream = random.Random()
         internal = tuple(int(item) for item in self._tensor(node["key"]).tolist())
         stream.setstate((int(node["version"]), internal, node["gauss"]))
         return stream
 
     def _read_floats(self, node: Mapping[str, Any]) -> list[float] | tuple[float, ...]:
+        """Rebuild a list or tuple of floats from its stored tensor."""
         items = [float(item) for item in self._tensor(node["key"]).tolist()]
         return tuple(items) if node["kind"] == "tuple" else items
 
     def _read_sequence(self, node: Mapping[str, Any]) -> list[Any] | tuple[Any, ...]:
+        """Rebuild a list or tuple item by item."""
         items = [self.node(item) for item in node["items"]]
         return tuple(items) if node["t"] == "tuple" else items
 
     def _read_dict(self, node: Mapping[str, Any]) -> dict[str, Any]:
+        """Rebuild a dict with string keys."""
         return {str(key): self.node(item) for key, item in node["items"]}
 
     def _read_encoder(self, node: Mapping[str, Any]) -> Callable[[Any], Any] | None:
+        """Return the caller's encoder in place of a saved encoder placeholder."""
         return self.encoder
 
     def _object(self, node: Mapping[str, Any]) -> Any:
+        """Rebuild an allow-listed accumulator object without calling its constructor."""
         cls = self._classes[str(node["cls"])]
         if node["t"] == "dataclass":
             return cls(**{name: self.node(item) for name, item in node["fields"]})
@@ -397,7 +412,7 @@ def read_state(
             recomputed=recomputed,
         )
     try:
-        node = json.loads(state_json)
+        node = loads_bounded(state_json)
         saved_encoders = [str(item) for item in node.get("encoders", [])]
         if require_encoder_match and bool(saved_encoders) != (encoder is not None):
             refuse_encoder_mismatch(source, saved_encoders, encoder)
