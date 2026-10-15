@@ -419,6 +419,7 @@ def apply_theme_to_spec(spec: NodeSpec, theme: VisualizationTheme) -> NodeSpec:
         fillcolor = palette_fill
     else:
         fillcolor = theme.default_fill if spec.fillcolor in {None, "white"} else spec.fillcolor
+    fontcolor: str | None
     if spec.fontcolor in {None, "black"}:
         fontcolor = _legible_ink(fillcolor, theme.default_font)
     else:

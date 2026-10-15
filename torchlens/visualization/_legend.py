@@ -121,6 +121,7 @@ def _role_fills(theme: VisualizationTheme) -> dict[str, frozenset[str]]:
     from .themes import apply_theme_to_spec
 
     def themed(*constants: str) -> frozenset[str]:
+        """Return the lowercased fills ``theme`` paints for ``constants``."""
         return frozenset(
             str(apply_theme_to_spec(NodeSpec(["x"], fillcolor=constant), theme).fillcolor).lower()
             for constant in constants
