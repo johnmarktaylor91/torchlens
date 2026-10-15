@@ -1151,6 +1151,34 @@ Spellings below shipped ahead of their naming-session/S2 ratification under
 the provisional-name protocol: they may rename WITHOUT deprecation
 shims, by declared contract. Each carries the same tag at its definition.
 
+**splice / SpliceResult (`tl.bridge.sae.splice(model_or_log, inputs, *, site, sae, latents_edit=None, tokens=None, exclude_bos=False, keep_latents=True)` returns `tl.bridge.sae.SpliceResult`)** — *unstable — no deprecation shim owed*
+: The SAE splice experiment: a duck-typed SAE's reconstruction replaces one
+  site and the fork replays downstream. Every metric is float64 and follows
+  the SAELens evals and the Gemma Scope paper. `fraction_variance_explained_pooled`
+  is the standard reading (each feature dimension, the last axis, centred on
+  its own mean over tokens); `fraction_variance_explained_by_dim` gives it per
+  dimension; `fraction_variance_explained` centres on one global mean. A zero
+  denominator gives `nan`, `zero_variance=True` and a reason in
+  `unavailable_metrics`, never 0.0. `latents` is the encoder output exactly as
+  `sae.encode` returned it and `edited_latents` the latents after
+  `latents_edit`, both kept by default (`keep_latents=False` drops them;
+  `sae_splice_latents_large` warns once past 256 MiB). With `tokens=` (the
+  integer ids the model ran on) the first output shaped `tokens.shape +
+  (vocab,)` is read as logits: `ce_loss_clean`, `ce_loss_spliced`,
+  `ce_loss_zero_ablated`, `ce_loss_recovered` = `(CE_zero - CE_spliced) /
+  (CE_zero - CE_clean)` and `kl_divergence` = mean `KL(P_clean || P_spliced)`;
+  without it they are `None` with a reason. `exclude_bos=True` keeps sequence
+  position 0 clean and out of every metric. Recipe:
+  `docs/recipes/pretrained_saes.md`.
+
+**reconstruct (`tl.bridge.sae_lens.reconstruct(log, site, sae)`)** — *unstable — no deprecation shim owed*
+: The SAE's reconstruction of a saved site activation,
+  `sae.decode(sae.encode(out))`; a callable SAE without that pair is called on
+  the activation (an SAE Lens `SAE`'s forward is the same encode then decode).
+  Replaces the removed `decode(log, site, sae)`, which passed the activation
+  to `sae.decode` as if it were latents. `tl.bridge.sae_lens.encode(log, site,
+  sae)` gives the latents.
+
 **similarity_repository_id (`rdm_evolution(...).similarity_repository_id`, `tl.stats.CKA.similarity_repository_id`, the `SimilarityScore` that `tl.stats.cka` and `tl.stats.CKA.result()` return, `ScoreInterval.similarity_repository_id`, the `neuro.rdms()` source-mode descriptor)** — *unstable — no deprecation shim owed*
 : The similarity-repository catalogue identifier of the exact measure variant a
   TorchLens result computed, with `*` for the implementing repository (for
