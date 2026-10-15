@@ -2,6 +2,12 @@
 
 from torchlens.attribution import onebackward
 from torchlens.attribution._cam import grad_cam
+from torchlens.attribution._causal_audit import (
+    CausalAuditResult,
+    CausalAuditSet,
+    CausalAuditUnit,
+    causal_audit,
+)
 from torchlens.attribution._core import (
     AttributionError,
     AttributionResult,
@@ -43,6 +49,10 @@ from torchlens.attribution.onebackward import (
 __all__ = [
     "AttributionError",
     "AttributionResult",
+    "CausalAuditResult",
+    "CausalAuditSet",
+    "CausalAuditUnit",
+    "causal_audit",
     "CurveResult",
     "CurveStep",
     "DEFAULT",
