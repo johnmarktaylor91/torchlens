@@ -19,7 +19,7 @@
       "kind": "undersell-falsehood",
       "receipt": "The historical 'deferred' row is gone, but line 6 still says 'TorchLens does not ship SAE training/inference utilities' with no mention of the shipped bridge.sae splice experiment (bridge/sae.py: reconstruction fidelity + causal effect + latents_edit).",
       "status": "fixed",
-      "verified_at": "2026-10-14 (the page names bridge.sae.splice in its first row; the read-latents row now states that SpliceResult carries no latents and lists the fields it does return, pinned by tests/test_migration_pages_executed.py)",
+      "verified_at": "2026-10-15 (the page names bridge.sae.splice in its first row; the read-latents row names SpliceResult.latents and SpliceResult.edited_latents, which splice now keeps by default, pinned by tests/test_migration_pages_executed.py)",
       "owner_next": "none"
     },
     {

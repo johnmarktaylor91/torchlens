@@ -314,6 +314,8 @@ _WARN_ONCE_STATE = frozenset(
         # Once-per-file source-drift disclosure for the C4 pinned-digest refusal
         # (fix/postproc 7a58a021); reset row lives in tests/conftest.py.
         ("torchlens/postprocess/ast_branches.py", "_source_drift_warned"),
+        # SAE splice once-per-session warnings; reset row lives in tests/conftest.py.
+        ("torchlens/bridge/sae.py", "_WARNED_CODES"),
         # Per-unit statistics state-size warning; reset row lives in tests/conftest.py.
         ("torchlens/stats/_per_unit.py", "_WARNED_CODES"),
         ("torchlens/utils/_torch_compat.py", "_warned_missing_capabilities"),

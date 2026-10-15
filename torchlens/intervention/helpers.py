@@ -682,13 +682,22 @@ def splice_module(
 ) -> Edit:
     """Create a helper that calls a module as a black-box forward splice.
 
+    Transcoder support: a transcoder maps a block's MLP input to its MLP
+    output, so it replaces the MLP call as a whole. Target the MLP module and
+    route its call inputs, ``hooks={tl.module("mlp"):
+    tl.splice_module(transcoder, input="in")}``: the transcoder runs on the
+    arguments the MLP was called with and its result becomes the MLP's
+    output. An SAE reconstructs the site's own value instead, which is
+    ``input="out"`` (the route ``torchlens.bridge.sae.splice`` uses).
+
     Parameters
     ----------
     module:
         Module to call under ``pause_logging()`` in the execution helper.
     input:
         Input routing policy. ``"in"`` runs ``module`` on the original call
-        inputs; ``"out"`` preserves the legacy output-transform route.
+        inputs (a transcoder on its MLP's inputs); ``"out"`` passes the
+        site's output to ``module`` (an SAE on its site).
     output:
         Output routing policy. Only ``"out"`` is supported.
     force_shape_change:

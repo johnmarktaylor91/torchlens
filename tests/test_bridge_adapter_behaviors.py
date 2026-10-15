@@ -142,10 +142,10 @@ def test_gradcam_missing_dependency_names_extra(conv_log, monkeypatch: pytest.Mo
 
 
 @pytest.mark.smoke
-def test_sae_lens_bridge_dispatches_encode_decode_and_refuses_junk(
+def test_sae_lens_bridge_dispatches_encode_reconstruct_and_refuses_junk(
     conv_log, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """encode()/decode() use the SAE's methods, fall back to callables, else refuse."""
+    """encode()/reconstruct() use the SAE's methods, fall back to callables, else refuse."""
 
     from torchlens.bridge import sae_lens as sae_bridge
 
@@ -161,8 +161,14 @@ def test_sae_lens_bridge_dispatches_encode_decode_and_refuses_junk(
 
     encoded = sae_bridge.encode(conv_log, "relu_1_2", _Sae())
     assert torch.equal(encoded, site_out * 2)
-    decoded = sae_bridge.decode(conv_log, "relu_1_2", _Sae())
-    assert torch.equal(decoded, site_out * 3)
+    # reconstruct decodes the site's latents, never the raw activation.
+    reconstructed = sae_bridge.reconstruct(conv_log, "relu_1_2", _Sae())
+    assert torch.equal(reconstructed, site_out * 2 * 3)
+    assert not hasattr(sae_bridge, "decode")
+    forward = sae_bridge.reconstruct(conv_log, "relu_1_2", lambda value: value + 1)
+    assert torch.equal(forward, site_out + 1)
+    with pytest.raises(TypeError, match="encode"):
+        sae_bridge.reconstruct(conv_log, "relu_1_2", object())
 
     called_with: list[torch.Tensor] = []
     fallback = sae_bridge.encode(conv_log, "relu_1_2", called_with.append)
