@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import json
 import re
-import threading
 from dataclasses import dataclass
 from typing import Any
 
@@ -128,13 +127,6 @@ _SIDECAR_REGISTRY = create_registry(
 # write (C07): the C01-era pre-release gating retired at the bump, and loads
 # validate the envelope shape fail-closed (_io/forgery_validation.py).
 
-#: Builtin-family load state: ``"idle"`` until the first door consultation,
-#: ``"loading"`` while the owning modules import (they register back through
-#: this door), ``"done"`` after. Guarded by ``_BUILTINS_LOCK`` (reentrant: the
-#: owning module's own registration consults the door mid-load).
-_BUILTINS_LOCK = threading.RLock()
-_builtins_state = "idle"
-
 
 def _ensure_builtin_families() -> None:
     """Register the in-tree TorchLens families before any door consultation.
@@ -142,27 +134,18 @@ def _ensure_builtin_families() -> None:
     A builtin family's contract lives with its owning lane (the
     ``torchlens.boundary_facts`` family and its ``token_boundary_v1``
     validator live in :mod:`torchlens.bundle._fed_by`) and registers through
-    :func:`register_sidecar_family` at that module's import. Loading the
-    owners here, on first consultation, makes every builtin family present
+    :func:`register_sidecar_family` at that module's import. Importing the
+    owners here, on every consultation, makes every builtin family present
     whatever was imported first, while ``import torchlens`` stays free of
-    them. Only TorchLens's own modules load; out-of-tree provider code is
-    never imported (memo 6.4).
+    them. The import system supplies the rest: a repeat import is a
+    ``sys.modules`` hit, the owner's own registration (which consults this
+    door mid-import) gets the partly initialized module back, and another
+    thread waits until the import finishes. Only TorchLens's own modules
+    load; out-of-tree provider code is never imported (memo 6.4).
     """
 
-    global _builtins_state
-    if _builtins_state == "done":
-        return
-    with _BUILTINS_LOCK:
-        if _builtins_state != "idle":
-            return
-        _builtins_state = "loading"
-        try:
-            # Importing the owner registers ``torchlens.boundary_facts``.
-            from ..bundle import _fed_by  # noqa: F401
-        except BaseException:
-            _builtins_state = "idle"
-            raise
-        _builtins_state = "done"
+    # Importing the owner registers ``torchlens.boundary_facts``.
+    from ..bundle import _fed_by  # noqa: F401
 
 
 def register_sidecar_family(
