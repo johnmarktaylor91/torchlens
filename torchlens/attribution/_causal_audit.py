@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import math
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import torch
@@ -63,7 +63,7 @@ class CausalAuditUnit:
     unit: tuple[int, ...]
     claimed: float
     measured: float
-    _plan: _AuditPlan
+    _plan: _AuditPlan = field(repr=False, compare=False)
 
     @property
     def intervention(self) -> tuple[tuple[Any, Any], ...]:
@@ -107,7 +107,7 @@ class CausalAuditSet:
     claimed: float
     measured: float
     draw: int
-    _plan: _AuditPlan
+    _plan: _AuditPlan = field(repr=False, compare=False)
 
     @property
     def intervention(self) -> tuple[tuple[Any, Any], ...]:

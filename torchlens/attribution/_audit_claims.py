@@ -74,9 +74,10 @@ class _AuditPlan:
 
         fork = self.trace.fork(name="attribution_causal_audit")
         try:
-            for selection, edit in self.intervention(units):
-                fork.do(selection, edit)
-            return self.score(fork)
+            with torch.no_grad():
+                for selection, edit in self.intervention(units):
+                    fork.do(selection, edit)
+                return self.score(fork)
         finally:
             fork.cleanup()
 
@@ -97,7 +98,7 @@ def _remedy_call(target: Any, layer: str) -> str:
     spelling = _target_spelling(target)
     return (
         "tl.attribution.causal_audit(model, x, claim=tl.attribution.layer_attribution("
-        f"model, x, {spelling}, layer={layer!r}), {spelling})"
+        f"model, x, {spelling}, layer={layer!r}), {spelling}, k=1)"
     )
 
 
@@ -249,7 +250,7 @@ def _target_scorer(request: _AuditRequest, trace: Any, layer: str) -> Callable[[
                 code="attribution_audit_claim_misaligned",
             )
         site = labels[0]
-        return lambda run: float(_select_unit(run[site].out, target))
+        return lambda run: float(_select_unit(run[site].out, target).detach())
 
     def _score(run: Any) -> float:
         """Score the model output of a trace or fork."""
