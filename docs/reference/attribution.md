@@ -685,8 +685,8 @@ with torch.no_grad():
 x = torch.tensor([[1.0, 2.0, 3.0]])
 claim = tl.attribution.layer_attribution(model, x, target=0, layer="fc1")
 audit = tl.attribution.causal_audit(model, x, claim=claim, target=0, k=2, random_draws=3)
-print([(row.unit, row.claimed, row.measured) for row in audit.units])
-print(audit.rank_agreement, [(item.kind, item.units, item.measured) for item in audit.sets[:2]])
+print([(row.unit, row.claimed_effect, row.measured_effect) for row in audit.units])
+print(audit.rank_agreement, [(item.kind, item.units, item.measured_effect) for item in audit.sets[:2]])
 
 trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
 fork = trace.fork()

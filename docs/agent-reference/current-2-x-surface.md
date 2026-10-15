@@ -1381,7 +1381,7 @@
   claimed units together beside bottom-k and seeded random-k controls, one
   `trace.fork().do(...)` each; returns `tl.attribution.CausalAuditResult` (`units`, `sets`,
   `rank_agreement` (Spearman), `original_score`, `site`) whose `tl.attribution.CausalAuditUnit`
-  and `tl.attribution.CausalAuditSet` rows carry `claimed`, `measured` and a replayable
+  and `tl.attribution.CausalAuditSet` rows carry `claimed_effect`, `measured_effect` and a replayable
   `intervention`. Refusals `attribution_audit_claim_unsupported`,
   `attribution_audit_claim_misaligned`, `attribution_eval_setting_invalid`; warning
   `attribution_audit_units_many`. Doc of record: `docs/reference/attribution.md`.

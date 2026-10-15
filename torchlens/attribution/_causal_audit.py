@@ -53,21 +53,21 @@ class CausalAuditUnit:
     unit
         Index of the unit after the batch axis (``(3,)`` is unit 3 of a
         linear output, ``(3, 1, 2)`` one position of a convolution channel).
-    claimed
+    claimed_effect
         The claim's score for the unit, summed over the batch.
-    measured
+    measured_effect
         ``score(original) - score(ablated)`` with this unit ablated in every
         example.
     """
 
     unit: tuple[int, ...]
-    claimed: float
-    measured: float
+    claimed_effect: float
+    measured_effect: float
     _plan: _AuditPlan = field(repr=False, compare=False)
 
     @property
     def intervention(self) -> tuple[tuple[Any, Any], ...]:
-        """The ``(tl.units(label, mask), edit)`` pair that produced ``measured``.
+        """The ``(tl.units(label, mask), edit)`` pair that produced ``measured_effect``.
 
         Replay it with ``fork = trace.fork(); fork.do(*pair)`` on a trace
         captured with ``capture=tl.options.CaptureOptions(intervention_ready=True)``.
@@ -78,7 +78,7 @@ class CausalAuditUnit:
     def __repr__(self) -> str:
         """Compact representation."""
 
-        return f"CausalAuditUnit(unit={self.unit}, claimed={self.claimed:.6g}, measured={self.measured:.6g})"
+        return f"CausalAuditUnit(unit={self.unit}, claimed_effect={self.claimed_effect:.6g}, measured_effect={self.measured_effect:.6g})"
 
 
 @dataclass(frozen=True)
@@ -92,10 +92,10 @@ class CausalAuditSet:
         magnitude) or ``"random"`` (a seeded draw).
     units
         The ablated units, indexed after the batch axis.
-    claimed
+    claimed_effect
         Sum of the claimed scores of ``units`` (what the claim predicts if
         effects add).
-    measured
+    measured_effect
         ``score(original) - score(ablated)`` with every unit in ``units``
         ablated together.
     draw
@@ -104,14 +104,14 @@ class CausalAuditSet:
 
     kind: str
     units: tuple[tuple[int, ...], ...]
-    claimed: float
-    measured: float
+    claimed_effect: float
+    measured_effect: float
     draw: int
     _plan: _AuditPlan = field(repr=False, compare=False)
 
     @property
     def intervention(self) -> tuple[tuple[Any, Any], ...]:
-        """The ``(tl.units(label, mask), edit)`` pair that produced ``measured``."""
+        """The ``(tl.units(label, mask), edit)`` pair that produced ``measured_effect``."""
 
         return self._plan.intervention(self.units)
 
@@ -120,7 +120,7 @@ class CausalAuditSet:
 
         return (
             f"CausalAuditSet(kind={self.kind!r}, k={len(self.units)}, "
-            f"claimed={self.claimed:.6g}, measured={self.measured:.6g})"
+            f"claimed_effect={self.claimed_effect:.6g}, measured_effect={self.measured_effect:.6g})"
         )
 
 
@@ -174,7 +174,7 @@ class CausalAuditResult:
         return (
             f"CausalAuditResult(layer={self.layer!r}, units={len(self.units)}, "
             f"rank_agreement={self.rank_agreement!r}, "
-            f"top_measured={top[0].measured if top else None!r})"
+            f"top_measured_effect={top[0].measured_effect if top else None!r})"
         )
 
 
@@ -267,10 +267,10 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
         original = plan.score(plan.trace)
         rows = _unit_rows(plan, original) if per_unit else ()
         sets = _ablated_sets(plan, original, request)
-    claimed = torch.tensor([row.claimed for row in rows], dtype=torch.float64)
-    measured = torch.tensor([row.measured for row in rows], dtype=torch.float64)
+    claimed = torch.tensor([row.claimed_effect for row in rows], dtype=torch.float64)
+    measured = torch.tensor([row.measured_effect for row in rows], dtype=torch.float64)
     agreement = _spearman(claimed, measured) if len(rows) > 1 else None
-    random_effects = [item.measured for item in sets if item.kind == "random"]
+    random_effects = [item.measured_effect for item in sets if item.kind == "random"]
     return CausalAuditResult(
         layer=plan.layer,
         site=plan.label,
@@ -371,8 +371,8 @@ def _ablated_sets(
         CausalAuditSet(
             kind=kind,
             units=units,
-            claimed=math.fsum(float(plan.claimed[unit]) for unit in units),
-            measured=original - plan.ablated_score(units),
+            claimed_effect=math.fsum(float(plan.claimed[unit]) for unit in units),
+            measured_effect=original - plan.ablated_score(units),
             draw=draw,
             _plan=plan,
         )
