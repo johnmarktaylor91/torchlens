@@ -124,7 +124,6 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         # accepts neither transient metadata nor a storage side table.
         "intervention_fire_results_cleanup_failed",
         "intervention_fire_results_unrecordable",
-        "intervention_helper_unknown",
         "intervention_tensor_unsupported",
         "layer_pass_ambiguous",
         "layers_not_logged",

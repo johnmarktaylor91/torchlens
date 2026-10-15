@@ -73,7 +73,6 @@ backend's supported table), BEFORE any forward or mutation.
 
 from __future__ import annotations
 
-import functools
 import hashlib
 import warnings
 from collections.abc import Callable, Mapping, Sequence
@@ -1488,14 +1487,7 @@ def set_direction_mean(
         coefs.append((member.detach().to(torch.float32) * aligned).sum(dim=axis))
         axes.append(axis)
     mean_coef = float(torch.stack([coef.mean() for coef in coefs]).mean())
-    # The float64 coefficient is computed on the first float64 site only, so a
-    # float32 population pays no float64 copy unless a float64 site fires.
-
-    @functools.cache
-    def _mean_coef64() -> float:
-        """Return the population's mean coefficient along the float64 unit."""
-
-        return _direction_mean_coefficient64(members, axes, unit64)
+    mean_coef64 = _direction_mean_coefficient64(members, axes, unit64)
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime directional mean-setting hook."""
@@ -1519,7 +1511,7 @@ def set_direction_mean(
             # coefficient; other dtypes keep the float32 forms, cast.
             wide = out.dtype == torch.float64
             site_unit = unit64 if wide else unit
-            site_coef = _mean_coef64() if wide else mean_coef
+            site_coef = mean_coef64 if wide else mean_coef
             aligned = site_unit.to(device=out.device, dtype=out.dtype).reshape(shape)
             projection = (out * aligned).sum(dim=fire_axis, keepdim=True) * aligned
             _record_sampling(
