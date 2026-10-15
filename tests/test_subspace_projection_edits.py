@@ -43,7 +43,7 @@ _H = 0.5 * torch.tensor(
 )
 _BASES = {"rank1": _H[:1], "rank3": _H[:3]}
 _COORDS = torch.tensor(
-    [[2.0, -4.0, 6.0, 1.0], [6.0, 2.0, -2.0, 3.0], [-2.0, 4.0, 2.0, -1.0], [2.0, 6.0, 6.0, 5.0]],
+    [[2.0, -4.0, 6.0, 1.0], [6.0, 2.0, -2.0, 3.0], [-2.0, 4.0, 2.0, -1.0], [2.0, 6.0, 8.0, 5.0]],
     dtype=torch.float64,
 )
 _SITE = "linear_1_1"
@@ -245,9 +245,19 @@ _REFUSED: dict[str, tuple[Callable[[], tuple[Any, Any]], Callable[[], tuple[Any,
     ),
     "grad_zero": (
         lambda: (_subspace_sel(), grad_zero()),
-        lambda: (_SITE, grad_zero()),
+        lambda: ("capture", grad_zero()),
     ),
 }
+
+
+def _run_remedy(target: Any, edit: Any) -> None:
+    """Run one remedy spelling; backward verbs attach at capture time."""
+
+    if target != "capture":
+        _trace().fork().do(target, edit)
+        return
+    trace = tl.trace(_Mlp(), _COORDS @ _H, intervene=tl.when(tl.intervention.label(_SITE), edit))
+    trace[trace.output_layers[0]].out.sum().backward()
 
 
 @pytest.mark.parametrize("name", sorted(_REFUSED))
@@ -258,7 +268,7 @@ def test_refused_verb_carries_its_code_and_the_remedy_runs(name: str) -> None:
         fork.do(*refused())
     assert caught.value.fields["code"] == "subspace_edit_unsupported"
     assert caught.value.fields["remedy"]
-    _trace().fork().do(*remedy())
+    _run_remedy(*remedy())
 
 
 def test_composed_target_refuses_and_within_runs() -> None:

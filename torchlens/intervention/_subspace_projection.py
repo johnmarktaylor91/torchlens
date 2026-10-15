@@ -154,7 +154,8 @@ def _verb_meaning(edit: Any) -> str:
         raise _unsupported(
             verb,
             "backward-direction verbs edit gradients, not the forward component",
-            "apply the gradient verb to the site label without a subspace",
+            "attach the gradient verb at capture time: tl.trace(model, x, "
+            "intervene=tl.when(tl.intervention.label(site), tl.grad_zero()))",
         )
     if verb in _COORDINATE_VERBS:
         return "coordinates"
