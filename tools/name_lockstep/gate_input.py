@@ -168,14 +168,113 @@ def _snippets(
 
 
 _STRENGTH_ORDER = (spelling.QUALIFIED, spelling.CONTEXTUAL, spelling.LEAF)
+#: Glossary candidate kinds, best first: a per-path index entry keyed on the row id, a
+#: definition-list term, a prose line or a definition table row, a spelling-index row.
+_KIND_ORDER = ("id", "term", "prose", "index")
+_TICKED_LIST = re.compile(r"`[^`]+`\s*,\s*`[^`]+`")
+
+
+def _definition(lines: list[str], index: int) -> str:
+    """Return the ``: definition`` paragraph that follows a ``**Term**`` line, or ``""``.
+
+    Parameters
+    ----------
+    lines
+        Glossary lines.
+    index
+        Zero-based index of the term line.
+
+    Returns
+    -------
+    str
+        The definition text, whitespace joined, without its leading ``: ``.
+    """
+
+    following = [i for i in range(index + 1, min(len(lines), index + 4)) if lines[i].strip()]
+    if not following or not lines[following[0]].startswith(": "):
+        return ""
+    body = [lines[following[0]][2:].strip()]
+    for line in lines[following[0] + 1 :]:
+        if not line.strip() or not line.startswith((" ", "\t")):
+            break
+        body.append(line.strip())
+    return " ".join(body)
+
+
+def _candidate(row: dict[str, Any], lines: list[str], number: int) -> tuple[str, str]:
+    """Classify one glossary hit and return ``(kind, definition text)``.
+
+    Parameters
+    ----------
+    row
+        Head row.
+    lines
+        Glossary lines.
+    number
+        One-based line number of the hit.
+
+    Returns
+    -------
+    tuple[str, str]
+        Kind from ``_KIND_ORDER`` and the text a grader should compare against.
+    """
+
+    line = lines[number - 1].strip()
+    if f"id `{row['id']}`" in line and "): " in line:
+        return "id", line.split("): ", 1)[1]
+    if line.startswith("**"):
+        definition = _definition(lines, number - 1)
+        if definition:
+            return "term", definition
+    if line.startswith("|"):
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        if any(_TICKED_LIST.search(cell) for cell in cells):
+            return "index", line
+    return "prose", line
+
+
+def _glossary_candidates(row: dict[str, Any], corpus: Corpus) -> list[tuple[int, int, str, str]]:
+    """Return ``(kind rank, strength rank, text, source)`` for every glossary hit, best first.
+
+    Parameters
+    ----------
+    row
+        Head row.
+    corpus
+        Lockstep texts.
+
+    Returns
+    -------
+    list[tuple[int, int, str, str]]
+        Sorted candidates; source is ``glossary:<path>:<line>``.
+    """
+
+    patterns = spelling.spellings(row)
+    found = []
+    for path, text in corpus.files.get("glossary", []):
+        lines = text.splitlines()
+        for number, _, _, strength in spelling.find(text, patterns, _STRENGTH_ORDER, prose=True):
+            kind, definition = _candidate(row, lines, number)
+            found.append(
+                (
+                    _KIND_ORDER.index(kind),
+                    _STRENGTH_ORDER.index(strength),
+                    definition,
+                    f"glossary:{path}:{number}",
+                )
+            )
+    return sorted(found, key=lambda item: (item[0], item[1], item[3]))
 
 
 def _reference(row: dict[str, Any], corpus: Corpus) -> tuple[str, str]:
     """Return the meaning a grader compares guesses against, and where it came from.
 
-    The glossary line with the strongest spelling wins. For a member or keyword a
-    leaf-only glossary hit (the bare word, which index tables list for many objects)
-    ranks below the documented meaning read from the owner's docstring sections.
+    Only definition text counts: a per-path index entry for this exact row id, else a
+    ``**Term**`` entry's ``: definition`` paragraph or a prose or table line naming it;
+    a spelling-index row (a cell listing several backticked spellings) is a last resort
+    below the documented meaning. For a member or keyword a bare-word (leaf) hit names
+    many objects, so it also ranks below the documented meaning read from the owner's
+    docstring sections.
 
     Parameters
     ----------
@@ -191,23 +290,28 @@ def _reference(row: dict[str, Any], corpus: Corpus) -> tuple[str, str]:
         name's own docstring), ``doc:<owner> <Section>`` or ``none``.
     """
 
-    patterns = spelling.spellings(row)
-    best: tuple[int, str, str] | None = None
-    for path, text in corpus.files.get("glossary", []):
-        for line, _, _, strength in spelling.find(text, patterns, _STRENGTH_ORDER, prose=True):
-            rank = _STRENGTH_ORDER.index(strength)
-            if best is None or rank < best[0]:
-                best = (rank, text.splitlines()[line - 1].strip(), f"glossary:{path}:{line}")
+    candidates = _glossary_candidates(row, corpus)
     documented = str(row.get("doc_first_line") or "")
     doc_source = row.get("doc_source") or "docstring"
     doc_source = doc_source if doc_source == "docstring" else f"doc:{doc_source}"
-    leaf_only = best is not None and best[0] == _STRENGTH_ORDER.index(spelling.LEAF)
-    if documented and row["kind"] in ("member", "param") and (best is None or leaf_only):
-        return documented, doc_source
-    if best is not None:
-        return best[1], best[2]
+    index_rank, leaf_rank = _KIND_ORDER.index("index"), _STRENGTH_ORDER.index(spelling.LEAF)
+    ambiguous_leaf = row["kind"] in ("member", "param")
+
+    def strong(item: tuple[int, int, str, str]) -> bool:
+        return item[0] == 0 or (
+            item[0] < index_rank and not (ambiguous_leaf and item[1] == leaf_rank)
+        )
+
+    for item in candidates:
+        if strong(item):
+            return item[2], item[3]
     if documented:
         return documented, doc_source
+    for item in candidates:
+        if item[0] < index_rank:
+            return item[2], item[3]
+    if candidates:
+        return candidates[0][2], candidates[0][3]
     return "", "none"
 
 

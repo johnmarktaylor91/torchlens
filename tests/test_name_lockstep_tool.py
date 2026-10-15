@@ -433,6 +433,45 @@ def test_gate_items_use_documented_meaning_over_a_leaf_index_row(
     assert area["snippet"].splitlines()[-1] == "c.area"
 
 
+def test_reference_takes_definition_text_and_skips_spelling_index_rows(tmp_path: Path) -> None:
+    """A term entry gives its definition; an index row loses to the docstring; a row id wins."""
+
+    glossary = (
+        "| Dump surface | `dump`, `fresh` | unstable |\n"
+        "\n"
+        "**tl.io.dump**\n"
+        ": Writes a trace to disk,\n"
+        "  one file per trace.\n"
+        "\n"
+        "| `fresh` | was `stale` | makes a fresh thing |\n"
+    )
+    corpus = _lockstep_repo(tmp_path, glossary=glossary, example="\n")
+    dump = _row("export:tl.io.dump", "export", "dump", "tl.io.dump", doc_first_line="Dump it.")
+    assert gate_input._reference(dump, corpus) == (
+        "Writes a trace to disk, one file per trace.",
+        "glossary:docs/reference/glossary.md:3",
+    )
+    fresh = _row("export:tl.io.fresh", "export", "fresh", "tl.io.fresh", doc_first_line="Fresh.")
+    text, source = gate_input._reference(fresh, corpus)
+    assert (text, source) == ("| `fresh` | was `stale` | makes a fresh thing |", source)
+    assert source.endswith(":7")
+    only_index = _lockstep_repo(
+        tmp_path / "b", glossary="| S | `fresh`, `x` | unstable |\n", example="\n"
+    )
+    assert gate_input._reference(fresh, only_index) == ("Fresh.", "docstring")
+    no_doc = dict(fresh, doc_first_line="")
+    assert gate_input._reference(no_doc, only_index)[1] == "glossary:docs/reference/glossary.md:1"
+    by_id = _lockstep_repo(
+        tmp_path / "c",
+        glossary="**fresh**\n: Another fresh.\n\n- `tl.io.fresh` (export; id `export:tl.io.fresh`; guess pass): The fresh one.\n",
+        example="\n",
+    )
+    assert gate_input._reference(fresh, by_id) == (
+        "The fresh one.",
+        "glossary:docs/reference/glossary.md:4",
+    )
+
+
 def test_snippet_prefers_a_hit_near_the_owner() -> None:
     """A contextual hit beside the owner's name outranks an earlier unrelated one."""
 
