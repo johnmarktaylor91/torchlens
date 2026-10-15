@@ -193,8 +193,8 @@ def test_sae_lens_bridge_encode_matches_direct_sae() -> None:
 
 
 @pytest.mark.heavy
-def test_sae_lens_bridge_decode_matches_direct_sae() -> None:
-    """SAE Lens bridge decoding should match a direct SAE decode call.
+def test_sae_lens_bridge_reconstruct_matches_direct_sae() -> None:
+    """SAE Lens bridge reconstruction should match a direct encode then decode.
 
     Measured at 11.2s wall (weekly leg, 2026-10-01), over the unmarked/smoke
     7s budget (tests/conftest.py); the heavy tier's 20s+grace budget covers
@@ -210,16 +210,16 @@ def test_sae_lens_bridge_decode_matches_direct_sae() -> None:
     out = log["linear_1_2"].out
     sae = _TinySae(width=out.shape[-1])
 
-    bridge_result = tl.bridge.sae_lens.decode(log, "linear_1_2", sae)
-    direct_result = sae.decode(out)
+    bridge_result = tl.bridge.sae_lens.reconstruct(log, "linear_1_2", sae)
+    direct_result = sae.decode(sae.encode(out))
 
     assert torch.allclose(bridge_result, direct_result)
 
 
-def test_sae_lens_bridge_decode_with_fake_optional_dependency(
+def test_sae_lens_bridge_reconstruct_with_fake_optional_dependency(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A fake SAE object should exercise decode without installing SAE Lens."""
+    """A fake SAE object should exercise reconstruct without installing SAE Lens."""
 
     monkeypatch.setitem(sys.modules, "sae_lens", type(sys)("sae_lens"))
     torch.manual_seed(15)
@@ -229,9 +229,9 @@ def test_sae_lens_bridge_decode_with_fake_optional_dependency(
     out = log["linear_1_2"].out
     sae = _TinySae(width=out.shape[-1])
 
-    result = tl.bridge.sae_lens.decode(log, "linear_1_2", sae)
+    result = tl.bridge.sae_lens.reconstruct(log, "linear_1_2", sae)
 
-    assert torch.equal(result, sae.decode(out))
+    assert torch.equal(result, sae.decode(sae.encode(out)))
 
 
 def test_rsatoolbox_bridge_rdm_matches_direct_dataset() -> None:
