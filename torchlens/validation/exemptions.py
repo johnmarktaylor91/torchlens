@@ -485,6 +485,10 @@ def _check_setitem_exempt(self: "Trace", layer: Op, layers_to_perturb: list[str]
     """Exempt ``__setitem__`` for structural masks or proven full overwrites."""
     perturbed_tensor = self[layers_to_perturb[0]].out
     args = layer.saved_args
+    if args is None:
+        # No saved call to prove anything from: not exempt. The replay's own
+        # missing-saved-args guard then reports the op unverified.
+        return False
 
     # Case 1: saved_args[1] is a bool tensor and perturbed layer matches it (mask arg)
     if (
