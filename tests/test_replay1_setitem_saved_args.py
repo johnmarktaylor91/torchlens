@@ -9,7 +9,6 @@ never exempt a case that would fail today.
 
 from __future__ import annotations
 
-import pytest
 import torch
 from torch import nn
 
@@ -46,12 +45,6 @@ def _parent_at(op, slot: int) -> str:
     return str(op.parent_arg_positions["args"][slot])
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=TypeError,
-    reason="_check_setitem_exempt reads len(saved_args) before any None check; flips when "
-    "the exemption returns False for a call with no saved args",
-)
 def test_setitem_exempt_with_no_saved_args_answers_not_exempt() -> None:
     """Both slot-1 (mask) and slot-0 (destination) parents: False, no TypeError."""
 
