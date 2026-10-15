@@ -127,7 +127,9 @@ relu_out = trace.find_sites(tl.func("relu")).first().out
 assert relu_out.shape == (2, 4)
 ```
 
-Steer many forwards without capture (about 1x a plain forward hook):
+Steer many forwards without capture (about 1x a plain forward hook). A binding selects ops
+structurally (`tl.module`, `tl.func`, `tl.in_module`) and refuses labels such as
+`tl.label("relu_1_2")` when bound, because labels are assigned after a capture:
 
 ```python
 import torch
