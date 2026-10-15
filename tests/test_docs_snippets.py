@@ -501,6 +501,14 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
         "needs sae-lens; executed fence by fence by tests/test_recipe_pretrained_saes.py "
         "through the shared recipe runner until the page joins its PAGES registry"
     ),
+    "recipes/feature_visualisation.md": (
+        "executed fence by fence by tests/test_recipe_feature_visualisation.py with the "
+        "shared recipe runner (TorchLens only; the pretrained-model fence is text)"
+    ),
+    "recipes/dissection.md": (
+        "executed fence by fence by tests/test_recipe_dissection.py with the shared recipe "
+        "runner (TorchLens only; the OpenCLIP fence is text)"
+    ),
     "neuroai/netrep.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/himalaya.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/byo_alignment.md": (
