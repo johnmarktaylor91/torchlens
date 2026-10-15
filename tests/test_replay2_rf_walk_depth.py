@@ -12,6 +12,7 @@ size 3 widens a unit's receptive field by 2 per layer, so the centre unit of a l
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable
 
 import pytest
@@ -119,17 +120,20 @@ def test_deep_chain_projective_field_matches_closed_form() -> None:
 
 @pytest.mark.slow
 def test_deep_chain_validate_forward_pass_completes() -> None:
-    """``validate_forward_pass`` runs the receptive-field invariants without RecursionError."""
+    """``validate_forward_pass`` runs the receptive-field invariants without RecursionError.
+
+    Slow (about three minutes): the receptive-field metadata invariants query every op's
+    unit box, and on a 600-deep chain that is the cost of the check, not of the walk method.
+    """
 
     torch.manual_seed(0)
-    model = _DeepConvChain(DEPTH)
-    x = torch.randn(1, 1, LENGTH)
-    trace = tl.trace(model, x)
-    with torch.no_grad():
-        expected = model(x)
-    passed = trace.validate_forward_pass(expected)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        passed = tl.validation.validate_forward_pass(
+            _DeepConvChain(DEPTH), torch.randn(1, 1, LENGTH), random_seed=0
+        )
     failure = tl.validation.last_validation_failure()
-    assert passed, failure.summary() if failure is not None else "no failure record"
+    assert passed is True, failure.summary() if failure is not None else "no failure record"
 
 
 def _recursive_reference(
