@@ -1,7 +1,8 @@
-"""repeng bridge against the real package on a tiny cached Llama.
+"""repeng converter against the real package on a tiny cached Llama.
 
-Each test compares ``tl.bridge.repeng.control_vector`` on saved activations with
-``repeng.ControlVector.train`` run directly on the same model. Skips when repeng,
+A native ``direction_from_pairs`` direction converted with
+``Direction.to_repeng()`` must reproduce the native steer's logits when
+``repeng.ControlModel`` applies it, for every method. Skips when repeng,
 transformers, or the checkpoint is unavailable.
 """
 
@@ -12,11 +13,12 @@ from collections import Counter
 from collections.abc import Iterator
 from typing import Any
 
-import numpy as np
 import pytest
+import torch
 from support.hf_cache import skip_unless_hf_checkpoint_cached
 
 import torchlens as tl
+from torchlens.intervention import direction_from_pairs
 
 repeng = pytest.importorskip("repeng")
 transformers = pytest.importorskip("transformers")
@@ -53,7 +55,7 @@ def stack() -> Iterator[dict[str, Any]]:
     stack = {
         "model": model,
         "tok": tok,
-        "dataset": [repeng.DatasetEntry(positive=p, negative=n) for p, n in pairs],
+        "ids": tok([p for p, _ in pairs], return_tensors="pt").input_ids,
         "log_pos": trace([p for p, _ in pairs]),
         "log_neg": trace([n for _, n in pairs]),
     }
@@ -64,113 +66,53 @@ def stack() -> Iterator[dict[str, Any]]:
         stack["log_neg"].cleanup()
 
 
-def _assert_same(bridge: Any, direct: Any) -> None:
-    """Assert two control vectors are identical, bit for bit."""
-
-    assert isinstance(bridge, repeng.ControlVector)
-    assert bridge.model_type == direct.model_type
-    assert bridge.directions.keys() == direct.directions.keys()
-    for layer, values in direct.directions.items():
-        assert bridge.directions[layer].dtype == values.dtype
-        assert np.array_equal(bridge.directions[layer], values), (
-            layer,
-            float(np.abs(bridge.directions[layer] - values).max()),
-        )
+_SITE = "model.layers.1"
+_COEFF = 4.0
 
 
-@pytest.mark.parametrize("method", ["pca_diff", "pca_center"])
-def test_control_vector_matches_train(stack: dict[str, Any], method: str) -> None:
-    """Decoder layer 0 output gives exactly ControlVector.train(hidden_layers=[0])."""
+def _per_prompt_logits(call: Any, ids: torch.Tensor) -> torch.Tensor:
+    """Run one prompt per forward and stack the logits.
 
-    direct = repeng.ControlVector.train(
-        stack["model"],
-        stack["tok"],
-        stack["dataset"],
-        hidden_layers=[0],
-        batch_size=1,
-        method=method,
-    )
-    payload = tl.bridge.repeng.control_vector(
-        stack["log_pos"],
-        "model.layers.0",
-        negative_log=stack["log_neg"],
-        layer=0,
-        method=method,
-    )
-    _assert_same(payload["control_vector"], direct)
+    repeng 0.4's ``ControlModule`` builds its padding mask from the decoder
+    layer's ``position_ids``, which this transformers passes as ``[1, seq]``,
+    so a batch of several prompts fails its reshape; one prompt per forward
+    is the case it supports.
+    """
+
+    with torch.no_grad():
+        return torch.cat([call(ids[i : i + 1]).logits for i in range(ids.shape[0])])
 
 
-def test_default_last_layer_reads_final_norm(stack: dict[str, Any]) -> None:
-    """repeng's default layer list reads the final-norm output at the last layer."""
+@pytest.mark.parametrize("method", ["mean_diff", "pca", "logistic"])
+def test_converted_control_vector_reproduces_native_steer_logits(
+    stack: dict[str, Any], method: str
+) -> None:
+    """``ControlModel.set_control`` gives the native steer's logits for every method."""
 
-    direct = repeng.ControlVector.train(
-        stack["model"], stack["tok"], stack["dataset"], batch_size=1
-    )
-    assert list(direct.directions) == [1]
-    payload = tl.bridge.repeng.control_vector(
-        stack["log_pos"], "model.norm", negative_log=stack["log_neg"], layer=1
-    )
-    _assert_same(payload["control_vector"], direct)
-
-
-def test_unknown_method_is_refused(stack: dict[str, Any]) -> None:
-    """An unknown method fails like repeng's own ValueError, before any vector."""
-
-    with pytest.raises(ValueError, match="Unknown method"):
-        tl.bridge.repeng.control_vector(
-            stack["log_pos"],
-            "model.layers.0",
-            negative_log=stack["log_neg"],
-            layer=0,
-            method="pca",
-        )
-
-
-def test_layer_object_site_resolves_in_negative_log(stack: dict[str, Any]) -> None:
-    """A Layer-object site reads the negative trace's layer, not the positive one."""
-
-    direct = repeng.ControlVector.train(
-        stack["model"], stack["tok"], stack["dataset"], hidden_layers=[0], batch_size=1
-    )
-    payload = tl.bridge.repeng.control_vector(
-        stack["log_pos"],
-        stack["log_pos"]["model.layers.0"],
-        negative_log=stack["log_neg"],
-        layer=0,
-    )
-    _assert_same(payload["control_vector"], direct)
-
-
-def test_padded_unequal_prompts_match_batched_train(stack: dict[str, Any]) -> None:
-    """Right-padded unequal prompts read the last real token, as repeng does."""
-
-    tok = transformers.AutoTokenizer.from_pretrained(_TINY, padding_side="right")
-    tok.pad_token_id = 0
-    pairs = [(f"I love {w}", f"I really hate {w}") for w in _WORDS]
-    texts = [text for pair in pairs for text in pair]
-    longest = max(len(tok(text).input_ids) for text in texts)
-    assert len({len(tok(text).input_ids) for text in texts}) > 1
-
-    def trace(prompts: list[str]) -> Any:
-        # Pad to repeng's one-batch length so every row sees the same tokens.
-        enc = tok(prompts, return_tensors="pt", padding="max_length", max_length=longest)
-        kwargs = {"input_ids": enc.input_ids, "attention_mask": enc.attention_mask}
-        capture = tl.options.CaptureOptions(layers_to_save="all")
-        return tl.trace(stack["model"], (), input_kwargs=kwargs, capture=capture)
-
-    dataset = [repeng.DatasetEntry(positive=p, negative=n) for p, n in pairs]
-    log_pos = trace([p for p, _ in pairs])
-    log_neg = trace([n for _, n in pairs])
+    model, ids = stack["model"], stack["ids"]
+    direction = direction_from_pairs(stack["log_pos"], stack["log_neg"], _SITE, method)
+    converted = direction.to_repeng()
+    assert isinstance(converted, repeng.ControlVector)
+    assert converted.model_type == "llama" and list(converted.directions) == [1]
+    plain = _per_prompt_logits(model, ids)
+    native = _per_prompt_logits(tl.when(tl.module(_SITE), direction.steer(_COEFF)).bind(model), ids)
+    control = repeng.ControlModel(model, layer_ids=[1])
     try:
-        direct = repeng.ControlVector.train(
-            stack["model"], tok, dataset, hidden_layers=[0], batch_size=len(texts)
-        )
-        payload = tl.bridge.repeng.control_vector(
-            log_pos, "model.layers.0", negative_log=log_neg, layer=0
-        )
+        control.set_control(converted, coeff=_COEFF)
+        library = _per_prompt_logits(control, ids)
     finally:
-        log_pos.cleanup()
-        log_neg.cleanup()
-    np.testing.assert_allclose(
-        payload["control_vector"].directions[0], direct.directions[0], atol=1e-5, rtol=0
-    )
+        control.reset()
+        control.unwrap()
+    assert not torch.allclose(native, plain, atol=1e-5, rtol=0)
+    torch.testing.assert_close(library, native, atol=1e-5, rtol=0)
+    torch.testing.assert_close(_per_prompt_logits(model, ids), plain, atol=0, rtol=0)
+
+
+def test_explicit_layer_and_model_type(stack: dict[str, Any]) -> None:
+    """``layer=`` and ``model_type=`` are honoured; a site naming no layer needs ``layer=``."""
+
+    direction = direction_from_pairs(stack["log_pos"], stack["log_neg"], "model.norm")
+    with pytest.raises(ValueError, match="decoder layer index"):
+        direction.to_repeng()
+    converted = direction.to_repeng(layer=1, model_type="custom")
+    assert converted.model_type == "custom" and list(converted.directions) == [1]

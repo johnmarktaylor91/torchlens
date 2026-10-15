@@ -290,10 +290,11 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # never a hand-derived subtotal -- and a reconcile lane does not
     # redesign a documented public door to dodge a +1. Measured 443 (pinned
     # ruff, isolated mode, torchlens/ scope).
-    # 443 -> 440 (2026-10-06 next-release): the three bridge doors that mirror their
-    # upstream libraries' call shapes (dialz.vector, repeng.control_vector,
-    # steering_vectors.vector) carry per-line noqa with that reason, so the
-    # count no longer rides on other merges. Measured 440 (same pinned mode).
+    # 443 -> 440 (2026-10-06 next-release): the bridge doors that mirror their
+    # upstream libraries' call shapes (now only dialz.vector; the other two were
+    # replaced by converters without the noqa) carry per-line noqa with that
+    # reason, so the count no longer rides on other merges. Measured 440 (same
+    # pinned mode).
     "PLR0913": 440,
     # 152->155 (same L8 settle): wrapped_funcol + the criterion-3 census body
     # + capture_completeness_witness gained reviewed statements with plane-P.

@@ -1,8 +1,10 @@
-"""steering-vectors bridge against the real package on a tiny cached Llama.
+"""steering-vectors converter against the real package on a tiny cached Llama.
 
-Each test compares ``tl.bridge.steering_vectors.vector`` on saved activations
-with ``steering_vectors.train_steering_vector`` run directly on the same model.
-Skips when steering-vectors, transformers, or the checkpoint is unavailable.
+A native ``direction_from_pairs`` direction converted with
+``Direction.to_steering_vectors()`` must reproduce the native steer's logits
+when the package applies it, for every method. The native methods are also
+checked against the package's own aggregators on the same saved rows. Skips
+when steering-vectors, transformers, or the checkpoint is unavailable.
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ import torch
 from support.hf_cache import skip_unless_hf_checkpoint_cached
 
 import torchlens as tl
+from torchlens.intervention import direction_from_pairs
 
 sv = pytest.importorskip("steering_vectors")
 transformers = pytest.importorskip("transformers")
@@ -70,6 +73,10 @@ def stack() -> Iterator[dict[str, Any]]:
         stack["log_neg"].cleanup()
 
 
+_SITE = "model.layers.1"
+_MULTIPLIER = 4.0
+
+
 def _direct(stack: dict[str, Any], **kwargs: Any) -> Any:
     """Train with the package directly, at the traced batch shape.
 
@@ -89,90 +96,75 @@ def _direct(stack: dict[str, Any], **kwargs: Any) -> Any:
     )
 
 
-def test_default_trainer_matches_train_steering_vector(stack: dict[str, Any]) -> None:
-    """The documented default path is bit-identical to the package's own trainer."""
+def _ids(stack: dict[str, Any]) -> torch.Tensor:
+    """Return the positive prompts' input ids (one unpadded batch)."""
+
+    return stack["tok"]([p for p, _ in stack["pairs"]], return_tensors="pt").input_ids
+
+
+def test_mean_diff_matches_train_steering_vector(stack: dict[str, Any]) -> None:
+    """The default native method is bit-identical to the package's own trainer."""
 
     direct = _direct(stack).layer_activations[1]
-    payload = tl.bridge.steering_vectors.vector(
-        stack["log_pos"], "model.layers.1", negative_log=stack["log_neg"]
-    )
-    assert payload["vector"].shape == direct.shape == (16,)
-    assert torch.equal(payload["vector"], direct)
-    assert payload["steering_vector"] is None
+    direction = direction_from_pairs(stack["log_pos"], stack["log_neg"], _SITE)
+    assert direction.vector.shape == direct.shape == (16,)
+    assert torch.equal(direction.vector, direct)
 
 
-def test_layer_returns_real_steering_vector(stack: dict[str, Any]) -> None:
-    """``layer=`` wraps the result in a steering_vectors.SteeringVector."""
-
-    direct = _direct(stack)
-    payload = tl.bridge.steering_vectors.vector(
-        stack["log_pos"], "model.layers.1", negative_log=stack["log_neg"], layer=1
-    )
-    result = payload["steering_vector"]
-    assert isinstance(result, sv.SteeringVector)
-    assert result.layer_type == direct.layer_type
-    assert result.layer_activations.keys() == direct.layer_activations.keys()
-    assert torch.equal(result.layer_activations[1], direct.layer_activations[1])
-
-
-def test_pca_aggregator_matches_package(stack: dict[str, Any]) -> None:
-    """A package aggregator passed as trainer matches the direct run with it."""
+def test_pca_matches_pca_aggregator(stack: dict[str, Any]) -> None:
+    """Native ``pca`` agrees with the package's ``pca_aggregator`` on the same rows."""
 
     direct = _direct(stack, aggregator=sv.pca_aggregator()).layer_activations[1]
-    payload = tl.bridge.steering_vectors.vector(
-        stack["log_pos"],
-        "model.layers.1",
-        negative_log=stack["log_neg"],
-        trainer=sv.pca_aggregator(),
-    )
-    assert torch.equal(payload["vector"], direct)
+    direction = direction_from_pairs(stack["log_pos"], stack["log_neg"], _SITE, "pca")
+    torch.testing.assert_close(direction.vector, direct, atol=1e-5, rtol=0)
 
 
-def test_missing_negative_is_refused(stack: dict[str, Any]) -> None:
-    """Without a negative site or trace the bridge refuses with a remedy."""
+def test_logistic_matches_logistic_aggregator(stack: dict[str, Any]) -> None:
+    """Native ``logistic`` agrees with the package's ``logistic_aggregator`` solved tightly."""
 
-    with pytest.raises(ValueError, match="negative_log="):
-        tl.bridge.steering_vectors.vector(stack["log_pos"], "model.layers.1")
+    aggregator = sv.logistic_aggregator(sklearn_kwargs={"tol": 1e-12, "max_iter": 100000})
+    direct = _direct(stack, aggregator=aggregator).layer_activations[1]
+    direction = direction_from_pairs(stack["log_pos"], stack["log_neg"], _SITE, "logistic")
+    torch.testing.assert_close(direction.vector, direct, atol=1e-5, rtol=0)
 
 
-def test_layer_object_site_resolves_in_negative_log(stack: dict[str, Any]) -> None:
-    """A Layer-object site is re-resolved in negative_log, not reused from log."""
+@pytest.mark.parametrize("method", ["mean_diff", "pca", "logistic"])
+def test_converted_vector_reproduces_native_steer_logits(
+    stack: dict[str, Any], method: str
+) -> None:
+    """``SteeringVector.apply`` gives the native steer's logits for every method."""
 
-    site = stack["log_pos"]["model.layers.1"]
+    model, ids = stack["model"], _ids(stack)
+    direction = direction_from_pairs(stack["log_pos"], stack["log_neg"], _SITE, method)
+    converted = direction.to_steering_vectors()
+    assert isinstance(converted, sv.SteeringVector)
+    assert list(converted.layer_activations) == [1]
+    with torch.no_grad():
+        plain = model(ids).logits
+        native = tl.when(tl.module(_SITE), direction.steer(_MULTIPLIER)).bind(model)(ids).logits
+        with converted.apply(model, multiplier=_MULTIPLIER):
+            library = model(ids).logits
+    assert not torch.allclose(native, plain, atol=1e-5, rtol=0)
+    torch.testing.assert_close(library, native, atol=1e-5, rtol=0)
+
+
+def test_planted_wrong_site_fails_the_exact_comparison(stack: dict[str, Any]) -> None:
+    """Reading the wrong layer breaks the bitwise match with the package's trainer."""
+
+    direct = _direct(stack).layer_activations[1]
+    direction = direction_from_pairs(stack["log_pos"], stack["log_neg"], "model.layers.0")
+    assert direction.vector.shape == direct.shape
+    assert not torch.equal(direction.vector, direct)
+
+
+def test_layer_object_site_resolves_in_each_trace(stack: dict[str, Any]) -> None:
+    """A Layer-object site is re-resolved by label in the negative trace."""
+
+    site = stack["log_pos"][_SITE]
     assert hasattr(site, "out") and hasattr(site, "layer_label")
     direct = _direct(stack).layer_activations[1]
-    payload = tl.bridge.steering_vectors.vector(
-        stack["log_pos"], site, negative_log=stack["log_neg"]
-    )
-    assert torch.equal(payload["vector"], direct)
-    assert not torch.equal(payload["positive"], payload["negative"])
-
-
-@pytest.mark.parametrize(
-    ("positive_site", "negative_site"),
-    [("model.layers.0", None), ("model.layers.1", "model.layers.0")],
-    ids=["wrong_positive_site", "wrong_negative_site"],
-)
-def test_planted_wrong_site_fails_the_exact_comparison(
-    stack: dict[str, Any], positive_site: str, negative_site: str | None
-) -> None:
-    """Reading the wrong layer on either side breaks the bitwise match above."""
-
-    direct = _direct(stack).layer_activations[1]
-    payload = tl.bridge.steering_vectors.vector(
-        stack["log_pos"], positive_site, negative_site, negative_log=stack["log_neg"]
-    )
-    assert payload["vector"].shape == direct.shape
-    assert not torch.equal(payload["vector"], direct)
-
-
-def test_identical_rows_are_refused(stack: dict[str, Any]) -> None:
-    """Identical positive and negative rows (a zero vector) are refused."""
-
-    with pytest.raises(ValueError, match="identical"):
-        tl.bridge.steering_vectors.vector(
-            stack["log_pos"], "model.layers.1", negative_log=stack["log_pos"]
-        )
+    direction = direction_from_pairs(stack["log_pos"], stack["log_neg"], site)
+    assert torch.equal(direction.vector, direct)
 
 
 def test_padded_unequal_prompts_match_batched_package(stack: dict[str, Any]) -> None:
@@ -185,42 +177,21 @@ def test_padded_unequal_prompts_match_batched_package(stack: dict[str, Any]) -> 
     lengths = {len(tok(text).input_ids) for pair in pairs for text in pair}
     assert len(lengths) > 1
 
-    def trace(prompts: list[str]) -> tuple[Any, torch.Tensor]:
+    def trace(prompts: list[str]) -> Any:
         enc = tok(prompts, return_tensors="pt", padding=True)
         assert bool((enc.attention_mask == 0).any())
         kwargs = {"input_ids": enc.input_ids, "attention_mask": enc.attention_mask}
         capture = tl.options.CaptureOptions(layers_to_save="all")
-        return tl.trace(stack["model"], (), input_kwargs=kwargs, capture=capture), (
-            enc.attention_mask
-        )
+        return tl.trace(stack["model"], (), input_kwargs=kwargs, capture=capture)
 
-    log_pos, mask_pos = trace([p for p, _ in pairs])
-    log_neg, mask_neg = trace([n for _, n in pairs])
+    log_pos = trace([p for p, _ in pairs])
+    log_neg = trace([n for _, n in pairs])
     try:
         direct = sv.train_steering_vector(
             stack["model"], tok, pairs, layers=[1], read_token_index=-1, batch_size=len(pairs)
         ).layer_activations[1]
-        captured = tl.bridge.steering_vectors.vector(
-            log_pos, "model.layers.1", negative_log=log_neg
-        )
-        explicit = tl.bridge.steering_vectors.vector(
-            log_pos,
-            "model.layers.1",
-            negative_log=log_neg,
-            attention_mask=mask_pos,
-            negative_attention_mask=mask_neg,
-        )
-        unmasked = tl.bridge.steering_vectors.vector(
-            log_pos,
-            "model.layers.1",
-            negative_log=log_neg,
-            attention_mask=torch.ones_like(mask_pos),
-            negative_attention_mask=torch.ones_like(mask_neg),
-        )
+        direction = direction_from_pairs(log_pos, log_neg, _SITE)
     finally:
         log_pos.cleanup()
         log_neg.cleanup()
-    torch.testing.assert_close(captured["vector"], direct, atol=1e-5, rtol=0)
-    assert torch.equal(captured["vector"], explicit["vector"])
-    # Reading position -1 of the padded batch picks pad tokens and drifts away.
-    assert not torch.allclose(unmasked["vector"], direct, atol=1e-5, rtol=0)
+    torch.testing.assert_close(direction.vector, direct, atol=1e-5, rtol=0)

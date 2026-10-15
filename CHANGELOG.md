@@ -16,6 +16,20 @@
   RDM value differs from every earlier release (for 1-D points 0, 1, 3: 0.148, 0.765, 0.474 become
   0.275, 0.945, 0.724).
 
+- **bridge.steering_vectors / bridge.repeng**: the trainers `tl.bridge.steering_vectors.vector`
+  and `tl.bridge.repeng.control_vector` are removed, with no alias. Build the direction with
+  `torchlens.intervention.direction_from_pairs(pos_traces, neg_traces, site, method=)` and
+  convert it with `direction.to_steering_vectors()` or `direction.to_repeng()` (the bridges now
+  hold only the converters `from_direction`). repeng's `pca_diff`, `pca_center` and `umap`
+  replications are gone; the native methods are `mean_diff`, `pca` and `logistic`.
+
+### Features
+
+- **intervention**: `torchlens.intervention.direction_from_pairs` fits a contrastive steering
+  direction (`"mean_diff"`, `"pca"` or `"logistic"`, torch only) from saved activations and
+  returns a `torchlens.intervention.Direction` with a `BasisProvenance` record, a native
+  `.steer(m)` edit and `.to_steering_vectors()` / `.to_repeng()` converters whose library
+  objects reproduce the native steer's logits.
 
 ## v2.34.1 (2026-08-10)
 
