@@ -39,6 +39,10 @@
 
 ### Features
 
+- **stats**: `tl.stats.Quantile` and `tl.stats.TopK` take `unit_axis=` for per-unit quantiles
+  and top-k (neurons, channels, SAE latents via `encoder=`); per-unit `TopK` returns
+  `tl.stats.UnitTopK` with the example id and position of each value, deterministic ties, and a
+  once-per-session warning when state passes 256 MiB.
 - **tools**: `tools/agent_evals/` is a harness that tests whether a coding agent can drive
   TorchLens from its docs alone; the docs-only reference solutions run in the test suite.
 - **Trace**: `Trace.pristine` (documented unstable) reads `True`, `False` or `None` for whether
