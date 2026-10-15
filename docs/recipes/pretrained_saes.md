@@ -68,8 +68,8 @@ Gemma or GPT-2 model the common Gemma Scope hooks land here:
 
 ## The same steps on a stand-in
 
-The rest of the page runs offline: a two-layer GPT-2 with random weights built
-from a config, and a small SAELens `StandardSAE` with seeded weights, saved in
+The rest of the page runs offline: a three-layer GPT-2 with random weights
+built from a config, and a small SAELens `StandardSAE` with seeded weights, saved in
 the SAELens format and loaded back with `SAE.load_from_disk`, as a downloaded
 SAE would be.
 
@@ -84,7 +84,7 @@ from transformers import GPT2Config, GPT2LMHeadModel
 import torchlens as tl
 
 torch.manual_seed(0)
-config = GPT2Config(n_layer=2, n_head=2, n_embd=16, vocab_size=64, n_positions=32, use_cache=False)
+config = GPT2Config(n_layer=3, n_head=2, n_embd=16, vocab_size=64, n_positions=32, use_cache=False)
 model = GPT2LMHeadModel(config).eval()
 ids = torch.randint(0, 64, (2, 8), generator=torch.Generator().manual_seed(0))
 
@@ -128,8 +128,8 @@ RESULT = (
 
 ## Check the numbers against SAELens's own computation
 
-The site TorchLens spliced is Hugging Face's `hidden_states[L + 1]`, and the
-metrics are the ones SAELens's evals and the Gemma Scope paper report: the
+The site TorchLens spliced is Hugging Face's `hidden_states[L + 1]` (for any
+block but the last, whose entry comes after the final norm), and the metrics are the ones SAELens's evals and the Gemma Scope paper report: the
 fraction of variance unexplained with per-dimension centring, and the
 cross-entropy loss recovered against a zero-ablated site. Recomputed here
 directly, without the splice:
@@ -163,14 +163,18 @@ MLP call as a whole: `tl.splice_module(transcoder, input="in")` on the MLP
 module runs the transcoder on the arguments the MLP was called with (here the
 `ln_2` output) and uses its result as the MLP's output. With `input="out"` it
 would read the MLP's own output instead, which is the SAE case. A loaded
-SAELens transcoder goes in the same place; the stand-in below is a hand-built
-map from the MLP's input to its output.
+SAELens transcoder goes in the same place; the stand-in below is an SAELens
+`Transcoder` with seeded weights, a map from the MLP's 16-wide input to its
+16-wide output.
 
 ```python
 # recipe-test: tool=sae_lens expected=(True, True)
-from torch import nn
+from sae_lens import Transcoder, TranscoderConfig
 
-transcoder = nn.Sequential(nn.Linear(16, 48), nn.ReLU(), nn.Linear(48, 16)).eval()
+transcoder = Transcoder(TranscoderConfig(d_in=16, d_sae=48, d_out=16))
+with torch.no_grad():
+    for parameter in transcoder.parameters():
+        parameter.copy_(0.3 * torch.randn(parameter.shape, generator=torch.Generator().manual_seed(2)))
 clean = tl.trace(model, ids, capture=tl.options.CaptureOptions(layers_to_save="all"))
 spliced = tl.trace(
     model,
