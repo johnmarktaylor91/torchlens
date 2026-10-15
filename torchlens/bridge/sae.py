@@ -34,9 +34,9 @@ from ._utils import resolve_one_site
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-#: Kept-latents size above which ``splice`` warns once per session (defaults.1:
-#: keep everything, warn past a size and name the cheaper spelling). The same
-#: 256 MiB guard ``tl.stats`` uses for per-unit state.
+#: Kept-latents size above which ``splice`` warns once per session: the latents
+#: are always kept by default, and past this size the warning names the cheaper
+#: spelling. The same 256 MiB guard ``tl.stats`` uses for per-unit state.
 _LATENTS_WARN_BYTES = 256 * 1024**2
 
 #: Warning codes already emitted this session (each code fires once).
