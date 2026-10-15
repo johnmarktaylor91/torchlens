@@ -318,6 +318,12 @@ _EDGE_INCHES = 0.06
 _GAP_INCHES = 0.12
 
 
+def _height_inches(extent: Any, dpi: float) -> float:
+    """Return a drawn extent's height in inches."""
+
+    return float(extent.height) / dpi
+
+
 def _reserve_footer(  # noqa: PLR0913 -- the five artists the layout measures
     fig: Any, ax: Any, bar: Any, title: Any, footer: Any, *, n_rows: int
 ) -> None:
@@ -331,14 +337,10 @@ def _reserve_footer(  # noqa: PLR0913 -- the five artists the layout measures
 
     renderer = fig.canvas.get_renderer()
     dpi = fig.dpi
-
-    def inches(extent: Any) -> float:
-        return float(extent.height) / dpi
-
-    footer_h = inches(footer.get_window_extent(renderer))
-    title_h = inches(title.get_window_extent(renderer))
+    footer_h = _height_inches(footer.get_window_extent(renderer), dpi)
+    title_h = _height_inches(title.get_window_extent(renderer), dpi)
     tick_h = (ax.bbox.y0 - ax.get_tightbbox(renderer).y0) / dpi
-    label_h = inches(bar.ax.yaxis.label.get_window_extent(renderer))
+    label_h = _height_inches(bar.ax.yaxis.label.get_window_extent(renderer), dpi)
     matrix_h = max(_ROW_INCHES * n_rows, label_h + _GAP_INCHES)
     bottom = _EDGE_INCHES + footer_h + _GAP_INCHES + tick_h
     top = _EDGE_INCHES + title_h + _GAP_INCHES
