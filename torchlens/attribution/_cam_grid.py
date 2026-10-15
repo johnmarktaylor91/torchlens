@@ -296,13 +296,37 @@ def _metadata_trace(model: Module, inputs: Any, input_kwargs: Any) -> Any:
         return tl.trace(model, args, input_kwargs, capture=options)
 
 
-def _module_output_label(graph: _TraceGraph, layer: str) -> str | None:
-    """Return the single op that is ``layer``'s output, or ``None``."""
+def _module_outputs(graph: _TraceGraph) -> dict[str, tuple[int, str]]:
+    """Map each module address to ``(call count, label of its last output op)``.
 
-    labels = [
-        label for label, op in graph.ops.items() if layer in tuple(op.output_of_modules or ())
-    ]
-    return labels[0] if len(labels) == 1 else None
+    A module call can mark more than one op as its output (an op and a view
+    of it, say); the last of them in execution order is the value the call
+    returned. Calls are counted from ``output_of_module_calls`` when the trace
+    records them, else from the number of output ops.
+    """
+
+    labels: dict[str, list[str]] = {}
+    calls: dict[str, set[str]] = {}
+    for label, op in graph.ops.items():
+        for address in tuple(op.output_of_modules or ()):
+            labels.setdefault(str(address), []).append(label)
+        for call in tuple(getattr(op, "output_of_module_calls", None) or ()):
+            address, _, index = str(call).rpartition(":")
+            calls.setdefault(address or str(call), set()).add(index)
+    return {
+        address: (
+            len(calls.get(address, ())) or len(found),
+            max(found, key=graph.order.__getitem__),
+        )
+        for address, found in labels.items()
+    }
+
+
+def _module_output_label(graph: _TraceGraph, layer: str) -> str | None:
+    """Return the op that is ``layer``'s output in its single call, or ``None``."""
+
+    count, label = _module_outputs(graph).get(layer, (0, ""))
+    return label if count == 1 else None
 
 
 def _guess_grid(tokens: int) -> tuple[int, int, int]:

@@ -34,6 +34,7 @@ from torchlens.attribution._cam_grid import (
     _derive_token_grid,
     _grid_to_map,
     _labels,
+    _module_outputs,
     _target_spelling,
     _TokenGrid,
     _TraceGraph,
@@ -79,15 +80,13 @@ class _LayerChoice:
 
 
 def _single_call_outputs(graph: _TraceGraph, model: Module) -> dict[str, str]:
-    """Map each once-firing named module to the label of its single output op."""
+    """Map each once-firing named module to the label of its output op."""
 
-    outputs: dict[str, list[str]] = {}
-    for label, op in graph.ops.items():
-        for address in tuple(op.output_of_modules or ()):
-            outputs.setdefault(str(address), []).append(label)
     named = {name for name, _ in model.named_modules() if name}
     return {
-        name: labels[0] for name, labels in outputs.items() if name in named and len(labels) == 1
+        name: label
+        for name, (count, label) in _module_outputs(graph).items()
+        if name in named and count == 1
     }
 
 
