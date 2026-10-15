@@ -223,7 +223,7 @@ def test_recorded_ablations_replay_to_their_measured_effects(case: str) -> None:
         try:
             for selection, edit in point.intervention:
                 fork.do(selection, edit)
-            replayed = float(fork[fork.output_layers[0]].out[..., 1].sum())
+            replayed = float(fork[fork.output_layers[0]].out[..., 1].sum().detach())
         finally:
             fork.cleanup()
         assert result.original_score - replayed == pytest.approx(point.measured, abs=REPLAY_ATOL)
