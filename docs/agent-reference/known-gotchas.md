@@ -163,3 +163,10 @@
   assignment sets it and a func-targeted `intervene=` capture keeps it. Validation's
   pristine-torch oracle (`torchlens/validation/_pristine.py`) means unwrapped torch functions.
   Bundle's pristine label and baseline auto-detection read `Trace.pristine is True`.
+- A capture-time module edit (`intervene=` with a `tl.module(...)` selector) is its own
+  `interventionreplacement` op between the module's last op and its consumers. The last op keeps
+  its pre-edit value by design (`tl.module(...)` reads the replacement op), and every later op is
+  renumbered, so a cross-trace join by literal label drops exactly the ops the edit changed. Bundle
+  site reads pair through the supergraph alignment, which folds a replacement op into its parent
+  (`torchlens/intervention/_topology/topology.py`, `_structural_parent_labels`;
+  `tests/test_bundle_module_edit_alignment.py`).
