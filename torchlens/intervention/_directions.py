@@ -2,9 +2,9 @@
 
 :func:`direction_from_pairs` reads one row per prompt at one site from the
 positive and the negative traces and fits a direction with one of three
-methods. The math lives here only: the steering-vectors and repeng bridges
-convert the returned :class:`Direction` to their library objects without
-recomputing anything.
+methods. The math lives here only: the steering-vectors, repeng and dialz
+bridges convert the returned :class:`Direction` to their library objects
+without recomputing anything.
 
 Methods (rows are ``[n_pairs, hidden]``, ``D = positive - negative``):
 
@@ -151,6 +151,27 @@ class Direction:
         """
 
         from ..bridge.repeng import from_direction
+
+        return from_direction(self, layer=layer, model_type=model_type)
+
+    def to_dialz(self, *, layer: int | None = None, model_type: str | None = None) -> Any:
+        """Return a ``dialz.SteeringVector`` holding this vector.
+
+        Parameters
+        ----------
+        layer:
+            Decoder layer ``SteeringModel`` applies it to. Defaults to the
+            trailing index of the site label.
+        model_type:
+            ``SteeringVector.model_type``; defaults to :attr:`model_type`.
+
+        Returns
+        -------
+        Any
+            A real ``dialz.SteeringVector``.
+        """
+
+        from ..bridge.dialz import from_direction
 
         return from_direction(self, layer=layer, model_type=model_type)
 

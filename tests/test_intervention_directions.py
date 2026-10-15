@@ -5,8 +5,8 @@ against oracles computed without TorchLens: forward hooks read the rows, and
 each method's math is re-derived independently (an eigendecomposition for
 ``"pca"``, an L-BFGS solve of the same objective for ``"logistic"``). The
 converters are checked against stand-in library modules here; the real
-packages run in ``tests/test_bridge_real_steering_vectors.py`` and
-``tests/test_bridge_real_repeng.py``.
+packages run in ``tests/test_bridge_real_steering_vectors.py``,
+``tests/test_bridge_real_repeng.py`` and ``tests/test_bridge_real_dialz.py``.
 """
 
 from __future__ import annotations
@@ -284,6 +284,24 @@ def test_to_repeng_wraps_the_vector(stack: dict[str, Any], monkeypatch: pytest.M
     assert result.directions[1].dtype.name == "float32"
     assert torch.equal(torch.from_numpy(result.directions[1]), direction.vector)
     assert _code(direction.to_repeng) == "direction_model_type_unknown"
+
+
+def test_to_dialz_wraps_the_vector(stack: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
+    """The dialz converter carries float32 values and an explicit model type."""
+
+    class SteeringVector:
+        def __init__(self, model_type: str, directions: dict[int, Any]) -> None:
+            self.model_type = model_type
+            self.directions = directions
+
+    monkeypatch.setitem(sys.modules, "dialz", _fake_module("dialz", SteeringVector=SteeringVector))
+    direction = direction_from_pairs(stack["pos"], stack["neg"], _SITE)
+    result = direction.to_dialz(model_type="tiny")
+    assert result.model_type == "tiny" and list(result.directions) == [1]
+    assert result.directions[1].dtype.name == "float32"
+    assert torch.equal(torch.from_numpy(result.directions[1]), direction.vector)
+    assert _code(direction.to_dialz) == "direction_model_type_unknown"
+    assert _code(lambda: direction.to_dialz(layer=0)) == "direction_layer_mismatch"
 
 
 def _code(call: Any) -> str:

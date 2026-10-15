@@ -262,9 +262,7 @@ def test_repeng_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_dialz_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
-    """dialz bridge follows the installed default method and builds a SteeringVector."""
-
-    pytest.importorskip("sklearn")
+    """The dialz converter wraps a native PCA direction in a SteeringVector."""
 
     @dataclass
     class SteeringVector:
@@ -273,40 +271,22 @@ def test_dialz_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
         model_type: str
         directions: dict[int, Any]
 
-    def read_representations(model: Any, tokenizer: Any, inputs: Any, method: str = "pca") -> Any:
-        """dialz 1.x signature shape: the default method name is read from here."""
-
-        raise AssertionError("the bridge never runs the model")
-
     log_pos, log_neg = _contrastive_logs()
-    vector_module = _module("dialz.vector", read_representations=read_representations)
-    monkeypatch.setitem(
-        sys.modules,
-        "dialz",
-        _module("dialz", SteeringVector=SteeringVector, vector=vector_module),
-    )
+    monkeypatch.setitem(sys.modules, "dialz", _module("dialz", SteeringVector=SteeringVector))
 
-    payload = tl.bridge.dialz.vector(
-        log_pos, "linear", negative_log=log_neg, layer=1, read_token_index=None, model_type="t"
+    direction = tl.intervention.direction_from_pairs(
+        log_pos, log_neg, "linear", "pca", read_token_index=None
     )
-    mean = tl.bridge.dialz.vector(
-        log_pos,
-        "linear",
-        negative_log=log_neg,
-        layer=1,
-        read_token_index=None,
-        model_type="t",
-        method="mean_diff",
-    )
+    vector = direction.to_dialz(layer=1, model_type="tiny")
 
-    assert payload["schema"] == "torchlens.dialz.v2"
-    _assert_signed_direction(
-        payload["steering_vector"].directions[1], payload["positive"], payload["negative"]
-    )
-    expected_mean = (payload["positive"] - payload["negative"]).numpy().mean(axis=0)
-    got_mean = mean["steering_vector"].directions[1]
-    # read_representations flips the sign when most pairs project the wrong way.
-    assert (got_mean == expected_mean).all() or (got_mean == -expected_mean).all()
+    assert isinstance(vector, SteeringVector)
+    assert vector.model_type == "tiny"
+    assert list(vector.directions) == [1]
+    positive, negative = log_pos["linear"].out.detach(), log_neg["linear"].out.detach()
+    _assert_signed_direction(vector.directions[1], positive, negative)
+    assert torch.equal(torch.from_numpy(vector.directions[1]), direction.vector.float())
+    with pytest.raises(ValueError, match="model_type="):
+        tl.bridge.dialz.from_direction(direction, layer=1)
 
 
 # The former mock-based LIT contract test is deliberately GONE (lane F31,

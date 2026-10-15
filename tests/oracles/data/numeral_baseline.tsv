@@ -2924,8 +2924,6 @@ package-docstrings	torchlens/brainpipe.py	21
 package-docstrings	torchlens/brainpipe.py	26
 package-docstrings	torchlens/brainpipe.py	3.2
 package-docstrings	torchlens/brainpipe.py	512
-package-docstrings	torchlens/bridge/_contrastive.py	32
-package-docstrings	torchlens/bridge/_contrastive.py	32,
 package-docstrings	torchlens/bridge/_utils.py	4.1
 package-docstrings	torchlens/bridge/_utils.py	4.1.
 package-docstrings	torchlens/bridge/brain_score.py	18
