@@ -11,7 +11,8 @@ captured Trace.
 |------|---------|
 | `__init__.py` | Public re-exports only; the 12-name `__all__` below |
 | `_core.py` | `AttributionError`, `AttributionResult`, input normalization / leaf minting / baseline validation machinery, and the input-level methods (`saliency`, `input_x_grad`, `integrated_gradients`, `smoothgrad`); IG always reports its completeness residual |
-| `_layer.py` | Layer-level methods: `layer_attribution`, `layer_integrated_gradients`, `layer_conductance`, `grad_cam` |
+| `_layer.py` | Layer-level methods: `layer_attribution`, `layer_integrated_gradients`, `layer_conductance`, the shared layer capture and input-path machinery, and the CAM overlay renderer |
+| `_cam.py` | `grad_cam`: feature maps, token grids (through `_cam_grid.py`), integer-input grids, and the input grid the map is upsampled onto |
 | `_cam_grid.py` | Token-grid derivation for `grad_cam` from a metadata-only trace (grid flatten and grid view patterns, prefix tokens from the token concatenation), the `reshape=` escape hatch and their coded refusals |
 | `_cam_choice.py` | Automatic `grad_cam` layer choice (`layer=None`): once-firing map or token-grid outputs that dominate the output, deepest with a nonzero grid gradient |
 | `_entry.py` | Integer inputs for the layer methods: finds the innermost modules that turn caller integers into floats (embeddings), substitutes the path values at their outputs by prepended forward hooks, and builds baselines from reference ids |

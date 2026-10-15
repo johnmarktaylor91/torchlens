@@ -1,6 +1,7 @@
 """Input-attribution methods for TorchLens."""
 
 from torchlens.attribution import onebackward
+from torchlens.attribution._cam import grad_cam
 from torchlens.attribution._core import (
     AttributionError,
     AttributionResult,
@@ -12,7 +13,6 @@ from torchlens.attribution._core import (
 from torchlens.attribution._gradient_shap import gradient_shap
 from torchlens.attribution._guided import deconvolution, guided_backprop
 from torchlens.attribution._layer import (
-    grad_cam,
     layer_attribution,
     layer_conductance,
     layer_integrated_gradients,

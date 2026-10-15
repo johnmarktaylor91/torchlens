@@ -883,16 +883,16 @@ torchlens.attribution._layer:_layer_path_run:AttributionError::2	INTERNAL	layer_
 torchlens.attribution._layer:_layer_path_run:AttributionError::3	INTERNAL	layer_path_gradient_missing	F06 internal invariant tripwire; fires only on TorchLens contract breaches, coded for diagnostics (T51 union fix)
 torchlens.attribution._layer:_resolve_named_layer:AttributionError::1	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
 torchlens.attribution._layer:_resolve_named_layer:AttributionError::2	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
-torchlens.attribution._layer:_spatial_reference_tensor:AttributionError::1	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
-torchlens.attribution._layer:_spatial_reference_tensor:AttributionError::2	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
-torchlens.attribution._layer:_spatial_reference_tensor:AttributionError::3	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
-torchlens.attribution._layer:_validate_conv_activation:AttributionError::1	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
+torchlens.attribution._cam:_spatial_reference_tensor:AttributionError::1	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
+torchlens.attribution._cam:_spatial_reference_tensor:AttributionError::2	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
+torchlens.attribution._cam:_spatial_reference_tensor:AttributionError::3	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
+torchlens.attribution._cam:_validate_conv_activation:AttributionError::1	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
 torchlens.attribution._layer:_validate_matching_firings:AttributionError::1	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
 torchlens.attribution._layer:_validate_matching_firings:AttributionError::2	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
 torchlens.attribution._layer:_validate_stacked_firings:AttributionError::1	CONTRACTED	step_batch_layer_firings_inconsistent	F06 attribution-kit typed teaching refusal (attrib memo D1-D32); coded with structured Remedy
 torchlens.attribution._layer:_validate_stacked_firings:AttributionError::2	CONTRACTED	step_batch_layer_firings_inconsistent	F06 attribution-kit typed teaching refusal (attrib memo D1-D32); coded with structured Remedy
 torchlens.attribution._layer:_validate_uniform_firing_shapes:AttributionError::1	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
-torchlens.attribution._layer:grad_cam:AttributionError::1	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
+torchlens.attribution._cam:grad_cam:AttributionError::1	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
 torchlens.attribution._layer:layer_attribution:AttributionError::1	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
 torchlens.attribution._layer:layer_conductance:AttributionError::1	INTERNAL	layer_conductance_edge_missing	F06 internal invariant tripwire; fires only on TorchLens contract breaches, coded for diagnostics (T51 union fix)
 torchlens.attribution._cam_choice:_choose_cam_layer:AttributionError:_refuse_no_choice:1	CONTRACTED	grad_cam_layer_unchosen	grad_cam token-grid and layer-choice refusal (U45.5/U45.6 ATTR lane); coded with a runnable Remedy and a contract-doc row
@@ -1335,7 +1335,7 @@ torchlens.attribution._entry:_EntryRoute.substituted._hook:AttributionError::1	C
 torchlens.attribution._entry:_baseline_leaves:AttributionError:_baseline_ids_invalid:1	CONTRACTED	layer_path_baseline_ids_invalid	integer inputs for the layer methods and site targets (ATTR-2 lane); coded with a runnable Remedy and a contract-doc row
 torchlens.attribution._entry:_baseline_leaves:AttributionError:_baseline_ids_invalid:2	CONTRACTED	layer_path_baseline_ids_invalid	integer inputs for the layer methods and site targets (ATTR-2 lane); coded with a runnable Remedy and a contract-doc row
 torchlens.attribution._entry:_entry_baselines:AttributionError:_baseline_ids_invalid:1	CONTRACTED	layer_path_baseline_ids_invalid	integer inputs for the layer methods and site targets (ATTR-2 lane); coded with a runnable Remedy and a contract-doc row
-torchlens.attribution._layer:_integer_spatial_reference:AttributionError::1	CONTRACTED	grad_cam_integer_grid_invalid	integer inputs for the layer methods and site targets (ATTR-2 lane); coded with a runnable Remedy and a contract-doc row
+torchlens.attribution._cam:_integer_spatial_reference:AttributionError::1	CONTRACTED	grad_cam_integer_grid_invalid	integer inputs for the layer methods and site targets (ATTR-2 lane); coded with a runnable Remedy and a contract-doc row
 torchlens.attribution._layer:_layer_path_baselines:AttributionError::1	CONTRACTED	layer_path_no_embedding	integer inputs for the layer methods and site targets (ATTR-2 lane); coded with a runnable Remedy and a contract-doc row
 torchlens.attribution._site:SiteTarget.__post_init__:AttributionError::1	CONTRACTED	attribution_site_not_found	integer inputs for the layer methods and site targets (ATTR-2 lane); coded with a runnable Remedy and a contract-doc row
 torchlens.attribution._site:SiteTarget.__post_init__:AttributionError:_firing_invalid:1	CONTRACTED	attribution_site_firing_invalid	integer inputs for the layer methods and site targets (ATTR-2 lane); coded with a runnable Remedy and a contract-doc row
