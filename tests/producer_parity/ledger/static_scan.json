@@ -9562,6 +9562,14 @@
  {
   "ambiguous": true,
   "field": "kind",
+  "file": "torchlens/visualization/_legend.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
   "file": "torchlens/visualization/_mutated_params.py",
   "has_default": false,
   "sites": 1,

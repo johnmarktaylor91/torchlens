@@ -2595,3 +2595,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 39211e2247390d0a196db018e35c9659d5c02e30 (dirty)
 recorded: 2026-10-15T08:46:08.158019+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: b2-VIZFIX: the role legend now lists only drawn roles; its new helper _legend.statement_node_attrs reads RenderIRDotStatement.kind to walk node statements (one new consumer site row for torchlens/visualization/_legend.py; no other site added, removed or moved)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7fd595e1b88bf068d4ee747971a7abdfab5af565 (dirty)
+recorded: 2026-10-15T16:08:48.298447+00:00
