@@ -1894,47 +1894,6 @@ _SINGLE_PUSH_LOAD_OPNAMES = frozenset(
 _CALL_BOOKKEEPING_OPNAMES = frozenset({"PRECALL"})
 
 
-def _call_site_argcount(frame: Any) -> int | None:
-    """Decode the positional argument count of a profile-observed ``c_call`` site.
-
-    Reads the caller frame's bytecode at ``f_lasti``. A plain ``CALL`` instruction
-    on Python 3.11+ and ``CALL_FUNCTION`` (plain call) or ``CALL_METHOD``
-    (attribute-style ``obj.method(...)`` call) on Python 3.10 carry the exact
-    positional argument count in their oparg. The monitored implicit-now
-    converters reject keywords, so these opcodes fully determine arity for every
-    valid call. Omitting ``CALL_METHOD`` previously left a py3.10 held-ref alias
-    invoked as a method (e.g. a captured ``datetime`` reader) undecodable, so a
-    call passing the explicit-time argument still fail-closed-MARKED, falsely
-    ceilinging an otherwise-verifiable capture.
-
-    Parameters
-    ----------
-    frame:
-        Caller frame supplied by the ``c_call`` profile event.
-
-    Returns
-    -------
-    int | None
-        Positional argument count for a plain ``CALL`` site; ``None`` for any other
-        opcode (``CALL_FUNCTION_EX`` star-calls) or decode failure, so callers mark
-        fail-closed (over-marking, never under-marking).
-    """
-
-    try:
-        lasti = frame.f_lasti
-        for instruction in _dis_module.get_instructions(frame.f_code):
-            if instruction.offset == lasti:
-                if (
-                    instruction.opname in {"CALL", "CALL_FUNCTION", "CALL_METHOD"}
-                    and instruction.arg is not None
-                ):
-                    return int(instruction.arg)
-                return None
-        return None
-    except Exception:
-        return None
-
-
 def _call_site_explicit_time_value(frame: Any, time_arg_index: int) -> bool:
     """Return whether a held-alias ``c_call`` site passes an explicit non-None time.
 
@@ -1973,7 +1932,7 @@ def _call_site_explicit_time_value(frame: Any, time_arg_index: int) -> bool:
     # flow additionally distinguishes ``"unknown"`` -- unresolvable value --
     # as monitor uncertainty; this boolean conflates it with the mark-worthy
     # outcomes, which is exactly the unit-pinned fail-closed contract).
-    argcount = _call_site_argcount(frame)
+    argcount = _rng_channels.call_site_argcount(frame)
     if argcount is None or argcount <= time_arg_index:
         return False
     return _call_site_time_arg_proof(frame, argcount, time_arg_index) == "transform"
@@ -3052,7 +3011,7 @@ class host_nondeterminism_monitor:
                     # unknown opcode) marks fail-closed; a literal ``None`` marks; a
                     # computed argument flags uncertainty (runtime-dependent value:
                     # neither a clock-draw claim nor a clean pass is provable).
-                    argcount = _call_site_argcount(frame)
+                    argcount = _rng_channels.call_site_argcount(frame)
                     if argcount is None or argcount <= time_arg_index:
                         self._mark(held_channel)
                     else:

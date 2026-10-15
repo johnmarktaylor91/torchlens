@@ -80,13 +80,8 @@ from ..captured_run import CapturedRun
 from ..constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
 from ..intervention.types import (
     MODEL_LOG_FIELD_FORK_POLICY,
-    CapturedArgTemplate,
     InterventionSpec,
-    LiteralTensor,
-    LiteralValue,
-    ParentRef,
     Relationship,
-    Unsupported,
 )
 from ..ir.workspaces import (
     LEGACY_TRACE_BUILD_STATE_KEYS,
@@ -178,16 +173,10 @@ else:
     from ._trace_viz import TraceVisualizationMixin
 
 
-#: Values a rerun refresh hands over as they are: ``copy.deepcopy`` returns
-#: these same objects (or an equal immutable one), so the call is skipped.
+#: Values ``copy.deepcopy`` returns unchanged, so a rerun refresh hands them over as they are.
 _ATOMIC_RERUN_VALUE_TYPES: frozenset[type] = frozenset(
     {type(None), bool, int, float, complex, str, bytes, torch.dtype, torch.device}
 )
-#: Frozen replay-template records the refresh rebuilds field by field.
-_REPLAY_TEMPLATE_TYPES: frozenset[type] = frozenset(
-    {CapturedArgTemplate, LiteralTensor, LiteralValue, ParentRef, Unsupported}
-)
-
 _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "grouping": "structural",
     "grouping_policy": None,
@@ -3612,19 +3601,11 @@ class Trace(
         preserved_user_annotations = self._copy_user_annotations(
             getattr(layer, "annotations", None)
         )
-        # Both loops below write some fields (the replay templates among them);
-        # copy each field's fresh value once and hand the same copy to both.
-        copies: dict[str, Any] = {}
-
-        def copied(field_name: str) -> Any:
-            if field_name not in copies:
-                copies[field_name] = self._copy_rerun_value(new_layer_state.get(field_name))
-            return copies[field_name]
-
+        copies: dict[str, Any] = {}  # fields both loops below write are copied once
         for field_name in LAYER_PASS_LOG_FIELD_ORDER:
             if field_name in preserved_fields:
                 continue
-            value = copied(field_name)
+            value = copies[field_name] = self._copy_rerun_value(new_layer_state.get(field_name))
             if field_name == "annotations":
                 value = self._merge_user_annotations(value, preserved_user_annotations)
             layer._internal_set(
@@ -3646,7 +3627,9 @@ class Trace(
             "_edge_uses",
         ):
             if hasattr(new_layer, field_name):
-                value = copied(field_name)
+                if field_name not in copies:
+                    copies[field_name] = self._copy_rerun_value(new_layer_state.get(field_name))
+                value = copies[field_name]
                 if field_name == "annotations":
                     value = self._merge_user_annotations(value, preserved_user_annotations)
                 layer._internal_set(
@@ -3794,18 +3777,6 @@ class Trace(
 
         if isinstance(value, torch.Tensor) or type(value) in _ATOMIC_RERUN_VALUE_TYPES:
             return value
-        if type(value) in _REPLAY_TEMPLATE_TYPES:
-            # Frozen replay-template records: rebuild field by field so a
-            # parameter literal keeps its identity, exactly as the source
-            # capture's template holds it. A deep copy cloned every parameter
-            # into every refreshed fork.
-            return dataclasses.replace(
-                value,
-                **{
-                    field.name: self._copy_rerun_value(getattr(value, field.name))
-                    for field in dataclasses.fields(value)
-                },
-            )
         if isinstance(value, list):
             return [self._copy_rerun_value(item) for item in value]
         if isinstance(value, tuple):
@@ -3815,8 +3786,13 @@ class Trace(
                 self._copy_rerun_value(key): self._copy_rerun_value(item)
                 for key, item in value.items()
             }
+        from ..intervention.types import REPLAY_TEMPLATE_TYPES
         from ..utils.fail_open import fail_open
 
+        if type(value) in REPLAY_TEMPLATE_TYPES:
+            # Field by field, so a parameter literal keeps its identity (a deep copy cloned it).
+            names = [field.name for field in dataclasses.fields(value)]
+            return type(value)(**{n: self._copy_rerun_value(getattr(value, n)) for n in names})
         return fail_open(lambda: copy.deepcopy(value), lambda _error: value)
 
     def append_state_from(self, new_log: "Trace") -> None:
