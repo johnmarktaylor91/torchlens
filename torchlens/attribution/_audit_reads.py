@@ -14,8 +14,8 @@ on the fork.
 The read's target is an edge seed (``tl.attribution.seed(site, index=...)``
 or ``cotangent=...``); the caller passes the same seed as ``target=`` and it
 must match the table's recorded target. Rows whose status is not ``ok``
-carry no score and are reported apart. ``EDGE`` rows are not audited here:
-an edge is tested by patching it, through ``tl.mechinterp.patch_edges``.
+carry no score and are reported apart. A table of ``EDGE`` rows is not
+grounded here: an edge is tested by patching it (``_audit_edges``).
 """
 
 from __future__ import annotations
@@ -67,11 +67,11 @@ def _read_remedy(seed: str) -> str:
     )
 
 
-def _read_refusal(why: str, remedy: str, *, code: str, extra: str = "") -> AttributionError:
+def _read_refusal(why: str, remedy: str, *, code: str) -> AttributionError:
     """Build a coded refusal for a read table the audit cannot measure."""
 
     return AttributionError(
-        f"causal_audit cannot audit this read table: {why}.{extra} Remedy: {remedy}. "
+        f"causal_audit cannot audit this read table: {why}. Remedy: {remedy}. "
         f"{_AUDIT_DOCS_POINTER}",
         code=code,
     )
@@ -84,15 +84,6 @@ def _audited_rows(claim: Any) -> tuple[str | None, list[tuple[int, Any]], list[t
     targets = sorted({row.target_id for row in rows if row.target_id is not None})
     first = targets[0] if targets else None
     seed = _seed_spelling(_recorded_target(claim, first))
-    if any(row.kind == "EDGE" for row in rows):
-        raise _read_refusal(
-            "it holds EDGE rows, and edges are tested by patching them, not by ablating a site",
-            _read_remedy(seed),
-            code="attribution_audit_claim_unsupported",
-            extra=" To test edges causally, patch them with "
-            "tl.mechinterp.patch_edges(trace, edges, corrupt=graph); the remedy audits the "
-            "site (ACT) reads instead.",
-        )
     if len(targets) != 1:
         raise _read_refusal(
             f"it holds rows for {len(targets)} targets {targets!r}; the audit measures one target",

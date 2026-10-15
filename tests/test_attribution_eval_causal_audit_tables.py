@@ -501,13 +501,18 @@ def test_read_misaligned_claims_refuse_and_the_remedy_runs(kind: str) -> None:
 
 @pytest.mark.parametrize("kind", ["edge_rows", "two_targets", "grad_method"])
 def test_read_unsupported_tables_refuse_and_the_remedy_runs(kind: str) -> None:
-    """EDGE rows, several targets and non-effect reads refuse; each remedy runs."""
+    """Several targets and non-effect reads refuse; EDGE rows mixed into an ACT table refuse.
+
+    A table of EDGE rows alone is audited by patching each edge
+    (``tests/test_attribution_eval_causal_audit_edges.py``); one that mixes
+    EDGE rows into site reads refuses, and the remedy audits the site reads.
+    """
 
     model = LinearNet().eval().double()
     if kind == "edge_rows":
         table = _read(model)
         rows = {row.key: row for row in table.rows()}
-        edge = dataclasses.replace(table.rows()[0], kind="EDGE", address=("fc1", "fc2"))
+        edge = dataclasses.replace(table.rows()[0], kind="EDGE", address=("fc1->fc2",))
         rows[edge.key] = edge
         claim = type(table)(rows, table.provenance, trace=table.trace)
     elif kind == "two_targets":
@@ -518,7 +523,7 @@ def test_read_unsupported_tables_refuse_and_the_remedy_runs(kind: str) -> None:
         attribution.causal_audit(model, X, claim=claim, target=_seed(), k=1)
     assert excinfo.value.fields.get("code") == "attribution_audit_claim_unsupported"
     if kind == "edge_rows":
-        assert "tl.mechinterp.patch_edges" in str(excinfo.value)
+        assert "mixes EDGE rows with ACT rows" in str(excinfo.value)
     scope = {"tl": tl, "model": model, "x": X, "claim": claim}
     fixed = eval(_remedy(str(excinfo.value)), scope)  # noqa: S307
     assert isinstance(fixed, attribution.CausalAuditResult) and fixed.rank_agreement == 1.0

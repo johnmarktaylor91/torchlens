@@ -47,6 +47,9 @@ class _AuditRequest:
     controls: Any
     random_draws: int
     seed: int
+    corrupted: Any = None
+    metric: Any = None
+    edges: Any = None
 
 
 @dataclass(frozen=True)
@@ -81,6 +84,16 @@ class _AuditPlan:
         """Return the claim's layer, the component every unit belongs to."""
 
         return self.layer
+
+    def effect(self, original: float, scored: float) -> float:
+        """Return ``score(original) - score(ablated)``, the measured effect of an ablation."""
+
+        return original - scored
+
+    def unmeasured_reason(self, units: tuple[tuple[int, ...], ...]) -> str | None:
+        """Return why a set cannot be measured (``None``: every set of a site can)."""
+
+        return None
 
     def unit_scores(self) -> dict[tuple[int, ...], float]:
         """Score every unit ablated alone, one fork each."""
@@ -141,11 +154,22 @@ def _is_count(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 1
 
 
+def _call_prefix(request: _AuditRequest) -> str:
+    """Return the caller's audit spelling up to its settings (claim, target, edge inputs)."""
+
+    target = "" if request.target is None else f", {_target_spelling(request.target)}"
+    edge_inputs = "".join(
+        f", {name}={name}"
+        for name, value in (("corrupted", request.corrupted), ("metric", request.metric))
+        if value is not None
+    )
+    return f"tl.attribution.causal_audit(model, x, claim=claim{target}{edge_inputs}"
+
+
 def _validate_settings(request: _AuditRequest) -> None:
     """Refuse an invalid ``k``, ``ablation``, ``controls`` or ``random_draws``."""
 
-    target = "" if request.target is None else f", {_target_spelling(request.target)}"
-    base = f"tl.attribution.causal_audit(model, x, claim=claim{target}"
+    base = _call_prefix(request)
     code = "attribution_eval_setting_invalid"
     if not _is_count(request.k):
         raise _setting_error(
@@ -156,7 +180,7 @@ def _validate_settings(request: _AuditRequest) -> None:
     if not numeric and ablation not in ("zero", "mean"):
         raise _setting_error(
             f"ablation must be 'zero', 'mean', or a number or tensor baseline; got {ablation!r}",
-            f"{base}, ablation='mean')",
+            f"{base}, k=1)" if request.metric is not None else f"{base}, ablation='mean')",
             code=code,
         )
     controls = request.controls

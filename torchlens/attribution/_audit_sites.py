@@ -70,6 +70,16 @@ class _SitesPlan:
 
         return self.rows[key].component
 
+    def effect(self, original: float, scored: float) -> float:
+        """Return ``score(original) - score(ablated)``, the measured effect of an ablation."""
+
+        return original - scored
+
+    def unmeasured_reason(self, keys: tuple[tuple[int, ...], ...]) -> str | None:
+        """Return why a set cannot be measured (``None``: any set of sites can)."""
+
+        return None
+
     def intervention(self, keys: tuple[tuple[int, ...], ...]) -> tuple[tuple[Any, Any], ...]:
         """Return the ``(selection, edit)`` pairs ablating ``keys``, one pair per site.
 
