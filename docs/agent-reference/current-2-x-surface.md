@@ -1065,7 +1065,8 @@
   the MIB/EAP-IG names: nodes `input`/`a{L}.h{H}`/`b{L}`/`m{L}`, receivers
   `a{L}.h{H}<q|k|v>`/`m{L}`/`logits`, edges `"s->t"`) of
   `tl.mechinterp.ComponentNode`, `tl.mechinterp.ComponentReceiver` and
-  `tl.mechinterp.ComponentEdge` records; every receiver's pre-norm input is
+  `tl.mechinterp.ComponentEdge` records (nodes and receivers carry `layer_index`
+  and `head`); every receiver's pre-norm input is
   checked equal to the sum of its edges' contributions in the API, and an edge
   is an intervention selection. `tl.mechinterp.patch_edges(trace, edges, *,
   corrupt)` patches edges into one receiver on the replay engine.

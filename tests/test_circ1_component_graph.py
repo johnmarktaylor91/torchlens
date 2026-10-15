@@ -146,7 +146,7 @@ def test_toy_nodes_and_receiver_inputs_equal_the_closed_form(gpt2_toy) -> None:
     for name, expected in nodes.items():
         torch.testing.assert_close(graph.nodes[name].value, expected, rtol=0, atol=1e-12)
     for receiver in graph.receivers.values():
-        key = f"a{receiver.layer}" if receiver.kind in ("q", "k", "v") else receiver.name
+        key = f"a{receiver.layer_index}" if receiver.kind in ("q", "k", "v") else receiver.name
         torch.testing.assert_close(receiver.value, inputs[key], rtol=0, atol=1e-12)
     assert graph.nodes["b1"].kind == "bias" and graph.nodes["a1.h0"].module_address == (
         "transformer.h.1.attn"

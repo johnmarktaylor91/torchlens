@@ -65,9 +65,10 @@ class ComponentNode:
         Vocabulary name: ``input``, ``a{L}.h{H}``, ``b{L}`` or ``m{L}``.
     kind:
         ``"input"``, ``"head"``, ``"bias"`` or ``"mlp"``.
-    layer, head:
-        Block index (execution order of the attention or MLP modules) and
-        head index; ``None`` where they do not apply.
+    layer_index:
+        Transformer block index (integer); ``None`` where it does not apply.
+    head:
+        Head index (integer); ``None`` where it does not apply.
     module_address:
         The owning module (embedding, attention or MLP; the attention module
         for head and bias nodes).
@@ -78,7 +79,7 @@ class ComponentNode:
 
     name: str
     kind: NodeKind
-    layer: int | None
+    layer_index: int | None
     head: int | None
     module_address: str | None
     value: torch.Tensor
@@ -97,8 +98,10 @@ class ComponentReceiver:
         Vocabulary name: ``a{L}.h{H}<q|k|v>``, ``m{L}`` or ``logits``.
     kind:
         ``"q"``, ``"k"``, ``"v"``, ``"mlp"`` or ``"logits"``.
-    layer, head:
-        Block and head index; ``None`` where they do not apply.
+    layer_index:
+        Transformer block index (integer); ``None`` where it does not apply.
+    head:
+        Head index (integer); ``None`` where it does not apply.
     module_address:
         The reading module (attention, MLP, or the unembedding head).
     norm_address:
@@ -113,7 +116,7 @@ class ComponentReceiver:
 
     name: str
     kind: ReceiverKind
-    layer: int | None
+    layer_index: int | None
     head: int | None
     module_address: str
     norm_address: str

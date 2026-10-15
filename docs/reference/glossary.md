@@ -340,7 +340,7 @@ is documented unstable and may be renamed or removed without a compatibility ali
 | Alias table generation value | `generation="4.x"` (TransformerBridge canonical hook names) | unstable -- no deprecation shim owed |
 | Appliance on the `trace.using` door | `trace.using("mi")`, `head_scores`, `qk_circuit`, `ov_circuit` | unstable -- no deprecation shim owed |
 | Per-query-head patching under grouped-query attention | `patch_query_heads_grid`, `site`, `heads`, `effect_site` | unstable -- no deprecation shim owed |
-| Component edge graph (heads and MLPs as nodes, q/k/v split receivers) | `component_graph`, `ComponentGraph`, `ComponentNode`, `ComponentReceiver`, `ComponentEdge`, `nodes`, `receivers`, `edges`, `senders`, `contribution`, `identity_receipt`, `input_label`, `norm_address`, `patch_edges`, `corrupt` | unstable -- no deprecation shim owed |
+| Component edge graph (heads and MLPs as nodes, q/k/v split receivers) | `component_graph`, `ComponentGraph`, `ComponentNode`, `ComponentReceiver`, `ComponentEdge`, `nodes`, `receivers`, `edges`, `layer_index`, `head`, `senders`, `contribution`, `identity_receipt`, `input_label`, `norm_address`, `patch_edges`, `corrupt` | unstable -- no deprecation shim owed |
 
 <!-- MECHINTERP-KIT-UNSTABLE-INDEX:END -->
 
@@ -348,8 +348,9 @@ is documented unstable and may be renamed or removed without a compatibility ali
 keyed by MIB/EAP-IG vocabulary name (`input`, `a{L}.h{H}`, `b{L}`, `m{L}`; receivers
 `a{L}.h{H}<q|k|v>`, `m{L}`, `logits`; edges `"<sender>-><receiver>"`). Each `ComponentReceiver`
 holds the captured pre-norm input (`value`, from the op `input_label` entering the norm at
-`norm_address`) and its `senders`; each `ComponentEdge` exposes the sender's output as its
-`contribution`. `identity_receipt` records the in-API check that every receiver input equals the
+`norm_address`) and its `senders`. Nodes and receivers carry `layer_index` (transformer block
+index) and `head` (head index), each `None` where it does not apply. Each `ComponentEdge` exposes
+the sender's output as its `contribution`. `identity_receipt` records the in-API check that every receiver input equals the
 sum of its contributions. Each attention output bias is its own node `b{L}`. A `ComponentEdge` is
 also a selection (`__selection__`): an EDGE selection of the pre-norm input edge for `m{L}` and
 `logits` receivers, an ACT selection of one head's q, k or v projection slice otherwise.
