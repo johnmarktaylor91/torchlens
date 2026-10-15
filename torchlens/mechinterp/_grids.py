@@ -54,6 +54,12 @@ class PatchGrid:
     ``coordinates`` maps each axis to its labels (module addresses carry
     site-key-bearing provenance through the trace itself). ``receipts``
     records fires, identical-value fires, baselines, and the disclosed cost.
+
+    ``values`` holds the metric of each PATCHED run, not an effect. The
+    unpatched baselines are in ``receipts["clean_metric"]`` and
+    ``receipts["corrupted_metric"]``; a cell's effect is its value minus
+    ``corrupted_metric`` (the run every cell patches into), which is what
+    :func:`torchlens.tviz.receipt_from_patch_grid` plots.
     """
 
     axes: tuple[str, ...]
@@ -126,6 +132,13 @@ def grid(  # noqa: PLR0913 -- the memo-normative driver signature (section 7)
         known HF replay crash (FIX-A) lands.
     trace_kwargs:
         Extra kwargs forwarded to ``tl.trace``.
+
+    Returns
+    -------
+    PatchGrid
+        ``values`` are the patched-run metrics; the receipts carry the fire
+        ledger, the cost disclosure and the unpatched baselines
+        ``clean_metric`` and ``corrupted_metric``.
     """
 
     _validate_grid_request(engine, axes, sites)
@@ -143,6 +156,7 @@ def grid(  # noqa: PLR0913 -- the memo-normative driver signature (section 7)
             guard=guard,
         )
         baseline_seconds = (time.perf_counter() - started) / 2.0
+        baselines = _baseline_metrics(clean_log, corrupted_log, metric)
         modules = _modules_with_facet(clean_log, sites)
         if not modules:
             refuse(
@@ -240,10 +254,25 @@ def grid(  # noqa: PLR0913 -- the memo-normative driver signature (section 7)
                 "n_cells": n_cells,
                 "baseline_seconds_per_rerun": baseline_seconds,
                 "metric_provenance": getattr(metric, "__name__", repr(metric)),
+                **baselines,
             },
         )
     finally:
         _teardown(guard, clean_log, corrupted_log)
+
+
+def _baseline_metrics(clean_log: Any, corrupted_log: Any, metric: Any) -> dict[str, float]:
+    """Return the metric on both unpatched baselines, rounded like a cell.
+
+    Each value goes through the same float32 conversion as a grid cell, so a
+    cell that reproduces the corrupted run exactly has an effect of exactly 0.
+    """
+
+    like = torch.empty((), dtype=torch.float32)
+    return {
+        "clean_metric": float(_metric_scalar(metric(clean_log), like=like)),
+        "corrupted_metric": float(_metric_scalar(metric(corrupted_log), like=like)),
+    }
 
 
 def _disclose_cost_and_enforce_budget(

@@ -933,7 +933,8 @@ class CausalReceipt:
     heads:
         Original head indices, aligned with ``effects``.
     effects:
-        Measured metric deltas per head; ``None`` = unmeasured.
+        Measured metric deltas per head (metric after the intervention minus
+        the baseline run's metric); ``None`` = unmeasured.
     metric:
         Metric wording (printed on the figure).
     intervention:
@@ -963,9 +964,17 @@ class CausalReceipt:
         Content fingerprints for the joined artifacts.
     kv_groups:
         Grouped-query disclosure for a KEY/VALUE-site receipt: when set,
-        ``heads`` are zero-based KV group indices, each cell ablates one
-        shared group, and every rendering names the query heads that
+        ``heads`` are zero-based KV group indices, each cell intervenes on
+        one shared group, and every rendering names the query heads that
         read it. ``None`` means ``heads`` are query heads.
+    baseline_metric:
+        The metric of the unpatched baseline run every effect is measured
+        from (for a patch-grid receipt, the corrupted run); printed on the
+        grid figure so a reader knows what a cell is. ``None`` when the
+        producer did not record it.
+    baseline_run:
+        Which run ``baseline_metric`` comes from, as printed on the figure
+        (``"unpatched corrupted run"`` for a patch-grid receipt).
     """
 
     layer: str
@@ -985,6 +994,8 @@ class CausalReceipt:
     effect_source: str = "capture route"
     fingerprints: dict[str, str] = field(default_factory=dict)
     kv_groups: GqaInfo | None = None
+    baseline_metric: float | None = None
+    baseline_run: str = "unpatched baseline run"
 
     def __post_init__(self) -> None:
         """Validate alignment, finiteness, both controls and KV group range."""
@@ -1001,6 +1012,12 @@ class CausalReceipt:
                     message="A receipt effect is non-finite.",
                     remedy="a non-finite metric is a failed measurement; re-run the cell",
                 )
+        if self.baseline_metric is not None and not math.isfinite(self.baseline_metric):
+            refuse(
+                code="tv_receipt_invalid",
+                message="The receipt's baseline metric is non-finite.",
+                remedy="a non-finite baseline is a failed measurement; re-run the baseline",
+            )
         _validate_receipt_controls(self)
         if self.kv_groups is not None:
             _require(
@@ -1107,7 +1124,7 @@ class Annotation:
             refuse(
                 code="tv_annotation_invalid",
                 message="A kv-group receipt cannot annotate per-query-head attention panels: "
-                "each cell ablates one shared key/value group, so its effect belongs to "
+                "each cell intervenes on one shared key/value group, so its effect belongs to "
                 "every query head reading that group, not to any one of them.",
                 remedy="render it with render_receipt_grid, which names each group's query heads",
             )

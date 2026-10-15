@@ -44,7 +44,7 @@ from ..semantic.patching import (
     _warn_if_campaign_all_identical,
 )
 from ._errors import refuse
-from ._grids import PatchGrid, _disclose_cost_and_enforce_budget
+from ._grids import PatchGrid, _baseline_metrics, _disclose_cost_and_enforce_budget
 
 __all__ = ["patch_query_heads_grid"]
 
@@ -124,7 +124,9 @@ def patch_query_heads_grid(  # noqa: PLR0913 -- mirrors the grid driver's signat
         receipts add ``effect_site`` (the interceptor wording), ``site``,
         ``n_q_heads``, ``n_kv_heads`` and ``expansion_ops`` (module address
         to the clean trace's expansion op label). ``fires`` equals the cell
-        count: a cell whose rerun fires other than once refuses.
+        count: a cell whose rerun fires other than once refuses. As for
+        every grid, ``values`` are patched-run metrics and the receipts carry
+        ``clean_metric`` and ``corrupted_metric`` (the unpatched baselines).
 
     Raises
     ------
@@ -151,6 +153,7 @@ def patch_query_heads_grid(  # noqa: PLR0913 -- mirrors the grid driver's signat
             guard=guard,
         )
         baseline_seconds = (time.perf_counter() - started) / 2.0
+        baselines = _baseline_metrics(clean_log, corrupted_log, metric)
         expansions = _locate_all(clean_log, corrupted_log, site)
         n_q = expansions[0].n_q_heads
         head_list = _head_list(heads, n_q)
@@ -192,6 +195,7 @@ def patch_query_heads_grid(  # noqa: PLR0913 -- mirrors the grid driver's signat
                 "n_q_heads": n_q,
                 "n_kv_heads": expansions[0].n_kv_heads,
                 "expansion_ops": {e.address: e.op_label for e in expansions},
+                **baselines,
             },
         )
     finally:

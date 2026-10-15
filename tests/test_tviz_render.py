@@ -158,8 +158,8 @@ def test_receipt_grid_prints_joint_line(receipt: tviz.CausalReceipt, tmp_path: P
 
     artifact = tviz.render_receipt_grid(receipt, tmp_path / "grid.svg")
     lines = "\n".join(artifact.disclosure_lines)
-    assert "joint effect of ablating all 3 measured heads together: -0.68" in lines
-    assert "single-head effects are not additive" in lines
+    assert "joint effect of the same intervention on all 3 measured heads together: -0.68" in lines
+    assert "single-head effects need not be additive" in lines
     assert "measured 3 of 4" in lines
     assert "<image" not in artifact.paths[0].read_text()
 

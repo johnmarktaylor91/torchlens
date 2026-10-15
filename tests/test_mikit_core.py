@@ -17,6 +17,7 @@ import torch
 import torchlens as tl
 import torchlens.mechinterp as mi
 from torchlens.mechinterp._errors import MechInterpError
+from torchlens.tviz import receipt_from_patch_grid
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "real_model" / "r0"))
 
@@ -342,3 +343,41 @@ def test_grid_budget_length_and_flatness(r0_models):
     assert bool((flat.values == flat.values.reshape(-1)[0]).all())
     codes = {getattr(w.message, "fields", {}).get("code") for w in caught}
     assert "mi_grid_all_identical" in codes  # D21: flatness DISCLOSES, never refuses
+    # The self-patch grid's receipt is the negative control: every effect is 0.
+    assert flat.receipts["corrupted_metric"] == flat.receipts["clean_metric"]
+    receipt = receipt_from_patch_grid(
+        flat,
+        layer=flat.coordinates["layer"][0],
+        negative_control=0.0,
+        positive_control=1.0,
+    )
+    assert set(receipt.effects) == {0.0}
+
+
+def test_head_grid_records_the_unpatched_baselines(r0_models):
+    """patch_heads_grid's receipts carry both baselines; receipts subtract the corrupted one."""
+
+    model = r0_models["gpt2"]
+    torch.manual_seed(2)
+    clean, corrupted = torch.randint(0, 500, (1, 6)), torch.randint(0, 500, (1, 6))
+
+    def metric(trace):
+        anchor_module = next(
+            m for m in trace.modules if m.facets is not None and "logits" in list(m.facets.keys())
+        )
+        return anchor_module.facets["logits"].value[0, -1, 42]
+
+    patched = mi.patch_heads_grid(model, clean, corrupted, metric, heads=[0, 1])
+    with torch.no_grad():
+        expected = {
+            "clean_metric": float(model(clean).logits[0, -1, 42].to(torch.float32)),
+            "corrupted_metric": float(model(corrupted).logits[0, -1, 42].to(torch.float32)),
+        }
+    assert {key: patched.receipts[key] for key in expected} == expected
+    layer = patched.coordinates["layer"][-1]
+    receipt = receipt_from_patch_grid(
+        patched, layer=layer, negative_control=0.0, positive_control=1.0
+    )
+    row = patched.values[patched.coordinates["layer"].index(layer)]
+    assert receipt.effects == tuple(float(v) - expected["corrupted_metric"] for v in row)
+    assert receipt.baseline_metric == expected["corrupted_metric"]

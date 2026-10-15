@@ -347,7 +347,9 @@ coordinates are QUERY heads, on grouped-query attention. Each cell patches one q
 its key/value group (`site="v"` for the value copy, `"k"` for the key copy) at the op that expands
 the grouped tensor to the query heads, so the other heads of the group are untouched; a k/v-site
 `grid` can only patch the whole group. Receipts add `effect_site` (the interceptor wording),
-`site`, `n_q_heads`, `n_kv_heads` and `expansion_ops`, and every cell fires exactly once. Fused
+`site`, `n_q_heads`, `n_kv_heads` and `expansion_ops`, and every cell fires exactly once. As for
+every `PatchGrid`, `values` are patched-run metrics and the receipts carry the unpatched baselines
+`clean_metric` and `corrupted_metric`. Fused
 kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expansion ops refuse
 `mi_kv_expansion_ambiguous`; equal query and key/value head counts refuse
 `mi_kv_heads_not_grouped`.
@@ -2063,6 +2065,30 @@ deprecation shim owed*
   `effect_site` receipt becomes the receipt's `effect_source`, printed as
   "effect source: ..." on the grid figure, and passing `kv_groups=` for it
   refuses `tv_receipt_invalid`.
+
+**Receipt cells and patch-grid baselines (torchlens.tviz, torchlens.mechinterp)** — *unstable — no deprecation shim owed*
+: A `mechinterp.PatchGrid` from `mechinterp.grid`, its presets or
+  `mechinterp.patch_query_heads_grid` keeps `values` as the metric of each
+  patched run (`to_pandas` names the column `metric`) and records the
+  unpatched baselines as `receipts["clean_metric"]` and
+  `receipts["corrupted_metric"]`. `tviz.receipt_from_patch_grid` turns a
+  row into effects: patched metric minus `corrupted_metric`, the run every
+  cell patches into, so a cell that changes nothing is exactly 0, the same
+  quantity as the self-patch negative control. A grid without
+  `corrupted_metric` refuses `tv_receipt_invalid`. The `CausalReceipt`
+  carries the baseline as `baseline_metric` (`None` when a producer did not
+  record one) and names its run in `baseline_run` ("unpatched corrupted
+  run" for a patch-grid receipt); its `effects`, `joint_effect` and
+  controls are all deltas from that run. The default `intervention` wording is "clean activation of
+  one head patched into the corrupted run" ("one kv group" with
+  `kv_groups=`); a row's `fires` is its own cell count when the grid's
+  ledger shows one fire per cell. `tviz.render_receipt_grid` titles the
+  figure "measured head effects on METRIC", labels the colorbar "change in
+  METRIC", labels the x axis "query head" (or "kv group"), prints "each
+  cell: change in METRIC from the unpatched corrupted run (B)" and says
+  single-head effects need not be additive in the footer, refuses rows
+  measured from different baselines (`tv_receipt_invalid`), and reserves the footer's height below the matrix
+  and its tick labels.
 
 **Summary columns (`summary(columns=...)`)** — *unstable — no deprecation shim owed*
 : The column registry of `tl.summary` / `trace.summary`: `name`, `input`,
