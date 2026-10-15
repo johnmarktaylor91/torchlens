@@ -191,6 +191,9 @@ class ComponentGraph:
         edges = (ComponentEdge(sender, r) for r in receivers for sender in r.senders)
         self.edges: Mapping[str, ComponentEdge] = MappingProxyType({e.name: e for e in edges})
         self.identity_receipt = identity_receipt
+        # ``(op label, module address)`` of the embedding writes that sum to the
+        # ``input`` node (EAP-IG's interpolation site); set by :func:`component_graph`.
+        self._input_writes: tuple[tuple[str, str], ...] = ()
 
     def __repr__(self) -> str:
         return (
@@ -521,4 +524,10 @@ def component_graph(trace: Any) -> ComponentGraph:
         if layer < len(builder.layers.mlp):
             receivers.append(builder.mlp_receiver(layer))
     receivers.append(builder.logits_receiver())
-    return ComponentGraph(tuple(builder.order), tuple(receivers), _identity(receivers))
+    graph = ComponentGraph(tuple(builder.order), tuple(receivers), _identity(receivers))
+    graph._input_writes = tuple(
+        (leaf.op_label, leaf.module_address)
+        for leaf in builder.final_leaves
+        if leaf.kind == "embedding"
+    )
+    return graph

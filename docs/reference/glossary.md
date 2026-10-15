@@ -347,6 +347,8 @@ is documented unstable and may be renamed or removed without a compatibility ali
 | Per-query-head patching under grouped-query attention | `patch_query_heads_grid`, `site`, `heads`, `effect_site` | unstable -- no deprecation shim owed |
 | Component edge graph (heads and MLPs as nodes, q/k/v split receivers) | `component_graph`, `ComponentGraph`, `ComponentNode`, `ComponentReceiver`, `ComponentEdge`, `nodes`, `receivers`, `edges`, `layer_index`, `head`, `senders`, `contribution`, `identity_receipt`, `input_label`, `norm_address`, `patch_edges`, `corrupt` | unstable -- no deprecation shim owed |
 
+| Edge attribution patching over the component graph | `edge_scores`, `corrupted`, `metric`, `method`, `eap`, `eap_ig`, `steps`, `example_reduction`, `mean`, `sum` | unstable -- no deprecation shim owed |
+| Circuit faithfulness areas | `circuit_performance_ratio`, `circuit_model_difference`, `faithfulness`, `fractions`, `log_scale` | unstable -- no deprecation shim owed |
 <!-- MECHINTERP-KIT-UNSTABLE-INDEX:END -->
 
 `component_graph(trace)` returns a `ComponentGraph`: read-only `nodes`, `receivers` and `edges`
@@ -362,6 +364,18 @@ also a selection (`__selection__`): an EDGE selection of the pre-norm input edge
 `patch_edges(trace, edges, *, corrupt)` returns a fork of `trace` in which the one receiver those
 edges enter reads `clean input - sum(s_clean) + sum(s_corrupt)` (`corrupt` is the corrupted
 input's `ComponentGraph`); the trace needs `intervention_ready=True`.
+
+`edge_scores(model, inputs, *, corrupted, metric, method="eap_ig", steps=None,
+example_reduction="mean")` returns a one-backward `ReadTable` of `EDGE` rows, one per
+component-graph edge, addressed `(edge name,)`: the edge attribution patching score
+`(s_corrupt - s_clean) . dM/d(input of t)`, summed over positions and reduced over examples
+(`example_reduction`, `"mean"` or `"sum"`). `metric` maps the unembedding output to one value per
+example. `method="eap"` takes the gradient at the clean input; `method="eap_ig"` averages it over
+`steps` points (default 5) from the corrupted to the clean `input` node (left Riemann sum).
+`circuit_performance_ratio(faithfulness, *, fractions=None, log_scale=False)` (CPR) and
+`circuit_model_difference(...)` (CMD) are the trapezoidal areas under `f` and under `|1 - f|` of a
+faithfulness curve over kept edge fractions (`fractions` default: the ten MIB fractions 0.001 to
+1; `log_scale` integrates over the log fraction).
 
 `qk_circuit(trace, attention)` and `ov_circuit(trace, attention)` return a `FactoredMatrix` of
 shape `[n_q_heads, d_model, d_model]` built from `head_weight_views` (TransformerLens's
