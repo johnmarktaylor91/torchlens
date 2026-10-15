@@ -1355,7 +1355,7 @@ jobs:
         # every page's peer is installed, so a skip means a page went unrun.
         run: |
           "$RUNNER_TEMP/peer-venv/bin/python" scripts/check_ci_executed_tests.py \
-            "$RUNNER_TEMP/peer-recipes.junit.xml" 13 0
+            "$RUNNER_TEMP/peer-recipes.junit.xml" 14 0
 
       - name: Upload the peer freeze and junit
         if: always()
