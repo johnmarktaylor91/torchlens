@@ -37,6 +37,7 @@ def _registered(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(recipes.TOOL_MODULES, TOOL, ("dictionary_learning", "sparsify"))
 
 
+@pytest.mark.heavy  # measured 4.8 s, at the 5 s boundary (imports nnsight and wandb)
 def test_sae_trainers_recipe_runs(
     _registered: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

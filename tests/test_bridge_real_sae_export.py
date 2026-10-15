@@ -178,7 +178,10 @@ def test_delphi_reads_the_cache_and_builds_latent_records(setup, tmp_path: Path,
     dataset = delphi_loader.LatentDataset(
         tmp_path,
         SamplerConfig(n_examples_train=2, n_examples_test=1, n_quantiles=1, train_type="top"),
-        ConstructorConfig(min_examples=1, example_ctx_len=4, n_non_activating=1),
+        # n_non_activating=0: on a dataset this small a latent can have exactly one
+        # non-activating window, which delphi 0.1.3 indexes as a 0-d tensor and fails on
+        # (delphi/latents/constructors.py, random_non_activating_windows).
+        ConstructorConfig(min_examples=1, example_ctx_len=4, n_non_activating=0),
         tokenizer=_tokenizer(),
         modules=["hidden"],
     )
