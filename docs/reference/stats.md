@@ -17,8 +17,8 @@ Every accumulator implements the `tl.stats.StreamingStat` protocol --
 |---|---|---|
 | `tl.stats.Mean()` | float | Count-weighted elementwise mean |
 | `tl.stats.Norm(p=2.0)` | float | Streaming p-norm over all elements |
-| `tl.stats.Quantile(quantiles=...)` | dict | Reservoir-backed quantile estimates |
-| `tl.stats.TopK(k=10)` | list | Largest k elements seen |
+| `tl.stats.Quantile(quantiles=...)` | dict | Reservoir-backed quantile estimates; per unit with `unit_axis=` |
+| `tl.stats.TopK(k=10)` | list, or `UnitTopK` per unit | Largest k elements seen; per unit with example ids under `unit_axis=` |
 | `tl.stats.Covariance()` | Tensor | Feature-space covariance (rows = observations) |
 | `tl.stats.CrossCovariance()` | Tensor | Paired `update(a, b)` |
 | `tl.stats.CKA()` | `SimilarityScore` (a float) | Paired `update(a, b)`; exact full-data linear CKA; the result names its variant in `similarity_repository_id` |
@@ -66,6 +66,73 @@ grad_results = tl.aggregate(
     loss_fn=lambda output: output.square().mean(),
 )
 print(grad_results["relu_1_2"] >= 0.0)
+```
+
+## Per-unit statistics: neurons, channels and SAE latents
+
+`tl.stats.Quantile` and `tl.stats.TopK` pool every value by default. Name the
+unit axis with the keyword-only `unit_axis=` and they keep one reservoir, or
+one top-k list, per unit. Axis 0 of every batch is the example axis; every
+axis other than the example and unit axes is a position axis (a token
+position, a spatial location).
+
+- `Quantile(..., unit_axis=-1).result()` maps each quantile to a `float64
+  [units]` tensor: a quantile vector per unit. It is exact while each unit has
+  seen at most `reservoir_size` values; beyond that the rank-space error is
+  about `sqrt(q * (1 - q) / reservoir_size)`, from a private seeded stream, so
+  the same seed gives the same result.
+- `TopK(k, unit_axis=-1).result()` is a `tl.stats.UnitTopK`: `values`
+  (`float64 [units, k]`, descending), `example_ids` (`int64 [units, k]`) and
+  `positions` (`int64 [units, k, position_axes]`, one column per position
+  axis). Under `tl.aggregate` an example id is the example's index in the
+  dataloader's iteration order, which is the dataset index for an unshuffled
+  loader; outside it, `update(batch, example_ids=...)` names the examples.
+  Ties break toward the lowest example id, then the lowest position, so the
+  answer does not depend on batch size. NaN values are ignored, as in the
+  pooled tracker; a unit with fewer than `k` values has NaN values and `-1`
+  ids in its empty slots.
+- `encoder=` applies a callable to each batch before it is folded, so SAE
+  latents use the same tool as neurons: pass the SAE's encoder and the site's
+  activations become latents inside the loop. `tl.stats.Aggregator` fans one
+  site out to a neuron tracker and a latent tracker.
+
+Memory: per-unit state is `8 * reservoir_size` bytes per unit for `Quantile`
+(64 KiB at the default 8192) and `k * (16 + 8 * position_axes)` bytes per unit
+for `TopK` (160 B at the default `k=10` with no position axis, 240 B with one).
+Past 256 MiB of state, a `stats_per_unit_state_large` warning fires once per
+session and names the cheaper spelling: a smaller `reservoir_size=` or `k=`,
+or fewer units through `encoder=lambda v: v.narrow(axis, 0, n)`. No unit is
+ever dropped.
+
+```python
+import torch
+import torchlens as tl
+from torch import nn
+
+torch.manual_seed(0)
+mlp = nn.Sequential(nn.Linear(4, 8), nn.ReLU(), nn.Linear(8, 2)).eval()
+sae_encoder = nn.Sequential(nn.Linear(8, 16), nn.ReLU()).eval()  # a tiny SAE encoder
+stimuli = [torch.randn(3, 4) for _ in range(3)]  # 9 examples, ragged batches welcome
+
+relu_label = next(
+    op.layer_label for op in tl.trace(mlp, stimuli[0]).layer_list if op.layer_type == "relu"
+)
+per_unit = tl.aggregate(
+    mlp,
+    stimuli,
+    metrics={
+        relu_label: tl.stats.Aggregator(
+            tl.stats.TopK(k=3, unit_axis=-1, name="neurons"),
+            tl.stats.TopK(k=3, unit_axis=-1, encoder=sae_encoder, name="latents"),
+            tl.stats.Quantile((0.5, 0.9), unit_axis=-1, name="neuron_quantiles"),
+        )
+    },
+)[relu_label]
+neurons, latents = per_unit["neurons"], per_unit["latents"]
+print(neurons.values.shape, latents.values.shape)  # (8, 3) and (16, 3)
+print("top stimuli of neuron 0:", neurons.example_ids[0].tolist())
+print("top stimuli of latent 0:", latents.example_ids[0].tolist())
+print(per_unit["neuron_quantiles"][0.5].shape)  # one median per neuron
 ```
 
 ## Paired statistics (CKA between two layers)

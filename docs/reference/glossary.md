@@ -1033,8 +1033,15 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   persistence (`tl.stats.save_fitted` / `tl.stats.load_fitted`). `tl.aggregate(model,
   dataloader, metrics)` streams activations (`target="out"`) or gradients
   (`target="grad"`, with `loss_fn=`) through those accumulators across a whole
-  dataloader without retaining per-batch tensors. Doc of record:
-  [docs/reference/stats.md](stats.md).
+  dataloader without retaining per-batch tensors. Per-unit statistics
+  (DOCUMENTED-UNSTABLE): the keyword-only `unit_axis=` on `tl.stats.Quantile` and
+  `tl.stats.TopK` keeps one reservoir or top-k list per unit (neuron, channel or SAE
+  latent); per-unit `TopK` returns a `tl.stats.UnitTopK` (`values`, `example_ids`,
+  `positions`, `unit_axis`), the one top-k-over-a-dataset tool for neurons and SAE
+  latents, with ties broken toward the lowest example id, then position;
+  `encoder=` maps each batch (for example through an SAE encoder) before it is
+  folded; `TopK.update(..., example_ids=...)` names examples outside
+  `tl.aggregate`. Doc of record: [docs/reference/stats.md](stats.md).
 
 ## Quantities and typed errors
 

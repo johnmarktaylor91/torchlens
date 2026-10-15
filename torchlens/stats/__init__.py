@@ -1,7 +1,8 @@
 """Streaming statistics for out aggregation (real subpackage; C01 item 18).
 
-Implementation lives in ``_streaming`` (stat kernels) and ``_aggregate``
-(the dataloader aggregation face); this facade re-exports every historical
+Implementation lives in ``_streaming`` (stat kernels), ``_per_unit``
+(``Quantile`` and ``TopK``, pooled or per unit) and ``_aggregate`` (the
+dataloader aggregation face); this facade re-exports every historical
 spelling unchanged.
 """
 
@@ -15,10 +16,8 @@ from ._streaming import (
     CrossCovariance,
     Mean,
     Norm,
-    Quantile,
     SimilarityScore,
     StreamingStat,
-    TopK,
     cka,
 )
 
@@ -47,6 +46,11 @@ from ._fitted import (  # noqa: E402
     save_fitted,
 )
 from ._glance import glance  # noqa: E402
+
+# Per-unit statistics (neurons, channels, SAE latents): ``unit_axis=`` on
+# Quantile and TopK, with UnitTopK carrying example ids and positions.
+# Spellings DOCUMENTED-UNSTABLE pending naming-session ratification.
+from ._per_unit import Quantile, TopK, UnitTopK  # noqa: E402
 from ._seams import EchoObserver, echo, summary_cell, treescope_card_fields  # noqa: E402
 from ._stats_render import (  # noqa: E402
     GLYPH_RAMP_ASCII,
@@ -92,6 +96,7 @@ __all__ = [
     "TENSOR_STATS_SCHEMA_VERSION",
     "TensorStats",
     "TopK",
+    "UnitTopK",
     "aggregate",
     "cka",
     "degrade",
