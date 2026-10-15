@@ -61,6 +61,20 @@ _DTYPES: dict[str, torch.dtype] = {
     )
 }
 
+#: Decoder method per stored node kind (scalars and objects are handled inline).
+_READERS = {
+    "tensor": "_read_tensor",
+    "dtype": "_read_dtype",
+    "device": "_read_device",
+    "generator": "_read_generator",
+    "pyrandom": "_read_pyrandom",
+    "floats": "_read_floats",
+    "list": "_read_sequence",
+    "tuple": "_read_sequence",
+    "dict": "_read_dict",
+    "encoder": "_read_encoder",
+}
+
 # Attribute values longer than this that are all floats are stored as one
 # float64 tensor (reservoirs, pooled top-k heaps) instead of JSON numbers.
 _FLOAT_LIST_TENSOR_MIN = 16
@@ -111,8 +125,23 @@ class _Encoder:
         self.tensors[key] = tensor.detach().to("cpu").contiguous().clone()
         return key
 
-    def node(self, value: Any, path: str) -> Any:  # noqa: PLR0911 -- one branch per stored kind
+    def node(self, value: Any, path: str) -> Any:
         """Encode one value found at attribute ``path``."""
+
+        leaf = self._leaf(value)
+        if leaf is not None:
+            return leaf
+        if isinstance(value, (list, tuple)):
+            return self._sequence(value, path)
+        if isinstance(value, dict) and all(isinstance(key, str) for key in value):
+            return {
+                "t": "dict",
+                "items": [[key, self.node(item, f"{path}.{key}")] for key, item in value.items()],
+            }
+        return self._object(value, path)
+
+    def _leaf(self, value: Any) -> dict[str, Any] | None:
+        """Encode a scalar, tensor, dtype or device; ``None`` for anything else."""
 
         if value is None or isinstance(value, (bool, int, str)):
             return {"t": "v", "v": value}
@@ -124,6 +153,11 @@ class _Encoder:
             return {"t": "dtype", "v": str(value).removeprefix("torch.")}
         if isinstance(value, torch.device):
             return {"t": "device", "v": str(value)}
+        return self._stream(value)
+
+    def _stream(self, value: Any) -> dict[str, Any] | None:
+        """Encode a random stream (torch or Python); ``None`` for anything else."""
+
         if isinstance(value, torch.Generator):
             return {
                 "t": "generator",
@@ -134,14 +168,7 @@ class _Encoder:
             version, internal, gauss = value.getstate()
             key = self._tensor(torch.tensor(internal, dtype=torch.int64))
             return {"t": "pyrandom", "version": version, "key": key, "gauss": gauss}
-        if isinstance(value, (list, tuple)):
-            return self._sequence(value, path)
-        if isinstance(value, dict) and all(isinstance(key, str) for key in value):
-            return {
-                "t": "dict",
-                "items": [[key, self.node(item, f"{path}.{key}")] for key, item in value.items()],
-            }
-        return self._object(value, path)
+        return None
 
     def _sequence(self, value: list[Any] | tuple[Any, ...], path: str) -> Any:
         kind = "tuple" if isinstance(value, tuple) else "list"
@@ -198,45 +225,56 @@ class _Decoder:
     def _tensor(self, key: str) -> torch.Tensor:
         return self.tensors[key]
 
-    def node(self, node: Mapping[str, Any]) -> Any:  # noqa: PLR0911 -- one branch per stored kind
-        """Decode one JSON node."""
+    def node(self, node: Mapping[str, Any]) -> Any:
+        """Decode one JSON node (an unknown kind raises ``KeyError``)."""
 
-        kind = node["t"]
+        kind = str(node["t"])
         if kind in {"v", "f"}:
             return node["v"]
-        if kind == "tensor":
-            return self._tensor(node["key"]).to(node["device"])
-        if kind == "dtype":
-            return _DTYPES[str(node["v"])]
-        if kind == "device":
-            return torch.device(node["v"])
-        if kind == "generator":
-            generator = torch.Generator(device=node["device"])
-            generator.set_state(self._tensor(node["key"]))
-            return generator
-        if kind == "pyrandom":
-            stream = random.Random()
-            internal = tuple(int(item) for item in self._tensor(node["key"]).tolist())
-            stream.setstate((int(node["version"]), internal, node["gauss"]))
-            return stream
-        if kind == "floats":
-            items = [float(item) for item in self._tensor(node["key"]).tolist()]
-            return tuple(items) if node["kind"] == "tuple" else items
-        if kind in {"list", "tuple"}:
-            items = [self.node(item) for item in node["items"]]
-            return tuple(items) if kind == "tuple" else items
-        if kind == "dict":
-            return {key: self.node(item) for key, item in node["items"]}
-        if kind == "encoder":
-            return self.encoder
-        return self._object(node)
+        if kind in {"obj", "dataclass"}:
+            return self._object(node)
+        return getattr(self, _READERS[kind])(node)
+
+    def _read_tensor(self, node: Mapping[str, Any]) -> torch.Tensor:
+        return self._tensor(node["key"]).to(node["device"])
+
+    def _read_dtype(self, node: Mapping[str, Any]) -> torch.dtype:
+        return _DTYPES[str(node["v"])]
+
+    def _read_device(self, node: Mapping[str, Any]) -> torch.device:
+        return torch.device(node["v"])
+
+    def _read_generator(self, node: Mapping[str, Any]) -> torch.Generator:
+        generator = torch.Generator(device=node["device"])
+        generator.set_state(self._tensor(node["key"]))
+        return generator
+
+    def _read_pyrandom(self, node: Mapping[str, Any]) -> random.Random:
+        stream = random.Random()
+        internal = tuple(int(item) for item in self._tensor(node["key"]).tolist())
+        stream.setstate((int(node["version"]), internal, node["gauss"]))
+        return stream
+
+    def _read_floats(self, node: Mapping[str, Any]) -> list[float] | tuple[float, ...]:
+        items = [float(item) for item in self._tensor(node["key"]).tolist()]
+        return tuple(items) if node["kind"] == "tuple" else items
+
+    def _read_sequence(self, node: Mapping[str, Any]) -> list[Any] | tuple[Any, ...]:
+        items = [self.node(item) for item in node["items"]]
+        return tuple(items) if node["t"] == "tuple" else items
+
+    def _read_dict(self, node: Mapping[str, Any]) -> dict[str, Any]:
+        return {str(key): self.node(item) for key, item in node["items"]}
+
+    def _read_encoder(self, node: Mapping[str, Any]) -> Callable[[Any], Any] | None:
+        return self.encoder
 
     def _object(self, node: Mapping[str, Any]) -> Any:
         cls = self._classes[str(node["cls"])]
         if node["t"] == "dataclass":
             return cls(**{name: self.node(item) for name, item in node["fields"]})
         attrs = {name: self.node(item) for name, item in node["attrs"]}
-        obj = cls.__new__(cls)
+        obj = object.__new__(cls)
         obj.__dict__.update(attrs)
         return obj
 

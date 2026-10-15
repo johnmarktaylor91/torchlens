@@ -190,7 +190,8 @@ def _rewrite(path: Path, *, metadata: dict[str, str] | None = None, bump: bool =
 
     with safe_open(str(path), framework="pt", device="cpu") as handle:
         old_metadata = dict(handle.metadata() or {})
-        tensors = {key: handle.get_tensor(key) for key in handle.keys()}
+        names = list(handle.keys())
+        tensors = {key: handle.get_tensor(key) for key in names}
     if bump:
         key = sorted(tensors)[0]
         tensors[key] = tensors[key] + 1

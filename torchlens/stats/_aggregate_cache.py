@@ -81,13 +81,14 @@ def _refuse_unkeyable(reason: _Unkeyable) -> NoReturn:
     )
 
 
-def _value_key(value: Any, where: str, depth: int = 0) -> object:  # noqa: PLR0911 -- one branch per keyed kind
-    """Return a by-value key fragment, or raise :class:`_Unkeyable`."""
+_NOT_A_LEAF = object()
+
+
+def _leaf_key(value: Any, where: str) -> object:
+    """Key a scalar, tensor or array by value; ``_NOT_A_LEAF`` for anything else."""
 
     from .._capture_fingerprint import _hash_tensor_content
 
-    if depth > _VALUE_DEPTH_CEILING:
-        raise _Unkeyable(where, "the value nests deeper than 64 levels", _REMEDY_DATA)
     if value is None or isinstance(value, (bool, int, float, complex, str, bytes)):
         return (type(value).__name__, value)
     if isinstance(value, torch.Tensor):
@@ -98,6 +99,17 @@ def _value_key(value: Any, where: str, depth: int = 0) -> object:  # noqa: PLR09
         return ("torch", str(value))
     if type(value).__module__ == "numpy" and hasattr(value, "dtype") and hasattr(value, "shape"):
         return _ndarray_key(value, where)
+    return _NOT_A_LEAF
+
+
+def _value_key(value: Any, where: str, depth: int = 0) -> object:
+    """Return a by-value key fragment, or raise :class:`_Unkeyable`."""
+
+    if depth > _VALUE_DEPTH_CEILING:
+        raise _Unkeyable(where, "the value nests deeper than 64 levels", _REMEDY_DATA)
+    leaf = _leaf_key(value, where)
+    if leaf is not _NOT_A_LEAF:
+        return leaf
     if isinstance(value, Mapping):
         items = sorted(
             (
@@ -400,9 +412,10 @@ def _restore_hit(entry: Path, metrics: Mapping[str, StreamingStat]) -> bool:
     try:
         with safe_open(str(entry), framework="pt", device="cpu") as handle:
             metadata = handle.metadata() or {}
-            tensors = {key: handle.get_tensor(key) for key in handle.keys()}
+            names = list(handle.keys())
+            tensors = {key: handle.get_tensor(key) for key in names}
         loaded = read_state(entry, metadata, tensors, encoder=None, require_encoder_match=False)
-    except Exception:
+    except Exception:  # noqa: BLE001 -- any unreadable entry is a cache miss, never an error
         # A damaged or foreign entry (a refused digest, an unreadable file) is a
         # miss: the loop recomputes and overwrites it.
         return False
@@ -438,7 +451,7 @@ def _warn_unstable_data() -> None:
     )
 
 
-def run_cached(
+def run_cached(  # noqa: PLR0913 -- aggregate's subject arguments plus its keywords
     model: nn.Module,
     dataloader: Iterable[Any],
     metrics: Mapping[str, StreamingStat],
