@@ -62,7 +62,7 @@ condition = direction_from_pairs(pos, neg, CONDITION_SITE, method="pca")
 
 def score(activation):
     """Cosine similarity of the newest position with the condition direction."""
-    return float(F.cosine_similarity(activation[0, -1], condition.vector, dim=0))
+    return float(F.cosine_similarity(activation[0, -1].detach(), condition.vector, dim=0))
 
 
 def calibration_scores(ids):
