@@ -19,6 +19,7 @@ All spellings are DOCUMENTED-UNSTABLE pending the naming session.
 
 from __future__ import annotations
 
+import textwrap
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -310,12 +311,23 @@ def _column_labels(receipt: CausalReceipt) -> list[str]:
     return labels
 
 
+#: Smallest text size on the figure, in points: 8 pt at the 200 dpi export
+#: reads as about 11 CSS px in a 760 px pane, the legibility floor.
+_TEXT_PT = 8
+
 #: Height of one matrix row, in inches.
 _ROW_INCHES = 0.5
 
 #: Vertical gaps, in inches: page edge, between bands, under the title.
 _EDGE_INCHES = 0.06
 _GAP_INCHES = 0.12
+
+
+def _wrap_footer(lines: list[str], width_inches: float) -> str:
+    """Wrap each disclosure line to the figure width (continuations indented)."""
+
+    chars = max(40, int(width_inches * 72 / (0.6 * _TEXT_PT)))
+    return "\n".join(textwrap.fill(line, width=chars, subsequent_indent="    ") for line in lines)
 
 
 def _height_inches(extent: Any, dpi: float) -> float:
@@ -421,18 +433,21 @@ def render_receipt_grid(
                     f"{value:+.2f}",
                     ha="center",
                     va="center",
-                    fontsize=6,
+                    fontsize=_TEXT_PT,
                 )
     ax.set_xticks([col + 0.5 for col in range(len(heads))])
-    ax.set_xticklabels(_column_labels(rows[0]), fontsize=7)
+    ax.set_xticklabels(_column_labels(rows[0]), fontsize=_TEXT_PT)
     ax.set_yticks([row_index + 0.5 for row_index in range(len(rows))])
-    ax.set_yticklabels([receipt.layer for receipt in rows], fontsize=6)
+    ax.set_yticklabels([receipt.layer for receipt in rows], fontsize=_TEXT_PT)
     ax.tick_params(length=0)
     bar = colorbar(fig, mesh, ax, label=f"change in\n{rows[0].metric}")
-    bar.ax.yaxis.label.set_fontsize(7)
+    bar.ax.yaxis.label.set_fontsize(_TEXT_PT)
+    bar.ax.tick_params(labelsize=_TEXT_PT)
     unit_title = "head" if rows[0].kv_groups is None else "kv-group"
-    title = fig.suptitle(f"measured {unit_title} effects on {rows[0].metric}", fontsize=9)
-    footer = fig.text(0.01, 0.0, "\n".join(disclosures), fontsize=6, va="bottom")
+    title = fig.suptitle(f"measured {unit_title} effects on {rows[0].metric}", fontsize=10)
+    footer = fig.text(
+        0.01, 0.0, _wrap_footer(disclosures, fig.get_figwidth()), fontsize=_TEXT_PT, va="bottom"
+    )
     _reserve_footer(fig, ax, bar, title, footer, n_rows=len(rows))
     written = save_figure(fig, path, svg_fonttype=svg_fonttype)
     return Artifact(
