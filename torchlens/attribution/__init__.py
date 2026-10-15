@@ -32,6 +32,7 @@ from torchlens.attribution._randomization import (
     RandomizationStep,
     randomization_test,
 )
+from torchlens.attribution._road import road_curve
 from torchlens.attribution._site import SiteTarget
 from torchlens.attribution._stash import SiteStash
 from torchlens.attribution._text import TokenAttributionPayload, TokenAttributionResult, text
@@ -82,6 +83,7 @@ __all__ = [
     "RandomizationResult",
     "RandomizationStep",
     "read",
+    "road_curve",
     "saliency",
     "seed",
     "sensitivity",
