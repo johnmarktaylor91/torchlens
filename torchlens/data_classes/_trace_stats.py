@@ -34,6 +34,7 @@ from ._trace_accessors import (
     TraceGradFnCallAccessor,
     TraceModuleCallAccessor,
     TraceOpAccessor,
+    boundary_label_ops,
 )
 from ._trace_profile import (
     ModelProfile,
@@ -1727,13 +1728,15 @@ class TraceStatsMixin(_TraceMixinBase):
     def input_ops(self: "Trace") -> Accessor[Op]:
         """Access flat input-boundary Ops."""
 
-        return TraceOpAccessor([self[label] for label in self.input_layers], self.layer_num_calls)
+        return TraceOpAccessor(
+            boundary_label_ops(self.input_layers, self.__getitem__), self.layer_num_calls
+        )
 
     @property
     def num_input_layers(self: "Trace") -> int:
-        """Number of input-boundary Layers."""
+        """Number of distinct input-boundary Layers (a multi-pass Layer counts once)."""
 
-        return len(self.input_layers)
+        return len(dict.fromkeys(self.input_layers))
 
     @property
     def num_input_ops(self: "Trace") -> int:
@@ -1745,13 +1748,15 @@ class TraceStatsMixin(_TraceMixinBase):
     def output_ops(self: "Trace") -> Accessor[Op]:
         """Access flat output-boundary Ops."""
 
-        return TraceOpAccessor([self[label] for label in self.output_layers], self.layer_num_calls)
+        return TraceOpAccessor(
+            boundary_label_ops(self.output_layers, self.__getitem__), self.layer_num_calls
+        )
 
     @property
     def num_output_layers(self: "Trace") -> int:
-        """Number of output-boundary Layers."""
+        """Number of distinct output-boundary Layers (a multi-pass Layer counts once)."""
 
-        return len(self.output_layers)
+        return len(dict.fromkeys(self.output_layers))
 
     @property
     def num_output_ops(self: "Trace") -> int:
