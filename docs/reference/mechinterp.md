@@ -152,7 +152,19 @@ total = sum(node.value for node in receiver.senders)
 assert torch.allclose(total, receiver.value, atol=1e-5)
 edge = graph.edges["m0->a1.h1<q>"]
 assert edge.contribution is graph.nodes["m0"].value
-trace.cleanup()
+
+# A circuit runs as one patch_edges call: every edge outside it reads its
+# sender's value on the corrupted input.
+ready = tl.options.CaptureOptions(layers_to_save="all", intervention_ready=True)
+clean = tl.trace(model, ids, capture=ready)
+corrupt = tl.trace(model, torch.randint(0, 32, (1, 5)), capture=ready)
+corrupt_graph = tl.mechinterp.component_graph(corrupt)
+kept = {"input->a0.h0<q>", "a0.h0->a1.h1<v>", "a1.h1->logits"}
+outside = [e for name, e in tl.mechinterp.component_graph(clean).edges.items() if name not in kept]
+circuit = tl.mechinterp.patch_edges(clean, outside, corrupt=corrupt_graph)
+print(circuit.modules["lm_head"].out[0, -1, :3])
+for t in (trace, clean, corrupt):
+    t.cleanup()
 ```
 
 Edges are intervention selections. `graph.edges["m0->logits"]` passed to
@@ -160,12 +172,25 @@ Edges are intervention selections. `graph.edges["m0->logits"]` passed to
 edge substitution on the replay engine); an edge into `a{L}.h{H}<q>` (or
 `<k>`, `<v>`) addresses head H's slice of that layer's projection output (an
 ACT selection), because the heads and roles of one layer share their norm.
-`patch_edges(trace, edges, corrupt=corrupt_graph)` builds the matching value
-and returns a fork in which the edges' one receiver reads `clean input -
-sum(s_clean) + sum(s_corrupt)`; every receiver that is not downstream of it
-reads exactly what it read before. Patching needs a trace captured with
-`intervention_ready=True`; edges into several receivers refuse
-`mi_edge_patch_receivers_mixed`.
+`patch_edges(trace, edges, *, corrupt=corrupt_graph)` builds the matching
+values and returns a fork in which every patched receiver reads `input -
+sum(s) + sum(s_corrupt)` over its patched edges. With edges into one
+receiver, `input` and `s` are the clean values, and every receiver that is
+not downstream of it reads exactly what it read before. With edges into
+several receivers, `input` and `s` are the values of the patched forward
+itself (the MIB circuit track's convention): a receiver sees its patched
+senders' corrupted values while every other sender carries what it computes
+in that forward, including the effect of patches upstream of it. A circuit
+(a set of kept edges, everything else patched) is one call, as in the
+example above: pass every edge outside the circuit.
+
+Receivers are patched in topological order, a stage at a time (a layer's
+attention receivers, then its MLP, then `logits`), and the component graph
+is rebuilt on the partly patched fork at each later stage, so a circuit over
+all 445 GPT-2 small receivers costs one replay per patched receiver (two for
+`q`, `k`, `v`) plus 24 graph builds. No edges returns an unpatched fork; an
+edge passed twice refuses `mi_edge_patch_edge_repeated`. Patching needs a
+trace captured with `intervention_ready=True`.
 
 ## Edge attribution patching and circuit faithfulness
 
