@@ -14,6 +14,8 @@ captured Trace.
 | `_layer.py` | Layer-level methods: `layer_attribution`, `layer_integrated_gradients`, `layer_conductance`, `grad_cam` |
 | `_cam_grid.py` | Token-grid derivation for `grad_cam` from a metadata-only trace (grid flatten and grid view patterns, prefix tokens from the token concatenation), the `reshape=` escape hatch and their coded refusals |
 | `_cam_choice.py` | Automatic `grad_cam` layer choice (`layer=None`): once-firing map or token-grid outputs that dominate the output, deepest with a nonzero grid gradient |
+| `_entry.py` | Integer inputs for the layer methods: finds the innermost modules that turn caller integers into floats (embeddings), substitutes the path values at their outputs by prepended forward hooks, and builds baselines from reference ids |
+| `_site.py` | `SiteTarget` (attribute a hidden layer's output or one unit of it) and its route: `_call_model` returns the site activation, `_scalarize_output` selects the unit; coded refusals for missing sites, bad units or calls, and sites the input does not reach |
 | `_occlusion.py` | Selection-addressed scored occlusion through `Trace.fork().do(...)`, with explicit zeros/mean/blur baselines |
 | `_viz.py` | `overlay`: bridges layer-scoped results (or explicit mappings) onto `Trace.draw(color_by=...)`; uncovered nodes return `None` (unencoded) |
 

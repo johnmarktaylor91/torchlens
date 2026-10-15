@@ -167,7 +167,7 @@ def test_site_target_refuses_missing_site_and_its_remedy_runs() -> None:
     model, x = _mlp_and_input()
     with pytest.raises(AttributionError) as caught:
         tl.attribution.saliency(model, x, target=SiteTarget("fc9", unit=1))
-    assert caught.value.code == "attribution_site_not_found"
+    assert caught.value.fields.get("code") == "attribution_site_not_found"
     assert "'fc9'" in str(caught.value)
     remedy = _target_remedy(caught.value)
     assert remedy.layer in {"fc1", "fc2"}
@@ -182,7 +182,7 @@ def test_site_target_refuses_site_independent_of_input_and_its_remedy_runs() -> 
     x = torch.randn(2, 5)
     with pytest.raises(AttributionError) as caught:
         tl.attribution.saliency(model, x, target=SiteTarget("offset"))
-    assert caught.value.code == "attribution_site_independent_of_input"
+    assert caught.value.fields.get("code") == "attribution_site_independent_of_input"
     remedy = _target_remedy(caught.value)
     assert remedy == SiteTarget("fc2")
     values = tl.attribution.saliency(model, x, target=remedy).values
@@ -195,7 +195,7 @@ def test_site_target_refuses_bad_unit_and_reused_site_and_remedies_run() -> None
     model, x = _mlp_and_input()
     with pytest.raises(AttributionError) as caught:
         tl.attribution.saliency(model, x, target=SiteTarget("act", unit=99))
-    assert caught.value.code == "attribution_site_unit_invalid"
+    assert caught.value.fields.get("code") == "attribution_site_unit_invalid"
     remedy = _target_remedy(caught.value)
     assert remedy == SiteTarget("act", unit=0)
     tl.attribution.saliency(model, x, target=remedy)
@@ -205,7 +205,7 @@ def test_site_target_refuses_bad_unit_and_reused_site_and_remedies_run() -> None
     x7 = torch.randn(2, 5)
     with pytest.raises(AttributionError) as caught:
         tl.attribution.saliency(reused, x7, target=SiteTarget("act", unit=1))
-    assert caught.value.code == "attribution_site_firing_invalid"
+    assert caught.value.fields.get("code") == "attribution_site_firing_invalid"
     remedy = _target_remedy(caught.value)
     assert remedy == SiteTarget("act", unit=1, call=0)
     first_call = tl.attribution.saliency(reused, x7, target=remedy).values
@@ -215,7 +215,7 @@ def test_site_target_refuses_bad_unit_and_reused_site_and_remedies_run() -> None
 
     with pytest.raises(AttributionError) as caught:
         SiteTarget("act", unit=1.5)  # type: ignore[arg-type]
-    assert caught.value.code == "attribution_site_unit_invalid"
+    assert caught.value.fields.get("code") == "attribution_site_unit_invalid"
 
 
 def test_site_target_refuses_where_unsupported() -> None:
@@ -226,7 +226,7 @@ def test_site_target_refuses_where_unsupported() -> None:
     attribution = tl.attribution.saliency(model, x, target=1)
     with pytest.raises(AttributionError) as caught:
         tl.attribution.infidelity(model, x, target=target, attribution=attribution)
-    assert caught.value.code == "attribution_site_target_unsupported"
+    assert caught.value.fields.get("code") == "attribution_site_target_unsupported"
     assert str(caught.value).startswith("infidelity cannot attribute a SiteTarget")
     spelling = re.search(r"e\.g\. (tl\.attribution\.saliency\(.*?\))\. See", str(caught.value))
     assert spelling is not None

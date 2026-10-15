@@ -62,12 +62,14 @@ class SiteTarget:
                 self.layer,
                 f"unit must be None, an int or a tuple of ints; got {self.unit!r}",
                 SiteTarget(self.layer, call=self.call) if _is_call(self.call) else None,
+                code="attribution_site_unit_invalid",
             )
         if not _is_call(self.call):
             raise _firing_invalid(
                 self.layer,
                 f"call must be None or a call index of at least 0; got {self.call!r}",
                 SiteTarget(self.layer, unit=self.unit),
+                code="attribution_site_firing_invalid",
             )
 
     def __repr__(self) -> str:
@@ -115,24 +117,24 @@ def _target_spelling(target: Any) -> str:
     return f"target={target!r}" if _is_index(target) else "target=target"
 
 
-def _unit_invalid(layer: str, why: str, fixed: SiteTarget | None) -> AttributionError:
+def _unit_invalid(layer: str, why: str, fixed: SiteTarget | None, *, code: str) -> AttributionError:
     """Build the coded refusal for a unit selection that does not fit the site."""
 
     fixed = fixed if fixed is not None else SiteTarget(layer)
     return AttributionError(
         f"SiteTarget for layer {layer!r} cannot select its unit: {why}. Remedy: select a unit "
         f"inside the layer's output, e.g. target={_spelling(fixed)}. {_DOCS_POINTER}",
-        code="attribution_site_unit_invalid",
+        code=code,
     )
 
 
-def _firing_invalid(layer: str, why: str, fixed: SiteTarget) -> AttributionError:
+def _firing_invalid(layer: str, why: str, fixed: SiteTarget, *, code: str) -> AttributionError:
     """Build the coded refusal for a site whose firing cannot be chosen."""
 
     return AttributionError(
         f"SiteTarget for layer {layer!r} has no single output to attribute: {why}. Remedy: "
         f"name the call, e.g. target={_spelling(fixed)}. {_DOCS_POINTER}",
-        code="attribution_site_firing_invalid",
+        code=code,
     )
 
 
@@ -200,18 +202,25 @@ class _SiteRoute:
         target = self.target
         call = 0 if target.call is None else target.call
         if not firings:
-            raise _firing_invalid(target.layer, "it did not run in the forward pass", target)
+            raise _firing_invalid(
+                target.layer,
+                "it did not run in the forward pass",
+                target,
+                code="attribution_site_firing_invalid",
+            )
         if target.call is None and len(firings) > 1:
             raise _firing_invalid(
                 target.layer,
                 f"it ran {len(firings)} times",
                 SiteTarget(target.layer, unit=target.unit, call=0),
+                code="attribution_site_firing_invalid",
             )
         if call >= len(firings):
             raise _firing_invalid(
                 target.layer,
                 f"call={call} was asked for but it ran {len(firings)} times",
                 SiteTarget(target.layer, unit=target.unit, call=len(firings) - 1),
+                code="attribution_site_firing_invalid",
             )
         output = firings[call]
         if not isinstance(output, Tensor):
@@ -219,6 +228,7 @@ class _SiteRoute:
                 target.layer,
                 f"its output is a {type(output).__name__}, not a tensor",
                 target,
+                code="attribution_site_firing_invalid",
             )
         _require_input_dependence(target, output, replacements, dependent_site)
         return _SiteActivation(output)
@@ -298,6 +308,7 @@ def _select_unit(activation: Tensor, target: SiteTarget) -> Tensor:
                 target.layer,
                 f"unit={unit} is outside the last axis of its output of shape {shape}",
                 _first_unit(target, shape),
+                code="attribution_site_unit_invalid",
             )
         return activation[..., unit].sum()
     if len(unit) > activation.ndim - 1 or any(
@@ -308,8 +319,10 @@ def _select_unit(activation: Tensor, target: SiteTarget) -> Tensor:
             f"unit={unit} does not index the axes after the batch axis of its output of "
             f"shape {shape}",
             _first_unit(target, shape),
+            code="attribution_site_unit_invalid",
         )
-    return activation[(slice(None), *unit)].sum()
+    index: tuple[slice | int, ...] = (slice(None), *unit)
+    return activation[index].sum()
 
 
 def _first_unit(target: SiteTarget, shape: tuple[int, ...]) -> SiteTarget:
@@ -320,14 +333,14 @@ def _first_unit(target: SiteTarget, shape: tuple[int, ...]) -> SiteTarget:
     return SiteTarget(target.layer, unit=0, call=target.call)
 
 
-def _site_unsupported(method: str, target: SiteTarget) -> AttributionError:
+def _site_unsupported(method: str, target: SiteTarget, *, code: str) -> AttributionError:
     """Build the coded refusal for a method that cannot attribute a site."""
 
     return AttributionError(
         f"{method} cannot attribute a SiteTarget ({target!r}); it scores the model output "
         "only. Remedy: use a gradient method that accepts site targets, e.g. "
         f"tl.attribution.saliency(model, inputs, target={_spelling(target)}). {_DOCS_POINTER}",
-        code="attribution_site_target_unsupported",
+        code=code,
     )
 
 

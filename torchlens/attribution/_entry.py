@@ -251,7 +251,7 @@ def _detect_entry_route(
     return route, float_outputs
 
 
-def _baseline_ids_invalid(why: str) -> AttributionError:
+def _baseline_ids_invalid(why: str, *, code: str) -> AttributionError:
     """Build the coded refusal for baseline ids that do not mirror the integer inputs."""
 
     return AttributionError(
@@ -259,7 +259,7 @@ def _baseline_ids_invalid(why: str) -> AttributionError:
         "pass reference ids of the same shape and dtype, e.g. "
         "baseline=torch.zeros_like(inputs), or omit baseline= for a zero embedding. "
         f"{_DOCS_POINTER}",
-        code="layer_path_baseline_ids_invalid",
+        code=code,
     )
 
 
@@ -270,13 +270,15 @@ def _baseline_leaves(route: _EntryRoute, baseline: Any) -> list[Tensor]:
     if len(leaves) != len(route.integer_leaves):
         raise _baseline_ids_invalid(
             f"it has {len(leaves)} tensors where the inputs have {len(route.integer_leaves)} "
-            "integer tensors"
+            "integer tensors",
+            code="layer_path_baseline_ids_invalid",
         )
     for given, expected in zip(leaves, route.integer_leaves, strict=True):
         if given.shape != expected.shape or given.dtype != expected.dtype:
             raise _baseline_ids_invalid(
                 f"got shape {tuple(given.shape)} and dtype {given.dtype} where the input has "
-                f"shape {tuple(expected.shape)} and dtype {expected.dtype}"
+                f"shape {tuple(expected.shape)} and dtype {expected.dtype}",
+                code="layer_path_baseline_ids_invalid",
             )
     return leaves
 
@@ -315,7 +317,8 @@ def _entry_baselines(
         if value is None or value.shape != own.shape:
             raise _baseline_ids_invalid(
                 f"on the baseline ids, embedding {site.layer!r} (call {site.call}) did not "
-                "return an output of the same shape"
+                "return an output of the same shape",
+                code="layer_path_baseline_ids_invalid",
             )
         values.append(value)
     return tuple(values)

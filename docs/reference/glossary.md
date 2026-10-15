@@ -306,14 +306,18 @@ documented unstable and may be renamed or removed without a compatibility alias.
 | F06 metrics | `infidelity`, `sensitivity`, `MetricResult`, `perturb`, `noise_std`, `radius`, `gaussian`, `square_removal` | unstable -- no deprecation shim owed |
 | F06 token attribution | `text`, `TokenAttributionResult`, `TokenAttributionPayload`, `keep_special_tokens`, `steps_per_batch`, `max_length`, `pad_token`, `auto`, `converged`, `show` | unstable -- no deprecation shim owed |
 | F06 LRP mechanism | `SiteStash`, `stash`, `fetch`, `mark_firing`, `leftovers`, `register_site`, `label_of` | unstable -- no deprecation shim owed |
+| Site targets | `SiteTarget`, `unit`, `call` | unstable -- no deprecation shim owed |
+| Integer-input evidence | `integer_input_layers` | unstable -- no deprecation shim owed |
 
 <!-- ATTRIBUTION-KIT-UNSTABLE-INDEX:END -->
 
 Integrated Gradients always reports its signed completeness residual against the exact endpoint
 target delta. Occlusion always names its replacement baseline. CAM overlays visibly state the
 native measured map resolution, while their larger display grid is labeled as interpolation.
-The callable/index annotation used inside `torchlens.attribution` is privately named
-`_AttributionTarget`; `TargetSpec` refers only to the intervention selector record and is not an
+A `SiteTarget` passed as `target=` attributes a hidden layer's output (or one unit of it) instead
+of the model output; layer methods given only integer inputs start their input path at the
+embedding output. The callable/index/site annotation used inside `torchlens.attribution` is
+privately named `_AttributionTarget`; `TargetSpec` refers only to the intervention selector record and is not an
 attribution-target alias. See the [attribution reference](attribution.md).
 
 ### Documented-unstable mechinterp kit additions INDEX

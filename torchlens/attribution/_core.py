@@ -192,13 +192,15 @@ def _normalize_model_inputs(
     site: _SiteRoute | None = None
     if isinstance(target, SiteTarget):
         if model is None:
-            raise _site_unsupported(method, target)
+            raise _site_unsupported(method, target, code="attribution_site_target_unsupported")
         site = _resolve_site(model, target)
     attributed_leaves = tuple(_iter_attributed_tensors((positional, kwargs)))
     entry: _EntryRoute | None = None
     if not attributed_leaves:
         if not (integer_route and model is not None and _tensor_leaves((positional, kwargs))):
-            raise _input_not_float(method, model, positional, kwargs, target)
+            raise _input_not_float(
+                method, model, positional, kwargs, target, code="attribution_input_not_float"
+            )
         entry, _float_outputs = _detect_entry_route(model, positional, kwargs)
         attributed_leaves = entry.values
     return _PreparedInputs(
@@ -228,6 +230,8 @@ def _input_not_float(
     positional: tuple[Any, ...],
     kwargs: dict[str, Any],
     target: Any,
+    *,
+    code: str,
 ) -> AttributionError:
     """Build the coded refusal for an input method given no floating-point input.
 
@@ -250,7 +254,7 @@ def _input_not_float(
         "token ids have no gradient. Remedy: attribute a layer's output instead, which "
         f"accepts integer inputs, e.g. tl.attribution.{path_method}(model, inputs, "
         f"{_target_spelling(target)}, layer={layer_spelling}). {_DOCS_POINTER}",
-        code="attribution_input_not_float",
+        code=code,
     )
 
 
@@ -670,7 +674,9 @@ def _scalarize_output(output: Any, target: _AttributionTarget) -> Tensor:
 
     if isinstance(target, SiteTarget):
         if not isinstance(output, _SiteActivation):
-            raise _site_unsupported("this method", target)
+            raise _site_unsupported(
+                "this method", target, code="attribution_site_target_unsupported"
+            )
         return _select_unit(output.tensor, target)
     if isinstance(output, _SiteActivation):
         output = output.tensor

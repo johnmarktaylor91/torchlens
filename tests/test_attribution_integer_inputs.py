@@ -208,7 +208,7 @@ def test_input_method_refuses_integer_ids_and_its_remedy_runs(method_name: str) 
     method = getattr(tl.attribution, method_name)
     with pytest.raises(AttributionError) as caught:
         method(token_model, ids, target=1, **_INPUT_METHODS[method_name])
-    assert caught.value.code == "attribution_input_not_float"
+    assert caught.value.fields.get("code") == "attribution_input_not_float"
     message = str(caught.value)
     assert method_name in message
     assert "torch.int64 tensor of shape (2, 5)" in message
@@ -228,7 +228,7 @@ def test_layer_path_refuses_integer_inputs_without_an_embedding_and_its_remedy_r
     ids = torch.randint(0, 5, (2, 6))
     with pytest.raises(AttributionError) as caught:
         tl.attribution.layer_integrated_gradients(model, ids, target=0, layer="fc", n_steps=4)
-    assert caught.value.code == "layer_path_no_embedding"
+    assert caught.value.fields.get("code") == "layer_path_no_embedding"
     spelling = _remedy(caught.value, r"e\.g\. (tl\.attribution\.\w+\(.*?\)), or")
     assert spelling == "tl.attribution.layer_attribution(model, inputs, target=0, layer='fc')"
     result = eval(spelling, {"tl": tl, "model": model, "inputs": ids})  # noqa: S307
@@ -244,7 +244,7 @@ def test_layer_path_refuses_baseline_ids_that_do_not_mirror_inputs() -> None:
         tl.attribution.layer_integrated_gradients(
             token_model, ids, target=1, layer="body.encoder", baseline=ids[:, :3], n_steps=4
         )
-    assert caught.value.code == "layer_path_baseline_ids_invalid"
+    assert caught.value.fields.get("code") == "layer_path_baseline_ids_invalid"
     spelling = _remedy(caught.value, r"e\.g\. (baseline=torch\.zeros_like\(inputs\))")
     result = eval(  # noqa: S307
         f"tl.attribution.layer_integrated_gradients(model, inputs, target=1, "
@@ -277,7 +277,7 @@ def test_grad_cam_refuses_integer_inputs_without_a_grid_and_its_remedy_runs() ->
     ids = torch.randint(0, 7, (2, 30))
     with pytest.raises(AttributionError) as caught:
         tl.attribution.grad_cam(model, ids, target=0, layer="body.conv", overlay=False)
-    assert caught.value.code == "grad_cam_integer_grid_invalid"
+    assert caught.value.fields.get("code") == "grad_cam_integer_grid_invalid"
     spelling = _remedy(caught.value, r"e\.g\. (tl\.attribution\.\w+\(.*?\))\. See")
     result = eval(spelling, {"tl": tl, "model": model, "inputs": ids, "target": 0})  # noqa: S307
     assert tuple(result.values.shape) == (2, 6, 5, 6)
@@ -307,4 +307,4 @@ def test_integer_route_refuses_embedding_that_changes_between_passes() -> None:
     ids = torch.randint(0, 7, (2, 6))
     with pytest.raises(AttributionError) as caught:
         tl.attribution.layer_attribution(model, ids, target=0, layer="fc")
-    assert caught.value.code == "layer_path_embedding_inconsistent"
+    assert caught.value.fields.get("code") == "layer_path_embedding_inconsistent"
