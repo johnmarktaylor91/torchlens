@@ -41,7 +41,7 @@ from ._streaming import _as_float_tensor
 
 __tl_layer__ = "L5"
 
-#: Per-unit state above this many bytes warns once (defaults.1 size guard).
+#: Per-unit state above this many bytes warns once (the per-unit size guard).
 STATE_WARN_BYTES = 256 * 1024**2
 
 #: Element budget for one transient per-unit fold buffer (units are chunked).
