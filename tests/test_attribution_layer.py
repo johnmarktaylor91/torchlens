@@ -274,7 +274,7 @@ def test_layer_attribution_activation_x_grad_shape_matches_layer_activation() ->
 
     assert result.method == "layer_activation_x_grad"
     assert result.values.shape == (1, 2, 5, 5)
-    assert result.extra == {"layer": "features.0"}
+    assert result.extra == {"layer": "features.0", "integer_input_layers": ()}
     assert torch.isfinite(result.values).all()
 
 
