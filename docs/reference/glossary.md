@@ -329,6 +329,7 @@ is documented unstable and may be renamed or removed without a compatibility ali
 | Per-neuron MLP rows under the identity gate | `mlp_neuron_contributions`, `layers`, `neurons`, `onto`, `positions` | unstable -- no deprecation shim owed |
 | Alias table generation value | `generation="4.x"` (TransformerBridge canonical hook names) | unstable -- no deprecation shim owed |
 | Appliance on the `trace.using` door | `trace.using("mi")`, `head_scores`, `qk_circuit`, `ov_circuit` | unstable -- no deprecation shim owed |
+| Per-query-head patching under grouped-query attention | `patch_query_heads_grid`, `site`, `heads`, `effect_site` | unstable -- no deprecation shim owed |
 
 <!-- MECHINTERP-KIT-UNSTABLE-INDEX:END -->
 
@@ -339,6 +340,17 @@ pairs with the KV head that serves it). `mlp_neuron_contributions` returns a `Co
 one row per hidden neuron (`hidden[n] * W_out[n]`, read from the output projection's captured
 input), a verified bias constant, and the D7 grading; unselected neurons under `neurons=` fold into
 one exact `other_neurons` row.
+
+`patch_query_heads_grid(model, clean_input, corrupted_input, metric, site="v", heads=None,
+budget=None, trace_kwargs=None)` returns a `PatchGrid` with axes `("layer", "head")` whose head
+coordinates are QUERY heads, on grouped-query attention. Each cell patches one query head's copy of
+its key/value group (`site="v"` for the value copy, `"k"` for the key copy) at the op that expands
+the grouped tensor to the query heads, so the other heads of the group are untouched; a k/v-site
+`grid` can only patch the whole group. Receipts add `effect_site` (the interceptor wording),
+`site`, `n_q_heads`, `n_kv_heads` and `expansion_ops`, and every cell fires exactly once. Fused
+kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expansion ops refuse
+`mi_kv_expansion_ambiguous`; equal query and key/value head counts refuse
+`mi_kv_heads_not_grouped`.
 
 ## Selection and storage
 
@@ -2025,7 +2037,11 @@ deprecation shim owed*
   `query_heads(group)` and `group_header(group)`. A grid whose head axis
   exceeds the group count refuses `tv_record_invalid`; mixing kv-group and
   query-head rows refuses `tv_receipt_invalid`; `Annotation.from_receipt`
-  refuses a kv-group receipt `tv_annotation_invalid`.
+  refuses a kv-group receipt `tv_annotation_invalid`. A grid from
+  `mechinterp.patch_query_heads_grid` is an ordinary query-head receipt: its
+  `effect_site` receipt becomes the receipt's `effect_source`, printed as
+  "effect source: ..." on the grid figure, and passing `kv_groups=` for it
+  refuses `tv_receipt_invalid`.
 
 **Summary columns (`summary(columns=...)`)** — *unstable — no deprecation shim owed*
 : The column registry of `tl.summary` / `trace.summary`: `name`, `input`,
