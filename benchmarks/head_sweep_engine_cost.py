@@ -341,6 +341,15 @@ def _environment() -> dict[str, Any]:
         "seed": SEED,
         "seq_len": SEQ_LEN,
         "model": f"GPT2Config(n_layer={N_LAYER}, n_head={N_HEAD}, n_embd={N_EMBD}) random",
+        # Thread and determinism settings: float results of a CPU matmul can
+        # depend on them, so every parity record carries them.
+        "torch_threads": torch.get_num_threads(),
+        "torch_interop_threads": torch.get_num_interop_threads(),
+        "deterministic_algorithms": torch.are_deterministic_algorithms_enabled(),
+        "thread_env": {
+            name: os.environ.get(name)
+            for name in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "MKL_DYNAMIC", "OMP_DYNAMIC")
+        },
     }
 
 
