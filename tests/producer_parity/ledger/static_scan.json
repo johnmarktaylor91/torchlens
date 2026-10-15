@@ -8369,6 +8369,14 @@
  },
  {
   "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/stats/_aggregate_cache.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "policy",
   "file": "torchlens/stats/_seams.py",
   "has_default": false,

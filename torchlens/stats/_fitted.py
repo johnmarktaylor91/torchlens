@@ -1,5 +1,10 @@
 """Fitted-PCA payload + digest-checked persisted sidecar (transforms memo P6).
 
+``save_fitted`` / ``load_fitted`` are also the one persistence path for
+streaming accumulators: a ``tl.stats`` accumulator saves its whole state to a
+``tl_stats_state_v1`` file (``_state_io``) and reloads to an object that keeps
+folding as if never interrupted.
+
 The additive ``tl.stats.PCA`` upgrade three panels depend on: the fitted
 result carries ``mean``, ``n_samples``, ``n_features``, and a content
 ``digest`` alongside the (deterministically sign-canonicalized) components,
@@ -15,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -139,13 +145,22 @@ class FittedPCA:
         )
 
 
-def save_fitted(fitted: FittedPCA, path: str | Path) -> Path:
-    """Persist a fitted payload as the digest-checked ``tl_pca_fitted_v1`` sidecar.
+def save_fitted(fitted: Any, path: str | Path) -> Path:
+    """Persist a fitted payload or a streaming accumulator's whole state.
+
+    A :class:`FittedPCA` writes the digest-checked ``tl_pca_fitted_v1``
+    sidecar. A ``tl.stats`` accumulator (``Mean``, ``Norm``, ``Covariance``,
+    ``CrossCovariance``, ``CKA``, ``PCA``, ``Quantile``, ``TopK``, pooled or
+    per unit, ``Histogram``, ``Spine``, or an ``Aggregator`` of them) writes a
+    ``tl_stats_state_v1`` file: its configuration, its folded tensors and its
+    private random stream, so :func:`load_fitted` returns an object that
+    keeps folding as if it had never stopped. An ``encoder=`` callable is
+    not stored; pass it back to :func:`load_fitted`.
 
     Parameters
     ----------
     fitted:
-        The fitted payload.
+        The fitted payload, or the accumulator to save.
     path:
         Destination file path (conventionally ``*.safetensors``).
 
@@ -157,11 +172,19 @@ def save_fitted(fitted: FittedPCA, path: str | Path) -> Path:
 
     from safetensors.torch import save_file
 
+    from ._state_io import is_saveable_state, write_state
+
+    if is_saveable_state(fitted):
+        return write_state(fitted, path)
     if not isinstance(fitted, FittedPCA):
         raise FittedArtifactError(
-            f"save_fitted() needs a FittedPCA payload; got {type(fitted).__name__}.",
+            "save_fitted() needs a FittedPCA payload or a tl.stats accumulator; "
+            f"got {type(fitted).__name__}.",
             code="pca_fitted_record_invalid",
-            remedy="pass tl.stats.PCA(...).fitted(...)",
+            remedy=(
+                "pass tl.stats.PCA(...).fitted(...), or an accumulator such as "
+                "tl.stats.TopK(10, unit_axis=-1)"
+            ),
             value_type=type(fitted).__name__,
         )
     destination = Path(path)
@@ -186,28 +209,37 @@ def save_fitted(fitted: FittedPCA, path: str | Path) -> Path:
     return destination
 
 
-def load_fitted(path: str | Path) -> FittedPCA:
-    """Load a ``tl_pca_fitted_v1`` sidecar, recomputing and CHECKING the digest.
+def load_fitted(path: str | Path, *, encoder: Callable[[Any], Any] | None = None) -> Any:
+    """Load a ``tl_pca_fitted_v1`` sidecar or a ``tl_stats_state_v1`` accumulator state.
 
-    No code is imported or executed; the arrays are the identity, and a
-    digest mismatch refuses instead of serving silently different numbers.
+    No code is imported or executed and nothing is unpickled; the digest is
+    recomputed and a mismatch refuses instead of serving silently different
+    numbers.
 
     Parameters
     ----------
     path:
-        Sidecar file path.
+        File written by :func:`save_fitted`.
+    encoder:
+        The ``encoder=`` callable the saved accumulator was built with (it
+        is not stored in the file); required exactly when one was set.
 
     Returns
     -------
-    FittedPCA
-        The rehydrated fitted payload.
+    FittedPCA | StreamingStat | dict
+        The rehydrated fitted payload; for an accumulator state, an
+        accumulator that keeps folding as if never interrupted (a
+        ``tl.aggregate`` cache entry loads as a ``{metric: accumulator}``
+        dict).
 
     Raises
     ------
     FittedArtifactError
         ``pca_fitted_record_invalid`` on a malformed sidecar;
         ``pca_fitted_digest_mismatch`` when the recomputed array digest does
-        not match the recorded one.
+        not match the recorded one; the ``stats_state_*`` codes for an
+        accumulator state (unknown format version, digest mismatch, encoder
+        mismatch, malformed state).
     """
 
     from safetensors import safe_open
@@ -225,6 +257,12 @@ def load_fitted(path: str | Path) -> FittedPCA:
             remedy="pass a sidecar written by tl.stats.save_fitted()",
             path=str(source),
         ) from exc
+    from ._state_io import _SCHEMA_PREFIX, read_state, refuse_encoder_mismatch
+
+    if str(metadata.get("schema", "")).startswith(_SCHEMA_PREFIX):
+        return read_state(source, metadata, tensors, encoder=encoder)
+    if encoder is not None:
+        refuse_encoder_mismatch(source, [], encoder)
     if metadata.get("schema") != FITTED_SIDECAR_SCHEMA or not {
         "components",
         "mean",

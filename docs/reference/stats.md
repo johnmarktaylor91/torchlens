@@ -159,6 +159,79 @@ activation-transform kernel `pca_apply(fitted)` consumes it at extraction
 time (see [docs/reference/transforms.md](transforms.md)). Fit-during-write is
 refused -- early and late shards would get different coordinates.
 
+## Save, reload and cache
+
+`tl.stats.save_fitted(stat, path)` saves an accumulator's whole state: its
+configuration, its folded tensors and its private random stream (schema
+`tl_stats_state_v1`, a safetensors file with a `sha256:` digest). It takes
+every accumulator on this page, pooled or per unit, and an `Aggregator` of
+them. `tl.stats.load_fitted(path)` rebuilds an object that keeps folding as
+if it had never stopped: folding the rest of the data gives the same values,
+example ids, positions and quantiles as one uninterrupted run. The reload
+keeps the unit layout, so a batch with a changed unit count still refuses
+(`stats_unit_count_changed`). An `encoder=` callable is code, not state, so
+it is not stored: pass it back as `tl.stats.load_fitted(path,
+encoder=sae.encode)`. Loading refuses a file whose contents no longer match
+its digest (`stats_state_digest_mismatch`), a format version this torchlens
+does not read (`stats_state_version_unknown`) and an `encoder=` that does not
+match how the state was saved (`stats_state_encoder_mismatch`). Nothing in
+the file is unpickled or imported.
+
+`tl.aggregate(..., cache=True)` keys the run and, when the same run was
+cached before, restores each accumulator's saved final state in place and
+returns its results without running the model. The key covers the torchlens
+and torch versions; the model's tensor contents, `requires_grad` and
+`training` flags and its implementation (forward code, plain attributes,
+registered hooks: the same fingerprints as `tl.trace(cache=True)`); every
+batch the dataloader yields, in order, by value; each metric's name and
+starting state, configuration included; the code and weights of any
+`encoder=`; `target=` and the code of `loss_fn=`. Keying reads the data once
+before the loop (the model does not run for it) and restores the global
+random state afterwards. A run that cannot be keyed by value refuses with
+`stats_aggregate_cache_unkeyable` instead of risking a stale result: a
+one-shot iterator, a batch leaf of an opaque type, `Quantile(seed=None)`, a
+model with modules in training mode, a metric that is not a `tl.stats`
+accumulator, or an `encoder=` or `loss_fn=` whose state the key cannot read.
+A loader that yields different batches when keyed and when folded returns
+its result, stores nothing and warns once
+(`stats_aggregate_cache_data_unstable`). Entries live in the `aggregate`
+folder of `cache_dir=` (default `TORCHLENS_CACHE_DIR` or
+`~/.cache/torchlens`) and are not evicted; delete the folder to clear them.
+A cache hit does not advance the global random state the way running the
+loop would.
+
+```python
+import tempfile
+from pathlib import Path
+
+acts = [torch.rand(2, 4, 5) for _ in range(5)]   # [examples, positions, units]
+whole = tl.stats.TopK(3, unit_axis=-1)
+for batch in acts:
+    whole.update(batch)
+
+with tempfile.TemporaryDirectory() as folder:
+    first_half = tl.stats.TopK(3, unit_axis=-1)
+    for batch in acts[:2]:
+        first_half.update(batch)
+    path = tl.stats.save_fitted(first_half, Path(folder) / "top.safetensors")
+    resumed = tl.stats.load_fitted(path)
+    for batch in acts[2:]:
+        resumed.update(batch)
+    print(torch.equal(resumed.result().example_ids, whole.result().example_ids))
+
+    # A rerun of the same run reads the cache and skips the forward passes.
+    batches = [torch.rand(2, 3, 16, 16) for _ in range(3)]
+    first = tl.aggregate(
+        model, batches, {"relu_1_2": tl.stats.TopK(3, unit_axis=1)},
+        cache=True, cache_dir=folder,
+    )
+    again = tl.aggregate(
+        model, batches, {"relu_1_2": tl.stats.TopK(3, unit_axis=1)},
+        cache=True, cache_dir=folder,
+    )
+    print(torch.equal(first["relu_1_2"].values, again["relu_1_2"].values))
+```
+
 ## Where it sits
 
 - Install both: lovely-tensors for any tensor at a REPL, TorchLens for the

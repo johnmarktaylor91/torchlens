@@ -17,6 +17,15 @@ module, 12-name `__all__`).
   capture each batch, fold the selected layers' activations into the
   requested stats, return the aggregated results.
 - `cka(a, b)` — direct two-matrix CKA convenience.
+- `save_fitted` / `load_fitted` — the one persistence path: fitted PCA
+  (`_fitted.py`) and every accumulator's whole state (`_state_io.py`,
+  `tl_stats_state_v1`: JSON description plus safetensors tensors, digest
+  checked, class allow-list, never pickle). A new accumulator class joins
+  `_state_io._classes()`; its attributes must be tensors, numbers, strings,
+  random streams or other listed classes.
+- `aggregate(..., cache=True)` — `_aggregate_cache.py` keys the run by value
+  and restores saved states in place on a hit; anything it cannot key
+  refuses (`stats_aggregate_cache_unkeyable`), never a guessed key.
 
 ## Gotchas
 

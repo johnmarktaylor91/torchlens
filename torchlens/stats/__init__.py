@@ -1,8 +1,10 @@
 """Streaming statistics for out aggregation (real subpackage; C01 item 18).
 
 Implementation lives in ``_streaming`` (stat kernels), ``_per_unit``
-(``Quantile`` and ``TopK``, pooled or per unit) and ``_aggregate`` (the
-dataloader aggregation face); this facade re-exports every historical
+(``Quantile`` and ``TopK``, pooled or per unit), ``_aggregate`` (the
+dataloader aggregation face, with ``_aggregate_cache`` behind ``cache=``)
+and ``_fitted`` / ``_state_io`` (``save_fitted`` / ``load_fitted`` for fitted
+PCA and accumulator state); this facade re-exports every historical
 spelling unchanged.
 """
 
