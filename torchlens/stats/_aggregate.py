@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import gc
+import os
 import random
 import warnings
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import torch
 from torch import nn
 
+from .._errors import ArgumentTypeError
 from ..intervention.errors import MultiMatchWarning
 
 __tl_layer__ = "L5"
@@ -491,13 +494,15 @@ def _model_state_allows_compiled_plan(model: nn.Module) -> bool:
         return False
 
 
-def aggregate(
+def aggregate(  # noqa: PLR0913 -- the ruled cache pair joins target= and loss_fn=
     model: nn.Module,
     dataloader: Iterable[Any],
     metrics: Mapping[str, StreamingStat],
     *,
     target: str = "out",
     loss_fn: Callable[..., torch.Tensor] | None = None,
+    cache: bool = False,
+    cache_dir: str | Path | None = None,
 ) -> dict[str, Any]:
     """Stream outs through metric accumulators.
 
@@ -515,6 +520,19 @@ def aggregate(
     loss_fn:
         Callable used to build a loss from ``(output, *batch_tail)`` when
         ``target="grad"``.
+    cache:
+        ``True`` keys the run (model contents and code, every batch by
+        value, each accumulator's starting state and encoder, ``target=``,
+        ``loss_fn=``, the torchlens and torch versions) and, when the same
+        run was cached before, restores each accumulator's saved final
+        state in place and returns its results without running the model.
+        A run that cannot be keyed by value refuses
+        (``stats_aggregate_cache_unkeyable``) rather than risk a stale
+        result. Off by default.
+    cache_dir:
+        Cache directory, as for ``tl.trace(cache=True)``: default
+        ``TORCHLENS_CACHE_DIR`` or ``~/.cache/torchlens``; entries go in its
+        ``aggregate`` subdirectory.
 
     Returns
     -------
@@ -522,15 +540,50 @@ def aggregate(
         Finalized metric results.
     """
 
+    if target not in {"out", "grad"}:
+        raise ValueError("target must be 'out' or 'grad'")
+    if target == "grad" and loss_fn is None:
+        raise TypeError("aggregate(target='grad') requires loss_fn=")
+    if not isinstance(cache, bool) or not (
+        cache_dir is None or isinstance(cache_dir, (str, os.PathLike))
+    ):
+        raise ArgumentTypeError(
+            f"tl.aggregate(cache={cache!r}, cache_dir={cache_dir!r}) needs cache= to be "
+            "True or False and cache_dir= a path or None",
+            code="stats_aggregate_cache_type",
+            remedy="spell it tl.aggregate(model, data, metrics, cache=True, cache_dir='stats-cache')",
+            argument="cache",
+        )
+    if not cache:
+        return _aggregate_loop(model, dataloader, metrics, target=target, loss_fn=loss_fn)
+    from ._aggregate_cache import run_cached
+
+    return run_cached(
+        model,
+        dataloader,
+        metrics,
+        target=target,
+        loss_fn=loss_fn,
+        cache_dir=cache_dir,
+        loop=lambda data: _aggregate_loop(model, data, metrics, target=target, loss_fn=loss_fn),
+    )
+
+
+def _aggregate_loop(
+    model: nn.Module,
+    dataloader: Iterable[Any],
+    metrics: Mapping[str, StreamingStat],
+    *,
+    target: str,
+    loss_fn: Callable[..., torch.Tensor] | None,
+) -> dict[str, Any]:
+    """Run the dataset loop of :func:`aggregate` (arguments already validated)."""
+
     # Real-home import (not the lazy root facade) for the same SCC/implicit-
     # Any reason as the fastlog.record import above.
     from ..options import CaptureOptions
     from ..user_funcs import trace
 
-    if target not in {"out", "grad"}:
-        raise ValueError("target must be 'out' or 'grad'")
-    if target == "grad" and loss_fn is None:
-        raise TypeError("aggregate(target='grad') requires loss_fn=")
     grad_loss_fn = loss_fn
 
     layers = [name for name in metrics if name != "output"]

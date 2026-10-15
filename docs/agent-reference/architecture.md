@@ -272,7 +272,10 @@ Key entry points:
   `overlay` renderer, all operating on Traces. `grad_cam` also takes
   vision-transformer token layers (grid and leading tokens derived from a
   metadata-only trace, `reshape=` as the caller escape hatch) and chooses its
-  layer from that trace when `layer=` is omitted. Doc of record:
+  layer from that trace when `layer=` is omitted. The layer methods accept
+  integer inputs (the path starts at the embedding output), and
+  `target=SiteTarget(layer, unit=...)` attributes a hidden site instead of the
+  model output. Doc of record:
   `docs/reference/attribution.md`; glossary carries the unstable index.
 - Kernel telemetry (optional CUDA/CUPTI adapter, DOCUMENTED-UNSTABLE):
   importing `torchlens.kernel_telemetry` installs `gpu_kernels` views over

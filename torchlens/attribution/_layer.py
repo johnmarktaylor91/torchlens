@@ -6,25 +6,19 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, TypeAlias
 
 import torch
-import torch.nn.functional as F
 from PIL import Image
 from torch import Tensor
 from torch.nn import Module
 from torch.utils.hooks import RemovableHandle
 
-from torchlens.attribution._cam_choice import _choose_cam_layer
-from torchlens.attribution._cam_grid import (
-    TokenReshape,
-    _cam_feature_maps,
-    _metadata_trace,
-    _TraceGraph,
-)
 from torchlens.attribution._core import (
+    _DOCS_POINTER as _INTEGER_DOCS_POINTER,
     AttributionError,
     AttributionResult,
     InputKwargs,
     _AttributionTarget,
     _call_model,
+    _Caller,
     _completeness_extra,
     _interned_path_leaves,
     _make_input_leaves,
@@ -37,6 +31,8 @@ from torchlens.attribution._core import (
     _validate_baselines,
     _validate_positive_int,
 )
+from torchlens.attribution._entry import _entry_baselines
+from torchlens.attribution._site import _target_spelling
 from torchlens.attribution._steps import (
     _chunk_steps,
     _midpoint_alphas,
@@ -802,79 +798,49 @@ def _layer_path_run(
     }
 
 
-def _spatial_reference_tensor(
+def _layer_path_baselines(
+    model: Module,
     inputs: _PreparedInputs,
-    feeding_leaves: tuple[Tensor, ...],
+    baseline: Any | None,
+    *,
+    target: _AttributionTarget,
     layer: str,
-) -> Tensor:
-    """Return the input tensor whose grid the Grad-CAM should be upsampled onto.
+) -> tuple[Tensor, ...]:
+    """Return baseline values where the input path of a layer method starts.
 
-    The CAM lives in the coordinate system of the input that actually feeds the
-    target layer. Upsampling onto any other input would place the attribution
-    in an unrelated coordinate space, so candidates are restricted to
-    dependency-proven feeders and ambiguity between different grids is refused
-    rather than resolved by traversal order.
-
-    Parameters
-    ----------
-    inputs
-        Normalized attribution inputs.
-    feeding_leaves
-        Unique original attributed leaves proven to feed the target layer.
-    layer
-        Layer name used for error reporting.
-
-    Returns
-    -------
-    Tensor
-        Spatial (``ndim >= 4``) feeding leaf; when several feed the layer they
-        must share one spatial grid.
+    Floating-point inputs keep their own baselines. Integer inputs start the
+    path at the embedding outputs: zeros by default, or the embeddings of
+    caller baseline ids.
 
     Raises
     ------
     AttributionError
-        If no attributed leaf has spatial dimensions, no spatial leaf feeds the
-        layer, or the feeding spatial grids are heterogeneous.
+        ``layer_path_no_embedding`` when integer inputs reach no module that
+        turns them into floats, so no path can be laid.
     """
 
-    if not any(input_tensor.ndim >= 4 for input_tensor in inputs.attributed_leaves):
-        raise AttributionError("grad_cam requires an input tensor with spatial dimensions")
-    candidates = [input_tensor for input_tensor in feeding_leaves if input_tensor.ndim >= 4]
-    if not candidates:
+    entry = inputs.entry
+    if entry is None:
+        return _validate_baselines(inputs, baseline)
+    if not entry.sites:
         raise AttributionError(
-            f"grad_cam found no spatial (ndim >= 4) input tensor feeding layer {layer!r}; "
-            "the CAM has no input coordinate system to upsample onto"
+            "the input path of a path method cannot start from integer inputs here: no "
+            "module takes only the integer inputs and returns floats (an embedding), so "
+            "there is no floating-point point to interpolate from. Remedy: attribute "
+            f"without a path, e.g. tl.attribution.layer_attribution(model, inputs, "
+            f"{_target_spelling(target)}, layer={layer!r}), or pass floating-point inputs. "
+            f"{_INTEGER_DOCS_POINTER}",
+            code="layer_path_no_embedding",
         )
-    grids = {tuple(candidate.shape[-2:]) for candidate in candidates}
-    if len(grids) > 1:
-        raise AttributionError(
-            f"grad_cam target layer {layer!r} is fed by spatial inputs with different "
-            f"grids {sorted(grids)}; the upsampling target is ambiguous"
-        )
-    return candidates[0]
+    return _entry_baselines(model, entry, inputs.positional, inputs.kwargs, baseline)
 
 
-def _validate_conv_activation(activation: Tensor, layer: str) -> None:
-    """Validate that an activation is a 2D convolution-style feature map.
+def _integer_input_layers(inputs: _PreparedInputs) -> tuple[str, ...]:
+    """Return the modules whose outputs stood in for integer inputs (empty for floats)."""
 
-    Parameters
-    ----------
-    activation
-        Captured target-layer activation.
-    layer
-        Layer name used for error reporting.
-
-    Raises
-    ------
-    AttributionError
-        If ``activation`` is not shaped ``N, C, H, W``.
-    """
-
-    if activation.ndim != 4:
-        raise AttributionError(
-            f"grad_cam requires layer {layer!r} to produce a 4D N,C,H,W feature map; "
-            f"got shape {tuple(activation.shape)}"
-        )
+    if inputs.entry is None:
+        return ()
+    return tuple(site.layer for site in inputs.entry.sites)
 
 
 def _cam_base_image(spatial_reference: Tensor, image: Image.Image | None) -> Image.Image:
@@ -949,160 +915,6 @@ def _cam_overlay(
     return _blend_heatmap(base, heatmap, alpha=alpha, disclosure=disclosure)
 
 
-def grad_cam(
-    model: Module,
-    inputs: Any,
-    input_kwargs: InputKwargs = None,
-    *,
-    target: _AttributionTarget,
-    layer: str | None = None,
-    reshape: TokenReshape | None = None,
-    relu: bool = True,
-    overlay: bool = True,
-    image: Image.Image | None = None,
-    alpha: float = 0.6,
-    cmap: str = "magma",
-) -> AttributionResult:
-    """Compute Grad-CAM for a convolution-style or token-grid layer.
-
-    Parameters
-    ----------
-    model
-        PyTorch module to attribute.
-    inputs
-        Bare tensor for v1 behavior, or tuple/list of positional model arguments.
-        Floating-point or complex tensor leaves are threaded through the model call.
-    input_kwargs
-        Optional keyword arguments for ``model``.
-    target
-        Integer class index selecting ``output[..., target]`` and summing the
-        selected values, or callable ``output -> scalar tensor``.
-    layer
-        Name from ``dict(model.named_modules())`` identifying the target layer.
-        The layer must fire exactly once during the forward pass; Grad-CAM has
-        no defined semantics for a reused layer, so multi-fire raises rather
-        than silently attributing one arbitrary call. ``None`` chooses the layer
-        from a metadata-only trace of the same call: the deepest once-firing
-        module whose output is a spatial map or a provable token grid, lies on
-        every input-to-output path, and carries a nonzero target gradient on
-        its grid. ``extra["layer_source"]`` and ``extra["layer_reason"]``
-        record the choice.
-    reshape
-        Optional callable mapping the layer output to ``N, C, H, W``. It must
-        be a pure rearrangement (slicing, transposing, reshaping), because it
-        is applied to the activation and to its gradient alike. Without it, a
-        token-sequence output ``N, T, C`` is laid on the grid that the trace
-        proves (the patch-embedding grid and the leading class, distillation
-        or register tokens, or a Swin stage's grid), and the call refuses
-        with ``grad_cam_token_grid_unprovable`` when the trace proves none.
-    relu
-        Whether to apply ReLU to the channel-reduced CAM.
-    overlay
-        Whether to render the CAM over the dependency-proven spatial input.
-    image
-        Optional source image override for the rendered overlay.
-    alpha
-        Heatmap opacity in ``[0, 1]``.
-    cmap
-        Heatmap colormap.
-
-    Returns
-    -------
-    AttributionResult
-        Grad-CAM values upsampled to the spatial size of the input that feeds
-        the target layer, with shape ``N, 1, Hin, Win``. Metadata reports the
-        measured native map resolution separately from the interpolated display
-        resolution. When requested, ``extra["overlay"]`` is a PIL image whose
-        visible footer discloses that native resolution. ``extra["grid_route"]``
-        is ``"feature_map"``, ``"derived"`` or ``"reshape"``,
-        ``extra["prefix_tokens"]`` the count of leading tokens dropped, and
-        ``extra["grid_evidence"]`` the trace ops that proved a derived grid.
-
-    Raises
-    ------
-    AttributionError
-        If the target layer fired more than once, no spatial input feeds it,
-        several feeding spatial inputs have different grids, a token grid is
-        not provable, or no layer can be chosen automatically.
-    """
-
-    prepared_inputs = _normalize_model_inputs(inputs, input_kwargs)
-    graph: _TraceGraph | None = None
-    layer_reason: str | None = None
-    if layer is None:
-        graph = _TraceGraph(_metadata_trace(model, inputs, input_kwargs))
-        choice = _choose_cam_layer(model, prepared_inputs, target, graph)
-        layer, layer_reason = choice.layer, choice.reason
-    activations, gradients, feeding_leaves = _capture_layer_activation(
-        model, prepared_inputs, target, layer
-    )
-    if len(activations) != 1:
-        raise AttributionError(
-            f"grad_cam requires layer {layer!r} to fire exactly once during the forward "
-            f"pass; it fired {len(activations)} times"
-        )
-    activation, gradient = activations[0], gradients[0]
-    mapped = _cam_feature_maps(
-        layer,
-        (activation, gradient),
-        target,
-        reshape,
-        lambda: (
-            graph
-            if graph is not None
-            else _TraceGraph(_metadata_trace(model, inputs, input_kwargs))
-        ),
-    )
-    if mapped is None:
-        _validate_conv_activation(activation, layer)
-        grid_extra: dict[str, Any] = {
-            "grid_route": "feature_map",
-            "prefix_tokens": 0,
-            "grid_evidence": (),
-        }
-    else:
-        activation, gradient, grid_extra = mapped
-    spatial_reference = _spatial_reference_tensor(prepared_inputs, feeding_leaves, layer)
-    channel_weights = gradient.mean(dim=(2, 3), keepdim=True)
-    cam = (channel_weights * activation).sum(dim=1, keepdim=True)
-    if relu:
-        cam = torch.relu(cam)
-    native_resolution = tuple(int(value) for value in cam.shape[-2:])
-    rendered_resolution = tuple(int(value) for value in spatial_reference.shape[-2:])
-    upsampled_cam = F.interpolate(
-        cam,
-        size=spatial_reference.shape[-2:],
-        mode="bilinear",
-        align_corners=False,
-    )
-    return AttributionResult(
-        method="grad_cam",
-        values=upsampled_cam.detach(),
-        target_repr=_target_repr(target),
-        extra={
-            "layer": layer,
-            "layer_source": "caller" if layer_reason is None else "trace",
-            "layer_reason": layer_reason,
-            **grid_extra,
-            "relu": relu,
-            "native_map_resolution": native_resolution,
-            "rendered_map_resolution": rendered_resolution,
-            "upsampling": "bilinear_display_only",
-            "overlay": (
-                _cam_overlay(
-                    cam,
-                    spatial_reference,
-                    image=image,
-                    alpha=alpha,
-                    cmap=cmap,
-                )
-                if overlay
-                else None
-            ),
-        },
-    )
-
-
 def layer_integrated_gradients(
     model: Module,
     inputs: Any,
@@ -1133,7 +945,9 @@ def layer_integrated_gradients(
         Optional keyword arguments for ``model``.
     target
         Integer class index selecting ``output[..., target]`` and summing the
-        selected values, or callable ``output -> scalar tensor``.
+        selected values, a callable ``output -> scalar tensor``, or a
+        :class:`SiteTarget` naming a hidden layer's output (and unit) to
+        attribute instead of the model output.
     layer
         Name from ``dict(model.named_modules())`` identifying the target layer.
     baseline
@@ -1164,8 +978,14 @@ def layer_integrated_gradients(
     _validate_positive_int("n_steps", n_steps)
     chunk_size = _validate_step_batch_size(step_batch_size)
     audit_mode = _validate_step_audit(step_audit, chunk_size)
-    prepared_inputs = _normalize_model_inputs(inputs, input_kwargs)
-    baseline_tensors = _validate_baselines(prepared_inputs, baseline)
+    prepared_inputs = _normalize_model_inputs(
+        inputs,
+        input_kwargs,
+        _Caller("layer_integrated_gradients", model, target, integer_route=True),
+    )
+    baseline_tensors = _layer_path_baselines(
+        model, prepared_inputs, baseline, target=target, layer=layer
+    )
     run = _layer_path_run(
         model,
         prepared_inputs,
@@ -1199,6 +1019,7 @@ def layer_integrated_gradients(
         target_repr=_target_repr(target),
         extra={
             "layer": layer,
+            "integer_input_layers": _integer_input_layers(prepared_inputs),
             "n_steps": n_steps,
             "path_evaluations_logical": n_steps,
             "physical_forward_calls": run["physical_forward_calls"],
@@ -1241,7 +1062,9 @@ def layer_conductance(
         Optional keyword arguments for ``model``.
     target
         Integer class index selecting ``output[..., target]`` and summing the
-        selected values, or callable ``output -> scalar tensor``.
+        selected values, a callable ``output -> scalar tensor``, or a
+        :class:`SiteTarget` naming a hidden layer's output (and unit) to
+        attribute instead of the model output.
     layer
         Name from ``dict(model.named_modules())`` identifying the target layer.
     baseline
@@ -1272,8 +1095,12 @@ def layer_conductance(
     _validate_positive_int("n_steps", n_steps)
     chunk_size = _validate_step_batch_size(step_batch_size)
     audit_mode = _validate_step_audit(step_audit, chunk_size)
-    prepared_inputs = _normalize_model_inputs(inputs, input_kwargs)
-    baseline_tensors = _validate_baselines(prepared_inputs, baseline)
+    prepared_inputs = _normalize_model_inputs(
+        inputs, input_kwargs, _Caller("layer_conductance", model, target, integer_route=True)
+    )
+    baseline_tensors = _layer_path_baselines(
+        model, prepared_inputs, baseline, target=target, layer=layer
+    )
     run = _layer_path_run(
         model,
         prepared_inputs,
@@ -1317,6 +1144,7 @@ def layer_conductance(
         target_repr=_target_repr(target),
         extra={
             "layer": layer,
+            "integer_input_layers": _integer_input_layers(prepared_inputs),
             "n_steps": n_steps,
             "path_evaluations_logical": n_steps,
             "physical_forward_calls": run["physical_forward_calls"],
@@ -1350,7 +1178,9 @@ def layer_attribution(
         Optional keyword arguments for ``model``.
     target
         Integer class index selecting ``output[..., target]`` and summing the
-        selected values, or callable ``output -> scalar tensor``.
+        selected values, a callable ``output -> scalar tensor``, or a
+        :class:`SiteTarget` naming a hidden layer's output (and unit) to
+        attribute instead of the model output.
     layer
         Name from ``dict(model.named_modules())`` identifying the target layer.
     method
@@ -1374,7 +1204,9 @@ def layer_attribution(
     if method not in ("activation_x_grad", "grad"):
         raise AttributionError("method must be 'activation_x_grad' or 'grad'")
 
-    prepared_inputs = _normalize_model_inputs(inputs, input_kwargs)
+    prepared_inputs = _normalize_model_inputs(
+        inputs, input_kwargs, _Caller("layer_attribution", model, target, integer_route=True)
+    )
     activations, gradients, _feeding_leaves = _capture_layer_activation(
         model, prepared_inputs, target, layer
     )
@@ -1389,5 +1221,5 @@ def layer_attribution(
         method=f"layer_{method}",
         values=values.detach(),
         target_repr=_target_repr(target),
-        extra={"layer": layer},
+        extra={"layer": layer, "integer_input_layers": _integer_input_layers(prepared_inputs)},
     )

@@ -1262,6 +1262,20 @@
   (Quantile), `k * (16 + 8 * position_axes)` B per unit (TopK); past 256 MiB the
   `stats_per_unit_state_large` warning fires once per session. Doc of record:
   `docs/reference/stats.md`, Per-unit statistics.
+- Accumulator save, reload and cache (DOCUMENTED-UNSTABLE): `tl.stats.save_fitted(stat,
+  path)` also saves any `tl.stats` accumulator's whole state (pooled or per unit,
+  `Histogram`, `Spine`, an `Aggregator` of them; schema `tl_stats_state_v1`, safetensors
+  plus a digest, never pickle), and `tl.stats.load_fitted(path, encoder=None)` rebuilds
+  an object that keeps folding as if never interrupted (unit layout kept; `encoder=` is
+  not stored and must be passed back). Refusals: `stats_state_unsupported`,
+  `stats_state_version_unknown`, `stats_state_digest_mismatch`, `stats_state_invalid`,
+  `stats_state_encoder_mismatch`. `tl.aggregate(..., cache=True, cache_dir=None)` keys
+  the run by value (versions, model contents and code, every batch, each metric's
+  starting state and encoder, `target=`, `loss_fn=`) and on a hit restores the saved
+  states in place and skips the loop; an unkeyable run refuses with
+  `stats_aggregate_cache_unkeyable`; a loader that changes between the keying and
+  folding passes warns once (`stats_aggregate_cache_data_unstable`) and stores nothing.
+  Doc of record: `docs/reference/stats.md`, Save, reload and cache.
 - Appliance packages `notebook` and `neuro` reserve extras boundaries and enforce
   import gating for their optional dependencies.
 - NEURO TREATY DESK (F22; every spelling DOCUMENTED-UNSTABLE pending the naming
@@ -1329,3 +1343,15 @@
   (`grad_cam_layer_choice_ambiguous`, `grad_cam_layer_unchosen` otherwise).
   `extra` records `layer_source`, `layer_reason`, `grid_route`, `prefix_tokens`
   and `grid_evidence`. Doc of record: `docs/reference/attribution.md`.
+- Integer inputs and site targets in attribution (DOCUMENTED-UNSTABLE): the layer
+  methods (`layer_attribution`, `layer_integrated_gradients`, `layer_conductance`,
+  `grad_cam`) accept inputs with no floating-point tensor (token ids); the input
+  path starts at the outputs of the innermost modules that turn caller integers
+  into floats (embeddings), baseline ids embed to the path start, and
+  `extra["integer_input_layers"]` names those modules. Input methods refuse
+  integers with `attribution_input_not_float` and a runnable layer-method spelling.
+  `target=tl.attribution.SiteTarget(layer, unit=None, call=None)` attributes a
+  hidden module output (or one unit, summed over the batch) instead of the model
+  output; refusals `attribution_site_not_found`, `attribution_site_unit_invalid`,
+  `attribution_site_firing_invalid`, `attribution_site_independent_of_input`,
+  `attribution_site_target_unsupported`. Doc of record: `docs/reference/attribution.md`.

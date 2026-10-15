@@ -2,8 +2,10 @@
 
 `tl.attribution` provides input and intermediate-layer attribution methods directly on
 PyTorch modules. Each call returns `AttributionResult(method, values, target_repr, extra)`.
-`target` is an output-class index or a callable that maps model output to one scalar tensor;
-the layer methods name a module from `dict(model.named_modules())`.
+`target` is an output-class index, a callable that maps model output to one scalar tensor, or a
+[`SiteTarget`](#site-targets-sitetarget) naming a hidden layer's output; the layer methods name a
+module from `dict(model.named_modules())` and also accept [integer inputs](#integer-inputs-token-ids)
+such as token ids.
 
 The stage-4b compute-kit spellings (Integrated Gradients completeness fields,
 `occlusion`, and Grad-CAM overlay fields) are **DOCUMENTED-UNSTABLE**: they are
@@ -178,7 +180,7 @@ print(tl.attribution.grad_cam(ImageModel(), torch.ones(1, 1, 2, 2), target=0, la
 Output:
 
 ```text
-AttributionResult(method='grad_cam', values=Tensor(shape=(1, 1, 2, 2), dtype=torch.float32, device='cpu'), target_repr='index=0', extra_keys=['grid_evidence', 'grid_route', 'layer', 'layer_reason', 'layer_source', 'native_map_resolution', 'overlay', 'prefix_tokens', 'relu', 'rendered_map_resolution', 'upsampling'])
+AttributionResult(method='grad_cam', values=Tensor(shape=(1, 1, 2, 2), dtype=torch.float32, device='cpu'), target_repr='index=0', extra_keys=['grid_evidence', 'grid_route', 'integer_input_layers', 'layer', 'layer_reason', 'layer_source', 'native_map_resolution', 'overlay', 'prefix_tokens', 'relu', 'rendered_map_resolution', 'upsampling'])
 ```
 
 ### Vision transformers: token grids
@@ -290,7 +292,7 @@ print(tl.attribution.layer_integrated_gradients(model, torch.ones(1, 2), target=
 Output:
 
 ```text
-AttributionResult(method='layer_integrated_gradients', values=Tensor(shape=(1, 2), dtype=torch.float32, device='cpu'), target_repr='index=0', extra_keys=['layer', 'n_steps'])
+AttributionResult(method='layer_integrated_gradients', values=Tensor(shape=(1, 2), dtype=torch.float32, device='cpu'), target_repr='index=0', extra_keys=['attribution_sum', 'completeness_caveat', 'completeness_residual', 'integer_input_layers', 'layer', 'n_steps', 'path_evaluations_logical', 'physical_forward_calls', 'residual_rel', 'step_audit', 'step_batch_size', 'target_delta', 'target_delta_abs'])
 ```
 
 ## `layer_conductance`
@@ -312,7 +314,7 @@ print(tl.attribution.layer_conductance(model, torch.ones(1, 2), target=0, layer=
 Output:
 
 ```text
-AttributionResult(method='layer_conductance', values=Tensor(shape=(1, 2), dtype=torch.float32, device='cpu'), target_repr='index=0', extra_keys=['layer', 'n_steps'])
+AttributionResult(method='layer_conductance', values=Tensor(shape=(1, 2), dtype=torch.float32, device='cpu'), target_repr='index=0', extra_keys=['attribution_sum', 'completeness_caveat', 'completeness_residual', 'integer_input_layers', 'layer', 'n_steps', 'path_evaluations_logical', 'physical_forward_calls', 'residual_rel', 'step_audit', 'step_batch_size', 'target_delta', 'target_delta_abs'])
 ```
 
 ## `overlay` — drawing attribution on the graph
@@ -378,8 +380,98 @@ print(tl.attribution.layer_attribution(model, torch.ones(1, 2), target=0, layer=
 Output:
 
 ```text
-AttributionResult(method='layer_activation_x_grad', values=Tensor(shape=(1, 2), dtype=torch.float32, device='cpu'), target_repr='index=0', extra_keys=['layer'])
+AttributionResult(method='layer_activation_x_grad', values=Tensor(shape=(1, 2), dtype=torch.float32, device='cpu'), target_repr='index=0', extra_keys=['integer_input_layers', 'layer'])
 ```
+
+## Integer inputs (token ids)
+
+The layer methods (`layer_attribution`, `layer_integrated_gradients`, `layer_conductance` and
+`grad_cam`) accept inputs that hold no floating-point tensor, such as token ids, because what they
+attribute is a layer's output. Integer values have no gradient, so the input path of the path
+methods starts where the integers become floats: at the outputs of the innermost modules that take
+only integer tensors from your inputs and return a floating-point tensor (an `nn.Embedding`, in
+practice). Those outputs stand in for a floating-point input, so each result equals the same
+method run on a model that takes the embedding output as its input. The default baseline is a
+zero embedding; `baseline=` may instead hold reference ids of the same shape and dtype (a padding
+token, say), whose embeddings start the path. `extra["integer_input_layers"]` names the modules the
+path started at, and is `()` for floating-point inputs.
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+
+class TokenClassifier(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.embed = nn.Embedding(10, 4)
+        self.mix = nn.Linear(4, 4)
+        self.head = nn.Linear(4, 2)
+
+    def forward(self, ids):
+        return self.head(torch.tanh(self.mix(self.embed(ids))).mean(dim=1))
+
+
+torch.manual_seed(0)
+model = TokenClassifier()
+ids = torch.tensor([[1, 4, 2, 7]])
+result = tl.attribution.layer_integrated_gradients(model, ids, target=1, layer="mix", n_steps=16)
+print(tuple(result.values.shape), result.extra["integer_input_layers"])
+```
+
+Output:
+
+```text
+(1, 4, 4) ('embed',)
+```
+
+The input methods (`saliency`, `input_x_grad`, `integrated_gradients`, `smoothgrad`,
+`gradient_shap`, `guided_backprop`, `deconvolution`) attribute the input itself and refuse integer
+inputs with `attribution_input_not_float`; the message spells a layer-method call on the embedding
+that runs. A path method whose integer inputs reach no embedding (the model casts them with
+`.float()`, say) refuses with `layer_path_no_embedding` and spells the path-free
+`layer_attribution` call. For `grad_cam`, integer inputs laid out `N, H, W` or `N, C, H, W` give
+the map its grid; others refuse with `grad_cam_integer_grid_invalid`.
+
+## Site targets (`SiteTarget`)
+
+`tl.attribution.SiteTarget(layer, *, unit=None, call=None)` passed as `target=` attributes a
+hidden site instead of the model output: the output of the module named `layer`, optionally one
+unit of it, summed over the batch (the summing rule of an integer `target=`). This is the
+neuron-attribution family: `saliency` toward a hidden unit gives that unit's input gradients, and
+a layer method toward a deeper unit says how an earlier layer drives it.
+
+- `unit=None` attributes the whole output, summed.
+- An int `unit` selects `output[..., unit]`, the last axis, as an integer `target=` does.
+- A tuple `unit` indexes the axes after the batch axis: `(3,)` is channel 3 of a convolution
+  output, `(3, 1, 2)` one position of it.
+- `call` picks which call of a module that runs more than once, counted from 0.
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+torch.manual_seed(0)
+mlp = nn.Sequential(nn.Linear(3, 5), nn.Tanh(), nn.Linear(5, 2))
+x = torch.randn(2, 3)
+result = tl.attribution.saliency(mlp, x, target=tl.attribution.SiteTarget("1", unit=2))
+print(result.target_repr, tuple(result.values.shape))
+```
+
+Output:
+
+```text
+SiteTarget('1', unit=2) (2, 3)
+```
+
+Refusals name the fix: a layer the model lacks (`attribution_site_not_found`, with the closest
+module name), a unit outside the output (`attribution_site_unit_invalid`), a module that ran more
+than once without `call=` or did not run (`attribution_site_firing_invalid`), a site computed
+without the attributed inputs, whose attributions would all be zero
+(`attribution_site_independent_of_input`), and a method that scores only the model output
+(`infidelity`, for example: `attribution_site_target_unsupported`).
 
 ## Reading attribution results honestly
 
