@@ -160,6 +160,9 @@
   no longer covers the matrix.
 - **agent**: a trimmed `torchlens_overview` names a next call it accepts
   (`torchlens_dump view='graph'`) instead of `labels=`/`query=`.
+- **io**: the reserved `torchlens.boundary_facts` sidecar family is registered on the sidecar
+  door's first use, so listing, attaching or reading it works in a fresh interpreter regardless of
+  what was imported first (the harness_bundles reference examples failed when run alone).
 
 ### Changed
 
