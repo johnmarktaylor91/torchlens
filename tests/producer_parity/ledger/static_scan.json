@@ -641,6 +641,14 @@
  },
  {
   "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/attribution/_cam_grid.py",
+  "has_default": false,
+  "sites": 8,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/attribution/_core.py",
   "has_default": false,
