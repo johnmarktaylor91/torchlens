@@ -1249,6 +1249,19 @@
   `input_preprocessing_of`/`LoadedExtraction.input_preprocessing`; resume never
   grafts). Docs: `docs/neuroai/` (journey/loaders/BYO-alignment/demand ledger) +
   the rewritten `docs/migration/from_thingsvision.md`.
+- Per-unit streaming statistics (DOCUMENTED-UNSTABLE): `tl.stats.Quantile` and
+  `tl.stats.TopK` take a keyword-only `unit_axis=` (axis 0 is the example axis) and
+  keep one reservoir or top-k list per unit (neuron, channel, SAE latent).
+  `Quantile(..., unit_axis=-1).result()` maps each quantile to a `float64 [units]`
+  tensor; per-unit `TopK` returns `tl.stats.UnitTopK` (`values`, `example_ids`,
+  `positions`, `unit_axis`), ties broken toward the lowest example id, then position;
+  under `tl.aggregate` an example id is its index in the dataloader's iteration
+  order. `encoder=` maps each batch (an SAE encoder) before folding, so neurons and
+  latents share one top-k-over-a-dataset tool; `TopK.update(..., example_ids=...)`
+  names examples outside `tl.aggregate`. State: `8 * reservoir_size` B per unit
+  (Quantile), `k * (16 + 8 * position_axes)` B per unit (TopK); past 256 MiB the
+  `stats_per_unit_state_large` warning fires once per session. Doc of record:
+  `docs/reference/stats.md`, Per-unit statistics.
 - Appliance packages `notebook` and `neuro` reserve extras boundaries and enforce
   import gating for their optional dependencies.
 - NEURO TREATY DESK (F22; every spelling DOCUMENTED-UNSTABLE pending the naming
