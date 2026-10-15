@@ -210,6 +210,8 @@
   draws and gains a `plain op` row; buffer nodes fill with the palette's buffer colour (orange)
   instead of the plain-op fill. `vis_intervention_mode="as_node"` keeps the edited op inside its
   module boxes, and header advisories cite a file name and line instead of a local path.
+- **validation**: The `__setitem__` exemption check answers not-exempt instead of raising
+  `TypeError` when the call has no saved arguments.
 
 ### Changed
 
