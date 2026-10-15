@@ -649,6 +649,14 @@
  },
  {
   "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/attribution/_audit_reads.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "parents",
   "file": "torchlens/attribution/_cam_grid.py",
   "has_default": false,
