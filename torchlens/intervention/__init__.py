@@ -21,6 +21,7 @@ public surface, ``__all__``, and static types unchanged.
 
 from typing import TYPE_CHECKING, Any
 
+from ._affine_source import affine_source
 from ._directions import Direction, direction_from_pairs
 from ._gradient_contract import keep_grad
 from ._metrics import (
@@ -364,6 +365,7 @@ __all__ = [
     "set_direction_mean",
     "at_positions",
     "keep_grad",
+    "affine_source",
     "subspace_ablate",
     "subspace_interchange",
     "relative_l1_scalar",

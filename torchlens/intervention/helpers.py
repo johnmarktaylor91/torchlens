@@ -1208,6 +1208,7 @@ def _builtin_constructors() -> dict[str, Callable[..., Edit]]:
     # portability="builtin" specs like every entry below, and their absence
     # here made a saved/pickled spec a dead artifact (R10-1: save succeeded,
     # load raised intervention_helper_unknown).
+    from ._affine_source import affine_source
     from ._subspace_spec import rebuild_subspace_edit
     from .compose import compose
     from .predicates import add, replace_with
@@ -1242,6 +1243,8 @@ def _builtin_constructors() -> dict[str, Callable[..., Edit]]:
         "grad_scale": grad_scale,
         # Projection-valued subspace edit (a learned rotation's rows travel here).
         "subspace_edit": rebuild_subspace_edit,
+        # Its source verb (LoReFT's W h + b); saved only inside subspace_edit.
+        "affine_source": affine_source,
     }
 
 
