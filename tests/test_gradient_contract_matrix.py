@@ -61,8 +61,6 @@ _X2 = torch.randn(*_SHAPE, generator=torch.Generator().manual_seed(2), dtype=tor
 _CONST = torch.randn(*_SHAPE, generator=torch.Generator().manual_seed(3), dtype=torch.float64)
 _V = torch.tensor([1.0, 2.0, -1.0, 0.5], dtype=torch.float64)
 _V_HAT = _V / _V.norm()
-# set_direction_mean builds its unit direction in float32 (its own canonical form).
-_V_HAT32 = (_V.float() / _V.float().norm()).double()
 _Q = 0.5 * torch.tensor([[1, 1, 1, 1], [1, -1, 1, -1]], dtype=torch.float64)
 _P = _Q.T @ _Q
 _UNITS = torch.zeros(*_SHAPE, dtype=torch.bool)
@@ -190,7 +188,7 @@ _VERBS: dict[str, tuple[Callable[[], Any], Callable[[torch.Tensor], torch.Tensor
     ),
     "set_direction_mean": (
         lambda: set_direction_mean(_V, _site_donors(), feature_axis=-1),
-        lambda out: out - (out @ _V_HAT32)[..., None] * _V_HAT32,
+        lambda out: out - (out @ _V_HAT)[..., None] * _V_HAT,
         "refused",
     ),
     "subspace_ablate": (lambda: subspace_ablate(_Q), lambda out: out - out @ _P, "refused"),
