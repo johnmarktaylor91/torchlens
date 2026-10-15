@@ -48,6 +48,7 @@ from torchlens.attribution._core import (
     InputKwargs,
     _AttributionTarget,
     _call_model,
+    _Caller,
     _make_input_leaves,
     _normalize_model_inputs,
     _scalarize_output,
@@ -283,9 +284,7 @@ def _modified_backward_attribution(
             "nn.ReLU-dispatched firings only.",
             code="guided_sites_invalid",
         )
-    prepared = _normalize_model_inputs(
-        inputs, input_kwargs, model=model, target=target, method=rule_name
-    )
+    prepared = _normalize_model_inputs(inputs, input_kwargs, _Caller(rule_name, model, target))
     rule = _RULE_FUNCTIONS[rule_name]
     depth = [0]
     hook_handles: list[RemovableHandle] = []

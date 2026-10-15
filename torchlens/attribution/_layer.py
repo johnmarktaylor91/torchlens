@@ -18,6 +18,7 @@ from torchlens.attribution._core import (
     InputKwargs,
     _AttributionTarget,
     _call_model,
+    _Caller,
     _completeness_extra,
     _interned_path_leaves,
     _make_input_leaves,
@@ -980,10 +981,7 @@ def layer_integrated_gradients(
     prepared_inputs = _normalize_model_inputs(
         inputs,
         input_kwargs,
-        model=model,
-        target=target,
-        method="layer_integrated_gradients",
-        integer_route=True,
+        _Caller("layer_integrated_gradients", model, target, integer_route=True),
     )
     baseline_tensors = _layer_path_baselines(
         model, prepared_inputs, baseline, target=target, layer=layer
@@ -1098,12 +1096,7 @@ def layer_conductance(
     chunk_size = _validate_step_batch_size(step_batch_size)
     audit_mode = _validate_step_audit(step_audit, chunk_size)
     prepared_inputs = _normalize_model_inputs(
-        inputs,
-        input_kwargs,
-        model=model,
-        target=target,
-        method="layer_conductance",
-        integer_route=True,
+        inputs, input_kwargs, _Caller("layer_conductance", model, target, integer_route=True)
     )
     baseline_tensors = _layer_path_baselines(
         model, prepared_inputs, baseline, target=target, layer=layer
@@ -1212,12 +1205,7 @@ def layer_attribution(
         raise AttributionError("method must be 'activation_x_grad' or 'grad'")
 
     prepared_inputs = _normalize_model_inputs(
-        inputs,
-        input_kwargs,
-        model=model,
-        target=target,
-        method="layer_attribution",
-        integer_route=True,
+        inputs, input_kwargs, _Caller("layer_attribution", model, target, integer_route=True)
     )
     activations, gradients, _feeding_leaves = _capture_layer_activation(
         model, prepared_inputs, target, layer

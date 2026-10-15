@@ -69,10 +69,7 @@ def _hand_gradient(model: _MLP, x: Tensor, select: str) -> Tensor:
 
     leaf = x.detach().clone().requires_grad_(True)
     hidden = torch.tanh(model.fc1(leaf))
-    if select == "unit":
-        scalar = hidden[..., _UNIT].sum()
-    else:
-        scalar = hidden.sum()
+    scalar = hidden[..., _UNIT].sum() if select == "unit" else hidden.sum()
     (gradient,) = torch.autograd.grad(scalar, leaf)
     return gradient
 

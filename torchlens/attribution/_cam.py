@@ -23,6 +23,7 @@ from torchlens.attribution._core import (
     AttributionResult,
     InputKwargs,
     _AttributionTarget,
+    _Caller,
     _normalize_model_inputs,
     _PreparedInputs,
     _target_repr,
@@ -226,7 +227,7 @@ def grad_cam(
     """
 
     prepared_inputs = _normalize_model_inputs(
-        inputs, input_kwargs, model=model, target=target, method="grad_cam", integer_route=True
+        inputs, input_kwargs, _Caller("grad_cam", model, target, integer_route=True)
     )
     graph: _TraceGraph | None = None
     layer_reason: str | None = None

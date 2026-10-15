@@ -41,6 +41,7 @@ from torchlens.attribution._core import (
     InputKwargs,
     _AttributionTarget,
     _call_model,
+    _Caller,
     _interned_by_identity,
     _normalize_model_inputs,
     _PreparedInputs,
@@ -401,7 +402,7 @@ def infidelity(
             "10 for reference parity, or raise it for tighter estimates.",
             code="metric_perturbation_invalid",
         )
-    prepared = _normalize_model_inputs(inputs, input_kwargs, target=target, method="infidelity")
+    prepared = _normalize_model_inputs(inputs, input_kwargs, _Caller("infidelity", target=target))
     attribution_leaves = _attribution_leaves(attribution, prepared)
     noise = _NoiseSource(seed, None)
     generator = torch.Generator()

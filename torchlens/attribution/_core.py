@@ -74,6 +74,30 @@ class _PreparedInputs:
     site: _SiteRoute | None = None
 
 
+@dataclass(frozen=True)
+class _Caller:
+    """The public call normalizing its inputs.
+
+    Attributes
+    ----------
+    method
+        Public method name used in refusal messages.
+    model
+        The model, when the method supports site targets, integer inputs or a
+        concrete refusal remedy.
+    target
+        The public target; a :class:`SiteTarget` is resolved against ``model``.
+    integer_route
+        Whether integer-only inputs are accepted (layer methods): the input
+        path then starts at the modules that turn them into floats.
+    """
+
+    method: str = "input attribution"
+    model: Module | None = None
+    target: Any = None
+    integer_route: bool = False
+
+
 @contextmanager
 def _temporarily_eval(model: Module) -> Any:
     """Run attribution with ``model`` in eval mode, then restore prior per-module modes.
@@ -135,11 +159,7 @@ def _is_attributed_tensor(value: Any) -> bool:
 def _normalize_model_inputs(
     inputs: Any,
     input_kwargs: InputKwargs,
-    *,
-    model: Module | None = None,
-    target: Any = None,
-    method: str = "input attribution",
-    integer_route: bool = False,
+    caller: _Caller | None = None,
 ) -> _PreparedInputs:
     """Normalize public attribution inputs into model-call args and kwargs.
 
@@ -149,16 +169,9 @@ def _normalize_model_inputs(
         Bare tensor or tuple/list of positional arguments.
     input_kwargs
         Optional keyword arguments for the model call.
-    model
-        The model, when the caller supports site targets, integer inputs or
-        a concrete refusal remedy.
-    target
-        The public target; a :class:`SiteTarget` is resolved against ``model``.
-    method
-        Public method name used in refusal messages.
-    integer_route
-        Whether integer-only inputs are accepted (layer methods): the input
-        path then starts at the modules that turn them into floats.
+    caller
+        The public method, model and target; ``None`` for internal callers
+        that support neither site targets nor integer inputs.
 
     Returns
     -------
@@ -172,6 +185,8 @@ def _normalize_model_inputs(
         and the method attributes the input itself.
     """
 
+    caller = caller if caller is not None else _Caller()
+    model = caller.model
     if input_kwargs is None:
         kwargs: dict[str, Any] = {}
     elif isinstance(input_kwargs, dict):
@@ -190,17 +205,19 @@ def _normalize_model_inputs(
         )
 
     site: _SiteRoute | None = None
-    if isinstance(target, SiteTarget):
+    if isinstance(caller.target, SiteTarget):
         if model is None:
-            raise _site_unsupported(method, target, code="attribution_site_target_unsupported")
-        site = _resolve_site(model, target)
+            raise _site_unsupported(
+                caller.method, caller.target, code="attribution_site_target_unsupported"
+            )
+        site = _resolve_site(model, caller.target)
     attributed_leaves = tuple(_iter_attributed_tensors((positional, kwargs)))
     entry: _EntryRoute | None = None
     if not attributed_leaves:
-        if not (integer_route and model is not None and _tensor_leaves((positional, kwargs))):
-            raise _input_not_float(
-                method, model, positional, kwargs, target, code="attribution_input_not_float"
-            )
+        if not (
+            caller.integer_route and model is not None and _tensor_leaves((positional, kwargs))
+        ):
+            raise _input_not_float(caller, positional, kwargs, code="attribution_input_not_float")
         entry, _float_outputs = _detect_entry_route(model, positional, kwargs)
         attributed_leaves = entry.values
     return _PreparedInputs(
@@ -225,35 +242,33 @@ def _describe_tensors(positional: tuple[Any, ...], kwargs: dict[str, Any]) -> st
 
 
 def _input_not_float(
-    method: str,
-    model: Module | None,
+    caller: _Caller,
     positional: tuple[Any, ...],
     kwargs: dict[str, Any],
-    target: Any,
     *,
     code: str,
 ) -> AttributionError:
     """Build the coded refusal for an input method given no floating-point input.
 
     The remedy names a layer method on the module that turns the integers
-    into floats (found by one forward pass) when ``model`` is known.
+    into floats (found by one forward pass) when the caller's model is known.
     """
 
     layer = None
     path_method = "layer_integrated_gradients"
-    if model is not None and _tensor_leaves((positional, kwargs)):
-        route, float_outputs = _detect_entry_route(model, positional, kwargs)
+    if caller.model is not None and _tensor_leaves((positional, kwargs)):
+        route, float_outputs = _detect_entry_route(caller.model, positional, kwargs)
         if route.sites:
             layer = route.sites[0].layer
         elif float_outputs:
             layer, path_method = float_outputs[0], "layer_attribution"
     layer_spelling = repr(layer) if layer is not None else "'<embedding layer name>'"
     return AttributionError(
-        f"{method} attributes the model's input, and the inputs hold no floating-point "
+        f"{caller.method} attributes the model's input, and the inputs hold no floating-point "
         f"tensor (got {_describe_tensors(positional, kwargs)}). Integer values such as "
         "token ids have no gradient. Remedy: attribute a layer's output instead, which "
         f"accepts integer inputs, e.g. tl.attribution.{path_method}(model, inputs, "
-        f"{_target_spelling(target)}, layer={layer_spelling}). {_DOCS_POINTER}",
+        f"{_target_spelling(caller.target)}, layer={layer_spelling}). {_DOCS_POINTER}",
         code=code,
     )
 
@@ -678,8 +693,6 @@ def _scalarize_output(output: Any, target: _AttributionTarget) -> Tensor:
                 "this method", target, code="attribution_site_target_unsupported"
             )
         return _select_unit(output.tensor, target)
-    if isinstance(output, _SiteActivation):
-        output = output.tensor
     if callable(target):
         scalar = target(output)
         if not isinstance(scalar, Tensor):
@@ -998,7 +1011,7 @@ def saliency(
     """
 
     prepared_inputs = _normalize_model_inputs(
-        inputs, input_kwargs, model=model, target=target, method="saliency"
+        inputs, input_kwargs, _Caller("saliency", model, target)
     )
     with _temporarily_eval(model):
         input_leaves = _make_input_leaves(prepared_inputs)
@@ -1051,7 +1064,7 @@ def input_x_grad(
     """
 
     prepared_inputs = _normalize_model_inputs(
-        inputs, input_kwargs, model=model, target=target, method="input_x_grad"
+        inputs, input_kwargs, _Caller("input_x_grad", model, target)
     )
     with _temporarily_eval(model):
         input_leaves = _make_input_leaves(prepared_inputs)
@@ -1297,7 +1310,7 @@ def integrated_gradients(
     chunk_size = _validate_step_batch_size(step_batch_size)
     audit_mode = _validate_step_audit(step_audit, chunk_size)
     prepared_inputs = _normalize_model_inputs(
-        inputs, input_kwargs, model=model, target=target, method="integrated_gradients"
+        inputs, input_kwargs, _Caller("integrated_gradients", model, target)
     )
     baseline_tensors = _validate_baselines(prepared_inputs, baseline)
     deltas = tuple(
@@ -1445,7 +1458,7 @@ def smoothgrad(
             "noise-free map.",
             code="smoothgrad_noise_level_invalid",
         )
-    _normalize_model_inputs(inputs, input_kwargs, model=model, target=target, method="smoothgrad")
+    _normalize_model_inputs(inputs, input_kwargs, _Caller("smoothgrad", model, target))
     # D7: SmoothGrad is the thin alias over the sampling substrate. The
     # per-sample ABSOLUTE VALUE happens before the mean because the child is
     # saliency, which absolute-values each sample's gradients itself; the
