@@ -117,7 +117,9 @@ def test_deep_chain_validate_forward_pass_completes() -> None:
     model = _DeepConvChain(DEPTH)
     x = torch.randn(1, 1, LENGTH)
     trace = tl.trace(model, x)
-    assert trace.validate_forward_pass(x)
+    passed = trace.validate_forward_pass(x)
+    failure = tl.validation.last_validation_failure()
+    assert passed, failure.summary() if failure is not None else "no failure record"
 
 
 def _recursive_reference(
