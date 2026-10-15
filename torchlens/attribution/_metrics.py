@@ -401,7 +401,7 @@ def infidelity(
             "10 for reference parity, or raise it for tighter estimates.",
             code="metric_perturbation_invalid",
         )
-    prepared = _normalize_model_inputs(inputs, input_kwargs)
+    prepared = _normalize_model_inputs(inputs, input_kwargs, target=target, method="infidelity")
     attribution_leaves = _attribution_leaves(attribution, prepared)
     noise = _NoiseSource(seed, None)
     generator = torch.Generator()

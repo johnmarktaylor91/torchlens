@@ -20,6 +20,7 @@ from torchlens.attribution._layer import (
 from torchlens.attribution._metrics import MetricResult, infidelity, sensitivity
 from torchlens.attribution._noise_tunnel import noise_tunnel
 from torchlens.attribution._occlusion import occlusion, occlusion_map
+from torchlens.attribution._site import SiteTarget
 from torchlens.attribution._stash import SiteStash
 from torchlens.attribution._text import TokenAttributionPayload, TokenAttributionResult, text
 from torchlens.attribution._viz import overlay
@@ -62,6 +63,7 @@ __all__ = [
     "seed",
     "sensitivity",
     "SiteStash",
+    "SiteTarget",
     "smoothgrad",
     "text",
     "TokenAttributionPayload",

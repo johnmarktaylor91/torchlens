@@ -20,6 +20,7 @@ from torchlens.attribution._cam_grid import (
     _TraceGraph,
 )
 from torchlens.attribution._core import (
+    _DOCS_POINTER as _INTEGER_DOCS_POINTER,
     AttributionError,
     AttributionResult,
     InputKwargs,
@@ -37,6 +38,8 @@ from torchlens.attribution._core import (
     _validate_baselines,
     _validate_positive_int,
 )
+from torchlens.attribution._entry import _entry_baselines, _EntryRoute
+from torchlens.attribution._site import _target_spelling
 from torchlens.attribution._steps import (
     _chunk_steps,
     _midpoint_alphas,
@@ -802,6 +805,51 @@ def _layer_path_run(
     }
 
 
+def _layer_path_baselines(
+    model: Module,
+    inputs: _PreparedInputs,
+    baseline: Any | None,
+    *,
+    target: _AttributionTarget,
+    layer: str,
+) -> tuple[Tensor, ...]:
+    """Return baseline values where the input path of a layer method starts.
+
+    Floating-point inputs keep their own baselines. Integer inputs start the
+    path at the embedding outputs: zeros by default, or the embeddings of
+    caller baseline ids.
+
+    Raises
+    ------
+    AttributionError
+        ``layer_path_no_embedding`` when integer inputs reach no module that
+        turns them into floats, so no path can be laid.
+    """
+
+    entry = inputs.entry
+    if entry is None:
+        return _validate_baselines(inputs, baseline)
+    if not entry.sites:
+        raise AttributionError(
+            "the input path of a path method cannot start from integer inputs here: no "
+            "module takes only the integer inputs and returns floats (an embedding), so "
+            "there is no floating-point point to interpolate from. Remedy: attribute "
+            f"without a path, e.g. tl.attribution.layer_attribution(model, inputs, "
+            f"{_target_spelling(target)}, layer={layer!r}), or pass floating-point inputs. "
+            f"{_INTEGER_DOCS_POINTER}",
+            code="layer_path_no_embedding",
+        )
+    return _entry_baselines(model, entry, inputs.positional, inputs.kwargs, baseline)
+
+
+def _integer_input_layers(inputs: _PreparedInputs) -> tuple[str, ...]:
+    """Return the modules whose outputs stood in for integer inputs (empty for floats)."""
+
+    if inputs.entry is None:
+        return ()
+    return tuple(site.layer for site in inputs.entry.sites)
+
+
 def _spatial_reference_tensor(
     inputs: _PreparedInputs,
     feeding_leaves: tuple[Tensor, ...],
@@ -837,6 +885,8 @@ def _spatial_reference_tensor(
         layer, or the feeding spatial grids are heterogeneous.
     """
 
+    if inputs.entry is not None:
+        return _integer_spatial_reference(inputs.entry, feeding_leaves, layer)
     if not any(input_tensor.ndim >= 4 for input_tensor in inputs.attributed_leaves):
         raise AttributionError("grad_cam requires an input tensor with spatial dimensions")
     candidates = [input_tensor for input_tensor in feeding_leaves if input_tensor.ndim >= 4]
@@ -850,6 +900,40 @@ def _spatial_reference_tensor(
         raise AttributionError(
             f"grad_cam target layer {layer!r} is fed by spatial inputs with different "
             f"grids {sorted(grids)}; the upsampling target is ambiguous"
+        )
+    return candidates[0]
+
+
+def _integer_spatial_reference(
+    entry: _EntryRoute,
+    feeding_leaves: tuple[Tensor, ...],
+    layer: str,
+) -> Tensor:
+    """Return the integer input whose last two axes are the grid of an integer-input Grad-CAM.
+
+    Integer inputs laid out on a grid (token ids ``N, H, W``, or an integer
+    image ``N, C, H, W``) carry the CAM's coordinate system. Candidates are the
+    integer inputs consumed by the embeddings that feed the layer; with no
+    embedding in the route every integer input with a grid is a candidate.
+
+    Raises
+    ------
+    AttributionError
+        If no candidate has at least three axes, or candidates disagree on
+        the grid.
+    """
+
+    pool = entry.sources_of(feeding_leaves) if entry.sites else entry.integer_leaves
+    candidates = [leaf for leaf in pool if leaf.ndim >= 3]
+    grids = {tuple(candidate.shape[-2:]) for candidate in candidates}
+    if len(grids) != 1:
+        raise AttributionError(
+            f"grad_cam found no single grid among the integer inputs feeding layer {layer!r} "
+            f"(grids {sorted(grids)}); a CAM is laid on integer inputs shaped N, H, W or "
+            "N, C, H, W. Remedy: attribute the layer without a map, e.g. "
+            f"tl.attribution.layer_attribution(model, inputs, target=target, layer={layer!r}). "
+            f"{_INTEGER_DOCS_POINTER}",
+            code="grad_cam_integer_grid_invalid",
         )
     return candidates[0]
 
@@ -976,7 +1060,9 @@ def grad_cam(
         Optional keyword arguments for ``model``.
     target
         Integer class index selecting ``output[..., target]`` and summing the
-        selected values, or callable ``output -> scalar tensor``.
+        selected values, a callable ``output -> scalar tensor``, or a
+        :class:`SiteTarget` naming a hidden layer's output (and unit) to
+        attribute instead of the model output.
     layer
         Name from ``dict(model.named_modules())`` identifying the target layer.
         The layer must fire exactly once during the forward pass; Grad-CAM has
@@ -1026,7 +1112,9 @@ def grad_cam(
         not provable, or no layer can be chosen automatically.
     """
 
-    prepared_inputs = _normalize_model_inputs(inputs, input_kwargs)
+    prepared_inputs = _normalize_model_inputs(
+        inputs, input_kwargs, model=model, target=target, method="grad_cam", integer_route=True
+    )
     graph: _TraceGraph | None = None
     layer_reason: str | None = None
     if layer is None:
@@ -1081,6 +1169,7 @@ def grad_cam(
         target_repr=_target_repr(target),
         extra={
             "layer": layer,
+            "integer_input_layers": _integer_input_layers(prepared_inputs),
             "layer_source": "caller" if layer_reason is None else "trace",
             "layer_reason": layer_reason,
             **grid_extra,
@@ -1133,7 +1222,9 @@ def layer_integrated_gradients(
         Optional keyword arguments for ``model``.
     target
         Integer class index selecting ``output[..., target]`` and summing the
-        selected values, or callable ``output -> scalar tensor``.
+        selected values, a callable ``output -> scalar tensor``, or a
+        :class:`SiteTarget` naming a hidden layer's output (and unit) to
+        attribute instead of the model output.
     layer
         Name from ``dict(model.named_modules())`` identifying the target layer.
     baseline
@@ -1164,8 +1255,17 @@ def layer_integrated_gradients(
     _validate_positive_int("n_steps", n_steps)
     chunk_size = _validate_step_batch_size(step_batch_size)
     audit_mode = _validate_step_audit(step_audit, chunk_size)
-    prepared_inputs = _normalize_model_inputs(inputs, input_kwargs)
-    baseline_tensors = _validate_baselines(prepared_inputs, baseline)
+    prepared_inputs = _normalize_model_inputs(
+        inputs,
+        input_kwargs,
+        model=model,
+        target=target,
+        method="layer_integrated_gradients",
+        integer_route=True,
+    )
+    baseline_tensors = _layer_path_baselines(
+        model, prepared_inputs, baseline, target=target, layer=layer
+    )
     run = _layer_path_run(
         model,
         prepared_inputs,
@@ -1199,6 +1299,7 @@ def layer_integrated_gradients(
         target_repr=_target_repr(target),
         extra={
             "layer": layer,
+            "integer_input_layers": _integer_input_layers(prepared_inputs),
             "n_steps": n_steps,
             "path_evaluations_logical": n_steps,
             "physical_forward_calls": run["physical_forward_calls"],
@@ -1241,7 +1342,9 @@ def layer_conductance(
         Optional keyword arguments for ``model``.
     target
         Integer class index selecting ``output[..., target]`` and summing the
-        selected values, or callable ``output -> scalar tensor``.
+        selected values, a callable ``output -> scalar tensor``, or a
+        :class:`SiteTarget` naming a hidden layer's output (and unit) to
+        attribute instead of the model output.
     layer
         Name from ``dict(model.named_modules())`` identifying the target layer.
     baseline
@@ -1272,8 +1375,17 @@ def layer_conductance(
     _validate_positive_int("n_steps", n_steps)
     chunk_size = _validate_step_batch_size(step_batch_size)
     audit_mode = _validate_step_audit(step_audit, chunk_size)
-    prepared_inputs = _normalize_model_inputs(inputs, input_kwargs)
-    baseline_tensors = _validate_baselines(prepared_inputs, baseline)
+    prepared_inputs = _normalize_model_inputs(
+        inputs,
+        input_kwargs,
+        model=model,
+        target=target,
+        method="layer_conductance",
+        integer_route=True,
+    )
+    baseline_tensors = _layer_path_baselines(
+        model, prepared_inputs, baseline, target=target, layer=layer
+    )
     run = _layer_path_run(
         model,
         prepared_inputs,
@@ -1317,6 +1429,7 @@ def layer_conductance(
         target_repr=_target_repr(target),
         extra={
             "layer": layer,
+            "integer_input_layers": _integer_input_layers(prepared_inputs),
             "n_steps": n_steps,
             "path_evaluations_logical": n_steps,
             "physical_forward_calls": run["physical_forward_calls"],
@@ -1350,7 +1463,9 @@ def layer_attribution(
         Optional keyword arguments for ``model``.
     target
         Integer class index selecting ``output[..., target]`` and summing the
-        selected values, or callable ``output -> scalar tensor``.
+        selected values, a callable ``output -> scalar tensor``, or a
+        :class:`SiteTarget` naming a hidden layer's output (and unit) to
+        attribute instead of the model output.
     layer
         Name from ``dict(model.named_modules())`` identifying the target layer.
     method
@@ -1374,7 +1489,14 @@ def layer_attribution(
     if method not in ("activation_x_grad", "grad"):
         raise AttributionError("method must be 'activation_x_grad' or 'grad'")
 
-    prepared_inputs = _normalize_model_inputs(inputs, input_kwargs)
+    prepared_inputs = _normalize_model_inputs(
+        inputs,
+        input_kwargs,
+        model=model,
+        target=target,
+        method="layer_attribution",
+        integer_route=True,
+    )
     activations, gradients, _feeding_leaves = _capture_layer_activation(
         model, prepared_inputs, target, layer
     )
@@ -1389,5 +1511,5 @@ def layer_attribution(
         method=f"layer_{method}",
         values=values.detach(),
         target_repr=_target_repr(target),
-        extra={"layer": layer},
+        extra={"layer": layer, "integer_input_layers": _integer_input_layers(prepared_inputs)},
     )

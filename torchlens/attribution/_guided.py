@@ -254,7 +254,8 @@ def _modified_backward_attribution(
     input_kwargs
         Optional keyword arguments for ``model``.
     target
-        Integer class index or callable ``output -> scalar tensor``.
+        Integer class index, callable ``output -> scalar tensor``, or a
+        :class:`SiteTarget` naming a hidden layer's output to attribute.
     sites
         ``"all"`` (every executed exact-ReLU op -- the op-level default) or
         ``"module"`` (only ``nn.ReLU``-dispatched firings -- the module-hook
@@ -282,7 +283,9 @@ def _modified_backward_attribution(
             "nn.ReLU-dispatched firings only.",
             code="guided_sites_invalid",
         )
-    prepared = _normalize_model_inputs(inputs, input_kwargs)
+    prepared = _normalize_model_inputs(
+        inputs, input_kwargs, model=model, target=target, method=rule_name
+    )
     rule = _RULE_FUNCTIONS[rule_name]
     depth = [0]
     hook_handles: list[RemovableHandle] = []
@@ -445,7 +448,8 @@ def guided_backprop(
     input_kwargs
         Optional keyword arguments for ``model``.
     target
-        Integer class index or callable ``output -> scalar tensor``.
+        Integer class index, callable ``output -> scalar tensor``, or a
+        :class:`SiteTarget` naming a hidden layer's output to attribute.
     sites
         ``"all"`` (op-level coverage, default) or ``"module"``
         (``nn.ReLU``-dispatched firings only -- the module-hook coverage class
@@ -497,7 +501,8 @@ def deconvolution(
     input_kwargs
         Optional keyword arguments for ``model``.
     target
-        Integer class index or callable ``output -> scalar tensor``.
+        Integer class index, callable ``output -> scalar tensor``, or a
+        :class:`SiteTarget` naming a hidden layer's output to attribute.
     sites
         ``"all"`` (op-level coverage, default) or ``"module"``
         (``nn.ReLU``-dispatched firings only).
