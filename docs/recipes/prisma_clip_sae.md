@@ -114,8 +114,10 @@ class PrismaCodec:
         return self.sae.run_time_activation_norm_fn_out(out)
 
 
+first_block, second_block = vit.blocks
 with torch.no_grad():
-    block_out = vit.blocks[1](vit.blocks[0](vit._pos_embed(vit.patch_embed(images))))
+    tokens = vit._pos_embed(vit.patch_embed(images))  # class token and 16 patches
+    block_out = second_block(first_block(tokens))
 RESULT = (type(sae).__name__, sae.d_sae, tuple(block_out.shape))
 ```
 

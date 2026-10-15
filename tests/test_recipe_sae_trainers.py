@@ -58,4 +58,4 @@ def test_sae_trainers_recipe_names_both_trainers_and_the_way_back() -> None:
     assert "crosscoder_learning@d1fd6f3fea41fc1123699cc09f4cdad47ca35160" in text
     assert 'pip install "eai-sparsify==1.3.3"' in text
     assert "trainSAE(" in text and "SparseCoder(" in text
-    assert text.count("splice(model, x, site=") == 2
+    assert text.count("result = splice(model, x, site=") == 2

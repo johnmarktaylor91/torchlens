@@ -42,10 +42,12 @@ stimuli = torch.randn(512, 8)
 
 base_trace = tl.trace(base, stimuli)
 tuned_trace = tl.trace(tuned, stimuli)
-paired = torch.stack([base_trace["1"].out, tuned_trace["1"].out], dim=1)
+# detach(): a trace keeps each activation's autograd history; the trainer needs plain data.
+paired = torch.stack([base_trace["1"].out, tuned_trace["1"].out], dim=1).detach()
 
+base_to_relu, tuned_to_relu = base[:2], tuned[:2]
 with torch.no_grad():
-    by_hand = torch.stack([base[:2](stimuli), tuned[:2](stimuli)], dim=1)
+    by_hand = torch.stack([base_to_relu(stimuli), tuned_to_relu(stimuli)], dim=1)
 RESULT = (tuple(paired.shape), bool(torch.equal(paired, by_hand)))
 ```
 
