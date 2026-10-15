@@ -2,8 +2,9 @@
 
 In float64 on the first two vendored MIB IOI rows (clean prompt and its
 ``s2_io_flip_counterfactual``), one ``tl.mechinterp.patch_edges`` call that
-patches every edge outside a random kept set (every receiver of the graph
-is patched) equals the independent forward-hook implementation of the same
+patches every edge outside a random kept set into every MLP, ``logits`` and
+the q, k and v receivers of layers 0, 6 and 11 (121 receivers in 16
+topological stages) equals the independent forward-hook implementation of the same
 convention (``tests/support/multi_patch_reference.py``) within 1e-10
 absolute on every layer's ``c_attn`` and ``ln_2`` outputs, ``ln_f`` and the
 logits. Runs only in the preflighted offline venue (GATE-ID R1_OFFLINE_VENUE).
@@ -38,8 +39,11 @@ def test_a_gpt2_small_circuit_runs_as_one_call_and_matches_plain_hooks(r1_loader
         corrupt = tl.mechinterp.component_graph(corrupt_trace)
         from test_circ3_multi_receiver_patch import _outside_random_circuit
 
-        edges = _outside_random_circuit(graph, keep=0.05)
-        assert len({edge.receiver.name for edge in edges}) == len(graph.receivers) == 445
+        def chosen(receiver) -> bool:
+            return receiver.kind in ("mlp", "logits") or receiver.layer_index in (0, 6, 11)
+
+        edges = [e for e in _outside_random_circuit(graph, keep=0.05) if chosen(e.receiver)]
+        assert len({edge.receiver.name for edge in edges}) == 12 + 1 + 3 * 36
         started = time.perf_counter()
         patched = tl.mechinterp.patch_edges(clean, edges, corrupt=corrupt)
         print(

@@ -290,7 +290,8 @@ Circuit test cases on GPT-2 small (CPU):
   against ACDC's encoding of the circuit is 0.870. The run took 57 minutes
   on 4 cores (3.4 s per row).
 - Circuits run as one `patch_edges` call; on GPT-2 small a call that patches
-  edges into all 445 receivers equals an independent forward-hook
+  edges into 121 receivers (every MLP, `logits`, and the q, k and v
+  receivers of layers 0, 6 and 11) equals an independent forward-hook
   implementation of the same convention within 1e-10 in float64.
 
 ACDC-style discovery is a recipe, not a TorchLens loop:
