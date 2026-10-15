@@ -52,6 +52,11 @@
 - **intervention**: `InterventionDecision(keep_grad=True)` now runs a gradient-connectivity check
   and raises `edit_detached_from_graph` when the edit writes values with no autograd graph; before,
   the flag was ignored on torch. `keep_grad=False` (the default) is unchanged.
+- **intervention**: a gradient edit (`grad_zero`, `grad_scale`, `grad_clip`, `grad_noise`,
+  `grad_clamp`, `bwd_hook`) passed to `fork.do(site, edit)` on a replay fork, or to
+  `push(replay=ReplayOptions(hooks=...))`, now refuses `InvalidArgumentError` code
+  `replay_gradient_edit_unsupported` naming the live door; before, it failed with an uncoded
+  `HookSignatureError`.
 
 ### Features
 
@@ -145,6 +150,30 @@
   filled by noisy linear imputation from their neighbours, each step a recorded edit.
   `randomization_test` now refuses when no layer with parameters runs during the method call instead
   of returning an empty result.
+- **attribution**: `tl.attribution.causal_audit` now also audits direct-logit-attribution tables
+  from `tl.mechinterp.direct_logit_contributions` (each component's whole site is ablated and the
+  same logit quantity is read from the unembedding head, after a check that the model reproduces the
+  table's native logits; the constant row is reported apart) and one-backward read tables from
+  `tl.attribution.read` (each activation-times-gradient site or element is ablated and the seeded
+  target measured; `EDGE` rows refuse and point to `tl.mechinterp.patch_edges`). Its `target=` is
+  now optional (left out for a direct-logit table), and every audit row names its `site` and
+  `component`.
+- **intervention**: `tl.intervention.keep_grad(edit)` warns `keep_grad_replay_frontier` once per
+  session under `push(replay=ReplayOptions(differentiable=True))`, where parameters upstream of the
+  replay frontier get no gradient.
+- **intervention**: `do(tl.subspace(site, basis, origin=...), verb)` with a builtin verb saves
+  portably: the staged edit is the builtin `subspace_edit` (verb, orthonormal rows, axis, digests,
+  provenance), so `tl.io.save_intervention(..., level="portable")` reloads the same projection; a
+  learned rotation (DAS, ReFT) is applied as `tl.subspace(site, R[:k], origin=...)`. Load refuses
+  `subspace_spec_invalid`, `subspace_spec_basis_tampered`, `subspace_spec_basis_not_orthonormal`.
+  New field `BasisProvenance.source_dtype`. Fire records of such edits name `subspace_edit`.
+- **mechinterp**: `tl.mechinterp.edge_scores(model, inputs, *, corrupted, metric, method="eap_ig",
+  steps=None, example_reduction="mean")`: edge attribution patching over the component graph (EAP,
+  and EAP-IG with a left Riemann sum over the input embedding), one capture and one backward per
+  evaluation point, each receiver's own gradient (q, k and v per head); returns a one-backward
+  `ReadTable` of `EDGE` rows addressed by edge name. `tl.mechinterp.circuit_performance_ratio` and
+  `tl.mechinterp.circuit_model_difference`: the MIB circuit track's CPR and CMD areas over a
+  faithfulness curve. Documented unstable.
 
 ### Bug Fixes
 
@@ -172,6 +201,15 @@
 - **io**: the reserved `torchlens.boundary_facts` sidecar family is registered on the sidecar
   door's first use, so listing, attaching or reading it works in a fresh interpreter regardless of
   what was imported first (the harness_bundles reference examples failed when run alone).
+- **intervention**: `set_direction_mean` on a float64 site now uses a float64 unit direction and
+  mean coefficient, so its result and gradient are float64-precise (they were float32-precise, about
+  3e-8 off); float32 and lower-precision sites are unchanged bit for bit.
+- **visualization**: skins now own all of a render's ink. Under `vis_theme="dark"`, edges, edge
+  labels and module boxes follow the skin and node text stays readable on light fills; the rank
+  layout paints the skin's page. With `show_legend=True` the legend lists only the roles the picture
+  draws and gains a `plain op` row; buffer nodes fill with the palette's buffer colour (orange)
+  instead of the plain-op fill. `vis_intervention_mode="as_node"` keeps the edited op inside its
+  module boxes, and header advisories cite a file name and line instead of a local path.
 
 ### Changed
 

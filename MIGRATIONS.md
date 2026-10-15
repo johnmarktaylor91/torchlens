@@ -517,3 +517,14 @@ select those layers by name, write `save=["stats"]`.
 `do(tl.subspace(...), edit)` changed meaning from "edit every element the basis touches" to "edit
 the component along the basis". To keep the old behaviour, edit the support set directly:
 `trace.do(tl.units(site, tl.subspace(site, basis, origin=...).resolve(trace)[0].mask), edit)`.
+
+## Gradient edits on a replay fork refuse typed; portable subspace edits (2026-10-15, refusal change and format addition)
+
+Code that caught `HookSignatureError` for a gradient edit on a replay fork should branch on
+`InvalidArgumentError` with `fields["code"] == "replay_gradient_edit_unsupported"` and move the
+edit to a live capture (`tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True),
+intervene=tl.when(tl.module(name), edit))`, then `trace.backward(loss)`).
+
+Specs saved with a `subspace_edit` helper need this release to load; an older TorchLens refuses
+them `intervention_helper_unknown`. Code that reads fire-record helper names for
+`do(tl.subspace(...), verb)` sees `subspace_edit`; the verb is `record.helper.args[0]`.
