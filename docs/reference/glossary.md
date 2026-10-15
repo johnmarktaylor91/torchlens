@@ -362,9 +362,11 @@ the sender's output as its `contribution`. `identity_receipt` records the in-API
 sum of its contributions. Each attention output bias is its own node `b{L}`. A `ComponentEdge` is
 also a selection (`__selection__`): an EDGE selection of the pre-norm input edge for `m{L}` and
 `logits` receivers, an ACT selection of one head's q, k or v projection slice otherwise.
-`patch_edges(trace, edges, *, corrupt)` returns a fork of `trace` in which the one receiver those
-edges enter reads `clean input - sum(s_clean) + sum(s_corrupt)` (`corrupt` is the corrupted
-input's `ComponentGraph`); the trace needs `intervention_ready=True`.
+`patch_edges(trace, edges, *, corrupt)` returns a fork of `trace` in which every receiver the
+edges enter reads `input - sum(s) + sum(s_corrupt)` over its patched edges (`corrupt` is the
+corrupted input's `ComponentGraph`); `input` and `s` are the patched forward's own values (the
+clean values when one receiver is patched), so a circuit (everything outside a kept set patched)
+is one call; the trace needs `intervention_ready=True`.
 
 `edge_scores(model, inputs, *, corrupted, metric, method="eap_ig", steps=None,
 example_reduction="mean")` returns a one-backward `ReadTable` of `EDGE` rows, one per
