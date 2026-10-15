@@ -1535,7 +1535,10 @@ deprecation shim owed*
   carried, a dense direction supports the WHOLE axis, and
   `do(subspace(...), edit)` edits every supported element, never "the
   component along the direction" (projection-valued selections are a named
-  design fork, not a promise). BASIS PROVENANCE IS MANDATORY: `origin=` is
+  design fork, not a promise). To edit the component along a direction, apply
+  `tl.project_off` / `tl.project_onto` or
+  `torchlens.intervention.set_direction_mean` to the site instead
+  (docs/intervention_explainers.md, "Set, not projection"). BASIS PROVENANCE IS MANDATORY: `origin=` is
   a required non-empty account of where the basis came from; origin,
   optional `method=`, geometry, and the basis's sha256 content digest are
   stamped into every resolved entry's `provenance.source` (and therefore

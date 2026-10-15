@@ -1681,10 +1681,12 @@ def _apply_invalid(
 def _warn_if_dense_subspace_edit(resolved: ResolvedSelection) -> None:
     """Point-of-use disclosure: editing a DENSE direction's support set is
     full-axis ablation (set semantics), never a projection along the
-    direction (list-A row 8; the projection-valued edit is a named fork,
-    not a shipped capability). The marker rides ``provenance.source``, so
-    the audit record discloses it either way; this warning surfaces it at
-    the ``do()`` call itself."""
+    direction. Projection-valued edits are separate edit helpers
+    (``tl.project_off``, ``tl.project_onto``,
+    ``torchlens.intervention.set_direction_mean``), which the warning names
+    as the remedy. The marker rides ``provenance.source``, so the audit
+    record discloses it either way; this warning surfaces it at the
+    ``do()`` call itself."""
 
     import warnings as _warnings
 
@@ -1697,10 +1699,13 @@ def _warn_if_dense_subspace_edit(resolved: ResolvedSelection) -> None:
             TorchLensWarning(
                 "do() on a dense-direction subspace selection edits EVERY "
                 "element of the bound axis (the documented support-set "
-                "semantics), not the component along the direction; "
-                "projection-valued edits are not a shipped capability. "
-                "Remedy: use a sparse direction (or tol=) to target a "
-                "subset, or accept the full-axis edit knowingly",
+                "semantics), not the component along the direction. "
+                "Remedy: to edit the component along the direction, apply "
+                "tl.project_off(direction, feature_axis=...), "
+                "tl.project_onto(...) or "
+                "torchlens.intervention.set_direction_mean(...) to the site "
+                "instead; to target a subset, use a sparse direction (or "
+                "tol=); or accept the full-axis edit knowingly",
                 code="dense_subspace_full_axis_edit",
             ),
             stacklevel=4,
