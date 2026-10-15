@@ -43,6 +43,15 @@
   `torchlens.bridge.sae_lens.reconstruct(log, site, sae)` for the reconstruction, or
   `sae.decode(latents)` on latents you hold. `SpliceResult.fraction_variance_explained` is `nan`
   (with `zero_variance=True`) when the site's total variance is zero; it was 0.0.
+- **intervention**: `do(tl.subspace(site, basis, origin=...), edit)` now edits the component of the
+  site value along the basis span and keeps the orthogonal complement; it no longer edits every
+  element of the basis's support. `tl.patch_from(source)` under a subspace is the basis
+  interchange. Verbs with no coordinate meaning refuse `subspace_edit_unsupported`; a subspace
+  combined with set operators or resolved refuses `subspace_projection_composed` in `do()`. The
+  `dense_subspace_full_axis_edit` warning is removed.
+- **intervention**: `InterventionDecision(keep_grad=True)` now runs a gradient-connectivity check
+  and raises `edit_detached_from_graph` when the edit writes values with no autograd graph; before,
+  the flag was ignored on torch. `keep_grad=False` (the default) is unchanged.
 
 ### Features
 
@@ -117,6 +126,16 @@
   tokens, per layer and position), returning `tl.stats.TrajectoryStats`;
   `torchlens.semantic.logit_lens_predictions(..., mask_input=True)` bans the input's own tokens
   before its reductions.
+- **mechinterp**: `tl.mechinterp.component_graph(trace)`: the circuit-discovery component graph
+  (MIB/EAP-IG vocabulary: `input`, per-head `a{L}.h{H}`, per-layer attention output bias `b{L}`,
+  `m{L}`; receivers `a{L}.h{H}<q|k|v>`, `m{L}`, `logits`), with every receiver's pre-norm input
+  checked equal to the sum of its edges' contributions; edges are intervention selections, and
+  `tl.mechinterp.patch_edges(trace, edges, *, corrupt)` patches the edges into one receiver on the
+  replay engine. Documented unstable.
+- **semantic**: GPT-NeoX (Pythia) attention recipe: per-head `q`, `k`, `v`, `result` and
+  `attn_out` facets from the fused `query_key_value` projection.
+- **intervention**: `torchlens.intervention.keep_grad(edit)` and the gradient-contract page
+  `docs/gradient_contract.md` (verb x door matrix).
 
 ### Bug Fixes
 

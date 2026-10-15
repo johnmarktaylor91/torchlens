@@ -511,3 +511,9 @@ total variance is zero; it was 0.0.
 A bare `save="stats"` string used to be a substring selector for layers with "stats" in their
 names; it is now the reduce-and-discard save level (`tl.stats.site_spines(trace)` reads it). To
 select those layers by name, write `save=["stats"]`.
+
+## `do(tl.subspace(...), edit)` edits the basis component (2026-10-15, behavior change)
+
+`do(tl.subspace(...), edit)` changed meaning from "edit every element the basis touches" to "edit
+the component along the basis". To keep the old behaviour, edit the support set directly:
+`trace.do(tl.units(site, tl.subspace(site, basis, origin=...).resolve(trace)[0].mask), edit)`.

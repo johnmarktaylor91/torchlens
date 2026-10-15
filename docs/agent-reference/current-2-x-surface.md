@@ -774,12 +774,22 @@
   `tl.subspace(within, basis, *, origin=, method=None, dim=-1, tol=0.0)`
   selects the elements a DIRECTION in activation space lives on (probe
   directions, steering vectors, PCA components, SAE decoder rows; basis
-  `[d]` or `[k, d]`, canonicalized float64). SET, NOT PROJECTION: it
-  resolves to the basis SUPPORT SET (`|w| > tol` on the bound axis, union
-  over rows, expanded across other axes; a dense direction supports the
-  WHOLE axis and `do()` edits every supported element, never "the
-  component along the direction" — projection-valued selections are a
-  named design fork, not a promise). BASIS PROVENANCE MANDATORY:
+  `[d]` or `[k, d]`, canonicalized float64). PROJECTION UNDER do():
+  `do(subspace(...), edit)` edits the COMPONENT along the basis span
+  (coordinates `c = Q x`, written back `x + Q^T (edit(c) - c)`; the
+  orthogonal complement is unchanged; coordinate verbs act on `c`, value
+  verbs such as `tl.patch_from(source)` (the interchange) write a value's
+  component, other verbs refuse `subspace_edit_unsupported`; an orthonormal
+  basis is used as given, any other full-rank one is orthonormalised with
+  signs kept; set-combined or resolved subspaces refuse
+  `subspace_projection_composed`; a partial-axis `within=` refuses
+  `subspace_projection_partial_axis`). SUPPORT UNDER resolve(): the basis
+  SUPPORT SET (`|w| > tol` on the bound axis, union over rows, expanded
+  across other axes; a dense direction supports the WHOLE axis). GRADIENT
+  CONTRACT: `tl.intervention.keep_grad(edit)` (and
+  `InterventionDecision(keep_grad=True)`) raise `edit_detached_from_graph`
+  when an edit writes values with no autograd graph; the verb x door matrix
+  is `docs/gradient_contract.md`. BASIS PROVENANCE MANDATORY:
   `origin=` required non-empty; origin/method/geometry/sha256 content
   digest ride `provenance.source` and `do()` audit records
   (`selection_subspace.BasisProvenance` is the programmatic face).
