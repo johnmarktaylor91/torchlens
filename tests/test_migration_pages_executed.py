@@ -132,8 +132,8 @@ def test_every_fence_is_headed_with_a_known_tool(page: str) -> None:
     assert tools & {"torchlens", "timm_torchlens"}, f"{page} has no TorchLens example"
 
 
-def test_saelens_page_lists_only_real_splice_result_fields() -> None:
-    """The SAELens page names SpliceResult fields that exist, and no latents field."""
+def test_saelens_page_names_the_splice_result_latents_fields() -> None:
+    """The SAELens page's read-latents row names SpliceResult fields that exist."""
 
     from torchlens.bridge.sae import SpliceResult
 
@@ -143,12 +143,10 @@ def test_saelens_page_lists_only_real_splice_result_fields() -> None:
         for line in (DOCS / "migration/saelens.md").read_text("utf-8").splitlines()
         if line.startswith("| Read feature activations")
     )
-    named = set(re.findall(r"`([a-z_]+)`", row.split("it returns", 1)[1].split("Encode")[0]))
-    assert named and named <= fields, named - fields
-    assert "does not carry the latents" in row
-    assert not any("latent" in name for name in fields), (
-        "SpliceResult now carries latents: update docs/migration/saelens.md"
-    )
+    named = set(re.findall(r"`SpliceResult\.([a-z_]+)`", row))
+    assert named == {"latents", "edited_latents"}, named
+    assert named <= fields, named - fields
+    assert "kept by default" in row and "keep_latents=False" in row
 
 
 def test_gaussian_rdm_migration_note_matches_the_formula() -> None:

@@ -35,7 +35,23 @@ optional dependency.
   `background=None` refuses typed (`bridge_shap_background_missing`) before
   shap is called.
   `inputs` defaults to the first saved input tensor.
-- `sae_lens.py`: `encode()`, `decode()` (extra: `torchlens[sae]`).
+- `sae_lens.py`: `encode(log, site, sae)` (the site's latents) and
+  `reconstruct(log, site, sae)` (`sae.decode(sae.encode(out))`; a callable
+  SAE is called on the out) (extra: `torchlens[sae]`). The old `decode(log,
+  site, sae)` passed the site activation to `sae.decode` as if it were
+  latents and is removed.
+- `sae.py`: `splice(model_or_log, inputs, *, site, sae, latents_edit=None,
+  tokens=None, exclude_bos=False, keep_latents=True)` returns `SpliceResult`
+  (duck-typed SAE, no extra). Metrics are float64 and follow SAELens evals and
+  Gemma Scope: `fraction_variance_explained_pooled` (per-dimension centring)
+  and `_by_dim` beside the global-mean `fraction_variance_explained`; zero
+  denominators give `nan`, `zero_variance=True` and a reason in
+  `unavailable_metrics`, never 0.0. `latents`/`edited_latents` are kept by
+  default (once-per-session `sae_splice_latents_large` past 256 MiB). With
+  `tokens=` the first output shaped `tokens.shape + (vocab,)` is the logits:
+  `ce_loss_clean`/`_spliced`/`_zero_ablated`, `ce_loss_recovered`,
+  `kl_divergence`; without it they are `None` with a reason. Metric math lives
+  in `_sae_metrics.py`. Recipe: `docs/recipes/pretrained_saes.md`.
 - `lit/`: `model(net, tokenizer, *, task=, sites=, ...)` wraps a LIVE model as
   a real `lit_nlp.api.model.Model` (classification + causal LM); `dataset()`,
   `layout()` (extra: `torchlens[lit]`; import-inert, call-time gate; site
