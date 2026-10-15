@@ -127,38 +127,30 @@ def _checked_rows(rows: torch.Tensor, basis_sha256: str) -> None:
         )
 
 
-def rebuild_subspace_edit(
-    edit: Any,
-    *,
-    basis: Any,
-    axis: Any,
-    basis_sha256: Any,
-    origin: Any,
-    method: Any = None,
-    origin_sha256: Any = None,
-    source_dtype: Any = "float64",
-    orthonormalised: Any = False,
-) -> Edit:
+_REQUIRED = ("basis", "axis", "basis_sha256", "origin")
+_OPTIONAL: dict[str, Any] = {
+    "method": None,
+    "origin_sha256": None,
+    "source_dtype": "float64",
+    "orthonormalised": False,
+}
+
+
+def rebuild_subspace_edit(edit: Any, **stored: Any) -> Edit:
     """Rebuild a saved ``subspace_edit`` as the projection it recorded.
 
     Parameters
     ----------
     edit:
         The inner builtin verb, already rebuilt by the loader.
-    basis:
-        The float64 orthonormal ``[k, d]`` rows the edit applied.
-    axis:
-        The bound site axis.
-    basis_sha256:
-        Digest of ``basis`` (shape header plus float64 bytes).
-    origin, method:
-        The ``tl.subspace`` provenance of the caller's basis.
-    origin_sha256:
-        Provenance digest of the caller's basis (default: ``basis_sha256``).
-    source_dtype:
-        Dtype of the caller's basis before float64 canonicalisation.
-    orthonormalised:
-        Whether the caller's basis was orthonormalised.
+    **stored:
+        The saved keywords: ``basis`` (the float64 orthonormal ``[k, d]`` rows
+        the edit applied), ``axis`` (the bound site axis), ``basis_sha256``
+        (digest of ``basis``: shape header plus float64 bytes), ``origin`` and
+        optionally ``method`` (the ``tl.subspace`` provenance), ``origin_sha256``
+        (digest of the caller's basis; default ``basis_sha256``),
+        ``source_dtype`` (dtype of the caller's basis; default ``"float64"``)
+        and ``orthonormalised`` (default ``False``).
 
     Returns
     -------
@@ -179,25 +171,28 @@ def rebuild_subspace_edit(
             f"expected a builtin edit verb, got {type(edit).__name__}",
             code="subspace_spec_invalid",
         )
-    rows = _checked_basis(basis)
-    fields = {
-        "axis": axis,
-        "basis_sha256": basis_sha256,
-        "origin": origin,
-        "method": method,
-        "origin_sha256": basis_sha256 if origin_sha256 is None else origin_sha256,
-        "source_dtype": source_dtype,
-        "orthonormalised": orthonormalised,
-    }
+    unknown = sorted(set(stored) - set(_REQUIRED) - set(_OPTIONAL))
+    missing = [name for name in _REQUIRED if name not in stored]
+    if unknown or missing:
+        field = (unknown or missing)[0]
+        raise _invalid(
+            field,
+            f"unknown fields {unknown}, missing fields {missing}",
+            code="subspace_spec_invalid",
+        )
+    fields = {**_OPTIONAL, **stored}
+    if fields["origin_sha256"] is None:
+        fields["origin_sha256"] = fields["basis_sha256"]
+    rows = _checked_basis(fields["basis"])
     _checked_fields(fields)
-    _checked_rows(rows, str(basis_sha256))
+    _checked_rows(rows, str(fields["basis_sha256"]))
     projection = SubspaceProjection(
         rows,
-        int(axis),
+        int(fields["axis"]),
         str(fields["origin_sha256"]),
-        bool(orthonormalised),
-        origin=str(origin),
-        method=method,
-        source_dtype=str(source_dtype),
+        bool(fields["orthonormalised"]),
+        origin=str(fields["origin"]),
+        method=fields["method"],
+        source_dtype=str(fields["source_dtype"]),
     )
     return projection.wrap(edit)

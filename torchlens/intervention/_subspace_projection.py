@@ -265,20 +265,24 @@ class SubspaceProjection:
         basis = node.basis * support
         gram = basis @ basis.T
         identity = torch.eye(int(basis.shape[0]), dtype=basis.dtype)
+        orthonormal = bool(torch.allclose(gram, identity, rtol=0.0, atol=_ORTHONORMAL_TOL))
+        rows = basis
+        if not orthonormal:
+            rows = _orthonormal_rows(basis, "subspace")
+            # Sign-preserving Gram-Schmidt: row j keeps a positive inner product
+            # with the caller's row j, so a one-direction coordinate keeps its sign.
+            signs = torch.sign(torch.sum(rows * basis, dim=1, keepdim=True))
+            rows = rows * signs * support.any(dim=0)
         provenance = node.provenance
-        recorded = {
-            "origin": provenance.origin,
-            "method": provenance.method,
-            "source_dtype": provenance.source_dtype,
-        }
-        if bool(torch.allclose(gram, identity, rtol=0.0, atol=_ORTHONORMAL_TOL)):
-            return cls(basis, provenance.dim, provenance.sha256, False, **recorded)
-        rows = _orthonormal_rows(basis, "subspace")
-        # Sign-preserving Gram-Schmidt: row j keeps a positive inner product
-        # with the caller's row j, so a one-direction coordinate keeps its sign.
-        signs = torch.sign(torch.sum(rows * basis, dim=1, keepdim=True))
-        rows = rows * signs * support.any(dim=0)
-        return cls(rows, provenance.dim, provenance.sha256, True, **recorded)
+        return cls(
+            rows,
+            provenance.dim,
+            provenance.sha256,
+            not orthonormal,
+            origin=provenance.origin,
+            method=provenance.method,
+            source_dtype=provenance.source_dtype,
+        )
 
     @property
     def note(self) -> str:
@@ -375,17 +379,15 @@ class SubspaceProjection:
     ) -> Edit:
         """Return the builtin ``subspace_edit`` that saves and reloads as this projection."""
 
-        return Edit(
+        # replace() keeps the verb's direction and batch flags on the wrapper.
+        return dataclasses.replace(
+            edit,
             helper_name=SUBSPACE_EDIT_NAME,
             args=(edit,),
             kwargs=self.stored_kwargs(),
-            kind=edit.kind,
             factory=factory,
             portability="builtin",
             metadata=tuple(edit.metadata) + disclosure,
-            direction=edit.direction,
-            batch_independent=edit.batch_independent,
-            compatible_with_append=edit.compatible_with_append,
         )
 
     def _factory(self, inner_factory: Callable[[], Any], meaning: str, verb: str) -> Any:

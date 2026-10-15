@@ -254,8 +254,8 @@ def _refuse_gradient_edit_on_forward(hook_callable: Any, hook_context: HookConte
     """Refuse a gradient edit reached by a forward-only engine (replay, push).
 
     A backward edit (``tl.grad_zero()``, ``tl.bwd_hook(fn)``, ...) is normalized
-    to the gradient-tuple callback, whose keyword-only ``grad_output`` a forward
-    value can never supply. The replay engine recomputes forward values only, so
+    to the gradient-tuple callback, whose ``grad_output`` argument a forward
+    value can never supply (this runs only after the forward bind failed). The replay engine recomputes forward values only, so
     such an edit has no gradient to edit there.
 
     Raises
@@ -271,8 +271,7 @@ def _refuse_gradient_edit_on_forward(hook_callable: Any, hook_context: HookConte
         parameters = inspect.signature(hook_callable).parameters
     except (TypeError, ValueError):
         return
-    grad_output = parameters.get("grad_output")
-    if grad_output is None or grad_output.kind is not inspect.Parameter.KEYWORD_ONLY:
+    if "grad_output" not in parameters:
         return
     from .._errors import InvalidArgumentError
 
