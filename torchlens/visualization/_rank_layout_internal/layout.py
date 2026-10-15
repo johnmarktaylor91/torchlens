@@ -678,6 +678,12 @@ def render_rank_layout(
         getattr(theme, "typography", None), "family", DEFAULT_TYPOGRAPHY.family
     )
     graph_attr_parts.append(f"fontname={_dot_quote(typography_family)}")
+    # The dot path takes the page colour from ``theme_graph_attrs``; this raw
+    # DOT never emitted it, so a dark rank render kept a white page. White
+    # pages stay implicit so white-page skins emit the same DOT as before.
+    page = str(getattr(theme, "graph", {}).get("bgcolor", "white"))
+    if page.lower() != "white":
+        graph_attr_parts.append(f"bgcolor={_dot_quote(page)}")
     if dpi is not None and is_raster_format(vis_fileformat):
         # Raster-only, matching the dot path (vizmech D23): on vector formats
         # graphviz's dpi attribute multiplies the coordinate space instead.

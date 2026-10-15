@@ -354,3 +354,22 @@ def test_as_node_intervention_keeps_the_site_inside_its_module_boxes(tmp_path: P
         return len(line) - len(line.lstrip("\t"))
 
     assert depth(into_hook[0]) == depth(out_of_hook[0]) > 1
+
+
+@pytest.mark.parametrize("skin", ["dark", "torchlens"])
+def test_rank_path_page_follows_the_skin(skin: str, tmp_path: Path) -> None:
+    """The rank engine paints the dark page; white pages stay implicit, as before."""
+
+    dot = _draw(
+        nn.Sequential(nn.Linear(3, 3), nn.ReLU()),
+        torch.randn(1, 3),
+        tmp_path,
+        f"rank_{skin}",
+        vis_theme=skin,
+        vis_node_placement="rank",
+    )
+    page = THEME_PRESETS[skin].graph["bgcolor"]
+    if skin == "dark":
+        assert f'bgcolor="{page}"' in dot
+    else:
+        assert "bgcolor" not in dot
