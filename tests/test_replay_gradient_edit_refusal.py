@@ -16,6 +16,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
+from torchlens.intervention.errors import ReplayPreconditionError
 
 
 class _Net(nn.Module):
@@ -66,7 +67,8 @@ def test_fork_do_gradient_edit_refuses_and_the_remedy_runs(verb: str) -> None:
     # Nothing changed: values, and no sticky hook left to re-fire on the next push.
     for label, value in before.items():
         assert torch.equal(fork[label].out, value)
-    assert torch.equal(fork.push()["linear_2_2"].out, before["linear_2_2"])
+    with pytest.raises(ReplayPreconditionError):
+        fork.push()
     # The remedy, spelled as the refusal names it, edits the gradient live.
     assert "tl.module('l1')" in fields["remedy"]
     trace = tl.trace(

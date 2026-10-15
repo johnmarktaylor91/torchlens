@@ -12,24 +12,33 @@ while the site value had one (or when the site value has no graph to keep).
 The matrix of which verb keeps the graph under which door is
 ``docs/gradient_contract.md``.
 
+Differentiable replay (``push(replay=ReplayOptions(differentiable=True))``)
+re-leafs each edited site value as a fresh frontier leaf, so a graph-keeping
+edit passes the check there yet no parameter upstream of the site gets a
+gradient; ``keep_grad`` discloses that once per session with the warning code
+``keep_grad_replay_frontier``.
+
 DOCUMENTED-UNSTABLE spelling.
 """
 
 from __future__ import annotations
 
 import dataclasses
+import warnings
 from collections.abc import Callable
 from typing import Any
 
 import torch
 
 from .._errors import InvalidArgumentError
+from ..errors import TorchLensWarning
 from .types import Edit
 
 __all__ = ["keep_grad"]
 
 _GUIDE = "see docs/gradient_contract.md"
 _ZERO_REMEDY = "tl.intervention.keep_grad(tl.scale(0.0)) writes zeros and keeps the graph"
+_WARNED_CODES: set[str] = set()
 _FIXED_REMEDY = (
     "tl.intervention.keep_grad(tl.intervention.compose(tl.scale(0.0), tl.add(value))) "
     "writes a fixed value and keeps the graph with a zero gradient"
@@ -106,6 +115,32 @@ def _check(out: Any, result: Any, hook: Any, verb: str) -> None:
             _detached_remedy(verb),
             code="edit_detached_from_graph",
         )
+    if bool(getattr(hook, "run_ctx", {}).get("differentiable", False)):
+        _disclose_replay_frontier(where)
+
+
+def _disclose_replay_frontier(where: tuple[str, str]) -> None:
+    """Warn once per session that differentiable replay reaches nothing upstream."""
+
+    code = "keep_grad_replay_frontier"
+    if code in _WARNED_CODES:
+        return
+    _WARNED_CODES.add(code)
+    verb, site = where
+    warnings.warn(
+        TorchLensWarning(
+            f"keep_grad({verb}) at {site!r} under differentiable replay: the edit keeps "
+            "the graph, but replay re-enters the edited value as a fresh leaf, so "
+            "gradients reach that value and the computation after it, and no parameter "
+            "upstream of the site gets a gradient. Remedy: to train parameters upstream "
+            "of the site, run the edit on a live forward, e.g. "
+            "tl.when(tl.module(name), tl.intervention.keep_grad(edit)).bind(model)(x), "
+            f"or tl.trace(model, x, intervene=tl.when(tl.module(name), edit)) ({_GUIDE})",
+            code=code,
+            affected_sites=[site],
+        ),
+        stacklevel=2,
+    )
 
 
 def _checked_factory(factory: Callable[[], Any], verb: str) -> Callable[[], Any]:
