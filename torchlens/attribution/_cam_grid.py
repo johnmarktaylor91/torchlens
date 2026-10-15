@@ -453,22 +453,16 @@ def _apply_reshape(reshape: TokenReshape, tensor: Tensor, layer: str) -> Tensor:
 
 
 def _cam_feature_maps(
-    model: Module,
-    raw_inputs: tuple[Any, Any],
     layer: str,
     pair: tuple[Tensor, Tensor],
     target: Any,
     reshape: TokenReshape | None,
-    graph: _TraceGraph | None,
+    graph_of: Callable[[], _TraceGraph],
 ) -> tuple[Tensor, Tensor, dict[str, Any]] | None:
     """Return the activation and gradient as ``N, C, H, W`` maps plus grid metadata.
 
     Parameters
     ----------
-    model
-        Attributed model (traced only when a token grid must be derived).
-    raw_inputs
-        The caller's ``(inputs, input_kwargs)``, used for the metadata trace.
     layer
         Layer name used for the trace lookup and error reporting.
     pair
@@ -477,8 +471,9 @@ def _cam_feature_maps(
         Caller target, echoed in remedy spellings.
     reshape
         Optional caller callable mapping the activation to ``N, C, H, W``.
-    graph
-        Trace graph already captured for this call, if any.
+    graph_of
+        Returns the call's trace graph; called only when a token grid must be
+        derived, so a plain feature map is never traced twice.
 
     Returns
     -------
@@ -498,9 +493,7 @@ def _cam_feature_maps(
         return mapped, _apply_reshape(reshape, gradient, layer), extra
     if activation.ndim != 3:
         return None
-    if graph is None:
-        graph = _TraceGraph(_metadata_trace(model, *raw_inputs))
-    grid = _derive_token_grid(graph, layer, activation, target)
+    grid = _derive_token_grid(graph_of(), layer, activation, target)
     extra = {"grid_route": "derived", "prefix_tokens": grid.prefix, "grid_evidence": grid.evidence}
     return _grid_to_map(activation, grid), _grid_to_map(gradient, grid), extra
 
@@ -509,6 +502,3 @@ def _labels(values: Iterable[str]) -> str:
     """Return a comma-separated quoted label list."""
 
     return ", ".join(repr(value) for value in values)
-
-
-__all__: list[str] = []

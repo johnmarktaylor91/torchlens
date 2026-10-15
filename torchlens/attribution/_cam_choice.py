@@ -150,7 +150,11 @@ def _grid_gradients(
     handles: list[RemovableHandle] = []
 
     def _hook_for(name: str) -> Any:
+        """Return a forward hook that keeps ``name``'s output when it is a tensor."""
+
         def _hook(_module: Module, _args: tuple[Any, ...], output: Any) -> None:
+            """Keep the module's tensor output under ``name``."""
+
             if isinstance(output, Tensor):
                 captured[name] = output
 
@@ -297,6 +301,3 @@ def _choose_cam_layer(
         [candidate.layer for candidate in dominators],
         code="grad_cam_layer_unchosen",
     )
-
-
-__all__: list[str] = []

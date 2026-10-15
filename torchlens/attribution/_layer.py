@@ -1043,7 +1043,15 @@ def grad_cam(
         )
     activation, gradient = activations[0], gradients[0]
     mapped = _cam_feature_maps(
-        model, (inputs, input_kwargs), layer, (activation, gradient), target, reshape, graph
+        layer,
+        (activation, gradient),
+        target,
+        reshape,
+        lambda: (
+            graph
+            if graph is not None
+            else _TraceGraph(_metadata_trace(model, inputs, input_kwargs))
+        ),
     )
     if mapped is None:
         _validate_conv_activation(activation, layer)
