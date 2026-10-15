@@ -75,6 +75,7 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
 #: unmarked family charged 18.1 s against its 14.2 s aggregate budget.
 HEAVY_PAGES: frozenset[str] = frozenset(
     {
+        "docs/recipes/acdc_ioi.md",
         "docs/recipes/lrp_transformers_lxt.md",
         "docs/neuroai/journey.md",
         "docs/recipes/tcav.md",
