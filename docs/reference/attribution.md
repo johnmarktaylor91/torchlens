@@ -503,11 +503,13 @@ insertion) and `aopc`, the mean score change from the start (`mean_k(s_0 - s_k)`
   `"elements"` (every scalar). `"auto"` picks pixels for `N, C, H, W` inputs, tokens for
   `N, T, D` inputs, elements otherwise. Several floating-point inputs share one ranking.
 
-Each step is a recorded intervention. `curve.steps[k].intervention` is a `tl.when(...)` spec
-that replaces the evaluated input layer with that step's perturbed value, so a curve point comes
-with the exact edit that produced it. Replay it on a replay-ready trace of the original input
-with `trace.fork().do(step.intervention)` (the first access traces the model once to name its
-input layers; the scores themselves come from direct forward passes, which the replay matches):
+Each step is a recorded intervention. `curve.steps[k].intervention` holds the step's edits as
+`(selection, edit)` pairs, one per evaluated input that holds any baseline value:
+`tl.units(<input layer>, <baseline mask>)` with `tl.replace_with(<baseline>)`. A curve point
+therefore comes with the exact edit that produced it, and it replays through the intervention
+engine on a replay-ready trace of the original input with `trace.fork().do(selection, edit)`.
+The scores themselves come from direct forward passes, which the replay matches; the first
+access to `intervention` traces the model once to name its input layers.
 
 ```python
 import torch
@@ -525,7 +527,8 @@ print(curve.scores[:, 0].tolist(), curve.aopc)
 
 trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
 fork = trace.fork()
-fork.do(curve.steps[1].intervention)
+for selection, edit in curve.steps[1].intervention:
+    fork.do(selection, edit)
 print(fork[fork.output_layers[0]].out.item(), curve.steps[1].inputs.tolist())
 ```
 

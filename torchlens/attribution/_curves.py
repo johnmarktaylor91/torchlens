@@ -12,13 +12,12 @@ the area over the most-relevant-first perturbation curve of Samek et al.
 (2017): the mean, over the steps, of the score change from the unperturbed
 start.
 
-Each step is a recorded intervention: ``CurveStep.intervention`` is the
-``tl.when(...)`` spec that replaces each evaluated input layer with that
-step's perturbed value, so ``trace.fork().do(step.intervention)`` on a
-replay-ready trace of the original inputs reproduces the step's score. The
-scores themselves come from direct no-grad forward passes (the fast engine
-``occlusion_map`` uses); the replay is the same computation through the
-intervention engine.
+Each step is a recorded intervention: ``CurveStep.intervention`` holds
+``(tl.units(<input layer>, <baseline mask>), tl.replace_with(<baseline>))``
+pairs, so ``trace.fork().do(selection, edit)`` on a replay-ready trace of the
+original inputs reproduces the step's score. The scores themselves come from
+direct no-grad forward passes (the fast engine ``occlusion_map`` uses); the
+replay is the same computation through the intervention engine.
 """
 
 from __future__ import annotations
@@ -60,7 +59,7 @@ class _CurvePlan:
 
     Attributes
     ----------
-    kind
+    metric
         ``"deletion"`` or ``"insertion"``.
     prepared
         Normalized inputs of the curve call.
@@ -79,7 +78,7 @@ class _CurvePlan:
         Cache of the input-layer labels.
     """
 
-    kind: str
+    metric: str
     prepared: _PreparedInputs
     leaves: tuple[Tensor, ...]
     baselines: tuple[Tensor, ...]
@@ -124,7 +123,7 @@ class _CurvePlan:
         masks = []
         for leaf, group in zip(self.leaves, self.groups, strict=True):
             mask = changed[:, group.reshape(-1)].reshape(leaf.shape)
-            masks.append(mask if self.kind == "deletion" else ~mask)
+            masks.append(mask if self.metric == "deletion" else ~mask)
         return tuple(masks)
 
     def step_leaves(self, n_features: int) -> tuple[Tensor, ...]:
@@ -192,19 +191,22 @@ class CurveStep:
         return masks[0] if len(masks) == 1 else masks
 
     @property
-    def intervention(self) -> Any:
-        """The recorded edit of this step, as an intervention spec.
+    def intervention(self) -> tuple[tuple[Any, Any], ...]:
+        """The recorded edits of this step, as ``(selection, edit)`` pairs.
 
-        A ``tl.when(tl.label(<input layer>), tl.replace_with(<step input>))``
-        spec (one rule per evaluated input). Replay it on a replay-ready trace
+        One pair per evaluated input that holds any baseline value:
+        ``tl.units(<input layer>, <baseline mask>)`` with
+        ``tl.replace_with(<baseline>)``, so the selected elements take the
+        baseline and the rest keep the input. Replay on a replay-ready trace
         of the original inputs: ``trace = tl.trace(model, x,
         capture=tl.options.CaptureOptions(intervention_ready=True))``, then
-        ``fork = trace.fork(); fork.do(step.intervention)``; the fork's output
-        scores ``score``. The first access traces the model once to name its
-        input layers.
+        ``fork = trace.fork()`` and ``fork.do(selection, edit)`` for each
+        pair; the fork's output scores ``score``. Empty when the step changes
+        nothing. The first access traces the model once to name its input
+        layers.
         """
 
-        return _step_intervention(self._plan, self._plan.step_leaves(self.n_features))
+        return _step_intervention(self._plan, self._plan.baseline_masks(self.n_features))
 
 
 @dataclass(frozen=True)
@@ -276,6 +278,8 @@ def _rebuild_inputs(prepared: _PreparedInputs, leaves: tuple[Tensor, ...]) -> tu
     }
 
     def _swap(tree: Any) -> Any:
+        """Replace evaluated leaves anywhere in a nested input tree."""
+
         if isinstance(tree, Tensor):
             return replacement.get(id(tree), tree)
         if isinstance(tree, tuple):
@@ -291,31 +295,33 @@ def _rebuild_inputs(prepared: _PreparedInputs, leaves: tuple[Tensor, ...]) -> tu
     return (positional[0] if prepared.is_single_tensor else positional), kwargs
 
 
-def _step_intervention(plan: _CurvePlan, leaves: tuple[Tensor, ...]) -> Any:
-    """Build the intervention spec that replays one step.
+def _step_intervention(plan: _CurvePlan, masks: tuple[Tensor, ...]) -> tuple[tuple[Any, Any], ...]:
+    """Build the ``(selection, edit)`` pairs that replay one step.
 
     Parameters
     ----------
     plan
         The curve plan.
-    leaves
-        The step's perturbed leaves.
+    masks
+        Per leaf, the elements holding the baseline at the step.
 
     Returns
     -------
-    Any
-        An ``InterventionSpec`` replacing each evaluated input layer's value.
+    tuple[tuple[Any, Any], ...]
+        ``(tl.units(label, mask), tl.replace_with(baseline))`` per leaf whose
+        mask selects anything.
     """
 
     from torchlens.intervention.predicates import replace_with
-    from torchlens.intervention.selectors import label
-    from torchlens.intervention.spec import InterventionRule, InterventionSpec
+    from torchlens.selection import units
 
-    rules = tuple(
-        InterventionRule(label(name), replace_with(leaf.clone()))
-        for name, leaf in zip(plan.input_labels(), leaves, strict=True)
+    if not any(bool(mask.any()) for mask in masks):
+        return ()
+    return tuple(
+        (units(name, mask), replace_with(baseline.clone()))
+        for name, mask, baseline in zip(plan.input_labels(), masks, plan.baselines, strict=True)
+        if bool(mask.any())
     )
-    return InterventionSpec(rules=rules)
 
 
 def _match_input_labels(plan: _CurvePlan) -> tuple[str, ...]:
@@ -599,18 +605,24 @@ def _validated_steps(n_steps: int, n_features: int, method: str) -> list[int]:
     return [(step * n_features) // n_steps for step in range(n_steps + 1)]
 
 
+@dataclass(frozen=True)
+class _CurveRequest:
+    """The keyword arguments of one curve call (see :func:`deletion_curve`)."""
+
+    target: _AttributionTarget
+    attribution: AttributionResult | Any
+    baseline: CurveBaseline
+    n_steps: int
+    features: CurveFeatures
+    patch_size: int | tuple[int, int]
+
+
 def _curve(
     kind: str,
     model: Module,
     inputs: Any,
     input_kwargs: InputKwargs,
-    *,
-    target: _AttributionTarget,
-    attribution: AttributionResult | Any,
-    baseline: CurveBaseline,
-    n_steps: int,
-    features: CurveFeatures,
-    patch_size: int | tuple[int, int],
+    request: _CurveRequest,
 ) -> CurveResult:
     """Shared body of :func:`deletion_curve` and :func:`insertion_curve`.
 
@@ -618,8 +630,10 @@ def _curve(
     ----------
     kind
         ``"deletion"`` or ``"insertion"``.
-    model, inputs, input_kwargs, target, attribution, baseline, n_steps, features, patch_size
+    model, inputs, input_kwargs
         As in :func:`deletion_curve`.
+    request
+        The keyword arguments of the public call.
 
     Returns
     -------
@@ -627,6 +641,8 @@ def _curve(
         The curve with its recorded steps.
     """
 
+    target, attribution, baseline = request.target, request.attribution, request.baseline
+    n_steps, features, patch_size = request.n_steps, request.features, request.patch_size
     method = f"{kind}_curve"
     prepared = _normalize_model_inputs(inputs, input_kwargs, _Caller(method, target=target))
     leaves = tuple(leaf.detach() for leaf in prepared.attributed_leaves)
@@ -692,7 +708,7 @@ def _curve(
     )
 
 
-def deletion_curve(
+def deletion_curve(  # noqa: PLR0913 - public door: keyword-only evaluation settings
     model: Module,
     inputs: Any,
     input_kwargs: InputKwargs = None,
@@ -762,16 +778,11 @@ def deletion_curve(
         model,
         inputs,
         input_kwargs,
-        target=target,
-        attribution=attribution,
-        baseline=baseline,
-        n_steps=n_steps,
-        features=features,
-        patch_size=patch_size,
+        _CurveRequest(target, attribution, baseline, n_steps, features, patch_size),
     )
 
 
-def insertion_curve(
+def insertion_curve(  # noqa: PLR0913 - mirrors deletion_curve one-to-one
     model: Module,
     inputs: Any,
     input_kwargs: InputKwargs = None,
@@ -807,13 +818,5 @@ def insertion_curve(
         model,
         inputs,
         input_kwargs,
-        target=target,
-        attribution=attribution,
-        baseline=baseline,
-        n_steps=n_steps,
-        features=features,
-        patch_size=patch_size,
+        _CurveRequest(target, attribution, baseline, n_steps, features, patch_size),
     )
-
-
-__all__ = ["CurveResult", "CurveStep", "deletion_curve", "insertion_curve"]

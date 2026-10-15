@@ -108,7 +108,7 @@ def test_curve_equals_closed_form_on_linear_model(kind: str) -> None:
 
 @pytest.mark.parametrize("kind", ["deletion", "insertion"])
 def test_curve_steps_replay_to_their_scores_on_small_cnn(kind: str) -> None:
-    """Every recorded step, replayed by ``trace.fork().do(step.intervention)``, gives its score."""
+    """Every recorded step, replayed by ``trace.fork().do(selection, edit)``, gives its score."""
 
     torch.manual_seed(0)
     model = SmallCnn().eval()
@@ -122,9 +122,11 @@ def test_curve_steps_replay_to_their_scores_on_small_cnn(kind: str) -> None:
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     for step in curve.steps:
         fork = trace.fork()
-        fork.do(step.intervention)
+        for selection, edit in step.intervention:
+            fork.do(selection, edit)
         output = fork[fork.output_layers[0]].out
         assert torch.allclose(output[:, 1].to(torch.float64), step.score, atol=1e-6)
+        assert len(step.intervention) == (1 if bool(step.baseline_mask.any()) else 0)
         fork.cleanup()
         direct = model(step.inputs)[:, 1].detach().to(torch.float64)
         assert torch.allclose(direct, step.score, atol=1e-6)
@@ -247,7 +249,7 @@ def test_curve_over_two_inputs_ranks_features_jointly() -> None:
     # contributions 1, 4, -2 | 3, 0.5: removed in the order 4, 3, 1, 0.5, -2
     expected = torch.tensor([6.5, 2.5, -0.5, -1.5, -2.0, 0.0], dtype=torch.float64)
     assert torch.equal(curve.scores[:, 0], expected)
-    assert len(curve.steps[2].intervention.rules) == 2
+    assert len(curve.steps[2].intervention) == 2
     step_x, step_y = curve.steps[2].inputs
     assert torch.equal(step_x, torch.tensor([[1.0, 0.0, 1.0]], dtype=torch.float64))
     assert torch.equal(step_y, torch.tensor([[0.0, 1.0]], dtype=torch.float64))

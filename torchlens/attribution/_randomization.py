@@ -147,11 +147,13 @@ def _parameterized_layers_top_down(model: Module, run: Callable[[Module], Any]) 
     handles = []
 
     def _record(module: Module, *_: Any) -> None:
+        """Note a parameterized module the first time it runs."""
+
         name = names.get(id(module))
         if name is not None and name not in executed:
             executed.append(name)
 
-    for module in model.modules():
+    for _, module in model.named_modules():
         if any(True for _ in module.parameters(recurse=False)):
             handles.append(module.register_forward_hook(_record))
     try:
@@ -254,7 +256,7 @@ def _map_of(result: Any) -> Tensor:
     return _attribution_tensor(result).to(torch.float64)
 
 
-def randomization_test(
+def randomization_test(  # noqa: PLR0913 - public door: keyword-only test settings
     model: Module,
     inputs: Any,
     input_kwargs: InputKwargs = None,
@@ -339,6 +341,8 @@ def randomization_test(
     kwargs = dict(method_kwargs or {})
 
     def _run(copy_model: Module) -> Tensor:
+        """Run the explanation method on one model copy."""
+
         return _map_of(method(copy_model, inputs, input_kwargs, target=target, **kwargs))
 
     devices = [torch.cuda.current_device()] if torch.cuda.is_available() else []
@@ -371,13 +375,20 @@ def randomization_test(
     )
 
 
+@dataclass(frozen=True)
+class _RandomizationPlan:
+    """What one test randomizes: the layers (top first), the order, and map keeping."""
+
+    names: tuple[str, ...]
+    randomization: str
+    keep_maps: bool
+
+
 def _randomize_steps(
     model: Module,
-    names: list[str],
-    randomization: str,
+    plan: _RandomizationPlan,
     run: Callable[[Module], Tensor],
     original: Tensor,
-    keep_maps: bool,
 ) -> tuple[list[RandomizationStep], dict[str, str]]:
     """Run the randomizations in order.
 
@@ -385,16 +396,12 @@ def _randomize_steps(
     ----------
     model
         The caller's model (copied, never modified).
-    names
-        Layers, top first.
-    randomization
-        ``"cascading"`` or ``"independent"``.
+    plan
+        Layers, order and whether to keep each map.
     run
         Explanation method on a model copy.
     original
         The unrandomized map.
-    keep_maps
-        Whether to keep each map.
 
     Returns
     -------
@@ -402,6 +409,7 @@ def _randomize_steps(
         The steps and how each layer was re-initialized.
     """
 
+    names, randomization, keep_maps = list(plan.names), plan.randomization, plan.keep_maps
     steps: list[RandomizationStep] = []
     notes: dict[str, str] = {}
     kept_bytes = 0
@@ -437,6 +445,3 @@ def _randomize_steps(
                 )
         steps.append(RandomizationStep(name, randomized, similarity, values if keep_maps else None))
     return steps, notes
-
-
-__all__ = ["RandomizationResult", "RandomizationStep", "randomization_test"]

@@ -153,6 +153,8 @@ def _input_space_maps(
     flat: list[Tensor] = []
 
     def _collect(tree: Any) -> None:
+        """Collect tensor leaves in traversal order (``None`` slots skipped)."""
+
         if isinstance(tree, Tensor):
             flat.append(tree)
         elif isinstance(tree, (tuple, list)):
@@ -279,6 +281,8 @@ def _ssim(first: Tensor, second: Tensor) -> float:
     right = second.reshape(1, 1, *second.shape)
 
     def _mean(value: Tensor) -> Tensor:
+        """Mean over every valid 7x7 window."""
+
         return F.avg_pool2d(value, window, stride=1)
 
     covariance_scale = pixels / (pixels - 1)
@@ -322,14 +326,3 @@ def _map_similarity(original: Tensor, randomized: Tensor) -> dict[str, float | N
         if left is not None and right is not None:
             measures["ssim"].append(_ssim(left, right))
     return {name: (sum(found) / len(found) if found else None) for name, found in measures.items()}
-
-
-__all__ = [
-    "_attribution_tensor",
-    "_average_ranks",
-    "_input_space_map",
-    "_input_space_maps",
-    "_map_similarity",
-    "_spearman",
-    "_ssim",
-]
