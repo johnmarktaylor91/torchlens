@@ -240,19 +240,24 @@ runs, and no activation payload is kept. The capture logs the same graph as a
 full capture (the reducer's own torch calls never enter it), makes no raw
 copy of an out, and keeps one fixed 16-number float64 vector (128 bytes) per
 op whatever the batch size. `tl.stats.site_spines(trace)` returns
-`{op label: Spine}` in capture order; the statistics equal
-`Spine().update(out)` on the full capture's out field by field, counts,
-extrema, sums and moments alike, because the reducer runs that same kernel.
-The returned spines are live accumulators: `merge` folds another batch's
-spines in and `tl.stats.save_fitted` saves them.
+`{op label: Spine}` in capture order. For a float64 out the counts, the
+extrema, the sum and the mean equal `Spine().update(out)` on the full
+capture's out exactly. The sum of squares, the sum of absolute values and
+M2 are folded in float64 chunks of 2^20 values so the reducer never holds a
+full-size float64 copy; they are bit-equal for outs up to that size and
+otherwise equal within float64 reduction-order rounding. A float32 out's sum
+accumulates in float64 without a converted copy, so it can differ from
+`Spine.update` in the last bits. The returned spines are live accumulators:
+`merge` folds another batch's spines in and `tl.stats.save_fitted` saves
+them.
 
 A stats trace keeps nothing to read back or replay from, so it refuses
 instead of answering with an empty value: reading an op's `out` refuses
 `activation_reduced_to_stats` (the remedy names `site_spines` and
 `save="all"`), and replay or validation on the trace (`run`,
-`validate_forward_pass`, `save_new_outs`, `push`) refuses
-`stats_capture_not_replayable`; `tl.validate(model, x)` still works because
-it runs its own full capture. `site_spines` on a trace captured any other
+`validate_forward_pass`, `save_new_outs`, `push`, `push_from`) refuses
+`stats_capture_not_replayable`; `tl.validate(model, x, scope="forward")`
+still works because it runs its own full capture. `site_spines` on a trace captured any other
 way refuses `stats_capture_not_reduced`.
 
 ```python

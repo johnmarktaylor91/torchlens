@@ -2591,8 +2591,7 @@ def trace(
 
     - ``'all'`` (default) - save outs for every layer.
     - ``'none'`` / ``None`` / ``[]`` - save no outs (metadata only).
-    - ``'stats'`` - reduce and discard: fold every out into a ``Spine`` during
-      the forward and keep no payload (read with ``tl.stats.site_spines``).
+    - ``'stats'`` - fold every out into a ``Spine``, keep no payload (``tl.stats.site_spines``).
     - A predicate selector, e.g. ``tl.func("relu")``, ``tl.in_module("encoder")``,
       or combinators such as ``tl.func("conv2d") & tl.followed_by(tl.func("relu"))``.
     - A list containing any mix of:
@@ -2888,21 +2887,6 @@ def _model_type_remedy(model: Any) -> str:
     )
 
 
-def _resolve_stats_save_level(save: Any) -> Any:
-    """Turn ``save="stats"`` into the reduce-and-discard ``SaveOptions``.
-
-    ``"stats"`` is a save level beside ``"all"`` and ``"none"``: every site's
-    out folds into a ``Spine`` during the forward (the summary-transform seam
-    with ``save_raw_activations=False``) and no payload is kept.
-    """
-
-    if not (isinstance(save, str) and save.lower() == "stats"):
-        return save
-    from .stats._capture_stats import stats_reducer
-
-    return SaveOptions(activation_transform=stats_reducer(), save_raw_activations=False)
-
-
 def _trace_torch_model(
     model: nn.Module | Callable[..., Any],
     input_args: str | torch.Tensor | list[Any] | tuple[Any, ...],
@@ -3136,7 +3120,6 @@ def _trace_torch_model(
         input_kwargs,
         admit_meta=bool(capture_options.structure_only),
     )
-    save = _resolve_stats_save_level(save)
     routed_save, capture_options = _route_save_label_selection(
         save, capture, capture_options, model
     )

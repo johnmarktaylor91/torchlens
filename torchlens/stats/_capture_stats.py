@@ -6,9 +6,9 @@ seam (a reducer with the declared ``summary`` role and
 ``save_raw_activations=False``), so the capture makes no raw clone and
 admits nothing to the save budget; each op retains one fixed 16-slot
 float64 vector (128 bytes) instead of its out. ``site_spines(trace)``
-decodes those vectors back into live ``Spine`` accumulators, bit-equal to
-``Spine().update(out)`` on the same out because the reducer runs that very
-kernel. Reading an op's payload on such a trace refuses
+decodes those vectors back into live ``Spine`` accumulators equal to
+``Spine().update(out)`` on the same out (see :func:`lean_spine` for which
+fields are bit-equal). Reading an op's payload on such a trace refuses
 (``activation_reduced_to_stats``).
 
 Spellings DOCUMENTED-UNSTABLE pending naming-session ratification.
@@ -21,10 +21,18 @@ from typing import Any
 
 import torch
 
-from .._errors import InvalidArgumentError
-from ..observability._kernels import Spine
+from .._errors import InvalidArgumentError, PayloadUnavailableError
+from ..observability._kernels import Spine, _as_reduction_tensor
 
-__all__ = ["STATS_REDUCER_REPR", "STATS_SAVE_LEVEL", "is_stats_capture", "site_spines"]
+__all__ = [
+    "STATS_REDUCER_REPR",
+    "STATS_SAVE_LEVEL",
+    "is_stats_capture",
+    "lean_spine",
+    "refuse_reduced_payload_read",
+    "site_spines",
+    "stats_save_options",
+]
 
 #: The ``save=`` value that selects reduce-and-discard capture.
 STATS_SAVE_LEVEL = "stats"
@@ -63,9 +71,9 @@ class _StatsReducer:
     """Summary-role reducer: one op out to its packed ``Spine`` state.
 
     The declared ``summary`` role makes the capture skip the raw clone; the
-    reducer runs ``Spine.update`` itself, so the folded statistics are the
-    exact ones a ``Spine`` computes from the full out. Total by design: an
-    out the kernel refuses (a complex tensor) packs to the empty vector and
+    reducer folds with :func:`lean_spine`, which reproduces ``Spine.update``
+    without its full-size float64 working copies. Total by design: an out
+    the kernel refuses (a complex tensor) packs to the empty vector and
     ``site_spines`` leaves that site out.
     """
 
@@ -75,9 +83,8 @@ class _StatsReducer:
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
         """Fold one detached out into a fresh ``Spine`` and pack its state."""
 
-        spine = Spine()
         try:
-            spine.update(tensor)
+            spine = lean_spine(tensor)
         except Exception:  # noqa: BLE001 -- total reducer: refused dtypes become "no spine"
             return torch.empty(0, dtype=torch.float64)
         return pack_spine(spine)
@@ -88,10 +95,89 @@ class _StatsReducer:
         return STATS_REDUCER_REPR
 
 
-def stats_reducer() -> _StatsReducer:
-    """Return the reducer ``save="stats"`` installs as the activation transform."""
+#: Values per float64 working chunk for the squared, absolute and centred
+#: sums (8 MiB of float64): bounds the reducer's transient memory per op.
+_CHUNK = 1 << 20
 
-    return _StatsReducer()
+
+def lean_spine(value: Any) -> Spine:
+    """Fold one tensor into a fresh ``Spine`` with bounded working memory.
+
+    Produces the state ``Spine().update(value)`` produces. Counts, extrema,
+    the sum and the mean are computed over the whole tensor exactly as
+    ``Spine.update`` does (bit-equal for float64 outs; for float32 outs the
+    sum accumulates in float64 without a converted copy, so it can differ
+    in the last bits). The sum of squares, sum of absolute values and M2
+    are summed over float64 chunks of ``_CHUNK`` values: bit-equal for outs
+    up to that size, otherwise equal within float64 reduction-order rounding.
+    ``Spine.update`` instead materializes several full-size float64 copies,
+    which would make a reduce-and-discard capture peak above a full one.
+    """
+
+    tensor, dtype_tag = _as_reduction_tensor("Spine", value)
+    spine = Spine()
+    spine._reduction_dtype = dtype_tag
+    n = int(tensor.numel())
+    if n == 0:
+        return spine
+    n_nan = int(torch.isnan(tensor).sum().item())
+    n_posinf = int((tensor == math.inf).sum().item())
+    n_neginf = int((tensor == -math.inf).sum().item())
+    finite = tensor[torch.isfinite(tensor)] if (n_nan or n_posinf or n_neginf) else tensor
+    n_finite = int(finite.numel())
+    spine._count_total, spine._count_finite = n, n_finite
+    spine._count_nan, spine._count_posinf, spine._count_neginf = n_nan, n_posinf, n_neginf
+    if n_finite == 0:
+        return spine
+    spine._count_zero = int((finite == 0).sum().item())
+    spine._count_negative = int((finite < 0).sum().item())
+    low, high = torch.aminmax(finite)
+    spine._finite_min, spine._finite_max = float(low.item()), float(high.item())
+    spine._finite_absmax = max(abs(spine._finite_min), abs(spine._finite_max))
+    total = finite.sum() if finite.dtype == torch.float64 else finite.sum(dtype=torch.float64)
+    spine._sum = float(total.item())
+    spine._mean = spine._sum / n_finite
+    squares = absolutes = centred = 0.0
+    for start in range(0, n_finite, _CHUNK):
+        chunk = finite[start : start + _CHUNK].to(torch.float64)
+        squares += float((chunk * chunk).sum().item())
+        absolutes += float(chunk.abs().sum().item())
+        centred += float(((chunk - spine._mean) ** 2).sum().item())
+    spine._sum_squares, spine._sum_abs, spine._m2 = squares, absolutes, centred
+    return spine
+
+
+def stats_save_options() -> Any:
+    """Return the ``SaveOptions`` that ``save="stats"`` stands for.
+
+    The summary-role reducer as the activation transform with raw outs
+    dropped: the capture's existing reduce-only path, so no raw clone is made
+    and nothing is admitted to the save budget.
+    """
+
+    from ..options import SaveOptions
+
+    return SaveOptions(activation_transform=_StatsReducer(), save_raw_activations=False)
+
+
+def refuse_reduced_payload_read(slot: Any, source_trace: Any) -> None:
+    """Refuse an op payload read on a ``save="stats"`` trace (reduce and discard).
+
+    Such a trace folded every out into a ``Spine`` and kept no payload, so a
+    silent ``None`` would read as "this op produced nothing".
+    """
+
+    if not is_stats_capture(source_trace):
+        return
+    label = slot("label") or slot("layer_label") or slot("_label_raw")
+    raise PayloadUnavailableError(
+        f"op {label} was captured with save='stats': its out was folded into a Spine "
+        "and no payload was kept",
+        code="activation_reduced_to_stats",
+        remedy="read the statistics with tl.stats.site_spines(trace)[label], or capture "
+        "again keeping payloads with tl.trace(model, x, save='all')",
+        label=str(label),
+    )
 
 
 def pack_spine(spine: Spine) -> torch.Tensor:

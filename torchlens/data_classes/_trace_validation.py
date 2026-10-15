@@ -302,7 +302,7 @@ def _refuse_stats_capture(trace: Any, purpose: str) -> None:
         f"so {action} has nothing to check against",
         code="stats_capture_not_replayable",
         remedy="capture again keeping payloads, tl.trace(model, x, save='all'), and run "
-        f"{action} on that trace; tl.validate(model, x) runs its own full capture",
+        f"{action} on that trace; tl.validate(model, x, scope='forward') runs its own full capture",
         purpose=purpose,
     )
 

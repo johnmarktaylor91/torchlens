@@ -15,6 +15,7 @@ Spellings DOCUMENTED-UNSTABLE pending naming-session ratification.
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -162,19 +163,12 @@ def measure_trajectory(  # noqa: PLR0913 -- what (statistics), where (facet, lay
             remedy="pass an iterable of batches, e.g. tl.stats.measure_trajectory(model, [ids])",
             argument="data",
         )
+    from ..semantic.logit_lens import _LensRequest
+
+    request = _LensRequest(facet=facet, layers=layers, lens=lens, validate=validate)
     folder = _TrajectoryFolder(statistics)
     for batch in batches:
-        model_input, targets = _split_batch(batch)
-        folder.fold_batch(
-            model,
-            model_input,
-            targets,
-            facet=facet,
-            layers=layers,
-            lens=lens,
-            mask_input=mask_input,
-            validate=validate,
-        )
+        folder.fold_batch(model, _split_batch(batch), request, mask_input)
     return folder.result(facet=facet, mask_input=mask_input)
 
 
@@ -258,24 +252,20 @@ class _TrajectoryFolder:
             )
         return self.names
 
-    def fold_batch(  # noqa: PLR0913 -- the lens arguments pass straight through
+    def fold_batch(
         self,
         model: nn.Module,
-        model_input: Any,
-        targets: torch.Tensor | None,
-        *,
-        facet: str,
-        layers: Sequence[str] | None,
-        lens: Any,
+        batch: tuple[Any, torch.Tensor | None],
+        request: Any,
         mask_input: bool,
-        validate: bool,
     ) -> None:
-        """Trace one batch, project layer by layer, reduce and fold."""
+        """Trace one ``(model_input, targets)`` batch, project layer by layer, reduce and fold."""
 
         from ..options import CaptureOptions
         from ..semantic.logit_lens import _iter_layer_logits, _mask_input_tokens, _prepare_lens
         from ..user_funcs import trace
 
+        model_input, targets = batch
         names = self._resolve_names(targets is not None)
         banned = _input_ids(model_input) if mask_input else None
         log = trace(
@@ -284,18 +274,9 @@ class _TrajectoryFolder:
             capture=CaptureOptions(layers_to_save="all", save_arg_values=True),
         )
         try:
-            setup = _prepare_lens(
-                log,
-                facet=facet,
-                layers=layers,
-                lens=lens,
-                validate=validate and not self.checked,
-                rtol=1e-4,
-                atol=1e-5,
-                # warn -> _check_user_lens -> _prepare_lens -> fold_batch ->
-                # measure_trajectory -> the user's frame.
-                warn_stacklevel=5,
-            )
+            # The lens is checked once, on the first batch.
+            first = dataclasses.replace(request, validate=request.validate and not self.checked)
+            setup = _prepare_lens(log, first)
             self.checked = True
             self._start(setup.addresses, setup.lens_source, setup.validated)
             final = _final_log_probs(setup.final_logits, banned, names, _mask_input_tokens)
@@ -328,8 +309,7 @@ class _TrajectoryFolder:
     def _fold_layer(self, address: str, values: dict[str, torch.Tensor]) -> None:
         """Fold one layer's ``{statistic: [batch, positions]}`` values."""
 
-        assert self.layers is not None
-        row = self.layers.index(address)
+        row = (self.layers or ()).index(address)
         for name, value in values.items():
             positions = int(value.shape[-1])
             if self.positions is None:
@@ -344,7 +324,9 @@ class _TrajectoryFolder:
                 )
             column_sum = value.to(torch.float64).sum(dim=0)
             if name not in self.sums:
-                self.sums[name] = torch.zeros(len(self.layers), positions, dtype=torch.float64)
+                self.sums[name] = torch.zeros(
+                    len(self.layers or ()), positions, dtype=torch.float64
+                )
             self.sums[name][row] += column_sum.cpu()
             spine = self.spines.setdefault(name, {}).setdefault(address, Spine(name=name))
             spine.update(value)
@@ -456,8 +438,7 @@ def trajectory_values(
         out: dict[str, torch.Tensor] = {}
         if "entropy" in names:
             out["entropy"] = -torch.where(probs > 0, probs * log_probs, 0.0).sum(dim=-1)
-        if "kl_to_final" in names:
-            assert final_log_probs is not None
+        if "kl_to_final" in names and final_log_probs is not None:
             q_log = _align_final(final_log_probs, work)
             q = q_log.exp()
             out["kl_to_final"] = torch.where(q > 0, q * (q_log - log_probs), 0.0).sum(dim=-1)

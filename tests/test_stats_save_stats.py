@@ -172,7 +172,7 @@ def test_validation_and_replay_refuse() -> None:
     with pytest.raises(tl.errors.TorchLensError) as info:
         trace.run(x)
     assert info.value.fields["code"] == "stats_capture_not_replayable"
-    assert tl.validate(model, x) is not None
+    assert tl.validate(model, x, scope="forward") is not None
 
 
 def test_site_spines_refuses_full_trace() -> None:
@@ -213,3 +213,35 @@ def test_stats_trace_reprs_render() -> None:
     trace = tl.trace(model, x, save="stats")
     assert "Trace" in repr(trace) or repr(trace)
     assert str(trace)
+
+
+def test_budget_refusal_names_stats_level_and_it_fits() -> None:
+    """The save-budget refusal names save='stats'; that spelling fits the same budget."""
+
+    from torchlens._save_budget import SaveBudgetExceededError
+    from torchlens.options import CaptureOptions
+
+    model, x = _model_and_input("mlp", 32)
+    with pytest.raises(SaveBudgetExceededError) as info:
+        tl.trace(model, x, capture=CaptureOptions(save_budget=64))
+    assert "save='stats'" in str(info.value)
+    reduced = tl.trace(model, x, save="stats", capture=CaptureOptions(save_budget=64))
+    assert tl.stats.site_spines(reduced)
+
+
+def test_chunked_reducer_tolerance(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Past one working chunk: counts, extrema, sum and mean stay exact; the rest within rounding."""
+
+    from torchlens.stats import _capture_stats
+
+    monkeypatch.setattr(_capture_stats, "_CHUNK", 7)
+    model, x = _model_and_input("cnn", 8)
+    full = _full_spines(tl.trace(model, x))
+    reduced = tl.stats.site_spines(tl.trace(model, x, save="stats"))
+    for label, want in full.items():
+        got = reduced[label].result()
+        assert got.counts() == want.counts(), label
+        for field in ("finite_min", "finite_max", "finite_absmax", "sum", "mean"):
+            assert getattr(got, field) == getattr(want, field), (label, field)
+        for field in ("sum_squares", "sum_abs", "m2"):
+            assert getattr(got, field) == pytest.approx(getattr(want, field), rel=1e-12, abs=1e-12)

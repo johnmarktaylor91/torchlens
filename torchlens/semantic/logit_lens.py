@@ -383,7 +383,10 @@ def logit_lens(
     """
 
     setup = _prepare_lens(
-        trace, facet=facet, layers=layers, lens=lens, validate=validate, rtol=rtol, atol=atol
+        trace,
+        _LensRequest(
+            facet=facet, layers=layers, lens=lens, validate=validate, rtol=rtol, atol=atol
+        ),
     )
     entries = [
         LogitLensEntry(address=address, layer_index=layer_index, facet=facet, logits=logits)
@@ -463,7 +466,10 @@ def logit_lens_predictions(
             code="logit_lens_k_invalid",
         )
     setup = _prepare_lens(
-        trace, facet=facet, layers=layers, lens=lens, validate=validate, rtol=rtol, atol=atol
+        trace,
+        _LensRequest(
+            facet=facet, layers=layers, lens=lens, validate=validate, rtol=rtol, atol=atol
+        ),
     )
     head, final_logits = setup.head, setup.final_logits
     token_ids = tuple(int(token) for token in tokens) if tokens is not None else ()
@@ -551,24 +557,33 @@ class _LensSetup:
     final_logits: torch.Tensor | None
 
 
-def _prepare_lens(
-    trace: Any,
-    *,
-    facet: str,
-    layers: Sequence[str] | None,
-    lens: LensFunc | Mapping[str, LensFunc] | None,
-    validate: bool,
-    rtol: float,
-    atol: float,
-    warn_stacklevel: int = 4,
-) -> _LensSetup:
+@dataclass(frozen=True)
+class _LensRequest:
+    """What a lens reader asked for: the facet, layers, lens and its check.
+
+    Attributes
+    ----------
+    facet / layers / lens / validate / rtol / atol:
+        As in :func:`logit_lens`.
+    """
+
+    facet: str = "resid_post"
+    layers: Sequence[str] | None = None
+    lens: LensFunc | Mapping[str, LensFunc] | None = None
+    validate: bool = True
+    rtol: float = 1e-4
+    atol: float = 1e-5
+
+
+def _prepare_lens(trace: Any, request: _LensRequest) -> _LensSetup:
     """Resolve the head, the layers and the lens, and check the lens once.
 
     The one home of the lens rule for :func:`logit_lens`,
     :func:`logit_lens_predictions` and ``tl.stats.measure_trajectory``.
-    ``warn_stacklevel`` attributes the unverified-lens warning to the public
-    caller's frame (4 when a public function here calls this directly).
     """
+
+    facet, layers, lens = request.facet, request.layers, request.lens
+    validate, rtol, atol = request.validate, request.rtol, request.atol
 
     head = _find_default_head(trace)
     final_logits = _read_final_logits(head)
@@ -577,9 +592,7 @@ def _prepare_lens(
         addresses = _resolve_layer_addresses(trace, facet=facet, layers=layers)
         lens_by_address = _user_lens_by_address(lens, addresses)
         if validate:
-            _check_user_lens(
-                trace, lens, lens_by_address, head, (rtol, atol), stacklevel=warn_stacklevel
-            )
+            _check_user_lens(trace, lens, lens_by_address, head, (rtol, atol))
         lens_source, validated = "user", False
     else:
         if head is None:
@@ -1218,8 +1231,6 @@ def _check_user_lens(
     lens_by_address: Mapping[str, LensFunc],
     head: _DefaultHead | None,
     tolerance: tuple[float, float],
-    *,
-    stacklevel: int = 3,
 ) -> None:
     """Refuse a user lens built for another model; warn when it is unverified.
 
@@ -1245,6 +1256,8 @@ def _check_user_lens(
     disagreement = _last_layer_disagreement(trace, lens, lens_by_address, head, tolerance)
     if disagreement is None:
         return
+    from ..utils.display import user_stacklevel
+
     warnings.warn(
         TorchLensWarning(
             f"logit_lens could not confirm the user lens belongs to this model: {reason}, "
@@ -1254,7 +1267,7 @@ def _check_user_lens(
             "the check",
             code="logit_lens_identity_unrecorded",
         ),
-        stacklevel=stacklevel,
+        stacklevel=user_stacklevel(),
     )
 
 
