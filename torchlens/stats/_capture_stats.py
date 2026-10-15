@@ -3,9 +3,9 @@
 ``save="stats"`` folds every site's out into a ``Spine`` as the forward runs
 and keeps no activation payload. It rides the existing summary-transform
 seam (a reducer with the declared ``summary`` role and
-``save_raw_activations=False``), so the capture makes no raw clone and
-admits nothing to the save budget; each op retains one fixed 16-slot
-float64 vector (128 bytes) instead of its out. ``site_spines(trace)``
+``save_raw_activations=False``), so the capture makes no raw clone; each op
+retains one fixed 16-slot float64 vector (128 bytes) instead of its out,
+and that vector is all the save budget is charged. ``site_spines(trace)``
 decodes those vectors back into live ``Spine`` accumulators equal to
 ``Spine().update(out)`` on the same out (see :func:`lean_spine` for which
 fields are bit-equal). Reading an op's payload on such a trace refuses
@@ -152,7 +152,7 @@ def stats_save_options() -> Any:
 
     The summary-role reducer as the activation transform with raw outs
     dropped: the capture's existing reduce-only path, so no raw clone is made
-    and nothing is admitted to the save budget.
+    and the save budget is charged only the packed vectors.
     """
 
     from ..options import SaveOptions

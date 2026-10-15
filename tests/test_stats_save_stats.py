@@ -222,10 +222,11 @@ def test_budget_refusal_names_stats_level_and_it_fits() -> None:
     from torchlens.options import CaptureOptions
 
     model, x = _model_and_input("mlp", 32)
+    budget = 4096  # a full capture of this batch retains about 6.4 KiB; stats 128 B per op
     with pytest.raises(SaveBudgetExceededError) as info:
-        tl.trace(model, x, capture=CaptureOptions(save_budget=64))
+        tl.trace(model, x, capture=CaptureOptions(save_budget=budget))
     assert "save='stats'" in str(info.value)
-    reduced = tl.trace(model, x, save="stats", capture=CaptureOptions(save_budget=64))
+    reduced = tl.trace(model, x, save="stats", capture=CaptureOptions(save_budget=budget))
     assert tl.stats.site_spines(reduced)
 
 

@@ -8100,7 +8100,7 @@
   "field": "kind",
   "file": "torchlens/semantic/logit_lens.py",
   "has_default": false,
-  "sites": 4,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -8108,7 +8108,7 @@
   "field": "modules",
   "file": "torchlens/semantic/logit_lens.py",
   "has_default": false,
-  "sites": 5,
+  "sites": 4,
   "via_getattr": false
  },
  {

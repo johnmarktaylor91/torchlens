@@ -2587,3 +2587,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 5bbda3532c1be1a6c972f40f82ad6471e405c20e (dirty)
 recorded: 2026-10-15T06:42:37.201680+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: SAE-STATS-3: the logit_lens and logit_lens_predictions lens setup merged into one shared helper, so their duplicate head.kind and trace.modules reads became one each (no producer or consumer site added)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 39211e2247390d0a196db018e35c9659d5c02e30 (dirty)
+recorded: 2026-10-15T08:46:08.158019+00:00
