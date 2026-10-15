@@ -40,6 +40,17 @@ optional dependency.
   SAE is called on the out) (extra: `torchlens[sae]`). The old `decode(log,
   site, sae)` passed the site activation to `sae.decode` as if it were
   latents and is removed.
+- `pyreft.py`: `read(directory, *, repo=None, revision=None)` returns `LoreftArtifact`
+  (`rotation` R `[d, k]`, `weight` W `[k, d]`, `bias` b `[k]` as saved; `layer`,
+  `component`, `unit`, `units_per_example`; `provenance` with file sha256s, source
+  dtypes, float64 param sha256s). No extra and no peer import: files are read with
+  `torch.load(weights_only=True)`; the weight file is `intkey_<key>.bin` under the dotted
+  or underscored key. Apply with `fork.do(artifact.subspace(site, positions=mask),
+  artifact.edit)` (`tl.subspace` over `R.T` plus `tl.intervention.affine_source`); the
+  float32 R is orthonormalised by the subspace step, not here. Refusals
+  `pyreft_artifact_invalid`, `pyreft_artifact_unsupported`, `pyreft_positions_invalid`.
+  Tests: `tests/test_bridge_pyreft.py` (stand-in artifact); the pinned-pyreft oracle leg
+  runs outside the test suite.
 - `sae.py`: `splice(model_or_log, inputs, *, site, sae, latents_edit=None,
   tokens=None, exclude_bos=False, keep_latents=True)` returns `SpliceResult`
   (duck-typed SAE, no extra). Metrics are float64 and follow SAELens evals and
