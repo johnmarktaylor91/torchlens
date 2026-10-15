@@ -147,6 +147,21 @@ no cell is a per-query-head effect. `Annotation.from_receipt` refuses a
 kv-group receipt (`tv_annotation_invalid`): attention panels are per query
 head, and one group's effect is not any single query head's.
 
+To measure one query head at a value site, patch its own copy of the group
+with `mi.patch_query_heads_grid`. The grid counts query heads, so its
+receipt is an ordinary query-head receipt; the grid's `effect_site` becomes
+the receipt's `effect_source`, printed on the figure:
+
+```python
+q_grid = mi.patch_query_heads_grid(model, clean, corrupted, metric, site="v")
+receipt = tviz.receipt_from_patch_grid(
+    q_grid, layer="model.layers.0.self_attn", negative_control=neg,
+    positive_control=pos, joint_effect=joint,
+)
+receipt.effect_source  # "expanded value copy read by one query head (op-level interceptor)"
+ann = tviz.Annotation.from_receipt(receipt)
+```
+
 Annotation kinds are a closed set of four -- `descriptive_head_score`,
 `additive_logit_contribution`, `screening_estimate`, `intervention_effect`
 -- each with its own glyph and legend section; only a valid `CausalReceipt`
@@ -232,10 +247,11 @@ exists.
 Episode/generation views: `EpisodeCoordinates` (step / role / completion /
 member) lands on the records from day one, so per-step sheets and the
 staircase render against the episode substrate without recomputation.
-Per-query-head GQA receipts at the value site are **not measurable** (a KV
-group is shared storage); kv-group receipts (above) render the honest
-disclosure ("kv group g of G, shared by query heads a-b"), and an op-level
-per-query-head interceptor is still to come.
+A value-site grid measures KV groups (a group is shared storage); kv-group
+receipts (above) render the disclosure ("kv group g of G, shared by query
+heads a-b"). Per-query-head value-site receipts come from the op-level
+interceptor (`mi.patch_query_heads_grid`, above), which patches one query
+head's expanded copy.
 
 ## Refusal codes
 

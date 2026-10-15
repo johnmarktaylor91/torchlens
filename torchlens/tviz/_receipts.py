@@ -19,6 +19,7 @@ All spellings are DOCUMENTED-UNSTABLE pending the naming session.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -81,7 +82,13 @@ def receipt_from_patch_grid(  # noqa: PLR0913 -- every mandatory D12 evidence fi
         (``sites="k"`` / ``"v"``): its head axis counts shared KV groups,
         not query heads, and the receipt then says which query heads share
         each group. Under grouped-query attention a per-query-head effect
-        is not measurable at those sites.
+        is not measurable at those sites. A query-head interceptor grid
+        (``mechinterp.patch_query_heads_grid``) already counts query heads
+        and refuses ``kv_groups``.
+
+    A grid whose receipts carry ``effect_site`` (the query-head
+    interceptor's disclosure) sets the receipt's ``effect_source`` to it, so
+    every rendering prints which op the effect was measured at.
 
     Returns
     -------
@@ -108,7 +115,16 @@ def receipt_from_patch_grid(  # noqa: PLR0913 -- every mandatory D12 evidence fi
     heads = tuple(int(head) for head in grid.coordinates["head"])
     effects = tuple(float(value) for value in row.reshape(-1))
     receipts = dict(getattr(grid, "receipts", {}) or {})
-    return CausalReceipt(
+    effect_site = receipts.get("effect_site")
+    if effect_site is not None and kv_groups is not None:
+        refuse(
+            code="tv_receipt_invalid",
+            message="This grid came from the query-head interceptor: its head axis already "
+            "counts query heads, so it is not a kv-group grid.",
+            remedy="drop kv_groups=; the receipt is an ordinary query-head receipt",
+            effect_site=str(effect_site),
+        )
+    receipt = CausalReceipt(
         layer=layer,
         heads=heads,
         effects=effects,
@@ -122,6 +138,7 @@ def receipt_from_patch_grid(  # noqa: PLR0913 -- every mandatory D12 evidence fi
         joint_effect=joint_effect,
         kv_groups=kv_groups,
     )
+    return receipt if effect_site is None else replace(receipt, effect_source=str(effect_site))
 
 
 def _grid_matrix(receipts: list[CausalReceipt]) -> tuple[np.ndarray, tuple[int, ...]]:

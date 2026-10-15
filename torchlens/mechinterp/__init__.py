@@ -26,6 +26,7 @@ from ._errors import MechInterpError
 from ._factored import FactoredMatrix
 from ._grids import PatchGrid, grid, patch_heads_grid, patch_residual_grid
 from ._heads import attention_head_contributions
+from ._kv_heads import patch_query_heads_grid
 from ._lowered import LoweredResult, lowered_counterfactual
 from ._neurons import mlp_neuron_contributions
 from ._params import HeadWeightViews, ProjectionSource, head_weight_views, ov_circuit, qk_circuit
@@ -63,6 +64,7 @@ __all__ = [
     "mlp_neuron_contributions",
     "ov_circuit",
     "patch_heads_grid",
+    "patch_query_heads_grid",
     "patch_residual_grid",
     "qk_circuit",
     "residual_accumulation",
