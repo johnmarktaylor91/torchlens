@@ -30,6 +30,7 @@ REPO = Path(__file__).resolve().parents[1]
 
 #: Page or notebook (repo-relative) -> the one tool its fences need.
 PAGES: dict[str, str] = {
+    "docs/recipes/acdc_ioi.md": "transformers",
     "docs/recipes/lrp_transformers_lxt.md": "lxt",
     "docs/recipes/seeded_subsample.md": "torchlens",
     "docs/recipes/training_ribbon.md": "matplotlib",

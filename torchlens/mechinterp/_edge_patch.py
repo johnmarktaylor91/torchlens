@@ -119,13 +119,18 @@ def _stages(edges: list[Any]) -> list[list[tuple[Any, list[Any]]]]:
     return [stages[key] for key in sorted(stages)]
 
 
-def _write_receiver(owner: Any, source: Any, receiver: Any, patched: torch.Tensor) -> None:
-    """Write ``patched`` as the receiver's input into ``owner`` (forked from ``source``'s state)."""
+def _write_receiver(owner: Any, trace: Any, receiver: Any, patched: torch.Tensor) -> None:
+    """Write ``patched`` as the receiver's input into ``owner``.
+
+    A q/k/v slice is computed on a scratch fork of the clean ``trace``: the
+    projection output depends only on the substituted norm input, so the
+    scratch never needs the partly patched state.
+    """
 
     if receiver.kind not in ("q", "k", "v"):
         owner.do(_input_edge_record(owner, receiver).__selection__(), patched)
         return
-    scratch = source.fork()
+    scratch = trace.fork()
     scratch.do(_input_edge_record(scratch, receiver).__selection__(), patched)
     spec = _head_spec(scratch, receiver)
     projection = scratch.ops[str(spec.home_label)].out
@@ -137,7 +142,7 @@ def _write_receiver(owner: Any, source: Any, receiver: Any, patched: torch.Tenso
             "intervention_ready=True)",
             receiver=receiver.name,
         )
-    owner.do(_head_spec(owner, receiver).__selection__(), projection.clone())
+    owner.do(_head_spec(owner, receiver).__selection__(), projection.detach().clone())
 
 
 def patch_edges(trace: Any, edges: Iterable[Any], *, corrupt: Any) -> Any:
@@ -185,8 +190,7 @@ def patch_edges(trace: Any, edges: Iterable[Any], *, corrupt: Any) -> Any:
             for edge in receiver_edges:
                 corrupt_value = corrupt.nodes[edge.sender.name].value
                 patched = patched - senders[edge.sender.name] + corrupt_value.to(patched.dtype)
-            source = trace if result is None else result
             owner = trace.fork() if result is None else result
-            _write_receiver(owner, source, receiver, patched)
+            _write_receiver(owner, trace, receiver, patched.detach())
             result = owner
     return trace.fork() if result is None else result
