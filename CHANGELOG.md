@@ -160,9 +160,6 @@
   no longer covers the matrix.
 - **agent**: a trimmed `torchlens_overview` names a next call it accepts
   (`torchlens_dump view='graph'`) instead of `labels=`/`query=`.
-- **intervention**: the `dense_subspace_full_axis_edit` warning no longer says projection-valued
-  edits are unshipped; its remedy names `tl.project_off`, `tl.project_onto` and
-  `torchlens.intervention.set_direction_mean`, and the glossary subspace entry links to them.
 
 ### Changed
 
