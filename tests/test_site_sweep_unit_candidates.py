@@ -74,7 +74,7 @@ def test_distinct_units_at_one_site_are_distinct_candidates(engine: str) -> None
             tl.zero_ablate(),
             intervention=InterventionOptions(engine="replay"),
         )
-        assert rows[name].status == "completed"
+        assert rows[name].status == "released"  # retain="none": the number survives release
         assert rows[name].value == _metric(direct)
         values.add(rows[name].value)
     # Each candidate ablated only its own units: the three effects differ, and
