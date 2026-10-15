@@ -488,3 +488,12 @@ A request with `max_rows` between 151 and 200 now refuses `agent_limit_invalid`;
 `max_rows<=150` and follow `data.next` for the rest. `torchlens_overview` serves up to 12,000
 tokens by default (was 4,000). Both numbers are configuration set from a corpus measurement
 (`tools/agent_evals/BUDGETS.md`), not a guaranteed API limit.
+
+## Patch-grid receipts plot effects (2026-10-14, value change)
+
+Receipts from `tviz.receipt_from_patch_grid` change value: `effects` are now `grid.values` minus
+`grid.receipts["corrupted_metric"]`. Pass `joint_effect` as a delta from the same run (for a
+whole-layer grid: `float(joint.values[i]) - joint.receipts["corrupted_metric"]`). A hand-built
+`PatchGrid` must set `receipts["corrupted_metric"]` or the call refuses `tv_receipt_invalid`. The
+default `intervention` wording is now "clean activation of one head patched into the corrupted
+run" (was "head contribution zeroed"); the grid title and joint line no longer say "ablation".

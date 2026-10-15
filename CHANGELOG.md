@@ -65,6 +65,14 @@
 
 ### Bug Fixes
 
+- **tviz**: `torchlens.tviz.receipt_from_patch_grid` now plots effects: each cell is the patched
+  metric minus the grid's corrupted-run baseline, which `mechinterp.grid`, its presets and
+  `mechinterp.patch_query_heads_grid` record as `receipts["clean_metric"]` and
+  `receipts["corrupted_metric"]`; before, receipt cells showed the raw patched metric.
+  `render_receipt_grid` prints the baseline and names its run, no longer counts a grid's fires
+  once per row, keeps text at 8 pt or larger, prints small effects with enough digits to read
+  nonzero, says single-head effects "need not be" additive, and reserves the footer's height so it
+  no longer covers the matrix.
 - **agent**: a trimmed `torchlens_overview` names a next call it accepts
   (`torchlens_dump view='graph'`) instead of `labels=`/`query=`.
 - **intervention**: the `dense_subspace_full_axis_edit` warning no longer says projection-valued
