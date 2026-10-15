@@ -238,7 +238,9 @@ class CurveResult:
     settings
         The resolved evaluation policy (baseline, step count, features).
     extra
-        Per-example areas and AOPC values and the feature count.
+        Method-specific extras: per-example areas (``area_per_example``) and
+        AOPC values (``aopc_per_example``), the feature count (``n_features``)
+        and the attribution method name (``attribution_method``).
     """
 
     metric: str

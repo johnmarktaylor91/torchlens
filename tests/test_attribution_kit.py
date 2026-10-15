@@ -163,6 +163,7 @@ _DOCUMENTED_UNSTABLE_TOKENS = {
     "original_attribution",
     "randomized",
     "similarity",
+    "similarities",
     "spearman",
     "spearman_abs",
     "ssim",

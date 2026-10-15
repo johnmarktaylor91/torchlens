@@ -51,10 +51,10 @@ class RandomizationStep:
     randomized
         Every module re-initialized when the map was computed (cascading:
         this layer and all above it; independent: this layer alone).
-    similarity
-        ``spearman``, ``spearman_abs`` and ``ssim`` of this map against the
-        original (``None`` where the measure is undefined or the map is not a
-        spatial plane).
+    similarities
+        Similarity scores of this map against the original, keyed by measure:
+        ``spearman``, ``spearman_abs`` and ``ssim`` (``None`` where the measure
+        is undefined or the map is not a spatial plane).
     values
         The attribution computed on the randomized copy, or ``None`` with
         ``keep_maps=False``.
@@ -62,7 +62,7 @@ class RandomizationStep:
 
     layer: str
     randomized: tuple[str, ...]
-    similarity: dict[str, float | None]
+    similarities: dict[str, float | None]
     values: Tensor | None
 
 
@@ -83,7 +83,8 @@ class RandomizationResult:
     settings
         The resolved test policy (randomization, seed, method, initialization).
     extra
-        Measure names and per-step initialization notes.
+        Method-specific extras: the similarity measure names (``measures``) and
+        the per-step initialization notes (``initialization_per_layer``).
     """
 
     randomization: str
@@ -114,7 +115,7 @@ class RandomizationResult:
                 f"{_DOCS_POINTER}",
                 code="attribution_eval_setting_invalid",
             )
-        return tuple(step.similarity[measure] for step in self.steps)
+        return tuple(step.similarities[measure] for step in self.steps)
 
     def __repr__(self) -> str:
         """Compact representation without dumping tensors."""
@@ -430,7 +431,7 @@ def _randomize_steps(
                 f"layer. {_DOCS_POINTER}",
                 code="attribution_randomization_map_changed",
             )
-        similarity = _map_similarity(original, values)
+        similarities = _map_similarity(original, values)
         if keep_maps:
             kept_bytes += values.element_size() * values.numel()
             if kept_bytes > _KEEP_MAPS_WARN_BYTES and not warned:
@@ -444,5 +445,7 @@ def _randomize_steps(
                     ),
                     stacklevel=3,
                 )
-        steps.append(RandomizationStep(name, randomized, similarity, values if keep_maps else None))
+        steps.append(
+            RandomizationStep(name, randomized, similarities, values if keep_maps else None)
+        )
     return steps, notes
