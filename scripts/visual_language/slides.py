@@ -1183,8 +1183,9 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="builtin-legend",
         title="The legend TorchLens draws",
-        rule="show_legend=True adds seven fill roles and nothing else; None shows only an active "
-        "channel's section.",
+        rule="show_legend=True adds a row only for each fill role drawn (input, output, plain op, "
+        "parameterized, buffer, boolean, intervention/cone); None shows only an active channel's "
+        "section.",
         panels=(
             Panel(
                 "a",
