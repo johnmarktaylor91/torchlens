@@ -266,6 +266,10 @@ def _solve_uncached(
 
     for op in _topological_operations(operations, by_reference):
         if seed_predicate(op):
+            if 0 in tuple(op.shape):
+                # A zero-length axis leaves the input with no units, so it has no
+                # influence geometry: it seeds nothing and no descriptor names it.
+                continue
             seed = _seed_input(op)
             states_by_op[op.label] = {
                 seed.io_role: _BranchState(state=seed, geometry_neutral=False)
@@ -325,24 +329,6 @@ def _solve_uncached(
     )
 
 
-def _empty_axis_seed(op: Op, shape: tuple[int, ...], role: str, rule: str) -> _InputState:
-    """Seed for a graph point with a zero-length axis: it has no units, so no geometry.
-
-    Every descriptor reached from it carries ``UNSUPPORTED`` with a note instead of
-    public axes (a public axis requires a positive extent).
-    """
-
-    return _InputState(
-        input_op_label=op.label,
-        io_role=role,
-        input_shape=shape,
-        axes=None,
-        taint=ReceptiveFieldStatus.UNSUPPORTED,
-        notes=(f"{op.label}: shape {shape} has a zero-length axis, so it has no units to map",),
-        rule=rule,
-    )
-
-
 def _seed_input(op: Op) -> _InputState:
     """Create identity geometry for a model-input operation.
 
@@ -359,8 +345,6 @@ def _seed_input(op: Op) -> _InputState:
 
     shape = tuple(op.shape)
     role = op.io_role or op.label
-    if 0 in shape:
-        return _empty_axis_seed(op, shape, role, "input_identity")
     identity = _Mapped(_Affine(Fraction(1), Fraction(0)), _Affine(Fraction(1), Fraction(0)))
     return _InputState(
         input_op_label=op.label,
