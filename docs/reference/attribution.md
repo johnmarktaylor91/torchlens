@@ -479,7 +479,8 @@ Two checks reviewers ask of an attribution method, built on TorchLens's own piec
 any input-space result, including [`grad_cam`](#grad_cam) maps (CNN feature maps and ViT token
 grids alike; the input-resolution `N, 1, H, W` map is spread across the input channels). The
 two existing metrics, [`infidelity` and `sensitivity`](#infidelity-and-sensitivity), sit
-beside them. A third check, the [causal audit](#auditing-internal-attributions-causal_audit),
+beside them. [ROAD](#road-remove-and-debias-road_curve) is the deletion curve with noisy linear
+imputation in place of a constant baseline. A further check, the [causal audit](#auditing-internal-attributions-causal_audit),
 grades internal attributions: it ablates the hidden units a layer attribution ranks and
 compares the measured effects with the claim.
 
@@ -592,6 +593,52 @@ same layer. Each `RandomizationStep` keeps its map in `values`; past 256 MiB of 
 test warns once (`attribution_randomization_maps_large`) and names `keep_maps=False`. Unknown
 layers refuse `attribution_randomization_layer_invalid`, and so does a method under which no
 module with parameters runs (the test would otherwise randomize nothing and pass).
+
+### ROAD: remove and debias (`road_curve`)
+
+`tl.attribution.road_curve(model, inputs, input_kwargs=None, *, target, attribution,
+ranking="most_relevant_first", n_steps=20, features="auto", patch_size=8, noise_std=0.01,
+seed=0)` is ROAD (Rong et al., 2022, "A Consistent and Efficient Evaluation Strategy for
+Attribution Methods"). It is the deletion curve above with one change: a removed pixel does not
+take a constant baseline, whose shape would tell the model where the mask is, but the weighted
+mean of its 8 neighbours (1/6 for the direct neighbours, 1/12 for the diagonals, renormalised at
+the border), solved jointly for all removed pixels of a channel, plus Gaussian noise of
+`noise_std` (0.01, the authors' reference value). `ranking="most_relevant_first"` (MoRF) removes
+the most attributed features first, `"least_relevant_first"` (LeRF) the least attributed. The
+result is a `CurveResult` with `metric="road"`; each step's `intervention` holds
+`tl.units(<input layer>, <mask>)` with `tl.replace_with(<that step's imputed values>)`, so every
+point replays like any curve step. The noise of a step comes from a local generator seeded by
+`seed` and the step, so a step recomputes to the same values and the global random state is
+untouched. A removed region with no kept neighbour stays at zero (plus noise). ROAD needs
+`(N, C, H, W)` image inputs; other inputs refuse `attribution_eval_setting_invalid` and name
+`deletion_curve`. Quantus also provides ROAD; this one shares the curves' recorded edits.
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+model = nn.Sequential(nn.Flatten(), nn.Linear(9, 1))
+with torch.no_grad():
+    model[1].weight.copy_(torch.arange(1.0, 10.0).reshape(1, 9))
+    model[1].bias.zero_()
+x = torch.ones(1, 1, 3, 3)
+x[0, 0, 1, 1] = 4.0
+result = tl.attribution.input_x_grad(model, x, target=0)
+road = tl.attribution.road_curve(model, x, target=0, attribution=result, n_steps=9, noise_std=0.0)
+print(road.metric, [round(value, 4) for value in road.scores[:2, 0].tolist()])
+print(round(road.steps[1].inputs[0, 0, 1, 1].item(), 4), road.settings["ranking"])
+```
+
+Output:
+
+```text
+road [60.0, 45.0]
+1.0 most_relevant_first
+```
+
+The center pixel (attribution 20) goes first; with every neighbour equal to 1 its imputed value
+is 1, so the score falls from 60 to `60 - 5 * 4 + 5 * 1 = 45`.
 
 ### Auditing internal attributions (`causal_audit`)
 

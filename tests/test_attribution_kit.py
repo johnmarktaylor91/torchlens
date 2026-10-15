@@ -190,6 +190,11 @@ _DOCUMENTED_UNSTABLE_TOKENS = {
     "measured",
     "kind",
     "draw",
+    "road_curve",
+    "ranking",
+    "most_relevant_first",
+    "least_relevant_first",
+    "road",
 }
 
 

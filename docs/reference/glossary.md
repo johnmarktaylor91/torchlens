@@ -310,6 +310,7 @@ documented unstable and may be renamed or removed without a compatibility alias.
 | Integer-input evidence | `integer_input_layers` | unstable -- no deprecation shim owed |
 | Evaluation curves | `deletion_curve`, `insertion_curve`, `CurveResult`, `CurveStep`, `fractions`, `scores`, `area`, `aopc`, `steps`, `features`, `patch_size`, `auto`, `elements`, `pixels`, `patches`, `tokens`, `n_features`, `index`, `fraction`, `inputs`, `input_kwargs`, `baseline_mask`, `intervention` | unstable -- no deprecation shim owed |
 | Randomization test | `randomization_test`, `RandomizationResult`, `RandomizationStep`, `randomization`, `cascading`, `independent`, `layers`, `seed`, `keep_maps`, `original`, `randomized`, `similarity`, `spearman`, `spearman_abs`, `ssim`, `values` | unstable -- no deprecation shim owed |
+| ROAD curve | `road_curve`, `ranking`, `most_relevant_first`, `least_relevant_first`, `noise_std`, `seed`, `road` | unstable -- no deprecation shim owed |
 | Causal audit | `causal_audit`, `CausalAuditResult`, `CausalAuditUnit`, `CausalAuditSet`, `claim`, `k`, `ablation`, `zero`, `mean`, `controls`, `top`, `bottom`, `random`, `random_draws`, `per_unit`, `layer`, `site`, `original_score`, `units`, `sets`, `rank_agreement`, `set_of`, `unit`, `claimed`, `measured`, `kind`, `draw`, `intervention` | unstable -- no deprecation shim owed |
 
 <!-- ATTRIBUTION-KIT-UNSTABLE-INDEX:END -->
@@ -322,7 +323,8 @@ of the model output; layer methods given only integer inputs start their input p
 embedding output. `deletion_curve` and `insertion_curve` score an attribution by removing or
 revealing its most-attributed input features in steps (each step a recorded intervention), and
 `randomization_test` checks that a method's maps change when the model's layers are
-re-initialized. `causal_audit` grades an internal (layer) attribution by ablating the hidden
+re-initialized. `road_curve` is ROAD, the deletion curve with removed pixels filled by noisy
+linear imputation from their neighbours. `causal_audit` grades an internal (layer) attribution by ablating the hidden
 units it ranks, through forks of an intervention-ready trace, and comparing the measured
 effects with the claim. The callable/index/site annotation used inside `torchlens.attribution` is
 privately named `_AttributionTarget`; `TargetSpec` refers only to the intervention selector record and is not an
