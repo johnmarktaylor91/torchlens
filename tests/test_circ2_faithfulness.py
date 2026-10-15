@@ -56,7 +56,7 @@ def test_log_scale_mapping_and_explicit_fractions_match_the_loop() -> None:
     """``log_scale=True``, a ``{fraction: f}`` mapping and ``fractions=`` agree with the loop."""
 
     area_under, area_from_1 = _mib_areas(FAITHFULNESS, PERCENTAGES, log_scale=True)
-    curve = dict(zip(PERCENTAGES, FAITHFULNESS))
+    curve = dict(zip(PERCENTAGES, FAITHFULNESS, strict=True))
     cpr = tl.mechinterp.circuit_performance_ratio(curve, log_scale=True)
     cmd = tl.mechinterp.circuit_model_difference(curve, log_scale=True)
     assert abs(cpr - area_under) <= 1e-12

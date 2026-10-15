@@ -661,7 +661,7 @@ class ReadTable(Mapping):
         return destination
 
 
-def edge_read_table(
+def edge_read_table(  # noqa: PLR0913 -- one keyword per provenance field an EDGE table records
     rows: list[dict[str, Any]],
     *,
     method: str,

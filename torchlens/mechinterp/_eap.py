@@ -327,49 +327,32 @@ def _point_gradients(
     gradients: dict[str, torch.Tensor | None] = dict.fromkeys(unreached)
     for key, seeds in grouped.items():
         pulled = _local_pullbacks(trace, seeds, key[0])
-        gradients.update(zip(names[key], pulled))
+        gradients.update(zip(names[key], pulled, strict=True))
     return gradients, values
 
 
 def _interpolation_points(
-    model: Any,
-    inputs: Any,
-    clean_trace: Any,
-    clean: ComponentGraph,
-    corrupt: ComponentGraph,
-    steps: int,
+    model: Any, inputs: Any, site_module: str, difference: torch.Tensor, steps: int
 ) -> Iterator[Any]:
-    """Captures at ``e(k/m)`` for ``k = 0..m-1``, one at a time; the shift rides the first
-    embedding write."""
+    """Captures at ``e(k/m)`` for ``k = 0..m-1``, one at a time; the shift
+    ``(1 - k/m) * difference`` rides the output of ``site_module`` (the first embedding
+    write)."""
 
     from ..intervention.predicates import add
     from ..intervention.selectors import module as module_selector
     from ..intervention.spec import when
 
-    site = module_selector(_input_write_module(clean_trace, clean))
-    difference = (corrupt.nodes["input"].value - clean.nodes["input"].value).detach()
+    site = module_selector(site_module)
     for k in range(steps):
         shift = (1.0 - k / steps) * difference
         yield _capture(model, inputs, intervene=when(site, add(shift)))
 
 
-def _edge_table(
-    graph: ComponentGraph,
-    scores: dict[str, float],
-    *,
-    method: str,
-    steps: int,
-    example_reduction: str,
-    n_examples: int,
-    trace: Any,
-    statuses: dict[str, str],
-    started: float,
-) -> Any:
-    """Assemble the EDGE-kind :class:`ReadTable` (one row per graph edge)."""
+def _edge_rows(
+    graph: ComponentGraph, scores: dict[str, float], statuses: dict[str, str]
+) -> list[dict[str, Any]]:
+    """One EDGE-table row mapping per graph edge, in graph order."""
 
-    from ..attribution.onebackward._table import edge_read_table
-
-    target_repr = f"metric via {method}" + (f" (steps={steps})" if method == "eap_ig" else "")
     rows = []
     for name, edge in graph.edges.items():
         value = edge.sender.value
@@ -383,15 +366,7 @@ def _edge_table(
                 "device": str(value.device),
             }
         )
-    return edge_read_table(
-        rows,
-        method=method,
-        reduction=f"sum_positions_{example_reduction}_examples",
-        target_repr=target_repr,
-        sample_count=n_examples,
-        timing_s=time.perf_counter() - started,
-        trace=trace,
-    )
+    return rows
 
 
 def _accumulate(
@@ -407,7 +382,7 @@ def _accumulate(
         total[name] = grad.detach().clone() if previous is None else previous + grad.detach()
 
 
-def edge_scores(
+def edge_scores(  # noqa: PLR0913 -- the public door: five keyword-only spec-pinned knobs
     model: Any,
     inputs: Any,
     *,
@@ -466,7 +441,9 @@ def edge_scores(
         point, _values = _point_gradients(clean_trace, clean, metric)
         _accumulate(total, point)
     else:
-        for point_trace in _interpolation_points(model, inputs, clean_trace, clean, corrupt, m):
+        site_module = _input_write_module(clean_trace, clean)
+        difference = (corrupt.nodes["input"].value - clean.nodes["input"].value).detach()
+        for point_trace in _interpolation_points(model, inputs, site_module, difference, m):
             point, _values = _point_gradients(point_trace, component_graph(point_trace), metric)
             _accumulate(total, point)
             point_trace.cleanup()
@@ -481,14 +458,14 @@ def edge_scores(
         per_example = (deltas[edge.sender.name] * (grad / m)).flatten(1).sum(dim=1)
         reduced = per_example.mean() if example_reduction == "mean" else per_example.sum()
         scores[name] = float(reduced)
-    return _edge_table(
-        clean,
-        scores,
+    from ..attribution.onebackward._table import edge_read_table
+
+    return edge_read_table(
+        _edge_rows(clean, scores, statuses),
         method=method,
-        steps=m,
-        example_reduction=example_reduction,
-        n_examples=n_examples,
+        reduction=f"sum_positions_{example_reduction}_examples",
+        target_repr=f"metric via {method}" + (f" (steps={m})" if method == "eap_ig" else ""),
+        sample_count=n_examples,
+        timing_s=time.perf_counter() - started,
         trace=clean_trace,
-        statuses=statuses,
-        started=started,
     )

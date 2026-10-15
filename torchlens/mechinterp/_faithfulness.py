@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
+from itertools import pairwise
 from typing import Any
 
 from ._errors import refuse
@@ -52,7 +53,7 @@ def _curve(
             n_values=len(fs),
             n_fractions=len(xs),
         )
-    if any(not math.isfinite(v) for v in xs + fs) or any(b <= a for a, b in zip(xs, xs[1:])):
+    if any(not math.isfinite(v) for v in xs + fs) or any(b <= a for a, b in pairwise(xs)):
         refuse(
             code="mi_faithfulness_curve_invalid",
             message=f"{caller} needs finite values and strictly increasing fractions.",
