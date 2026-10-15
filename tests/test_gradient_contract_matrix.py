@@ -239,13 +239,13 @@ def _door_replay(model: nn.Module, edit: Any) -> torch.Tensor:
 
 def _door_rerun(model: nn.Module, edit: Any) -> torch.Tensor:
     trace = tl.trace(model, _X)
-    trace.do(_SITE, edit, model=model, x=_X)
+    trace.do(tl.module("lin1"), edit, model=model, x=_X)
     return _out(trace)
 
 
 def _door_attach_run(model: nn.Module, edit: Any) -> torch.Tensor:
     trace = tl.trace(model, _X)
-    trace.attach_hooks(_SITE, edit, confirm_mutation=True)
+    trace.attach_hooks(tl.module("lin1"), edit, confirm_mutation=True)
     trace.run(model, _X)
     return _out(trace)
 

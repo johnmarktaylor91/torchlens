@@ -39,15 +39,19 @@ _FIXED_REMEDY = (
 def _site_label(hook: Any) -> str:
     """Return the user's label for the firing site."""
 
-    return str(getattr(hook, "name", None) or "<site>")
+    layer_log = getattr(hook, "layer_log", None) or {}
+    label = layer_log.get("layer_label") or layer_log.get("label")
+    return str(label or getattr(hook, "name", None) or "<site>")
 
 
-def _refusal(verb: str, site: str, reason: str, why: str, remedy: str) -> InvalidArgumentError:
-    """Build the contracted connectivity refusal."""
+def _refusal(
+    verb: str, site: str, reason: str, why: str, remedy: str, *, code: str
+) -> InvalidArgumentError:
+    """Build the connectivity refusal (``code`` is spelled at each raise site)."""
 
     return InvalidArgumentError(
         f"keep_grad({verb}) at {site!r}: {why}",
-        code="edit_detached_from_graph",
+        code=code,
         remedy=f"{remedy}; or drop keep_grad(...) to accept that no gradient flows ({_GUIDE})",
         argument="edit",
         verb=verb,
@@ -78,6 +82,7 @@ def _check(out: Any, result: Any, hook: Any, verb: str) -> None:
             "the edit fired with gradients disabled (torch.no_grad, inference_mode or "
             "an inference-only capture), so no gradient can flow",
             "run the forward with gradients enabled and do not pass inference_only=True",
+            code="edit_detached_from_graph",
         )
     if not out.requires_grad:
         raise _refusal(
@@ -88,6 +93,7 @@ def _check(out: Any, result: Any, hook: Any, verb: str) -> None:
             "requires grad, or the saved activations were detached)",
             "keep parameters trainable and capture with "
             "tl.options.CaptureOptions(detach_saved_activations=False)",
+            code="edit_detached_from_graph",
         )
     if not result.requires_grad:
         raise _refusal(
@@ -97,6 +103,7 @@ def _check(out: Any, result: Any, hook: Any, verb: str) -> None:
             "the edit wrote values computed without the site's graph, so no gradient "
             "reaches the parameters upstream of the edited elements",
             _detached_remedy(verb),
+            code="edit_detached_from_graph",
         )
 
 

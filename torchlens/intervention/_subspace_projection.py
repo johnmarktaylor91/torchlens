@@ -76,20 +76,28 @@ _NESTED_PROJECTIONS = frozenset(
 )
 
 
-def _unsupported(verb: str, why: str, remedy: str) -> InvalidArgumentError:
-    """Build the contracted refusal for a verb with no coordinate meaning."""
+def _unsupported(
+    verb: str, why: str, remedy: str, *, code: str = "subspace_edit_unsupported"
+) -> InvalidArgumentError:
+    """Build the contracted refusal for a verb with no coordinate meaning.
+
+    ``code`` is always ``subspace_edit_unsupported``; raise sites spell it so
+    the refusal census sees a coded site.
+    """
 
     return InvalidArgumentError(
         f"do(subspace(...), {verb}) has no meaning on the subspace coordinates: {why}",
-        code="subspace_edit_unsupported",
+        code=code,
         remedy=f"{remedy} ({_GUIDE})",
         argument="edit",
         verb=verb,
     )
 
 
-def _refusal_for(verb: str) -> InvalidArgumentError:
+def _refusal_for(verb: str, *, code: str = "subspace_edit_unsupported") -> InvalidArgumentError:
     """Return the refusal (with its working spelling) for an unsupported verb."""
+
+    del code  # spelled at the raise site for the refusal census; always the same code
 
     if verb == "set_direction_mean":
         return _unsupported(
@@ -156,6 +164,7 @@ def _verb_meaning(edit: Any) -> str:
             "backward-direction verbs edit gradients, not the forward component",
             "attach the gradient verb at capture time: tl.trace(model, x, "
             "intervene=tl.when(tl.module(name), tl.grad_zero()))",
+            code="subspace_edit_unsupported",
         )
     if verb in _COORDINATE_VERBS:
         return "coordinates"
@@ -169,7 +178,7 @@ def _verb_meaning(edit: Any) -> str:
         return "coordinates"
     if verb == "splice_module" and kwargs.get("input") == "out":
         return "coordinates"
-    raise _refusal_for(verb)
+    raise _refusal_for(verb, code="subspace_edit_unsupported")
 
 
 def _move_coords(value: torch.Tensor, rows: torch.Tensor, axis: int) -> torch.Tensor:
@@ -272,7 +281,7 @@ class SubspaceProjection:
         verb = edit.helper_name if isinstance(edit, Edit) else "hook callable"
         if isinstance(edit, Edit):
             if edit.factory is None:
-                raise _refusal_for(verb)
+                raise _refusal_for(verb, code="subspace_edit_unsupported")
             inner_factory: Callable[[], Any] = edit.factory
         else:
 

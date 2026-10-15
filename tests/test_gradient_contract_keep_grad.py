@@ -105,8 +105,9 @@ def test_decision_keep_grad_false_default_is_a_no_op() -> None:
     out, model = _capture(decision)
     plain, _ = _capture(zero_ablate())
     assert torch.equal(out, plain)
-    assert not out.requires_grad
+    out.sum().backward()
     assert model.lin1.weight.grad is None
+    assert model.lin2.weight.grad is not None
 
 
 def test_keep_grad_refuses_when_gradients_are_disabled_and_enabled_runs() -> None:
@@ -118,11 +119,14 @@ def test_keep_grad_refuses_when_gradients_are_disabled_and_enabled_runs() -> Non
 
 
 def test_keep_grad_refuses_a_site_with_no_graph_and_trainable_params_run() -> None:
+    """A capture-free bound call on frozen parameters has no graph at the site."""
+
     frozen = _Net().requires_grad_(False)
-    error = _detached_error(lambda: _capture(keep_grad(scale(2.0)), frozen))
+    bound = tl.when(tl.module("lin1"), keep_grad(scale(2.0))).bind(frozen)
+    error = _detached_error(lambda: bound(_X))
     assert error.fields["reason"] == "site_has_no_graph"
-    out, _ = _capture(keep_grad(scale(2.0)), frozen.requires_grad_(True))
-    assert out.requires_grad
+    trainable = tl.when(tl.module("lin1"), keep_grad(scale(2.0))).bind(frozen.requires_grad_(True))
+    assert trainable(_X).requires_grad
 
 
 def test_keep_grad_wraps_a_hook_callable() -> None:
