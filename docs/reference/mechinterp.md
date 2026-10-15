@@ -97,8 +97,11 @@ refusal (`worst_element`).
 - `head_scores` / `inspect_prompt` / `test_prompt`: taxonomy masks with
   TLens-compatible conventions (credited), structured prompt records with
   explicit BOS disclosure and teacher-forced multi-token scoring.
-  `head_scores(trace, kind="induction", period=n)` scores the fixed repeat
-  of a sequence with period `n` instead of the token-equality mask:
+  `head_scores(trace, kind=tl.mechinterp.FixedPeriodInduction(period=n))`
+  scores the fixed repeat of a sequence with period `n` instead of the
+  token-equality induction mask (the result reports `kind="induction"` and
+  the period in its provenance; a period that is not a positive int refuses
+  when the kind is built):
   destination `i` on the one source `i - n + 1`, counted when its token
   equals the token at `i - n`, so a token that repeats inside the sequence
   adds nothing (measured on GPT-2 small in the circuit section below).
@@ -274,7 +277,7 @@ and CMD equal the MIB circuit track's loop exactly.
 
 Circuit test cases on GPT-2 small (CPU):
 
-- Induction heads: `head_scores(trace, kind="induction", period=50)` on
+- Induction heads: `head_scores(trace, kind=FixedPeriodInduction(period=50))` on
   `[bos] + R + R` (`R` 50 random tokens in `[1000, 50000)`, generator seed
   0, batch 8) equals an independent Hugging Face eager-attention oracle
   within 5.0e-11 for all 144 heads in float64 (2.7e-7 in float32), and its

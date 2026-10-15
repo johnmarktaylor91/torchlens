@@ -1,11 +1,11 @@
-"""``head_scores(..., kind="induction", period=n)``: the fixed-period induction mask.
+"""``head_scores(..., kind=FixedPeriodInduction(period=n))``: the fixed-period induction mask.
 
 On ``[bos] + R + R`` the score of every head equals its mean attention from
 each second-copy query to the token after that token's first occurrence,
 read straight off the captured pattern, even when a token repeats inside
 ``R`` (where the token-equality mask adds rows and sources). Float64
-patterns are scored in float64. A bad ``period=`` refuses typed and the
-remedy runs.
+patterns are scored in float64. A bad period refuses typed when the kind is
+built, and the remedy runs; the string kinds are unchanged.
 """
 
 from __future__ import annotations
@@ -49,23 +49,23 @@ def _oracle(trace, period: int) -> torch.Tensor:
 
 
 def test_period_mask_is_the_positional_induction_score(repeated) -> None:
-    result = mi.head_scores(repeated, kind="induction", period=6)
+    result = mi.head_scores(repeated, kind=mi.FixedPeriodInduction(period=6))
     got = torch.tensor(result.scores, dtype=torch.float64)
     torch.testing.assert_close(got, _oracle(repeated, 6), rtol=0, atol=1e-12)
     assert result.eligible_rows == (12, 12)
     assert result.provenance["mask_definition"].startswith("fixed period 6")
     token_equality = mi.head_scores(repeated, kind="induction")
     assert token_equality.eligible_rows != result.eligible_rows  # the repeat inside R adds rows
-    appliance = repeated.using("mi").head_scores(kind="induction", period=6)
+    assert result.kind == "induction"
+    appliance = repeated.using("mi").head_scores(kind=mi.FixedPeriodInduction(period=6))
     assert appliance.scores == result.scores
 
 
-@pytest.mark.parametrize(
-    ("kind", "period"), [("duplicate_token", 6), ("induction", 0), ("induction", 2.0)]
-)
-def test_a_bad_period_refuses_and_the_remedy_runs(repeated, kind, period) -> None:
+@pytest.mark.parametrize("period", [0, -3, 2.0, True, "6"])
+def test_a_bad_period_refuses_and_the_remedy_runs(repeated, period) -> None:
     with pytest.raises(MechInterpError) as excinfo:
-        mi.head_scores(repeated, kind=kind, period=period)
+        mi.FixedPeriodInduction(period=period)
     assert excinfo.value.fields["code"] == "mi_head_score_period_invalid"
-    assert mi.head_scores(repeated, kind="induction", period=6).eligible_rows == (12, 12)
-    assert mi.head_scores(repeated, kind=kind).kind == kind
+    remedy = mi.head_scores(repeated, kind=mi.FixedPeriodInduction(period=6))
+    assert remedy.eligible_rows == (12, 12)
+    assert mi.head_scores(repeated, kind="induction").kind == "induction"

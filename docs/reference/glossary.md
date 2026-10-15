@@ -350,7 +350,7 @@ is documented unstable and may be renamed or removed without a compatibility ali
 
 | Edge attribution patching over the component graph | `edge_scores`, `corrupted`, `metric`, `method`, `eap`, `eap_ig`, `steps`, `example_reduction`, `mean`, `sum` | unstable -- no deprecation shim owed |
 | Circuit faithfulness areas | `circuit_performance_ratio`, `circuit_model_difference`, `faithfulness`, `fractions`, `log_scale` | unstable -- no deprecation shim owed |
-| Fixed-period induction score | `head_scores(..., kind="induction", period=)`, `period` | unstable -- no deprecation shim owed |
+| Fixed-period induction score | `FixedPeriodInduction`, `head_scores(..., kind=FixedPeriodInduction(period=n))`, `period` | unstable -- no deprecation shim owed |
 <!-- MECHINTERP-KIT-UNSTABLE-INDEX:END -->
 
 `component_graph(trace)` returns a `ComponentGraph`: read-only `nodes`, `receivers` and `edges`

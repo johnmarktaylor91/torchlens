@@ -9,8 +9,8 @@ conventions so numbers are comparable. Reads only, so FUSED attention is
 fully supported -- TLens needs an eager reload to find induction heads on a
 fused model. Empty-eligible rows are masked and reported, never scored zero.
 
-``period=n`` (induction only) swaps the token-equality mask for the fixed
-repeat of a sequence with period ``n``: destination ``i`` is scored on the
+``kind=FixedPeriodInduction(period=n)`` swaps the induction kind's
+token-equality mask for the fixed repeat of a sequence with period ``n``: destination ``i`` is scored on the
 one source ``i - n + 1`` and counts only when its token equals the token at
 ``i - n``. On ``[bos] + R + R`` with ``len(R) = n`` this is the usual
 repeated-random-token induction score, and a token that repeats inside
@@ -34,10 +34,44 @@ import torch
 from ._errors import refuse
 from ._heads import _attention_modules
 
-__all__ = ["HeadScoreResult", "head_scores"]
+__all__ = ["FixedPeriodInduction", "HeadScoreResult", "head_scores"]
 
 _KINDS = ("previous_token", "duplicate_token", "induction")
 _MEASURES = ("mul", "abs")
+
+
+@dataclass(frozen=True)
+class FixedPeriodInduction:
+    """The induction kind on a sequence repeated with a known period.
+
+    Pass it as ``head_scores(trace, kind=FixedPeriodInduction(period=n))``:
+    destination ``i`` is scored on the one source ``i - n + 1`` and counts
+    only when its token equals the token at ``i - n``. On ``[bos] + R + R``
+    with ``len(R) = n`` this is the repeated-random-token induction score.
+    The result reports ``kind="induction"`` and records the period in its
+    provenance.
+
+    Parameters
+    ----------
+    period:
+        The repeated sequence's length, a positive int.
+    """
+
+    period: int
+
+    def __post_init__(self) -> None:
+        """Refuse a period that is not a positive int."""
+
+        period = self.period
+        if isinstance(period, bool) or not isinstance(period, int) or period < 1:
+            refuse(
+                code="mi_head_score_period_invalid",
+                message=f"FixedPeriodInduction got period={period!r}; the period is a "
+                "positive int (the repeated sequence's length).",
+                remedy="pass FixedPeriodInduction(period=<the repeated sequence's length>), "
+                "or kind='induction' for the token-equality mask",
+                period=period,
+            )
 
 
 @dataclass(frozen=True)
@@ -141,31 +175,13 @@ def _score_layer(
     return tuple(layer_scores)
 
 
-def _check_period(kind: str, period: Any) -> None:
-    """Refuse a ``period=`` that is not a positive int or is given with a non-induction kind."""
-
-    if period is None:
-        return
-    if kind != "induction" or isinstance(period, bool) or not isinstance(period, int) or period < 1:
-        refuse(
-            code="mi_head_score_period_invalid",
-            message=f"head_scores got period={period!r} with kind={kind!r}; period is a "
-            "positive int and applies to kind='induction' only.",
-            remedy="pass kind='induction' with period=<the repeated sequence's length>, or "
-            "drop period= for the token-equality mask",
-            period=period,
-            kind=kind,
-        )
-
-
 def head_scores(
     trace: Any,
     *,
-    kind: str = "induction",
+    kind: str | FixedPeriodInduction = "induction",
     measure: str = "mul",
     layers: Any = None,
     pattern_source: Any = None,
-    period: int | None = None,
 ) -> HeadScoreResult:
     """Score every head against one taxonomy mask (mikit section 8).
 
@@ -174,7 +190,11 @@ def head_scores(
     trace:
         A finished torchlens trace with attention patterns readable.
     kind:
-        ``previous_token`` / ``duplicate_token`` / ``induction``.
+        ``previous_token`` / ``duplicate_token`` / ``induction``, or
+        ``FixedPeriodInduction(period=n)`` to score the fixed repeat of a
+        sequence with period ``n`` (destination ``i`` on source
+        ``i - n + 1``, counted when its token equals the token at
+        ``i - n``) instead of the token-equality induction mask.
     measure:
         ``mul`` (attention mass on mask-eligible sources, TLens-compatible)
         or ``abs`` (1 - L1/2 distance between the pattern row and the mask
@@ -184,11 +204,6 @@ def head_scores(
     pattern_source:
         Optional callable ``module -> [b, head, dst, src]`` pattern override
         (the SSM pseudo-pattern socket); default reads the ``pattern`` facet.
-    period:
-        Optional, ``kind="induction"`` only: score the fixed repeat of a
-        sequence with this period (destination ``i`` on source ``i - period
-        + 1``, counted when its token equals the token at ``i - period``)
-        instead of the token-equality mask.
 
     Returns
     -------
@@ -197,11 +212,13 @@ def head_scores(
         ``None`` scores, never zero.
     """
 
+    period = kind.period if isinstance(kind, FixedPeriodInduction) else None
+    kind = "induction" if isinstance(kind, FixedPeriodInduction) else kind
     if kind not in _KINDS:
         refuse(
             code="mi_head_score_kind_invalid",
             message=f"Unknown head-score kind {kind!r}.",
-            remedy=f"choose among {list(_KINDS)}",
+            remedy=f"choose among {list(_KINDS)}, or FixedPeriodInduction(period=n)",
         )
     if measure not in _MEASURES:
         refuse(
@@ -209,7 +226,6 @@ def head_scores(
             message=f"Unknown head-score measure {measure!r}.",
             remedy=f"choose among {list(_MEASURES)}",
         )
-    _check_period(kind, period)
     modules = _attention_modules(trace)
     if layers is not None:
         from ._heads import _select_layers

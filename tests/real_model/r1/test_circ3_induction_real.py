@@ -8,14 +8,13 @@ with Hugging Face eager attention and no TorchLens): GPT-2 small at revision
 drawn by a ``torch.Generator`` seeded 0, batch 8; a head's score is its mean
 attention from each second-copy query to the token after that token's first
 occurrence. With the model in float64, ``tl.mechinterp.head_scores(...,
-kind="induction")`` equals the oracle's float64 scores within 1e-9 absolute
+kind=FixedPeriodInduction(period=50))`` equals the oracle's float64 scores within 1e-9 absolute
 for all 144 heads and its top 5 heads are the oracle's top 5; float32 is held
 to a 1e-4 ceiling against the same scores.
 
-The scores come from ``head_scores(..., kind="induction", period=50)``, the
-fixed-period mask (destination ``i`` on the one source ``i - 49``, counted
-when its token equals the token at ``i - 50``), which is the oracle's
-definition. The default token-equality mask differs on this input: one row
+The scores come from the fixed-period induction kind, whose mask
+(destination ``i`` on the one source ``i - 49``, counted when its token
+equals the token at ``i - 50``) is the oracle's definition. The default token-equality mask differs on this input: one row
 of ``R`` repeats a token, so it adds a scored row and extra sources (401
 eligible rows instead of 400); the protocol test pins that repeat.
 Runs only in the preflighted offline venue (GATE-ID R1_OFFLINE_VENUE).
@@ -61,7 +60,8 @@ def _scores(model, dtype: torch.dtype):
     model.set_attn_implementation("eager")
     trace = tl.trace(model, _tokens(), capture=tl.options.CaptureOptions(layers_to_save="all"))
     try:
-        return tl.mechinterp.head_scores(trace, kind="induction", measure="mul", period=50)
+        kind = tl.mechinterp.FixedPeriodInduction(period=50)
+        return tl.mechinterp.head_scores(trace, kind=kind, measure="mul")
     finally:
         trace.cleanup()
 
