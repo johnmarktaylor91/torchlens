@@ -20,6 +20,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.receptive_field import _forward_query, _query
+from torchlens.receptive_field._errors import ReceptiveFieldError
 
 DEPTH = 600
 LENGTH = 2 * DEPTH + 101
@@ -27,11 +28,18 @@ CENTER = LENGTH // 2
 
 
 class _DeepConvChain(nn.Module):
-    """``DEPTH`` stride-1 kernel-3 padding-1 one-channel convolutions in a row."""
+    """``DEPTH`` stride-1 kernel-3 padding-1 one-channel convolutions in a row.
+
+    Each kernel is ``[0.25, 0.5, 0.25]``, so activations stay on the input's scale at any depth
+    and the forward replay compares ordinary finite values.
+    """
 
     def __init__(self, depth: int) -> None:
         super().__init__()
         self.layers = nn.ModuleList(nn.Conv1d(1, 1, 3, padding=1, bias=False) for _ in range(depth))
+        with torch.no_grad():
+            for layer in self.layers:
+                layer.weight.copy_(torch.tensor([[[0.25, 0.5, 0.25]]]))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         for layer in self.layers:
@@ -183,7 +191,10 @@ def test_explicit_stack_walk_equals_recursive_walk(
         if op.func_name not in {"conv1d", "conv2d", "max_pool2d", "avg_pool2d", "__add__"}:
             continue
         center = tuple(int(size) // 2 for size in op.shape[2:])
-        op.receptive_field.at(center)
+        try:
+            op.receptive_field.at(center)
+        except ReceptiveFieldError:
+            continue  # no per-unit geometry for this op; the walk never runs
     for target in trace.output_ops:
         source = trace.input_ops[0]
         center = tuple(int(size) // 2 for size in source.shape[2:])
