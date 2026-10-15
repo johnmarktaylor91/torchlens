@@ -248,6 +248,9 @@ def _validate_descriptor_optional(payload: Mapping[str, Any]) -> None:
             raise ValueError(f"token_boundary_v1 {key!r} must be a string or null")
 
 
+# The sidecar door imports this module on its first consultation
+# (``torchlens._io.sidecar._ensure_builtin_families``), so the family is
+# present in a fresh process whatever was imported first.
 if TOKEN_BOUNDARY_FAMILY_ID not in list_sidecar_families():
     register_sidecar_family(
         _TokenBoundaryFamily(
