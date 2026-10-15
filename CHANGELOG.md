@@ -264,6 +264,8 @@
 - **experiment**: `torchlens.experiment.site_sweep` runs a `tl.units(site, mask)` candidate on the
   selected units only (it previously ablated the whole site), and distinct units at one site are
   distinct candidates.
+- **receptive_field**: receptive- and projective-field walks no longer raise RecursionError on deep
+  models (the hop walk keeps its pending steps on an explicit stack; results unchanged).
 
 ### Performance Improvements
 
