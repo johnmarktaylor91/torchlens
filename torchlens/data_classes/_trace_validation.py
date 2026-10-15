@@ -282,6 +282,31 @@ def _loaded_non_torch_validation_replay_unavailable(trace: Any) -> bool:
     return False
 
 
+def _refuse_stats_capture(trace: Any, purpose: str) -> None:
+    """Refuse replay and validation on a ``save="stats"`` trace.
+
+    A reduce-and-discard trace kept no payloads, so a replay has nothing to
+    start from and validation nothing to compare; refusing is the honest
+    outcome (a missing payload must never read as a pass).
+    """
+
+    from ..stats._capture_stats import is_stats_capture
+
+    if not is_stats_capture(trace):
+        return
+    from .._errors import PayloadUnavailableError
+
+    action = "validation" if purpose == "validation_entry" else "replay"
+    raise PayloadUnavailableError(
+        f"this trace was captured with save='stats', which keeps no activation payloads, "
+        f"so {action} has nothing to check against",
+        code="stats_capture_not_replayable",
+        remedy="capture again keeping payloads, tl.trace(model, x, save='all'), and run "
+        f"{action} on that trace; tl.validate(model, x) runs its own full capture",
+        purpose=purpose,
+    )
+
+
 class TraceValidationMixin(_TraceMixinBase):
     """``Trace`` validation surface: forward replay, backward checks, and re-capture."""
 
@@ -314,6 +339,7 @@ class TraceValidationMixin(_TraceMixinBase):
         from ..capture.structure_only import require_structure_only_capability
 
         require_structure_only_capability(self, "live_replay")
+        _refuse_stats_capture(self, "live_replay")
         model = unwrap_compiled_model(model)
 
         return _impl(
@@ -373,6 +399,7 @@ class TraceValidationMixin(_TraceMixinBase):
         from ..capture.structure_only import require_structure_only_capability
 
         require_structure_only_capability(self, "validation_entry")
+        _refuse_stats_capture(self, "validation_entry")
         status = self.validation_replay_status
         if bool(getattr(self, "_loaded_from_bundle", False)) and not status.available:
             setattr(self, "_validation_replay_status", status)
@@ -471,6 +498,7 @@ class TraceValidationMixin(_TraceMixinBase):
         from ..capture.structure_only import require_structure_only_capability
 
         require_structure_only_capability(self, "live_replay")
+        _refuse_stats_capture(self, "live_replay")
         replay_options = merge_replay_options(replay=replay)
 
         from ..intervention.replay import push as _impl
@@ -504,6 +532,7 @@ class TraceValidationMixin(_TraceMixinBase):
         from ..capture.structure_only import require_structure_only_capability
 
         require_structure_only_capability(self, "live_replay")
+        _refuse_stats_capture(self, "live_replay")
         replay_options = merge_replay_options(replay=replay)
 
         from ..intervention.replay import push_from as _impl
@@ -659,6 +688,7 @@ class TraceValidationMixin(_TraceMixinBase):
             from ..capture.structure_only import require_structure_only_capability
 
             require_structure_only_capability(self, "live_replay")
+            _refuse_stats_capture(self, "live_replay")
         # Episode join gate (lane F40c), AFTER the R06 outcome authority:
         # whole-episode replay is an episode-dependent claim across every
         # join, so a MEASURED broken join (exogenous or declared crossing)
@@ -868,6 +898,7 @@ class TraceValidationMixin(_TraceMixinBase):
                 from ..capture.structure_only import require_structure_only_capability
 
                 require_structure_only_capability(self, "live_replay")
+                _refuse_stats_capture(self, "live_replay")
                 if fast:
                     from .._fast_run import run_fast_loaded_trace
 
@@ -892,6 +923,7 @@ class TraceValidationMixin(_TraceMixinBase):
                 from ..capture.structure_only import require_structure_only_capability
 
                 require_structure_only_capability(self, "live_replay")
+                _refuse_stats_capture(self, "live_replay")
                 from .._runnable_execution import raise_analysis_run_unavailable
 
                 raise_analysis_run_unavailable(self)
@@ -902,6 +934,7 @@ class TraceValidationMixin(_TraceMixinBase):
             from ..capture.structure_only import require_structure_only_capability
 
             require_structure_only_capability(self, "live_replay")
+            _refuse_stats_capture(self, "live_replay")
             from .._runnable_execution import _LiveRunOptions, run_live_trace
 
             _refuse_state_compromised_live_run(self)
@@ -989,6 +1022,7 @@ class TraceValidationMixin(_TraceMixinBase):
         from ..capture.structure_only import require_structure_only_capability
 
         require_structure_only_capability(self, "live_replay")
+        _refuse_stats_capture(self, "live_replay")
 
         run_model: nn.Module | None
         if isinstance(model, nn.Module):
@@ -1135,6 +1169,7 @@ class TraceValidationMixin(_TraceMixinBase):
         from ..capture.structure_only import require_structure_only_capability
 
         require_structure_only_capability(self, "validation_entry")
+        _refuse_stats_capture(self, "validation_entry")
         from ..validation.invariants import check_metadata_invariants as _impl
 
         return _impl(self)
@@ -1258,6 +1293,7 @@ class TraceValidationMixin(_TraceMixinBase):
         from ..capture.structure_only import require_structure_only_capability
 
         require_structure_only_capability(self, "backward_grads")
+        _refuse_stats_capture(self, "backward_grads")
         _refuse_loaded_backward_capture(self, "log_backward")
         spec = get_backend_spec(getattr(self, "backend", "torch"))
         if not spec.capabilities.backward_capture:
@@ -1303,6 +1339,7 @@ class TraceValidationMixin(_TraceMixinBase):
         from ..capture.structure_only import require_structure_only_capability
 
         require_structure_only_capability(self, "backward_grads")
+        _refuse_stats_capture(self, "backward_grads")
         _refuse_loaded_backward_capture(self, "recording_backward")
         spec = get_backend_spec(getattr(self, "backend", "torch"))
         if not spec.capabilities.backward_capture:

@@ -1371,6 +1371,28 @@ if TYPE_CHECKING:
     from .trace import Trace
 
 
+def _refuse_reduced_payload_read(slot: Callable[..., Any], source_trace: Any) -> None:
+    """Refuse a payload read on a ``save="stats"`` trace (reduce and discard).
+
+    Such a trace folded every out into a ``Spine`` and kept no payload, so a
+    silent ``None`` would read as "this op produced nothing".
+    """
+
+    from ..stats._capture_stats import is_stats_capture
+
+    if not is_stats_capture(source_trace):
+        return
+    label = slot("label") or slot("layer_label") or slot("_label_raw")
+    raise PayloadUnavailableError(
+        f"op {label} was captured with save='stats': its out was folded into a Spine "
+        "and no payload was kept",
+        code="activation_reduced_to_stats",
+        remedy="read the statistics with tl.stats.site_spines(trace)[label], or capture "
+        "again keeping payloads with tl.trace(model, x, save='all')",
+        label=str(label),
+    )
+
+
 class Op(OpCardHtmlMixin, _SelectionOperand):
     """Metadata for a single tensor operation (one pass of one layer).
 
@@ -1913,6 +1935,8 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
                     remedy="re-run with save=... to retain this activation",
                     label=str(label),
                 )
+            if out is None and slot("_tracing_finished") and source_trace is not None:
+                _refuse_reduced_payload_read(slot, source_trace)
             if not getattr(source_trace, "_postprocessing_active", False):
                 state = {
                     "out": out,

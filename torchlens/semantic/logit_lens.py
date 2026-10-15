@@ -30,8 +30,9 @@ ratification.
 
 from __future__ import annotations
 
+import math
 import warnings
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -381,48 +382,19 @@ def logit_lens(
         Per-layer projections in block order.
     """
 
-    head = _find_default_head(trace)
-    final_logits = _read_final_logits(head)
-    if lens is not None:
-        addresses = _resolve_layer_addresses(trace, facet=facet, layers=layers)
-        lens_by_address = _user_lens_by_address(lens, addresses)
-        if validate:
-            _check_user_lens(trace, lens, lens_by_address, head, (rtol, atol))
-        lens_source, validated = "user", False
-    else:
-        if head is None:
-            raise LogitLensError(
-                "No module in this trace exposes the 'unembed_weight' facet (or a vision "
-                "head's 'classifier_weight' / 'image_projection_weight' facet), so the "
-                "model's own lens cannot be reconstructed. Remedy: register a facet "
-                "recipe producing the language_model_head facet names for this "
-                "architecture (tl.facets.register), or pass lens= explicitly.",
-                code="logit_lens_head_unavailable",
-            )
-        addresses = _resolve_layer_addresses(trace, facet=facet, layers=layers, tower=head.tower)
-        default_lens = _build_head_lens(head)
-        if validate:
-            _validate_lens(trace, head, default_lens, rtol=rtol, atol=atol)
-        lens_by_address = dict.fromkeys(addresses, default_lens)
-        lens_source, validated = head.kind, validate
-    entries: list[LogitLensEntry] = []
-    with torch.no_grad():
-        for layer_index, address in enumerate(addresses):
-            hidden = _facet_tensor(trace.modules[address].facets[facet], name=facet)
-            entries.append(
-                LogitLensEntry(
-                    address=address,
-                    layer_index=layer_index,
-                    facet=facet,
-                    logits=lens_by_address[address](hidden.detach()),
-                )
-            )
+    setup = _prepare_lens(
+        trace, facet=facet, layers=layers, lens=lens, validate=validate, rtol=rtol, atol=atol
+    )
+    entries = [
+        LogitLensEntry(address=address, layer_index=layer_index, facet=facet, logits=logits)
+        for layer_index, address, logits in _iter_layer_logits(trace, setup)
+    ]
     return LogitLensResult(
         entries=tuple(entries),
         facet=facet,
-        lens_source=lens_source,
-        validated=validated,
-        final_logits=final_logits,
+        lens_source=setup.lens_source,
+        validated=setup.validated,
+        final_logits=setup.final_logits,
     )
 
 
@@ -439,6 +411,7 @@ def logit_lens_predictions(
     rtol: float = 1e-4,
     atol: float = 1e-5,
     include_native: bool = True,
+    mask_input: bool = False,
 ) -> LogitLensPredictions:
     """Stream per-layer top-k predictions without retaining full projections.
 
@@ -468,6 +441,15 @@ def logit_lens_predictions(
     include_native:
         Whether to append the native-output row when captured logits are
         readable.
+    mask_input:
+        ``True`` bans the model input's own token ids from every row's
+        predictions: each batch row's input tokens get ``-inf`` logits
+        before any reduction, so top-k, the ``logsumexp`` denominator,
+        probabilities and ranks all see the masked vocabulary. This cannot
+        be recomputed from the retained rows afterwards (their
+        denominators are already reduced), which is why it is a knob here.
+        The trace's first input must be a saved integer token-id tensor
+        (``logit_lens_mask_input_unavailable`` otherwise). Off by default.
 
     Returns
     -------
@@ -480,8 +462,114 @@ def logit_lens_predictions(
             f"k must be a positive integer, got {k!r}. Remedy: pass k >= 1.",
             code="logit_lens_k_invalid",
         )
+    setup = _prepare_lens(
+        trace, facet=facet, layers=layers, lens=lens, validate=validate, rtol=rtol, atol=atol
+    )
+    head, final_logits = setup.head, setup.final_logits
+    token_ids = tuple(int(token) for token in tokens) if tokens is not None else ()
+    banned = _input_token_ids(trace) if mask_input else None
+    rows: list[LogitLensPrediction] = []
+    sequence_length: int | None = None
+    with torch.no_grad():
+        for layer_index, address, projected in _iter_layer_logits(trace, setup):
+            if sequence_length is None and projected.ndim >= 3:
+                sequence_length = int(projected.shape[-2])
+            rows.append(
+                _reduce_projection_row(
+                    projected,
+                    address=address,
+                    layer_index=layer_index,
+                    facet=facet,
+                    provenance=PROVENANCE_PROJECTED,
+                    position_base=0,
+                    full_length=sequence_length,
+                    k=k,
+                    positions=positions,
+                    token_ids=token_ids,
+                    banned_ids=banned,
+                )
+            )
+            del projected
+        if include_native and final_logits is not None:
+            native_length = int(final_logits.shape[-2]) if final_logits.ndim >= 3 else 1
+            full_length = sequence_length if sequence_length is not None else native_length
+            head_address = (head.address if head is not None else None) or "<head>"
+            rows.append(
+                _reduce_projection_row(
+                    final_logits,
+                    address=head_address,
+                    layer_index=None,
+                    facet=None,
+                    provenance=PROVENANCE_NATIVE,
+                    # HF logits_to_keep projects the LAST K positions, so the
+                    # native row's absolute positions start at S - K.
+                    position_base=max(0, full_length - native_length),
+                    full_length=full_length,
+                    k=k,
+                    positions=positions,
+                    token_ids=token_ids,
+                    banned_ids=banned,
+                )
+            )
+    return LogitLensPredictions(
+        rows=tuple(rows),
+        k=k,
+        facet=facet,
+        lens_source=setup.lens_source,
+        validated=setup.validated,
+    )
+
+
+@dataclass(frozen=True)
+class _LensSetup:
+    """A resolved, checked lens for one trace (shared by every lens reader).
+
+    Attributes
+    ----------
+    facet:
+        The hidden-state facet each layer is read from.
+    addresses:
+        Block addresses to project, in block order.
+    lens_by_address:
+        The per-address lens callable.
+    lens_source:
+        ``"user"`` or the default head's kind.
+    validated:
+        Whether a default lens was numerically validated.
+    head:
+        The default head, when the trace has one.
+    final_logits:
+        The head's captured output logits, when readable.
+    """
+
+    facet: str
+    addresses: tuple[str, ...]
+    lens_by_address: Mapping[str, LensFunc]
+    lens_source: str
+    validated: bool
+    head: _DefaultHead | None
+    final_logits: torch.Tensor | None
+
+
+def _prepare_lens(
+    trace: Any,
+    *,
+    facet: str,
+    layers: Sequence[str] | None,
+    lens: LensFunc | Mapping[str, LensFunc] | None,
+    validate: bool,
+    rtol: float,
+    atol: float,
+) -> _LensSetup:
+    """Resolve the head, the layers and the lens, and check the lens once.
+
+    The one home of the lens rule for :func:`logit_lens`,
+    :func:`logit_lens_predictions` and ``tl.stats.measure_trajectory``.
+    """
+
     head = _find_default_head(trace)
     final_logits = _read_final_logits(head)
+    lens_by_address: Mapping[str, LensFunc]
     if lens is not None:
         addresses = _resolve_layer_addresses(trace, facet=facet, layers=layers)
         lens_by_address = _user_lens_by_address(lens, addresses)
@@ -504,57 +592,79 @@ def logit_lens_predictions(
             _validate_lens(trace, head, default_lens, rtol=rtol, atol=atol)
         lens_by_address = dict.fromkeys(addresses, default_lens)
         lens_source, validated = head.kind, validate
-    token_ids = tuple(int(token) for token in tokens) if tokens is not None else ()
-    rows: list[LogitLensPrediction] = []
-    sequence_length: int | None = None
-    with torch.no_grad():
-        for layer_index, address in enumerate(addresses):
-            hidden = _facet_tensor(trace.modules[address].facets[facet], name=facet)
-            projected = lens_by_address[address](hidden.detach())
-            if sequence_length is None and projected.ndim >= 3:
-                sequence_length = int(projected.shape[-2])
-            rows.append(
-                _reduce_projection_row(
-                    projected,
-                    address=address,
-                    layer_index=layer_index,
-                    facet=facet,
-                    provenance=PROVENANCE_PROJECTED,
-                    position_base=0,
-                    full_length=sequence_length,
-                    k=k,
-                    positions=positions,
-                    token_ids=token_ids,
-                )
-            )
-            del projected
-        if include_native and final_logits is not None:
-            native_length = int(final_logits.shape[-2]) if final_logits.ndim >= 3 else 1
-            full_length = sequence_length if sequence_length is not None else native_length
-            head_address = (head.address if head is not None else None) or "<head>"
-            rows.append(
-                _reduce_projection_row(
-                    final_logits,
-                    address=head_address,
-                    layer_index=None,
-                    facet=None,
-                    provenance=PROVENANCE_NATIVE,
-                    # HF logits_to_keep projects the LAST K positions, so the
-                    # native row's absolute positions start at S - K.
-                    position_base=max(0, full_length - native_length),
-                    full_length=full_length,
-                    k=k,
-                    positions=positions,
-                    token_ids=token_ids,
-                )
-            )
-    return LogitLensPredictions(
-        rows=tuple(rows),
-        k=k,
+    return _LensSetup(
         facet=facet,
+        addresses=tuple(addresses),
+        lens_by_address=lens_by_address,
         lens_source=lens_source,
         validated=validated,
+        head=head,
+        final_logits=final_logits,
     )
+
+
+def _iter_layer_logits(trace: Any, setup: _LensSetup) -> Iterator[tuple[int, str, torch.Tensor]]:
+    """Yield ``(layer_index, address, logits)`` one layer at a time.
+
+    Each layer is projected under ``torch.no_grad`` from its detached facet
+    value; the caller reduces and drops it before the next layer, so at
+    most one ``[batch, positions, vocab]`` projection is alive.
+    """
+
+    for layer_index, address in enumerate(setup.addresses):
+        with torch.no_grad():
+            hidden = _facet_tensor(trace.modules[address].facets[setup.facet], name=setup.facet)
+            logits = setup.lens_by_address[address](hidden.detach())
+        yield layer_index, address, logits
+
+
+def _input_token_ids(trace: Any) -> torch.Tensor:
+    """Return the trace's integer model input as ``[batch, positions]`` token ids.
+
+    ``mask_input=True`` bans these ids; a trace whose first input is not a
+    saved integer tensor refuses (``logit_lens_mask_input_unavailable``).
+    """
+
+    labels = list(getattr(trace, "input_layers", ()) or ())
+    value: Any = None
+    if labels:
+        try:
+            value = trace[labels[0]].out
+        except Exception:  # noqa: BLE001 -- any unreadable input means "unavailable" below
+            value = None
+    if not isinstance(value, torch.Tensor) or value.is_floating_point() or value.is_complex():
+        raise LogitLensError(
+            "mask_input=True bans the input's own token ids, but this trace's first model "
+            "input is not a saved integer token-id tensor (a model fed embeddings has no "
+            "token ids to ban). Remedy: trace the model on token ids with activations "
+            "saved, e.g. tl.trace(model, input_ids), or drop mask_input=True.",
+            code="logit_lens_mask_input_unavailable",
+        )
+    ids = value.detach().long()
+    return ids.unsqueeze(0) if ids.ndim == 1 else ids.reshape(ids.shape[0], -1)
+
+
+def _mask_input_tokens(logits: torch.Tensor, token_ids: torch.Tensor) -> torch.Tensor:
+    """Set every input token's logit to ``-inf`` in each batch row, before any reduction.
+
+    ``logits`` is ``[batch, positions, vocab]``; ``token_ids`` is
+    ``[batch, input_positions]``. Each row bans the tokens of its own input
+    at every position (the tuned-lens ``mask_input`` meaning).
+    """
+
+    batch, vocab = int(logits.shape[0]), int(logits.shape[-1])
+    if int(token_ids.shape[0]) != batch:
+        raise LogitLensError(
+            f"mask_input=True: the input has {int(token_ids.shape[0])} token rows but the "
+            f"projected logits have {batch} batch rows. Remedy: pass one token row per batch "
+            "row, or drop mask_input=True.",
+            code="logit_lens_mask_input_unavailable",
+        )
+    ids = token_ids.to(logits.device)
+    valid = (ids >= 0) & (ids < vocab)
+    banned = torch.zeros(batch, vocab, dtype=torch.bool, device=logits.device)
+    banned.scatter_(1, ids.clamp(0, vocab - 1), valid)
+    return logits.masked_fill(banned.unsqueeze(-2), -math.inf)
 
 
 def _reduce_projection_row(
@@ -569,6 +679,7 @@ def _reduce_projection_row(
     k: int,
     positions: Sequence[int] | None,
     token_ids: tuple[int, ...],
+    banned_ids: torch.Tensor | None = None,
 ) -> LogitLensPrediction:
     """Reduce one full projection to its retained prediction summary.
 
@@ -589,6 +700,8 @@ def _reduce_projection_row(
     if work.ndim > 3:
         work = work.reshape(-1, work.shape[-2], work.shape[-1])
     work = work.float()
+    if banned_ids is not None:
+        work = _mask_input_tokens(work, banned_ids)
     vocab = int(work.shape[-1])
     covered = _row_positions(
         n_row_positions=int(work.shape[-2]),

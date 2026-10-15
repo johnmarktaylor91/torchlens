@@ -2591,6 +2591,8 @@ def trace(
 
     - ``'all'`` (default) - save outs for every layer.
     - ``'none'`` / ``None`` / ``[]`` - save no outs (metadata only).
+    - ``'stats'`` - reduce and discard: fold every out into a ``Spine`` during
+      the forward and keep no payload (read with ``tl.stats.site_spines``).
     - A predicate selector, e.g. ``tl.func("relu")``, ``tl.in_module("encoder")``,
       or combinators such as ``tl.func("conv2d") & tl.followed_by(tl.func("relu"))``.
     - A list containing any mix of:
@@ -2886,6 +2888,35 @@ def _model_type_remedy(model: Any) -> str:
     )
 
 
+def _resolve_stats_save_level(
+    save: Any,
+    *,
+    activation_transform: Any,
+    save_raw_activations: Any,
+) -> Any:
+    """Turn ``save="stats"`` into the reduce-and-discard ``SaveOptions``.
+
+    ``"stats"`` is a save level beside ``"all"`` and ``"none"``: every site's
+    out folds into a ``Spine`` during the forward and no payload is kept.
+    It owns the activation transform, so an explicit transform refuses.
+    """
+
+    if not (isinstance(save, str) and save.lower() == "stats"):
+        return save
+    if activation_transform is not MISSING or save_raw_activations is not MISSING:
+        raise ArgumentConflictError(
+            "save='stats' folds each out into a Spine through its own reducer, so it cannot "
+            "be combined with activation_transform= or save_raw_activations=",
+            code="save_stats_conflict",
+            remedy="drop activation_transform=/save_raw_activations=: "
+            "tl.trace(model, x, save='stats'), or keep payloads with save='all'",
+            argument="save",
+        )
+    from .stats._capture_stats import stats_reducer
+
+    return SaveOptions(activation_transform=stats_reducer(), save_raw_activations=False)
+
+
 def _trace_torch_model(
     model: nn.Module | Callable[..., Any],
     input_args: str | torch.Tensor | list[Any] | tuple[Any, ...],
@@ -3118,6 +3149,9 @@ def _trace_torch_model(
         input_args,
         input_kwargs,
         admit_meta=bool(capture_options.structure_only),
+    )
+    save = _resolve_stats_save_level(
+        save, activation_transform=activation_transform, save_raw_activations=save_raw_activations
     )
     routed_save, capture_options = _route_save_label_selection(
         save, capture, capture_options, model
