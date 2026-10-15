@@ -30,6 +30,14 @@
   returns a `torchlens.intervention.Direction` with a `BasisProvenance` record, a native
   `.steer(m)` edit and `.to_steering_vectors()` / `.to_repeng()` converters whose library
   objects reproduce the native steer's logits.
+- **mechinterp**: `torchlens.mechinterp.patch_query_heads_grid` (documented unstable) builds a
+  `[layer, head]` patching grid over query heads at a key or value site under grouped-query
+  attention; each cell patches one query head's copy of its key/value group at the expansion op.
+  New refusals `mi_kv_expansion_unavailable`, `mi_kv_expansion_ambiguous` and
+  `mi_kv_heads_not_grouped`.
+- **tviz**: `torchlens.tviz.receipt_from_patch_grid` sets `CausalReceipt.effect_source` from a
+  grid's `effect_site` receipt, and refuses `kv_groups=` for a query-head interceptor grid
+  (`tv_receipt_invalid`).
 
 ### Bug Fixes
 

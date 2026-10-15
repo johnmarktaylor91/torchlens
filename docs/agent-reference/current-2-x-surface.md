@@ -1040,12 +1040,15 @@
   `residual_decomposition` / `full_decomposition` (bitwise-closed),
   `direct_logit_contributions` (DLA), `attention_head_contributions`,
   `head_scores`, `patch_heads_grid` / `patch_residual_grid` (turnkey
-  `PatchGrid` results), `lowered_counterfactual` (patch one head on a FUSED
+  `PatchGrid` results), `patch_query_heads_grid` (per-query-head k/v
+  patching under grouped-query attention at the op that expands each
+  key/value group; SDPA with `enable_gqa` refuses typed),
+  `lowered_counterfactual` (patch one head on a FUSED
   SDPA model via exact implementation-independent lowering),
   `resolve_alias` / `translation_table` (TLens spellings resolve against a
   trace; tuple and compact `"k6"` forms), `test_prompt`, `apply_norm_scale`
   (cached-scale LayerNorm linearization, TLens-parity bit-exact), retention
-  planning (`retention_plan`). ~34 names; `MechInterpError` family.
+  planning (`retention_plan`). ~38 names; `MechInterpError` family.
 - TRAINING-TIME WATCH (F26; DOCUMENTED-UNSTABLE): `torchlens.trackers` is the
   attach-once watch engine over the C06 records -- `watch`/`WatchSession`,
   sinks (TensorBoardSink incl. `add_histogram_raw` precomputed buckets,
