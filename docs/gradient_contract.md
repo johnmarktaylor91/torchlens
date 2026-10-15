@@ -24,7 +24,9 @@ this one) and silent for training, so a caller who needs the gradient says so wi
 - The capture doors, `fork.do` (replay), `do(model=, x=)` (rerun), `attach_hooks` + `run` and
   `spec.bind(model)` keep whatever the verb keeps. `push(replay=ReplayOptions(differentiable=True))`
   re-leafs the replayed values by design, so no gradient reaches the parameters upstream of the
-  edit under any verb; the gradient stops at the replay frontier.
+  edit under any verb; the gradient stops at the replay frontier. To train parameters upstream of
+  an edit, use a live door (`tl.when(site, edit).bind(model)(x)` or `tl.trace(model, x,
+  intervene=...)`).
 
 ## Asking for the gradient: `keep_grad`
 
@@ -35,7 +37,10 @@ keeps the graph. It also raises when the site value has no graph to keep (`reaso
 `site_has_no_graph`) or when gradients are disabled (`grad_disabled`).
 `InterventionDecision(keep_grad=True)` runs the same check; `keep_grad=False`, the default,
 checks nothing. The check is on the edit, not the door: under differentiable replay a keeping
-verb passes it and still delivers no gradient upstream (see the matrix).
+verb passes it and still delivers no gradient upstream (see the matrix), so there `keep_grad`
+warns once per session with code `keep_grad_replay_frontier`: the edit stays connected inside the
+replayed computation, parameters upstream of the replay frontier get no gradient, and the live
+door `tl.when(site, keep_grad(edit)).bind(model)(x)` reaches them.
 
 The graph-keeping spellings:
 
@@ -85,7 +90,9 @@ layer's weight a gradient, equal to the gradient of the same edit applied by han
 forward hook; `cut` means it gives none. `raises:<code>` is a typed refusal. Under
 `do(tl.subspace(...))` the verbs act on the subspace coordinates or write a value's component (see
 [subspace edits](intervention_explainers.md#subspace-edits-the-component-along-a-basis)), and the
-projection edits refuse `subspace_edit_unsupported` there.
+projection edits refuse `subspace_edit_unsupported` there. Every `push(differentiable=True)` cell
+reads `cut` because the replay frontier re-leafs the edited value; each of its `keep_grad` cells
+that does not raise also carries the `keep_grad_replay_frontier` warning, and the test checks it.
 
 | Door | Verb | `keep_grad` off | `keep_grad` on |
 | --- | --- | --- | --- |

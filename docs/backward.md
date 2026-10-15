@@ -138,7 +138,10 @@ patched.log_backward(patched[patched.output_layers[0]].out.sum())
 ```
 
 Saved frontier tensors enter replay as fresh leaves, so gradients flow within the replayed
-computation and do not leak into the source run's buffers.
+computation and do not leak into the source run's buffers. Parameters upstream of the replay
+frontier therefore get no gradient: to train them through an edit, run the edit on a live forward
+(`tl.when(site, edit).bind(model)(x)`), and `tl.intervention.keep_grad(edit)` warns
+`keep_grad_replay_frontier` once per session when it fires under differentiable replay.
 
 Backward-only replay from a saved trace is intentionally deferred. A saved TorchLens backward
 projection does not contain PyTorch's live autograd graph or saved-tensor closures; reconstructing

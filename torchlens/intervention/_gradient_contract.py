@@ -39,6 +39,7 @@ __all__ = ["keep_grad"]
 _GUIDE = "see docs/gradient_contract.md"
 _ZERO_REMEDY = "tl.intervention.keep_grad(tl.scale(0.0)) writes zeros and keeps the graph"
 _WARNED_CODES: set[str] = set()
+_FRONTIER_CODE = "keep_grad_replay_frontier"
 _FIXED_REMEDY = (
     "tl.intervention.keep_grad(tl.intervention.compose(tl.scale(0.0), tl.add(value))) "
     "writes a fixed value and keeps the graph with a zero gradient"
@@ -122,10 +123,9 @@ def _check(out: Any, result: Any, hook: Any, verb: str) -> None:
 def _disclose_replay_frontier(where: tuple[str, str]) -> None:
     """Warn once per session that differentiable replay reaches nothing upstream."""
 
-    code = "keep_grad_replay_frontier"
-    if code in _WARNED_CODES:
+    if _FRONTIER_CODE in _WARNED_CODES:
         return
-    _WARNED_CODES.add(code)
+    _WARNED_CODES.add(_FRONTIER_CODE)
     verb, site = where
     warnings.warn(
         TorchLensWarning(
@@ -136,7 +136,7 @@ def _disclose_replay_frontier(where: tuple[str, str]) -> None:
             "of the site, run the edit on a live forward, e.g. "
             "tl.when(tl.module(name), tl.intervention.keep_grad(edit)).bind(model)(x), "
             f"or tl.trace(model, x, intervene=tl.when(tl.module(name), edit)) ({_GUIDE})",
-            code=code,
+            code="keep_grad_replay_frontier",
             affected_sites=[site],
         ),
         stacklevel=2,

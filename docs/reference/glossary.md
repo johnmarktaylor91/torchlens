@@ -485,7 +485,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   graph-keeping zero; `keep_grad(tl.intervention.compose(tl.scale(0.0), tl.add(value)))` the
   graph-keeping fixed value. A wrapped `Edit` carries `("keep_grad", True)` in its metadata and
   `portability="opaque_audit"`. A backward edit or a non-edit refuses `keep_grad_edit_invalid`.
-  Which verbs keep the graph under which door: docs/gradient_contract.md.
+  Under differentiable replay (`push(replay=ReplayOptions(differentiable=True))`) a passing
+  check warns once per session with code `keep_grad_replay_frontier`: parameters upstream of the
+  replay frontier get no gradient; the live door `tl.when(site, keep_grad(edit)).bind(model)(x)`
+  reaches them. Which verbs keep the graph under which door: docs/gradient_contract.md.
 
 **InterventionDecision.keep_grad** — *documented-unstable*
 : `True` runs the same check as `torchlens.intervention.keep_grad(edit)` on the decision's hook
@@ -1676,7 +1679,21 @@ deprecation shim owed*
   construction (vacuous direction). Resolution is geometry-only (no payload
   reads — unsaved sites resolve); relation is `exact`; PARAM/EDGE
   populations refuse `selection_kind_incompatible` (a parameter-space
-  direction is a named possibility, not a promise).
+  direction is a named possibility, not a promise). PORTABLE ROTATIONS: with a
+  builtin verb the staged per-site edit is the builtin `subspace_edit`, whose
+  stored arguments are the verb, the float64 orthonormal rows it applies (a
+  tensor sidecar), the bound `axis`, the rows' `basis_sha256` and the basis
+  provenance (`origin`, `method`, `origin_sha256`, `source_dtype`), so
+  `tl.io.save_intervention(trace, path, level="portable")` reloads it as the
+  same projection, never as the plain verb over the whole site. A rotation
+  learned elsewhere (DAS, ReFT) is applied as `tl.subspace(site, R[:k],
+  origin=...)`; TorchLens applies it and does not fit it. At load a malformed
+  field refuses `subspace_spec_invalid`, rows changed after saving refuse
+  `subspace_spec_basis_tampered`, non-orthonormal rows refuse
+  `subspace_spec_basis_not_orthonormal`. A verb that is not builtin
+  (`patch_from`, population verbs, hook callables) keeps the edit
+  `opaque_audit`. `BasisProvenance.source_dtype` is the dtype of the caller's
+  basis before the float64 canonicalisation.
 
 **SelectionError / selection refusal codes** — *unstable — no deprecation
 shim owed; S2-gated*

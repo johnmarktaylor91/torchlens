@@ -318,6 +318,8 @@ _WARN_ONCE_STATE = frozenset(
         ("torchlens/bridge/sae.py", "_WARNED_CODES"),
         # Per-unit statistics state-size warning; reset row lives in tests/conftest.py.
         ("torchlens/stats/_per_unit.py", "_WARNED_CODES"),
+        # keep_grad differentiable-replay disclosure; reset row lives in tests/conftest.py.
+        ("torchlens/intervention/_gradient_contract.py", "_WARNED_CODES"),
         ("torchlens/utils/_torch_compat.py", "_warned_missing_capabilities"),
         ("torchlens/utils/introspection.py", "_col_offset_cache_warned"),
         ("torchlens/validation/_stock_layer_grads.py", "_PASS_INDEX_PARSE_WARNED"),

@@ -93,7 +93,8 @@ class BasisProvenance:
     header, so an identical claim can be re-checked bit-exactly.
     ``n_vectors`` x ``space_dim`` is the canonical basis geometry; ``dim``
     and ``tol`` are the axis binding and support threshold the producer was
-    built with.
+    built with. ``source_dtype`` is the dtype the caller's basis had before
+    the float64 canonicalisation (a learned rotation's training precision).
     """
 
     origin: str
@@ -103,6 +104,7 @@ class BasisProvenance:
     space_dim: int
     dim: int
     tol: float
+    source_dtype: str = "float64"
 
     def summary(self) -> str:
         """Return the compact one-line disclosure used in provenance sources."""
@@ -319,6 +321,7 @@ def subspace(
         space_dim=int(canonical.shape[1]),
         dim=dim,
         tol=tol,
+        source_dtype=str(basis.dtype).removeprefix("torch."),
     )
     return Selection(
         _SubspaceTerm(

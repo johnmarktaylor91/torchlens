@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import copy
 import re
+import warnings
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.intervention import (
     InterventionDecision,
+    _gradient_contract,
     add,
     clamp,
     compose,
@@ -254,8 +256,19 @@ def _door_bind(model: nn.Module, edit: Any) -> torch.Tensor:
 
 
 def _door_push_differentiable(model: nn.Module, edit: Any) -> torch.Tensor:
+    """Differentiable replay; a keep_grad edit that keeps the graph also discloses the frontier."""
+
     replay = tl.options.ReplayOptions(hooks={tl.label(_SITE): edit}, differentiable=True)
-    return _out(_ready(model).push(replay=replay))
+    _gradient_contract._WARNED_CODES.clear()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        output = _out(_ready(model).push(replay=replay))
+    codes = {getattr(record.message, "fields", {}).get("code") for record in caught}
+    kept = dict(getattr(edit, "metadata", ())).get("keep_grad") or getattr(
+        edit, "_torchlens_keep_grad", False
+    )
+    assert ("keep_grad_replay_frontier" in codes) == bool(kept), (codes, kept)
+    return output
 
 
 def _door_units(model: nn.Module, edit: Any) -> torch.Tensor:

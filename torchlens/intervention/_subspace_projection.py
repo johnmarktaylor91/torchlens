@@ -30,6 +30,17 @@ Each edit verb has one of three meanings here:
 * every other verb refuses ``subspace_edit_unsupported`` with the spelling
   that works.
 
+Portability: a projected builtin verb is itself a builtin edit named
+``subspace_edit`` whose stored arguments are the inner verb and the basis
+actually applied (the float64 orthonormal rows, saved as a tensor sidecar),
+the bound axis, the rows' sha256, and the basis provenance (``origin``,
+``method``, the caller's basis digest and dtype). A saved spec therefore
+reloads as the same projection, never as the plain verb over the whole site,
+and a malformed, tampered or non-orthonormal stored basis refuses at load.
+This is how a rotation learned elsewhere (DAS, ReFT) travels: its first
+``k`` rows are the basis. A projected edit whose inner verb is not builtin
+(``patch_from``, population verbs, hook callables) stays ``opaque_audit``.
+
 DOCUMENTED-UNSTABLE semantics.
 """
 
@@ -43,11 +54,18 @@ import torch
 
 from .._errors import InvalidArgumentError
 from ..selection import ResolvedSelection, Selection, SiteEntry, _Combinator, _lift
-from ..selection_subspace import _SubspaceTerm
+from ..selection_subspace import _basis_digest, _SubspaceTerm
 from ._subspace_edits import _orthonormal_rows
 from .types import Edit
 
-__all__ = ["PROJECTION_NOTE", "SubspaceProjection", "subspace_projection_of"]
+__all__ = [
+    "PROJECTION_NOTE",
+    "SubspaceProjection",
+    "subspace_projection_of",
+]
+
+#: Builtin helper name of a projected verb in a saved spec.
+SUBSPACE_EDIT_NAME = "subspace_edit"
 
 #: Marker stamped into every projected site's audit ``source``: the do()
 #: audit record states which meaning ran.
@@ -223,14 +241,19 @@ class SubspaceProjection:
     """The basis a projection-valued ``do()`` edit acts through (one per target).
 
     ``rows`` is the orthonormal float64 ``[k, d]`` basis actually used,
-    ``dim`` the bound site axis, ``orthonormalised`` whether the caller's
-    basis had to be orthonormalised.
+    ``dim`` the bound site axis, ``sha256`` the provenance digest of the
+    caller's basis, ``orthonormalised`` whether the caller's basis had to be
+    orthonormalised; ``origin``, ``method`` and ``source_dtype`` are the
+    basis provenance a saved spec keeps.
     """
 
     rows: torch.Tensor
     dim: int
     sha256: str
     orthonormalised: bool
+    origin: str = ""
+    method: str | None = None
+    source_dtype: str = "float64"
 
     @classmethod
     def from_term(cls, node: _SubspaceTerm) -> SubspaceProjection:
@@ -242,14 +265,20 @@ class SubspaceProjection:
         basis = node.basis * support
         gram = basis @ basis.T
         identity = torch.eye(int(basis.shape[0]), dtype=basis.dtype)
+        provenance = node.provenance
+        recorded = {
+            "origin": provenance.origin,
+            "method": provenance.method,
+            "source_dtype": provenance.source_dtype,
+        }
         if bool(torch.allclose(gram, identity, rtol=0.0, atol=_ORTHONORMAL_TOL)):
-            return cls(basis, node.provenance.dim, node.provenance.sha256, False)
+            return cls(basis, provenance.dim, provenance.sha256, False, **recorded)
         rows = _orthonormal_rows(basis, "subspace")
         # Sign-preserving Gram-Schmidt: row j keeps a positive inner product
         # with the caller's row j, so a one-direction coordinate keeps its sign.
         signs = torch.sign(torch.sum(rows * basis, dim=1, keepdim=True))
         rows = rows * signs * support.any(dim=0)
-        return cls(rows, node.provenance.dim, node.provenance.sha256, True)
+        return cls(rows, provenance.dim, provenance.sha256, True, **recorded)
 
     @property
     def note(self) -> str:
@@ -296,20 +325,68 @@ class SubspaceProjection:
                 return edit
 
         factory = self._factory(inner_factory, meaning, verb)
-        disclosure = (
-            ("subspace_projection_sha256", self.sha256),
-            ("subspace_edit_meaning", meaning),
-        )
+        disclosure = self._disclosure(meaning)
+        if isinstance(edit, Edit) and edit.portability == "builtin":
+            return self._portable_edit(edit, factory, disclosure)
         if isinstance(edit, Edit):
             return dataclasses.replace(
                 edit,
                 factory=factory,
-                # The rewritten hook is session-time: its persisted form must
+                # A non-builtin verb is session-time: its persisted form must
                 # never rebuild as the plain verb over the whole site.
                 portability="opaque_audit",
                 metadata=tuple(edit.metadata) + disclosure,
             )
         return factory()
+
+    def wrap(self, edit: Edit) -> Edit:
+        """Return the builtin ``subspace_edit`` for a builtin verb (the reload path)."""
+
+        meaning = _verb_meaning(edit)
+        if edit.factory is None:
+            raise _refusal_for(edit.helper_name, code="subspace_edit_unsupported")
+        factory = self._factory(edit.factory, meaning, edit.helper_name)
+        return self._portable_edit(edit, factory, self._disclosure(meaning))
+
+    def _disclosure(self, meaning: str) -> tuple[tuple[str, Any], ...]:
+        """Return the metadata a projected edit carries about its basis."""
+
+        return (
+            ("subspace_projection_sha256", self.sha256),
+            ("subspace_edit_meaning", meaning),
+        )
+
+    def stored_kwargs(self) -> tuple[tuple[str, Any], ...]:
+        """Return the constructor keywords a saved ``subspace_edit`` carries."""
+
+        return (
+            ("basis", self.rows),
+            ("axis", self.dim),
+            ("basis_sha256", _basis_digest(self.rows)),
+            ("origin", self.origin),
+            ("method", self.method),
+            ("origin_sha256", self.sha256),
+            ("source_dtype", self.source_dtype),
+            ("orthonormalised", self.orthonormalised),
+        )
+
+    def _portable_edit(
+        self, edit: Edit, factory: Any, disclosure: tuple[tuple[str, Any], ...]
+    ) -> Edit:
+        """Return the builtin ``subspace_edit`` that saves and reloads as this projection."""
+
+        return Edit(
+            helper_name=SUBSPACE_EDIT_NAME,
+            args=(edit,),
+            kwargs=self.stored_kwargs(),
+            kind=edit.kind,
+            factory=factory,
+            portability="builtin",
+            metadata=tuple(edit.metadata) + disclosure,
+            direction=edit.direction,
+            batch_independent=edit.batch_independent,
+            compatible_with_append=edit.compatible_with_append,
+        )
 
     def _factory(self, inner_factory: Callable[[], Any], meaning: str, verb: str) -> Any:
         """Wrap one inner hook factory with the coordinate write-back."""
