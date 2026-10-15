@@ -3369,6 +3369,14 @@
  },
  {
   "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/data_classes/_trace_accessors.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
   "field": "raw_index",
   "file": "torchlens/data_classes/_trace_accessors.py",
   "has_default": false,

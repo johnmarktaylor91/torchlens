@@ -1,7 +1,7 @@
 """Trace accessor helpers."""
 
-from collections import OrderedDict
-from collections.abc import Iterator, Mapping, Sequence
+from collections import Counter, OrderedDict
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from typing import Any
 
 from .._errors import AmbiguousOpLookupError
@@ -101,6 +101,48 @@ class OrphanAccessor(Accessor[Op]):
         """Return display name used in generic ``KeyError`` messages."""
 
         return "orphan"
+
+
+def boundary_label_ops(labels: Sequence[str], resolve: Callable[[str], Any]) -> list[Op]:
+    """Resolve a boundary label list (``input_layers``, ``output_layers``) to its Ops.
+
+    Torch stores these lists in layer space: the bare layer label of each
+    boundary row, once per row. When recurrence grouping folds several
+    boundary rows into one multi-pass Layer, its bare label is listed once
+    per pass and resolves to that Layer, not to an Op. Both the list and the
+    Layer's passes are in capture order, so the k-th listing names pass k; a
+    Layer listed a different number of times than it has passes contributes
+    every pass at its first listing. Each Op appears once, in list order.
+
+    Parameters
+    ----------
+    labels:
+        Ordered boundary labels.
+    resolve:
+        Label lookup (``Trace.__getitem__``) returning an Op or a Layer.
+
+    Returns
+    -------
+    list[Op]
+        The boundary Ops, one per row.
+    """
+
+    listings = Counter(labels)
+    taken: Counter[str] = Counter()
+    ops: dict[str, Op] = {}
+    for label in labels:
+        entry = resolve(label)
+        if isinstance(entry, Op):
+            ops.setdefault(entry.label, entry)
+            continue
+        passes = sorted(entry.ops.values(), key=lambda op: op.pass_index)
+        chosen = passes
+        if listings[label] == len(passes):
+            chosen = [passes[taken[label]]]
+            taken[label] += 1
+        for op in chosen:
+            ops.setdefault(op.label, op)
+    return list(ops.values())
 
 
 def _is_counted_op(op: Op) -> bool:

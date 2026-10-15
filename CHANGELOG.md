@@ -75,6 +75,10 @@
 
 ### Bug Fixes
 
+- **Trace**: `Trace.input_ops` and `Trace.output_ops` no longer raise when a boundary Layer has
+  several passes (inputs consumed by one loop body); they list one Op per input or output row, and
+  `num_input_layers`/`num_output_layers` count such a Layer once. `to_agent_json()`,
+  `torchlens_dump` and the folded `torchlens_overview` work on these models again.
 - **tviz**: `torchlens.tviz.receipt_from_patch_grid` now plots effects: each cell is the patched
   metric minus the grid's corrupted-run baseline, which `mechinterp.grid`, its presets and
   `mechinterp.patch_query_heads_grid` record as `receipts["clean_metric"]` and
