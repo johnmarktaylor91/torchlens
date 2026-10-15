@@ -1385,8 +1385,8 @@
   `attribution_site_firing_invalid`, `attribution_site_independent_of_input`,
   `attribution_site_target_unsupported`. Doc of record: `docs/reference/attribution.md`.
 - Attribution evaluation (DOCUMENTED-UNSTABLE): `tl.attribution.deletion_curve` and
-  `insertion_curve(model, inputs, input_kwargs=None, *, target, attribution, baseline="zeros",
-  n_steps=20, features="auto", patch_size=8)` remove or reveal the most-attributed input
+  `tl.attribution.insertion_curve(model, inputs, input_kwargs=None, *, target, attribution,
+  baseline="zeros", n_steps=20, features="auto", patch_size=8)` remove or reveal the most-attributed input
   features (elements, pixels, patches or tokens) in steps and return a `CurveResult`
   (`fractions`, `scores`, `area`, `aopc`, `steps`); every `CurveStep.intervention` holds
   `(tl.units(...), tl.replace_with(...))` pairs, replayed by `trace.fork().do(selection, edit)`.

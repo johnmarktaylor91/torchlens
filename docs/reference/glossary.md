@@ -1091,7 +1091,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `kl_to_final`, `max_prob` and, for `(input_ids, target_ids)` batches,
   `cross_entropy` and `target_rank` into a `tl.stats.TrajectoryStats`
   (`position_means[statistic]`, a float64 `[layers, positions]` tensor;
-  `spines[statistic][layer]`; `summary(statistic)`). Doc of record:
+  `spines[statistic][layer]`; `summary(statistic)`; `examples`, the number of examples
+  (batch rows) folded; `validated`, whether the default lens was numerically validated;
+  `tie_convention`, how `target_rank` breaks ties). Doc of record:
   [docs/reference/stats.md](stats.md).
 
 ## Quantities and typed errors
