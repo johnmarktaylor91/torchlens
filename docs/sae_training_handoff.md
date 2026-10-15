@@ -9,9 +9,11 @@ them to the trainer you choose, such as SAELens or your own loop. The hand-off h
 2. `torchlens.dataset_extraction.open_extraction(output_dir)` opens the artifact lazily, and
    `torchlens.dataset_extraction.as_torch_dataset(reader, keys=[...])` wraps it as a map-style
    `torch.utils.data.Dataset` whose items are `{layer: activation}` rows.
-3. A `DataLoader` over that dataset feeds the trainer: your own loop, or SAELens configured to
-   train from pre-computed activations where your SAELens version supports that (check its
-   documentation for the entry point).
+3. A `DataLoader` over that dataset feeds the trainer: your own loop, dictionary_learning's
+   `trainSAE`, sparsify's `SparseCoder`, or SAELens configured to train from pre-computed
+   activations where your SAELens version supports that (check its documentation for the entry
+   point). The [trainer recipe](recipes/sae_trainers.md) runs dictionary_learning and sparsify on
+   extracted activations and splices each trained SAE back.
 
 The example runs all three steps on a small model, with a few optimizer steps of a minimal
 plain-PyTorch SAE standing in for the trainer:
