@@ -183,6 +183,26 @@
   sparsify and splicing it back (`docs/recipes/sae_trainers.md`); model diffing with a crosscoder on
   two traces (`docs/recipes/sae_crosscoder_diff.md`); Prisma CLIP SAEs
   (`docs/recipes/prisma_clip_sae.md`); latent export (`docs/recipes/sae_latent_export.md`).
+- **attribution**: `tl.attribution.causal_audit` now also audits EDGE tables from
+  `tl.mechinterp.edge_scores`: each edge is patched alone with `tl.mechinterp.patch_edges` (the
+  sender's value from the corrupted run) and the metric's change `M(patched) - M(clean)` is compared
+  with the edge's score, with rank agreement and top-k, bottom-k and random-k sets (sets whose edges
+  enter several receivers are listed in `extra["sets_not_measured"]`). New keyword-only arguments
+  `corrupted=` and `metric=` (the ones the table was scored with) and `edges=` (audit a subset).
+  Documented unstable.
+- **intervention**: `tl.intervention.affine_source(weight, *, bias=None)`, a source verb for
+  subspace edits: `do(tl.subspace(site, R.T, origin=...), affine_source(W, bias=b))` writes `x + Q^T
+  (W x + b - Q x)` (LoReFT). Outside a subspace it refuses `affine_source_needs_subspace`; malformed
+  arguments refuse `affine_source_invalid`. DOCUMENTED-UNSTABLE.
+- **intervention**: a subspace edit restricted by `within=tl.units(site, mask)` with a builtin verb
+  now saves at `level="portable"` (the `subspace_edit` payload stores `mask` and `mask_sha256`) and
+  reloads bit-identically; load refuses `subspace_spec_mask_tampered`, and any stored keyword the
+  loader does not know refuses `subspace_spec_invalid`. Other masked edits are unchanged.
+- **bridge**: `tl.bridge.pyreft.read(directory, *, repo=None, revision=None)` reads a pyreft LoReFT
+  artifact into a `LoreftArtifact` (R, W, b as saved, the layer and component, provenance with file
+  sha256s and dtypes); apply with `fork.do(artifact.subspace(site, positions=mask), artifact.edit)`.
+  No pyreft import, no extra. Refuses `pyreft_artifact_invalid`, `pyreft_artifact_unsupported`,
+  `pyreft_positions_invalid`. DOCUMENTED-UNSTABLE.
 
 ### Bug Fixes
 
@@ -221,6 +241,10 @@
   module boxes, and header advisories cite a file name and line instead of a local path.
 - **validation**: The `__setitem__` exemption check answers not-exempt instead of raising
   `TypeError` when the call has no saved arguments.
+- **mechinterp**: patch_edges resolves receivers that read an op whose label differs from its raw
+  label, such as every layer-0 receiver.
+- **bundle**: `Bundle.most_changed` and `Bundle.diff_pair` pair ops by graph structure, so ops a
+  module intervention renumbers are no longer dropped from the comparison.
 
 ### Changed
 

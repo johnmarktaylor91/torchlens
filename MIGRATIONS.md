@@ -528,3 +528,9 @@ intervene=tl.when(tl.module(name), edit))`, then `trace.backward(loss)`).
 Specs saved with a `subspace_edit` helper need this release to load; an older TorchLens refuses
 them `intervention_helper_unknown`. Code that reads fire-record helper names for
 `do(tl.subspace(...), verb)` sees `subspace_edit`; the verb is `record.helper.args[0]`.
+
+## Masked subspace edits and the affine source verb save portably (2026-10-15, format addition)
+
+Specs saved with a `subspace_edit` or an `affine_source` helper need this release to load; an older
+TorchLens refuses them `intervention_helper_unknown` (and a `subspace_edit` carrying `mask` refuses
+`subspace_spec_invalid` on a reader that predates it).

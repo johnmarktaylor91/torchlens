@@ -799,6 +799,22 @@
   rotation `R` (DAS, ReFT) is applied as `tl.subspace(site, R[:k],
   origin=...)`, never fitted; load refuses `subspace_spec_invalid`,
   `subspace_spec_basis_tampered`, `subspace_spec_basis_not_orthonormal`.
+  LEARNED AFFINE SOURCE (LoReFT): `tl.intervention.affine_source(weight, *,
+  bias=None)` is a source verb: under `do(tl.subspace(site, R.T, origin=...),
+  affine_source(W, bias=b))` the new coordinates are `W x + b` of the whole
+  site value, so the site gets `x + Q^T (W x + b - Q x)`; `weight` shaped
+  like the basis rows, else `affine_source_invalid`; outside a subspace it
+  refuses `affine_source_needs_subspace`. A `within=tl.units(site, mask)`
+  restricted subspace edit with a builtin verb stores `mask` and
+  `mask_sha256`, so a one-position edit saves portably (load refuses
+  `subspace_spec_mask_tampered`; unknown stored keywords refuse
+  `subspace_spec_invalid`); other masked edits keep their portability.
+  PYREFT READER: `tl.bridge.pyreft.read(directory, *, repo=None,
+  revision=None)` returns `LoreftArtifact` (`rotation`, `weight`, `bias` as
+  saved, `layer`, `component`, `unit`, `units_per_example`, `provenance`);
+  apply with `fork.do(artifact.subspace(site, positions=mask),
+  artifact.edit)`; no pyreft import; refuses `pyreft_artifact_invalid`,
+  `pyreft_artifact_unsupported`.
   BASIS PROVENANCE MANDATORY:
   `origin=` required non-empty; origin/method/geometry/sha256 content
   digest ride `provenance.source` and `do()` audit records
@@ -1449,14 +1465,17 @@
   `attribution_randomization_map_changed`; warning `attribution_randomization_maps_large`. Doc
   of record: `docs/reference/attribution.md`.
 - Causal audit (DOCUMENTED-UNSTABLE): `tl.attribution.causal_audit(model, inputs,
-  input_kwargs=None, *, claim, target=None, k=5, ablation="zero", controls=("bottom", "random"),
-  random_draws=10, per_unit=True, seed=0)` grades a layer attribution (also one computed for a
+  input_kwargs=None, *, claim, target=None, corrupted=None, metric=None, edges=None, k=5,
+  ablation="zero", controls=("bottom", "random"), random_draws=10, per_unit=True, seed=0)` grades a layer attribution (also one computed for a
   `tl.attribution.SiteTarget`) at its hidden site, a `tl.mechinterp.direct_logit_contributions`
   table (each component's whole site ablated, the logit read from the unembedding head after a
   native-logit check; leave `target=` out; the constant row is reported apart in
   `extra["constant_row"]`), or a `tl.attribution.read` table of `activation_x_grad` `ACT` rows
-  (each site or element ablated, `target=` the same `tl.attribution.seed(...)`; `EDGE` rows refuse
-  and name `tl.mechinterp.patch_edges`): each unit ablated alone, then the top-k
+  (each site or element ablated, `target=` the same `tl.attribution.seed(...)`), or a
+  `tl.mechinterp.edge_scores` table of `EDGE` rows (each edge patched alone with
+  `tl.mechinterp.patch_edges`, `M(patched) - M(clean)`; pass the `corrupted=` and `metric=` it was
+  scored with, `edges=` audits a subset; a set spanning several receivers is listed in
+  `extra["sets_not_measured"]`): each unit ablated (or patched) alone, then the top-k
   claimed units together beside bottom-k and seeded random-k controls, one
   `trace.fork().do(...)` each; returns `tl.attribution.CausalAuditResult` (`units`, `sets`,
   `rank_agreement` (Spearman), `original_score`, `site`) whose `tl.attribution.CausalAuditUnit`
