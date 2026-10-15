@@ -2,7 +2,8 @@
 
 TransformerLens's daily-driver analysis tools rebuilt on torchlens: residual
 decomposition, direct logit attribution, per-head results, patching grids,
-head-taxonomy scores, per-neuron MLP rows, QK/OV circuits (``FactoredMatrix``,
+head-taxonomy scores, per-neuron MLP rows, the component edge graph (heads
+and MLPs as nodes, q/k/v split receivers), QK/OV circuits (``FactoredMatrix``,
 vendored from TransformerLens with credit), prompt utilities, an alias layer, and
 retention plans
 -- derived from the captured graph on ANY architecture with a certifiable
@@ -22,6 +23,14 @@ from __future__ import annotations
 from ._aliases import AliasResolution, alias_report, resolve_alias, translation_table
 from ._compose import apply_norm_scale, full_decomposition, stack_facet
 from ._dla import direct_logit_contributions, token_directions
+from ._edge_patch import patch_edges
+from ._edges import (
+    ComponentEdge,
+    ComponentGraph,
+    ComponentNode,
+    ComponentReceiver,
+    component_graph,
+)
 from ._errors import MechInterpError
 from ._factored import FactoredMatrix
 from ._grids import PatchGrid, grid, patch_heads_grid, patch_residual_grid
@@ -38,6 +47,10 @@ from ._scores import HeadScoreResult, head_scores
 
 __all__ = [
     "AliasResolution",
+    "ComponentEdge",
+    "ComponentGraph",
+    "ComponentNode",
+    "ComponentReceiver",
     "ComponentRow",
     "ComponentStack",
     "ContributionScores",
@@ -54,6 +67,7 @@ __all__ = [
     "alias_report",
     "apply_norm_scale",
     "attention_head_contributions",
+    "component_graph",
     "direct_logit_contributions",
     "full_decomposition",
     "grid",
@@ -63,6 +77,7 @@ __all__ = [
     "lowered_counterfactual",
     "mlp_neuron_contributions",
     "ov_circuit",
+    "patch_edges",
     "patch_heads_grid",
     "patch_query_heads_grid",
     "patch_residual_grid",
