@@ -792,8 +792,16 @@ print(round(audit.extra["constant_row"], 3), round(audit.rank_agreement, 3))
 Output:
 
 ```text
-OUTPUT-DLA
+embed 0.739 -0.562
+writers.0 -0.239 -0.967
+writers.1 0.111 0.32
+0.495 0.5
 ```
+
+Here each writer reads the residual stream and the final norm rescales, so ablating a component
+moves the logit by more (or less) than its direct share: the embedding's direct share is positive
+and its measured effect negative, and rank agreement is 0.5. The constant row's 0.495 is the part
+of the logit difference no component can remove.
 
 #### One-backward read tables
 
@@ -835,8 +843,16 @@ print(audit.rank_agreement)
 Output:
 
 ```text
-OUTPUT-READ
+linear_1_1:1 0.0531 0.0531
+relu_1_2:1 0.0531 0.0531
+linear_2_3:1 0.106 0.106
+output_1:1 0.106 0.106
+1.0
 ```
+
+Zero-ablating a site of this ReLU network moves the target by exactly its activation times
+gradient (a ReLU passes a zeroed input through as zero), so every row agrees; on a model with
+smooth nonlinearities, or a read with a frozen linearization, the gap is the finding.
 
 ## Reading attribution results honestly
 
