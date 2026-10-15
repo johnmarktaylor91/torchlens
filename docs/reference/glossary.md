@@ -2028,8 +2028,12 @@ shim owed*
   1); `rank`; `origin` (the subspace `origin=` text); `provenance` (repo, revision, each file's
   sha256, the weight file name, each tensor's source dtype, the float64 sha256 of `R`, `W`, `b`,
   and `orthonormality_max_abs`). `subspace(site, *, positions=None)` returns the selection
-  (`positions` a bool mask over the site's axes except the feature axis; `None` is every position;
-  a non-bool mask refuses `pyreft_positions_invalid`); `edit` is the float64 `affine_source`.
+  (`site` a site label or the site from a trace, `trace[label]`; `positions` a bool mask over the
+  site's axes except the trailing feature axis; `None` is every position; a non-bool mask refuses
+  `pyreft_positions_invalid`). Given the site from a trace, its shape is checked at once: a
+  trailing axis that is not the artifact's width (or a feature axis that is not last) refuses
+  `pyreft_site_invalid`, and a mask that does not cover the other axes refuses
+  `pyreft_positions_invalid`; a label is checked at `do()`. `edit` is the float64 `affine_source`.
 
 **torchlens.bridge.huggingface.from_hub(repo_id, *, path_in_repo, revision, token, api)** — *unstable — no deprecation shim owed*
 : Downloads the gzipped `.tlspec` tar that `push_to_hub` uploads, checks

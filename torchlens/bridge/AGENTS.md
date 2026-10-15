@@ -47,10 +47,14 @@ optional dependency.
   `torch.load(weights_only=True)`; the weight file is `intkey_<key>.bin` under the dotted
   or underscored key. Apply with `fork.do(artifact.subspace(site, positions=mask),
   artifact.edit)` (`tl.subspace` over `R.T` plus `tl.intervention.affine_source`); the
-  float32 R is orthonormalised by the subspace step, not here. Refusals
-  `pyreft_artifact_invalid`, `pyreft_artifact_unsupported`, `pyreft_positions_invalid`.
-  Tests: `tests/test_bridge_pyreft.py` (stand-in artifact); the pinned-pyreft oracle leg
-  runs outside the test suite.
+  float32 R is orthonormalised by the subspace step, not here. `site` is a label or the
+  site from a trace (`trace[label]`); a site's shape is checked in `_checked_site` (the
+  edit acts on the trailing axis, so it must be `d` wide). Refusals
+  `pyreft_artifact_invalid`, `pyreft_artifact_unsupported`, `pyreft_positions_invalid`,
+  `pyreft_site_invalid`. Tests: `tests/test_bridge_pyreft.py` (stand-in artifact),
+  `tests/test_rot4_pyreft_site.py` (the site check); the pinned-pyreft oracle leg runs
+  outside the test suite, and its bar from 2026-10-15 on is the same-host comparison with
+  pyreft's own LoReFT (exactly equal before the edited position, within 2e-5 at and after).
 - `sae.py`: `splice(model_or_log, inputs, *, site, sae, latents_edit=None,
   tokens=None, exclude_bos=False, keep_latents=True)` returns `SpliceResult`
   (duck-typed SAE, no extra). Metrics are float64 and follow SAELens evals and
