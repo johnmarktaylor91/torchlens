@@ -242,10 +242,11 @@ copy of an out, and keeps one fixed 16-number float64 vector (128 bytes) per
 op whatever the batch size. `tl.stats.site_spines(trace)` returns
 `{op label: Spine}` in capture order. For a float64 out the counts, the
 extrema, the sum and the mean equal `Spine().update(out)` on the full
-capture's out exactly. The sum of squares, the sum of absolute values and
-M2 are folded in float64 chunks of 2^20 values so the reducer never holds a
-full-size float64 copy; they are bit-equal for outs up to that size and
-otherwise equal within float64 reduction-order rounding. A float32 out's sum
+capture's out exactly. The reducer folds each out in chunks of 2^16 values,
+so its largest working tensor is 512 KiB whatever the out's size (where
+`Spine.update` holds full-size float64 copies); the sum of squares, the sum
+of absolute values and M2 are therefore bit-equal for outs up to one chunk
+and otherwise equal within float64 reduction-order rounding. A float32 out's sum
 accumulates in float64 without a converted copy, so it can differ from
 `Spine.update` in the last bits. The returned spines are live accumulators:
 `merge` folds another batch's spines in and `tl.stats.save_fitted` saves
