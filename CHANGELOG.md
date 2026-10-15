@@ -88,6 +88,9 @@
 
 ### Bug Fixes
 
+- **run**: `trace.run(inputs=..., fast=True)` now refreshes every saved pass of an input Layer that
+  folds several inputs (two inputs of the same shape and dtype consumed by one loop body); before,
+  an earlier pass kept its capture-time tensor.
 - **Trace**: `Trace.input_ops` and `Trace.output_ops` no longer raise when a boundary Layer has
   several passes (inputs consumed by one loop body); they list one Op per input or output row, and
   `num_input_layers`/`num_output_layers` count such a Layer once. `to_agent_json()`,
