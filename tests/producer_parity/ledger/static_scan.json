@@ -3385,6 +3385,14 @@
  },
  {
   "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/data_classes/_trace_accessors.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
   "field": "raw_index",
   "file": "torchlens/data_classes/_trace_accessors.py",
   "has_default": false,
@@ -8371,6 +8379,14 @@
   "ambiguous": false,
   "field": "raw_index",
   "file": "torchlens/stats/_aggregate.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/stats/_aggregate_cache.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false

@@ -88,6 +88,7 @@ from ._runnable_execution import (
     run_loaded_sparse_trace,
 )
 from ._runnable_state import PreparedRunnableState, RunResourceCeiling, prepare_runnable_state
+from .data_classes._trace_accessors import boundary_label_rows
 from .errors import PathDivergenceError, RunCapabilityUnavailableError, RuntimeSignatureDriftError
 from .ir.container import ContainerSpec, rebuild_container_from_spec
 from .runnable import (
@@ -1581,9 +1582,12 @@ class _FastLiveSession:
                     affected_op_labels=input_labels,
                 )
                 self._poison_and_raise(failed)
-            for label, value in zip(input_labels, input_leaves, strict=True):
-                op = self.trace.layer_dict_all_keys[label]
-                if bool(getattr(op, "has_saved_activation", False)):
+            # A folded input Layer is listed once per pass under one bare
+            # label, which ``layer_dict_all_keys`` maps to the LAST pass; the
+            # per-listing rule refreshes each pass with its own input.
+            input_ops = boundary_label_rows(input_labels, self.trace.__getitem__)
+            for op, value in zip(input_ops, input_leaves, strict=True):
+                if op is not None and bool(getattr(op, "has_saved_activation", False)):
                     op.save_activation(value, (), {}, False)
         if inputs_only:
             return

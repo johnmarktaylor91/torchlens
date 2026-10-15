@@ -1198,6 +1198,11 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     "torchlens._runnable_state_live.LiveStateRestoreFailure": (
         "internal mid-bracket carrier; surfaced as run_state_restore_failed"
     ),
+    # tl.aggregate(cache=True) key builder: raised while hashing a run's inputs
+    # and caught by run_cached, which raises stats_aggregate_cache_unkeyable.
+    "torchlens.stats._aggregate_cache._Unkeyable": (
+        "internal key-builder carrier; surfaced as stats_aggregate_cache_unkeyable"
+    ),
     # -- L7a structure-only refusals + S3 registrar (DOCUMENTED-UNSTABLE;
     # their torchlens.errors registration rides the S2 author's ratification
     # PR together with the BUILTIN_LINEAGE_GOLDEN rows — this allowlist entry

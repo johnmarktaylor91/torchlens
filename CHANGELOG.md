@@ -5,6 +5,8 @@
 
 ### Behavior changes
 
+- **attribution**: layer-method results carry one more `extra` key, `integer_input_layers`, and
+  the uncoded float-input refusal is replaced by the coded `attribution_input_not_float`.
 - **trace.ops**: `len`, iteration, integer indexing, `keys()`/`values()`/`items()` and
   `to_pandas()` of `trace.ops` now cover only the ops `trace.num_ops` counts, so
   `len(trace.ops) == trace.num_ops`. Input, output and buffer rows are no longer in that
@@ -39,6 +41,17 @@
 
 ### Features
 
+- **attribution**: the layer methods (`layer_attribution`, `layer_integrated_gradients`,
+  `layer_conductance`, `grad_cam`) accept integer inputs such as token ids: the input path starts at
+  the embedding output, baseline ids embed to the path start, and `extra["integer_input_layers"]`
+  names the embedding. Input methods refuse integer inputs with `attribution_input_not_float` and a
+  runnable layer-method spelling. New `tl.attribution.SiteTarget(layer, unit=None, call=None)`: pass
+  it as `target=` to attribute a hidden layer's output or one unit of it (the neuron-attribution
+  family).
+- **stats**: `tl.stats.save_fitted` / `tl.stats.load_fitted` save and reload any `tl.stats`
+  accumulator mid-stream (pooled or per unit, `Histogram`, `Spine`, `Aggregator`), and the reload
+  keeps folding exactly as an uninterrupted run; `tl.aggregate(..., cache=True, cache_dir=None)`
+  skips the dataset loop on a rerun of the same run and refuses runs it cannot key by value.
 - **attribution**: `tl.attribution.grad_cam` accepts vision-transformer token layers: the patch
   grid and leading class, distillation or register tokens are derived from a metadata-only trace
   (ViT, DeiT, DINOv2 with registers, CLIP vision, Swin per stage); `reshape=` lays tokens out by
@@ -75,6 +88,17 @@
 
 ### Bug Fixes
 
+- **run**: `trace.run(inputs=..., fast=True)` now refreshes every saved pass of an input Layer that
+  folds several inputs (two inputs of the same shape and dtype consumed by one loop body); before,
+  an earlier pass kept its capture-time tensor.
+- **rerun**: a rerun whose staged edit fires at zero sites no longer raises
+  `InvalidArgumentError` when the model's inputs fold into one input Layer (two inputs of the same
+  shape and dtype consumed by one loop body); the same-inputs check compares each input pass, so
+  the rerun refuses typed (`rerun_selector_unmatchable_live`) or warns as it does for other inputs.
+- **Trace**: `Trace.input_ops` and `Trace.output_ops` no longer raise when a boundary Layer has
+  several passes (inputs consumed by one loop body); they list one Op per input or output row, and
+  `num_input_layers`/`num_output_layers` count such a Layer once. `to_agent_json()`,
+  `torchlens_dump` and the folded `torchlens_overview` work on these models again.
 - **tviz**: `torchlens.tviz.receipt_from_patch_grid` now plots effects: each cell is the patched
   metric minus the grid's corrupted-run baseline, which `mechinterp.grid`, its presets and
   `mechinterp.patch_query_heads_grid` record as `receipts["clean_metric"]` and

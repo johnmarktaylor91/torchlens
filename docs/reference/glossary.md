@@ -1064,11 +1064,18 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   (`tl.stats.Mean`, `tl.stats.Norm`, `tl.stats.Covariance`, `tl.stats.CrossCovariance`,
   `tl.stats.Quantile`, `tl.stats.TopK`, `tl.stats.PCA`, `tl.stats.CKA` -- exact
   full-data linear CKA, never a minibatch approximation -- `tl.stats.Histogram`,
-  `tl.stats.Spine`) built on the `tl.stats.StreamingStat` protocol, plus fitted-PCA
-  persistence (`tl.stats.save_fitted` / `tl.stats.load_fitted`). `tl.aggregate(model,
+  `tl.stats.Spine`) built on the `tl.stats.StreamingStat` protocol, plus one
+  persistence path (`tl.stats.save_fitted` / `tl.stats.load_fitted`) for fitted PCA and,
+  DOCUMENTED-UNSTABLE, for any accumulator's whole state (`tl_stats_state_v1`; a reload
+  keeps folding as if never interrupted; `load_fitted(path, encoder=...)` takes back an
+  `encoder=` callable, which is not stored). `tl.aggregate(model,
   dataloader, metrics)` streams activations (`target="out"`) or gradients
   (`target="grad"`, with `loss_fn=`) through those accumulators across a whole
-  dataloader without retaining per-batch tensors. Per-unit statistics
+  dataloader without retaining per-batch tensors; `cache=True` (with `cache_dir=`, as
+  for `tl.trace`; DOCUMENTED-UNSTABLE) keys the run by value (model contents and code,
+  every batch, each accumulator's starting state and encoder, `target=`, `loss_fn=`,
+  versions) so a rerun restores the saved states and skips the loop, and refuses a run
+  it cannot key (`stats_aggregate_cache_unkeyable`). Per-unit statistics
   (DOCUMENTED-UNSTABLE): the keyword-only `unit_axis=` on `tl.stats.Quantile` and
   `tl.stats.TopK` keeps one reservoir or top-k list per unit (neuron, channel or SAE
   latent); per-unit `TopK` returns a `tl.stats.UnitTopK` (`values`, `example_ids`,

@@ -1,7 +1,7 @@
 """Trace accessor helpers."""
 
-from collections import OrderedDict
-from collections.abc import Iterator, Mapping, Sequence
+from collections import Counter, OrderedDict
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from typing import Any
 
 from .._errors import AmbiguousOpLookupError
@@ -101,6 +101,91 @@ class OrphanAccessor(Accessor[Op]):
         """Return display name used in generic ``KeyError`` messages."""
 
         return "orphan"
+
+
+def _boundary_listing_passes(
+    labels: Sequence[str], resolve: Callable[[str], Any]
+) -> Iterator[list[Op]]:
+    """Yield the Ops each boundary listing names, one list per listing.
+
+    The one per-pass rule behind :func:`boundary_label_ops` and
+    :func:`boundary_label_rows`: an Op entry names itself; a Layer listed as
+    many times as it has passes names pass k at its k-th listing (the list and
+    the Layer's passes are both in capture order); a Layer listed a different
+    number of times names every pass at each listing.
+    """
+
+    listings = Counter(labels)
+    taken: Counter[str] = Counter()
+    for label in labels:
+        entry = resolve(label)
+        if isinstance(entry, Op):
+            yield [entry]
+            continue
+        passes = sorted(entry.ops.values(), key=lambda op: op.pass_index)
+        if listings[label] == len(passes):
+            yield [passes[taken[label]]]
+            taken[label] += 1
+        else:
+            yield passes
+
+
+def boundary_label_ops(labels: Sequence[str], resolve: Callable[[str], Any]) -> list[Op]:
+    """Resolve a boundary label list (``input_layers``, ``output_layers``) to its Ops.
+
+    Torch stores these lists in layer space: the bare layer label of each
+    boundary row, once per row. When recurrence grouping folds several
+    boundary rows into one multi-pass Layer, its bare label is listed once
+    per pass and resolves to that Layer, not to an Op. Both the list and the
+    Layer's passes are in capture order, so the k-th listing names pass k; a
+    Layer listed a different number of times than it has passes contributes
+    every pass at its first listing. Each Op appears once, in list order.
+
+    Parameters
+    ----------
+    labels:
+        Ordered boundary labels.
+    resolve:
+        Label lookup (``Trace.__getitem__``) returning an Op or a Layer.
+
+    Returns
+    -------
+    list[Op]
+        The boundary Ops, one per row.
+    """
+
+    ops: dict[str, Op] = {}
+    for chosen in _boundary_listing_passes(labels, resolve):
+        for op in chosen:
+            ops.setdefault(op.label, op)
+    return list(ops.values())
+
+
+def boundary_label_rows(labels: Sequence[str], resolve: Callable[[str], Any]) -> list[Op | None]:
+    """Resolve a boundary label list to one Op per listing, aligned with ``labels``.
+
+    The same per-pass rule as :func:`boundary_label_ops`, for positional
+    readers that pair each listing with a runtime value. A listing the rule
+    cannot pin to one pass (a multi-pass Layer listed a different number of
+    times than it has passes) is ``None``.
+
+    Parameters
+    ----------
+    labels:
+        Ordered boundary labels.
+    resolve:
+        Label lookup (``Trace.__getitem__``) returning an Op or a Layer.
+
+    Returns
+    -------
+    list[Op | None]
+        One entry per listing, in list order.
+    """
+
+    return [
+        chosen[0] if len(chosen) == 1 else None
+        for chosen in _boundary_listing_passes(labels, resolve)
+    ]
 
 
 def _is_counted_op(op: Op) -> bool:
