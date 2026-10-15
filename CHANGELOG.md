@@ -22,6 +22,10 @@
   convert it with `direction.to_steering_vectors()` or `direction.to_repeng()` (the bridges now
   hold only the converters `from_direction`). repeng's `pca_diff`, `pca_center` and `umap`
   replications are gone; the native methods are `mean_diff`, `pca` and `logistic`.
+- **bridge.dialz**: `tl.bridge.dialz.vector` is removed with no alias; build the direction with
+  `torchlens.intervention.direction_from_pairs` and convert it with `Direction.to_dialz()` (or
+  `tl.bridge.dialz.from_direction`). The `bridge_contrastive_*` refusal codes are gone with it.
+  The `dialz` extra now requires dialz 1.1 or later (`dialz>=1.1,<2`).
 - **Bundle**: the "pristine" label and baseline auto-detection now read `Trace.pristine is True`
   instead of `Trace.state is TraceState.PRISTINE`. Intervened captures (including func-targeted
   `intervene=` captures, whose state stayed `PRISTINE`), artifacts older than tlspec 9 and
@@ -40,6 +44,10 @@
   returns a `torchlens.intervention.Direction` with a `BasisProvenance` record, a native
   `.steer(m)` edit and `.to_steering_vectors()` / `.to_repeng()` converters whose library
   objects reproduce the native steer's logits.
+- **intervention**: `Direction.to_dialz()` returns a real `dialz.SteeringVector`; applied with
+  `SteeringModel.set_control(vector, scalar=m)` it reproduces `direction.steer(m)`'s logits.
+- **docs**: a conditional-steering recipe (`docs/recipes/conditional_steering.md`) with a
+  per-token audit of when the steer was applied.
 - **mechinterp**: `torchlens.mechinterp.patch_query_heads_grid` (documented unstable) builds a
   `[layer, head]` patching grid over query heads at a key or value site under grouped-query
   attention; each cell patches one query head's copy of its key/value group at the expansion op.

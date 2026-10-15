@@ -162,12 +162,17 @@ are removed; calling them raises `AttributeError`.
 | `tl.bridge.steering_vectors.vector(..., layer=i)["steering_vector"]` | `direction_from_pairs(log_pos, log_neg, site).to_steering_vectors(layer=i)` |
 | `tl.bridge.steering_vectors.vector(..., trainer=sv.pca_aggregator())` | `direction_from_pairs(..., method="pca")` |
 | `tl.bridge.repeng.control_vector(log_pos, site, negative_log=log_neg, layer=i)["control_vector"]` | `direction_from_pairs(log_pos, log_neg, site, method="pca").to_repeng(layer=i)` |
+| `tl.bridge.dialz.vector(log, site, negative_log=..., layer=i, method=...)["steering_vector"]` | `direction_from_pairs(log_pos, log_neg, site, method=...).to_dialz()` |
 
 The native `"pca"` is the uncentered first principal axis of the paired differences (the
 steering-vectors `pca_aggregator` definition), not repeng's centered `pca_diff`, so a repeng
 vector built the old way and the new one differ; `pca_center` and `umap` have no
 replacement. The explicit `attention_mask=` / `negative_attention_mask=` arguments are gone:
 the builder reads each trace's saved `attention_mask` input.
+
+For dialz, the `dialz` extra now needs dialz 1.1 or later (`dialz>=1.1,<2`; it was 0.2). dialz's
+own `pca` (scikit-learn PCA, which centres the differences), `pca_center` and `umap` training
+methods are not reproduced; only `mean_diff` equals dialz's `mean_diff`.
 
 ## Removed member spellings name their replacement (typed redirect)
 
