@@ -69,7 +69,7 @@ def test_keep_grad_on_a_transparent_edit_changes_nothing() -> None:
 @pytest.mark.smoke
 def test_keep_grad_zero_ablate_raises_and_scale_zero_keeps_the_graph() -> None:
     error = _detached_error(lambda: _capture(keep_grad(zero_ablate())))
-    assert error.fields["site"] == _SITE
+    assert error.fields["site"] == "lin1:1"  # the capture-time label of the selected module
     assert error.fields["reason"] == "edit_detached"
     assert "keep_grad(tl.scale(0.0))" in error.fields["remedy"]
     out, model = _capture(keep_grad(scale(0.0)))
