@@ -907,7 +907,7 @@ import transformers
 import torchlens as tl
 
 torch.manual_seed(0)
-config = transformers.GPT2Config(n_layer=2, n_head=2, n_embd=16, vocab_size=64, n_positions=32)
+config = transformers.GPT2Config(n_layer=1, n_head=2, n_embd=16, vocab_size=64, n_positions=32)
 model = transformers.GPT2LMHeadModel(config).eval()
 model.set_attn_implementation("eager")
 clean, corrupted = torch.randint(0, 64, (3, 6)), torch.randint(0, 64, (3, 6))
@@ -918,30 +918,39 @@ def metric(logits):
 
 
 claim = tl.mechinterp.edge_scores(model, clean, corrupted=corrupted, metric=metric)
+largest = sorted(claim.rows(), key=lambda row: -abs(row.score))[:6]
 audit = tl.attribution.causal_audit(
-    model, clean, claim=claim, corrupted=corrupted, metric=metric, k=2, random_draws=4
+    model,
+    clean,
+    claim=claim,
+    corrupted=corrupted,
+    metric=metric,
+    edges=[row.address[0] for row in largest],
+    k=2,
+    random_draws=2,
 )
-for row in sorted(audit.units, key=lambda row: -abs(row.measured_effect))[:4]:
+for row in audit.units:
     print(row.component, round(row.claimed_effect, 4), round(row.measured_effect, 4))
-print(len(audit.units), round(audit.rank_agreement, 3))
-print(len(audit.sets), len(audit.extra["sets_not_measured"]))
+print(round(audit.rank_agreement, 3), len(audit.sets), len(audit.extra["sets_not_measured"]))
 ```
 
 Output:
 
 ```text
-input->logits -0.0107 -0.0081
-m1->logits 0.0058 0.0051
-input->m1 0.0059 0.005
-input->a1.h1<v> -0.0028 -0.0028
-57 0.945
-1 5
+input->a0.h1<v> 0.0009 0.0014
+input->m0 -0.0025 0.0012
+input->logits -0.0284 -0.0142
+a0.h0->logits -0.0006 0.0005
+a0.h1->logits 0.001 0.0014
+m0->logits -0.0029 0.0019
+0.314 2 2
 ```
 
-On this random two-layer model the scores rank the 57 edges much as the patches do (rank
-agreement 0.945), while single edges differ in size: the largest, `input->logits`, is claimed at
--0.0107 and moves the metric by -0.0081. Of the six sets (top-2, bottom-2 and four random
-draws), one has both its edges in one receiver and is measured; the other five are listed in
+Here the audit takes the six edges with the largest scores of a random one-layer model. The
+largest, `input->logits`, is claimed at -0.0284 and moves the metric by -0.0142, half as much;
+three of the six (`input->m0`, `a0.h0->logits`, `m0->logits`) move it the opposite way to their
+claim, and rank agreement over the six is 0.314. Of the four sets (top-2, bottom-2 and two random
+draws), two have both their edges in one receiver and are measured; the other two are listed in
 `extra["sets_not_measured"]`.
 
 Measured on two larger checks. On the deterministic nonlinear fixture of the edge-scoring tests
