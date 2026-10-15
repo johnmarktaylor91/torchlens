@@ -272,9 +272,10 @@ def _reference(row: dict[str, Any], corpus: Corpus) -> tuple[str, str]:
     Only definition text counts: a per-path index entry for this exact row id, else a
     ``**Term**`` entry's ``: definition`` paragraph or a prose or table line naming it;
     a spelling-index row (a cell listing several backticked spellings) is a last resort
-    below the documented meaning. For a member or keyword a bare-word (leaf) hit names
-    many objects, so it also ranks below the documented meaning read from the owner's
-    docstring sections.
+    below the documented meaning. For a member or keyword only an owner-qualified hit
+    (``Owner.name``) or the row-id entry outranks the documented meaning read from the
+    owner's docstring sections: ``.name``, ``name=`` and the bare word also match other
+    objects' members and keywords.
 
     Parameters
     ----------
@@ -294,13 +295,12 @@ def _reference(row: dict[str, Any], corpus: Corpus) -> tuple[str, str]:
     documented = str(row.get("doc_first_line") or "")
     doc_source = row.get("doc_source") or "docstring"
     doc_source = doc_source if doc_source == "docstring" else f"doc:{doc_source}"
-    index_rank, leaf_rank = _KIND_ORDER.index("index"), _STRENGTH_ORDER.index(spelling.LEAF)
-    ambiguous_leaf = row["kind"] in ("member", "param")
+    index_rank = _KIND_ORDER.index("index")
+    qualified_rank = _STRENGTH_ORDER.index(spelling.QUALIFIED)
+    owned = row["kind"] in ("member", "param")
 
     def strong(item: tuple[int, int, str, str]) -> bool:
-        return item[0] == 0 or (
-            item[0] < index_rank and not (ambiguous_leaf and item[1] == leaf_rank)
-        )
+        return item[0] == 0 or (item[0] < index_rank and (not owned or item[1] == qualified_rank))
 
     for item in candidates:
         if strong(item):

@@ -406,7 +406,8 @@ def test_gate_items_use_documented_meaning_over_a_leaf_index_row(
     corpus = _lockstep_repo(
         tmp_path,
         glossary=(
-            "| Unrelated rows | `area`, `steps` | unstable |\n`tl.make_curve` makes a curve.\n"
+            "| Unrelated rows | `area`, `steps` | unstable |\n`plot.area` is a drawn node's area.\n"
+            "`tl.make_curve` makes a curve.\n"
         ),
         example="other.area = 3\n" + "\n" * 20 + "c = tl.make_curve()\nc.area\n",
     )
