@@ -311,7 +311,7 @@ documented unstable and may be renamed or removed without a compatibility alias.
 | Evaluation curves | `deletion_curve`, `insertion_curve`, `CurveResult`, `CurveStep`, `fractions`, `scores`, `area`, `aopc`, `steps`, `features`, `patch_size`, `auto`, `elements`, `pixels`, `patches`, `tokens`, `n_features`, `index`, `fraction`, `inputs`, `input_kwargs`, `baseline_mask`, `intervention` | unstable -- no deprecation shim owed |
 | Randomization test | `randomization_test`, `RandomizationResult`, `RandomizationStep`, `randomization`, `cascading`, `independent`, `layers`, `seed`, `keep_maps`, `original_attribution`, `randomized`, `similarity`, `similarities`, `spearman`, `spearman_abs`, `ssim`, `values` | unstable -- no deprecation shim owed |
 | ROAD curve | `road_curve`, `ranking`, `most_relevant_first`, `least_relevant_first`, `noise_std`, `seed`, `road` | unstable -- no deprecation shim owed |
-| Causal audit | `causal_audit`, `CausalAuditResult`, `CausalAuditUnit`, `CausalAuditSet`, `claim`, `k`, `ablation`, `zero`, `mean`, `controls`, `top`, `bottom`, `random`, `random_draws`, `per_unit`, `layer`, `site`, `original_score`, `units`, `sets`, `rank_agreement`, `set_of`, `unit`, `claimed_effect`, `measured_effect`, `kind`, `draw`, `intervention` | unstable -- no deprecation shim owed |
+| Causal audit | `causal_audit`, `CausalAuditResult`, `CausalAuditUnit`, `CausalAuditSet`, `claim`, `k`, `ablation`, `zero`, `mean`, `controls`, `top`, `bottom`, `random`, `random_draws`, `per_unit`, `layer`, `site`, `original_score`, `units`, `sets`, `rank_agreement`, `set_of`, `unit`, `claimed_effect`, `measured_effect`, `kind`, `draw`, `intervention`, `component`, `claim_kind`, `constant_row`, `rows_not_audited` | unstable -- no deprecation shim owed |
 
 <!-- ATTRIBUTION-KIT-UNSTABLE-INDEX:END -->
 
@@ -324,9 +324,10 @@ embedding output. `deletion_curve` and `insertion_curve` score an attribution by
 revealing its most-attributed input features in steps (each step a recorded intervention), and
 `randomization_test` checks that a method's maps change when the model's layers are
 re-initialized. `road_curve` is ROAD, the deletion curve with removed pixels filled by noisy
-linear imputation from their neighbours. `causal_audit` grades an internal (layer) attribution by ablating the hidden
-units it ranks, through forks of an intervention-ready trace, and comparing the measured
-effects with the claim. The callable/index/site annotation used inside `torchlens.attribution` is
+linear imputation from their neighbours. `causal_audit` grades an internal attribution (a layer attribution, a direct-logit-attribution
+table or a one-backward read table) by ablating the units it ranks, through forks of an
+intervention-ready trace, and comparing the measured effects with the claim; each row names its
+`site` and its `component`, and a direct-logit table's `constant_row` is reported apart. The callable/index/site annotation used inside `torchlens.attribution` is
 privately named `_AttributionTarget`; `TargetSpec` refers only to the intervention selector record and is not an
 attribution-target alias. See the [attribution reference](attribution.md).
 

@@ -1424,13 +1424,18 @@
   `attribution_randomization_map_changed`; warning `attribution_randomization_maps_large`. Doc
   of record: `docs/reference/attribution.md`.
 - Causal audit (DOCUMENTED-UNSTABLE): `tl.attribution.causal_audit(model, inputs,
-  input_kwargs=None, *, claim, target, k=5, ablation="zero", controls=("bottom", "random"),
+  input_kwargs=None, *, claim, target=None, k=5, ablation="zero", controls=("bottom", "random"),
   random_draws=10, per_unit=True, seed=0)` grades a layer attribution (also one computed for a
-  `tl.attribution.SiteTarget`) at its hidden site: each unit ablated alone, then the top-k
+  `tl.attribution.SiteTarget`) at its hidden site, a `tl.mechinterp.direct_logit_contributions`
+  table (each component's whole site ablated, the logit read from the unembedding head after a
+  native-logit check; leave `target=` out; the constant row is reported apart in
+  `extra["constant_row"]`), or a `tl.attribution.read` table of `activation_x_grad` `ACT` rows
+  (each site or element ablated, `target=` the same `tl.attribution.seed(...)`; `EDGE` rows refuse
+  and name `tl.mechinterp.patch_edges`): each unit ablated alone, then the top-k
   claimed units together beside bottom-k and seeded random-k controls, one
   `trace.fork().do(...)` each; returns `tl.attribution.CausalAuditResult` (`units`, `sets`,
   `rank_agreement` (Spearman), `original_score`, `site`) whose `tl.attribution.CausalAuditUnit`
-  and `tl.attribution.CausalAuditSet` rows carry `claimed_effect`, `measured_effect` and a replayable
-  `intervention`. Refusals `attribution_audit_claim_unsupported`,
+  rows carry `site`, `component`, `claimed_effect`, `measured_effect` and a replayable
+  `intervention`, as do the `tl.attribution.CausalAuditSet` rows (without `site` and `component`). Refusals `attribution_audit_claim_unsupported`,
   `attribution_audit_claim_misaligned`, `attribution_eval_setting_invalid`; warning
   `attribution_audit_units_many`. Doc of record: `docs/reference/attribution.md`.
