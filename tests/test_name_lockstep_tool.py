@@ -430,8 +430,16 @@ def test_gate_items_use_documented_meaning_over_a_leaf_index_row(
     made_by = gate_input.producers(head)
     assert made_by["Curve"] == {"make_curve"}
     area_row = head["member:doclens_pkg.core:Curve.area"]
-    assert gate_input._context_terms(area_row, made_by) == ["Curve", "make_curve"]
+    assert gate_input._context_terms(area_row, made_by) == ["Curve", "curve", "make_curve"]
     assert area["snippet"].splitlines()[-1] == "c.area"
+    assert [s["path"] for s in area["snippets"]] == ["examples/demo.py"]
+    steps = items["member:doclens_pkg.core:Curve.steps"]
+    assert steps["snippets"] == [] and steps["snippet"] is None
+    exports = gate_input.module_exports(head)
+    assert {"Curve", "make_curve", "plain"} <= set(gate_input._sibling_terms(area_row, exports))
+    assert "make_curve" in gate_input._sibling_terms(head["param:budget"], exports)
+    made = gate_input._context_terms({"kind": "member", "path": "TrajectoryStats.x"}, {})
+    assert made == ["TrajectoryStats", "trajectory_stats"]
 
 
 def test_reference_takes_definition_text_and_skips_spelling_index_rows(tmp_path: Path) -> None:
@@ -479,7 +487,15 @@ def test_snippet_prefers_a_hit_near_the_owner() -> None:
     lines = ["spec.area"] + [""] * 30 + ["c = Curve()", "c.area"]
     hits = [(1, 5, 9, "contextual"), (33, 2, 6, "contextual")]
     assert gate_input._best_hit(hits, lines, ["Curve"]) == (1, 33)
-    assert gate_input._best_hit(hits, lines, []) == (2, 1)
+    assert gate_input._best_hit(hits, lines, []) == (3, 1)
+    far = ["c = Curve()"] + [""] * 30 + ["c.area"]
+    assert gate_input._best_hit([(32, 2, 6, "contextual")], far, ["Curve"]) == (2, 32)
+    sibling = ["g = make_graph()"] + [""] * 30 + ["e.area"]
+    assert gate_input._best_hit([(32, 2, 6, "contextual")], sibling, ["Curve"]) == (3, 32)
+    assert gate_input._best_hit([(32, 2, 6, "contextual")], sibling, ["Curve"], ["make_graph"]) == (
+        2,
+        32,
+    )
     assert gate_input._best_hit([(1, 0, 4, "qualified")] + hits, lines, ["Curve"]) == (0, 1)
 
 

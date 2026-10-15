@@ -69,6 +69,64 @@ def producers(head_rows: dict[str, dict[str, Any]]) -> dict[str, set[str]]:
     return found
 
 
+def module_exports(
+    head_rows: dict[str, dict[str, Any]],
+) -> tuple[dict[str, set[str]], dict[str, str]]:
+    """Map each module to its exported class and function names, and each export path to its module.
+
+    Parameters
+    ----------
+    head_rows
+        Head inventory keyed on id.
+
+    Returns
+    -------
+    tuple[dict[str, set[str]], dict[str, str]]
+        ``(module -> leaf names, export path -> module)`` over root and export rows.
+    """
+
+    names: dict[str, set[str]] = {}
+    modules: dict[str, str] = {}
+    for row in head_rows.values():
+        if row["kind"] in ("root", "export") and row.get("module"):
+            names.setdefault(row["module"], set()).add(str(row["path"]).rsplit(".", 1)[-1])
+            modules[str(row["path"])] = row["module"]
+    return names, modules
+
+
+def _sibling_terms(
+    row: dict[str, Any], exports: tuple[dict[str, set[str]], dict[str, str]] | None
+) -> list[str]:
+    """Return the exports of the module that defines a member, or of the callables taking a keyword.
+
+    A file that names one of them is about that module, so a ``.name`` or ``name=`` hit
+    in it is plausibly this name's call site even far from the owner's own name.
+
+    Parameters
+    ----------
+    row
+        Head row.
+    exports
+        ``module_exports`` of the head inventory (optional).
+
+    Returns
+    -------
+    list[str]
+        Sorted leaf names; empty for other kinds or without ``exports``.
+    """
+
+    if not exports:
+        return []
+    names, modules = exports
+    if row["kind"] == "member":
+        found = {str(row.get("module") or "")}
+    elif row["kind"] == "param":
+        found = {modules.get(str(use), "") for use in row.get("uses", ())}
+    else:
+        return []
+    return sorted(set().union(*(names.get(module, set()) for module in found)))
+
+
 def _context_terms(row: dict[str, Any], made_by: dict[str, set[str]] | None = None) -> list[str]:
     """Return the words that place a contextual hit in this name's own context.
 
@@ -85,23 +143,31 @@ def _context_terms(row: dict[str, Any], made_by: dict[str, set[str]] | None = No
     Returns
     -------
     list[str]
-        Owner class and producer names (members) or callable leaf names (keywords);
-        empty otherwise.
+        Owner class names, their snake-case variable spellings and producer names
+        (members), or callable leaf names (keywords); empty otherwise.
     """
 
     made_by = made_by or {}
     if row["kind"] == "member":
         owners = {*row.get("owner_names", ()), str(row["path"]).split(".")[0]}
-        return sorted(owners.union(*(made_by.get(owner, set()) for owner in owners)))
+        variables = {re.sub(r"(?<!^)(?=[A-Z])", "_", owner).lower() for owner in owners}
+        return sorted(owners.union(variables, *(made_by.get(owner, set()) for owner in owners)))
     if row["kind"] == "param":
         return sorted({str(use).rsplit(".", 1)[-1] for use in row.get("uses", ())})
     return []
 
 
 def _best_hit(
-    hits: list[tuple[int, int, int, str]], lines: list[str], terms: list[str]
+    hits: list[tuple[int, int, int, str]],
+    lines: list[str],
+    terms: list[str],
+    file_terms: list[str] = (),
 ) -> tuple[int, int]:
     """Pick a file's best hit: qualified, then contextual near a context term, then first.
+
+    Ranks: 0 qualified; 1 contextual within a snippet's reach of a context term; 2
+    contextual in a file that mentions a context term or a file term elsewhere; 3
+    contextual in a file that mentions neither.
 
     Parameters
     ----------
@@ -111,25 +177,34 @@ def _best_hit(
         The file's lines.
     terms
         Context terms from ``_context_terms``.
+    file_terms
+        Sibling terms from ``_sibling_terms`` (they place the file, not the line).
 
     Returns
     -------
     tuple[int, int]
-        ``(rank, line)``: rank 0 qualified, 1 contextual in context, 2 other contextual.
+        ``(rank, line)`` of the best-ranked hit.
     """
 
     pattern = re.compile(rf"\b(?:{'|'.join(map(re.escape, terms))})\b") if terms else None
     context = {n for n, text in enumerate(lines, start=1) if pattern and pattern.search(text)}
+    words = [*terms, *file_terms]
+    about = bool(context) or bool(
+        words and re.search(rf"\b(?:{'|'.join(map(re.escape, words))})\b", "\n".join(lines))
+    )
     ranked = []
     for line, _, _, strength in hits:
         near = any(abs(line - n) <= SNIPPET_BEFORE + SNIPPET_AFTER for n in context)
-        rank = 0 if strength == spelling.QUALIFIED else (1 if near else 2)
+        rank = 0 if strength == spelling.QUALIFIED else (1 if near else (2 if about else 3))
         ranked.append((rank, line))
     return min(ranked)
 
 
 def _snippets(
-    row: dict[str, Any], corpus: Corpus, made_by: dict[str, set[str]] | None = None
+    row: dict[str, Any],
+    corpus: Corpus,
+    made_by: dict[str, set[str]] | None = None,
+    exports: tuple[dict[str, set[str]], dict[str, str]] | None = None,
 ) -> list[dict[str, Any]]:
     """Return up to three call-site snippets from different files.
 
@@ -141,18 +216,23 @@ def _snippets(
         Texts of the snippet places (``snippets`` key: tests, examples, docs).
     made_by
         ``producers`` of the head inventory (optional).
+    exports
+        ``module_exports`` of the head inventory (optional).
 
     Returns
     -------
     list[dict[str, Any]]
         ``{"path", "line", "text"}`` per snippet; qualified spellings first, then
         contextual spellings near the owner class or a call that returns it (members) or a
-        callable that takes the
-        keyword (keywords), then other contextual spellings.
+        callable that takes the keyword (keywords), then hits in a file that mentions that
+        context or another export of the same module. For a member or keyword a hit in a
+        file that mentions neither is another object's call site and is left out; exports
+        keep it.
     """
 
     patterns = spelling.spellings(row)
     terms = _context_terms(row, made_by)
+    file_terms = _sibling_terms(row, exports)
     found: list[tuple[int, dict[str, Any]]] = []
     for path, text in corpus.files.get("snippets", []):
         strengths = (spelling.QUALIFIED, spelling.CONTEXTUAL)
@@ -160,7 +240,9 @@ def _snippets(
         if not hits:
             continue
         lines = text.splitlines()
-        rank, line = _best_hit(hits, lines, terms)
+        rank, line = _best_hit(hits, lines, terms, file_terms)
+        if rank == 3 and row["kind"] in ("member", "param"):
+            continue  # ``.name`` or ``name=`` in a file without the owner: another object's call site
         low, high = max(0, line - 1 - SNIPPET_BEFORE), min(len(lines), line + SNIPPET_AFTER)
         found.append((rank, {"path": path, "line": line, "text": "\n".join(lines[low:high])}))
     found.sort(key=lambda item: (item[0], item[1]["path"]))
@@ -338,8 +420,9 @@ def gate_items(surface_diff: SurfaceDiff, head_rows: dict[str, dict[str, Any]], 
     rows += [(head_rows[r.new_id], "renamed", r.old_id) for r in surface_diff.renamed]
     items = []
     made_by = producers(head_rows)
+    exports = module_exports(head_rows)
     for row, change, old_id in rows:
-        snippets = _snippets(row, corpus, made_by)
+        snippets = _snippets(row, corpus, made_by, exports)
         reference, source = _reference(row, corpus)
         items.append(
             {
