@@ -23,7 +23,7 @@ from test_circ3_multi_receiver_patch import _outside_random_circuit, _tiny_gpt2
 import torchlens as tl
 import torchlens.mechinterp as mi
 from torchlens.intervention import replay as replay_module
-from torchlens.intervention.edge_substitution import recompute_with_substitution
+from torchlens.intervention.edge_substitution import _recompute_with_substitution
 from torchlens.mechinterp import _edges
 from torchlens.mechinterp._edge_patch import _head_spec, _input_edge_record
 from torchlens.selection import SelectionError
@@ -92,7 +92,7 @@ def test_the_local_projection_is_bitwise_a_substitution_and_push(tiny, receiver)
     before = clean.ops[home].out.clone()
     scratch = clean.fork()
     scratch.do(_input_edge_record(scratch, target).__selection__(), patched)
-    got = recompute_with_substitution(clean, _input_edge_record(clean, target), patched, home)
+    got = _recompute_with_substitution(clean, _input_edge_record(clean, target), patched, home)
     assert torch.equal(got, scratch.ops[home].out)
     assert not torch.equal(got, before)
     assert torch.equal(clean.ops[home].out, before)
@@ -103,5 +103,5 @@ def test_a_target_upstream_of_the_edge_refuses(tiny) -> None:
     late = graph.receivers["a1.h0<q>"]
     early_home = str(_head_spec(clean, graph.receivers["a0.h0<q>"]).home_label)
     with pytest.raises(SelectionError) as excinfo:
-        recompute_with_substitution(clean, _input_edge_record(clean, late), late.value, early_home)
+        _recompute_with_substitution(clean, _input_edge_record(clean, late), late.value, early_home)
     assert excinfo.value.fields["code"] == "selection_apply_invalid"

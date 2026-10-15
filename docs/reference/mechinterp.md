@@ -194,9 +194,12 @@ example above: pass every edge outside the circuit.
 
 Receivers are patched in topological order, a stage at a time (a layer's
 attention receivers, then its MLP, then `logits`), and the component graph
-is rebuilt on the partly patched fork at each later stage, so a circuit over
-all 445 GPT-2 small receivers costs one replay per patched receiver (two for
-`q`, `k`, `v`) plus 24 graph builds. No edges returns an unpatched fork; an
+is rebuilt on the partly patched fork at each later stage. Each stage is
+one replay: a layer's `q`, `k` and `v` receivers are written together as
+one selection batch, and the projection output behind each of them is
+recomputed locally (only the norm and projection ops run on the
+substituted input, with no fork). A circuit over all 445 GPT-2 small
+receivers therefore costs 25 replays, 24 graph builds and one fork. No edges returns an unpatched fork; an
 edge passed twice refuses `mi_edge_patch_edge_repeated`. Patching needs a
 trace captured with `intervention_ready=True`.
 
@@ -293,9 +296,11 @@ Circuit test cases on GPT-2 small (CPU):
   against ACDC's encoding of the circuit is 0.870. The run took 57 minutes
   on 4 cores (3.4 s per row).
 - Circuits run as one `patch_edges` call; on GPT-2 small a call that patches
-  edges into 121 receivers (every MLP, `logits`, and the q, k and v
-  receivers of layers 0, 6 and 11) equals an independent forward-hook
-  implementation of the same convention within 1e-10 in float64.
+  33,161 edges into all 445 receivers equals an independent forward-hook
+  implementation of the same convention within 1e-10 in float64 (measured
+  gap 2.6e-13). On 2 rows, 4 threads, that call takes 119 s (25 replays,
+  24 graph builds); patching each q, k and v receiver through its own fork
+  and replay took 2675 s.
 
 ACDC-style discovery is a recipe, not a TorchLens loop:
 [docs/recipes/acdc_ioi.md](../recipes/acdc_ioi.md) walks the receivers from

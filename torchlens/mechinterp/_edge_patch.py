@@ -18,11 +18,10 @@ replay engine:
   residual state itself, and every other consumer of it, stay as computed.
 * ``a{L}.h{H}<q|k|v>`` receivers share one norm with every head and role of
   their layer, so the patch goes one step later: the norm and projection
-  ops alone are re-executed on the substituted input
-  (``recompute_with_substitution``, no fork and no replay), and only head
-  ``H``'s ``q`` (or ``k``, or ``v``) slice of the projection output is
-  written into the result (an ACT selection over the recipe's per-head
-  facet).
+  ops alone are re-executed on the substituted input (no fork and no
+  replay), and only head ``H``'s ``q`` (or ``k``, or ``v``) slice of the
+  projection output is written into the result (an ACT selection over the
+  recipe's per-head facet).
 
 Receivers are patched in topological order, one stage at a time (a layer's
 attention receivers, then its MLP, then ``logits``). An edge substitution
@@ -134,10 +133,10 @@ def _projection_value(trace: Any, receiver: Any, patched: torch.Tensor) -> torch
     alone, with no fork and no replay of the rest of the model).
     """
 
-    from ..intervention.edge_substitution import recompute_with_substitution
+    from ..intervention.edge_substitution import _recompute_with_substitution
 
     spec = _head_spec(trace, receiver)
-    projection = recompute_with_substitution(
+    projection = _recompute_with_substitution(
         trace, _input_edge_record(trace, receiver), patched, str(spec.home_label)
     )
     if not isinstance(projection, torch.Tensor):
@@ -159,12 +158,11 @@ def _write_stage(owner: Any, trace: Any, writes: list[tuple[Any, torch.Tensor]])
     written together as one selection batch (one replay).
     """
 
-    attention = [
-        (receiver, value) for receiver, value in writes if receiver.kind in ("q", "k", "v")
-    ]
+    attention, residual = [], []
     for receiver, value in writes:
-        if receiver.kind not in ("q", "k", "v"):
-            owner.do(_input_edge_record(owner, receiver).__selection__(), value)
+        (attention if receiver.kind in ("q", "k", "v") else residual).append((receiver, value))
+    for receiver, value in residual:
+        owner.do(_input_edge_record(owner, receiver).__selection__(), value)
     pairs = [
         (_head_spec(owner, receiver).__selection__(), _projection_value(trace, receiver, value))
         for receiver, value in attention

@@ -62,7 +62,7 @@ from .types import Edit
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
 
-__all__ = ["apply_edge_substitution_do", "recompute_with_substitution"]
+__all__ = ["apply_edge_substitution_do"]
 
 
 def tensor_content_digest(value: torch.Tensor) -> str:
@@ -392,7 +392,7 @@ def _reexecute_child_with_substitution(
     )
 
 
-def recompute_with_substitution(
+def _recompute_with_substitution(
     trace: Trace, record: Any, substituted: torch.Tensor, target_label: str, *, strict: bool = False
 ) -> torch.Tensor:
     """Return what op ``target_label`` computes when edge ``record`` consumes ``substituted``.
