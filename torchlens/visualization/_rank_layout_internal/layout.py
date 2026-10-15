@@ -846,7 +846,10 @@ def render_rank_layout(
 
         lines.extend(
             legend_table_lines_for_rank_path(
-                theme, max_y, mutated_parameter=legend_mutated_parameter
+                theme,
+                max_y,
+                mutated_parameter=legend_mutated_parameter,
+                node_attrs=[entry["attrs"] for entry in node_data.values()],
             )
         )
 

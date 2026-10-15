@@ -27,6 +27,7 @@ DOCUMENTED-UNSTABLE pending the naming session.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -39,13 +40,16 @@ if TYPE_CHECKING:
 
 __all__ = [
     "LEGEND_NODE_NAME",
+    "LEGEND_ROLES",
     "LegendRow",
     "LegendSection",
     "add_legend_table_to_graphviz",
     "backward_key_sections",
     "build_legend_table_label",
+    "drawn_legend_roles",
     "encoding_sections",
     "legend_table_lines_for_rank_path",
+    "statement_node_attrs",
     "theme_role_sections",
 ]
 
@@ -84,8 +88,114 @@ class LegendSection:
     rows: tuple[LegendRow, ...]
 
 
+#: Legend role rows in display order. ``drawn_legend_roles`` returns these keys.
+LEGEND_ROLES = (
+    "input",
+    "output",
+    "plain op",
+    "parameterized",
+    "buffer",
+    "mutated parameter",
+    "boolean",
+    "intervention/cone",
+)
+
+#: Shapes that never stand for a legend role (layout helpers, image nodes).
+_NON_ROLE_SHAPES = frozenset({"plaintext", "plain", "none", "point"})
+
+
+def _role_fills(theme: VisualizationTheme) -> dict[str, frozenset[str]]:
+    """Return each fill-coded role's rendered fills under ``theme``, lowercased."""
+
+    from ._render_common import (
+        BOOL_NODE_COLOR,
+        BUFFER_NODE_COLOR,
+        DEFAULT_BG_COLOR,
+        FROZEN_PARAMS_BG_COLOR,
+        INPUT_COLOR,
+        OUTPUT_COLOR,
+        PARAMS_NODE_BG_COLOR,
+        TRAINABLE_PARAMS_BG_COLOR,
+    )
+    from .node_spec import NodeSpec
+    from .themes import apply_theme_to_spec
+
+    def themed(*constants: str) -> frozenset[str]:
+        return frozenset(
+            str(apply_theme_to_spec(NodeSpec(["x"], fillcolor=constant), theme).fillcolor).lower()
+            for constant in constants
+        )
+
+    return {
+        "input": themed(INPUT_COLOR),
+        "output": themed(OUTPUT_COLOR),
+        "plain op": themed(DEFAULT_BG_COLOR),
+        "parameterized": themed(
+            TRAINABLE_PARAMS_BG_COLOR,
+            FROZEN_PARAMS_BG_COLOR,
+            PARAMS_NODE_BG_COLOR,
+            f"{TRAINABLE_PARAMS_BG_COLOR}:{FROZEN_PARAMS_BG_COLOR}",
+        ),
+        "buffer": themed(BUFFER_NODE_COLOR),
+        "boolean": themed(BOOL_NODE_COLOR),
+    }
+
+
+def statement_node_attrs(statements: Iterable[Any]) -> Iterator[dict[str, Any]]:
+    """Yield the attributes of every node statement in a RenderIR statement tree."""
+
+    for statement in statements:
+        if statement.kind == "node":
+            yield dict(statement.attrs)
+        yield from statement_node_attrs(statement.children)
+
+
+def drawn_legend_roles(
+    node_attrs: Iterable[Mapping[str, Any]], theme: VisualizationTheme
+) -> frozenset[str]:
+    """Return the legend roles some drawn node actually carries.
+
+    A role counts only when a node was painted with it: its rendered fill
+    (and, for buffers and mutated Parameters, the cylinder), or for
+    interventions the site or cone outline or the intervention node's fill.
+    Collapsed module boxes (``box3d``) are not plain ops; a parameterized one
+    counts as parameterized.
+    """
+
+    from .node_spec import (
+        INTERVENTION_CONE_COLOR,
+        INTERVENTION_HOOK_FILL_COLOR,
+        INTERVENTION_SITE_COLOR,
+    )
+
+    fills = _role_fills(theme)
+    marks = {INTERVENTION_SITE_COLOR.lower(), INTERVENTION_CONE_COLOR.lower()}
+    hook_fill = INTERVENTION_HOOK_FILL_COLOR.lower()
+    roles: set[str] = set()
+    for attrs in node_attrs:
+        shape = str(attrs.get("shape", "")).lower()
+        if shape in _NON_ROLE_SHAPES or "invis" in str(attrs.get("style", "")):
+            continue
+        fill = str(attrs.get("fillcolor", "")).lower()
+        if str(attrs.get("color", "")).lower() in marks or fill == hook_fill:
+            roles.add("intervention/cone")
+        if shape == "cylinder":
+            if fill in fills["buffer"]:
+                roles.add("buffer")
+            elif fill in fills["parameterized"]:
+                roles.add("mutated parameter")
+            continue
+        for role, role_fills in fills.items():
+            if fill in role_fills and not (role == "plain op" and shape == "box3d"):
+                roles.add(role)
+    return frozenset(roles)
+
+
 def theme_role_sections(
-    theme: VisualizationTheme, *, mutated_parameter: bool = False
+    theme: VisualizationTheme,
+    *,
+    mutated_parameter: bool = False,
+    drawn: frozenset[str] | None = None,
 ) -> tuple[LegendSection, ...]:
     """Build the node-role legend section from the RENDERED specs.
 
@@ -103,61 +213,62 @@ def theme_role_sections(
         gated on that, like the backward key's rows: a row for a node kind the
         render does not draw would be an unexplained claim, and plain renders
         keep their legend unchanged.
+    drawn:
+        Roles the render drew (``drawn_legend_roles``). Every other row is
+        left out for the same reason; ``None`` lists every role.
 
     Returns
     -------
     tuple[LegendSection, ...]
-        The one role section.
+        The one role section, or nothing when no listed role was drawn.
     """
 
     from ._render_common import (
         BOOL_NODE_COLOR,
+        BUFFER_NODE_COLOR,
         DEFAULT_BG_COLOR,
         INPUT_COLOR,
         OUTPUT_COLOR,
         TRAINABLE_PARAMS_BG_COLOR,
     )
-    from .node_spec import INTERVENTION_CONE_COLOR, INTERVENTION_SITE_COLOR, NodeSpec
+    from .node_spec import INTERVENTION_SITE_COLOR, NodeSpec
     from .themes import apply_theme_to_spec
 
     role_specs = (
         ("input", NodeSpec(["input"], shape="oval", fillcolor=INPUT_COLOR), None),
         ("output", NodeSpec(["output"], shape="oval", fillcolor=OUTPUT_COLOR), None),
+        ("plain op", NodeSpec(["plain op"], shape="oval", fillcolor=DEFAULT_BG_COLOR), None),
         (
             "parameterized",
             NodeSpec(["parameterized"], shape="oval", fillcolor=TRAINABLE_PARAMS_BG_COLOR),
             None,
         ),
-        ("buffer", NodeSpec(["buffer"], shape="cylinder", fillcolor=DEFAULT_BG_COLOR), "cylinder"),
-        *(
-            (
-                (
-                    "mutated parameter",
-                    NodeSpec(
-                        ["mutated parameter"],
-                        shape="cylinder",
-                        fillcolor=TRAINABLE_PARAMS_BG_COLOR,
-                    ),
-                    "cylinder",
-                ),
-            )
-            if mutated_parameter
-            else ()
+        ("buffer", NodeSpec(["buffer"], shape="cylinder", fillcolor=BUFFER_NODE_COLOR), "cylinder"),
+        (
+            "mutated parameter",
+            NodeSpec(["mutated parameter"], shape="cylinder", fillcolor=TRAINABLE_PARAMS_BG_COLOR),
+            "cylinder",
         ),
         ("boolean", NodeSpec(["boolean"], shape="oval", fillcolor=BOOL_NODE_COLOR), None),
         (
+            # Sites and cone members are marked by their OUTLINE, so the
+            # swatch is a plain-op fill inside the site outline.
             "intervention/cone",
             NodeSpec(
                 ["intervention/cone"],
                 shape="oval",
-                fillcolor=INTERVENTION_CONE_COLOR,
+                fillcolor=DEFAULT_BG_COLOR,
                 color=INTERVENTION_SITE_COLOR,
             ),
-            None,
+            "outline",
         ),
     )
     rows = []
     for text, spec, hint in role_specs:
+        if text == "mutated parameter" and not mutated_parameter:
+            continue
+        if drawn is not None and text not in drawn and text != "mutated parameter":
+            continue
         themed = apply_theme_to_spec(spec, theme)
         rows.append(
             LegendRow(
@@ -167,6 +278,8 @@ def theme_role_sections(
                 hint=hint,
             )
         )
+    if not rows:
+        return ()
     return (LegendSection(title="TorchLens legend", rows=tuple(rows)),)
 
 
@@ -321,6 +434,7 @@ def legend_table_lines_for_rank_path(
     max_y: float,
     *,
     mutated_parameter: bool = False,
+    node_attrs: Iterable[Mapping[str, Any]] | None = None,
 ) -> list[str]:
     """Return raw-DOT lines for the rank path's pinned legend table.
 
@@ -328,15 +442,18 @@ def legend_table_lines_for_rank_path(
     ``neato -n`` needs every node positioned, so the one table node is pinned
     left of the graph origin like the historical pinned cluster -- but as ONE
     compact node instead of six. ``mutated_parameter`` adds the gated
-    ``mutated parameter`` row exactly as on the dot path.
+    ``mutated parameter`` row exactly as on the dot path; ``node_attrs`` (the
+    drawn nodes' attributes) keeps only the roles drawn, as on the dot path.
     """
 
     from .themes import THEME_PRESETS
 
     resolved = theme if theme is not None else THEME_PRESETS["torchlens"]
-    label = build_legend_table_label(
-        theme_role_sections(resolved, mutated_parameter=mutated_parameter), resolved
-    )
+    drawn = None if node_attrs is None else drawn_legend_roles(node_attrs, resolved)
+    sections = theme_role_sections(resolved, mutated_parameter=mutated_parameter, drawn=drawn)
+    if not sections:
+        return []
+    label = build_legend_table_label(sections, resolved)
     return [
         f"  {LEGEND_NODE_NAME} [label={label} shape=plaintext margin=0 "
         f'fontname="{resolved.typography.family}" pos="-200.0,{max(max_y - 40.0, 40.0):.1f}!"]'

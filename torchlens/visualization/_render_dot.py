@@ -42,6 +42,7 @@ from ._render_utils import (
     announce_written_graph,
     collision_safe_outpath,
     html_escape,
+    strip_path_directories,
 )
 from ._svg_compose import (
     _inline_svg_file_local_images,
@@ -447,8 +448,10 @@ def _graph_caption_body(trace: "Trace", request: ResolvedRenderRequest) -> str:
     # the graph is a publishable artifact, so the caption carries the facts.
     from .._capture_honesty import honesty_banner_lines
 
+    # The picture keeps a cited source location's file name and line only.
     for banner_line in honesty_banner_lines(trace):
-        caption_body += f"<B>{html_escape(banner_line)}</B><br align='left'/>"
+        banner_text = html_escape(strip_path_directories(banner_line))
+        caption_body += f"<B>{banner_text}</B><br align='left'/>"
     encoding_state = getattr(request, "encoding", None)
     if encoding_state is not None and getattr(encoding_state, "stack_spec", None) is not None:
         # Stacking disclosure is part of the contract (memo 4.1): the
@@ -927,6 +930,7 @@ def _finalize_forward_ir(
         captured_edges=tuple(work.captured_edges),
         overrides=overrides,
         rankdir=context.rankdir,
+        theme=context.theme,
     )
     _setup_subgraphs(
         trace,
@@ -938,6 +942,7 @@ def _finalize_forward_ir(
         # re-emitting them at top level put clustered nodes in a root rankset.
         [chain for chain in forward_render_ir.ordering_constraints if chain.lca_key == -1],
         forward_render_ir.regions,
+        container_ink=_theme_cluster_attrs(context.theme),
     )
     return replace(forward_render_ir, dot_statements=tuple(work.builder.calls))
 
@@ -1051,14 +1056,19 @@ def _emit_and_finish_forward(
     from ._legend import (
         LegendSection,
         add_legend_table_to_graphviz,
+        drawn_legend_roles,
         encoding_sections,
+        statement_node_attrs,
         theme_role_sections,
     )
 
     legend_sections: tuple[LegendSection, ...] = ()
     if request.show_legend is True:
+        drawn = drawn_legend_roles(
+            statement_node_attrs(forward_render_ir.dot_statements), context.theme
+        )
         legend_sections += theme_role_sections(
-            context.theme, mutated_parameter=bool(work.mutated_parameter_nodes)
+            context.theme, mutated_parameter=bool(work.mutated_parameter_nodes), drawn=drawn
         )
     if request.encoding is not None and request.show_legend is not False:
         # None (AUTO) or True with an active channel -> disclosure section;

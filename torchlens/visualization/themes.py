@@ -16,6 +16,7 @@ Okabe-Ito semantic set; the other shipped skins keep their historical palettes.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -357,6 +358,10 @@ _CONSTANT_ROLES: dict[str, str] = {
     "#D9D9D9": "params_trainable",
     "#B0B0B0": "params_frozen",
     "#F7D460": "boolean",
+    # Buffers fill with the palette's buffer role. They used to fill with the
+    # plain-op default, so the legend's buffer swatch and a plain op looked
+    # the same in every skin; the shape was the only cue.
+    "#E69F00": "buffer",
 }
 
 
@@ -414,9 +419,108 @@ def apply_theme_to_spec(spec: NodeSpec, theme: VisualizationTheme) -> NodeSpec:
         fillcolor = palette_fill
     else:
         fillcolor = theme.default_fill if spec.fillcolor in {None, "white"} else spec.fillcolor
-    fontcolor = theme.default_font if spec.fontcolor in {None, "black"} else spec.fontcolor
+    if spec.fontcolor in {None, "black"}:
+        fontcolor = _legible_ink(fillcolor, theme.default_font)
+    else:
+        fontcolor = spec.fontcolor
     color = theme.default_border if spec.color in {None, "black"} else spec.color
     return spec.replace(fillcolor=fillcolor, fontcolor=fontcolor, color=color)
+
+
+#: WCAG AA contrast floor for normal-size text.
+_MIN_TEXT_CONTRAST = 4.5
+#: Fallback inks when a skin's default text colour is unreadable on a fill.
+_FALLBACK_INKS = ("#111111", "#FFFFFF")
+
+
+def _relative_luminance(color: str) -> float | None:
+    """Return the WCAG relative luminance of ``#RRGGBB`` or ``white``/``black``."""
+
+    text = {"white": "#FFFFFF", "black": "#000000"}.get(color.strip().lower(), color.strip())
+    if not re.fullmatch(r"#[0-9A-Fa-f]{6}", text):
+        return None
+    channels = []
+    for index in (1, 3, 5):
+        value = int(text[index : index + 2], 16) / 255.0
+        channels.append(value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4)
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+
+
+def _contrast_ratio(color_a: str, color_b: str) -> float | None:
+    """Return the WCAG contrast ratio of two colours, or ``None`` if either is unparseable."""
+
+    lum_a, lum_b = _relative_luminance(color_a), _relative_luminance(color_b)
+    if lum_a is None or lum_b is None:
+        return None
+    high, low = max(lum_a, lum_b), min(lum_a, lum_b)
+    return (high + 0.05) / (low + 0.05)
+
+
+def _worst_contrast(ink: str, fill: str) -> float | None:
+    """Return ``ink``'s lowest contrast over a fill's gradient segments, or ``None``."""
+
+    ratios = [_contrast_ratio(ink, segment) for segment in fill.split(":")]
+    known = [ratio for ratio in ratios if ratio is not None]
+    if not known or len(known) != len(ratios):
+        return None
+    return min(known)
+
+
+def _legible_ink(fill: str | None, ink: str) -> str:
+    """Return ``ink``, or a fallback ink when ``ink`` is unreadable on ``fill``.
+
+    A skin's default text colour suits its default fill; on a semantic fill
+    of the opposite lightness (the dark skin's white text on the light input,
+    output, boolean and buffer fills) it fell to about 1.2:1. Gradient fills
+    are judged by their worst segment; an unparseable fill keeps ``ink``.
+    """
+
+    if fill is None:
+        return ink
+    current = _worst_contrast(ink, str(fill))
+    if current is None or current >= _MIN_TEXT_CONTRAST:
+        return ink
+    best = max(_FALLBACK_INKS, key=lambda candidate: _worst_contrast(candidate, str(fill)) or 0.0)
+    return best if (_worst_contrast(best, str(fill)) or 0.0) > current else ink
+
+
+def _theme_line_ink(theme: VisualizationTheme, color: str | None) -> str | None:
+    """Return the skin's edge colour for the renderer's default black edge ink."""
+
+    if color in (None, "black"):
+        return theme.edge.get("color", color)
+    return color
+
+
+def _theme_annotation_ink(theme: VisualizationTheme, color: str | None) -> str | None:
+    """Return the skin's edge-label colour for the renderer's default black label ink."""
+
+    if color in (None, "black"):
+        return theme.edge.get("fontcolor", color)
+    return color
+
+
+def _theme_cluster_attrs(theme: VisualizationTheme) -> dict[str, str]:
+    """Return the module-box ink a skin implies: page fill, line border, label caption.
+
+    Module boxes are drawn as white boxes with Graphviz's default black ink.
+    That suits the white-page skins and was the dark skin's defect (white
+    boxes and black borders on a near-black page). Only attributes that
+    differ from that historical box are returned, so white-page skins emit
+    the same DOT as before.
+    """
+
+    attrs: dict[str, str] = {}
+    page = theme.graph.get("bgcolor", "white")
+    if page.lower() != "white":
+        attrs["fillcolor"] = page
+    border = theme.edge.get("color")
+    if border is not None and border.lower() != "black":
+        attrs["color"] = border
+    caption = theme.edge.get("fontcolor")
+    if caption is not None and caption.lower() != "black":
+        attrs["fontcolor"] = caption
+    return attrs
 
 
 def theme_graph_attrs(

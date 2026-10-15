@@ -85,6 +85,7 @@ def _setup_subgraphs(
     overrides: VisualizationOverrides | None = None,
     top_level_rank_groups: Sequence[SiblingOrderChain | RenderIROrderingConstraint] = (),
     regions: Sequence[Any] = (),
+    container_ink: Mapping[str, str] | None = None,
 ) -> None:
     """Build nested Graphviz subgraphs for module clusters.
 
@@ -106,6 +107,7 @@ def _setup_subgraphs(
         module_edge_dict: Dict mapping each module cluster name to
             ``{"edges": [...], "has_input_ancestor": bool}``.
         overrides: Graphviz attribute overrides for module subgraphs.
+        container_ink: Skin ink for container clusters (``_theme_cluster_attrs``).
     """
     if "self" not in self.modules:
         return
@@ -147,6 +149,7 @@ def _setup_subgraphs(
             vis_mode,
             overrides,  # type: ignore[arg-type]
             region_styles,
+            container_ink,
         )
     for chain in top_level_rank_groups:
         _emit_sibling_rank_group(graphviz_graph, cast(SiblingOrderChain, chain))
@@ -221,6 +224,7 @@ def _setup_subgraphs_recurse(
     vis_mode: str,
     overrides: VisualizationOverrides,
     region_styles: Mapping[str, Mapping[str, str]],
+    container_ink: Mapping[str, str] | None = None,
 ) -> int:
     """Recursively build a single branch of the module subgraph hierarchy.
 
@@ -242,6 +246,8 @@ def _setup_subgraphs_recurse(
         max_call_depth: Maximum depth across all branches (for penwidth scaling).
         vis_mode: ``'rolled'`` or ``'unrolled'``.
         overrides: Graphviz attribute overrides.
+        region_styles: Resolved module-region attributes keyed by cluster name.
+        container_ink: Skin ink for container clusters.
     """
     subgraph_name_w_pass = parent_graph_list[call_depth]
     subgraph_module = subgraph_name_w_pass.split(":")[0]
@@ -292,6 +298,7 @@ def _setup_subgraphs_recurse(
                 vis_mode,
                 overrides,
                 region_styles,
+                container_ink,
             )
 
     else:  # Leaf of this branch: create the subgraph and add all edges.
@@ -343,7 +350,9 @@ def _setup_subgraphs_recurse(
             for node_args in subgraph_nodes:
                 s.node(**node_args)
             for container_cluster in cluster_payload.get("container_clusters", []):
-                _emit_container_cluster(s, cast(ContainerClusterSpec, container_cluster))
+                _emit_container_cluster(
+                    s, cast(ContainerClusterSpec, container_cluster), ink=container_ink
+                )
             subgraph_edges = cluster_payload["edges"]
             for edge_dict in subgraph_edges:
                 s.edge(**edge_dict)

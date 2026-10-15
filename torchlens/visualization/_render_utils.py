@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -373,6 +374,23 @@ def html_escape(value: str) -> str:
     """
 
     return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+#: An absolute POSIX or Windows file path: a root (``/`` or ``C:\\``), then
+#: directory segments, then the file name kept by ``strip_path_directories``.
+_ABSOLUTE_PATH_RE = re.compile(r"(?<![\w.~-])(?:[A-Za-z]:[\\/]|/)(?:[^\s()\[\]'\"<>:/\\]+[\\/])+")
+
+
+def strip_path_directories(text: str) -> str:
+    """Drop the directories of absolute file paths in ``text``, keeping file names.
+
+    Header lines that cite a source location (the capture advisories' "first
+    at /path/to/model.py:224") are drawn into every saved figure; the full
+    path leaked the local directory layout into shared pictures and widened
+    the header. The file name and line number stay.
+    """
+
+    return _ABSOLUTE_PATH_RE.sub("", text)
 
 
 def make_module_cluster_label(

@@ -119,6 +119,9 @@ from .render_ir import (
 from .request import RenderContext
 from .themes import (
     VisualizationTheme,
+    _theme_annotation_ink,
+    _theme_cluster_attrs,
+    _theme_line_ink,
     apply_theme_to_spec,
     resolve_theme,
     theme_edge_attrs,
@@ -353,6 +356,7 @@ BACKWARD_HIGHER_ORDER_COLOR = "#FFF4D6"
 BACKWARD_ACCUMULATION_EDGE_STYLE = "dotted"
 DEFAULT_BG_COLOR = "white"
 BOOL_NODE_COLOR = "#F7D460"  # Yellow for terminal boolean layers
+BUFFER_NODE_COLOR = "#E69F00"  # Orange for buffer layers (the palette buffer role)
 _NOISE_BUFFER_NAMES = frozenset({"running_mean", "running_var", "num_batches_tracked"})
 
 # Module subgraph border widths live in ._render_utils -- both this file
@@ -778,6 +782,7 @@ __all__ = [
     "BACKWARD_NODE_BORDER_COLOR",
     "BACKWARD_NODE_COLOR",
     "BOOL_NODE_COLOR",
+    "BUFFER_NODE_COLOR",
     "BackwardNodeSpecFn",
     "BackwardPassFilter",
     "BaseGraphNode",
@@ -880,6 +885,9 @@ __all__ = [
     "_open_file_quietly",
     "_render_node_label",
     "_render_node_name",
+    "_theme_annotation_ink",
+    "_theme_cluster_attrs",
+    "_theme_line_ink",
     "relativize_visualizer_image",
     "_timed_phase",
     "_vprint",
