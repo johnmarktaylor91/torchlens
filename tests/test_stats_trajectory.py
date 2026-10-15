@@ -297,6 +297,9 @@ def test_logit_lens_predictions_mask_input_refuses_embeddings() -> None:
         ("positions_changed", "stats_trajectory_positions_changed"),
         ("flag_type", "stats_trajectory_flag_type"),
         ("empty", "stats_trajectory_empty"),
+        ("data_type", "stats_trajectory_data_type"),
+        ("targets_float", "stats_trajectory_targets_type"),
+        ("targets_out_of_vocab", "stats_trajectory_targets_type"),
     ],
 )
 def test_trajectory_refusals(case: str, code: str) -> None:
@@ -319,6 +322,43 @@ def test_trajectory_refusals(case: str, code: str) -> None:
         "positions_changed": lambda: tl.stats.measure_trajectory(model, [ids, ids[:, :3]]),
         "flag_type": lambda: tl.stats.measure_trajectory(model, [ids], mask_input="yes"),
         "empty": lambda: tl.stats.measure_trajectory(model, []),
+        "data_type": lambda: tl.stats.measure_trajectory(model, 5),
+        "targets_float": lambda: tl.stats.measure_trajectory(model, [(ids, ids.double())]),
+        "targets_out_of_vocab": lambda: tl.stats.measure_trajectory(
+            model, [(ids, ids + VOCAB)], statistics=["cross_entropy"]
+        ),
+    }
+    with pytest.raises(tl.errors.TorchLensError) as info:
+        calls[case]()
+    assert info.value.fields["code"] == code
+
+
+@pytest.mark.parametrize(
+    ("case", "code"),
+    [
+        ("layers_changed", "stats_trajectory_layers_changed"),
+        ("projection_rank", "stats_trajectory_projection_rank"),
+        ("final_missing", "stats_trajectory_final_unavailable"),
+        ("final_sliced", "stats_trajectory_final_unavailable"),
+    ],
+)
+def test_trajectory_internal_refusals(case: str, code: str) -> None:
+    """Refusals a toy model cannot reach end to end, provoked at their helper."""
+
+    from torchlens.stats import _trajectory
+
+    def layers_changed() -> None:
+        folder = _trajectory._TrajectoryFolder(None)
+        folder._start(("blocks.0",), "identity", True)
+        folder._start(("blocks.1",), "identity", True)
+
+    calls = {
+        "layers_changed": layers_changed,
+        "projection_rank": lambda: _trajectory._as_bpv(torch.zeros(VOCAB)),
+        "final_missing": lambda: _trajectory._final_log_probs(None, None, ("kl_to_final",), None),
+        "final_sliced": lambda: _trajectory._align_final(
+            torch.zeros(1, 1, VOCAB), torch.zeros(1, SEQ, VOCAB)
+        ),
     }
     with pytest.raises(tl.errors.TorchLensError) as info:
         calls[case]()

@@ -229,7 +229,7 @@ def is_stats_capture(trace: Any) -> bool:
     transform = getattr(trace, "activation_transform", None)
     if getattr(transform, "_tl_stats_reducer", False):
         return True
-    return getattr(trace, "_activation_transform_repr", None) == STATS_REDUCER_REPR
+    return trace._activation_transform_repr == STATS_REDUCER_REPR  # noqa: SLF001 -- declared Trace field
 
 
 def site_spines(trace: Any) -> dict[str, Spine]:
