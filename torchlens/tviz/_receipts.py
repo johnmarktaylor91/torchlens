@@ -19,6 +19,7 @@ All spellings are DOCUMENTED-UNSTABLE pending the naming session.
 
 from __future__ import annotations
 
+import math
 import textwrap
 from dataclasses import replace
 from pathlib import Path
@@ -324,10 +325,35 @@ _GAP_INCHES = 0.12
 
 
 def _wrap_footer(lines: list[str], width_inches: float) -> str:
-    """Wrap each disclosure line to the figure width (continuations indented)."""
+    """Wrap each disclosure line to ``width_inches`` (continuations indented)."""
 
-    chars = max(40, int(width_inches * 72 / (0.6 * _TEXT_PT)))
+    chars = max(40, int(width_inches * 72 / (0.55 * _TEXT_PT)))
     return "\n".join(textwrap.fill(line, width=chars, subsequent_indent="    ") for line in lines)
+
+
+def _cell_format(scale: float) -> str:
+    """Return the cell format: two significant digits of the largest effect.
+
+    A small-effect grid gets more decimals, so a cell that moved never
+    prints as ``+0.00``; ``+0.00`` (two decimals) stays for scales of 0.1
+    and up.
+    """
+
+    decimals = min(6, max(2, 1 - math.floor(math.log10(scale))))
+    return f"{{:+.{decimals}f}}"
+
+
+def _fit_footer(fig: Any, footer: Any, lines: list[str], *, left: float, renderer: Any) -> None:
+    """Place the footer at ``left`` and wrap it until it ends inside the figure."""
+
+    footer.set_x(left)
+    width = fig.get_figwidth() * (1.0 - left)
+    for _ in range(4):
+        footer.set_text(_wrap_footer(lines, width))
+        overflow = footer.get_window_extent(renderer).x1 - fig.bbox.x1
+        if overflow <= 0:
+            return
+        width -= overflow / fig.dpi + 0.1
 
 
 def _height_inches(extent: Any, dpi: float) -> float:
@@ -336,19 +362,23 @@ def _height_inches(extent: Any, dpi: float) -> float:
     return float(extent.height) / dpi
 
 
-def _reserve_footer(  # noqa: PLR0913 -- the five artists the layout measures
-    fig: Any, ax: Any, bar: Any, title: Any, footer: Any, *, n_rows: int
+def _reserve_footer(  # noqa: PLR0913 -- the artists the layout measures
+    fig: Any, ax: Any, bar: Any, title: Any, footer: Any, *, lines: list[str], n_rows: int
 ) -> None:
     """Size the figure so title, matrix, tick labels and footer never overlap.
 
-    The bands are stacked in inches from the measured extents of the drawn
-    text (footer lines, x tick labels, title, colorbar label), so a long
-    footer reserves its own height instead of drawing over the matrix. The
-    matrix is at least as tall as the colorbar label, which is centred on it.
+    The footer starts at the layer labels' left edge and wraps to the width
+    from there to the figure's right edge. The bands are then stacked in
+    inches from the measured extents of the drawn text (footer lines, x tick
+    labels, title, colorbar label), so a long footer reserves its own height
+    instead of drawing over the matrix. The matrix is at least as tall as
+    the colorbar label, which is centred on it.
     """
 
     renderer = fig.canvas.get_renderer()
     dpi = fig.dpi
+    left = min(0.01, ax.get_tightbbox(renderer).x0 / fig.bbox.width)
+    _fit_footer(fig, footer, lines, left=left, renderer=renderer)
     footer_h = _height_inches(footer.get_window_extent(renderer), dpi)
     title_h = _height_inches(title.get_window_extent(renderer), dpi)
     tick_h = (ax.bbox.y0 - ax.get_tightbbox(renderer).y0) / dpi
@@ -423,6 +453,7 @@ def render_receipt_grid(
         rasterized=False,
     )
     ax.invert_yaxis()
+    cell_format = _cell_format(scale)
     for row_index in range(matrix.shape[0]):
         for col in range(matrix.shape[1]):
             value = matrix[row_index, col]
@@ -430,7 +461,7 @@ def render_receipt_grid(
                 ax.text(
                     col + 0.5,
                     row_index + 0.5,
-                    f"{value:+.2f}",
+                    cell_format.format(value),
                     ha="center",
                     va="center",
                     fontsize=_TEXT_PT,
@@ -445,10 +476,8 @@ def render_receipt_grid(
     bar.ax.tick_params(labelsize=_TEXT_PT)
     unit_title = "head" if rows[0].kv_groups is None else "kv-group"
     title = fig.suptitle(f"measured {unit_title} effects on {rows[0].metric}", fontsize=10)
-    footer = fig.text(
-        0.01, 0.0, _wrap_footer(disclosures, fig.get_figwidth()), fontsize=_TEXT_PT, va="bottom"
-    )
-    _reserve_footer(fig, ax, bar, title, footer, n_rows=len(rows))
+    footer = fig.text(0.01, 0.0, "", fontsize=_TEXT_PT, va="bottom")
+    _reserve_footer(fig, ax, bar, title, footer, lines=disclosures, n_rows=len(rows))
     written = save_figure(fig, path, svg_fonttype=svg_fonttype)
     return Artifact(
         paths=(written,),

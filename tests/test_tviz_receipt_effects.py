@@ -70,6 +70,17 @@ def test_cell_equal_to_the_baseline_is_exactly_zero_and_prints_zero(tmp_path: Pa
     assert "measured head effects on logit_diff" in svg
 
 
+def test_small_effects_get_enough_decimals_to_read_nonzero(tmp_path: Path) -> None:
+    """A grid of effects near 0.01 prints three decimals, so 0.002 never reads +0.00."""
+
+    values = torch.tensor([[0.002, -0.019, 0.0]], dtype=torch.float32)
+    receipt = _receipt(_grid(values, corrupted_metric=0.0), joint_effect=0.0)
+    artifact = tviz.render_receipt_grid(receipt, tmp_path / "small.svg", svg_fonttype="none")
+    svg = artifact.paths[0].read_text()
+    for cell in ("+0.002", "-0.019", "+0.000"):
+        assert f">{cell}<" in svg, cell
+
+
 def test_known_patched_value_gives_the_known_difference() -> None:
     """A float32 cell and baseline subtract exactly as Python floats."""
 
@@ -203,8 +214,8 @@ def test_footer_never_overlaps_matrix_ticks_or_colorbar_label(
     # Every text is at least 8 pt (about 11 CSS px at the pane target).
     texts = [footer, *labels, *ax.texts, bar_ax.yaxis.label]
     assert min(text.get_fontsize() for text in texts) >= 8
-    # The footer is wrapped to the figure width.
-    assert footer_box.width <= fig.bbox.width
+    # The footer is wrapped to end inside the figure.
+    assert footer_box.x1 <= fig.bbox.x1
     # The colorbar label stays within the figure's vertical extent.
     label_box = bar_ax.yaxis.label.get_window_extent(renderer)
     assert label_box.y0 >= footer_box.y1 and label_box.y1 <= fig.bbox.y1
