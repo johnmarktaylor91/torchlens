@@ -2547,3 +2547,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: f7b8dadfd2d4777c1339816abff33e5746b8d555 (dirty)
 recorded: 2026-10-15T00:46:46.431149+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: per-query-head interceptor: the new mechinterp/_kv_heads.py reads op modules (2 sites) and parents (1 site) while locating the repeat_kv expansion op; no other site moved
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f5794281fe290282f4926d3229912fb2e3dccce8 (dirty)
+recorded: 2026-10-15T00:53:59.272308+00:00

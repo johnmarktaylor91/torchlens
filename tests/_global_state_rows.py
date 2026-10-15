@@ -1216,6 +1216,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/mechinterp/_factored.py", "__all__"),
         ("torchlens/mechinterp/_grids.py", "__all__"),
         ("torchlens/mechinterp/_heads.py", "__all__"),
+        ("torchlens/mechinterp/_kv_heads.py", "__all__"),
         ("torchlens/mechinterp/_lowered.py", "__all__"),
         ("torchlens/mechinterp/_neurons.py", "__all__"),
         ("torchlens/mechinterp/_params.py", "__all__"),
