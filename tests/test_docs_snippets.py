@@ -64,6 +64,7 @@ DOC_FILE_GROUPS: dict[str, tuple[str, ...]] = {
         "reference/attribution.md",
         "reference/collapse.md",
         "reference/lenses.md",
+        "reference/mechinterp.md",
         "reference/summary.md",
     ),
 }

@@ -385,6 +385,7 @@ class _Builder:
 
         nodes_of: dict[str, list[ComponentNode]] = {}
         for layer, address in enumerate(self.layers.attention):
+            _require_mha(self.trace, address)  # refuse before reading any head rows
             nodes_of[address] = _head_nodes(self.trace, address, layer, self._writes_of(address))
         for layer, address in enumerate(self.layers.mlp):
             writes = self._writes_of(address)

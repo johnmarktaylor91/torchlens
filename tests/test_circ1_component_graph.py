@@ -270,7 +270,8 @@ def test_renormalized_residual_stream_is_refused_typed() -> None:
 def test_grouped_query_attention_is_refused_typed() -> None:
     from families import build_llama
 
-    trace = _trace(build_llama("eager"), torch.randint(0, 64, (1, 4)))
+    model = build_llama("eager")  # kept alive: the trace reads live parameters
+    trace = _trace(model, torch.randint(0, 64, (1, 4)))
     try:
         with pytest.raises(MechInterpError) as excinfo:
             mi.component_graph(trace)
