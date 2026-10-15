@@ -17,7 +17,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
-from name_lockstep import check, codemod, gate_input  # noqa: E402
+from name_lockstep import check, codemod, docsections, gate_input  # noqa: E402
 from name_lockstep.cli import main  # noqa: E402
 from name_lockstep.diff import diff_inventories, proposals_to_map, renamed_id  # noqa: E402
 from name_lockstep.inventory import build_inventory, load_inventory  # noqa: E402
@@ -260,6 +260,182 @@ def test_gate_items_carry_snippet_and_reference(tmp_path: Path) -> None:
     assert "tl.io.dump" in dump["snippet"]
     paths = {s["path"] for s in dump["snippets"]}
     assert paths == {"examples/demo.py", "tests/test_demo.py", "docs/agent-reference/surface.md"}
+
+
+DOCUMENTED_CORE = '''
+"""Core with numpydoc-documented fields and keywords."""
+import dataclasses
+
+
+@dataclasses.dataclass
+class Base:
+    """A base.
+
+    Attributes
+    ----------
+    origin:
+        Where the base came from.
+    """
+
+    origin: str = ""
+
+
+@dataclasses.dataclass
+class Curve(Base):
+    """A curve and its area.
+
+    Attributes
+    ----------
+    area : float
+        Area under the curve, by the
+        trapezoid rule.
+
+        A second paragraph that is not part of the meaning.
+    steps, points
+        One record per evaluated fraction.
+    bare: int
+    """
+
+    area: float = 0.0
+    steps: tuple = ()
+    points: tuple = ()
+    bare: int = 0
+
+    @property
+    def width(self) -> float:
+        return 1.0
+
+
+def make_curve(*, area: float = 0.0, budget: int = 1) -> Curve:
+    """Make a curve.
+
+    Parameters
+    ----------
+    area : float
+        Area to start from.
+    budget : int
+        How many evaluations to spend.
+
+    Returns
+    -------
+    Curve
+        The curve.
+    """
+
+    return Curve(area=area)
+
+
+def plain(*, budget: int = 1) -> int:
+    """Take a budget, documented elsewhere."""
+
+    return budget
+'''
+
+
+@pytest.fixture()
+def documented_inventory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
+    """Inventory a synthetic package whose fields and keywords are documented in sections."""
+
+    _write(
+        tmp_path,
+        {
+            "doclens_pkg/__init__.py": '''
+            """Fake package."""
+            from doclens_pkg.core import Curve, make_curve, plain
+
+            __all__ = ["Curve", "make_curve", "plain"]
+            ''',
+            "doclens_pkg/core.py": DOCUMENTED_CORE,
+        },
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    for name in [m for m in sys.modules if m.startswith("doclens_pkg")]:
+        monkeypatch.delitem(sys.modules, name)
+    return {row["id"]: row for row in build_inventory("doclens_pkg")["rows"]}
+
+
+def test_numpydoc_sections_give_the_first_paragraph() -> None:
+    """Entries with and without types, shared entries and empty entries parse."""
+
+    doc = textwrap.dedent(DOCUMENTED_CORE.split("class Curve(Base):\n    ")[1].split('"""')[1])
+    entries = docsections._entries(docsections._sections(doc)["Attributes"])
+    assert entries["area"] == "Area under the curve, by the trapezoid rule."
+    assert entries["steps"] == entries["points"] == "One record per evaluated fraction."
+    assert "bare" not in entries
+    assert docsections._clip("word " * 100).endswith(" ...")
+    assert len(docsections._clip("word " * 100)) <= docsections.MAX_MEANING + 4
+
+
+def test_fields_and_keywords_get_their_documented_meaning(documented_inventory: dict) -> None:
+    """A field reads its owner's Attributes; a keyword reads the Parameters of its callables."""
+
+    rows = documented_inventory
+    area = rows["member:doclens_pkg.core:Curve.area"]
+    assert area["doc_first_line"] == "Area under the curve, by the trapezoid rule."
+    assert area["doc_source"] == "Curve Attributes"
+    origin = rows["member:doclens_pkg.core:Base.origin"]
+    assert (origin["doc_first_line"], origin["doc_source"]) == (
+        "Where the base came from.",
+        "Base Attributes",
+    )
+    assert rows["member:doclens_pkg.core:Curve.bare"]["doc_first_line"] == ""
+    assert rows["member:doclens_pkg.core:Curve.width"]["doc_first_line"] == ""
+    budget = rows["param:budget"]
+    assert budget["doc_first_line"] == "How many evaluations to spend."
+    assert [d["use"] for d in budget["param_docs"]] == ["tl.core.make_curve", "tl.make_curve"]
+    area_kw = rows["param:area"]
+    assert "Area to start from." in area_kw["doc_first_line"]
+    assert "Area under the curve" in area_kw["doc_first_line"]
+    assert area_kw["doc_first_line"].count(" | ") == 1
+    assert area_kw["doc_source"] == "tl.Curve Attributes"
+
+
+def test_section_meanings_stay_out_of_the_fingerprint(documented_inventory: dict) -> None:
+    """Two fields of one class still share a fingerprint, as before meanings were read."""
+
+    rows = documented_inventory
+    area = rows["member:doclens_pkg.core:Curve.area"]["fingerprint"]
+    assert rows["member:doclens_pkg.core:Curve.steps"]["fingerprint"] == area
+
+
+def test_gate_items_use_documented_meaning_over_a_leaf_index_row(
+    tmp_path: Path, documented_inventory: dict
+) -> None:
+    """A bare-word index row loses to the field's documented meaning; snippets stay in context."""
+
+    corpus = _lockstep_repo(
+        tmp_path,
+        glossary=(
+            "| Unrelated rows | `area`, `steps` | unstable |\n`tl.make_curve` makes a curve.\n"
+        ),
+        example="other.area = 3\n" + "\n" * 20 + "c = tl.make_curve()\nc.area\n",
+    )
+    head = documented_inventory
+    base = {
+        k: v
+        for k, v in head.items()
+        if not k.startswith(("member:doclens_pkg.core:Curve.", "param:area"))
+    }
+    items = {i["id"]: i for i in gate_input.gate_items(diff_inventories(base, head), head, corpus)}
+    area = items["member:doclens_pkg.core:Curve.area"]
+    assert area["reference"] == "Area under the curve, by the trapezoid rule."
+    assert area["reference_source"] == "doc:Curve Attributes"
+    assert area["doc_first_line"] == area["reference"]
+    assert area["doc_source"] == "Curve Attributes"
+    bare = items["member:doclens_pkg.core:Curve.bare"]
+    assert bare["reference_source"] == "none" and bare["doc_first_line"] is None
+    assert items["param:area"]["reference_source"] == "doc:tl.Curve Attributes"
+    assert gate_input._context_terms(head["param:area"]) == ["Curve", "make_curve"]
+
+
+def test_snippet_prefers_a_hit_near_the_owner() -> None:
+    """A contextual hit beside the owner's name outranks an earlier unrelated one."""
+
+    lines = ["spec.area"] + [""] * 30 + ["c = Curve()", "c.area"]
+    hits = [(1, 5, 9, "contextual"), (33, 2, 6, "contextual")]
+    assert gate_input._best_hit(hits, lines, ["Curve"]) == (1, 33)
+    assert gate_input._best_hit(hits, lines, []) == (2, 1)
+    assert gate_input._best_hit([(1, 0, 4, "qualified")] + hits, lines, ["Curve"]) == (0, 1)
 
 
 CODEMOD_PKG = '''
