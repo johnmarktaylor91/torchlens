@@ -13,6 +13,7 @@ with it equals one built without it, field by field.
 from __future__ import annotations
 
 import copy
+import functools
 from collections import OrderedDict, defaultdict
 from typing import Any
 
@@ -51,6 +52,8 @@ def _flat(value: Any, memo: dict[Any, Any]) -> Any:
         lambda parent: {"k": [1, 2, parent], "j": ("x", "y")},
         lambda parent: {"s", "t"},
         lambda parent: frozenset({1, 2}),
+        lambda parent: defaultdict(list, {"a": ["x", parent], "b": []}),
+        lambda parent: {"k": ("a", ("b", 1))},
     ],
 )
 def test_flat_copy_equals_deepcopy(build: Any) -> None:
@@ -65,7 +68,8 @@ def test_flat_copy_equals_deepcopy(build: Any) -> None:
         if item is own_shell:
             return "<shell>"
         if isinstance(item, dict):
-            return (type(item), [(k, normalize(v, own_shell)) for k, v in item.items()])
+            factory = getattr(item, "default_factory", None)
+            return (type(item), factory, [(k, normalize(v, own_shell)) for k, v in item.items()])
         if isinstance(item, (list, tuple)):
             return (type(item), [normalize(v, own_shell) for v in item])
         if isinstance(item, (set, frozenset)):
@@ -91,7 +95,7 @@ def test_everything_else_takes_the_deepcopy_path() -> None:
     for value in (
         {("tuple", "key"): 1},
         {"a": _Record()},
-        defaultdict(list, a=[1]),
+        defaultdict(functools.partial(list), a=[1]),
         {"t": torch.zeros(1)},
         [[[["too deep"]]]],
     ):
