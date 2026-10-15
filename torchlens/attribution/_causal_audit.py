@@ -12,6 +12,12 @@ an activation-times-gradient claim (a unit that supports the target has a
 positive claim and a positive effect). Rank agreement is the Spearman
 correlation of the claimed and measured per-unit effects.
 
+The same audit grades the two internal claims that span sites: a
+direct-logit-attribution table (one component per site; see
+``_audit_logits``) and a one-backward read table (one site, or each element
+of it, per row; see ``_audit_reads``). Their plan (``_audit_sites``) keeps
+every unit with its own site.
+
 Every ablation runs through the intervention engine on an intervention-ready
 trace (``trace.fork().do(tl.units(label, mask), edit)``, the replay engine of
 ``torchlens.experiment.site_sweep``), one fork per row or set, and every row
@@ -35,13 +41,21 @@ from torchlens.attribution._audit_claims import (
     _AuditPlan,
     _AuditRequest,
     _plan_audit,
+    _setting_error,
+    _trace_once,
+    _validate_settings,
 )
-from torchlens.attribution._core import InputKwargs, _AttributionTarget
+from torchlens.attribution._audit_logits import _is_contribution_table, _plan_logit_audit
+from torchlens.attribution._audit_reads import _is_read_table, _plan_read_audit
+from torchlens.attribution._audit_sites import _SitesPlan
+from torchlens.attribution._core import InputKwargs
 from torchlens.attribution._eval_maps import _spearman
-from torchlens.attribution._result import AttributionResult, AttributionWarning
+from torchlens.attribution._result import AttributionWarning
 
 # Single-unit ablations past this count warn once and name per_unit=False.
 _PER_UNIT_WARN_COUNT = 1024
+
+_Plan = _AuditPlan | _SitesPlan
 
 
 @dataclass(frozen=True)
@@ -51,19 +65,31 @@ class CausalAuditUnit:
     Attributes
     ----------
     unit
-        Index of the unit after the batch axis (``(3,)`` is unit 3 of a
-        linear output, ``(3, 1, 2)`` one position of a convolution channel).
+        Index of the unit in the claim. For a layer claim, the position after
+        the batch axis (``(3,)`` is unit 3 of a linear output, ``(3, 1, 2)``
+        one position of a convolution channel); for a direct-logit table, the
+        row (``(2,)``); for a read table, the row, then for an element-grain
+        read the position after the batch axis (``(1, 0)``).
     claimed_effect
-        The claim's score for the unit, summed over the batch.
+        The claim's score for the unit, summed over the batch (and, for a
+        direct-logit row, over its positions and tokens).
     measured_effect
         ``score(original) - score(ablated)`` with this unit ablated in every
         example.
+    site
+        Op label of the site the unit lives at (the label the edit selects).
+    component
+        The claim's name for the unit's component: the layer of a layer
+        claim, the row label of a direct-logit table (``"blocks.0.mlp"``),
+        the site of a read row.
     """
 
     unit: tuple[int, ...]
     claimed_effect: float
     measured_effect: float
-    _plan: _AuditPlan = field(repr=False, compare=False)
+    site: str = ""
+    component: str = ""
+    _plan: _Plan | None = field(default=None, repr=False, compare=False)
 
     @property
     def intervention(self) -> tuple[tuple[Any, Any], ...]:
@@ -73,12 +99,16 @@ class CausalAuditUnit:
         captured with ``capture=tl.options.CaptureOptions(intervention_ready=True)``.
         """
 
+        assert self._plan is not None  # noqa: S101 - every audit row carries its plan
         return self._plan.intervention((self.unit,))
 
     def __repr__(self) -> str:
         """Compact representation."""
 
-        return f"CausalAuditUnit(unit={self.unit}, claimed_effect={self.claimed_effect:.6g}, measured_effect={self.measured_effect:.6g})"
+        return (
+            f"CausalAuditUnit(unit={self.unit}, component={self.component!r}, "
+            f"claimed_effect={self.claimed_effect:.6g}, measured_effect={self.measured_effect:.6g})"
+        )
 
 
 @dataclass(frozen=True)
@@ -91,7 +121,7 @@ class CausalAuditSet:
         ``"top"`` (largest claimed magnitude), ``"bottom"`` (smallest claimed
         magnitude) or ``"random"`` (a seeded draw).
     units
-        The ablated units, indexed after the batch axis.
+        The ablated units, indexed as :attr:`CausalAuditUnit.unit`.
     claimed_effect
         Sum of the claimed scores of ``units`` (what the claim predicts if
         effects add).
@@ -107,7 +137,7 @@ class CausalAuditSet:
     claimed_effect: float
     measured_effect: float
     draw: int
-    _plan: _AuditPlan = field(repr=False, compare=False)
+    _plan: _Plan = field(repr=False, compare=False)
 
     @property
     def intervention(self) -> tuple[tuple[Any, Any], ...]:
@@ -131,12 +161,15 @@ class CausalAuditResult:
     Attributes
     ----------
     layer
-        Module name of the audited site.
+        Module name of the audited site of a layer claim (``None`` for a
+        direct-logit or read table, whose units span sites).
     site
-        Op label of the site in the audit's trace (the label the recorded
-        edits select).
+        Op label of that site in the audit's trace (the label the recorded
+        edits select); ``None`` for a direct-logit or read table (each unit
+        names its own ``site``).
     original_score
-        Target score of the unablated model.
+        Target score of the unablated model (for a direct-logit table, its
+        logit quantity summed over the batch, positions and tokens).
     units
         One :class:`CausalAuditUnit` per unit, in index order (empty with
         ``per_unit=False``).
@@ -149,13 +182,18 @@ class CausalAuditResult:
     settings
         The resolved audit policy.
     extra
-        Method-specific extras: the audited claim's method name
-        (``claim_method``), the number of audited units (``n_units``) and the
-        mean measured effect of the random draws (``random_measured_mean``).
+        Method-specific extras: the claim kind (``claim_kind``: ``"layer"``,
+        ``"direct_logit"`` or ``"read_table"``), the audited claim's method
+        name (``claim_method``), the number of audited units (``n_units``) and
+        the mean measured effect of the random draws (``random_measured_mean``);
+        for a direct-logit table also ``constant_row`` (the claimed constant,
+        which has no site and is not ablated), ``native_score`` and
+        ``logits_site``; for a read table ``target_id``, ``grain`` and
+        ``rows_not_audited`` (``(site, status)`` of rows without a score).
     """
 
-    layer: str
-    site: str
+    layer: str | None
+    site: str | None
     original_score: float
     units: tuple[CausalAuditUnit, ...]
     sets: tuple[CausalAuditSet, ...]
@@ -184,8 +222,8 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
     inputs: Any,
     input_kwargs: InputKwargs = None,
     *,
-    claim: AttributionResult,
-    target: _AttributionTarget,
+    claim: Any,
+    target: Any = None,
     k: int = 5,
     ablation: str | float | Tensor = "zero",
     controls: tuple[str, ...] = ("bottom", "random"),
@@ -195,14 +233,22 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
 ) -> CausalAuditResult:
     """Ablate the units an internal attribution ranks and measure each effect.
 
-    The claim is a layer attribution (``layer_attribution``,
+    Three claim kinds are audited. A layer attribution (``layer_attribution``,
     ``layer_integrated_gradients``, ``layer_conductance``), possibly computed
-    against a :class:`SiteTarget`. Each unit of its site is ablated alone,
-    then the top-k claimed units together, beside a bottom-k and a seeded
-    random-k control; every effect is ``score(original) - score(ablated)``
-    and is measured through ``trace.fork().do(...)`` on an intervention-ready
-    trace (unit ablation after Meyes et al., 2019; rank agreement is
-    Spearman's correlation).
+    against a :class:`SiteTarget`, scores the units of one hidden site. A
+    ``tl.mechinterp.direct_logit_contributions`` table scores components,
+    each at its own site, by their direct share of a logit; each component's
+    whole site is ablated and the same logit quantity is read from the
+    unembedding head (after the model's logits are checked against the
+    table's native logits). A ``tl.attribution.read`` table of
+    activation-times-gradient ``ACT`` rows scores sites, or their elements,
+    for one seeded target; each is ablated and that target is measured.
+
+    Each unit is ablated alone, then the top-k claimed units together,
+    beside a bottom-k and a seeded random-k control; every effect is
+    ``score(original) - score(ablated)`` and is measured through
+    ``trace.fork().do(...)`` on an intervention-ready trace (unit ablation
+    after Meyes et al., 2019; rank agreement is Spearman's correlation).
 
     Parameters
     ----------
@@ -215,10 +261,14 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
         Optional keyword arguments for ``model``.
     claim
         The internal attribution to audit: an ``AttributionResult`` of a
-        layer method whose values have the site's output shape.
+        layer method whose values have the site's output shape, a
+        ``ContributionScores`` table, or a ``ReadTable``.
     target
-        The target the claim was computed for: an integer class index, a
-        callable ``output -> scalar``, or a :class:`SiteTarget`.
+        The target the claim was computed for: for a layer claim an integer
+        class index, a callable ``output -> scalar``, or a
+        :class:`SiteTarget`; for a read table the ``tl.attribution.seed(...)``
+        it was read for. Left out for a direct-logit table, which fixes its
+        own logits.
     k
         Units per ablated set (default 5).
     ablation
@@ -246,8 +296,8 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
     Raises
     ------
     AttributionError
-        On a claim the audit cannot ground at a hidden site, a claim that does
-        not fit its site or target, or invalid settings.
+        On a claim the audit cannot ground at its sites, a claim that does
+        not fit its sites, target or logits, or invalid settings.
     """
 
     request = _AuditRequest(
@@ -264,7 +314,8 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
     )
     devices = [torch.cuda.current_device()] if torch.cuda.is_available() else []
     with torch.random.fork_rng(devices=devices):
-        plan = _plan_audit(request)
+        _validate_settings(request)
+        plan = _plan_any(request)
         original = plan.score(plan.trace)
         rows = _unit_rows(plan, original) if per_unit else ()
         sets = _ablated_sets(plan, original, request)
@@ -286,20 +337,42 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
             "random_draws": random_draws,
             "per_unit": per_unit,
             "seed": seed,
-            "target": claim.target_repr,
+            "target": plan.target_repr,
             "ranking": "claimed magnitude, summed over the batch",
         },
         extra={
-            "claim_method": claim.method,
+            "claim_kind": plan.claim_kind,
+            "claim_method": plan.claim_method,
             "n_units": len(plan.units),
             "random_measured_mean": (
                 sum(random_effects) / len(random_effects) if random_effects else None
             ),
+            **plan.extra,
         },
     )
 
 
-def _unit_rows(plan: _AuditPlan, original: float) -> tuple[CausalAuditUnit, ...]:
+def _plan_any(request: _AuditRequest) -> _Plan:
+    """Ground the claim by its kind; refuse a set size larger than the units."""
+
+    if not (_is_contribution_table(request.claim) or _is_read_table(request.claim)):
+        return _plan_audit(request)
+    trace = _trace_once(request)
+    if _is_contribution_table(request.claim):
+        plan: _Plan = _plan_logit_audit(request, trace)
+    else:
+        plan = _plan_read_audit(request, trace)
+    if request.k > len(plan.units):
+        target = "" if request.target is None else ", target=target"
+        raise _setting_error(
+            f"k={request.k} exceeds the {len(plan.units)} audited units of the claim",
+            f"tl.attribution.causal_audit(model, x, claim=claim{target}, k={max(1, len(plan.units))})",
+            code="attribution_eval_setting_invalid",
+        )
+    return plan
+
+
+def _unit_rows(plan: _Plan, original: float) -> tuple[CausalAuditUnit, ...]:
     """Ablate every unit alone, one fork each, and record the effects.
 
     Parameters
@@ -319,23 +392,29 @@ def _unit_rows(plan: _AuditPlan, original: float) -> tuple[CausalAuditUnit, ...]
         warnings.warn(
             AttributionWarning(
                 f"causal_audit is ablating each of the {len(plan.units)} units of "
-                f"{plan.layer!r} alone ({len(plan.units)} replays). Remedy: pass "
+                f"{plan.layer or 'the claim'!r} alone ({len(plan.units)} replays). Remedy: pass "
                 "per_unit=False to measure only the top-k and control sets. "
                 f"{_AUDIT_DOCS_POINTER}",
                 code="attribution_audit_units_many",
             ),
             stacklevel=3,
         )
+    scores = plan.unit_scores()
     return tuple(
         CausalAuditUnit(
-            unit, float(plan.claimed[unit]), original - plan.ablated_score((unit,)), plan
+            unit=unit,
+            claimed_effect=plan.claimed_of(unit),
+            measured_effect=original - scores[unit],
+            site=plan.site_of(unit),
+            component=plan.component_of(unit),
+            _plan=plan,
         )
         for unit in plan.units
     )
 
 
 def _ablated_sets(
-    plan: _AuditPlan, original: float, request: _AuditRequest
+    plan: _Plan, original: float, request: _AuditRequest
 ) -> tuple[CausalAuditSet, ...]:
     """Ablate the top-k set and the controls jointly, one fork each.
 
@@ -355,7 +434,7 @@ def _ablated_sets(
     """
 
     order = sorted(
-        plan.units, key=lambda unit: (-abs(float(plan.claimed[unit])), plan.units.index(unit))
+        plan.units, key=lambda unit: (-abs(plan.claimed_of(unit)), plan.units.index(unit))
     )
     chosen: list[tuple[str, int, tuple[tuple[int, ...], ...]]] = [
         ("top", 0, tuple(order[: request.k]))
@@ -372,7 +451,7 @@ def _ablated_sets(
         CausalAuditSet(
             kind=kind,
             units=units,
-            claimed_effect=math.fsum(float(plan.claimed[unit]) for unit in units),
+            claimed_effect=math.fsum(plan.claimed_of(unit) for unit in units),
             measured_effect=original - plan.ablated_score(units),
             draw=draw,
             _plan=plan,

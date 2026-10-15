@@ -642,11 +642,15 @@ is 1, so the score falls from 60 to `60 - 5 * 4 + 5 * 1 = 45`.
 
 ### Auditing internal attributions (`causal_audit`)
 
-`tl.attribution.causal_audit(model, inputs, input_kwargs=None, *, claim, target, k=5,
+`tl.attribution.causal_audit(model, inputs, input_kwargs=None, *, claim, target=None, k=5,
 ablation="zero", controls=("bottom", "random"), random_draws=10, per_unit=True, seed=0)` tests
-an internal attribution causally. The `claim` is a layer attribution (`layer_attribution`,
-`layer_integrated_gradients`, `layer_conductance`), for a model output target or for a
-[`SiteTarget`](#site-targets-sitetarget); its values score every unit of one hidden site.
+an internal attribution causally. The `claim` is one of three kinds: a layer attribution
+(`layer_attribution`, `layer_integrated_gradients`, `layer_conductance`), for a model output
+target or for a [`SiteTarget`](#site-targets-sitetarget), whose values score every unit of one
+hidden site; a direct-logit-attribution table from `tl.mechinterp.direct_logit_contributions`
+([below](#direct-logit-attribution-tables)); or a one-backward read table from
+`tl.attribution.read` ([below](#one-backward-read-tables)). A layer claim needs the `target=`
+it was computed for.
 The audit ablates each unit alone (unit ablation, Meyes et al., 2019) and measures the target's
 change, `score(original) - score(ablated)`, the same sign as an activation-times-gradient claim.
 It then ablates the `k` units with the largest claimed magnitude together, beside two controls:
@@ -719,12 +723,136 @@ nonlinear model the gap between a set's claimed sum and its measured effect is t
   trace, and the random draws use a local generator inside a forked random state, so the
   caller's model and the global random state are unchanged.
 
-A claim the audit cannot ground at one hidden site refuses `attribution_audit_claim_unsupported`:
-a plain tensor, an input-level result, a site whose module runs more than once, and, for now,
-direct-logit-attribution rows and one-backward read tables. A claim whose values do not have the
-site's output shape on these inputs, or that was computed for another target, refuses
-`attribution_audit_claim_misaligned`; bad `k`, `ablation`, `controls` or `random_draws` refuse
-`attribution_eval_setting_invalid`. Each refusal names a spelling that works.
+Each row also names its `site` (the op label the edit selects) and its `component` (the
+claim's own name for it: the layer here, a row label of a direct-logit table, a read row's site).
+
+A claim the audit cannot ground refuses `attribution_audit_claim_unsupported`: a plain tensor, an
+input-level result, a site whose module runs more than once, a direct-logit row with no captured
+site, and the read tables described below. A claim whose values do not have the site's output
+shape on these inputs, that was computed for another target, or whose logits are not this run's,
+refuses `attribution_audit_claim_misaligned`; bad `k`, `ablation`, `controls` or `random_draws`
+refuse `attribution_eval_setting_invalid`. Each refusal names a spelling that works.
+
+#### Direct-logit-attribution tables
+
+A `ContributionScores` table from `tl.mechinterp.direct_logit_contributions` splits the model's
+logit, or logit difference, at chosen positions into one row per component (the embedding and
+every residual writer), plus one constant row (the final norm's shift and the unembedding bias).
+Each row claims how much logit its component contributes directly. The audit ablates each
+component's whole site (`Coordinate.op_label`) and reads the same logit quantity from the
+unembedding head's output on the fork, summed over the batch, the table's positions and its
+answer and `vs` tokens; the row's claimed effect is its values summed the same way. Leave
+`target=` out: the table fixes its own target.
+
+- The native-logit check: before anything is ablated, the head's logits on the audit's trace must
+  reproduce the table's `native` logits within the table's own identity tolerance. A table
+  computed on other inputs, other weights or in another mode refuses
+  `attribution_audit_claim_misaligned`, naming the `direct_logit_contributions` call that
+  recomputes it.
+- The constant row has no site, so it is not ablated: `extra["constant_row"]` reports its claimed
+  sum, and `extra["native_score"]` the table's native sum (rows plus constant).
+- Under zero ablation the per-row ablations run as one `torchlens.experiment.site_sweep` (one
+  candidate per component site, the replay engine, nothing retained); other ablations and the
+  sets use one fork each. A unit is `(row,)`, the row's index in the table.
+- Direct logit attribution reads a component's direct path only; the ablation also removes what
+  later components read from it, and the final norm rescales. The gap between the two is what
+  the audit reports.
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+
+class TinyLM(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.embed = nn.Embedding(5, 4)
+        self.writers = nn.ModuleList([nn.Linear(4, 4) for _ in range(2)])
+        self.ln_f = nn.LayerNorm(4)
+        self.lm_head = nn.Linear(4, 5)
+
+    def forward(self, ids):
+        hidden = self.embed(ids)
+        for writer in self.writers:
+            hidden = hidden + writer(hidden)
+        return self.lm_head(self.ln_f(hidden))
+
+
+torch.manual_seed(0)
+model = TinyLM().eval()
+ids = torch.tensor([[1, 2, 3]])
+claim = tl.mechinterp.direct_logit_contributions(tl.trace(model, ids), answer=1, vs=2)
+audit = tl.attribution.causal_audit(model, ids, claim=claim, k=1, random_draws=2)
+for row in audit.units:
+    print(row.component, round(row.claimed_effect, 3), round(row.measured_effect, 3))
+print(round(audit.extra["constant_row"], 3), round(audit.rank_agreement, 3))
+```
+
+Output:
+
+```text
+embed 0.739 -0.562
+writers.0 -0.239 -0.967
+writers.1 0.111 0.32
+0.495 0.5
+```
+
+Here each writer reads the residual stream and the final norm rescales, so ablating a component
+moves the logit by more (or less) than its direct share: the embedding's direct share is positive
+and its measured effect negative, and rank agreement is 0.5. The constant row's 0.495 is the part
+of the logit difference no component can remove.
+
+#### One-backward read tables
+
+A `ReadTable` from `tl.attribution.read` with `method="activation_x_grad"` scores every site
+(`reduce="sum"`) or every element of it (`reduce=None`) for one seeded target. Summed over a site,
+activation times gradient is the first-order estimate of what zero-ablating the site does to the
+target (attribution patching), and it is exact when the target is linear in the site. The audit
+ablates each `ACT` row's site, or each element of it, and measures the target the read was
+taken for; pass that target as `target=`, the same `tl.attribution.seed(...)`. A unit is
+`(row,)` at site grain or `(row, *element)` at element grain, the row being its index in
+`table.rows()` and the element indexed after the batch axis.
+
+- One target per audit: a table read for several targets refuses and names
+  `claim=claim.for_target("t0")`. A `target=` that is not the table's recorded seed, or a table
+  whose site shapes differ from these inputs, refuses `attribution_audit_claim_misaligned`.
+- Rows whose status is not `ok` carry no score; they are listed in `extra["rows_not_audited"]` as
+  `(site, status)` and not ablated.
+- `grad` and `activation` reads, and site reductions other than `"sum"`, refuse
+  `attribution_audit_claim_unsupported`: they are not estimates of an ablation effect.
+- `EDGE` rows refuse `attribution_audit_claim_unsupported`: an edge is tested by patching it,
+  with `tl.mechinterp.patch_edges(trace, edges, corrupt=graph)`; the remedy audits the site rows.
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+torch.manual_seed(0)
+model = nn.Sequential(nn.Linear(3, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
+x = torch.randn(2, 3)
+target = tl.attribution.seed("output_1", index=(0, 1))
+table = tl.attribution.read(tl.trace(model, x), target=target, frozen=None)
+audit = tl.attribution.causal_audit(model, x, claim=table, target=target, k=1, random_draws=2)
+for row in audit.units:
+    print(row.site, round(row.claimed_effect, 4), round(row.measured_effect, 4))
+print(audit.rank_agreement)
+```
+
+Output:
+
+```text
+linear_1_1:1 0.0531 0.0531
+relu_1_2:1 0.0531 0.0531
+linear_2_3:1 0.106 0.106
+output_1:1 0.106 0.106
+1.0
+```
+
+Zero-ablating a site of this ReLU network moves the target by exactly its activation times
+gradient (a ReLU passes a zeroed input through as zero), so every row agrees; on a model with
+smooth nonlinearities, or a read with a frozen linearization, the gap is the finding.
 
 ## Reading attribution results honestly
 
