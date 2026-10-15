@@ -282,10 +282,13 @@ The nine tools:
   produce); `mode="folded"` (default) is the recurrence-folded structural view (a
   repeated transformer block states once with `n_instances`, splits disclosed).
 - `torchlens_dump` — `view=overview|graph|full`; `graph` and `full` page their op rows
-  under `max_rows` (echo `data.next` as `continuation`), `graph` takes `class_id=` for fold
-  drill-down, and `max_tokens` lowers the served token ceiling.
+  under `max_rows` (echo `data.next` as `continuation`; it is `null` on the last page),
+  `graph` takes `class_id=` for fold drill-down, and `max_tokens` lowers the served token
+  ceiling. A `full` page holds its rows in `data["ops"]` and a `graph` page in
+  `data["rows"]`; both use the `trace.to_agent_json()` op-row shape, so every row carries
+  `layer_label`.
 - `torchlens_explain` — `tl.report.explain(trace, max_tokens=..., audience=...)`;
-  `max_tokens` defaults to the 4000-token orientation budget, and the record carries the
+  `max_tokens` defaults to the explain budget (4,000 tokens), and the record carries the
   same `capture`/`audit` honesty blocks the overview serves.
 - `torchlens_query_sites` — structured site discovery over a closed JSON query AST
   (persisted facts only; regex/callables/value predicates refuse typed naming the Python
@@ -330,6 +333,15 @@ is re-minted at the first dropped row, so following `next` always reaches every 
 even the non-droppable floor exceeds `max_tokens`, the envelope returns
 `status: "budget_floor_exceeded"` carrying only the `capture` honesty block (when the record
 has one) and a disclosure naming the levers.
+
+The served defaults are configuration, not a guaranteed API limit, and may change between
+releases: 12,000 tokens for `torchlens_overview`, 4,000 for `torchlens_explain`, 150 rows and
+a 25,000-token backstop for the row tools, and 64 MiB per payload and 128 MiB per call for the
+payload tools. They were set from a measurement over the classics test corpus
+(`tools/agent_evals/BUDGETS.md` in the repository holds the method and numbers). Read the
+values a call actually used from its `limits` block, and the per-tool defaults from
+`torchlens.agent.list_tools()` (each declaration's `default_limits`, the rows MCP `list_tools`
+serves); nothing guarantees a response is never trimmed, so always check `truncation`.
 
 ## Anti-patterns
 

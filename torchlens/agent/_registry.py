@@ -126,6 +126,7 @@ def _fit_token_budget(
     max_tokens: int,
     *,
     row_key: str | tuple[str, ...] | None,
+    more_hint: str | None = None,
 ) -> dict[str, Any]:
     """Enforce the response-token budget on one built envelope.
 
@@ -147,6 +148,9 @@ def _fit_token_budget(
     row_key:
         Key (or candidate keys, first present list wins) inside ``data``
         holding droppable rows (``None`` = nothing to drop).
+    more_hint:
+        Tool-specific next call for a NON-paging tool's dropped rows (``None``
+        = the generic hint).
 
     Returns
     -------
@@ -184,7 +188,8 @@ def _fit_token_budget(
                     "echo data.next as the continuation argument (the next page starts "
                     "at the first dropped row), or raise max_tokens within the ceiling"
                     if pages
-                    else "raise max_tokens (within the ceiling) or narrow the site set "
+                    else more_hint
+                    or "raise max_tokens (within the ceiling) or narrow the site set "
                     "with labels=/query=; this tool does not page"
                 ),
             }
@@ -695,7 +700,7 @@ def tool_specs() -> tuple[AgentToolSpec, ...]:
                         "enum": ["manifest", "folded"],
                         "description": "Overview mode; the two modes return DIFFERENT schemas.",
                     },
-                    "max_tokens": _max_tokens_property(_budgets.ORIENTATION_MAX_TOKENS),
+                    "max_tokens": _max_tokens_property(_budgets.OVERVIEW_MAX_TOKENS),
                 },
                 "required": ["path"],
                 "additionalProperties": False,
@@ -704,7 +709,7 @@ def tool_specs() -> tuple[AgentToolSpec, ...]:
             tool_class="orientation",
             cli_verb="overview",
             handler=_handle_overview,
-            default_limits={"max_tokens": _budgets.ORIENTATION_MAX_TOKENS},
+            default_limits={"max_tokens": _budgets.OVERVIEW_MAX_TOKENS},
         ),
         AgentToolSpec(
             name="torchlens_dump",
@@ -912,6 +917,20 @@ _ROW_KEYS: dict[str, str | tuple[str, ...]] = {
 }
 
 
+#: Next call for the dropped rows of tools that take no ``labels=``/``query=``.
+_MORE_HINTS: dict[str, str] = {
+    "torchlens_overview": (
+        "this tool does not page: raise max_tokens (within the ceiling), or read the "
+        "structure page by page with torchlens_dump view='graph' (echo data.next as "
+        "the continuation; class_id= drills into one folded class)"
+    ),
+    "torchlens_api_map": (
+        "this tool does not page: raise max_tokens (within the ceiling), or pass name= "
+        "for one public name's full record"
+    ),
+}
+
+
 def spec_for(name: str) -> AgentToolSpec:
     """Return one tool spec by name.
 
@@ -971,7 +990,9 @@ def call_tool(name: str, arguments: dict[str, Any] | None = None) -> dict[str, A
     limits.setdefault("max_tokens", max_tokens)
     limits.setdefault("token_estimator", _budgets.TOKEN_ESTIMATOR)
     envelope = {**envelope, "limits": limits}
-    envelope = _fit_token_budget(envelope, max_tokens, row_key=_ROW_KEYS.get(name))
+    envelope = _fit_token_budget(
+        envelope, max_tokens, row_key=_ROW_KEYS.get(name), more_hint=_MORE_HINTS.get(name)
+    )
     return json_safe(envelope)
 
 
