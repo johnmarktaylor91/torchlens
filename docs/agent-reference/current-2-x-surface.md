@@ -1355,3 +1355,16 @@
   output; refusals `attribution_site_not_found`, `attribution_site_unit_invalid`,
   `attribution_site_firing_invalid`, `attribution_site_independent_of_input`,
   `attribution_site_target_unsupported`. Doc of record: `docs/reference/attribution.md`.
+- Attribution evaluation (DOCUMENTED-UNSTABLE): `tl.attribution.deletion_curve` and
+  `insertion_curve(model, inputs, input_kwargs=None, *, target, attribution, baseline="zeros",
+  n_steps=20, features="auto", patch_size=8)` remove or reveal the most-attributed input
+  features (elements, pixels, patches or tokens) in steps and return a `CurveResult`
+  (`fractions`, `scores`, `area`, `aopc`, `steps`); every `CurveStep.intervention` holds
+  `(tl.units(...), tl.replace_with(...))` pairs, replayed by `trace.fork().do(selection, edit)`.
+  `tl.attribution.randomization_test(model, inputs, input_kwargs=None, *, target, method,
+  method_kwargs=None, randomization="cascading", layers=None, seed=0, keep_maps=True)`
+  re-initializes layers top down on deep copies and reports Spearman and SSIM similarity per
+  step (`RandomizationResult`, `RandomizationStep`). Both accept `grad_cam` results. Refusals
+  `attribution_eval_map_misaligned`, `attribution_eval_setting_invalid`,
+  `attribution_randomization_layer_invalid`, `attribution_randomization_map_changed`; warning
+  `attribution_randomization_maps_large`. Doc of record: `docs/reference/attribution.md`.

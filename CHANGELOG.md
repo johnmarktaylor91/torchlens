@@ -85,6 +85,13 @@
 - **tviz**: `torchlens.tviz.receipt_from_patch_grid` sets `CausalReceipt.effect_source` from a
   grid's `effect_site` receipt, and refuses `kv_groups=` for a query-head interceptor grid
   (`tv_receipt_invalid`).
+- **attribution**: `tl.attribution` gains an evaluation battery: `deletion_curve` and
+  `insertion_curve` remove or reveal the most-attributed input features in steps and report the
+  curve, its area and AOPC, and every step carries its edit as a `(tl.units(...),
+  tl.replace_with(...))` pair that replays through `trace.fork().do(...)`; `randomization_test` is
+  the model-parameter randomization test (cascading or independent, Spearman and SSIM per step) on
+  deep copies of the model. Both accept `grad_cam` results, including vision-transformer token
+  grids.
 
 ### Bug Fixes
 
