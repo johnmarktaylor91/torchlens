@@ -316,3 +316,25 @@ def test_kept_maps_past_the_size_guard_warn_once_and_name_keep_maps_false(
         model, x, target=0, method=attribution.saliency, keep_maps=False
     )
     assert lean.similarity("spearman") == result.similarity("spearman")
+
+
+def test_randomization_refuses_when_no_parameterized_module_runs_and_the_remedy_runs() -> None:
+    """A method that never runs the model would randomize nothing; it refuses, naming layers=."""
+
+    torch.manual_seed(0)
+    model = SmallCnn()
+    x = torch.randn(1, 3, 12, 12)
+
+    def method(model: nn.Module, inputs: Tensor, input_kwargs: Any, *, target: Any) -> Tensor:
+        """A stub that never calls the model, so no layer runs."""
+
+        del model, input_kwargs, target
+        return inputs.detach().clone()
+
+    with pytest.raises(attribution.AttributionError) as excinfo:
+        attribution.randomization_test(model, x, target=0, method=method)
+    assert excinfo.value.fields.get("code") == "attribution_randomization_layer_invalid"
+    assert "layers=" in str(excinfo.value)
+    scope = {"tl": tl, "model": model, "x": x, "method": method}
+    fixed = eval(_remedy(str(excinfo.value)), scope)  # noqa: S307
+    assert isinstance(fixed, attribution.RandomizationResult) and len(fixed.steps) == 1

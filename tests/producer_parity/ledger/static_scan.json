@@ -641,10 +641,26 @@
  },
  {
   "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/attribution/_audit_claims.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "parents",
   "file": "torchlens/attribution/_cam_grid.py",
   "has_default": false,
   "sites": 8,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/attribution/_causal_audit.py",
+  "has_default": false,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -4513,6 +4529,14 @@
  },
  {
   "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/intervention/_gradient_contract.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/intervention/_module_alias_guard.py",
   "has_default": false,
@@ -4542,6 +4566,14 @@
   "has_default": true,
   "sites": 1,
   "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/intervention/_subspace_projection.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
  },
  {
   "ambiguous": true,
@@ -6142,6 +6174,46 @@
   "has_default": true,
   "sites": 2,
   "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/mechinterp/_edge_patch.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/mechinterp/_edge_patch.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/mechinterp/_edge_sources.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/mechinterp/_edges.py",
+  "has_default": false,
+  "sites": 7,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/mechinterp/_edges.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
  },
  {
   "ambiguous": true,

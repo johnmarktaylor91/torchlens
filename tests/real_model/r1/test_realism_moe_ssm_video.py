@@ -94,15 +94,41 @@ def test_switch_base_8_real_weights_sparse_routing_capture_and_validate(r1_loade
         generated = model.generate(**encoded, max_new_tokens=6, do_sample=False)
     assert generated[0].tolist() == SWITCH_GREEDY_IDS
     inputs = {**dict(encoded), "decoder_input_ids": generated[:, :4]}
-    with torch.no_grad():
-        direct = model(**inputs).logits
+    routed = set()
+    num_experts = model.config.num_experts
+
+    def _record_routed(router_name: str):
+        def _hook(_module, _args, output) -> None:
+            # The router's first output is the one-hot (capacity-masked) expert choice per token.
+            selected = output[0]
+            assert selected.shape[-1] == num_experts, "router output contract changed"
+            chosen = selected.reshape(-1, num_experts).any(dim=0).nonzero().flatten()
+            expert_prefix = router_name.removesuffix(".router") + ".experts.expert_"
+            routed.update(f"{expert_prefix}{int(index)}" for index in chosen)
+
+        return _hook
+
+    handles = [
+        module.register_forward_hook(_record_routed(name))
+        for name, module in model.named_modules()
+        if name.endswith(".mlp.router")
+    ]
+    try:
+        with torch.no_grad():
+            direct = model(**inputs).logits
+    finally:
+        for handle in handles:
+            handle.remove()
     called, _ = _capture_matches_direct_and_validates(model, inputs, direct)
-    experts = {address for address in called if ".experts.expert_" in address}
-    assert experts, "no expert MLP ran: routing never reached an expert"
+    # Compare expert modules only: a called expert's children (wi, wo, act, dropout) are not
+    # experts, so counting them would make the subset check fail even when routing is sparse.
     every_expert = {
         name for name, _ in model.named_modules() if name.rsplit(".", 1)[-1].startswith("expert_")
     }
+    experts = called & every_expert
+    assert experts, "no expert MLP ran: routing never reached an expert"
     assert experts < every_expert, "every expert ran on a short input: routing is not sparse"
+    assert experts == routed, "captured expert calls differ from the router's top-1 choices"
 
 
 def test_videomae_small_real_weights_tubelet_capture_and_validate(r1_loader):

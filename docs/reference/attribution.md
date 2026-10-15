@@ -479,7 +479,10 @@ Two checks reviewers ask of an attribution method, built on TorchLens's own piec
 any input-space result, including [`grad_cam`](#grad_cam) maps (CNN feature maps and ViT token
 grids alike; the input-resolution `N, 1, H, W` map is spread across the input channels). The
 two existing metrics, [`infidelity` and `sensitivity`](#infidelity-and-sensitivity), sit
-beside them.
+beside them. [ROAD](#road-remove-and-debias-road_curve) is the deletion curve with noisy linear
+imputation in place of a constant baseline. A further check, the [causal audit](#auditing-internal-attributions-causal_audit),
+grades internal attributions: it ablates the hidden units a layer attribution ranks and
+compares the measured effects with the claim.
 
 ### Deletion and insertion curves (`deletion_curve`, `insertion_curve`)
 
@@ -588,7 +591,140 @@ unchanged. `method` is called as `method(model_copy, inputs, input_kwargs, targe
 **method_kwargs)`; pass `method_kwargs={"layer": ...}` to `grad_cam` so every map uses the
 same layer. Each `RandomizationStep` keeps its map in `values`; past 256 MiB of kept maps the
 test warns once (`attribution_randomization_maps_large`) and names `keep_maps=False`. Unknown
-layers refuse `attribution_randomization_layer_invalid`.
+layers refuse `attribution_randomization_layer_invalid`, and so does a method under which no
+module with parameters runs (the test would otherwise randomize nothing and pass).
+
+### ROAD: remove and debias (`road_curve`)
+
+`tl.attribution.road_curve(model, inputs, input_kwargs=None, *, target, attribution,
+ranking="most_relevant_first", n_steps=20, features="auto", patch_size=8, noise_std=0.01,
+seed=0)` is ROAD (Rong et al., 2022, "A Consistent and Efficient Evaluation Strategy for
+Attribution Methods"). It is the deletion curve above with one change: a removed pixel does not
+take a constant baseline, whose shape would tell the model where the mask is, but the weighted
+mean of its 8 neighbours (1/6 for the direct neighbours, 1/12 for the diagonals, renormalised at
+the border), solved jointly for all removed pixels of a channel, plus Gaussian noise of
+`noise_std` (0.01, the authors' reference value). `ranking="most_relevant_first"` (MoRF) removes
+the most attributed features first, `"least_relevant_first"` (LeRF) the least attributed. The
+result is a `CurveResult` with `metric="road"`; each step's `intervention` holds
+`tl.units(<input layer>, <mask>)` with `tl.replace_with(<that step's imputed values>)`, so every
+point replays like any curve step. The noise of a step comes from a local generator seeded by
+`seed` and the step, so a step recomputes to the same values and the global random state is
+untouched. A removed region with no kept neighbour stays at zero (plus noise). ROAD needs
+`(N, C, H, W)` image inputs; other inputs refuse `attribution_eval_setting_invalid` and name
+`deletion_curve`. Quantus also provides ROAD; this one shares the curves' recorded edits.
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+model = nn.Sequential(nn.Flatten(), nn.Linear(9, 1))
+with torch.no_grad():
+    model[1].weight.copy_(torch.arange(1.0, 10.0).reshape(1, 9))
+    model[1].bias.zero_()
+x = torch.ones(1, 1, 3, 3)
+x[0, 0, 1, 1] = 4.0
+result = tl.attribution.input_x_grad(model, x, target=0)
+road = tl.attribution.road_curve(model, x, target=0, attribution=result, n_steps=9, noise_std=0.0)
+print(road.metric, [round(value, 4) for value in road.scores[:2, 0].tolist()])
+print(round(road.steps[1].inputs[0, 0, 1, 1].item(), 4), road.settings["ranking"])
+```
+
+Output:
+
+```text
+road [60.0, 45.0]
+1.0 most_relevant_first
+```
+
+The center pixel (attribution 20) goes first; with every neighbour equal to 1 its imputed value
+is 1, so the score falls from 60 to `60 - 5 * 4 + 5 * 1 = 45`.
+
+### Auditing internal attributions (`causal_audit`)
+
+`tl.attribution.causal_audit(model, inputs, input_kwargs=None, *, claim, target, k=5,
+ablation="zero", controls=("bottom", "random"), random_draws=10, per_unit=True, seed=0)` tests
+an internal attribution causally. The `claim` is a layer attribution (`layer_attribution`,
+`layer_integrated_gradients`, `layer_conductance`), for a model output target or for a
+[`SiteTarget`](#site-targets-sitetarget); its values score every unit of one hidden site.
+The audit ablates each unit alone (unit ablation, Meyes et al., 2019) and measures the target's
+change, `score(original) - score(ablated)`, the same sign as an activation-times-gradient claim.
+It then ablates the `k` units with the largest claimed magnitude together, beside two controls:
+the `k` units with the smallest claimed magnitude (`"bottom"`) and `random_draws` seeded random
+sets of `k` (`"random"`). `rank_agreement` is the Spearman correlation of the claimed and
+measured per-unit effects; each set reports its claimed sum next to its measured joint effect.
+
+Every ablation runs through the intervention engine on an intervention-ready trace, one
+`trace.fork().do(...)` per row or set (the replay engine `torchlens.experiment.site_sweep`
+uses). Each row (`CausalAuditUnit`) and set (`CausalAuditSet`) carries its edit
+in `intervention` as `(tl.units(<site>, <mask>), edit)` pairs, the same form as a curve step, so
+any point replays exactly.
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+
+class Residual(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc1 = nn.Linear(3, 4)
+        self.fc2 = nn.Linear(4, 1)
+
+    def forward(self, x):
+        return self.fc2(self.fc1(x)) + x.sum(dim=1, keepdim=True)
+
+
+model = Residual()
+with torch.no_grad():
+    model.fc1.weight.copy_(torch.tensor([[1.0, 0, 0], [0, 2, 0], [0, 0, 1], [1, 1, 1]]))
+    model.fc2.weight.copy_(torch.tensor([[3.0, -1.0, 0.5, 2.0]]))
+    model.fc1.bias.zero_()
+    model.fc2.bias.zero_()
+x = torch.tensor([[1.0, 2.0, 3.0]])
+claim = tl.attribution.layer_attribution(model, x, target=0, layer="fc1")
+audit = tl.attribution.causal_audit(model, x, claim=claim, target=0, k=2, random_draws=3)
+print([(row.unit, row.claimed_effect, row.measured_effect) for row in audit.units])
+print(audit.rank_agreement, [(item.kind, item.units, item.measured_effect) for item in audit.sets[:2]])
+
+trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+fork = trace.fork()
+for selection, edit in audit.set_of("top")[0].intervention:
+    fork.do(selection, edit)
+print(audit.original_score - fork[fork.output_layers[0]].out.item())
+```
+
+Output:
+
+```text
+[((0,), 3.0, 3.0), ((1,), -4.0, -4.0), ((2,), 1.5, 1.5), ((3,), 12.0, 12.0)]
+1.0 [('top', ((3,), (1,)), 8.0), ('bottom', ((0,), (2,)), 4.5)]
+8.0
+```
+
+On this linear model every claim is exact, so agreement is 1.0 and the sets add up; on a
+nonlinear model the gap between a set's claimed sum and its measured effect is the finding.
+
+- `ablation`: `"zero"` (default; `tl.zero_ablate()`), `"mean"` (each unit's mean over the
+  batch, through `tl.replace_with`), or a number or tensor broadcast to the site (a baseline
+  activation). Mean ablation over a batch of one changes nothing.
+- Units are the site's elements after the batch axis; a unit is ablated in every example, and
+  its claimed score is the claim summed over the batch, the same summing rule as an integer
+  `target=`. A `SiteTarget` target is read from its own site on every fork.
+- `per_unit=False` skips the single-unit table (`units` is empty and `rank_agreement` is
+  `None`) and measures only the sets; past 1024 units the audit warns once
+  (`attribution_audit_units_many`) and names it.
+- The model is traced once in eval mode without gradients, every edit lands on forks of that
+  trace, and the random draws use a local generator inside a forked random state, so the
+  caller's model and the global random state are unchanged.
+
+A claim the audit cannot ground at one hidden site refuses `attribution_audit_claim_unsupported`:
+a plain tensor, an input-level result, a site whose module runs more than once, and, for now,
+direct-logit-attribution rows and one-backward read tables. A claim whose values do not have the
+site's output shape on these inputs, or that was computed for another target, refuses
+`attribution_audit_claim_misaligned`; bad `k`, `ablation`, `controls` or `random_draws` refuse
+`attribution_eval_setting_invalid`. Each refusal names a spelling that works.
 
 ## Reading attribution results honestly
 

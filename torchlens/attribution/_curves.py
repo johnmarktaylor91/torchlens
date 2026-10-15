@@ -22,6 +22,7 @@ replay is the same computation through the intervention engine.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -90,6 +91,7 @@ class _CurvePlan:
     rank: Tensor
     model: Module
     labels: dict[str, tuple[str, ...]] = field(default_factory=dict, compare=False)
+    imputer: Callable[[Tensor, Tensor, int], Tensor] | None = field(default=None, compare=False)
 
     def input_labels(self) -> tuple[str, ...]:
         """Return the trace label of each evaluated input, traced once on first use.
@@ -144,11 +146,36 @@ class _CurvePlan:
             Perturbed leaves in traversal order.
         """
 
+        masks = self.baseline_masks(n_features)
         return tuple(
             torch.where(mask, baseline, leaf)
             for mask, baseline, leaf in zip(
-                self.baseline_masks(n_features), self.baselines, self.leaves, strict=True
+                masks, self.step_baselines(n_features, masks), self.leaves, strict=True
             )
+        )
+
+    def step_baselines(self, n_features: int, masks: tuple[Tensor, ...]) -> tuple[Tensor, ...]:
+        """Return, per leaf, the values the step's masked elements take.
+
+        Parameters
+        ----------
+        n_features
+            Features removed (deletion) or revealed (insertion) at the step.
+        masks
+            The step's baseline masks.
+
+        Returns
+        -------
+        tuple[Tensor, ...]
+            The fixed baselines, or with an imputer (ROAD) the values imputed
+            for this step's mask.
+        """
+
+        if self.imputer is None:
+            return self.baselines
+        imputer = self.imputer
+        return tuple(
+            imputer(leaf, mask, n_features) for leaf, mask in zip(self.leaves, masks, strict=True)
         )
 
 
@@ -210,7 +237,10 @@ class CurveStep:
         layers.
         """
 
-        return _step_intervention(self._plan, self._plan.baseline_masks(self.n_features))
+        masks = self._plan.baseline_masks(self.n_features)
+        return _step_intervention(
+            self._plan, masks, self._plan.step_baselines(self.n_features, masks)
+        )
 
 
 @dataclass(frozen=True)
@@ -301,7 +331,9 @@ def _rebuild_inputs(prepared: _PreparedInputs, leaves: tuple[Tensor, ...]) -> tu
     return (positional[0] if prepared.is_single_tensor else positional), kwargs
 
 
-def _step_intervention(plan: _CurvePlan, masks: tuple[Tensor, ...]) -> tuple[tuple[Any, Any], ...]:
+def _step_intervention(
+    plan: _CurvePlan, masks: tuple[Tensor, ...], baselines: tuple[Tensor, ...]
+) -> tuple[tuple[Any, Any], ...]:
     """Build the ``(selection, edit)`` pairs that replay one step.
 
     Parameters
@@ -310,6 +342,8 @@ def _step_intervention(plan: _CurvePlan, masks: tuple[Tensor, ...]) -> tuple[tup
         The curve plan.
     masks
         Per leaf, the elements holding the baseline at the step.
+    baselines
+        Per leaf, the values those elements take.
 
     Returns
     -------
@@ -325,7 +359,7 @@ def _step_intervention(plan: _CurvePlan, masks: tuple[Tensor, ...]) -> tuple[tup
         return ()
     return tuple(
         (units(name, mask), replace_with(baseline.clone()))
-        for name, mask, baseline in zip(plan.input_labels(), masks, plan.baselines, strict=True)
+        for name, mask, baseline in zip(plan.input_labels(), masks, baselines, strict=True)
         if bool(mask.any())
     )
 
@@ -415,6 +449,8 @@ class _CurveRequest:
     n_steps: int
     features: CurveFeatures
     patch_size: int | tuple[int, int]
+    imputer: Callable[[Tensor, Tensor, int], Tensor] | None = None
+    least_relevant_first: bool = False
 
 
 def _curve(
@@ -447,6 +483,8 @@ def _curve(
     prepared = _normalize_model_inputs(inputs, input_kwargs, _Caller(method, target=target))
     leaves = tuple(leaf.detach() for leaf in prepared.attributed_leaves)
     maps = _input_space_maps(attribution, leaves, method)
+    if request.least_relevant_first:
+        maps = tuple(-values for values in maps)
     resolved = _resolve_features(features, leaves, method)
     patch = _patch_sides(patch_size, method)
     baselines = tuple(_baseline_for(baseline, leaf, method) for leaf in leaves)
@@ -464,7 +502,9 @@ def _curve(
     order = torch.sort(combined, dim=1, descending=True, stable=True).indices
     rank = torch.empty_like(order)
     rank.scatter_(1, order, torch.arange(offset, device=order.device).expand_as(order))
-    plan = _CurvePlan(kind, prepared, leaves, baselines, tuple(groups), rank, model)
+    plan = _CurvePlan(
+        kind, prepared, leaves, baselines, tuple(groups), rank, model, imputer=request.imputer
+    )
     counts = _validated_steps(n_steps, offset, method)
 
     step_scores: list[Tensor] = []
@@ -494,7 +534,11 @@ def _curve(
             "n_steps": n_steps,
             "features": resolved,
             "patch_size": patch if resolved == "patches" else None,
-            "ranking": "most attributed first",
+            "ranking": (
+                "least attributed first"
+                if request.least_relevant_first
+                else "most attributed first"
+            ),
             "target": _target_repr(target),
         },
         extra={

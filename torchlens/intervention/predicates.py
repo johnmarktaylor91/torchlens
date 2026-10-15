@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Callable
 from typing import Any, TypeAlias, cast
 
@@ -38,7 +39,7 @@ def as_intervention_decision(
         return None
     if isinstance(action, InterventionDecision):
         if direction is not None:
-            return InterventionDecision(
+            action = InterventionDecision(
                 action=action.action,
                 hook=action.hook,
                 template_ref=action.template_ref,
@@ -46,6 +47,11 @@ def as_intervention_decision(
                 isolate=action.isolate,
                 direction=direction,
             )
+        if action.keep_grad and action.hook is not None:
+            from ._gradient_contract import keep_grad
+
+            # keep_grad=True runs the same connectivity check as keep_grad(edit).
+            return dataclasses.replace(action, hook=keep_grad(action.hook))
         return action
     if isinstance(action, Edit):
         resolved_direction = direction or action.direction or action.kind

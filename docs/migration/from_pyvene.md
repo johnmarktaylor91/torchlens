@@ -189,9 +189,10 @@ the cache itself.
 
 Pyvene's subspace interventions act on a learned or given basis. For a fixed direction,
 `tl.project_off` removes the component along it and `tl.project_onto` keeps only that component.
-A `tl.subspace(...)` selection is different: it selects the set of elements the direction has
-weight on and never projects (see
-[Set, not projection](../intervention_explainers.md#set-not-projection)).
+A `tl.subspace(...)` selection is the selection-side spelling of the same idea:
+`do(tl.subspace(site, basis, origin=...), edit)` edits the component in the span of the basis, and
+`tl.patch_from(source)` there is the basis interchange (see
+[Subspace edits](../intervention_explainers.md#subspace-edits-the-component-along-a-basis)).
 
 ```python
 # migration-test: tool=torchlens expected=True

@@ -1678,40 +1678,6 @@ def _apply_invalid(
 # do-plan below imports the derivation lazily.
 
 
-def _warn_if_dense_subspace_edit(resolved: ResolvedSelection) -> None:
-    """Point-of-use disclosure: editing a DENSE direction's support set is
-    full-axis ablation (set semantics), never a projection along the
-    direction. Projection-valued edits are separate edit helpers
-    (``tl.project_off``, ``tl.project_onto``,
-    ``torchlens.intervention.set_direction_mean``), which the warning names
-    as the remedy. The marker rides ``provenance.source``, so the audit
-    record discloses it either way; this warning surfaces it at the
-    ``do()`` call itself."""
-
-    import warnings as _warnings
-
-    from .selection_subspace import DENSE_SUPPORT_NOTE
-
-    if any(DENSE_SUPPORT_NOTE in entry.provenance.source for entry in resolved):
-        from .errors import TorchLensWarning
-
-        _warnings.warn(
-            TorchLensWarning(
-                "do() on a dense-direction subspace selection edits EVERY "
-                "element of the bound axis (the documented support-set "
-                "semantics), not the component along the direction. "
-                "Remedy: to edit the component along the direction, apply "
-                "tl.project_off(direction, feature_axis=...), "
-                "tl.project_onto(...) or "
-                "torchlens.intervention.set_direction_mean(...) to the site "
-                "instead; to target a subset, use a sparse direction (or "
-                "tol=); or accept the full-axis edit knowingly",
-                code="dense_subspace_full_axis_edit",
-            ),
-            stacklevel=4,
-        )
-
-
 def build_selection_do_plan(
     trace: Any, selection_like: Any, edit: Any
 ) -> tuple[ResolvedSelection, list[dict[str, Any]], dict[str, Any]]:
@@ -1729,8 +1695,12 @@ def build_selection_do_plan(
             "do(selection, edit) requires an edit: pass an Edit/Edit "
             "(e.g. tl.zero_ablate()), a hook callable, or a replacement tensor."
         )
+    from .intervention._subspace_projection import subspace_projection_of
+
+    # A bare tl.subspace(...) target is projection-valued: the edit acts on
+    # the component along the basis (resolve() still reports the support).
+    projection = subspace_projection_of(selection_like)
     resolved = _resolve_do_target(trace, selection_like)
-    _warn_if_dense_subspace_edit(resolved)
 
     from .intervention.masked_edit import _derive_masked_edit
     from .intervention.types import Edit
@@ -1767,12 +1737,13 @@ def build_selection_do_plan(
                 site=layer_label,
             )
         op = ops[0]
+        site_edit = edit if projection is None else projection.derive(edit, entry, op.label)
         plan.append(
             {
                 "op": op,
                 "entry": entry,
                 "is_leaf": getattr(op, "func", None) is None,
-                "edit": _derive_masked_edit(edit, entry, resolved.resolve_digest, op.label),
+                "edit": _derive_masked_edit(site_edit, entry, resolved.resolve_digest, op.label),
             }
         )
 
@@ -1790,7 +1761,7 @@ def build_selection_do_plan(
                 "site_key": repr(entry.site_key),
                 "relation": entry.provenance.relation,
                 "selected": entry.selected_count,
-                "source": entry.provenance.source,
+                "source": entry.provenance.source + ("" if projection is None else projection.note),
             }
             for entry in resolved
         ],

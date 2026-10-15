@@ -774,12 +774,22 @@
   `tl.subspace(within, basis, *, origin=, method=None, dim=-1, tol=0.0)`
   selects the elements a DIRECTION in activation space lives on (probe
   directions, steering vectors, PCA components, SAE decoder rows; basis
-  `[d]` or `[k, d]`, canonicalized float64). SET, NOT PROJECTION: it
-  resolves to the basis SUPPORT SET (`|w| > tol` on the bound axis, union
-  over rows, expanded across other axes; a dense direction supports the
-  WHOLE axis and `do()` edits every supported element, never "the
-  component along the direction" — projection-valued selections are a
-  named design fork, not a promise). BASIS PROVENANCE MANDATORY:
+  `[d]` or `[k, d]`, canonicalized float64). PROJECTION UNDER do():
+  `do(subspace(...), edit)` edits the COMPONENT along the basis span
+  (coordinates `c = Q x`, written back `x + Q^T (edit(c) - c)`; the
+  orthogonal complement is unchanged; coordinate verbs act on `c`, value
+  verbs such as `tl.patch_from(source)` (the interchange) write a value's
+  component, other verbs refuse `subspace_edit_unsupported`; an orthonormal
+  basis is used as given, any other full-rank one is orthonormalised with
+  signs kept; set-combined or resolved subspaces refuse
+  `subspace_projection_composed`; a partial-axis `within=` refuses
+  `subspace_projection_partial_axis`). SUPPORT UNDER resolve(): the basis
+  SUPPORT SET (`|w| > tol` on the bound axis, union over rows, expanded
+  across other axes; a dense direction supports the WHOLE axis). GRADIENT
+  CONTRACT: `tl.intervention.keep_grad(edit)` (and
+  `InterventionDecision(keep_grad=True)`) raise `edit_detached_from_graph`
+  when an edit writes values with no autograd graph; the verb x door matrix
+  is `docs/gradient_contract.md`. BASIS PROVENANCE MANDATORY:
   `origin=` required non-empty; origin/method/geometry/sha256 content
   digest ride `provenance.source` and `do()` audit records
   (`selection_subspace.BasisProvenance` is the programmatic face).
@@ -1049,7 +1059,17 @@
   `resolve_alias` / `translation_table` (TLens spellings resolve against a
   trace; tuple and compact `"k6"` forms), `test_prompt`, `apply_norm_scale`
   (cached-scale LayerNorm linearization, TLens-parity bit-exact), retention
-  planning (`retention_plan`). ~38 names; `MechInterpError` family.
+  planning (`retention_plan`). ~44 names; `MechInterpError` family.
+  Component edge graph: `tl.mechinterp.component_graph(trace)` returns a
+  `tl.mechinterp.ComponentGraph` (read-only `nodes`, `receivers`, `edges` keyed by
+  the MIB/EAP-IG names: nodes `input`/`a{L}.h{H}`/`b{L}`/`m{L}`, receivers
+  `a{L}.h{H}<q|k|v>`/`m{L}`/`logits`, edges `"s->t"`) of
+  `tl.mechinterp.ComponentNode`, `tl.mechinterp.ComponentReceiver` and
+  `tl.mechinterp.ComponentEdge` records (nodes and receivers carry `layer_index`
+  and `head`); every receiver's pre-norm input is
+  checked equal to the sum of its edges' contributions in the API, and an edge
+  is an intervention selection. `tl.mechinterp.patch_edges(trace, edges, *,
+  corrupt)` patches edges into one receiver on the replay engine.
 - TRAINING-TIME WATCH (F26; DOCUMENTED-UNSTABLE): `torchlens.trackers` is the
   attach-once watch engine over the C06 records -- `watch`/`WatchSession`,
   sinks (TensorBoardSink incl. `add_histogram_raw` precomputed buckets,
@@ -1386,14 +1406,31 @@
   `attribution_site_target_unsupported`. Doc of record: `docs/reference/attribution.md`.
 - Attribution evaluation (DOCUMENTED-UNSTABLE): `tl.attribution.deletion_curve` and
   `tl.attribution.insertion_curve(model, inputs, input_kwargs=None, *, target, attribution,
-  baseline="zeros", n_steps=20, features="auto", patch_size=8)` remove or reveal the most-attributed input
-  features (elements, pixels, patches or tokens) in steps and return a `CurveResult`
-  (`fractions`, `scores`, `area`, `aopc`, `steps`); every `CurveStep.intervention` holds
-  `(tl.units(...), tl.replace_with(...))` pairs, replayed by `trace.fork().do(selection, edit)`.
+  baseline="zeros", n_steps=20, features="auto", patch_size=8)` remove or reveal the
+  most-attributed input features (elements, pixels, patches or tokens) in steps and return a
+  `tl.attribution.CurveResult` (`fractions`, `scores`, `area`, `aopc`, `steps`); every
+  `tl.attribution.CurveStep.intervention` holds `(tl.units(...), tl.replace_with(...))` pairs,
+  replayed by `trace.fork().do(selection, edit)`. `tl.attribution.road_curve(model, inputs,
+  input_kwargs=None, *, target, attribution, ranking="most_relevant_first", n_steps=20,
+  features="auto", patch_size=8, noise_std=0.01, seed=0)` is ROAD (Rong et al., 2022): the
+  deletion curve with removed pixels filled by noisy linear imputation from their 8 neighbours,
+  `metric="road"`, every step's `intervention` holding its imputed values; image inputs only.
   `tl.attribution.randomization_test(model, inputs, input_kwargs=None, *, target, method,
   method_kwargs=None, randomization="cascading", layers=None, seed=0, keep_maps=True)`
   re-initializes layers top down on deep copies and reports Spearman and SSIM similarity per
-  step (`RandomizationResult`, `RandomizationStep`). Both accept `grad_cam` results. Refusals
-  `attribution_eval_map_misaligned`, `attribution_eval_setting_invalid`,
-  `attribution_randomization_layer_invalid`, `attribution_randomization_map_changed`; warning
-  `attribution_randomization_maps_large`. Doc of record: `docs/reference/attribution.md`.
+  step (`tl.attribution.RandomizationResult`, `tl.attribution.RandomizationStep`). Both accept
+  `grad_cam` results. Refusals `attribution_eval_map_misaligned`,
+  `attribution_eval_setting_invalid`, `attribution_randomization_layer_invalid`,
+  `attribution_randomization_map_changed`; warning `attribution_randomization_maps_large`. Doc
+  of record: `docs/reference/attribution.md`.
+- Causal audit (DOCUMENTED-UNSTABLE): `tl.attribution.causal_audit(model, inputs,
+  input_kwargs=None, *, claim, target, k=5, ablation="zero", controls=("bottom", "random"),
+  random_draws=10, per_unit=True, seed=0)` grades a layer attribution (also one computed for a
+  `tl.attribution.SiteTarget`) at its hidden site: each unit ablated alone, then the top-k
+  claimed units together beside bottom-k and seeded random-k controls, one
+  `trace.fork().do(...)` each; returns `tl.attribution.CausalAuditResult` (`units`, `sets`,
+  `rank_agreement` (Spearman), `original_score`, `site`) whose `tl.attribution.CausalAuditUnit`
+  and `tl.attribution.CausalAuditSet` rows carry `claimed_effect`, `measured_effect` and a replayable
+  `intervention`. Refusals `attribution_audit_claim_unsupported`,
+  `attribution_audit_claim_misaligned`, `attribution_eval_setting_invalid`; warning
+  `attribution_audit_units_many`. Doc of record: `docs/reference/attribution.md`.
