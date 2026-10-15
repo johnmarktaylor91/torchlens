@@ -133,7 +133,8 @@ def test_randomization_accepts_grad_cam_results(family: str) -> None:
             return output.logits[:, 1].sum()
 
         kwargs = {"layer": "vit.layers.0", "overlay": False}
-        layers = ["classifier", "vit.layers.1.mlp.fc2", "vit.layers.0.mlp.fc2"]
+        linears = [name for name, module in model.named_modules() if isinstance(module, nn.Linear)]
+        layers = list(reversed(linears))[:3]
 
     result = attribution.randomization_test(
         model,
@@ -257,3 +258,26 @@ def test_randomization_refuses_bad_settings_and_remedies_run(
     assert excinfo.value.fields.get("code") == code
     fixed = eval(_remedy(str(excinfo.value)), {"tl": tl, "model": model, "x": x})  # noqa: S307
     assert isinstance(fixed, attribution.RandomizationResult)
+
+
+def test_kept_maps_past_the_size_guard_warn_once_and_name_keep_maps_false(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The safe default keeps every map; past the guard it warns once with the cheaper spelling."""
+
+    import torchlens.attribution._randomization as randomization_module
+
+    monkeypatch.setattr(randomization_module, "_KEEP_MAPS_WARN_BYTES", 1)
+    torch.manual_seed(0)
+    model = SmallCnn()
+    x = torch.randn(1, 3, 12, 12)
+    with pytest.warns(attribution.AttributionWarning) as record:
+        result = attribution.randomization_test(model, x, target=0, method=attribution.saliency)
+    coded = [w for w in record if getattr(w.message, "fields", {}).get("code")]
+    assert [w.message.fields["code"] for w in coded] == ["attribution_randomization_maps_large"]
+    assert "keep_maps=False" in str(coded[0].message)
+    assert all(step.values is not None for step in result.steps)
+    lean = attribution.randomization_test(
+        model, x, target=0, method=attribution.saliency, keep_maps=False
+    )
+    assert lean.similarity("spearman") == result.similarity("spearman")

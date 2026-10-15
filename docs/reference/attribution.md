@@ -473,6 +473,116 @@ without the attributed inputs, whose attributions would all be zero
 (`attribution_site_independent_of_input`), and a method that scores only the model output
 (`infidelity`, for example: `attribution_site_target_unsupported`).
 
+## Evaluating attributions
+
+Two checks reviewers ask of an attribution method, built on TorchLens's own pieces. Both take
+any input-space result, including [`grad_cam`](#grad_cam) maps (CNN feature maps and ViT token
+grids alike; the input-resolution `N, 1, H, W` map is spread across the input channels). The
+two existing metrics, [`infidelity` and `sensitivity`](#infidelity-and-sensitivity), sit
+beside them.
+
+### Deletion and insertion curves (`deletion_curve`, `insertion_curve`)
+
+`tl.attribution.deletion_curve(model, inputs, input_kwargs=None, *, target, attribution,
+baseline="zeros", n_steps=20, features="auto", patch_size=8)` ranks the input features by
+attribution (highest first, per example) and replaces the top `floor(k * F / n_steps)` of them
+with the baseline at step `k`, recording the target score after each step: the
+most-relevant-first curve of Samek et al. (2017) and the deletion metric of Petsiuk et al.
+(2018). `insertion_curve` (Petsiuk et al., 2018) starts from the baseline and reveals the top
+features of the input instead. The `CurveResult` holds `fractions`, `scores`
+(`(n_steps + 1, B)`: one column per example for an integer target, one column for a callable
+target), `area` (trapezoid rule over the fractions; lower is better for deletion, higher for
+insertion) and `aopc`, the mean score change from the start (`mean_k(s_0 - s_k)` for deletion,
+`mean_k(s_k - s_0)` for insertion; higher is better for both). Per-example values are in
+`extra`, the resolved policy in `settings`.
+
+- `baseline`: `"zeros"`, `"blur"` (an 11x11 box blur of the input, image inputs only), a number,
+  or a tensor of the input's shape.
+- `features`: `"pixels"` (all channels at one position), `"patches"` (`patch_size` squares;
+  edge patches may be smaller), `"tokens"` (all values at one sequence position) or
+  `"elements"` (every scalar). `"auto"` picks pixels for `N, C, H, W` inputs, tokens for
+  `N, T, D` inputs, elements otherwise. Several floating-point inputs share one ranking.
+
+Each step is a recorded intervention. `curve.steps[k].intervention` is the `tl.when(...)`
+spec that replaces the evaluated input with that step's perturbed value, so a curve point comes
+with the exact edit that produced it and replays through the intervention engine:
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+model = nn.Linear(4, 1)
+with torch.no_grad():
+    model.weight.copy_(torch.tensor([[4.0, -1.0, 2.0, 0.5]]))
+    model.bias.zero_()
+x = torch.ones(1, 4)
+result = tl.attribution.input_x_grad(model, x, target=0)
+curve = tl.attribution.deletion_curve(model, x, target=0, attribution=result, n_steps=4)
+print(curve.scores[:, 0].tolist(), curve.aopc)
+
+replayed = tl.trace(model, x, intervene=curve.steps[1].intervention)
+print(replayed[replayed.output_layers[0]].out.item(), curve.steps[1].inputs.tolist())
+```
+
+Output:
+
+```text
+[5.5, 1.5, -0.5, -1.0, 0.0] 4.4
+1.5 [[0.0, 1.0, 1.0, 1.0]]
+```
+
+`step.inputs` and `step.baseline_mask` show the perturbed input and which elements hold the
+baseline. To compare against chance, evaluate a random ranking the same way
+(`attribution=torch.rand_like(x)`). Curves score the model output, so a `SiteTarget` refuses
+(`attribution_site_target_unsupported`); an attribution that does not cover the input (layer
+space) refuses `attribution_eval_map_misaligned`, and a bad baseline, step count or grouping
+refuses `attribution_eval_setting_invalid`, each naming a spelling that works.
+
+### The randomization test (`randomization_test`)
+
+`tl.attribution.randomization_test(model, inputs, input_kwargs=None, *, target, method,
+method_kwargs=None, randomization="cascading", layers=None, seed=0, keep_maps=True)` is the
+model-parameter randomization test of Adebayo et al. (2018), "Sanity checks for saliency
+maps": it re-initializes layers from the output side (`"cascading"`: cumulatively;
+`"independent"`: one at a time), re-runs `method` and compares each map with the original.
+An explanation that stays the same once the parameters are destroyed does not explain the
+model. The measures are `spearman` (rank correlation of the signed maps), `spearman_abs`
+(of their absolute values) and `ssim` (Wang et al., 2004: 7x7 uniform window, on the absolute
+maps summed over channels and rescaled to `[0, 1]`; `None` unless the maps are spatial planes
+of side 7 or more).
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+torch.manual_seed(0)
+mlp = nn.Sequential(nn.Linear(4, 8), nn.Tanh(), nn.Linear(8, 2))
+x = torch.randn(3, 4)
+check = tl.attribution.randomization_test(mlp, x, target=1, method=tl.attribution.saliency)
+print(check.layers, [step.randomized for step in check.steps])
+print(len(check.similarity("spearman")), check.similarity("ssim"))
+```
+
+Output:
+
+```text
+('2', '0') [('2',), ('2', '0')]
+2 (None, None)
+```
+
+`layers=` names the modules to randomize, top first (default: every module with parameters of
+its own, in reverse order of first execution). A module is re-initialized by its own
+`reset_parameters()` when it has one, else each of its parameters is drawn from
+`N(0, 0.02^2)`; `seed=` fixes the draws. Everything runs on deep copies inside a forked random
+state, so the caller's model (parameters and gradients) and the global random state are
+unchanged. `method` is called as `method(model_copy, inputs, input_kwargs, target=target,
+**method_kwargs)`; pass `method_kwargs={"layer": ...}` to `grad_cam` so every map uses the
+same layer. Each `RandomizationStep` keeps its map in `values`; past 256 MiB of kept maps the
+test warns once (`attribution_randomization_maps_large`) and names `keep_maps=False`. Unknown
+layers refuse `attribution_randomization_layer_invalid`.
+
 ## Reading attribution results honestly
 
 An attribution map answers a narrower question than it appears to. Five habits keep a reading

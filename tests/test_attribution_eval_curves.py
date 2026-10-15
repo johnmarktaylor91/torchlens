@@ -251,7 +251,7 @@ def test_curve_over_two_inputs_ranks_features_jointly() -> None:
 
 
 def _remedy(message: str) -> str:
-    found = re.search(r"Remedy: .*?(tl\.attribution\.\w+\(.*?\))\. See", message)
+    found = re.search(r"Remedy: [^\n]*?(tl\.attribution\.\w+\([^()]*\))", message)
     assert found is not None, message
     return found.group(1)
 
@@ -270,9 +270,8 @@ def test_curve_refuses_misaligned_attribution_and_its_remedy_runs() -> None:
     assert "(1, 3, 8, 8)" in message
     fixed = eval(_remedy(message), {"tl": tl, "model": model, "x": x})  # noqa: S307
     assert isinstance(fixed, attribution.AttributionResult)
-    assert attribution.deletion_curve(model, x, target=0, attribution=fixed).aopc == pytest.approx(
-        attribution.deletion_curve(model, x, target=0, attribution=fixed).aopc
-    )
+    curve = attribution.deletion_curve(model, x, target=0, attribution=fixed)
+    assert curve.extra["attribution_method"] == "saliency"
 
 
 @pytest.mark.parametrize(
