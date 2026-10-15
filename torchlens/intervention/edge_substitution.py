@@ -62,7 +62,7 @@ from .types import Edit
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
 
-__all__ = ["apply_edge_substitution_do"]
+__all__ = ["apply_edge_substitution_do", "recompute_with_substitution"]
 
 
 def tensor_content_digest(value: torch.Tensor) -> str:
@@ -390,6 +390,87 @@ def _reexecute_child_with_substitution(
     return replay_module._slice_output_by_path(
         output, replay_module._replay_container_path(child_op, trace)
     )
+
+
+def recompute_with_substitution(
+    trace: Trace, record: Any, substituted: torch.Tensor, target_label: str, *, strict: bool = False
+) -> torch.Tensor:
+    """Return what op ``target_label`` computes when edge ``record`` consumes ``substituted``.
+
+    Read-only: the trace is not modified and nothing is stored or audited.
+    Only the ops on a path from the edge's child to the target are
+    re-executed, each from capture truth with the replay engine's own
+    argument reconstruction and parameter splicing, so the value equals what
+    an edge substitution followed by a push leaves at the target, bit for
+    bit, without forking the trace or replaying the rest of the cone.
+
+    Raises
+    ------
+    SelectionError
+        ``selection_apply_invalid`` when the target is not downstream of the
+        edge's child, for a nested argument path, or for a buffer record on
+        the path.
+    """
+
+    import importlib
+
+    replay_module = importlib.import_module("torchlens.intervention.replay")
+    site_key = replay_module._replay_site_key
+    address = edge_address_of(record)
+    child_op = trace.layer_dict_all_keys[record.child_label].ops[0]
+    target_key = site_key(trace.ops[target_label])
+    overlay: dict[str, torch.Tensor] = {
+        site_key(child_op): _reexecute_child_with_substitution(
+            trace, child_op, address, substituted, strict=strict
+        )
+    }
+    cone = replay_module.cone_of_effect(trace, [child_op])
+    keys = [site_key(op) for op in cone]
+    if target_key not in keys:
+        raise _apply_invalid(
+            "not_maskable",
+            f"op {target_label!r} is not downstream of edge "
+            f"{record.parent_label!r} -> {record.child_label!r}, so substituting the edge "
+            "cannot change it.",
+            site=target_label,
+        )
+    path = cone[1 : keys.index(target_key) + 1]
+    label_keys = replay_module._label_key_map(trace)
+    needed = {target_key}
+    for op in reversed(path):
+        if site_key(op) in needed:
+            for parent in op.parents:
+                needed.update(label_keys.get(parent, ()))
+    for op in path:
+        key = site_key(op)
+        if key not in needed or key in overlay:
+            continue
+        if getattr(op, "is_buffer", False):
+            raise _apply_invalid(
+                "not_maskable",
+                f"the path from edge child {record.child_label!r} to {target_label!r} "
+                f"passes buffer record {op.label!r}, which local re-execution does not thread.",
+                site=op.label,
+            )
+        args, kwargs = replay_module._reconstruct_args_from_template(
+            replay_module._template_for_site(op),
+            op,
+            trace,
+            overlay,
+            strict=strict,
+            label_keys=label_keys,
+        )
+        args, kwargs = replay_module._splice_param_substitutions([op], args, kwargs)
+        if replay_module._call_mutates_tensor_args(op, kwargs):
+            args = replay_module._clone_tensors_in(args)
+            kwargs = {
+                name: replay_module._clone_tensors_in(value) for name, value in kwargs.items()
+            }
+        output = replay_module._execute_replay_func_strict(op, args, kwargs)
+        overlay[key] = replay_module._slice_output_by_path(
+            output, replay_module._replay_container_path(op, trace)
+        )
+    return overlay[target_key]
 
 
 def _record_edge_substitution(
