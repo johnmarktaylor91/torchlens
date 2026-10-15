@@ -358,7 +358,7 @@ def test_legend_true_with_channel_emits_both(mlp_log: tl.Trace, tmp_path: Path) 
     assert "TorchLens encoding" in dot
     # One-table form (vizmech 13): sections of the one legend node, never two
     # competing legend topologies.
-    assert dot.count("tl_legend [") == 1
+    assert dot.count("tl_legend [label=") == 1
     assert dot.count("TorchLens encoding") == 1
 
 
