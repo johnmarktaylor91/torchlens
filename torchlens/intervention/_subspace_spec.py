@@ -10,7 +10,9 @@ it builds anything: a malformed field refuses ``subspace_spec_invalid``, rows
 whose bytes no longer match their digest refuse ``subspace_spec_basis_tampered``,
 and rows that are not orthonormal refuse ``subspace_spec_basis_not_orthonormal``.
 A rotation learned elsewhere (DAS, ReFT) travels this way: its first ``k`` rows
-are the basis.
+are the basis. The digest check detects corruption and hand edits of the rows;
+it is not a signature, so a forger who also recomputes the digest is not caught
+(the spec is trusted data, like every builtin helper argument).
 
 DOCUMENTED-UNSTABLE persisted form.
 """
@@ -64,6 +66,12 @@ def _checked_basis(basis: Any) -> torch.Tensor:
         shape = tuple(basis.shape) if isinstance(basis, torch.Tensor) else type(basis).__name__
         raise _invalid(
             "basis", f"expected a [k, d] tensor, got {shape!r}", code="subspace_spec_invalid"
+        )
+    if basis.layout != torch.strided or basis.device.type == "meta":
+        raise _invalid(
+            "basis",
+            f"expected dense rows with data, got {basis.layout} on {basis.device}",
+            code="subspace_spec_invalid",
         )
     if basis.dtype != torch.float64:
         raise _invalid(

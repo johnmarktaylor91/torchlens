@@ -250,12 +250,21 @@ def _execute_hook(
     )
 
 
+#: Keyword arguments of the normalized gradient-tuple callback every backward
+#: edit is mounted as (``hooks._adapt_tensor_backward_hook`` and the
+#: ``grad_fn_handle`` helpers).
+_GRADIENT_CALLBACK_PARAMETERS = frozenset(
+    {"grad_output", "grad_fn_handle", "call_index", "run_ctx"}
+)
+
+
 def _refuse_gradient_edit_on_forward(hook_callable: Any, hook_context: HookContext) -> None:
     """Refuse a gradient edit reached by a forward-only engine (replay, push).
 
     A backward edit (``tl.grad_zero()``, ``tl.bwd_hook(fn)``, ...) is normalized
-    to the gradient-tuple callback, whose ``grad_output`` argument a forward
-    value can never supply (this runs only after the forward bind failed). The replay engine recomputes forward values only, so
+    to the gradient-tuple callback, whose ``grad_output``, ``grad_fn_handle``,
+    ``call_index`` and ``run_ctx`` arguments a forward value can never supply
+    (this runs only after the forward bind failed). The replay engine recomputes forward values only, so
     such an edit has no gradient to edit there.
 
     Raises
@@ -271,7 +280,7 @@ def _refuse_gradient_edit_on_forward(hook_callable: Any, hook_context: HookConte
         parameters = inspect.signature(hook_callable).parameters
     except (TypeError, ValueError):
         return
-    if "grad_output" not in parameters:
+    if not _GRADIENT_CALLBACK_PARAMETERS.issubset(parameters):
         return
     from .._errors import InvalidArgumentError
 

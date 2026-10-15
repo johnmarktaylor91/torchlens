@@ -184,6 +184,7 @@ _MALFORMED = {
     "method": ("method", 3),
     "flag": ("orthonormalised", "yes"),
     "float32-basis": ("basis", None),
+    "sparse-basis": ("basis", None),
 }
 
 
@@ -192,7 +193,8 @@ def test_malformed_field_refuses_and_the_remedy_runs(tmp_path: Path, case: str) 
     rows = _ROTATION[:2].contiguous()
     stored = _stored(rows)
     field, value = _MALFORMED[case]
-    stored[field] = rows.float() if case == "float32-basis" else value
+    replaced = {"float32-basis": rows.float(), "sparse-basis": rows.to_sparse()}
+    stored[field] = replaced.get(case, value)
     with pytest.raises(InvalidArgumentError) as excinfo:
         rebuild_builtin_helper("subspace_edit", (tl.scale(2.0),), stored)
     assert excinfo.value.fields["code"] == "subspace_spec_invalid"

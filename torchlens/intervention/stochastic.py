@@ -1454,7 +1454,7 @@ def set_direction_mean(
     members = ref._tensor_members("set_direction_mean")
     extent = int(unit.shape[0])
     coefs: list[torch.Tensor] = []
-    coefs64: list[torch.Tensor] = []
+    axes: list[int] = []
     for index, member in enumerate(members):
         axis = explicit_axis % member.ndim if -member.ndim <= explicit_axis < member.ndim else None
         if axis is None or member.shape[axis] != extent:
@@ -1471,10 +1471,24 @@ def set_direction_mean(
         shape[axis] = extent
         aligned = unit.reshape(shape)
         coefs.append((member.detach().to(torch.float32) * aligned).sum(dim=axis))
-        host_member64 = member.detach().to("cpu", torch.float64)
-        coefs64.append((host_member64 * unit64.reshape(shape)).sum(dim=axis))
+        axes.append(axis)
     mean_coef = float(torch.stack([coef.mean() for coef in coefs]).mean())
-    mean_coef64 = float(torch.stack([coef.mean() for coef in coefs64]).mean())
+    # The float64 coefficient is computed on the first float64 site only, so a
+    # float32 population pays no float64 copy unless a float64 site fires.
+    wide_coef: list[float] = []
+
+    def _mean_coef64() -> float:
+        """Return the population's mean coefficient along the float64 unit."""
+
+        if not wide_coef:
+            per_member = []
+            for member, axis in zip(members, axes):
+                shape = [1] * member.ndim
+                shape[axis] = extent
+                wide = member.detach().to("cpu", torch.float64)
+                per_member.append((wide * unit64.reshape(shape)).sum(dim=axis).mean())
+            wide_coef.append(float(torch.stack(per_member).mean()))
+        return wide_coef[0]
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime directional mean-setting hook."""
@@ -1498,7 +1512,7 @@ def set_direction_mean(
             # coefficient; other dtypes keep the float32 forms, cast.
             wide = out.dtype == torch.float64
             site_unit = unit64 if wide else unit
-            site_coef = mean_coef64 if wide else mean_coef
+            site_coef = _mean_coef64() if wide else mean_coef
             aligned = site_unit.to(device=out.device, dtype=out.dtype).reshape(shape)
             projection = (out * aligned).sum(dim=fire_axis, keepdim=True) * aligned
             _record_sampling(
