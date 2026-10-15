@@ -216,6 +216,20 @@ apply to it, and TorchLens discloses that at the run door with
 silently returning an un-edited verified run. The run itself proceeds:
 this is a disclosure, never a refusal.
 
+The two engines differ sharply in cost when you sweep many edits over one
+captured input. On the 144-head ablation sweep of a 12-layer, 12-head GPT-2
+configuration (585 captured ops; `benchmarks/head_sweep_engine_cost.py`), the
+push engine (`engine="replay"`) took about 2.1 minutes for all 144 heads
+(129 s and 125 s in two runs; median 0.60-0.62 s per head) and the rerun
+engine (`engine="rerun"`) about 34 minutes (2052 s and 2008 s; median
+13.5-13.7 s per head), on CPU with four torch threads (torch 2.13) on a shared
+32-core x86-64 Linux host. Both engines produce bitwise-identical ablated
+traces on all 144 heads, so the difference is cost only. A rerun re-executes
+every captured op, and from an intervention-ready source it also runs under
+the host RNG monitor, so its cost is the same for every site; push cost grows
+with the edited site's downstream cone. Prefer push for many edits on one
+captured input, and use rerun when the edit must see a fresh execution.
+
 `Trace.draw(vis_intervention_mode=...)` visualizes the planned intervention
 recipe stored on an intervention-ready trace, such as sites registered with
 `log.set(...)` or `log.do(...)`. Capture-time `intervene=...` calls record
