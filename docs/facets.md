@@ -347,7 +347,7 @@ resid_post  block output op
 ```
 
 These are op-structural facets when the anchors exist, so `.grad` works under
-the normal gradient contract. If a block structure does not expose a real
+the normal [gradient contract](gradient_contract.md). If a block structure does not expose a real
 post-attention add, `resid_mid` is absent instead of guessed.
 
 Attention modules also expose read-only per-head `result` when the recipe can

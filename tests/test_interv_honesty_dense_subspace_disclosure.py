@@ -1,15 +1,15 @@
-"""Intervention honesty: editing a DENSE direction's support set discloses at
-the point of use (list-A row 8).
+"""Intervention honesty: a DENSE direction's subspace edit discloses what ran.
 
-``tl.subspace`` is a SET producer: a dense direction supports the whole bound
-axis, so ``do(subspace(dense), edit)`` performs full-axis ablation -- the
-documented semantics, but the producer's own motivating use cases expect a
-projection. The adjudicated fix (projection fork rides list D): a dense-basis
-resolution stamps an explicit marker into ``provenance.source`` (and thus the
-``do()`` audit record), and ``do()`` fires a point-of-use warning.
+``tl.subspace`` resolves to a SET (a dense direction supports the whole bound
+axis) while ``do(subspace(...), edit)`` edits the COMPONENT along the basis
+span. Both facts ride the audit record: the resolved source keeps the
+whole-axis support marker, and every subspace ``do()`` stamps the projection
+marker, so a reader can always tell which meaning ran.
 """
 
 from __future__ import annotations
+
+import warnings
 
 import pytest
 import torch
@@ -17,6 +17,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors._base import TorchLensWarning
+from torchlens.intervention._subspace_projection import PROJECTION_NOTE
 from torchlens.selection_subspace import DENSE_SUPPORT_NOTE
 
 _D = 8
@@ -46,32 +47,25 @@ def _sparse() -> torch.Tensor:
     return direction
 
 
-def test_dense_direction_do_warns_and_stamps_the_audit() -> None:
+def _unit_dense() -> torch.Tensor:
+    return torch.ones(_D, dtype=torch.float32) / _D**0.5
+
+
+def test_dense_direction_do_edits_the_component_and_stamps_both_markers() -> None:
     log = _trace()
     fork = log.fork()
-    selection = tl.subspace(
-        "relu_1_2", torch.ones(_D), origin="dense steering vector", method="manual"
-    )
-    with pytest.warns(TorchLensWarning, match="EVERY element") as caught:
-        fork.do(selection, tl.zero_ablate())
-    codes = {
-        getattr(item.message, "fields", {}).get("code")
-        for item in caught
-        if isinstance(item.message, TorchLensWarning)
-    }
-    assert "dense_subspace_full_axis_edit" in codes
-    remedies = {
-        getattr(item.message, "fields", {}).get("remedy")
-        for item in caught
-        if isinstance(item.message, TorchLensWarning)
-    }
-    assert any(remedy for remedy in remedies), "the contracted warning carries a remedy"
-    assert bool((fork["relu_1_2"].out == 0).all())
-    audit = fork.intervention_audit[-1]
-    assert DENSE_SUPPORT_NOTE.strip(" []") not in ("",)
-    assert any(DENSE_SUPPORT_NOTE in str(site) for site in audit["sites"]) or (
-        DENSE_SUPPORT_NOTE in repr(audit)
-    )
+    direction = _unit_dense()
+    selection = tl.subspace("relu_1_2", direction, origin="dense steering vector", method="manual")
+    fork.do(selection, tl.zero_ablate())
+    before = log["relu_1_2"].out
+    after = fork["relu_1_2"].out
+    want = before - (before @ direction)[:, None] * direction[None, :]
+    torch.testing.assert_close(after, want, rtol=0.0, atol=1e-6)
+    torch.testing.assert_close(after @ direction, torch.zeros(2), rtol=0.0, atol=1e-6)
+    assert not bool((after == 0).all()), "a dense direction no longer zeroes the whole axis"
+    (site,) = fork.intervention_audit[-1]["sites"]
+    assert DENSE_SUPPORT_NOTE in site["source"]
+    assert PROJECTION_NOTE in site["source"]
 
 
 @pytest.mark.smoke
@@ -79,11 +73,10 @@ def test_dense_resolution_source_carries_the_marker() -> None:
     log = _trace()
     resolved = tl.subspace("relu_1_2", torch.ones(_D), origin="dense probe").resolve(log)
     assert all(DENSE_SUPPORT_NOTE in entry.provenance.source for entry in resolved)
+    assert all(bool(entry.mask.all()) for entry in resolved)
 
 
-def test_sparse_direction_do_stays_silent() -> None:
-    import warnings
-
+def test_sparse_direction_do_stamps_the_projection_and_edits_only_its_support() -> None:
     log = _trace()
     fork = log.fork()
     selection = tl.subspace("relu_1_2", _sparse(), origin="sparse probe")
@@ -93,36 +86,6 @@ def test_sparse_direction_do_stays_silent() -> None:
     mask = selection.resolve(log)[0].mask
     assert bool((fork["relu_1_2"].out[mask] == 0).all())
     assert torch.equal(fork["relu_1_2"].out[~mask], log["relu_1_2"].out[~mask])
-
-
-def test_dense_direction_warning_names_the_shipped_projection_helpers() -> None:
-    """The remedy points at the projection-valued edits that ship, each a
-    real callable at its named spelling, and never calls them unshipped."""
-
-    import importlib
-
-    log = _trace()
-    fork = log.fork()
-    selection = tl.subspace("relu_1_2", torch.ones(_D), origin="dense probe")
-    with pytest.warns(TorchLensWarning) as caught:
-        fork.do(selection, tl.zero_ablate())
-    (warning,) = [
-        item.message
-        for item in caught
-        if isinstance(item.message, TorchLensWarning)
-        and item.message.fields.get("code") == "dense_subspace_full_axis_edit"
-    ]
-    message = str(warning)
-    remedy = warning.fields["remedy"]
-    assert "not a shipped capability" not in message
-    named = {
-        "tl.project_off": (tl, "project_off"),
-        "tl.project_onto": (tl, "project_onto"),
-        "torchlens.intervention.set_direction_mean": (
-            importlib.import_module("torchlens.intervention"),
-            "set_direction_mean",
-        ),
-    }
-    for spelling, (namespace, attribute) in named.items():
-        assert spelling in message and spelling in remedy, spelling
-        assert callable(getattr(namespace, attribute)), spelling
+    (site,) = fork.intervention_audit[-1]["sites"]
+    assert PROJECTION_NOTE in site["source"]
+    assert DENSE_SUPPORT_NOTE not in site["source"]

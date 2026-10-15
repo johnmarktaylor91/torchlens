@@ -215,7 +215,7 @@ def test_digest_identifies_basis_content(log):
 
 
 def test_do_audit_record_carries_the_basis_origin(model):
-    """The gallery row: ablating a probe direction's support leaves an audit trail."""
+    """The gallery row: ablating a probe direction's component leaves an audit trail."""
 
     trace = tl.trace(
         model,
@@ -231,7 +231,9 @@ def test_do_audit_record_carries_the_basis_origin(model):
         fork = trace.fork()
         fork.do(selection, tl.zero_ablate())
         edited = fork[_RELU].out
-        assert bool((edited[mask] == 0).all())
+        unit = _sparse_direction() / _sparse_direction().norm()
+        want = baseline - (baseline @ unit)[:, None] * unit[None, :]
+        torch.testing.assert_close(edited, want, rtol=0.0, atol=1e-6)
         assert torch.equal(edited[~mask], baseline[~mask])
         assert torch.equal(trace[_RELU].out, baseline)  # capture truth intact
         audit = fork.intervention_audit[-1]

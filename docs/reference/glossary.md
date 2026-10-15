@@ -470,6 +470,22 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   same site (same-site donor resolution as `tl.patch_from`); applies a learned rotation the
   user trained elsewhere.
 
+**torchlens.intervention.keep_grad(edit)** — *documented-unstable*
+: Returns the same forward edit (an `Edit` or a hook callable) with the gradient-connectivity
+  check: at fire time it raises `InvalidArgumentError` / `edit_detached_from_graph` (with the
+  site label, a `reason` of `edit_detached`, `site_has_no_graph` or `grad_disabled`, and a
+  spelling that keeps the graph) when the edit writes values carrying no autograd graph, when
+  the site value has none, or when gradients are disabled. `keep_grad(tl.scale(0.0))` is the
+  graph-keeping zero; `keep_grad(tl.intervention.compose(tl.scale(0.0), tl.add(value)))` the
+  graph-keeping fixed value. A wrapped `Edit` carries `("keep_grad", True)` in its metadata and
+  `portability="opaque_audit"`. A backward edit or a non-edit refuses `keep_grad_edit_invalid`.
+  Which verbs keep the graph under which door: docs/gradient_contract.md.
+
+**InterventionDecision.keep_grad** — *documented-unstable*
+: `True` runs the same check as `torchlens.intervention.keep_grad(edit)` on the decision's hook
+  (`edit_detached_from_graph` at fire time when the written values carry no graph). `False`, the
+  default, checks nothing. MLX refuses `keep_grad=True`.
+
 **torchlens.intervention.at_positions(edit, positions, *, mask=None, assume_no_padding=False, axis=1)** — *documented-unstable*
 : Restricts a same-shape edit to chosen token positions of a `(batch, tokens, ...)` site value
   (token-position editing): `positions` is an int, a list of ints, a slice, a per-row
@@ -1624,18 +1640,22 @@ deprecation shim owed*
   lives on — probe directions, steering vectors, PCA components, SAE
   decoder rows. `subspace(within, basis, *, origin=, method=None, dim=-1,
   tol=0.0)` takes one direction `[d]` or a stack `[k, d]` (canonicalized to
-  float64) and resolves to the basis's SUPPORT SET: every element whose
-  coordinate on the bound axis carries weight `|w| > tol` in at least one
-  basis vector, expanded across the site's other axes. SET, NOT PROJECTION
-  (the normative boundary): a Selection denotes sets, masks are exact as
-  sets, and `do()` is elementwise — the weights are disclosed but never
-  carried, a dense direction supports the WHOLE axis, and
-  `do(subspace(...), edit)` edits every supported element, never "the
-  component along the direction" (projection-valued selections are a named
-  design fork, not a promise). To edit the component along a direction, apply
-  `tl.project_off` / `tl.project_onto` or
-  `torchlens.intervention.set_direction_mean` to the site instead
-  (docs/intervention_explainers.md, "Set, not projection"). BASIS PROVENANCE IS MANDATORY: `origin=` is
+  float64). Under `do()` the edit acts on the COMPONENT along the span of the
+  basis rows: with `Q` the rows, on the coordinates `c = Q x`, written back as
+  `x + Q^T (edit(c) - c)`; the orthogonal complement is unchanged. Coordinate
+  verbs (`zero_ablate`, `scale`, `clamp`, `noise`, `mean_ablate()`, hook
+  callables, ...) act on `c`; value verbs (`patch_from`, the interchange;
+  `replace_with`, `steer`, ...) write a value's component; other verbs refuse
+  `subspace_edit_unsupported`. An orthonormal basis is used as given; any
+  other full-rank basis is orthonormalised (Gram-Schmidt in row order, signs
+  kept). A subspace combined with set operators, or resolved, refuses in
+  `do()` (`subspace_projection_composed`); `within=` restricts positions
+  (a partial-axis mask refuses `subspace_projection_partial_axis`).
+  `resolve()` reports the basis's SUPPORT SET: every element whose coordinate
+  on the bound axis carries weight `|w| > tol` in at least one basis vector,
+  expanded across the site's other axes (a dense direction supports the WHOLE
+  axis) (docs/intervention_explainers.md, "Subspace edits: the component along
+  a basis"). BASIS PROVENANCE IS MANDATORY: `origin=` is
   a required non-empty account of where the basis came from; origin,
   optional `method=`, geometry, and the basis's sha256 content digest are
   stamped into every resolved entry's `provenance.source` (and therefore
