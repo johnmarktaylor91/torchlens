@@ -1332,10 +1332,12 @@ jobs:
             himalaya==0.4.11 scikit-learn==1.7.2 scipy==1.15.3 \
             "netrep @ git+https://github.com/ahwillia/netrep@0186b8a77ec1ebaf541cc8f7173cb2556df8a8f0" \
             "torch==$TV" "transformers==$TF" "torchvision==$TVV"
-          # These three declare dependencies that would move torch or
-          # transformers; their pages install them with --no-deps too.
+          # These declare dependencies that would move torch, transformers or
+          # numpy (torchcam pins numpy<2); their pages install them with
+          # --no-deps too.
           uv pip install --python "$PY" --no-deps \
             tuned-lens==0.2.0 \
+            torchcam==0.4.0 \
             "cornet @ git+https://github.com/dicarlolab/CORnet@d0cc17d4b34ad44dedb01683b70eafd15515adad" \
             "lxt @ git+https://github.com/rachtibat/LRP-eXplains-Transformers@f04344177551bfcc3665e88afe96501f43fe560b"
           uv pip freeze --python "$PY" > "$RUNNER_TEMP/peer-freeze.txt"
@@ -1355,7 +1357,7 @@ jobs:
         # every page's peer is installed, so a skip means a page went unrun.
         run: |
           "$RUNNER_TEMP/peer-venv/bin/python" scripts/check_ci_executed_tests.py \
-            "$RUNNER_TEMP/peer-recipes.junit.xml" 14 0
+            "$RUNNER_TEMP/peer-recipes.junit.xml" 15 0
 
       - name: Upload the peer freeze and junit
         if: always()

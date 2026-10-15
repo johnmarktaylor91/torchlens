@@ -1318,3 +1318,14 @@
   `bootstrap`, `ridge` and `encoding_model` refusals keep inference with rsatoolbox /
   himalaya / Net2Brain and point to the descriptive spellings. Doc of record:
   `docs/reference/neuro.md`.
+- Grad-CAM token grids and layer choice (DOCUMENTED-UNSTABLE):
+  `tl.attribution.grad_cam(model, inputs, target=..., layer=None, reshape=None, ...)`.
+  A token-sequence layer output `N, T, C` is laid on the grid a metadata-only trace
+  proves (patch-embedding flatten plus the token concatenation that places class,
+  distillation or register tokens first; a Swin stage's own grid view), else it
+  refuses `grad_cam_token_grid_unprovable` with a runnable `reshape=` spelling.
+  `layer=None` chooses the deepest once-firing map or token-grid module that lies
+  on every input-to-output path and carries a nonzero target gradient
+  (`grad_cam_layer_choice_ambiguous`, `grad_cam_layer_unchosen` otherwise).
+  `extra` records `layer_source`, `layer_reason`, `grid_route`, `prefix_tokens`
+  and `grid_evidence`. Doc of record: `docs/reference/attribution.md`.

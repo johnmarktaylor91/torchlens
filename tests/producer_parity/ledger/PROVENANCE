@@ -2555,3 +2555,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: f5794281fe290282f4926d3229912fb2e3dccce8 (dirty)
 recorded: 2026-10-15T00:53:59.272308+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: token-grid Grad-CAM: attribution/_cam_grid.py reads op parents (8 sites) while proving a patch grid from a metadata trace; no other site moved
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: fa5065886746698ac557f96bbff1ab0aca9db193 (clean)
+recorded: 2026-10-15T04:47:03.105661+00:00

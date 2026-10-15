@@ -39,6 +39,12 @@
 
 ### Features
 
+- **attribution**: `tl.attribution.grad_cam` accepts vision-transformer token layers: the patch
+  grid and leading class, distillation or register tokens are derived from a metadata-only trace
+  (ViT, DeiT, DINOv2 with registers, CLIP vision, Swin per stage); `reshape=` lays tokens out by
+  hand; unprovable grids refuse with `grad_cam_token_grid_unprovable`. `grad_cam` without `layer=`
+  chooses the layer from the trace and records `layer_source` and `layer_reason` in `extra`.
+  torch-cam is documented as the alternative for other CAM variants.
 - **stats**: `tl.stats.Quantile` and `tl.stats.TopK` take `unit_axis=` for per-unit quantiles
   and top-k (neurons, channels, SAE latents via `encoder=`); per-unit `TopK` returns
   `tl.stats.UnitTopK` with the example id and position of each value, deterministic ties, and a

@@ -269,7 +269,10 @@ Key entry points:
   seam (never a per-op CUDA sync). `raise_on_nan` is independent and unchanged.
 - Attribution kit (DOCUMENTED-UNSTABLE): `torchlens.attribution` ships
   `integrated_gradients`, `occlusion`, `grad_cam`, and the display-only
-  `overlay` renderer, all operating on Traces. Doc of record:
+  `overlay` renderer, all operating on Traces. `grad_cam` also takes
+  vision-transformer token layers (grid and leading tokens derived from a
+  metadata-only trace, `reshape=` as the caller escape hatch) and chooses its
+  layer from that trace when `layer=` is omitted. Doc of record:
   `docs/reference/attribution.md`; glossary carries the unstable index.
 - Kernel telemetry (optional CUDA/CUPTI adapter, DOCUMENTED-UNSTABLE):
   importing `torchlens.kernel_telemetry` installs `gpu_kernels` views over

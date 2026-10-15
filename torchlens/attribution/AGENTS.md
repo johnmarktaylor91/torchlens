@@ -12,6 +12,8 @@ captured Trace.
 | `__init__.py` | Public re-exports only; the 12-name `__all__` below |
 | `_core.py` | `AttributionError`, `AttributionResult`, input normalization / leaf minting / baseline validation machinery, and the input-level methods (`saliency`, `input_x_grad`, `integrated_gradients`, `smoothgrad`); IG always reports its completeness residual |
 | `_layer.py` | Layer-level methods: `layer_attribution`, `layer_integrated_gradients`, `layer_conductance`, `grad_cam` |
+| `_cam_grid.py` | Token-grid derivation for `grad_cam` from a metadata-only trace (grid flatten and grid view patterns, prefix tokens from the token concatenation), the `reshape=` escape hatch and their coded refusals |
+| `_cam_choice.py` | Automatic `grad_cam` layer choice (`layer=None`): once-firing map or token-grid outputs that dominate the output, deepest with a nonzero grid gradient |
 | `_occlusion.py` | Selection-addressed scored occlusion through `Trace.fork().do(...)`, with explicit zeros/mean/blur baselines |
 | `_viz.py` | `overlay`: bridges layer-scoped results (or explicit mappings) onto `Trace.draw(color_by=...)`; uncovered nodes return `None` (unencoded) |
 

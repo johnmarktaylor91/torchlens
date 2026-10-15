@@ -12,6 +12,13 @@ from torch import Tensor
 from torch.nn import Module
 from torch.utils.hooks import RemovableHandle
 
+from torchlens.attribution._cam_choice import _choose_cam_layer
+from torchlens.attribution._cam_grid import (
+    TokenReshape,
+    _cam_feature_maps,
+    _metadata_trace,
+    _TraceGraph,
+)
 from torchlens.attribution._core import (
     AttributionError,
     AttributionResult,
@@ -948,14 +955,15 @@ def grad_cam(
     input_kwargs: InputKwargs = None,
     *,
     target: _AttributionTarget,
-    layer: str,
+    layer: str | None = None,
+    reshape: TokenReshape | None = None,
     relu: bool = True,
     overlay: bool = True,
     image: Image.Image | None = None,
     alpha: float = 0.6,
     cmap: str = "magma",
 ) -> AttributionResult:
-    """Compute Grad-CAM for a named convolution-style layer.
+    """Compute Grad-CAM for a convolution-style or token-grid layer.
 
     Parameters
     ----------
@@ -973,7 +981,20 @@ def grad_cam(
         Name from ``dict(model.named_modules())`` identifying the target layer.
         The layer must fire exactly once during the forward pass; Grad-CAM has
         no defined semantics for a reused layer, so multi-fire raises rather
-        than silently attributing one arbitrary call.
+        than silently attributing one arbitrary call. ``None`` chooses the layer
+        from a metadata-only trace of the same call: the deepest once-firing
+        module whose output is a spatial map or a provable token grid, lies on
+        every input-to-output path, and carries a nonzero target gradient on
+        its grid. ``extra["layer_source"]`` and ``extra["layer_reason"]``
+        record the choice.
+    reshape
+        Optional callable mapping the layer output to ``N, C, H, W``. It must
+        be a pure rearrangement (slicing, transposing, reshaping), because it
+        is applied to the activation and to its gradient alike. Without it, a
+        token-sequence output ``N, T, C`` is laid on the grid that the trace
+        proves (the patch-embedding grid and the leading class, distillation
+        or register tokens, or a Swin stage's grid), and the call refuses
+        with ``grad_cam_token_grid_unprovable`` when the trace proves none.
     relu
         Whether to apply ReLU to the channel-reduced CAM.
     overlay
@@ -992,16 +1013,26 @@ def grad_cam(
         the target layer, with shape ``N, 1, Hin, Win``. Metadata reports the
         measured native map resolution separately from the interpolated display
         resolution. When requested, ``extra["overlay"]`` is a PIL image whose
-        visible footer discloses that native resolution.
+        visible footer discloses that native resolution. ``extra["grid_route"]``
+        is ``"feature_map"``, ``"derived"`` or ``"reshape"``,
+        ``extra["prefix_tokens"]`` the count of leading tokens dropped, and
+        ``extra["grid_evidence"]`` the trace ops that proved a derived grid.
 
     Raises
     ------
     AttributionError
         If the target layer fired more than once, no spatial input feeds it,
-        or several feeding spatial inputs have different grids.
+        several feeding spatial inputs have different grids, a token grid is
+        not provable, or no layer can be chosen automatically.
     """
 
     prepared_inputs = _normalize_model_inputs(inputs, input_kwargs)
+    graph: _TraceGraph | None = None
+    layer_reason: str | None = None
+    if layer is None:
+        graph = _TraceGraph(_metadata_trace(model, inputs, input_kwargs))
+        choice = _choose_cam_layer(model, prepared_inputs, target, graph)
+        layer, layer_reason = choice.layer, choice.reason
     activations, gradients, feeding_leaves = _capture_layer_activation(
         model, prepared_inputs, target, layer
     )
@@ -1011,7 +1042,26 @@ def grad_cam(
             f"pass; it fired {len(activations)} times"
         )
     activation, gradient = activations[0], gradients[0]
-    _validate_conv_activation(activation, layer)
+    mapped = _cam_feature_maps(
+        layer,
+        (activation, gradient),
+        target,
+        reshape,
+        lambda: (
+            graph
+            if graph is not None
+            else _TraceGraph(_metadata_trace(model, inputs, input_kwargs))
+        ),
+    )
+    if mapped is None:
+        _validate_conv_activation(activation, layer)
+        grid_extra: dict[str, Any] = {
+            "grid_route": "feature_map",
+            "prefix_tokens": 0,
+            "grid_evidence": (),
+        }
+    else:
+        activation, gradient, grid_extra = mapped
     spatial_reference = _spatial_reference_tensor(prepared_inputs, feeding_leaves, layer)
     channel_weights = gradient.mean(dim=(2, 3), keepdim=True)
     cam = (channel_weights * activation).sum(dim=1, keepdim=True)
@@ -1031,6 +1081,9 @@ def grad_cam(
         target_repr=_target_repr(target),
         extra={
             "layer": layer,
+            "layer_source": "caller" if layer_reason is None else "trace",
+            "layer_reason": layer_reason,
+            **grid_extra,
             "relu": relu,
             "native_map_resolution": native_resolution,
             "rendered_map_resolution": rendered_resolution,
