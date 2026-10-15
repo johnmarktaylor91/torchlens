@@ -314,7 +314,12 @@ restricted to pyreft's `unit_locations`, with `tl.intervention.affine_source(W, 
 trains `R` in float32, orthonormal to about `1e-7`, so the subspace orthonormalises it once in
 float64 and the saved edit records both the digest of `R` as read and that of the rows applied. The
 edit saves at `level="portable"`. A directory that is not one LoReFT intervention refuses
-`pyreft_artifact_invalid` or `pyreft_artifact_unsupported`.
+`pyreft_artifact_invalid` or `pyreft_artifact_unsupported`. The edit acts on the site's trailing
+axis, as pyreft's does on a `[batch, sequence, d]` block output. Pass the site from the trace,
+`artifact.subspace(trace[label], positions=mask)`, to have its shape checked at once: a trailing
+axis that is not `d` wide (a site of another width, or one whose feature axis is not last) refuses
+`pyreft_site_invalid`, and a mask that does not cover the other axes refuses
+`pyreft_positions_invalid`. A label is checked when `do()` resolves it.
 
 The example writes a stand-in artifact in pyreft's file layout; with a real one, `directory` is the
 folder pyreft saved (for example a Hugging Face snapshot) and `site` is the label of the decoder
