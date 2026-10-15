@@ -26,6 +26,10 @@
   `torchlens.intervention.direction_from_pairs` and convert it with `Direction.to_dialz()` (or
   `tl.bridge.dialz.from_direction`). The `bridge_contrastive_*` refusal codes are gone with it.
   The `dialz` extra now requires dialz 1.1 or later (`dialz>=1.1,<2`).
+- **agent**: agent-surface budgets are set from a classics-corpus measurement
+  (`tools/agent_evals/BUDGETS.md`). `torchlens_overview` now defaults to 12,000 tokens (was
+  4,000); the row tools' default and maximum `max_rows` is 150 (was 200). The numbers are
+  configuration, not a guaranteed API limit.
 - **Bundle**: the "pristine" label and baseline auto-detection now read `Trace.pristine is True`
   instead of `Trace.state is TraceState.PRISTINE`. Intervened captures (including func-targeted
   `intervene=` captures, whose state stayed `PRISTINE`), artifacts older than tlspec 9 and
@@ -35,6 +39,8 @@
 
 ### Features
 
+- **tools**: `tools/agent_evals/` is a harness that tests whether a coding agent can drive
+  TorchLens from its docs alone; the docs-only reference solutions run in the test suite.
 - **Trace**: `Trace.pristine` (documented unstable) reads `True`, `False` or `None` for whether
   anything ever intervened on the trace, derived from the evidence it carries, so it survives save
   and load and no reset makes a touched trace read `True` again. `None` means no evidence (an
@@ -59,6 +65,8 @@
 
 ### Bug Fixes
 
+- **agent**: a trimmed `torchlens_overview` names a next call it accepts
+  (`torchlens_dump view='graph'`) instead of `labels=`/`query=`.
 - **intervention**: the `dense_subspace_full_axis_edit` warning no longer says projection-valued
   edits are unshipped; its remedy names `tl.project_off`, `tl.project_onto` and
   `torchlens.intervention.set_direction_mean`, and the glossary subspace entry links to them.

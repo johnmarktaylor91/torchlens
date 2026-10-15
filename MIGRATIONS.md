@@ -481,3 +481,10 @@ auto-detection with such members, pass the baseline explicitly:
 `tl.Bundle({...}, baseline="clean")` or `bundle.most_changed(baseline="clean")`. Code that read
 `trace.state is TraceState.PRISTINE` to mean "never intervened" should read
 `trace.pristine is True`.
+
+## Agent tools page at most 150 rows (2026-10-14, limit change)
+
+A request with `max_rows` between 151 and 200 now refuses `agent_limit_invalid`; pass
+`max_rows<=150` and follow `data.next` for the rest. `torchlens_overview` serves up to 12,000
+tokens by default (was 4,000). Both numbers are configuration set from a corpus measurement
+(`tools/agent_evals/BUDGETS.md`), not a guaranteed API limit.
