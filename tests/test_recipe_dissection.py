@@ -154,10 +154,8 @@ def test_soft_wpmi_matches_the_reference_transcription() -> None:
 
     import torchlens as tl
 
-    namespace: dict[str, Any] = {
-        "__name__": "recipe_page",
-        "torch": torch,
-    }  # an earlier fence imports it
+    # The fence defining soft_wpmi relies on an earlier fence's torch import.
+    namespace: dict[str, Any] = {"__name__": "recipe_page", "torch": torch}
     (code,) = [code for code, _ in _printed_pairs(PAGE) if "def soft_wpmi(" in code]
     definition = code.split("\n\n\nscores = ")[0]
     exec(compile(definition, f"{PAGE}:soft_wpmi", "exec"), namespace)
