@@ -5,8 +5,9 @@
 # classified site moves the total.
 metric	count
 s17_total_sites	3562
+s17_total_sites	3578
 s17_uncoded_sites	1738
 s17_unclassified_sites	2174
-s18_total_sites	242
+s18_total_sites	243
 s18_uncoded_sites	165
 s18_contract_rows	76
