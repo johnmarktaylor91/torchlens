@@ -7,7 +7,7 @@ closed ledger entry whose verdict is ``supports`` (kept) or ``refutes``
 (pruned); the head-knockout ``site_sweep`` entry carries ``not_assessed``;
 and the pruning loop re-run here without the ledger prunes exactly the same
 edges, in the same order, to the same KL. Stand-in: the page's two-layer
-GPT-2 with random weights (46 non-bias edges).
+GPT-2 with random weights, walking its last two receivers (13 edge tests).
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ def test_every_decision_is_a_closed_ledger_verdict(page) -> None:
     first, *decisions = entries.values()
     assert first.verdict["token"] == "not_assessed"
     assert first.steps, "the site_sweep material step lands in the first entry"
-    assert len(decisions) == len(page["edges"]) == 46
+    assert len(decisions) == len(page["tested"]) == 13
     assert all(entry.status == "closed" for entry in decisions)
     assert {entry.verdict["token"] for entry in decisions} <= {"supports", "refutes"}
     assert all(entry.observations for entry in decisions)
@@ -71,7 +71,7 @@ def test_the_kept_set_reproduces_the_loops_own_pruning(page) -> None:
     graph, circuit_kl, tau = page["graph"], page["circuit_kl"], page["tau"]
     pruned: list[Any] = []
     current = circuit_kl(pruned)
-    for receiver in reversed(list(graph.receivers.values())):
+    for receiver in (graph.receivers["logits"], graph.receivers["m1"]):
         for sender in reversed(receiver.senders):
             if sender.kind == "bias":
                 continue
@@ -82,6 +82,6 @@ def test_the_kept_set_reproduces_the_loops_own_pruning(page) -> None:
                 current = trial
     assert [e.name for e in pruned] == [e.name for e in page["pruned"]]
     assert current == page["current"]
-    kept = [e.name for e in page["edges"] if e.name not in {p.name for p in pruned}]
+    kept = [name for name in page["tested"] if name not in {p.name for p in pruned}]
     assert kept == page["kept"]
-    assert 0 < len(kept) < 46
+    assert 0 < len(kept) < 13

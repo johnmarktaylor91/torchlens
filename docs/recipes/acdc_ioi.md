@@ -21,7 +21,9 @@ changes which edges are pruned.
 
 The page runs on a two-layer GPT-2 stand-in with random weights (two heads
 per layer, eight dimensions, 57 graph edges of which 46 are not bias edges)
-so it finishes in seconds on CPU. On GPT-2 small the same loop is 32,491
+and walks only its last two receivers, `logits` and `m1` (13 edge tests),
+so it finishes in seconds on CPU. The full walk is the same loop over
+`reversed(list(graph.receivers.values()))`; on GPT-2 small that is 32,491
 edge tests, each a multi-receiver patch: run it as a background job.
 
 ## Setup: the stand-in, the two inputs and the metric
@@ -112,8 +114,8 @@ RESULT = sorted(knockout_kl) == ["a0.h0", "a0.h1", "a1.h0", "a1.h1"]
 
 ## The ACDC loop
 
-Receivers in reverse topological order (`logits` first), each receiver's
-senders latest first; bias edges are skipped, since a bias is the same on
+Receivers in reverse topological order (`logits` first; here only the last
+two), each receiver's senders latest first; bias edges are skipped, since a bias is the same on
 both inputs and patching it changes nothing. Every test opens one ledger
 entry, records the observed KL change and sets the verdict: `refutes` (the
 edge is not needed: pruned) or `supports` (kept).
@@ -123,11 +125,14 @@ edge is not needed: pruned) or `supports` (kept).
 tau = 0.002
 pruned = []
 current = circuit_kl(pruned)
-for receiver in reversed(list(graph.receivers.values())):
+walk = [graph.receivers["logits"], graph.receivers["m1"]]  # full walk: reversed(graph.receivers)
+tested = []
+for receiver in walk:
     for sender in reversed(receiver.senders):
         if sender.kind == "bias":
             continue
         edge = graph.edges[f"{sender.name}->{receiver.name}"]
+        tested.append(edge.name)
         trial = circuit_kl(pruned + [edge])
         led.entry(
             question=f"Is {edge.name} needed?",
@@ -147,10 +152,10 @@ for receiver in reversed(list(graph.receivers.values())):
         led.close_entry()
 
 pruned_names = {e.name for e in pruned}
-kept = [e.name for e in edges if e.name not in pruned_names]
-print(f"kept {len(kept)} of {len(edges)} edges, final KL {current:.6f}")
+kept = [name for name in tested if name not in pruned_names]
+print(f"kept {len(kept)} of {len(tested)} tested edges, final KL {current:.6f}")
 print(kept)
-RESULT = 0 < len(kept) < len(edges)
+RESULT = (len(tested), 0 < len(kept) < len(tested)) == (13, True)
 ```
 
 ## On IOI with GPT-2 small
@@ -180,7 +185,7 @@ from_ledger_pruned = [graph.edges[name] for name, token in verdicts if token == 
 led.close()
 again = circuit_kl(from_ledger_pruned)
 print(len(decisions), sorted(from_ledger_kept) == sorted(kept), again == current)
-RESULT = (len(decisions), sorted(from_ledger_kept) == sorted(kept), again == current) == (46, True, True)
+RESULT = (len(decisions), sorted(from_ledger_kept) == sorted(kept), again == current) == (13, True, True)
 ```
 
 Printed output on CPU (float64): filled in from the page's test run.

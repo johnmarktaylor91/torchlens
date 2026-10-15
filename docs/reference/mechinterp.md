@@ -101,10 +101,7 @@ refusal (`worst_element`).
   of a sequence with period `n` instead of the token-equality mask:
   destination `i` on the one source `i - n + 1`, counted when its token
   equals the token at `i - n`, so a token that repeats inside the sequence
-  adds nothing. On GPT-2 small with `[bos] + R + R` (`R` 50 random tokens,
-  seed 0, batch 8) it equals an independent Hugging Face eager-attention
-  oracle within 1e-9 in float64 for all 144 heads, top 5 heads 5.5, 6.9,
-  7.10, 5.1, 7.2 (measured numbers below in the circuit section).
+  adds nothing (measured on GPT-2 small in the circuit section below).
 
 Fused attention (torch SDPA) needs
 `capture=CaptureOptions(save_arg_values=True)` for reconstructed
@@ -274,6 +271,33 @@ Against brute-force patching of all 32,491 edges one at a time (16 prompts,
 float32), EAP-IG at 5 steps has Pearson correlation 0.939 with the patching
 effect and shares 75 of the 100 largest edges; EAP has 0.806 and 87. CPR
 and CMD equal the MIB circuit track's loop exactly.
+
+Circuit test cases on GPT-2 small (CPU):
+
+- Induction heads: `head_scores(trace, kind="induction", period=50)` on
+  `[bos] + R + R` (`R` 50 random tokens in `[1000, 50000)`, generator seed
+  0, batch 8) equals an independent Hugging Face eager-attention oracle
+  within 5.0e-11 for all 144 heads in float64 (2.7e-7 in float32), and its
+  top 5 heads are the oracle's: 5.5, 6.9, 7.10, 5.1, 7.2.
+- Recovering Wang et al.'s IOI circuit: EAP-IG at 5 steps over 1000 rows
+  of the `mib-bench/ioi` train split, corrupted with its
+  `s2_io_flip_counterfactual` column (not the ABC corruption the circuit
+  was found with), ranks heads by the summed |score| of their outgoing
+  edges. Against the 26 circuit heads the ROC AUC is 0.926 and 20 of the
+  top 26 heads are circuit heads (recall 0.77). Over the 29,089 edges among
+  the input, the heads and the logits, 72 of the circuit's 182 head-level
+  edges are in the top 182 (recall 0.40); over all 32,491 edges the ROC AUC
+  against ACDC's encoding of the circuit is 0.870. The run took 57 minutes
+  on 4 cores (3.4 s per row).
+- Circuits run as one `patch_edges` call; on GPT-2 small a call that patches
+  edges into all 445 receivers equals an independent forward-hook
+  implementation of the same convention within 1e-10 in float64.
+
+ACDC-style discovery is a recipe, not a TorchLens loop:
+[docs/recipes/acdc_ioi.md](../recipes/acdc_ioi.md) walks the receivers from
+the output, patches each incoming edge with `patch_edges`, prunes it when
+the metric moves by less than a threshold, and records every decision as a
+ledger verdict.
 
 Bad settings refuse `mi_edge_scores_setting_invalid`, a metric that does
 not return one value per example `mi_edge_scores_metric_invalid`, and
