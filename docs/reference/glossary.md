@@ -308,6 +308,8 @@ documented unstable and may be renamed or removed without a compatibility alias.
 | F06 LRP mechanism | `SiteStash`, `stash`, `fetch`, `mark_firing`, `leftovers`, `register_site`, `label_of` | unstable -- no deprecation shim owed |
 | Site targets | `SiteTarget`, `unit`, `call` | unstable -- no deprecation shim owed |
 | Integer-input evidence | `integer_input_layers` | unstable -- no deprecation shim owed |
+| Evaluation curves | `deletion_curve`, `insertion_curve`, `CurveResult`, `CurveStep`, `fractions`, `scores`, `area`, `aopc`, `steps`, `features`, `patch_size`, `auto`, `elements`, `pixels`, `patches`, `tokens`, `n_features`, `index`, `fraction`, `inputs`, `input_kwargs`, `baseline_mask`, `intervention` | unstable -- no deprecation shim owed |
+| Randomization test | `randomization_test`, `RandomizationResult`, `RandomizationStep`, `randomization`, `cascading`, `independent`, `layers`, `seed`, `keep_maps`, `original`, `randomized`, `similarity`, `spearman`, `spearman_abs`, `ssim`, `values` | unstable -- no deprecation shim owed |
 
 <!-- ATTRIBUTION-KIT-UNSTABLE-INDEX:END -->
 
@@ -316,7 +318,10 @@ target delta. Occlusion always names its replacement baseline. CAM overlays visi
 native measured map resolution, while their larger display grid is labeled as interpolation.
 A `SiteTarget` passed as `target=` attributes a hidden layer's output (or one unit of it) instead
 of the model output; layer methods given only integer inputs start their input path at the
-embedding output. The callable/index/site annotation used inside `torchlens.attribution` is
+embedding output. `deletion_curve` and `insertion_curve` score an attribution by removing or
+revealing its most-attributed input features in steps (each step a recorded intervention), and
+`randomization_test` checks that a method's maps change when the model's layers are
+re-initialized. The callable/index/site annotation used inside `torchlens.attribution` is
 privately named `_AttributionTarget`; `TargetSpec` refers only to the intervention selector record and is not an
 attribution-target alias. See the [attribution reference](attribution.md).
 
