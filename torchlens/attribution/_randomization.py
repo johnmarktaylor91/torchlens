@@ -354,7 +354,8 @@ def randomization_test(  # noqa: PLR0913 - public door: keyword-only test settin
             names = _parameterized_layers_top_down(trained, _run)
         else:
             names = _validate_layers(model, layers)
-        steps, init_notes = _randomize_steps(model, names, randomization, _run, original, keep_maps)
+        plan = _RandomizationPlan(tuple(names), randomization, keep_maps)
+        steps, init_notes = _randomize_steps(model, plan, _run, original)
     return RandomizationResult(
         randomization=randomization,
         layers=tuple(names),
