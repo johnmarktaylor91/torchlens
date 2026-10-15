@@ -10,11 +10,19 @@ reloaded in the SAELens format, so nothing downloads. The page skips without
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 
 import pytest
 
-from tests import test_recipe_pages_executed as recipes
+# Loaded by file path, not as ``tests.test_recipe_pages_executed``: a peer
+# package that installs a top-level ``tests`` package would shadow this tree.
+_RUNNER_SPEC = importlib.util.spec_from_file_location(
+    "_recipe_pages_runner", Path(__file__).with_name("test_recipe_pages_executed.py")
+)
+assert _RUNNER_SPEC is not None and _RUNNER_SPEC.loader is not None
+recipes = importlib.util.module_from_spec(_RUNNER_SPEC)
+_RUNNER_SPEC.loader.exec_module(recipes)
 
 PAGE = "docs/recipes/pretrained_saes.md"
 TOOL = "sae_lens"

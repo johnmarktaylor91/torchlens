@@ -117,7 +117,6 @@ def _hand_kl(clean_logits: torch.Tensor, spliced_logits: torch.Tensor, start: in
     return float(per_position.sum()) / per_position.numel()
 
 
-@pytest.mark.smoke
 def test_variance_fields_equal_a_float64_hand_computation(mlp_setup) -> None:
     """Global, pooled and per-dimension variance explained match float64 by hand."""
 

@@ -667,7 +667,7 @@ def _output_deltas(
     return float(flat_delta.norm()), peak
 
 
-def splice(
+def splice(  # noqa: PLR0913 -- the public experiment door: each keyword is one documented splice input (site, SAE, latent edit, next-token ids, BOS handling, latent retention)
     model_or_log: Any,
     inputs: Any = None,
     *,
