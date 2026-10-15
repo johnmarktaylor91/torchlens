@@ -734,8 +734,8 @@ torchlens.export._model_explorer._validate:validate_model_explorer_payload:Model
 torchlens.data_classes._trace_intervention:TraceInterventionMixin._refuse_chunked_batch_coupling:InvalidArgumentError::1	CONTRACTED	chunked_replay_batch_coupling	F02 D34 chunk-replay guard; coded, documented, user-reachable on chunked captures
 torchlens.data_classes._trace_intervention:TraceInterventionMixin._apply_do_mutation:InvalidArgumentError::2	CONTRACTED	selection_batch_pair_invalid	F02 D33 batch door: stray second edit argument beside the pair list
 torchlens.data_classes._trace_intervention:TraceInterventionMixin._apply_selection_batch_do:InvalidArgumentError::1	CONTRACTED	selection_batch_pair_invalid	F02 D33 batch door: batch mixing Selections with legacy selector sites
-torchlens.data_classes._trace_intervention:TraceInterventionMixin._apply_selection_batch_do:InvalidArgumentError::2	CONTRACTED	selection_batch_cross_kind	F02 D33 v1 ACT-only capability refusal
-torchlens.data_classes._trace_intervention:TraceInterventionMixin._apply_selection_batch_do:InvalidArgumentError::3	CONTRACTED	selection_batch_leaf_unsupported	F02 D33 leaf sites cannot join one hook transaction in v1
+torchlens.data_classes._trace_intervention:TraceInterventionMixin._apply_cross_kind_batch_do:InvalidArgumentError::1	CONTRACTED	selection_batch_cross_kind	F02 D33 cross-kind batch on an engine other than replay
+torchlens.data_classes._trace_intervention:TraceInterventionMixin._batch_act_plan:InvalidArgumentError::1	CONTRACTED	selection_batch_leaf_unsupported	F02 D33 leaf sites cannot join one hook transaction in v1
 torchlens.intervention.compose:_validate_leaves:InvalidArgumentError::1	CONTRACTED	compose_empty	F02 D20 zero-leaf refusal
 torchlens.intervention.compose:_validate_leaves:InvalidArgumentError::2	CONTRACTED	compose_leaf_invalid	F02 D20 non-Edit leaf
 torchlens.intervention.compose:_validate_leaves:InvalidArgumentError::3	CONTRACTED	compose_leaf_invalid	F02 D20 factory-less (audit-only) leaf
