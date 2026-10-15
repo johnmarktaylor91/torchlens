@@ -53,6 +53,8 @@ _WARN_ONCE_SENTINELS: tuple[tuple[str, str, object], ...] = (
     ("torchlens.distributed._lifecycle", "_AUTO_ARM_DEGRADATION", None),
     ("torchlens.fastlog._storage_resolver", "_WARNED_REFERENCE_SAVE_MODE", False),
     ("torchlens.postprocess.ast_branches", "_source_drift_warned", set()),
+    # Per-unit statistics state-size warning: once per session per code.
+    ("torchlens.stats._per_unit", "_WARNED_CODES", set()),
     # F17 quickstart nongold-value gate: once-per-trace raw-read warning keyed
     # by id(trace) (plain int keys, so a plain set() reset pins nothing).
     ("torchlens.quickstart._gate", "_WARNED_TRACE_IDS", set()),

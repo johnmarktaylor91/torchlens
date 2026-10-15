@@ -4237,14 +4237,14 @@ package-docstrings	torchlens/stats/_stats_render.py	14
 package-docstrings	torchlens/stats/_stats_render.py	22
 package-docstrings	torchlens/stats/_stats_render.py	4.1
 package-docstrings	torchlens/stats/_stats_render.py	803
-package-docstrings	torchlens/stats/_streaming.py	0.55
+package-docstrings	torchlens/stats/_per_unit.py	0.55
+package-docstrings	torchlens/stats/_per_unit.py	50
 package-docstrings	torchlens/stats/_streaming.py	18
 package-docstrings	torchlens/stats/_streaming.py	20
 package-docstrings	torchlens/stats/_streaming.py	20,
 package-docstrings	torchlens/stats/_streaming.py	2019
 package-docstrings	torchlens/stats/_streaming.py	25
 package-docstrings	torchlens/stats/_streaming.py	256
-package-docstrings	torchlens/stats/_streaming.py	50
 package-docstrings	torchlens/stats/_streaming.py	64
 package-docstrings	torchlens/stats/_tensor_stats.py	10
 package-docstrings	torchlens/stats/_tensor_stats.py	16

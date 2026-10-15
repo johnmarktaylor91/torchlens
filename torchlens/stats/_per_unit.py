@@ -53,7 +53,7 @@ _QUANTILE_INPUT_LIMIT = 2**24
 _WARNED_CODES: set[str] = set()
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, repr=False)
 class UnitTopK:
     """Per-unit top-k values with the example and position each came from.
 
@@ -78,6 +78,15 @@ class UnitTopK:
     example_ids: torch.Tensor
     positions: torch.Tensor
     unit_axis: int
+
+    def __repr__(self) -> str:
+        """Summarize the shape instead of printing every tensor."""
+
+        units, k = (int(size) for size in self.values.shape[:2])
+        return (
+            f"UnitTopK(units={units}, k={k}, position_axes={int(self.positions.shape[-1])}, "
+            f"unit_axis={self.unit_axis})"
+        )
 
 
 def _validate_unit_axis(unit_axis: Any, owner: str) -> int | None:
@@ -252,7 +261,7 @@ class Quantile:
     a warning fires once per session when the total passes 256 MiB.
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 -- the pooled knobs plus the keyword-only per-unit pair
         self,
         quantiles: Iterable[float] = (0.5, 0.95, 0.99),
         name: str | None = None,
@@ -315,8 +324,8 @@ class Quantile:
         """
 
         value = _encode(self.encoder, value)
-        if self._layout is not None:
-            self._update_per_unit(_as_batch_tensor(value))
+        if self._layout is not None and self._generator is not None:
+            self._update_per_unit(_as_batch_tensor(value), self._layout, self._generator)
             return
         items = _as_float_tensor(value).tolist()
         start = 0
@@ -333,12 +342,12 @@ class Quantile:
             if replacement < self.reservoir_size:
                 self._reservoir[replacement] = float(item)
 
-    def _update_per_unit(self, tensor: torch.Tensor) -> None:
+    def _update_per_unit(
+        self, tensor: torch.Tensor, layout: _UnitLayout, generator: torch.Generator
+    ) -> None:
         """Fold one batch into the per-unit reservoirs (algorithm R, shared slots)."""
 
-        assert self._layout is not None and self._generator is not None
-        assert self.unit_axis is not None
-        axis = self._layout.check(tensor)
+        axis = layout.check(tensor)
         rows, _examples, _positions = _unit_rows(tensor, axis)
         units, count = int(rows.shape[0]), int(rows.shape[1])
         size = max(self.reservoir_size, 0)
@@ -347,8 +356,8 @@ class Quantile:
                 self.name or "tl.stats.Quantile",
                 units,
                 8 * size,
-                self.unit_axis,
-                f"tl.stats.Quantile(unit_axis={self.unit_axis}, reservoir_size={max(size // 8, 1)})",
+                layout.unit_axis,
+                f"tl.stats.Quantile(unit_axis={layout.unit_axis}, reservoir_size={max(size // 8, 1)})",
             )
             self._unit_reservoir = torch.empty((units, size), dtype=torch.float64)
         reservoir = self._unit_reservoir
@@ -361,7 +370,7 @@ class Quantile:
         if rest <= 0:
             return
         totals = torch.arange(self._seen + 1, self._seen + rest + 1, dtype=torch.float64)
-        draws = torch.rand(rest, generator=self._generator, dtype=torch.float64)
+        draws = torch.rand(rest, generator=generator, dtype=torch.float64)
         slots = torch.minimum((draws * totals).floor().long(), totals.long() - 1)
         self._seen += rest
         keep = slots < size
@@ -561,7 +570,7 @@ class TopK:
 
         value = _encode(self.encoder, value)
         if self._layout is not None:
-            self._update_per_unit(_as_batch_tensor(value), example_ids)
+            self._update_per_unit(_as_batch_tensor(value), example_ids, self._layout)
             return
         if example_ids is not None:
             raise InvalidArgumentError(
@@ -602,29 +611,27 @@ class TopK:
             )
         return ids.to(torch.long)
 
-    def _update_per_unit(self, tensor: torch.Tensor, example_ids: Any) -> None:
+    def _update_per_unit(self, tensor: torch.Tensor, example_ids: Any, layout: _UnitLayout) -> None:
         """Fold one batch into the per-unit top-k lists."""
 
-        assert self._layout is not None and self.unit_axis is not None
-        axis = self._layout.check(tensor)
+        axis = layout.check(tensor)
         rows, examples, position_shape = _unit_rows(tensor, axis)
         ids = self._batch_example_ids(examples, example_ids)
         self._examples_seen += examples
         units = int(rows.shape[0])
-        if self._values is None:
+        if self._values is None or self._example_ids is None or self._positions is None:
             _warn_state_size(
                 self.name or "tl.stats.TopK",
                 units,
                 max(self.k, 0) * (16 + 8 * len(position_shape)),
-                self.unit_axis,
-                f"tl.stats.TopK(k={max(self.k // 2, 1)}, unit_axis={self.unit_axis})",
+                layout.unit_axis,
+                f"tl.stats.TopK(k={max(self.k // 2, 1)}, unit_axis={layout.unit_axis})",
             )
             width = max(self.k, 0)
             self._values = torch.full((units, width), math.nan, dtype=torch.float64)
             self._example_ids = torch.full((units, width), -1, dtype=torch.long)
             self._positions = torch.full((units, width, len(position_shape)), -1, dtype=torch.long)
-        assert self._values is not None
-        assert self._example_ids is not None and self._positions is not None
+        values, kept_ids, kept_positions = self._values, self._example_ids, self._positions
         if self.k <= 0 or rows.shape[1] == 0:
             return
         row_examples, row_positions = _row_ids(ids, position_shape)
@@ -642,20 +649,18 @@ class TopK:
             merged = _rank_entries(
                 torch.cat(
                     [
-                        self._values[start:stop],
+                        values[start:stop],
                         torch.gather(rows[start:stop], 1, picked.clamp(min=0)).masked_fill(
                             picked < 0, math.nan
                         ),
                     ],
                     dim=1,
                 ),
-                torch.cat([self._example_ids[start:stop], _take(row_examples, picked, -1)], dim=1),
-                torch.cat([self._positions[start:stop], _take(row_positions, picked, -1)], dim=1),
+                torch.cat([kept_ids[start:stop], _take(row_examples, picked, -1)], dim=1),
+                torch.cat([kept_positions[start:stop], _take(row_positions, picked, -1)], dim=1),
                 self.k,
             )
-            self._values[start:stop], self._example_ids[start:stop], self._positions[start:stop] = (
-                merged
-            )
+            values[start:stop], kept_ids[start:stop], kept_positions[start:stop] = merged
 
     def result(self) -> list[float] | UnitTopK:
         """Return top values in descending order.
@@ -669,18 +674,17 @@ class TopK:
 
         if self._layout is None:
             return sorted(self._heap, reverse=True)
-        assert self.unit_axis is not None
         if self._values is None or self._example_ids is None or self._positions is None:
             width = max(self.k, 0)
             return UnitTopK(
                 values=torch.empty((0, width), dtype=torch.float64),
                 example_ids=torch.empty((0, width), dtype=torch.long),
                 positions=torch.empty((0, width, 0), dtype=torch.long),
-                unit_axis=self.unit_axis,
+                unit_axis=self._layout.unit_axis,
             )
         return UnitTopK(
             values=self._values.clone(),
             example_ids=self._example_ids.clone(),
             positions=self._positions.clone(),
-            unit_axis=self.unit_axis,
+            unit_axis=self._layout.unit_axis,
         )

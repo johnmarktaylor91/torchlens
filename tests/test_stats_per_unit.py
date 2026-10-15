@@ -333,3 +333,31 @@ def test_per_unit_refusals(case: str, code: str) -> None:
             tl.stats.TopK(unit_axis=-1).update(batch, example_ids=[1, 2, 3])
     assert info.value.fields["code"] == code
     assert "Remedy" in str(info.value) or "remedy" in str(info.value).lower()
+
+
+@pytest.mark.parametrize(
+    ("case", "code"),
+    [
+        ("unit_axis_type", "stats_unit_axis_type"),
+        ("encoder_type", "stats_encoder_type"),
+        ("layout_changed", "stats_unit_layout_changed"),
+    ],
+)
+def test_per_unit_construction_and_layout_refusals(case: str, code: str) -> None:
+    with pytest.raises(tl.errors.TorchLensError) as info:
+        if case == "unit_axis_type":
+            tl.stats.Quantile(unit_axis="-1")
+        elif case == "encoder_type":
+            tl.stats.TopK(unit_axis=-1, encoder=3)
+        else:
+            stat = tl.stats.TopK(unit_axis=-1)
+            stat.update(torch.zeros(2, 3))
+            stat.update(torch.zeros(2, 1, 3))
+    assert info.value.fields["code"] == code
+    assert "remedy" in str(info.value).lower()
+
+
+def test_unit_topk_repr_summarizes_shape() -> None:
+    stat = tl.stats.TopK(k=2, unit_axis=-1)
+    stat.update(torch.arange(12.0).reshape(2, 2, 3))
+    assert repr(stat.result()) == "UnitTopK(units=3, k=2, position_axes=1, unit_axis=-1)"
