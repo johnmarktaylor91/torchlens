@@ -469,13 +469,14 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `torchlens.selection_subspace.BasisProvenance` whose origin records the site, method, pair
   count, read position and a sha256 digest of the rows, and whose `sha256` is the digest of
   the canonical float64 vector. `direction.steer(m)` is `tl.steer(vector, m, feature_axis=-1)`;
-  place it with `tl.when(tl.module(direction.site), ...)`. `direction.to_steering_vectors()`
-  and `direction.to_repeng()` convert it to a real `steering_vectors.SteeringVector` and
-  `repeng.ControlVector` without recomputing it (thin converters
-  `tl.bridge.steering_vectors.from_direction` and `tl.bridge.repeng.from_direction`), keyed
-  by `direction.library_layer(layer=None)`: the site label's trailing index unless `layer=` is
+  place it with `tl.when(tl.module(direction.site), ...)`. `direction.to_steering_vectors()`,
+  `direction.to_repeng()` and `direction.to_dialz()` convert it to a real
+  `steering_vectors.SteeringVector`, `repeng.ControlVector` and `dialz.SteeringVector` without
+  recomputing it (thin converters `tl.bridge.steering_vectors.from_direction`,
+  `tl.bridge.repeng.from_direction` and `tl.bridge.dialz.from_direction`), keyed by
+  `direction.library_layer(layer=None)`: the site label's trailing index unless `layer=` is
   given; a different explicit index refuses `direction_layer_mismatch`. Applied with the same
-  multiplier, either library object gives the native steer's logits.
+  multiplier, each library object gives the native steer's logits.
 
 **Bundle**
 : A named collection of aligned Traces, constructed with `tl.bundle(...)` or `tl.Bundle(...)`, for

@@ -1,10 +1,8 @@
 """Regression tests for r18c bridge/compat adapter hardening.
 
 Covers the depyf prepare_debug contract, tensor_layers explicit-site validation
-(A3-14), the extractor/ILG .model unwrap gate (A3-15), dialz
-default-method detection, the lovely non-mutating fallback (A3-17), the dialz
-contrastive-row contract, the profiler blank-label guard
-(A3-01 partial), null traceEvents handling (LOW-9), and the push_to_hub artifact-format tag (LOW-4 / LOW-S1).
+(A3-14), the extractor/ILG .model unwrap gate (A3-15), the lovely
+non-mutating fallback (A3-17), the profiler blank-label guard (A3-01 partial), null traceEvents handling (LOW-9), and the push_to_hub artifact-format tag (LOW-4 / LOW-S1).
 
 The adapters are exercised with stubbed optional dependencies and fake logs so
 the suite needs none of the optional extras installed.
@@ -225,42 +223,6 @@ def test_from_ilg_keeps_plain_wrapper(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# dialz: the installed default method name is read from read_representations
-# --------------------------------------------------------------------------- #
-@pytest.mark.parametrize("default", ["pca", "pca_diff"])
-def test_dialz_default_method_follows_installed_release(
-    monkeypatch: pytest.MonkeyPatch, default: str
-) -> None:
-    """dialz 1.x defaults to ``pca`` and 0.2 to ``pca_diff``; both are honoured."""
-
-    from torchlens.bridge import dialz
-
-    def read_representations(model: Any, tokenizer: Any, inputs: Any, method: str = default):
-        raise AssertionError("never called")
-
-    fake = _module(
-        "dialz", vector=_module("dialz.vector", read_representations=read_representations)
-    )
-    assert dialz._default_method(fake) == default
-    assert dialz._default_method(_module("dialz")) == "pca"
-
-
-def test_dialz_unknown_method_refused(monkeypatch: pytest.MonkeyPatch) -> None:
-    """An unknown method names the accepted ones instead of guessing."""
-
-    pytest.importorskip("sklearn")
-    from torchlens.bridge import dialz
-
-    monkeypatch.setitem(sys.modules, "dialz", _module("dialz", SteeringVector=dict))
-    pos = _FakeLayer("p", out=torch.randn(3, 4))
-    neg = _FakeLayer("n", out=torch.randn(3, 4))
-    with pytest.raises(ValueError, match="mean_diff"):
-        dialz.vector(
-            _FakeLog([]), pos, neg, layer=0, read_token_index=None, model_type="m", method="x"
-        )
-
-
-# --------------------------------------------------------------------------- #
 # A3-17 compat.lovely: non-mutating fallback
 # --------------------------------------------------------------------------- #
 def test_lovely_fallback_does_not_monkeypatch(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -297,42 +259,6 @@ def test_lovely_forwards_kwargs(monkeypatch: pytest.MonkeyPatch) -> None:
     lovely_mod = importlib.import_module("torchlens.compat.lovely")
     assert lovely_mod.lovely(torch.zeros(2), color=False) == "formatted"
     assert seen == {"color": False}
-
-
-# --------------------------------------------------------------------------- #
-# contrastive rows (dialz bridge): read, sliced and checked before training
-# --------------------------------------------------------------------------- #
-def test_contrastive_rows_read_last_real_token_under_padding() -> None:
-    """With a mask, -1 is each prompt's last real token on either padding side."""
-
-    from torchlens.bridge._contrastive import _read_rows
-
-    out = torch.arange(2 * 4 * 1, dtype=torch.float32).reshape(2, 4, 1)
-    right = torch.tensor([[1, 1, 0, 0], [1, 1, 1, 1]])
-    left = torch.tensor([[0, 0, 1, 1], [1, 1, 1, 1]])
-    assert _read_rows(out, -1, right, "positive").flatten().tolist() == [1.0, 7.0]
-    assert _read_rows(out, -1, left, "positive").flatten().tolist() == [3.0, 7.0]
-    assert _read_rows(out, 0, left, "positive").flatten().tolist() == [2.0, 4.0]
-    assert _read_rows(out, -1, None, "positive").flatten().tolist() == [3.0, 7.0]
-    with pytest.raises(ValueError, match="attention_mask has shape"):
-        _read_rows(out, -1, right[:, :3], "positive")
-    with pytest.raises(ValueError, match="no unmasked token"):
-        _read_rows(out, -1, torch.zeros(2, 4, dtype=torch.long), "positive")
-
-
-def test_contrastive_rows_refuse_identical_sides() -> None:
-    """Identical positive and negative rows would train an all-zero vector."""
-
-    from torchlens.bridge._contrastive import _contrastive_rows, _ContrastiveRead
-
-    same = torch.randn(3, 4, 2)
-    with pytest.raises(ValueError, match="identical"):
-        _contrastive_rows(
-            _FakeLog([]),
-            _FakeLayer("p", out=same),
-            _FakeLayer("n", out=same.clone()),
-            _ContrastiveRead(negative_log=None, read_token_index=-1),
-        )
 
 
 # --------------------------------------------------------------------------- #

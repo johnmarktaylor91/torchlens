@@ -123,22 +123,18 @@ optional dependency.
     (extra `torchlens[repeng]`) returns a real `repeng.ControlVector` (float32
     values; `model_type` defaults to the one the direction recorded, else
     refuses `direction_model_type_unknown`); `Direction.to_repeng()` calls it.
-  - Both converters recompute nothing and key the vector by
+  - `dialz.py`: `from_direction(direction, *, layer=None, model_type=None)`
+    (extra `torchlens[dialz]`, pinned to the tested line `dialz>=1.1,<2`)
+    returns a real `dialz.SteeringVector`, with the same float32 values and
+    `model_type` rule as repeng; `Direction.to_dialz()` calls it.
+  - The converters recompute nothing and key the vector by
     `Direction.library_layer(layer)` (the site label's trailing index). The
     real-package tests prove that applying the converted object with the same
-    multiplier reproduces the native steer's logits.
-  - `dialz.py` still trains from saved outs with the private helpers in
-    `_contrastive.py`: `vector(log, positive_site, negative_site=None, *,
-    layer, negative_log=None, read_token_index=-1, attention_mask=None,
-    negative_attention_mask=None, method=None, model_type=None)` (extra
-    `torchlens[dialz]`, dialz 0.2 through 1.x) replicates
-    `dialz.vector.read_representations` and returns a real
-    `dialz.SteeringVector`; `method=None` follows the installed release's
-    default (`pca` in 1.x, `pca_diff` in 0.2). The negative prompts usually
-    live in a second trace (`negative_log=`); with a mask, indices count within
-    each prompt's unpadded tokens. dialz layer `i` matches
-    `hidden_states[i + 1]`, the output of `model.layers.<i>` except at the
-    last layer (site `"model.norm"`).
+    multiplier reproduces the native steer's logits. dialz's and repeng's
+    layer modules build a padding mask from the layer's `position_ids`, which
+    current transformers passes as `[1, seq]`, so those tests run one prompt
+    per forward. dialz's `SteeringModel` loads its checkpoint in float16; the
+    real test casts the wrapped model to float32 before tracing.
   - On HF decoders trace with `config.use_cache = False`, or
     `"model.layers.<i>"` is ambiguous (hidden state plus KV-cache outputs).
 - `inseq.py`: `attribute(model_or_id, inputs, *, method="integrated_gradients",
@@ -157,7 +153,7 @@ optional dependency.
   returns the files written; `path` is required; a cached compile that
   dumps nothing raises `RuntimeError` naming `torch.compiler.reset()`
   (extra: `torchlens[depyf]`).
-- `dialz.py`: `analyze()` (extra: `torchlens[dialz]`).
+- `dialz.py`: `from_direction()` (extra: `torchlens[dialz]`).
 - `repeng.py`: `from_direction()` (extra: `torchlens[repeng]`).
 - `steering_vectors.py`: `from_direction()` (extra: `torchlens[steering]`).
 
@@ -178,8 +174,8 @@ optional dependency.
   `__init__.py`; a name missing from `_BRIDGE_MODULES` raises
   `AttributeError` on access.
 - Bridges that execute the model (`captum`, `shap`, `gradcam`, ...) need the
-  source model alive (repeng/dialz read only its `config.model_type`, and
-  only when `model_type=` is not given); `tl.release_model()`
+  source model alive (the steering converters read no model:
+  `direction_from_pairs` records its `config.model_type`); `tl.release_model()`
   or a dropped reference makes `source_model()` raise.
 - Site arguments must carry saved tensor outs; `out_at()` raises `ValueError`
   otherwise. Keep error messages actionable (name the site and the extra).

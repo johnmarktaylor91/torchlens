@@ -37,6 +37,7 @@ PAGES: dict[str, str] = {
     "docs/recipes/generation_step_attribution.md": "transformers",
     "docs/recipes/trainable_backbone.md": "torchvision",
     "docs/recipes/tuned_lens.md": "tuned_lens",
+    "docs/recipes/conditional_steering.md": "transformers",
     "docs/recipes/weightwatcher.md": "weightwatcher",
     "docs/recipes/quantus.md": "quantus",
     "docs/neuroai/netrep.md": "netrep",

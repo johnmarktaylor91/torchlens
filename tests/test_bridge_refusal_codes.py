@@ -1,4 +1,4 @@
-"""Typed refusal codes of the contrastive, depyf and MLflow bridges.
+"""Typed refusal codes of the depyf and MLflow bridges.
 
 Every refusal these bridges added raises a ``TorchLensError`` subclass that
 keeps its historical built-in lineage (``ValueError``/``TypeError``/
@@ -14,30 +14,16 @@ import sys
 import types
 from typing import Any
 
-import numpy as np
 import pytest
 import torch
 
 from torchlens._errors import (
     ArgumentTypeError,
     CaptureContextError,
-    InvalidArgumentError,
     KeywordConflictError,
 )
-from torchlens.bridge import _contrastive, depyf as bdepyf
+from torchlens.bridge import depyf as bdepyf
 from torchlens.export import _trackers
-
-
-def _site(out: torch.Tensor, label: str = "site") -> types.SimpleNamespace:
-    """A layer-like site: ``resolve_one_site`` passes it through unchanged."""
-
-    return types.SimpleNamespace(out=out, layer_label=label)
-
-
-def _log() -> types.SimpleNamespace:
-    """A trace-like object with no saved attention mask and no live model."""
-
-    return types.SimpleNamespace(layer_list=[])
 
 
 def _assert_code(exc: BaseException, code: str) -> None:
@@ -47,84 +33,6 @@ def _assert_code(exc: BaseException, code: str) -> None:
     assert fields["code"] == code
     assert fields["remedy"]
     assert str(exc).rstrip().endswith(f"{fields['remedy']}.")
-
-
-def _rows(positive: torch.Tensor, negative: torch.Tensor, **kwargs: Any) -> Any:
-    """Call the shared contrastive reader with explicit sites in one trace."""
-
-    return _contrastive._contrastive_rows(
-        _log(),
-        _site(positive, "pos"),
-        _site(negative, "neg"),
-        _contrastive._ContrastiveRead(
-            negative_log=None,
-            read_token_index=kwargs.pop("read_token_index", -1),
-            **kwargs,
-        ),
-    )
-
-
-def test_contrastive_rows_mismatch() -> None:
-    with pytest.raises(InvalidArgumentError) as info:
-        _rows(torch.randn(2, 3, 4), torch.randn(3, 3, 4))
-    assert isinstance(info.value, ValueError)
-    _assert_code(info.value, "bridge_contrastive_rows_mismatch")
-
-
-def test_contrastive_rows_identical() -> None:
-    rows = torch.randn(2, 3, 4)
-    with pytest.raises(InvalidArgumentError) as info:
-        _rows(rows, rows.clone())
-    _assert_code(info.value, "bridge_contrastive_rows_identical")
-
-
-def test_contrastive_negative_missing() -> None:
-    with pytest.raises(InvalidArgumentError) as info:
-        _contrastive._negative_source(_log(), _site(torch.randn(2, 3, 4)), None, None)
-    _assert_code(info.value, "bridge_contrastive_negative_missing")
-
-
-def test_contrastive_read_token_rank() -> None:
-    with pytest.raises(InvalidArgumentError) as info:
-        _contrastive._read_rows(torch.randn(2, 4), -1, None, "positive")
-    _assert_code(info.value, "bridge_contrastive_read_token_rank")
-
-
-def test_contrastive_read_token_count() -> None:
-    with pytest.raises(InvalidArgumentError) as info:
-        _contrastive._read_rows(torch.randn(2, 3, 4), [0, 1, 2], None, "positive")
-    _assert_code(info.value, "bridge_contrastive_read_token_count")
-
-
-def test_contrastive_mask_shape() -> None:
-    with pytest.raises(InvalidArgumentError) as info:
-        _contrastive._read_rows(torch.randn(2, 3, 4), -1, torch.ones(2, 5), "positive")
-    _assert_code(info.value, "bridge_contrastive_mask_shape")
-
-
-def test_contrastive_mask_empty_row() -> None:
-    mask = torch.tensor([[1, 1, 0], [0, 0, 0]])
-    with pytest.raises(InvalidArgumentError) as info:
-        _contrastive._read_rows(torch.randn(2, 3, 4), -1, mask, "negative")
-    _assert_code(info.value, "bridge_contrastive_mask_empty_row")
-
-
-def test_contrastive_method_unknown() -> None:
-    with pytest.raises(InvalidArgumentError) as info:
-        _contrastive._read_directions(
-            np.zeros((4, 3), dtype=np.float32),
-            "no_such_method",
-            diff_methods=("pca_diff",),
-            center_in_place=False,
-            mean_diff=False,
-        )
-    _assert_code(info.value, "bridge_contrastive_method_unknown")
-
-
-def test_contrastive_model_type_unknown() -> None:
-    with pytest.raises(InvalidArgumentError) as info:
-        _contrastive._model_type(_log(), None)
-    _assert_code(info.value, "bridge_contrastive_model_type_unknown")
 
 
 def _fake_depyf(monkeypatch: pytest.MonkeyPatch, *, prepare_debug: Any | None) -> None:
