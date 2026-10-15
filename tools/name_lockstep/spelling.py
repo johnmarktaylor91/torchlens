@@ -30,10 +30,13 @@ class Spelling:
         Compiled regex; group ``name`` spans the leaf to respell.
     strength
         ``qualified``, ``contextual`` or ``leaf``.
+    leaf
+        The literal leaf every match contains (a cheap prefilter); empty disables it.
     """
 
     pattern: re.Pattern[str]
     strength: str
+    leaf: str = ""
 
 
 def _leaf(name: str) -> str:
@@ -87,7 +90,8 @@ def spellings(row: dict[str, Any], name: str | None = None) -> list[Spelling]:
         Patterns, strongest first.
     """
 
-    leaf = _leaf(name or row["name"])
+    literal = name or row["name"]
+    leaf = _leaf(literal)
     kind = row["kind"]
     aliases = "|".join(ALIASES)
     found: list[Spelling] = []
@@ -104,7 +108,7 @@ def spellings(row: dict[str, Any], name: str | None = None) -> list[Spelling]:
     elif kind == "param":
         found.append(Spelling(re.compile(rf"(?<![\w.]){leaf}(?=\s*=(?!=))"), CONTEXTUAL))
     found.append(Spelling(re.compile(rf"(?<![\w.]){leaf}"), LEAF))
-    return found
+    return [dataclasses.replace(item, leaf=literal) for item in found]
 
 
 _SPAN_RE = re.compile(r"`[^`\n]+`|\*\*[^*\n]+\*\*")
@@ -151,11 +155,15 @@ def find(
     """
 
     hits: dict[tuple[int, int], tuple[int, int, int, str]] = {}
+    wanted = [spelling for spelling in patterns if spelling.strength in strengths]
+    needles = {spelling.leaf for spelling in wanted}
+    if "" not in needles and not any(needle in text for needle in needles):
+        return []
     for number, line in enumerate(text.splitlines(), start=1):
+        if "" not in needles and not any(needle in line for needle in needles):
+            continue
         spans = emphasised_spans(line) if prose else []
-        for spelling in patterns:
-            if spelling.strength not in strengths:
-                continue
+        for spelling in wanted:
             for match in spelling.pattern.finditer(line):
                 start, end = match.span("name")
                 if spelling.strength == LEAF and prose and not _inside(start, spans):
