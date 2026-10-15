@@ -226,3 +226,30 @@ def test_live_parameter_edit_after_forking_keeps_recorded_values() -> None:
     finally:
         with torch.no_grad():
             model.fc2.weight.copy_(saved)
+
+
+def test_every_trace_and_fork_replays_with_the_live_parameter() -> None:
+    """After an in-place edit of the live parameter, the source, a push fork and
+    a rerun fork all replay with the edited parameter, and agree."""
+
+    model, x, trace = _capture()
+    relu = _label(trace, "relu")
+    fc1 = _label(trace, "linear")
+    rerun_fork = _rerun_fork(trace, model, x)
+    push_fork = trace.fork().do(
+        relu, tl.scale(2.0), intervention=InterventionOptions(engine="replay")
+    )
+    saved = model.fc2.weight.detach().clone()
+    try:
+        with torch.no_grad():
+            model.fc2.weight.mul_(3.0)
+        fresh = tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
+        fresh_fork = fresh.fork().do(
+            relu, tl.scale(2.0), intervention=InterventionOptions(engine="replay")
+        )
+        assert torch.equal(_push(trace, fc1), _push(fresh, fc1))
+        assert torch.equal(_push(push_fork, fc1), _push(fresh_fork, fc1))
+        assert torch.equal(_push(rerun_fork, fc1), _push(push_fork, fc1))
+    finally:
+        with torch.no_grad():
+            model.fc2.weight.copy_(saved)
