@@ -197,6 +197,29 @@ def _reason(candidate: _CamCandidate, graph: _TraceGraph, skipped: list[str]) ->
     return reason
 
 
+def _deepest_nonzero(
+    graph: _TraceGraph,
+    probed: list[_CamCandidate],
+    nonzero: dict[str, bool],
+) -> _LayerChoice | None:
+    """Return the first probed candidate with a nonzero grid gradient, if any.
+
+    ``probed`` is deepest first, outermost module first within one output op;
+    only the first tensor-returning module of each op is considered.
+    """
+
+    skipped: list[str] = []
+    seen_ops: set[str] = set()
+    for candidate in probed:
+        if candidate.layer not in nonzero or candidate.label in seen_ops:
+            continue
+        if nonzero[candidate.layer]:
+            return _LayerChoice(candidate.layer, _reason(candidate, graph, skipped))
+        seen_ops.add(candidate.label)
+        skipped.append(candidate.layer)
+    return None
+
+
 def _refuse_no_choice(target: Any, why: str, options: list[str], *, code: str) -> AttributionError:
     """Build the coded refusal for an automatic choice that cannot be made."""
 
@@ -265,16 +288,9 @@ def _choose_cam_layer(
         (candidate for candidate in found if candidate.dominates),
         key=lambda item: (-graph.order[item.label], len(item.layer)),
     )
-    nonzero = _grid_gradients(model, inputs, target, probed)
-    skipped: list[str] = []
-    seen_ops: set[str] = set()
-    for candidate in probed:
-        if candidate.layer not in nonzero or candidate.label in seen_ops:
-            continue
-        if nonzero[candidate.layer]:
-            return _LayerChoice(candidate.layer, _reason(candidate, graph, skipped))
-        seen_ops.add(candidate.label)
-        skipped.append(candidate.layer)
+    choice = _deepest_nonzero(graph, probed, _grid_gradients(model, inputs, target, probed))
+    if choice is not None:
+        return choice
     raise _refuse_no_choice(
         target,
         "the target gradient is zero on the grid of every candidate layer",
