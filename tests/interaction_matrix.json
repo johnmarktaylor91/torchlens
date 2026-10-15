@@ -18,7 +18,8 @@
   "intervene": {
    "summary": "Capture-time edits: intervene=tl.when(site, action)",
    "trace_kwargs": [
-    "intervene"
+    "intervene",
+    "on_zero_fire"
    ],
    "options": [
     "InterventionOptions"
