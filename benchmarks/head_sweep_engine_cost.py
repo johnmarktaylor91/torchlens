@@ -457,6 +457,12 @@ def cmd_parity(args: argparse.Namespace) -> dict[str, Any]:
     base_logits = logits_of(baseline)
     with torch.no_grad():
         plain = model(ids).logits
+    drift = _max_abs(base_logits, plain)
+    if args.stop_on_baseline_drift and drift != 0.0:
+        # The baseline capture of this process already differs from a plain
+        # forward of the same model (a per-process effect seen on the base
+        # too), so every head's push leg inherits the drift; report and stop.
+        return {"environment": _environment(), "baseline_vs_plain_forward": drift, "stopped": True}
     rows = []
     for candidate_id, site in head_sites()[: args.limit or None]:
         layer, head = (int(part) for part in candidate_id[1:].split("H"))
@@ -911,6 +917,12 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--out", type=Path, default=None)
         if name in ("parity", "sweep"):
             p.add_argument("--limit", type=int, default=0, help="first N heads only (0 = all)")
+        if name == "parity":
+            p.add_argument(
+                "--stop-on-baseline-drift",
+                action="store_true",
+                help="stop before the heads when the baseline differs from a plain forward",
+            )
         if name == "sweep":
             p.add_argument("--engine", choices=ENGINES, required=True)
         if name == "counters":
