@@ -42,6 +42,10 @@ if TYPE_CHECKING:
 # named submodule (we map that to the empty string so equality works cleanly).
 Fingerprint = tuple[str, str]
 
+# ``func_name`` of the op a module-boundary edit inserts between the edited op
+# and its consumers (the validation invariants key on the same value).
+_EDIT_FUNC_NAME = "intervention_replacement"
+
 
 def _fingerprint(layer: Layer) -> Fingerprint:
     """Return the structural fingerprint used for cross-trace node matching.
@@ -90,10 +94,52 @@ def _ordered_layers(trace: Trace) -> list[Layer]:
     return list(trace.layer_logs.values())
 
 
+def _structural_parent_labels(layer: Layer, layers_by_label: dict[str, Layer]) -> set[str]:
+    """Return a layer's parent labels, seeing through intervention-replacement ops.
+
+    A module-boundary edit is recorded as its own ``intervention_replacement``
+    op between the edited op and its consumers, and every later op is
+    renumbered. The edit changes a value, not the structure, so for alignment
+    a consumer's parent is the op the edit replaced (the edit op's own
+    parents), the same folding the rerun divergence hash applies to value-only
+    edit nodes. Without it the consumer of an edited module output never
+    aligns with its counterpart in an unedited trace.
+
+    Parameters
+    ----------
+    layer:
+        Layer whose parents should be resolved.
+    layers_by_label:
+        The layer's own trace, keyed by layer label.
+
+    Returns
+    -------
+    set[str]
+        Parent labels with every intervention-replacement parent replaced by
+        its own parents.
+    """
+
+    parents: set[str] = set()
+    pending = [str(parent) for parent in getattr(layer, "parents", ())]
+    seen: set[str] = set()
+    while pending:
+        label = pending.pop()
+        if label in seen:
+            continue
+        seen.add(label)
+        parent = layers_by_label.get(label)
+        if getattr(parent, "func_name", None) == _EDIT_FUNC_NAME:
+            pending.extend(str(grandparent) for grandparent in getattr(parent, "parents", ()))
+            continue
+        parents.add(label)
+    return parents
+
+
 def _matched_parent_labels(
     layer: Layer,
     *,
     matched_labels: set[str],
+    layers_by_label: dict[str, Layer],
 ) -> set[str]:
     """Return parent labels that have already been aligned.
 
@@ -103,6 +149,9 @@ def _matched_parent_labels(
         Layer whose parents should be filtered.
     matched_labels:
         Parent labels already aligned earlier in topological order.
+    layers_by_label:
+        The layer's own trace, keyed by layer label (see
+        :func:`_structural_parent_labels`).
 
     Returns
     -------
@@ -111,7 +160,9 @@ def _matched_parent_labels(
     """
 
     return {
-        str(parent) for parent in getattr(layer, "parents", ()) if str(parent) in matched_labels
+        parent
+        for parent in _structural_parent_labels(layer, layers_by_label)
+        if parent in matched_labels
     }
 
 
@@ -134,6 +185,8 @@ def _find_alignment(
         Matched ``(reference_index, candidate_index)`` pairs.
     """
 
+    reference_by_label = {str(layer.layer_label): layer for layer in reference_layers}
+    candidate_by_label = {str(layer.layer_label): layer for layer in candidate_layers}
     fingerprint_to_candidate_indices: dict[Fingerprint, deque[int]] = {}
     for idx, layer in enumerate(candidate_layers):
         fingerprint_to_candidate_indices.setdefault(_fingerprint(layer), deque()).append(idx)
@@ -157,6 +210,7 @@ def _find_alignment(
             for parent in _matched_parent_labels(
                 reference_layer,
                 matched_labels=set(matched_reference_to_candidate),
+                layers_by_label=reference_by_label,
             )
         }
         selected_candidate_index: int | None = None
@@ -165,6 +219,7 @@ def _find_alignment(
             candidate_parent_labels = _matched_parent_labels(
                 candidate_layer,
                 matched_labels=matched_candidate_labels,
+                layers_by_label=candidate_by_label,
             )
             if candidate_parent_labels == mapped_reference_parents:
                 selected_candidate_index = candidate_index

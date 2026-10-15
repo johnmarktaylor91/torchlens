@@ -1768,6 +1768,12 @@ class Bundle:
         the answer to "where did the bundle diverge", never "which member
         mattered" (the member axis lives on the effect table).
 
+        Sites pair across members through the bundle's structural alignment
+        (:attr:`supergraph`), not by literal label, so an op renumbered by an
+        inserted edit op still meets its counterpart. A site some member does
+        not traverse (such as the ``interventionreplacement`` op a module edit
+        inserts) has no counterpart and is not scored.
+
         Parameters
         ----------
         baseline:
@@ -1802,14 +1808,26 @@ class Bundle:
         baseline_log = self._members[baseline_name]
         metric_fn = resolve_metric(metric)
         scored: list[tuple[str, float]] = []
-        for site in getattr(baseline_log, "layer_list", []):
-            try:
-                view = self.node(site.layer_label)
-            except BundleMemberError:
+        baseline_sites = list(getattr(baseline_log, "layer_list", []))
+        if baseline_sites:
+            # The model-floor gate node() runs per site, run once here.
+            names = list(self._members)
+            pairs = [
+                (left, right) for index, left in enumerate(names) for right in names[index + 1 :]
+            ]
+            self._require_comparable("node", pairs=pairs)
+        # Sites pair through the supergraph's structural alignment, never by
+        # literal label: a capture-time module edit inserts an op and
+        # renumbers every later op, so a label join silently dropped exactly
+        # the ops the edit changed.
+        aligned = self._aligned_site_labels(baseline_name)
+        for site in baseline_sites:
+            members = self._resolve_aligned_site(str(site.layer_label), aligned)
+            if members is None:
                 continue
             outs = {
                 name: getattr(member, "out", None)
-                for name, member in view.members.items()
+                for name, member in members.items()
                 if getattr(member, "has_saved_activation", False)
             }
             base = outs.get(baseline_name)
@@ -1921,7 +1939,10 @@ class Bundle:
         Returns
         -------
         list[tuple[str, float]]
-            ``(site_label, relative_l1)`` rows for common labels.
+            ``(site_label, distance)`` rows (cosine; relative L1 when both
+            operands are scalar-like) keyed by the left member's
+            labels, for sites both members traverse, paired through the
+            structural alignment (:attr:`supergraph`).
         """
 
         left_log = self._members[left_name]
@@ -1933,10 +1954,12 @@ class Bundle:
         # relative_l1_scalar silently truncates each site to its first element.
         metric_fn = resolve_metric("cosine")
         rows: list[tuple[str, float]] = []
+        aligned = self._aligned_site_labels(left_name)
         for left_site in getattr(left_log, "layer_list", []):
             label = str(left_site.layer_label)
+            right_label = aligned.get(label, {}).get(right_name, label)
             try:
-                right_site = resolve_sites(right_log, label, max_fanout=1).first()
+                right_site = resolve_sites(right_log, right_label, max_fanout=1).first()
             except Exception:  # noqa: BLE001 - missing sites are not common sites
                 continue
             left_out = getattr(left_site, "out", None)
@@ -2278,6 +2301,63 @@ class Bundle:
         raise BaselineUndeterminedError(
             "Bundle operation requires a baseline, but no unique pristine baseline exists."
         )
+
+    def _aligned_site_labels(self, reference_name: str) -> dict[str, dict[str, str]]:
+        """Map each reference layer label to its structurally aligned labels.
+
+        Parameters
+        ----------
+        reference_name:
+            Member whose layer labels key the map.
+
+        Returns
+        -------
+        dict[str, dict[str, str]]
+            ``{reference_label: {member_name: member_label}}`` for every
+            supergraph node the reference member traverses.
+        """
+
+        aligned: dict[str, dict[str, str]] = {}
+        for node in self._ensure_supergraph().nodes.values():
+            reference_layer = node.layer_refs.get(reference_name)
+            if reference_layer is None:
+                continue
+            aligned[str(reference_layer.layer_label)] = {
+                name: str(layer.layer_label) for name, layer in node.layer_refs.items()
+            }
+        return aligned
+
+    def _resolve_aligned_site(
+        self,
+        label: str,
+        aligned: dict[str, dict[str, str]],
+    ) -> dict[str, Any] | None:
+        """Resolve one reference site in every member at its aligned label.
+
+        Parameters
+        ----------
+        label:
+            Reference member's layer label.
+        aligned:
+            Map from :meth:`_aligned_site_labels`. A member the alignment does
+            not pair is looked up by the literal label.
+
+        Returns
+        -------
+        dict[str, Any] | None
+            Member name to resolved op, or ``None`` when any member lacks the
+            site (it is then not a common site).
+        """
+
+        counterparts = aligned.get(label, {})
+        resolved: dict[str, Any] = {}
+        for name, log in self._members.items():
+            try:
+                table = resolve_sites(log, counterparts.get(name, label), max_fanout=1)
+                resolved[name] = table.first()
+            except Exception:  # noqa: BLE001 - missing sites are not common sites
+                return None
+        return resolved
 
     def _ensure_supergraph(self) -> Supergraph:
         """Build and cache the supergraph lazily.
