@@ -1331,7 +1331,7 @@ jobs:
             opencv-python==5.0.0.93 scikit-image==0.25.2 cachetools==7.2.1 \
             himalaya==0.4.11 scikit-learn==1.7.2 scipy==1.15.3 \
             sae-lens==6.54.0 eai-sparsify==1.3.3 "nnsight>=0.6" wandb \
-            timm fancy-einsum open_clip_torch line_profiler \
+            timm fancy-einsum "open_clip_torch==3.3.0" line_profiler \
             "netrep @ git+https://github.com/ahwillia/netrep@0186b8a77ec1ebaf541cc8f7173cb2556df8a8f0" \
             "torch==$TV" "transformers==$TF" "torchvision==$TVV"
           # These declare dependencies that would move torch, transformers or
