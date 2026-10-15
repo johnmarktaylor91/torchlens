@@ -460,3 +460,19 @@ recorded") for a default capture's `capture_verified=None`. The preamble header 
 (`torch.from_numpy`, `torch.from_dlpack`, `torch.frombuffer`, `torch.as_tensor` on
 non-tensor data) also records a `host_tensor_source` row in
 `trace.annotations["capture_advisories"]`.
+
+## Bundle baseline auto-detection reads `Trace.pristine` (2026-10-14, behavior change)
+
+Before: a Bundle picked the one member whose `Trace.state` was `TraceState.PRISTINE` and whose
+spec had never been edited. A capture with
+`tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.zero_ablate()))` kept that state, so it
+could be picked, or make the choice ambiguous; assigning `trace.state = TraceState.PRISTINE` made
+any member eligible.
+
+After: a member is a candidate only when `trace.pristine is True`, derived from the evidence the
+trace carries. Intervened members, members loaded from artifacts older than tlspec 9 and
+non-torch members (`pristine is None`) are never auto baselines. If your bundle relied on
+auto-detection with such members, pass the baseline explicitly:
+`tl.Bundle({...}, baseline="clean")` or `bundle.most_changed(baseline="clean")`. Code that read
+`trace.state is TraceState.PRISTINE` to mean "never intervened" should read
+`trace.pristine is True`.

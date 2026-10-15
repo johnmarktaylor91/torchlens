@@ -22,9 +22,19 @@
   convert it with `direction.to_steering_vectors()` or `direction.to_repeng()` (the bridges now
   hold only the converters `from_direction`). repeng's `pca_diff`, `pca_center` and `umap`
   replications are gone; the native methods are `mean_diff`, `pca` and `logistic`.
+- **Bundle**: the "pristine" label and baseline auto-detection now read `Trace.pristine is True`
+  instead of `Trace.state is TraceState.PRISTINE`. Intervened captures (including func-targeted
+  `intervene=` captures, whose state stayed `PRISTINE`), artifacts older than tlspec 9 and
+  non-torch traces are no longer auto baselines; plain reruns and `clear_hooks()` on an untouched
+  trace now are. With no qualifying member, baseline-anchored reads still refuse
+  `BaselineUndeterminedError`; pass `baseline=` explicitly.
 
 ### Features
 
+- **Trace**: `Trace.pristine` (documented unstable) reads `True`, `False` or `None` for whether
+  anything ever intervened on the trace, derived from the evidence it carries, so it survives save
+  and load and no reset makes a touched trace read `True` again. `None` means no evidence (an
+  artifact older than tlspec 9, or a non-torch backend).
 - **intervention**: `torchlens.intervention.direction_from_pairs` fits a contrastive steering
   direction (`"mean_diff"`, `"pca"` or `"logistic"`, torch only) from saved activations and
   returns a `torchlens.intervention.Direction` with a `BasisProvenance` record, a native
