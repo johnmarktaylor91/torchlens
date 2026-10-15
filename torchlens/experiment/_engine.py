@@ -1023,7 +1023,8 @@ def _chain_keyed_values(bundle: Bundle, values: Mapping[str, Any]) -> dict[str, 
     chained: list[tuple[int, int, str]] = []
     unchained: list[str] = []
     for position, name in enumerate(values):
-        operation = by_id.get(construction.get(name, {}).get("operation_id"))
+        operation_id = construction.get(name, {}).get("operation_id")
+        operation = by_id.get(operation_id) if isinstance(operation_id, str) else None
         if operation is None:
             unchained.append(name)
         else:

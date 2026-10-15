@@ -244,7 +244,11 @@ before its forward pass, as every intervention-ready capture does; each state
 entry whose bytes are unchanged since the source capture shares the source's
 snapshot instead of being cloned again, so on this sweep a rerun copies about
 54 MB of tensors instead of about 706 MB, and an entry that changed (an
-in-place weight edit, say) is cloned afresh.
+in-place weight edit, say) is cloned afresh. Every edit on either engine
+starts with `trace.fork()`, whose cost is fixed by the size of the trace, not
+by the edit: on this 585-op trace a fork takes about 0.08-0.09 s and makes
+about 419,000 Python calls (about 580,000 before its label tables were copied
+directly), which is the floor under the fastest push edits.
 
 `Trace.draw(vis_intervention_mode=...)` visualizes the planned intervention
 recipe stored on an intervention-ready trace, such as sites registered with
