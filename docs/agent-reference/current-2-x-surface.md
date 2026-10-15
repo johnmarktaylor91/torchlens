@@ -1049,7 +1049,16 @@
   `resolve_alias` / `translation_table` (TLens spellings resolve against a
   trace; tuple and compact `"k6"` forms), `test_prompt`, `apply_norm_scale`
   (cached-scale LayerNorm linearization, TLens-parity bit-exact), retention
-  planning (`retention_plan`). ~38 names; `MechInterpError` family.
+  planning (`retention_plan`). ~44 names; `MechInterpError` family.
+  Component edge graph: `tl.mechinterp.component_graph(trace)` returns a
+  `tl.mechinterp.ComponentGraph` (read-only `nodes`, `receivers`, `edges` keyed by
+  the MIB/EAP-IG names: nodes `input`/`a{L}.h{H}`/`b{L}`/`m{L}`, receivers
+  `a{L}.h{H}<q|k|v>`/`m{L}`/`logits`, edges `"s->t"`) of
+  `tl.mechinterp.ComponentNode`, `tl.mechinterp.ComponentReceiver` and
+  `tl.mechinterp.ComponentEdge` records; every receiver's pre-norm input is
+  checked equal to the sum of its edges' contributions in the API, and an edge
+  is an intervention selection. `tl.mechinterp.patch_edges(trace, edges, *,
+  corrupt)` patches edges into one receiver on the replay engine.
 - TRAINING-TIME WATCH (F26; DOCUMENTED-UNSTABLE): `torchlens.trackers` is the
   attach-once watch engine over the C06 records -- `watch`/`WatchSession`,
   sinks (TensorBoardSink incl. `add_histogram_raw` precomputed buckets,
