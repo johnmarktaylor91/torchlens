@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from .node_spec import NodeSpec
     from .node_universe import NodeUnit
     from .renderers.base import RendererCapabilities
+    from .themes import VisualizationTheme
 
 
 @dataclass(frozen=True)
@@ -1048,6 +1049,7 @@ def finalize_forward_regions(
     captured_edges: tuple[Any, ...],
     overrides: Any,
     rankdir: str | None = None,
+    theme: VisualizationTheme | None = None,
 ) -> RenderIR:
     """Attach final DOT region decisions to a forward render IR.
 
@@ -1070,6 +1072,9 @@ def finalize_forward_regions(
     rankdir:
         Graphviz rank direction; enables member-geometry caption placement
         (vizmech item 15). ``None`` keeps the geometry-free defaults.
+    theme:
+        Resolved skin; module and container boxes take its ink
+        (``_theme_cluster_attrs``) under any user module overrides.
 
     Returns
     -------
@@ -1079,6 +1084,9 @@ def finalize_forward_regions(
 
     from ._render_flow import _get_max_call_depth
     from ._render_utils import compute_module_penwidth, make_module_cluster_attrs
+    from .themes import _theme_cluster_attrs
+
+    cluster_ink = _theme_cluster_attrs(theme) if theme is not None else {}
 
     captured_by_occurrence = {edge.occurrence_key: edge for edge in captured_edges}
     edges = tuple(
@@ -1170,6 +1178,7 @@ def finalize_forward_regions(
             caption_pierced=caption_pierced,
             rankdir=rankdir,
         )
+        attrs.update(cluster_ink)
         for attr_name, attr_value in overrides.module.items():
             attrs[attr_name] = str(attr_value(trace, key) if callable(attr_value) else attr_value)
         regions.append(
@@ -1191,6 +1200,7 @@ def finalize_forward_regions(
             penwidth=1.0,
             fillcolor="white",
         )
+        attrs.update(cluster_ink)
         owner = str(container.owner_key)
         regions.append(
             RenderIRRegion(

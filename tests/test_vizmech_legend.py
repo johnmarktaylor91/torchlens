@@ -55,10 +55,11 @@ def test_role_legend_is_one_table_node_in_dedicated_rank(tmp_path: Path) -> None
     assert "style=invis" in dot and "constraint=false" in dot
     svg = (tmp_path / "legend_on.svg").read_text()
     assert "TorchLens legend" in svg
-    for role in ("input", "output", "parameterized", "boolean"):
+    for role in ("input", "output", "plain op", "parameterized"):
         assert f">{role}<" in svg, f"role row {role!r} missing from the rendered table"
-    # The buffer row carries its shape-vocabulary hint inline.
-    assert ">buffer (cylinder)<" in svg
+    # Rows key only what is drawn: this graph has no boolean and no buffer.
+    assert ">boolean<" not in svg
+    assert ">buffer (cylinder)<" not in svg
 
 
 def test_no_legend_by_default(tmp_path: Path) -> None:

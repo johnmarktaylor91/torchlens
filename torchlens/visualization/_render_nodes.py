@@ -503,12 +503,18 @@ def _add_node_to_graphviz(
             show_saved_for_backward=show_saved_for_backward,
         )
 
+    # Edges and their labels keep the renderer's black only on skins that
+    # leave edge ink unset; the dark skin's edge colours apply here.
+    edge_ink = node_color if theme is None else _theme_line_ink(theme, node_color) or node_color
+    label_ink = (
+        node_color if theme is None else _theme_annotation_ink(theme, node_color) or node_color
+    )
     _add_edges_for_node(
         self,
         node,
         is_collapsed_module,
         vis_call_depth,
-        node_color,
+        edge_ink,
         module_edge_dict,
         edges_used,
         graphviz_graph,
@@ -530,6 +536,7 @@ def _add_node_to_graphviz(
         antiparallel_projected_edges,
         rolled_maps,
         deduped_edge_registry,
+        label_color=label_ink,
     )
 
 
@@ -1852,8 +1859,8 @@ def _get_node_bg_color(self: "Trace", node: GraphNode) -> str:
     """Returns the background color hex string for a graph node based on its type.
 
     Maps node types to colors: input=green, output=red, boolean=yellow,
-    parameterized layers=light gray (trainable), dark gray (frozen) or a
-    two-tone split (both), default=white.
+    buffer=orange, parameterized layers=light gray (trainable), dark gray
+    (frozen) or a two-tone split (both), default=white.
 
     Args:
         node: node to add
@@ -1867,6 +1874,8 @@ def _get_node_bg_color(self: "Trace", node: GraphNode) -> str:
         bg_color = OUTPUT_COLOR
     elif node.is_terminal_bool:
         bg_color = BOOL_NODE_COLOR
+    elif node.is_buffer:
+        bg_color = BUFFER_NODE_COLOR
     elif node.uses_params:
         param_logs = getattr(node, "_param_logs", [])
         if param_logs:

@@ -365,9 +365,20 @@ def test_legend_lists_mutated_parameter_only_when_drawn(tmp_path: Path) -> None:
         plain.cleanup()
 
     assert "mutated parameter (cylinder)" in mutated_dot
-    assert "buffer (cylinder)" in mutated_dot
     assert "mutated parameter" not in plain_dot
-    assert "buffer (cylinder)" in plain_dot
+    # The buffer row is gated the same way: present exactly when a buffer is drawn.
+    for dot in (mutated_dot, plain_dot):
+        assert ("buffer (cylinder)" in dot) == _draws_buffer_node(dot)
+
+
+def _draws_buffer_node(dot: str) -> bool:
+    """Whether the DOT draws a buffer: a cylinder in the default skin's buffer fill."""
+
+    return any(
+        "shape=cylinder" in line and '"#E69F00"' in line
+        for line in dot.splitlines()
+        if not line.strip().startswith("tl_legend")
+    )
 
 
 def test_frozen_mutated_parameter_uses_frozen_parameter_grey(tmp_path: Path) -> None:

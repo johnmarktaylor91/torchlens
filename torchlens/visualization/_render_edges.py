@@ -909,6 +909,7 @@ def _add_edges_for_node(
     antiparallel_projected_edges: frozenset[tuple[str, str]] = frozenset(),
     rolled_maps: "_RolledEdgeMaps | None" = None,
     deduped_edge_registry: dict[tuple[Any, ...], dict[str, Any]] | None = None,
+    label_color: str | None = None,
 ) -> None:
     """Add forward (and optionally grad) edges from a parent node to all its children.
 
@@ -934,13 +935,14 @@ def _add_edges_for_node(
         parent_node: The node to add edges for.
         parent_is_collapsed_module: Whether the node is a collapsed module node.
         vis_call_depth: How many levels of module nesting to show.
-        node_color: Color of the node.
+        node_color: Edge colour (the parent node's ink, resolved through the skin).
         module_edge_dict: Dict mapping each cluster to its edges.
         edges_used: Set of (tail, head, occurrence) triples already added.
         graphviz_graph: The graphviz graph object.
         vis_mode: ``'unrolled'`` or ``'rolled'``.
         show_buffer_layers: Buffer visibility mode.
         overrides: Graphviz attribute overrides.
+        label_color: Edge-label colour; ``None`` reuses ``node_color``.
     """
     if edge_map is None:
         render_edges = [
@@ -1046,6 +1048,7 @@ def _add_edges_for_node(
         rendered_parent_name = tail_name
         # Edge deduplication: multiple layers mapping to the same collapsed
         # module node would produce duplicate edges without this check.
+        hook_edge: dict[str, Any] | None = None
         if (
             vis_intervention_mode == "as_node"
             and intervention_site_labels is not None
@@ -1055,15 +1058,15 @@ def _add_edges_for_node(
             hook_key = ("intervention_hook", parent_node.layer_label)
             if (tail_name, hook_name, hook_key) not in edges_used:
                 edges_used.add((tail_name, hook_name, hook_key))
-                graphviz_graph.edge(
-                    tail_name=tail_name,
-                    head_name=hook_name,
-                    color=node_color,
-                    fontcolor=node_color,
-                    style=edge_style,
-                    arrowsize=".7",
-                    labelfontsize=DEFAULT_TYPOGRAPHY.annotation_pt,
-                )
+                hook_edge = {
+                    "tail_name": tail_name,
+                    "head_name": hook_name,
+                    "color": node_color,
+                    "fontcolor": label_color or node_color,
+                    "style": edge_style,
+                    "arrowsize": ".7",
+                    "labelfontsize": DEFAULT_TYPOGRAPHY.annotation_pt,
+                }
             tail_name = hook_name
 
         edge_has_boundary = isinstance(parent_node, BoundaryNode) or isinstance(
@@ -1093,6 +1096,14 @@ def _add_edges_for_node(
         # record the wrong cluster key and sibling rank-groups would never resolve
         # to a common cluster (always falling back to top-level emission).
         edge_module_key: str | int = module
+        if hook_edge is not None:
+            # The site-to-hook edge goes in the cluster the site-to-child edge
+            # would use. Emitted at top level, it left the site op outside its
+            # module boxes while the hook sat inside them.
+            if module != -1:
+                module_edge_dict[cast(str, module)]["edges"].append(hook_edge)
+            else:
+                graphviz_graph.edge(**hook_edge)
 
         parent_hidden_fold = _run_fold_hidden_endpoint(parent_module_name_w_pass, repeat_folds)
         child_hidden_fold = _run_fold_hidden_endpoint(child_module_name_w_pass, repeat_folds)
@@ -1182,7 +1193,7 @@ def _add_edges_for_node(
             "tail_name": tail_name,
             "head_name": head_name,
             "color": node_color,
-            "fontcolor": node_color,
+            "fontcolor": label_color or node_color,
             "style": edge_style,
             "arrowsize": ".7",
             "labelfontsize": DEFAULT_TYPOGRAPHY.annotation_pt,

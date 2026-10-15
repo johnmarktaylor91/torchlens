@@ -1965,19 +1965,23 @@ def _insert_into_cluster(source: str, cluster_name: str, insertion: str) -> tupl
 def _emit_container_cluster(
     parent_graph: graphviz.Digraph,
     container_cluster: ContainerClusterSpec,
+    *,
+    ink: Mapping[str, str] | None = None,
 ) -> None:
-    """Emit one opt-in container cluster inside an existing module cluster."""
+    """Emit one opt-in container cluster inside an existing module cluster.
+
+    ``ink`` carries the skin's module-box ink (``_theme_cluster_attrs``).
+    """
 
     with parent_graph.subgraph(name=f"cluster_{container_cluster.cluster_id}") as cluster:
-        cluster.attr(
-            **make_module_cluster_attrs(
-                title=container_cluster.title,
-                module_type=container_cluster.kind,
-                line_style="dotted",
-                penwidth=1.0,
-                fillcolor="white",
-            )
+        attrs = make_module_cluster_attrs(
+            title=container_cluster.title,
+            module_type=container_cluster.kind,
+            line_style="dotted",
+            penwidth=1.0,
+            fillcolor="white",
         )
+        cluster.attr(**{**attrs, **(ink or {})})
         for node_name in container_cluster.node_names:
             cluster.node(node_name)
 

@@ -588,7 +588,7 @@ LEGEND_SECTION_ROWS: Mapping[str, str] = {
 LEGEND_ROW_WITNESS: Mapping[str, str] = {
     "TorchLens legend": "builtin-legend",
     "parameterized": "builtin-legend",
-    "intervention/cone": "builtin-legend",
+    "plain op": "builtin-legend",
     "mutated parameter": "mutated-param",
     "backward op (grad_fn)": "backward-legend",
     "order 2+: grad-of-grad (double backprop)": "backward-legend",
