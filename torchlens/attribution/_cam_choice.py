@@ -139,7 +139,12 @@ def _grid_gradients(
     target: Any,
     candidates: list[_CamCandidate],
 ) -> dict[str, bool]:
-    """Return, per candidate layer, whether the target gradient on its grid is nonzero."""
+    """Return, per candidate layer, whether the target gradient on its grid is nonzero.
+
+    Layers whose module returns a non-tensor value (a model-output container)
+    or a value the target is not differentiable through are absent: they are
+    not valid Grad-CAM layers.
+    """
 
     named = dict(model.named_modules())
     captured: dict[str, Tensor] = {}
@@ -240,21 +245,36 @@ def _choose_cam_layer(
         _outermost_per_op(found), key=lambda item: graph.order[item.label], reverse=True
     )
     dominators = [candidate for candidate in deepest_first if candidate.dominates]
-    if not dominators:
-        options = [candidate.layer for candidate in deepest_first]
-        why = (
-            "several module outputs are spatial maps or token grids, but none lies on every "
-            "path from the inputs to the outputs"
-            if options
-            else "no module output is a spatial map or a provable token grid"
+    if not deepest_first:
+        raise _refuse_no_choice(
+            target,
+            "no module output is a spatial map or a provable token grid",
+            [],
+            "grad_cam_layer_unchosen",
         )
-        code = "grad_cam_layer_choice_ambiguous" if options else "grad_cam_layer_unchosen"
-        raise _refuse_no_choice(target, why, options, code)
-    nonzero = _grid_gradients(model, inputs, target, dominators)
+    if not dominators:
+        raise _refuse_no_choice(
+            target,
+            "several module outputs are spatial maps or token grids, but none lies on every "
+            "path from the inputs to the outputs",
+            [candidate.layer for candidate in deepest_first],
+            "grad_cam_layer_choice_ambiguous",
+        )
+    # All modules sharing an output op are probed: an outer one may return a
+    # container rather than the tensor, and only the hook can tell.
+    probed = sorted(
+        (candidate for candidate in found if candidate.dominates),
+        key=lambda item: (-graph.order[item.label], len(item.layer)),
+    )
+    nonzero = _grid_gradients(model, inputs, target, probed)
     skipped: list[str] = []
-    for candidate in dominators:
-        if nonzero.get(candidate.layer, False):
+    seen_ops: set[str] = set()
+    for candidate in probed:
+        if candidate.layer not in nonzero or candidate.label in seen_ops:
+            continue
+        if nonzero[candidate.layer]:
             return _LayerChoice(candidate.layer, _reason(candidate, graph, skipped))
+        seen_ops.add(candidate.label)
         skipped.append(candidate.layer)
     raise _refuse_no_choice(
         target,

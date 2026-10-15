@@ -148,8 +148,8 @@ AttributionResult(method='smoothgrad', values=Tensor(shape=(1, 2), dtype=torch.f
 
 ## `grad_cam`
 
-`tl.attribution.grad_cam(model, inputs, input_kwargs=None, *, target=..., layer=..., relu=True,
-overlay=True, image=None, alpha=0.6, cmap="magma")`
+`tl.attribution.grad_cam(model, inputs, input_kwargs=None, *, target=..., layer=None,
+reshape=None, relu=True, overlay=True, image=None, alpha=0.6, cmap="magma")`
 forms a Grad-CAM map from a 4D `N, C, H, W` convolution-style layer and upsamples it to the
 spatial size of the input that actually feeds the target layer (proven through the autograd
 graph, not taken from argument order). Use a layer name from `model.named_modules()`. If no
@@ -178,8 +178,99 @@ print(tl.attribution.grad_cam(ImageModel(), torch.ones(1, 1, 2, 2), target=0, la
 Output:
 
 ```text
-AttributionResult(method='grad_cam', values=Tensor(shape=(1, 1, 2, 2), dtype=torch.float32, device='cpu'), target_repr='index=0', extra_keys=['layer', 'native_map_resolution', 'overlay', 'relu', 'rendered_map_resolution', 'upsampling'])
+AttributionResult(method='grad_cam', values=Tensor(shape=(1, 1, 2, 2), dtype=torch.float32, device='cpu'), target_repr='index=0', extra_keys=['grid_evidence', 'grid_route', 'layer', 'layer_reason', 'layer_source', 'native_map_resolution', 'overlay', 'prefix_tokens', 'relu', 'rendered_map_resolution', 'upsampling'])
 ```
+
+### Vision transformers: token grids
+
+A transformer layer emits tokens `N, T, C`, not a feature map. `grad_cam` lays them on the grid
+that a metadata-only trace of the same call proves, read from the graph's shapes and edges and
+never from a list of model names. The patch embedding that flattens a rank-4 map into tokens
+gives the grid, and a token concatenation whose last piece holds those patch tokens gives the
+leading tokens to drop: one class token for ViT and CLIP, class and distillation tokens for
+distilled DeiT, the class token plus the register tokens for DINOv2 with registers. A Swin
+stage's own grid comes from the view that lays its tokens out as `N, H, W, C`, so each stage after
+patch merging gets its own, smaller grid. `extra["grid_route"]` is `"derived"`,
+`extra["prefix_tokens"]` the leading-token count dropped, and `extra["grid_evidence"]` the trace
+ops that proved the grid.
+
+When the trace proves no grid (tokens cut by `F.unfold`, for example), or proves several, the
+call raises `AttributionError` with code `grad_cam_token_grid_unprovable` and a spelling to
+run instead. That spelling uses `reshape=`, the escape hatch: a callable that maps the layer
+output to `N, C, H, W`. It must only rearrange (slice, transpose, reshape), because it is
+applied to the activation and to its gradient alike; `extra["grid_route"]` is then
+`"reshape"`.
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+class Patches(nn.Module):
+    def __init__(self):
+        super().__init__(); self.embed = nn.Conv2d(1, 4, 2, stride=2); self.cls = nn.Parameter(torch.zeros(1, 1, 4))
+        self.block = nn.Linear(4, 4); self.head = nn.Linear(4, 2)
+    def forward(self, x):
+        tokens = self.embed(x).flatten(2).transpose(1, 2)
+        tokens = self.block(torch.cat([self.cls.expand(x.shape[0], -1, -1), tokens], dim=1))
+        return self.head(tokens.mean(dim=1))
+
+model, x = Patches(), torch.ones(1, 1, 4, 4)
+derived = tl.attribution.grad_cam(model, x, target=0, layer="block", overlay=False)
+by_hand = tl.attribution.grad_cam(
+    model, x, target=0, layer="block", overlay=False,
+    reshape=lambda a: a[:, 1:].transpose(1, 2).reshape(a.shape[0], a.shape[2], 2, 2),
+)
+print(derived.extra["grid_route"], derived.extra["native_map_resolution"], derived.extra["prefix_tokens"])
+print(torch.equal(derived.values, by_hand.values))
+```
+
+Output:
+
+```text
+derived (2, 2) 1
+True
+```
+
+### Choosing the layer automatically
+
+Called without `layer`, `grad_cam` chooses it from the trace. The candidates are named modules
+that fire once and output a spatial map or a provable token grid. The chosen one lies on every
+path from the inputs to the outputs, is the deepest such module, and carries a nonzero target
+gradient on its grid; several modules that return the same tensor resolve to the outermost.
+On a torchvision ResNet this is `layer4`. On a ViT classifier that reads only the class token,
+the last block's patch tokens carry a zero gradient, so the choice steps back to the residual
+stream entering the last block. `extra["layer_source"]` is `"trace"` and
+`extra["layer_reason"]` says why; with an explicit `layer` they are `"caller"` and `None`.
+When maps exist but none lies on every input-to-output path (two branches joined after
+pooling), the call refuses with `grad_cam_layer_choice_ambiguous` and names the candidates; a
+model with no spatial map and no token grid refuses with `grad_cam_layer_unchosen`. The
+automatic call computes the same map as the explicit call on the chosen layer.
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+model = nn.Sequential(nn.Conv2d(1, 2, 3, padding=1), nn.ReLU(), nn.AdaptiveAvgPool2d(1), nn.Flatten(), nn.Linear(2, 2))
+result = tl.attribution.grad_cam(model, torch.ones(1, 1, 4, 4), target=0, overlay=False)
+print(result.extra["layer"], result.extra["layer_source"])
+```
+
+Output:
+
+```text
+1 trace
+```
+
+### torch-cam as an alternative
+
+[TorchCAM](https://github.com/frgfm/torch-cam) (`pip install torchcam`) is a separate library
+with a wider set of class activation maps (Grad-CAM++, Smooth Grad-CAM++, Score-CAM, Layer-CAM
+and others) and its own automatic target-layer choice. TorchLens ships native Grad-CAM only and
+no torch-cam extra; use torch-cam directly when you need another CAM variant. The
+[torch-cam recipe](../recipes/torchcam.md) runs both on one model and checks that their Grad-CAM
+maps agree.
 
 ## `layer_integrated_gradients`
 
