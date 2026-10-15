@@ -353,6 +353,7 @@ is documented unstable and may be renamed or removed without a compatibility ali
 
 | Edge attribution patching over the component graph | `edge_scores`, `corrupted`, `metric`, `method`, `eap`, `eap_ig`, `steps`, `example_reduction`, `mean`, `sum` | unstable -- no deprecation shim owed |
 | Circuit faithfulness areas | `circuit_performance_ratio`, `circuit_model_difference`, `faithfulness`, `fractions`, `log_scale` | unstable -- no deprecation shim owed |
+| Fixed-period induction score | `FixedPeriodInduction`, `head_scores(..., kind=FixedPeriodInduction(period=n))`, `period` | unstable -- no deprecation shim owed |
 <!-- MECHINTERP-KIT-UNSTABLE-INDEX:END -->
 
 `component_graph(trace)` returns a `ComponentGraph`: read-only `nodes`, `receivers` and `edges`
@@ -365,9 +366,11 @@ the sender's output as its `contribution`. `identity_receipt` records the in-API
 sum of its contributions. Each attention output bias is its own node `b{L}`. A `ComponentEdge` is
 also a selection (`__selection__`): an EDGE selection of the pre-norm input edge for `m{L}` and
 `logits` receivers, an ACT selection of one head's q, k or v projection slice otherwise.
-`patch_edges(trace, edges, *, corrupt)` returns a fork of `trace` in which the one receiver those
-edges enter reads `clean input - sum(s_clean) + sum(s_corrupt)` (`corrupt` is the corrupted
-input's `ComponentGraph`); the trace needs `intervention_ready=True`.
+`patch_edges(trace, edges, *, corrupt)` returns a fork of `trace` in which every receiver the
+edges enter reads `input - sum(s) + sum(s_corrupt)` over its patched edges (`corrupt` is the
+corrupted input's `ComponentGraph`); `input` and `s` are the patched forward's own values (the
+clean values when one receiver is patched), so a circuit (everything outside a kept set patched)
+is one call; the trace needs `intervention_ready=True`.
 
 `edge_scores(model, inputs, *, corrupted, metric, method="eap_ig", steps=None,
 example_reduction="mean")` returns a one-backward `ReadTable` of `EDGE` rows, one per

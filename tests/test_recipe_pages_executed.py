@@ -30,6 +30,7 @@ REPO = Path(__file__).resolve().parents[1]
 
 #: Page or notebook (repo-relative) -> the one tool its fences need.
 PAGES: dict[str, str] = {
+    "docs/recipes/acdc_ioi.md": "transformers",
     "docs/recipes/lrp_transformers_lxt.md": "lxt",
     "docs/recipes/seeded_subsample.md": "torchlens",
     "docs/recipes/training_ribbon.md": "matplotlib",
@@ -88,6 +89,7 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
 #: is listed to keep the unmarked family inside its aggregate budget.
 HEAVY_PAGES: frozenset[str] = frozenset(
     {
+        "docs/recipes/acdc_ioi.md",
         "docs/recipes/lrp_transformers_lxt.md",
         "docs/neuroai/journey.md",
         "docs/recipes/tcav.md",

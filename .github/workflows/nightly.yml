@@ -1362,7 +1362,7 @@ jobs:
         # every page's peer is installed, so a skip means a page went unrun.
         run: |
           "$RUNNER_TEMP/peer-venv/bin/python" scripts/check_ci_executed_tests.py \
-            "$RUNNER_TEMP/peer-recipes.junit.xml" 49 0
+            "$RUNNER_TEMP/peer-recipes.junit.xml" 51 0
 
       # The SAE export consumers install last and run in their own step: one
       # of them ships a top-level ``tests`` package that shadows the repo's,

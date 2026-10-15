@@ -1,5 +1,7 @@
 """Component edges as intervention selections, and single-receiver edge patching.
 
+Multi-receiver patching is pinned in ``tests/test_circ3_multi_receiver_patch.py``.
+
 On a two-layer GPT-2 toy in float64: patching one edge makes its receiver
 read ``clean input - s_clean + s_corrupt`` (checked against the closed-form
 norm and projection of that input), and leaves every receiver that is not
@@ -125,13 +127,6 @@ def test_patching_two_edges_into_one_receiver_sums_their_deltas(pair) -> None:
         atol=1e-12,
     )
     assert math.isfinite(float(ln_2.abs().max()))
-
-
-def test_patch_edges_refuses_edges_into_several_receivers(pair) -> None:
-    _model, clean, graph, corrupt = pair
-    with pytest.raises(MechInterpError) as excinfo:
-        mi.patch_edges(clean, [graph.edges["input->m0"], graph.edges["input->m1"]], corrupt=corrupt)
-    assert excinfo.value.fields["code"] == "mi_edge_patch_receivers_mixed"
 
 
 def test_receiver_selection_refuses_an_unaddressable_receiver(pair) -> None:

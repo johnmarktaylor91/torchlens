@@ -470,6 +470,7 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "migration/from_transformers_interpret.md": _MIGRATION_PAGES_EXECUTED,
     "migration/multi_gpu_extraction.md": _MIGRATION_PAGES_EXECUTED,
     "migration/penzai.md": _MIGRATION_PAGES_EXECUTED,
+    "recipes/acdc_ioi.md": _RECIPE_PAGES_EXECUTED,
     "recipes/lrp_transformers_lxt.md": _RECIPE_PAGES_EXECUTED,
     "recipes/seeded_subsample.md": _RECIPE_PAGES_EXECUTED,
     "recipes/training_ribbon.md": _RECIPE_PAGES_EXECUTED,

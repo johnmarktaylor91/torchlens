@@ -97,6 +97,14 @@ refusal (`worst_element`).
 - `head_scores` / `inspect_prompt` / `test_prompt`: taxonomy masks with
   TLens-compatible conventions (credited), structured prompt records with
   explicit BOS disclosure and teacher-forced multi-token scoring.
+  `head_scores(trace, kind=tl.mechinterp.FixedPeriodInduction(period=n))`
+  scores the fixed repeat of a sequence with period `n` instead of the
+  token-equality induction mask (the result reports `kind="induction"` and
+  the period in its provenance; a period that is not a positive int refuses
+  when the kind is built):
+  destination `i` on the one source `i - n + 1`, counted when its token
+  equals the token at `i - n`, so a token that repeats inside the sequence
+  adds nothing (measured on GPT-2 small in the circuit section below).
 
 Fused attention (torch SDPA) needs
 `capture=CaptureOptions(save_arg_values=True)` for reconstructed
@@ -152,7 +160,19 @@ total = sum(node.value for node in receiver.senders)
 assert torch.allclose(total, receiver.value, atol=1e-5)
 edge = graph.edges["m0->a1.h1<q>"]
 assert edge.contribution is graph.nodes["m0"].value
-trace.cleanup()
+
+# A circuit runs as one patch_edges call: every edge outside it reads its
+# sender's value on the corrupted input.
+ready = tl.options.CaptureOptions(layers_to_save="all", intervention_ready=True)
+clean = tl.trace(model, ids, capture=ready)
+corrupt = tl.trace(model, torch.randint(0, 32, (1, 5)), capture=ready)
+corrupt_graph = tl.mechinterp.component_graph(corrupt)
+kept = {"input->a0.h0<q>", "a0.h0->a1.h1<v>", "a1.h1->logits"}
+outside = [e for name, e in tl.mechinterp.component_graph(clean).edges.items() if name not in kept]
+circuit = tl.mechinterp.patch_edges(clean, outside, corrupt=corrupt_graph)
+print(circuit.modules["lm_head"].out[0, -1, :3])
+for t in (trace, clean, corrupt):
+    t.cleanup()
 ```
 
 Edges are intervention selections. `graph.edges["m0->logits"]` passed to
@@ -160,12 +180,25 @@ Edges are intervention selections. `graph.edges["m0->logits"]` passed to
 edge substitution on the replay engine); an edge into `a{L}.h{H}<q>` (or
 `<k>`, `<v>`) addresses head H's slice of that layer's projection output (an
 ACT selection), because the heads and roles of one layer share their norm.
-`patch_edges(trace, edges, corrupt=corrupt_graph)` builds the matching value
-and returns a fork in which the edges' one receiver reads `clean input -
-sum(s_clean) + sum(s_corrupt)`; every receiver that is not downstream of it
-reads exactly what it read before. Patching needs a trace captured with
-`intervention_ready=True`; edges into several receivers refuse
-`mi_edge_patch_receivers_mixed`.
+`patch_edges(trace, edges, *, corrupt=corrupt_graph)` builds the matching
+values and returns a fork in which every patched receiver reads `input -
+sum(s) + sum(s_corrupt)` over its patched edges. With edges into one
+receiver, `input` and `s` are the clean values, and every receiver that is
+not downstream of it reads exactly what it read before. With edges into
+several receivers, `input` and `s` are the values of the patched forward
+itself (the MIB circuit track's convention): a receiver sees its patched
+senders' corrupted values while every other sender carries what it computes
+in that forward, including the effect of patches upstream of it. A circuit
+(a set of kept edges, everything else patched) is one call, as in the
+example above: pass every edge outside the circuit.
+
+Receivers are patched in topological order, a stage at a time (a layer's
+attention receivers, then its MLP, then `logits`), and the component graph
+is rebuilt on the partly patched fork at each later stage, so a circuit over
+all 445 GPT-2 small receivers costs one replay per patched receiver (two for
+`q`, `k`, `v`) plus 24 graph builds. No edges returns an unpatched fork; an
+edge passed twice refuses `mi_edge_patch_edge_repeated`. Patching needs a
+trace captured with `intervention_ready=True`.
 
 ## Edge attribution patching and circuit faithfulness
 
@@ -241,6 +274,34 @@ Against brute-force patching of all 32,491 edges one at a time (16 prompts,
 float32), EAP-IG at 5 steps has Pearson correlation 0.939 with the patching
 effect and shares 75 of the 100 largest edges; EAP has 0.806 and 87. CPR
 and CMD equal the MIB circuit track's loop exactly.
+
+Circuit test cases on GPT-2 small (CPU):
+
+- Induction heads: `head_scores(trace, kind=FixedPeriodInduction(period=50))` on
+  `[bos] + R + R` (`R` 50 random tokens in `[1000, 50000)`, generator seed
+  0, batch 8) equals an independent Hugging Face eager-attention oracle
+  within 5.0e-11 for all 144 heads in float64 (2.7e-7 in float32), and its
+  top 5 heads are the oracle's: 5.5, 6.9, 7.10, 5.1, 7.2.
+- Recovering Wang et al.'s IOI circuit: EAP-IG at 5 steps over 1000 rows
+  of the `mib-bench/ioi` train split, corrupted with its
+  `s2_io_flip_counterfactual` column (not the ABC corruption the circuit
+  was found with), ranks heads by the summed |score| of their outgoing
+  edges. Against the 26 circuit heads the ROC AUC is 0.926 and 20 of the
+  top 26 heads are circuit heads (recall 0.77). Over the 29,089 edges among
+  the input, the heads and the logits, 72 of the circuit's 182 head-level
+  edges are in the top 182 (recall 0.40); over all 32,491 edges the ROC AUC
+  against ACDC's encoding of the circuit is 0.870. The run took 57 minutes
+  on 4 cores (3.4 s per row).
+- Circuits run as one `patch_edges` call; on GPT-2 small a call that patches
+  edges into 121 receivers (every MLP, `logits`, and the q, k and v
+  receivers of layers 0, 6 and 11) equals an independent forward-hook
+  implementation of the same convention within 1e-10 in float64.
+
+ACDC-style discovery is a recipe, not a TorchLens loop:
+[docs/recipes/acdc_ioi.md](../recipes/acdc_ioi.md) walks the receivers from
+the output, patches each incoming edge with `patch_edges`, prunes it when
+the metric moves by less than a threshold, and records every decision as a
+ledger verdict.
 
 Bad settings refuse `mi_edge_scores_setting_invalid`, a metric that does
 not return one value per example `mi_edge_scores_metric_invalid`, and

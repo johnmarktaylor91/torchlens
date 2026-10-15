@@ -3,6 +3,6 @@
 # in the same change. Verdict: HARVESTABLE (fences and claim strings are countable
 # by regex today); the taught-path universe consumes this feed at wave A.
 metric	count
-harvest_doc_files	144
-harvest_python_fences	413
+harvest_doc_files	145
+harvest_python_fences	417
 harvest_claim_strings	178

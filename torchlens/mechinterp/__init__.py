@@ -46,7 +46,7 @@ from ._prompts import PromptInspection, inspect_prompt, test_prompt
 from ._records import ComponentRow, ComponentStack, ContributionScores, Coordinate
 from ._residual import residual_accumulation, residual_decomposition
 from ._retention import RetentionPlan, retention_plan
-from ._scores import HeadScoreResult, head_scores
+from ._scores import FixedPeriodInduction, HeadScoreResult, head_scores
 
 __all__ = [
     "AliasResolution",
@@ -59,6 +59,7 @@ __all__ = [
     "ContributionScores",
     "Coordinate",
     "FactoredMatrix",
+    "FixedPeriodInduction",
     "HeadScoreResult",
     "HeadWeightViews",
     "LoweredResult",
