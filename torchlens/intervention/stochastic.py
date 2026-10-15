@@ -73,6 +73,7 @@ backend's supported table), BEFORE any forward or mutation.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import warnings
 from collections.abc import Callable, Mapping, Sequence
@@ -1400,6 +1401,20 @@ def mean_fill(
 # ----------------------------------------------------------------------
 # directional dataset mean (D12 of the roster): set_direction_mean
 # ----------------------------------------------------------------------
+def _direction_mean_coefficient64(
+    members: Sequence[torch.Tensor], axes: Sequence[int], unit64: torch.Tensor
+) -> float:
+    """Return the mean coefficient of ``members`` along ``unit64``, in float64."""
+
+    per_member = []
+    for member, axis in zip(members, axes, strict=True):
+        shape = [1] * member.ndim
+        shape[axis] = int(unit64.shape[0])
+        wide = member.detach().to("cpu", torch.float64)
+        per_member.append((wide * unit64.reshape(shape)).sum(dim=axis).mean())
+    return float(torch.stack(per_member).mean())
+
+
 def set_direction_mean(
     direction: torch.Tensor,
     ref: Reference,
@@ -1475,20 +1490,12 @@ def set_direction_mean(
     mean_coef = float(torch.stack([coef.mean() for coef in coefs]).mean())
     # The float64 coefficient is computed on the first float64 site only, so a
     # float32 population pays no float64 copy unless a float64 site fires.
-    wide_coef: list[float] = []
 
+    @functools.cache
     def _mean_coef64() -> float:
         """Return the population's mean coefficient along the float64 unit."""
 
-        if not wide_coef:
-            per_member = []
-            for member, axis in zip(members, axes):
-                shape = [1] * member.ndim
-                shape[axis] = extent
-                wide = member.detach().to("cpu", torch.float64)
-                per_member.append((wide * unit64.reshape(shape)).sum(dim=axis).mean())
-            wide_coef.append(float(torch.stack(per_member).mean()))
-        return wide_coef[0]
+        return _direction_mean_coefficient64(members, axes, unit64)
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime directional mean-setting hook."""
