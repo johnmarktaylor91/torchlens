@@ -29,6 +29,7 @@ from torch import nn
 from .._errors import InvalidArgumentError
 from ..errors import TorchLensWarning
 from . import _sae_metrics
+from ._sae_export import write_delphi, write_sae_dashboard
 from ._utils import resolve_one_site
 
 if TYPE_CHECKING:
@@ -778,4 +779,4 @@ def splice(  # noqa: PLR0913 -- the public experiment door: each keyword is one 
     )
 
 
-__all__ = ["SpliceResult", "splice"]
+__all__ = ["SpliceResult", "splice", "write_delphi", "write_sae_dashboard"]

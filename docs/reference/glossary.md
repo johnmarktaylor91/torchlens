@@ -1265,6 +1265,26 @@ shims, by declared contract. Each carries the same tag at its definition.
   to `sae.decode` as if it were latents. `tl.bridge.sae_lens.encode(log, site,
   sae)` gives the latents.
 
+**write_delphi (`tl.bridge.sae.write_delphi(latents, tokens, *, site, model_name, n_splits=5, directory)`)** — *unstable — no deprecation shim owed*
+: Writes SAE latents as the latent cache delphi's `LatentDataset` loads
+  (eai-delphi 0.1.3): `directory/site/{start}_{end}.safetensors` splits with
+  `locations` (example, position, latent), `float16` `activations` and the
+  `tokens`, plus a `config.json` naming `model_name`. `latents` is dense
+  (`SpliceResult.latents`, every activation above delphi's 1e-5) or the
+  `UnitTopK` of `tl.stats.TopK(k, unit_axis=-1, encoder=sae.encode)` over a
+  dataset (only the retained top entries). Recipe:
+  `docs/recipes/sae_latent_export.md`.
+
+**write_sae_dashboard (`tl.bridge.sae.write_sae_dashboard(latents, tokens, *, latent_ids=None, k=20, path)`)** — *unstable — no deprecation shim owed*
+: Writes SAE latents and each latent's top examples as the JSON SAEDashboard's
+  `SaeVisData.load_json` loads (sae-dashboard 0.8.0): one "TOP ACTIVATIONS"
+  group of whole sequences per latent, ranked by activation, then lowest
+  example, then lowest position (the `tl.stats.TopK` order). Dense latents
+  carry every token's activation and give `feature_stats` `max` and
+  `frac_nonzero`; a dataset `UnitTopK` carries the ranked token's value only.
+  `latent_ids` defaults to every latent that fired; `sae_export_dashboard_large`
+  warns once past 256 MiB. Recipe: `docs/recipes/sae_latent_export.md`.
+
 **similarity_repository_id (`rdm_evolution(...).similarity_repository_id`, `tl.stats.CKA.similarity_repository_id`, the `SimilarityScore` that `tl.stats.cka` and `tl.stats.CKA.result()` return, `ScoreInterval.similarity_repository_id`, the `neuro.rdms()` source-mode descriptor)** — *unstable — no deprecation shim owed*
 : The similarity-repository catalogue identifier of the exact measure variant a
   TorchLens result computed, with `*` for the implementing repository (for
