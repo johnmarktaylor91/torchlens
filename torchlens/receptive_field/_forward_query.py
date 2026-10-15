@@ -168,6 +168,7 @@ def _walk_to_target(
     """
 
     def body(item: Op, sets: _AxisSets, item_exact: bool) -> _WalkStep:
+        """Start one projective hop from ``item`` toward this query's target."""
         return _walk_target_body(item, sets, target_label, active, by_reference, item_exact)
 
     return _run_memoized_walk(body, op, input_sets, exact, memo)

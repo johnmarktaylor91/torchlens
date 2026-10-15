@@ -86,7 +86,7 @@ class _Diamond(nn.Module):
         self.right = nn.ModuleList(nn.Conv1d(1, 1, 5, padding=2) for _ in range(levels))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        for left, right in zip(self.left, self.right):
+        for left, right in zip(self.left, self.right, strict=True):
             x = left(x) + right(x)
         return x
 
