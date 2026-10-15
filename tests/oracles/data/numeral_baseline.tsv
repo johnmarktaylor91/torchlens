@@ -765,7 +765,6 @@ docs-md	docs/for-ai-agents.md	2.0
 docs-md	docs/for-ai-agents.md	2.0,
 docs-md	docs/for-ai-agents.md	2.16
 docs-md	docs/for-ai-agents.md	2020
-docs-md	docs/for-ai-agents.md	4000
 docs-md	docs/guides/fast_paths.md	0.17
 docs-md	docs/guides/fast_paths.md	0.18
 docs-md	docs/guides/fast_paths.md	0.21
@@ -2546,7 +2545,6 @@ package-docstrings	torchlens/agent/_artifacts.py	3.2
 package-docstrings	torchlens/agent/_artifacts.py	3.9
 package-docstrings	torchlens/agent/_artifacts.py	60
 package-docstrings	torchlens/agent/_budgets.py	256
-package-docstrings	torchlens/agent/_budgets.py	3.8
 package-docstrings	torchlens/agent/_compare.py	64,
 package-docstrings	torchlens/agent/_envelope.py	3.6
 package-docstrings	torchlens/agent/_envelope.py	3.9
