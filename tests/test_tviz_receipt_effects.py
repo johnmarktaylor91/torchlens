@@ -211,6 +211,9 @@ def test_footer_never_overlaps_matrix_ticks_or_colorbar_label(
     ]
     for name, box in others:
         assert not footer_box.overlaps(box), name
+    # Numbers on the darkest cells are white, the rest black.
+    colours = {t.get_text(): t.get_color() for t in ax.texts}
+    assert colours[f"{values.max().item():+.2f}"] == "white"
     # Every text is at least 8 pt (about 11 CSS px at the pane target).
     texts = [footer, *labels, *ax.texts, bar_ax.yaxis.label]
     assert min(text.get_fontsize() for text in texts) >= 8

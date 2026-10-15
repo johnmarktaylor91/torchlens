@@ -316,6 +316,9 @@ def _column_labels(receipt: CausalReceipt) -> list[str]:
 #: reads as about 11 CSS px in a 760 px pane, the legibility floor.
 _TEXT_PT = 8
 
+#: Cells darker than this fraction of the colour scale print white text.
+_DARK_CELL = 0.6
+
 #: Height of one matrix row, in inches.
 _ROW_INCHES = 0.5
 
@@ -465,6 +468,7 @@ def render_receipt_grid(
                     ha="center",
                     va="center",
                     fontsize=_TEXT_PT,
+                    color="white" if abs(value) > _DARK_CELL * scale else "black",
                 )
     ax.set_xticks([col + 0.5 for col in range(len(heads))])
     ax.set_xticklabels(_column_labels(rows[0]), fontsize=_TEXT_PT)
