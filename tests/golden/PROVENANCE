@@ -106,3 +106,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 01ae4491d26d1e6bf628bd522b6e4c15b492663a (dirty)
 recorded: 2026-10-12T23:24:46.169664+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: b2-VIZFIX renderer fixes: dark skin edges, edge labels and module boxes follow the skin; dark node text meets 4.5:1 contrast; role legend lists only drawn roles plus a plain op row; buffers fill with the palette buffer role; as_node hook edge in its cluster; header paths reduced to file:line
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f32492d3cf7f49aab6109f8df4df9d007da76b41 (dirty)
+recorded: 2026-10-15T14:23:28.713898+00:00
