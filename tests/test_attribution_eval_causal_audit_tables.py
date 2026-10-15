@@ -70,6 +70,8 @@ class TinyLM(nn.Module):
                     parameter.copy_(torch.randn(parameter.shape, generator=generator))
             if exact:
                 self.ln_f.weight.fill_(2.0**30)
+                self.ln_f.bias.copy_(torch.tensor([1.0, -2.0, 0.0, 3.0]))
+                self.lm_head.bias.copy_(torch.tensor([0.0, 1.0, -1.0, 2.0, 3.0]))
 
     def forward(self, ids: Tensor) -> Tensor:
         """Embedding plus three writers, final norm, unembedding."""

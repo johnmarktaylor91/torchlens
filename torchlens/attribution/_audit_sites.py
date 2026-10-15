@@ -91,7 +91,8 @@ class _SitesPlan:
                 continue
             mask = torch.zeros(self.shapes[site], dtype=torch.bool)
             for element in elements:
-                mask[(slice(None), *element)] = True
+                index: tuple[slice | int, ...] = (slice(None), *element)
+                mask[index] = True
             pairs.append((unit_selection(site, mask), self.edits[site]()))
         return tuple(pairs)
 
