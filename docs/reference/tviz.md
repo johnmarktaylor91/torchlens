@@ -111,12 +111,24 @@ receipt = tviz.receipt_from_patch_grid(
     layer="transformer.h.0.attn",
     negative_control=neg,     # measured self-patch delta (must be ~0)
     positive_control=pos,     # measured large perturbation (must move)
-    joint_effect=joint,       # one extra run: all heads ablated together
+    joint_effect=joint,       # one extra run: all heads patched together, as a delta
 )
 tviz.render_receipt_grid(receipt, "receipts.pdf")
 ann = tviz.Annotation.from_receipt(receipt)
 tviz.render_attention(views[0], "annotated.pdf", annotation=ann)
 ```
+
+A grid's `values` are the metric of each patched run. Its receipts also
+record the unpatched baselines, `grid.receipts["clean_metric"]` and
+`grid.receipts["corrupted_metric"]`. A receipt cell is an effect: the patched
+metric minus `corrupted_metric`, because every cell patches clean values into
+a corrupted rerun, so a cell that changes nothing reads `+0.00` (the same
+quantity the self-patch negative control measures). The figure's footer
+prints the baseline value, and the joint effect and both controls are deltas
+from the same run. `receipt_from_patch_grid` refuses a grid without
+`corrupted_metric` (`tv_receipt_invalid`) rather than plotting raw metric
+values. The footer's height is reserved below the matrix, so the disclosure
+lines never cover a cell or a label.
 
 The validity rules are enforced, not advisory: zero fires refuses (a hook
 that did not fire is an exception, never a number), a moved negative control
