@@ -93,7 +93,8 @@ def _route_save_label_selection(
 
     The list form documented on ``tl.trace`` (layer names, pass-qualified labels,
     module addresses, integer indexes, substrings, ``'all'``/``'none'``) selects
-    exactly what ``capture=CaptureOptions(layers_to_save=...)`` selects.
+    exactly what ``capture=CaptureOptions(layers_to_save=...)`` selects;
+    ``save='stats'`` becomes the reduce-and-discard ``SaveOptions``.
 
     Parameters
     ----------
@@ -117,6 +118,11 @@ def _route_save_label_selection(
         ``save_selection_conflict`` when ``capture=`` also sets ``layers_to_save``.
     """
 
+    if isinstance(save_value, str) and save_value.lower() == "stats":
+        # The reduce-and-discard save level: one Spine per op, no payload.
+        from .stats._capture_stats import stats_save_options
+
+        return stats_save_options(), _flatten_stage_names_in_options(capture_options, model)
     if not _is_save_label_selection(save_value):
         return save_value, _flatten_stage_names_in_options(capture_options, model)
     from ._errors import ArgumentConflictError

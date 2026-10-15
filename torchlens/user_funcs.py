@@ -2591,6 +2591,7 @@ def trace(
 
     - ``'all'`` (default) - save outs for every layer.
     - ``'none'`` / ``None`` / ``[]`` - save no outs (metadata only).
+    - ``'stats'`` - fold every out into a ``Spine``, keep no payload (``tl.stats.site_spines``).
     - A predicate selector, e.g. ``tl.func("relu")``, ``tl.in_module("encoder")``,
       or combinators such as ``tl.func("conv2d") & tl.followed_by(tl.func("relu"))``.
     - A list containing any mix of:

@@ -1913,6 +1913,10 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
                     remedy="re-run with save=... to retain this activation",
                     label=str(label),
                 )
+            if out is None and slot("_tracing_finished") and source_trace is not None:
+                from ..stats._capture_stats import refuse_reduced_payload_read
+
+                refuse_reduced_payload_read(slot, source_trace)
             if not getattr(source_trace, "_postprocessing_active", False):
                 state = {
                     "out": out,

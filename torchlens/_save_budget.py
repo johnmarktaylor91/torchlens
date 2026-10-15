@@ -857,6 +857,8 @@ class SaveBudget:
             "instead of saving every activation\n"
             "    - save less AND stream those selected payloads to disk: "
             "save=tl.func('relu'), storage=tl.to_disk('run.tlspec')\n"
+            "    - keep per-op statistics only (one Spine per op, no payload): "
+            "tl.trace(model, x, save='stats'), read with tl.stats.site_spines(trace)\n"
             "    - keep metadata only: "
             "capture=tl.options.CaptureOptions(layers_to_save='none') "
             "(the graph is still captured)\n"

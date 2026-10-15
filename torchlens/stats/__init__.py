@@ -41,6 +41,11 @@ from ..observability._kernels import (  # noqa: E402
     Spine,
     SpineResult,
 )
+
+# Reduce-and-discard capture (tl.trace(..., save="stats")) reads back through
+# site_spines; measure_trajectory folds logit-lens trajectory statistics over
+# batches. Spellings DOCUMENTED-UNSTABLE pending naming-session ratification.
+from ._capture_stats import site_spines  # noqa: E402
 from ._fitted import (  # noqa: E402
     FittedArtifactError,
     FittedPCA,
@@ -67,6 +72,7 @@ from ._tensor_stats import (  # noqa: E402
     TensorStats,
     tensor_stats,
 )
+from ._trajectory import TrajectoryStats, measure_trajectory  # noqa: E402
 
 # F10 lovely surfaces (items 10-11): glance (FORK-C function form; submodule
 # spelling, root budget frozen), the summary-cell/treescope seam adapters,
@@ -98,6 +104,7 @@ __all__ = [
     "TENSOR_STATS_SCHEMA_VERSION",
     "TensorStats",
     "TopK",
+    "TrajectoryStats",
     "UnitTopK",
     "aggregate",
     "cka",
@@ -106,8 +113,10 @@ __all__ = [
     "format_sig",
     "glance",
     "load_fitted",
+    "measure_trajectory",
     "render_core_line",
     "save_fitted",
+    "site_spines",
     "summary_cell",
     "tensor_stats",
     "treescope_card_fields",
