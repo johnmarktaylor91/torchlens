@@ -38,6 +38,11 @@
   non-torch traces are no longer auto baselines; plain reruns and `clear_hooks()` on an untouched
   trace now are. With no qualifying member, baseline-anchored reads still refuse
   `BaselineUndeterminedError`; pass `baseline=` explicitly.
+- **bridge.sae_lens**: `torchlens.bridge.sae_lens.decode(log, site, sae)` is removed with no alias:
+  it passed the site activation to `sae.decode` as if it were latents. Use
+  `torchlens.bridge.sae_lens.reconstruct(log, site, sae)` for the reconstruction, or
+  `sae.decode(latents)` on latents you hold. `SpliceResult.fraction_variance_explained` is `nan`
+  (with `zero_variance=True`) when the site's total variance is zero; it was 0.0.
 
 ### Features
 
@@ -92,6 +97,17 @@
   the model-parameter randomization test (cascading or independent, Spearman and SSIM per step) on
   deep copies of the model. Both accept `grad_cam` results, including vision-transformer token
   grids.
+
+- **bridge.sae**: `tl.bridge.sae.splice` results are honest: `SpliceResult` gains `latents` and
+  `edited_latents` (kept by default; `keep_latents=False` drops them; a warning past 256 MiB),
+  `fraction_variance_explained_pooled` (the SAELens / Gemma Scope per-dimension reading) and
+  `fraction_variance_explained_by_dim`, `zero_variance` with `nan` instead of a silent 0.0, and,
+  given `tokens=`, `ce_loss_clean`, `ce_loss_spliced`, `ce_loss_zero_ablated`, `ce_loss_recovered`
+  and `kl_divergence`; `unavailable_metrics` says why any metric is missing. `exclude_bos=True`
+  follows the Gemma Scope evaluation.
+- **recipes**: new recipe for pretrained SAEs (Gemma Scope 1 and 2): SAELens loads and TorchLens
+  runs, with the hook-name to site mapping and transcoders via `tl.splice_module(transcoder,
+  input="in")`.
 
 ### Bug Fixes
 

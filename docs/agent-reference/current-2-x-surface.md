@@ -1133,11 +1133,22 @@
   sequence in bf16. Refusal codes `hf_attention_*`.
 - `torchlens.bridge` contains optional adapters for Captum, HF, SHAP, SAE Lens, LIT,
   profiler, and related tools. `bridge.sae.splice(model_or_log, inputs, site=, sae=,
-  latents_edit=)` (DOCUMENTED-UNSTABLE) is the packaged SAE splice experiment: fork +
+  latents_edit=, tokens=, exclude_bos=False, keep_latents=True)` (DOCUMENTED-UNSTABLE) is
+  the packaged SAE splice experiment: fork +
   `tl.splice_module` + push swaps a duck-typed SAE's reconstruction (`encode`/`decode`
   pair, no SAE package required) in at one site and reports reconstruction fidelity plus
   output-level causal effect; `latents_edit=` is the per-feature causal knob (demo:
-  `notebooks/sae_splice_tutorial.ipynb`). `bridge.brain_score` additionally serves Brain-Score's
+  `notebooks/sae_splice_tutorial.ipynb`). `SpliceResult` metrics are float64 and follow
+  SAELens evals and Gemma Scope: `fraction_variance_explained_pooled` (per-dimension
+  centring) and `fraction_variance_explained_by_dim`; zero denominators give `nan`,
+  `zero_variance=True` and a reason in `unavailable_metrics`, never 0.0; `latents` and
+  `edited_latents` are kept by default (`sae_splice_latents_large` warns once past 256 MiB);
+  `tokens=` adds `ce_loss_clean`/`ce_loss_spliced`/`ce_loss_zero_ablated`,
+  `ce_loss_recovered` and `kl_divergence`. `bridge.sae_lens.reconstruct(log, site, sae)`
+  replaces the removed `decode`. Pretrained SAEs (Gemma Scope 1 and 2) load with SAELens
+  and run here (`docs/recipes/pretrained_saes.md`); a transcoder splices with
+  `tl.splice_module(transcoder, input="in")` on its MLP module. `bridge.brain_score`
+  additionally serves Brain-Score's
   `ActivationsExtractorHelper` seam: `get_activations_fn(model)` is the offline
   per-batch callable (module dotted paths or any TorchLens lookup; `"logits"` = model
   output) and `activations_extractor(...)` wires it into the real helper, returned inside a

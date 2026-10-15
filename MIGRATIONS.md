@@ -497,3 +497,11 @@ whole-layer grid: `float(joint.values[i]) - joint.receipts["corrupted_metric"]`)
 `PatchGrid` must set `receipts["corrupted_metric"]` or the call refuses `tv_receipt_invalid`. The
 default `intervention` wording is now "clean activation of one head patched into the corrupted
 run" (was "head contribution zeroed"); the grid title and joint line no longer say "ablation".
+
+## `bridge.sae_lens.decode` removed; zero-variance splice FVE is `nan` (2026-10-15, removal and value change)
+
+`torchlens.bridge.sae_lens.decode(log, site, sae)` is removed: it passed the site activation to
+`sae.decode` as if it were latents. Use `torchlens.bridge.sae_lens.reconstruct(log, site, sae)`
+for the reconstruction, or `sae.decode(latents)` on latents you hold.
+`SpliceResult.fraction_variance_explained` is `nan` (with `zero_variance=True`) when the site's
+total variance is zero; it was 0.0.
