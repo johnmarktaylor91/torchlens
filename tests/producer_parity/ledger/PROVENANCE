@@ -2644,8 +2644,18 @@ torch: 2.13.0+cpu
 source: 23d86482dba95e2d29e20de73dfd983db8cd71ba (dirty)
 recorded: 2026-10-15T14:14:48.051192+00:00
 ---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
 reason: b2-VIZFIX: the role legend now lists only drawn roles; its new helper _legend.statement_node_attrs reads RenderIRDotStatement.kind to walk node statements (one new consumer site row for torchlens/visualization/_legend.py; no other site added, removed or moved)
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 7fd595e1b88bf068d4ee747971a7abdfab5af565 (dirty)
 recorded: 2026-10-15T16:08:48.298447+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: b2-INTEG12: merge of ATTR-5, ROT-2, CIRC-2 and VIZFIX into the train; the static scan is regenerated on the merged tree so it holds the trains
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 963910241fded6dfc8892e55f5bf7cf9fb326508 (dirty)
+recorded: 2026-10-15T16:52:53.612901+00:00
