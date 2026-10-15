@@ -152,6 +152,8 @@ def _solve_projective_uncached(
             continue
         branches: dict[str, list[_InputState]] = defaultdict(list)
         target = target_by_label.get(op.label)
+        if target is not None and 0 in tuple(target.shape):
+            target = None  # no units, so no projective geometry to seed
         if target is not None:
             seed = _seed_target(target)
             branches[seed.io_role].append(seed)

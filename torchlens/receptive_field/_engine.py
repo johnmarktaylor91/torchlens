@@ -266,6 +266,10 @@ def _solve_uncached(
 
     for op in _topological_operations(operations, by_reference):
         if seed_predicate(op):
+            if 0 in tuple(op.shape):
+                # A zero-length axis leaves the input with no units, so it has no
+                # influence geometry: it seeds nothing and no descriptor names it.
+                continue
             seed = _seed_input(op)
             states_by_op[op.label] = {
                 seed.io_role: _BranchState(state=seed, geometry_neutral=False)
