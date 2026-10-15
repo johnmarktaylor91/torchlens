@@ -81,10 +81,28 @@ class _TraceGraph:
             label = str(op.layer_label)
             self.ops[label] = op
             self.order[label] = index
+        self._add_boundary_nodes()
         self._lineage: dict[str, bool] = {}
         input_shapes = [self.shape(label) for label in self.input_labels()]
         batches = {shape[0] for shape in input_shapes if len(shape) >= 1}
         self.batch = batches.pop() if len(batches) == 1 else None
+
+    def _add_boundary_nodes(self) -> None:
+        """Index the input, buffer and output nodes that ``trace.ops`` does not list.
+
+        Model inputs and buffers precede every op and model outputs follow
+        them, so their order is set outside the op range.
+        """
+
+        last = len(self.order)
+        for op in list(self.ops.values()):
+            for ref, order in [(ref, -1) for ref in (op.parents or ())] + [
+                (ref, last) for ref in (op.children or ())
+            ]:
+                label = str(ref)
+                if label not in self.ops:
+                    self.ops[label] = self.trace[ref]
+                    self.order[label] = order
 
     def label_of(self, ref: Any) -> str:
         """Return the op label for a parent or child reference."""
@@ -118,7 +136,11 @@ class _TraceGraph:
     def input_labels(self) -> list[str]:
         """Return the labels of the model-input ops."""
 
-        return [label for label, op in self.ops.items() if op.is_input]
+        return [
+            label
+            for label, op in self.ops.items()
+            if op.is_input and not getattr(op, "is_buffer", False)
+        ]
 
     def output_labels(self) -> list[str]:
         """Return the labels of the model-output ops."""
@@ -304,6 +326,8 @@ def _unprovable(
     shape: tuple[int, ...],
     target: Any,
     why: str,
+    *,
+    code: str,
 ) -> AttributionError:
     """Build the coded refusal for a token grid the trace does not prove."""
 
@@ -319,7 +343,7 @@ def _unprovable(
         f"{_target_spelling(target)}, layer={layer!r}, reshape={reshape}) "
         f"(drop {prefix} leading tokens and lay the rest on a {height}x{width} grid; change "
         f"those numbers if your grid differs). {_DOCS_POINTER}",
-        code="grad_cam_token_grid_unprovable",
+        code=code,
     )
 
 
@@ -341,16 +365,32 @@ def _derive_token_grid(
     shape = tuple(int(value) for value in activation.shape)
     label = _module_output_label(graph, layer)
     if label is None or graph.shape(label) != shape:
-        raise _unprovable(layer, shape, target, "the trace has no single op for this output")
+        raise _unprovable(
+            layer,
+            shape,
+            target,
+            "the trace has no single op for this output",
+            code="grad_cam_token_grid_unprovable",
+        )
     candidates = _grid_candidates(graph, label)
     grids = {(height, width, prefix) for height, width, prefix, _ in candidates}
     if not grids:
         raise _unprovable(
-            layer, shape, target, "no patch grid on its ancestry has this token count"
+            layer,
+            shape,
+            target,
+            "no patch grid on its ancestry has this token count",
+            code="grad_cam_token_grid_unprovable",
         )
     if len(grids) > 1:
         options = ", ".join(f"{h}x{w} after {p} leading tokens" for h, w, p in sorted(grids))
-        raise _unprovable(layer, shape, target, f"its ancestry proves several grids ({options})")
+        raise _unprovable(
+            layer,
+            shape,
+            target,
+            f"its ancestry proves several grids ({options})",
+            code="grad_cam_token_grid_unprovable",
+        )
     height, width, prefix = grids.pop()
     evidence = tuple(sorted({item[3] for item in candidates}, key=graph.order.__getitem__))
     return _TokenGrid(height=height, width=width, prefix=prefix, evidence=evidence)

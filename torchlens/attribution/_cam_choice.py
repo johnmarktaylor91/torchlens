@@ -198,7 +198,7 @@ def _reason(candidate: _CamCandidate, graph: _TraceGraph, skipped: list[str]) ->
     return reason
 
 
-def _refuse_no_choice(target: Any, why: str, options: list[str], code: str) -> AttributionError:
+def _refuse_no_choice(target: Any, why: str, options: list[str], *, code: str) -> AttributionError:
     """Build the coded refusal for an automatic choice that cannot be made."""
 
     if options:
@@ -250,7 +250,7 @@ def _choose_cam_layer(
             target,
             "no module output is a spatial map or a provable token grid",
             [],
-            "grad_cam_layer_unchosen",
+            code="grad_cam_layer_unchosen",
         )
     if not dominators:
         raise _refuse_no_choice(
@@ -258,7 +258,7 @@ def _choose_cam_layer(
             "several module outputs are spatial maps or token grids, but none lies on every "
             "path from the inputs to the outputs",
             [candidate.layer for candidate in deepest_first],
-            "grad_cam_layer_choice_ambiguous",
+            code="grad_cam_layer_choice_ambiguous",
         )
     # All modules sharing an output op are probed: an outer one may return a
     # container rather than the tensor, and only the hook can tell.
@@ -280,7 +280,7 @@ def _choose_cam_layer(
         target,
         "the target gradient is zero on the grid of every candidate layer",
         [candidate.layer for candidate in dominators],
-        "grad_cam_layer_unchosen",
+        code="grad_cam_layer_unchosen",
     )
 
 

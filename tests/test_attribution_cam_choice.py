@@ -101,7 +101,7 @@ def test_grad_cam_chooses_residual_stream_into_last_vit_block() -> None:
     def target(output: Any) -> Tensor:
         return output.logits[:, 1].sum()
 
-    _assert_auto_matches_explicit(model, torch.randn(1, 3, 32, 32), target, "vit.encoder.layer.0")
+    _assert_auto_matches_explicit(model, torch.randn(1, 3, 32, 32), target, "vit.layers.0")
     auto = attribution.grad_cam(model, torch.randn(1, 3, 32, 32), target=target, overlay=False)
     assert "'vit.layernorm'" in auto.extra["layer_reason"]
     assert auto.extra["prefix_tokens"] == 1

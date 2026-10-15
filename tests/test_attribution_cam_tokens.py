@@ -26,6 +26,13 @@ transformers = pytest.importorskip("transformers")
 IMAGE = 32
 
 
+def _named(model: nn.Module, suffix: str) -> str:
+    """Return the one module name ending in ``suffix`` (layouts differ across releases)."""
+
+    (name,) = [name for name, _ in model.named_modules() if name.endswith(suffix)]
+    return name
+
+
 def _vit() -> tuple[nn.Module, str, Callable[[Any], Tensor], int, int]:
     config = transformers.ViTConfig(
         image_size=IMAGE,
@@ -38,7 +45,7 @@ def _vit() -> tuple[nn.Module, str, Callable[[Any], Tensor], int, int]:
     )
     model = transformers.ViTForImageClassification(config)
     side = config.image_size // config.patch_size
-    return model, "vit.encoder.layer.1.layernorm_before", _logit, side, 1
+    return model, _named(model, "1.layernorm_before"), _logit, side, 1
 
 
 def _deit() -> tuple[nn.Module, str, Callable[[Any], Tensor], int, int]:
@@ -54,7 +61,7 @@ def _deit() -> tuple[nn.Module, str, Callable[[Any], Tensor], int, int]:
     model = transformers.DeiTForImageClassificationWithTeacher(config)
     side = config.image_size // config.patch_size
     # Class token plus distillation token.
-    return model, "deit.encoder.layer.1.layernorm_before", _logit, side, 2
+    return model, _named(model, "1.layernorm_before"), _logit, side, 2
 
 
 def _dinov2_registers() -> tuple[nn.Module, str, Callable[[Any], Tensor], int, int]:

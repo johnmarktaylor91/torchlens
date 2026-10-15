@@ -268,9 +268,7 @@ Output:
 [TorchCAM](https://github.com/frgfm/torch-cam) (`pip install torchcam`) is a separate library
 with a wider set of class activation maps (Grad-CAM++, Smooth Grad-CAM++, Score-CAM, Layer-CAM
 and others) and its own automatic target-layer choice. TorchLens ships native Grad-CAM only and
-no torch-cam extra; use torch-cam directly when you need another CAM variant. The
-[torch-cam recipe](../recipes/torchcam.md) runs both on one model and checks that their Grad-CAM
-maps agree.
+no torch-cam extra; use torch-cam directly when you need another CAM variant.
 
 ## `layer_integrated_gradients`
 
