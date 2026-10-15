@@ -481,26 +481,11 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "recipes/weightwatcher.md": _RECIPE_PAGES_EXECUTED,
     "recipes/torchcam.md": _RECIPE_PAGES_EXECUTED,
     "recipes/quantus.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/sae_trainers.md": (
-        "needs dictionary_learning and sparsify; executed fence by fence by "
-        "tests/test_recipe_sae_trainers.py through the shared recipe runner"
-    ),
-    "recipes/prisma_clip_sae.md": (
-        "needs vit-prisma and timm; executed fence by fence by "
-        "tests/test_recipe_prisma_clip_sae.py through the shared recipe runner"
-    ),
-    "recipes/sae_crosscoder_diff.md": (
-        "needs dictionary_learning; executed fence by fence by "
-        "tests/test_recipe_sae_crosscoder_diff.py through the shared recipe runner"
-    ),
-    "recipes/sae_latent_export.md": (
-        "executed fence by fence by tests/test_recipe_sae_latent_export.py with the shared "
-        "recipe runner (TorchLens only; the consumer-side fences are text)"
-    ),
-    "recipes/pretrained_saes.md": (
-        "needs sae-lens; executed fence by fence by tests/test_recipe_pretrained_saes.py "
-        "through the shared recipe runner until the page joins its PAGES registry"
-    ),
+    "recipes/sae_trainers.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/prisma_clip_sae.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/sae_crosscoder_diff.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/sae_latent_export.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/pretrained_saes.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/netrep.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/himalaya.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/byo_alignment.md": (

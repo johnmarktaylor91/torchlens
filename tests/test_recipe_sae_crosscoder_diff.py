@@ -1,19 +1,14 @@
-"""Execute the crosscoder model-diff recipe (two traces, dictionary_learning).
+"""Page-content checks for the crosscoder model-diff recipe (two traces, dictionary_learning).
 
-The page traces a small MLP and an edited copy on the same stimuli, stacks
-the same site from both traces, trains dictionary_learning's crosscoder on
-the pairs and reads the diff from the decoder norms; its fences run top to
-bottom with the shared recipe runner. dictionary_learning is a test-only pin
-(the page names it); the page skips without it and fails without it in the
-peer-recipe leg (``TORCHLENS_RECIPE_PEERS=1``).
+The page's fences run in ``tests/test_recipe_pages_executed.py``, whose ``PAGES``
+registry lists ``docs/recipes/sae_crosscoder_diff.md``; this module keeps the page-
+content checks.
 """
 
 from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
-
-import pytest
 
 # Loaded by file path, not as ``tests.test_recipe_pages_executed``: a peer
 # package that installs a top-level ``tests`` package would shadow this tree.
@@ -25,29 +20,6 @@ recipes = importlib.util.module_from_spec(_RUNNER_SPEC)
 _RUNNER_SPEC.loader.exec_module(recipes)
 
 PAGE = "docs/recipes/sae_crosscoder_diff.md"
-TOOL = "crosscoder"
-
-
-@pytest.fixture()
-def _registered(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Register the page with the shared runner for this test only."""
-
-    monkeypatch.setitem(recipes.PAGES, PAGE, TOOL)
-    monkeypatch.setitem(recipes.TOOL_MODULES, TOOL, ("dictionary_learning",))
-
-
-def test_crosscoder_diff_recipe_runs(
-    _registered: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Every fence runs and its RESULT equals the header literal."""
-
-    recipes.test_recipe_page_runs(PAGE, tmp_path, monkeypatch)
-
-
-def test_crosscoder_diff_recipe_fences_are_all_headed(_registered: None) -> None:
-    """No unexecuted python fence on the page."""
-
-    recipes.test_every_recipe_fence_is_headed(PAGE)
 
 
 def test_crosscoder_diff_recipe_pairs_two_traces_and_names_the_pin() -> None:

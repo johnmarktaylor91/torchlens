@@ -1,19 +1,14 @@
-"""Execute the pretrained-SAE recipe page (SAELens loads, TorchLens runs).
+"""Page-content checks for the pretrained-SAE recipe page (SAELens loads, TorchLens runs).
 
-The page's fences run top to bottom in one namespace with the shared recipe
-runner, on a random-weight GPT-2 and a seeded SAELens ``StandardSAE`` saved and
-reloaded in the SAELens format, so nothing downloads. The page skips without
-``sae_lens`` and fails without it in the peer-recipe leg
-(``TORCHLENS_RECIPE_PEERS=1``). It joins ``PAGES`` in
-``tests/test_recipe_pages_executed.py`` when the nightly leg installs its pin.
+The page's fences run in ``tests/test_recipe_pages_executed.py``, whose ``PAGES``
+registry lists ``docs/recipes/pretrained_saes.md``; this module keeps the page-content
+checks.
 """
 
 from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
-
-import pytest
 
 # Loaded by file path, not as ``tests.test_recipe_pages_executed``: a peer
 # package that installs a top-level ``tests`` package would shadow this tree.
@@ -25,30 +20,6 @@ recipes = importlib.util.module_from_spec(_RUNNER_SPEC)
 _RUNNER_SPEC.loader.exec_module(recipes)
 
 PAGE = "docs/recipes/pretrained_saes.md"
-TOOL = "sae_lens"
-
-
-@pytest.fixture()
-def _registered(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Register the page with the shared runner for this test only."""
-
-    monkeypatch.setitem(recipes.PAGES, PAGE, TOOL)
-    monkeypatch.setitem(recipes.TOOL_MODULES, TOOL, ("sae_lens", "transformers"))
-
-
-@pytest.mark.heavy
-def test_pretrained_sae_recipe_runs(
-    _registered: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Every fence runs and its RESULT equals the header literal."""
-
-    recipes.test_recipe_page_runs(PAGE, tmp_path, monkeypatch)
-
-
-def test_pretrained_sae_recipe_fences_are_all_headed(_registered: None) -> None:
-    """No unexecuted python fence on the page; runnable-elsewhere code is text."""
-
-    recipes.test_every_recipe_fence_is_headed(PAGE)
 
 
 def test_pretrained_sae_recipe_names_gemma_scope_one_and_two() -> None:

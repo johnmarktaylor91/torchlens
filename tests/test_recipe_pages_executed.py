@@ -41,6 +41,11 @@ PAGES: dict[str, str] = {
     "docs/recipes/weightwatcher.md": "weightwatcher",
     "docs/recipes/quantus.md": "quantus",
     "docs/recipes/torchcam.md": "torchcam",
+    "docs/recipes/pretrained_saes.md": "sae_lens",
+    "docs/recipes/sae_latent_export.md": "torchlens",
+    "docs/recipes/sae_trainers.md": "sae_trainers",
+    "docs/recipes/sae_crosscoder_diff.md": "crosscoder",
+    "docs/recipes/prisma_clip_sae.md": "prisma",
     "docs/neuroai/netrep.md": "netrep",
     "docs/neuroai/himalaya.md": "himalaya",
     "docs/neuroai/journey.md": "cornet",
@@ -62,6 +67,10 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
     "weightwatcher": ("weightwatcher",),
     "quantus": ("quantus",),
     "torchcam": ("torchcam", "torchvision"),
+    "sae_lens": ("sae_lens", "transformers"),
+    "sae_trainers": ("dictionary_learning", "sparsify"),
+    "crosscoder": ("dictionary_learning",),
+    "prisma": ("vit_prisma", "timm"),
     "netrep": ("netrep",),
     "himalaya": ("himalaya",),
     "cornet": ("cornet",),
@@ -71,12 +80,16 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
 #: whose cost pushed the unmarked family past its aggregate budget. The LXT page
 #: measures 3.8-5.8 s there, at the boundary. The CORnet journey (3.9 s) and TCAV
 #: (3.5 s) pages are the two largest unmarked pages: with fifteen pages the
-#: unmarked family charged 18.1 s against its 14.2 s aggregate budget.
+#: unmarked family charged 18.1 s against its 14.2 s aggregate budget. The
+#: pretrained-SAE page measures 7.6 s and the SAE trainers page 4.8 s (it imports
+#: nnsight and wandb), at the boundary.
 HEAVY_PAGES: frozenset[str] = frozenset(
     {
         "docs/recipes/lrp_transformers_lxt.md",
         "docs/neuroai/journey.md",
         "docs/recipes/tcav.md",
+        "docs/recipes/pretrained_saes.md",
+        "docs/recipes/sae_trainers.md",
     }
 )
 
