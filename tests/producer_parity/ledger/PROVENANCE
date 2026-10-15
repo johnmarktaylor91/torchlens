@@ -2587,3 +2587,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 5bbda3532c1be1a6c972f40f82ad6471e405c20e (dirty)
 recorded: 2026-10-15T06:42:37.201680+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: U47.4 component edge graph: new tl.mechinterp edge modules (_edges, _edge_sources, _edge_patch) read op/module/edge-record fields (label, parents, modules, kind, out) for the dataflow-derived graph and edge patching (reviewed consumer sites)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7614ab6f536a4a0973f3e9f886739bc13a7a0deb (dirty)
+recorded: 2026-10-15T10:05:59.014873+00:00
