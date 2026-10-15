@@ -1167,7 +1167,12 @@
   `ce_loss_recovered` and `kl_divergence`. `bridge.sae_lens.reconstruct(log, site, sae)`
   replaces the removed `decode`. Pretrained SAEs (Gemma Scope 1 and 2) load with SAELens
   and run here (`docs/recipes/pretrained_saes.md`); a transcoder splices with
-  `tl.splice_module(transcoder, input="in")` on its MLP module. `bridge.brain_score`
+  `tl.splice_module(transcoder, input="in")` on its MLP module.
+  `bridge.sae.write_sae_dashboard(latents, tokens, latent_ids=, k=20, path=)` and
+  `bridge.sae.write_delphi(latents, tokens, site=, model_name=, n_splits=5, directory=)`
+  (DOCUMENTED-UNSTABLE) write a splice's `latents` or a dataset's
+  `tl.stats.TopK(k, unit_axis=-1, encoder=sae.encode)` result as the files SAEDashboard
+  0.8.0 and delphi 0.1.3 load (`docs/recipes/sae_latent_export.md`). `bridge.brain_score`
   additionally serves Brain-Score's
   `ActivationsExtractorHelper` seam: `get_activations_fn(model)` is the offline
   per-batch callable (module dotted paths or any TorchLens lookup; `"logits"` = model

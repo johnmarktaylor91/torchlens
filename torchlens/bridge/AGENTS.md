@@ -52,6 +52,14 @@ optional dependency.
   `ce_loss_clean`/`_spliced`/`_zero_ablated`, `ce_loss_recovered`,
   `kl_divergence`; without it they are `None` with a reason. Metric math lives
   in `_sae_metrics.py`. Recipe: `docs/recipes/pretrained_saes.md`.
+- `_sae_export.py` (exported by `sae.py`): `write_sae_dashboard(latents, tokens, *,
+  latent_ids=None, k=20, path)` and `write_delphi(latents, tokens, *, site, model_name,
+  n_splits=5, directory)` write the files SAEDashboard 0.8.0 (`SaeVisData.load_json`)
+  and eai-delphi 0.1.3 (`LatentDataset`) read, from dense latents or a dataset
+  `UnitTopK`; neither package is imported (json and safetensors only). The layouts copy
+  the consumers' own writers (cited in the docstrings); ranking is `tl.stats.TopK`'s.
+  The real loaders run in `tests/test_bridge_real_sae_export.py` (peer-leg pins).
+  Recipe: `docs/recipes/sae_latent_export.md`.
 - `lit/`: `model(net, tokenizer, *, task=, sites=, ...)` wraps a LIVE model as
   a real `lit_nlp.api.model.Model` (classification + causal LM); `dataset()`,
   `layout()` (extra: `torchlens[lit]`; import-inert, call-time gate; site

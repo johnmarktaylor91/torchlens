@@ -481,6 +481,10 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "recipes/weightwatcher.md": _RECIPE_PAGES_EXECUTED,
     "recipes/torchcam.md": _RECIPE_PAGES_EXECUTED,
     "recipes/quantus.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/sae_latent_export.md": (
+        "executed fence by fence by tests/test_recipe_sae_latent_export.py with the shared "
+        "recipe runner (TorchLens only; the consumer-side fences are text)"
+    ),
     "recipes/pretrained_saes.md": (
         "needs sae-lens; executed fence by fence by tests/test_recipe_pretrained_saes.py "
         "through the shared recipe runner until the page joins its PAGES registry"
