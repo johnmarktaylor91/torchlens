@@ -239,7 +239,8 @@ def _door_replay(model: nn.Module, edit: Any) -> torch.Tensor:
 
 def _door_rerun(model: nn.Module, edit: Any) -> torch.Tensor:
     trace = tl.trace(model, _X)
-    trace.do(tl.module("lin1"), edit, model=model, x=_X)
+    confirm = tl.options.InterventionOptions(confirm_mutation=True)
+    trace.do(tl.module("lin1"), edit, model=model, x=_X, intervention=confirm)
     return _out(trace)
 
 
