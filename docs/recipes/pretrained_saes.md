@@ -191,3 +191,10 @@ RESULT = (
     not torch.allclose(spliced.output_ops[0].out, clean.output_ops[0].out),
 )
 ```
+
+## Visualise a latent
+
+An SAE latent is also an objective: optimise an input until the latent at its
+site responds strongly. [The feature-visualisation recipe](feature_visualisation.md)
+reads the site through a capture-free binding, passes it through the SAE's
+`encode` and checks the result with `splice`.
