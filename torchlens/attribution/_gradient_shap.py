@@ -28,6 +28,7 @@ from torchlens.attribution._core import (
     InputKwargs,
     _AttributionTarget,
     _call_model,
+    _Caller,
     _gradient_for_inputs,
     _interned_by_identity,
     _normalize_model_inputs,
@@ -368,7 +369,8 @@ def gradient_shap(
     input_kwargs
         Optional keyword arguments for ``model``.
     target
-        Integer class index or callable ``output -> scalar tensor``.
+        Integer class index, callable ``output -> scalar tensor``, or a
+        :class:`SiteTarget` naming a hidden layer's output to attribute.
     baselines
         REQUIRED aligned baseline pool: a tensor whose leading axis stacks
         baseline examples (single attributed leaf), or a tree mirroring the
@@ -408,7 +410,9 @@ def gradient_shap(
             "Remedy: pass stdevs=0.0 for noiseless draws.",
             code="noise_stdevs_invalid",
         )
-    prepared = _normalize_model_inputs(inputs, input_kwargs)
+    prepared = _normalize_model_inputs(
+        inputs, input_kwargs, _Caller("gradient_shap", model, target)
+    )
     pool_leaves, pool_size = _validate_baseline_pool(prepared, baselines)
     batch_size = int(prepared.attributed_leaves[0].shape[0])
     for leaf in prepared.attributed_leaves:
