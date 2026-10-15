@@ -45,6 +45,7 @@ from typing import Any, cast
 import torch
 
 from .._errors import InvalidArgumentError
+from .._io._json import loads_bounded, read_bytes_bounded
 
 __all__ = ["LoreftArtifact", "read"]
 
@@ -186,8 +187,8 @@ def _config(directory: Path) -> tuple[dict[str, Any], str]:
             file="config.json",
         )
     try:
-        data = path.read_bytes()
-        config = json.loads(data.decode("utf-8"))
+        data = read_bytes_bounded(path)
+        config = loads_bounded(data.decode("utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise _refusal(
             f"config.json is not readable JSON ({exc})",
