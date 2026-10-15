@@ -11,8 +11,8 @@ everything else is related prior art, and nothing here implies endorsement.
 
 ## License hygiene
 
-Two upstream license situations deserve a plain statement. **baukit** is
-unlicensed and **zennit** is LGPL: from both, TorchLens takes ideas and
+Two upstream license situations deserve a plain statement. **baukit** has
+no license file (its setup file declares MIT) and **zennit** is LGPL: from both, TorchLens takes ideas and
 vocabulary only -- no source copied, ported, generated-from, or vendored.
 Permissively licensed work is different: the named CODE borrows are ported
 with a license notice in the source file -- treescope (Apache-2.0,
@@ -102,6 +102,8 @@ work; do not under-apply it to unlicensed or copyleft work.
   `all_zeros`/`empty`, omitting the ordinary, the plain-view escape hatch,
   separated +Inf/-Inf, dot-verb ergonomics, and repr-is-a-hot-path cost
   discipline. Our stats line is their line with a model behind it.
+  Install both: lovely-tensors for any tensor at a REPL, TorchLens for the
+  numbers of a whole model's run.
 - **treescope / penzai** (Daniel D. Johnson, Google DeepMind, Apache-2.0) --
   repr-is-the-product as a stance; external type registries,
   collapsed/expanded balanced layouts, copy-buttons that emit code, faceted

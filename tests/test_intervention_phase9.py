@@ -8,7 +8,6 @@ from example_models import TinyReluAdd as _ReluModel
 from torch import nn
 
 import torchlens as tl
-from torchlens._trace_state import TraceState
 from torchlens.intervention.errors import (
     BaselineUndeterminedError,
     BundleRelationshipError,
@@ -176,8 +175,7 @@ def test_baseline_auto_detect_and_ambiguity() -> None:
 
     clean = _log()
     dirty = _log()
-    dirty._spec_revision = 1
-    dirty.state = TraceState.SPEC_STALE
+    dirty.attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
 
     bundle = tl.bundle({"clean": clean, "dirty": dirty})
     assert bundle.baseline_name == "clean"
@@ -203,8 +201,7 @@ def test_bundle_help_lists_readiness() -> None:
 
     clean = _log()
     dirty = _log()
-    dirty._spec_revision = 1
-    dirty.state = TraceState.SPEC_STALE
+    dirty.attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
     bundle = tl.bundle({"clean": clean, "dirty": dirty}, baseline="clean")
 
     text = bundle.help()

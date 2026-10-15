@@ -62,13 +62,9 @@ def _bundle_store_comparison(
         explicit ``name`` was supplied.
     """
 
-    from . import _bundle_delta_map
+    from ._deltas import _delta_map_values, _gated_baseline
 
-    baseline_name = (
-        self._baseline_or_raise(baseline)
-        if baseline is not None or self.baseline_name is not None
-        else next(iter(self.names))
-    )
+    baseline_name = _gated_baseline(self, "delta_map", baseline)
     if name is None:
         if callable(metric):
             raise InvalidArgumentError(
@@ -78,7 +74,7 @@ def _bundle_store_comparison(
                 argument="name",
             )
         name = f"{metric}:{on}@{baseline_name}"
-    values = _bundle_delta_map(self, metric, baseline=baseline_name, on=on)
+    values = _delta_map_values(self, metric, baseline_name, on)
     supergraph = self.supergraph
     for node in supergraph.nodes.values():
         node.comparisons.pop(name, None)

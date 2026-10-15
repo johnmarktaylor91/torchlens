@@ -16,7 +16,7 @@ Two rules the gate enforces by construction:
   a non-reproducible RSS delta is noise presented as measurement).
 - a CUDA ``0`` renders as "did not exceed the pre-existing high-water mark",
   which is what the counter actually says -- never as "used 0 bytes".
-- a CPU forward ``None`` (the RSS delta read 0, forks.13) renders as
+- a CPU forward ``None`` (the RSS delta read 0) renders as
   unavailable with its recorded reason, which names
   ``CaptureOptions(measure_python_peak_memory=True)``.
 """
@@ -79,7 +79,7 @@ def pass_peak_facts(trace: Any, which: str = "forward") -> PassPeakFacts:
     backend = getattr(trace, f"{which}_memory_backend", None)
     peak = getattr(trace, f"{which}_peak_memory", None)
     if not backend or backend == "unknown" or peak is None:
-        # forks.13: a CPU forward delta of 0 is recorded as None WITH the
+        # a CPU forward delta of 0 is recorded as None WITH the
         # reason (naming measure_python_peak_memory=True); surface it verbatim.
         # The reason explains a CPU measurement only, never an unknown backend.
         reason = getattr(trace, f"{which}_peak_memory_reason", None)

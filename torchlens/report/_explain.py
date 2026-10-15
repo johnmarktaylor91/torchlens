@@ -17,6 +17,7 @@ from .._capture_honesty import (
     poison_facts,
     refuse_presenter_subject,
 )
+from ._summary_columns import attention_full_square_line, counted_attention_ops
 
 Audience = Literal["researcher", "practitioner", "auto"]
 
@@ -376,7 +377,7 @@ def _capture_verification(log: Any) -> dict[str, Any]:
     dict[str, Any]
         ``capture_status`` (the settled ``CaptureOutcome`` status value, or
         ``"unknown"`` when the log carries none), tri-state
-        ``capture_verified`` (``None`` = not recorded, witness not armed),
+        ``capture_verified`` (``None`` = not checked, witness not armed),
         ``capture_verification_reason``, and ``rescue_rerun``.
     """
 
@@ -475,7 +476,7 @@ def _capture_status_lines(log: Any) -> list[str]:
         # wrappers cannot see (from_numpy/as_tensor/from_dlpack round-trips,
         # numpy-backed autograd.Functions, storage writes) leave no ceiling here.
         lines.append(
-            "- Capture verification: not recorded (the completeness witness is not "
+            "- Capture verification: not checked (the completeness witness is not "
             "armed on the default capture; wrap_torch(completeness_witness=True) or "
             "tl.validate arm it). Absence of a ceiling is not a clean bill."
         )
@@ -597,6 +598,9 @@ def _model_summary_lines(log: Any) -> list[str]:
             f" LOWER BOUND: {core.compute.coverage.unknown} op(s) carry no cost rule "
             "(see trace.unknown_flop_ops)."
         )
+    if attention_ops := counted_attention_ops(core.compute):
+        note = attention_full_square_line(attention_ops)
+        flops_line += f" {note[:1].upper()}{note[1:]}."
     lines.append(flops_line)
     lines.append(f"- Modules represented: {_format_count(core.counts.modules)}.")
     return lines
@@ -764,7 +768,7 @@ def _anomaly_lines(log: Any) -> list[str]:
 
 
 def _track_nonfinite_hint_lines(log: Any) -> list[str]:
-    """The forks.7 partial-coverage hint line, while track_nonfinite is off."""
+    """The partial-coverage hint line, while track_nonfinite is off."""
 
     from ._health import nonfinite_option_hint
 

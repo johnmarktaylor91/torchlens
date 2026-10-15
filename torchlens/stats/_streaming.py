@@ -534,7 +534,7 @@ class CrossCovariance:
 
 
 def _refuse_nonfinite_cka_input(matrix: torch.Tensor, argument: str) -> None:
-    """Refuse NaN/Inf CKA input typed, matching ``tl.repgeom.rdm`` (U25.2).
+    """Refuse NaN/Inf CKA input typed, matching ``tl.repgeom.rdm``.
 
     Parameters
     ----------
@@ -578,6 +578,46 @@ def _warn_zero_variance_cka() -> float:
     return math.nan
 
 
+#: Similarity-repository identifier of linear CKA with the biased Gretton HSIC.
+LINEAR_CKA_ID = "measure/*/cka-kernel=linear-hsic=gretton-score"
+
+
+class SimilarityScore(float):
+    """A similarity score that names the exact measure variant it computes.
+
+    It is a ``float`` (arithmetic, comparison, ``repr`` and JSON encoding are a
+    float's) with one extra attribute, ``similarity_repository_id``: the
+    similarity-repository catalogue identifier of the variant, for example
+    ``measure/*/cka-kernel=linear-hsic=gretton-score``. :meth:`to_dict` is the
+    serialized form that keeps the identifier; arithmetic on a score returns a
+    plain ``float``. Spelling DOCUMENTED-UNSTABLE.
+    """
+
+    similarity_repository_id: str | None
+
+    def __new__(cls, value: float, similarity_repository_id: str | None) -> SimilarityScore:
+        """Create a score from its value and its measure identifier."""
+
+        score = super().__new__(cls, value)
+        score.similarity_repository_id = similarity_repository_id
+        return score
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        """Pickle with the identifier."""
+
+        return (type(self), (float(self), self.similarity_repository_id))
+
+    def __repr__(self) -> str:
+        """Return the float's repr."""
+
+        return float.__repr__(self)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return ``{"score": float, "similarity_repository_id": str | None}``."""
+
+        return {"score": float(self), "similarity_repository_id": self.similarity_repository_id}
+
+
 class CKA:
     r"""Streaming linear centered kernel alignment accumulator.
 
@@ -593,7 +633,15 @@ class CKA:
     zero variance, ``result()`` returns NaN (warning ``cka_zero_variance``)
     because the alignment denominator is zero; a NaN or infinite batch refuses
     ``cka_input_nonfinite`` at ``update()``. This follows the linear CKA formulation of Kornblith et al. (2019).
+
+    The variant is the similarity-repository's
+    ``cka-kernel=linear-hsic=gretton-score`` (linear kernel, biased Gretton
+    HSIC); :attr:`similarity_repository_id` records it (spelling
+    DOCUMENTED-UNSTABLE).
     """
+
+    #: Similarity-repository identifier of the exact CKA variant computed.
+    similarity_repository_id: str = LINEAR_CKA_ID
 
     def __init__(
         self,
@@ -640,14 +688,15 @@ class CKA:
         self._covariance_a.update(matrix_a)
         self._covariance_b.update(matrix_b)
 
-    def result(self) -> float:
+    def result(self) -> SimilarityScore:
         """Return the finalized linear CKA value.
 
         Returns
         -------
-        float
-            Linear CKA, or NaN (with a ``cka_zero_variance`` warning) when either
-            representation has zero variance.
+        SimilarityScore
+            Linear CKA as a float carrying ``similarity_repository_id``, or NaN
+            (with a ``cka_zero_variance`` warning) when either representation
+            has zero variance.
         """
 
         cross = self._cross.result()
@@ -658,11 +707,11 @@ class CKA:
             covariance_b, ord="fro"
         )
         if denominator.item() == 0.0:
-            return _warn_zero_variance_cka()
-        return float((numerator / denominator).item())
+            return SimilarityScore(_warn_zero_variance_cka(), LINEAR_CKA_ID)
+        return SimilarityScore(float((numerator / denominator).item()), LINEAR_CKA_ID)
 
 
-def cka(a: Any, b: Any, *, device: Any = None, dtype: Any = None) -> float:
+def cka(a: Any, b: Any, *, device: Any = None, dtype: Any = None) -> SimilarityScore:
     r"""Compute one-shot linear centered kernel alignment.
 
     Linear CKA is
@@ -673,7 +722,9 @@ def cka(a: Any, b: Any, *, device: Any = None, dtype: Any = None) -> float:
         \frac{\lVert C_{AB}\rVert_F^2}
         {\lVert C_{AA}\rVert_F\,\lVert C_{BB}\rVert_F}.
 
-    This is the linear CKA measure described by Kornblith et al. (2019).
+    This is the linear CKA measure described by Kornblith et al. (2019): the
+    similarity-repository's ``cka-kernel=linear-hsic=gretton-score`` (linear
+    kernel, biased Gretton HSIC), the same variant as :class:`CKA`.
     Inputs are treated as ``(n_observations, n_features)`` matrices; the
     default computes on CPU ``float64`` (bit-identical to the historical
     behavior). A zero-variance input produces NaN with a ``cka_zero_variance``
@@ -694,8 +745,9 @@ def cka(a: Any, b: Any, *, device: Any = None, dtype: Any = None) -> float:
 
     Returns
     -------
-    float
-        Linear CKA value, or NaN for a degenerate zero-variance input.
+    SimilarityScore
+        Linear CKA as a float carrying ``similarity_repository_id``, or NaN for a
+        degenerate zero-variance input.
 
     Raises
     ------
@@ -721,9 +773,9 @@ def cka(a: Any, b: Any, *, device: Any = None, dtype: Any = None) -> float:
         gram_b, ord="fro"
     )
     if denominator.item() == 0.0:
-        return _warn_zero_variance_cka()
+        return SimilarityScore(_warn_zero_variance_cka(), LINEAR_CKA_ID)
     numerator = torch.sum(gram_a * gram_b)
-    return float((numerator / denominator).item())
+    return SimilarityScore(float((numerator / denominator).item()), LINEAR_CKA_ID)
 
 
 class PCA:

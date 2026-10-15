@@ -280,11 +280,11 @@ def test_throw_into_lazy_output_settles_error_report() -> None:
     _assert_clean(model)
 
 
-def test_zero_fire_fails_closed_at_exhaustion() -> None:
-    """A lazy output that never fires refuses ``bind_zero_fire`` when it ends."""
+def test_zero_fire_error_policy_refuses_at_exhaustion() -> None:
+    """Under ``on_zero_fire='error'`` a never-firing lazy output refuses when it ends."""
 
     model = _NoForwardGen()
-    bound = _add_one().bind(model)
+    bound = _add_one().bind(model, on_zero_fire="error")
     gen = bound.generate(torch.ones(1))
     next(gen)
     with pytest.raises(BindingRuntimeError) as excinfo:

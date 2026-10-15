@@ -238,7 +238,7 @@ def test_tied_extrema_accept_any_tied_label(keyed_speed: Any) -> None:
     member = resolution.source.member
     values = {
         op.layer_label: float(getattr(op, member))
-        for op in log.ops
+        for op in log.layer_list
         if getattr(op, member, None) is not None
     }
     minimum = min(values.values())

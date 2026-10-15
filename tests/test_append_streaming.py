@@ -55,8 +55,12 @@ def test_append_rerun_on_streaming_trace_raises(tmp_path: Path) -> None:
         storage=tl.to_disk(tmp_path / "streaming_bundle.tl"),
     )
 
-    with pytest.raises(AppendStreamingNotSupportedError, match="bundle_path streaming"):
-        trace.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
+    try:
+        with pytest.raises(AppendStreamingNotSupportedError, match="bundle_path streaming"):
+            trace.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
+    finally:
+        # The deferred grad stream keeps its writer thread until backward finalizes it.
+        trace.log_backward(trace[trace.output_layers[0]].out.sum())
 
 
 def test_append_rerun_on_callback_streaming_trace_raises() -> None:

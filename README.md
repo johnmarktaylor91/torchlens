@@ -21,7 +21,7 @@ Run across **thousands of cataloged entries** in the Model Menagerie (image, vid
 multimodal, language; feedforward, recurrent, transformer, GNN, MoE, diffusion) --
 **verified on thousands of models across all major architecture families**: each verified
 capture is replayed op-by-op against its own forward pass, with metadata-invariant
-tripwires over the graph, so faithful capture is **proven, not assumed**. TorchLens also
+tripwires over the graph, so faithful capture is **proven, not assumed, for verified captures**. TorchLens also
 records **180+ metadata fields per operation**, and
 **550+ fields in total** across every record type — operations, modules, parameters,
 buffers, gradients, and the model itself.

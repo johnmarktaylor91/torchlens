@@ -608,6 +608,10 @@ def test_size_attr_writer_sites_are_the_declared_allowlist() -> None:
         # measurement record ("width"/"height" keys) -- a READER of the
         # rendered layout, never a node-arg writer; no node class involved.
         "visualization/lenses/audit/stage0.py": 2,
+        # ScoreInterval.to_dict's "width" key is a bootstrap interval's
+        # high - low (a statistic in a plain data dict), never a graphviz
+        # node arg; the module renders nothing and touches no node class.
+        "repgeom/_uncertainty.py": 1,
     }
     assert found == expected, (
         "width/height/fixedsize node-arg writer sites changed; a new internal "

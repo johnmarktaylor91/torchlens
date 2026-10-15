@@ -85,7 +85,7 @@ from .._errors import InvalidArgumentError
 from ..errors._base import TorchLensWarning
 from .hooks import HookContext
 from .population import OneDatum, PerRowDatums, Reference
-from .types import HelperSpec
+from .types import Edit
 
 __all__ = [
     "SamplingPlan",
@@ -764,7 +764,7 @@ def _prove_event_geometry(
     )
 
 
-def plan_patch_helper(plan: SamplingPlan) -> HelperSpec:
+def plan_patch_helper(plan: SamplingPlan) -> Edit:
     """Lower ``tl.patch_from(plan)`` onto the sampling substrate.
 
     One coherent donor per logical firing event (D1): the derived-seed law
@@ -945,7 +945,7 @@ def assign_batch_donor_groups(
 # ----------------------------------------------------------------------
 # the named lowerings: permute_batch / resample_rows_from
 # ----------------------------------------------------------------------
-def permute_batch(*, seed: int | str, axis: int | None = None) -> HelperSpec:
+def permute_batch(*, seed: int | str, axis: int | None = None) -> Edit:
     """Create the self-population batch-row exchange (a draw WITHOUT replacement).
 
     D24: REFUSES without a derived-or-explicit axis (a positional default is a
@@ -1056,7 +1056,7 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
     group_by: Callable[[Any], Any] | None = None,
     matching: Any = None,
     strict: bool = False,
-) -> HelperSpec:
+) -> Edit:
     """Create whole-row coherent donor sampling WITH replacement.
 
     THE field-standard resampling ablation (never the elementwise scramble --
@@ -1241,7 +1241,7 @@ def mean_from(
     *,
     group_by: Callable[[Any], Any] | None = None,
     matching: Any = None,
-) -> HelperSpec:
+) -> Edit:
     """Create the deterministic elementwise evidence-set mean fill.
 
     A mean is a reduction, never a draw (D3): the fill tensor is computed
@@ -1305,7 +1305,7 @@ def mean_fill(
     *,
     over: Any,
     force_shape_change: bool = False,
-) -> HelperSpec:
+) -> Edit:
     """Create the FIXED axis-aware mean fill (the ``mean_ablate`` successor).
 
     ``over=`` is REQUIRED and CLOSED (D17): ``"all"`` is the explicit spelling
@@ -1405,7 +1405,7 @@ def set_direction_mean(
     ref: Reference,
     *,
     feature_axis: int,
-) -> HelperSpec:
+) -> Edit:
     """Create the directional mean-setting edit.
 
     ``out - proj_v(out) + mean(coef(ref)) * v_hat``: the site's component

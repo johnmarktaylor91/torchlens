@@ -50,7 +50,10 @@
   inherited episode evidence. DIAGNOSTIC-TIER: cost is superlinear
   in step count — tens of steps, never hundreds. Bundles carry the optional S6
   member-relation table (`member_relations=`, `Bundle.relate`,
-  `Bundle.derive_episode_status`). Doc of record: `docs/reference/episode_capture.md`;
+  `Bundle.derive_episode_status`; harness bundles add the `fed_by` content-provenance kind
+  with token-stream-bound spans, automatic `token_spans="auto"` matching and the strict
+  `Bundle.token_pairs` read, `docs/reference/harness_bundles.md`). Doc of record:
+  `docs/reference/episode_capture.md`;
   refusal codes in `docs/reference/error_refusal_contract.md`.
 - Experiments remember (F03; spellings documented-unstable; doc of record
   `docs/reference/experiment_ledger.md`): Bundles carry persisted lineage

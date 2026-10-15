@@ -421,6 +421,32 @@ class TraceValidationMixin(_TraceMixinBase):
             return ValidationReplayStatus.unavailable_unsupported(backend=backend)
         return ValidationReplayStatus.available_live(backend=backend)
 
+    @property
+    def pristine(self: "Trace") -> bool | None:
+        """Whether nothing ever intervened on this trace, read from its saved evidence.
+
+        Derived at read time from records that persist with the trace (the
+        intervention audit, the operation history, mutation states, direct
+        writes and op intervention marks), so it survives ``tl.save`` /
+        ``tl.load`` and no reset makes a touched trace read pristine again.
+        It is a reading, never a verdict: it does not change validation or
+        any run report. Distinct from ``Trace.state`` (``TraceState.PRISTINE``
+        is an operational state an assignment can set) and from validation's
+        pristine-torch oracle (unwrapped torch functions).
+
+        Returns
+        -------
+        bool | None
+            ``False`` when any touch evidence is found; ``None`` when the
+            trace cannot carry the evidence (an artifact older than tlspec 9,
+            or a non-torch backend), which means no evidence and is never a
+            pristine reading; otherwise ``True``.
+        """
+
+        from ._trace_pristine import derive_pristine
+
+        return derive_pristine(self)
+
     def push(
         self: "Trace",
         replay: ReplayOptions | None = None,
@@ -500,6 +526,7 @@ class TraceValidationMixin(_TraceMixinBase):
         replay: ReplayOptions | None = None,
         transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
         output_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
+        on_zero_fire: str | MissingType = MISSING,
     ) -> "Trace | RunResult":
         """Execute this Trace through its live or loaded provider.
 
@@ -524,7 +551,7 @@ class TraceValidationMixin(_TraceMixinBase):
             loaded provider performs one ordinary verified run, then reuses staged state
             and compiled argument binders. Unlike the default transactional provider, later
             fast iterations reuse one result Trace in place. With ``until=`` a live fast
-            run cuts the native forward right after that saved site (U26.3).
+            run cuts the native forward right after that saved site.
         carry_state:
             PROVISIONAL spelling (documented-unstable). Default ``False``: the
             live provider snapshot-restores the model's declared state (named
@@ -548,6 +575,15 @@ class TraceValidationMixin(_TraceMixinBase):
         output_transform:
             Stored-transform sentinel, ``False`` to bypass, or explicit output
             transform callable for this run.
+        on_zero_fire:
+            What a staged hook entry that fired at zero sites on this run does
+            after the fact is recorded (``last_run["hooks_unfired"]``):
+            ``"warn"`` (default) emits a ``rerun_zero_fire`` coded warning,
+            ``"error"`` raises ``rerun_zero_fire``, ``"disclose"`` records only.
+            The same knob as ``spec.bind`` and ``tl.trace``. Typed refusals for
+            an edit that cannot fire on a rerun (a post-capture-only predicate, a
+            same-input rerun that fired nowhere) come first, whatever the knob
+            says (spelling DOCUMENTED-UNSTABLE).
 
         Returns
         -------
@@ -583,6 +619,9 @@ class TraceValidationMixin(_TraceMixinBase):
         trigger the normal graph-change tripwire.
         """
 
+        from ..intervention._zero_fire import check_zero_fire_policy, zero_fire_policy_scope
+
+        zero_fire_policy = None if on_zero_fire is MISSING else check_zero_fire_policy(on_zero_fire)
         if seed is not None:
             # r77 nit + r79 hardening: validate ``seed`` at the run door so junk
             # raises the typed precondition lane instead of escaping as torch's
@@ -754,7 +793,7 @@ class TraceValidationMixin(_TraceMixinBase):
                 and loaded_provider in {RunProvider.LOADED_SPARSE, RunProvider.LOADED_ANALYSIS}
             ):
                 # The live fast tier stops its native forward at a saved
-                # module (U26.3); a loaded artifact's fast tier compiles the
+                # module; a loaded artifact's fast tier compiles the
                 # full recorded path.
                 raise InvalidArgumentError(
                     "until= combines with fast=True only on a live trace; a loaded "
@@ -888,9 +927,13 @@ class TraceValidationMixin(_TraceMixinBase):
                 _warn_stateful_live_run_once(self, live_model)
 
             if fast:
+                from .._fast_live_steer import refuse_unfired_fast_run
                 from .._fast_run import run_fast_live_trace
 
-                return run_fast_live_trace(self, run_inputs, seed=seed, until=until)
+                with zero_fire_policy_scope(zero_fire_policy):
+                    fast_result = run_fast_live_trace(self, run_inputs, seed=seed, until=until)
+                    refuse_unfired_fast_run(self)
+                return fast_result
 
             return _apply_run_save_selection(
                 run_live_trace(
@@ -985,29 +1028,32 @@ class TraceValidationMixin(_TraceMixinBase):
         from .._fast_live_steer import stages_user_entries
 
         fast_refused: str | None = None
-        if (
-            chunk_paths is None
-            and not replay_options.append
-            and replay_options.chunk_size is None
-            and stages_user_entries(self)
-        ):
-            from .._fast_run import try_guarded_fast_rerun
+        with zero_fire_policy_scope(zero_fire_policy):
+            if (
+                chunk_paths is None
+                and not replay_options.append
+                and replay_options.chunk_size is None
+                and stages_user_entries(self)
+            ):
+                from .._fast_live_steer import refuse_unfired_fast_run
+                from .._fast_run import try_guarded_fast_rerun
 
-            fast_done, fast_refused = try_guarded_fast_rerun(
-                self, run_model, transformed_input, output_transform=resolved_output_transform
+                fast_done, fast_refused = try_guarded_fast_rerun(
+                    self, run_model, transformed_input, output_transform=resolved_output_transform
+                )
+                if fast_done:
+                    self.raw_input = user_input
+                    refuse_unfired_fast_run(self)
+                    return self
+            result = _impl(
+                self,
+                run_model,
+                transformed_input,
+                replay=replay_options,
+                chunk_paths=chunk_paths,
+                output_transform=resolved_output_transform,
+                fast_refused=fast_refused,
             )
-            if fast_done:
-                self.raw_input = user_input
-                return self
-        result = _impl(
-            self,
-            run_model,
-            transformed_input,
-            replay=replay_options,
-            chunk_paths=chunk_paths,
-            output_transform=resolved_output_transform,
-            fast_refused=fast_refused,
-        )
         # Atomic swap rebuilds Trace state; restore raw_input to the new
         # user-supplied value so visualization / save-load report the
         # current input rather than the prior trace's.

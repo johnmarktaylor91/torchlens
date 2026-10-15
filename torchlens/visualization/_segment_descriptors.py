@@ -303,7 +303,7 @@ def _op_segment_label(
     # Exact-key membership only: probing missing keys through the public
     # accessor would enter fuzzy lookup, which canonical collapse work must
     # never do.
-    valid = {str(op.label) for op in trace.ops}
+    valid = {str(op.label) for op in trace.layer_list}
 
     def endpoint(base: str, resolved: str) -> str:
         """Render a range endpoint, keeping its pass suffix only for a multi-pass label."""

@@ -7,9 +7,18 @@ TorchLens 2.16.0 wrote two public `.tlspec` directory formats:
 - Intervention specs with `spec.json` containing `format_version`.
 - Portable `ModelLog` bundles with `manifest.json` containing `io_format_version`.
 
-These 2.16.0 formats are permanently readable. TorchLens does not auto-migrate
-them in place; readers dispatch by detected format and preserve support for the
-legacy schemas.
+TorchLens does not auto-migrate them in place; readers dispatch by detected
+format.
+
+**Erratum (2026-10-14).** This section used to say that these 2.16.0 formats
+"are permanently readable". That sentence is retracted. Current releases still
+load 2.16.0 intervention specs, but they refuse 2.16.0 portable `ModelLog`
+bundles (`io_format_version` 2) with `tl.errors.ArtifactVersionBelowFloorError`
+(code `artifact_version_below_floor`): saved traces older than `tlspec_version`
+6 are below the rehydration floor. To read such a bundle, load it with
+TorchLens 2.17.0 (`pip install torchlens==2.17.0` in a separate environment), the
+verified reader for that format; `torchlens.ecosystem.compat_window()` lists the
+verified reader for each retired format.
 
 New writers introduced during the Phase 11 schema graduation emit the unified
 manifest format. The polymorphic loader detects the on-disk format and dispatches
@@ -83,10 +92,12 @@ Which "resample" do you mean?
 | Batch-row permutation | `torchlens.intervention.permute_batch` (shipped, lane F02) |
 | Per-row donor resampling | `torchlens.intervention.resample_rows_from` (shipped, lane F02) |
 
-Compatibility: saved intervention specs that persist the helper name
-`"resample_ablate"` keep loading (they reconstruct through the renamed
-constructor). The `resample_ablate` spelling itself is REMOVED, with no
-alias: `tl.resample_ablate`, `torchlens.intervention.resample_ablate`, and
+Saved artifacts: an intervention spec or pickled edit that persists the
+helper name `"resample_ablate"` no longer loads; it refuses with
+`intervention_helper_renamed`, whose remedy names
+`torchlens.intervention.scramble_elements`. Rebuild the edit with
+`scramble_elements(...)` (same arguments, same bytes) and save it again. The
+`resample_ablate` spelling itself is REMOVED, with no alias: `tl.resample_ablate`, `torchlens.intervention.resample_ablate`, and
 `torchlens.intervention.helpers.resample_ablate` no longer exist.
 
 | Old spelling | New spelling |
@@ -137,6 +148,31 @@ gone: `trace.summary()` mid-forward now raises `CaptureContextError`
 |---|---|
 | `flop_count(model, x, count_fma_as_two=True)` | `flop_count(model, x, flop_convention="fma2")` (the default) |
 | `flop_count(model, x, count_fma_as_two=False)` | `flop_count(model, x, flop_convention="fma1")` |
+
+## Steering bridges become converters (clean break, no aliases)
+
+The contrastive direction math lives in TorchLens only:
+`torchlens.intervention.direction_from_pairs(pos_traces, neg_traces, site, method=)` returns
+a `Direction`, and the steering-vectors and repeng bridges only convert it. The old trainers
+are removed; calling them raises `AttributeError`.
+
+| Old spelling | New spelling |
+|---|---|
+| `tl.bridge.steering_vectors.vector(log_pos, site, negative_log=log_neg)["vector"]` | `torchlens.intervention.direction_from_pairs(log_pos, log_neg, site).vector` |
+| `tl.bridge.steering_vectors.vector(..., layer=i)["steering_vector"]` | `direction_from_pairs(log_pos, log_neg, site).to_steering_vectors(layer=i)` |
+| `tl.bridge.steering_vectors.vector(..., trainer=sv.pca_aggregator())` | `direction_from_pairs(..., method="pca")` |
+| `tl.bridge.repeng.control_vector(log_pos, site, negative_log=log_neg, layer=i)["control_vector"]` | `direction_from_pairs(log_pos, log_neg, site, method="pca").to_repeng(layer=i)` |
+| `tl.bridge.dialz.vector(log, site, negative_log=..., layer=i, method=...)["steering_vector"]` | `direction_from_pairs(log_pos, log_neg, site, method=...).to_dialz()` |
+
+The native `"pca"` is the uncentered first principal axis of the paired differences (the
+steering-vectors `pca_aggregator` definition), not repeng's centered `pca_diff`, so a repeng
+vector built the old way and the new one differ; `pca_center` and `umap` have no
+replacement. The explicit `attention_mask=` / `negative_attention_mask=` arguments are gone:
+the builder reads each trace's saved `attention_mask` input.
+
+For dialz, the `dialz` extra now needs dialz 1.1 or later (`dialz>=1.1,<2`; it was 0.2). dialz's
+own `pca` (scikit-learn PCA, which centres the differences), `pca_center` and `umap` training
+methods are not reproduced; only `mean_diff` equals dialz's `mean_diff`.
 
 ## Removed member spellings name their replacement (typed redirect)
 
@@ -365,3 +401,83 @@ disclosure, input-preprocessing block, per-site identity with L1 site keys).
 v1 artifacts remain readable through `load_extraction`/`open_extraction`;
 resume continuation across the version boundary refuses typed
 (`extraction_resume_*`) rather than grafting mixed-manifest shards.
+
+## Gaussian RDM values changed: `repgeom.rdm(metric="gaussian")` now matches thingsvision (2026-10-14, numeric fix)
+
+`torchlens.repgeom.rdm(features, metric="gaussian")` now returns
+`1 - exp(-D / mean(D))`, where `D` is the squared Euclidean distance between
+stimuli and `mean(D)` is its mean over the whole matrix. This is the formula
+thingsvision's `gaussian_kernel` uses and the one the docstring always cited.
+Earlier releases divided by `2 * mean(D)`, so every gaussian RDM value differs
+from earlier releases; other metrics are unchanged. For three stimuli with one
+feature each, at 0, 1 and 3, the off-diagonal entries for the pairs (0, 1),
+(0, 3) and (1, 3) were 0.148, 0.765 and 0.474 and are now 0.275, 0.945 and
+0.724. Recompute any stored gaussian RDM, and any comparison score built on
+one, with the new release.
+
+## `trace.ops` covers only counted ops (2026-10-14, behavior change)
+
+`len`, iteration, integer indexing, `keys()`/`values()`/`items()` and `to_pandas()`
+of `trace.ops` now cover only the ops `trace.num_ops` counts, so
+`len(trace.ops) == trace.num_ops`. Input, output and buffer rows are no longer in
+that view. Code that read `trace.ops` as every row should read `trace.layer_list`
+(or use `len(trace)` and `trace[int]`). `trace.input_ops`, `trace.output_ops`,
+`trace.saved_ops` and `trace.saved_grad_ops` are unchanged.
+
+## Zero-fire rules warn by default on every intervention door (2026-10-14, default flip)
+
+`spec.bind(model)` and `torchlens.intervention.steer_generate(...)` no longer raise
+`bind_zero_fire` by default when a rule never fires. The default `on_zero_fire` is now
+`"warn"` at every door: the rule is recorded on `.last_report.zero_fire_rule_ids` and a
+`TorchLensWarning` with code `bind_zero_fire` is emitted. Code that relied on the refusal
+passes `on_zero_fire="error"`, which raises `BindingRuntimeError` (`bind_zero_fire`) after
+the call exactly as before. `on_zero_fire="disclose"` keeps recording without a warning.
+
+## `on_zero_fire` on `tl.trace` and `Trace.run` (2026-10-14, new keyword)
+
+`tl.trace(..., intervene=..., on_zero_fire=...)` and `Trace.run(..., on_zero_fire=...)`
+take the same knob as `spec.bind`. A capture-time `intervene=` that fired nowhere now warns
+with code `trace_zero_fire` (it was an uncoded `UserWarning` with the same message start),
+and a rerun hook entry that fired nowhere keeps warning `rerun_zero_fire`. `"error"` raises
+`SiteResolutionError` with the same code; `"disclose"` records only. Rerun edits that cannot
+fire live still refuse `rerun_selector_unmatchable_live` whatever the knob says.
+
+## `bind_zero_fire_policy_invalid` renamed to `zero_fire_policy_invalid` (2026-10-14, code rename)
+
+An `on_zero_fire` value outside `"warn"`, `"error"` and `"disclose"` now refuses with code
+`zero_fire_policy_invalid` at every door, raised as `InvalidArgumentError` (a `ValueError`)
+instead of `BindingPreflightError`. Branch on the new code; `"warn"` is now a valid value.
+
+## A hooked `run(inputs=..., fast=True)` reports `unverifiable` (2026-10-14, verdict change)
+
+`trace.run(inputs=..., fast=True)` on a live trace that applies its staged hooks or value
+replacements used to report `path_faithfulness=verified`. Its output is an edited forward,
+not the model's own, and no hook-aware check exists yet, so the report now reads
+`unverifiable` (`poisoned=True`) with a `user_intervention_not_replayable` diagnostic
+(stage `hooked_run_unverified`, detail `pristine=false`). Runs with nothing staged keep
+their verdicts.
+
+## Unarmed capture verification reads "not checked" (2026-10-14, wording)
+
+`tl.report.explain` and the export honesty preamble now say "not checked" (was "not
+recorded") for a default capture's `capture_verified=None`. The preamble header token
+`verified=not_recorded` is unchanged. A default capture that builds a tensor from host data
+(`torch.from_numpy`, `torch.from_dlpack`, `torch.frombuffer`, `torch.as_tensor` on
+non-tensor data) also records a `host_tensor_source` row in
+`trace.annotations["capture_advisories"]`.
+
+## Bundle baseline auto-detection reads `Trace.pristine` (2026-10-14, behavior change)
+
+Before: a Bundle picked the one member whose `Trace.state` was `TraceState.PRISTINE` and whose
+spec had never been edited. A capture with
+`tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.zero_ablate()))` kept that state, so it
+could be picked, or make the choice ambiguous; assigning `trace.state = TraceState.PRISTINE` made
+any member eligible.
+
+After: a member is a candidate only when `trace.pristine is True`, derived from the evidence the
+trace carries. Intervened members, members loaded from artifacts older than tlspec 9 and
+non-torch members (`pristine is None`) are never auto baselines. If your bundle relied on
+auto-detection with such members, pass the baseline explicitly:
+`tl.Bundle({...}, baseline="clean")` or `bundle.most_changed(baseline="clean")`. Code that read
+`trace.state is TraceState.PRISTINE` to mean "never intervened" should read
+`trace.pristine is True`.

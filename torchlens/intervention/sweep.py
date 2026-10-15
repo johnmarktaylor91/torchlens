@@ -16,7 +16,7 @@ from ..errors import TorchLensWarning
 from .hooks import HookContext
 from .selectors import BaseSelector, func, label
 from .spec import InterventionSpec, when
-from .types import HelperSpec
+from .types import Edit
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
@@ -334,7 +334,7 @@ def _assemble_sweep_bundle(
     return bundle
 
 
-def sweep_replace(value: Any) -> HelperSpec:
+def sweep_replace(value: Any) -> Edit:
     """Typed builtin replacement helper carrying one swept value.
 
     Same replacement semantics the historical sweep closure applied (scalar
@@ -349,11 +349,11 @@ def sweep_replace(value: Any) -> HelperSpec:
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in-compatible forward helper spec.
     """
 
-    return HelperSpec(
+    return Edit(
         helper_name="sweep_replace",
         args=(value,),
         factory=lambda: _replacement_hook(value),

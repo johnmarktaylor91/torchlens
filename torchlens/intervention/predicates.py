@@ -8,11 +8,9 @@ from typing import Any, TypeAlias, cast
 import torch
 
 from .._errors import ArgumentTypeError
-from .types import HelperDirection, HelperSpec, InterventionDecision
+from .types import Edit, HelperDirection, InterventionDecision
 
-InterventionPredicateDecision: TypeAlias = (
-    InterventionDecision | HelperSpec | Callable[..., Any] | None
-)
+InterventionPredicateDecision: TypeAlias = InterventionDecision | Edit | Callable[..., Any] | None
 InterventionPredicate: TypeAlias = Callable[[Any], InterventionPredicateDecision]
 
 
@@ -49,7 +47,7 @@ def as_intervention_decision(
                 direction=direction,
             )
         return action
-    if isinstance(action, HelperSpec):
+    if isinstance(action, Edit):
         resolved_direction = direction or action.direction or action.kind
         return InterventionDecision(action="add_hook", hook=action, direction=resolved_direction)
     if callable(action):
@@ -74,13 +72,13 @@ def as_intervention_decision(
     raise ArgumentTypeError(
         f"Intervention action has unsupported type {type(action).__name__}",
         code="intervention_action_type_invalid",
-        remedy="pass an InterventionDecision, HelperSpec, callable, or None",
+        remedy="pass an InterventionDecision, Edit, callable, or None",
         argument="action",
         received_type=type(action).__name__,
     )
 
 
-def add(delta: torch.Tensor | float | int, *, force_shape_change: bool = False) -> HelperSpec:
+def add(delta: torch.Tensor | float | int, *, force_shape_change: bool = False) -> Edit:
     """Create a helper that adds ``delta`` to an out tensor.
 
     Parameters
@@ -92,7 +90,7 @@ def add(delta: torch.Tensor | float | int, *, force_shape_change: bool = False) 
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in-compatible forward helper spec.
     """
 
@@ -109,7 +107,7 @@ def add(delta: torch.Tensor | float | int, *, force_shape_change: bool = False) 
 
         return _hook
 
-    return HelperSpec(
+    return Edit(
         helper_name="add",
         args=(delta,),
         kwargs=(("force_shape_change", force_shape_change),),
@@ -123,7 +121,7 @@ def replace_with(
     value: torch.Tensor | Callable[[], torch.Tensor],
     *,
     force_shape_change: bool = False,
-) -> HelperSpec:
+) -> Edit:
     """Create a helper that replaces an out with a fixed value.
 
     Parameters
@@ -135,7 +133,7 @@ def replace_with(
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in-compatible forward helper spec.
     """
 
@@ -161,7 +159,7 @@ def replace_with(
 
         return _hook
 
-    return HelperSpec(
+    return Edit(
         helper_name="replace_with",
         args=(value,),
         kwargs=(("force_shape_change", force_shape_change),),

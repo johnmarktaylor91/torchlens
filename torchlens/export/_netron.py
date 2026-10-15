@@ -209,7 +209,7 @@ def _metadata_props(
     if getattr(log, "intervention_audit", None):
         rows.append(("torchlens.intervened", "true"))
     if baseline is not None:
-        # The diff slot (netron #1544; compo row C4): the U09.5 diff summary
+        # The diff slot (netron #1544; compo row C4): the diff summary
         # JSON for a baseline Trace, or the caller's identifier string.
         rows.append(("torchlens.baseline", baseline))
     if projection.fallback_reason:
@@ -220,7 +220,7 @@ def _metadata_props(
 def _baseline_slot(
     log: Any, baseline: Any, projection: NetronProjection
 ) -> tuple[str | None, NetronBaselineDiff | None]:
-    """Resolve ``baseline=`` into the slot text and the per-node diff (U09.5).
+    """Resolve ``baseline=`` into the slot text and the per-node diff.
 
     A ``Trace`` is diffed against the exported trace through
     ``torchlens.differential.diff_report`` and its per-node facts are
@@ -333,8 +333,8 @@ def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-
         metadata.
     attachment:
         The ``<stem>.attachment.json`` metrics companion (netron's own
-        sidecar channel; drop it onto the open model). ``None`` (default,
-        ruling U09.3) writes it beside every file export and skips it for
+        sidecar channel; drop it onto the open model). ``None`` (the default)
+        writes it beside every file export and skips it for
         the memory-only serve, which has no file for it to sit beside;
         ``True`` demands it (and refuses ``path=None``); ``False`` opts
         out.
@@ -343,7 +343,7 @@ def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-
         port) and open a browser tab / notebook widget.
     baseline:
         Optional reference for the ``torchlens.baseline`` diff slot
-        (netron #1544; ruling U09.5). A ``Trace`` is diffed against ``log``
+        (netron #1544). A ``Trace`` is diffed against ``log``
         through ``torchlens.differential.diff_report`` (``log - baseline``):
         each exported node carries its ``torchlens.diff.*`` facts (status,
         largest value delta, reference label, join verdict; row counts for

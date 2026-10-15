@@ -1527,7 +1527,7 @@ FACET_RECIPE_MARKER_ATTR = "_torchlens_facet_recipe"
 # below, NOT enumerated here -- and (b) the pure built-in intervention helper
 # factories plus the ``identity`` display transform, enumerated here. Each entry was
 # read and vetted INERT to INVOKE with attacker args: every helper factory merely
-# constructs and returns a ``HelperSpec`` dataclass (its tensor-op side effects live
+# constructs and returns a ``Edit`` dataclass (its tensor-op side effects live
 # only inside an unexecuted ``factory``/``_hook`` closure) or raises a validation
 # error; ``identity`` returns its argument. NONE performs filesystem / import / exec /
 # spawn / network / global-state mutation. Anything torchlens-owned but not here (and

@@ -133,7 +133,22 @@ def test_unknown_cnn_refuses_and_names_imagenet_opt_in() -> None:
     assert excinfo.value.fields["code"] == "preprocessing_unresolved"
     assert excinfo.value.fields["model_type"] == "_ImageModel"
     assert "tl.preprocessing.imagenet_default()" in str(excinfo.value)
+    assert "tl.preprocessing.attach_authority(model, weights)" in str(excinfo.value)
     assert excinfo.value.fields["resolution_attempt"]["resolution_method"] == "none"
+
+
+def test_refusal_remedy_attach_authority_resolves_the_pil_input() -> None:
+    """Following the refusal's attach_authority remedy lets the PIL input through."""
+
+    import PIL.Image  # noqa: F401
+
+    torchvision = pytest.importorskip("torchvision")
+    weights = torchvision.models.ResNet18_Weights.IMAGENET1K_V1
+    model = tl.preprocessing.attach_authority(_ImageModel(), weights)
+
+    trace = tl.trace(model, _pil_image(), capture=tl.options.CaptureOptions(layers_to_save="none"))
+
+    assert trace.input_preprocessor.source == "torchvision_weights"
 
 
 def test_imagenet_default_opt_in_applies_and_discloses() -> None:

@@ -58,6 +58,7 @@ DOC_FILE_GROUPS: dict[str, tuple[str, ...]] = {
     "reference_tooling": (
         "reference/debug.md",
         "reference/export.md",
+        "reference/harness_bundles.md",
     ),
     "reference_views": (
         "reference/attribution.md",
@@ -379,6 +380,24 @@ def test_collapse_reference_gallery_exists_and_is_regenerable() -> None:
     assert not missing, f"Regenerate with scripts/render_collapse_reference.py: {missing}"
 
 
+#: Reason shared by the coming-from pages whose every fence is headed and run.
+_MIGRATION_PAGES_EXECUTED = (
+    "executed fence by fence by tests/test_migration_pages_executed.py (the TorchLens "
+    "fences always; a third-party fence where that package is installed)"
+)
+#: Reason shared by the teaching pages whose every fence is headed and run.
+_TEACHING_PAGES_EXECUTED = (
+    "executed fence by fence by tests/test_teaching_pages_executed.py, each against its "
+    "declared result"
+)
+
+#: Reason shared by the recipe pages whose every fence is headed and run.
+_RECIPE_PAGES_EXECUTED = (
+    "executed fence by fence by tests/test_recipe_pages_executed.py (a TorchLens-only "
+    "page always; a third-party page where that package is installed, and always in "
+    "the peer-recipe leg)"
+)
+
 #: r7 R81 (opus b2 MED): pages with python fences OUTSIDE the executed set,
 #: each with a reason. The executed gate covered 9 of 33 fence-bearing pages
 #: with NO drift gate, so a new page (or a new fence on an old one) shipped
@@ -423,12 +442,13 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "containers.md": "pending execution coverage",
     "facets.md": "pending execution coverage (semantic recipes; heavier model deps)",
     "intervention_api.md": "pending execution coverage",
-    "intervention_explainers.md": "pending execution coverage",
     "method_x_model_compatibility.md": "compatibility matrix stubs, not runnable programs",
     "migration/from_captum.md": "needs captum installed (weekly bridge leg env only)",
     "migration/from_fx.md": "pending execution coverage",
-    "migration/from_nnsight.md": "needs nnsight (heavyweight, deliberately dark)",
-    "migration/from_pyvene.md": "needs pyvene (not a declared extra)",
+    "migration/from_nnsight.md": (
+        "executed by tests/test_migrations.py (the TorchLens side always; the nnsight "
+        "side where nnsight is installed)"
+    ),
     "migration/from_thingsvision.md": "needs thingsvision (not a declared extra)",
     "reference/neuro.md": (
         "needs rsatoolbox (the neuro extra); every snippet's behavior is "
@@ -437,15 +457,40 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "migration/from_torchextractor.md": "needs torchextractor (bridge shim demo)",
     "migration/from_transformerlens.md": "needs transformer_lens (heavyweight)",
     "migration/v2.0_api_changes.md": "contains deliberate 'Before:' v1 blocks that must NOT run",
+    "migration/from_bertviz_ecco.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_hf_kwargs.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_intermediate_layer_getter.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_model_zoos.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_surgeon_pytorch.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_timm_features_only.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_torchview.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_torchvision_feature_extraction.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_torchviz_hiddenlayer.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_transformers_interpret.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/multi_gpu_extraction.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/penzai.md": _MIGRATION_PAGES_EXECUTED,
+    "recipes/lrp_transformers_lxt.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/seeded_subsample.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/training_ribbon.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/tcav.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/generation_step_attribution.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/trainable_backbone.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/tuned_lens.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/conditional_steering.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/weightwatcher.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/quantus.md": _RECIPE_PAGES_EXECUTED,
+    "neuroai/netrep.md": _RECIPE_PAGES_EXECUTED,
+    "neuroai/himalaya.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/byo_alignment.md": (
         "the file-round-trip blocks assume a completed real-checkpoint extraction and a "
         "user-owned learned transform; the offline mechanics (extract -> manifest -> "
         "torchlens-free reload) execute in tests/test_tvscope_export_acceptance.py"
     ),
     "neuroai/journey.md": (
-        "journey cells name real checkpoints (ResNet50 V2 weights, CORnet-S via torch.hub) "
-        "for the docs/nightly execution tier; the same mechanics execute offline against "
-        "config-built fixtures in tests/test_tvscope_*.py"
+        "journey cells name real checkpoints (ResNet50 V2 weights) for the docs/nightly "
+        "execution tier; the same mechanics execute offline against config-built fixtures "
+        "in tests/test_tvscope_*.py, and the CORnet-S showpiece (pinned checkout, direct "
+        "import) runs in tests/test_recipe_pages_executed.py"
     ),
     "neuroai/loaders.md": (
         "loader rows fetch real checkpoints (HF, timm pretrained, open_clip) by design; "
@@ -551,6 +596,17 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
         "fetches a gated Llama-3.1-8B config from the Hub; the meta-substrate admission "
         "and parity gates execute offline in tests/test_weightsfree_*.py"
     ),
+    # Teaching pages and the pyvene migration pages (teaching-pass rows): every fence
+    # on them is headed, and the named test runs every TorchLens fence.
+    "intervention_explainers.md": _TEACHING_PAGES_EXECUTED,
+    "stochastic_edits.md": _TEACHING_PAGES_EXECUTED,
+    "guides/kv_cache.md": _TEACHING_PAGES_EXECUTED,
+    "sae_training_handoff.md": _TEACHING_PAGES_EXECUTED,
+    "migration/from_pyvene.md": (
+        "executed by tests/test_migrations.py (the TorchLens side always; the pyvene "
+        "comparison fence is collected and skipped)"
+    ),
+    "migration/pyvene.md": _MIGRATION_PAGES_EXECUTED,
 }
 
 

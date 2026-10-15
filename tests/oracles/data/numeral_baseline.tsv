@@ -643,7 +643,6 @@ docs-md	docs/agent-reference/current-2-x-surface.md	307
 docs-md	docs/agent-reference/current-2-x-surface.md	32
 docs-md	docs/agent-reference/current-2-x-surface.md	32,
 docs-md	docs/agent-reference/current-2-x-surface.md	33
-docs-md	docs/agent-reference/current-2-x-surface.md	34
 docs-md	docs/agent-reference/current-2-x-surface.md	35
 docs-md	docs/agent-reference/current-2-x-surface.md	389
 docs-md	docs/agent-reference/current-2-x-surface.md	4.0
@@ -851,11 +850,7 @@ docs-md	docs/migration/from_fx.md	2.5,
 docs-md	docs/migration/from_fx.md	3.0
 docs-md	docs/migration/from_hooks.md	1_1
 docs-md	docs/migration/from_hooks.md	1_2
-docs-md	docs/migration/from_nnsight.md	1_1
-docs-md	docs/migration/from_nnsight.md	2.0,
 docs-md	docs/migration/from_nnsight.md	2.5
-docs-md	docs/migration/from_nnsight.md	2.5,
-docs-md	docs/migration/from_nnsight.md	3.0
 docs-md	docs/migration/from_pyvene.md	1_1
 docs-md	docs/migration/from_pyvene.md	2.0,
 docs-md	docs/migration/from_pyvene.md	3.0
@@ -2125,7 +2120,6 @@ package-docstrings	torchlens/_extraction/views.py	14
 package-docstrings	torchlens/_extraction_provenance.py	10
 package-docstrings	torchlens/_extraction_provenance.py	43
 package-docstrings	torchlens/_fast_run.py	35
-package-docstrings	torchlens/_input_coerce.py	11.2
 package-docstrings	torchlens/_input_coerce.py	3.10
 package-docstrings	torchlens/_input_walk.py	1.0
 package-docstrings	torchlens/_input_walk.py	11.1
@@ -2335,10 +2329,8 @@ package-docstrings	torchlens/_io/tlspec.py	4.4
 package-docstrings	torchlens/_io/tlspec.py	59
 package-docstrings	torchlens/_io/tlspec.py	8601
 package-docstrings	torchlens/_io/writer_contract.py	10
-package-docstrings	torchlens/_io/writer_contract.py	10,
 package-docstrings	torchlens/_io/writer_contract.py	2.33.0
 package-docstrings	torchlens/_io/writer_contract.py	2.34.1
-package-docstrings	torchlens/_io/writer_contract.py	22.3
 package-docstrings	torchlens/_io/writer_contract.py	256
 package-docstrings	torchlens/_io/writer_contract.py	3.1
 package-docstrings	torchlens/_io/writer_contract.py	3.3
@@ -2525,7 +2517,6 @@ package-docstrings	torchlens/_trace_core/relation_views.py	3.5,
 package-docstrings	torchlens/_trace_selector_helpers.py	1_2
 package-docstrings	torchlens/_trace_selector_helpers.py	256
 package-docstrings	torchlens/_trace_state.py	3.3,
-package-docstrings	torchlens/_training_validation.py	2132
 package-docstrings	torchlens/_transport.py	35
 package-docstrings	torchlens/_transport.py	35,
 package-docstrings	torchlens/_user_public_impls.py	1.0
@@ -2627,7 +2618,6 @@ package-docstrings	torchlens/attribution/_text.py	16
 package-docstrings	torchlens/attribution/_text.py	17
 package-docstrings	torchlens/attribution/_text.py	22
 package-docstrings	torchlens/attribution/_text.py	23
-package-docstrings	torchlens/attribution/_text.py	23.3
 package-docstrings	torchlens/attribution/_text.py	24
 package-docstrings	torchlens/attribution/_text.py	24,
 package-docstrings	torchlens/attribution/_text.py	25
@@ -2783,7 +2773,6 @@ package-docstrings	torchlens/backends/torch/_op_markers.py	13
 package-docstrings	torchlens/backends/torch/_op_markers.py	14
 package-docstrings	torchlens/backends/torch/_op_markers.py	2.2
 package-docstrings	torchlens/backends/torch/_op_markers.py	27
-package-docstrings	torchlens/backends/torch/_op_markers.py	35.3
 package-docstrings	torchlens/backends/torch/_ops_arguments.py	10
 package-docstrings	torchlens/backends/torch/_ops_arguments.py	75
 package-docstrings	torchlens/backends/torch/_ops_arguments.py	77
@@ -2809,7 +2798,6 @@ package-docstrings	torchlens/backends/torch/_ops_predicate_events.py	31
 package-docstrings	torchlens/backends/torch/_ops_predicate_events.py	78
 package-docstrings	torchlens/backends/torch/_ops_predicate_events.py	79
 package-docstrings	torchlens/backends/torch/_ops_retention.py	34
-package-docstrings	torchlens/backends/torch/_pinned_graph.py	37
 package-docstrings	torchlens/backends/torch/_quantized_flops.py	43
 package-docstrings	torchlens/backends/torch/_tl.py	2.13
 package-docstrings	torchlens/backends/torch/_tl.py	2.7.1
@@ -2824,7 +2812,6 @@ package-docstrings	torchlens/backends/torch/_weightsfree_ctx.py	1.4
 package-docstrings	torchlens/backends/torch/_weightsfree_ctx.py	11
 package-docstrings	torchlens/backends/torch/_weightsfree_transparency.py	24,
 package-docstrings	torchlens/backends/torch/_weightsfree_transparency.py	291
-package-docstrings	torchlens/backends/torch/backend.py	35.2
 package-docstrings	torchlens/backends/torch/backward.py	1.2
 package-docstrings	torchlens/backends/torch/backward.py	10
 package-docstrings	torchlens/backends/torch/backward.py	2.13
@@ -2936,8 +2923,6 @@ package-docstrings	torchlens/brainpipe.py	21
 package-docstrings	torchlens/brainpipe.py	26
 package-docstrings	torchlens/brainpipe.py	3.2
 package-docstrings	torchlens/brainpipe.py	512
-package-docstrings	torchlens/bridge/_contrastive.py	32
-package-docstrings	torchlens/bridge/_contrastive.py	32,
 package-docstrings	torchlens/bridge/_utils.py	4.1
 package-docstrings	torchlens/bridge/_utils.py	4.1.
 package-docstrings	torchlens/bridge/brain_score.py	18
@@ -2949,7 +2934,6 @@ package-docstrings	torchlens/bridge/brain_score.py	3.12
 package-docstrings	torchlens/bridge/brain_score.py	4.3
 package-docstrings	torchlens/bridge/gradcam.py	17_66
 package-docstrings	torchlens/bridge/gradcam.py	18
-package-docstrings	torchlens/bridge/hf.py	02.4
 package-docstrings	torchlens/bridge/lit/__init__.py	10
 package-docstrings	torchlens/bridge/lit/__init__.py	11
 package-docstrings	torchlens/bridge/lit/__init__.py	11,
@@ -3105,7 +3089,6 @@ package-docstrings	torchlens/capture/projections.py	12
 package-docstrings	torchlens/capture/projectors.py	13
 package-docstrings	torchlens/capture/projectors.py	18
 package-docstrings	torchlens/capture/projectors.py	2.3
-package-docstrings	torchlens/capture/stop.py	2132
 package-docstrings	torchlens/capture/structure_only.py	10
 package-docstrings	torchlens/capture/structure_only.py	16
 package-docstrings	torchlens/capture/structure_only.py	2.2
@@ -3409,8 +3392,6 @@ package-docstrings	torchlens/export/__init__.py	16,
 package-docstrings	torchlens/export/__init__.py	17
 package-docstrings	torchlens/export/__init__.py	18
 package-docstrings	torchlens/export/__init__.py	24
-package-docstrings	torchlens/export/_common.py	09.2,
-package-docstrings	torchlens/export/_common.py	10.5
 package-docstrings	torchlens/export/_common.py	18
 package-docstrings	torchlens/export/_graphs.py	14
 package-docstrings	torchlens/export/_graphs.py	15
@@ -3975,10 +3956,8 @@ package-docstrings	torchlens/postprocess/loop_detection.py	63
 package-docstrings	torchlens/postprocess/loop_grouping_adapter.py	1,024
 package-docstrings	torchlens/postprocess/loop_grouping_adapter.py	2048
 package-docstrings	torchlens/postprocess/loop_grouping_adapter.py	29
-package-docstrings	torchlens/postprocess/saved_summary.py	37
 package-docstrings	torchlens/preprocessing/_authorities.py	0.17
 package-docstrings	torchlens/preprocessing/_diagnostics.py	16
-package-docstrings	torchlens/preprocessing/_imagenet_default.py	02.4
 package-docstrings	torchlens/preprocessing/_imagenet_default.py	224
 package-docstrings	torchlens/preprocessing/_imagenet_default.py	224,
 package-docstrings	torchlens/preprocessing/_imagenet_default.py	256,
@@ -4261,7 +4240,6 @@ package-docstrings	torchlens/stats/_streaming.py	20
 package-docstrings	torchlens/stats/_streaming.py	20,
 package-docstrings	torchlens/stats/_streaming.py	2019
 package-docstrings	torchlens/stats/_streaming.py	25
-package-docstrings	torchlens/stats/_streaming.py	25.2
 package-docstrings	torchlens/stats/_streaming.py	256
 package-docstrings	torchlens/stats/_streaming.py	50
 package-docstrings	torchlens/stats/_streaming.py	64
@@ -4278,7 +4256,6 @@ package-docstrings	torchlens/trackers/_amp.py	1.6
 package-docstrings	torchlens/trackers/_amp.py	2.14
 package-docstrings	torchlens/trackers/_amp.py	23
 package-docstrings	torchlens/trackers/_amp.py	3.11
-package-docstrings	torchlens/trackers/_callback_config.py	34.2
 package-docstrings	torchlens/trackers/_callbacks.py	10
 package-docstrings	torchlens/trackers/_callbacks.py	100
 package-docstrings	torchlens/trackers/_callbacks.py	100,
@@ -4329,8 +4306,6 @@ package-docstrings	torchlens/trackers/_watch.py	3.5
 package-docstrings	torchlens/trackers/_watch.py	3.7
 package-docstrings	torchlens/trackers/_watch.py	3.8
 package-docstrings	torchlens/trackers/_watch.py	3.9
-package-docstrings	torchlens/trackers/_watch.py	32.1
-package-docstrings	torchlens/trackers/_watch.py	34.1
 package-docstrings	torchlens/trackers/_watch.py	497
 package-docstrings	torchlens/transforms/_context.py	1.5
 package-docstrings	torchlens/transforms/_context.py	12
@@ -4419,7 +4394,6 @@ package-docstrings	torchlens/user_funcs.py	17
 package-docstrings	torchlens/user_funcs.py	1_1
 package-docstrings	torchlens/user_funcs.py	256
 package-docstrings	torchlens/user_funcs.py	28
-package-docstrings	torchlens/user_funcs.py	35.2
 package-docstrings	torchlens/user_funcs.py	41
 package-docstrings	torchlens/utils/__init__.py	1,900
 package-docstrings	torchlens/utils/__init__.py	3,000
@@ -4696,7 +4670,6 @@ package-docstrings	torchlens/visualization/_arg_suppression.py	8.7
 package-docstrings	torchlens/visualization/_backward_inventory.py	17
 package-docstrings	torchlens/visualization/_backward_inventory.py	36
 package-docstrings	torchlens/visualization/_backward_inventory.py	43
-package-docstrings	torchlens/visualization/_backward_rows.py	08.5
 package-docstrings	torchlens/visualization/_buffer_visibility.py	13
 package-docstrings	torchlens/visualization/_buffer_visibility.py	43
 package-docstrings	torchlens/visualization/_collapse_disclosures.py	1,688
@@ -4722,9 +4695,7 @@ package-docstrings	torchlens/visualization/_encoding.py	2.4
 package-docstrings	torchlens/visualization/_encoding.py	3..4
 package-docstrings	torchlens/visualization/_encoding.py	3.1
 package-docstrings	torchlens/visualization/_encoding.py	3.2
-package-docstrings	torchlens/visualization/_expansion_manifest.py	11
 package-docstrings	torchlens/visualization/_fonts.py	1.1,
-package-docstrings	torchlens/visualization/_fonts.py	11
 package-docstrings	torchlens/visualization/_fonts.py	2.1.5
 package-docstrings	torchlens/visualization/_fonts.py	29
 package-docstrings	torchlens/visualization/_geometry_audit.py	0.25
@@ -4763,11 +4734,9 @@ package-docstrings	torchlens/visualization/_rank_layout_internal/layout.py	20
 package-docstrings	torchlens/visualization/_rank_layout_internal/layout.py	24
 package-docstrings	torchlens/visualization/_render_common.py	42
 package-docstrings	torchlens/visualization/_render_common.py	47
-package-docstrings	torchlens/visualization/_render_dot.py	07.5
 package-docstrings	torchlens/visualization/_render_dot.py	14
 package-docstrings	torchlens/visualization/_render_dot.py	94
 package-docstrings	torchlens/visualization/_render_edges.py	1,3
-package-docstrings	torchlens/visualization/_render_edges.py	11
 package-docstrings	torchlens/visualization/_render_edges.py	2,4
 package-docstrings	torchlens/visualization/_render_edges.py	25
 package-docstrings	torchlens/visualization/_render_edges.py	27
@@ -4787,15 +4756,12 @@ package-docstrings	torchlens/visualization/_render_nodes.py	19
 package-docstrings	torchlens/visualization/_render_nodes.py	2,3
 package-docstrings	torchlens/visualization/_render_nodes.py	27
 package-docstrings	torchlens/visualization/_render_nodes.py	48
-package-docstrings	torchlens/visualization/_render_ordering.py	07.5
 package-docstrings	torchlens/visualization/_render_ordering.py	11
 package-docstrings	torchlens/visualization/_render_ordering.py	16
 package-docstrings	torchlens/visualization/_render_ordering.py	2.43
 package-docstrings	torchlens/visualization/_render_regions.py	19
 package-docstrings	torchlens/visualization/_render_utils.py	1066
-package-docstrings	torchlens/visualization/_render_utils.py	11
 package-docstrings	torchlens/visualization/_render_utils.py	1121.9
-package-docstrings	torchlens/visualization/_render_utils.py	12
 package-docstrings	torchlens/visualization/_render_utils.py	15
 package-docstrings	torchlens/visualization/_render_utils.py	18
 package-docstrings	torchlens/visualization/_render_utils.py	19
@@ -4903,7 +4869,6 @@ package-docstrings	torchlens/visualization/node_spec.py	2.4
 package-docstrings	torchlens/visualization/node_spec.py	3.3,
 package-docstrings	torchlens/visualization/overlays.py	2.7
 package-docstrings	torchlens/visualization/render_execution.py	1.0
-package-docstrings	torchlens/visualization/render_execution.py	11
 package-docstrings	torchlens/visualization/render_execution.py	23
 package-docstrings	torchlens/visualization/render_execution.py	233
 package-docstrings	torchlens/visualization/render_execution.py	24
@@ -4915,7 +4880,6 @@ package-docstrings	torchlens/visualization/renderer_registry.py	6.3
 package-docstrings	torchlens/visualization/renderers/base.py	14
 package-docstrings	torchlens/visualization/renderers/base.py	17
 package-docstrings	torchlens/visualization/renderers/base.py	24
-package-docstrings	torchlens/visualization/request.py	12
 package-docstrings	torchlens/visualization/surgery_visuals.py	11
 package-docstrings	torchlens/visualization/surgery_visuals.py	17
 package-docstrings	torchlens/visualization/surgery_visuals.py	2.25
@@ -4928,7 +4892,6 @@ package-docstrings	torchlens/visualization/themes.py	10
 package-docstrings	torchlens/visualization/themes.py	17
 package-docstrings	torchlens/visualization/themes.py	23
 package-docstrings	torchlens/visualization/themes.py	29
-package-docstrings	torchlens/visualization/themes.py	29,
 package-docstrings	torchlens/visualization/themes.py	300
 package-docstrings	torchlens/visualization/themes.py	36
 package-docstrings	torchlens/visualization/themes.py	37

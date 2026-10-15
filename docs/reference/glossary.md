@@ -71,9 +71,11 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   values. Every plain module attribute is restored too: a rebound or removed attribute gets its
   original object back, a tensor or builtin `list`/`dict`/`set` changed in place is restored in
   place, and attributes the forward added are removed; what the forward wrote is read from the
-  trace (`Module.attribute_writes`). Objects without a value snapshot (custom objects, containers
-  over 128 items or 64 levels) are tracked by identity: a rebinding is undone, a change inside
-  them is not. Lazy modules are left as their materializing forward leaves them.
+  trace (`Module.attribute_writes`). Builtin containers are snapshotted at any size (a tensor inside
+  one is cloned whatever its size); custom objects are tracked by identity: a rebinding is undone,
+  a change inside them is neither undone nor recorded. A container nested more than 256 levels
+  deep is tracked by identity below that level and named in a `capture_state_restore_incomplete`
+  warning. Lazy modules are left as their materializing forward leaves them.
   `CaptureOptions(carry_state=True)` opts into forward-equivalent state: buffers, modes and
   plain attributes advance exactly as one direct `model(x)` would, and the attribute writes are
   recorded the same way, the same spelling as `trace.run(inputs=..., carry_state=True)`. No capture advances the caller's random streams
@@ -327,6 +329,7 @@ is documented unstable and may be renamed or removed without a compatibility ali
 | Per-neuron MLP rows under the identity gate | `mlp_neuron_contributions`, `layers`, `neurons`, `onto`, `positions` | unstable -- no deprecation shim owed |
 | Alias table generation value | `generation="4.x"` (TransformerBridge canonical hook names) | unstable -- no deprecation shim owed |
 | Appliance on the `trace.using` door | `trace.using("mi")`, `head_scores`, `qk_circuit`, `ov_circuit` | unstable -- no deprecation shim owed |
+| Per-query-head patching under grouped-query attention | `patch_query_heads_grid`, `site`, `heads`, `effect_site` | unstable -- no deprecation shim owed |
 
 <!-- MECHINTERP-KIT-UNSTABLE-INDEX:END -->
 
@@ -337,6 +340,17 @@ pairs with the KV head that serves it). `mlp_neuron_contributions` returns a `Co
 one row per hidden neuron (`hidden[n] * W_out[n]`, read from the output projection's captured
 input), a verified bias constant, and the D7 grading; unselected neurons under `neurons=` fold into
 one exact `other_neurons` row.
+
+`patch_query_heads_grid(model, clean_input, corrupted_input, metric, site="v", heads=None,
+budget=None, trace_kwargs=None)` returns a `PatchGrid` with axes `("layer", "head")` whose head
+coordinates are QUERY heads, on grouped-query attention. Each cell patches one query head's copy of
+its key/value group (`site="v"` for the value copy, `"k"` for the key copy) at the op that expands
+the grouped tensor to the query heads, so the other heads of the group are untouched; a k/v-site
+`grid` can only patch the whole group. Receipts add `effect_site` (the interceptor wording),
+`site`, `n_q_heads`, `n_kv_heads` and `expansion_ops`, and every cell fires exactly once. Fused
+kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expansion ops refuse
+`mi_kv_expansion_ambiguous`; equal query and key/value head counts refuse
+`mi_kv_heads_not_grouped`.
 
 ## Selection and storage
 
@@ -387,12 +401,24 @@ one exact `other_neurons` row.
   `generate` output under `torchlens.intervention.steer_generate`, whose report must settle
   before it returns.
 
+**Zero-fire policy (`on_zero_fire`)** *(spelling documented-unstable)*
+: One knob on every intervention door: `spec.bind`, `torchlens.intervention.steer_generate`,
+  `tl.trace(intervene=)` and `Trace.run`. An intervention that fires at zero sites is always
+  recorded on the door's own record (the bind report's `zero_fire_rule_ids`, the capture's
+  `annotations["unmatched_capture_selectors"]` and intervention audit, the rerun's
+  `last_run["hooks_unfired"]`). The knob then decides the same way everywhere: `"warn"`
+  (default) emits the door's coded warning (`bind_zero_fire`, `trace_zero_fire`,
+  `rerun_zero_fire`), `"error"` raises the door's typed refusal with that code, and
+  `"disclose"` records only. Any other value refuses `zero_fire_policy_invalid`. A rerun edit
+  that cannot fire live (`rerun_selector_unmatchable_live`) is refused before the policy runs,
+  whatever the knob says.
+
 **Bound intervention executor** *(spelling documented-unstable)*
 : `spec.bind(model)` pairs an `InterventionSpec` with a base model as a capture-free callable.
   It runs the model with the spec's edits held live, returns the model's own output, records
   only a firing report (`.last_report`), and supports HF `generate` with the KV cache on or off.
-  It is not an `nn.Module` and bindings never nest; zero firings fail closed unless
-  `on_zero_fire="disclose"`. `torchlens.intervention.steer_generate` is one-call sugar for
+  It is not an `nn.Module` and bindings never nest; a rule that never fires is recorded on
+  `.last_report` and settles by `on_zero_fire` (see **Zero-fire policy**). `torchlens.intervention.steer_generate` is one-call sugar for
   `spec.bind(model).generate(...)`. Decode steps: the binding counts root forwards, so
   `torchlens.intervention.at_step(k)` on a bound call or `generate` names the k-th forward
   (step 0 is the prefill), on op-level rules and as `tl.module(address) & at_step(...)`
@@ -425,9 +451,142 @@ one exact `other_neurons` row.
   value refuses `transform_mask_incompatible`). Unsupported spellings refuse
   `position_edit_invalid`; positions past the sequence refuse `position_edit_out_of_range`.
 
+**torchlens.intervention.direction_from_pairs(pos_traces, neg_traces, site, method="mean_diff", *, read_token_index=-1)** — *documented-unstable*
+: Builds one contrastive steering direction from saved activations. `pos_traces` and
+  `neg_traces` are a trace or a sequence of traces with one prompt per batch row; row `i` of the
+  negatives pairs with row `i` of the positives. One token per prompt is read at `site`
+  (`-1` is the last real token when the trace saved its `attention_mask` input; a sequence gives
+  one position per prompt; `None` reads `[n, hidden]` outs unsliced). With `D = pos - neg`:
+  `"mean_diff"` is `D.mean(0)` on the activation scale; `"pca"` is the first uncentered
+  principal axis of `D`, unit norm, signed toward the positives; `"logistic"` is L2 logistic
+  regression (`C = 1`, no intercept) of `D / 2` against `-D / 2`, solved with torch only, unit
+  norm. Returns a `Direction`. Refusals use the `direction_*` codes of the error contract.
+
+**Direction (`torchlens.intervention.Direction`)** — *documented-unstable*
+: The frozen result of `direction_from_pairs`: `vector` (1-D, the rows' dtype), `site`,
+  `method`, `n_pairs`, `read_token_index`, `model_type` (the traced model's
+  `config.model_type`, or `None`) and `provenance`, a
+  `torchlens.selection_subspace.BasisProvenance` whose origin records the site, method, pair
+  count, read position and a sha256 digest of the rows, and whose `sha256` is the digest of
+  the canonical float64 vector. `direction.steer(m)` is `tl.steer(vector, m, feature_axis=-1)`;
+  place it with `tl.when(tl.module(direction.site), ...)`. `direction.to_steering_vectors()`,
+  `direction.to_repeng()` and `direction.to_dialz()` convert it to a real
+  `steering_vectors.SteeringVector`, `repeng.ControlVector` and `dialz.SteeringVector` without
+  recomputing it (thin converters `tl.bridge.steering_vectors.from_direction`,
+  `tl.bridge.repeng.from_direction` and `tl.bridge.dialz.from_direction`), keyed by
+  `direction.library_layer(layer=None)`: the site label's trailing index unless `layer=` is
+  given; a different explicit index refuses `direction_layer_mismatch`. Applied with the same
+  multiplier, each library object gives the native steer's logits.
+
 **Bundle**
 : A named collection of aligned Traces, constructed with `tl.bundle(...)` or `tl.Bundle(...)`, for
-  cross-run comparison.
+  cross-run comparison. `tl.Bundle()` with no members builds an empty bundle to fill later with
+  `add`; an empty bundle saves and loads like any other.
+
+**Bundle.member_relations** *(spelling documented-unstable)*
+: The bundle's typed, directed relation rows between members, read as an immutable tuple of
+  `MemberRelationRow` (plus `OpaqueRelationRow` for unknown namespaced kinds loaded from an
+  artifact). Pair kinds: `alternative_of` (peers; still comparable), `forked_from`,
+  `successor_of`, `escalates`, `fed_by`; member kind: `episode_member`. Each kind's params are a
+  closed set; rows persist in `bundle.json` and every load re-checks them. On a pair row `from` is
+  always the LATER member. Rows are ordering and topology claims: members joined by a directed
+  path of ordering kinds are not comparison operands.
+
+**Bundle.relate** *(spelling documented-unstable)*
+: Appends relation rows and returns the bundle. Positional form, read as the sentence it records:
+  `b.relate("fed_by", "critique", "draft", token_spans=[[3, 7, 3, 7]], label="critique")` is
+  "critique fed_by draft" (kind, the later member, the earlier member, then the kind's params; a
+  member kind names one member). Row form: `b.relate(MemberRelationRow(...))` or payload mappings.
+  Refusals carry stable codes (`bundle_relation_schema_invalid`, `bundle_relation_member_missing`,
+  `bundle_relation_auto_spans_unavailable`, `bundle_relation_auto_spans_ambiguous`,
+  `bundle_relation_auto_spans_unmatched`, `bundle_relation_span_out_of_bounds`,
+  `bundle_relation_span_unverified`); a refusal leaves the table unchanged.
+
+**fed_by** *(relation kind; spelling documented-unstable)*
+: "B fed_by A": the later member B's prompt contains the earlier member A's output. Content
+  provenance only: a router whose decision selects a call without its output entering that call's
+  prompt is not `fed_by`; record that order with `successor_of` and keep the route decision in
+  your own metadata (TorchLens has no control-dependency kind). Optional params: `token_spans`
+  (rows of four ints, half-open: source start, source end, destination start, destination end),
+  `basis` (`declared`, `verified`, `matched`), `coverage` (a fraction in [0, 1]) and `label` (free
+  human text such as `"critique"` or `"judge"`; nothing in TorchLens interprets it).
+  `token_spans="auto"` asks TorchLens to find the spans: the source's eligible output (its bound
+  completion range minus `excluded_ids`) is searched as exact runs of token ids in the reader's
+  prompt, trimming up to two boundary tokens per side when a run is not found whole, and the row
+  is written with `basis="matched"` and a computed `coverage`. Several placements (a repeated
+  quote, or a tie between two trims) refuse `bundle_relation_auto_spans_ambiguous`; no placement
+  refuses `bundle_relation_auto_spans_unmatched`; missing evidence (no source completion range,
+  ids not retained) refuses `bundle_relation_auto_spans_unavailable`. `fed_by` is an ordering kind
+  for the comparison gate.
+
+**Token-stream binding** *(`token_boundary_v1`; spelling documented-unstable)*
+: What makes `fed_by` spans checkable: a per-member descriptor in the reserved
+  `"torchlens.boundary_facts"` sidecar family naming the captured stream the coordinates index
+  (`"input"`, the first integer-dtype input; or `"output"`), the `batch_row`, the measured
+  `length` and `ids_digest` of its token ids (filled in by `relate` when left out), the member's
+  own `completion` range, the `excluded_ids` outside the eligible set (padding, special tokens),
+  and `tokenizer` / `template` identity strings. Attach one with `torchlens.io.attach_sidecar`
+  before relating; with none, `relate` derives an input-stream binding for a batch-of-one capture
+  whose ids are retained. A row reads `basis="verified"` only when both members are bound, each
+  digest matches the retained ids, the source binding names its completion range, every source
+  span lies inside it, and the token ids agree span by span; anything less is `declared`. A
+  claimed `verified`/`matched` row re-checks at every door (relate, constructor, load): missing
+  evidence makes it `declared`, contradicting evidence refuses `bundle_relation_span_unverified`.
+  A `matched` row also re-runs the matcher on the members and keeps `matched` only when it finds
+  the same spans; spans that check out but are not what the matcher finds are stored as
+  `verified`. `coverage` on a verified or matched row is
+  computed: covered eligible source tokens over all eligible ones (the bound completion range
+  minus `excluded_ids`).
+
+**Bundle.upstream / Bundle.downstream** *(spelling documented-unstable)*
+: `b.upstream(name)` lists every member `name` transitively came after (what fed it), and
+  `b.downstream(name)` every member that came after it, nearest first, over the ordering kinds
+  (`fed_by`, `successor_of`, `forked_from`, `escalates`). Bundle helper-table methods, like
+  `compare`.
+
+**Bundle.token_pairs** *(spelling documented-unstable)*
+: `b.token_pairs(reader, source)` returns the verified one-to-one token positions of "reader
+  fed_by source", arguments in `relate`'s order (the later member, then the earlier one). The
+  result's `pairs` are `(source_pos, reader_pos)` tuples, each position at most once, with
+  `source_positions` / `reader_positions` lists for indexing activations; `coverage` is the paired
+  share of the source's eligible tokens (`None` without a bound completion range); `excluded`
+  lists what was not paired, each entry a dict with `side`, `start`, `end`, `reason` and
+  `row_index`. Only spans of `verified` or `matched` rows that re-check at call time pair.
+  Declared spans (retokenized many-to-many text, a token mixing a template delimiter with copied
+  text), excluded ids, positions claimed twice, streams whose bindings name different tokenizers,
+  and eligible source tokens no verified span covers are reported, never paired. Equal lengths are
+  never evidence of matching meaning. A verified row whose evidence now contradicts it refuses
+  `bundle_relation_span_unverified`. A Bundle helper-table method; any reduction over a
+  many-to-one group is the caller's own descriptive comparison.
+
+**Bundle.node** *(members= spelling documented-unstable)*
+: `b.node(site, members=None)` returns a `SuperOp` view of one site across the members, or across
+  the named subset, gated pairwise inside that subset (`same_param_shapes` floor), so one foreign
+  member no longer disables the view for the rest.
+
+**Bundle delta family** *(`delta_map`, `norm_delta`, `output_delta`, `compare`)*
+: Per-node and per-output distances from a baseline member (the configured baseline, else the
+  first member). Every (baseline, member) pair goes through the comparison gate first, the same
+  predicates as `compare_at`: no ordering path between them, a shared graph, and proven-equal
+  input values; otherwise the read refuses with the gate's `bundle_gate_*` code.
+
+**Bundle.derive_episode_status** *(spelling documented-unstable)*
+: `b.derive_episode_status(episode_id, *, ledger=None)` folds the outcomes of the members named by
+  `episode_member` rows into a derived episode status (`EpisodeFoldResult`). A derivation, never
+  a stored Bundle outcome; without a ledger the ledger-only arms degrade to `episode_unknown`.
+
+**Bundle.why / Bundle.provenance** *(spelling documented-unstable)*
+: `b.why(member, relative_to=None)` returns a `WhyReport`: the exact-or-refused ancestry of a
+  member against the baseline (or `relative_to`), with lineage status, payload fidelity, value
+  residual and comparability reported as separate axes. `b.provenance()` is the per-member list of
+  the same facts. Both are derived views; nothing is stored. Reference:
+  `docs/reference/experiment_ledger.md`.
+
+**Bundle.vary** *(spelling documented-unstable)*
+: `b.vary(mapping, *, unmentioned=None)` applies one explicit intervention spec (or `None`, the
+  identity) per named member, refusing incomplete coverage before any member changes; a mid-apply
+  failure refuses `vary_partial_failure` and discloses what completed (no rollback). Broadcast
+  `do()` is unchanged.
 
 **Parameter value basis** *(spelling documented-unstable)*
 : The derived, read-time, persisted-nowhere disclosure `Param.value_basis` of where a parameter
@@ -468,6 +627,23 @@ one exact `other_neurons` row.
 : The machine-readable `Trace.capture_verification_reason` explaining why a live capture is not
   positively verified, for example `mode_rescue_rerun`, `escape_rescue_unrecovered`,
   `owner_thread_tripwire_changed`, or `dynamo_region_not_logged`.
+
+**Pristine (`Trace.pristine`)** *(spelling documented-unstable)*
+: Whether nothing ever intervened on the trace, read from the evidence it carries: `True`,
+  `False`, or `None`. It is derived at read time from records that persist with the trace (the
+  intervention audit, the operation history, mutation states, direct writes and op intervention
+  marks), never stored as a flag, so it survives `tl.save`/`tl.load`, pickle and `fork()`, and no
+  reset makes a touched trace read `True` again. `False` means some touch was recorded: a
+  capture-time `intervene=` (including one that fired nowhere), a staged hook or value
+  replacement (even after `clear_hooks()`), `do()`, `set()`, a region edit, a hooked rerun or run,
+  a direct write. Plain reruns, plain runs, forks and `clear_hooks()` on an untouched trace are
+  not touches. `None` means no evidence: the artifact predates tlspec 9 or the backend is not
+  torch, and it is never a pristine reading. Bundle's pristine label and baseline
+  auto-detection count a member only when it reads `True`. It is a reading, not a verdict: it
+  never changes validation or a run report. Not `Trace.state`: `TraceState.PRISTINE` is an
+  operational state that an assignment can set and that a func-targeted `intervene=` capture
+  keeps. Not validation's pristine-torch oracle, which means running on unwrapped torch
+  functions.
 
 **Rescue re-run**
 : A single disclosed second forward under a `TorchFunctionMode` net that redirects detected stale
@@ -619,7 +795,8 @@ one exact `other_neurons` row.
 : `tl.zero_ablate`, `tl.scale`, `tl.add`, `tl.clamp`, `tl.noise` (Gaussian noise),
   `tl.mean_ablate` (replace with a source mean), `torchlens.intervention.scramble_elements`
   (elementwise iid scramble from a flattened source -- the honest rename of
-  the removed `resample_ablate` spelling; for coherent donor patching use
+  the removed `resample_ablate` spelling, which a saved spec may not name either: it refuses
+  `intervention_helper_renamed`; for coherent donor patching use
   `tl.patch_from`), `tl.replace_with` (fixed value), `tl.swap_with` (another
   site's tensor), `tl.steer` (add a scaled steering direction), `tl.project_onto` /
   `tl.project_off` (keep or remove the component along a direction), and
@@ -662,9 +839,11 @@ one exact `other_neurons` row.
   (`Trace.set(label, ...)`, `attach_hooks(tl.label(...))`) can never fire during a live
   forward, so a rerun refuses it up front with `rerun_staged_label_unmatchable` (trace
   unchanged). A staged edit whose selector matches sites on the trace but fires at none
-  during a rerun of the same graph on the same inputs (a `tl.where` predicate on
-  `p.layer_label`) refuses with `rerun_selector_unmatchable_live` (trace unchanged); on new
-  inputs it still warns `rerun_zero_fire`. The rerun divergence check (`ControlFlowDivergenceWarning`, or
+  during a rerun of the same graph on the same inputs refuses with
+  `rerun_selector_unmatchable_live` (trace unchanged), and so does, on any inputs, a
+  `tl.where` predicate that matches sites on the rerun's own trace but fired at none during
+  its forward (a predicate on `p.layer_label`, which exists only after postprocess). A
+  predicate that matches nothing on the new inputs warns `rerun_zero_fire`. The rerun divergence check (`ControlFlowDivergenceWarning`, or
   `ControlFlowDivergenceError` with `strict=True`) compares raw op order, edges and shapes with
   each value-only edit node folded into the op it replaces, so a staged edit is never
   reported as control-flow divergence while a changed op, edge, shape or batch size still is.
@@ -688,7 +867,10 @@ one exact `other_neurons` row.
   `clear_hooks()` on a steered capture, so the capture engine reruns once to record the current
   plan, or
   `<divergence code>:fast_live_call_fingerprint` for a structural change); `hooks_fired` / `hooks_unfired` count the staged plans that fired, and a plan that
-  never fired warns `rerun_zero_fire`. Output leaves (the model's and each saved module's) are paired
+  never fired settles by `on_zero_fire` (default: warns `rerun_zero_fire`). Through
+  `run(inputs=..., fast=True)` a run that applies staged edits reports `unverifiable`, never
+  `verified` (diagnostic `user_intervention_not_replayable`, stage `hooked_run_unverified`):
+  it is an edited forward, and no hook-aware check exists yet. Output leaves (the model's and each saved module's) are paired
   with the captured output ops by container path through capture's own output walker, so a
   stock Hugging Face forward returning a `DynamicCache` of per-layer key/value tensors reruns
   fast; a changed leaf count or an unmatched path still refuses
@@ -829,7 +1011,12 @@ one exact `other_neurons` row.
 : `tl.fastlog` is the sparse predicate-recording namespace behind `tl.record`;
   `tl.facets` is the semantic facet namespace (canonical home `torchlens.semantic`);
   `tl.export` holds static export helpers; `tl.bundle(...)` / `tl.Bundle` build aligned
-  Trace collections and `tl.show_bundle_graph` renders a bundle's graph.
+  Trace collections and `tl.show_bundle_graph` renders a bundle's graph:
+  `nodes="ops"` (default) the union op graph, `nodes="members"` (spelling documented-unstable)
+  one node per member and one edge per relation row, from the earlier member to the later one,
+  labelled with the kind, the row's `label` and, on `fed_by`, its basis and coverage; solid edges
+  carry token spans TorchLens checked, every other row is dashed. `tl.load(path, lazy=True)` on a
+  saved bundle passes `lazy` (with `map_location` and `materialize_nested`) to every member.
 
 **Appliance door (`Trace.using`)** *(spelling documented-unstable)*
 : `trace.using(name)` returns the appliance registered as `name`, bound to that trace (for
@@ -953,6 +1140,73 @@ one exact `other_neurons` row.
 Spellings below shipped ahead of their naming-session/S2 ratification under
 the provisional-name protocol: they may rename WITHOUT deprecation
 shims, by declared contract. Each carries the same tag at its definition.
+
+**similarity_repository_id (`rdm_evolution(...).similarity_repository_id`, `tl.stats.CKA.similarity_repository_id`, the `SimilarityScore` that `tl.stats.cka` and `tl.stats.CKA.result()` return, `ScoreInterval.similarity_repository_id`, the `neuro.rdms()` source-mode descriptor)** — *unstable — no deprecation shim owed*
+: The similarity-repository catalogue identifier of the exact measure variant a
+  TorchLens result computed, with `*` for the implementing repository (for
+  example `measure/*/cka-kernel=linear-hsic=gretton-score` for linear CKA,
+  `rdm/*/correlation` for a correlation RDM). On `rdm_evolution` results it is
+  `None` when the catalogue has no exact match (the `"manhattan"` metric); the
+  `neuro.rdms()` descriptor is then absent. The full table is in
+  [the brain-benchmarking seam](brain_benchmarking_seam.md).
+
+**SimilarityScore (`tl.stats.SimilarityScore`; returned by `tl.stats.cka` and `tl.stats.CKA.result()`)** — *unstable — no deprecation shim owed*
+: A `float` subclass: the score itself (arithmetic, comparison, `repr` and JSON
+  encoding are a float's; arithmetic returns a plain `float`) plus
+  `similarity_repository_id`, the exact measure variant it computes
+  (`measure/*/cka-kernel=linear-hsic=gretton-score` for linear CKA). `to_dict()`
+  is the serialized form that keeps the identifier
+  (`{"score": ..., "similarity_repository_id": ...}`); pickling keeps it too.
+
+**ScoreInterval (`tl.repgeom.ScoreInterval`; returned by `tl.repgeom.rdm_compare_interval` and `tl.repgeom.cka_interval`)** — *unstable — no deprecation shim owed*
+: A TorchLens score with a descriptive uncertainty interval beside it:
+  `score` (the unchanged estimator on all stimuli), `low` and `high` (a
+  percentile bootstrap over stimuli), `confidence`, `n_resamples`, `n_valid`
+  (resamples with a finite score), `seed`, `basis` (how the interval was
+  made, in words) and `similarity_repository_id` (the measure variant `score`
+  computes: the linear CKA identifier from `cka_interval`, `None` from
+  `rdm_compare_interval`, whose precomputed RDMs do not name their metric),
+  plus `width` and `to_dict()` (every field). `rdm_compare_interval(rdm_a,
+  rdm_b, method, n_resamples=1000, seed=0, confidence=0.95)` resamples
+  stimuli and recomputes `rdm_compare`, dropping self-pairs; `cka_interval(a,
+  b, ...)` does the same for linear CKA. Descriptive, not a test; inference
+  stays with rsatoolbox.
+
+**ScoreParts (`tl.bridge.brain_score.ScoreParts`; returned by `tl.bridge.brain_score.score_parts` and, per layer, `tl.bridge.brain_score.per_layer`)** — *unstable — no deprecation shim owed*
+: A benchmark score split into named parts so a ceiling-normalised value
+  never stands in for the raw one: `raw`, `ceiling_normalised`, `ceiling`,
+  `error`, `note`. A Brain-Score result that carries a ceiling gives its
+  value as `ceiling_normalised` and its raw attribute as `raw`; a result
+  without one is raw and `ceiling_normalised` is `None`. TorchLens reads
+  these numbers; it computes no ceiling.
+
+**metric_disagreement (`tl.repgeom.metric_disagreement`; returns `tl.repgeom.MetricDisagreement` with `tl.repgeom.DisagreeingPair` rows)** — *unstable — no deprecation shim owed*
+: The rank order of sites (layers or models) under each comparison metric on
+  one extraction, with every pair of sites that two metrics order oppositely
+  flagged. Input is `scores[metric][site]` (a float or a `ScoreInterval`);
+  higher scores rank first, ties share their average rank, missing scores
+  take no side. Each flagged pair names the site each metric ranks higher
+  and, when the scores carry intervals, whether the opposite orders are
+  separated by them (`firm`). `table()` gives the plain-text report and
+  `to_dict()` the data form.
+
+**neuro.compare (`tl.neuro.compare`; needs no extra)** — *unstable — no deprecation shim owed*
+: One call that scores every site of one extraction against one target with
+  several descriptive analyses: `tl.neuro.compare(source, target,
+  analyses=("rsa", "ridge", "cka"))`. Each site's activations are read once
+  from what `source` (a Trace with saved activations, an extraction, or a
+  `{site: array}` mapping) already holds; the model is never re-run. `"rsa"`
+  is `rdm_compare` over `rdm(site)` and `rdm(target)` (`rdm_metric`,
+  `rsa_method`); `"ridge"` is a cross-validated ridge score (a seeded
+  `n_folds` split, the penalty per fold chosen from `ridge_alphas` by exact
+  leave-one-out on the training fold, then the mean over target columns of
+  the Pearson r between out-of-fold predictions and the target); `"cka"` is
+  linear CKA. `n_resamples=` adds a `ScoreInterval` per score. The returned
+  report has `scores`, `intervals`, `settings`, `ridge_alphas_chosen`,
+  `similarity_repository_ids`, `table()`, `disagreement()` (a
+  `MetricDisagreement`) and `to_dict()`. Descriptive only: inference,
+  variance partitioning, voxel maps and stacked fits stay with rsatoolbox,
+  himalaya, scikit-learn and Net2Brain.
 
 **site_key (`Op.site_key`)** — *unstable — no deprecation shim owed*
 : The portable structural-position identity of one retained op
@@ -1294,7 +1548,10 @@ deprecation shim owed*
   carried, a dense direction supports the WHOLE axis, and
   `do(subspace(...), edit)` edits every supported element, never "the
   component along the direction" (projection-valued selections are a named
-  design fork, not a promise). BASIS PROVENANCE IS MANDATORY: `origin=` is
+  design fork, not a promise). To edit the component along a direction, apply
+  `tl.project_off` / `tl.project_onto` or
+  `torchlens.intervention.set_direction_mean` to the site instead
+  (docs/intervention_explainers.md, "Set, not projection"). BASIS PROVENANCE IS MANDATORY: `origin=` is
   a required non-empty account of where the basis came from; origin,
   optional `method=`, geometry, and the basis's sha256 content digest are
   stamped into every resolved entry's `provenance.source` (and therefore
@@ -1331,8 +1588,8 @@ shim owed; S2-gated*
 
 **tl.Edit / do(selection, edit)** — *Edit ratified (slate 5.5, subject to D7
 default-keep); mask-application semantics documented-unstable*
-: `tl.Edit` is the public edit-object type; `HelperSpec` is its deprecated
-  alias (stable surface, no removal scheduled). `repr(edit)` prints the
+: `tl.Edit` is the public edit-object type (the old class
+  spelling is removed, U00 clean break). `repr(edit)` prints the
   public spelling: a builtin edit prints as the public call that builds it
   (`tl.grad_scale(2.0)`, default-valued keywords omitted; evaluating it
   rebuilds an equal edit), any other edit as `tl.Edit('name', kind=...,
@@ -1777,6 +2034,36 @@ deprecation shim owed*
   comparable identity warns `logit_lens_identity_unrecorded` when its
   last-layer decode misses the captured logits. See [facets](../facets.md).
 
+**render_logit_lens_heatmap (torchlens.tviz)** — *unstable — no deprecation shim owed*
+: `torchlens.tviz.render_logit_lens_heatmap(result, path)` draws a
+  `LogitLensResult` as a layers-by-positions heatmap: one row per projected
+  block, one column per input position, each cell printing that layer's
+  top-1 next-token prediction and colored on a fixed 0-to-1 probability
+  scale (the top-1 probability, or with `value="target_prob",
+  target_token_id=...` a tracked token's). The footer states the lens
+  source, whether it was validated, and that every row is projected through
+  the final norm and head; only a validated lens lets it say that the last
+  row reproduces the model's own output scores. `title=` prefixes the
+  figure title with a subject such as the model's name. Lenses
+  wider than 48 positions refuse `tv_record_invalid` until `positions=`
+  names the columns; nothing is cropped silently. Returns an `Artifact`.
+
+**kv-group receipts (torchlens.tviz)** — *unstable — no deprecation shim owed*
+: `tviz.receipt_from_patch_grid(grid, ..., kv_groups=tviz.GqaInfo(...))`
+  builds a `CausalReceipt` whose cells are grouped-query KV groups, for
+  grids over a key or value site. The receipt's `kv_groups` field holds the
+  grouping, `unit` reads `"kv group"`, and `sharing_lines()` names each
+  group's query heads; `render_receipt_grid` labels the columns by group
+  and prints that no cell is a per-query-head effect. `GqaInfo` gains
+  `query_heads(group)` and `group_header(group)`. A grid whose head axis
+  exceeds the group count refuses `tv_record_invalid`; mixing kv-group and
+  query-head rows refuses `tv_receipt_invalid`; `Annotation.from_receipt`
+  refuses a kv-group receipt `tv_annotation_invalid`. A grid from
+  `mechinterp.patch_query_heads_grid` is an ordinary query-head receipt: its
+  `effect_site` receipt becomes the receipt's `effect_source`, printed as
+  "effect source: ..." on the grid figure, and passing `kv_groups=` for it
+  refuses `tv_receipt_invalid`.
+
 **Summary columns (`summary(columns=...)`)** — *unstable — no deprecation shim owed*
 : The column registry of `tl.summary` / `trace.summary`: `name`, `input`,
   `output`, `kernel_size`, `groups`, `params`, `params_pct`,
@@ -1809,11 +2096,15 @@ deprecation shim owed*
   tensors, their raw element count, and the mask zeros (`masked=None` when
   the capture retained no mask values).
 
-**FlopsReport.attention_full_square_ops** — *unstable — no deprecation shim owed*
-: The count of `scaled_dot_product_attention` ops in a `flops_report`
-  forward total; when non-zero the report prints that attention FLOPs
-  count the full query x key square and masks / `is_causal` are not
-  discounted.
+**FlopsReport.attention_full_square_ops / TraceProfile.attention_full_square_ops** — *unstable — no deprecation shim owed*
+: The count of `scaled_dot_product_attention` ops in the forward FLOP total
+  of a `flops_report` or a `trace.profile()`; when non-zero the report or the
+  profile footer prints that attention FLOPs count the full query x key
+  square and masks / `is_causal` are not discounted. Every attention FLOP
+  line carries the same note: the `tl.summary` FLOP cells (marked, with the
+  note as a legend), the `explain` FLOPs line, and graph labels, where an
+  attention node's `flops` label field or `flops` overlay row is followed by
+  the note.
 
 **`output_style_unknown`** — *unstable — no deprecation shim owed*
 : The typed refusal (an `InvalidArgumentError`) for a
@@ -1908,3 +2199,44 @@ deprecation shim owed*
 **Trace.total_backward_memory**
 : Bytes of the gradient payloads the trace retains, counted once per storage: a payload that is a
   view charges its whole base storage, an expanded gradient its smaller storage.
+**torchlens.conformance.preview_scorecard(backend, *, workdir=None)** — *unstable — no deprecation shim owed*
+: Runs the full C0-C2 conformance packs for one preview backend (`jax`, `tf`,
+  `mlx`, `tinygrad`, `paddle`; `torch` scores the reference as a baseline) on
+  that backend's own config-built roster (a function root and a module or
+  object root) and returns a `PreviewScorecard`. Every case the runner defines
+  for the roster is one cell in exactly one state: `passed` (executed, its
+  independent oracle matched: output parity against a direct run compared as
+  arrays, a repeat with the same op count, a distinct equal reload), `failed`,
+  `unsupported` (a typed `BackendUnsupportedError`) or `not_run` (framework not
+  importable, with the install remedy, or not reached after an earlier failure
+  for the same model). All cells stay in the denominator. A scorecard is never
+  a claim: toy inputs earn nothing, and it carries no claim string. The
+  backends `run_conformance` and `resolve_adapter` accept are the same set
+  (`torchlens.conformance.PREVIEW_BACKENDS` plus `torch` and `fake`); an absent
+  framework yields named skips, never an error. A roster row that declares
+  `RosterModel.expected_op_kinds` (its independent op inventory: every
+  `Op.func_name` one forward performs, in order, derived from the model
+  definition) also runs `c1_op_inventory_complete`, so output parity can never
+  pass with an op missing or extra; every preview roster row declares one.
+
+**torchlens.conformance.PreviewScorecard** — *unstable — no deprecation shim owed*
+: The frozen canonical scorecard: `scorecard_version`, `backend`,
+  `framework_version` (`""` when absent), `suite_version`,
+  `torchlens_version`, `cells` (`ScorecardCell` rows of `tier`, `case_id`,
+  `family`, `state`, `detail`), `counts` (cells per state plus `denominator`),
+  `highest_tier` (highest tier whose every cell passed, cumulative from C0, or
+  `""`) and `sha256` over the canonical bytes with that field excluded.
+  `to_canonical_json()` renders the attested bytes (sorted keys, compact,
+  ASCII).
+
+**trace.ops counting (`len(trace.ops) == trace.num_ops`)** — *unstable — no deprecation shim owed*
+: `len`, iteration, integer indexing, `keys()`/`values()`/`items()` and
+  `to_pandas()` of `trace.ops` cover the ops `trace.num_ops` counts (no
+  input, output or buffer rows; sumfam F1). Label lookup still resolves every
+  row: `trace.ops["input_1"]` returns the input row and `"input_1" in
+  trace.ops` is true although the label is not in `trace.ops.keys()`. The
+  every-row sequence (inputs, outputs and buffers included) is
+  `trace.layer_list`; `len(trace)`, `trace[int]` and `trace[slice]` index it.
+  Only `trace.ops` is the counted view: `input_ops`, `output_ops`,
+  `saved_ops`, `saved_grad_ops`, `compute_ops` and `ops_with_params` list
+  exactly their rows, boundary rows included.

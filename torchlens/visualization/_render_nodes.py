@@ -315,7 +315,7 @@ def _op_for_occurrence_label(trace: "Trace", label: str | None) -> Op | None:
         return None
     if label in trace.ops:
         return trace.ops[label]
-    for op in trace.ops:
+    for op in trace.layer_list:
         if (
             getattr(op, "layer_label_raw", None) == label
             or getattr(op, "_layer_label_raw", None) == label
@@ -344,7 +344,7 @@ def _render_output_node_name_for_path(
     """
 
     output_labels = set(getattr(trace, "output_layers", ()) or ())
-    for op in trace.ops:
+    for op in trace.layer_list:
         if getattr(op, "layer_label", None) not in output_labels:
             continue
         if tuple(getattr(op, "container_path", ()) or ()) == path:
@@ -2011,9 +2011,7 @@ def compute_default_node_lines(
         selected_lines = _compute_selected_node_lines(
             layer_log, node_address, vis_mode, node_label_fields
         )
-        overlay = overlay_line(layer_log, node_overlay)
-        if overlay is not None:
-            selected_lines.append(overlay)
+        append_overlay_lines(selected_lines, layer_log, node_overlay)
         return selected_lines
 
     annotation = _rolling_annotation(layer_log, vis_mode)
@@ -2074,8 +2072,7 @@ def compute_default_node_lines(
     address_line = format_module_path(node_address)
     if address_line is not None:
         lines.append(address_line)
-    if (overlay := overlay_line(layer_log, node_overlay)) is not None:
-        lines.append(overlay)
+    append_overlay_lines(lines, layer_log, node_overlay)
     return lines
 
 

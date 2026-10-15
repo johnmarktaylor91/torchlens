@@ -109,6 +109,13 @@ brainscore = ["brainscore_vision~=2.3; python_version >= '3.11'"]
 # CI pins netron==9.2.2 EXACT for the vendor-parser harness (pin REFRESHED,
 # never widened); the artifact FILE itself needs no extra.
 netron = ["netron>=9.2,<10"]
+# The Model Explorer serve one-liner's teaching refusal
+# (model_explorer_serve_unavailable) names this extra, matching the netron
+# one; floored at the vendor-contract pin and bounded below the next minor.
+# CI pins ai-edge-model-explorer==0.1.33 EXACT for the vendor-contract job
+# (pin REFRESHED after the contract passes on it, never widened); the
+# exported collection FILE itself needs no extra.
+model-explorer = ["ai-edge-model-explorer>=0.1.33,<0.2"]
 # F16: the treescope bridge extra. torchlens/bridge/treescope.py probes
 # capability at first use, so the released-but-torch-broken 0.1.10 stays
 # installable and degrades strictly (the probe, not the pin, is the gate).
@@ -192,17 +199,17 @@ inseq = ["inseq~=0.6"]
 # the bridge calls steering_vectors.mean_aggregator, absent from early 0.x releases.
 steering = ["steering-vectors~=0.12"]
 repeng = ["repeng~=0.4"]
-# D05 extras audit (2026-09-02): dialz 0.2 and 1.x import IPython.display at import
-# time (dialz/visualize.py) without declaring ipython, so `torchlens[dialz]` installed
+# D05 extras audit (2026-09-02): dialz imports IPython.display at import time
+# (dialz/visualize.py) without declaring ipython, so `torchlens[dialz]` installed
 # but could not `import dialz` in a clean venv -- the ipython rider closes that.
-# The pin spans 0.2 through 1.x: the bridge is verified bit-identical against
-# SteeringVector.train on dialz 0.2.0 and 1.1.4 (tests/test_bridge_real_dialz.py).
+# dialz floor = the tested line (1.1.4, tests/test_bridge_real_dialz.py): the
+# converter (Direction.to_dialz) reproduces the native steer's logits through
+# SteeringModel.set_control there; nothing needs the 0.2 line.
 # Its gguf<0.14 pin resolves sentencepiece 0.2.0, which ships no cp313 wheels and
 # fails its sdist build, so the extra is marked out on 3.13 (installable, empty;
 # the fix-by-exclusion idiom the tinygrad extra already uses). The same two
 # members appear in all-stretch below.
-dialz = ["dialz>=0.2,<2; python_version < '3.13'", "ipython>=8.0; python_version < '3.13'"]
-nnsight = ["nnsight~=0.4"]
+dialz = ["dialz>=1.1,<2; python_version < '3.13'", "ipython>=8.0; python_version < '3.13'"]
 # lit-nlp is bounded to the 1.3 line (LIT-panel memo item 1): `~=1.3` admitted
 # every future 1.x. lit-nlp 1.3 requires numpy<2 and shap>=0.42,<0.46; the
 # shap extra's 0.45.1 floor makes [lit,shap] resolve (nightly lit-real asserts
@@ -224,7 +231,7 @@ vision-shims = ["torchvision>=0.18,<1"]
 #     `torchlens[lit]` separately when the LIT bridge is wanted.
 #   * The framework-backend extras (jax/tf/tensorflow/paddle/mlx/tinygrad)
 #     stay excluded for conflicting pins.
-#   * Nine further extras (captum, hf, sae, nnsight, notebook, neuro,
+#   * Eight further extras (captum, hf, sae, notebook, neuro,
 #     tabular, wandb, lightning) are not rolled up, so `torchlens[all]`
 #     never meant "everything".
 # `pip install torchlens[all]` requests exactly `torchlens[all-stretch]`;
@@ -238,7 +245,7 @@ all-stretch = [
     "steering-vectors~=0.12",
     "repeng~=0.4",
     # dialz: ipython rider + 3.13 exclusion, see the dialz extra above.
-    "dialz>=0.2,<2; python_version < '3.13'",
+    "dialz>=1.1,<2; python_version < '3.13'",
     "ipython>=8.0; python_version < '3.13'",
     "depyf~=0.18",
     "torchextractor>=0.3,<2",

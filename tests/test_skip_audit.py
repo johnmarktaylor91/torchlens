@@ -102,11 +102,6 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         "repeng extra; real-package bridge leg in nightly.yml bridges-real",
     ),
     "shap": (OPTIONAL_PREVIEW, "shap extra; real-package bridge leg in nightly.yml bridges-real"),
-    "sklearn": (
-        OPTIONAL_PREVIEW,
-        "scikit-learn PCA, pulled in by the repeng and dialz extras; gates the fake-based "
-        "contrastive read-representation parity tests in test_bridges_stretch.py",
-    ),
     "steering_vectors": (
         OPTIONAL_PREVIEW,
         "steering extra; real-package bridge leg in nightly.yml bridges-real",
@@ -128,6 +123,11 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
     ),
     "PIL": (TEST_EXTRA, "pillow (also a core torchlens dependency)"),
     "brainscore_core": (OPTIONAL_PREVIEW, "neuro extra (brain-score dist)"),
+    "brainscore_core.metrics": (
+        OPTIONAL_PREVIEW,
+        "brainscore extra; the real Score object whose raw and ceiling attrs "
+        "score_parts reads (tests/test_bridge_brain_score_parts.py)",
+    ),
     "brainscore_vision": (
         OPTIONAL_PREVIEW,
         "neuro extra; the ActivationsExtractorHelper adapter contract. The wheel "

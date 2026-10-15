@@ -33,7 +33,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io import TorchLensIOError
-from torchlens._io.bundle import _resolve_bundle_member_path
+from torchlens._io.bundle_container import _resolve_bundle_member_path
 from torchlens.errors.runnable import RunPreconditionError
 from torchlens.ir.container import (
     ContainerReconstructionError,
@@ -369,7 +369,7 @@ def test_bundle_loader_rejects_escaping_member_path(evil_path: str, tmp_path: Pa
 
     import json
 
-    from torchlens._io.bundle import _load_unified_bundle_directory
+    from torchlens._io.bundle_container import _load_unified_bundle_directory
 
     bundle_path = tmp_path / "bundle.tlspec"
     bundle_path.mkdir()

@@ -760,7 +760,7 @@ def _model_position_limit(model: Module) -> int | None:
 
 
 def _refuse_beyond_position_limit(model: Module, length: int) -> None:
-    """Refuse an un-truncated input longer than the model's position limit (U23.3).
+    """Refuse an un-truncated input longer than the model's position limit.
 
     Without ``max_length`` a long input ran past the position table and either
     crashed inside the model or scored positions the model never trained on.

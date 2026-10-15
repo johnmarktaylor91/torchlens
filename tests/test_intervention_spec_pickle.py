@@ -5,7 +5,7 @@ Pre-fix, plain ``pickle`` of a Trace captured with ``intervene=`` failed
 closures) while ``tl.save`` of the same trace succeeded -- a serialization
 split on one object. Two aligned fixes:
 
-* ``HelperSpec`` pickle hooks drop the builtin factory closure and rebuild it
+* ``Edit`` pickle hooks drop the builtin factory closure and rebuild it
   at restore through the SAME builtin registry ``tl.load`` uses
   (``rebuild_builtin_helper``); ``opaque_audit`` factories drop to the
   canonical factory-less audit-only form.
@@ -24,7 +24,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention.types import HelperSpec
+from torchlens.intervention.types import Edit
 
 
 class _Net(nn.Module):
@@ -58,11 +58,11 @@ def intervened_trace() -> Iterator[tl.Trace]:
 
 
 def test_builtin_helper_spec_pickle_rebuilds_factory() -> None:
-    """A builtin ``HelperSpec`` pickles; the restored factory works."""
+    """A builtin ``Edit`` pickles; the restored factory works."""
 
     spec = tl.zero_ablate()
     restored = pickle.loads(pickle.dumps(spec))
-    assert isinstance(restored, HelperSpec)
+    assert isinstance(restored, Edit)
     assert restored.helper_name == spec.helper_name
     assert restored.factory is not None
     hook = restored()
@@ -170,7 +170,7 @@ def test_every_minted_builtin_helper_name_is_rebuildable() -> None:
                 first = node.args[0]
                 if isinstance(first, ast.Constant) and isinstance(first.value, str):
                     minted.add(first.value)
-            if func_name == "HelperSpec":
+            if func_name == "Edit":
                 name_kw = next((kw.value for kw in node.keywords if kw.arg == "helper_name"), None)
                 if isinstance(name_kw, ast.Constant) and isinstance(name_kw.value, str):
                     minted.add(name_kw.value)

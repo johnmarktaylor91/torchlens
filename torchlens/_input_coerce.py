@@ -126,7 +126,7 @@ def _reject_extra_positional_input(grad_transform: Any) -> None:
 
 
 def _reject_non_mapping_input_kwargs(input_kwargs: Any) -> None:
-    """Refuse a non-Mapping ``input_kwargs`` before any backend dispatch (U11.2).
+    """Refuse a non-Mapping ``input_kwargs`` before any backend dispatch.
 
     The natural multi-input spelling ``tl.trace(model, a, b)`` lands ``b`` in
     ``input_kwargs``. The torch path refused it typed, but other backends (the

@@ -132,7 +132,10 @@ trace.json True
 ### `chrome_trace_diff`
 
 `tl.export.chrome_trace_diff(bundle, path)` writes one Chrome timeline comparing the members of a
-TorchLens `Bundle`.
+TorchLens `Bundle`. Its per-node deltas come from `bundle.norm_delta()`, so they need members that pass the
+Bundle comparison gate (one shared graph, equal input values). Members that do not still export
+their timelines; only the deltas are refused: every event's `delta` is `None` and
+`metadata["deltas"]` records the gate's code (for example `bundle_gate_input_values_differ`).
 
 ```python
 from pathlib import Path
@@ -140,7 +143,8 @@ import torch
 from torch import nn
 import torchlens as tl
 
-bundle = tl.bundle({"first": tl.trace(nn.ReLU(), torch.ones(1, 2)), "second": tl.trace(nn.ReLU(), torch.zeros(1, 2))})
+x = torch.ones(1, 2)
+bundle = tl.bundle({"first": tl.trace(nn.ReLU(), x), "second": tl.trace(nn.ReLU(), x)})
 path = tl.export.chrome_trace_diff(bundle, Path(globals().get("DOCS_TMPDIR", "/tmp")) / "diff.json")
 print(path.name, path.exists())
 ```

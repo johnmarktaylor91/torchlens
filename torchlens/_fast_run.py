@@ -26,6 +26,7 @@ from ._fast_live_steer import (
     SteerPlan,
     clear_unrefreshed_shape_metadata,
     fast_live_input_admission,
+    hooked_run_diagnostic,
     install_steer_hooks,
     refusal_code,
     session_is_active,
@@ -1010,6 +1011,9 @@ class _FastLiveSession:
         self.shape_metadata_cleared = False
         self.allow_size_change = True
         self.poison_on_divergence = True
+        # The explicit fast door reports a run verdict, so a hooked run settles
+        # unverifiable there (see ``_finalize_run``).
+        self.reports_hooked_ceiling = True
         self.output_transform: Any = None
         self.last_fingerprint: tuple[int, int] | None = None
         self.refreshed_labels: frozenset[str] = frozenset(supported_labels)
@@ -1298,7 +1302,7 @@ class _FastLiveSession:
     def run(self, inputs: Any, *, seed: int | None, until: Any = None) -> RunResult:
         """Execute one native forward and enforce the cached static graph guard.
 
-        ``until`` names a saved module the forward stops after (U26.3): the
+        ``until`` names a saved module the forward stops after: the
         prefix keeps every per-call guard, the cut is disclosed as a
         ``RunTruncation``, and the call fingerprint (a whole-forward guard)
         cannot be compared, so the verdict is ``unverifiable``.
@@ -1442,9 +1446,12 @@ class _FastLiveSession:
         # container at UNVERIFIABLE. fast=True must never improve the verdict the
         # ordinary provider would settle on the same trace.
         lossy = _container_spec_reconstruction_lossy(_output_container_spec(self.trace))
+        # A run that applied staged user edits is an edited forward: unverifiable and
+        # not pristine until a hook-aware check exists, never VERIFIED.
+        hooked = hooked_run_diagnostic(self.trace) if self.reports_hooked_ceiling else None
         provisional = (
             PathFaithfulness.UNVERIFIABLE
-            if lossy or truncation is not None
+            if lossy or truncation is not None or hooked is not None
             else PathFaithfulness.VERIFIED
         )
         # Same declaration contract as the ordinary live provider (deephunt
@@ -1466,7 +1473,7 @@ class _FastLiveSession:
             random_filled_slot_ids=(),
             contract_checks=(guard_check,),
             provisional_path_faithfulness=provisional,
-            provisional_mismatch=None,
+            provisional_mismatch=hooked,
             numeric_attestation=NumericAttestationStatus.NOT_PRESENT,
             divergence_policy=DivergencePolicy.RAISE,
             nondeterministic_sources=nondeterministic_sources,
@@ -1742,6 +1749,9 @@ def try_guarded_fast_rerun(
     try:
         session = _FastLiveSession(trace, model)
         session.poison_on_divergence = False
+        # The legacy door returns the refreshed Trace, not a run verdict; the
+        # hooked-run ceiling belongs to the explicit run(inputs=, fast=True) door.
+        session.reports_hooked_ceiling = False
         session.output_transform = output_transform
         session.run(inputs, seed=None)
     except _FAST_RERUN_REFUSALS as exc:

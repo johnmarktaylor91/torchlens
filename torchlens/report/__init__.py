@@ -2,11 +2,6 @@
 
 from __future__ import annotations
 
-# ``log_value``'s canonical home is ``torchlens.observers`` (capture-time
-# annotation WRITERS live with the observers; reporting surfaces are the
-# READERS). This import is the kept compatibility alias for the historical
-# ``tl.report.log_value`` spelling.
-from ..observers import log_value
 from ._compute_truth import ComputeAggregation, ComputeRow, RatioFact, compute_aggregation
 from ._cost_backward import (
     BACKWARD_STATES,
@@ -188,7 +183,6 @@ __all__ = [
     "health_facts",
     "instrumented_rate",
     "instrumented_rate_calibration",
-    "log_value",
     "machine_balance",
     "mfu",
     "nonfinite_verdict",

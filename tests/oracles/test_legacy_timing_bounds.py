@@ -137,6 +137,9 @@ def test_backward_durations_are_bounded_by_an_outside_clock() -> None:
         trace.cleanup()
 
 
+SPAWNED_THREAD = "legacy-timing-spawned"
+
+
 class Spawner(nn.Module):
     """Starts one thread that outlives the forward."""
 
@@ -146,7 +149,7 @@ class Spawner(nn.Module):
         self.stop = stop
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        threading.Thread(target=self.stop.wait, daemon=True).start()
+        threading.Thread(target=self.stop.wait, name=SPAWNED_THREAD, daemon=True).start()
         return self.fc(x)
 
 
@@ -173,6 +176,9 @@ def test_capture_thread_counts_match_a_recount() -> None:
             trace.cleanup()
     finally:
         stop.set()
+        for thread in threading.enumerate():
+            if thread.name == SPAWNED_THREAD:
+                thread.join(timeout=30)
 
 
 class _DispatchCount(TorchDispatchMode):

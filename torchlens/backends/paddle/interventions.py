@@ -23,7 +23,7 @@ from ... import _state
 from ...fastlog.exceptions import PredicateError
 from ...intervention.predicates import as_intervention_decision
 from ...intervention.selectors import BaseSelector
-from ...intervention.types import FireRecord, HelperSpec, InterventionDecision, TargetSpec
+from ...intervention.types import Edit, FireRecord, InterventionDecision, TargetSpec
 from ...ir.intervention import FireResult
 from ...ir.predicate import RecordContext
 from ..registry import BackendUnsupportedError
@@ -119,7 +119,7 @@ class PaddleInterventionRuntime:
             decision = as_intervention_decision(result)
         except TypeError as exc:
             raise PredicateError(
-                "intervene predicate must return InterventionDecision, HelperSpec, "
+                "intervene predicate must return InterventionDecision, Edit, "
                 "callable, or None. "
                 "Remedy: return one of those values from the intervene predicate.",
                 ctx=ctx,
@@ -162,7 +162,7 @@ class PaddleInterventionRuntime:
         """
 
         self._reject_unsupported_decision(decision)
-        helper_spec = decision.hook if isinstance(decision.hook, HelperSpec) else None
+        helper_spec = decision.hook if isinstance(decision.hook, Edit) else None
         hook_fn = self._resolve_hook(decision)
         with _state.pause_logging():
             replacement = hook_fn(tensor)
@@ -253,7 +253,7 @@ class PaddleInterventionRuntime:
         frozen_target = target.freeze()
         if all(existing.freeze() != frozen_target for existing in spec.targets):
             spec.targets.append(target)
-        helper_spec = decision.hook if isinstance(decision.hook, HelperSpec) else None
+        helper_spec = decision.hook if isinstance(decision.hook, Edit) else None
         spec.add_hook(
             target,
             decision.hook,
@@ -310,7 +310,7 @@ class PaddleInterventionRuntime:
         """
 
         hook = decision.hook
-        if isinstance(hook, HelperSpec):
+        if isinstance(hook, Edit):
             return self._resolve_helper_hook(hook)
         if callable(hook):
             return hook
@@ -319,7 +319,7 @@ class PaddleInterventionRuntime:
             f"helper spec or a callable hook; got {type(hook).__name__!s}."
         )
 
-    def _resolve_helper_hook(self, helper: HelperSpec) -> Callable[[Any], Any]:
+    def _resolve_helper_hook(self, helper: Edit) -> Callable[[Any], Any]:
         """Return the Paddle adapter for one builtin helper spec.
 
         The builtin helper factories build torch hooks, so each supported

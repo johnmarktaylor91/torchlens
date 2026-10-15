@@ -22,6 +22,9 @@ Hard rules implemented here (each earned by a measurement in the memo):
   ids, no unscoped selectors.
 - **``<details>`` folding**: fold state is native HTML, readable with JS
   disabled.
+- **Hover values with a static floor**: grid cells carry their source index
+  and value as attributes (native tooltip with JS blocked); an optional
+  inline script adds a hover readout line and nothing else.
 - **Clipboard with click-to-select degradation**: copyable access
   expressions carry a stable ``data-lookup-key`` attribute and a clipboard
   handler; with JS disabled the CSS ``user-select: all`` makes one click
@@ -240,6 +243,8 @@ def card_css(theme: str = "torchlens") -> str:
         f"{scope} .tl-motif-masked,{scope} .tl-motif-unknown{{color:{tokens.muted}}}"
         f"{scope} .tl-motif-oor{{font-weight:700;color:{tokens.notice}}}"
         f"{scope} .tl-card-sentinel{{color:{tokens.muted};font-size:12px}}"
+        f"{scope} .tl-grid-hover{{font-family:ui-monospace,monospace;color:{tokens.muted};"
+        "font-size:11px;min-height:1.2em}"
         "</style>"
     )
 
@@ -250,6 +255,29 @@ def card_css(theme: str = "torchlens") -> str:
 _CLIPBOARD_ONCLICK = (
     "if(navigator.clipboard){navigator.clipboard.writeText(this.dataset.lookupKey);}"
 )
+
+
+# Optional hover readout for grid cells (treescope-style hover values). The
+# card is complete without it: every cell already carries its index and
+# value in static ``title`` / ``data-tl-*`` attributes. The script binds to
+# the card rendered just before it, reads only those attributes, and writes
+# only ``textContent`` -- no network, no dynamic code, no markup injection.
+_CARD_HOVER_SCRIPT = (
+    "<script>(function(){var s=document.currentScript,"
+    "c=s&&s.previousElementSibling;"
+    'if(!c||c.getAttribute("data-tl-hover"))return;c.setAttribute("data-tl-hover","1");'
+    'c.addEventListener("mouseover",function(e){var t=e.target;'
+    'if(!t||!t.getAttribute)return;var i=t.getAttribute("data-tl-index");'
+    'if(i===null)return;var g=t.closest(".tl-grid"),'
+    'o=g&&g.querySelector(".tl-grid-hover");'
+    'if(o)o.textContent=i+" = "+t.getAttribute("data-tl-value");});'
+    'c.addEventListener("mouseleave",function(){'
+    'c.querySelectorAll(".tl-grid-hover").forEach(function(o){o.textContent="";});});'
+    "})();</script>"
+)
+
+#: Static marker that a rendered fragment holds hover-capable grid cells.
+_HOVER_MARKER = "data-tl-index="
 
 
 def render_card_html(node: CardNode, *, theme: str = "torchlens", include_css: bool = True) -> str:
@@ -267,7 +295,11 @@ def render_card_html(node: CardNode, *, theme: str = "torchlens", include_css: b
     """
 
     prefix = card_css(theme) if include_css else ""
-    return f"{prefix}{_render_node(node)}"
+    body = _render_node(node)
+    # Only cards with grid cells get the hover script; it is never needed
+    # to read the card.
+    suffix = _CARD_HOVER_SCRIPT if _HOVER_MARKER in body else ""
+    return f"{prefix}{body}{suffix}"
 
 
 def _render_node(node: CardNode) -> str:

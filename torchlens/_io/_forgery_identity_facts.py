@@ -211,7 +211,7 @@ def _validate_tl_authored_root(trace: Trace) -> None:
 
 
 def _validate_forward_peak_memory_reason(trace: Trace) -> None:
-    """Validate the forward-peak reason pair (forks.13; tlspec v10).
+    """Validate the forward-peak reason pair (tlspec v10).
 
     ``forward_peak_memory_reason`` is ``None`` (a value was measured, or the
     artifact predates the field) or a non-empty string explaining why

@@ -6,6 +6,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, Final
 
 from .._errors import InvalidArgumentError
+from ..capture.flops import append_attention_note
 from ..quantities import Duration
 from ..utils._multipass_access import get_multipass_attr, is_multipass_layer
 from ..utils.display import human_readable_size
@@ -486,6 +487,7 @@ def compute_selected_node_lines(
                 rows.append(str(get_multipass_attr(layer_log, "num_passes", 1)))
         elif field_name == "flops":
             rows.append(str(getattr(layer_log, "flops_forward", 0) or 0))
+            append_attention_note(rows, layer_log)
         elif field_name == "time":
             if is_multipass_layer(layer_log):
                 # Rolled recurrent node: ``func_duration`` is per-pass and would

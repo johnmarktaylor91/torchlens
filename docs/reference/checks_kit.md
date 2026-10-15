@@ -12,6 +12,28 @@ ratios -- with each check honestly redefined by measurement rather than
 transplanted naively (the naive versions of the two flagship checks are
 provably broken; see "What the measurements broke" below).
 
+### Coming from torcheck
+
+torcheck's nine registrar calls and its four controls, mapped to the checks kit. The
+checks are redefined by measurement, so a row maps the intent, not identical
+semantics (see "What the measurements broke" below).
+
+| torcheck | Checks kit | Notes |
+| --- | --- | --- |
+| `torcheck.register(optimizer)` | `session = checks.ChecksSession(model, optimizer)`, then `with session:` (or `session.attach()`) | Hooks install on attach, not on construction. |
+| `add_module_changing_check(module)` | `session.register_change_check(within=[...parameter names])` | Detects parameters that stop receiving gradient over a window of steps. |
+| `add_tensor_changing_check(tensor)` | `session.register_change_check(within=["name"])` | Name the parameter. |
+| `add_module_unchanging_check(module)` | `session.register_frozen_check([...parameter names])` | Declared-frozen parameters; the default evidence keeps exact snapshots and shows the delta. |
+| `add_tensor_unchanging_check(tensor)` | `session.register_frozen_check(["name"])` | |
+| `add_module_output_range_check(module, output_range=(low, high))` | `checks.RangeProbe({site: (low, high)})`, passed to a trace as `capture=tl.options.CaptureOptions(hooks=probe.hook_plan())` | Sites are TorchLens selectors such as `tl.func("softmax")`. |
+| `add_module_nan_check(module)` | `session.register_nonfinite_param_check()` and `session.register_nonfinite_gradient_check()`; for activations, `tl.trace(..., capture=tl.options.CaptureOptions(raise_on_nan=True))` | Parameters, gradients and activations are checked at the points where the evidence is exact. |
+| `add_module_inf_check(module)` | The same three checks | They cover NaN and Inf together. |
+| `add_tensor_nan_check(tensor)` | `session.register_nonfinite_param_check()` | Scans every parameter and, by default, every buffer. |
+| `add_tensor_inf_check(tensor)` | `session.register_nonfinite_param_check()` | |
+| `torcheck.disable()` | `session.disable()` | |
+| `torcheck.enable()` | `session.enable()` | `with session.paused():` suspends checks for a block. |
+| `torcheck.verbose_on()` / `verbose_off()` | `session.report()` | Findings collect into the report; `action="raise"`, `"warn"` or `"collect"` on each registration sets what interrupts the loop. |
+
 Start with torch's own tripwire: `clip_grad_norm_(error_if_nonfinite=True)`.
 It is upstream, free, and OFF by default -- and without it the canonical clip
 recipe SILENTLY ZEROES every healthy gradient in the model and NaN-poisons the

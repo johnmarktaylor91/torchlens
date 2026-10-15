@@ -1,4 +1,4 @@
-"""Plain-attribute leg of the capture observer bracket (U40.1, AGT-2360).
+"""Plain-attribute leg of the capture observer bracket.
 
 A default ``tl.trace`` is a full pure observer: after the capture every plain
 instance attribute of every (non-lazy) module holds the object it held before
@@ -11,8 +11,12 @@ records the same rows and leaves the writes on the module.
 The restore keeps identity: an object the forward rebound is put back in its
 slot, and a builtin ``list``/``dict``/``set`` or a tensor the forward changed in
 place is restored in place, so outside references to it see the restored
-contents too. Objects without a value snapshot (custom objects, containers past
-the snapshot bounds) are tracked by identity only.
+contents too. Builtin containers are snapshotted whatever their size, and a
+tensor inside one is cloned whatever its size. Custom objects (and the items of a
+container that are custom objects) are tracked by identity only. Containers nested
+deeper than :data:`_MAX_DEPTH` levels are tracked by identity below that level, and
+the capture names such an attribute in its ``capture_state_restore_incomplete``
+warning.
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+import numpy as np
 import torch
 
 from .data_classes.attribute_write import AttributeWrite
@@ -47,10 +52,13 @@ _RESTORE_ERRORS = (
 )
 
 _IMMUTABLE_SCALARS = (type(None), bool, int, float, complex, str, bytes)
+_SCALAR_TYPES = frozenset(_IMMUTABLE_SCALARS)
 _MISSING = object()
-#: Container depth the skeleton, restore and record copy descend (the
-#: validation snapshotter's own bound).
-_MAX_DEPTH = 64
+#: Container depth the snapshot, skeleton, compare, restore and record copy
+#: descend. Each level costs at most two Python frames (a comprehension frame on
+#: Python < 3.12), so 256 levels stay well inside the default 1000-frame
+#: recursion limit; a ``RecursionError`` is still caught and disclosed.
+_MAX_DEPTH = 256
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +75,9 @@ class _AttrSlot:
     original: Any
     snapshot: Any
     skeleton: Any
+    #: The attribute nests deeper than ``_MAX_DEPTH`` (or overflowed the
+    #: recursion limit): changes below that depth are neither restored nor recorded.
+    incomplete: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,31 +105,180 @@ def observer_attr_names(module: Any) -> frozenset[str]:
     )
 
 
-def _value_snapshot(module: Any, name: str, attr_path: str) -> Any:
-    """Snapshot one attribute by value, or by identity when unsupported.
+def _value_snapshot(module: Any, name: str, attr_path: str) -> tuple[Any, bool]:
+    """Snapshot one attribute by value; return ``(snapshot, incomplete)``.
 
-    The validation snapshotter covers scalars, strings, tensors up to 4096
-    elements and builtin containers of them (128 items, 64 levels). A larger
-    plain tensor is cloned whole, like a buffer; any other object is tracked by
-    identity, so a forward that rebinds it is undone while its interior is
-    outside the bracket.
+    Managed (parametrization) tensors, registered tensor aliases and e3nn
+    ``Irreps`` keep the validation snapshotter's rules. Everything else goes
+    through :func:`_observer_snapshot`: builtin containers of any size, tensors
+    cloned whole, custom objects by identity. ``incomplete`` is true when part of
+    the value nests past ``_MAX_DEPTH`` levels.
     """
 
     from ._capture_state_helpers import (
+        _managed_plain_tensor_attr_snapshot,
         _PlainAttrIdentitySnapshot,
         _snapshot_module_plain_attr_value,
     )
+    from ._plain_attr_fidelity import is_registered_tensor_alias
+
+    value = module.__dict__[name]
+    if _managed_plain_tensor_attr_snapshot(module, name, value) is not None or (
+        is_registered_tensor_alias(module, value)
+    ):
+        return _snapshot_module_plain_attr_value(module, name, attr_path), False
+    truncated: list[bool] = []
+    try:
+        return _observer_snapshot(value, 0, set(), truncated), bool(truncated)
+    except RecursionError:
+        return _PlainAttrIdentitySnapshot(value=value, value_type_name=type(value).__name__), True
+
+
+def _snapshot_tensor(value: torch.Tensor) -> Any:
+    """Clone a tensor whole (a meta tensor, or one that cannot be cloned, by identity)."""
+
+    from ._capture_state_helpers import _PlainAttrIdentitySnapshot
+
+    if not value.is_meta:
+        try:
+            return value.detach().clone()
+        except _RESTORE_ERRORS:
+            pass
+    return _PlainAttrIdentitySnapshot(value=value, value_type_name=type(value).__name__)
+
+
+def _snapshot_leaf(value: Any) -> Any:
+    """Snapshot a non-container value: itself when immutable, else by identity."""
+
+    from ._capture_state_helpers import _is_identity_stable_plain_attr, _PlainAttrIdentitySnapshot
+
+    if isinstance(value, _IMMUTABLE_SCALARS):
+        return value
+    if isinstance(value, np.generic) and not isinstance(value, np.void):
+        return value  # NumPy scalars are immutable; a structured np.void is a view
+    if isinstance(value, torch.Tensor) and not _is_identity_stable_plain_attr(value):
+        return _snapshot_tensor(value)
+    return _PlainAttrIdentitySnapshot(value=value, value_type_name=type(value).__name__)
+
+
+def _is_e3nn_tuple(value: Any) -> bool:
+    """Return whether ``value`` is an e3nn ``Irreps`` tuple (validation snapshot rules)."""
+
+    kind = type(value)
+    return kind.__module__ == "e3nn.o3._irreps" and kind.__qualname__ in {
+        "Irreps",
+        "_MulIr",
+        "Irrep",
+    }
+
+
+def _observer_snapshot(value: Any, depth: int, ancestors: set[int], truncated: list[bool]) -> Any:
+    """Snapshot a plain-attribute value for the observer bracket.
+
+    Builtin ``list``/``tuple``/``dict``/``set``/``frozenset`` containers are
+    copied whatever their size, item by item; dict keys and set items are kept
+    as they are (hashable). A container past ``_MAX_DEPTH`` levels, or one that contains
+    itself, is tracked by identity at that point; past the depth bound
+    ``truncated`` is marked, so the capture can name the attribute.
+    """
+
+    from ._capture_state_helpers import _PlainAttrIdentitySnapshot
+
+    kind = type(value)
+    if kind in _SCALAR_TYPES:
+        return value
+    if not isinstance(value, (list, tuple, dict, set, frozenset)):
+        return _snapshot_leaf(value)
+    if _is_e3nn_tuple(value):
+        return _snapshot_e3nn(value)
+    if depth >= _MAX_DEPTH or id(value) in ancestors:
+        if depth >= _MAX_DEPTH:
+            truncated.append(True)
+        return _PlainAttrIdentitySnapshot(value=value, value_type_name=kind.__name__)
+    if isinstance(value, (set, frozenset)):
+        return frozenset(value)  # hashable items: a set changes by membership only
+    return _snapshot_container(value, depth, ancestors, truncated)
+
+
+def _snapshot_e3nn(value: Any) -> Any:
+    """Snapshot an e3nn ``Irreps`` tuple with the validation rules, else by identity."""
+
+    from ._capture_state_helpers import _PlainAttrIdentitySnapshot, _snapshot_plain_attr_value
 
     try:
-        return _snapshot_module_plain_attr_value(module, name, attr_path)
+        return _snapshot_plain_attr_value(value, "<e3nn>")
     except RuntimeError:
-        value = module.__dict__[name]
-        if isinstance(value, torch.Tensor) and not value.is_meta:
-            try:
-                return value.detach().clone()
-            except _RESTORE_ERRORS:
-                pass
         return _PlainAttrIdentitySnapshot(value=value, value_type_name=type(value).__name__)
+
+
+def _snapshot_container(
+    value: list[Any] | tuple[Any, ...] | dict[Any, Any],
+    depth: int,
+    ancestors: set[int],
+    truncated: list[bool],
+) -> Any:
+    """Copy a builtin list, tuple or dict item by item (cycle-guarded by ``ancestors``)."""
+
+    def _item(item: Any) -> Any:
+        """Keep a scalar item as is; snapshot any other item one level deeper."""
+        if type(item) in _SCALAR_TYPES:
+            return item
+        return _observer_snapshot(item, depth + 1, ancestors, truncated)
+
+    ancestors.add(id(value))
+    try:
+        if isinstance(value, dict):
+            return {key: _item(item) for key, item in value.items()}
+        items = [_item(item) for item in value]
+        # A list (tuple) subclass snapshots as a plain list (tuple) of its items.
+        return items if isinstance(value, list) else tuple(items)
+    finally:
+        ancestors.discard(id(value))
+
+
+def _observer_unchanged(value: Any, snapshot: Any, depth: int = 0) -> bool:
+    """Return whether ``value`` still matches its observer snapshot (NaN-safe)."""
+
+    if isinstance(snapshot, (dict, frozenset, list, tuple)):
+        return _container_unchanged(value, snapshot, depth)
+    return _leaf_unchanged(value, snapshot)
+
+
+def _leaf_unchanged(value: Any, snapshot: Any) -> bool:
+    """Compare a value with a non-container observer snapshot."""
+
+    from ._capture_state_helpers import _PlainAttrIdentitySnapshot
+    from ._runnable_state import declared_slot_unchanged
+
+    if isinstance(snapshot, _PlainAttrIdentitySnapshot):
+        return value is snapshot.value
+    if isinstance(snapshot, torch.Tensor):
+        return isinstance(value, torch.Tensor) and declared_slot_unchanged(value, snapshot)
+    if isinstance(snapshot, (_IMMUTABLE_SCALARS, np.generic)):
+        return _equal_scalar(value, snapshot) or (
+            isinstance(snapshot, np.generic)
+            and type(value) is type(snapshot)
+            and bool(value == snapshot)
+        )
+    return False
+
+
+def _container_unchanged(value: Any, snapshot: Any, depth: int) -> bool:
+    """Compare a value with a dict, frozenset, list or tuple observer snapshot."""
+
+    if isinstance(snapshot, dict):
+        if not isinstance(value, dict) or value.keys() != snapshot.keys():
+            return False
+        return all(_observer_unchanged(value[key], snapshot[key], depth + 1) for key in snapshot)
+    if isinstance(snapshot, frozenset):
+        return isinstance(value, (set, frozenset)) and bool(value == snapshot)
+    if not isinstance(value, type(snapshot)) or len(value) != len(snapshot):
+        return False
+    return all(
+        (item is item_snapshot and type(item) in _SCALAR_TYPES)
+        or _observer_unchanged(item, item_snapshot, depth + 1)
+        for item, item_snapshot in zip(value, snapshot, strict=True)
+    )
 
 
 def _skeleton(value: Any, depth: int = 0) -> Any:
@@ -137,10 +297,16 @@ def _skeleton(value: Any, depth: int = 0) -> Any:
     if depth >= _MAX_DEPTH:
         return None
     if isinstance(value, (list, tuple)):
-        return [(item, _skeleton(item, depth + 1)) for item in value]
-    if type(value) is dict:
-        return [(key, item, _skeleton(item, depth + 1)) for key, item in value.items()]
-    if type(value) in (set, frozenset):
+        return [
+            (item, None if type(item) in _SCALAR_TYPES else _skeleton(item, depth + 1))
+            for item in value
+        ]
+    if isinstance(value, dict):
+        return [
+            (key, item, None if type(item) in _SCALAR_TYPES else _skeleton(item, depth + 1))
+            for key, item in value.items()
+        ]
+    if isinstance(value, (set, frozenset)):
         return list(value)
     return None
 
@@ -159,13 +325,13 @@ def snapshot_module_attrs(modules: list[tuple[str, Any]]) -> tuple[ModuleAttrSna
         for name in sorted(names):
             original = module.__dict__[name]
             attr_path = f"{path or '<root>'}.{name}"
-            snapshot = _value_snapshot(module, name, attr_path)
+            snapshot, incomplete = _value_snapshot(module, name, attr_path)
             skeleton = (
                 None
                 if _is_identity_only(snapshot) or _is_special(snapshot)
                 else (_skeleton(original))
             )
-            slots.append(_AttrSlot(name, attr_path, original, snapshot, skeleton))
+            slots.append(_AttrSlot(name, attr_path, original, snapshot, skeleton, incomplete))
         snapshots.append(ModuleAttrSnapshot(module, type(module), names, tuple(slots)))
     return tuple(snapshots)
 
@@ -189,30 +355,20 @@ def _is_special(snapshot: Any) -> bool:
 def _contents_unchanged(module: Any, slot: _AttrSlot) -> bool:
     """Return whether the ORIGINAL object still has its snapshot contents."""
 
-    from ._capture_state_helpers import (
-        _plain_attr_values_equal,
-        _snapshot_module_plain_attr_value,
-        _snapshot_plain_attr_value,
-    )
-    from ._runnable_state import declared_slot_unchanged
+    from ._capture_state_helpers import _plain_attr_values_equal, _snapshot_module_plain_attr_value
 
     snapshot = slot.snapshot
     if _is_identity_only(snapshot):
         return True  # interior invisible to the bracket
-    if isinstance(snapshot, torch.Tensor):
-        return isinstance(slot.original, torch.Tensor) and declared_slot_unchanged(
-            slot.original, snapshot
-        )
     if isinstance(slot.original, _IMMUTABLE_SCALARS):
         return True
     try:
         if _is_special(snapshot):
             current = _snapshot_module_plain_attr_value(module, slot.name, slot.attr_path)
-        else:
-            current = _snapshot_plain_attr_value(slot.original, slot.attr_path)
-        return _plain_attr_values_equal(current, snapshot, slot.attr_path)
+            return _plain_attr_values_equal(current, snapshot, slot.attr_path)
+        return _observer_unchanged(slot.original, snapshot)
     except _RESTORE_ERRORS:
-        return False  # grew past the snapshot bounds or no longer comparable
+        return False  # no longer comparable
 
 
 def _original_tensor_ids(original: Any, skeleton: Any, depth: int = 0) -> set[int]:
@@ -241,16 +397,16 @@ def _copy_left_by_forward(value: Any, originals: set[int], depth: int = 0) -> An
     if isinstance(value, torch.Tensor):
         return value.detach().clone() if id(value) in originals else value
     kind = type(value)
-    if depth >= _MAX_DEPTH or not (kind in (list, dict, set) or isinstance(value, tuple)):
+    if depth >= _MAX_DEPTH or not isinstance(value, (list, tuple, dict, set)):
         return value
-    if kind is set:
+    if isinstance(value, set):
         return set(value)
-    if kind is dict:
+    if isinstance(value, dict):
         return {
             key: _copy_left_by_forward(item, originals, depth + 1) for key, item in value.items()
         }
     items = [_copy_left_by_forward(item, originals, depth + 1) for item in value]
-    if kind is list:
+    if isinstance(value, list):
         return items
     make = getattr(kind, "_make", None)  # a namedtuple keeps its type
     return tuple(items) if kind is tuple or make is None else make(items)
@@ -280,14 +436,14 @@ def _restore_into(obj: Any, snapshot: Any, skeleton: Any) -> None:
     if isinstance(obj, (list, tuple)) and isinstance(snapshot, (list, tuple)):
         for (item, child), item_snapshot in zip(skeleton, snapshot, strict=True):
             _restore_into(item, item_snapshot, child)
-        if type(obj) is list:
+        if isinstance(obj, list):
             obj[:] = [item for item, _child in skeleton]
-    elif type(obj) is dict and isinstance(snapshot, dict):
+    elif isinstance(obj, dict) and isinstance(snapshot, dict):
         for (_key, item, child), item_snapshot in zip(skeleton, snapshot.values(), strict=True):
             _restore_into(item, item_snapshot, child)
         obj.clear()
         obj.update((key, item) for key, item, _child in skeleton)
-    elif type(obj) is set:
+    elif isinstance(obj, set):
         obj.clear()
         obj.update(skeleton)
 
@@ -370,6 +526,8 @@ def settle_module_attrs(
             continue
         module_writes: dict[str, AttributeWrite] = {}
         for slot in snap.slots:
+            if restore and slot.incomplete:
+                failed.append(f"{slot.attr_path} (nested past {_MAX_DEPTH} levels)")
             try:
                 write = _settle_slot(module, slot, restore)
             except _RESTORE_ERRORS:

@@ -6273,6 +6273,7 @@
   "parent_run": null,
   "parent_trace": null,
   "pinned_autograd_memory": "<measured>",
+  "pristine": null,
   "profile_enabled": false,
   "raise_on_nan": false,
   "random_seed": 1196337876,

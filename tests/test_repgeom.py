@@ -966,22 +966,130 @@ def test_mds_evolution_recurrent_pass_qualified_selector_uses_op_key() -> None:
     assert torch.equal(trace._annotation_blobs[f"mds:{key}"], torch.from_numpy(coords_by_key[key]))
 
 
-def test_rdm_evolution_recurrent_aggregate_requires_pass_selection() -> None:
-    """Aggregate recurrent layers should raise the same pass-selection error for RDM."""
+def _hand_recurrent_linear_rdms() -> list[np.ndarray]:
+    """Return per-pass euclidean RDMs of ``_RecurrentMDS``'s linear op, by hand.
+
+    The recurrent linear has identity weight and zero bias, so pass ``k``'s
+    output is ``tanh`` applied ``k - 1`` times to the input. Built in numpy
+    from the input alone, independent of TorchLens capture.
+
+    Returns
+    -------
+    list[np.ndarray]
+        Square RDMs for passes 1, 2 and 3, in pass order.
+    """
+
+    zeros = np.zeros((ANALYTIC_POINTS.shape[0], 3), dtype=np.float64)
+    passes = []
+    hidden = np.concatenate([ANALYTIC_POINTS, zeros], axis=1).astype(np.float32)
+    for _index in range(3):
+        passes.append(_pairwise_distances(hidden.astype(np.float64)))
+        hidden = np.tanh(hidden)
+    return passes
+
+
+def _recurrent_linear_ops(trace: tl.Trace) -> list[Any]:
+    """Return the recurrent linear's per-pass ops in pass order.
+
+    Parameters
+    ----------
+    trace:
+        Trace of ``_RecurrentMDS``.
+
+    Returns
+    -------
+    list[Any]
+        The three linear ops, sorted by pass index.
+    """
+
+    ops = [op for op in trace.layer_list if op.layer_type == "linear"]
+    return sorted(ops, key=lambda op: op.pass_index)
+
+
+def test_rdm_evolution_default_sweep_expands_recurrent_passes() -> None:
+    """U24.2: the default sweep yields one RDM per pass, equal to hand-built RDMs."""
+
+    trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
+    ops = _recurrent_linear_ops(trace)
+    expected = _hand_recurrent_linear_rdms()
+
+    matrices_by_key = repgeom.rdm_evolution(trace, min_n=8)
+
+    keys = [f"op:{op.label}" for op in ops]
+    assert len(ops) == 3
+    assert [op.pass_index for op in ops] == [1, 2, 3]
+    assert list(matrices_by_key) == keys
+    assert trace._annotation_blobs is not None
+    for key, hand_rdm in zip(keys, expected, strict=True):
+        assert matrices_by_key.payload_basis[key] == "raw"
+        np.testing.assert_allclose(matrices_by_key[key], hand_rdm, rtol=0, atol=1e-5)
+        assert torch.equal(
+            trace._annotation_blobs[f"rdm:{key}"], torch.from_numpy(matrices_by_key[key])
+        )
+    # The passes are distinct objects: tanh contracts every pass after the first.
+    assert not np.allclose(matrices_by_key[keys[0]], matrices_by_key[keys[1]])
+
+
+def test_rdm_evolution_selector_matching_every_pass_expands() -> None:
+    """U24.2: a selector matching all passes gives the same per-pass RDMs."""
+
+    trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
+    ops = _recurrent_linear_ops(trace)
+    expected = _hand_recurrent_linear_rdms()
+
+    matrices_by_key = repgeom.rdm_evolution(trace, save=tl.func("linear"), min_n=8)
+
+    assert list(matrices_by_key) == [f"op:{op.label}" for op in ops]
+    for hand_rdm, matrix in zip(expected, matrices_by_key.values(), strict=True):
+        np.testing.assert_allclose(matrix, hand_rdm, rtol=0, atol=1e-5)
+
+
+def test_rdm_evolution_recurrent_expansion_leaves_mds_refusal() -> None:
+    """U24.2: expansion leaves mds_evolution's recurrent refusal unchanged."""
 
     trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
 
     with pytest.raises(ValueError, match="select a pass \\(layer is recurrent\\)"):
-        repgeom.rdm_evolution(trace, save=tl.func("linear"), min_n=8)
+        repgeom.mds_evolution(trace, min_n=8)
+    assert trace._annotation_blobs is None
+    assert len(repgeom.rdm_evolution(trace, min_n=8)) == 3
 
 
-def test_rdm_evolution_default_recurrent_saved_layer_requires_pass_selection() -> None:
-    """Default recurrent RDM selection should not silently omit saved passes."""
+@pytest.mark.parametrize(
+    ("metric", "expected"),
+    [
+        ("euclidean", "rdm/*/euclidean"),
+        ("cosine", "rdm/*/cosine"),
+        ("correlation", "rdm/*/correlation"),
+        ("manhattan", None),
+    ],
+)
+def test_rdm_evolution_records_similarity_repository_id(metric: str, expected: Any) -> None:
+    """U56.3: the result names its exact RDM variant in the catalogue, or None."""
 
-    trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
+    trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
 
-    with pytest.raises(ValueError, match="select a pass \\(layer is recurrent\\)"):
-        repgeom.rdm_evolution(trace, min_n=8)
+    result = repgeom.rdm_evolution(trace, metric=metric, min_n=8)
+
+    assert result.similarity_repository_id == expected
+    assert repgeom.mds_evolution(trace, min_n=8).similarity_repository_id is None
+
+
+def test_similarity_repository_table_covers_every_metric_and_method() -> None:
+    """U56.3: every rdm metric and rdm_compare method has a decided table entry."""
+
+    from torchlens.repgeom import _similarity_ids as ids
+    from torchlens.repgeom._geometry import DistanceMetric
+
+    metrics = set(DistanceMetric.__args__)
+    assert set(ids.RDM_IDS) == metrics
+    assert set(ids.RSA_IDS) == {
+        (metric, method) for metric in metrics for method in ("pearson", "spearman", "kendall")
+    }
+    assert tl.stats.CKA.similarity_repository_id == ids.LINEAR_CKA_ID
+    for key, identifier in [*ids.RDM_IDS.items(), *ids.RSA_IDS.items()]:
+        if identifier is not None:
+            assert identifier.split("/")[1] == "*", key
 
 
 def test_rdm_evolution_recurrent_pass_qualified_selector_uses_op_key() -> None:

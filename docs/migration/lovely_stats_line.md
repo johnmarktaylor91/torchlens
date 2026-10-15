@@ -24,6 +24,9 @@ TorchLens value displays converged on one grammar (see
 - Resolved selections iterate in GRAPH (execution) order, not
   lexicographic site-key order.
 
+Install both: lovely-tensors for any tensor at a REPL, TorchLens for the numbers of a
+whole model's run.
+
 ## Population sd (divergence from lovely-tensors, on purpose)
 
 TorchLens prints the POPULATION standard deviation (`unbiased=False`):

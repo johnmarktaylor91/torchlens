@@ -1,4 +1,4 @@
-"""Memory-planned whole-model extraction: plan, table, run, npz (F20).
+"""Planned whole-model extraction: plan, table, run, npz (F20).
 
 The brainpipe centerpiece (memo section 3): a two-phase plan-then-run API
 whose extraction-PLAN table prints measured bytes, measured peaks, and
@@ -475,7 +475,7 @@ def _probe_once(
 
     log = trace(model, inputs, capture=tl_options.CaptureOptions(inference_only=True))
     facts: dict[str, dict[str, Any]] = {}
-    for op in log.ops:
+    for op in log.layer_list:
         if not getattr(op, "has_saved_activation", False):
             continue
         label = str(op.layer_label)

@@ -51,13 +51,13 @@ def test_raw_label_round_trip_via_ops_accessor() -> None:
 
 
 def test_ops_accessor_fetches_by_raw_index() -> None:
-    """Trace.ops exposes a raw-index lookup helper without changing ordinal indexing."""
+    """Trace.ops exposes a raw-index lookup helper; ``ordinal_index`` indexes the trace."""
 
     trace = _raw_label_trace()
     op = next(candidate for candidate in trace.ops if candidate.func_name == "relu")
 
     assert trace.ops.by_raw_index(op.raw_index) is op
-    assert trace.ops[op.ordinal_index] is op
+    assert trace[op.ordinal_index] is op
 
 
 def test_four_form_fetch_on_simple_trace() -> None:
@@ -66,7 +66,7 @@ def test_four_form_fetch_on_simple_trace() -> None:
     trace = _raw_label_trace()
     op = next(candidate for candidate in trace.ops if candidate.func_name == "relu")
 
-    assert trace.ops[op.ordinal_index] is op
+    assert trace[op.ordinal_index] is op
     assert trace.ops[op.layer_label] is op
     assert trace.ops[op.label] is op
     assert trace.ops[op.raw_label] is op

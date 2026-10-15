@@ -36,7 +36,7 @@ from . import _runnable_execution as _execution
 from ._errors import TorchLensWarning
 from ._runnable_execution import _INPUT_CHECK_UNAVAILABLE, _contract_check
 from .errors import RunCapabilityUnavailableError
-from .runnable import ContractCheck, RunnableErrorCode
+from .runnable import ContractCheck, RunnableDiagnostic, RunnableErrorCode
 
 #: Op fields a native forward cannot refresh for unsaved ops; after a
 #: shape-varied run they read ``None`` instead of the capture-time numbers.
@@ -184,6 +184,54 @@ def stages_user_entries(trace: Any) -> bool:
 
     spec = trace._intervention_spec
     return bool(_staged_user_hook_specs(trace)) or bool(getattr(spec, "target_value_specs", None))
+
+
+def hooked_run_diagnostic(trace: Any) -> RunnableDiagnostic | None:
+    """Return the ceiling diagnostic for a run that applies staged user edits, else ``None``.
+
+    A run that applies the trace's staged hooks or value replacements returns an
+    edited forward, not the model's own. No check yet compares an edited run with
+    what the edit should produce, so such a run settles ``unverifiable``, never
+    ``verified``, and the trace it refreshes is no longer pristine.
+
+    Parameters
+    ----------
+    trace:
+        Live trace whose staged spec the run applies.
+
+    Returns
+    -------
+    RunnableDiagnostic | None
+        A ``user_intervention_not_replayable`` diagnostic (detection stage
+        ``hooked_run_unverified``) when the trace stages a user entry.
+    """
+
+    if not stages_user_entries(trace):
+        return None
+    hooks = len(_staged_user_hook_specs(trace))
+    values = len(getattr(trace._intervention_spec, "target_value_specs", None) or ())
+    return RunnableDiagnostic(
+        code=RunnableErrorCode.USER_INTERVENTION_NOT_REPLAYABLE,
+        message=(
+            f"This run applied the trace's staged edits ({hooks} hook(s), {values} value "
+            "replacement(s)), so its output is an edited forward, not the model's own. No "
+            "hook-aware check exists yet, so the run is unverifiable, and the trace it "
+            "refreshed is not pristine. Detach the staged edits (trace.clear_hooks()) for "
+            "a verified run."
+        ),
+        registry_id=None,
+        affected_op_labels=(),
+        recorded_runtime=None,
+        current_runtime=None,
+        detection_stage="hooked_run_unverified",
+        resolver_provenance=None,
+        analysis_load_available=True,
+        details=(
+            ("staged_hooks", str(hooks)),
+            ("staged_value_replacements", str(values)),
+            ("pristine", "false"),
+        ),
+    )
 
 
 def _staged_entries(trace: Any) -> tuple[Any, ...]:
@@ -425,10 +473,17 @@ class SteerPlan:
         return tuple(unfired)
 
     def warn_unfired(self) -> tuple[str, ...]:
-        """Emit the rerun contract's ``rerun_zero_fire`` warning for unfired entries."""
+        """Disclose unfired entries by the run's ``on_zero_fire`` policy (``rerun_zero_fire``).
+
+        ``"warn"`` (default) emits the coded warning here; ``"disclose"`` records
+        only; ``"error"`` defers to the door, which refuses after the run is
+        recorded (``refuse_unfired_fast_run``).
+        """
+
+        from .intervention._zero_fire import current_zero_fire_policy, external_stacklevel
 
         unfired = self.unfired_plan_ids()
-        if unfired:
+        if unfired and current_zero_fire_policy() == "warn":
             warnings.warn(
                 TorchLensWarning(
                     "Rerun hook plan entries fired at zero sites on the new inputs: "
@@ -438,7 +493,7 @@ class SteerPlan:
                     code="rerun_zero_fire",
                     unfired_plan_ids=list(unfired),
                 ),
-                stacklevel=4,
+                stacklevel=external_stacklevel(),
             )
         return unfired
 
@@ -537,3 +592,32 @@ def output_dtype_and_rank(value: Any) -> tuple[str | None, int | None]:
     if isinstance(value, torch.Tensor):
         return str(value.dtype), value.ndim
     return None, None
+
+
+def refuse_unfired_fast_run(trace: Any) -> None:
+    """Refuse a recorded fast run whose staged entries fired nowhere, under ``"error"``.
+
+    The fast engine refreshes the live trace in place, so the refusal comes after
+    the run and its ``last_run`` record (``hooks_unfired``) are settled: the
+    refusal carries the fact, and the trace holds the run that happened.
+
+    Raises
+    ------
+    SiteResolutionError
+        ``rerun_zero_fire`` when the run's policy is ``"error"`` and an entry
+        fired at zero sites.
+    """
+
+    from .intervention._zero_fire import current_zero_fire_policy, raise_rerun_zero_fire
+
+    record = getattr(trace, "last_run", None) or {}
+    if record.get("engine") != "guarded_fast" or not record.get("hooks_unfired"):
+        return
+    if current_zero_fire_policy() != "error":
+        return
+    count = int(record["hooks_unfired"])
+    raise_rerun_zero_fire(
+        f"{count} rerun hook plan entr{'y' if count == 1 else 'ies'} fired at zero sites "
+        "on the new inputs (recorded on trace.last_run['hooks_unfired']).",
+        [],
+    )

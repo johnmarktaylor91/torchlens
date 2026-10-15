@@ -126,7 +126,7 @@ def model_explorer_serve(source: Any, **kwargs: Any) -> Path:
     Thin deferred door over
     :func:`torchlens.export._model_explorer.model_explorer_serve` (L8 bridge,
     loaded on first call; requires the ``ai-edge-model-explorer`` app package:
-    ``pip install 'ai-edge-model-explorer>=0.1.33,<0.2'``).
+    ``pip install "torchlens[model-explorer]"``).
 
     Parameters
     ----------
@@ -352,12 +352,14 @@ def chrome_trace_diff(bundle: Any, path: str | Path) -> Path:
 
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
+    deltas, delta_status = _chrome_trace_diff_deltas(bundle)
     payload = {
-        "traceEvents": _chrome_trace_diff_events(bundle),
+        "traceEvents": _chrome_trace_diff_events(bundle, deltas),
         "displayTimeUnit": "ms",
         "metadata": {
             "schema": "torchlens.chrome_trace_diff.v1",
             "members": list(bundle.names),
+            "deltas": delta_status,
             "torchlens_capture_honesty": _bundle_member_honesty(bundle),
         },
     }
@@ -678,7 +680,7 @@ def xarray(log: Any) -> Any:
     presentation_count: int | None = None
     for layer in _iter_layers(log):
         label = _layer_label(layer)
-        # U28.2: a partial trace's unsaved placeholders raise on ``.out``;
+        # a partial trace's unsaved placeholders raise on ``.out``;
         # skip them and disclose the skip in ``attrs``.
         if getattr(layer, "has_saved_activation", None) is False:
             skipped_unsaved.append(label)
@@ -936,13 +938,42 @@ def _chrome_trace_events(log: Any) -> list[dict[str, Any]]:
     return events
 
 
-def _chrome_trace_diff_events(bundle: Any) -> list[dict[str, Any]]:
+def _chrome_trace_diff_deltas(bundle: Any) -> tuple[dict[str, dict[str, float]], dict[str, Any]]:
+    """Return the per-node deltas and their status for a bundle timeline.
+
+    The timeline (one process per member, one event per supergraph node) never
+    needs the deltas. The deltas are ``bundle.norm_delta()``, which runs the
+    Bundle comparison gate: when the gate refuses (members on different
+    inputs, foreign models, ordering-joined members), only the delta part is
+    refused -- every event's ``delta`` is ``None`` and the status records the
+    gate's stable code and message. The gate is never bypassed.
+    """
+
+    from ..intervention.errors import BundleRelationshipError
+
+    try:
+        return bundle.norm_delta(), {"status": "computed", "operation": "norm_delta"}
+    except BundleRelationshipError as exc:
+        return {}, {
+            "status": "refused",
+            "operation": "norm_delta",
+            "code": exc.fields.get("code"),
+            "message": str(exc),
+        }
+
+
+def _chrome_trace_diff_events(
+    bundle: Any, deltas: dict[str, dict[str, float]]
+) -> list[dict[str, Any]]:
     """Return Chrome trace events for a bundle comparison.
 
     Parameters
     ----------
     bundle:
         Bundle to serialize.
+    deltas:
+        Per-node member deltas from :func:`_chrome_trace_diff_deltas` (empty
+        when the comparison gate refused them).
 
     Returns
     -------
@@ -951,7 +982,6 @@ def _chrome_trace_diff_events(bundle: Any) -> list[dict[str, Any]]:
     """
 
     events: list[dict[str, Any]] = []
-    deltas = bundle.norm_delta()
     pid_by_member = {name: index + 1 for index, name in enumerate(bundle.names)}
     for member_name in bundle.names:
         events.append(
@@ -1157,7 +1187,7 @@ def _safe_id(value: str) -> str:
 
 
 def safetensors(log: Any, path: str | Path) -> Path:
-    """Export one Trace to a single safetensors file (R2-08; DOCUMENTED-UNSTABLE).
+    """Export one Trace to a single safetensors file (DOCUMENTED-UNSTABLE).
 
     Every tensor-valued op payload (``out``, ``transformed_out``, ``grad``,
     ``transformed_grad``) is a tensor entry; the metadata is one JSON

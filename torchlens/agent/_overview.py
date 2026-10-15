@@ -134,8 +134,9 @@ def _anomalies_block(log: Any, capture: dict[str, Any]) -> list[dict[str, Any]]:
     """Notable anomalies an agent must not miss, each one structured row."""
 
     anomalies: list[dict[str, Any]] = []
-    # ``capture_verified`` is TRI-STATE (None = no ceiling recorded, a HEALTHY
-    # capture); only an explicit False is an anomaly (AUD-CODE 2.5).
+    # ``capture_verified`` is TRI-STATE (None = not checked: the completeness
+    # witness was not armed, so it is no verdict and not a clean bill); only an
+    # explicit False is an anomaly (AUD-CODE 2.5).
     if capture.get("capture_verified") is False:
         anomalies.append(
             {

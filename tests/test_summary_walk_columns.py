@@ -6,7 +6,8 @@ columns and a params-size line (U01.4, U02.3, U06.7); a ``mode`` column over
 ``module.training`` (U03.5); ``flops_pct`` beside ``params_pct`` (U04.3);
 the full-square attention disclosure on every attention FLOP line (U04.2);
 raw and effective nonzero counts on pruned models (U01.2); the optimizer
-state footer (U06.2).
+state footer (U06.2). The attention note also rides the profile footer, the
+explain FLOPs line and graph-label FLOP rows.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from torch import nn
 from torch.nn.utils import prune
 
 import torchlens as tl
+from torchlens.capture.flops import ATTENTION_FULL_SQUARE_NOTE
 from torchlens.report._summary_render import ATTENTION_MARK
 
 
@@ -219,3 +221,59 @@ def test_no_attention_legend_without_a_flop_column() -> None:
 
     report = tl.summary(_Attention(), torch.randn(2, 5, 8), columns=["name", "params"])
     assert "full query x key square" not in str(report)
+
+
+def _attention_trace() -> tl.Trace:
+    """A captured causal-SDPA model."""
+
+    torch.manual_seed(0)
+    return tl.trace(_Attention(), torch.randn(2, 5, 8))
+
+
+def test_profile_footer_discloses_the_full_square() -> None:
+    """U04.2 (b): the profile footer carries the attention note."""
+
+    profile = _attention_trace().profile()
+    assert profile.attention_full_square_ops == 1
+    assert ATTENTION_FULL_SQUARE_NOTE in repr(profile)
+
+
+def test_profile_footer_has_no_note_without_attention() -> None:
+    """A model with no attention op prints no attention note."""
+
+    trace = tl.trace(_frozen_eval_head(), torch.randn(1, 3, 8, 8))
+    profile = trace.profile()
+    assert profile.attention_full_square_ops == 0
+    assert ATTENTION_FULL_SQUARE_NOTE not in repr(profile)
+
+
+def test_explain_flops_line_discloses_the_full_square() -> None:
+    """U04.2 (b): the explain FLOPs line carries the attention note."""
+
+    text = tl.report.explain(_attention_trace())
+    flops_line = next(line for line in text.splitlines() if "Forward FLOPs" in line)
+    assert ATTENTION_FULL_SQUARE_NOTE in flops_line
+
+
+def test_graph_label_flops_rows_carry_the_note_on_attention_nodes_only() -> None:
+    """U04.2 (b): an attention node's flops label field and flops overlay add the note."""
+
+    from torchlens.visualization._render_nodes import compute_default_node_lines
+
+    trace = _attention_trace()
+    layers = list(trace.layer_logs.values())
+    sdpa = next(layer for layer in layers if layer.func_name == "scaled_dot_product_attention")
+    proj = next(layer for layer in layers if layer.func_name == "linear")
+
+    field_lines = compute_default_node_lines(sdpa, node_label_fields=["label", "flops"])
+    assert field_lines[-1] == ATTENTION_FULL_SQUARE_NOTE
+    assert field_lines[-2] == str(sdpa.flops_forward)
+    overlay_lines = compute_default_node_lines(sdpa, node_overlay="flops")
+    assert overlay_lines[-2].startswith("flops: ")
+    assert overlay_lines[-1] == ATTENTION_FULL_SQUARE_NOTE
+    both = compute_default_node_lines(sdpa, node_label_fields=["flops"], node_overlay="flops")
+    assert both.count(ATTENTION_FULL_SQUARE_NOTE) == 1
+    assert ATTENTION_FULL_SQUARE_NOTE not in compute_default_node_lines(
+        proj, node_label_fields=["flops"], node_overlay="flops"
+    )
+    assert ATTENTION_FULL_SQUARE_NOTE not in compute_default_node_lines(sdpa)

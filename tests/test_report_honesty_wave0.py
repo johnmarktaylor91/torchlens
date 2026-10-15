@@ -6,8 +6,8 @@ Covers listA rows 23 and 25a plus sumfam wave-0 items 1, 3, 4, and 6:
   carries ESC bytes or resolved-absolute-path URIs (LAUNCH BLOCKER).
 - The health-scan predicate is the one-pass ``isfinite().all()`` form,
   equivalence-pinned against the two-pass reference.
-- ``log_value``'s canonical home is ``torchlens.observers`` with the
-  ``tl.report`` compat alias, and its values read back and render.
+- ``log_value`` lives in ``torchlens.observers`` only (U00 clean break: no
+  ``tl.report`` alias), and its values read back and render.
 - ``to_agent_json``'s guide menu is executable-by-the-reader and conditional.
 - explain/to_agent_json refuse known presenters typed; poisoned traces stop
   rendering clean on explain/agent_json/draw; TraceSlice.summary carries the
@@ -121,13 +121,14 @@ def test_predicate_unrunnable_dtype_returns_none() -> None:
 # --- SF4: log_value canonical home + read-back ------------------------------
 
 
-def test_log_value_canonical_home_and_alias() -> None:
-    """observers owns log_value; tl.report keeps the identical compat alias."""
+def test_log_value_lives_in_observers_only() -> None:
+    """observers owns log_value; tl.report carries no alias (U00 clean break)."""
 
-    from torchlens.observers import log_value as canonical
-    from torchlens.report import log_value as alias
+    import torchlens.report as report
+    from torchlens.observers import log_value
 
-    assert canonical is alias
+    assert callable(log_value)
+    assert not hasattr(report, "log_value") and "log_value" not in report.__all__
 
 
 @pytest.mark.smoke

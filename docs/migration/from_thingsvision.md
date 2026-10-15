@@ -159,3 +159,8 @@ dataset = tl_rsa.dataset("resnet50_features", site="avgpool")  # layer-wise RSA
 For gLocal and other learned alignment transforms, keep using thingsvision's
 own implementations over the exported matrices -- see
 [bring your own alignment](../neuroai/byo_alignment.md).
+
+To keep large layers small during extraction, pass
+`transform={"layer4": tl.transforms.srp(n_components, seed=0)}` to
+`tl.extract_dataset`: sparse random projection, the speed trick DeepJuice uses for
+brain benchmarking (worked example in [model zoos](from_model_zoos.md)).

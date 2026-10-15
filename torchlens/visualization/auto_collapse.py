@@ -296,7 +296,7 @@ def _compute_collapse_graph_revision(trace: Trace) -> tuple[object, ...]:
             tuple(op.shape),
             op.io_role,
         )
-        for op in trace.ops
+        for op in trace.layer_list
     )
     module_revision = tuple(
         (
@@ -341,7 +341,7 @@ def _op_adjacency_index(
         return cached[1]
     unique_ops: dict[str, Op] = {}
     ambiguous_forms: set[str] = set()
-    for op in trace.ops:
+    for op in trace.layer_list:
         forms = (
             op.label,
             op.label_short,
@@ -625,7 +625,7 @@ def resolve_collapse_fn(
 
         result = select_collapse_plan(trace, resolved_context, mode=collapse)
         if result.declined and "collapse_ops_ceiling" in (result.reason or ""):
-            # forks.11 FK4: past the pathological pre-gate the render is a
+            # Past the pathological pre-gate the render is a
             # bounded top-level overview plus an expansion manifest, never an
             # uncollapsed wall (a flat trace with no child modules has no
             # coarser legal plan and stays as it is, disclosed by the skip).
@@ -691,7 +691,7 @@ def resolve_repeat_folds(
         return {}
     from .collapse_optimizer import COLLAPSE_OPTIMIZER_MAX_OPS
 
-    if len(trace.ops) > COLLAPSE_OPTIMIZER_MAX_OPS:
+    if len(trace.layer_list) > COLLAPSE_OPTIMIZER_MAX_OPS:
         # Compute-ceiling parity (r8 R60-9): ``draw(fold_repeats=True)`` with
         # ``collapse="none"`` entered run folding directly -- full
         # ``analyze_collapse`` plus uncached per-candidate structural digests
@@ -700,7 +700,7 @@ def resolve_repeat_folds(
         # policy as the optimizer: the graph renders without run folds.
         warnings.warn(
             f"TorchLens is skipping repeat-run folding: this trace has "
-            f"{len(trace.ops)} ops, above the collapse engine's compute "
+            f"{len(trace.layer_list)} ops, above the collapse engine's compute "
             f"ceiling COLLAPSE_OPTIMIZER_MAX_OPS={COLLAPSE_OPTIMIZER_MAX_OPS}. "
             "The graph renders without folds; reduce the rendered graph "
             "first with module= focus, vis_call_depth, or rolled mode.",
@@ -963,7 +963,7 @@ def _synthetic_child_condensed_flow_graph(
         Flow graph with external source/sink sentinels for boundary edges.
     """
 
-    op_order = {op.label: index for index, op in enumerate(trace.ops)}
+    op_order = {op.label: index for index, op in enumerate(trace.layer_list)}
     child_sets = {
         child: set(signals[child].subtree_ops) for child in child_addresses if child in signals
     }
@@ -984,7 +984,7 @@ def _synthetic_child_condensed_flow_graph(
     # Reachable outside analyze_collapse (optimizer synthetic scopes), so this
     # walk fingerprints once here rather than per edge.
     revision = _collapse_graph_revision(trace)
-    for op in trace.ops:
+    for op in trace.layer_list:
         source = owner_by_label.get(op.label)
         for child_label in getattr(op, "children", ()) or ():
             child_op = _resolve_relationship_op(trace, child_label, revision)
@@ -1746,7 +1746,7 @@ def _compute_signal_skeleton(
     input_edges: dict[str, set[tuple[str, str]]] = defaultdict(set)
     output_edges: dict[str, set[tuple[str, str]]] = defaultdict(set)
 
-    ops = list(trace.ops)
+    ops = list(trace.layer_list)
     op_by_label = {op.label: op for op in ops}
     stack_by_label = {op.label: _module_address_stack(op) for op in ops}
     labels_by_stack: dict[tuple[str, ...], list[str]] = defaultdict(list)
@@ -1785,6 +1785,9 @@ def _compute_signal_skeleton(
             for address in parent_set - child_set:
                 output_edges[address].add(edge)
 
+    # Every hidden count exists before any gate runs: the single-child rule
+    # reads a child that is built after its parent.
+    hidden_ops_by_module = {a: max(len(set(ops)) - 1, 0) for a, ops in op_labels_by_module.items()}
     signals: dict[str, ModuleCollapseSignals] = {}
     for module in trace.modules:
         address = module.address
@@ -1817,7 +1820,7 @@ def _compute_signal_skeleton(
             structural_digest="",
             peer_count=1,
             hidden_ops=hidden_ops,
-            eligible=_gate_module(module, hidden_ops, signals),
+            eligible=_gate_module(module, hidden_ops, hidden_ops_by_module),
         )
     return signals
 
@@ -1825,7 +1828,7 @@ def _compute_signal_skeleton(
 def _gate_module(
     module: Module,
     hidden_ops: int,
-    partial_signals: Mapping[str, ModuleCollapseSignals],
+    hidden_ops_by_module: Mapping[str, int],
 ) -> bool:
     """Return whether a module mirrors renderer collapse eligibility."""
 
@@ -1834,11 +1837,8 @@ def _gate_module(
     if int(getattr(module, "num_layers", 0) or 0) <= 1:
         return False
     child_addresses = list(getattr(module, "address_children", ()) or ())
-    if len(child_addresses) == 1:
-        child_signal = partial_signals.get(child_addresses[0])
-        if child_signal is not None and child_signal.hidden_ops == hidden_ops:
-            return False
-    return True
+    single = len(child_addresses) == 1
+    return not (single and hidden_ops_by_module.get(child_addresses[0]) == hidden_ops)
 
 
 def _compute_structural_digests(
@@ -1944,13 +1944,13 @@ def _readable_band_high(trace: Trace) -> int:
         Upper readable node-count budget for auto collapse.
     """
 
-    return 25 if len(trace.ops) > 100 else 40
+    return 25 if len(trace.layer_list) > 100 else 40
 
 
 def _is_trunk_collapse(trace: Trace, signal: ModuleCollapseSignals) -> bool:
     """Return whether a module would collapse nearly the whole input-output trunk."""
 
-    visible_after = max(1, len(trace.ops) - signal.hidden_ops)
+    visible_after = max(1, len(trace.layer_list) - signal.hidden_ops)
     if visible_after >= 4:
         return False
     op_set = set(signal.subtree_ops)

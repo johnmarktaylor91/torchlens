@@ -1,4 +1,4 @@
-"""The decode-step position of an armed capture-free binding (R2-25, N-IV-12).
+"""The decode-step position of an armed capture-free binding (N-IV-12).
 
 A bound executor counts root forwards: a bound ``generate`` runs the base
 model's forward once per generation step, so the 0-based root-forward index of

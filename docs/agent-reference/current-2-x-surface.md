@@ -37,6 +37,15 @@
   (`trace.run(model, x)` on a module-targeted staged spec) is a fast path too: the guarded
   fast engine, about 1.5x a plain hook, with the trace's saved sites refreshed. Recipe:
   [Common Patterns](common-patterns.md), "Steering many forwards / generation".
+- Contrastive directions (DOCUMENTED-UNSTABLE):
+  `torchlens.intervention.direction_from_pairs(pos_traces, neg_traces, site, method="mean_diff"|"pca"|"logistic", *, read_token_index=-1)`
+  returns a `torchlens.intervention.Direction` (`vector`, `site`, `method`, `n_pairs`,
+  `model_type`, `provenance` as a `BasisProvenance`). `direction.steer(m)` is the native
+  steer; `direction.to_steering_vectors()`, `direction.to_repeng()` and `direction.to_dialz()`
+  return the real library objects (thin converters `tl.bridge.steering_vectors.from_direction`,
+  `tl.bridge.repeng.from_direction`, `tl.bridge.dialz.from_direction`; the math lives only in
+  TorchLens). The old `tl.bridge.steering_vectors.vector`, `tl.bridge.repeng.control_vector`
+  and `tl.bridge.dialz.vector` trainers are removed.
 - `tl.record(..., save=...)` is the sparse predicate recorder; it returns `Recording`.
   `Recording.to_trace()` cooks the event stream into a full-structure `Trace`, with unsaved
   payload reads rejected explicitly. `tl.record()`/fastlog is torch-only in the backend-v1
@@ -228,6 +237,38 @@
   (`member_relations=`, `Bundle.relate`, `Bundle.derive_episode_status` — a derived fold,
   never Bundle-level settlement; mutators cascade explicitly or refuse typed). Doc of record:
   `docs/reference/episode_capture.md`.
+- HARNESS BUNDLES (phases 1 and 2; every spelling DOCUMENTED-UNSTABLE; doc of record
+  `docs/reference/harness_bundles.md`): no new datatype, the Bundle plus its relation table is
+  the harness graph. Relation kind `fed_by` (tlspec v10): "critique fed_by draft", the later
+  member's prompt contains the earlier member's output; CONTENT provenance only (a router
+  decision without a text feed is `successor_of` plus application metadata; no
+  control-dependency kind). Params exactly `token_spans` (four-int half-open rows), `basis`
+  (`declared`/`verified`/`matched`), `coverage`, `label` (free text, never interpreted).
+  Positional `b.relate("fed_by", "critique", "draft", token_spans=[[3, 6, 1, 4]])` beside the
+  row form; `token_spans="auto"` finds the spans by exact token-id runs of the source's bound
+  completion inside the reader's prompt (up to two boundary tokens trimmed per side) and writes
+  `basis="matched"`; repeats/ties refuse `bundle_relation_auto_spans_ambiguous`, no hit
+  `bundle_relation_auto_spans_unmatched`, missing evidence `bundle_relation_auto_spans_unavailable`.
+  A `matched` row is attested by re-derivation at every door (spans verify AND the matcher re-finds
+  them, else it settles `verified`).
+  Spans bind to member token streams through a `token_boundary_v1` descriptor in the reserved
+  `torchlens.boundary_facts` sidecar family (stream, batch row, length, ids digest, completion
+  range, excluded ids, tokenizer/template); `verified` only when both bindings match the
+  retained ids, the source binding names its completion range, and the ids agree span by span
+  (shared prompt tokens never verify), re-checked at every door (unverifiable clamps
+  to `declared`, contradicted refuses `bundle_relation_span_unverified`; out-of-range spans
+  refuse `bundle_relation_span_out_of_bounds`). `fed_by` is an ordering kind for the gate.
+  `b.upstream(name)` / `b.downstream(name)` (helper-table methods) walk the ordering kinds;
+  `b.node(site, members=[...])` scopes the gate to a subset; `delta_map`/`norm_delta`/
+  `output_delta`/`compare` (and `store_comparison`) now run the comparison gate on every
+  (baseline, member) pair; `tl.Bundle()` builds an empty bundle that saves and loads.
+  `b.token_pairs("critique", "draft")` (helper-table method, relate's argument order) is the one
+  verified alignment read: `.pairs` of `(source_pos, reader_pos)`, `.source_positions`,
+  `.reader_positions`, `.coverage`, `.excluded` (dicts with side/start/end/reason/row_index);
+  only re-verified one-to-one positions pair, declared/retokenized spans stay correspondences.
+  Slicing is a docs recipe: `b["draft"][site].out[0, pairs.source_positions]`.
+  `tl.show_bundle_graph(b, nodes="members")` draws members and relation rows;
+  `tl.load(path, lazy=True)` reaches bundle members.
 - EXPERIMENTS REMEMBER (F03; every spelling DOCUMENTED-UNSTABLE pending
   naming-session ratification; doc of record `docs/reference/experiment_ledger.md`):
   the Bundle is the MATERIAL record — persisted random `bundle_id` (never a
@@ -1000,12 +1041,15 @@
   `residual_decomposition` / `full_decomposition` (bitwise-closed),
   `direct_logit_contributions` (DLA), `attention_head_contributions`,
   `head_scores`, `patch_heads_grid` / `patch_residual_grid` (turnkey
-  `PatchGrid` results), `lowered_counterfactual` (patch one head on a FUSED
+  `PatchGrid` results), `patch_query_heads_grid` (per-query-head k/v
+  patching under grouped-query attention at the op that expands each
+  key/value group; SDPA with `enable_gqa` refuses typed),
+  `lowered_counterfactual` (patch one head on a FUSED
   SDPA model via exact implementation-independent lowering),
   `resolve_alias` / `translation_table` (TLens spellings resolve against a
   trace; tuple and compact `"k6"` forms), `test_prompt`, `apply_norm_scale`
   (cached-scale LayerNorm linearization, TLens-parity bit-exact), retention
-  planning (`retention_plan`). ~34 names; `MechInterpError` family.
+  planning (`retention_plan`). ~38 names; `MechInterpError` family.
 - TRAINING-TIME WATCH (F26; DOCUMENTED-UNSTABLE): `torchlens.trackers` is the
   attach-once watch engine over the C06 records -- `watch`/`WatchSession`,
   sinks (TensorBoardSink incl. `add_histogram_raw` precomputed buckets,
@@ -1066,7 +1110,10 @@
   v2.33.0-cannot-load-v2.34.1 class), `migrate` (tl.migrate v1,
   `MigrationReport`/`MigrationStep`), and `plugins` (entry-point discovery
   that NEVER executes third-party code at discovery; kill switch).
-  `torchlens.conformance` holds the C0-C2 packs.
+  `torchlens.conformance` holds the C0-C2 packs, plus the preview-backend
+  scorecard (DOCUMENTED-UNSTABLE): `preview_scorecard`, `PreviewScorecard`,
+  `ScorecardCell`, `PREVIEW_BACKENDS`, and `RosterModel.expected_op_kinds`
+  (the op-inventory check that fails when a backend silently drops an op).
 - LIVE NARRATION (F28; DOCUMENTED-UNSTABLE): `echo=` on `tl.trace`/`tl.record`
   streams compact per-op narration (the torchsnooper niche on the capture
   substrate, 3-4x cheaper than settrace); `torchlens.snoop` owns
@@ -1093,11 +1140,15 @@
   `notebooks/sae_splice_tutorial.ipynb`). `bridge.brain_score` additionally serves Brain-Score's
   `ActivationsExtractorHelper` seam: `get_activations_fn(model)` is the offline
   per-batch callable (module dotted paths or any TorchLens lookup; `"logits"` = model
-  output) and `activations_extractor(...)` wires it into the real helper (requires
+  output) and `activations_extractor(...)` wires it into the real helper, returned inside a
+  `PytorchWrapper`-shaped activations model (`._extractor` is the helper) so a Brain-Score
+  model plugin hands it to `ModelCommitment(activations_model=...)` (requires
   `brainscore_vision`, Python >= 3.11; LIVE-GATE VERIFIED 2026-08-29 against a running
   brainscore-vision 2.3.22 install on py3.12/CPU -- resnet18 through a real helper +
   StimulusSet with value/order/coordinate/logits/functional-op/short-batch parity and
-  default sites on a partially saved trace; also exposed as `tl.neuro.activations_extractor`
+  default sites on a partially saved trace; SCORED END TO END 2026-10-14 through such a
+  plugin on MajajHong2015public.IT-pls and Geirhos2021colour-top1, brainscore-vision 2.4.1,
+  py3.11/CPU; also exposed as `tl.neuro.activations_extractor`
   / `get_activations_fn`, gated on brainscore_vision alone). `torchlens.bridge.mcp` (extra `torchlens[mcp]`,
   mcp>=2.0; DOCUMENTED-UNSTABLE) is the Model Context Protocol stdio server (`python -m
   torchlens.bridge.mcp`): read-only tools over saved `.tlspec` artifacts + environment
@@ -1127,7 +1178,7 @@
   tensors plus a JSON header of the writer contract's KEEP fields, honesty facts and the
   contract digest); `tl.io.read_safetensors(path)` reads it back bit-equal.
 - BRAINPIPE (F20; every spelling DOCUMENTED-UNSTABLE): `torchlens.brainpipe` is the
-  memory-planned whole-model extraction planner over the extraction artifact --
+  whole-model extraction planner over the extraction artifact --
   `extraction_plan(model, probe_inputs, sites=, n_stimuli=, batch_size=, transform=,
   memory_budget=, engine="trace")` runs one unmeasured warm-up + TWO measured probes
   (batch b and 2b), fits per-site bytes linearly (batch-invariant sites detected, never
@@ -1228,10 +1279,29 @@
   dependency-present names. Brain-Score alias branch LIVE (gate passed):
   `tl.neuro.activations_extractor`/`get_activations_fn` gated on brainscore_vision
   alone (extras split D17: neuro = rsatoolbox, never Brain-Score; new `brainscore` extra, filed).
-  repgeom riders: `rdm(metric="gaussian")` (thingsvision bandwidth convention,
-  credited), `rank_transform_rdm` + `rdm_node_spec(display="rank"|"percentile")`.
+  repgeom riders: `rdm(metric="gaussian")` (thingsvision's `1 - exp(-D / mean(D))`,
+  credited; fixed 2026-10-14 from a `2 * mean(D)` bandwidth), `rank_transform_rdm` +
+  `rdm_node_spec(display="rank"|"percentile")`. `rdm_evolution` expands recurrent layers
+  into one `op:` RDM per saved pass (default sweep and multi-pass selectors), as
+  `tl.neuro.rdms` does; its result, the `tl.neuro.rdms` source-mode descriptors and
+  `tl.stats.CKA` carry `similarity_repository_id` (the similarity-repository identifier of
+  the exact variant, e.g. `measure/*/cka-kernel=linear-hsic=gretton-score`; table in
+  docs/reference/brain_benchmarking_seam.md; DOCUMENTED-UNSTABLE).
   `tl.stats.cka` contract published (linear, biased, CPU float64, matched rows, NaN
   on zero variance; pinned literals). brain_score bridge fixes: default `sites=`
   survives partially saved traces via the core stimulus-indexed filter (buffer rows
   never scored), documented ValueError contract live, `sites=` accepts module dotted
-  paths. Doc of record: `docs/reference/neuro.md`.
+  paths; `per_layer` returns `ScoreParts` per layer (`raw` always named, with
+  `ceiling_normalised`/`ceiling`/`error`/`note` beside it; `score_parts(score)` reads
+  one Brain-Score `Score`; nothing recomputed). Reliable comparison (neuro.1,
+  DOCUMENTED-UNSTABLE): `tl.neuro.compare(source, target, analyses=("rsa", "ridge",
+  "cka"))` is ungated and numpy-only, reads each site once (never re-runs the model)
+  and returns descriptive RSA, a cross-validated ridge score (seeded folds, per-fold
+  exact leave-one-out penalty, mean Pearson r over target columns) and linear CKA,
+  with `table()`/`disagreement()`/`to_dict()`; `n_resamples=` adds stimulus-bootstrap
+  `tl.repgeom.ScoreInterval`s (standalone: `tl.repgeom.rdm_compare_interval`,
+  `tl.repgeom.cka_interval`); `tl.repgeom.metric_disagreement(scores)` ranks sites per
+  metric and flags opposite orders. The neuro `compare` refusal row is gone; the
+  `bootstrap`, `ridge` and `encoding_model` refusals keep inference with rsatoolbox /
+  himalaya / Net2Brain and point to the descriptive spellings. Doc of record:
+  `docs/reference/neuro.md`.

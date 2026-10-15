@@ -130,14 +130,18 @@ unwrap_torch()
 The independent aten-level completeness witness is also opt-in and can run alone or alongside the
 callable detector. **This is the only route to `capture_verified=True`.** A plain `tl.trace()` never
 arms it: every default capture reads `capture_verified=None`, which every honesty surface renders as
-"not recorded" -- not a clean bill. Escapes the wrappers themselves observe (worker-thread ops,
+"not checked" -- not a clean bill. Escapes the wrappers themselves observe (worker-thread ops,
 `torch.jit.script` regions, direct `torch.ops.aten.*` calls, `.data.copy_()`) still ceiling the
 default capture to `False`, and tensor-to-scalar escapes (`.item()`, `int(argmax)`) raise the
 `scalar_escape` advisory; but host tensor sources the wrappers cannot see -- `torch.from_numpy(...)`
 / `torch.as_tensor(np_array)` / `torch.from_dlpack(...)` round-trips, an `autograd.Function` whose
 forward runs in NumPy, and in-forward storage writes through `.numpy()` / `untyped_storage()`
-aliases -- leave NO ceiling and NO advisory on the default capture (the op is visible to a graph
-reader as an internal-source op with `parents=()`). Arm the witness (or run `tl.validate`) when that
+aliases -- leave NO ceiling on the default capture (the op is visible to a graph
+reader as an internal-source op with `parents=()`). A default capture whose recorded ops include
+`torch.from_numpy`, `torch.from_dlpack`, `torch.frombuffer`, or `torch.as_tensor` on non-tensor data
+records one `host_tensor_source` row in `trace.annotations["capture_advisories"]` (count, sources and
+the first location when code context was kept; no warning, no verdict change), so the shared artifact
+says host data entered the graph unchecked. The other host sources above record nothing. Arm the witness (or run `tl.validate`) when that
 class of escape matters:
 
 ```python
@@ -332,7 +336,27 @@ assert torch.count_nonzero(patched.find_sites(tl.func("relu")).first().out) == 0
 ```
 
 Use `intervene=` when the edited value must affect downstream execution. For post-hoc experiments
-on an existing trace, prefer `trace.fork()`, `set(...)` or `attach_hooks(...)`, and `replay()`.
+on an existing trace, prefer `trace.fork()`, `set(...)` or `attach_hooks(...)`, and `push()`
+(which engine fits which question: [intervention explainers](intervention_explainers.md#which-engine-when)).
+
+## Long sequences and long contexts
+
+Saved activations grow with sequence length at every op, and attention probabilities grow with
+its square: one layer's `(batch, heads, q, kv)` matrix for a 4096-token sequence with 32 heads in
+bfloat16 is 32 x 4096 x 4096 x 2 bytes, 1 GiB, so a 32-layer model's set is 32 GiB. Plan what
+to keep before the first long capture:
+
+- Name the sites with `save=` (`tl.module("model.layers.20")`, `tl.func("linear") &
+  tl.in_module("model.layers.20")`) instead of the whole-graph default.
+- `CaptureOptions(save_budget=...)` (default `"auto"`) caps saved bytes; an exceeded budget
+  raises `SaveBudgetExceededError` rather than exhausting memory, and `output_device="cpu"` keeps
+  saved activations in host memory.
+- For a logit-lens sweep over many positions, `torchlens.semantic.logit_lens_predictions`
+  projects one layer at a time and keeps only top-k summaries.
+- For many forwards or generation, a bound spec or `steer_generate` saves nothing at all; editing
+  the cached past of a long prompt is the [KV-cache recipe](guides/kv_cache.md).
+- For a dataset of long sequences, `tl.extract_dataset(..., output_dir=...)` writes the named
+  layers to disk batch by batch.
 
 ## When another tool is faster
 

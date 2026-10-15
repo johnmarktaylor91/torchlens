@@ -223,7 +223,7 @@ def test_non_recurrent_control_is_still_caught() -> None:
     """The same corruption shape on a non-recurrent graph keeps failing."""
 
     trace = tl.trace(_NonRecurrent(), torch.randn(1, 4))
-    labels = [op.label for op in trace.ops]
+    labels = [op.label for op in trace.layer_list]
     _entry(trace, labels[1].rsplit(":", 1)[0]).children = [labels[5]]
     with pytest.raises(MetadataInvariantError) as excinfo:
         check_metadata_invariants(trace)
@@ -263,7 +263,7 @@ def test_buffer_source_is_a_resolvable_final_label() -> None:
     """``Buffer.buffer_source`` must be a live lookup key, not a dead raw label."""
 
     trace = tl.trace(_WriteThenRead(), torch.ones(2))
-    sources = [op.buffer_source for op in trace.ops if op.is_buffer and op.buffer_source]
+    sources = [op.buffer_source for op in trace.layer_list if op.is_buffer and op.buffer_source]
     assert sources, "the write-then-read fixture must produce a sourced buffer version"
     for source in sources:
         assert not source.endswith("_raw")

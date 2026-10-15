@@ -1165,6 +1165,14 @@ runnable descriptor would replay a truncated program while claiming faithfulness
 forward. Analysis-level saves of halted captures remain allowed; the refusal surfaces as
 `RunnablePreflightError` at `tl.save(level="runnable")` entry.
 
+`user_intervention_not_replayable` is also the RUN-time ceiling diagnostic (stage
+`hooked_run_unverified`, details `pristine=false`) of a hooked run: `trace.run(inputs=...,
+fast=True)` on a live trace that applies its staged hooks or value replacements returns an
+edited forward, not the model's own, and no hook-aware check exists yet, so the report settles
+`unverifiable` (poisoned, never `verified`) and the trace is no longer pristine. A run with
+nothing staged keeps its verdict; the ordinary `run(inputs=)` keeps refusing staged edits it
+would not apply (`run_staged_spec_unapplied`).
+
 `user_intervention_not_replayable` is the SAVE-time producer refusal (stage
 `producer_user_intervention`) for a capture whose taken path carries at least one
 user-intervention-replaced op (`trace(intervene=...)`, `set`, or a raw forward hook that
@@ -2558,7 +2566,7 @@ run; `wrap_torch(completeness_witness=True)` arms it for every capture; the spar
 save-time census runs it) — observable writes are caught by whole-storage byte comparison (including
 per-consumption sampling), and the only unobservable surface (a raw `data_ptr()` pointer) fails
 closed to `unverifiable`. The DEFAULT live `run()` provider does NOT arm the witness: a default
-capture whose forward wrote through such an alias carries `capture_verified=None` (not recorded,
+capture whose forward wrote through such an alias carries `capture_verified=None` (not checked,
 never a clean bill), its parent/child payloads may disagree, and the live refresh can still settle
 `verified` under oracle 1 (the fresh forward IS the model) while `tl.validate(scope="forward")`
 and the loaded-sparse provider catch the contradiction. Read `capture_verified=None` as "no

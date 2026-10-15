@@ -163,6 +163,54 @@ def test_t15_values_match_rdm_evolution() -> None:
         assert np.allclose(neuro_result.dissimilarities[row_index], condensed, atol=1e-12), key
 
 
+class _Recurrent(nn.Module):
+    """One linear module reused across three passes."""
+
+    def __init__(self) -> None:
+        """Initialize the shared linear."""
+
+        super().__init__()
+        torch.manual_seed(0)
+        self.cell = nn.Linear(5, 5)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply the shared cell three times."""
+
+        for _index in range(3):
+            x = torch.tanh(self.cell(x))
+        return x
+
+
+@pytest.mark.heavy
+def test_u24_2_rdm_evolution_expands_recurrent_passes_like_rdms() -> None:
+    """U24.2: both doors expand a recurrent layer into the same per-pass RDMs."""
+
+    torch.manual_seed(0)
+    log = tl.trace(_Recurrent(), torch.randn(7, 5), save=tl.func("linear"))
+    verb_result = tl.repgeom.rdm_evolution(log, metric="correlation")
+    neuro_result = rdms(log)
+    verb_sites = [key.split(":", 1)[1] for key in verb_result]
+    assert len(verb_sites) == 3
+    assert all(key.startswith("op:") for key in verb_result)
+    assert list(neuro_result.rdm_descriptors["site"]) == verb_sites
+    for row_index, square in enumerate(verb_result.values()):
+        condensed = square[np.triu_indices(square.shape[0], k=1)]
+        assert np.allclose(neuro_result.dissimilarities[row_index], condensed, atol=1e-12)
+
+
+@pytest.mark.heavy
+def test_u56_3_source_mode_records_similarity_repository_id() -> None:
+    """U56.3: source mode names the RDM variant; a metric without one omits it."""
+
+    log = _full_trace()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        correlation = rdms(log)
+        manhattan = rdms(log, metric="manhattan")
+    assert correlation.descriptors["similarity_repository_id"] == "rdm/*/correlation"
+    assert "similarity_repository_id" not in manhattan.descriptors
+
+
 @pytest.mark.heavy
 def test_source_mode_never_mutates_annotations() -> None:
     """The handoff is a treaty desk: no annotation blobs are written."""

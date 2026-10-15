@@ -1,6 +1,6 @@
 ## Brainpipe (F20; spellings DOCUMENTED-UNSTABLE)
 
-`torchlens.brainpipe` is the memory-planned whole-model extraction planner:
+`torchlens.brainpipe` is the whole-model extraction planner:
 `extraction_plan` (warm-up + two measured probes, per-site linear byte fits with
 batch-invariant detection, live transform measurement, full input-signature keying),
 `plan.table()` (one row per requested site plus measured peak pairs, exact pass

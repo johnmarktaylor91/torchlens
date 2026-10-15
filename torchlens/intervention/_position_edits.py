@@ -1,4 +1,4 @@
-"""Token-position editing (U42.1 position editing, phase 2).
+"""Token-position editing.
 
 ``at_positions(edit, positions, ...)`` restricts any same-shape edit to chosen
 token positions of a ``(batch, tokens, ...)`` site value: the edit computes its
@@ -21,7 +21,7 @@ import torch
 from .._errors import InvalidArgumentError
 from .errors import HookValueError
 from .hooks import HookContext, normalize_hook
-from .types import HelperSpec
+from .types import Edit
 
 _NAMED = ("first", "last")
 
@@ -107,7 +107,7 @@ def at_positions(
     mask: torch.Tensor | None = None,
     assume_no_padding: bool = False,
     axis: int = 1,
-) -> HelperSpec:
+) -> Edit:
     """Restrict an edit to chosen token positions of each batch row.
 
     Parameters
@@ -129,7 +129,7 @@ def at_positions(
 
     Returns
     -------
-    HelperSpec
+    Edit
         The position-restricted edit.
 
     Raises

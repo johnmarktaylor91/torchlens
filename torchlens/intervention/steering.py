@@ -43,7 +43,7 @@ def steer_generate(
     inputs: Any,
     spec: InterventionSpec,
     *,
-    on_zero_fire: str = "error",
+    on_zero_fire: str = "warn",
     **generate_kwargs: Any,
 ) -> SteerResult:
     """Run one real HF ``generate`` with the spec's edits held live.
@@ -51,7 +51,7 @@ def steer_generate(
     Composition sugar over ``spec.bind(model).generate(...)``: one binding is
     constructed, one generation runs capture-free with every firing recorded,
     and the result pairs the model's own outputs with the ledger. All bind
-    refusals (preflight anchors, zero-fire fail-closed, missing ``generate``,
+    refusals (preflight anchors, ``on_zero_fire='error'``, missing ``generate``,
     serial re-entrancy) apply unchanged.
 
     Parameters
@@ -63,8 +63,8 @@ def steer_generate(
     spec:
         The immutable intervention spec to hold across the generation.
     on_zero_fire:
-        Zero-fire settlement policy forwarded to ``spec.bind`` (FOLD-A3
-        fail-closed default).
+        Zero-fire settlement policy forwarded to ``spec.bind``: ``"warn"``
+        (default), ``"error"`` or ``"disclose"``.
     **generate_kwargs:
         Forwarded verbatim to the model's ``generate``.
 

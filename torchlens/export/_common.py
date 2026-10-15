@@ -14,7 +14,7 @@ __tl_layer__ = "L7"
 
 
 def _require_trace(log: Any, *, exporter: str) -> None:
-    """Refuse a non-``Trace`` input to a graph exporter, typed (U09.2, U10.5).
+    """Refuse a non-``Trace`` input to a graph exporter, typed.
 
     Without this gate a wrong argument reached the projection code and either
     crashed deep inside it or wrote a plausible empty artifact.

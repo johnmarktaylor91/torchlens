@@ -140,7 +140,7 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
 
     if isinstance(ix, int):
         try:
-            return self.ops[ix]
+            return self.layer_list[ix]  # every row, like the slice form above
         except IndexError:
             _give_user_feedback_about_lookup_key(self, ix, "get_one_item")
             raise
@@ -184,7 +184,14 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
             self.grad_fns,
         ):
             try:
-                for key in accessor.keys():
+                # ``ops.keys()`` lists the counted ops only; a
+                # case-insensitive label still reaches every row.
+                keys = (
+                    [op.label for op in self.layer_list]
+                    if accessor is self.ops
+                    else accessor.keys()
+                )
+                for key in keys:
                     if str(key).lower() == lower_ix:
                         return accessor[key]
             except (AttributeError, KeyError, ValueError, TypeError):
@@ -252,7 +259,7 @@ def _honesty_header_lines(self: "Trace") -> list[str]:
     if verdict == "found":
         lines.append("\tHealth: NaN/Inf FOUND (see .nonfinite_ops)")
     elif verdict == "not_checked":
-        # forks.7: track_nonfinite stays False by default (no overhead); the
+        # track_nonfinite stays False by default (no overhead); the
         # not-checked footer names the option while it is off.
         hint = (
             ""
@@ -300,7 +307,7 @@ def _str_after_pass(self: "Trace") -> str:
     s += f"\n\tRandom seed: {self.random_seed}"
     s += f"\n\tTime elapsed: {self.capture_duration} ({self.overhead_duration} spent logging)"
 
-    # Overall model structure. U35.1: an unverified capture (severed
+    # Overall model structure. An unverified capture (severed
     # provenance) may have missed ops, so it never claims "purely
     # feedforward" and its op and parameter counts read as lower bounds.
     unverified = getattr(self, "capture_verified", True) is False

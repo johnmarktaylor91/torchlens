@@ -56,8 +56,9 @@ _MEASURE_CONVENTIONS: dict[str, str] = {
         "1 - cosine similarity over flattened features; rsatoolbox has no cosine RDM method"
     ),
     "gaussian": (
-        "1 - exp(-D / (2 * mean(D))) with D the squared euclidean distances "
-        "(thingsvision's bandwidth convention)"
+        "1 - exp(-D / mean(D)) with D the squared euclidean distances and "
+        "mean(D) over the full matrix (thingsvision's gaussian_kernel, "
+        "thingsvision/core/rsa/helpers.py, 2022-08-31)"
     ),
 }
 
@@ -361,22 +362,12 @@ def _source_mode(  # noqa: PLR0913 -- mirrors the rdms() door's knob set verbati
     patterns, identity = _source_pattern_descriptors(computed, n_rows, obs, pattern_descriptors)
     rdm_descriptors = _source_rdm_descriptors(computed, casts, source_kind=kind, trace=trace)
 
-    sample = base_descriptors(computed[0], source_kind=kind, trace=trace)
-    descriptors: dict[str, Any] = {
-        "source": "torchlens",
-        "source_kind": kind,
-        "measure_source": "computed",
-        "measure_convention": _MEASURE_CONVENTIONS.get(
-            resolved_metric, f"computed by tl.repgeom metric {resolved_metric!r}"
-        ),
-        "pattern_identity": identity,
-        "tl_version": sample["tl_version"],
-        "rsatoolbox_version": sample["rsatoolbox_version"],
-    }
-    if "model" in sample:
-        descriptors["model"] = sample["model"]
-    if "tl_intervened" in sample:
-        descriptors["tl_intervened"] = sample["tl_intervened"]
+    descriptors = _source_stack_descriptors(
+        base_descriptors(computed[0], source_kind=kind, trace=trace),
+        resolved_metric=resolved_metric,
+        source_kind=kind,
+        identity=identity,
+    )
 
     result = rsatoolbox.rdm.RDMs(
         dissimilarities=np.stack(condensed_rows),
@@ -387,6 +378,57 @@ def _source_mode(  # noqa: PLR0913 -- mirrors the rdms() door's knob set verbati
     )
     result.tl_ledger = tuple(ledger)
     return result
+
+
+def _source_stack_descriptors(
+    sample: dict[str, Any],
+    *,
+    resolved_metric: str,
+    source_kind: str,
+    identity: str,
+) -> dict[str, Any]:
+    """Build the stack-level descriptors of a source-mode RDMs object.
+
+    Parameters
+    ----------
+    sample:
+        ``base_descriptors`` of the first computed site.
+    resolved_metric:
+        The ``tl.repgeom`` metric actually computed.
+    source_kind:
+        ``"trace"`` or the extraction kind.
+    identity:
+        Pattern-identity disclosure from the pattern-descriptor block.
+
+    Returns
+    -------
+    dict[str, Any]
+        Descriptors, including the metric's similarity-repository
+        identifier when the catalogue has an exact match.
+    """
+
+    from ..repgeom._similarity_ids import rdm_id
+
+    descriptors: dict[str, Any] = {
+        "source": "torchlens",
+        "source_kind": source_kind,
+        "measure_source": "computed",
+        "measure_convention": _MEASURE_CONVENTIONS.get(
+            resolved_metric, f"computed by tl.repgeom metric {resolved_metric!r}"
+        ),
+        "pattern_identity": identity,
+        "tl_version": sample["tl_version"],
+        "rsatoolbox_version": sample["rsatoolbox_version"],
+    }
+    similarity_id = rdm_id(resolved_metric)
+    if similarity_id is not None:
+        # the exact RDM variant's similarity-repository identifier.
+        descriptors["similarity_repository_id"] = similarity_id
+    if "model" in sample:
+        descriptors["model"] = sample["model"]
+    if "tl_intervened" in sample:
+        descriptors["tl_intervened"] = sample["tl_intervened"]
+    return descriptors
 
 
 def _source_pattern_descriptors(

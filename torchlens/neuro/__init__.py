@@ -3,7 +3,7 @@
 torchlens owns everything that touches the network; rsatoolbox and
 Brain-Score own everything that touches the brain or the hypothesis. This
 namespace hands representations across that seam with provenance that
-cannot lie, and teaches where everything else lives. The map, in five
+cannot lie, and teaches where everything else lives. The map, in six
 sections:
 
 1. EXTRACT (upstream, needs no extra): capture with ``tl.trace(model, x,
@@ -26,8 +26,10 @@ sections:
    measure.
 4. SCORE (requires the ``brainscore`` extra = brainscore-vision, Python
    >= 3.11): ``neuro.activations_extractor(model, preprocessing, ...)``
-   builds a real Brain-Score ``ActivationsExtractorHelper`` over TorchLens
-   capture, and ``neuro.get_activations_fn(model, ...)`` is the underlying
+   builds a ``PytorchWrapper``-shaped Brain-Score activations model over
+   TorchLens capture (its ``_extractor`` is a real
+   ``ActivationsExtractorHelper``; it goes into a plugin's
+   ``ModelCommitment``), and ``neuro.get_activations_fn(model, ...)`` is the underlying
    per-batch callable. Both are exposed here because the live end-to-end
    gate PASSED (2026-08-29): a real resnet18 checkpoint through a real
    ``ActivationsExtractorHelper`` and ``StimulusSet`` against a live
@@ -35,11 +37,22 @@ sections:
    presentation order, layer coordinates, logits, dotted module paths, a
    functional-op mapping, a short final batch, and CPU behavior matching
    direct torchlens extraction, plus default sites on a PARTIALLY saved
-   trace. CUDA is not claimed (no covered runner). The offline
+   trace. A plugin wrapping it in ``ModelCommitment`` was scored end to
+   end on MajajHong2015public.IT-pls and Geirhos2021colour-top1
+   (2026-10-14, brainscore-vision 2.4.1, Python 3.11, CPU). CUDA is not
+   claimed (no covered runner). The offline
    ``per_layer`` recipe deliberately gets no neuro name (a generic
    score-a-callable loop must not borrow a benchmark's authority).
-5. REFUSALS: noise ceilings, crossnobis/mahalanobis, searchlight,
-   bootstrap/permutation/model fitting, encoding models, CCA/SVCCA/PWCCA,
+5. COMPARE (needs no extra): ``neuro.compare(source, target,
+   analyses=("rsa", "ridge", "cka"))`` reads each site's activations once
+   and scores every site against one target with RSA, a cross-validated
+   ridge score and linear CKA, all descriptive (optional stimulus-bootstrap
+   intervals with ``n_resamples=``); ``.disagreement()`` reports where the
+   analyses rank sites differently.
+6. REFUSALS: noise ceilings, crossnobis/mahalanobis, searchlight,
+   inferential bootstrap/permutation/model fitting (descriptive intervals
+   are tl.repgeom.rdm_compare_interval / cka_interval), encoding-model
+   inference, CCA/SVCCA/PWCCA,
    non-metric MDS, model zoos, and brain data itself are deliberately NOT
    here. Each attempted name raises a teaching refusal naming the owning
    neighbour, the missing ingredient, and the torchlens spelling that
@@ -80,15 +93,21 @@ _INSTALL_BRAINSCORE = 'pip install "torchlens[brainscore]" (Python >= 3.11)'
 #: not a real public name of this environment, and ``hasattr`` already
 #: answers ``False`` for it. Access to an unadvertised gated name still
 #: teaches the exact install command (facade step 4 re-probes per access).
-__all__ = (["datasets", "rdms"] if _find_spec("rsatoolbox") is not None else []) + (
-    ["activations_extractor", "get_activations_fn"]
-    if _find_spec("brainscore_vision") is not None
-    else []
+__all__ = (
+    ["compare"]
+    + (["datasets", "rdms"] if _find_spec("rsatoolbox") is not None else [])
+    + (
+        ["activations_extractor", "get_activations_fn"]
+        if _find_spec("brainscore_vision") is not None
+        else []
+    )
 )
 __all__.sort()
 
 #: Real active names (facade step 4), each behind its own dependency gate.
 _LAZY_ATTRS: dict[str, tuple[str, str | None]] = {
+    # Ungated: numpy-only, so it needs no extra.
+    "compare": ("torchlens.neuro._compare", "compare"),
     "datasets": ("torchlens.neuro._datasets", "datasets"),
     "rdms": ("torchlens.neuro._rdms", "rdms"),
     "activations_extractor": ("torchlens.bridge.brain_score", "activations_extractor"),
@@ -122,7 +141,9 @@ _REDIRECTS: dict[str, str] = {
     "brain_score": (
         "the verified adapters are neuro.activations_extractor and "
         "neuro.get_activations_fn (live-gate verified against "
-        "brainscore-vision 2.3.22, Python 3.12, CPU); the underlying module "
+        "brainscore-vision 2.3.22, Python 3.12, CPU, and scored end to end "
+        "through a ModelCommitment plugin on brainscore-vision 2.4.1, "
+        "Python 3.11, CPU); the underlying module "
         "is tl.bridge.brain_score, and the offline per_layer recipe "
         "deliberately keeps its bridge-only spelling"
     ),
@@ -142,7 +163,9 @@ _REFUSALS: dict[str, str] = {
     "bootstrap": (
         "bootstrap inference over stimuli/subjects belongs to "
         "rsatoolbox.inference; torchlens hands it descriptor-complete RDMs "
-        "via neuro.rdms()"
+        "via neuro.rdms(). For a DESCRIPTIVE stimulus-bootstrap interval on "
+        "torchlens's own scores, use tl.repgeom.rdm_compare_interval or "
+        "tl.repgeom.cka_interval (needs no extra)"
     ),
     "permutation_test": (
         "permutation-based hypothesis inference belongs to "
@@ -172,11 +195,6 @@ _REFUSALS: dict[str, str] = {
         "unit coordinates in channel descriptors for a possible model-side "
         "searchlight later"
     ),
-    "compare": (
-        "RDM comparison beyond pearson/spearman (whitened cosine, tau, "
-        "rho-a, ...) is rsatoolbox.rdm.compare's mature vocabulary; feed it "
-        "RDMs from neuro.rdms()"
-    ),
     "kendall": (
         "kendall's tau carries the tau-a vs tau-b tie trap (tau-b "
         "understates agreement when model RDMs contain ties); "
@@ -188,14 +206,18 @@ _REFUSALS: dict[str, str] = {
         "descriptor-complete RDMs via neuro.rdms()"
     ),
     "encoding_model": (
-        "encoding models / ridge regression to brain responses belong to "
-        "Brain-Score and himalaya; tl.extract_dataset writes the "
-        "stimuli-x-features matrices they consume"
+        "encoding-model fitting, voxel maps, variance partitioning and "
+        "stacked fits belong to Brain-Score, himalaya and Net2Brain; "
+        "tl.extract_dataset writes the stimuli-x-features matrices they "
+        "consume. For a DESCRIPTIVE cross-validated ridge score per site, "
+        "use neuro.compare(source, target, analyses=('ridge',))"
     ),
     "ridge": (
-        "ridge regression to brain responses belongs to himalaya (and "
-        "Brain-Score's pipelines); tl.extract_dataset writes the "
-        "stimuli-x-features matrices it consumes"
+        "ridge fitting with alpha inference, voxel maps and variance "
+        "partitioning belongs to himalaya (and Brain-Score's pipelines); "
+        "tl.extract_dataset writes the stimuli-x-features matrices it "
+        "consumes. For a DESCRIPTIVE cross-validated ridge score per site, "
+        "use neuro.compare(source, target, analyses=('ridge',))"
     ),
     "cca": (
         "CCA/SVCCA/PWCCA and shape metrics live in netrep and documented "

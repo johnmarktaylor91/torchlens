@@ -88,7 +88,7 @@ _LAZY_ATTRS = {
     "callbacks": ("torchlens.callbacks", None),
     "neuro": ("torchlens.neuro", None),
     "notebook": ("torchlens.notebook", None),
-    # Batch-2 R2-32 + UI-inventory root namespaces: existing subpackages that
+    # Batch-2 and UI-inventory root namespaces: existing subpackages that
     # raised AttributeError at the root in a fresh process (most of them even
     # after a capture) get module rows, so `tl.<ns>` resolves identically in a
     # fresh process and after a capture. Namespaces, not new root verbs; which
@@ -570,7 +570,7 @@ def pluck(model: _nn.Module, x: _Any, layer: str, stop_after: _Any | None = None
 
     from .options import CaptureOptions
 
-    # U15.1: an explicit site rides the capture options, where the trace
+    # an explicit site rides the capture options, where the trace
     # validates it; without one the trace reads the ambient site itself.
     capture = (
         CaptureOptions(layers_to_save=[layer])

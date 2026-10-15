@@ -1291,7 +1291,7 @@ def _add_reference_fallback_collision(trace: tl.Trace) -> str:
         Relationship label deliberately removed from the fast index.
     """
 
-    input_op = next(op for op in trace.ops if op.is_input)
+    input_op = next(op for op in trace.layer_list if op.is_input)
     collision_op = next(op for op in trace.ops if not op.is_input and not op.is_output)
     collision_op._label_raw = input_op.layer_label
     return str(input_op.layer_label)
@@ -1929,9 +1929,9 @@ def test_adjacency_index_matches_forced_accessor_reference(
         if case_name == "recurrent":
             assert any(module.num_calls > 1 for module in trace.modules)
         if case_name == "batchnorm_buffer":
-            assert any(op.is_buffer for op in trace.ops)
+            assert any(op.is_buffer for op in trace.layer_list)
         if case_name == "write_version":
-            assert any(op.buffer_write_kind is not None for op in trace.ops)
+            assert any(op.buffer_write_kind is not None for op in trace.layer_list)
 
         optimized = _collapse_artifact_snapshot(trace, tmp_path, f"{case_name}_indexed")
         if case_name == "external_endpoints":
@@ -2311,7 +2311,9 @@ def test_auto_collapse_run_fold_splits_same_spatial_channel_steps(tmp_path: Path
         auto_source = _draw_source(trace, tmp_path, "dim_step_stage_boundary_auto", "auto")
         folds = resolve_repeat_folds(trace, _select_blocks_child)
 
-        assert _collapsed_exact_label_count(auto_source, "blocks.1") == 1
+        # Re-pinned with the collapse gate fix: a block whose only child (``net``)
+        # hides the same ops is not a box candidate, so the box takes the inner name.
+        assert _collapsed_exact_label_count(auto_source, "blocks.1.net") == 1
         assert "runfoldellipsis" not in auto_source
         assert "... +" not in auto_source
         assert "shapes " not in auto_source

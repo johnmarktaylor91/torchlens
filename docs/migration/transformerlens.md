@@ -4,7 +4,7 @@
 | --- | --- | --- |
 | Cache activations with `run_with_cache` | `log = tl.trace(model, x, save=tl.in_module("block"))` | TorchLens records a broader PyTorch op DAG, not only transformer hook points. |
 | Inspect hook names | `log.find_sites(tl.contains("..."))` or `log.summary()` | Equivalent discovery workflow, different names. |
-| Target a hook point by TLens name | `torchlens.mechinterp.resolve_alias(log, "blocks.5.attn.hook_pattern")` (also tuple and compact `"k6"` forms), or discover once and use `tl.label(label)` | TLens spellings resolve against the trace; exact labels remain the reproducible form. |
+| Target a hook point by TLens name | `torchlens.mechinterp.resolve_alias(log, "blocks.5.attn.hook_pattern")` (2.x names, 3.x bridge-cache names, 4.x canonical names such as `blocks.5.attn.o.hook_in`, plus tuple and compact `"k6"` forms), or discover once and use `tl.label(label)` | TLens spellings resolve against the trace; exact labels remain the reproducible form. |
 | `run_with_hooks` | `tl.trace(model, x, intervene=tl.when(site, hook), save=site)` | Capture-time `intervene=` is the direct live execution equivalent when the site is known. |
 | Patch from clean cache into corrupted run | Capture clean and corrupted logs, then `corrupted.fork().set(site, clean_site.out).push()` | Equivalent for graph-stable patching. |
 | `act_patch` / patching heatmaps | `torchlens.mechinterp.patch_heads_grid` / `patch_residual_grid` (turnkey `PatchGrid` results); gradient-based attribution via `torchlens.attribution` | Turnkey grids ship; validated against TransformerLens oracles. |
@@ -35,5 +35,7 @@ tutorials) speaks those names natively. Choose TorchLens when you need the
 real model (stock HF checkpoints, any architecture), the broader PyTorch op
 DAG, verified capture, or architecture-agnostic tooling; choose
 TransformerLens when its curated model families and pedagogy corpus are the
-point. See `from_transformerlens.md` for the 3.x TransformerBridge refusal
-(the bridge mutates the HF model it wraps and cannot be instrumented).
+point. TransformerLens 4.x adds vLLM and Inspect drivers, the backward lens,
+sparse probing and SVD circuit tools, and makes `TransformerBridge` its main model class;
+see `from_transformerlens.md` for why TorchLens refuses to trace a bridge (it mutates the
+HF model it wraps and cannot be instrumented) and what to trace instead.

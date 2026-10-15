@@ -1,4 +1,4 @@
-"""Intervened dataset extraction (R2-08; spellings DOCUMENTED-UNSTABLE).
+"""Intervened dataset extraction (spellings DOCUMENTED-UNSTABLE).
 
 ``extract_dataset(..., intervene=spec)`` runs every batch through the live
 capture door with the spec armed (``tl.trace(..., intervene=spec)``), so the
@@ -138,16 +138,16 @@ def _rule_helper(rule: Any) -> Any:
 
     Returns
     -------
-    HelperSpec | None
+    Edit | None
         The helper spec carrying the batch-independence declaration.
     """
 
-    from ..intervention.types import HelperSpec, InterventionDecision
+    from ..intervention.types import Edit, InterventionDecision
 
     action = rule.action
     if isinstance(action, InterventionDecision):
         action = action.hook
-    return action if isinstance(action, HelperSpec) else None
+    return action if isinstance(action, Edit) else None
 
 
 def _refuse_batch_dependent(rule: Any) -> None:

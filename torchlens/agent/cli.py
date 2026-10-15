@@ -162,8 +162,9 @@ def _audit_blocks(envelope: dict[str, Any]) -> list[dict[str, Any]]:
 def _check_unverified(envelope: dict[str, Any]) -> bool:
     """Whether any capture block records an explicit verification ceiling.
 
-    ``capture_verified`` is TRI-STATE: ``None`` means no ceiling recorded (a
-    healthy capture) and never trips.
+    ``capture_verified`` is TRI-STATE: ``None`` means not checked (the
+    completeness witness was not armed; no verdict, not a clean bill) and never
+    trips.
     """
 
     return any(block.get("capture_verified") is False for block in _capture_blocks(envelope))

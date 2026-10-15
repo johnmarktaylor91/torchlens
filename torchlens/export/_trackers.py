@@ -48,7 +48,7 @@ def tensorboard(log: Any, writer: Any, *, step: int, prefix: str = "torchlens") 
         The writer object passed in.
     """
 
-    # U33.2: a non-Trace input used to write plausible zeros (getattr defaults).
+    # a non-Trace input used to write plausible zeros (getattr defaults).
     _require_trace(log, exporter="tl.export.tensorboard")
     _require_tracker_object(writer, method_name="tensorboard", required_method="add_scalar")
     # One converter for every tracker exporter (F26 unification): the four

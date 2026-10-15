@@ -49,7 +49,7 @@ from typing import Any
 import torch
 
 from .errors import RegionError
-from .types import HelperSpec
+from .types import Edit
 
 #: The engine-set execution-effect value for the region replay lowering.
 _REGION_EXECUTION_EFFECT = "exits_substituted_interior_not_replayed"
@@ -680,7 +680,7 @@ def _evaluate_instance(
         edge = next(e for e in instance.exits if e.parent == label)
         exit_values[label] = _consumed_value(trace, graph.ops[edge.parent], graph.ops[edge.child])
 
-    is_splice = isinstance(edit, HelperSpec) and edit.helper_name == "splice_module"
+    is_splice = isinstance(edit, Edit) and edit.helper_name == "splice_module"
     if is_splice and dict(edit.metadata).get("input") == "in":
         module = edit.args[0]
         entries = _entry_values(trace, graph, instance)
@@ -732,7 +732,7 @@ def _evaluate_instance(
         # an edit (AUD-CODE 3.7c).
         return {label: validate_hook_output(replaced, exit_values[label], hook_context=context)}
 
-    if isinstance(edit, (HelperSpec, torch.Tensor)) or not callable(edit):
+    if isinstance(edit, (Edit, torch.Tensor)) or not callable(edit):
         raise RegionError(
             f"region instance {instance.index} has {len(instance.exit_ops)} "
             "exit ops; a per-value edit cannot coordinate a multi-exit "
@@ -921,9 +921,7 @@ def _commit_region_occurrence(
         timing="post",
         direction="forward",
         helper_name=(
-            edit.helper_name
-            if isinstance(edit, HelperSpec)
-            else getattr(edit, "__name__", "region_edit")
+            edit.helper_name if isinstance(edit, Edit) else getattr(edit, "__name__", "region_edit")
         ),
         replaced=False,
         edge_address=tuple(address),
@@ -1037,9 +1035,7 @@ def apply_region_do(
         ],
         exits=applied,
         instances=per_instance,
-        edit=(
-            edit.helper_name if isinstance(edit, HelperSpec) else getattr(edit, "__name__", "value")
-        ),
+        edit=(edit.helper_name if isinstance(edit, Edit) else getattr(edit, "__name__", "value")),
         execution_effect=_REGION_EXECUTION_EFFECT,
         effect_closure=effect_disclosure,
         source="current_transaction",

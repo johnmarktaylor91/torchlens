@@ -72,6 +72,107 @@ def _failed(case_id: str, tier: str, detail: str, model: RosterModel | None = No
     )
 
 
+#: Detail prefix marking a typed backend refusal (``BackendUnsupportedError``)
+#: inside a failed row; preview scorecards read it as an ``unsupported`` cell.
+UNSUPPORTED_DETAIL_PREFIX = "unsupported"
+
+#: Per-model case ids each rung runs, in order (a named skip covers all of them).
+C1_MODEL_CASES: tuple[str, ...] = (
+    "c1_capture_completes",
+    "c1_reference_parity",
+    "c1_deterministic_repeat",
+)
+#: The op-completeness case, run for every roster row that declares an inventory.
+C1_INVENTORY_CASE = "c1_op_inventory_complete"
+C2_MODEL_CASES: tuple[str, ...] = (
+    "c2_roundtrip_completes",
+    "c2_reload_is_distinct",
+    "c2_structure_equal",
+)
+
+
+def _captured_op_kinds(trace: Any) -> tuple[str, ...]:
+    """The captured ops' kinds (``Op.func_name``) in capture order."""
+
+    rows = getattr(trace, "layer_list", None)
+    if rows is None:
+        ops = trace.ops
+        rows = ops.values() if hasattr(ops, "values") else ops
+    return tuple(str(getattr(op, "func_name", "")) for op in rows)
+
+
+def _op_inventory_case(trace: Any, model: RosterModel) -> CaseResult:
+    """Op completeness against the roster's independent inventory.
+
+    Output parity alone passes when the capture drops an op whose effect still
+    reaches the output (the op ran, it just was not recorded); comparing every
+    captured op kind with the inventory derived from the model definition
+    fails that, and any extra op, in either direction.
+    """
+
+    expected = model.expected_op_kinds or ()
+    captured = _captured_op_kinds(trace)
+    if captured == expected:
+        return _passed(C1_INVENTORY_CASE, "C1", model)
+    detail = f"captured op kinds {list(captured)} != declared inventory {list(expected)}"
+    return _failed(C1_INVENTORY_CASE, "C1", detail[:300], model)
+
+
+def _failure_detail(exc: Exception) -> str:
+    """Failure detail; a typed backend refusal is tagged ``unsupported[<code>]``."""
+
+    from ..backends.registry import BackendUnsupportedError
+
+    text = str(exc)[:300]
+    if isinstance(exc, BackendUnsupportedError):
+        return f"{UNSUPPORTED_DETAIL_PREFIX}[{exc.code}]: {text}"
+    return text
+
+
+def model_case_ids(model: RosterModel, tier: str, model_cases: tuple[str, ...]) -> tuple[str, ...]:
+    """The per-model case ids one rung defines for ``model``, in report order."""
+
+    if tier == "C1" and model.expected_op_kinds is not None:
+        return (model_cases[0], C1_INVENTORY_CASE, *model_cases[1:])
+    return model_cases
+
+
+def _unavailable_rows(
+    adapter: Any,
+    roster: tuple[RosterModel, ...],
+    tier: str,
+    model_cases: tuple[str, ...],
+    tail_cases: tuple[str, ...] = (),
+) -> list[CaseResult] | None:
+    """Named skips for every case when the adapter's framework cannot run here.
+
+    A skip is not green: it fails the requested cell, and the funnel counts it.
+    Returns ``None`` when the adapter declares no unavailability.
+    """
+
+    probe = getattr(adapter, "unavailable_reason", None)
+    reason = probe() if callable(probe) else None
+    if reason is None:
+        return None
+    rows = [
+        CaseResult(
+            case_id=case_id,
+            tier=tier,
+            outcome="skipped",
+            family=model.family,
+            realism=model.realism,
+            detail=reason,
+        )
+        for model in roster
+        for case_id in model_case_ids(model, tier, model_cases)
+    ]
+    rows.extend(
+        CaseResult(case_id=case_id, tier=tier, outcome="skipped", detail=reason)
+        for case_id in tail_cases
+    )
+    return rows
+
+
 def run_c0_cases(adapter: Any) -> list[CaseResult]:
     """C0 provider-API pack: spec/capability shape, no model execution.
 
@@ -119,13 +220,30 @@ def _run_capture(adapter: Any, model: RosterModel) -> tuple[Any, Any, Any]:
     return net, trace, reference
 
 
-def _parity_holds(trace: Any, reference: Any) -> bool:
-    """Direct-reference parity: the captured output equals the direct run."""
+def _parity_holds(trace: Any, reference: Any, adapter: Any) -> bool:
+    """Direct-reference parity: the captured output equals the direct run.
 
-    import torch
+    Torch outputs compare with ``torch.equal``. An adapter exposing
+    ``as_array`` (the preview backends) only converts each arm to a NumPy
+    array; the runner compares dtype, shape and every element exactly.
+    """
 
     captured = trace.output_ops[0].out if getattr(trace, "output_ops", None) else None
-    if captured is None or not isinstance(reference, torch.Tensor):
+    if captured is None:
+        return False
+    as_array = getattr(adapter, "as_array", None)
+    if callable(as_array):
+        import numpy as np
+
+        left, right = as_array(captured), as_array(reference)
+        return (
+            left.dtype == right.dtype
+            and left.shape == right.shape
+            and bool(np.array_equal(left, right))
+        )
+    import torch
+
+    if not isinstance(reference, torch.Tensor):
         return False
     return bool(torch.equal(captured, reference))
 
@@ -149,6 +267,11 @@ def run_c1_cases(adapter: Any, roster: tuple[RosterModel, ...]) -> list[CaseResu
 
     import warnings
 
+    skipped = _unavailable_rows(
+        adapter, roster, "C1", C1_MODEL_CASES, ("c1_capabilities_consumed",)
+    )
+    if skipped is not None:
+        return skipped
     results: list[CaseResult] = []
     for model in roster:
         try:
@@ -156,19 +279,21 @@ def run_c1_cases(adapter: Any, roster: tuple[RosterModel, ...]) -> list[CaseResu
                 warnings.simplefilter("ignore")
                 _, trace, reference = _run_capture(adapter, model)
         except Exception as exc:  # noqa: BLE001 - provider failures become red cells, never crashes
-            results.append(_failed("c1_capture_completes", "C1", str(exc)[:300], model))
+            results.append(_failed("c1_capture_completes", "C1", _failure_detail(exc), model))
             continue
         try:
             dropped_ops = trace._conformance_dropped_ops
         except AttributeError:
             dropped_ops = False
-        if dropped_ops or not len(trace.ops):
+        if dropped_ops or not len(trace.layer_list):
             results.append(
                 _failed("c1_capture_completes", "C1", "capture dropped recorded ops", model)
             )
             continue
         results.append(_passed("c1_capture_completes", "C1", model))
-        if _parity_holds(trace, reference):
+        if model.expected_op_kinds is not None:
+            results.append(_op_inventory_case(trace, model))
+        if _parity_holds(trace, reference, adapter):
             results.append(_passed("c1_reference_parity", "C1", model))
         else:
             results.append(
@@ -183,14 +308,14 @@ def run_c1_cases(adapter: Any, roster: tuple[RosterModel, ...]) -> list[CaseResu
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 _, repeat, _ = _run_capture(adapter, model)
-            if len(repeat.ops) == len(trace.ops):
+            if len(repeat.layer_list) == len(trace.layer_list):
                 results.append(_passed("c1_deterministic_repeat", "C1", model))
             else:
                 results.append(
                     _failed("c1_deterministic_repeat", "C1", "op count varies across runs", model)
                 )
         except Exception as exc:  # noqa: BLE001 - provider failures become red cells, never crashes
-            results.append(_failed("c1_deterministic_repeat", "C1", str(exc)[:300], model))
+            results.append(_failed("c1_deterministic_repeat", "C1", _failure_detail(exc), model))
     results.append(_capability_consumption_case(adapter, roster))
     return results
 
@@ -252,6 +377,9 @@ def run_c2_cases(
 
     import warnings
 
+    skipped = _unavailable_rows(adapter, roster, "C2", C2_MODEL_CASES)
+    if skipped is not None:
+        return skipped
     results: list[CaseResult] = []
     for index, model in enumerate(roster):
         path = workdir / f"c2_{adapter.name}_{model.family}_{index}.tlspec"
@@ -262,7 +390,7 @@ def run_c2_cases(
                 adapter.save(trace, path)
                 loaded = adapter.load(path)
         except Exception as exc:  # noqa: BLE001 - provider failures become red cells, never crashes
-            results.append(_failed("c2_roundtrip_completes", "C2", str(exc)[:300], model))
+            results.append(_failed("c2_roundtrip_completes", "C2", _failure_detail(exc), model))
             continue
         results.append(_passed("c2_roundtrip_completes", "C2", model))
         if loaded is trace:
@@ -277,7 +405,9 @@ def run_c2_cases(
             )
             continue
         results.append(_passed("c2_reload_is_distinct", "C2", model))
-        if getattr(loaded, "_conformance_field_lost", False) or len(loaded.ops) != len(trace.ops):
+        if getattr(loaded, "_conformance_field_lost", False) or len(loaded.layer_list) != len(
+            trace.layer_list
+        ):
             results.append(
                 _failed("c2_structure_equal", "C2", "reloaded structure differs from live", model)
             )

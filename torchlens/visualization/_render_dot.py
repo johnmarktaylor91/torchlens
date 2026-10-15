@@ -11,6 +11,7 @@ from .._errors import CaptureContextError, InvalidArgumentError, PayloadUnavaila
 from ..errors._base import TorchLensWarning
 from ..utils.display import user_stacklevel
 from . import _render_utils
+from ._boundary_bundle import bundle_member_nodes
 from ._draw_validation import _validate_draw_flag_options, _validate_draw_options
 from ._render_common import *
 from ._render_edges import *
@@ -723,6 +724,11 @@ def _populate_forward_ir(trace: "Trace", context: _ForwardRenderContext) -> _For
         container_max_inline=request.container_max_inline,
         pending_nodes=pending_container_collapse_nodes,
     )
+    collapsed_container_nodes.update(
+        bundle_member_nodes(
+            trace, context.source_graph.entries_to_plot, request, request.collapse_fn
+        )
+    )
     # Checked suppression (L5 M4, DEFAULT-ON): the trace-bearing prepass
     # proves which constructor-arg rows duplicate captured shapes on THIS
     # trace; unprovable or mismatching args stay visible (self-honest).
@@ -955,8 +961,10 @@ def _emit_and_finish_forward(
     overrides = cast(VisualizationOverrides, request.overrides)
     if context.engine == "rank":
         from ._rank_layout_internal.layout import render_rank_layout
+        from ._rank_segments import project_segments_for_rank
 
         _disclose_rank_layout_omissions(trace, context)
+        forward_render_ir = project_segments_for_rank(forward_render_ir, context, request.vis_mode)
         resolved_graph_overrides = {
             key: str(val(trace)) if callable(val) else str(val)
             for key, val in overrides.graph.items()  # type: ignore[union-attr]
@@ -1152,7 +1160,7 @@ def _speculative_render_for(
 ) -> SpeculativeRender | None:
     """Return speculative-render state when the final render can reuse a verifier layout.
 
-    U07.5: the sibling-order verifier's ordered layout is the same layout the
+    The sibling-order verifier's ordered layout is the same layout the
     final render would run again; reuse needs the plain ``dot`` engine and a
     direct (not code-panel-composed) artifact.
 
@@ -1244,7 +1252,7 @@ def _publish_forward_render(
                         speculative.reusable_for(final_source) if speculative is not None else None
                     )
                     if reusable is not None:
-                        # U07.5: the verifier already laid out exactly this
+                        # the verifier already laid out exactly this
                         # source and wrote the format; publish that artifact.
                         shutil.move(reusable, temp_rendered_path)
                         stderr_text: Any = cast(SpeculativeRender, speculative).last_stderr
@@ -1459,7 +1467,7 @@ def draw(
         from ._encoding import raise_encoding_dagua_refusal
 
         raise_encoding_dagua_refusal(request.encoding.active_channels())
-    # forks.12: a bare draw (no vis_outpath) writes a collision-safe file and
+    # a bare draw (no vis_outpath) writes a collision-safe file and
     # always prints where; an explicit path is written exactly, as before.
     announce_path = vis_outpath is None
     resolved_outpath = (

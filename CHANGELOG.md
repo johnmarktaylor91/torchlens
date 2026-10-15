@@ -1,6 +1,79 @@
 # CHANGELOG
 
 
+## Unreleased
+
+### Behavior changes
+
+- **trace.ops**: `len`, iteration, integer indexing, `keys()`/`values()`/`items()` and
+  `to_pandas()` of `trace.ops` now cover only the ops `trace.num_ops` counts, so
+  `len(trace.ops) == trace.num_ops`. Input, output and buffer rows are no longer in that
+  sequence (label lookup such as `trace.ops["input_1"]` still finds them). Code that read
+  `trace.ops` as every captured row should read `trace.layer_list`, which `len(trace)`,
+  `trace[int]` and `trace[slice]` index.
+- **repgeom**: `tl.repgeom.rdm(metric="gaussian")` now computes `1 - exp(-D / mean(D))`, the
+  thingsvision bandwidth it credits, instead of `1 - exp(-D / (2 * mean(D)))`, so every gaussian
+  RDM value differs from every earlier release (for 1-D points 0, 1, 3: 0.148, 0.765, 0.474 become
+  0.275, 0.945, 0.724).
+
+- **bridge.steering_vectors / bridge.repeng**: the trainers `tl.bridge.steering_vectors.vector`
+  and `tl.bridge.repeng.control_vector` are removed, with no alias. Build the direction with
+  `torchlens.intervention.direction_from_pairs(pos_traces, neg_traces, site, method=)` and
+  convert it with `direction.to_steering_vectors()` or `direction.to_repeng()` (the bridges now
+  hold only the converters `from_direction`). repeng's `pca_diff`, `pca_center` and `umap`
+  replications are gone; the native methods are `mean_diff`, `pca` and `logistic`.
+- **bridge.dialz**: `tl.bridge.dialz.vector` is removed with no alias; build the direction with
+  `torchlens.intervention.direction_from_pairs` and convert it with `Direction.to_dialz()` (or
+  `tl.bridge.dialz.from_direction`). The `bridge_contrastive_*` refusal codes are gone with it.
+  The `dialz` extra now requires dialz 1.1 or later (`dialz>=1.1,<2`).
+- **Bundle**: the "pristine" label and baseline auto-detection now read `Trace.pristine is True`
+  instead of `Trace.state is TraceState.PRISTINE`. Intervened captures (including func-targeted
+  `intervene=` captures, whose state stayed `PRISTINE`), artifacts older than tlspec 9 and
+  non-torch traces are no longer auto baselines; plain reruns and `clear_hooks()` on an untouched
+  trace now are. With no qualifying member, baseline-anchored reads still refuse
+  `BaselineUndeterminedError`; pass `baseline=` explicitly.
+
+### Features
+
+- **Trace**: `Trace.pristine` (documented unstable) reads `True`, `False` or `None` for whether
+  anything ever intervened on the trace, derived from the evidence it carries, so it survives save
+  and load and no reset makes a touched trace read `True` again. `None` means no evidence (an
+  artifact older than tlspec 9, or a non-torch backend).
+- **intervention**: `torchlens.intervention.direction_from_pairs` fits a contrastive steering
+  direction (`"mean_diff"`, `"pca"` or `"logistic"`, torch only) from saved activations and
+  returns a `torchlens.intervention.Direction` with a `BasisProvenance` record, a native
+  `.steer(m)` edit and `.to_steering_vectors()` / `.to_repeng()` converters whose library
+  objects reproduce the native steer's logits.
+- **intervention**: `Direction.to_dialz()` returns a real `dialz.SteeringVector`; applied with
+  `SteeringModel.set_control(vector, scalar=m)` it reproduces `direction.steer(m)`'s logits.
+- **docs**: a conditional-steering recipe (`docs/recipes/conditional_steering.md`) with a
+  per-token audit of when the steer was applied.
+- **mechinterp**: `torchlens.mechinterp.patch_query_heads_grid` (documented unstable) builds a
+  `[layer, head]` patching grid over query heads at a key or value site under grouped-query
+  attention; each cell patches one query head's copy of its key/value group at the expansion op.
+  New refusals `mi_kv_expansion_unavailable`, `mi_kv_expansion_ambiguous` and
+  `mi_kv_heads_not_grouped`.
+- **tviz**: `torchlens.tviz.receipt_from_patch_grid` sets `CausalReceipt.effect_source` from a
+  grid's `effect_site` receipt, and refuses `kv_groups=` for a query-head interceptor grid
+  (`tv_receipt_invalid`).
+
+### Bug Fixes
+
+- **intervention**: the `dense_subspace_full_axis_edit` warning no longer says projection-valued
+  edits are unshipped; its remedy names `tl.project_off`, `tl.project_onto` and
+  `torchlens.intervention.set_direction_mean`, and the glossary subspace entry links to them.
+
+### Changed
+
+- **model wrappers**: the `model_wrapper_uninstrumentable` refusal for a TransformerLens
+  `TransformerBridge` now leads with reloading the HF model fresh and offers a `HookedTransformer`
+  only while you still use one.
+
+### Continuous Integration
+
+- A nightly `peer-recipes` job runs the executed recipe pages with every peer installed and fails
+  on any skip.
+
 ## v2.34.1 (2026-08-10)
 
 ### Bug Fixes

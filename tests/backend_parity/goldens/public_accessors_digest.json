@@ -36,14 +36,12 @@
       }
     },
     "ops": {
-      "first_key_label": "input_1:1",
-      "first_label": "input_1:1",
+      "first_key_label": "linear_1_1:1",
+      "first_label": "linear_1_1:1",
       "keys": [
-        "input_1:1",
         "linear_1_1:1",
         "relu_1_2:1",
-        "linear_2_3:1",
-        "output_1:1"
+        "linear_2_3:1"
       ]
     },
     "params": {
@@ -100,13 +98,13 @@
     }
   },
   "sha256_chunks": [
-    "94f5e172",
-    "ee7040c0",
-    "a820ca18",
-    "fffaae7a",
-    "8122caf7",
-    "61eeb5db",
-    "18705186",
-    "10337b74"
+    "878b239c",
+    "9f5348df",
+    "db5e92b1",
+    "b790b26b",
+    "d7c79dc8",
+    "fc551b09",
+    "92e1ce11",
+    "d550d8c8"
   ]
 }

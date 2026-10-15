@@ -750,11 +750,13 @@ def _angular_dissimilarity(features: np.ndarray, *, center_rows: bool) -> np.nda
 def _gaussian_dissimilarity(features: np.ndarray) -> np.ndarray:
     """Return Gaussian/RBF-kernel dissimilarities for row-wise features.
 
-    Convention (thingsvision's, credited -- ``thingsvision.core.rsa``):
-    with squared euclidean pairwise distances ``D``, the bandwidth is
-    ``mean(D)`` over the FULL ``N x N`` matrix (diagonal zeros included),
-    the similarity kernel is ``exp(-D / (2 * mean(D)))``, and the
-    dissimilarity is ``1 - similarity``. The bandwidth choice is a
+    Convention (thingsvision's, credited -- ``gaussian_kernel`` in
+    ``thingsvision/core/rsa/helpers.py``, unchanged upstream since its
+    2022-08-31 commit): with squared euclidean pairwise distances ``D``, the
+    bandwidth is ``mean(D)`` over the FULL ``N x N`` matrix (diagonal zeros
+    included), the similarity kernel is ``exp(-D / mean(D))``, and the
+    dissimilarity is ``1 - similarity``. This equals the similarity-repository's
+    ``rdm/*/gaussian`` exactly (oracle-checked). The bandwidth choice is a
     convention, not a law of nature; it is stated here so the number is
     reproducible.
 
@@ -766,7 +768,7 @@ def _gaussian_dissimilarity(features: np.ndarray) -> np.ndarray:
     Returns
     -------
     np.ndarray
-        Square ``1 - exp(-D / (2 * mean(D)))`` dissimilarity matrix.
+        Square ``1 - exp(-D / mean(D))`` dissimilarity matrix.
 
     Raises
     ------
@@ -785,7 +787,7 @@ def _gaussian_dissimilarity(features: np.ndarray) -> np.ndarray:
             "the data-derived bandwidth (mean squared pairwise distance, "
             "thingsvision's convention) is zero."
         )
-    return 1.0 - np.exp(-squared / (2.0 * bandwidth))
+    return 1.0 - np.exp(-squared / bandwidth)
 
 
 def rank_transform_rdm(

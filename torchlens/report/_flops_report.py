@@ -37,7 +37,7 @@ from .._errors import InvalidArgumentError
 from ._cost_backward import backward_status
 from ._cost_tree import build_cost_tree
 from ._factcore import factcore
-from ._summary_columns import ATTENTION_FULL_SQUARE_FUNCS, ATTENTION_FULL_SQUARE_NOTE
+from ._summary_columns import attention_full_square_line, counted_attention_ops
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
@@ -184,10 +184,7 @@ class FlopsReport:
         if self.non_mac_flops is not None:
             lines.append(f"  non-MAC FLOPs: {self.non_mac_flops}")
         if self.attention_full_square_ops:
-            lines.append(
-                f"  attention: {self.attention_full_square_ops} op(s) counted; "
-                f"{ATTENTION_FULL_SQUARE_NOTE}"
-            )
+            lines.append(f"  {attention_full_square_line(self.attention_full_square_ops)}")
         if self.batch_size is not None:
             scope = f"  scope: batch={self.batch_size}"
             if self.tokens_per_item is not None:
@@ -254,13 +251,7 @@ def _build_report(
     estimated = sum(
         1 for row in agg.rows if row.coverage_class == "known" and row.evidence == "estimated"
     )
-    attention_ops = sum(
-        1
-        for row in agg.rows
-        if row.kind == "op"
-        and row.func_name in ATTENTION_FULL_SQUARE_FUNCS
-        and row.flops_fma2 is not None
-    )
+    attention_ops = counted_attention_ops(agg)
     batch, tokens = _input_scope(trace)
     d_numel = main_input_numel
     if d_numel is None:

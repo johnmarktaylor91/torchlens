@@ -11,7 +11,7 @@ spelling here is DOCUMENTED-UNSTABLE pending the naming sprint.
 The working surfaces behind the "we supply" column:
 
 - `torchlens.brainpipe.extraction_plan` / `ExtractionPlan.run` -- the
-  memory-planned whole-model sweep: two measured probes, a printable plan
+  planned whole-model sweep: two measured probes, a printable plan
   table (measured bytes, peak pairs with backend named, exact pass counts),
   and a run door onto the atomic, resumable extraction artifact.
 - `torchlens.brainpipe.export_npz` -- npz interchange, including
@@ -23,12 +23,26 @@ The working surfaces behind the "we supply" column:
 - `tl.repgeom.rdm_compare` -- DESCRIPTIVE Pearson/Spearman/Kendall tau-a
   over aligned strict upper triangles (diagonal excluded). No p-values, no
   noise ceilings: asking for them refuses naming rsatoolbox.
+- `tl.repgeom.rdm_compare_interval` / `tl.repgeom.cka_interval` -- the same
+  scores with a DESCRIPTIVE percentile bootstrap interval over stimuli
+  beside them (`ScoreInterval`: seeded, resample count a parameter). Not a
+  test and not rsatoolbox's corrected bootstrap.
 - `tl.stats.CKA` / `tl.stats.cka` -- one-shot and streaming linear CKA
   (memory-bounded over arbitrarily many stimuli), `device=`/`dtype=`.
+- `tl.neuro.compare(source, target, analyses=("rsa", "ridge", "cka"))` --
+  one call that reads each site once and scores it against one target with
+  descriptive RSA, a cross-validated ridge score and linear CKA, optional
+  bootstrap intervals, and `.disagreement()` (`tl.repgeom.metric_disagreement`)
+  for where the analyses rank sites differently. Descriptive only.
 - `tl.bridge.rsatoolbox.dataset` -- the per-site rsatoolbox handoff.
-- `tl.bridge.brain_score` -- the Brain-Score `ActivationsExtractorHelper`
-  seam (live verification is CI-gated; the docstring's UNVERIFIED marker
-  leaves only when the L1/L2 job passes).
+- `tl.bridge.brain_score` -- the Brain-Score activations-model seam: a
+  `PytorchWrapper`-shaped model over an `ActivationsExtractorHelper` that a
+  model plugin hands to `ModelCommitment`; one neural and one behavioral
+  benchmark were scored end to end through such a plugin (2026-10-14,
+  brainscore-vision 2.4.1, Python 3.11, CPU). Brain-Score computes the
+  scores; TorchLens supplies the activations. `per_layer` and `score_parts`
+  report a ceiling-normalised score only beside its raw score
+  (`ScoreParts.raw`, `.ceiling_normalised`, `.ceiling`, `.error`).
 
 | # | Net2Brain method | We supply | We refuse and point |
 |---|---|---|---|
@@ -38,7 +52,7 @@ The working surfaces behind the "we supply" column:
 | 4 | Searchlight RSA | Model RDMs with stimulus identity; npz interchange | Brain-space neighborhoods, maps, tests -> Net2Brain `Searchlight` / rsatoolbox / nilearn |
 | 5 | CKA | One-shot + streaming linear CKA (memory-bounded; DeepJuice advertises no equivalent), `device=`/`dtype=`, convention recorded | Kernel CKA (documented non-offer), permutation/subject inference, rankings -> Net2Brain `CKA.run` / statistics tools |
 | 6 | Distributional comparison | Aligned features; streaming marginals when that accumulator lands | Binning/KDE/optimal-transport estimator choices, JSD/Wasserstein aggregation -> Net2Brain / scipy / POT |
-| 7 | Linear/ridge encoding | Aligned, ordered, site-keyed design matrices; the sweep's guaranteed row order; raw inputs for fold-local learned reductions | Splits, ridge fits, alpha selection, voxel scores -> himalaya / sklearn / Net2Brain `Encoding` |
+| 7 | Linear/ridge encoding | Aligned, ordered, site-keyed design matrices; the sweep's guaranteed row order; raw inputs for fold-local learned reductions; one DESCRIPTIVE cross-validated ridge score per site in `tl.neuro.compare` (seeded folds, per-fold leave-one-out penalty, mean Pearson r over target columns) | Encoding-model inference, alpha inference, voxel maps and per-voxel scores, banded/stacked fits -> himalaya / sklearn / Net2Brain `Encoding` |
 | 8 | veRSA | Features, plus `rdm()` accepting externally predicted responses (documented composition) | Encoding fit and veRSA orchestration -> Net2Brain veRSA / rsatoolbox |
 | 9 | Stacked encoding + variance partitioning | Multi-site banks with GUARANTEED identical row order and stable identities (the sweep's stimulus-order invariant) | Stacked fits, voxel R2, unique/shared variance, layer selection, SEM/tests -> Net2Brain / brainML / himalaya |
 
@@ -56,3 +70,36 @@ every operation, prints a measured cost table before running, emits a
 manifest a reviewer can audit, and never silently drops a site. Coverage
 and provenance are the trade; this page names it rather than claiming
 dominance on both axes.
+
+## Which measure, exactly: similarity-repository identifiers
+
+The [similarity-repository](https://github.com/nacloos/similarity-repository)
+is the catalogue for representational-similarity measures, including the
+ones TorchLens does not ship. Each TorchLens measure below carries the
+catalogue identifier of the exact variant it computes (`*` stands for the
+implementing repository, so `similarity.make(identifier)` selects every
+catalogued implementation of that variant), in these docs and in the
+result's provenance where the result has any: `rdm_evolution(...)
+.similarity_repository_id`, the `similarity_repository_id` descriptor of
+`tl.neuro.rdms` source mode, `tl.stats.CKA.similarity_repository_id`, the
+`SimilarityScore` that `tl.stats.cka` and `tl.stats.CKA.result()` return (a
+`float` with `similarity_repository_id`; `to_dict()` keeps it), and
+`tl.repgeom.cka_interval(...).similarity_repository_id` (also in its
+`to_dict()`).
+Identifiers were taken from the repository at commit `035b3be` and checked
+numerically against its implementations; a dash means the catalogue has no
+exact match, and no near match is substituted. The attribute and
+descriptor spellings are DOCUMENTED-UNSTABLE.
+
+| TorchLens measure | Similarity-repository identifier |
+|---|---|
+| `tl.stats.cka` / `tl.stats.CKA` (linear CKA) | `measure/*/cka-kernel=linear-hsic=gretton-score` |
+| `tl.repgeom.rdm(metric="euclidean")` | `rdm/*/euclidean` |
+| `tl.repgeom.rdm(metric="cosine")` | `rdm/*/cosine` |
+| `tl.repgeom.rdm(metric="correlation")` | `rdm/*/correlation` |
+| `tl.repgeom.rdm(metric="gaussian")` | `rdm/*/gaussian` |
+| `tl.repgeom.rdm(metric="manhattan")` | - |
+| `rdm_compare` over `rdm(metric=M)` RDMs, `method="pearson"` | `measure/*/rsa-rdm=M-compare=pearson` (M = euclidean, cosine, correlation, gaussian; - for manhattan) |
+| `rdm_compare` over `rdm(metric=M)` RDMs, `method="spearman"` | `measure/*/rsa-rdm=M-compare=spearman` (same M; - for manhattan) |
+| `rdm_compare` over `rdm(metric="correlation")` RDMs, `method="kendall"` | `measure/*/rsa-rdm=correlation-compare=tau_a` |
+| `rdm_compare` over euclidean, cosine, gaussian or manhattan RDMs, `method="kendall"` | - |

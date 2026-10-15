@@ -255,7 +255,14 @@ def test_transformer_bridge_refuses_typed_with_pristine_copy_remedy() -> None:
     assert excinfo.value.fields["remedy"]
     message = str(excinfo.value)
     assert "PRISTINE" in message or "pristine" in message
-    assert "HookedTransformer" in message
+    # The remedy leads with reloading the HF model fresh; HookedTransformer is
+    # offered only while the caller still uses one.
+    assert message.index("reload the HF model fresh") < message.index("HookedTransformer")
+    assert "HookedTransformer directly while you still use one" in message
+    assert "MUTATES the HF model it wraps IN PLACE" in message
+    remedy = excinfo.value.fields["remedy"]
+    assert remedy.startswith("Reload the HF model fresh")
+    assert "HookedTransformer while you still use one" in remedy
 
 
 def test_transformer_bridge_namesake_outside_namespace_traces() -> None:

@@ -45,7 +45,7 @@ from ._content_identity import (
     tensor_version,
 )
 from .predicates import as_intervention_decision
-from .types import HelperDirection, HelperSpec, InterventionDecision
+from .types import Edit, HelperDirection, InterventionDecision
 
 AddressClass = Literal["structural", "recorded", "value_dependent"]
 
@@ -117,7 +117,7 @@ def classify_where(where: Any) -> AddressClass:
 def _canonical_repr(value: Any, *, exact: bool = False) -> str:
     """Render a WHERE/action term canonically for rule identity.
 
-    ``HelperSpec`` renders as its portable ``(name, args, kwargs)`` identity
+    ``Edit`` renders as its portable ``(name, args, kwargs)`` identity
     -- two helpers differing only by an argument (``noise(std=0.1)`` vs
     ``noise(std=0.9)``) render differently BY CONSTRUCTION, which is what
     makes rule ids distinguishable (ledger memo D1d). Tensor arguments render
@@ -140,7 +140,7 @@ def _canonical_repr(value: Any, *, exact: bool = False) -> str:
         Canonical rendering.
     """
 
-    if isinstance(value, HelperSpec):
+    if isinstance(value, Edit):
         return render_helper(value, exact=exact)
     if isinstance(value, InterventionDecision):
         hook_repr = _canonical_repr(value.hook, exact=exact)
@@ -469,7 +469,7 @@ class InterventionSpec:
 
         return [(rule.where, rule.action) for rule in self.rules]
 
-    def bind(self, model: Any, *, on_zero_fire: str = "error") -> Any:
+    def bind(self, model: Any, *, on_zero_fire: str = "warn") -> Any:
         """Bind this spec to a model as a capture-free live executor (F01).
 
         Surgery memo 3.3: the result is a bound intervention executor -- a
@@ -487,10 +487,12 @@ class InterventionSpec:
             The base ``nn.Module`` (validated through the one audited
             model-door funnel; bindings do not nest).
         on_zero_fire:
-            Zero-fire settlement policy (FOLD-A3 default): ``"error"``
-            fails closed after the call when any rule never fired (the report
-            is retained on ``.last_report``); ``"disclose"`` records the
-            zero-fire rules in the report without raising.
+            Zero-fire settlement policy, the same knob at every intervention
+            door. A rule that never fired is always recorded on
+            ``.last_report.zero_fire_rule_ids``; ``"warn"`` (default) also
+            emits a ``bind_zero_fire`` coded warning, ``"error"`` raises
+            ``bind_zero_fire`` after the call, and ``"disclose"`` records
+            only.
 
         Returns
         -------

@@ -71,8 +71,10 @@ What to know about a binding:
   (`bound.parameters()`, `bound.to(...)`) raises a teaching error; call the model itself for
   those.
 - Each call settles a `BindReport` on `bound.last_report` (fire counts, resolved targets,
-  cleanup verdict). By default a rule that never fires raises `bind_zero_fire` after the call;
-  pass `on_zero_fire="disclose"` to record it in the report instead.
+  cleanup verdict). A rule that never fires is recorded there and, by default
+  (`on_zero_fire="warn"`), warns `bind_zero_fire` after the call; pass `on_zero_fire="error"` to
+  refuse instead or `on_zero_fire="disclose"` to record without warning. The same knob is on
+  `tl.trace(intervene=)` and `Trace.run`.
 - Plain `tl.module(...)` sites run as real forward hooks; op-level sites such as `tl.func(...)`
   run through a torch function mode. The original computation always runs, and the edited value
   replaces it downstream.
@@ -133,6 +135,16 @@ assert torch.equal(steered, reference)
 
 If your generation loop is your own code rather than `generate()`, call the binding once per
 step (`bound(ids)`); the binding is reused across steps and the input may grow.
+
+To steer only on the steps where a condition holds, with a per-token audit of when the steer was
+applied, see the [conditional steering recipe](../recipes/conditional_steering.md).
+
+`steer_generate` is always routed through the binding: it never traces, so it records nothing
+beyond the fire counts in its report. To record what generation computed, capture the whole run
+as an episode (`tl.trace(..., episode=tl.options.EpisodeSpec(...))`), which is diagnostic tier:
+its cost grows faster than the number of steps, so plan for tens of steps, never hundreds
+([episode capture](../reference/episode_capture.md)). To edit what the KV cache holds for the
+prompt rather than every step, see [the KV-cache recipe](kv_cache.md).
 
 ## Steering with evidence: `tl.record`
 

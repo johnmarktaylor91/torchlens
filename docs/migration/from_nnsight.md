@@ -1,53 +1,72 @@
 # Migrating from NNsight
 
-Functional migration pattern: an NNsight trace block that saves one module value maps to a
-TorchLens capture followed by label/module lookup on the completed log.
+This page maps NNsight's tracing idioms to TorchLens: their spelling on the left, the
+TorchLens spelling on the right. The rows and both examples were checked with nnsight
+0.8.0rc1 (the 0.8 release candidate, published 2026-09-09; the latest stable release is
+0.7.0) and transformers 5.18.0 (torch 2.13). In transformers 5, a GPT-2 block returns its hidden
+states as a tensor, so the older `.output[0]` tuple idiom is gone from both sides.
 
-| NNsight construct | TorchLens equivalent |
-| --- | --- |
-| Save an intermediate value during a trace. | Capture the eager forward, then read the saved activation. |
+| NNsight (0.8.0rc1, transformers 5.18.0) | TorchLens (transformers 5.18.0) | Notes |
+| --- | --- | --- |
+| `with model.trace(ids): h = model.transformer.h[0].output.save()` | `tl.extract(model, ids, ["transformer.h.0"])["transformer.h.0"]` | TorchLens runs the forward first and you read the result afterwards. |
+| `model.transformer.h[0].output[:, :, :2] = 2.5` inside the trace | Capture with `capture=tl.options.CaptureOptions(intervention_ready=True)`, then `trace.fork().set(tl.module("transformer.h.0"), edit, confirm_mutation=True).push()` | `edit` is a tensor or a function of the original output; `.push()` replays the recorded graph downstream. |
+| Save every op, including ones no module owns (`.source`) | Nothing to ask for: `tl.trace` records every executed op (`trace.layers`) | |
+| `model.trace(...)` on the wrapped model | `tl.trace(model._model, ids)` on the model NNsight wraps | See below. |
+| Remote execution (NDIF), vLLM and tensor-parallel back ends | No equivalent | TorchLens captures a local eager forward. |
 
-Their construct:
+## Running TorchLens on the model NNsight wraps
+
+An `NNsight` (or `LanguageModel`) object keeps the PyTorch module it wraps as
+`model._model`. Pass that module to `tl.trace` or `tl.extract`; the NNsight wrapper
+itself is not a plain `nn.Module` forward.
+
+Their construct (needs nnsight; not run in the default test environment):
 
 ```python
-# migration-test: tool=nnsight expected=[[2.5, 2.5]]
-# LanguageModel traces a compatible Hugging Face language model and tokenizes the prompt.
+# migration-test: tool=nnsight expected=([1, 4, 32], True)
 import torch
-from nnsight import LanguageModel
+import transformers
+from nnsight import NNsight
 
+torch.manual_seed(0)
+config = transformers.GPT2Config(n_layer=2, n_embd=32, n_head=2, vocab_size=64, n_positions=16)
+hf_model = transformers.GPT2LMHeadModel(config).eval()
+model = NNsight(hf_model)
+ids = torch.tensor([[1, 2, 3, 4]])
 
-model = LanguageModel("openai-community/gpt2", dispatch=True)
-with model.trace("TorchLens captures eager operations"):
-    hidden_states = model.transformer.h[0].output[0]
-    hidden_states[:, :, :2] = 2.5
-    saved = hidden_states[:, :1, :2].save()
+with model.trace(ids):
+    model.transformer.h[0].output[:, :, :2] = 2.5
+    edited = model.transformer.h[0].output.save()
 
-RESULT = saved.value[0].detach().tolist()
+RESULT = (list(edited.shape), bool((edited[:, :, :2] == 2.5).all()))
 ```
 
 TorchLens equivalent:
 
 ```python
-# migration-test: tool=torchlens expected=[[2.5, 2.5]]
+# migration-test: tool=torchlens expected=([1, 4, 32], True, True)
 import torch
-from torch import nn
+import transformers
 import torchlens as tl
 
-
-class Tiny(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.proj = nn.Linear(2, 2)
-        with torch.no_grad():
-            self.proj.weight.copy_(torch.eye(2))
-            self.proj.bias.copy_(torch.tensor([0.5, -0.5]))
-
-    def forward(self, x):
-        return torch.relu(self.proj(x))
+torch.manual_seed(0)
+config = transformers.GPT2Config(n_layer=2, n_embd=32, n_head=2, vocab_size=64, n_positions=16)
+model = transformers.GPT2LMHeadModel(config).eval()
+ids = torch.tensor([[1, 2, 3, 4]])
 
 
-model = Tiny()
-x = torch.tensor([[2.0, 3.0]])
-log = tl.trace(model, x)
-RESULT = log["linear_1_1"].out.detach().tolist()
+def edit(out):
+    out = out.clone()
+    out[:, :, :2] = 2.5
+    return out
+
+
+trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(intervention_ready=True))
+edited = trace.fork("edited").set(tl.module("transformer.h.0"), edit, confirm_mutation=True)
+edited.push()
+block0 = edited["transformer.h.0"].out
+logits_changed = not torch.equal(
+    edited[edited.output_layers[0]].out, trace[trace.output_layers[0]].out
+)
+RESULT = (list(block0.shape), bool((block0[:, :, :2] == 2.5).all()), logits_changed)
 ```

@@ -169,12 +169,14 @@ def test_respelling_rows_keep_operation_identity() -> None:
 
 
 def _stub_trace(op_names: list[str], *, signal: bool = False) -> Any:
-    """Build a minimal trace stub for direct driver tests."""
+    """Build a minimal trace stub for direct driver tests (rows in ``layer_list`` too)."""
 
+    rows = [types.SimpleNamespace(func_name=name) for name in op_names]
     return types.SimpleNamespace(
         escape_diagnostics=[],
         _had_unattributed_tensor_args=signal,
-        ops=[types.SimpleNamespace(func_name=name) for name in op_names],
+        ops=rows,
+        layer_list=rows,
         modules=[],
         capture_verification_reason=None,
     )

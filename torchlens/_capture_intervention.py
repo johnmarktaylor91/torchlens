@@ -172,6 +172,18 @@ def _record_capture_intervention_event(trace: Trace, intervene_request: Any) -> 
         rules=rules,
         zero_fire_rule_ids=zero_fire_rule_ids,
     )
+    if fire_count and zero_fire_rule_ids:
+        # Some rules fired and some did not: the fact is on the audit row above;
+        # the capture's on_zero_fire policy settles the rest. (A request that fired
+        # nowhere at all settles at the zero-match selector disclosure instead.)
+        from .intervention._zero_fire import settle_capture_zero_fire
+
+        names = ", ".join(zero_fire_rule_ids)
+        settle_capture_zero_fire(
+            f"Capture-time intervention rule(s) [{names}] fired at zero sites while "
+            "other rules fired; the capture completed with those rules unapplied.",
+            zero_fire_rule_ids=list(zero_fire_rule_ids),
+        )
 
 
 def _intervention_spec_from_hook_plan(hook_plan: Any) -> InterventionSpec | None:

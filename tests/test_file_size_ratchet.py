@@ -175,8 +175,10 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # _artifact_anchors); bundle.py carries only the two call seams and the
     # persisted-row-count disclosure (+27 measured at settle). Conscious
     # raise, F41 precedent; PRE-SPRINT BASELINE 4450 and the debloat target
-    # are unchanged.
-    "torchlens/_io/bundle.py": 4700,
+    # are unchanged. Harness bundles phase 2 moved the bundle-container
+    # loaders to _io/bundle_container.py and re-keyed the row back down to
+    # the 4450 baseline (4700 -> 4450).
+    "torchlens/_io/bundle.py": 4450,
     "torchlens/_io/runnable_load.py": 3850,
     # 4200 -> 4050: the wave-0 governance sweep extracted the structure-only
     # Layer-0 entry contract to capture/_structure_only_entry.py; re-keyed

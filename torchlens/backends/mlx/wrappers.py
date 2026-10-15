@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import functools
+import inspect
 from contextlib import contextmanager
 from typing import Any
 
@@ -94,6 +95,15 @@ class _MLXWrapperRegistry:
             self.wrap_attr(mx, name, backend, name)
         for name in ("relu", "gelu", "sigmoid", "tanh", "softmax", "silu"):
             self.wrap_attr(nn, name, backend, name)
+        # Most functions of mlx.nn.layers.activations are mx.compile'd. An
+        # unwrapped call traces the body with the wrapped mx primitives logging
+        # tracer arrays, which leaves lazy parameters unevaluable. Wrap every
+        # one, in that module and under mlx.nn, so the nested-op guard is up
+        # while the body traces.
+        activations = mlx_activations_module(nn)
+        for name in mlx_activation_function_names(activations):
+            self.wrap_attr(activations, name, backend, name)
+            self.wrap_attr(nn, name, backend, name)
         class_op_names = {
             "Linear": "linear",
             "Conv2d": "conv2d",
@@ -105,10 +115,16 @@ class _MLXWrapperRegistry:
             "Embedding": "embedding",
             "MultiHeadAttention": "multiheadattention",
         }
+        layer_ops = [(getattr(nn, cls_name, None), op) for cls_name, op in class_op_names.items()]
+        # The activation layers (nn.ReLU, ...) reach their function through a
+        # closure MLX binds at class creation, so no attribute wrapper sees the
+        # call: wrap the layer itself, like nn.Linear.
+        layer_ops += [
+            (cls, cls.__name__.lower()) for cls in mlx_activation_layer_classes(activations, nn)
+        ]
         wrapped_classes: set[type[Any]] = set()
-        for cls_name, op_name in class_op_names.items():
-            cls = getattr(nn, cls_name, None)
-            if cls is not None:
+        for cls, op_name in layer_ops:
+            if cls is not None and cls not in wrapped_classes:
                 self.wrap_attr(
                     cls,
                     "__call__",
@@ -267,6 +283,94 @@ def mlx_tap_observer(observer: object) -> Any:
         yield
     finally:
         _ACTIVE_TAP_OBSERVER = previous
+
+
+#: Public names ``mlx.nn.layers.activations`` defines that are not
+#: activation functions or layers. Empty today; a helper MLX adds there goes here.
+MLX_ACTIVATION_NAME_EXCLUSIONS: frozenset[str] = frozenset()
+
+
+def mlx_activations_module(nn: Any) -> Any:
+    """Return ``mlx.nn.layers.activations`` (``None`` when MLX moved it).
+
+    Parameters
+    ----------
+    nn
+        Imported ``mlx.nn`` module.
+
+    Returns
+    -------
+    Any
+        The activations module, or ``None``.
+    """
+
+    return getattr(getattr(nn, "layers", None), "activations", None)
+
+
+def mlx_activation_function_names(activations: Any) -> tuple[str, ...]:
+    """Derive the activation functions ``mlx.nn.layers.activations`` defines.
+
+    Every public plain function defined in that module, and every
+    ``mx.compile``'d function bound there, minus
+    :data:`MLX_ACTIVATION_NAME_EXCLUSIONS`. Derived, not listed, so an
+    activation MLX adds is wrapped without a code change.
+
+    Parameters
+    ----------
+    activations
+        The activations module, or ``None``.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Sorted attribute names to wrap.
+    """
+
+    if activations is None:
+        return ()
+    names = []
+    for name, value in vars(activations).items():
+        if name.startswith("_") or name in MLX_ACTIVATION_NAME_EXCLUSIONS:
+            continue
+        if isinstance(value, type) or inspect.ismodule(value):
+            continue
+        defined_here = inspect.isfunction(value) and value.__module__ == activations.__name__
+        if defined_here or type(value).__name__ == "gc_func":
+            names.append(name)
+    return tuple(sorted(names))
+
+
+def mlx_activation_layer_classes(activations: Any, nn: Any) -> tuple[type[Any], ...]:
+    """Derive the activation layer classes ``mlx.nn.layers.activations`` defines.
+
+    Every ``nn.Module`` subclass defined in that module, minus
+    :data:`MLX_ACTIVATION_NAME_EXCLUSIONS`, so a layer MLX adds is wrapped
+    without a code change.
+
+    Parameters
+    ----------
+    activations
+        The activations module, or ``None``.
+    nn
+        Imported ``mlx.nn`` module.
+
+    Returns
+    -------
+    tuple[type[Any], ...]
+        Layer classes in name order.
+    """
+
+    module_base = getattr(nn, "Module", None)
+    if activations is None or not isinstance(module_base, type):
+        return ()
+    return tuple(
+        value
+        for name, value in sorted(vars(activations).items())
+        if isinstance(value, type)
+        and issubclass(value, module_base)
+        and value.__module__ == activations.__name__
+        and name not in MLX_ACTIVATION_NAME_EXCLUSIONS
+    )
 
 
 def _module_instances_for_class(

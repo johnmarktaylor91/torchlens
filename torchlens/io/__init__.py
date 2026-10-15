@@ -220,7 +220,7 @@ def inspect_tlspec(path: str | Path) -> dict[str, Any]:
 
 
 def read_safetensors(path: str | Path) -> Any:
-    """Read a ``tl.export.safetensors`` Trace export back (R2-08; DOCUMENTED-UNSTABLE).
+    """Read a ``tl.export.safetensors`` Trace export back (DOCUMENTED-UNSTABLE).
 
     The file holds no pickle, so reading it never executes code. Returns a
     read-only record: ``header`` (schema, tlspec version, writer-contract
