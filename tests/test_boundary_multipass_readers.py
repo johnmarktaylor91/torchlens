@@ -11,6 +11,11 @@ dtype fold and every pass of a folded input Layer shares both. These tests pin
 that premise and the readers' verdicts on both sides of it. The oracles are the
 tensors the test passed in and the model's own eager outputs, never another
 TorchLens read.
+
+One positional reader was wrong regardless of geometry: the fast live run's
+input refresh looked each listing up in ``layer_dict_all_keys``, which maps a
+folded input's bare label to its last pass, so a saved earlier pass kept its
+capture-time tensor after ``trace.run(inputs=..., fast=True)``.
 """
 
 from __future__ import annotations
@@ -41,6 +46,17 @@ class _LoopOverInputs(nn.Module):
         for x in (a, b):
             h = h + self.lin(x.to(torch.float32)).sum(0, keepdim=True)
         return h
+
+
+class _TwoInputs(nn.Module):
+    """Single-pass control: two inputs through separate code."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+        return self.lin(a) + self.lin(b) * 2
 
 
 def _inputs(kind: str) -> tuple[torch.Tensor, torch.Tensor]:
@@ -132,3 +148,25 @@ def test_folded_live_checks_refuse_a_wrong_input_in_either_position(position: in
     assert isinstance(admitted, ContractCheck)
     assert admitted.diagnostic is not None
     assert admitted.diagnostic.code is RunnableErrorCode.INPUT_DTYPE_MISMATCH
+
+
+@pytest.mark.parametrize("fast", [True, False])
+@pytest.mark.parametrize("model_cls", [_LoopOverInputs, _TwoInputs])
+def test_run_refreshes_each_saved_input_pass_with_its_own_input(
+    model_cls: type[nn.Module], fast: bool
+) -> None:
+    """After ``trace.run``, a saved input op holds the new tensor for its position."""
+
+    torch.manual_seed(0)
+    model = model_cls().eval()
+    a, b = torch.randn(1, 4), torch.randn(1, 4)
+    new_a, new_b = torch.randn(1, 4), torch.randn(1, 4)
+    trace = tl.trace(model, (a, b), save=tl.label("input_1") | tl.in_module("lin"))
+    first_input = next(iter(trace.input_ops.values()))
+    assert first_input.has_saved_activation
+    assert torch.equal(first_input.out, a)
+    result = trace.run(inputs=[new_a, new_b], fast=fast)
+    with torch.no_grad():
+        assert torch.equal(result.output, model(new_a, new_b))
+    refreshed = result.trace if result.trace is not None else trace
+    assert torch.equal(refreshed[first_input.label].out, new_a)
