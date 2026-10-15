@@ -2056,15 +2056,17 @@ deprecation shim owed*
   quantity as the self-patch negative control. A grid without
   `corrupted_metric` refuses `tv_receipt_invalid`. The `CausalReceipt`
   carries the baseline as `baseline_metric` (`None` when a producer did not
-  record one); its `effects`, `joint_effect` and controls are all deltas
-  from that run. The default `intervention` wording is "clean activation of
+  record one) and names its run in `baseline_run` ("unpatched corrupted
+  run" for a patch-grid receipt); its `effects`, `joint_effect` and
+  controls are all deltas from that run. The default `intervention` wording is "clean activation of
   one head patched into the corrupted run" ("one kv group" with
   `kv_groups=`); a row's `fires` is its own cell count when the grid's
   ledger shows one fire per cell. `tviz.render_receipt_grid` titles the
   figure "measured head effects on METRIC", labels the colorbar "change in
-  METRIC", prints "each cell: change in METRIC from the unpatched baseline
-  run (B)" in the footer, refuses rows measured from different baselines
-  (`tv_receipt_invalid`), and reserves the footer's height below the matrix
+  METRIC", labels the x axis "query head" (or "kv group"), prints "each
+  cell: change in METRIC from the unpatched corrupted run (B)" and says
+  single-head effects need not be additive in the footer, refuses rows
+  measured from different baselines (`tv_receipt_invalid`), and reserves the footer's height below the matrix
   and its tick labels.
 
 **Summary columns (`summary(columns=...)`)** — *unstable — no deprecation shim owed*

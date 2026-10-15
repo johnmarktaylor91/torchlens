@@ -64,10 +64,11 @@ def test_cell_equal_to_the_baseline_is_exactly_zero_and_prints_zero(tmp_path: Pa
         assert f">{cell}<" in svg, cell
     assert ">+0.75<" not in svg  # the raw baseline value is never a cell
     assert (
-        "each cell: change in logit_diff from the unpatched baseline run (+0.75); 0 = no change"
+        "each cell: change in logit_diff from the unpatched corrupted run (+0.75); 0 = no change"
         in artifact.disclosure_lines
     )
     assert "measured head effects on logit_diff" in svg
+    assert ">query head<" in svg
 
 
 def test_small_effects_get_enough_decimals_to_read_nonzero(tmp_path: Path) -> None:
@@ -153,6 +154,7 @@ def test_receipt_without_a_baseline_says_so() -> None:
         positive_control=1.0,
         joint_effect=1.0,
     )
+    assert receipt.baseline_run == "unpatched baseline run"
     lines = _receipts._receipt_disclosures([receipt], None)
     assert "each cell: change in m under the intervention (baseline value not recorded)" in lines
 

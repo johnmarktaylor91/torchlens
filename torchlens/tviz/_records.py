@@ -972,6 +972,9 @@ class CausalReceipt:
         from (for a patch-grid receipt, the corrupted run); printed on the
         grid figure so a reader knows what a cell is. ``None`` when the
         producer did not record it.
+    baseline_run:
+        Which run ``baseline_metric`` comes from, as printed on the figure
+        (``"unpatched corrupted run"`` for a patch-grid receipt).
     """
 
     layer: str
@@ -992,6 +995,7 @@ class CausalReceipt:
     fingerprints: dict[str, str] = field(default_factory=dict)
     kv_groups: GqaInfo | None = None
     baseline_metric: float | None = None
+    baseline_run: str = "unpatched baseline run"
 
     def __post_init__(self) -> None:
         """Validate alignment, finiteness, both controls and KV group range."""

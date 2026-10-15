@@ -43,7 +43,7 @@ UNMARKED_MASK_WORDING = "zero and masked positions are not distinguished"
 PANELS_NOT_COMPARABLE = "panels not comparable: per-panel color rescale"
 
 #: Printed on every receipt grid beside the sum of cells (tviz memo D13).
-NOT_ADDITIVE_WORDING = "single-head effects are not additive"
+NOT_ADDITIVE_WORDING = "single-head effects need not be additive"
 
 #: The joint-measurement line template for receipt grids (tviz memo D13).
 JOINT_EFFECT_WORDING = (
@@ -54,7 +54,7 @@ JOINT_EFFECT_WORDING = (
 #: What one receipt-grid cell is: an effect, measured from the unpatched
 #: baseline run's metric (never the raw metric after the intervention).
 RECEIPT_CELL_WORDING = (
-    "each cell: change in {metric} from the unpatched baseline run ({baseline:+.4g}); 0 = no change"
+    "each cell: change in {metric} from the {run} ({baseline:+.4g}); 0 = no change"
 )
 
 #: The same line for a receipt built without a recorded baseline value.
@@ -85,7 +85,7 @@ KV_GROUP_RECEIPT_WORDING = (
 KV_JOINT_EFFECT_WORDING = (
     "joint effect of the same intervention on all {n} measured kv groups together: "
     "{joint:+.4g} "
-    "(sum of single-group cells: {cell_sum:+.4g}; single-group effects are not additive)"
+    "(sum of single-group cells: {cell_sum:+.4g}; single-group effects need not be additive)"
 )
 
 #: Provenance wording for reconstructed (fused-path) attention patterns.

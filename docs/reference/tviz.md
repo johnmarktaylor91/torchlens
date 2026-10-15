@@ -134,7 +134,7 @@ The validity rules are enforced, not advisory: zero fires refuses (a hook
 that did not fire is an exception, never a number), a moved negative control
 refuses, an unmoved positive control refuses (the only check that catches
 the silent no-fire class), and the grid **figure** refuses without the
-measured joint effect -- single-head effects are not additive (measured on
+measured joint effect -- single-head effects need not be additive (measured on
 gpt2 layer 0: one head `+13.27` alone, all twelve together `-0.68`), so
 every grid prints the joint measurement beside the cell sum. Unmeasured
 cells are blank, never zero, and the figure prints "measured N of M".

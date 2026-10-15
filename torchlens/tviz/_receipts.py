@@ -149,6 +149,7 @@ def receipt_from_patch_grid(  # noqa: PLR0913 -- every mandatory D12 evidence fi
         joint_effect=joint_effect,
         kv_groups=kv_groups,
         baseline_metric=baseline,
+        baseline_run="unpatched corrupted run",
     )
     return receipt if effect_site is None else replace(receipt, effect_source=str(effect_site))
 
@@ -225,7 +226,7 @@ def _joint_line(receipts: list[CausalReceipt], joint_effect: float | None) -> st
         refuse(
             code="tv_receipt_invalid",
             message="A receipt grid must print the measured JOINT effect of the "
-            "displayed set (D13): single-head effects are not additive (measured on "
+            "displayed set (D13): single-head effects need not be additive (measured on "
             "gpt2 layer 0: one head +13.27 alone, all twelve together -0.68), so the "
             "figure refuses rather than inviting the false sum inference.",
             remedy="measure one extra forward applying the intervention to all displayed "
@@ -259,7 +260,7 @@ def _kv_group_lines(receipt: CausalReceipt) -> list[str]:
 def _cell_line(receipts: list[CausalReceipt]) -> str:
     """Return what one cell shows; refuse rows measured from different baselines."""
 
-    baselines = {receipt.baseline_metric for receipt in receipts}
+    baselines = {(receipt.baseline_metric, receipt.baseline_run) for receipt in receipts}
     if len(baselines) > 1:
         refuse(
             code="tv_receipt_invalid",
@@ -267,11 +268,11 @@ def _cell_line(receipts: list[CausalReceipt]) -> str:
             f"({sorted(map(str, baselines))}); their cells are not on one scale.",
             remedy="render receipts from one grid (one clean/corrupted pair) together",
         )
-    (baseline,) = baselines
+    ((baseline, run),) = baselines
     metric = receipts[0].metric
     if baseline is None:
         return RECEIPT_CELL_NO_BASELINE_WORDING.format(metric=metric)
-    return RECEIPT_CELL_WORDING.format(metric=metric, baseline=baseline)
+    return RECEIPT_CELL_WORDING.format(metric=metric, run=run, baseline=baseline)
 
 
 def _receipt_disclosures(receipts: list[CausalReceipt], joint_effect: float | None) -> list[str]:
@@ -475,6 +476,7 @@ def render_receipt_grid(
     ax.set_yticks([row_index + 0.5 for row_index in range(len(rows))])
     ax.set_yticklabels([receipt.layer for receipt in rows], fontsize=_TEXT_PT)
     ax.tick_params(length=0)
+    ax.set_xlabel("query head" if rows[0].kv_groups is None else "kv group", fontsize=_TEXT_PT)
     bar = colorbar(fig, mesh, ax, label=f"change in\n{rows[0].metric}")
     bar.ax.yaxis.label.set_fontsize(_TEXT_PT)
     bar.ax.tick_params(labelsize=_TEXT_PT)
