@@ -1287,6 +1287,24 @@
   `stats_aggregate_cache_unkeyable`; a loader that changes between the keying and
   folding passes warns once (`stats_aggregate_cache_data_unstable`) and stores nothing.
   Doc of record: `docs/reference/stats.md`, Save, reload and cache.
+- Reduce-and-discard capture (DOCUMENTED-UNSTABLE): `tl.trace(model, x, save="stats")` is a
+  save level beside `"all"` and `"none"`: every op's out folds into a `tl.stats.Spine` during
+  the forward (the summary-transform seam with `save_raw_activations=False`; no raw clone, one
+  16-slot float64 vector per op) and no payload is kept. `tl.stats.site_spines(trace)` returns
+  `{op label: Spine}`, equal field by field to `Spine().update(out)` on a full capture. Refusals:
+  `activation_reduced_to_stats` (payload read), `stats_capture_not_replayable` (`run`,
+  `validate_forward_pass`, `save_new_outs`, `push`, `push_from` on the trace),
+  `stats_capture_not_reduced` (`site_spines` on another trace). Doc of record:
+  `docs/reference/stats.md`, Reduce and discard.
+- Trajectory statistics (DOCUMENTED-UNSTABLE): `tl.stats.measure_trajectory(model, data, *,
+  statistics=None, facet="resid_post", layers=None, lens=None, mask_input=False,
+  validate=True)` traces each batch, projects the logit lens one layer at a time and folds
+  `entropy`, `kl_to_final`, `max_prob` and, for `(input_ids, target_ids)` batches,
+  `cross_entropy` and `target_rank` into `tl.stats.TrajectoryStats` (`position_means`,
+  `spines`, `summary(statistic)`); refusals `stats_trajectory_*`.
+  `torchlens.semantic.logit_lens_predictions(..., mask_input=False)` bans the input's own
+  token ids before its reductions (`logit_lens_mask_input_unavailable`). Doc of record:
+  `docs/reference/stats.md`, Trajectory statistics.
 - Appliance packages `notebook` and `neuro` reserve extras boundaries and enforce
   import gating for their optional dependencies.
 - NEURO TREATY DESK (F22; every spelling DOCUMENTED-UNSTABLE pending the naming

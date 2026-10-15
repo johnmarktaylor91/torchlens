@@ -108,6 +108,15 @@
 - **recipes**: new recipe for pretrained SAEs (Gemma Scope 1 and 2): SAELens loads and TorchLens
   runs, with the hook-name to site mapping and transcoders via `tl.splice_module(transcoder,
   input="in")`.
+- **stats**: `tl.trace(model, x, save="stats")`, a reduce-and-discard save level: every op's out is
+  folded into a `tl.stats.Spine` during the forward and no payload is kept (128 bytes per op at any
+  batch size); read the statistics with `tl.stats.site_spines(trace)`. Payload reads, replay and
+  validation on such a trace refuse with stable codes.
+- **stats**: `tl.stats.measure_trajectory(model, data)`, logit-lens trajectory statistics in one
+  call (entropy, KL to the final output, top probability, and cross-entropy and rank of target
+  tokens, per layer and position), returning `tl.stats.TrajectoryStats`;
+  `torchlens.semantic.logit_lens_predictions(..., mask_input=True)` bans the input's own tokens
+  before its reductions.
 
 ### Bug Fixes
 
@@ -138,6 +147,7 @@
 
 ### Changed
 
+- **save budget**: the save-budget refusal lists `save='stats'` among its cheaper spellings.
 - **model wrappers**: the `model_wrapper_uninstrumentable` refusal for a TransformerLens
   `TransformerBridge` now leads with reloading the HF model fresh and offers a `HookedTransformer`
   only while you still use one.

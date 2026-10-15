@@ -505,3 +505,9 @@ run" (was "head contribution zeroed"); the grid title and joint line no longer s
 for the reconstruction, or `sae.decode(latents)` on latents you hold.
 `SpliceResult.fraction_variance_explained` is `nan` (with `zero_variance=True`) when the site's
 total variance is zero; it was 0.0.
+
+## `save="stats"` is a save level (2026-10-15, spelling change)
+
+A bare `save="stats"` string used to be a substring selector for layers with "stats" in their
+names; it is now the reduce-and-discard save level (`tl.stats.site_spines(trace)` reads it). To
+select those layers by name, write `save=["stats"]`.
