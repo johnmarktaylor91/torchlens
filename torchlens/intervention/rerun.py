@@ -15,6 +15,7 @@ from .._chunking import iter_chunked_inputs, normalize_chunk_paths, plan_chunks
 from .._errors import InvalidArgumentError, TorchLensWarning
 from .._input_coerce import _coerce_input_args
 from .._trace_state import TraceState
+from ..data_classes._trace_accessors import boundary_label_rows
 from ..options import ReplayOptions, merge_replay_options
 from ..utils.hashing import compute_graph_shape_hash
 from ._helper_fingerprint import refuse_changed_staged_helpers
@@ -1392,8 +1393,10 @@ def _same_rerun_inputs(source_log: Trace, new_log: Trace) -> bool:
     -------
     bool
         ``True`` only when both graph-shape hashes are known and equal and
-        every source input layer's saved tensor equals the rerun's; anything
-        unknown or unsaved reads as different, which keeps the warning path.
+        every source input's saved tensor equals the rerun's, listing by
+        listing; anything unknown or unsaved reads as different, which keeps
+        the warning path. A folded input (one multi-pass Layer listed once per
+        pass) compares pass by pass through the shared per-listing rule.
     """
 
     source_hash = getattr(source_log, "graph_shape_hash", None)
@@ -1402,9 +1405,11 @@ def _same_rerun_inputs(source_log: Trace, new_log: Trace) -> bool:
     labels = list(getattr(source_log, "input_layers", None) or ())
     if not labels or labels != list(getattr(new_log, "input_layers", None) or ()):
         return False
-    for label in labels:
-        before = getattr(source_log[label], "out", None)
-        after = getattr(new_log[label], "out", None)
+    source_rows = boundary_label_rows(labels, source_log.__getitem__)
+    new_rows = boundary_label_rows(labels, new_log.__getitem__)
+    for source_op, new_op in zip(source_rows, new_rows, strict=True):
+        before = getattr(source_op, "out", None)
+        after = getattr(new_op, "out", None)
         if not isinstance(before, torch.Tensor) or not isinstance(after, torch.Tensor):
             return False
         if before.shape != after.shape or before.dtype != after.dtype:
