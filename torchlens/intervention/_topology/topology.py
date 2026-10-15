@@ -120,18 +120,19 @@ def _structural_parent_labels(layer: Layer, layers_by_label: dict[str, Layer]) -
     """
 
     parents: set[str] = set()
-    pending = [str(parent) for parent in getattr(layer, "parents", ())]
     seen: set[str] = set()
+    pending: list[Layer] = [layer]
     while pending:
-        label = pending.pop()
-        if label in seen:
-            continue
-        seen.add(label)
-        parent = layers_by_label.get(label)
-        if getattr(parent, "func_name", None) == _EDIT_FUNC_NAME:
-            pending.extend(str(grandparent) for grandparent in getattr(parent, "parents", ()))
-            continue
-        parents.add(label)
+        for parent_label in getattr(pending.pop(), "parents", ()):
+            label = str(parent_label)
+            if label in seen:
+                continue
+            seen.add(label)
+            parent = layers_by_label.get(label)
+            if parent is not None and getattr(parent, "func_name", None) == _EDIT_FUNC_NAME:
+                pending.append(parent)
+            else:
+                parents.add(label)
     return parents
 
 
