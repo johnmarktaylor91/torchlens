@@ -178,7 +178,10 @@ Key entry points:
   span, resolve() reports the SUPPORT SET; mandatory basis provenance with sha256 digest riding
   `provenance.source` and do() audits; extent mismatch on the bound axis
   refuses `basis_dim_mismatch`, never broadcast/truncate; geometry-only
-  resolution, unsaved sites resolve).
+  resolution, unsaved sites resolve). Gradient contract (DOCUMENTED-UNSTABLE):
+  `tl.intervention.keep_grad(edit)` and `InterventionDecision(keep_grad=True)`
+  raise `edit_detached_from_graph` when an edit writes values with no autograd
+  graph; the verb x door matrix is `docs/gradient_contract.md`.
   Cross-run (stage 4a): `resolved.align_to(target)`
   re-binds ACT selections across runs on L1 site keys, same-policy captures
   only (`selection_alignment_invalid`, closed six-reason set); `do()` still
