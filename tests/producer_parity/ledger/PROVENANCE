@@ -2516,6 +2516,22 @@ torch: 2.13.0+cpu
 source: 25bcd1712593b45a03da7a948f31a7cad93a6c86 (clean)
 recorded: 2026-10-14T21:47:11.907483+00:00
 ---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: contrastive directions: direction_from_pairs in intervention/_directions.py reads a layer record's pass_index (via getattr) to name it in another trace; no other site moved
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c22ded97ed8e4b5877defdd03cb794b44399bf95 (clean)
+recorded: 2026-10-14T23:43:05.599651+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: contrastive directions: direction_from_pairs in intervention/_directions.py reads a layer record's pass_index (via getattr) to name it in another trace; no other site moved
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c22ded97ed8e4b5877defdd03cb794b44399bf95 (clean)
+recorded: 2026-10-14T23:43:10.842358+00:00
+---
 generator: producer_parity/test_ledger.py (full closure)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
 reason: per-query-head interceptor: the new mechinterp/_kv_heads.py reads op modules (2 sites) and parents (1 site) while locating the repeat_kv expansion op; no other site moved

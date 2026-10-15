@@ -451,6 +451,32 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   value refuses `transform_mask_incompatible`). Unsupported spellings refuse
   `position_edit_invalid`; positions past the sequence refuse `position_edit_out_of_range`.
 
+**torchlens.intervention.direction_from_pairs(pos_traces, neg_traces, site, method="mean_diff", *, read_token_index=-1)** — *documented-unstable*
+: Builds one contrastive steering direction from saved activations. `pos_traces` and
+  `neg_traces` are a trace or a sequence of traces with one prompt per batch row; row `i` of the
+  negatives pairs with row `i` of the positives. One token per prompt is read at `site`
+  (`-1` is the last real token when the trace saved its `attention_mask` input; a sequence gives
+  one position per prompt; `None` reads `[n, hidden]` outs unsliced). With `D = pos - neg`:
+  `"mean_diff"` is `D.mean(0)` on the activation scale; `"pca"` is the first uncentered
+  principal axis of `D`, unit norm, signed toward the positives; `"logistic"` is L2 logistic
+  regression (`C = 1`, no intercept) of `D / 2` against `-D / 2`, solved with torch only, unit
+  norm. Returns a `Direction`. Refusals use the `direction_*` codes of the error contract.
+
+**Direction (`torchlens.intervention.Direction`)** — *documented-unstable*
+: The frozen result of `direction_from_pairs`: `vector` (1-D, the rows' dtype), `site`,
+  `method`, `n_pairs`, `read_token_index`, `model_type` (the traced model's
+  `config.model_type`, or `None`) and `provenance`, a
+  `torchlens.selection_subspace.BasisProvenance` whose origin records the site, method, pair
+  count, read position and a sha256 digest of the rows, and whose `sha256` is the digest of
+  the canonical float64 vector. `direction.steer(m)` is `tl.steer(vector, m, feature_axis=-1)`;
+  place it with `tl.when(tl.module(direction.site), ...)`. `direction.to_steering_vectors()`
+  and `direction.to_repeng()` convert it to a real `steering_vectors.SteeringVector` and
+  `repeng.ControlVector` without recomputing it (thin converters
+  `tl.bridge.steering_vectors.from_direction` and `tl.bridge.repeng.from_direction`), keyed
+  by `direction.library_layer(layer=None)`: the site label's trailing index unless `layer=` is
+  given; a different explicit index refuses `direction_layer_mismatch`. Applied with the same
+  multiplier, either library object gives the native steer's logits.
+
 **Bundle**
 : A named collection of aligned Traces, constructed with `tl.bundle(...)` or `tl.Bundle(...)`, for
   cross-run comparison. `tl.Bundle()` with no members builds an empty bundle to fill later with
