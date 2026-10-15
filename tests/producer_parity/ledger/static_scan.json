@@ -6204,7 +6204,7 @@
   "field": "kind",
   "file": "torchlens/mechinterp/_edge_patch.py",
   "has_default": false,
-  "sites": 3,
+  "sites": 4,
   "via_getattr": false
  },
  {

@@ -2659,3 +2659,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 963910241fded6dfc8892e55f5bf7cf9fb326508 (dirty)
 recorded: 2026-10-15T16:52:53.612901+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: b2-CIRC-3: multi-receiver patch_edges orders its stages by receiver kind (_edge_patch._stage_key reads ComponentReceiver.kind), one more consumer site of kind in torchlens/mechinterp/_edge_patch.py; no other site added, removed or moved
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f83bad2379a42314227e01bd336001fe2ed90f92 (dirty)
+recorded: 2026-10-15T21:19:36.736026+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: b2-CIRC-3: multi-receiver patch_edges orders its stages by receiver kind (_edge_patch._stage_key reads ComponentReceiver.kind), one more consumer site of kind in torchlens/mechinterp/_edge_patch.py; no other site added, removed or moved
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f83bad2379a42314227e01bd336001fe2ed90f92 (dirty)
+recorded: 2026-10-15T21:19:42.675913+00:00
