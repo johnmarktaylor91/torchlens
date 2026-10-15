@@ -167,6 +167,88 @@ reads exactly what it read before. Patching needs a trace captured with
 `intervention_ready=True`; edges into several receivers refuse
 `mi_edge_patch_receivers_mixed`.
 
+## Edge attribution patching and circuit faithfulness
+
+`edge_scores(model, inputs, *, corrupted, metric)` scores every edge of the
+component graph by edge attribution patching, the first-order estimate of
+patching that edge alone: `score(s->t) = (s_corrupt - s_clean) . dM/d(input
+of t)`, summed over positions and averaged over examples
+(`example_reduction="sum"` adds them instead). `metric` maps the
+unembedding output to one value per example. `method="eap"` takes the
+gradient once, at the clean input. `method="eap_ig"` (the default, the best
+edge method of the MIB circuit track) averages it over `steps` points (5 by
+default) on the straight line between the corrupted and the clean `input`
+node, `e_corrupt + (k/m) (e_clean - e_corrupt)` for `k = 0..m-1`, a left
+Riemann sum.
+
+Each evaluation point costs one capture and one backward for all edges at
+once. A receiver's gradient is its own, never the total gradient at the
+shared residual state: the backward stops at the receiver's own read (its
+pre-norm's output for `m{L}` and `logits`; head H's q, k or v slice of the
+projection output for `a{L}.h{H}<q|k|v>`), and a local pull-back through the
+norm (and the projection slice) carries it to the receiver's input, reusing
+the captured autograd graph. The result is a one-backward `ReadTable` of
+`EDGE` rows addressed `(edge name,)` in the graph vocabulary; bias-sender
+edges score exactly zero, since a bias is the same on both inputs. The table
+is scalar, so `table.save(path)` persists it.
+
+`circuit_performance_ratio(faithfulness)` (CPR) and
+`circuit_model_difference(faithfulness)` (CMD) summarize a circuit sweep the
+way the MIB circuit track does. Given the faithfulness `f = (M_circuit -
+M_empty) / (M_full - M_empty)` at each kept edge fraction (the ten MIB
+fractions 0.001 to 1 by default, `fractions=` otherwise, or a `{fraction:
+f}` mapping), CPR is the trapezoidal area under `f` (higher is better) and
+CMD the area under `|1 - f|` (lower is better); `log_scale=True` integrates
+over the log fraction.
+
+```python
+import torch
+from transformers import GPT2Config, GPT2LMHeadModel
+
+import torchlens as tl
+
+config = GPT2Config(
+    n_layer=2, n_head=2, n_embd=8, vocab_size=32, n_positions=16, attn_implementation="eager"
+)
+model = GPT2LMHeadModel(config).eval()
+clean = torch.randint(0, 32, (2, 5))
+corrupted = torch.randint(0, 32, (2, 5))
+
+
+def logit_difference(logits):
+    return logits[:, -1, 3] - logits[:, -1, 4]
+
+
+table = tl.mechinterp.edge_scores(
+    model, clean, corrupted=corrupted, metric=logit_difference, steps=2
+)
+scores = {address[0]: row.score for (_target, kind, address), row in table.items()}
+print(max(scores, key=lambda name: abs(scores[name])))
+assert scores["b0->m0"] == 0.0
+
+curve = [0.1, 0.2, 0.35, 0.5, 0.7, 0.9, 1.05, 1.0, 0.98, 1.0]
+cpr = tl.mechinterp.circuit_performance_ratio(curve)
+cmd = tl.mechinterp.circuit_model_difference(curve)
+assert 0 < cmd < cpr < 1
+```
+
+Measured on GPT-2 small with prompts from the `mib-bench/ioi` dataset (CPU):
+EAP, and EAP-IG at 1 and 5 steps, equal an independent plain-PyTorch
+implementation on every one of the 32,491 edges in float64 (largest
+relative difference 5.0e-10). On a closed-form nonlinear fixture, EAP-IG
+equals the left Riemann sum at every step count from 1 to 128 within 3e-16.
+Against brute-force patching of all 32,491 edges one at a time (16 prompts,
+float32), EAP-IG at 5 steps has Pearson correlation 0.939 with the patching
+effect and shares 75 of the 100 largest edges; EAP has 0.806 and 87. CPR
+and CMD equal the MIB circuit track's loop exactly.
+
+Bad settings refuse `mi_edge_scores_setting_invalid`, a metric that does
+not return one value per example `mi_edge_scores_metric_invalid`, and
+corrupted inputs of another shape `mi_edge_scores_inputs_mismatched`; a
+model whose attention and MLP share one norm refuses
+`mi_edge_scores_shared_norm`. Malformed faithfulness curves refuse
+`mi_faithfulness_curve_invalid`.
+
 ## Refusal vocabulary
 
 Every kit refusal carries a stable `fields["code"]` (`mi_*` rows in

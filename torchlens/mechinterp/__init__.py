@@ -3,7 +3,8 @@
 TransformerLens's daily-driver analysis tools rebuilt on torchlens: residual
 decomposition, direct logit attribution, per-head results, patching grids,
 head-taxonomy scores, per-neuron MLP rows, the component edge graph (heads
-and MLPs as nodes, q/k/v split receivers), QK/OV circuits (``FactoredMatrix``,
+and MLPs as nodes, q/k/v split receivers) with edge attribution patching
+scores (EAP, EAP-IG) and circuit faithfulness areas (CPR, CMD), QK/OV circuits (``FactoredMatrix``,
 vendored from TransformerLens with credit), prompt utilities, an alias layer, and
 retention plans
 -- derived from the captured graph on ANY architecture with a certifiable
@@ -23,6 +24,7 @@ from __future__ import annotations
 from ._aliases import AliasResolution, alias_report, resolve_alias, translation_table
 from ._compose import apply_norm_scale, full_decomposition, stack_facet
 from ._dla import direct_logit_contributions, token_directions
+from ._eap import edge_scores
 from ._edge_patch import patch_edges
 from ._edges import (
     ComponentEdge,
@@ -33,6 +35,7 @@ from ._edges import (
 )
 from ._errors import MechInterpError
 from ._factored import FactoredMatrix
+from ._faithfulness import circuit_model_difference, circuit_performance_ratio
 from ._grids import PatchGrid, grid, patch_heads_grid, patch_residual_grid
 from ._heads import attention_head_contributions
 from ._kv_heads import patch_query_heads_grid
@@ -67,8 +70,11 @@ __all__ = [
     "alias_report",
     "apply_norm_scale",
     "attention_head_contributions",
+    "circuit_model_difference",
+    "circuit_performance_ratio",
     "component_graph",
     "direct_logit_contributions",
+    "edge_scores",
     "full_decomposition",
     "grid",
     "head_scores",

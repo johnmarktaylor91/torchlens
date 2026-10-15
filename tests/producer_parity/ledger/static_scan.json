@@ -6186,6 +6186,22 @@
  {
   "ambiguous": true,
   "field": "kind",
+  "file": "torchlens/mechinterp/_eap.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/mechinterp/_eap.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
   "file": "torchlens/mechinterp/_edge_patch.py",
   "has_default": false,
   "sites": 3,
@@ -6212,7 +6228,7 @@
   "field": "kind",
   "file": "torchlens/mechinterp/_edges.py",
   "has_default": false,
-  "sites": 7,
+  "sites": 8,
   "via_getattr": false
  },
  {

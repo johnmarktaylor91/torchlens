@@ -1069,7 +1069,7 @@
   `resolve_alias` / `translation_table` (TLens spellings resolve against a
   trace; tuple and compact `"k6"` forms), `test_prompt`, `apply_norm_scale`
   (cached-scale LayerNorm linearization, TLens-parity bit-exact), retention
-  planning (`retention_plan`). ~44 names; `MechInterpError` family.
+  planning (`retention_plan`). ~47 names; `MechInterpError` family.
   Component edge graph: `tl.mechinterp.component_graph(trace)` returns a
   `tl.mechinterp.ComponentGraph` (read-only `nodes`, `receivers`, `edges` keyed by
   the MIB/EAP-IG names: nodes `input`/`a{L}.h{H}`/`b{L}`/`m{L}`, receivers
@@ -1080,6 +1080,16 @@
   checked equal to the sum of its edges' contributions in the API, and an edge
   is an intervention selection. `tl.mechinterp.patch_edges(trace, edges, *,
   corrupt)` patches edges into one receiver on the replay engine.
+  Edge attribution patching: `tl.mechinterp.edge_scores(model, inputs, *,
+  corrupted, metric, method="eap_ig", steps=None, example_reduction="mean")`
+  scores every graph edge, `(s_corrupt - s_clean) . dM/d(input of t)` summed
+  over positions (EAP: gradient at the clean input; EAP-IG: averaged over
+  `steps` points, default 5, from the corrupted to the clean `input` node),
+  one backward per point, each receiver's own gradient; returns a one-backward
+  `ReadTable` of `EDGE` rows addressed `(edge name,)`.
+  `tl.mechinterp.circuit_performance_ratio(faithfulness, *, fractions=None,
+  log_scale=False)` (CPR) and `tl.mechinterp.circuit_model_difference(...)`
+  (CMD) are the MIB trapezoidal areas under `f` and `|1 - f|`.
 - TRAINING-TIME WATCH (F26; DOCUMENTED-UNSTABLE): `torchlens.trackers` is the
   attach-once watch engine over the C06 records -- `watch`/`WatchSession`,
   sinks (TensorBoardSink incl. `add_histogram_raw` precomputed buckets,
