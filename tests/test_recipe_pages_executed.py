@@ -41,6 +41,8 @@ PAGES: dict[str, str] = {
     "docs/recipes/weightwatcher.md": "weightwatcher",
     "docs/recipes/quantus.md": "quantus",
     "docs/recipes/torchcam.md": "torchcam",
+    "docs/recipes/feature_visualisation.md": "torchlens",
+    "docs/recipes/dissection.md": "torchlens",
     "docs/recipes/pretrained_saes.md": "sae_lens",
     "docs/recipes/sae_latent_export.md": "torchlens",
     "docs/recipes/sae_trainers.md": "sae_trainers",
@@ -82,7 +84,8 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
 #: (3.5 s) pages are the two largest unmarked pages: with fifteen pages the
 #: unmarked family charged 18.1 s against its 14.2 s aggregate budget. The
 #: pretrained-SAE page measures 7.6 s and the SAE trainers page 4.8 s (it imports
-#: nnsight and wandb), at the boundary.
+#: nnsight and wandb), at the boundary. The feature-visualisation page (3.3 s)
+#: is listed to keep the unmarked family inside its aggregate budget.
 HEAVY_PAGES: frozenset[str] = frozenset(
     {
         "docs/recipes/lrp_transformers_lxt.md",
@@ -90,6 +93,7 @@ HEAVY_PAGES: frozenset[str] = frozenset(
         "docs/recipes/tcav.md",
         "docs/recipes/pretrained_saes.md",
         "docs/recipes/sae_trainers.md",
+        "docs/recipes/feature_visualisation.md",
     }
 )
 

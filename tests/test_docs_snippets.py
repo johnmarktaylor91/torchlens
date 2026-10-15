@@ -486,6 +486,8 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "recipes/sae_crosscoder_diff.md": _RECIPE_PAGES_EXECUTED,
     "recipes/sae_latent_export.md": _RECIPE_PAGES_EXECUTED,
     "recipes/pretrained_saes.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/feature_visualisation.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/dissection.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/netrep.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/himalaya.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/byo_alignment.md": (
