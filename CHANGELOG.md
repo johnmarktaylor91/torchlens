@@ -136,6 +136,15 @@
   `attn_out` facets from the fused `query_key_value` projection.
 - **intervention**: `torchlens.intervention.keep_grad(edit)` and the gradient-contract page
   `docs/gradient_contract.md` (verb x door matrix).
+- **attribution**: `tl.attribution.causal_audit` grades an internal attribution causally: it ablates
+  each unit of a layer attribution's hidden site alone, and the top-k claimed units together beside
+  bottom-k and seeded random-k controls, through `trace.fork().do(...)`, and reports each unit's
+  claimed score next to its measured effect, the Spearman rank agreement, and the replayable edit
+  behind every number; claims computed for a `SiteTarget` are audited at that site.
+  `tl.attribution.road_curve` adds ROAD (remove and debias): the deletion curve with removed pixels
+  filled by noisy linear imputation from their neighbours, each step a recorded edit.
+  `randomization_test` now refuses when no layer with parameters runs during the method call instead
+  of returning an empty result.
 
 ### Bug Fixes
 
