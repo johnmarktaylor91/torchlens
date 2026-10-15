@@ -105,7 +105,7 @@ def _closed_form(model: LinearResidual, x: Tensor, target: int, value: Tensor) -
 
 
 def _remedy(message: str) -> str:
-    found = re.search(r"Remedy: [^.]*?(tl\.attribution\.causal_audit\(.*\))\. See", message)
+    found = re.search(r"(tl\.attribution\.causal_audit\(.*\))\. See", message)
     assert found is not None, message
     return found.group(1)
 

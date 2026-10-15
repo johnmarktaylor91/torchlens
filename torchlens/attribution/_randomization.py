@@ -239,18 +239,20 @@ def _validate_layers(model: Module, layers: Any) -> list[str]:
     return named
 
 
-def _no_layers_ran(model: Module) -> AttributionError:
+def _no_layers_ran(model: Module, *, code: str) -> AttributionError:
     """Build the refusal for a method under which no parameterized module ran.
 
     Parameters
     ----------
     model
         The caller's model.
+    code
+        The refusal code (``attribution_randomization_layer_invalid``).
 
     Returns
     -------
     AttributionError
-        Coded ``attribution_randomization_layer_invalid``, naming ``layers=``.
+        The coded refusal, naming ``layers=``.
     """
 
     candidates = [
@@ -265,7 +267,7 @@ def _no_layers_ran(model: Module) -> AttributionError:
         f"vacuously (modules with parameters: {candidates}). Remedy: name the modules to "
         "randomize, top first, e.g. tl.attribution.randomization_test(model, x, target=0, "
         f"method=method, layers=[{example!r}]). {_DOCS_POINTER}",
-        code="attribution_randomization_layer_invalid",
+        code=code,
     )
 
 
@@ -384,7 +386,7 @@ def randomization_test(  # noqa: PLR0913 - public door: keyword-only test settin
         if layers is None:
             names = _parameterized_layers_top_down(trained, _run)
             if not names:
-                raise _no_layers_ran(model)
+                raise _no_layers_ran(model, code="attribution_randomization_layer_invalid")
         else:
             names = _validate_layers(model, layers)
         plan = _RandomizationPlan(tuple(names), randomization, keep_maps)

@@ -20,6 +20,8 @@ captured Trace.
 | `_curves.py` | `deletion_curve` and `insertion_curve`: rank input features by attribution (elements, pixels, patches, tokens), perturb them onto a baseline in steps, score each step; area and AOPC; each `CurveStep` carries its replayable `tl.when(...)` intervention |
 | `_curve_settings.py` | The curves' settings: feature grouping (`features`, `patch_size`), baselines and step counts, with their coded refusals |
 | `_randomization.py` | `randomization_test`: the model-parameter randomization test (cascading or independent, top down) on deep copies inside a forked random state |
+| `_causal_audit.py` | `causal_audit`: ablates each unit of a layer attribution's hidden site alone and the top-k, bottom-k and random-k sets together, one `Trace.fork().do` per row or set; rank agreement is Spearman; every row and set carries its replayable `(tl.units(...), edit)` pair |
+| `_audit_claims.py` | The causal audit's plan: setting checks, the one intervention-ready trace, grounding the claim at one module call, the edit (zero, per-unit batch mean, or a baseline) and the target score of a trace or fork, with their coded refusals |
 | `_eval_maps.py` | Shared by the evaluation battery: aligns results (including `grad_cam` maps) with the input, Spearman rank correlation and SSIM |
 | `_occlusion.py` | Selection-addressed scored occlusion through `Trace.fork().do(...)`, with explicit zeros/mean/blur baselines |
 | `_viz.py` | `overlay`: bridges layer-scoped results (or explicit mappings) onto `Trace.draw(color_by=...)`; uncovered nodes return `None` (unencoded) |

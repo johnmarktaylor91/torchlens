@@ -86,7 +86,8 @@ def _unit_mask(shape: tuple[int, ...], units: tuple[tuple[int, ...], ...]) -> Te
 
     mask = torch.zeros(shape, dtype=torch.bool)
     for unit in units:
-        mask[(slice(None), *unit)] = True
+        index: tuple[slice | int, ...] = (slice(None), *unit)
+        mask[index] = True
     return mask
 
 
@@ -100,12 +101,11 @@ def _remedy_call(target: Any, layer: str) -> str:
     )
 
 
-def _setting_error(why: str, remedy: str) -> AttributionError:
+def _setting_error(why: str, remedy: str, *, code: str) -> AttributionError:
     """Build the coded refusal for an invalid audit setting."""
 
     return AttributionError(
-        f"causal_audit {why}. Remedy: {remedy}. {_AUDIT_DOCS_POINTER}",
-        code="attribution_eval_setting_invalid",
+        f"causal_audit {why}. Remedy: {remedy}. {_AUDIT_DOCS_POINTER}", code=code
     )
 
 
@@ -119,25 +119,31 @@ def _validate_settings(request: _AuditRequest) -> None:
     """Refuse an invalid ``k``, ``ablation``, ``controls`` or ``random_draws``."""
 
     base = f"tl.attribution.causal_audit(model, x, claim=claim, {_target_spelling(request.target)}"
+    code = "attribution_eval_setting_invalid"
     if not _is_count(request.k):
-        raise _setting_error(f"k must be a positive int; got {request.k!r}", f"{base}, k=1)")
+        raise _setting_error(
+            f"k must be a positive int; got {request.k!r}", f"{base}, k=1)", code=code
+        )
     ablation = request.ablation
     numeric = isinstance(ablation, (int, float, Tensor)) and not isinstance(ablation, bool)
     if not numeric and ablation not in ("zero", "mean"):
         raise _setting_error(
             f"ablation must be 'zero', 'mean', or a number or tensor baseline; got {ablation!r}",
             f"{base}, ablation='mean')",
+            code=code,
         )
     controls = request.controls
     if isinstance(controls, str) or not all(item in _CONTROLS for item in controls):
         raise _setting_error(
             f"controls must be a tuple of {_CONTROLS}; got {controls!r}",
             f"{base}, controls=('bottom',))",
+            code=code,
         )
     if not _is_count(request.random_draws):
         raise _setting_error(
             f"random_draws must be a positive int; got {request.random_draws!r}",
             f"{base}, random_draws=10)",
+            code=code,
         )
 
 
@@ -178,7 +184,7 @@ def _output_labels(trace: Any, layer: str) -> list[str] | None:
     return list(module.calls[0].output_ops)
 
 
-def _unsupported(request: _AuditRequest, trace: Any, what: str) -> AttributionError:
+def _unsupported(request: _AuditRequest, trace: Any, what: str, *, code: str) -> AttributionError:
     """Build the coded refusal for a claim the audit cannot ground at one hidden site."""
 
     candidates = _single_call_layers(request, trace)
@@ -189,18 +195,18 @@ def _unsupported(request: _AuditRequest, trace: Any, what: str) -> AttributionEr
         "direct-logit-attribution rows and one-backward read tables are not audited yet. "
         f"Remedy: audit a layer attribution, e.g. {_remedy_call(request.target, example)}. "
         f"{_AUDIT_DOCS_POINTER}",
-        code="attribution_audit_claim_unsupported",
+        code=code,
     )
 
 
-def _misaligned(request: _AuditRequest, layer: str, why: str) -> AttributionError:
+def _misaligned(request: _AuditRequest, layer: str, why: str, *, code: str) -> AttributionError:
     """Build the coded refusal for a claim that does not fit its site or the target."""
 
     return AttributionError(
         f"causal_audit: {why}, so its ranking cannot be checked against these ablations. "
         f"Remedy: recompute the claim on these inputs for this target, e.g. "
         f"{_remedy_call(request.target, layer)}. {_AUDIT_DOCS_POINTER}",
-        code="attribution_audit_claim_misaligned",
+        code=code,
     )
 
 
@@ -217,11 +223,14 @@ def _claim_layer(request: _AuditRequest, trace: Any) -> tuple[str, str]:
             if isinstance(claim, AttributionResult)
             else f"a {type(claim).__name__}"
         )
-        raise _unsupported(request, trace, kind)
+        raise _unsupported(request, trace, kind, code="attribution_audit_claim_unsupported")
     labels = _output_labels(trace, layer)
     if labels is None or len(labels) != 1:
         raise _unsupported(
-            request, trace, f"a claim at {layer!r}, which does not run exactly once with one output"
+            request,
+            trace,
+            f"a claim at {layer!r}, which does not run exactly once with one output",
+            code="attribution_audit_claim_unsupported",
         )
     return layer, labels[0]
 
@@ -234,7 +243,10 @@ def _target_scorer(request: _AuditRequest, trace: Any, layer: str) -> Callable[[
         labels = _output_labels(trace, target.layer) if target.call in (None, 0) else None
         if labels is None or len(labels) != 1:
             raise _misaligned(
-                request, layer, f"the target site {target.layer!r} is not one module call here"
+                request,
+                layer,
+                f"the target site {target.layer!r} is not one module call here",
+                code="attribution_audit_claim_misaligned",
             )
         site = labels[0]
         return lambda run: float(_select_unit(run[site].out, target))
@@ -261,8 +273,8 @@ def _edit_factory(request: _AuditRequest, site: Tensor) -> tuple[str, Callable[[
     if isinstance(ablation, str):
         value = site.detach().mean(dim=0, keepdim=True).expand_as(site).clone()
         return "mean", lambda: replace_with(value.clone())
+    baseline = torch.as_tensor(ablation, dtype=site.dtype, device=site.device)
     try:
-        baseline = torch.as_tensor(ablation, dtype=site.dtype, device=site.device)
         value = torch.broadcast_to(baseline, site.shape).clone()
     except RuntimeError as exc:
         raise _setting_error(
@@ -270,6 +282,7 @@ def _edit_factory(request: _AuditRequest, site: Tensor) -> tuple[str, Callable[[
             f"the site output of shape {tuple(site.shape)}",
             "tl.attribution.causal_audit(model, x, claim=claim, "
             f"{_target_spelling(request.target)}, ablation=0.0)",
+            code="attribution_eval_setting_invalid",
         ) from exc
     return "baseline", lambda: replace_with(value.clone())
 
@@ -288,6 +301,7 @@ def _plan_audit(request: _AuditRequest) -> _AuditPlan:
             layer,
             f"the claim's values have shape {tuple(values.shape)} but {layer!r} outputs "
             f"{tuple(site.shape)} on these inputs",
+            code="attribution_audit_claim_misaligned",
         )
     if request.claim.target_repr != _target_repr(request.target):
         raise _misaligned(
@@ -295,6 +309,7 @@ def _plan_audit(request: _AuditRequest) -> _AuditPlan:
             layer,
             f"the claim was computed for target {request.claim.target_repr} but the audit "
             f"scores target {_target_repr(request.target)}",
+            code="attribution_audit_claim_misaligned",
         )
     units = tuple(itertools.product(*(range(size) for size in site.shape[1:])))
     if request.k > len(units):
@@ -302,6 +317,7 @@ def _plan_audit(request: _AuditRequest) -> _AuditPlan:
             f"k={request.k} exceeds the {len(units)} units of {layer!r}",
             "tl.attribution.causal_audit(model, x, claim=claim, "
             f"{_target_spelling(request.target)}, k={len(units)})",
+            code="attribution_eval_setting_invalid",
         )
     name, edit = _edit_factory(request, site)
     return _AuditPlan(

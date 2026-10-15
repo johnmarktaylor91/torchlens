@@ -13,9 +13,9 @@ positive claim and a positive effect). Rank agreement is the Spearman
 correlation of the claimed and measured per-unit effects.
 
 Every ablation runs through the intervention engine on an intervention-ready
-trace (``trace.fork().do(tl.units(label, mask), edit)``), the per-unit table
-through ``torchlens.experiment.site_sweep`` on its replay engine, and every
-row and set carries its edit as ``(tl.units(...), edit)`` pairs, so any point
+trace (``trace.fork().do(tl.units(label, mask), edit)``, the replay engine of
+``torchlens.experiment.site_sweep``), one fork per row or set, and every row
+and set carries its edit as ``(tl.units(...), edit)`` pairs, so any point
 replays exactly.
 """
 
@@ -35,7 +35,6 @@ from torchlens.attribution._audit_claims import (
     _AuditPlan,
     _AuditRequest,
     _plan_audit,
-    _unit_mask,
 )
 from torchlens.attribution._core import InputKwargs, _AttributionTarget
 from torchlens.attribution._eval_maps import _spearman
@@ -300,7 +299,7 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
 
 
 def _unit_rows(plan: _AuditPlan, original: float) -> tuple[CausalAuditUnit, ...]:
-    """Ablate every unit alone through ``site_sweep`` and read the effect table.
+    """Ablate every unit alone, one fork each, and record the effects.
 
     Parameters
     ----------
@@ -315,9 +314,6 @@ def _unit_rows(plan: _AuditPlan, original: float) -> tuple[CausalAuditUnit, ...]
         One row per unit, in index order.
     """
 
-    from torchlens.experiment import site_sweep
-    from torchlens.selection import units as unit_selection
-
     if len(plan.units) > _PER_UNIT_WARN_COUNT:
         warnings.warn(
             AttributionWarning(
@@ -329,43 +325,12 @@ def _unit_rows(plan: _AuditPlan, original: float) -> tuple[CausalAuditUnit, ...]
             ),
             stacklevel=3,
         )
-    candidates = {
-        f"u{index}": unit_selection(plan.label, _unit_mask(plan.shape, (unit,)))
-        for index, unit in enumerate(plan.units)
-    }
-    bundle = site_sweep(
-        plan.trace,
-        candidates=candidates,
-        edit=plan.edit(),
-        metric=plan.score,
-        retain="none",
-        engine="replay",
-    )
-    ablated = _effect_values(bundle, len(plan.units))
     return tuple(
-        CausalAuditUnit(unit, float(plan.claimed[unit]), original - value, plan)
-        for unit, value in zip(plan.units, ablated, strict=True)
+        CausalAuditUnit(
+            unit, float(plan.claimed[unit]), original - plan.ablated_score((unit,)), plan
+        )
+        for unit in plan.units
     )
-
-
-def _effect_values(bundle: Any, count: int) -> list[float]:
-    """Return the ablated metric of candidates ``u0..u{count-1}`` from the effect table.
-
-    Parameters
-    ----------
-    bundle
-        The ``site_sweep`` bundle.
-    count
-        Number of candidates.
-
-    Returns
-    -------
-    list[float]
-        The metric value per candidate, in candidate order.
-    """
-
-    values = {row.candidate_id: row.value for row in bundle.effects().rows}
-    return [float(values[f"u{index}"]) for index in range(count)]
 
 
 def _ablated_sets(
