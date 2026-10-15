@@ -650,9 +650,9 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/attribution/_audit_reads.py",
+  "file": "torchlens/attribution/_audit_edges.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 5,
   "via_getattr": false
  },
  {
