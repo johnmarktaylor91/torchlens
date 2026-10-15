@@ -136,6 +136,9 @@ assert torch.equal(steered, reference)
 If your generation loop is your own code rather than `generate()`, call the binding once per
 step (`bound(ids)`); the binding is reused across steps and the input may grow.
 
+To steer only on the steps where a condition holds, with a per-token audit of when the steer was
+applied, see the [conditional steering recipe](../recipes/conditional_steering.md).
+
 `steer_generate` is always routed through the binding: it never traces, so it records nothing
 beyond the fire counts in its report. To record what generation computed, capture the whole run
 as an episode (`tl.trace(..., episode=tl.options.EpisodeSpec(...))`), which is diagnostic tier:
