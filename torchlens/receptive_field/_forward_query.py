@@ -22,8 +22,11 @@ from ._query import (
     _IndexSet,
     _initial_axis_sets,
     _normalize_unit,
+    _run_memoized_walk,
     _TerminalState,
     _validate_descriptor_for_query,
+    _WalkKey,
+    _WalkStep,
     map_transposed_convolution_index_set,
 )
 from ._rules import _RuleResult
@@ -152,25 +155,22 @@ def _walk_to_target(
     active: frozenset[str],
     by_reference: Mapping[str, Op],
     exact: bool,
-    memo: dict[tuple[str, _AxisSets, bool], tuple[_TerminalState, ...]],
+    memo: dict[_WalkKey, tuple[_TerminalState, ...]],
 ) -> tuple[_TerminalState, ...]:
-    """Recursively transpose a joint axis-set state toward one target.
+    """Transpose a joint axis-set state toward one target.
 
     ``memo`` collapses the path enumeration to distinct
     ``(operation, axis-set state)`` states for the duration of one query. It is
     plain memoization of a pure function, so the cached tuple is exactly what
-    the recursion would rebuild; see ``_query._walk_to_input``.
+    a fresh walk would rebuild; see ``_query._walk_to_input``. The hops run on
+    ``_query._run_memoized_walk``'s explicit stack, so depth is not bounded by
+    the interpreter's recursion limit.
     """
 
-    key = (op.label, input_sets, exact)
-    cached = memo.get(key)
-    if cached is not None:
-        return cached
-    terminals_for_key = _walk_target_body(
-        op, input_sets, target_label, active, by_reference, exact, memo
-    )
-    memo[key] = terminals_for_key
-    return terminals_for_key
+    def body(item: Op, sets: _AxisSets, item_exact: bool) -> _WalkStep:
+        return _walk_target_body(item, sets, target_label, active, by_reference, item_exact)
+
+    return _run_memoized_walk(body, op, input_sets, exact, memo)
 
 
 def _walk_target_body(
@@ -180,9 +180,12 @@ def _walk_target_body(
     active: frozenset[str],
     by_reference: Mapping[str, Op],
     exact: bool,
-    memo: dict[tuple[str, _AxisSets, bool], tuple[_TerminalState, ...]],
-) -> tuple[_TerminalState, ...]:
-    """Transpose one joint axis-set state across a single forward hop."""
+) -> _WalkStep:
+    """Transpose one joint axis-set state across a single forward hop.
+
+    Yields one request per live child branch and receives that branch's
+    terminals; see ``_query._run_memoized_walk``.
+    """
 
     if op.label == target_label:
         clipped = tuple(
@@ -213,14 +216,12 @@ def _walk_target_body(
             )
         )
         terminals.extend(
-            _walk_to_target(
-                child,
-                bounded,
-                target_label,
-                active,
-                by_reference,
-                exact and hop_exact and all(item is None or item.exact for item in child_sets),
-                memo,
+            (
+                yield (
+                    child,
+                    bounded,
+                    exact and hop_exact and all(item is None or item.exact for item in child_sets),
+                )
             )
         )
     return _distinct_terminals(terminals)
