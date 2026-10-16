@@ -92,14 +92,14 @@ class _Case:
             fork.cleanup()
 
 
-def _check_sets(audit: Any, case: _Case) -> int:
-    """Every set is measured, matches the reference within the bound and replays exactly.
+def _check_sets(audit: Any, case: _Case, table: Any) -> int:
+    """Every set (and row) is measured, matches the reference within the bound and replays exactly.
 
     Returns the number of sets whose edges enter more than one receiver.
     """
 
     assert audit.extra["sets_not_measured"] == ()
-    name_of = {row.unit: row.component for row in audit.units}
+    name_of = {(index,): str(row.address[0]) for index, row in enumerate(table.rows())}
     spanning = 0
     for item in audit.sets:
         names = [name_of[unit] for unit in item.units]
@@ -127,13 +127,20 @@ def test_fixture_sets_across_receivers_match_the_reference_and_replay() -> None:
     assert len(audit.units) == 5 and len(audit.sets) == 6
     graph = tl.mechinterp.component_graph(audit.extra["trace"])
     case = _Case(model, _fixture_spec(model, graph), CLEAN, CORRUPT, fixture_metric)
-    assert _check_sets(audit, case) >= 1
+    assert _check_sets(audit, case, table) >= 1
     every = attribution.causal_audit(
-        model, CLEAN, claim=table, corrupted=CORRUPT, metric=fixture_metric, k=5, controls=()
+        model,
+        CLEAN,
+        claim=table,
+        corrupted=CORRUPT,
+        metric=fixture_metric,
+        k=5,
+        controls=(),
+        per_unit=False,
     )
     (whole,) = every.sets
     assert len(whole.intervention) == 3  # m0, m1 and logits, written in that order
-    assert _check_sets(every, case) == 1
+    assert _check_sets(every, case, table) == 1
 
 
 def _tiny_gpt2() -> tuple[nn.Module, Tensor, Tensor]:
@@ -167,13 +174,22 @@ EDGES = [
 
 @pytest.mark.heavy
 def test_tiny_gpt2_sets_across_receivers_match_the_reference_and_replay() -> None:
-    """q, k, v, MLP and logits receivers patched together match the plain-hook patcher."""
+    """q, k, v, MLP and logits receivers patched together match the plain-hook patcher.
+
+    The rows are not re-measured here (per_unit=False): the edge audit's own tests
+    measure them against the same patches.
+    """
 
     model, clean, corrupt = _tiny_gpt2()
-    table = tl.mechinterp.edge_scores(model, clean, corrupted=corrupt, metric=_logit_difference)
+    table = tl.mechinterp.edge_scores(
+        model, clean, corrupted=corrupt, metric=_logit_difference, method="eap"
+    )
     common = {"claim": table, "corrupted": corrupt, "metric": _logit_difference, "edges": EDGES}
-    audit = attribution.causal_audit(model, clean, k=3, random_draws=4, **common)
+    audit = attribution.causal_audit(model, clean, k=3, random_draws=2, per_unit=False, **common)
     case = _Case(model, gpt2_spec(model), clean, corrupt, _logit_difference)
-    assert _check_sets(audit, case) >= 1
-    every = attribution.causal_audit(model, clean, k=len(EDGES), controls=(), **common)
-    assert _check_sets(every, case) == 1
+    assert len(audit.sets) == 4
+    assert _check_sets(audit, case, table) >= 1
+    every = attribution.causal_audit(
+        model, clean, k=len(EDGES), controls=(), per_unit=False, **common
+    )
+    assert _check_sets(every, case, table) == 1
