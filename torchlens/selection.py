@@ -1184,14 +1184,18 @@ def _resolve_selector_term(node: _SelectorTerm, trace: Any) -> ResolvedSelection
     """Resolve a lifted selector to whole-site masks over its matched sites."""
 
     from .intervention.resolver import (
+        _indexed_label_match,
         _iter_sites,
+        _normalize_query,
         _resolve_unchecked,
         _selector_resolution_direction,
     )
 
     direction = _selector_resolution_direction(node.selector)
-    sites = tuple(_iter_sites(trace, direction))
-    matched = _resolve_unchecked(sites, node.selector, strict=False)
+    matched = _indexed_label_match(trace, direction, _normalize_query(node.selector))
+    if matched is None:
+        sites = tuple(_iter_sites(trace, direction))
+        matched = _resolve_unchecked(sites, node.selector, strict=False)
     entries = [
         _act_entry(op, _mask_whole(_site_shape(op)), "exact", f"selector {node.selector!r}")
         for op in matched
@@ -1689,6 +1693,19 @@ def build_selection_do_plan(
     substituted on the replay engine, the live parameter is never written);
     EDGE selections are stage-3 edge-substitution territory.
     """
+
+    from .intervention.resolver import _label_index_scope
+
+    # Building the plan adds, removes and relabels no op, so plain-label terms
+    # resolve through one label index per trace for the whole plan.
+    with _label_index_scope():
+        return _build_selection_do_plan(trace, selection_like, edit)
+
+
+def _build_selection_do_plan(
+    trace: Any, selection_like: Any, edit: Any
+) -> tuple[ResolvedSelection, list[dict[str, Any]], dict[str, Any]]:
+    """Build :func:`build_selection_do_plan`'s result inside its label-index scope."""
 
     if edit is None:
         raise ValueError(
