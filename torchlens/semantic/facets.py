@@ -30,6 +30,7 @@ from ..ir.container import (
 )
 from ..selection import _SelectionOperand
 from ..utils._callable_safety import FACET_RECIPE_MARKER_ATTR
+from ._families import family_entries, family_spec
 
 RecordScope = Literal["op", "module", "any"]
 RecipeFunc = Callable[[Any], Any]
@@ -37,7 +38,7 @@ PredicateFunc = Callable[[Any], bool]
 RecipeSource = Literal["built-in", "user"]
 FacetKey: TypeAlias = str | tuple[OutputPathComponent, ...]
 HomeKind = Literal["op", "module_output", "module_input", "parameter", "computed"]
-CapabilityClass = Literal["bijective_view", "selection", "aliasing_selection", "computed"]
+CapabilityClass = Literal["bijective_view", "selection", "aliasing_selection", "computed", "codec"]
 ValueVersion = Literal["raw_out", "out_versions_by_child"]
 AbsenceStatus = Literal["structurally_absent", "needs_capture", "declared_not_produced"]
 MenuStatus = Literal[
@@ -210,6 +211,7 @@ _CAPABILITY_FLAGS_BY_CLASS: dict[CapabilityClass, FacetCapabilityFlags] = {
     "selection": FacetCapabilityFlags(read=True, grad=True, write=True),
     "aliasing_selection": FacetCapabilityFlags(read=True, grad=True, write=False),
     "computed": FacetCapabilityFlags(read=True, grad=False, write=False, portable=False),
+    "codec": FacetCapabilityFlags(read=True, grad=False, write=True, portable=False),
 }
 
 
@@ -283,6 +285,8 @@ class TransformPrimitive:
         elif self.kind == "select":
             dim, index = self.args
             result = value.select(dim, index)
+        elif self.kind == "codec":
+            result = self.args[0].read(value)
         else:
             raise ValueError(f"Unknown facet transform primitive {self.kind!r}.")
         self._assert_shape(result, self.post_shape, "post")
@@ -567,8 +571,9 @@ class FacetSpec(_SelectionOperand):
             raise TypeError("Facet scatter_update requires a tensor home output.")
         if not isinstance(edited_slice, torch.Tensor):
             raise TypeError("Facet scatter_update requires a tensor edited slice.")
+        view_part = self._view_part()
         updated = home_out.clone(memory_format=torch.preserve_format)
-        target = self.apply(updated)
+        target = view_part.apply(updated)
         if target.untyped_storage().data_ptr() != updated.untyped_storage().data_ptr():
             # A primitive in the transform chain (typically "reshape"/"heads" on a
             # non-contiguous tensor) silently fell back to a copy instead of
@@ -579,6 +584,10 @@ class FacetSpec(_SelectionOperand):
                 f"Facet {self.recipe_id!r} did not produce a writable view of home "
                 f"{self.home_label or self.home_address or '<unknown>'!r}."
             )
+        if view_part is not self:  # a codec writes the decoder-space delta of its edit
+            codec = self.transforms[-1].args[0]
+            edited_slice = codec.scatter_update(target, edited_slice, mode=mode)
+            mode = "replace"
         _copy_scatter_value(target, edited_slice, mode=mode)
         return updated
 
@@ -604,7 +613,7 @@ class FacetSpec(_SelectionOperand):
         if not isinstance(home_out, torch.Tensor):
             raise TypeError("Facet write masks require a tensor home output.")
         mask = torch.zeros_like(home_out, dtype=torch.bool, device=home_out.device)
-        target = self.apply(mask)
+        target = self._view_part().apply(mask)
         target.fill_(True)
         if not bool(mask.any()):
             raise RuntimeError(
@@ -612,6 +621,12 @@ class FacetSpec(_SelectionOperand):
                 f"{self.home_label or self.home_address or '<unknown>'!r}."
             )
         return mask
+
+    def _view_part(self) -> FacetSpec:
+        """Return the chain without a trailing codec (an SAE's latents, never a view)."""
+
+        codec = bool(self.transforms) and self.transforms[-1].kind == "codec"
+        return replace(self, transforms=self.transforms[:-1]) if codec else self
 
     def _append(self, primitive: TransformPrimitive) -> FacetSpec:
         """Return a copy with one additional primitive."""
@@ -717,7 +732,7 @@ def _ensure_scatter_capable(primitive: TransformPrimitive) -> None:
 
     if primitive.capability_class == "aliasing_selection":
         raise RuntimeError("aliasing_selection scatter_update requires an explicit alias policy.")
-    if primitive.capability_class == "computed" or not primitive.flags.write:
+    if primitive.capability_class in {"computed", "codec"} or not primitive.flags.write:
         raise RuntimeError(f"Primitive {primitive.kind!r} is not scatter-back capable.")
 
 
@@ -1103,7 +1118,7 @@ class FacetView(Mapping[FacetKey, Any]):
     def has(self, name: FacetKey) -> bool:
         """Return whether a facet is available in the current trace."""
 
-        return name in self.keys()
+        return family_spec(self._record, name) is not None or name in self.keys()
 
     def invalidate(self) -> None:
         """Clear cached computed facet values."""
@@ -1144,6 +1159,8 @@ class FacetView(Mapping[FacetKey, Any]):
     def __getitem__(self, name: FacetKey) -> Any:
         """Return a facet value by key, computing lazily if needed."""
 
+        if (spec := family_spec(self._record, name)) is not None:
+            return Facet(spec)
         if name not in self._cache:
             self._compute()
         if name not in self._cache:
@@ -1274,6 +1291,9 @@ class FacetView(Mapping[FacetKey, Any]):
                     menu=menu,
                     facet_tiers=facet_tiers,
                 )
+        for name, spec in family_entries(self._record).items():
+            values.setdefault(name, spec)
+            menu.setdefault(name, FacetMenuItem(status="available_now", recipe=str(name)))
         if _TRANSFORMERLENS_ALIASES_ENABLED:
             for alias, native in _TRANSFORMERLENS_ALIAS_TO_NATIVE.items():
                 if native in values and alias not in values:
@@ -1710,6 +1730,8 @@ def _weakest_capability_class(
 
     if any(primitive.capability_class == "computed" for primitive in transforms):
         return "computed"
+    if any(primitive.capability_class == "codec" for primitive in transforms):
+        return "codec"
     if any(primitive.capability_class == "aliasing_selection" for primitive in transforms):
         return "aliasing_selection"
     if any(primitive.capability_class == "selection" for primitive in transforms):

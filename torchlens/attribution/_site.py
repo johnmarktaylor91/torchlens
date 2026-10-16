@@ -5,7 +5,7 @@ from __future__ import annotations
 import difflib
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import KW_ONLY, dataclass
+from dataclasses import KW_ONLY, dataclass, replace
 from typing import Any
 
 from torch import Tensor
@@ -40,12 +40,19 @@ class SiteTarget:
     call
         Which call of the layer, counted from 0, when the layer runs more than
         once in a forward pass. ``None`` requires that the layer runs once.
+    sae
+        An SAE (any object with ``encode`` and ``decode``) trained on the
+        layer's output. Given, the site is the SAE's latents,
+        ``sae.encode(output)``, and ``unit`` selects among them:
+        ``SiteTarget("fc1", sae=sae, unit=3442)`` attributes latent 3442.
+        DOCUMENTED-UNSTABLE.
     """
 
     layer: str
     _: KW_ONLY
     unit: int | tuple[int, ...] | None = None
     call: int | None = None
+    sae: Any = None
 
     def __post_init__(self) -> None:
         """Validate the selection types; ranges are checked against the activation."""
@@ -61,15 +68,28 @@ class SiteTarget:
             raise _unit_invalid(
                 self.layer,
                 f"unit must be None, an int or a tuple of ints; got {self.unit!r}",
-                SiteTarget(self.layer, call=self.call) if _is_call(self.call) else None,
+                SiteTarget(self.layer, call=self.call, sae=self.sae)
+                if _is_call(self.call)
+                else None,
                 code="attribution_site_unit_invalid",
             )
         if not _is_call(self.call):
             raise _firing_invalid(
                 self.layer,
                 f"call must be None or a call index of at least 0; got {self.call!r}",
-                SiteTarget(self.layer, unit=self.unit),
+                SiteTarget(self.layer, unit=self.unit, sae=self.sae),
                 code="attribution_site_firing_invalid",
+            )
+        if self.sae is not None and not (
+            callable(getattr(self.sae, "encode", None))
+            and callable(getattr(self.sae, "decode", None))
+        ):
+            raise AttributionError(
+                f"SiteTarget for layer {self.layer!r}: sae= must expose encode(...) and "
+                f"decode(...); got {type(self.sae).__name__}. Remedy: pass the SAE object "
+                f"trained on the layer, e.g. tl.attribution.SiteTarget({self.layer!r}, sae=sae, "
+                f"unit=0), or drop sae= to attribute the layer itself. {_DOCS_POINTER}",
+                code="attribution_site_sae_invalid",
             )
 
     def __repr__(self) -> str:
@@ -80,6 +100,8 @@ class SiteTarget:
             parts.append(f"unit={self.unit!r}")
         if self.call is not None:
             parts.append(f"call={self.call!r}")
+        if self.sae is not None:
+            parts.append("sae=sae")
         return f"SiteTarget({', '.join(parts)})"
 
 
@@ -212,14 +234,14 @@ class _SiteRoute:
             raise _firing_invalid(
                 target.layer,
                 f"it ran {len(firings)} times",
-                SiteTarget(target.layer, unit=target.unit, call=0),
+                replace(target, call=0),
                 code="attribution_site_firing_invalid",
             )
         if call >= len(firings):
             raise _firing_invalid(
                 target.layer,
                 f"call={call} was asked for but it ran {len(firings)} times",
-                SiteTarget(target.layer, unit=target.unit, call=len(firings) - 1),
+                replace(target, call=len(firings) - 1),
                 code="attribution_site_firing_invalid",
             )
         output = firings[call]
@@ -298,6 +320,8 @@ def _select_unit(activation: Tensor, target: SiteTarget) -> Tensor:
         ``attribution_site_unit_invalid`` when the unit does not fit the shape.
     """
 
+    if target.sae is not None:
+        activation = _sae_latents(activation, target)
     unit = target.unit
     shape = tuple(int(size) for size in activation.shape)
     if unit is None:
@@ -325,12 +349,32 @@ def _select_unit(activation: Tensor, target: SiteTarget) -> Tensor:
     return activation[index].sum()
 
 
+def _sae_latents(activation: Tensor, target: SiteTarget) -> Tensor:
+    """Return ``target.sae.encode(activation)``, the latents the unit selects among.
+
+    Raises
+    ------
+    AttributionError
+        ``attribution_site_sae_invalid`` when the encoder returns a non-tensor.
+    """
+
+    latents = target.sae.encode(activation)
+    if not isinstance(latents, Tensor):
+        raise AttributionError(
+            f"SiteTarget for layer {target.layer!r}: sae.encode(...) returned a "
+            f"{type(latents).__name__}, not a tensor. Remedy: pass an SAE whose encode returns "
+            f"its latents as a tensor, or drop sae= to attribute the layer itself. {_DOCS_POINTER}",
+            code="attribution_site_sae_invalid",
+        )
+    return latents
+
+
 def _first_unit(target: SiteTarget, shape: tuple[int, ...]) -> SiteTarget:
     """Return the same site selecting unit 0, or the whole output when no unit axis exists."""
 
     if len(shape) < 2 or shape[-1] == 0:
-        return SiteTarget(target.layer, call=target.call)
-    return SiteTarget(target.layer, unit=0, call=target.call)
+        return SiteTarget(target.layer, call=target.call, sae=target.sae)
+    return SiteTarget(target.layer, unit=0, call=target.call, sae=target.sae)
 
 
 def _site_unsupported(method: str, target: SiteTarget, *, code: str) -> AttributionError:

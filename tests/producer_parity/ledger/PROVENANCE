@@ -2787,3 +2787,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 9298ccc3cd869436431a45d7e5317c26dec60a7f (dirty)
 recorded: 2026-10-16T14:22:32.553343+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: SAE-4: _sae_latents reads the owning trace of a facet record (source_trace) to resolve its registered site
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: d8d3deb6aeec5c3ce9691cbfc3acb7ddd78b0684 (dirty)
+recorded: 2026-10-16T15:31:12.685392+00:00

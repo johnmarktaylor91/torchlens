@@ -436,7 +436,7 @@ the map its grid; others refuse with `grad_cam_integer_grid_invalid`.
 
 ## Site targets (`SiteTarget`)
 
-`tl.attribution.SiteTarget(layer, *, unit=None, call=None)` passed as `target=` attributes a
+`tl.attribution.SiteTarget(layer, *, unit=None, call=None, sae=None)` passed as `target=` attributes a
 hidden site instead of the model output: the output of the module named `layer`, optionally one
 unit of it, summed over the batch (the summing rule of an integer `target=`). This is the
 neuron-attribution family: `saliency` toward a hidden unit gives that unit's input gradients, and
@@ -447,6 +447,10 @@ a layer method toward a deeper unit says how an earlier layer drives it.
 - A tuple `unit` indexes the axes after the batch axis: `(3,)` is channel 3 of a convolution
   output, `(3, 1, 2)` one position of it.
 - `call` picks which call of a module that runs more than once, counted from 0.
+- `sae=` (an SAE, any object with `encode` and `decode`, trained on that output) makes the site
+  the SAE's latents, `sae.encode(output)`, and `unit` selects among them:
+  `SiteTarget("fc1", sae=sae, unit=3442)` attributes SAE latent 3442. The same SAE registered
+  with `tl.bridge.sae.register` is the facet family `tl.facet(name).latent(k)` reads and edits.
 
 ```python
 import torch
@@ -470,7 +474,8 @@ Refusals name the fix: a layer the model lacks (`attribution_site_not_found`, wi
 module name), a unit outside the output (`attribution_site_unit_invalid`), a module that ran more
 than once without `call=` or did not run (`attribution_site_firing_invalid`), a site computed
 without the attributed inputs, whose attributions would all be zero
-(`attribution_site_independent_of_input`), and a method that scores only the model output
+(`attribution_site_independent_of_input`), an `sae=` object without an encoder and decoder
+(`attribution_site_sae_invalid`), and a method that scores only the model output
 (`infidelity`, for example: `attribution_site_target_unsupported`).
 
 ## Evaluating attributions

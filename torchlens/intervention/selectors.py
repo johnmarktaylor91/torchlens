@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import builtins
 import re as _re
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, TypeAlias, overload
 
 from .._errors import ArgumentTypeError
 from .types import TargetSpec
+
+#: A latent facet name, ``"<sae name>[k]"`` or ``"<sae name>[j,k]"`` (see
+#: ``FacetSelector.latent``); matched for display only, never for resolution.
+_LATENT_FACET_NAME = _re.compile(r"^(?P<base>[^\[\],\s]+)\[(?P<index>\d+(?:,\d+)*,?)\]$")
 
 SelectorKind: TypeAlias = Literal[
     "label",
@@ -942,6 +946,40 @@ class FacetSelector(BaseSelector):
 
         return FacetSelector(self.name, head_index=head_index, module_address=self.module_address)
 
+    def latent(self, index: int | Sequence[int]) -> FacetSelector:
+        """Return a copy scoped to latents of the SAE registered under this facet name.
+
+        ``tl.facet("res").latent(3442)`` names latent 3442 of the SAE
+        registered as ``"res"`` (``tl.bridge.sae.register``) at its one site; a
+        list names several latents of that SAE, edited together in one write.
+        Reads return the encoder activation; an edit adds the decoder-space
+        change of the edited latents to the site and leaves the SAE's
+        reconstruction error untouched. DOCUMENTED-UNSTABLE.
+
+        Parameters
+        ----------
+        index:
+            Latent index, or a non-empty sequence of latent indices.
+
+        Returns
+        -------
+        FacetSelector
+            Facet selector for those latents.
+
+        Raises
+        ------
+        InvalidArgumentError
+            ``sae_latent_family_unknown`` when no SAE is registered under
+            this name, ``sae_latent_index_invalid`` or
+            ``sae_latent_index_unknown`` for an index the SAE does not have.
+        """
+
+        from ..semantic._families import family_facet_name
+
+        return FacetSelector(
+            family_facet_name(self.name, index), module_address=self.module_address
+        )
+
     def in_module(self, address: str) -> FacetSelector:
         """Return a copy scoped to one module address.
 
@@ -967,8 +1005,13 @@ class FacetSelector(BaseSelector):
             Constructor-style selector representation.
         """
 
+        latent = _LATENT_FACET_NAME.match(self.name) if self.name is not None else None
         if self.name is None:
             base = f"tl.head({self.head_index!r})"
+        elif latent is not None and self.head_index is None:
+            indices = latent["index"].rstrip(",")
+            spelled = f"[{indices}]" if "," in latent["index"] else indices
+            base = f"tl.facet({latent['base']!r}).latent({spelled})"
         elif self.head_index is None:
             base = f"tl.facet({self.name!r})"
         else:

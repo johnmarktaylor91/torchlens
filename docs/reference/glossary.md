@@ -337,7 +337,8 @@ Integrated Gradients always reports its signed completeness residual against the
 target delta. Occlusion always names its replacement baseline. CAM overlays visibly state the
 native measured map resolution, while their larger display grid is labeled as interpolation.
 `build_graph` builds an attribution graph from one prompt's capture and a set of transcoders: typed feature, error, token and logit nodes whose edges are direct linear effects along a frozen graph, with every feature and logit node accounted for by its incoming edges plus named constant terms (`AttributionGraph`). A `SiteTarget` passed as `target=` attributes a hidden layer's output (or one unit of it) instead
-of the model output; layer methods given only integer inputs start their input path at the
+of the model output, and with `sae=` one latent of that SAE's encoding of the output (unstable, no
+deprecation shim owed); layer methods given only integer inputs start their input path at the
 embedding output. `deletion_curve` and `insertion_curve` score an attribution by removing or
 revealing its most-attributed input features in steps (each step a recorded intervention), and
 `randomization_test` checks that a method's maps change when the model's layers are
@@ -1274,7 +1275,7 @@ Spellings below shipped ahead of their naming-session/S2 ratification under
 the provisional-name protocol: they may rename WITHOUT deprecation
 shims, by declared contract. Each carries the same tag at its definition.
 
-**splice / SpliceResult (`tl.bridge.sae.splice(model_or_log, inputs, *, site, sae, latents_edit=None, tokens=None, exclude_bos=False, keep_latents=True)` returns `tl.bridge.sae.SpliceResult`)** — *unstable — no deprecation shim owed*
+**splice / SpliceResult (`tl.bridge.sae.splice(model_or_log, inputs, *, site, sae, latents_edit=None, tokens=None, exclude_bos=False, keep_latents=True, log_latents=False)` returns `tl.bridge.sae.SpliceResult`)** — *unstable — no deprecation shim owed*
 : The SAE splice experiment: a duck-typed SAE's reconstruction replaces one
   site and the fork replays downstream. Every metric is float64 and follows
   the SAELens evals and the Gemma Scope paper. `fraction_variance_explained_pooled`
@@ -1291,8 +1292,31 @@ shims, by declared contract. Each carries the same tag at its definition.
   `ce_loss_zero_ablated`, `ce_loss_recovered` = `(CE_zero - CE_spliced) /
   (CE_zero - CE_clean)` and `kl_divergence` = mean `KL(P_clean || P_spliced)`;
   without it they are `None` with a reason. `exclude_bos=True` keeps sequence
-  position 0 clean and out of every metric. Recipe:
+  position 0 clean and out of every metric. `log_latents=True` (off by
+  default; live-model door only) makes `spliced` a fresh capture with the SAE
+  run inside the model as ordinary ops, so the encoder ops, the latents node
+  and the decoder ops are trace nodes between the site and its consumers;
+  `latents_site` names the latents node (`None` with logging off). The spliced
+  outputs are the same with logging on and off. Recipe:
   `docs/recipes/pretrained_saes.md`.
+
+**register / unregister (`tl.bridge.sae.register(name, sae, *, site)`, `tl.bridge.sae.unregister(name)`)** — *unstable — no deprecation shim owed*
+: Make (or stop making) an SAE's latents the facet family `name` at `site`.
+  `tl.facet(name).latent(k)` then addresses latent `k` at the doors a
+  `tl.head` selector serves (`Trace.set`, `attach_hooks`, `Trace.do`,
+  `fork().do`, `tl.do`), and `trace[site].facets[name]` (every latent),
+  `facets[f"{name}[{k}]"]` or `facets[f"{name}[{j},{k}]"]` read the encoder
+  activation. A write edits the latents and adds the decoder-space change
+  `decode(z') - decode(z)` to the site (for an affine decoder, `delta *
+  W_dec[k]`), so the reconstruction error is untouched. A string site must
+  name one op of a layer that runs once (`sae_latent_site_ambiguous`
+  otherwise); a selector site is every match, and an edit there fans out and
+  reports its count (`facet_selector_fanout`). Registration is process-wide.
+
+**FacetSelector.latent (`tl.facet(name).latent(index)`)** — *unstable — no deprecation shim owed*
+: Latent `index` (an int, or a list of ints edited together in one write) of
+  the SAE registered as `name`; refuses `sae_latent_family_unknown`,
+  `sae_latent_index_invalid` or `sae_latent_index_unknown`.
 
 **reconstruct (`tl.bridge.sae_lens.reconstruct(log, site, sae)`)** — *unstable — no deprecation shim owed*
 : The SAE's reconstruction of a saved site activation,

@@ -68,6 +68,21 @@ optional dependency.
   `kl_divergence`; without it they are `None` with a reason. Metric math lives
   in `_sae_metrics.py`. Recipes: `docs/recipes/pretrained_saes.md`; an SAE latent
   as a feature-visualisation objective, `docs/recipes/feature_visualisation.md`.
+  `log_latents=True` (live-model door only) captures the model again with the SAE
+  run inside it (`_sae_latents.logged_splice_trace`: a forward hook on the module
+  `module_for_site` names, and the reconstruction module a temporary child of the
+  root so the SAE's parameters are known sources); `latents_site` labels the
+  latents node; spliced outputs equal the off path's exactly.
+- `_sae_latents.py` (exported by `sae.py`): `register(name, sae, *, site)` and
+  `unregister(name)` fill `torchlens.semantic._families._FACET_FAMILIES`; every
+  `FacetView` consults it live, so `tl.facet(name).latent(k)` (selector name
+  `"name[k]"`) and `facets["name[k]"]` work on traces captured before the
+  registration. The facet is a `"codec"` transform primitive (capability class
+  `codec`): reads are `encode(home)[..., k]`, writes are
+  `home + decode(z') - decode(z)` (the error term stays), the write mask is the
+  whole home. A string site must be one op of a single-pass layer (hooks target
+  the raw layer label, which fires on every pass); a selector site keeps one home
+  per matched layer. `SiteTarget(..., sae=)` is the attribution seam.
 - `_sae_export.py` (exported by `sae.py`): `write_sae_dashboard(latents, tokens, *,
   latent_ids=None, k=20, path)` and `write_delphi(latents, tokens, *, site, model_name,
   n_splits=5, directory)` write the files SAEDashboard 0.8.0 (`SaeVisData.load_json`)

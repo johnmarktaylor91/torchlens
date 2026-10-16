@@ -2464,6 +2464,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "source_trace",
+  "file": "torchlens/bridge/_sae_latents.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": true,
   "field": "modules",
   "file": "torchlens/bridge/_utils.py",
@@ -8260,7 +8268,7 @@
   "field": "kind",
   "file": "torchlens/semantic/facets.py",
   "has_default": false,
-  "sites": 9,
+  "sites": 11,
   "via_getattr": false
  },
  {
