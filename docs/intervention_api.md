@@ -263,7 +263,11 @@ in-place weight edit, say) is cloned afresh. Every edit on either engine
 starts with `trace.fork()`, whose cost is fixed by the size of the trace, not
 by the edit: on this 585-op trace a fork takes about 0.08-0.09 s and makes
 about 419,000 Python calls (about 580,000 before its label tables were copied
-directly), which is the floor under the fastest push edits.
+directly), which is the floor under the fastest push edits. A rerun that
+refreshes its fork in place releases the capture it discarded before it
+returns, so a fork made right after a rerun costs the same as any other
+(about 420,000 calls; about 1.25 million before, when that capture's cleanup
+ran inside whatever came next, typically the next fork).
 
 `Trace.draw(vis_intervention_mode=...)` visualizes the planned intervention
 recipe stored on an intervention-ready trace, such as sites registered with
