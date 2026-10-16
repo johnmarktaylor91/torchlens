@@ -28,6 +28,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.receptive_field import _engine, _query
 from torchlens.receptive_field._engine_forward import solve_projective
+from torchlens.receptive_field._errors import ReceptiveFieldError
 from torchlens.receptive_field._types import ReceptiveFieldDirection
 from torchlens.receptive_field._validation import (
     _box_for_descriptor,
@@ -248,7 +249,7 @@ def _all_boxes(trace: tl.Trace) -> list[tuple[str, str, str, Any]]:
                     direction=direction,
                     endpoint=None,
                 )
-            except Exception as error:  # the invariant skips these; record the type
+            except ReceptiveFieldError as error:  # the invariant skips these; record the type
                 box = type(error).__name__
             rows.append((direction.value, label, role, box))
     return rows
