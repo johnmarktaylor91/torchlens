@@ -6,6 +6,8 @@ import importlib
 import operator
 import warnings
 from collections.abc import Callable, Collection, Iterator, Sequence
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 
@@ -13,6 +15,7 @@ import torch
 
 from .._errors import InvalidArgumentError
 from ..ir.selector_eval import (
+    _label_site_index,
     ensure_supported,
     evaluate,
     normalize_selector_like,
@@ -1001,8 +1004,10 @@ def resolve_sites(
     _guard_episode_step_query(log, selector)
     refuse_trace_alias_spellings(log, selector)
     direction = _selector_resolution_direction(selector)
-    sites = tuple(_iter_sites(log, direction))
-    matched = _resolve_unchecked(sites, selector, strict=strict)
+    matched = _indexed_label_match(log, direction, selector)
+    if matched is None:
+        sites = tuple(_iter_sites(log, direction))
+        matched = _resolve_unchecked(sites, selector, strict=strict)
     if not matched:
         raise SiteResolutionError(
             f"selector {query!r} matched 0 sites. Use log.find_sites(...) to discover labels."
@@ -1020,6 +1025,81 @@ def resolve_sites(
             stacklevel=2,
         )
     return SiteTable(matched, query=query)
+
+
+#: Label indexes of the active :func:`_label_index_scope`, keyed by ``id(log)``:
+#: ``(log, site universe, universe length, index)``. ``None`` outside a scope.
+_LABEL_INDEXES: ContextVar[dict[int, tuple[Any, Sequence[Site], int, Any]] | None] = ContextVar(
+    "torchlens_label_indexes", default=None
+)
+
+
+@contextmanager
+def _label_index_scope() -> Iterator[None]:
+    """Resolve plain ``tl.label`` selectors through one label index per trace in the block.
+
+    Inside the block, the first plain-label resolution against a trace builds
+    a map from every label spelling to the sites the selector evaluator would
+    match, and later plain-label resolutions against the same trace look the
+    answer up instead of evaluating the selector on every op. The caller
+    guarantees that no op is added, removed or relabelled inside the block;
+    every other check of :func:`resolve_sites` still runs per query. A nested
+    scope reuses the outer one.
+
+    Yields
+    ------
+    None
+        Control while the scope is active.
+    """
+
+    if _LABEL_INDEXES.get() is not None:
+        yield
+        return
+    token = _LABEL_INDEXES.set({})
+    try:
+        yield
+    finally:
+        _LABEL_INDEXES.reset(token)
+
+
+def _indexed_label_match(
+    log: Trace,
+    direction: Literal["forward", "backward"],
+    selector: BaseSelector,
+) -> tuple[Site, ...] | None:
+    """Return a plain-label selector's matches from the scope's index, or ``None``.
+
+    Parameters
+    ----------
+    log:
+        Model log being searched.
+    direction:
+        Resolver search universe.
+    selector:
+        Normalized selector.
+
+    Returns
+    -------
+    tuple[Site, ...] | None
+        Matching sites in execution order, exactly what
+        :func:`_resolve_unchecked` returns for the selector; ``None`` when no
+        scope is active, the selector is not a plain label, the universe is
+        not the forward ops, or the index cannot be built exactly.
+    """
+
+    indexes = _LABEL_INDEXES.get()
+    if indexes is None or direction != "forward" or str(selector.selector_kind) != "label":
+        return None
+    sites = _iter_sites(log, direction)
+    ensure_supported(selector, lifecycle="site")
+    cached = indexes.get(id(log))
+    if cached is None or cached[0] is not log or cached[1] is not sites or cached[2] != len(sites):
+        index = _label_site_index(sites)
+        if index is None:
+            return None
+        cached = (log, sites, len(sites), index)
+        indexes[id(log)] = cached
+    return cast("tuple[Site, ...]", cached[3].get(str(selector.selector_value), ()))
 
 
 def _multi_match_message(query: SelectorInput, matched: Sequence[Site]) -> str:
