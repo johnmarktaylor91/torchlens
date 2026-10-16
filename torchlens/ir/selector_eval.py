@@ -627,6 +627,10 @@ def _string_labels(
     return tuple(labels)
 
 
+#: Lookup-key types whose values never compare equal to a ``str`` target.
+_NEVER_EQUAL_TO_STR = frozenset({int, bool, float, type(None)})
+
+
 def _label_site_index(sites: Sequence[Any]) -> dict[str, tuple[Any, ...]] | None:
     """Map each label spelling to the sites a ``label`` selector matches post hoc.
 
@@ -645,8 +649,9 @@ def _label_site_index(sites: Sequence[Any]) -> dict[str, tuple[Any, ...]] | None
     -------
     dict[str, tuple[Any, ...]] | None
         Matching sites per spelling, in ``sites`` order; ``None`` when a site
-        is a backward ``GradFn`` or carries a non-string lookup key, whose
-        matching the index does not reproduce.
+        is a backward ``GradFn`` or carries a lookup key of another type than
+        ``str`` or the built-in scalars (positional ``int`` keys never equal a
+        string target), whose matching the index does not reproduce.
     """
 
     index: dict[str, list[Any]] = {}
@@ -655,6 +660,8 @@ def _label_site_index(sites: Sequence[Any]) -> dict[str, tuple[Any, ...]] | None
             return None
         keys = dict.fromkeys(_string_labels(site, "site"))
         for key in getattr(site, "lookup_keys", ()) or ():
+            if type(key) in _NEVER_EQUAL_TO_STR:
+                continue
             if type(key) is not str:
                 return None
             keys[key] = None

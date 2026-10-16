@@ -130,13 +130,24 @@ def test_each_trace_in_one_scope_gets_its_own_index(trace) -> None:
         other.cleanup()
 
 
-def test_the_index_steps_aside_for_non_string_lookup_keys() -> None:
+def test_the_index_skips_positional_keys_and_steps_aside_for_unknown_ones() -> None:
     class _Site:
         layer_label = "a_1_1"
         label = "a_1_1:1"
-        lookup_keys = ("a_1_1", 7)
+        lookup_keys: tuple[Any, ...] = ("a_1_1", 7, -3)
 
-    assert selector_eval._label_site_index([_Site()]) is None
+    class _Key:
+        def __eq__(self, other: object) -> bool:
+            return other == "a_1_1"
+
+        __hash__ = object.__hash__
+
+    site = _Site()
+    index = selector_eval._label_site_index([site])
+    assert index == {"a_1_1": (site,), "a_1_1:1": (site,)}
+    odd = _Site()
+    odd.lookup_keys = ("a_1_1", _Key())
+    assert selector_eval._label_site_index([odd]) is None
 
 
 def test_a_push_with_label_hooks_evaluates_no_selector_per_hook(
