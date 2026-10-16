@@ -26,6 +26,7 @@ History files (the changelog, migration notes, the deprecations list) are never 
 from __future__ import annotations
 
 import dataclasses
+import itertools
 import os
 import re
 import shutil
@@ -427,7 +428,7 @@ def _merge(file_edits: list[Edit]) -> tuple[list[Edit], list[str]]:
             )
         else:
             merged.append(group[0])
-    for before, after in zip(merged, merged[1:]):
+    for before, after in itertools.pairwise(merged):
         if before.line == after.line and before.start + len(before.old) > after.start:
             conflicts.append(
                 f"{after.line}:{after.start + 1}: edits overlap: {before.row_id}, {after.row_id}"
