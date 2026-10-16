@@ -245,6 +245,10 @@ def _check_entry(entry: CorpusEntry) -> None:
         if entry.id in BACKWARD_RAISES:
             with pytest.raises(RuntimeError, match="modified by an inplace operation"):
                 trace.log_backward(_loss(leaves))
+            # The pass raised part way: its backward did not run, and no number is printed.
+            status = backward_status(trace)
+            assert status.executed_flops is None, status.status_line
+            assert "UNKNOWN" in status.status_line
             return
         trace.log_backward(_loss(leaves))
         status = backward_status(trace)
