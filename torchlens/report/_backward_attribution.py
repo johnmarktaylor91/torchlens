@@ -38,6 +38,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..capture.flops import DISPATCH_COUNTING_CONVENTION
+from ..utils import _torch_compat
 
 #: Closed key set of the persisted per-pass record (SCHEMA-REQUESTS row 15).
 EXECUTED_FLOPS_RECORD_KEYS: frozenset[str] = frozenset(
@@ -285,6 +286,16 @@ def pass_failed(backward_pass: Any) -> bool:
     return str(getattr(backward_pass, "status", "ok") or "ok") != "ok"
 
 
+def node_resolver_missing() -> bool:
+    """Whether torch lacks the executing-node resolver (``HAS_CURRENT_AUTOGRAD_NODE``).
+
+    Without it a recorded call cannot be matched to the node that ran it, so
+    the census charges no call to a node and the pass has no executed count.
+    """
+
+    return not _torch_compat.HAS_CURRENT_AUTOGRAD_NODE
+
+
 def _add(left: int | None, right: int | None) -> int | None:
     """None-propagating sum."""
 
@@ -298,9 +309,10 @@ def _census_executed(
 ) -> int | None:
     """The pass's executed count: rows plus the unattributed bucket."""
 
-    if pass_failed(backward_pass):
-        # A pass that raised did not run to completion: its calls stay as
-        # evidence on the rows, but the pass has no executed count.
+    if pass_failed(backward_pass) or node_resolver_missing():
+        # A pass that raised did not run to completion, and without the
+        # executing-node resolver no call can be charged to its node: the
+        # calls stay as evidence, but the pass has no executed count.
         return None
     executed = unattributed_flops
     for row in rows:

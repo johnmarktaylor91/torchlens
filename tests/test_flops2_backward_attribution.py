@@ -323,6 +323,40 @@ def test_a_backward_that_raises_reads_not_run_never_a_number() -> None:
         trace.cleanup()
 
 
+def test_without_the_node_resolver_the_count_reads_unknown_never_a_guess(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``HAS_CURRENT_AUTOGRAD_NODE`` False: no call is charged to a node and the count is unknown."""
+
+    from torchlens.backends.torch import _backward_dispatch
+    from torchlens.utils import _torch_compat
+
+    monkeypatch.setattr(_torch_compat, "HAS_CURRENT_AUTOGRAD_NODE", False)
+    monkeypatch.setattr(_backward_dispatch, "get_current_autograd_node_fn", lambda: None)
+    assert _torch_compat.get_torch_capability_snapshot()["HAS_CURRENT_AUTOGRAD_NODE"] is False
+    model = nn.Linear(4, 3)
+    trace = tl.trace(
+        model, _leaf((5, 4), False, 4), capture=tl.options.CaptureOptions(backward_ready=True)
+    )
+    try:
+        trace.log_backward(trace[trace.output_layers[0]].out.sum())
+        (record,) = trace.backward_passes
+        assert record.status == "ok" and record.dispatched_ops
+        assert all(op.grad_fn_call_ref is None for op in record.dispatched_ops)
+        attribution = record.flops_attribution
+        assert attribution.executed_flops is None and not attribution.rows
+        status = backward_status(trace)
+        assert status.state == "backward_observed"
+        assert status.executed_flops is None and status.executed_evidence == "unknown"
+        assert "HAS_CURRENT_AUTOGRAD_NODE is False" in status.reason
+        assert "UNKNOWN" in status.status_line
+        tree = tl.report.cost_tree(trace)
+        assert tree.backward_total is None
+        assert "executed backward: unknown" in str(tree)
+    finally:
+        trace.cleanup()
+
+
 def test_backward_guide_attribution_example_runs() -> None:
     """The runnable example in docs/backward.md executes as written."""
 

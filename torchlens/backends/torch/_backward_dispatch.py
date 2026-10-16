@@ -222,7 +222,10 @@ class _BackwardCensusMode(_TorchLensDispatchMode):
             return None
         current = get_current_autograd_node_fn()
         if current is None:
-            return refs[-1]
+            # No executing-node resolver: charging the innermost marker would
+            # be a guess, so the call is charged to no node and the pass reads
+            # unknown (HAS_CURRENT_AUTOGRAD_NODE in the capability snapshot).
+            return None
         node = current()
         task = _current_backward_graph_task_id()
         if node is not None:

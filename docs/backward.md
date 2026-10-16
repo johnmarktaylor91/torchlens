@@ -207,7 +207,10 @@ grad mode on (`DispatchedOp.grad_enabled`), so on a trace whose checkpoint witne
 checkpointing a counted call made with grad mode on is labeled recompute on the row it ran
 under. The label splits that row's count and never moves a FLOP between rows. A `create_graph`
 pass that checkpoints, or a trace without checkpoint evidence, reads the recompute share as
-`None` (unknown), never a guess.
+`None` (unknown), never a guess. Matching a call to the node that ran it needs torch's
+executing-node resolver; on a build without it (`HAS_CURRENT_AUTOGRAD_NODE` is `False` in
+`tl.utils.doctor()` and `tl.compat.report()`) no call is charged to a node and the executed count
+reads unknown with that reason.
 
 `tl.report.cost_tree(trace)` carries the same counts per module call: `self_forward_mac_flops`
 (the forward's multiply-accumulate work, 2 x true MACs), `self_backward_flops` and

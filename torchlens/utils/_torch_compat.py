@@ -2586,7 +2586,7 @@ def get_current_autograd_node_fn() -> Callable[[], Any] | None:
     resolver = getattr(torch._C, "_current_autograd_node", None)
     if resolver is None:
         mark_torch_capability_missing(
-            "HAS_CURRENT_AUTOGRAD_NODE", "backward FLOPs fall back to the innermost node marker"
+            "HAS_CURRENT_AUTOGRAD_NODE", "executed backward FLOPs read unknown, not per node"
         )
     return resolver
 

@@ -43,7 +43,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ..capture.flops import DISPATCH_COUNTING_CONVENTION
-from ._backward_attribution import pass_failed
+from ._backward_attribution import node_resolver_missing, pass_failed
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
@@ -279,6 +279,7 @@ def _executed_backward_count(trace: Any) -> _ExecutedCount:
     attributions: list[Any] = []
     missing: list[int] = []
     failed: list[int] = []
+    unresolved: list[int] = []
     unreadable: list[int] = []
     other_trace = 0
     for pass_index, record in sorted((getattr(trace, "backward_pass_logs", {}) or {}).items()):
@@ -291,6 +292,8 @@ def _executed_backward_count(trace: Any) -> _ExecutedCount:
         per_pass.append((pass_index, attribution.executed_flops))
         if pass_failed(record):
             failed.append(pass_index)
+        elif attribution.source == "census" and node_resolver_missing():
+            unresolved.append(pass_index)
         elif attribution.executed_flops is None:
             unreadable.append(pass_index)
         for name, count in attribution.uncounted_ops:
@@ -299,26 +302,11 @@ def _executed_backward_count(trace: Any) -> _ExecutedCount:
     named = tuple(uncounted.items())
     unattributed = _sum_known(item.unattributed_flops for item in attributions)
     recompute = _sum_known(item.recompute_flops for item in attributions)
-    if missing:
-        listed = ", ".join(str(index) for index in missing)
-        reason = (
-            f"backward pass(es) {listed} carry no dispatch record on this object "
-            "(an implicit pass opened by tensor hooks, or a trace saved before the "
-            "count was kept)"
+    unknown = _unknown_count_reason(missing, failed, unresolved, unreadable)
+    if unknown is not None:
+        return _ExecutedCount(
+            None, unknown, tuple(per_pass), named, tuple(attributions), None, None
         )
-        return _ExecutedCount(None, reason, tuple(per_pass), named, tuple(attributions), None, None)
-    if failed:
-        listed = ", ".join(str(index) for index in failed)
-        reason = (
-            f"backward pass(es) {listed} raised before finishing: the executed backward was "
-            "not run to completion, so it has no count (the calls dispatched before the "
-            "raise stay on dispatched_ops)"
-        )
-        return _ExecutedCount(None, reason, tuple(per_pass), named, tuple(attributions), None, None)
-    if unreadable:
-        listed = ", ".join(str(index) for index in unreadable)
-        reason = f"counted-family call(s) with unreadable shapes in backward pass(es) {listed}"
-        return _ExecutedCount(None, reason, tuple(per_pass), named, tuple(attributions), None, None)
     total = sum(count for _index, count in per_pass if count is not None)
     reason = (
         "counted from the ATen calls the observed backward dispatched, by GradFn call; "
@@ -332,6 +320,37 @@ def _executed_backward_count(trace: Any) -> _ExecutedCount:
     return _ExecutedCount(
         total, reason, tuple(per_pass), named, tuple(attributions), unattributed, recompute
     )
+
+
+def _unknown_count_reason(
+    missing: list[int], failed: list[int], unresolved: list[int], unreadable: list[int]
+) -> str | None:
+    """Why the executed backward has no count, first cause first, or ``None``."""
+
+    def listed(indices: list[int]) -> str:
+        return ", ".join(str(index) for index in indices)
+
+    if missing:
+        return (
+            f"backward pass(es) {listed(missing)} carry no dispatch record on this object "
+            "(an implicit pass opened by tensor hooks, or a trace saved before the "
+            "count was kept)"
+        )
+    if failed:
+        return (
+            f"backward pass(es) {listed(failed)} raised before finishing: the executed "
+            "backward was not run to completion, so it has no count (the calls dispatched "
+            "before the raise stay on dispatched_ops)"
+        )
+    if unresolved:
+        return (
+            f"this torch build has no executing-node resolver (HAS_CURRENT_AUTOGRAD_NODE "
+            f"is False), so the calls of backward pass(es) {listed(unresolved)} cannot be "
+            "charged to the nodes that ran them and have no count"
+        )
+    if unreadable:
+        return f"counted-family call(s) with unreadable shapes in backward pass(es) {listed(unreadable)}"
+    return None
 
 
 def _sum_known(values: Any) -> int | None:
