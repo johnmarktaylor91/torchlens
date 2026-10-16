@@ -841,12 +841,15 @@ class TraceInterventionMixin(_TraceMixinBase):
         if staged_only:
             extra["staged_only"] = True
         if self._is_selection_batch(hooks_or_site):
+            kinds = [self._selection_batch_kind(selection) for selection, _edit in hooks_or_site]
             extra["selection_batch"] = {
                 "pairs": len(hooks_or_site),
-                "kinds": ["ACT"] * len(hooks_or_site),
-                # Kind-specific staged-store slots (D33): carried NOW so the
-                # OPEN cross-kind completion item needs no schema change.
-                "staged_stores": {"act": len(hooks_or_site), "param": 0, "edge": 0},
+                "kinds": kinds,
+                # Kind-specific staged-store slots (D33), one count per door.
+                "staged_stores": {
+                    door: sum(kind == door.upper() for kind in kinds)
+                    for door in ("act", "param", "edge")
+                },
             }
         record_intervention_event(
             self,
@@ -1121,6 +1124,19 @@ class TraceInterventionMixin(_TraceMixinBase):
             isinstance(item[0], (Selection, ResolvedSelection, slice_type)) for item in value
         )
 
+    @staticmethod
+    def _selection_batch_kind(selection: Any) -> str:
+        """The selection kind (``ACT``/``PARAM``/``EDGE``) of one batch pair's target."""
+
+        from ..selection import ResolvedSelection, Selection, _lift
+
+        slice_module = sys.modules.get("torchlens.trace_slice")
+        if slice_module is not None and isinstance(selection, slice_module.TraceSlice):
+            selection = selection.__selection__()
+        if not isinstance(selection, (Selection, ResolvedSelection)):
+            return "ACT"
+        return str(getattr(_lift(selection), "kind", "ACT"))
+
     def _apply_selection_batch_do(
         self: "Trace",
         pairs: Any,
@@ -1144,21 +1160,21 @@ class TraceInterventionMixin(_TraceMixinBase):
         so kwargs coincidence never shares a group
         while a rerun of the same declared batch still reproduces its draws.
 
-        v1 scope (capability-reported, never silently narrowed): ACT
-        selections on interior sites only. Cross-kind batches (PARAM/EDGE)
-        refuse typed -- edge substitution commits and pushes inside its
-        per-entry loop today, so cross-kind atomicity does not exist to be
-        reused; the completion item stays OPEN and is never relabeled
-        complete. Leaf sites (inputs/buffers) commit-then-propagate per site
-        and cannot join one hook transaction yet.
+        Scope: ACT selections on interior sites. A batch that also carries
+        PARAM or EDGE selections runs through ``_apply_cross_kind_batch_do``
+        (ordered doors under one rollback journal; replay engine only). Leaf
+        sites (inputs/buffers) commit-then-propagate per site and cannot join
+        one hook transaction yet.
 
         Returns
         -------
         tuple[str, tuple[str, ...]]
-            ``("selection_hooks", attached_handle_ids)``.
+            ``("selection_hooks", attached_handle_ids)``, or
+            ``("selection_replayed", attached_handle_ids)`` for a cross-kind
+            batch, which has already propagated.
         """
 
-        from ..selection import ResolvedSelection, Selection, _lift, build_selection_do_plan
+        from ..selection import ResolvedSelection, Selection, _lift
 
         slice_module = sys.modules.get("torchlens.trace_slice")
         slice_type = slice_module.TraceSlice if slice_module is not None else ()
@@ -1183,38 +1199,17 @@ class TraceInterventionMixin(_TraceMixinBase):
             kind = getattr(lifted, "kind", "ACT")
             kinds.append(kind)
             normalized.append((selection, edit))
-        non_act = [f"pair {index}: {kind}" for index, kind in enumerate(kinds) if kind != "ACT"]
-        if non_act:
-            raise InvalidArgumentError(
-                "selection-batch do() v1 is ACT-only; this batch carries "
-                f"[{', '.join(non_act)}]. Capability report: ACT selections "
-                "attach as ONE transaction; PARAM and EDGE selections commit "
-                "and push inside their own doors today, so a cross-kind batch "
-                "cannot be made atomic yet (the completion item is OPEN, not "
-                "silently narrowed)",
-                code="selection_batch_cross_kind",
-                remedy="apply PARAM/EDGE selections in their own do() calls, one per kind",
-                argument="hooks_or_site",
-            )
         from ..intervention.stochastic import assign_batch_donor_groups
 
         normalized = assign_batch_donor_groups(normalized)
-        plans: list[tuple[Any, list[dict[str, Any]], dict[str, Any]]] = []
-        for index, (selection, edit) in enumerate(normalized):
-            resolved, plan, audit = build_selection_do_plan(self, selection, edit)
-            leaf_sites = [item["op"].label for item in plan if item["is_leaf"]]
-            if leaf_sites:
-                raise InvalidArgumentError(
-                    f"selection-batch do() pair {index} addresses leaf sites "
-                    f"{leaf_sites!r} (inputs/buffers): leaf edits commit and "
-                    "propagate per site and cannot join one hook transaction "
-                    "in v1",
-                    code="selection_batch_leaf_unsupported",
-                    remedy="apply leaf-site edits through single-selection "
-                    "do() calls; batch interior sites only",
-                    argument="hooks_or_site",
-                )
-            plans.append((resolved, plan, audit))
+        if any(kind != "ACT" for kind in kinds):
+            return self._apply_cross_kind_batch_do(
+                normalized, kinds, engine=engine, strict=strict, direction=direction
+            )
+        plans = [
+            self._batch_act_plan(index, selection, edit)
+            for index, (selection, edit) in enumerate(normalized)
+        ]
         all_hook_items = [item for _resolved, plan, _audit in plans for item in plan]
         attached = self._attach_selection_plan_hooks(
             all_hook_items, strict=strict, direction=direction
@@ -1222,6 +1217,98 @@ class TraceInterventionMixin(_TraceMixinBase):
         for _resolved, _plan, audit in plans:
             self.intervention_audit.append(audit)
         return "selection_hooks", attached
+
+    def _batch_act_plan(
+        self: "Trace", index: int, selection: Any, edit: Any
+    ) -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:
+        """Resolve one ACT batch pair to its hook plan, refusing leaf sites typed."""
+
+        from ..selection import build_selection_do_plan
+
+        resolved, plan, audit = build_selection_do_plan(self, selection, edit)
+        leaf_sites = [item["op"].label for item in plan if item["is_leaf"]]
+        if leaf_sites:
+            raise InvalidArgumentError(
+                f"selection-batch do() pair {index} addresses leaf sites "
+                f"{leaf_sites!r} (inputs/buffers): leaf edits commit and "
+                "propagate per site and cannot join one hook transaction "
+                "in v1",
+                code="selection_batch_leaf_unsupported",
+                remedy="apply leaf-site edits through single-selection "
+                "do() calls; batch interior sites only",
+                argument="hooks_or_site",
+            )
+        return resolved, plan, audit
+
+    def _apply_cross_kind_batch_do(
+        self: "Trace",
+        pairs: list[tuple[Any, Any]],
+        kinds: list[str],
+        *,
+        engine: str,
+        strict: bool,
+        direction: str | None,
+    ) -> tuple[str, tuple[str, ...]]:
+        """Apply a batch mixing ACT with PARAM/EDGE selections as ONE transaction.
+
+        Pairs run in order exactly as one ``do()`` per pair would: each run of
+        consecutive ACT pairs attaches together and pushes once, and each
+        PARAM or EDGE pair goes through its own door, which stages and
+        replays. Every ACT plan resolves before anything changes. A journal
+        of everything replay and the doors write (per-op saved outs and
+        metadata, fire records, tier-(ii) stores; the run context, state,
+        audit rows and operation history) is taken first; if any pair
+        refuses, this batch's hooks detach and the journal is restored, so the
+        trace is as before the call apart from the one error envelope
+        ``do()`` records. PARAM and EDGE edits ship on replay only, so other
+        engines refuse before anything runs.
+        """
+
+        from ..intervention._replay_context import journal_replay_state, restore_replay_state
+
+        if engine != "replay":
+            mixed = ", ".join(f"pair {index}: {kind}" for index, kind in enumerate(kinds))
+            raise InvalidArgumentError(
+                f"this selection-batch do() mixes kinds [{mixed}] on engine "
+                f"{engine!r}; PARAM and EDGE edits apply on the replay engine "
+                "only, so the batch cannot run as one transaction there",
+                code="selection_batch_cross_kind",
+                remedy="pass intervention=tl.options.InterventionOptions(engine='replay'), "
+                "or apply the ACT pairs in their own do() call on this engine",
+                argument="hooks_or_site",
+            )
+        steps: list[tuple[str, Any]] = []
+        for index, ((selection, edit), kind) in enumerate(zip(pairs, kinds, strict=True)):
+            if kind != "ACT":
+                steps.append((kind, (selection, edit)))
+            elif steps and steps[-1][0] == "ACT":
+                steps[-1][1].append(self._batch_act_plan(index, selection, edit))
+            else:
+                steps.append(("ACT", [self._batch_act_plan(index, selection, edit)]))
+        journal = journal_replay_state(self)
+        attached: list[str] = []
+        try:
+            for kind, step in steps:
+                if kind == "ACT":
+                    items = [item for _resolved, plan, _audit in step for item in plan]
+                    attached.extend(
+                        self._attach_selection_plan_hooks(items, strict=strict, direction=direction)
+                    )
+                    self.intervention_audit.extend(audit for _resolved, _plan, audit in step)
+                    self.push(replay=ReplayOptions(strict=strict))
+                    continue
+                mutation_kind, handles = self._apply_selection_do(
+                    *step, engine=engine, strict=strict, direction=direction
+                )
+                attached.extend(handles)
+                if mutation_kind == "selection_hooks":
+                    self.push(replay=ReplayOptions(strict=strict))
+        except BaseException:
+            for handle_id in attached:
+                self.detach_hooks(handle=handle_id, confirm_mutation=True)
+            restore_replay_state(self, journal)
+            raise
+        return "selection_replayed", tuple(attached)
 
     def _apply_selection_do(
         self: "Trace",

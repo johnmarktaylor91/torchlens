@@ -226,6 +226,21 @@ apply to it, and TorchLens discloses that at the run door with
 silently returning an un-edited verified run. The run itself proceeds:
 this is a disclosure, never a refusal.
 
+`log.do([(selection, edit), ...])` applies a list of selection and edit pairs
+as one transaction with one intervention event. Activation (ACT) pairs attach
+together and push once. A batch may also carry parameter selections
+(`tl.params(...)`) and dataflow edge selections (from `log.edges`); on the
+replay engine the pairs then run in order exactly as one `do()` per pair would
+(each run of consecutive activation pairs attaches and pushes together; each
+parameter or edge pair goes through its own substitution path), and the result
+equals those calls made one at a time. The batch is atomic: if any pair is
+refused, every value, hook, audit row and history record the batch wrote is
+put back, and the trace keeps only the one error event for the failed call.
+Parameter and edge edits apply on the replay engine only, so a mixed batch on
+another engine refuses with `selection_batch_cross_kind` before anything runs;
+pass `intervention=tl.options.InterventionOptions(engine="replay")`. Leaf sites
+(inputs and buffers) still cannot join a batch (`selection_batch_leaf_unsupported`).
+
 The two engines differ sharply in cost when you sweep many edits over one
 captured input. On the 144-head ablation sweep of a 12-layer, 12-head GPT-2
 configuration (585 captured ops; `benchmarks/head_sweep_engine_cost.py`), the
@@ -248,7 +263,11 @@ in-place weight edit, say) is cloned afresh. Every edit on either engine
 starts with `trace.fork()`, whose cost is fixed by the size of the trace, not
 by the edit: on this 585-op trace a fork takes about 0.08-0.09 s and makes
 about 419,000 Python calls (about 580,000 before its label tables were copied
-directly), which is the floor under the fastest push edits.
+directly), which is the floor under the fastest push edits. A rerun that
+refreshes its fork in place releases the capture it discarded before it
+returns, so a fork made right after a rerun costs the same as any other
+(about 420,000 calls; about 1.25 million before, when that capture's cleanup
+ran inside whatever came next, typically the next fork).
 
 `Trace.draw(vis_intervention_mode=...)` visualizes the planned intervention
 recipe stored on an intervention-ready trace, such as sites registered with

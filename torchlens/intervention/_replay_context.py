@@ -3,7 +3,8 @@
 Session-time state the replay/push engine keeps on ``Trace.last_run`` (RUNTIME
 storage, never persisted): the pass-qualified key every replay structure is
 addressed by, the run-context accessor that seeds it, and the ledger of
-capture-time out digests recorded the first time replay overwrites a site.
+capture-time out digests recorded the first time replay overwrites a site,
+and the rollback journal a multi-door transaction restores on failure.
 Split out of ``replay.py`` so validation can read the ledger without importing
 the engine.
 """
@@ -114,3 +115,97 @@ def replay_capture_digest(log: Trace, site: Op) -> str | None:
         return None
     digest = digests.get(_replay_site_key(site))
     return digest if isinstance(digest, str) else None
+
+
+#: Per-op fields replay commits and the PARAM/EDGE doors stage (saved out and
+#: its metadata, fire records, tier-(ii) substitution stores).
+_JOURNAL_OP_FIELDS = (
+    "out",
+    "transformed_out",
+    "shape",
+    "transformed_out_shape",
+    "dtype",
+    "dtype_ref",
+    "device_ref",
+    "transformed_out_dtype",
+    "activation_memory",
+    "transformed_activation_memory",
+    "has_saved_activation",
+    "interventions",
+    "intervention_replaced",
+    "edge_substitutions",
+    "edge_replacement_stamps",
+)
+#: Trace fields a replay rebinds or mutates (run context, state, revisions,
+#: audit rows and operation history).
+_JOURNAL_TRACE_FIELDS = (
+    "last_run",
+    "state",
+    "_out_recipe_revision",
+    "_has_direct_writes",
+    "replay_frontier",
+    "state_history",
+    "intervention_audit",
+)
+
+
+def _journal_copy(value: Any) -> Any:
+    """Shallow-copy a mutable container so later in-place writes cannot reach it."""
+
+    if isinstance(value, list):
+        return list(value)
+    if isinstance(value, dict):
+        return dict(value)
+    return value
+
+
+def _journal_same(current: Any, recorded: Any) -> bool:
+    """Whether ``current`` still holds exactly the recorded objects (identity-wise)."""
+
+    if isinstance(recorded, list) and isinstance(current, list):
+        return len(current) == len(recorded) and all(
+            a is b for a, b in zip(current, recorded, strict=True)
+        )
+    if isinstance(recorded, dict) and isinstance(current, dict):
+        return current.keys() == recorded.keys() and all(
+            current[key] is recorded[key] for key in recorded
+        )
+    return current is recorded
+
+
+def journal_replay_state(trace: Trace) -> tuple[list[tuple[Any, dict[str, Any]]], dict[str, Any]]:
+    """Record every value replay and the PARAM/EDGE doors may write on ``trace``.
+
+    Tensors are held by reference (replay replaces outs, never writes them in
+    place); containers are shallow-copied. ``restore_replay_state`` puts each
+    value back, so a transaction spanning several doors can be undone whole.
+    """
+
+    ops = [
+        (op, {name: _journal_copy(getattr(op, name, None)) for name in _JOURNAL_OP_FIELDS})
+        for op in trace.layer_list
+    ]
+    fields = {
+        name: _journal_copy(getattr(trace, name))
+        for name in _JOURNAL_TRACE_FIELDS
+        if hasattr(trace, name)
+    }
+    return ops, fields
+
+
+def restore_replay_state(
+    trace: Trace, journal: tuple[list[tuple[Any, dict[str, Any]]], dict[str, Any]]
+) -> None:
+    """Put back every value ``journal_replay_state`` recorded."""
+
+    ops, fields = journal
+    for op, values in ops:
+        for name, value in values.items():
+            if not _journal_same(getattr(op, name, None), value):
+                op._internal_set(name, _journal_copy(value))
+    for name, value in fields.items():
+        current = getattr(trace, name)
+        if isinstance(value, list) and isinstance(current, list):
+            current[:] = value
+        else:
+            setattr(trace, name, _journal_copy(value))

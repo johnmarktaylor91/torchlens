@@ -3436,7 +3436,7 @@
   "field": "kind",
   "file": "torchlens/data_classes/_trace_intervention.py",
   "has_default": true,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": true
  },
  {
@@ -3444,7 +3444,7 @@
   "field": "modules",
   "file": "torchlens/data_classes/_trace_intervention.py",
   "has_default": false,
-  "sites": 5,
+  "sites": 6,
   "via_getattr": false
  },
  {

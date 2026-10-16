@@ -2694,6 +2694,22 @@ recorded: 2026-10-15T21:56:54.927920+00:00
 ---
 generator: producer_parity/test_ledger.py (static half)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: PERF-4 B5: the cross-kind batch envelope reads each pair selection kind (one getattr kind read) and the TraceSlice module gate (one sys.modules read) in _trace_intervention.py
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 2f3fcee0aace65e045cb8cadde875eeafb969ef8 (dirty)
+recorded: 2026-10-16T00:31:53.272486+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: PERF-4 B5: the cross-kind batch envelope reads each pair selection kind (one getattr kind read) and the TraceSlice module gate (one sys.modules read) in _trace_intervention.py
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 2f3fcee0aace65e045cb8cadde875eeafb969ef8 (dirty)
+recorded: 2026-10-16T00:31:59.319202+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
 reason: b2-CIRC-4: patch_edges writes each stage in one replay and recomputes q/k/v projections locally; new private helper edge_substitution._recompute_with_substitution reads op parents, label and is_buffer and the edge record child_label/parent_label (reviewed consumer sites); _edge_patch kind sites unchanged at 4
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu

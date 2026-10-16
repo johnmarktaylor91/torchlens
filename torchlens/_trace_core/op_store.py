@@ -212,6 +212,7 @@ class OpRowStore:
         "_mutable_keys",
         "_n_rows",
         "_overlay",
+        "_payload_finalizers",
         "_payload_owner_count",
         "_payload_views",
         "_sweep_plan",
@@ -284,6 +285,10 @@ class OpRowStore:
         # ``Op`` facade -- which holds this store strongly -- keeps its
         # metadata readable without pinning every captured activation.
         self._payload_owner_count = 0
+        # One live finalizer per owning core (keyed by the core's id while it
+        # is alive), so an owner known to be discarded can release its pin at
+        # a chosen point instead of whenever the cyclic collector frees it.
+        self._payload_finalizers: dict[int, weakref.finalize] = {}
         # Weak references to every OpStoreView over this base: row-major
         # views SNAPSHOT the row lists (and every view has private
         # overlays), so last-owner payload eviction must sweep surviving
@@ -307,11 +312,36 @@ class OpRowStore:
         """
 
         self._payload_owner_count += 1
-        weakref.finalize(owner, self._release_payload_owner)
+        key = id(owner)
+        self._payload_finalizers[key] = weakref.finalize(owner, self._release_payload_owner, key)
 
-    def _release_payload_owner(self) -> None:
+    def release_payload_owner(self, owner: Any) -> None:
+        """Release ``owner``'s payload pin now rather than at its collection.
+
+        For an owner the caller has discarded (a rerun's own capture after a
+        fast refresh): such an owner usually sits in reference cycles, so the
+        cyclic collector frees it at an arbitrary later point and the
+        last-owner eviction walk runs inside whatever executes then. Running
+        the owner's finalizer here pays that cost at a known point; the
+        finalizer runs once either way, and eviction still happens only when
+        no other owner holds the store.
+
+        Parameters
+        ----------
+        owner:
+            A core previously registered through ``adopt_payload_owner``.
+        """
+
+        finalizer = self._payload_finalizers.get(id(owner))
+        registered = None if finalizer is None else finalizer.peek()
+        if finalizer is not None and registered is not None and registered[0] is owner:
+            finalizer()
+
+    def _release_payload_owner(self, key: int | None = None) -> None:
         """Drop one owner; evict tensor payloads when the last owner dies."""
 
+        if key is not None:
+            self._payload_finalizers.pop(key, None)
         self._payload_owner_count -= 1
         if self._payload_owner_count == 0 and self._sealed:
             self._evict_tensor_payloads()

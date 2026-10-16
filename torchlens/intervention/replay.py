@@ -247,12 +247,6 @@ def _run_differentiable_replay(
         source_cone_labels=tuple(_disclosure_label(site) for site in source_cone),
     )
     _reset_backward_projection(replay_log)
-    # Hooks firing inside this replay see the door in their run context, so
-    # keep_grad can disclose that the frontier re-leafs the edited value.
-    replay_log.last_run = {
-        **(replay_log.last_run if isinstance(replay_log.last_run, dict) else {}),
-        "differentiable": True,
-    }
     _run_replay(
         replay_log,
         [replay_log.layer_dict_all_keys[_replay_site_key(origin)] for origin in origins],
@@ -544,6 +538,14 @@ def _run_replay(
     """
 
     started_at = time.monotonic()
+    # The flag says what THIS replay does, never what an earlier one did: hooks
+    # firing here read it (keep_grad discloses the frontier only under
+    # differentiable replay). Rebind, never mutate: a fork may share the dict.
+    is_differentiable = differentiable_frontier is not None
+    run_ctx = {**_ensure_replay_run_ctx(log), "differentiable": is_differentiable}
+    if not is_differentiable:
+        run_ctx.pop("frontier", None)
+    log.last_run = run_ctx
     cone = cone_of_effect(log, origins)
     origin_keys = {_replay_site_key(origin) for origin in origins}
     label_keys = _label_key_map(log)

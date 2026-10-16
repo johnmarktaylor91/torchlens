@@ -1,9 +1,10 @@
 """F02 selection-batch ``do()`` v1 (edits memo D33; row B6 analog).
 
-One atomic ACT-only transaction: all-or-nothing attachment, ONE envelope with
+One atomic transaction: all-or-nothing attachment, ONE envelope with
 the batch disclosure and kind-specific staged-store slots, per-pair ACT audit
-rows, donor-group sharing by plan object identity (D8), cross-kind capability
-refusal, and the abort row -- one valid + one invalid clause leaves the trace
+rows, donor-group sharing by plan object identity (D8), the cross-kind batch
+(ACT with PARAM and EDGE: equal to one door at a time, atomic on refusal), and
+the abort row -- one valid + one invalid clause leaves the trace
 value-equivalent to its pre-call state with one aborted-transaction record.
 """
 
@@ -14,6 +15,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._errors import InvalidArgumentError
 from torchlens.intervention import reference, sample_from, sampling_records
 
 
@@ -137,20 +139,142 @@ def test_leaf_site_pair_refuses_typed() -> None:
     assert excinfo.value.fields["code"] == "selection_batch_leaf_unsupported"
 
 
-def test_cross_kind_batch_refuses_with_capability_report() -> None:
-    """D33: PARAM/EDGE selections in a batch refuse typed, naming the v1 scope."""
+def _trace64() -> tl.Trace:
+    torch.manual_seed(0)
+    return tl.trace(
+        _TwoBlock().double(),
+        torch.randn(5, 4, dtype=torch.float64),
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+    )
 
-    log = _trace()
-    param_name = next(iter(dict(log.params.items())))
+
+def _cross_kind_pairs(fork: tl.Trace, order: tuple[str, ...], bad: str = "") -> list:
+    """ACT, PARAM and EDGE pairs on ``fork`` in ``order``; ``bad`` names a refusing pair."""
+
+    def _wrong_shape(tensor, *, hook):  # noqa: ANN001, ANN202 - edit callable
+        return tensor[:1]
+
+    def _refuse(tensor, *, hook):  # noqa: ANN001, ANN202 - edit callable
+        raise InvalidArgumentError(
+            "refused by the test edit", code="test_edit_refused", remedy="none"
+        )
+
+    edge = next(e for e in fork.edges if e.parent_label == "relu_1_2")
+    pairs = {
+        "ACT": (fork["relu_1_2"].__selection__(), _refuse if bad == "ACT" else tl.scale(2.0)),
+        "PARAM": (tl.params("b.weight"), _wrong_shape if bad == "PARAM" else tl.scale(0.25)),
+        "EDGE": (edge.__selection__(), _wrong_shape if bad == "EDGE" else tl.add(0.25)),
+    }
+    return [pairs[kind] for kind in order]
+
+
+def _fingerprint(log: tl.Trace) -> dict:
+    """Everything a failed batch must leave as it was (values, spec, ledger rows)."""
+
+    ops = {}
+    for op in log.layer_list:
+        store = op.edge_substitutions or {}
+        ops[op.label] = (
+            None if op.out is None else op.out.clone(),
+            tuple(repr(record) for record in op.interventions or ()),
+            bool(op.intervention_replaced),
+            tuple(sorted(repr(key) for key in store)),
+        )
+    return {
+        "ops": ops,
+        "hooks": tuple(repr(spec) for spec in log._ensure_intervention_spec().hook_specs),
+        "audit": tuple(repr(row) for row in log.intervention_audit),
+        "history": tuple(repr(row) for row in log.state_history),
+        "state": log.state,
+    }
+
+
+def _assert_same_values(left: dict, right: dict) -> None:
+    assert left.keys() == right.keys()
+    for label, (left_out, *left_rest) in left.items():
+        right_out, *right_rest = right[label]
+        assert (left_out is None) == (right_out is None), label
+        if left_out is not None:
+            assert torch.equal(left_out, right_out), label
+        assert left_rest == right_rest, label
+
+
+@pytest.mark.parametrize(
+    "order", [("ACT", "PARAM", "EDGE"), ("EDGE", "ACT", "PARAM"), ("PARAM", "EDGE", "ACT")]
+)
+def test_cross_kind_batch_equals_the_doors_one_at_a_time(order: tuple[str, ...]) -> None:
+    """A batch mixing ACT, PARAM and EDGE equals one do() per pair, in order, exactly."""
+
+    log = _trace64()
+    batch = log.fork()
+    batch.do(_cross_kind_pairs(batch, order))
+    sequential = log.fork()
+    for selection, edit in _cross_kind_pairs(sequential, order):
+        sequential.do(selection, edit)
+    for batch_op, seq_op in zip(batch.layer_list, sequential.layer_list, strict=True):
+        assert batch_op.label == seq_op.label
+        assert batch_op.out.dtype == torch.float64
+        assert torch.equal(batch_op.out, seq_op.out), batch_op.label
+        assert sorted(map(repr, batch_op.edge_substitutions or {})) == sorted(
+            map(repr, seq_op.edge_substitutions or {})
+        )
+    assert not torch.equal(batch[batch.output_layers[0]].out, log[log.output_layers[0]].out), (
+        "the batch changed the output"
+    )
+    envelopes = _envelopes(batch)
+    assert len(envelopes) == 1, "ONE transactional envelope for the whole batch"
+    assert envelopes[0]["selection_batch"]["kinds"] == list(order)
+    assert envelopes[0]["selection_batch"]["staged_stores"] == {"act": 1, "param": 1, "edge": 1}
+    kinds = [row.get("kind") for row in batch.intervention_audit if row.get("kind") != "EVENT"]
+    assert kinds == list(order), "one audit row per pair, in pair order"
+
+
+@pytest.mark.parametrize("bad", ["ACT", "PARAM", "EDGE"])
+def test_cross_kind_batch_with_a_refusing_pair_leaves_the_fork_as_before(bad: str) -> None:
+    """Atomicity: the refusing pair runs last, after the other doors changed values."""
+
+    order = tuple(kind for kind in ("ACT", "PARAM", "EDGE") if kind != bad) + (bad,)
+    log = _trace64()
+    fork = log.fork()
+    before = _fingerprint(fork)
+    probe = log.fork()
+    probe.do(_cross_kind_pairs(probe, order[:2]))
+    assert not torch.equal(probe[probe.output_layers[0]].out, log[log.output_layers[0]].out), (
+        "the pairs before the refusal do change values, so the rollback is exercised"
+    )
     with pytest.raises(Exception) as excinfo:
-        log.fork().do(
-            [
-                (log["relu_1_2"].__selection__(), tl.scale(2.0)),
-                (tl.params(param_name), tl.scale(0.5)),
-            ]
+        fork.do(_cross_kind_pairs(fork, order, bad=bad))
+    assert "code" in getattr(excinfo.value, "fields", {}), "a typed refusal"
+    after = _fingerprint(fork)
+    _assert_same_values(after["ops"], before["ops"])
+    assert after["hooks"] == before["hooks"], "no hook leaks"
+    assert after["state"] == before["state"]
+    assert after["audit"][: len(before["audit"])] == before["audit"]
+    assert len(after["audit"]) - len(before["audit"]) <= 1, "at most the error row"
+    assert after["history"][: len(before["history"])] == before["history"]
+    added = list(fork.state_history[len(before["history"]) :])
+    assert [row.get("op") for row in added] == ["intervention_event"]
+    assert added[0]["status"] == "error", "the fire-evidence rule: one aborted record"
+    assert added[0]["selection_batch"]["kinds"] == list(order)
+    fork.do(_cross_kind_pairs(fork, order[:2]))
+    for fork_op, probe_op in zip(fork.layer_list, probe.layer_list, strict=True):
+        assert torch.equal(fork_op.out, probe_op.out), "the fork is usable after the abort"
+
+
+def test_cross_kind_batch_off_replay_refuses_before_anything_runs() -> None:
+    """PARAM/EDGE edits ship on replay only: other engines refuse typed, nothing applied."""
+
+    log = _trace64()
+    fork = log.fork()
+    before = _fingerprint(fork)
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        fork.do(
+            _cross_kind_pairs(fork, ("ACT", "PARAM")),
+            intervention=tl.options.InterventionOptions(engine="set_only"),
         )
     assert excinfo.value.fields["code"] == "selection_batch_cross_kind"
-    assert "ACT-only" in str(excinfo.value)
+    assert "engine='replay'" in excinfo.value.fields["remedy"]
+    _assert_same_values(_fingerprint(fork)["ops"], before["ops"])
 
 
 def test_mixed_selection_and_legacy_pairs_refuse() -> None:
