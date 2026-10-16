@@ -782,7 +782,7 @@ class CaptureSession:
             raise RuntimeError("Cannot snapshot projection facts after the run core is sealed.")
         capture_events = getattr(trace, "capture_events", None)
         recording = getattr(trace, "_fastlog_recording", None)
-        records = ()
+        records: tuple[Any, ...] = ()
         if recording is not None:
             records = tuple(object.__getattribute__(recording, "records"))
             # A Recorder shares one Recording across its passes, so its record
