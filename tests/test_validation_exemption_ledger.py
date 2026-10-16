@@ -371,6 +371,17 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         ),
     ),
     Exemption(
+        code="batch_norm_input_at_running_mean",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._norm_running_var_proof:batch_norm_input_at_running_mean",
+        refuses=(
+            "a training-mode call, a perturbed input, running_mean, weight or bias, a parent "
+            "that also occupies another slot, and any channel with a non-zero weight whose "
+            "saved input differs from running_mean by any amount (no tolerance)"
+        ),
+    ),
+    Exemption(
         code="sdpa_zero_query_uniform_attention",
         tier="posthoc",
         contract="C2 perturbation sensitivity",

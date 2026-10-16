@@ -266,6 +266,8 @@
   distinct candidates.
 - **receptive_field**: receptive- and projective-field walks no longer raise RecursionError on deep
   models (the hop walk keeps its pending steps on an explicit stack; results unchanged).
+- **validation**: an eval-mode batch_norm whose input equals its running mean exactly no longer
+  reports running_var as a dead edge; exact value proof, no tolerance
 
 ### Performance Improvements
 

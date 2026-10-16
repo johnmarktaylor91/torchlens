@@ -51,6 +51,7 @@ from ._index_domain import (
     _saved_integer_index_tensor,
 )
 from ._integer_mod_proof import integer_mod_by_unit_is_identically_zero
+from ._norm_running_var_proof import batch_norm_input_at_running_mean
 from ._norm_zero_weight_proof import norm_input_annihilated_by_zero_weight
 from ._value_predicates import (
     _extrema_operand_dominates,
@@ -2156,6 +2157,14 @@ def _posthoc_value_proof_decision(
         decision = _layer_norm_singleton_shape_decision(layer, layers_to_perturb, args)
         if decision.exempt:
             return decision
+    if batch_norm_input_at_running_mean(layer, layers_to_perturb, args):
+        return PosthocPerturbDecision(
+            True,
+            "batch_norm_input_at_running_mean",
+            "eval-mode batch_norm input equals running_mean exactly in every channel with a "
+            "non-zero weight, so (input - running_mean) is zero and running_var cannot reach "
+            "the output",
+        )
     if norm_input_annihilated_by_zero_weight(layer, layers_to_perturb, args):
         return PosthocPerturbDecision(
             True,
