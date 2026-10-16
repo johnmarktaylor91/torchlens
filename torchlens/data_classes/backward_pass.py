@@ -211,6 +211,24 @@ class BackwardPass:
         return recorded_ops(trace, self.pass_index)
 
     @property
+    def flops_attribution(self) -> Any:
+        """This pass's executed backward FLOPs by GradFn call and forward op (DOCUMENTED-UNSTABLE).
+
+        A ``BackwardFlopsAttribution``: one row per GradFn call (its forward
+        op, counted FLOPs, recompute share) plus an ``unattributed`` bucket
+        naming every call that ran under no recorded node; the rows plus the
+        bucket equal the pass's executed count exactly. ``None`` when the
+        pass has no recorded census on this object.
+        """
+        trace = self.source_trace
+        ops = self.dispatched_ops
+        if trace is None or ops is None:
+            return None
+        from ..report._backward_attribution import attribute_census
+
+        return attribute_census(trace, self, ops)
+
+    @property
     def ordinal_index(self) -> int:
         """Return this pass's 0-based position in ``trace.backward_passes``."""
 

@@ -39,6 +39,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ..capture.flops import DISPATCH_COUNTING_CONVENTION
+from ._backward_attribution import pass_failed
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
@@ -114,23 +115,33 @@ def recompute_observation(trace: Any) -> str:
     """The D23 checkpoint-recompute observation: never guessed.
 
     ``"observed"`` when the L9 checkpoint witness recorded checkpoint
-    context during capture; ``"none_observed"`` when the witness exists
-    and recorded nothing; ``"unknown"`` when no witness is available --
-    and the MFU/HFU classification of duplicate passes stays ``unknown``
-    in that case (a recurrent second pass is model arithmetic; a
-    checkpoint recompute is not; the capture can only tell them apart
-    when it observed checkpoint context).
+    context during capture (a minted checkpoint invocation, or a reentrant
+    checkpoint node in the walked graph); ``"none_observed"`` when the
+    witness exists and recorded nothing; ``"unknown"`` when no witness is
+    available or its evidence is incomplete -- and the MFU/HFU
+    classification of duplicate passes stays ``unknown`` in that case (a
+    recurrent second pass is model arithmetic; a checkpoint recompute is
+    not; the capture can only tell them apart when it observed checkpoint
+    context).
     """
 
     witness = getattr(trace, "checkpoint_invocation_witness", None)
-    if witness is None:
+    if not isinstance(witness, dict):
         return "unknown"
-    count = getattr(witness, "invocation_count", None)
-    if count is None and isinstance(witness, dict):
-        count = witness.get("invocation_count")
-    if count is None:
-        return "unknown"
-    return "observed" if int(count) > 0 else "none_observed"
+    verdict = witness.get("verdict")
+    if verdict == "checkpoint_invocations_observed":
+        return "observed"
+    if verdict == "no_checkpoint_invocation_observed":
+        return "none_observed"
+    if _REENTRANT_CHECKPOINT_FLAG in (witness.get("degrade_flags") or ()):
+        return "observed"
+    return "unknown"
+
+
+#: The witness degrade flag set when the walked graph holds a reentrant
+#: checkpoint node: checkpointing certainly ran, though its tokens were not
+#: minted.
+_REENTRANT_CHECKPOINT_FLAG = "reentrant_node_discovered"
 
 
 #: The executed-backward counting convention (matches FlopCounterMode's).
@@ -154,7 +165,13 @@ class BackwardStatus:
     count (``None`` where unrecorded); ``uncounted_ops`` names every recorded
     op kind outside the counted families with its call count -- never
     zeroed, never estimated. ``measured_seconds`` is per-fire backward
-    timing when the live trace recorded it.
+    timing when the live trace recorded it. ``attributions`` holds one
+    ``BackwardFlopsAttribution`` per counted pass (rows by GradFn call and
+    forward op); ``unattributed_flops`` is the counted work that ran under no
+    recorded node, so the rows plus it equal ``executed_flops`` exactly;
+    ``recompute_flops`` is the part that replayed forward kernels under
+    activation checkpointing (``None`` when the evidence cannot tell). The
+    three are empty or ``None`` outside the ``backward_observed`` state.
     """
 
     state: str
@@ -168,6 +185,9 @@ class BackwardStatus:
     counting_convention: str = EXECUTED_BACKWARD_CONVENTION
     executed_flops_per_pass: tuple[tuple[int, int | None], ...] = ()
     uncounted_ops: tuple[tuple[str, int], ...] = ()
+    attributions: tuple[Any, ...] = ()
+    unattributed_flops: int | None = None
+    recompute_flops: int | None = None
 
     @property
     def status_line(self) -> str:
@@ -200,9 +220,22 @@ class BackwardStatus:
             head
             + f"executed backward compute: {self.executed_flops} FLOPs counted from the "
             + "backward ops that ran (fma2; matmul and convolution families exact)"
+            + self._attribution_clause()
             + self._uncounted_clause()
             + "."
         )
+
+    def _attribution_clause(self) -> str:
+        """Name the unattributed and recompute shares when they are nonzero."""
+
+        parts = []
+        if self.unattributed_flops:
+            parts.append(f"{self.unattributed_flops} unattributed (ran under no recorded node)")
+        if self.recompute_flops:
+            parts.append(f"{self.recompute_flops} recomputed forward under checkpointing")
+        elif self.recompute_flops is None and self.recompute == "observed":
+            parts.append("recompute share unknown")
+        return "; of which " + ", ".join(parts) if parts else ""
 
     def _uncounted_clause(self) -> str:
         """Name the recorded op kinds outside the counted families (bounded)."""
@@ -216,53 +249,96 @@ class BackwardStatus:
         return f"; {len(names)} op kind(s) outside those families not counted: {shown}{tail}"
 
 
-def _executed_backward_count(
-    trace: Any,
-) -> tuple[int | None, str, tuple[tuple[int, int | None], ...], tuple[tuple[str, int], ...]]:
-    """Count the observed backward over its recorded dispatched ops.
+@dataclass(frozen=True)
+class _ExecutedCount:
+    """The observed-state count folded over every pass's attribution."""
 
-    Returns ``(total, reason, per_pass, uncounted)``; ``total`` is ``None``
-    when a pass has no record or a counted-family call could not be read.
+    total: int | None
+    reason: str
+    per_pass: tuple[tuple[int, int | None], ...]
+    uncounted: tuple[tuple[str, int], ...]
+    attributions: tuple[Any, ...]
+    unattributed: int | None
+    recompute: int | None
+
+
+def _executed_backward_count(trace: Any) -> _ExecutedCount:
+    """Count the observed backward pass by pass from its attribution.
+
+    ``total`` is ``None`` when a pass has no record or a counted-family call
+    could not be read. Each pass's count is its attributed rows plus its
+    unattributed bucket, so the total and the rows agree exactly.
     """
 
     per_pass: list[tuple[int, int | None]] = []
     uncounted: dict[str, int] = {}
+    attributions: list[Any] = []
     missing: list[int] = []
-    unreadable: list[str] = []
-    n_ops = 0
+    failed: list[int] = []
+    unreadable: list[int] = []
+    other_trace = 0
     for pass_index, record in sorted((getattr(trace, "backward_pass_logs", {}) or {}).items()):
-        ops = getattr(record, "dispatched_ops", None)
-        if ops is None:
+        attribution = getattr(record, "flops_attribution", None)
+        if attribution is None:
             missing.append(pass_index)
             per_pass.append((pass_index, None))
             continue
-        pass_total = 0
-        for op in ops:
-            n_ops += 1
-            if op.flops is not None:
-                pass_total += int(op.flops)
-            elif op.family == "uncounted":
-                uncounted[op.base_name] = uncounted.get(op.base_name, 0) + 1
-            else:
-                unreadable.append(op.operator)
-        per_pass.append((pass_index, pass_total))
+        attributions.append(attribution)
+        per_pass.append((pass_index, attribution.executed_flops))
+        if pass_failed(record):
+            failed.append(pass_index)
+        elif attribution.executed_flops is None:
+            unreadable.append(pass_index)
+        for name, count in attribution.uncounted_ops:
+            uncounted[name] = uncounted.get(name, 0) + count
+        other_trace += attribution.other_trace_ops or 0
     named = tuple(uncounted.items())
+    unattributed = _sum_known(item.unattributed_flops for item in attributions)
+    recompute = _sum_known(item.recompute_flops for item in attributions)
     if missing:
         listed = ", ".join(str(index) for index in missing)
         reason = (
             f"backward pass(es) {listed} carry no dispatch record on this object "
-            "(a loaded trace, or an implicit pass opened by tensor hooks)"
+            "(an implicit pass opened by tensor hooks, or a trace saved before the "
+            "count was kept)"
         )
-        return None, reason, tuple(per_pass), named
+        return _ExecutedCount(None, reason, tuple(per_pass), named, tuple(attributions), None, None)
+    if failed:
+        listed = ", ".join(str(index) for index in failed)
+        reason = (
+            f"backward pass(es) {listed} raised before finishing: the executed backward was "
+            "not run to completion, so it has no count (the calls dispatched before the "
+            "raise stay on dispatched_ops)"
+        )
+        return _ExecutedCount(None, reason, tuple(per_pass), named, tuple(attributions), None, None)
     if unreadable:
-        reason = f"counted-family call(s) with unreadable shapes: {', '.join(unreadable[:3])}"
-        return None, reason, tuple(per_pass), named
+        listed = ", ".join(str(index) for index in unreadable)
+        reason = f"counted-family call(s) with unreadable shapes in backward pass(es) {listed}"
+        return _ExecutedCount(None, reason, tuple(per_pass), named, tuple(attributions), None, None)
     total = sum(count for _index, count in per_pass if count is not None)
     reason = (
-        f"counted from the {n_ops} ATen call(s) the observed backward dispatched; "
+        "counted from the ATen calls the observed backward dispatched, by GradFn call; "
         f"{len(named)} op kind(s) outside the counted families are named, not zeroed"
     )
-    return total, reason, tuple(per_pass), named
+    if other_trace:
+        reason += (
+            f"; {other_trace} call(s) that ran on another trace's nodes in a shared "
+            "backward belong to that trace"
+        )
+    return _ExecutedCount(
+        total, reason, tuple(per_pass), named, tuple(attributions), unattributed, recompute
+    )
+
+
+def _sum_known(values: Any) -> int | None:
+    """Sum of ints, ``None`` when any value is unknown."""
+
+    total = 0
+    for value in values:
+        if value is None:
+            return None
+        total += int(value)
+    return total
 
 
 def backward_status(trace: Trace) -> BackwardStatus:
@@ -272,6 +348,9 @@ def backward_status(trace: Trace) -> BackwardStatus:
     backward_passes = getattr(trace, "backward_pass_logs", {}) or {}
     per_pass: tuple[tuple[int, int | None], ...] = ()
     uncounted: tuple[tuple[str, int], ...] = ()
+    attributions: tuple[Any, ...] = ()
+    unattributed: int | None = None
+    recompute_flops: int | None = None
     if not grad_enabled_at_capture(trace):
         state = "grad_disabled"
         executed: int | None = 0
@@ -284,7 +363,11 @@ def backward_status(trace: Trace) -> BackwardStatus:
         reason = "grad enabled at capture; no backward pass observed"
     else:
         state = "backward_observed"
-        executed, reason, per_pass, uncounted = _executed_backward_count(trace)
+        counted = _executed_backward_count(trace)
+        executed, reason = counted.total, counted.reason
+        per_pass, uncounted = counted.per_pass, counted.uncounted
+        attributions = counted.attributions
+        unattributed, recompute_flops = counted.unattributed, counted.recompute
         evidence = "unknown" if executed is None else "formula_exact"
     measured: float | None = None
     if backward_passes:
@@ -308,6 +391,9 @@ def backward_status(trace: Trace) -> BackwardStatus:
         recompute=recompute_observation(trace),
         executed_flops_per_pass=per_pass,
         uncounted_ops=uncounted,
+        attributions=attributions,
+        unattributed_flops=unattributed,
+        recompute_flops=recompute_flops,
     )
 
 

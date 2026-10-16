@@ -31,6 +31,7 @@ import torch
 from ...capture.flops import compute_dispatched_op_flops, dispatch_op_family
 from ._aten_capture import _capture_backward_aten
 from ._modes import _TorchLensDispatchMode
+from .tensor_tracking import _current_backward_graph_task_id
 
 _T = TypeVar("_T")
 
@@ -39,6 +40,21 @@ _CENSUS_PAUSED: ContextVar[bool] = ContextVar("torchlens_backward_census_paused"
 _BACKWARD_DISPATCH: weakref.WeakKeyDictionary[Any, dict[int, tuple[DispatchedOp, ...]]]
 _BACKWARD_DISPATCH = weakref.WeakKeyDictionary()
 """Per-trace ``pass_index -> recorded ops`` (session-time; dies with the trace)."""
+
+_WindowRef = tuple["weakref.ReferenceType[Any]", int]
+
+_ACTIVE_WINDOWS: ContextVar[tuple[_WindowRef, ...]] = ContextVar(
+    "torchlens_backward_census_windows", default=()
+)
+
+_BACKWARD_PARTNERS: weakref.WeakKeyDictionary[Any, dict[int, list[_WindowRef]]]
+_BACKWARD_PARTNERS = weakref.WeakKeyDictionary()
+"""Per-trace ``pass_index -> (other trace, its pass)`` sharing one engine run.
+
+Session-time and weakly held on both sides: when one backward reaches the
+nodes of several captures, each capture's census window is open at once,
+and each records the others so attribution can leave their nodes to them.
+"""
 
 #: Plain positional values kept on a record (conv flags, masks); never tensors.
 _PLAIN_TYPES = (bool, int, float, str, type(None))
@@ -67,6 +83,12 @@ class DispatchedOp:
     flops:
         fma2 FLOPs for a counted call, ``0`` for a layout or copy call,
         ``None`` for a call outside the counted families.
+    grad_enabled:
+        Whether autograd grad mode was on when the call dispatched. The
+        engine runs backward kernels with grad mode off unless the pass
+        builds a graph (``create_graph=True``); activation checkpointing
+        replays forward kernels with grad mode on, which is how a replayed
+        forward kernel is told apart from the backward around it.
     """
 
     operator: str
@@ -77,6 +99,7 @@ class DispatchedOp:
     grad_fn_call_ref: tuple[int, int, int] | None
     family: str
     flops: int | None
+    grad_enabled: bool = False
 
     @property
     def base_name(self) -> str:
@@ -116,7 +139,12 @@ def _output_tensors(result: Any) -> tuple[torch.Tensor, ...]:
     return ()
 
 
-def _make_record(func: Any, args: tuple[Any, ...], result: Any) -> DispatchedOp:
+def _make_record(
+    func: Any,
+    args: tuple[Any, ...],
+    result: Any,
+    ref: tuple[int, int, int] | None,
+) -> DispatchedOp:
     """Build the value-free record of one dispatched call."""
 
     operator = str(func)
@@ -136,18 +164,16 @@ def _make_record(func: Any, args: tuple[Any, ...], result: Any) -> DispatchedOp:
             plain.append((position, value))
     outputs = _output_tensors(result)
     output_shapes = tuple(tuple(int(size) for size in out.shape) for out in outputs)
-    from ._aten_capture import _ACTIVE_BACKWARD_GRAD_FN_REFS
-
-    refs = _ACTIVE_BACKWARD_GRAD_FN_REFS.get()
     return DispatchedOp(
         operator=operator,
         input_shapes=tuple(shapes),
         input_dtypes=tuple(dtypes),
         output_shapes=output_shapes,
         output_dtypes=tuple(str(out.dtype) for out in outputs),
-        grad_fn_call_ref=refs[-1] if refs else None,
+        grad_fn_call_ref=ref,
         family=dispatch_op_family(base),
         flops=compute_dispatched_op_flops(base, shapes, output_shapes, plain),
+        grad_enabled=torch.is_grad_enabled(),
     )
 
 
@@ -159,6 +185,7 @@ class _BackwardCensusMode(_TorchLensDispatchMode):
 
         super().__init__()
         self._sink = sink
+        self._task_of: dict[tuple[int, int, int], int | None] = {}
 
     def __torch_dispatch__(
         self,
@@ -171,8 +198,41 @@ class _BackwardCensusMode(_TorchLensDispatchMode):
 
         result = func(*args, **(kwargs or {}))
         if not _CENSUS_PAUSED.get():
-            self._sink.append(_make_record(func, args, result))
+            self._sink.append(_make_record(func, args, result, self._executing_ref()))
         return result
+
+    def _executing_ref(self) -> tuple[int, int, int] | None:
+        """The GradFn call marker of the node executing this call, or ``None``.
+
+        The marker stack can hold a finished node's marker when several
+        captures hook the same node (their pre- and post-hooks do not nest),
+        so the marker is matched to the node autograd reports as executing.
+        A call made by a node no capture walked belongs to none of them,
+        except inside an engine run nested under a walked node (a reentrant
+        checkpoint's inner backward), whose calls are that node's work.
+        """
+
+        from ._aten_capture import _ACTIVE_BACKWARD_GRAD_FN_REFS
+
+        refs = _ACTIVE_BACKWARD_GRAD_FN_REFS.get()
+        if not refs:
+            return None
+        current = getattr(torch._C, "_current_autograd_node", None)
+        if current is None:
+            return refs[-1]
+        node = current()
+        task = _current_backward_graph_task_id()
+        if node is not None:
+            node_id = id(node)
+            for ref in reversed(refs):
+                if ref[0] == node_id:
+                    self._task_of.setdefault(ref, task)
+                    return ref
+        top = refs[-1]
+        outer_task = self._task_of.get(top)
+        if node is not None and task is not None and outer_task not in (None, task):
+            return top
+        return None
 
 
 @contextmanager
@@ -195,13 +255,39 @@ def backward_window(trace: Any, pass_index: int) -> Iterator[None]:
     from ._aten_capture import _ACTIVE_BACKWARD_GRAD_FN_REFS
 
     sink: list[DispatchedOp] = []
+    window = (weakref.ref(trace), int(pass_index))
+    open_windows = _ACTIVE_WINDOWS.get()
+    _record_partners(trace, window, open_windows)
+    windows_token = _ACTIVE_WINDOWS.set((*open_windows, window))
     marker_token = _ACTIVE_BACKWARD_GRAD_FN_REFS.set(())
     try:
         with _capture_backward_aten(trace, pass_index), _BackwardCensusMode(sink):
             yield
     finally:
         _ACTIVE_BACKWARD_GRAD_FN_REFS.reset(marker_token)
+        _ACTIVE_WINDOWS.reset(windows_token)
         _BACKWARD_DISPATCH.setdefault(trace, {})[pass_index] = tuple(sink)
+
+
+def _record_partners(trace: Any, window: _WindowRef, open_windows: tuple[_WindowRef, ...]) -> None:
+    """Pair this pass with every other trace's pass already open in this engine run."""
+
+    for other_ref, other_pass in open_windows:
+        other = other_ref()
+        if other is None or other is trace:
+            continue
+        _BACKWARD_PARTNERS.setdefault(trace, {}).setdefault(window[1], []).append(
+            (other_ref, other_pass)
+        )
+        _BACKWARD_PARTNERS.setdefault(other, {}).setdefault(other_pass, []).append(window)
+
+
+def shared_backward_partners(trace: Any, pass_index: int) -> tuple[tuple[Any, int], ...]:
+    """Live ``(trace, pass_index)`` pairs that shared this pass's engine run."""
+
+    pairs = (_BACKWARD_PARTNERS.get(trace) or {}).get(int(pass_index), ())
+    live = ((ref(), other_pass) for ref, other_pass in pairs)
+    return tuple((other, other_pass) for other, other_pass in live if other is not None)
 
 
 def outside_census(fn: Callable[..., _T], *args: Any) -> _T:
@@ -241,4 +327,10 @@ def recorded_ops(trace: Any, pass_index: int) -> tuple[DispatchedOp, ...] | None
     return by_pass.get(int(pass_index))
 
 
-__all__ = ["DispatchedOp", "backward_window", "outside_census", "recorded_ops"]
+__all__ = [
+    "DispatchedOp",
+    "backward_window",
+    "outside_census",
+    "recorded_ops",
+    "shared_backward_partners",
+]
