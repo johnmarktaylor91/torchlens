@@ -1045,3 +1045,83 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
 recorded: 2026-10-03T04:40:41.423061+00:00
+---
+generator: tests/capture_oracle (train_batchnorm__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: batch-2 designed changes, every field diffed against the old golden: (1) zero backward FLOPs on outputs without an autograd node (c32ecc740, 270382abc) turn flops_backward from populated to defaulted_zero on no-grad ops; (2) a default trace is a pure observer (df04e924b) and puts back the BatchNorm running stats, so train_batchnorm side_effects record value_changed False and one more version bump from the write-back. No other field changes; the other 21 goldens reproduce byte-exact on this tip.
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1f28bc702f6d77fddc13780c5a65daad2163aa6d (dirty)
+recorded: 2026-10-16T03:09:09.772797+00:00
+---
+generator: tests/capture_oracle (train_batchnorm__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: batch-2 designed changes, every field diffed against the old golden: (1) zero backward FLOPs on outputs without an autograd node (c32ecc740, 270382abc) turn flops_backward from populated to defaulted_zero on no-grad ops; (2) a default trace is a pure observer (df04e924b) and puts back the BatchNorm running stats, so train_batchnorm side_effects record value_changed False and one more version bump from the write-back. No other field changes; the other 21 goldens reproduce byte-exact on this tip.
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1f28bc702f6d77fddc13780c5a65daad2163aa6d (dirty)
+recorded: 2026-10-16T03:09:14.976010+00:00
+---
+generator: tests/capture_oracle (train_batchnorm__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: batch-2 designed changes, every field diffed against the old golden: (1) zero backward FLOPs on outputs without an autograd node (c32ecc740, 270382abc) turn flops_backward from populated to defaulted_zero on no-grad ops; (2) a default trace is a pure observer (df04e924b) and puts back the BatchNorm running stats, so train_batchnorm side_effects record value_changed False and one more version bump from the write-back. No other field changes; the other 21 goldens reproduce byte-exact on this tip.
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1f28bc702f6d77fddc13780c5a65daad2163aa6d (dirty)
+recorded: 2026-10-16T03:09:20.249583+00:00
+---
+generator: tests/capture_oracle (conditional__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: batch-2 designed changes, every field diffed against the old golden: (1) zero backward FLOPs on outputs without an autograd node (c32ecc740, 270382abc) turn flops_backward from populated to defaulted_zero on no-grad ops; (2) a default trace is a pure observer (df04e924b) and puts back the BatchNorm running stats, so train_batchnorm side_effects record value_changed False and one more version bump from the write-back. No other field changes; the other 21 goldens reproduce byte-exact on this tip.
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1f28bc702f6d77fddc13780c5a65daad2163aa6d (dirty)
+recorded: 2026-10-16T03:09:25.625566+00:00
+---
+generator: tests/capture_oracle (conditional__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: batch-2 designed changes, every field diffed against the old golden: (1) zero backward FLOPs on outputs without an autograd node (c32ecc740, 270382abc) turn flops_backward from populated to defaulted_zero on no-grad ops; (2) a default trace is a pure observer (df04e924b) and puts back the BatchNorm running stats, so train_batchnorm side_effects record value_changed False and one more version bump from the write-back. No other field changes; the other 21 goldens reproduce byte-exact on this tip.
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1f28bc702f6d77fddc13780c5a65daad2163aa6d (dirty)
+recorded: 2026-10-16T03:09:30.859803+00:00
+---
+generator: tests/capture_oracle (in_place__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: batch-2 designed changes, every field diffed against the old golden: (1) zero backward FLOPs on outputs without an autograd node (c32ecc740, 270382abc) turn flops_backward from populated to defaulted_zero on no-grad ops; (2) a default trace is a pure observer (df04e924b) and puts back the BatchNorm running stats, so train_batchnorm side_effects record value_changed False and one more version bump from the write-back. No other field changes; the other 21 goldens reproduce byte-exact on this tip.
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1f28bc702f6d77fddc13780c5a65daad2163aa6d (dirty)
+recorded: 2026-10-16T03:09:36.068690+00:00
+---
+generator: tests/capture_oracle (in_place__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: batch-2 designed changes, every field diffed against the old golden: (1) zero backward FLOPs on outputs without an autograd node (c32ecc740, 270382abc) turn flops_backward from populated to defaulted_zero on no-grad ops; (2) a default trace is a pure observer (df04e924b) and puts back the BatchNorm running stats, so train_batchnorm side_effects record value_changed False and one more version bump from the write-back. No other field changes; the other 21 goldens reproduce byte-exact on this tip.
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1f28bc702f6d77fddc13780c5a65daad2163aa6d (dirty)
+recorded: 2026-10-16T03:09:41.182914+00:00
+---
+generator: tests/capture_oracle (mutating_pre_hook__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: batch-2 designed changes, every field diffed against the old golden: (1) zero backward FLOPs on outputs without an autograd node (c32ecc740, 270382abc) turn flops_backward from populated to defaulted_zero on no-grad ops; (2) a default trace is a pure observer (df04e924b) and puts back the BatchNorm running stats, so train_batchnorm side_effects record value_changed False and one more version bump from the write-back. No other field changes; the other 21 goldens reproduce byte-exact on this tip.
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1f28bc702f6d77fddc13780c5a65daad2163aa6d (dirty)
+recorded: 2026-10-16T03:09:46.487626+00:00
+---
+generator: tests/capture_oracle (mutating_pre_hook__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: batch-2 designed changes, every field diffed against the old golden: (1) zero backward FLOPs on outputs without an autograd node (c32ecc740, 270382abc) turn flops_backward from populated to defaulted_zero on no-grad ops; (2) a default trace is a pure observer (df04e924b) and puts back the BatchNorm running stats, so train_batchnorm side_effects record value_changed False and one more version bump from the write-back. No other field changes; the other 21 goldens reproduce byte-exact on this tip.
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1f28bc702f6d77fddc13780c5a65daad2163aa6d (dirty)
+recorded: 2026-10-16T03:09:51.882834+00:00
+---
+generator: tests/capture_oracle (failing_conditional__trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: batch-2 designed changes, every field diffed against the old golden: (1) zero backward FLOPs on outputs without an autograd node (c32ecc740, 270382abc) turn flops_backward from populated to defaulted_zero on no-grad ops; (2) a default trace is a pure observer (df04e924b) and puts back the BatchNorm running stats, so train_batchnorm side_effects record value_changed False and one more version bump from the write-back. No other field changes; the other 21 goldens reproduce byte-exact on this tip.
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1f28bc702f6d77fddc13780c5a65daad2163aa6d (dirty)
+recorded: 2026-10-16T03:09:57.166218+00:00

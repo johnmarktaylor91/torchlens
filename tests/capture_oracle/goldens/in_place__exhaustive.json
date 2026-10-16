@@ -218,7 +218,7 @@
             "func_call_id": "populated",
             "function.arg_names": "populated",
             "function.code_context": "populated",
-            "function.flops_backward": "populated",
+            "function.flops_backward": "defaulted_zero",
             "function.flops_forward": "populated",
             "function.func": "populated",
             "function.func_autocast_state": "populated",
@@ -362,7 +362,7 @@
             "func_call_id": "populated",
             "function.arg_names": "populated",
             "function.code_context": "populated",
-            "function.flops_backward": "populated",
+            "function.flops_backward": "defaulted_zero",
             "function.flops_forward": "populated",
             "function.func": "populated",
             "function.func_autocast_state": "populated",
@@ -740,20 +740,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 496808,
+      "python_peak_memory_median_bytes": 532927,
       "sample_count": 3,
       "torch_version": "2.13.0+cpu",
-      "wall_time_median_ms": 50.55933690164238
+      "wall_time_median_ms": 48.7443758174777
     }
   },
   "sha256_chunks": [
-    "a691b5db",
-    "c23ae225",
-    "37cac2ba",
-    "8567cc3f",
-    "8b35500f",
-    "50bc32b2",
-    "4dfc7265",
-    "e13b8ce0"
+    "71dd378c",
+    "676748bb",
+    "796ff7a9",
+    "ddbb7bb1",
+    "3653cde7",
+    "3139b84e",
+    "add099a5",
+    "64a3f64d"
   ]
 }

@@ -213,7 +213,7 @@
             "func_call_id": "populated",
             "function.arg_names": "defaulted_empty",
             "function.code_context": "populated",
-            "function.flops_backward": "populated",
+            "function.flops_backward": "defaulted_zero",
             "function.flops_forward": "populated",
             "function.func": "populated",
             "function.func_autocast_state": "populated",
@@ -357,7 +357,7 @@
             "func_call_id": "populated",
             "function.arg_names": "populated",
             "function.code_context": "populated",
-            "function.flops_backward": "populated",
+            "function.flops_backward": "defaulted_zero",
             "function.flops_forward": "populated",
             "function.func": "populated",
             "function.func_autocast_state": "populated",
@@ -498,7 +498,7 @@
             "func_call_id": "populated",
             "function.arg_names": "defaulted_empty",
             "function.code_context": "populated",
-            "function.flops_backward": "populated",
+            "function.flops_backward": "defaulted_zero",
             "function.flops_forward": "populated",
             "function.func": "populated",
             "function.func_autocast_state": "populated",
@@ -642,7 +642,7 @@
             "func_call_id": "populated",
             "function.arg_names": "populated",
             "function.code_context": "populated",
-            "function.flops_backward": "populated",
+            "function.flops_backward": "defaulted_zero",
             "function.flops_forward": "populated",
             "function.func": "populated",
             "function.func_autocast_state": "populated",
@@ -1082,20 +1082,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 607258,
+      "python_peak_memory_median_bytes": 646658,
       "sample_count": 3,
       "torch_version": "2.13.0+cpu",
-      "wall_time_median_ms": 67.638358916156
+      "wall_time_median_ms": 84.49498284608126
     }
   },
   "sha256_chunks": [
-    "68e3bb64",
-    "e8bbfe42",
-    "96d42e86",
-    "9933c5f9",
-    "3df10f7b",
-    "be487167",
-    "9f24bba7",
-    "1b8010fc"
+    "38c9c4d6",
+    "642ccd3a",
+    "72b722dc",
+    "852a1a88",
+    "bf9c0040",
+    "1ac5f733",
+    "b7cf0539",
+    "1e7935c1"
   ]
 }

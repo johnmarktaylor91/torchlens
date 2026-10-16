@@ -71,7 +71,7 @@
             "func_call_id": "populated",
             "function.arg_names": "populated",
             "function.code_context": "populated",
-            "function.flops_backward": "populated",
+            "function.flops_backward": "defaulted_zero",
             "function.flops_forward": "populated",
             "function.func": "populated",
             "function.func_autocast_state": "populated",
@@ -952,14 +952,14 @@
             "after": {
               "dtype": "int64",
               "sha256_chunks": [
-                "7c9fa136",
-                "d4413fa6",
-                "173637e8",
-                "83b6998d",
-                "32e1d675",
-                "f88cddff",
-                "9dcbcf33",
-                "1820f4b8"
+                "af5570f5",
+                "a1810b7a",
+                "f78caf4b",
+                "c70a660f",
+                "0df51e42",
+                "baf91d4d",
+                "e5b2328d",
+                "e0e83dfc"
               ],
               "shape": []
             },
@@ -977,22 +977,22 @@
               ],
               "shape": []
             },
-            "numeric_delta": 1,
-            "value_changed": true,
-            "version_delta": 1
+            "numeric_delta": 0,
+            "value_changed": false,
+            "version_delta": 2
           },
           "bn.running_mean": {
             "after": {
               "dtype": "float32",
               "sha256_chunks": [
-                "6db1ac58",
-                "c6987e1d",
-                "45dbd82a",
-                "b5f79d68",
-                "1df3eb2f",
-                "ca407dcb",
-                "fcd56396",
-                "740afd69"
+                "af5570f5",
+                "a1810b7a",
+                "f78caf4b",
+                "c70a660f",
+                "0df51e42",
+                "baf91d4d",
+                "e5b2328d",
+                "e0e83dfc"
               ],
               "shape": [
                 2
@@ -1015,21 +1015,21 @@
               ]
             },
             "numeric_delta": null,
-            "value_changed": true,
+            "value_changed": false,
             "version_delta": 0
           },
           "bn.running_var": {
             "after": {
               "dtype": "float32",
               "sha256_chunks": [
-                "aeecc9e4",
-                "1363bc5a",
-                "bcc65db7",
-                "ebeba5cb",
-                "aacf6fa6",
-                "b0c81ae7",
-                "da47befb",
-                "6edc6084"
+                "80b8fd6d",
+                "60fa85fd",
+                "14a38b52",
+                "95cb92ab",
+                "d80dfec5",
+                "ca406c9f",
+                "969609a7",
+                "9d36809d"
               ],
               "shape": [
                 2
@@ -1052,11 +1052,11 @@
               ]
             },
             "numeric_delta": null,
-            "value_changed": true,
+            "value_changed": false,
             "version_delta": 0
           }
         },
-        "buffer_mutation_count": 1,
+        "buffer_mutation_count": 2,
         "forward_invocations": 1,
         "inplace_op_count": 1,
         "input_value_after": {
@@ -1126,20 +1126,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 676633,
+      "python_peak_memory_median_bytes": 719475,
       "sample_count": 3,
       "torch_version": "2.13.0+cpu",
-      "wall_time_median_ms": 87.8022579709068
+      "wall_time_median_ms": 109.6877628006041
     }
   },
   "sha256_chunks": [
-    "20bc2f0b",
-    "eae81bc3",
-    "e1165f0a",
-    "7864fc85",
-    "b54565db",
-    "9cc4ab0a",
-    "553a4257",
-    "a9add595"
+    "60447c23",
+    "0f33f3f7",
+    "93ccce35",
+    "12420eeb",
+    "2e69e33b",
+    "7bce50c9",
+    "39bdb2ef",
+    "bfda2276"
   ]
 }
