@@ -106,6 +106,21 @@ def test_a_latent_registered_at_a_selector_site_saves_every_home() -> None:
         tl.bridge.sae.unregister("both")
 
 
+def test_a_structural_facet_save_keeps_every_op() -> None:
+    """``tl.facet("out")`` is served by every op, so its save keeps every op."""
+
+    torch.manual_seed(0)
+    model, x = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval(), torch.randn(2, 4)
+    trace = tl.trace(model, x, save=tl.facet("out"))
+    full = tl.trace(model, x)
+    assert _saved(trace) == _saved(full)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        table = trace.resolve_sites(tl.facet("out"), max_fanout=100)
+    for label, facet in zip(table.labels(), table):
+        torch.testing.assert_close(facet.value, full[label].out, **TOL)
+
+
 @pytest.mark.parametrize("make", [lambda: tl.head(0), lambda: tl.facet("q")], ids=["head", "facet"])
 def test_a_facet_save_on_a_model_without_the_facet_warns_it_matched_nothing(make) -> None:
     torch.manual_seed(0)

@@ -1026,6 +1026,12 @@ class FacetSelector(BaseSelector):
         return hash(repr(self))
 
 
+def _is_op_event(ctx: Any) -> bool:
+    """Return whether a capture-time record context is an operation event."""
+
+    return getattr(ctx, "kind", "op") == "op"
+
+
 class _FacetSaveSelector(WhereSelector):
     """The predicate selector ``trace(save=<facet selector>)`` runs, spelled as the facet."""
 
@@ -1071,6 +1077,12 @@ def _facet_save_predicate(selector: FacetSelector) -> BaseSelector:
         return home
 
     names = frozenset(("q", "k", "v") if selector.name is None else (selector.name,))
+    from ..semantic.facets import _REGISTRY
+
+    if not any(names & set(recipe.declared_facets) for recipe in _REGISTRY):
+        # No recipe declares the facet: it is structural (``out``, an output
+        # path), served by every op record, so every op is a possible home.
+        return _FacetSaveSelector(_is_op_event, name_hint=repr(selector))
     declares: dict[tuple[int, str], bool] = {}
 
     def _declares(address: str) -> bool:
@@ -1091,7 +1103,7 @@ def _facet_save_predicate(selector: FacetSelector) -> BaseSelector:
         return declares[key]
 
     def _recipe_interior(ctx: Any) -> bool:
-        if getattr(ctx, "kind", "op") != "op":
+        if not _is_op_event(ctx):
             return False
         return any(
             (selector.module_address is None or frame.address == selector.module_address)
