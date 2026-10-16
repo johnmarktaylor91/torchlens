@@ -268,6 +268,13 @@
 - **fastlog**: `tl.record(..., generate_kwargs={...})` (documented-unstable) records chosen sites at
   every forward of one cached Hugging Face `generate()` call, each decode step holding only its new
   position; returns a `GenerationRecording`.
+- **bridge**: SAE latents are a facet family: `tl.bridge.sae.register(name, sae, site=...)` makes
+  `tl.facet(name).latent(k)` address latent `k` wherever a head selector works (`Trace.set`,
+  `attach_hooks`, `do`, `fork().do`); an edit adds the decoder-space change of the edited latents
+  and keeps the SAE's reconstruction error; `trace[site].facets[f"{name}[{k}]"]` reads it.
+  `tl.attribution.SiteTarget(layer, sae=sae, unit=k)` attributes an SAE latent.
+  `tl.bridge.sae.splice(..., log_latents=True)` puts the latents in the spliced trace as nodes
+  (`SpliceResult.latents_site`).
 
 ### Bug Fixes
 
@@ -356,6 +363,10 @@
 - **capture**: On macOS (and any host without procfs) the CPU peak-memory readers treated
   `ru_maxrss` as kibibytes, so `Trace.backward_peak_memory` for a CPU backward and
   `Trace.forward_peak_memory_pair["resident"]` were overstated 1024 times; they now read bytes.
+- **intervention**: A facet write (a head selector or an SAE latent) no longer fails with
+  `module_call_ambiguous` on a model that calls one module more than once; scoping a facet selector
+  to such a module with `.in_module(...)` refuses with `facet_selector_module_multi_call` and names
+  each call's read address.
 
 ### Performance Improvements
 
