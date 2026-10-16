@@ -9,11 +9,13 @@ phase-local peaks.
 
 from __future__ import annotations
 
+import gc
+from typing import Any
+
 import pytest
 import torch
 from torch import nn
 
-from benchmarks import perf_runner
 from benchmarks.perf_gate import compare_gate_payloads, normalize_gate_payload
 from benchmarks.perf_runner import (
     _operation,
@@ -341,39 +343,57 @@ def test_run_memory_detects_transient_inside_measured_call() -> None:
     )
 
 
-@pytest.mark.serial
-def test_run_memory_phase_peak_survives_flat_kernel_high_water(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A transient registers even when memory pressure keeps ``VmHWM`` flat.
+class _Cycle:
+    """A self-referencing holder: only the cyclic garbage collector frees it."""
 
-    Under memory pressure the kernel can reclaim the process's file-backed
-    pages (and swap anonymous ones) while the measured call runs, so total RSS
-    and its high water stay flat with a transient live. Force that condition
-    by pinning the kernel high-water reading: the phase peak must still see
-    the transient through the sampled anonymous footprint.
+    def __init__(self, size: int) -> None:
+        self.me = self
+        self.buffer = bytearray(size)
+        for index in range(0, size, 4096):
+            self.buffer[index] = 1
+
+
+@pytest.mark.serial
+def test_run_memory_detects_transient_when_garbage_is_collected_mid_phase() -> None:
+    """Garbage resident at the phase start cannot hide a transient by being freed mid-phase.
+
+    In a long-lived process (a test worker that ran other tests first) the
+    process can hold unreachable reference cycles when the memory pass starts.
+    If a collection frees them inside the measured call, resident memory drops
+    by their size, and a transient no larger than that never lifts the high
+    water above the phase-start level: the phase peak read 0.0. Here the
+    measured call itself forces that collection; automatic collection is off
+    so the garbage is still resident when the memory pass starts.
     """
 
-    def _touch(buffer: bytearray) -> None:
-        for index in range(0, len(buffer), 4096):
-            buffer[index] = 1
-
     transient_mb = 128
+    was_enabled = gc.isenabled()
+    gc.disable()
+    try:
+        metrics = _run_memory_after_cyclic_garbage(transient_mb)
+    finally:
+        if was_enabled:
+            gc.enable()
 
-    def _transient() -> None:
-        buffer = bytearray(transient_mb * 1024 * 1024)
-        _touch(buffer)
-        del buffer
-
-    flat = perf_runner._read_rss_high_water()
-    monkeypatch.setattr(perf_runner, "_read_rss_high_water", lambda: flat)
-    metrics = _run_memory(_transient, "cpu", memory_runs=3)
-
-    if perf_runner._read_anon_footprint() is None:
-        pytest.skip("anonymous footprint unavailable on this platform")
-    assert metrics["phase_rss_high_water_kernel_delta_mb"] == 0.0
+    if not metrics.get("rss_high_water_phase_local"):
+        pytest.skip("RSS high-water reset unavailable on this platform")
     observed = metrics["phase_rss_high_water_delta_mb"]
     assert observed >= transient_mb * 0.8, (
-        f"phase-local peak {observed:.1f} MB missed a {transient_mb} MB transient "
-        "while the kernel high water stayed flat"
+        f"phase-local RSS peak {observed:.1f} MB missed a {transient_mb} MB transient "
+        "after garbage held at the phase start was collected inside the measured call"
     )
+
+
+def _run_memory_after_cyclic_garbage(transient_mb: int) -> dict[str, Any]:
+    """Leave 256 MiB of cyclic garbage, then measure a call that collects it and allocates."""
+
+    _Cycle(256 * 1024 * 1024)  # dropped at once: 256 MiB of cyclic garbage
+
+    def _collect_then_transient() -> None:
+        gc.collect()
+        buffer = bytearray(transient_mb * 1024 * 1024)
+        for index in range(0, len(buffer), 4096):
+            buffer[index] = 1
+        del buffer
+
+    return _run_memory(_collect_then_transient, "cpu", memory_runs=1)
