@@ -2691,3 +2691,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 42d7e57b65701866886192acdf1f2dbcfe74a8b1 (dirty)
 recorded: 2026-10-15T21:56:54.927920+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: FLOPS-1: BackwardPass.dispatched_ops reads pass_index and source_trace (one new consumer site each in data_classes/backward_pass.py)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 17292aac2f0419d1f43e5c68e8c8345560c25105 (dirty)
+recorded: 2026-10-16T00:41:44.526233+00:00
