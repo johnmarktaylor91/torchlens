@@ -303,3 +303,29 @@ def test_session_end_walk_does_not_grow_with_the_step_count(monkeypatch) -> None
 
     assert len(per_pass) == 16
     assert len(set(per_pass[1:])) == 1, per_pass
+
+
+@pytest.mark.parametrize(
+    ("record_kwargs", "extra", "fragment"),
+    [
+        ({"halt": lambda ctx: False}, {}, "halted forward"),
+        ({"on_forward_error": "return_partial"}, {}, "partial forward-error modes"),
+        ({}, {"prompt_lookup_num_tokens": 2}, "assisted decoding"),
+    ],
+)
+def test_halt_partial_modes_and_assisted_decoding_refuse(
+    record_kwargs: dict[str, object], extra: dict[str, object], fragment: str
+) -> None:
+    model = build_distilgpt2("eager")
+
+    error = _refusal(
+        lambda: tl.record(
+            model,
+            PROMPT,
+            save=tl.module("transformer.ln_f"),
+            generate_kwargs={**_greedy(2), **extra},
+            **record_kwargs,
+        )
+    )
+
+    assert fragment in error.fields["reason"]
