@@ -643,3 +643,66 @@ def test_every_fence_bearing_doc_page_is_executed_or_reason_exempt() -> None:
         f"stale DOC_FENCE_EXEMPT row(s): {sorted(stale & set(DOC_FENCE_EXEMPT))} "
         "-- the page lost its fences or moved; delete the row"
     )
+
+
+#: Fences heavy-class by measurement (beyond the cold ``torch.compile`` fences),
+#: keyed by page and a line unique to the fence, since block indexes shift as
+#: pages grow. Measured single-threaded and serial on the gate worker at a
+#: 2.1-2.2x slowdown factor, each charged 10.0-10.7 s (about 4.7 s at 1x) against
+#: the reference-views family's 23-24 s aggregate 5s-tier budget there, while
+#: every other fence in the family stayed under 6.2 s (under 0.7 s for all but two).
+MEASURED_HEAVY_FENCES: frozenset[tuple[str, str]] = frozenset(
+    {
+        # The component-graph example patches a circuit into every receiver of a
+        # two-layer GPT-2 in one patch_edges call (the same fence is the heavy
+        # tests/test_circ1_component_graph.py::test_reference_doc_example_runs).
+        ("reference/mechinterp.md", "# A circuit runs as one patch_edges call"),
+        # edge_scores on a one-layer GPT-2, then a causal_audit of its six
+        # largest edges with random draws.
+        ("reference/attribution.md", "largest = sorted(claim.rows()"),
+    }
+)
+
+
+def _is_measured_heavy_fence(file_name: str, code: str) -> bool:
+    """Return whether one docs fence is in ``MEASURED_HEAVY_FENCES``."""
+
+    return any(page == file_name and line in code for page, line in MEASURED_HEAVY_FENCES)
+
+
+def _classify_measured_heavy_fences(*tests: Any) -> None:
+    """Mark each family's measured-heavy fences HEAVY at collection.
+
+    The page-group families build their params when they are decorated; this
+    adds the ``heavy`` mark to the measured fences' params in place, so the
+    mark selects (``-m "not heavy"`` deselects them) and resolves the 20s tier,
+    which takes them out of their family's aggregate 5s-tier budget.
+    """
+
+    for test in tests:
+        for mark in test.pytestmark:
+            if mark.name != "parametrize":
+                continue
+            params = mark.args[1]
+            params[:] = [
+                pytest.param(*param.values, marks=(*param.marks, pytest.mark.heavy), id=param.id)
+                if _is_measured_heavy_fence(param.values[0], param.values[2])
+                else param
+                for param in params
+            ]
+
+
+_classify_measured_heavy_fences(
+    test_doc_python_blocks_run_guides,
+    test_doc_python_blocks_run_reference_tooling,
+    test_doc_python_blocks_run_reference_views,
+)
+
+
+def test_every_measured_heavy_fence_names_exactly_one_executed_fence() -> None:
+    """A measured-heavy row that stops matching would leave its fence unclassified."""
+
+    blocks = _iter_python_blocks()
+    for page, line in sorted(MEASURED_HEAVY_FENCES):
+        matches = [index for name, index, code in blocks if name == page and line in code]
+        assert len(matches) == 1, f"{page}: {line!r} matches fences {matches}, expected one"
