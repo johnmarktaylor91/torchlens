@@ -79,11 +79,6 @@ BEYOND_FCM: dict[str, tuple[int, int]] = {
     "SketchLattice": (187_392, 374_784),
 }
 
-#: Entries whose captured backward raises inside TorchLens's tensor gradient
-#: hook (a ``None`` gradient reaches it); a TorchLens defect handed on, not
-#: fixed in this module's files.
-NONE_GRAD_HOOK = {"SubspaceNet", "SPCA-Net", "SketchLattice"}
-
 #: The entry whose own backward fails in eval mode (an in-place write the
 #: gradient needs); its forward is still checked.
 BACKWARD_RAISES = {"KUIELAB-MDX-Net (ConvTDFNet)"}
@@ -196,13 +191,6 @@ def _forward_family_flops(trace: Any) -> int | None:
 
 
 def _entry_param(entry: CorpusEntry) -> Any:
-    if entry.id in NONE_GRAD_HOOK:
-        reason = "TorchLens tensor gradient hook receives a None gradient"
-        return pytest.param(
-            entry,
-            id=entry.id,
-            marks=pytest.mark.xfail(raises=AttributeError, strict=True, reason=reason),
-        )
     return pytest.param(entry, id=entry.id)
 
 
