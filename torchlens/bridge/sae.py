@@ -30,6 +30,7 @@ from .._errors import InvalidArgumentError
 from ..errors import TorchLensWarning
 from . import _sae_metrics
 from ._sae_export import write_delphi, write_sae_dashboard
+from ._sae_latents import logged_splice_trace, register, unregister
 from ._utils import resolve_one_site
 
 if TYPE_CHECKING:
@@ -138,6 +139,21 @@ class _SAEReconstruction(nn.Module):
         _latents, _edited, reconstruction = _encode_decode(
             self._sae, out, self._latents_edit, self._start
         )
+        return reconstruction
+
+    def logged(
+        self, out: torch.Tensor, keep_latents: Callable[[torch.Tensor], None]
+    ) -> torch.Tensor:
+        """Return the reconstruction of ``out``, handing the encoder output to ``keep_latents``.
+
+        The same arithmetic as ``forward``, run under capture by the logged
+        splice so every op is a trace node.
+        """
+
+        latents, _edited, reconstruction = _encode_decode(
+            self._sae, out, self._latents_edit, self._start
+        )
+        keep_latents(latents)
         return reconstruction
 
 
@@ -293,6 +309,10 @@ class SpliceResult:
         in nats.
     unavailable_metrics:
         Metric name to the reason it is ``None`` or ``nan``.
+    latents_site:
+        With ``log_latents=True``, the label of the latents node in
+        ``spliced`` (the encoder output, between the encoder and decoder
+        ops); ``None`` otherwise.
     """
 
     site: str
@@ -317,6 +337,7 @@ class SpliceResult:
     ce_loss_recovered: float | None
     kl_divergence: float | None
     unavailable_metrics: Mapping[str, str]
+    latents_site: str | None = None
 
 
 def _tensor_outputs(log: Any) -> tuple[torch.Tensor, ...]:
@@ -668,7 +689,7 @@ def _output_deltas(
     return float(flat_delta.norm()), peak
 
 
-def splice(  # noqa: PLR0913 -- the public experiment door: each keyword is one documented splice input (site, SAE, latent edit, next-token ids, BOS handling, latent retention)
+def splice(  # noqa: PLR0913 -- the public experiment door: each keyword is one documented splice input (site, SAE, latent edit, next-token ids, BOS handling, latent retention, latent logging)
     model_or_log: Any,
     inputs: Any = None,
     *,
@@ -678,6 +699,7 @@ def splice(  # noqa: PLR0913 -- the public experiment door: each keyword is one 
     tokens: torch.Tensor | None = None,
     exclude_bos: bool = False,
     keep_latents: bool = True,
+    log_latents: bool = False,
 ) -> SpliceResult:
     """Run the standard SAE splice experiment at one site.
 
@@ -715,6 +737,14 @@ def splice(  # noqa: PLR0913 -- the public experiment door: each keyword is one 
     keep_latents:
         Keep the latents in the result (default). Past 256 MiB a warning
         fires once per session; ``keep_latents=False`` drops them.
+    log_latents:
+        Off by default. On, ``spliced`` is a fresh capture of the live model
+        with the SAE run inside it as ordinary ops, so its encoder ops, the
+        latents and its decoder ops are trace nodes between the site and its
+        consumers (``result.latents_site`` names the latents node). The
+        spliced outputs are the same as with it off. Needs the live-model
+        door (``splice(model, inputs, ...)``) and a site some module call
+        returns.
 
     Returns
     -------
@@ -729,10 +759,20 @@ def splice(  # noqa: PLR0913 -- the public experiment door: each keyword is one 
     InvalidArgumentError
         If ``tokens`` matches no model output (``sae_splice_tokens_mismatch``)
         or ``exclude_bos`` meets a site without a sequence axis
-        (``sae_splice_bos_needs_sequence_axis``).
+        (``sae_splice_bos_needs_sequence_axis``); with ``log_latents=True``,
+        a Trace door (``sae_splice_logged_needs_live_model``) or a site no
+        single module call returns (``bridge_module_site_*``).
     """
 
     _require_codec(sae)
+    if log_latents and not isinstance(model_or_log, nn.Module):
+        raise InvalidArgumentError(
+            "splice(..., log_latents=True) captures the live model again with the SAE inside "
+            "it, so it needs the model and its inputs; it got a Trace",
+            code="sae_splice_logged_needs_live_model",
+            remedy="call splice(model, inputs, site=..., sae=..., log_latents=True) with the "
+            f"live model; see {_DOCS}",
+        )
     clean = _clean_trace(model_or_log, inputs)
     site_label = str(resolve_one_site(clean, site).label)
     clean_site_out = clean[site_label].out
@@ -746,9 +786,15 @@ def splice(  # noqa: PLR0913 -- the public experiment door: each keyword is one 
     )
     if variance.zero_variance:
         _warn_zero_variance(site_label, variance.reasons)
-    spliced = _replayed(
-        clean, site_label, "sae_splice", _SAEReconstruction(sae, latents_edit, start)
-    )
+    latents_site = None
+    if log_latents:
+        spliced, latents_site = logged_splice_trace(
+            model_or_log, inputs, clean, site_label, _SAEReconstruction(sae, latents_edit, start)
+        )
+    else:
+        spliced = _replayed(
+            clean, site_label, "sae_splice", _SAEReconstruction(sae, latents_edit, start)
+        )
     clean_outputs = _tensor_outputs(clean)
     spliced_outputs = _tensor_outputs(spliced)
     next_token, token_reasons = _next_token_metrics(
@@ -775,8 +821,16 @@ def splice(  # noqa: PLR0913 -- the public experiment door: each keyword is one 
         fraction_variance_explained_by_dim=variance.fve_by_dim,
         zero_variance=variance.zero_variance,
         unavailable_metrics={**variance.reasons, **token_reasons},
+        latents_site=latents_site,
         **next_token,
     )
 
 
-__all__ = ["SpliceResult", "splice", "write_delphi", "write_sae_dashboard"]
+__all__ = [
+    "SpliceResult",
+    "register",
+    "splice",
+    "unregister",
+    "write_delphi",
+    "write_sae_dashboard",
+]

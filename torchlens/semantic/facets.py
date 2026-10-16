@@ -10,13 +10,14 @@ import hashlib
 import importlib
 import inspect
 import itertools
+import re
 import textwrap
 import threading
 import warnings
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from fnmatch import fnmatch
-from typing import Any, Literal, TypeAlias, overload
+from typing import Any, Literal, TypeAlias, cast, overload
 
 import torch
 
@@ -37,7 +38,9 @@ PredicateFunc = Callable[[Any], bool]
 RecipeSource = Literal["built-in", "user"]
 FacetKey: TypeAlias = str | tuple[OutputPathComponent, ...]
 HomeKind = Literal["op", "module_output", "module_input", "parameter", "computed"]
-CapabilityClass = Literal["bijective_view", "selection", "aliasing_selection", "computed"]
+CapabilityClass = Literal[
+    "bijective_view", "selection", "aliasing_selection", "computed", "decoder_direction"
+]
 ValueVersion = Literal["raw_out", "out_versions_by_child"]
 AbsenceStatus = Literal["structurally_absent", "needs_capture", "declared_not_produced"]
 MenuStatus = Literal[
@@ -210,6 +213,9 @@ _CAPABILITY_FLAGS_BY_CLASS: dict[CapabilityClass, FacetCapabilityFlags] = {
     "selection": FacetCapabilityFlags(read=True, grad=True, write=True),
     "aliasing_selection": FacetCapabilityFlags(read=True, grad=True, write=False),
     "computed": FacetCapabilityFlags(read=True, grad=False, write=False, portable=False),
+    # A codec facet (an SAE's latents): read through the encoder, written as a
+    # decoder-space delta added to the home; never a view, never portable.
+    "decoder_direction": FacetCapabilityFlags(read=True, grad=False, write=True, portable=False),
 }
 
 
@@ -283,6 +289,8 @@ class TransformPrimitive:
         elif self.kind == "select":
             dim, index = self.args
             result = value.select(dim, index)
+        elif self.kind == "codec":
+            result = self.args[0].read(value)
         else:
             raise ValueError(f"Unknown facet transform primitive {self.kind!r}.")
         self._assert_shape(result, self.post_shape, "post")
@@ -314,6 +322,8 @@ class TransformPrimitive:
         """
 
         _ensure_scatter_capable(self)
+        if self.kind == "codec":
+            return self.args[0].scatter_update(home_out, edited_slice, mode=mode)
         updated = home_out.clone(memory_format=torch.preserve_format)
         target = self.apply(updated)
         _copy_scatter_value(target, edited_slice, mode=mode)
@@ -567,8 +577,9 @@ class FacetSpec(_SelectionOperand):
             raise TypeError("Facet scatter_update requires a tensor home output.")
         if not isinstance(edited_slice, torch.Tensor):
             raise TypeError("Facet scatter_update requires a tensor edited slice.")
+        view_part, codec = self._split_codec()
         updated = home_out.clone(memory_format=torch.preserve_format)
-        target = self.apply(updated)
+        target = view_part.apply(updated)
         if target.untyped_storage().data_ptr() != updated.untyped_storage().data_ptr():
             # A primitive in the transform chain (typically "reshape"/"heads" on a
             # non-contiguous tensor) silently fell back to a copy instead of
@@ -579,6 +590,13 @@ class FacetSpec(_SelectionOperand):
                 f"Facet {self.recipe_id!r} did not produce a writable view of home "
                 f"{self.home_label or self.home_address or '<unknown>'!r}."
             )
+        if codec is not None:
+            # A codec facet writes its whole view region: the decoder-space delta
+            # of the edited latents, added to the region (the error term stays).
+            _copy_scatter_value(
+                target, codec.scatter_update(target, edited_slice, mode=mode), mode="replace"
+            )
+            return updated
         _copy_scatter_value(target, edited_slice, mode=mode)
         return updated
 
@@ -604,7 +622,7 @@ class FacetSpec(_SelectionOperand):
         if not isinstance(home_out, torch.Tensor):
             raise TypeError("Facet write masks require a tensor home output.")
         mask = torch.zeros_like(home_out, dtype=torch.bool, device=home_out.device)
-        target = self.apply(mask)
+        target = self._split_codec()[0].apply(mask)
         target.fill_(True)
         if not bool(mask.any()):
             raise RuntimeError(
@@ -612,6 +630,17 @@ class FacetSpec(_SelectionOperand):
                 f"{self.home_label or self.home_address or '<unknown>'!r}."
             )
         return mask
+
+    def _split_codec(self) -> tuple[FacetSpec, TransformPrimitive | None]:
+        """Return the view part of the chain and its trailing codec primitive, if any.
+
+        A codec (an SAE's latents) is never a view: reads pass through it,
+        while writes and write masks act on the view region before it.
+        """
+
+        if self.transforms and self.transforms[-1].kind == "codec":
+            return replace(self, transforms=self.transforms[:-1]), self.transforms[-1]
+        return self, None
 
     def _append(self, primitive: TransformPrimitive) -> FacetSpec:
         """Return a copy with one additional primitive."""
@@ -1103,6 +1132,8 @@ class FacetView(Mapping[FacetKey, Any]):
     def has(self, name: FacetKey) -> bool:
         """Return whether a facet is available in the current trace."""
 
+        if _family_spec(self._record, name) is not None:
+            return True
         return name in self.keys()
 
     def invalidate(self) -> None:
@@ -1144,6 +1175,9 @@ class FacetView(Mapping[FacetKey, Any]):
     def __getitem__(self, name: FacetKey) -> Any:
         """Return a facet value by key, computing lazily if needed."""
 
+        family_spec = _family_spec(self._record, name)
+        if family_spec is not None:
+            return Facet(family_spec)
         if name not in self._cache:
             self._compute()
         if name not in self._cache:
@@ -1274,6 +1308,10 @@ class FacetView(Mapping[FacetKey, Any]):
                     menu=menu,
                     facet_tiers=facet_tiers,
                 )
+        for family_name, family_spec in _family_entries(self._record).items():
+            if family_name not in values:
+                values[family_name] = family_spec
+                menu[family_name] = FacetMenuItem(status="available_now", recipe=str(family_name))
         if _TRANSFORMERLENS_ALIASES_ENABLED:
             for alias, native in _TRANSFORMERLENS_ALIAS_TO_NATIVE.items():
                 if native in values and alias not in values:
@@ -1296,6 +1334,17 @@ class FacetView(Mapping[FacetKey, Any]):
 
 
 _MISSING_CONTRIBUTION_KEY = "__torchlens_missing_facets__"
+
+#: Facet families by name: each serves the facets of one codec (an SAE's
+#: latents) on the op that is its home, ``"<name>"`` for every latent and
+#: ``"<name>[k]"`` / ``"<name>[j,k]"`` for chosen ones. Filled by
+#: ``torchlens.bridge.sae.register``; every FacetView consults it live, so a
+#: family registered after capture is visible on existing traces. A family
+#: provides ``facet_spec(record, index)`` (``None`` off its home, coded
+#: refusals for an ambiguous home or an unknown latent), ``listed_spec(record)``
+#: (never raises) and ``selector_name(index)`` (validates a selector spelling).
+_FACET_FAMILIES: dict[str, Any] = {}
+_FAMILY_KEY = re.compile(r"^(?P<base>[^\[\],\s]+)(?:\[(?P<index>\d+(?:,\d+)*,?)\])?$")
 _REGISTRY: builtins.list[_RegisteredRecipe] = []
 _BUILTIN_REGISTRY: tuple[_RegisteredRecipe, ...] = ()
 _REGISTRY_VERSION = 0
@@ -1703,6 +1752,83 @@ def _recipe_matches(recipe: _RegisteredRecipe, record: Any) -> bool:
     return not (recipe.predicate is not None and not recipe.predicate(record))
 
 
+def _family_key(name: Any) -> tuple[Any, int | tuple[int, ...] | None] | None:
+    """Return ``(family, index)`` when ``name`` spells a registered family facet.
+
+    ``"res"`` is every latent (index ``None``), ``"res[3]"`` latent 3 and
+    ``"res[3,7]"`` (or ``"res[3,]"``) the listed latents as one tuple.
+    """
+
+    match = _FAMILY_KEY.match(name) if isinstance(name, str) else None
+    family = _FACET_FAMILIES.get(match["base"]) if match is not None else None
+    if match is None or family is None:
+        return None
+    raw = match["index"]
+    if raw is None:
+        return family, None
+    parts = tuple(int(part) for part in raw.rstrip(",").split(","))
+    return family, parts if "," in raw else parts[0]
+
+
+def _family_spec(record: Any, name: Any) -> FacetSpec | None:
+    """Return the family facet ``name`` names on ``record``, or ``None`` off its home."""
+
+    key = _family_key(name)
+    if key is None:
+        return None
+    family, index = key
+    return cast("FacetSpec | None", family.facet_spec(record, index))
+
+
+def _family_entries(record: Any) -> dict[FacetKey, FacetSpec]:
+    """Return every registered family's all-latents facet whose home is ``record``."""
+
+    entries: dict[FacetKey, FacetSpec] = {}
+    for family_name, family in builtins.list(_FACET_FAMILIES.items()):
+        spec = family.listed_spec(record)
+        if spec is not None:
+            entries[family_name] = spec
+    return entries
+
+
+def _family_facet_name(base: Any, index: Any) -> str:
+    """Return the facet name of latents ``index`` of family ``base``, validated.
+
+    Parameters
+    ----------
+    base:
+        Registered family name (the name an SAE was registered under).
+    index:
+        A latent index, or a non-empty sequence of them.
+
+    Returns
+    -------
+    str
+        ``"<base>[k]"`` or ``"<base>[j,k]"``.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``sae_latent_family_unknown`` when no family has that name; the
+        family's own refusals for an index it does not have.
+    """
+
+    from .._errors import InvalidArgumentError
+
+    family = _FACET_FAMILIES.get(base) if isinstance(base, str) else None
+    if family is None:
+        registered = sorted(_FACET_FAMILIES)
+        raise InvalidArgumentError(
+            f"tl.facet({base!r}).latent(...) names no registered SAE; registered SAEs: "
+            f"{registered if registered else 'none'}",
+            code="sae_latent_family_unknown",
+            remedy=f"register the SAE under that name first, "
+            f"tl.bridge.sae.register({base!r}, sae, site='<site>'), or use one of the "
+            "registered names; see docs/recipes/pretrained_saes.md",
+        )
+    return cast(str, family.selector_name(index))
+
+
 def _weakest_capability_class(
     transforms: tuple[TransformPrimitive, ...],
 ) -> CapabilityClass:
@@ -1710,6 +1836,8 @@ def _weakest_capability_class(
 
     if any(primitive.capability_class == "computed" for primitive in transforms):
         return "computed"
+    if any(primitive.capability_class == "decoder_direction" for primitive in transforms):
+        return "decoder_direction"
     if any(primitive.capability_class == "aliasing_selection" for primitive in transforms):
         return "aliasing_selection"
     if any(primitive.capability_class == "selection" for primitive in transforms):
