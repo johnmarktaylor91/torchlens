@@ -41,7 +41,8 @@ from torch import nn
 #: 12s bound once the FW2 closure sweep added the 2026-08-28 pages (the
 #: doctor(), resnet50 summary, and wandb cells alone charge ~7.7s). The split
 #: is by page group, never by cell cost, so per-cell tiers stay honest: only
-#: the cold ``torch.compile`` fence is heavy-class by measurement.
+#: the cold ``torch.compile`` fence and the fences in MEASURED_HEAVY_FENCES are
+#: heavy-class by measurement.
 DOC_FILE_GROUPS: dict[str, tuple[str, ...]] = {
     "guides": (
         "performance.md",
@@ -107,8 +108,27 @@ def _iter_python_blocks(file_names: tuple[str, ...] = DOC_FILES) -> list[tuple[s
     return blocks
 
 
+#: Fences heavy-class by measurement, keyed by page and a line unique to the
+#: fence: the mechinterp component-graph example patches a circuit into every
+#: receiver of a two-layer GPT-2 in one ``patch_edges`` call and measured 9.4 s
+#: on the gate worker (the same fence runs in
+#: tests/test_circ1_component_graph.py), which pushed the reference-views family
+#: to 14.3 s against its 14.0 s aggregate budget.
+MEASURED_HEAVY_FENCES: frozenset[tuple[str, str]] = frozenset(
+    {("reference/mechinterp.md", "# A circuit runs as one patch_edges call")}
+)
+
+
+def _is_heavy_fence(file_name: str, code: str) -> bool:
+    """Return whether one fence is heavy-class (cold compile, or measured)."""
+
+    if "torch.compile" in code or "frames_compiled" in code:
+        return True
+    return any(page == file_name and line in code for page, line in MEASURED_HEAVY_FENCES)
+
+
 def _doc_block_params(group: str) -> list[object]:
-    """Wrap one page group's blocks in params; compile-bearing blocks are HEAVY.
+    """Wrap one page group's blocks in params; compile-bearing and measured fences are HEAVY.
 
     r7 R41/R72 fresh-env gate finding: the ``torch.compile`` fence in
     reference/debug.md charges ~15s CPU in a COLD environment (first-run
@@ -119,9 +139,7 @@ def _doc_block_params(group: str) -> list[object]:
 
     params: list[object] = []
     for file_name, block_index, code in _iter_python_blocks(DOC_FILE_GROUPS[group]):
-        marks = (
-            (pytest.mark.heavy,) if ("torch.compile" in code or "frames_compiled" in code) else ()
-        )
+        marks = (pytest.mark.heavy,) if _is_heavy_fence(file_name, code) else ()
         params.append(pytest.param(file_name, block_index, code, marks=marks))
     return params
 

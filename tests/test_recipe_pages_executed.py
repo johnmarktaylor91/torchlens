@@ -86,7 +86,10 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
 #: unmarked family charged 18.1 s against its 14.2 s aggregate budget. The
 #: pretrained-SAE page measures 7.6 s and the SAE trainers page 4.8 s (it imports
 #: nnsight and wandb), at the boundary. The feature-visualisation page (3.3 s)
-#: is listed to keep the unmarked family inside its aggregate budget.
+#: is listed to keep the unmarked family inside its aggregate budget. With the
+#: wave-three pages the unmarked family charged 15.8 s against its 13.6 s
+#: aggregate budget; its two largest pages, the tuned-lens training notebook
+#: (7.1 s) and the Prisma CLIP SAE page (2.0 s), are listed for that reason.
 HEAVY_PAGES: frozenset[str] = frozenset(
     {
         "docs/recipes/acdc_ioi.md",
@@ -96,6 +99,8 @@ HEAVY_PAGES: frozenset[str] = frozenset(
         "docs/recipes/pretrained_saes.md",
         "docs/recipes/sae_trainers.md",
         "docs/recipes/feature_visualisation.md",
+        "examples/recipes/train_tuned_lens_recipe.ipynb",
+        "docs/recipes/prisma_clip_sae.md",
     }
 )
 

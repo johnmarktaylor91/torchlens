@@ -293,6 +293,7 @@ def test_identity_gate_refuses_a_decomposition_that_does_not_close() -> None:
     assert excinfo.value.fields["max_abs_residual"] == pytest.approx(1.0)
 
 
+@pytest.mark.heavy  # measured 9.4 s on the gate worker: the example patches a whole circuit
 def test_reference_doc_example_runs() -> None:
     """The component-graph example in docs/reference/mechinterp.md executes as written."""
 
