@@ -128,6 +128,42 @@ def test_import_of_a_same_named_object_elsewhere_is_not_definite(tmp_path: Path)
     assert definite == {("torchlens/export/__init__.py", 1, 5)}
 
 
+def test_imports_through_a_reexporting_module_follow_the_export(tmp_path: Path) -> None:
+    """F1: a module that re-exports the object passes it on to its own importers."""
+
+    root = _repo(
+        tmp_path,
+        {
+            "torchlens/__init__.py": "",
+            "torchlens/checks/__init__.py": "from ._audit import OldAudit\n",
+            "torchlens/checks/_audit.py": "class OldAudit:\n    pass\n",
+            "torchlens/debug/__init__.py": "from ._shim import OldAudit\n",
+            "torchlens/debug/_shim.py": (
+                "from ..checks._audit import OldAudit\n\n__all__ = ['OldAudit']\n"
+            ),
+            "tests/test_audit.py": "from torchlens.debug._shim import OldAudit\n",
+        },
+    )
+    row = {
+        "id": "export:tl.debug.OldAudit",
+        "kind": "export",
+        "name": "OldAudit",
+        "proposed": "NewAudit",
+        "path": "tl.debug.OldAudit",
+        "owner": "tl.debug",
+        "module": "torchlens.checks._audit",
+    }
+    edits = codemod.plan([row], root, roots=("torchlens", "tests"))
+    assert _sites(edits) == {
+        ("torchlens/checks/_audit.py", 1, 7, codemod.DEFINITE),
+        ("torchlens/checks/__init__.py", 1, 21, codemod.DEFINITE),
+        ("torchlens/debug/_shim.py", 1, 29, codemod.DEFINITE),
+        ("torchlens/debug/_shim.py", 3, 13, codemod.DEFINITE),
+        ("torchlens/debug/__init__.py", 1, 20, codemod.DEFINITE),
+        ("tests/test_audit.py", 1, 35, codemod.DEFINITE),
+    }
+
+
 def test_owner_module_lazy_table_and_all_follow_the_export(tmp_path: Path) -> None:
     """F1: the public module that exposes an export lazily names it in strings."""
 

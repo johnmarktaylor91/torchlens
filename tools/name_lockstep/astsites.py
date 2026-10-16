@@ -9,6 +9,7 @@ definition and class tables, a parameter inside its listed callables.
 from __future__ import annotations
 
 import ast
+import dataclasses
 import re
 from collections.abc import Iterator
 from pathlib import Path
@@ -118,7 +119,7 @@ def _local_bindings(func: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda) -
     return bound - declared
 
 
-def _in_torchlens(module: str) -> bool:
+def in_torchlens(module: str) -> bool:
     """Return whether a dotted module is ``torchlens`` or one of its submodules."""
 
     return module == "torchlens" or module.startswith("torchlens.")
@@ -210,6 +211,77 @@ def definite_object(
         _reexported_all(tree, pos)
     if home or imported:
         pos.module_names(tree)
+
+
+@dataclasses.dataclass(frozen=True)
+class ImportBindings:
+    """How one module imports a root or export leaf from other TorchLens modules.
+
+    Attributes
+    ----------
+    module
+        The importing file's dotted module.
+    binds
+        Modules it imports the leaf from under the leaf's own name (it re-binds it).
+    sites
+        Import-statement positions of the leaf, per module imported from.
+    dependent
+        Its ``__all__`` entry and module-level uses, definite once a binding is.
+    """
+
+    module: str
+    binds: frozenset[str]
+    sites: dict[str, frozenset[tuple[int, int]]]
+    dependent: frozenset[tuple[int, int]]
+
+
+def module_name(relative: str) -> str:
+    """Return the dotted module of a repository-relative ``.py`` path."""
+
+    parts = list(Path(relative).with_suffix("").parts)
+    return ".".join(parts[:-1] if parts and parts[-1] == "__init__" else parts)
+
+
+def import_bindings(
+    tree: ast.Module, lines: list[str], old: str, relative: str
+) -> ImportBindings | None:
+    """Return how a module imports the leaf ``old`` from TorchLens, or None when it does not.
+
+    Parameters
+    ----------
+    tree
+        Parsed module.
+    lines
+        Its source lines.
+    old
+        The leaf.
+    relative
+        Repository-relative path, which places relative imports.
+    """
+
+    sites: dict[str, Positions] = {}
+    binds: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        source = _import_source(node, relative)
+        for alias in node.names:
+            if alias.name == old and in_torchlens(source):
+                _record_import(sites.setdefault(source, Positions(lines, old)), node, old)
+                if alias.asname in (None, old):
+                    binds.add(source)
+    if not sites:
+        return None
+    dependent = Positions(lines, old)
+    if binds:
+        _reexported_all(tree, dependent)
+        dependent.module_names(tree)
+    return ImportBindings(
+        module=module_name(relative),
+        binds=frozenset(binds),
+        sites={source: frozenset(pos.found) for source, pos in sites.items()},
+        dependent=frozenset(dependent.found),
+    )
 
 
 def _reexported_all(tree: ast.Module, pos: Positions) -> None:
@@ -469,7 +541,7 @@ def _init_scopes(tree: ast.Module, class_name: str, relative: str) -> list[tuple
             scopes += [(tree, class_name), (node, "cls")]
         elif (
             isinstance(node, ast.ImportFrom)
-            and _in_torchlens(_import_source(node, relative))
+            and in_torchlens(_import_source(node, relative))
             and any(a.name == class_name and a.asname in (None, class_name) for a in node.names)
         ):
             scopes.append((tree, class_name))
