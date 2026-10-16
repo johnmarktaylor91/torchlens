@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import math
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -207,8 +208,18 @@ def _entry_param(entry: CorpusEntry) -> Any:
 
 @pytest.mark.parametrize("entry", [_entry_param(entry) for entry in corpus_entries()])
 def test_corpus_forward_and_executed_backward_equal_the_oracle(entry: CorpusEntry) -> None:
-    """Forward and executed backward FLOPs equal the oracle up to the two explained differences."""
+    """Forward and executed backward FLOPs equal the oracle up to the two explained differences.
 
+    The models' own warnings (deprecations, unsupported output containers)
+    are not what this test asserts, as in ``test_classics_corpus.py``.
+    """
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("default")
+        _check_entry(entry)
+
+
+def _check_entry(entry: CorpusEntry) -> None:
     row = ROWS[entry.id]
     whole = "call_convention" in row
     forward_census, backward_census = _census(entry, whole)
