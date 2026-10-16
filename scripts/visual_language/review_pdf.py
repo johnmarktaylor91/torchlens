@@ -35,7 +35,7 @@ def _show(ax: Any, png: bytes | None, words: str) -> None:
 
     ax.set_axis_off()
     if png is None:
-        ax.text(0.5, 0.5, words, ha="center", va="center", fontsize=12, color="#555555")
+        ax.text(0.5, 0.5, words, ha="center", va="center", fontsize=13, color="#555555")
         return
     ax.imshow(mpimg.imread(io.BytesIO(png), format="png"))
 
@@ -44,9 +44,9 @@ def _text_page(pdf: Any, title: str, lines: list[str]) -> None:
     import matplotlib.pyplot as plt
 
     fig = plt.figure(figsize=PAGE)
-    fig.text(0.04, 0.95, title, fontsize=16, weight="bold", va="top")
-    wrapped = [w for line in lines for w in (textwrap.wrap(line, 120) or [""])]
-    fig.text(0.04, 0.89, "\n".join(wrapped[:52]), fontsize=10, va="top", family="monospace")
+    fig.text(0.04, 0.95, title, fontsize=18, weight="bold", va="top")
+    wrapped = [w for line in lines for w in (textwrap.wrap(line, 96) or [""])]
+    fig.text(0.04, 0.89, "\n".join(wrapped[:40]), fontsize=12, va="top", family="monospace")
     pdf.savefig(fig)
     plt.close(fig)
 
@@ -72,7 +72,7 @@ def _pair_pages(
     for start in range(0, len(panels), ROWS_PER_PAGE):
         chunk = panels[start : start + ROWS_PER_PAGE]
         fig, axes = plt.subplots(len(chunk), 2, figsize=PAGE, squeeze=False)
-        fig.suptitle(f"{title}: {slide_id}", fontsize=14, weight="bold")
+        fig.suptitle(f"{title}: {slide_id}", fontsize=16, weight="bold")
         for row, panel in enumerate(chunk):
             for col, side in enumerate(("base", "head")):
                 render = renders[side]
@@ -80,7 +80,7 @@ def _pair_pages(
                 png = panel_png(entry[1], cwds[side]) if entry else None
                 missing = f"not in {side}" if render is None else f"panel {panel} not drawn"
                 _show(axes[row][col], png, missing)
-                axes[row][col].set_title(f"{side} {shas[side][:10]}  panel {panel}", fontsize=9)
+                axes[row][col].set_title(f"{side} {shas[side][:10]}  panel {panel}", fontsize=12)
         fig.tight_layout(rect=(0, 0, 1, 0.95))
         pdf.savefig(fig)
         plt.close(fig)
