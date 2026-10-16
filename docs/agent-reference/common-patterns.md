@@ -219,3 +219,49 @@ probs = attn["model.layers.0.self_attn"]  # (batch, heads, q, kv), the tensor th
 assert probs.shape == (2, 4, 4, 4)
 assert torch.count_nonzero(probs[1, :, :2, 2:]) == 0  # padded keys get exactly zero
 ```
+
+### Newer namespace exports
+
+Exports added to existing namespaces during 2.x; spellings DOCUMENTED-UNSTABLE, each defined
+in the glossary under its name. The fence builds edits and results without a transformer; the
+comments name the exports that need one.
+
+```python
+# trace.using(name) appliances, with a one-line summary each.
+appliances = tl.accessors.registered_appliances()  # {name: summary}, sorted by name
+# Subspace and position edits are plain tl.Edit objects; apply them with do() or fork.do().
+basis = torch.eye(4)[:1]  # [k, d]: one direction over a 4-wide feature axis
+ablate = tl.intervention.subspace_ablate(basis, feature_axis=1)  # x - P x on the span
+assert isinstance(ablate, tl.Edit)
+# tl.intervention.subspace_interchange(basis, source_trace) writes the source trace's
+# in-span component over the target's instead.
+first_token = tl.intervention.at_positions(tl.scale(0.0), [0])  # token axis 1 by default
+assert isinstance(first_token, tl.Edit)
+# tl.mechinterp.FactoredMatrix(A, B) keeps A @ B factored.
+factored = tl.mechinterp.FactoredMatrix(torch.randn(4, 2), torch.randn(2, 4))
+assert factored.ndim == 2 and factored.AB.shape == (4, 4)
+# On a transformer trace, tl.mechinterp.qk_circuit(trace, attention) and
+# tl.mechinterp.ov_circuit(trace, attention) return one FactoredMatrix per query head, and
+# tl.mechinterp.mlp_neuron_contributions(trace) returns per-neuron MLP rows.
+disagreement = tl.repgeom.metric_disagreement(
+    {"cka": {"layer1": 0.9, "layer2": 0.4}, "rsa": {"layer1": 0.3, "layer2": 0.8}}
+)
+assert isinstance(disagreement, tl.repgeom.MetricDisagreement)
+pair = disagreement.pairs[0]  # a tl.repgeom.DisagreeingPair
+assert pair.higher == {"cka": "layer1", "rsa": "layer2"}
+score = tl.stats.cka(torch.randn(8, 3), torch.randn(8, 5))
+assert isinstance(score, tl.stats.SimilarityScore)  # a float that names its measure
+measure = score.similarity_repository_id
+# An output_style no detector resolves refuses before the forward.
+try:
+    tl.trace(model, x, capture=tl.options.CaptureOptions(output_style="no_such_style"))
+except tl.errors.OutputStyleUnknownError as error:
+    assert error.fields["code"] == "output_style_unknown"
+else:
+    raise AssertionError("output_style_unknown did not refuse")
+# Also exported: tl.debug.DebugReport (base class of report-shaped tl.debug results),
+# tl.report.PrunedParamFacts (prune state in the FactCore parameter facts),
+# tl.trackers.MLflowSink and tl.trackers.CometSink (forward-watch sinks over a run or
+# experiment the user owns) and tl.tviz.render_logit_lens_heatmap(result, path)
+# (the layers-by-positions logit-lens figure).
+```

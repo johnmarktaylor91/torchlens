@@ -343,13 +343,13 @@ is documented unstable and may be renamed or removed without a compatibility ali
 
 | Surface | Exact spelling or token | Stability |
 | --- | --- | --- |
-| Factored low-rank algebra (vendored from TransformerLens, MIT) | `FactoredMatrix`, `A`, `B`, `AB`, `BA`, `T`, `svd`, `U`, `S`, `V`, `eigenvalues`, `norm`, `make_even`, `get_corner`, `collapse_l`, `collapse_r`, `unsqueeze`, `pair`, `ldim`, `mdim`, `rdim` | unstable -- no deprecation shim owed |
+| Factored low-rank algebra (vendored from TransformerLens, MIT) | `FactoredMatrix`, `A`, `B`, `AB`, `BA`, `T`, `svd`, `U`, `S`, `V`, `eigenvalues`, `norm`, `make_even`, `get_corner`, `collapse_l`, `collapse_r`, `unsqueeze`, `pair`, `ldim`, `mdim`, `rdim`, `ndim` | unstable -- no deprecation shim owed |
 | QK and OV circuits on verified head weight views | `qk_circuit`, `ov_circuit` | unstable -- no deprecation shim owed |
 | Per-neuron MLP rows under the identity gate | `mlp_neuron_contributions`, `layers`, `neurons`, `onto`, `positions` | unstable -- no deprecation shim owed |
 | Alias table generation value | `generation="4.x"` (TransformerBridge canonical hook names) | unstable -- no deprecation shim owed |
 | Appliance on the `trace.using` door | `trace.using("mi")`, `head_scores`, `qk_circuit`, `ov_circuit` | unstable -- no deprecation shim owed |
 | Per-query-head patching under grouped-query attention | `patch_query_heads_grid`, `site`, `heads`, `effect_site` | unstable -- no deprecation shim owed |
-| Component edge graph (heads and MLPs as nodes, q/k/v split receivers) | `component_graph`, `ComponentGraph`, `ComponentNode`, `ComponentReceiver`, `ComponentEdge`, `nodes`, `receivers`, `edges`, `layer_index`, `head`, `senders`, `contribution`, `identity_receipt`, `input_label`, `norm_address`, `patch_edges`, `corrupt` | unstable -- no deprecation shim owed |
+| Component edge graph (heads and MLPs as nodes, q/k/v split receivers) | `component_graph`, `ComponentGraph`, `ComponentNode`, `ComponentReceiver`, `ComponentEdge`, `nodes`, `receivers`, `edges`, `layer_index`, `head`, `senders`, `contribution`, `identity_receipt`, `input_label`, `norm_address`, `module_address`, `patch_edges`, `corrupt` | unstable -- no deprecation shim owed |
 
 | Edge attribution patching over the component graph | `edge_scores`, `corrupted`, `metric`, `method`, `eap`, `eap_ig`, `steps`, `example_reduction`, `mean`, `sum` | unstable -- no deprecation shim owed |
 | Circuit faithfulness areas | `circuit_performance_ratio`, `circuit_model_difference`, `faithfulness`, `fractions`, `log_scale` | unstable -- no deprecation shim owed |
@@ -361,7 +361,10 @@ keyed by MIB/EAP-IG vocabulary name (`input`, `a{L}.h{H}`, `b{L}`, `m{L}`; recei
 `a{L}.h{H}<q|k|v>`, `m{L}`, `logits`; edges `"<sender>-><receiver>"`). Each `ComponentReceiver`
 holds the captured pre-norm input (`value`, from the op `input_label` entering the norm at
 `norm_address`) and its `senders`. Nodes and receivers carry `layer_index` (transformer block
-index) and `head` (head index), each `None` where it does not apply. Each `ComponentEdge` exposes
+index) and `head` (head index), each `None` where it does not apply. `ComponentNode.module_address`
+is the owning module (embedding, attention or MLP; the attention module for head and bias nodes)
+and `ComponentReceiver.module_address` the reading module (attention, MLP, or the unembedding
+head). Each `ComponentEdge` exposes
 the sender's output as its `contribution`. `identity_receipt` records the in-API check that every receiver input equals the
 sum of its contributions. Each attention output bias is its own node `b{L}`. A `ComponentEdge` is
 also a selection (`__selection__`): an EDGE selection of the pre-norm input edge for `m{L}` and
@@ -1370,7 +1373,13 @@ shims, by declared contract. Each carries the same tag at its definition.
   higher scores rank first, ties share their average rank, missing scores
   take no side. Each flagged pair names the site each metric ranks higher
   and, when the scores carry intervals, whether the opposite orders are
-  separated by them (`firm`). `table()` gives the plain-text report and
+  separated by them (`firm`). `MetricDisagreement.metrics` lists the metric
+  names in input order and `MetricDisagreement.ranks` holds
+  `ranks[metric][site]` (1 is the highest score; ties share their average
+  rank; a NaN score gets a NaN rank). Each `DisagreeingPair` names its two
+  sites as `site_a` and `site_b` (in the report's site order) and, in
+  `higher`, the site each metric scores higher (`None` for a tie or a
+  missing score). `table()` gives the plain-text report and
   `to_dict()` the data form.
 
 **neuro.compare (`tl.neuro.compare`; needs no extra)** — *unstable — no deprecation shim owed*
@@ -1526,6 +1535,13 @@ S2-gated*
   `structure_only_{save,runnable,replay,validation,backward,episode}_unsupported`,
   `structure_only_refuted_hypothesis`, `structure_only_discharge_precondition`,
   `structure_only_type_invalid`.
+
+**tl.ir.ModuleCaptureWorkspace.root_forward_args** — *unstable — no deprecation shim owed*
+: The root call's `(args, kwargs)`, kept on a capture's module workspace while the capture
+  runs: the root forward is never decorated, so the per-module forward-argument table has no
+  entry for it. Set at capture entry, read when finalization builds the root module pass, then
+  cleared with the other temporary build state (`None` outside a capture). The
+  `ModuleCaptureWorkspace(..., root_forward_args=...)` keyword sets the same field.
 
 **PredicateProtocol** — *unstable — no deprecation shim owed*
 : `torchlens.ir.predicate_registry.PredicateProtocol` — the frozen callable
@@ -1800,7 +1816,18 @@ default-keep); mask-application semantics documented-unstable*
   public spelling: a builtin edit prints as the public call that builds it
   (`tl.grad_scale(2.0)`, default-valued keywords omitted; evaluating it
   rebuilds an equal edit), any other edit as `tl.Edit('name', kind=...,
-  portability=...)`. `trace.do(selection, edit)`
+  portability=...)`. An `Edit` is a frozen record of its identity:
+  `helper_name` (also read as `name`), positional `args`, keyword `kwargs`
+  (a tuple of name and value pairs), `kind`, `portability`, `metadata`
+  (name and value pairs, such as `("keep_grad", True)` or the selection
+  disclosure a masked `do()` adds), `direction`, `batch_independent`,
+  `compatible_with_append` (an edit that may change the output shape is
+  refused on an append rerun unless this is true) and `selection_recipe`
+  (the selection recipe a selection-targeted `do()` attaches; `None`
+  otherwise). The hook `factory` is session-side. `Edit.PORTABLE_STATE_SPEC`
+  is the class-level table of how a saved spec keeps each field: `factory`
+  is dropped, `selection_recipe` is saved as a recursive blob, every other
+  field is kept. `trace.do(selection, edit)`
   applies an edit to a resolved selection under the NORMATIVE
   MASK-APPLICATION CONTRACT: the edit hook computes its full replacement
   exactly as today (helpers stay mask-oblivious), then the ENGINE applies
@@ -2025,8 +2052,9 @@ shim owed*
   an opaque callable refuses `preprocessing_attach_opaque`. Returns the model.
 
 **torchlens.preprocessing.check_card(trace_or_record, *, model=None, authority=None, offline=None)** — *unstable — no deprecation shim owed*
-: The on-request preprocessing verifier: compares the preprocessing a capture
-  recorded (`Trace.input_preprocessor`) with the model's known card (HF image
+: The on-request preprocessing verifier: `trace_or_record` is a `Trace` (its
+  `input_preprocessor` is read) or a `ResolvedPreprocessing` record. It compares the
+  preprocessing a capture recorded (`Trace.input_preprocessor`) with the model's known card (HF image
   processor, torchvision weights, timm or open_clip config, or a named
   `authority=`), returns the field-level `PreprocessingAudit`, and warns
   `preprocessing_card_mismatch` when a field disagrees. Nothing runs it
@@ -2093,7 +2121,17 @@ shim owed*
   takes the fluent module, an `MlflowClient` + `run_id`, or nothing; keeps the
   caller's step; raw histograms are exact JSON artifacts. `CometSink(experiment)`
   takes an `Experiment` or `OfflineExperiment`; scalars and text only (Comet
-  re-bins histograms, so `raw_histogram` is not advertised).
+  re-bins histograms, so `raw_histogram` is not advertised). Both implement
+  the `tl.trackers` sink protocol: `capabilities()` returns what the sink
+  accepts (`MLflowSink`: `scalar`, `raw_histogram`, `text_manifest`,
+  `run_metadata`; `CometSink` the same without `raw_histogram`);
+  `emit_scalar(point)` logs one metric at the caller's step;
+  `emit_text(point)` stores one text payload (an MLflow text artifact, a
+  Comet text log tagged in its metadata); `emit_histogram(point)` stores
+  exact counts and edges as one MLflow JSON artifact, while `CometSink`
+  refuses it with `tracker_sink_capability_missing`; `flush()` has nothing
+  to force (MLflow writes synchronously, Comet writes at `experiment.end()`);
+  `close()` is idempotent and never ends the user's run or experiment.
 
 **tl.export.mlflow / tl.export.aim parity keys** — *unstable — no deprecation shim owed*
 : Both exporters log the per-layer table, the report and every honesty fact as
@@ -2430,7 +2468,11 @@ deprecation shim owed*
   `CaptureOptions(optimizer=...)` (read from the optimizer's live state;
   omitted on a loaded trace). The raw values ride `SummaryTotals.params_bytes`,
   `.params_effective`, `.optimizer_state_params`, and
-  `.optimizer_state_bytes`.
+  `.optimizer_state_bytes`: `params_bytes` is the unique parameters'
+  storage, `params_effective` is set only on a pruned model (raw total minus
+  mask zeros), and `optimizer_state_params` and `optimizer_state_bytes` are
+  set only when the capture was given an optimizer; each is `None`
+  otherwise.
 
 **ParamFacts.bytes / ParamFacts.pruned (`tl.report.PrunedParamFacts`)** — *unstable — no deprecation shim owed*
 : FactCore parameter facts (schema version 2): `bytes` is the unique
@@ -2440,7 +2482,7 @@ deprecation shim owed*
   the capture retained no mask values).
 
 **FlopsReport.attention_full_square_ops / TraceProfile.attention_full_square_ops** — *unstable — no deprecation shim owed*
-: The count of `scaled_dot_product_attention` ops in the forward FLOP total
+: The count (the `attention_full_square_ops` field) of `scaled_dot_product_attention` ops in the forward FLOP total
   of a `flops_report` or a `trace.profile()`; when non-zero the report or the
   profile footer prints that attention FLOPs count the full query x key
   square and masks / `is_causal` are not discounted. Every attention FLOP
@@ -2450,8 +2492,8 @@ deprecation shim owed*
   the note.
 
 **`output_style_unknown`** — *unstable — no deprecation shim owed*
-: The typed refusal (an `InvalidArgumentError`) for a
-  `CaptureOptions(output_style=...)` no detector can resolve, with a did-you-mean over the built-in styles
+: The typed refusal `tl.errors.OutputStyleUnknownError` (an `InvalidArgumentError`
+  subclass) for a `CaptureOptions(output_style=...)` no detector can resolve, with a did-you-mean over the built-in styles
   (`classification`, `imagenet`, `imagenet1k`, `hf_text`). It refuses before
   the forward when no custom output detector is registered, and after the
   capture when registered custom detectors all declined the style.
@@ -2557,7 +2599,7 @@ deprecation shim owed*
   backends `run_conformance` and `resolve_adapter` accept are the same set
   (`torchlens.conformance.PREVIEW_BACKENDS` plus `torch` and `fake`); an absent
   framework yields named skips, never an error. A roster row that declares
-  `RosterModel.expected_op_kinds` (its independent op inventory: every
+  `RosterModel.expected_op_kinds` (`RosterModel(..., expected_op_kinds=...)`; its independent op inventory: every
   `Op.func_name` one forward performs, in order, derived from the model
   definition) also runs `c1_op_inventory_complete`, so output parity can never
   pass with an op missing or extra; every preview roster row declares one.
