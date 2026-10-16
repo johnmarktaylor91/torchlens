@@ -104,21 +104,30 @@ class LiveIndex:
         if old == new:
             return
         for parent in old:
-            if parent in new:
-                continue
-            children = self.children_by_parent.get(parent)
-            if children is not None and label in children:
-                children.remove(label)
-                if not children:
-                    del self.children_by_parent[parent]
+            if parent not in new:
+                self._drop_child_edge(label, parent)
         added = [parent for parent in new if parent not in old]
-        if not added:
+        if added:
+            self._add_child_edges(label, added)
+
+    def _drop_child_edge(self, label: str, parent: str) -> None:
+        """Remove ``label`` from ``parent``'s child list, dropping a list it empties."""
+
+        children = self.children_by_parent.get(parent)
+        if children is None or label not in children:
             return
+        children.remove(label)
+        if not children:
+            del self.children_by_parent[parent]
+
+    def _add_child_edges(self, label: str, parents: list[str]) -> None:
+        """Insert ``label`` into each parent's child list at its ``labels`` position."""
+
         try:
             position = self.labels.index(label)
         except ValueError:
             return
-        for parent in added:
+        for parent in parents:
             children = self.children_by_parent[parent]
             children.insert(bisect_left(children, position, key=self.labels.index), label)
 
