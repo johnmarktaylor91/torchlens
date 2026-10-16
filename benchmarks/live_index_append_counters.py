@@ -16,8 +16,8 @@ synthetic cases) under ``cProfile``. Counters gate. Each case also prints a
 SHA-256 digest of the index state after every pass (``labels``,
 ``by_raw_label`` keys with the identity of each event, and
 ``children_by_parent`` as its key set with each list in order) and, for the
-recorder cases, of the saved outputs. The order of ``children_by_parent``
-gets its own digest, reported as information. The wall time of two
+recorder cases, of the saved outputs. The iteration order of the
+``children_by_parent`` keys gets its own digest, reported as information. The wall time of two
 unprofiled runs (an A/A pair) and the Python-heap peak are context only.
 
 Cases
