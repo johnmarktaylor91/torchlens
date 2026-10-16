@@ -1414,12 +1414,12 @@ def _sdpa_flops(
 # Recurrent kernels (fused ``torch._VF`` RNN, GRU and LSTM calls and their cells).
 #: Fused sequence kernels: ``(input, hx, weights, ...)`` or, for packed
 #: sequences, ``(data, batch_sizes, hx, weights, ...)``.
-RNN_SEQUENCE_FUNCS: frozenset[str] = frozenset({"rnn_tanh", "rnn_relu", "gru", "lstm"})
-#: Single-step cells with one output: ``(input, hx, w_ih, w_hh, b_ih, b_hh)``.
-RNN_CELL_FUNCS: frozenset[str] = frozenset({"rnn_tanh_cell", "rnn_relu_cell", "gru_cell"})
+_RNN_SEQUENCE_FUNCS: frozenset[str] = frozenset({"rnn_tanh", "rnn_relu", "gru", "lstm"})
+#: Single-step cells: ``(input, hx, w_ih, w_hh, b_ih, b_hh)``.
+_RNN_CELL_FUNCS: frozenset[str] = frozenset({"rnn_tanh_cell", "rnn_relu_cell", "gru_cell"})
 
 
-def rnn_flops_from_shapes(output_shape: Shape | None, param_shapes: ParamShapes) -> int | None:
+def _rnn_flops_from_shapes(output_shape: Shape | None, param_shapes: ParamShapes) -> int | None:
     """FLOPs of one recurrent call from its sequence output and weight shapes.
 
     Every row of the output (one time step of one sequence, or one packed
@@ -1487,7 +1487,7 @@ def _rnn_sequence_flops(
         return None
     if not is_sequence:
         return 0
-    return rnn_flops_from_shapes(output_shape, param_shapes)
+    return _rnn_flops_from_shapes(output_shape, param_shapes)
 
 
 def _rnn_cell_flops(
@@ -1498,10 +1498,27 @@ def _rnn_cell_flops(
     """Single-output recurrent cells (``rnn_tanh_cell``, ``rnn_relu_cell``, ``gru_cell``)."""
 
     del saved_args
-    return rnn_flops_from_shapes(output_shape, param_shapes)
+    return _rnn_flops_from_shapes(output_shape, param_shapes)
 
 
-def multi_dot_macs(shapes: Sequence[Shape]) -> int | None:
+def _lstm_cell_flops(
+    output_shape: Shape | None,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
+) -> int | None:
+    """``lstm_cell``: half the call's work on each of its two outputs.
+
+    The hidden and cell states it returns have one shape and cannot be told
+    apart here, so the call's work is split evenly over the two: the call's
+    total is exact, the even split is a convention.
+    """
+
+    del saved_args
+    flops = _rnn_flops_from_shapes(output_shape, param_shapes)
+    return None if flops is None or flops % 2 else flops // 2
+
+
+def _multi_dot_macs(shapes: Sequence[Shape]) -> int | None:
     """Multiply-accumulates of ``torch.linalg.multi_dot`` in its optimal order.
 
     ``multi_dot`` multiplies the chain in the order with the fewest
@@ -1551,7 +1568,7 @@ def _multi_dot_flops(
     shapes = [_safe_shape(operand) for operand in saved_args[0]]
     if any(shape is None for shape in shapes):
         return None
-    macs = multi_dot_macs(cast(list[Shape], shapes))
+    macs = _multi_dot_macs(cast(list[Shape], shapes))
     return None if macs is None else 2 * macs
 
 
@@ -1576,6 +1593,10 @@ SPECIALTY_HANDLERS: dict[str, _FlopsHandler] = {
     "baddbmm": _addmm_flops,
     "baddbmm_": _addmm_flops,
     "multi_dot": _multi_dot_flops,
+    "mv": _matmul_flops,
+    "dot": _matmul_flops,
+    "vdot": _matmul_flops,
+    "spmm": _matmul_flops,
     "chain_matmul": _matmul_flops,
     "linear": _linear_flops,
     # Convolution
@@ -1736,8 +1757,9 @@ SPECIALTY_HANDLERS: dict[str, _FlopsHandler] = {
     "cdist": _norm_flops,
     # Attention
     "scaled_dot_product_attention": _sdpa_flops,
-    **dict.fromkeys(RNN_SEQUENCE_FUNCS, _rnn_sequence_flops),
-    **dict.fromkeys(RNN_CELL_FUNCS, _rnn_cell_flops),
+    **dict.fromkeys(_RNN_SEQUENCE_FUNCS, _rnn_sequence_flops),
+    **dict.fromkeys(_RNN_CELL_FUNCS, _rnn_cell_flops),
+    "lstm_cell": _lstm_cell_flops,
     # MHA is a composite op; FLOPs from its sub-ops (linear, sdpa) are captured
     # individually. Return None to avoid double-counting.
     "multi_head_attention_forward": lambda *_: None,

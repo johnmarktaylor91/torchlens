@@ -10,9 +10,9 @@ from typing import Any
 
 from .flops import (
     _CUSTOM_OP_RULES,
+    _RNN_CELL_FUNCS,
+    _RNN_SEQUENCE_FUNCS,
     ELEMENTWISE_FLOPS,
-    RNN_CELL_FUNCS,
-    RNN_SEQUENCE_FUNCS,
     SPECIALTY_HANDLERS,
     ZERO_ARITHMETIC_CONSTRUCTIONS,
     ZERO_FLOPS_OPS,
@@ -21,10 +21,10 @@ from .flops import (
     Shape,
     _numel,
     _prod,
+    _rnn_flops_from_shapes,
     _safe_shape,
     _with_operand_kwargs,
     compute_forward_flops,
-    rnn_flops_from_shapes,
 )
 
 # ============================================================================
@@ -89,6 +89,10 @@ _ALL_MAC_NAMES = frozenset(
         "bmm",
         "multi_dot",
         "chain_matmul",
+        "mv",
+        "dot",
+        "vdot",
+        "spmm",
     }
 )
 
@@ -114,7 +118,7 @@ _BIASED_MAC_NAMES = frozenset(
 )
 
 #: Recurrent kernels: weight-matrix products (MACs) plus one add per bias element per row.
-_RNN_NAMES = RNN_SEQUENCE_FUNCS | RNN_CELL_FUNCS
+_RNN_NAMES = _RNN_SEQUENCE_FUNCS | _RNN_CELL_FUNCS | {"lstm_cell"}
 
 #: Every FMA-family (MAC-applicable) op name.
 MAC_FAMILY_NAMES = frozenset(
@@ -206,15 +210,20 @@ def _split_rnn(
     """
 
     del qk_shapes
-    full = rnn_flops_from_shapes(output_shape, param_shapes)
-    if full is None or full != total_flops or not output_shape:
+    full = _rnn_flops_from_shapes(output_shape, param_shapes)
+    if full is None or not output_shape:
         return None
     rows = _numel(output_shape) // output_shape[-1]
     macs = rows * sum(_prod(shape) for shape in param_shapes if len(shape) == 2)
+    if full != total_flops:
+        # lstm_cell carries half its call on each of its two outputs.
+        if 2 * total_flops != full or macs % 2:
+            return None
+        macs //= 2
     return (macs, total_flops - 2 * macs)
 
 
-def split_weighted_by_operands(
+def _split_weighted_by_operands(
     func_name: str,
     total_flops: int,
     output_shape: Shape | None,
@@ -343,7 +352,7 @@ def _mac_record(
         split = (
             None
             if operand_shapes is None
-            else split_weighted_by_operands(
+            else _split_weighted_by_operands(
                 func_name, total_flops, output_shape, operand_shapes[0], operand_shapes[1]
             )
         )

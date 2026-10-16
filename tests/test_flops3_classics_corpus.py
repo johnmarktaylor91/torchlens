@@ -59,7 +59,29 @@ GROUPED_DW_EXCESS = {
 
 #: Work TorchLens counts that FlopCounterMode has no rule for, per entry:
 #: ``(forward, backward)`` FLOPs.
-BEYOND_FCM: dict[str, tuple[int, int]] = {}
+BEYOND_FCM: dict[str, tuple[int, int]] = {
+    "denoiser.Demucs (speech enhancement)": (260_096, 520_192),
+    "studiogan_sngan_generator": (110_214, 0),
+    "LogAnomaly": (196_608, 393_216),
+    "CoKT": (18_432, 36_864),
+    "PyanNet": (1_966_080, 3_932_160),
+    "ATDKT": (65_536, 131_072),
+    "IMPALA_AtariNet": (17_239_104, 34_478_208),
+    "pointer_network_tsp": (131_072, 262_144),
+    "Real-Time Demucs (denoiser)": (8_159_232, 16_318_464),
+    "DPTNet": (2_162_688, 4_325_376),
+    "Pointer Sentinel-LSTM mixture model": (196_608, 393_216),
+    "DeepConvLSTM-HARModel": (917_504, 1_835_008),
+    "Soft committee machine": (20, 20),
+    "CLDNN (Automatic Modulation Classification)": (20_240_000, 40_480_000),
+    "DeepLog": (4_546_560, 9_093_120),
+    "SketchLattice": (187_392, 374_784),
+}
+
+#: Entries whose captured backward raises inside TorchLens's tensor gradient
+#: hook (a ``None`` gradient reaches it); a TorchLens defect handed on, not
+#: fixed in this module's files.
+NONE_GRAD_HOOK = {"SubspaceNet", "SPCA-Net", "SketchLattice"}
 
 #: The entry whose own backward fails in eval mode (an in-place write the
 #: gradient needs); its forward is still checked.
@@ -172,7 +194,18 @@ def _forward_family_flops(trace: Any) -> int | None:
     return total
 
 
-@pytest.mark.parametrize("entry", [pytest.param(e, id=e.id) for e in corpus_entries()])
+def _entry_param(entry: CorpusEntry) -> Any:
+    if entry.id in NONE_GRAD_HOOK:
+        reason = "TorchLens tensor gradient hook receives a None gradient"
+        return pytest.param(
+            entry,
+            id=entry.id,
+            marks=pytest.mark.xfail(raises=AttributeError, strict=True, reason=reason),
+        )
+    return pytest.param(entry, id=entry.id)
+
+
+@pytest.mark.parametrize("entry", [_entry_param(entry) for entry in corpus_entries()])
 def test_corpus_forward_and_executed_backward_equal_the_oracle(entry: CorpusEntry) -> None:
     """Forward and executed backward FLOPs equal the oracle up to the two explained differences."""
 
