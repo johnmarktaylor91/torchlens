@@ -409,3 +409,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: a7416a008f983984597a9004665d8ea0d26bd281 (dirty)
 recorded: 2026-10-13T10:44:54.564563+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: FLOPS-3: LSTMCell forward FLOPs are now counted (lstm_cell rule, half the call on each of its two outputs); the trace forward total moves from the readout alone (264) to 3 x 6400 + 264 = 19464
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: b3f3b3fc4b37b11355027d365fdb7d16f055d5ed (dirty)
+recorded: 2026-10-16T06:59:45.677331+00:00

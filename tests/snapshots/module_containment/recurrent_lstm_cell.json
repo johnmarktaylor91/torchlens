@@ -828,7 +828,7 @@
     }
   ],
   "trace_summary": {
-    "total_flops_forward": 264,
+    "total_flops_forward": 19464,
     "uncalled_modules": []
   }
 }
