@@ -54,7 +54,7 @@ def test_selector_save_matches_plain_callable_record_for_record() -> None:
     by_callable = _record_passes(_is_relu)
 
     assert len(by_selector.records) == len(by_callable.records) == 3
-    for left, right in zip(by_selector.records, by_callable.records):
+    for left, right in zip(by_selector.records, by_callable.records, strict=True):
         assert left.ctx.pass_index == right.ctx.pass_index
         assert left.ctx.label == right.ctx.label
         assert torch.equal(left.ram_payload, right.ram_payload)

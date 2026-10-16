@@ -17,12 +17,12 @@ step (``torchlens.intervention.at_step``).
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
-from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import torch
 from torch import nn
@@ -70,7 +70,7 @@ _UNSUPPORTED_RECORD_OPTIONS: tuple[tuple[str, str], ...] = (
 _ASSISTED_KEYS: tuple[str, ...] = ("assistant_model", "prompt_lookup_num_tokens")
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class GenerationStep:
     """One forward of a recorded generation (DOCUMENTED-UNSTABLE).
 
@@ -103,7 +103,7 @@ class GenerationStep:
     saved_bytes: int
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class GenerationRecording:
     """The selected sites of every forward one ``generate()`` call ran (DOCUMENTED-UNSTABLE).
 
@@ -189,15 +189,8 @@ class GenerationRecording:
         )
 
 
-def _refuse(reason: str, remedy: str) -> InvalidArgumentError:
-    """Build the one generation-recorder refusal."""
-
-    return InvalidArgumentError(
-        f"tl.record(..., generate_kwargs=...) refuses: {reason}",
-        code="record_generation_unsupported",
-        remedy=remedy,
-        reason=reason,
-    )
+#: The message shape every generation-recorder refusal shares.
+_REFUSAL = "tl.record(..., generate_kwargs=...) refuses: {}"
 
 
 def _setting(key: str, generate_kwargs: Mapping[str, Any], base: Any) -> Any:
@@ -235,6 +228,67 @@ def _batch_size(input_args: Any, input_kwargs: Mapping[str, Any]) -> int | None:
     return None
 
 
+def _model_refusal(model: nn.Module, record_options: Mapping[str, Any]) -> tuple[str, str] | None:
+    """Return ``(reason, remedy)`` when the model or record options cannot hold a generation."""
+
+    if not callable(getattr(model, "generate", None)):
+        return (
+            f"{type(model).__name__} has no callable generate(); the recorder runs the "
+            "model's own generate and never invents one",
+            "record one forward per step yourself: tl.record(model, ids, save=...)",
+        )
+    if bool(getattr(getattr(model, "config", None), "is_encoder_decoder", False)):
+        return (
+            "encoder-decoder models are not supported (the encoder runs outside the "
+            "decoder forwards the recorder holds)",
+            "record the decoder forwards yourself: tl.record(model, inputs, save=...)",
+        )
+    for option, reason in _UNSUPPORTED_RECORD_OPTIONS:
+        if record_options.get(option) is not None:
+            return reason, f"drop {option}= from the tl.record call"
+    if record_options.get("on_forward_error", "raise") != "raise":
+        return (
+            "partial forward-error modes cannot continue a generation",
+            'drop on_forward_error= (the default "raise" holds)',
+        )
+    return None
+
+
+def _decoding_refusal(
+    settings: Mapping[str, Any], generate_kwargs: Mapping[str, Any], batch: int | None
+) -> tuple[str, str] | None:
+    """Return ``(reason, remedy)`` when the decoding settings cannot be recorded."""
+
+    if settings["use_cache"] is False:
+        return (
+            "use_cache=False recomputes the whole prefix every step, so the cost is no "
+            "longer linear in generated tokens",
+            "drop use_cache=False from generate_kwargs",
+        )
+    if (settings["num_beams"] or 1) > 1:
+        return (
+            "beam search (num_beams > 1) is not supported",
+            "drop num_beams= from generate_kwargs (greedy or sampled decoding)",
+        )
+    if (settings["num_return_sequences"] or 1) > 1:
+        return (
+            "more than one return sequence is not supported",
+            "drop num_return_sequences= from generate_kwargs",
+        )
+    for key in _ASSISTED_KEYS:
+        if generate_kwargs.get(key) is not None:
+            return (
+                f"assisted decoding ({key}=) is not supported",
+                f"drop {key}= from generate_kwargs",
+            )
+    if batch is not None and batch > 1:
+        return (
+            f"a batch of {batch} prompts is not supported (padding-aware batching is not built)",
+            "record one prompt at a time: input_ids[i : i + 1]",
+        )
+    return None
+
+
 def preflight_generation(
     model: nn.Module,
     input_args: Any,
@@ -250,55 +304,17 @@ def preflight_generation(
         ``record_generation_unsupported`` naming what is unsupported.
     """
 
-    if not callable(getattr(model, "generate", None)):
-        raise _refuse(
-            f"{type(model).__name__} has no callable generate(); the recorder runs the "
-            "model's own generate and never invents one",
-            "record one forward per step yourself: tl.record(model, ids, save=...)",
-        )
-    config = getattr(model, "config", None)
-    if bool(getattr(config, "is_encoder_decoder", False)):
-        raise _refuse(
-            "encoder-decoder models are not supported (the encoder runs outside the "
-            "decoder forwards the recorder holds)",
-            "record the decoder forwards yourself: tl.record(model, inputs, save=...)",
-        )
-    for option, reason in _UNSUPPORTED_RECORD_OPTIONS:
-        if record_options.get(option) is not None:
-            raise _refuse(reason, f"drop {option}= from the tl.record call")
-    if record_options.get("on_forward_error", "raise") != "raise":
-        raise _refuse(
-            "partial forward-error modes cannot continue a generation",
-            'drop on_forward_error= (the default "raise" holds)',
-        )
     settings = _resolved_settings(model, generate_kwargs)
-    if settings["use_cache"] is False:
-        raise _refuse(
-            "use_cache=False recomputes the whole prefix every step, so the cost is no "
-            "longer linear in generated tokens",
-            "drop use_cache=False from generate_kwargs",
-        )
-    if (settings["num_beams"] or 1) > 1:
-        raise _refuse(
-            "beam search (num_beams > 1) is not supported",
-            "drop num_beams= from generate_kwargs (greedy or sampled decoding)",
-        )
-    if (settings["num_return_sequences"] or 1) > 1:
-        raise _refuse(
-            "more than one return sequence is not supported",
-            "drop num_return_sequences= from generate_kwargs",
-        )
-    for key in _ASSISTED_KEYS:
-        if generate_kwargs.get(key) is not None:
-            raise _refuse(
-                f"assisted decoding ({key}=) is not supported",
-                f"drop {key}= from generate_kwargs",
-            )
-    batch = _batch_size(input_args, input_kwargs)
-    if batch is not None and batch > 1:
-        raise _refuse(
-            f"a batch of {batch} prompts is not supported (padding-aware batching is not built)",
-            "record one prompt at a time: input_ids[i : i + 1]",
+    refusal = _model_refusal(model, record_options) or _decoding_refusal(
+        settings, generate_kwargs, _batch_size(input_args, input_kwargs)
+    )
+    if refusal is not None:
+        reason, remedy = refusal
+        raise InvalidArgumentError(
+            _REFUSAL.format(reason),
+            code="record_generation_unsupported",
+            remedy=remedy,
+            reason=reason,
         )
     return settings
 
@@ -326,10 +342,15 @@ def _step_window(kwargs: Mapping[str, Any], step: int) -> range:
     elif isinstance(kwargs.get("cache_position"), torch.Tensor):
         start = int(kwargs["cache_position"].reshape(-1)[0])
     if step > 0 and start == 0:
-        raise _refuse(
+        reason = (
             "the model ran a decode step without a KV cache (it recomputed the whole "
-            "prefix), so the cost is no longer linear in generated tokens",
-            "use a model whose generate() passes past_key_values to its forward",
+            "prefix), so the cost is no longer linear in generated tokens"
+        )
+        raise InvalidArgumentError(
+            _REFUSAL.format(reason),
+            code="record_generation_unsupported",
+            remedy="use a model whose generate() passes past_key_values to its forward",
+            reason=reason,
         )
     return range(start, start + length)
 
@@ -380,6 +401,8 @@ def _forwards_through(
     route = _ForwardRoute(recorder, windows, model.forward)
 
     def forward(*args: Any, **kwargs: Any) -> Any:
+        """Hand the call to the route, which records outermost forwards only."""
+
         return route(*args, **kwargs)
 
     object.__setattr__(model, "forward", forward)
@@ -477,7 +500,7 @@ def record_generation(
     windows: list[tuple[int, range]] = []
     with Recorder(model, **recorder_kwargs) as recorder:
         with _forwards_through(model, recorder, windows):
-            generate: Callable[..., Any] = getattr(model, "generate")
+            generate = cast("Callable[..., Any]", model.generate)
             output = generate(*_positional(input_args), **prompt_kwargs, **generate_kwargs)
     recording = recorder.recording
     steps = _steps(recording, windows)
@@ -489,3 +512,11 @@ def record_generation(
         prompt_length=prompt_length,
         settings=MappingProxyType(settings),
     )
+
+
+def enrich_generation(generation: GenerationRecording, postprocess: str) -> GenerationRecording:
+    """Return ``generation`` with its recording enriched by ``postprocess`` (``"none"`` keeps it)."""
+
+    if postprocess == "none":
+        return generation
+    return dataclasses.replace(generation, recording=generation.recording.enrich(postprocess))

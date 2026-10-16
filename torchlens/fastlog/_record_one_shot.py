@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 from collections.abc import Mapping
 from typing import Any
 
@@ -23,7 +22,7 @@ from ..backends import (
 from ..intervention.predicates import InterventionPredicate
 from ..options import StreamingOptions
 from ..types import ActivationPostfunc, GradientPostfunc
-from ._generation import GenerationRecording, record_generation
+from ._generation import GenerationRecording, enrich_generation, record_generation
 from ._recorder import Recorder
 from ._validation import validate_postprocess
 from .options import (
@@ -197,14 +196,12 @@ def record(
     # instead of crashing deep in capture with an opaque torch error.
     check_model_and_input_variants(model, input_args, input_kwargs)
     if generate_kwargs is not None:
-        return _record_generation_door(
+        output, generation = record_generation(
             model,
             input_args,
             input_kwargs,
             generate_kwargs,
-            return_output=return_output,
-            postprocess=postprocess,
-            recorder_kwargs={
+            {
                 "save": save,
                 "default_op": default_op,
                 "default_module": default_module,
@@ -231,6 +228,10 @@ def record(
                 "detach_saved_activations": detach_saved_activations,
             },
         )
+        generation = enrich_generation(generation, postprocess)
+        if return_output:
+            return output, generation
+        return generation
     with Recorder(
         model,
         save=save,
@@ -265,26 +266,3 @@ def record(
     if return_output:
         return output, recording
     return recording
-
-
-def _record_generation_door(
-    model: nn.Module,
-    input_args: Any,
-    input_kwargs: dict[str, Any] | None,
-    generate_kwargs: Mapping[str, Any],
-    *,
-    return_output: bool,
-    postprocess: str,
-    recorder_kwargs: dict[str, Any],
-) -> GenerationRecording | tuple[Any, GenerationRecording]:
-    """Run the ``generate_kwargs=`` door of :func:`record`."""
-
-    output, generation = record_generation(
-        model, input_args, input_kwargs, generate_kwargs, recorder_kwargs
-    )
-    if postprocess != "none":
-        enriched = generation.recording.enrich(postprocess)
-        generation = dataclasses.replace(generation, recording=enriched)
-    if return_output:
-        return output, generation
-    return generation
