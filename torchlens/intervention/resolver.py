@@ -45,6 +45,7 @@ from .errors import (
 from .selectors import (
     BaseSelector,
     CompositeSelector,
+    FacetSelector,
     NotSelector,
     _classify_selector_direction,
 )
@@ -852,12 +853,12 @@ class SiteTable:
         return tuple(
             str(
                 getattr(
-                    site,
+                    record,
                     "layer_label",
-                    getattr(site, "label", "<unknown>"),
+                    getattr(record, "label", "<unknown>"),
                 )
             )
-            for site in self._sites
+            for record in map(_site_record, self._sites)
         )
 
     def to_dataframe(self) -> pd.DataFrame:
@@ -887,7 +888,7 @@ class SiteTable:
                 "modules": getattr(site, "modules", ()),
                 "output_of_module_calls": getattr(site, "output_of_module_calls", ()),
             }
-            for site in self._sites
+            for site in map(_site_record, self._sites)
         ]
         return pd.DataFrame(rows)
 
@@ -1001,6 +1002,8 @@ def resolve_sites(
         )
 
     selector = _normalize_query(query)
+    if isinstance(selector, FacetSelector):
+        return _resolve_facet_sites(log, selector, query, max_fanout=max_fanout)
     _guard_episode_step_query(log, selector)
     refuse_trace_alias_spellings(log, selector)
     direction = _selector_resolution_direction(selector)
@@ -1025,6 +1028,85 @@ def resolve_sites(
             stacklevel=2,
         )
     return SiteTable(matched, query=query)
+
+
+def _resolve_facet_sites(
+    log: Trace,
+    selector: FacetSelector,
+    query: SelectorInput,
+    *,
+    max_fanout: int,
+) -> SiteTable:
+    """Resolve a facet selector on a finished trace to the facets it reads.
+
+    The facets are the ones the write doors (``Trace.set``, ``attach_hooks``,
+    ``do``) resolve for the same selector, each the ``Facet`` that
+    ``record.facets[...]`` serves, so its ``.value`` is the slice an edit at
+    those doors receives (a head's slice, an SAE latent's encoder activation).
+    A selector that matches several facets keeps its broadcast and says how
+    many it read, as an ordinary multi-site selector does.
+
+    Parameters
+    ----------
+    log:
+        Finished trace to read.
+    selector:
+        Normalized facet selector.
+    query:
+        The selector as the caller spelled it, for messages.
+    max_fanout:
+        Maximum number of facets allowed.
+
+    Returns
+    -------
+    SiteTable
+        One ``Facet`` per matched facet, in resolution order.
+
+    Raises
+    ------
+    SiteResolutionError
+        Coded ``facet_selector_no_match`` when the trace serves no such facet.
+    SiteAmbiguityError
+        If more facets match than ``max_fanout`` allows.
+    """
+
+    from ..semantic.facets import Facet
+    from .hooks import _resolve_facet_specs
+
+    facets = tuple(Facet(spec) for _, spec in _resolve_facet_specs(log, selector))
+    if not facets:
+        first = next(iter(getattr(log, "layer_labels", ()) or ()), None)
+        example = f"trace[{first!r}].facets.keys()" if first is not None else "record.facets.keys()"
+        raise SiteResolutionError(
+            f"facet selector {query!r} matched 0 facets on this trace: no module or op record "
+            "here serves that facet",
+            code="facet_selector_no_match",
+            remedy=f"list the facets a record serves with {example}, then select one of them",
+            selector=repr(query),
+        )
+    labels = SiteTable(facets).labels()
+    if len(facets) > max_fanout:
+        raise SiteAmbiguityError(
+            f"site {query!r} matched {len(facets)} facets, exceeding max_fanout={max_fanout}. "
+            "Pass a larger max_fanout explicitly or use a narrower selector."
+        )
+    if len(facets) > 1:
+        shown = ", ".join(labels[:4]) + (f" and {len(labels) - 4} more" if len(labels) > 4 else "")
+        warnings.warn(
+            f"facet selector {query!r} reads {len(facets)} facets (home ops: {shown}). "
+            "Scope it with .in_module(address) to read fewer.",
+            MultiMatchWarning,
+            stacklevel=3,
+        )
+    return SiteTable(facets, query=query)
+
+
+def _site_record(site: Any) -> Any:
+    """Return the record a table entry describes: the home op of a ``Facet``, else itself."""
+
+    from ..semantic.facets import Facet
+
+    return site.spec.home if isinstance(site, Facet) else site
 
 
 #: Label indexes of the active :func:`_label_index_scope`, keyed by ``id(log)``:
