@@ -13,6 +13,7 @@ import pytest
 import torch
 from torch import nn
 
+from benchmarks import perf_runner
 from benchmarks.perf_gate import compare_gate_payloads, normalize_gate_payload
 from benchmarks.perf_runner import (
     _operation,
@@ -337,4 +338,42 @@ def test_run_memory_detects_transient_inside_measured_call() -> None:
     assert observed >= transient_mb * 0.8, (
         f"phase-local RSS peak {observed:.1f} MB missed a {transient_mb} MB "
         "allocate-touch-free transient inside the measured call"
+    )
+
+
+@pytest.mark.serial
+def test_run_memory_phase_peak_survives_flat_kernel_high_water(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A transient registers even when memory pressure keeps ``VmHWM`` flat.
+
+    Under memory pressure the kernel can reclaim the process's file-backed
+    pages (and swap anonymous ones) while the measured call runs, so total RSS
+    and its high water stay flat with a transient live. Force that condition
+    by pinning the kernel high-water reading: the phase peak must still see
+    the transient through the sampled anonymous footprint.
+    """
+
+    def _touch(buffer: bytearray) -> None:
+        for index in range(0, len(buffer), 4096):
+            buffer[index] = 1
+
+    transient_mb = 128
+
+    def _transient() -> None:
+        buffer = bytearray(transient_mb * 1024 * 1024)
+        _touch(buffer)
+        del buffer
+
+    flat = perf_runner._read_rss_high_water()
+    monkeypatch.setattr(perf_runner, "_read_rss_high_water", lambda: flat)
+    metrics = _run_memory(_transient, "cpu", memory_runs=3)
+
+    if perf_runner._read_anon_footprint() is None:
+        pytest.skip("anonymous footprint unavailable on this platform")
+    assert metrics["phase_rss_high_water_kernel_delta_mb"] == 0.0
+    observed = metrics["phase_rss_high_water_delta_mb"]
+    assert observed >= transient_mb * 0.8, (
+        f"phase-local peak {observed:.1f} MB missed a {transient_mb} MB transient "
+        "while the kernel high water stayed flat"
     )

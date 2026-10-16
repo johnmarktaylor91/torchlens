@@ -689,6 +689,43 @@ def _read_rss_high_water() -> int:
     return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
 
 
+def _read_anon_footprint() -> int | None:
+    """Return the anonymous memory footprint in KiB, ``RssAnon + VmSwap`` (Linux).
+
+    Total RSS, and so ``VmHWM``, counts file-backed pages (shared libraries,
+    mapped files) that memory pressure can reclaim while the measured call
+    runs: the process's resident total can then stay flat while a transient
+    allocation is live, and the high-water growth reads 0.0. The
+    anonymous footprint is not lowered by that reclaim, and swapped-out
+    anonymous pages stay counted through ``VmSwap``, so a transient inside the
+    measured call always raises it.
+
+    Returns
+    -------
+    int | None
+        KiB, or ``None`` where ``/proc/self/status`` is unavailable.
+    """
+
+    anon = None
+    swap = 0
+    try:
+        with open("/proc/self/status") as handle:
+            for line in handle:
+                if line.startswith("RssAnon:"):
+                    anon = int(line.split()[1])
+                elif line.startswith("VmSwap:"):
+                    swap = int(line.split()[1])
+    except (OSError, ValueError, IndexError):
+        return None
+    return None if anon is None else anon + swap
+
+
+#: GIL switch interval while the memory pass runs: the sampler thread gets the
+#: interpreter at least this often, so a transient that lives a few milliseconds
+#: inside a pure-Python measured call is still sampled. Restored afterwards.
+_SAMPLER_SWITCH_INTERVAL_S = 0.0005
+
+
 class _ConcurrentPeakSampler:
     """Sample RSS/USS peaks WHILE the measured callable executes.
 
@@ -708,11 +745,12 @@ class _ConcurrentPeakSampler:
         self._thread: threading.Thread | None = None
         self.rss_peak = 0
         self.uss_peak = 0
+        self.anon_peak = 0
 
     def __enter__(self) -> _ConcurrentPeakSampler:
-        """Start sampling when a process handle is available."""
+        """Start sampling when a process handle or the anonymous footprint is available."""
 
-        if self._process is not None:
+        if self._process is not None or _read_anon_footprint() is not None:
             self._thread = threading.Thread(
                 target=self._sample_loop, name="tl-perf-peak-sampler", daemon=True
             )
@@ -727,14 +765,18 @@ class _ConcurrentPeakSampler:
             self._thread.join(timeout=1.0)
 
     def _sample_loop(self) -> None:
-        """Poll RSS (cheap) and USS (exact) until stopped."""
+        """Poll the anonymous footprint, RSS (cheap) and USS (exact) until stopped."""
 
         while not self._stop.is_set():
-            try:
-                self.rss_peak = max(self.rss_peak, self._process.memory_info().rss)
-                self.uss_peak = max(self.uss_peak, self._process.memory_full_info().uss)
-            except Exception:
-                return
+            footprint = _read_anon_footprint()
+            if footprint is not None:
+                self.anon_peak = max(self.anon_peak, footprint)
+            if self._process is not None:
+                try:
+                    self.rss_peak = max(self.rss_peak, self._process.memory_info().rss)
+                    self.uss_peak = max(self.uss_peak, self._process.memory_full_info().uss)
+                except Exception:
+                    return
             self._stop.wait(0.001)
 
 
@@ -759,6 +801,12 @@ def _run_memory(fn: OperationFn, device: str, memory_runs: int) -> dict[str, Any
         (``rss_high_water_phase_local`` reports which semantics apply), and
         a concurrent sampler thread polls RSS/USS during the runs, so an
         allocate-touch-free transient registers instead of reading ``0.0``.
+        ``phase_rss_high_water_delta_mb`` is the larger of the kernel
+        high-water growth (``phase_rss_high_water_kernel_delta_mb``) and the
+        sampled anonymous-footprint growth (``sampled_anon_peak_delta_mb``,
+        ``RssAnon + VmSwap``): under memory pressure the kernel can reclaim
+        the process's file-backed pages during the phase, which keeps total
+        RSS, and so its high water, flat while a transient is live.
         End-state deltas stay separately named (``uss_delta_mb_memory_pass``,
         ``final_uss_mb``).
     """
@@ -781,15 +829,21 @@ def _run_memory(fn: OperationFn, device: str, memory_runs: int) -> dict[str, Any
     metrics["rss_high_water_phase_local"] = rss_reset
     rss_high_water_before = _read_rss_high_water()
     metrics["rss_high_water_before_mb"] = rss_high_water_before / 1024
+    anon_before = _read_anon_footprint()
     if device == "cuda":
         torch.cuda.reset_peak_memory_stats()
     peak_uss = baseline_uss
-    with _ConcurrentPeakSampler(process) as sampler:
-        for _ in range(memory_runs):
-            fn()
-            if process is not None and peak_uss is not None:
-                peak_uss = max(peak_uss, process.memory_full_info().uss)
-        _sync(device)
+    switch_interval = sys.getswitchinterval()
+    sys.setswitchinterval(_SAMPLER_SWITCH_INTERVAL_S)
+    try:
+        with _ConcurrentPeakSampler(process) as sampler:
+            for _ in range(memory_runs):
+                fn()
+                if process is not None and peak_uss is not None:
+                    peak_uss = max(peak_uss, process.memory_full_info().uss)
+            _sync(device)
+    finally:
+        sys.setswitchinterval(switch_interval)
     if process is not None and baseline_uss is not None and peak_uss is not None:
         final_uss = process.memory_full_info().uss
         peak_uss = max(peak_uss, final_uss, sampler.uss_peak)
@@ -802,7 +856,13 @@ def _run_memory(fn: OperationFn, device: str, memory_runs: int) -> dict[str, Any
     usage = resource.getrusage(resource.RUSAGE_SELF)
     metrics["process_high_water_rss_mb"] = usage.ru_maxrss / 1024
     phase_rss_delta_kib = max(_read_rss_high_water() - rss_high_water_before, 0)
-    metrics["phase_rss_high_water_delta_mb"] = phase_rss_delta_kib / 1024
+    metrics["phase_rss_high_water_kernel_delta_mb"] = phase_rss_delta_kib / 1024
+    phase_peak_kib = phase_rss_delta_kib
+    if anon_before is not None:
+        anon_peak = max(sampler.anon_peak, _read_anon_footprint() or 0, anon_before)
+        metrics["sampled_anon_peak_delta_mb"] = (anon_peak - anon_before) / 1024
+        phase_peak_kib = max(phase_peak_kib, anon_peak - anon_before)
+    metrics["phase_rss_high_water_delta_mb"] = phase_peak_kib / 1024
     if device == "cuda":
         metrics["max_allocated_mb"] = torch.cuda.max_memory_allocated() / 1024 / 1024
         metrics["max_reserved_mb"] = torch.cuda.max_memory_reserved() / 1024 / 1024
