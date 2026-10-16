@@ -102,6 +102,7 @@ def validate_persisted_forgery_surfaces(trace: Trace) -> None:
     from ._load_validators import (
         _validate_annotation_families,
         _validate_edge_carriers,
+        _validate_executed_flops_records,
         _validate_graph_structure,
     )
 
@@ -121,6 +122,7 @@ def validate_persisted_forgery_surfaces(trace: Trace) -> None:
     _validate_identity_facts(trace)
     _validate_source_snapshots(trace)
     _validate_structure_evidence(trace)
+    _validate_executed_flops_records(trace)
 
 
 def _refuse(

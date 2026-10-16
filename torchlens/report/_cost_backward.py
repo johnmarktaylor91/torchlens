@@ -19,8 +19,12 @@ states:
   pass's ``BackwardPass.dispatched_ops``), exact for the matmul and
   convolution families at fma2 (FlopCounterMode's convention); every
   recorded op outside those families is named in ``uncounted_ops``, never
-  zeroed or estimated. A pass with no dispatch record on this object (a
-  loaded trace, an implicit pass) leaves the executed answer UNKNOWN.
+  zeroed or estimated. Each pass's count is attributed to the GradFn calls
+  and forward ops that did the work, with a named unattributed bucket
+  (``BackwardStatus.attributions``); a loaded trace reads the count saved
+  with the pass. A pass with neither a dispatch record nor a saved count (an
+  implicit pass, an artifact saved before the count was kept) or a pass that
+  raised before finishing leaves the executed answer UNKNOWN.
 
 D15/D23 plumbing (derived live-only; F09 holds no adjudicated persisted
 fields): ``grad_enabled_at_capture``, per-op ``needs_param_grad`` /

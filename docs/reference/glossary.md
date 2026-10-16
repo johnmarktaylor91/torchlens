@@ -2223,6 +2223,16 @@ shim owed*
   `flops_by_op()` sums rows per forward op. `None` when the pass has no
   census on this object; a pass that raised has `executed_flops` `None`.
 
+**BackwardPass.executed_flops_record** — *unstable — no deprecation shim owed*
+: The pass's counted executed backward and its attribution as a closed
+  record (`convention`, `executed_flops`, `uncounted_ops`, `rows`,
+  `unattributed`; ints, `None` and short strings only), written when the
+  trace is saved (tlspec v10) so a loaded trace reads the counted answer
+  through `flops_attribution` and `tl.report.backward_status`. `None` on a
+  live pass and on artifacts saved before the field, which read unknown. A
+  malformed record refuses at load with
+  `artifact_executed_flops_record_invalid`.
+
 **BackwardStatus.attributions / unattributed_flops / recompute_flops** — *unstable — no deprecation shim owed*
 : `tl.report.backward_status(trace)` in the `backward_observed` state: one
   `BackwardFlopsAttribution` per counted pass, the counted work that ran

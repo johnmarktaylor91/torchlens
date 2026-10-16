@@ -262,6 +262,11 @@ Unified `.tlspec` manifests include `backward_summary`, gradient blob kinds in `
 the public policy for old bundles: legacy class remaps are accepted at load, while removed
 backward gradient configuration fields are dropped during state normalization.
 
+The per-call census (`BackwardPass.dispatched_ops`) is session-time. Saving writes each pass's
+counted executed backward and its attribution as `BackwardPass.executed_flops_record`, so a
+loaded trace reads the same `backward_status` count, rows and unattributed bucket; artifacts
+saved before the field read the executed backward as unknown.
+
 ## Limitations And Costs
 
 Torch keeps strong references to discovered autograd wrapper objects until `trace.cleanup()` or

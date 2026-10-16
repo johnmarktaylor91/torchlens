@@ -164,7 +164,7 @@
   "field": "pass_index",
   "file": "torchlens/_io/_load_validators.py",
   "has_default": true,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": true
  },
  {
@@ -3604,7 +3604,7 @@
   "field": "pass_index",
   "file": "torchlens/data_classes/backward_pass.py",
   "has_default": false,
-  "sites": 4,
+  "sites": 5,
   "via_getattr": false
  },
  {
@@ -3612,7 +3612,7 @@
   "field": "source_trace",
   "file": "torchlens/data_classes/backward_pass.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 4,
   "via_getattr": false
  },
  {
@@ -7798,6 +7798,14 @@
   "has_default": true,
   "sites": 1,
   "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/report/_backward_attribution.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
  },
  {
   "ambiguous": true,

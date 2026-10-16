@@ -82,6 +82,7 @@
     "backward_call_context": "keep",
     "duration": "keep",
     "engine_flags": "keep",
+    "executed_flops_record": "keep",
     "grad_fn_calls": "keep",
     "implicit": "keep",
     "inputs_subset": "keep",
@@ -1428,6 +1429,7 @@
      "backward_call_context": "keep",
      "duration": "keep",
      "engine_flags": "keep",
+     "executed_flops_record": "keep",
      "grad_fn_calls": "keep",
      "implicit": "keep",
      "inputs_subset": "keep",
@@ -1449,6 +1451,7 @@
      "backward_call_context": "fact",
      "duration": "fact",
      "engine_flags": "fact",
+     "executed_flops_record": "fact",
      "grad_fn_calls": "fact",
      "implicit": "fact",
      "inputs_subset": "fact",
@@ -1470,6 +1473,7 @@
      "backward_call_context",
      "duration",
      "engine_flags",
+     "executed_flops_record",
      "grad_fn_calls",
      "implicit",
      "inputs_subset",
@@ -4090,5 +4094,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "547f32be00d97fec11ae122e702c5c67c9f20266cfbafe7a77ef6d2427812639"
+ "writer_contract_digest": "ff49d65bd3e76bb6a596cae32bfcfcb32c062031d58fd7ce185e5d1e622ceb1d"
 }

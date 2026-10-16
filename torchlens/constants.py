@@ -997,6 +997,7 @@ BACKWARD_PASS_FIELD_ORDER = [
     "status",
     "order_attribution_coverage",
     "grad_fn_calls",
+    "executed_flops_record",
 ]
 
 PRIMITIVE_OP_FIELD_ORDER = [

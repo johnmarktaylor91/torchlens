@@ -463,3 +463,32 @@ def _validate_op_annotations(op: Any) -> None:
             'Op.annotations["dedup_reference_label"]',
             "dedup_type",
         )
+
+
+def _validate_executed_flops_records(trace: Trace) -> None:
+    """Validate each backward pass's persisted executed-FLOPs record (tlspec v10).
+
+    The record is a closed dict of ints, ``None`` and short strings whose rows
+    plus unattributed bucket equal a known executed count; anything else
+    refuses rather than coercing.
+    """
+
+    from ..report._backward_attribution import executed_flops_record_problem
+
+    for record in (getattr(trace, "backward_pass_logs", None) or {}).values():
+        value = getattr(record, "executed_flops_record", None)
+        if value is None:
+            continue
+        problem = executed_flops_record_problem(value)
+        if problem is not None:
+            message, reason = problem
+            _refuse(
+                f"backward pass {getattr(record, 'pass_index', '?')}: {message}",
+                code="artifact_executed_flops_record_invalid",
+                field="BackwardPass.executed_flops_record",
+                reason=reason,
+                remedy=(
+                    "re-save the artifact from its source capture; do not hand-edit "
+                    "the counted backward record"
+                ),
+            )

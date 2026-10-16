@@ -974,6 +974,7 @@ STORAGE_BINDINGS: dict[str, dict[str, StorageBinding]] = {
         "status": StorageBinding(StorageKind.SCALAR, annotation='str'),
         "order_attribution_coverage": StorageBinding(StorageKind.SCALAR, annotation='float | None'),
         "grad_fn_calls": StorageBinding(StorageKind.SCALAR, annotation='list[Any]'),
+        "executed_flops_record": StorageBinding(StorageKind.SCALAR, annotation='dict[str, Any] | None'),
         "_source_trace_ref": StorageBinding(StorageKind.SCALAR, annotation='Any'),
     },
     "func_call_location": {

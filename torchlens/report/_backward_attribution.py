@@ -376,6 +376,23 @@ def attribute_census(
     )
 
 
+def _saved_recompute_state(rows: tuple[BackwardFlopsRow, ...], checkpoint: str) -> str:
+    """The recompute state of a saved record: its rows first, then the witness.
+
+    A positive recompute share was labeled at save time, which needed the
+    checkpoint witness; all-zero rows defer to the persisted witness.
+    """
+
+    shares = [row.recompute_flops for row in rows]
+    if any(share is None for share in shares):
+        return "unknown"
+    if any(shares):
+        return "labeled"
+    if checkpoint == "none_observed":
+        return "none_observed"
+    return "labeled" if checkpoint == "observed" else "unknown"
+
+
 def executed_flops_record(attribution: BackwardFlopsAttribution) -> dict[str, Any]:
     """The closed persisted form of one pass's attribution (ints, None, short strings)."""
 
@@ -430,13 +447,7 @@ def attribution_from_record(
     unattributed_flops: int | None = (
         None if executed is None else sum(flops for _name, flops in unattributed if flops)
     )
-    checkpoint = _checkpoint_evidence(trace)
-    if checkpoint == "none_observed":
-        recompute = "none_observed"
-    elif checkpoint == "observed" and all(row.recompute_flops is not None for row in rows):
-        recompute = "labeled"
-    else:
-        recompute = "unknown"
+    recompute = _saved_recompute_state(rows, _checkpoint_evidence(trace))
     return BackwardFlopsAttribution(
         pass_index=int(pass_index),
         convention=str(record["convention"]),
@@ -449,3 +460,74 @@ def attribution_from_record(
         other_trace_ops=None,
         source="saved record",
     )
+
+
+def _is_count(value: Any, *, minimum: int = 0) -> bool:
+    """A non-boolean int at or above ``minimum``."""
+
+    return isinstance(value, int) and not isinstance(value, bool) and value >= minimum
+
+
+def _is_label(value: Any) -> bool:
+    """A short string."""
+
+    return isinstance(value, str) and len(value) <= _RECORD_STRING_LIMIT
+
+
+def _entries_problem(entries: Any, field: str, check: Any, width: int) -> tuple[str, str] | None:
+    """Validate one list of fixed-width entries with a per-entry predicate."""
+
+    if not isinstance(entries, (list, tuple)):
+        return f"{field} must be a list", f"{field}_type"
+    for entry in entries:
+        if not isinstance(entry, (list, tuple)) or len(entry) != width or not check(entry):
+            return f"{field} entry {entry!r} is malformed", f"{field}_entry"
+    return None
+
+
+def _row_ok(entry: Any) -> bool:
+    label, call_index, op_label, flops, recompute = entry
+    return (
+        _is_label(label)
+        and _is_count(call_index, minimum=1)
+        and (op_label is None or _is_label(op_label))
+        and (flops is None or _is_count(flops))
+        and (recompute is None or _is_count(recompute))
+    )
+
+
+def executed_flops_record_problem(record: Any) -> tuple[str, str] | None:
+    """Why a persisted ``executed_flops_record`` is malformed, or ``None`` when sound.
+
+    Returns ``(message, reason)``: the closed key set, ints and short strings
+    only, and rows plus unattributed equal to a known executed count.
+    """
+
+    if not isinstance(record, Mapping):
+        return "the record must be a mapping or None", "record_type"
+    if set(record) != EXECUTED_FLOPS_RECORD_KEYS:
+        return (
+            f"keys {sorted(map(str, record))} differ from {sorted(EXECUTED_FLOPS_RECORD_KEYS)}",
+            "record_keys",
+        )
+    if not _is_label(record["convention"]):
+        return "convention must be a short string", "convention_type"
+    executed = record["executed_flops"]
+    if executed is not None and not _is_count(executed):
+        return f"executed_flops {executed!r} must be a non-negative int or None", "count_type"
+    for field, check, width in (
+        ("uncounted_ops", lambda e: _is_label(e[0]) and _is_count(e[1], minimum=1), 2),
+        ("rows", _row_ok, 5),
+        ("unattributed", lambda e: _is_label(e[0]) and (e[1] is None or _is_count(e[1])), 2),
+    ):
+        problem = _entries_problem(record[field], field, check, width)
+        if problem is not None:
+            return problem
+    if executed is not None:
+        row_flops = [entry[3] for entry in record["rows"]]
+        if any(flops is None for flops in row_flops):
+            return "a known executed_flops needs every row's flops", "rows_incoherent"
+        bucket = sum(flops for _name, flops in record["unattributed"] if flops)
+        if sum(row_flops) + bucket != executed:
+            return "rows plus unattributed differ from executed_flops", "rows_incoherent"
+    return None
