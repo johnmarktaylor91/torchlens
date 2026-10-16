@@ -243,6 +243,7 @@ def test_llama_direct_eager_edit_matches_lowered(llama_rotary_models):
     assert abs(float(direct.values[0, 0]) - float(lowered.metric_value[42])) < 5e-5
 
 
+# The seam stopped diverging at 52268486c, which pauses the live-site proxy's internal size read.
 @pytest.mark.parametrize("kind", ["head", "pattern"])
 def test_llama_buffer_view_rotary_matches_direct_buffer(llama_rotary_models, kind):
     """The buffer-view rotary body's lowered cells equal the direct-buffer ones.
