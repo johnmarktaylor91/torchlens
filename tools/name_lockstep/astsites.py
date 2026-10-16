@@ -192,19 +192,27 @@ def definite_object(tree: ast.Module, pos: Positions, home: bool, relative: str)
                     _record_import(pos, node, alias.name)
         elif isinstance(node, ast.Constant) and node.value == pos.old and home:
             pos.at(node.lineno, node.col_offset + 1)
-        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == pos.old:
-            if home:
-                pos.after_keyword(node.lineno, "def")
+        elif (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == pos.old
+            and home
+        ):
+            pos.after_keyword(node.lineno, "def")
         elif isinstance(node, ast.ClassDef) and node.name == pos.old and home:
             pos.after_keyword(node.lineno, "class")
     if imported and not home:
-        # A re-exporting module lists the name it imported in its own ``__all__``.
-        for value in _all_values(tree):
-            for const in ast.walk(value):
-                if isinstance(const, ast.Constant) and const.value == pos.old:
-                    pos.at(const.lineno, const.col_offset + 1)
+        _reexported_all(tree, pos)
     if home or imported:
         pos.module_names(tree)
+
+
+def _reexported_all(tree: ast.Module, pos: Positions) -> None:
+    """Record the leaf in the ``__all__`` of a module that re-exports what it imported."""
+
+    for value in _all_values(tree):
+        for const in ast.walk(value):
+            if isinstance(const, ast.Constant) and const.value == pos.old:
+                pos.at(const.lineno, const.col_offset + 1)
 
 
 def _record_import(pos: Positions, node: ast.ImportFrom, name: str) -> None:
@@ -375,37 +383,46 @@ def definite_member(row: dict[str, Any], tree: ast.Module, pos: Positions) -> No
 
     class_name = str(row["owner"]).split(":", 1)[-1].split(".")[-1]
     for node in ast.walk(tree):
-        if not (isinstance(node, ast.ClassDef) and node.name == class_name):
-            continue
-        tables: set[str] = set()
-        for item in node.body:
-            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == pos.old:
-                pos.after_keyword(item.lineno, "def")
-            elif isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
-                if item.target.id == pos.old:
-                    pos.at(item.target.lineno, item.target.col_offset)
-            elif isinstance(item, ast.Assign):
-                for target in item.targets:
-                    if isinstance(target, ast.Name) and target.id == pos.old:
-                        pos.at(target.lineno, target.col_offset)
-            names, value = _assigned(item)
-            # The class's own field tables (portable-state spec, slots, policies).
-            if value is not None and _table_keys(value, pos):
-                tables.update(names)
-        if tables:
-            _table_lookups(node, tables, frozenset({"", "self", "cls", class_name}), pos)
-            _table_lookups(tree, tables, frozenset({class_name}), pos)
-        for sub in ast.walk(node):
-            if (
-                isinstance(sub, ast.Attribute)
-                and sub.attr == pos.old
-                and isinstance(sub.value, ast.Name)
-                and sub.value.id in ("self", "cls")
-            ):
-                end = sub.end_col_offset or 0
-                line = pos.lines[(sub.end_lineno or sub.lineno) - 1]
-                start = char_offset(line, end) - len(pos.old)
-                pos.found.add((sub.end_lineno or sub.lineno, start))
+        if isinstance(node, ast.ClassDef) and node.name == class_name:
+            tables = _class_body(node, pos)
+            if tables:
+                _table_lookups(node, tables, frozenset({"", "self", "cls", class_name}), pos)
+                _table_lookups(tree, tables, frozenset({class_name}), pos)
+            _self_attributes(node, pos)
+
+
+def _class_body(node: ast.ClassDef, pos: Positions) -> set[str]:
+    """Record the member's definition and class-table keys; return the tables holding it."""
+
+    tables: set[str] = set()
+    for item in node.body:
+        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == pos.old:
+            pos.after_keyword(item.lineno, "def")
+        names, value = _assigned(item)
+        targets = [item.target] if isinstance(item, ast.AnnAssign) else getattr(item, "targets", [])
+        for target in targets if pos.old in names else ():
+            if isinstance(target, ast.Name) and target.id == pos.old:
+                pos.at(target.lineno, target.col_offset)
+        # The class's own field tables (portable-state spec, slots, policies).
+        if value is not None and _table_keys(value, pos):
+            tables.update(names)
+    return tables
+
+
+def _self_attributes(node: ast.ClassDef, pos: Positions) -> None:
+    """Record ``self.<member>`` and ``cls.<member>`` inside the class."""
+
+    for sub in ast.walk(node):
+        if (
+            isinstance(sub, ast.Attribute)
+            and sub.attr == pos.old
+            and isinstance(sub.value, ast.Name)
+            and sub.value.id in ("self", "cls")
+        ):
+            end = sub.end_col_offset or 0
+            line = pos.lines[(sub.end_lineno or sub.lineno) - 1]
+            start = char_offset(line, end) - len(pos.old)
+            pos.found.add((sub.end_lineno or sub.lineno, start))
 
 
 def init_keywords(tree: ast.Module, class_name: str, relative: str, pos: Positions) -> None:
@@ -426,22 +443,31 @@ def init_keywords(tree: ast.Module, class_name: str, relative: str, pos: Positio
         Position collector.
     """
 
-    scopes: list[tuple[ast.AST, str]] = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ClassDef) and node.name == class_name:
-            if relative.startswith("torchlens/"):
-                scopes += [(tree, class_name), (node, "cls")]
-        elif isinstance(node, ast.ImportFrom) and _in_torchlens(_import_source(node, relative)):
-            if any(a.name == class_name and a.asname in (None, class_name) for a in node.names):
-                scopes.append((tree, class_name))
-    for scope, callee in dict.fromkeys(scopes):
+    for scope, callee in _init_scopes(tree, class_name, relative):
         for node in ast.walk(scope):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-                if node.func.id != callee:
-                    continue
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)):
+                continue
+            if node.func.id == callee:
                 for keyword in node.keywords:
                     if keyword.arg == pos.old:
                         pos.at(keyword.lineno, keyword.col_offset)
+
+
+def _init_scopes(tree: ast.Module, class_name: str, relative: str) -> list[tuple[ast.AST, str]]:
+    """Return ``(scope, callee)`` pairs where a call constructs ``class_name``."""
+
+    scopes: list[tuple[ast.AST, str]] = []
+    in_package = relative.startswith("torchlens/")
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == class_name and in_package:
+            scopes += [(tree, class_name), (node, "cls")]
+        elif (
+            isinstance(node, ast.ImportFrom)
+            and _in_torchlens(_import_source(node, relative))
+            and any(a.name == class_name and a.asname in (None, class_name) for a in node.names)
+        ):
+            scopes.append((tree, class_name))
+    return list(dict.fromkeys(scopes))
 
 
 def definite_param(
