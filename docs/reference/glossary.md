@@ -2209,6 +2209,45 @@ shim owed*
   estimated. `grad_disabled` still reads `0` and `grad_enabled_unobserved`
   still reads unknown; the hypothetical `backward_estimate` is unchanged.
 
+**BackwardPass.flops_attribution / BackwardFlopsAttribution / BackwardFlopsRow** — *unstable — no deprecation shim owed*
+: One backward pass's executed FLOPs charged to the GradFn call each counted
+  call ran under and to the forward op that node differentiates. A
+  `BackwardFlopsAttribution` holds `rows` (one `BackwardFlopsRow` per GradFn
+  call: `pass_index`, `grad_fn_label`, `call_index`, `op_label` or `None` for
+  a node with no forward op, `flops`, `recompute_flops`), the
+  `unattributed_flops` bucket with every unattributed call named in
+  `unattributed_ops` (the seed gradient, nodes no capture walked), so rows
+  plus bucket equal `executed_flops` exactly; `uncounted_ops`, `recompute`
+  (`"labeled"`, `"none_observed"`, `"unknown"`), `other_trace_ops` (calls on
+  another capture's nodes in a shared backward, left to it) and `source`.
+  `flops_by_op()` sums rows per forward op. `None` when the pass has no
+  census on this object; a pass that raised has `executed_flops` `None`.
+
+**BackwardStatus.attributions / unattributed_flops / recompute_flops** — *unstable — no deprecation shim owed*
+: `tl.report.backward_status(trace)` in the `backward_observed` state: one
+  `BackwardFlopsAttribution` per counted pass, the counted work that ran
+  under no recorded node, and the part that replayed forward kernels under
+  activation checkpointing (`None` when the evidence cannot separate replay
+  from backward, as in a `create_graph` pass that checkpoints). Empty or
+  `None` in the other two states.
+
+**DispatchedOp.grad_enabled** — *unstable — no deprecation shim owed*
+: Whether autograd grad mode was on when the call dispatched during a
+  recorded backward. Backward kernels run with grad mode off unless the pass
+  builds a graph; checkpoint replays run with it on, which is how a replayed
+  forward kernel is labeled recompute.
+
+**CostTreeRow forward/backward/total columns; CostTree.backward_state / backward_total / forward_mac_total / column_conventions** — *unstable — no deprecation shim owed*
+: `tl.report.cost_tree(trace)` rows carry `self_forward_mac_flops` (2 x true
+  MACs), `self_backward_flops` (executed backward, matmul and convolution
+  families, fma2) and `self_total_flops` (their sum, one convention), each
+  with a non-additive `subtree_*` twin. Backward work on nodes with no
+  forward op and unattributed calls get their own remainder rows, so the self
+  backward column sums to `backward_total`. Without a counted backward the
+  cells are `None` and `backward_state` names the state; never 0.
+  `column_conventions` names each FLOPs column's convention. Siblings fold
+  only when their MAC and backward cells agree too.
+
 **BackwardPassEnd.close_path** — *unstable — no deprecation shim owed*
 : Sidecar-event-only implicit-pass close-path disclosure: `"engine_drain"`
   when the queued final callback journaled the close, `"sync_point"` for

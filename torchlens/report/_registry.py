@@ -155,7 +155,10 @@ SURFACE_REGISTRY: tuple[SurfaceEntry, ...] = (
         subject="RUN-RESOURCES",
         register="SHAPE",
         invariants=("conserves_totals", "truncation_disclosed"),
-        answers="Show compute as the module tree with exact self/subtree conservation.",
+        answers=(
+            "Show compute as the module tree with exact self/subtree conservation "
+            "and fwd/bwd/total FLOPs columns."
+        ),
         reads_sections=("compute",),
         requires=("finished_trace",),
         refuses_when="the capture failed before finalization",
@@ -246,7 +249,10 @@ SURFACE_REGISTRY: tuple[SurfaceEntry, ...] = (
         subject="RUN-RESOURCES",
         register="SHAPE",
         invariants=("mints_no_facts",),
-        answers="The three-state executed-backward answer (0 / unknown / count of the ops run).",
+        answers=(
+            "The three-state executed-backward answer (0 / unknown / count of the ops run), "
+            "by node and forward op."
+        ),
         reads_sections=("compute",),
         requires=("finished_trace",),
         refuses_when="never",

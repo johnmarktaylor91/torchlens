@@ -186,6 +186,57 @@ means the token wrapper's hook-object replacement is unconditionally safe. The t
 checkpoint-ambiguity refusal is a pending contract amendment and lands with the identity-read
 accessors once the amendment is ratified.
 
+## Executed Backward FLOPs By Node And Forward Op
+
+A captured backward records every ATen call it dispatches (`BackwardPass.dispatched_ops`), and
+`tl.report.backward_status(trace)` counts them exactly for the matmul and convolution families
+(fma2, FlopCounterMode's convention). `BackwardPass.flops_attribution` charges each counted call
+to the GradFn call it ran under and to the forward op that node differentiates
+(DOCUMENTED-UNSTABLE): one `BackwardFlopsRow` per GradFn call (`grad_fn_label`, `call_index`,
+`op_label`, `flops`, `recompute_flops`). Calls that ran under no recorded node (the engine's seed
+gradient, nodes no capture walked) go to the `unattributed` bucket, which names every call
+(`unattributed_ops`); the rows plus `unattributed_flops` equal the pass's `executed_flops`
+exactly. `backward_status(trace).attributions` holds one attribution per counted pass. When one
+backward reaches the nodes of two captures, each capture's view keeps the nodes whose forward op
+it recorded and leaves the others to their capture (`other_trace_ops`); a pass that raised before
+finishing has no count.
+
+Under activation checkpointing the backward replays forward kernels. The engine runs backward
+kernels with grad mode off unless the pass builds a graph, while checkpoint replays run with
+grad mode on (`DispatchedOp.grad_enabled`), so on a trace whose checkpoint witness saw
+checkpointing a counted call made with grad mode on is labeled recompute on the row it ran
+under. The label splits that row's count and never moves a FLOP between rows. A `create_graph`
+pass that checkpoints, or a trace without checkpoint evidence, reads the recompute share as
+`None` (unknown), never a guess.
+
+`tl.report.cost_tree(trace)` carries the same counts per module call: `self_forward_mac_flops`
+(the forward's multiply-accumulate work, 2 x true MACs), `self_backward_flops` and
+`self_total_flops`, with `subtree_*` twins. The total adds the backward to the forward's MAC
+work, one convention, never to the elementwise-inclusive `self_flops`. Backward work on a node
+with no forward op and the unattributed calls get their own rows, so the backward column sums to
+the executed count. Without a counted backward the columns are `None` and the tree's
+`backward_state` says whether the backward was not run or is unknown, never 0.
+
+<!-- flops2-attribution-example -->
+```python
+import torch
+import torchlens as tl
+from torchlens.report import backward_status, cost_tree
+
+model = torch.nn.Sequential(torch.nn.Linear(4, 6), torch.nn.ReLU(), torch.nn.Linear(6, 3))
+trace = tl.trace(model, torch.randn(5, 4), capture=tl.options.CaptureOptions(backward_ready=True))
+trace.log_backward(trace[trace.output_layers[0]].out.sum())
+
+status = backward_status(trace)
+(attribution,) = status.attributions
+attributed = sum(row.flops for row in attribution.rows)
+assert attributed + attribution.unattributed_flops == status.executed_flops
+by_op = attribution.flops_by_op()  # forward op label -> backward FLOPs
+tree = cost_tree(trace)
+assert sum(row.self_backward_flops for row in tree.rows) == status.executed_flops
+trace.cleanup()
+```
+
 ## Validation
 
 Backward validation checks parameter-gradient parity, module-output gradient parity through a

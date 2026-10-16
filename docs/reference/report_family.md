@@ -13,14 +13,14 @@ real fixture in its declared state.
 | `trace.summary()` | Orient me: what model ran, its layers, parameters, and totals. | MODEL | SHAPE | metadata_only |
 | `tl.report.explain(trace)` | Narrate this capture: what ran, its health states, and anything unusual. | CAPTURE | NARRATIVE | metadata_only |
 | `trace.profile(sort_by=..., top_k=...)` | Rank me: which ops/modules cost the most time, FLOPs, or memory. | RUN-RESOURCES | RANK | metadata_only |
-| `tl.report.cost_tree(trace)` | Show compute as the module tree with exact self/subtree conservation. | RUN-RESOURCES | SHAPE | metadata_only |
+| `tl.report.cost_tree(trace)` | Show compute as the module tree with exact self/subtree conservation and fwd/bwd/total FLOPs columns. | RUN-RESOURCES | SHAPE | metadata_only |
 | `tl.report.flops_report(trace_or_model, ...)` | The one-call paper number: analytic forward FLOPs with coverage and params. | RUN-RESOURCES | SHAPE | metadata_only |
 | `trace.stats_table()` | Observations of ONE captured batch per site: mean/std/zero/NaN fractions. | RUN-VALUES | SHAPE | payload_scan |
 | `trace.audit()` | Judge me: findings with severities, checks run, and skips disclosed. | RUN-HEALTH | VERDICT | payload_scan |
 | `tl.report.health_facts(trace)` | The three-state nonfinite record (found / clean / not-checked) with basis. | RUN-HEALTH | SHAPE | payload_scan |
 | `trace.bill_of_materials()` | What does THIS object retain: payload bytes now, counts, annotations. | CAPTURE | SHAPE | metadata_only |
 | `trace.to_agent_json()` | The machine navigation map: op rows, edges, hierarchy, guide. | CAPTURE | ADDRESS | metadata_only |
-| `tl.report.backward_status(trace)` | The three-state executed-backward answer (0 / unknown / count of the ops run). | RUN-RESOURCES | SHAPE | metadata_only |
+| `tl.report.backward_status(trace)` | The three-state executed-backward answer (0 / unknown / count of the ops run), by node and forward op. | RUN-RESOURCES | SHAPE | metadata_only |
 | `tl.report.backward_estimate(trace)` | The HYPOTHETICAL training-backward counterfactual behind its named door. | RUN-RESOURCES | SHAPE | metadata_only |
 | `tl.report.roofline(trace, ridge_intensity=...)` | Theoretical intensity/work map; bound verdicts are hypotheses. | RUN-RESOURCES | SHAPE | metadata_only |
 | `tl.report.instrumented_rate(trace)` | The boxed CPU-only FLOPs-per-instrumented-second triage diagnostic. | RUN-RESOURCES | RANK | metadata_only |
