@@ -389,6 +389,30 @@ status = tl.report.backward_status(trace)
 assert status.executed_flops == 2 * 2 * 32 * 4
 print(status.status_line)
 print(status.uncounted_ops)  # the bias-gradient sums and other calls, named, not zeroed
+
+from torch.nn.attention import SDPBackend, sdpa_kernel
+
+
+class Attend(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.qkv = nn.Linear(8, 24)
+
+    def forward(self, x):
+        q, k, v = self.qkv(x).view(1, 6, 3, 2, 4).permute(2, 0, 3, 1, 4)
+        return nn.functional.scaled_dot_product_attention(q, k, v)
+
+
+def executed(model, x):
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
+    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    return tl.report.backward_status(trace).executed_flops
+
+
+attend, x = Attend(), torch.randn(1, 6, 8)
+fused = executed(attend, x)  # CPU picks its fused attention kernel
+with sdpa_kernel(SDPBackend.MATH):
+    assert executed(attend, x) == fused  # the decomposed math counts the same
 ```
 
 Calls TorchLens makes inside its own GradFn posthooks (gradient logging and the backward
@@ -398,6 +422,35 @@ saved and reloaded trace reports the executed backward as unknown. A capture tha
 no backward never installs the recorder and pays nothing for it. The training-cost estimate
 `tl.report.backward_estimate(trace)` is a separate figure, always labeled hypothetical, and it
 never appears where an executed cost belongs.
+
+### What is counted, and where FlopCounterMode differs
+
+Forward, each op's `flops_forward` follows its rule, with one multiply-add counted as 2 FLOPs:
+
+- A linear or convolution weight computed inside `forward` (weight norm, spectral norm, a
+  weight passed in as an input) is read from the call's arguments, as a parameter weight is.
+- The fused recurrent kernels behind `nn.RNN`, `nn.GRU`, `nn.LSTM` and their cells count one
+  multiply-add per weight-matrix element per output row, plus their bias adds; the gate
+  nonlinearities inside the kernel are not counted. A sequence kernel's whole call is counted
+  on its sequence output and its final states read 0. `lstm_cell` returns two outputs of one
+  shape that cannot be told apart, so half the call is counted on each.
+- `torch.linalg.multi_dot` counts its chain in the order it runs, the cheapest one.
+- `einsum` equations with `...` are counted; repeated labels within one operand and
+  equations over three or more operands stay unknown.
+- `mv`, `dot`, `vdot` and `spmm` count as matrix products; a sparse `spmm` operand is counted
+  as dense, from its shape.
+
+Backward, `tl.report.backward_status(trace)` also counts two fused kernels as the math they
+replace: the CPU fused attention backward (`_scaled_dot_product_flash_attention_for_cpu_backward`:
+the four matrix products of the attention gradient over the full query x key square, which is
+what the MATH attention backend dispatches) and the oneDNN LSTM layer backward
+(`mkldnn_rnn_layer_backward`: dX, dW_ih, dH and dW_hh).
+
+The count follows `torch.utils.flop_counter.FlopCounterMode`'s convention and differs from it in
+two named ways. FlopCounterMode counts a grouped or depthwise convolution's weight gradient
+`groups` times over; TorchLens counts it once. And FlopCounterMode has no rule for `mv`,
+`addmv`, `dot`, `vdot`, the CPU fused attention kernels or the oneDNN LSTM layer kernels, so it
+reports 0 for that work; TorchLens counts it.
 
 ## When another tool is faster
 
