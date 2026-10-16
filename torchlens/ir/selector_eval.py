@@ -627,6 +627,42 @@ def _string_labels(
     return tuple(labels)
 
 
+def _label_site_index(sites: Sequence[Any]) -> dict[str, tuple[Any, ...]] | None:
+    """Map each label spelling to the sites a ``label`` selector matches post hoc.
+
+    The universe is exactly the ``"label"`` branch of :func:`_evaluate_subject`
+    under the ``"site"`` lifecycle: the :data:`_STRING_LABEL_ATTRS` spellings
+    and the site's ``lookup_keys``. ``index.get(target, ())`` therefore equals
+    the sites, in order, for which ``evaluate(label(target), site,
+    lifecycle="site")`` is true.
+
+    Parameters
+    ----------
+    sites:
+        Forward site universe in execution order.
+
+    Returns
+    -------
+    dict[str, tuple[Any, ...]] | None
+        Matching sites per spelling, in ``sites`` order; ``None`` when a site
+        is a backward ``GradFn`` or carries a non-string lookup key, whose
+        matching the index does not reproduce.
+    """
+
+    index: dict[str, list[Any]] = {}
+    for site in sites:
+        if _is_grad_fn(site):
+            return None
+        keys = dict.fromkeys(_string_labels(site, "site"))
+        for key in getattr(site, "lookup_keys", ()) or ():
+            if type(key) is not str:
+                return None
+            keys[key] = None
+        for key in keys:
+            index.setdefault(key, []).append(site)
+    return {key: tuple(matched) for key, matched in index.items()}
+
+
 def _maybe_guard_label(kind: str, value: str, subject: Any, lifecycle: str) -> None:
     """Apply the finalized-label diagnostic where the lifecycle requires it.
 

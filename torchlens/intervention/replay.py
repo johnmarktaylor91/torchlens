@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 import warnings
 from collections import OrderedDict, deque
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import torch
@@ -46,6 +46,7 @@ from .hooks import (
     normalize_hook_plan,
     normalize_hooks_from_spec,
 )
+from .resolver import _label_index_scope
 from .runtime import _execute_hook
 from .types import (
     CapturedArgTemplate,
@@ -557,6 +558,7 @@ def _run_replay(
     hook_targets = _hook_targets_by_label(log, hook_entries, strict=strict)
     executed_call_ids: set[int] = set()
     call_groups = _func_call_groups(log)
+    cone_keys = {_replay_site_key(member) for member in cone}
     errors_non_fatal = 0
     pending_updates: dict[str, torch.Tensor] = {}
     pending_records: dict[str, list[FireRecord]] = {}
@@ -568,7 +570,7 @@ def _run_replay(
             continue
         if site.func_call_id is not None and site.func_call_id in executed_call_ids:
             continue
-        group = _group_for_site(site, call_groups, cone)
+        group = _group_for_site(site, call_groups, cone_keys)
         if site.func_call_id is not None:
             executed_call_ids.add(site.func_call_id)
         if all(preserve_origins and _replay_site_key(member) in origin_keys for member in group):
@@ -1510,11 +1512,12 @@ def _origin_sites_for_hooks(
     """
 
     target_keys: set[str] = set()
-    for entry in hook_entries:
-        for site in log.resolve_sites(
-            entry.site_target, strict=strict, max_fanout=len(log.layer_list)
-        ):
-            target_keys.add(_replay_site_key(site))
+    with _label_index_scope():  # resolution reads the trace; nothing relabels it here
+        for entry in hook_entries:
+            for site in log.resolve_sites(
+                entry.site_target, strict=strict, max_fanout=len(log.layer_list)
+            ):
+                target_keys.add(_replay_site_key(site))
     return [site for site in log.layer_list if _replay_site_key(site) in target_keys]
 
 
@@ -1543,11 +1546,12 @@ def _hook_targets_by_label(
     """
 
     targets: dict[str, list[NormalizedHookEntry]] = {}
-    for entry in hook_entries:
-        for site in log.resolve_sites(
-            entry.site_target, strict=strict, max_fanout=len(log.layer_list)
-        ):
-            targets.setdefault(_replay_site_key(site), []).append(entry)
+    with _label_index_scope():  # resolution reads the trace; nothing relabels it here
+        for entry in hook_entries:
+            for site in log.resolve_sites(
+                entry.site_target, strict=strict, max_fanout=len(log.layer_list)
+            ):
+                targets.setdefault(_replay_site_key(site), []).append(entry)
     return {label: tuple(entries) for label, entries in targets.items()}
 
 
@@ -1602,7 +1606,7 @@ def _func_call_groups(log: Trace) -> dict[int | None, tuple[Op, ...]]:
 def _group_for_site(
     site: Op,
     call_groups: Mapping[int | None, Sequence[Op]],
-    cone: Sequence[Op],
+    cone_keys: Collection[str],
 ) -> tuple[Op, ...]:
     """Return same-call group members for a site.
 
@@ -1612,8 +1616,8 @@ def _group_for_site(
         Representative site.
     call_groups:
         Function-call grouping map.
-    cone:
-        Current replay cone.
+    cone_keys:
+        Replay keys of the current replay cone, computed once per replay.
 
     Returns
     -------
@@ -1623,7 +1627,6 @@ def _group_for_site(
 
     if site.func_call_id is None:
         return (site,)
-    cone_keys = {_replay_site_key(member) for member in cone}
     return tuple(
         member
         for member in call_groups.get(site.func_call_id, (site,))
