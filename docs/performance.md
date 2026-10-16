@@ -358,6 +358,47 @@ to keep before the first long capture:
 - For a dataset of long sequences, `tl.extract_dataset(..., output_dir=...)` writes the named
   layers to disk batch by batch.
 
+## Counting the backward that ran
+
+`tl.report.backward_status(trace)` reports the compute of the backward pass that actually
+ran, counted call by call. When a capture requested a backward (`backward_ready=True`,
+`save_grads=` or `default_grad=`), every ATen call that backward dispatches is recorded on
+its `BackwardPass.dispatched_ops`, with its shapes, its dtypes and the GradFn call it ran
+under. Each call is then counted with the same convention as `torch.utils.flop_counter`: one
+multiply-add counts 2 FLOPs, and only matmul and convolution calls are counted. Any other call
+is listed by name in `uncounted_ops`; it is never counted as zero and never estimated.
+Frozen weights, partial `requires_grad` and second-order passes are counted exactly as
+they ran. A `create_graph=True` gradient and the backward run through it are separate passes
+in `executed_flops_per_pass`.
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+model = nn.Sequential(nn.Linear(16, 32), nn.ReLU(), nn.Linear(32, 4))
+model[0].requires_grad_(False)  # frozen first layer, and x needs no gradient
+x = torch.randn(2, 16)
+
+trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
+trace.log_backward(trace[trace.output_layers[0]].out.sum())
+
+status = tl.report.backward_status(trace)
+# Only the last layer's weight gradient runs (2 * 2 * 32 * 4 FLOPs): nothing upstream of
+# it needs a gradient, so no input-gradient matmul is dispatched.
+assert status.executed_flops == 2 * 2 * 32 * 4
+print(status.status_line)
+print(status.uncounted_ops)  # the bias-gradient sums and other calls, named, not zeroed
+```
+
+Calls TorchLens makes inside its own GradFn posthooks (gradient logging and the backward
+edits they apply) are not recorded; the copies its tensor hooks make when saving gradients
+are recorded as zero-arithmetic calls and never change the count. The record exists only in the session that ran the backward: a
+saved and reloaded trace reports the executed backward as unknown. A capture that requests
+no backward never installs the recorder and pays nothing for it. The training-cost estimate
+`tl.report.backward_estimate(trace)` is a separate figure, always labeled hypothetical, and it
+never appears where an executed cost belongs.
+
 ## When another tool is faster
 
 Use raw PyTorch when you only need the final output. Use `torch.profiler` when the question is
