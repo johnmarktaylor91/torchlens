@@ -6,6 +6,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens.backends.torch.aliasing import detect_torch_alias_contract
+from torchlens.errors import TorchLensWarning
 from torchlens.ir.intervention import FunctionEventInput
 from torchlens.options import CaptureOptions
 
@@ -258,16 +259,36 @@ def test_two_pass_succeeds_with_multiple_inplace_relu_modules() -> None:
 def test_two_pass_succeeds_with_resnet50_inplace_relu_modules() -> None:
     """Two-pass logging should handle ResNet50's default in-place ReLU modules.
 
+    An op-label selector needs final numbering, so the capture escrows every op's
+    output and spills the oldest past the escrow RAM budget. ResNet50's first conv
+    output is the oldest, so it comes back detached and the capture discloses it
+    with the coded ``escrow_spill_detached`` warning (U27.1); the later selectors
+    stay in RAM and warn nothing.
+
     Returns
     -------
     None
-        This test only asserts that logging succeeds for previously failing selectors.
+        This test asserts that logging succeeds for previously failing selectors.
     """
     torchvision = pytest.importorskip("torchvision")
     model = torchvision.models.resnet50(weights=None).eval()
     x = torch.randn(2, 3, 224, 224)
 
-    for selector in (["conv2d_1_1"], ["linear_1_175"], [-1]):
-        trace = tl.trace(model, x, capture=CaptureOptions(layers_to_save=selector))
+    for selector, detached_spills in ((["conv2d_1_1"], 1), (["linear_1_175"], 0), ([-1], 0)):
+        if detached_spills:
+            with pytest.warns(TorchLensWarning) as caught:
+                trace = tl.trace(model, x, capture=CaptureOptions(layers_to_save=selector))
+            # Every TorchLens warning is caught here, so pin that the spill is the only one.
+            coded = [
+                (fields.get("code"), fields.get("detached_spill_count"))
+                for fields in (
+                    record.message.fields
+                    for record in caught
+                    if isinstance(record.message, TorchLensWarning)
+                )
+            ]
+            assert coded == [("escrow_spill_detached", detached_spills)], coded
+        else:
+            trace = tl.trace(model, x, capture=CaptureOptions(layers_to_save=selector))
         assert trace is not None
         trace.cleanup()
