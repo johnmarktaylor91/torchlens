@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from ..._io import BlobRef
+from ..._state import pause_logging
 from ...data_classes.op import (
     Op,
 )
@@ -25,7 +26,9 @@ from . import module_stack as _mstack
 from ._tl import (
     active_label_session_token,
     get_param_meta,
+    get_tensor_label,
     set_same_object_mutation,
+    set_tensor_label,
 )
 from .completeness_witness import internal_scalar_read
 
@@ -48,9 +51,6 @@ if TYPE_CHECKING:
         _LABEL_VERSION_SNAPSHOT,
         _VIEW_MUTATION_RELABELS,
         _AncestorBitset,
-        get_tensor_label,
-        pause_logging,
-        set_tensor_label,
     )
 
 __all__ = (
