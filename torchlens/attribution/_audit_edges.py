@@ -88,6 +88,10 @@ class _EdgesPlan(_SitesPlan):
     graph: Any = None
     corrupt: Any = None
     names: dict[tuple[int, ...], str] = field(default_factory=dict)
+    #: Each measured key's recorded edits, read from the fork that measured it.
+    _recorded: dict[tuple[tuple[int, ...], ...], tuple[tuple[Any, Tensor], ...]] = field(
+        default_factory=dict, init=False, repr=False, compare=False
+    )
 
     def effect(self, original: float, scored: float) -> float:
         """Return ``M(patched) - M(clean)``, the quantity an edge score estimates."""
@@ -108,11 +112,18 @@ class _EdgesPlan(_SitesPlan):
             return patch_edges(self.trace, self._edges(keys), corrupt=self.corrupt)
 
     def ablated_score(self, keys: tuple[tuple[int, ...], ...]) -> float:
-        """Score a fork of the trace with the edges of ``keys`` patched together."""
+        """Score a fork of the trace with the edges of ``keys`` patched together.
+
+        The recorded edits are read from this fork and kept, so
+        ``intervention`` does not patch the edges again; each is one receiver
+        input per receiver, small beside the saved trace the audit holds.
+        """
 
         fork = self._patched(keys)
         try:
-            return self.score(fork)
+            scored = self.score(fork)
+            self._recorded[keys] = self._pairs(fork, keys)
+            return scored
         finally:
             fork.cleanup()
 
@@ -129,8 +140,9 @@ class _EdgesPlan(_SitesPlan):
         """Return the ``(selection, value)`` pairs ``patch_edges`` wrote for ``keys``.
 
         One pair per receiver, in the order ``patch_edges`` writes them
-        (topological stages), read from the patched fork itself, so a later
-        receiver's value is the one computed from the partly patched forward.
+        (topological stages), read from the patched fork itself (for a measured
+        row or set, the fork that measured it), so a later receiver's value is
+        the one computed from the partly patched forward.
         For an ``m{L}`` or ``logits`` receiver the selection is the EDGE
         selection of its pre-norm input edge and the value is what the fork
         substituted on that edge (``input - sum(s) + sum(s_corrupt)``); for a
@@ -142,18 +154,27 @@ class _EdgesPlan(_SitesPlan):
         each pair in order.
         """
 
+        if keys in self._recorded:
+            return tuple((selection, value.clone()) for selection, value in self._recorded[keys])
+        fork = self._patched(keys)
+        try:
+            return self._pairs(fork, keys)
+        finally:
+            fork.cleanup()
+
+    def _pairs(
+        self, fork: Any, keys: tuple[tuple[int, ...], ...]
+    ) -> tuple[tuple[Any, Tensor], ...]:
+        """Return one ``(selection, value)`` pair per receiver of ``keys``, as ``fork`` wrote it."""
+
         from torchlens.mechinterp._edge_patch import _stage_key, receiver_selection
 
         receivers = {edge.receiver.name: edge.receiver for edge in self._edges(keys)}
         ordered = sorted(receivers.values(), key=_stage_key)
-        fork = self._patched(keys)
-        try:
-            return tuple(
-                (receiver_selection(self.trace, receiver), _written(fork, receiver))
-                for receiver in ordered
-            )
-        finally:
-            fork.cleanup()
+        return tuple(
+            (receiver_selection(self.trace, receiver), _written(fork, receiver))
+            for receiver in ordered
+        )
 
 
 def _written(fork: Any, receiver: Any) -> Tensor:

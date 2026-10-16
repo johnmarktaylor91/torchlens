@@ -904,9 +904,9 @@ receiver one head's slice of the projection output).
   the largest rows, or `per_unit=False`. `ablation=` does not apply: an edge is patched, not
   ablated (`settings["ablation"]` is `"edge_patch"`).
 - Each row's and set's `intervention` holds the `(selection, value)` pairs `patch_edges` wrote,
-  one per receiver in the order it wrote them, read from the patched fork itself (the EDGE
-  selection of the receiver's input edge with the value substituted there, or the ACT selection of
-  one head's projection slice). An EDGE selection addresses its edge by the call ids of one
+  one per receiver in the order it wrote them, read from the fork that measured the row or set (the
+  EDGE selection of the receiver's input edge with the value substituted there, or the ACT
+  selection of one head's projection slice). An EDGE selection addresses its edge by the call ids of one
   capture, so the pairs replay on forks of the audit's own clean trace, `extra["trace"]`:
   `fork = audit.extra["trace"].fork()`, then `fork.do(*pair)` for each pair in order, reproduces
   the measured effect exactly.

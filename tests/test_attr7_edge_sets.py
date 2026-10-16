@@ -116,7 +116,11 @@ def _check_sets(audit: Any, case: _Case, table: Any) -> int:
     return spanning
 
 
-def test_fixture_sets_across_receivers_match_the_reference_and_replay() -> None:
+def _refuse_patching(*args: Any, **kwargs: Any) -> Any:
+    raise AssertionError("recorded edits come from the fork that measured them")
+
+
+def test_fixture_sets_across_receivers_match_the_reference_and_replay(monkeypatch) -> None:
     """On the float64 fixture, every set (one receiver or several) is measured and replays."""
 
     model = Fixture().eval()
@@ -127,7 +131,14 @@ def test_fixture_sets_across_receivers_match_the_reference_and_replay() -> None:
     assert len(audit.units) == 5 and len(audit.sets) == 6
     graph = tl.mechinterp.component_graph(audit.extra["trace"])
     case = _Case(model, _fixture_spec(model, graph), CLEAN, CORRUPT, fixture_metric)
+    with monkeypatch.context() as patched:
+        patched.setattr(tl.mechinterp, "patch_edges", _refuse_patching)
+        recorded = [item.intervention for item in (*audit.units, *audit.sets)]
     assert _check_sets(audit, case, table) >= 1
+    for item, pairs in zip((*audit.units, *audit.sets), recorded, strict=True):
+        assert [value.tolist() for _, value in item.intervention] == [
+            value.tolist() for _, value in pairs
+        ]
     every = attribution.causal_audit(
         model,
         CLEAN,
