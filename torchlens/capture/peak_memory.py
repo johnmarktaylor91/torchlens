@@ -78,7 +78,8 @@ def peak_rss_bytes() -> int:
     """Return the process resident high-water mark in bytes, or 0.
 
     Reads ``VmHWM`` from ``/proc/self/status`` on Linux; falls back to
-    ``ru_maxrss`` elsewhere. Both are process-lifetime maxima unless
+    ``ru_maxrss`` elsewhere, which macOS reports in bytes and Linux and the
+    BSDs in kibibytes. Both are process-lifetime maxima unless
     :func:`reset_peak_rss` succeeded beforehand.
 
     Returns
@@ -96,8 +97,10 @@ def peak_rss_bytes() -> int:
         pass
     try:
         import resource
+        import sys
 
-        return int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) * 1024
+        scale = 1 if sys.platform == "darwin" else 1024
+        return int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) * scale
     except (ImportError, OSError, ValueError, AttributeError):
         return 0
 
