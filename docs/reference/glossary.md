@@ -2229,7 +2229,8 @@ shim owed*
   `unattributed`; ints, `None` and short strings only), written when the
   trace is saved (tlspec v10) so a loaded trace reads the counted answer
   through `flops_attribution` and `tl.report.backward_status`. `None` on a
-  live pass and on artifacts saved before the field, which read unknown. A
+  live pass and on artifacts saved before the field, which read unknown
+  (record keyword `executed_flops_record=`). A
   malformed record refuses at load with
   `artifact_executed_flops_record_invalid`.
 
@@ -2239,7 +2240,8 @@ shim owed*
   under no recorded node, and the part that replayed forward kernels under
   activation checkpointing (`None` when the evidence cannot separate replay
   from backward, as in a `create_graph` pass that checkpoints). Empty or
-  `None` in the other two states.
+  `None` in the other two states. The record's constructor keyword is
+  `attributions=`.
 
 **DispatchedOp.grad_enabled** — *unstable — no deprecation shim owed*
 : Whether autograd grad mode was on when the call dispatched during a
@@ -2250,8 +2252,11 @@ shim owed*
 **CostTreeRow forward/backward/total columns; CostTree.backward_state / backward_total / forward_mac_total / column_conventions** — *unstable — no deprecation shim owed*
 : `tl.report.cost_tree(trace)` rows carry `self_forward_mac_flops` (2 x true
   MACs), `self_backward_flops` (executed backward, matmul and convolution
-  families, fma2) and `self_total_flops` (their sum, one convention), each
-  with a non-additive `subtree_*` twin. Backward work on nodes with no
+  families, fma2) and `self_total_flops` (their sum, one convention), with
+  non-additive subtree twins `CostTreeRow.subtree_forward_mac_flops`,
+  `CostTreeRow.subtree_backward_flops` and `CostTreeRow.subtree_total_flops`
+  (constructor keywords `subtree_forward_mac_flops=`,
+  `subtree_backward_flops=`, `subtree_total_flops=`). Backward work on nodes with no
   forward op and unattributed calls get their own remainder rows, so the self
   backward column sums to `backward_total`. Without a counted backward the
   cells are `None` and `backward_state` names the state; never 0.
