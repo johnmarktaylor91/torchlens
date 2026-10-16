@@ -151,10 +151,10 @@ def _trace64() -> tl.Trace:
 def _cross_kind_pairs(fork: tl.Trace, order: tuple[str, ...], bad: str = "") -> list:
     """ACT, PARAM and EDGE pairs on ``fork`` in ``order``; ``bad`` names a refusing pair."""
 
-    def _wrong_shape(tensor, hook=None):  # noqa: ANN001, ANN202 - edit callable
+    def _wrong_shape(tensor, *, hook):  # noqa: ANN001, ANN202 - edit callable
         return tensor[:1]
 
-    def _refuse(tensor, hook=None):  # noqa: ANN001, ANN202 - edit callable
+    def _refuse(tensor, *, hook):  # noqa: ANN001, ANN202 - edit callable
         raise InvalidArgumentError(
             "refused by the test edit", code="test_edit_refused", remedy="none"
         )
@@ -162,7 +162,7 @@ def _cross_kind_pairs(fork: tl.Trace, order: tuple[str, ...], bad: str = "") -> 
     edge = next(e for e in fork.edges if e.parent_label == "relu_1_2")
     pairs = {
         "ACT": (fork["relu_1_2"].__selection__(), _refuse if bad == "ACT" else tl.scale(2.0)),
-        "PARAM": (tl.params("b.weight"), _wrong_shape if bad == "PARAM" else tl.scale(0.5)),
+        "PARAM": (tl.params("b.weight"), _wrong_shape if bad == "PARAM" else tl.scale(0.25)),
         "EDGE": (edge.__selection__(), _wrong_shape if bad == "EDGE" else tl.add(0.25)),
     }
     return [pairs[kind] for kind in order]
