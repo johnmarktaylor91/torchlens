@@ -22,6 +22,7 @@ aggregate duration budget.
 
 from __future__ import annotations
 
+import copy
 import gc
 import re
 import warnings
@@ -29,6 +30,7 @@ from collections import Counter
 from pathlib import Path
 
 import pytest
+import torch
 
 import torchlens as tl
 from tests.classics_corpus._loader import (
@@ -45,6 +47,7 @@ from tests.classics_corpus._loader import (
 from torchlens._io.runnable import build_sparse_run_descriptor, preflight_sparse_run_descriptor
 from torchlens.options import CaptureOptions
 from torchlens.runnable import ResolverStatus, RunnableErrorCode
+from torchlens.utils.arg_handling import normalize_input_args
 from torchlens.validation import last_validation_failure
 
 SMOKE_TIER_SIZE = (10, 20)
@@ -147,6 +150,15 @@ def _check_entry(entry: CorpusEntry, tmp_path: Path) -> None:
     del trace, loaded
     gc.collect()
 
+    # A default trace is a pure observer (df04e924b): it puts back every plain
+    # attribute the forward wrote, so a cache the model builds lazily in its
+    # forward (DiffLinker's edge cache, ToolkenGPT's KV cache) is empty again
+    # here. Validation's fresh re-trace rightly reports that first forward as a
+    # one-time execution (CHECK_RETRACE_MISMATCH in torchlens/validation/
+    # diagnostics.py). One plain forward, which runs no TorchLens code, gives
+    # validation the steady-state model; validation itself runs unchanged.
+    with torch.no_grad():
+        model(*normalize_input_args(copy.deepcopy(inputs), model))
     _validate_entry(entry, model, inputs)
 
     readiness_trace = tl.trace(
