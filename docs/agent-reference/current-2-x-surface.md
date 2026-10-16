@@ -66,6 +66,12 @@
   `log_backward()` refuses naming that cause. The implied flag is cleared when the forward
   re-enables grad (`torch.enable_grad()` inside it) and an output carries autograd history;
   an explicit `inference_only=True` is never cleared.
+  A backward run through such a capture records the ATen calls it dispatched on
+  `BackwardPass.dispatched_ops` (session-time, DOCUMENTED-UNSTABLE), and
+  `tl.report.backward_status(trace)` counts them: `executed_flops` is exact for the matmul
+  and convolution families at fma2 (FlopCounterMode's convention), per pass in
+  `executed_flops_per_pass`, with every other recorded op kind named in `uncounted_ops`;
+  a loaded trace reads unknown. `tl.report.backward_estimate(trace)` stays hypothetical.
   Trace-side failed captures expose `exc.partial_log`, recoverable with
   `tl.partial.from_failed_capture(exc)`.
 - **A default `tl.trace` is a pure observer** (U40.1, AGT-2360; `carry_state`,
@@ -813,8 +819,11 @@
   revision=None)` returns `LoreftArtifact` (`rotation`, `weight`, `bias` as
   saved, `layer`, `component`, `unit`, `units_per_example`, `provenance`);
   apply with `fork.do(artifact.subspace(site, positions=mask),
-  artifact.edit)`; no pyreft import; refuses `pyreft_artifact_invalid`,
-  `pyreft_artifact_unsupported`.
+  artifact.edit)`; `site` is a label or `trace[label]`, whose shape is
+  checked at once (trailing axis not the artifact's width refuses
+  `pyreft_site_invalid`, a mask not covering the other axes
+  `pyreft_positions_invalid`); no pyreft import; refuses
+  `pyreft_artifact_invalid`, `pyreft_artifact_unsupported`.
   BASIS PROVENANCE MANDATORY:
   `origin=` required non-empty; origin/method/geometry/sha256 content
   digest ride `provenance.source` and `do()` audit records

@@ -541,3 +541,16 @@ TorchLens refuses them `intervention_helper_unknown` (and a `subspace_edit` carr
 (`mi_edge_patch_receivers_mixed` is removed); an empty edge list returns an unpatched fork. Code
 that caught `mi_edge_patch_receivers_mixed` to split a circuit into per-receiver calls can pass the
 whole edge list in one call.
+
+## Label selectors in a capture-free binding refuse when bound (2026-10-15, refusal change)
+
+A binding with a label selector now refuses when bound (`BindingPreflightError`, code
+`bind_rule_unsupported`) instead of raising `BindingRuntimeError` (`bind_rule_runtime_error`) on
+the first call; a short label, or `followed_by`, `preceded_by` or `input_at`, now refuses when
+bound instead of never firing with a `bind_zero_fire` warning. Select the op with
+`tl.func(<op type>) & tl.in_module(<address>)`, or a raw label.
+
+## `BackwardStatus.executed_flops` counts an observed backward (2026-10-15, value change)
+
+In the `backward_observed` state `BackwardStatus.executed_flops` is now an integer (it was always
+`None`); code that used `None` to detect an observed backward should read `status.state`.

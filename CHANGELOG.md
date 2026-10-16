@@ -203,6 +203,10 @@
   sha256s and dtypes); apply with `fork.do(artifact.subspace(site, positions=mask), artifact.edit)`.
   No pyreft import, no extra. Refuses `pyreft_artifact_invalid`, `pyreft_artifact_unsupported`,
   `pyreft_positions_invalid`. DOCUMENTED-UNSTABLE.
+- **bridge**: `LoreftArtifact.subspace(site, ...)` also takes the site from a trace (`trace[label]`)
+  and checks its shape at once: a trailing axis that is not the artifact's width refuses
+  `pyreft_site_invalid`, positions that do not cover the other axes refuse
+  `pyreft_positions_invalid`. DOCUMENTED-UNSTABLE.
 - **docs**: a feature-visualisation recipe (`docs/recipes/feature_visualisation.md`): optimisation
   at any TorchLens site (an op label, a channel or unit, an SAE latent; vision and non-vision
   models), native PyTorch through a capture-free binding.
@@ -216,6 +220,11 @@
   driver loop over edge substitution and the experiment ledger). Documented unstable.
 - **bundle**: `Bundle.measure_members(order="chain")` orders members by the bundle's validated
   operation chain and lists members no operation recorded apart.
+- **report**: `tl.report.backward_status(trace)` counts the backward that ran: a captured backward
+  records the ATen calls it dispatches on `BackwardPass.dispatched_ops`, counted exactly for the
+  matmul and convolution families at fma2 (FlopCounterMode's convention), per pass in
+  `executed_flops_per_pass`, with every other call named in `uncounted_ops`. An observed backward
+  used to read unknown.
 
 ### Bug Fixes
 
@@ -268,6 +277,19 @@
   models (the hop walk keeps its pending steps on an explicit stack; results unchanged).
 - **validation**: an eval-mode batch_norm whose input equals its running mean exactly no longer
   reports running_var as a dead edge; exact value proof, no tolerance
+- **benchmarks**: the memory pass frees collectable garbage before reading its baselines, so a
+  collection inside the measured call can no longer make the phase-local peak read 0.0.
+- **capture**: an augmented slice assignment (`x[idx] += v` and the other in-place operators)
+  records its write-back with the tensor's pre-mutation producer at the receiver slot, so replay
+  validation no longer fails argument logging on it.
+- **receptive_field**: a model input with a zero-length axis no longer makes the receptive-field
+  solve, and so validate_forward_pass, raise ValueError.
+- **binding**: A capture-free binding (`spec.bind(model)`, `steer_generate`) now refuses a rule that
+  selects with a TorchLens label (final, short or pass-qualified) or with
+  `followed_by`/`preceded_by`/`input_at` when it is bound, naming the structural spelling
+  `tl.func(...) & tl.in_module(...)`, instead of failing at the first op or never firing.
+- **report**: `tl.report.backward_status` no longer raises `TypeError` on a trace with an observed
+  backward whose GradFn fires were timed.
 
 ### Performance Improvements
 
@@ -280,6 +302,15 @@
 - **fork**: `Trace.fork()` copies the trace's large label tables directly instead of element by
   element; on a 12-layer GPT-2 trace a fork makes about 419,000 Python calls instead of about
   580,000.
+- **mechinterp**: `mechinterp.patch_edges` writes each topological stage in one replay: a layer's q,
+  k and v receivers go in as one selection batch, and the projection each needs is recomputed
+  locally from the patched norm input. A call into all 445 GPT-2 small receivers costs 25 replays,
+  24 graph builds and one fork (was 877 replays and 433 forks) and runs about 25 times faster;
+  values are unchanged.
+- **receptive_field**: the always-on receptive-field metadata invariants run in about n^2 instead of
+  n^3 on deep chains (a 600-layer convolution chain's check: 169 s to 31 s) by mapping
+  single-progression index windows in closed form and sharing graph facts and rule results across
+  the check's queries; every box is unchanged.
 
 ### Changed
 
