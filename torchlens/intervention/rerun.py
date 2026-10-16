@@ -217,6 +217,31 @@ def _release_discarded_capture(new_log: Trace) -> None:
     release = getattr(store, "release_payload_owner", None)
     if core is not None and release is not None:
         release(core)
+    _release_backward_registry_slot(new_log)
+
+
+def _release_backward_registry_slot(trace: Trace) -> None:
+    """Evict a discarded trace's backward-registry keys now, not at its collection.
+
+    For a trace the caller has discarded (a rerun's own capture after a fast
+    refresh), which sits in reference cycles: its weakref callback would
+    otherwise run whenever the cyclic collector frees it, inside whatever
+    executes then. The callback runs again at collection with nothing left.
+
+    Parameters
+    ----------
+    trace:
+        The discarded trace.
+    """
+
+    from ..backends.torch.backward import _BACKWARD_TRACE_SLOTS
+
+    slot = _BACKWARD_TRACE_SLOTS.pop(trace, None)
+    if slot is not None:
+        reference, _owned_ids = slot
+        callback = reference.__callback__
+        if callback is not None:
+            callback(reference)
 
 
 def _chunked_rerun(
