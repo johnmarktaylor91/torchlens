@@ -525,6 +525,9 @@ _WEAK_SUBJECT_TABLES = frozenset(
         # F27 FLIP-2 open-marker LIFO + session-time Kineto join results:
         # keyed weakly by the owning trace, die with it; the marker LIFO is
         # additionally drained at every pass boundary.
+        # Executed-backward dispatch census: per-trace recorded ops by pass,
+        # weak-keyed by the owning trace, dies with it (session-time only).
+        ("torchlens/backends/torch/_backward_dispatch.py", "_BACKWARD_DISPATCH"),
         ("torchlens/backends/torch/_gradfn_markers.py", "_GRADFN_MARKER_TOKENS"),
         ("torchlens/observability/_native_profile.py", "_JOIN_TRACES"),
         # Post-T52 census sweep (F27): weak-keyed caches other merged lanes
@@ -841,6 +844,9 @@ _WEAKLY_HELD = frozenset(
         ("torchlens/backends/torch/backward.py", "_BACKWARD_TRACE_SLOTS"),
         ("torchlens/backends/torch/backward.py", "_CHECKPOINT_TOKEN_STATE"),
         ("torchlens/backends/torch/_fire_timing.py", "_FIRE_TIMING_STAMPS"),
+        # Executed-backward dispatch census: per-trace recorded ops by pass,
+        # weak-keyed by the owning trace, dies with it (session-time only).
+        ("torchlens/backends/torch/_backward_dispatch.py", "_BACKWARD_DISPATCH"),
         ("torchlens/backends/torch/_gradfn_markers.py", "_GRADFN_MARKER_TOKENS"),
         ("torchlens/observability/_native_profile.py", "_JOIN_TRACES"),
         # Post-T52 census sweep (F27): weak-keyed caches other merged lanes
@@ -1042,6 +1048,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/backends/tinygrad/capabilities.py", "__all__"),
         ("torchlens/backends/torch/__init__.py", "__all__"),
         ("torchlens/backends/torch/_fire_timing.py", "__all__"),
+        ("torchlens/backends/torch/_backward_dispatch.py", "__all__"),
         ("torchlens/backends/torch/_gradfn_markers.py", "__all__"),
         ("torchlens/backends/torch/_held_refs.py", "__all__"),
         ("torchlens/backends/torch/_held_refs_capture.py", "__all__"),

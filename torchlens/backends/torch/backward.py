@@ -50,6 +50,7 @@ from ...utils._torch_compat import (
 from ...utils._torch_symbols import torch_attr
 from ...utils.introspection import _get_code_qualname, _get_col_offset
 from ...utils.tensor_utils import synchronize_pending_cpu_async_copies
+from ._backward_dispatch import outside_census
 from ._fire_timing import (
     _clear_fire_timing_stamps,
     _fire_timing_stamp_list,
@@ -2132,7 +2133,7 @@ def _make_grad_fn_hook(  # noqa: PLR0913 -- one keyword per carrier the ONE regi
             _exit_gradfn_marker(gradfn_marker_tokens.pop())
         internal_bracket = _enter_internal_gradfn_bracket(grad_fn_object_id)
         try:
-            return _hook_body(fire_finished_monotonic, *hook_args)
+            return outside_census(_hook_body, fire_finished_monotonic, *hook_args)
         finally:
             _exit_gradfn_marker(internal_bracket)
 
@@ -2859,17 +2860,13 @@ def _walk_and_hook_backward_graph(
                 handles.append(timing_handle)
                 if getattr(trace, "grad_fn_timing_provenance", None) in (None, "unmeasured"):
                     trace.grad_fn_timing_provenance = "perf_counter"
-            event_stream = _ensure_backward_event_stream(trace)
-            if getattr(event_stream, "aten_recording_enabled", False):
-                handles.append(
-                    grad_fn_handle.register_prehook(
-                        _make_aten_grad_fn_prehook(
-                            trace,
-                            grad_fn_object_id,
-                            aten_marker_tokens,
-                        )
-                    )
+            # The GradFn-call marker attributes every dispatched backward op
+            # (the executed-backward census and the private ATen recorder).
+            handles.append(
+                grad_fn_handle.register_prehook(
+                    _make_aten_grad_fn_prehook(trace, grad_fn_object_id, aten_marker_tokens)
                 )
+            )
         except RuntimeError as exc:
             # A node the walk discovered but could not observe is a typed
             # journal fact, never a silent skip: validation fails closed on
@@ -3382,9 +3379,9 @@ def _run_backward_with_capture(
     result = None
     trace._tl_active_backward_bracket = True
     try:
-        from ._aten_capture import _capture_backward_aten
+        from ._backward_dispatch import backward_window
 
-        with _capture_backward_aten(trace, pass_index):
+        with backward_window(trace, pass_index):
             result = backward_callable()
     except BaseException:
         # BaseException (including KeyboardInterrupt/SystemExit) is stamped
