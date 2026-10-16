@@ -46,11 +46,14 @@ from ...quantities import Bytes, Duration
 from ...utils._torch_compat import (
     HAS_SAVED_TENSORS_HOOKS_PATCHABLE,
     get_accumulate_grad_class,
+    get_current_autograd_node_fn,
 )
 from ...utils._torch_symbols import torch_attr
 from ...utils.introspection import _get_code_qualname, _get_col_offset
 from ...utils.tensor_utils import synchronize_pending_cpu_async_copies
 from ._backward_dispatch import outside_census
+from ._backward_markers import begin_grad_fn_marker, end_grad_fn_marker, executing_grad_fn_ref
+from ._backward_roots import _root_tensor_step_index, _roots_by_trace
 from ._fire_timing import (
     _clear_fire_timing_stamps,
     _fire_timing_stamp_list,
@@ -63,7 +66,7 @@ from ._gradfn_markers import (
     _exit_gradfn_marker,
     _gradfn_marker_list,
 )
-from ._tl import detached_saved_activation_label, get_tensor_label
+from ._tl import detached_saved_activation_label
 from .escape_detection import expected_original_call
 from .tensor_tracking import (
     _STATE_BOUNDARY_GRAD_FNS,
@@ -687,41 +690,6 @@ def _root_forward_op_count(trace: Any, roots: Any) -> int | None:
         if (step_index := _root_tensor_step_index(trace, root)) is not None
     ]
     return max(root_steps) if root_steps else None
-
-
-def _root_tensor_step_index(trace: Any, root: torch.Tensor) -> int | None:
-    """Return a TorchLens ``step_index`` for an autograd root tensor.
-
-    Parameters
-    ----------
-    trace:
-        Trace that owns the root tensor.
-    root:
-        Root tensor passed to an autograd entry point.
-
-    Returns
-    -------
-    int | None
-        Root layer ``step_index`` when resolvable.
-    """
-
-    label = get_tensor_label(root)
-    if label is None:
-        return None
-    lookup_labels = (getattr(trace, "_raw_to_final_layer_labels", {}).get(label, label), label)
-    layer_lookup = getattr(trace, "layer_dict_all_keys", {})
-    for lookup_label in lookup_labels:
-        layer = layer_lookup.get(lookup_label)
-        step_index = getattr(layer, "step_index", None)
-        if isinstance(step_index, int):
-            return step_index
-    raw_match = re.search(r"_(\d+)_raw$", label)
-    if raw_match is not None:
-        return int(raw_match.group(1))
-    final_match = re.search(r"_[1-9]\d*_(\d+)(?::[1-9]\d*)?$", label)
-    if final_match is not None:
-        return int(final_match.group(1))
-    return None
 
 
 def _grad_fn_is_custom(grad_fn_handle: Any) -> bool:
@@ -2142,9 +2110,7 @@ def _make_grad_fn_hook(  # noqa: PLR0913 -- one keyword per carrier the ONE regi
     ) -> tuple[torch.Tensor | None, ...] | None:
         """The posthook logging body (runs inside the typed internal bracket)."""
         if aten_marker_tokens:
-            from ._aten_capture import _end_backward_grad_fn
-
-            _end_backward_grad_fn(aten_marker_tokens.pop())
+            end_grad_fn_marker(aten_marker_tokens.pop())
         resolved = _resolve_live_grad_fn(trace_ref, grad_fn_object_id)
         if resolved is None:
             return None
@@ -2318,9 +2284,9 @@ def _make_aten_grad_fn_prehook(
             return None
         pass_index = int(getattr(live_trace, "_active_backward_pass_index", 0) or 0)
         call_index = len(grad_fn_record.calls) + 1
-        from ._aten_capture import _begin_backward_grad_fn
-
-        marker_tokens.append(_begin_backward_grad_fn(grad_fn_object_id, call_index, pass_index))
+        marker_tokens.append(
+            begin_grad_fn_marker(grad_fn_object_id, call_index, pass_index, id(live_trace))
+        )
         return None
 
     return prehook
@@ -2689,6 +2655,8 @@ def _walk_and_hook_backward_graph(
     trace: Any,
     loss: torch.Tensor,
     handles: list[Any] | None = None,
+    *,
+    extra_roots: tuple[torch.Tensor, ...] = (),
 ) -> list[Any]:
     """Walk ``loss.grad_fn`` and register hooks on every reachable grad_fn_handle.
 
@@ -2701,6 +2669,8 @@ def _walk_and_hook_backward_graph(
     handles:
         Caller-owned hook-handle list. Passing this list lets the caller
         remove partially registered hooks when graph walking is interrupted.
+    extra_roots:
+        Further roots of the same engine call; their graphs are walked too.
 
     Returns
     -------
@@ -2711,7 +2681,8 @@ def _walk_and_hook_backward_graph(
         raise ValueError("log_backward requires a loss tensor with a grad_fn_handle.")
 
     layer_lookup = _layer_by_grad_fn_id(trace)
-    queue: deque[Any] = deque([loss.grad_fn])
+    root_grad_fns = [loss.grad_fn, *(root.grad_fn for root in extra_roots)]
+    queue: deque[Any] = deque(root_grad_fns)
     seen: set[int] = set()
     if handles is None:
         handles = []
@@ -2723,17 +2694,17 @@ def _walk_and_hook_backward_graph(
     # like AccumulateGrad were gc'd, their ids could be reused by later-created
     # grad_fns (e.g. the output clone wrapper), creating phantom cycles.
     strong_refs = trace.__dict__.setdefault("_backward_gradfn_refs", [])
-    strong_refs.append(loss.grad_fn)
-    root_grad_fn_id = id(loss.grad_fn)
-    if root_grad_fn_id not in trace.backward_root_grad_fn_object_ids:
-        trace.backward_root_grad_fn_object_ids.append(root_grad_fn_id)
+    strong_refs.extend(root_grad_fns)
     pass_index = int(
         getattr(trace, "_active_backward_pass_index", getattr(trace, "num_backward_passes", 0) + 1)
     )
     roots_by_pass = trace.__dict__.setdefault("_backward_roots_by_pass", {})
     roots_by_pass.setdefault(pass_index, [])
-    if root_grad_fn_id not in roots_by_pass[pass_index]:
-        roots_by_pass[pass_index].append(root_grad_fn_id)
+    for root_grad_fn_id in map(id, root_grad_fns):
+        if root_grad_fn_id not in trace.backward_root_grad_fn_object_ids:
+            trace.backward_root_grad_fn_object_ids.append(root_grad_fn_id)
+        if root_grad_fn_id not in roots_by_pass[pass_index]:
+            roots_by_pass[pass_index].append(root_grad_fn_id)
     trace.has_backward_pass = True
 
     while queue:
@@ -3251,6 +3222,7 @@ def _run_backward_with_capture(
     save_grads: Any | MissingType = MISSING,
     forward_op_count_at_trigger: int | None = None,
     backward_call_context: FuncCallLocation | None = None,
+    extra_roots: tuple[torch.Tensor, ...] = (),
 ) -> Any:
     """Capture a backward graph, run backward, and record memory delta.
 
@@ -3262,6 +3234,8 @@ def _run_backward_with_capture(
         Loss tensor that roots the backward graph.
     backward_callable:
         Zero-argument callable that performs the actual backward pass.
+    extra_roots:
+        Further roots of a multi-root engine call whose graphs reach ``trace``.
 
     Returns
     -------
@@ -3310,12 +3284,9 @@ def _run_backward_with_capture(
         implicit=False,
         outer_context=outer_context,
         call_context_ref=backward_call_context,
-        root_meta=(
-            {
-                "shape": tuple(loss.shape),
-                "dtype": str(loss.dtype),
-                "device": str(loss.device),
-            },
+        root_meta=tuple(
+            {"shape": tuple(root.shape), "dtype": str(root.dtype), "device": str(root.device)}
+            for root in (loss, *extra_roots)
         ),
         root_grad_arguments=None,
         inputs_subset=(),
@@ -3333,7 +3304,10 @@ def _run_backward_with_capture(
     events.append_backward(start_event)
     handles: list[Any] = []
     try:
-        _walk_and_hook_backward_graph(trace, loss, handles)
+        if extra_roots:
+            _walk_and_hook_backward_graph(trace, loss, handles, extra_roots=extra_roots)
+        else:  # a single-root pass calls the walk exactly as before
+            _walk_and_hook_backward_graph(trace, loss, handles)
     except BaseException:
         # The graph walk can fail after the start event and global capture
         # state have been installed. Restore the global state so a failed
@@ -3591,13 +3565,16 @@ def _capture_autograd_engine_call(
     loss = _first_root_tensor(roots)
     if loss is None or not matched_traces:
         return _run_with_detached_activation_guidance(roots, engine_callable)
+    # Each capture walks the graph of every root that reaches it, not only the first.
+    roots_of = _roots_by_trace(_root_tensors(roots), matched_traces, _traces_for_roots)
     if len(matched_traces) == 1:
         matched_trace = matched_traces[0]
         root_forward_op_count = _root_forward_op_count(matched_trace, roots)
         return _run_backward_with_capture(
             matched_trace,
-            loss,
+            roots_of[0][0],
             engine_callable,
+            extra_roots=roots_of[0][1:],
             trigger=trigger,
             engine_flags=engine_flags,
             forward_op_count_at_trigger=(
@@ -3619,8 +3596,9 @@ def _capture_autograd_engine_call(
         root_forward_op_count = _root_forward_op_count(matched_trace, roots)
         return _run_backward_with_capture(
             matched_trace,
-            loss,
+            roots_of[index][0],
             lambda: nested_call(index + 1),
+            extra_roots=roots_of[index][1:],
             trigger=trigger,
             outer_context=None if index == 0 else f"{trigger}:multi_trace",
             engine_flags=engine_flags,
@@ -3829,12 +3807,12 @@ def _token_bearing_unpack_hook(
             state = _CHECKPOINT_TOKEN_STATE.get(live_trace)
             record = None if state is None else state["tokens"].get(token)
             if state is not None and record is not None:
-                from ._aten_capture import _ACTIVE_BACKWARD_GRAD_FN_REFS
-
-                active_refs = _ACTIVE_BACKWARD_GRAD_FN_REFS.get()
+                bracket = executing_grad_fn_ref(
+                    id(live_trace), resolver=get_current_autograd_node_fn()
+                )
                 point = {
                     "graph_task_id": _current_backward_graph_task_id(),
-                    "fire_bracket": active_refs[-1] if active_refs else None,
+                    "fire_bracket": bracket,
                     "pass_index": getattr(live_trace, "_active_backward_pass_index", None),
                 }
                 with state["lock"]:
