@@ -328,6 +328,7 @@ def _unknown_count_reason(
     """Why the executed backward has no count, first cause first, or ``None``."""
 
     def listed(indices: list[int]) -> str:
+        """The pass indices as a comma-separated list."""
         return ", ".join(str(index) for index in indices)
 
     if missing:

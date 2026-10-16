@@ -179,7 +179,7 @@ class _RowAccumulator:
         self.flops: int | None = 0
         self.recompute: int | None = 0
 
-    def add(self, op: Any, builds_graph: bool, checkpoint: str) -> bool:
+    def add(self, op: Any, builds_graph: bool | None, checkpoint: str) -> bool:
         """Fold one counted call into the row; whether its recompute share is unknown."""
 
         self.flops = _add(self.flops, op.flops)
