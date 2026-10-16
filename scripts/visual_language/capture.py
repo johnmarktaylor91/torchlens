@@ -21,6 +21,7 @@ import torch
 
 import torchlens as tl
 from scripts.visual_language.models import FIXTURES
+from scripts.visual_language.sentinel_models import SENTINEL_FIXTURES
 from scripts.visual_language.slides import CONVENTIONS, Panel, Slide
 from torchlens.errors import InvalidArgumentError
 from torchlens.visualization import lenses
@@ -78,7 +79,11 @@ CALLABLES: Mapping[str, Callable[[], Any]] = {
 
 INTERVENTIONS: Mapping[str, Callable[[], Any]] = {
     "zero_tanh": lambda: tl.when(tl.func("tanh"), tl.zero_ablate()),
+    "zero_relu": lambda: tl.when(tl.func("relu"), tl.zero_ablate()),
 }
+
+#: Every fixture a panel may name: the teaching slides' and the sentinel strip's.
+ALL_FIXTURES: Mapping[str, Callable[[], tuple[Any, Any]]] = {**FIXTURES, **SENTINEL_FIXTURES}
 
 
 def _resolve(value: Any) -> Any:
@@ -91,6 +96,33 @@ def _fork_edit(trace: Any) -> Any:
     fork = trace.fork()
     fork.do(tl.units("linear_1_1:1", [(0, 0)]).resolve(fork), tl.zero_ablate())
     return fork
+
+
+def _bundle(trace: Any) -> Any:
+    """Clean, intervened and successor traces of one capture, as a bundle."""
+
+    ablated = trace.fork("ablated")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        ablated.do(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+        successor = ablated.fork("successor")
+        successor.do(tl.func("add"), tl.zero_ablate(), confirm_mutation=True)
+    return tl.bundle({"clean": trace, "ablated": ablated, "successor": successor}, baseline="clean")
+
+
+def _summary_dot(text: str) -> str:
+    """The summary as it prints, as one left-aligned monospace text block."""
+
+    escaped = (
+        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+    )
+    lines = "".join(f'{line}<BR ALIGN="LEFT"/>' for line in escaped.splitlines())
+    return (
+        "digraph summary {\n"
+        "graph [bgcolor=white]\n"
+        f"summary [shape=plaintext fontname=Courier fontsize=11 label=<{lines}>]\n"
+        "}\n"
+    )
 
 
 def _log_backward(trace: Any) -> Any:
@@ -109,7 +141,7 @@ def _higher_order(trace: Any, inputs: Any) -> Any:
 def capture(panel: Panel) -> tuple[Any, Any]:
     """Build the fixture and capture it with the panel's capture options."""
 
-    model, inputs = FIXTURES[panel.fixture]()
+    model, inputs = ALL_FIXTURES[panel.fixture]()
     kwargs: dict[str, Any] = {}
     if panel.capture:
         options = {k: _resolve(v) for k, v in panel.capture.items()}
@@ -173,6 +205,10 @@ def draw(panel: Panel, trace: Any, outpath: Path) -> str:
         diff.draw(str(outpath), vis_fileformat="svg", vis_save_only=True)
         # draw() writes only the SVG and the census; the DOT it rendered is rebuilt here.
         return str(_build_diff_dot(diff, theme="torchlens").source)
+    if panel.call == "bundle_graph":
+        return str(tl.show_bundle_graph(_bundle(trace), **kwargs))
+    if panel.call == "bundle_diff":
+        return str(tl.viz.bundle_diff(_bundle(trace), **kwargs))
     raise ValueError(f"unknown call {panel.call!r}")
 
 
@@ -192,13 +228,16 @@ def render_panel(slide: Slide, panel: Panel, out: Path) -> dict[str, Any]:
     caught = io.StringIO()
     with warnings.catch_warnings(record=True) as seen, contextlib.redirect_stdout(caught):
         warnings.simplefilter("always")
-        trace, _inputs = capture(panel)
-        if panel.kwargs.get("return_graph"):
+        if panel.call in ("quickstart_render", "summary"):
+            dot_source = _facade(panel, outpath)
+        elif panel.kwargs.get("return_graph"):
+            trace, _inputs = capture(panel)
             graph = trace.draw(**{**draw_kwargs(panel), "vis_outpath": str(outpath)})
             record["returned"] = type(graph).__name__
             dot_source = graph.source
             graph.render(str(outpath), format="svg", cleanup=True)
         else:
+            trace, _inputs = capture(panel)
             dot_source = draw(panel, trace, outpath)
     record["warnings"] = sorted({f"{w.category.__name__}: {w.message}"[:300] for w in seen})
     (out / f"{stem}.dot").write_text(dot_source)
@@ -210,6 +249,8 @@ def render_panel(slide: Slide, panel: Panel, out: Path) -> dict[str, Any]:
         record["png_size"] = _png_size(png) if png.exists() else None
         svg_text = graphviz.Source(dot_source).pipe(format="svg").decode()
         (out / f"{stem}.svg").write_text(svg_text)
+    elif panel.call == "summary":
+        (out / f"{stem}.svg").write_bytes(graphviz.Source(dot_source).pipe(format="svg"))
     else:
         svg = _svg_path(outpath)
         if svg != out / f"{stem}.svg":
@@ -217,6 +258,18 @@ def render_panel(slide: Slide, panel: Panel, out: Path) -> dict[str, Any]:
     json_text = graphviz.Source(dot_source).pipe(format="json").decode()
     (out / f"{stem}.json").write_text(json_text)
     return record
+
+
+def _facade(panel: Panel, outpath: Path) -> str:
+    """Run a one-call door on the fixture (no trace of ours); return the DOT it drew."""
+
+    model, inputs = ALL_FIXTURES[panel.fixture]()
+    if panel.call == "summary":
+        return _summary_dot(str(tl.summary(model, inputs)))
+    from torchlens.quickstart import render
+
+    result = render(model, inputs, file=str(outpath.with_suffix(".svg")), format="svg")
+    return str(result.dot)
 
 
 def _png_size(path: Path) -> tuple[int, int]:
