@@ -264,7 +264,10 @@ def test_grad_edges_attach_with_repeat_folding(tmp_path: Path, model_name: str) 
         trace.cleanup()
 
 
-@pytest.mark.smoke
+# One smoke cell: the batch-2 union put the whole-tree smoke selection one over its
+# ceiling; the recurrent cell keeps combined-tie coverage in smoke, and the block cell
+# runs in the backstops.
+@pytest.mark.smoke_cells("test_combined_ties_attach_to_forward_nodes[recurrent]")
 @pytest.mark.parametrize("model_name", sorted(_MODELS))
 def test_combined_ties_attach_to_forward_nodes(tmp_path: Path, model_name: str) -> None:
     """draw_combined forward-to-grad_fn ties and backward edges name declared nodes."""
