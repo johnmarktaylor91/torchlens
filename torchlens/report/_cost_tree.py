@@ -30,7 +30,7 @@ ratification.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 from .._errors import InvalidArgumentError
@@ -47,6 +47,8 @@ class _RemainderMass(NamedTuple):
     n_ops: int
     n_unknown: int
     passes: int | None
+    forward_mac: int = 0
+    backward: int | None = None
 
 
 #: Row roles (D5, closed): an OWNER row's self family is additive mass; a
@@ -60,6 +62,27 @@ COST_COLUMN_ADDITIVITY: dict[str, bool] = {
     "self_pct": True,
     "subtree_flops": False,
     "subtree_pct": False,
+    "self_forward_mac_flops": True,
+    "self_backward_flops": True,
+    "self_total_flops": True,
+    "subtree_forward_mac_flops": False,
+    "subtree_backward_flops": False,
+    "subtree_total_flops": False,
+}
+
+#: The counting convention of each FLOPs column family. The forward
+#: ``*_flops`` columns count every op kind with a rule; the executed backward
+#: counts only the matmul and convolution families, so ``*_total_flops``
+#: adds the backward to the forward's multiply-accumulate work (2 x true
+#: MACs), never to the elementwise-inclusive forward column.
+COST_COLUMN_CONVENTIONS: dict[str, str] = {
+    "flops": "forward, every op kind with a cost rule (fma2)",
+    "forward_mac_flops": "forward multiply-accumulate work only: 2 x true MACs (fma2)",
+    "backward_flops": (
+        "executed backward, matmul and convolution families (fma2, FlopCounterMode's "
+        "convention); other backward calls are named in backward_status, never counted"
+    ),
+    "total_flops": "forward_mac_flops + backward_flops (one convention)",
 }
 
 
@@ -99,6 +122,16 @@ class CostTreeRow:
     folded:
         Number of sibling calls this row represents (strict fold; 1 =
         unfolded).
+    self_forward_mac_flops / subtree_forward_mac_flops:
+        The forward's multiply-accumulate work (2 x true MACs), the
+        convention the executed backward is counted in.
+    self_backward_flops / subtree_backward_flops:
+        Executed backward FLOPs charged to this row's ops through their
+        GradFn calls (matmul and convolution families, fma2), recompute
+        included; ``None`` when no backward was counted (the tree's
+        ``backward_state`` says whether it was not run or is unknown).
+    self_total_flops / subtree_total_flops:
+        Forward MAC work plus executed backward; ``None`` with the backward.
     """
 
     row_id: str
@@ -115,6 +148,12 @@ class CostTreeRow:
     n_unknown_ops: int
     passes: int | None
     folded: int
+    self_forward_mac_flops: int | None = None
+    subtree_forward_mac_flops: int | None = None
+    self_backward_flops: int | None = None
+    subtree_backward_flops: int | None = None
+    self_total_flops: int | None = None
+    subtree_total_flops: int | None = None
 
 
 @dataclass(frozen=True)
@@ -126,6 +165,12 @@ class CostTree:
     display receipt -- the known mass folded into REMAINDER rows by the
     current view (already INCLUDED in the conservation identity through
     those rows, disclosed so a truncated view never reads as complete).
+
+    ``backward_state`` is the three-state backward answer
+    (``tl.report.backward_status``); ``backward_total`` is the executed
+    backward count when one was counted (the self backward column sums to
+    it exactly, unattributed calls included as their own row), else
+    ``None``; ``column_conventions`` names each FLOPs column's convention.
     """
 
     rows: tuple[CostTreeRow, ...]
@@ -133,6 +178,10 @@ class CostTree:
     unknown_events: int
     hidden_flops: int
     column_additivity: dict[str, bool]
+    backward_state: str = "grad_disabled"
+    backward_total: int | None = None
+    forward_mac_total: int = 0
+    column_conventions: dict[str, str] = field(default_factory=dict)
 
     def __repr__(self) -> str:
         """Bounded identity card (F10/D31): rows point, never dump."""
@@ -168,6 +217,7 @@ def _structure_digest(
     self_flops: int | None,
     children: dict[str, list[str]],
     digests: dict[str, str],
+    extra: str = "",
 ) -> str:
     """Bottom-up structural digest used by the strict fold signature.
 
@@ -177,7 +227,7 @@ def _structure_digest(
     """
 
     child_digests = ",".join(digests[child] for child in children.get(row_id, ()))
-    return hashlib.sha256(f"{self_flops}|{child_digests}".encode()).hexdigest()[:16]
+    return hashlib.sha256(f"{self_flops}{extra}|{child_digests}".encode()).hexdigest()[:16]
 
 
 def build_cost_tree(
@@ -267,6 +317,7 @@ class _TreeBuilder:
         self.rows: list[CostTreeRow] = []
         self.hidden_flops = 0
         self._ownership()
+        self._backward_ownership()
         self._forest()
 
     # -- phase 1: op ownership (innermost recorded call) ------------------
@@ -276,12 +327,16 @@ class _TreeBuilder:
 
         op_owner: dict[str, str | None] = {}
         pass_by_label: dict[str, int] = {}
+        self.owner_by_any_label: dict[str, str | None] = {}
         for op in self.trace.layer_list:
             label = str(getattr(op, "label", None) or getattr(op, "layer_label", ""))
             stack = tuple(getattr(op, "module_call_stack", ()) or ())
             op_owner[label] = str(stack[-1]) if stack else None
             pass_by_label[label] = int(getattr(op, "pass_index", 1) or 1)
+            for spelling in _label_spellings(op):
+                self.owner_by_any_label.setdefault(spelling, op_owner[label])
         self.self_flops: dict[str | None, int] = {}
+        self.self_mac: dict[str | None, int] = {}
         self.self_ops: dict[str | None, int] = {}
         self.self_unknown: dict[str | None, int] = {}
         self.self_passes: dict[str | None, set[int]] = {}
@@ -298,6 +353,49 @@ class _TreeBuilder:
                 self.self_unknown[owner] = self.self_unknown.get(owner, 0) + 1
             elif row.flops_fma2 is not None:
                 self.self_flops[owner] = self.self_flops.get(owner, 0) + int(row.flops_fma2)
+                if row.fma_macs:
+                    self.self_mac[owner] = self.self_mac.get(owner, 0) + 2 * int(row.fma_macs)
+
+    def _backward_ownership(self) -> None:
+        """Charge each counted backward row to the owner of its forward op.
+
+        Rows whose node has no forward op, and the unattributed bucket, are
+        kept apart and rendered as their own REMAINDER rows so the self
+        backward column sums to the executed count exactly.
+        """
+
+        from ._cost_backward import backward_status
+
+        status = backward_status(self.trace)
+        self.backward_state = status.state
+        self.backward_known = (
+            status.state == "backward_observed" and status.executed_flops is not None
+        )
+        self.backward_total = status.executed_flops if self.backward_known else None
+        self.self_bwd: dict[str | None, int] = {}
+        self.bwd_no_op = 0
+        self.bwd_unattributed = int(status.unattributed_flops or 0)
+        if not self.backward_known:
+            return
+        for attribution in status.attributions:
+            for row in attribution.rows:
+                if row.op_label is None:
+                    self.bwd_no_op += int(row.flops or 0)
+                    continue
+                owner = self.owner_by_any_label.get(str(row.op_label))
+                if owner is not None and owner not in self.calls:
+                    owner = None
+                self.self_bwd[owner] = self.self_bwd.get(owner, 0) + int(row.flops or 0)
+
+    def _bwd(self, value: int) -> int | None:
+        """A backward cell: the value when the backward was counted, else None."""
+
+        return value if self.backward_known else None
+
+    def _total(self, mac: int, bwd: int) -> int | None:
+        """Forward MAC work plus the counted backward (one convention)."""
+
+        return mac + bwd if self.backward_known else None
 
     # -- phase 2: the call forest + inclusive totals -----------------------
 
@@ -317,6 +415,8 @@ class _TreeBuilder:
         self.roots.sort(key=lambda label: int(self.calls[label].ordinal_index))
         self.subtree_flops: dict[str, int] = {}
         self.subtree_unknown: dict[str, int] = {}
+        self.subtree_mac: dict[str, int] = {}
+        self.subtree_bwd: dict[str, int] = {}
         for root_label in self.roots:
             self._accumulate(root_label)
 
@@ -325,12 +425,18 @@ class _TreeBuilder:
 
         flops = self.self_flops.get(label, 0)
         unknown = self.self_unknown.get(label, 0)
+        mac = self.self_mac.get(label, 0)
+        bwd = self.self_bwd.get(label, 0)
         for child in self.children[label]:
             child_flops, child_unknown = self._accumulate(child)
             flops += child_flops
             unknown += child_unknown
+            mac += self.subtree_mac[child]
+            bwd += self.subtree_bwd[child]
         self.subtree_flops[label] = flops
         self.subtree_unknown[label] = unknown
+        self.subtree_mac[label] = mac
+        self.subtree_bwd[label] = bwd
         return flops, unknown
 
     # -- row constructors ---------------------------------------------------
@@ -349,7 +455,9 @@ class _TreeBuilder:
         """
 
         depth, parent_id = position
-        flops, n_ops, n_unknown, passes = mass
+        flops, n_ops, n_unknown, passes, mac, bwd_mass = mass
+        bwd = self._bwd(bwd_mass or 0)
+        total = self._total(mac, bwd_mass or 0)
 
         self.rows.append(
             CostTreeRow(
@@ -367,6 +475,12 @@ class _TreeBuilder:
                 n_unknown_ops=n_unknown,
                 passes=passes,
                 folded=1,
+                self_forward_mac_flops=mac,
+                subtree_forward_mac_flops=mac,
+                self_backward_flops=bwd,
+                subtree_backward_flops=bwd,
+                self_total_flops=total,
+                subtree_total_flops=total,
             )
         )
 
@@ -382,6 +496,12 @@ class _TreeBuilder:
         # T-ROOT: the root row's self cells are 0; root-direct ops move to
         # an explicit REMAINDER child so conservation stays exact.
         row_self = 0 if is_root else own * folded
+        own_mac = self.self_mac.get(label, 0)
+        own_bwd = self.self_bwd.get(label, 0)
+        self_mac = 0 if is_root else own_mac * folded
+        self_bwd = 0 if is_root else own_bwd * folded
+        sub_mac = self.subtree_mac.get(label, 0) * folded
+        sub_bwd = self.subtree_bwd.get(label, 0) * folded
         self.rows.append(
             CostTreeRow(
                 row_id=label,
@@ -398,9 +518,15 @@ class _TreeBuilder:
                 n_unknown_ops=self.self_unknown.get(label, 0) * folded,
                 passes=(len(self.self_passes.get(label, ())) or None),
                 folded=folded,
+                self_forward_mac_flops=self_mac,
+                subtree_forward_mac_flops=sub_mac,
+                self_backward_flops=self._bwd(self_bwd),
+                subtree_backward_flops=self._bwd(sub_bwd),
+                self_total_flops=self._total(self_mac, self_bwd),
+                subtree_total_flops=self._total(sub_mac, sub_bwd),
             )
         )
-        if is_root and (own > 0 or own_ops > 0):
+        if is_root and (own > 0 or own_ops > 0 or own_bwd > 0):
             self._remainder(
                 f"{label}::direct",
                 "(root-direct ops)",
@@ -410,6 +536,8 @@ class _TreeBuilder:
                     own_ops,
                     self.self_unknown.get(label, 0),
                     len(self.self_passes.get(label, ())) or None,
+                    own_mac,
+                    own_bwd,
                 ),
             )
         if self.max_depth is not None and depth + 1 > self.max_depth:
@@ -438,6 +566,8 @@ class _TreeBuilder:
                 sum(self.self_ops.get(child, 0) for child in kids),
                 sum(self.subtree_unknown.get(child, 0) for child in kids),
                 None,
+                sum(self.subtree_mac.get(child, 0) for child in kids) * folded,
+                sum(self.subtree_bwd.get(child, 0) for child in kids) * folded,
             ),
         )
 
@@ -457,6 +587,8 @@ class _TreeBuilder:
                 sum(self.self_ops.get(item[0], 0) * item[1] for item in dropped),
                 sum(self.subtree_unknown.get(item[0], 0) * item[1] for item in dropped),
                 None,
+                sum(self.subtree_mac.get(item[0], 0) * item[1] for item in dropped) * folded,
+                sum(self.subtree_bwd.get(item[0], 0) * item[1] for item in dropped) * folded,
             ),
         )
 
@@ -473,8 +605,14 @@ class _TreeBuilder:
             if node not in digests:
                 for child in self.children[node]:
                     _digest(child)
+                # Folding multiplies one representative's cells, so siblings
+                # fold only when their MAC and backward cells agree too.
                 digests[node] = _structure_digest(
-                    node, self.self_flops.get(node, 0), self.children, digests
+                    node,
+                    self.self_flops.get(node, 0),
+                    self.children,
+                    digests,
+                    extra=f"|{self.self_mac.get(node, 0)}|{self.self_bwd.get(node, 0)}",
                 )
             return digests[node]
 
@@ -518,6 +656,8 @@ class _TreeBuilder:
         """One synthetic root for a trace with no module calls."""
 
         direct = self.self_flops.get(None, 0)
+        mac_total = sum(self.self_mac.values())
+        bwd_total = sum(self.self_bwd.values()) + self.bwd_no_op + self.bwd_unattributed
         self.rows.append(
             CostTreeRow(
                 row_id="::root",
@@ -534,9 +674,15 @@ class _TreeBuilder:
                 n_unknown_ops=0,
                 passes=None,
                 folded=1,
+                self_forward_mac_flops=0,
+                subtree_forward_mac_flops=mac_total,
+                self_backward_flops=self._bwd(0),
+                subtree_backward_flops=self._bwd(bwd_total),
+                self_total_flops=self._total(0, 0),
+                subtree_total_flops=self._total(mac_total, bwd_total),
             )
         )
-        if direct or self.self_ops.get(None, 0):
+        if direct or self.self_ops.get(None, 0) or self.self_bwd.get(None, 0):
             self._remainder(
                 "::root::direct",
                 "(root-direct ops)",
@@ -546,15 +692,22 @@ class _TreeBuilder:
                     self.self_ops.get(None, 0),
                     self.self_unknown.get(None, 0),
                     len(self.self_passes.get(None, ())) or None,
+                    self.self_mac.get(None, 0),
+                    self.self_bwd.get(None, 0),
                 ),
             )
+        self._backward_buckets(1, "::root")
 
     def _attach_outside_ops(self) -> None:
         """Ops outside every recorded call: one remainder under the first root."""
 
-        if not (self.self_flops.get(None, 0) or self.self_ops.get(None, 0)):
+        extra_bwd = self._backward_buckets(1, self.roots[0])
+        outside_bwd = self.self_bwd.get(None, 0)
+        if not (self.self_flops.get(None, 0) or self.self_ops.get(None, 0) or outside_bwd):
+            self._grow_first_root(0, 0, extra_bwd)
             return
         outside = self.self_flops.get(None, 0)
+        outside_mac = self.self_mac.get(None, 0)
         self._remainder(
             "::outside",
             "(ops outside recorded calls)",
@@ -564,14 +717,52 @@ class _TreeBuilder:
                 self.self_ops.get(None, 0),
                 self.self_unknown.get(None, 0),
                 len(self.self_passes.get(None, ())) or None,
+                outside_mac,
+                outside_bwd,
             ),
         )
+        self._grow_first_root(outside, outside_mac, outside_bwd + extra_bwd)
+
+    def _backward_buckets(self, depth: int, parent_id: str) -> int:
+        """REMAINDER rows for backward work with no forward-op owner; returns their sum.
+
+        Node calls with no forward op (a reentrant checkpoint node, for
+        example) and the unattributed calls each get one row, so the self
+        backward column sums to the executed count exactly.
+        """
+
+        if not self.backward_known:
+            return 0
+        for suffix, label, value in (
+            ("no_op", "(backward nodes with no forward op)", self.bwd_no_op),
+            ("unattributed", "(unattributed backward calls)", self.bwd_unattributed),
+        ):
+            if value:
+                self._remainder(
+                    f"::backward::{suffix}",
+                    label,
+                    (depth, parent_id),
+                    _RemainderMass(0, 0, 0, None, 0, value),
+                )
+        return self.bwd_no_op + self.bwd_unattributed
+
+    def _grow_first_root(self, flops: int, mac: int, bwd: int) -> None:
+        """Add mass attached under the first root to that root's subtree cells."""
+
+        if not (flops or mac or bwd):
+            return
         for index, tree_row in enumerate(self.rows):
             if tree_row.row_id == self.roots[0]:
+                sub_flops = (tree_row.subtree_flops or 0) + flops
+                sub_mac = (tree_row.subtree_forward_mac_flops or 0) + mac
+                sub_bwd = self.subtree_bwd.get(self.roots[0], 0) + bwd
                 self.rows[index] = replace(
                     tree_row,
-                    subtree_flops=(tree_row.subtree_flops or 0) + outside,
-                    subtree_pct=_pct((tree_row.subtree_flops or 0) + outside, self.partition_total),
+                    subtree_flops=sub_flops,
+                    subtree_pct=_pct(sub_flops, self.partition_total),
+                    subtree_forward_mac_flops=sub_mac,
+                    subtree_backward_flops=self._bwd(sub_bwd),
+                    subtree_total_flops=self._total(sub_mac, sub_bwd),
                 )
                 break
 
@@ -590,7 +781,22 @@ class _TreeBuilder:
             unknown_events=self.agg.coverage.unknown,
             hidden_flops=self.hidden_flops,
             column_additivity=dict(COST_COLUMN_ADDITIVITY),
+            backward_state=self.backward_state,
+            backward_total=self.backward_total,
+            forward_mac_total=sum(self.self_mac.values()),
+            column_conventions=dict(COST_COLUMN_CONVENTIONS),
         )
+
+
+def _label_spellings(op: Any) -> tuple[str, ...]:
+    """The label spellings a GradFn's ``op_label`` may use for one op."""
+
+    spellings = []
+    for name in ("label", "layer_label", "layer_label_w_pass", "layer_label_no_pass"):
+        value = getattr(op, name, None)
+        if value:
+            spellings.append(str(value))
+    return tuple(spellings)
 
 
 def _call_display(call: Any) -> str:
@@ -605,13 +811,17 @@ def format_cost_tree(tree: CostTree) -> str:
     The header names both column families and their additivity; the
     footer prints the invariant denominator, the unknown EVENT count
     (never a FLOP percentage, D4), and the hidden-share display receipt
-    when a view dropped rows (D6).
+    when a view dropped rows (D6). When an executed backward was counted,
+    three self columns follow: forward MAC work, executed backward, and
+    their total (one convention); otherwise the footer states the backward
+    as not run or unknown, never 0.
     """
 
-    lines = [
-        "cost tree (self = exclusive, additive; subtree = inclusive, NON-additive)",
-        f"{'call':<44} {'self FLOPs':>14} {'self%':>7} {'subtree FLOPs':>14} {'subtree%':>9}",
-    ]
+    counted = tree.backward_total is not None
+    head = f"{'call':<44} {'self FLOPs':>14} {'self%':>7} {'subtree FLOPs':>14} {'subtree%':>9}"
+    if counted:
+        head += f" {'fwd MAC':>12} {'bwd':>12} {'fwd MAC+bwd':>12}"
+    lines = ["cost tree (self = exclusive, additive; subtree = inclusive, NON-additive)", head]
     for row in tree.rows:
         indent = "  " * row.depth
         label = f"{indent}{row.label}"
@@ -621,8 +831,19 @@ def format_cost_tree(tree: CostTree) -> str:
         self_pct = "-" if row.self_pct is None else f"{row.self_pct:.1f}%"
         sub_cell = "-" if row.subtree_flops is None else str(row.subtree_flops)
         sub_pct = "-" if row.subtree_pct is None else f"{row.subtree_pct:.1f}%"
-        lines.append(f"{label:<44} {self_cell:>14} {self_pct:>7} {sub_cell:>14} {sub_pct:>9}")
+        line = f"{label:<44} {self_cell:>14} {self_pct:>7} {sub_cell:>14} {sub_pct:>9}"
+        if counted:
+            line += " " + " ".join(
+                f"{'-' if value is None else value:>12}"
+                for value in (
+                    row.self_forward_mac_flops,
+                    row.self_backward_flops,
+                    row.self_total_flops,
+                )
+            )
+        lines.append(line)
     lines.append(f"partition total (known forward FLOPs, whole capture): {tree.partition_total}")
+    lines.append(_backward_footer(tree))
     if tree.unknown_events:
         lines.append(
             f"unknown-cost ops: {tree.unknown_events} (an event count; see unknown_flop_ops)"
@@ -633,3 +854,19 @@ def format_cost_tree(tree: CostTree) -> str:
             "by top_k/depth"
         )
     return "\n".join(lines)
+
+
+def _backward_footer(tree: CostTree) -> str:
+    """One line on the backward columns: counted with its convention, or why absent."""
+
+    if tree.backward_total is not None:
+        return (
+            f"executed backward: {tree.backward_total} FLOPs (matmul and convolution "
+            "families, fma2); fwd MAC = 2 x true MACs, the same convention"
+        )
+    if tree.backward_state == "grad_disabled":
+        return "executed backward: not run (autograd recorded no graph for this capture)"
+    return (
+        "executed backward: unknown (no counted backward on this object; "
+        "see tl.report.backward_status)"
+    )
