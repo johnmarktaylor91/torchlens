@@ -49,6 +49,7 @@ Maintenance — checking coverage against the full op list::
 """
 
 import math
+import string
 from collections.abc import Callable, Sequence
 from typing import cast
 
@@ -737,31 +738,59 @@ def _addmm_flops(
     return 2 * batch * m * k * n + _numel(output_shape)
 
 
+def _operand_weight(
+    param_shapes: ParamShapes, saved_args: CapturedArgs, min_rank: int
+) -> tuple[Shape, bool] | None:
+    """Return ``(weight_shape, has_bias)`` for a linear or convolution call.
+
+    The weight is read from the parameter shapes when the first one is a
+    weight (rank ``min_rank`` or more); otherwise from the call's second
+    positional argument (``F.linear(x, w, b)``, ``F.conv2d(x, w, b)``), so a
+    weight computed in ``forward`` (weight norm, spectral norm, a weight passed
+    in as an input) is counted too. The bias is present when a second
+    parameter shape follows a parameter weight, or when the third positional
+    argument is a tensor.
+    """
+
+    if param_shapes and len(param_shapes[0]) >= min_rank:
+        return tuple(param_shapes[0]), len(param_shapes) > 1
+    if len(saved_args) < 2:
+        return None
+    weight = _safe_shape(saved_args[1]) if not isinstance(saved_args[1], tuple) else None
+    if weight is None or len(weight) < min_rank:
+        return None
+    has_bias = len(saved_args) > 2 and _safe_shape(saved_args[2]) is not None
+    if has_bias and isinstance(saved_args[2], tuple):
+        has_bias = False
+    return weight, has_bias
+
+
 def _linear_flops(
     output_shape: Shape | None,
     param_shapes: ParamShapes,
     saved_args: CapturedArgs,
 ) -> int | None:
-    """nn.Linear: 2 * batch * in_features * out_features (+ bias).
+    """nn.Linear / F.linear: 2 * batch * in_features * out_features (+ bias).
 
     Parameters
 
     ----------
         output_shape: Shape of the output tensor.
         param_shapes: Shapes of parameter tensors involved.
-        saved_args: Positional args to the function.
+        saved_args: Positional args to the function (the weight is read here
+            when it is not a parameter).
     """
-    if param_shapes:
-        # Weight shape is [out_features, in_features]
-        weight_shape = param_shapes[0]
-        if len(weight_shape) >= 2:
-            out_features, in_features = weight_shape[0], weight_shape[1]
-            batch = _numel(output_shape) // out_features if out_features > 0 else 0
-            flops = 2 * batch * in_features * out_features
-            if len(param_shapes) > 1:  # bias
-                flops += _numel(output_shape)
-            return flops
-    return None
+    operand = _operand_weight(param_shapes, saved_args, 2)
+    if operand is None:
+        return None
+    weight_shape, has_bias = operand
+    # Weight shape is [out_features, in_features]
+    out_features, in_features = weight_shape[0], weight_shape[1]
+    batch = _numel(output_shape) // out_features if out_features > 0 else 0
+    flops = 2 * batch * in_features * out_features
+    if has_bias:
+        flops += _numel(output_shape)
+    return flops
 
 
 def _conv_flops(
@@ -775,16 +804,15 @@ def _conv_flops(
     Each output element requires a dot product of size
     ``in_channels_per_group * kernel_size``, hence ``2 * ...`` (MAC convention).
     """
-    if not param_shapes:
+    operand = _operand_weight(param_shapes, saved_args, 3)
+    if operand is None:
         return None
-    weight_shape = param_shapes[0]
-    if len(weight_shape) < 3:
-        return None
+    weight_shape, has_bias = operand
     out_numel = _numel(output_shape)
     channels_per_group = weight_shape[1]  # in_channels / groups
     kernel_size = _prod(weight_shape[2:])  # product of spatial kernel dims
     flops = 2 * out_numel * channels_per_group * kernel_size
-    if len(param_shapes) > 1:  # bias adds 1 FLOP per output element
+    if has_bias:  # bias adds 1 FLOP per output element
         flops += _numel(output_shape)
     return flops
 
@@ -816,16 +844,17 @@ def _conv_transpose_flops(
         Estimated FLOPs, or ``None`` when the input or weight shape is unavailable.
     """
 
-    if not param_shapes or not saved_args:
+    operand = _operand_weight(param_shapes, saved_args, 3)
+    if operand is None or not saved_args:
         return None
-    weight_shape = param_shapes[0]
+    weight_shape, has_bias = operand
     input_shape = _safe_shape(saved_args[0])
-    if len(weight_shape) < 3 or input_shape is None:
+    if input_shape is None:
         return None
     output_channels_per_group = weight_shape[1]
     kernel_size = _prod(weight_shape[2:])
     flops = 2 * _numel(input_shape) * output_channels_per_group * kernel_size
-    if len(param_shapes) > 1:
+    if has_bias:
         flops += _numel(output_shape)
     return flops
 
@@ -1192,6 +1221,42 @@ def _binary_cross_entropy_flops(
     return None
 
 
+def _expand_einsum_ellipsis(equation: str, shapes: Sequence[Shape]) -> str | None:
+    """Spell an einsum equation's ``...`` as explicit labels (right-aligned).
+
+    Each operand's ellipsis covers its leading dimensions; they broadcast
+    right-aligned, so the widest ellipsis takes fresh labels and narrower
+    ones take that run's trailing labels. An implicit output keeps the
+    ellipsis dimensions first, then the labels used once, sorted. Returns
+    the equation unchanged without an ellipsis, or ``None`` when it cannot
+    be spelled out.
+    """
+
+    if "..." not in equation:
+        return equation
+    inputs, separator, output = equation.partition("->")
+    terms = inputs.split(",")
+    if len(terms) != len(shapes) or any(term.count("...") > 1 for term in [*terms, output]):
+        return None
+    widths = [
+        len(shape) - (len(term) - 3) if "..." in term else 0 for term, shape in zip(terms, shapes)
+    ]
+    width = max(widths)
+    pool = [label for label in string.ascii_letters if label not in equation]
+    if min(widths) < 0 or len(pool) < width:
+        return None
+    run = "".join(pool[:width])
+    spelled = [term.replace("...", run[width - used :]) for term, used in zip(terms, widths)]
+    if separator:
+        spelled_output = output.replace("...", run)
+    else:
+        named = "".join(term.replace("...", "") for term in terms)
+        spelled_output = run + "".join(
+            sorted(label for label in set(named) if named.count(label) == 1)
+        )
+    return ",".join(spelled) + "->" + spelled_output
+
+
 def _einsum_flops(
     output_shape: Shape | None,
     param_shapes: ParamShapes,
@@ -1200,8 +1265,9 @@ def _einsum_flops(
     """Compute two-operand einsum FLOPs from its subscript equation.
 
     Explicit axis labels are classified as output axes, shared batch axes, or
-    contracted axes. Ellipses, repeated axes within one operand, and
-    multi-operand contractions remain unknown rather than being guessed.
+    contracted axes; an ellipsis is spelled out as labels first. Repeated axes
+    within one operand and multi-operand contractions remain unknown rather
+    than being guessed.
 
     Parameters
     ----------
@@ -1223,7 +1289,7 @@ def _einsum_flops(
     if not saved_args or output_shape is None:
         return None
     equation = next((arg for arg in saved_args if isinstance(arg, str)), None)
-    if equation is None or "..." in equation:
+    if equation is None:
         return None
 
     operand_args = tuple(arg for arg in saved_args if arg is not equation)
@@ -1235,8 +1301,11 @@ def _einsum_flops(
     if len(shapes) != 2 or any(shape is None for shape in shapes):
         return None
     a_shape, b_shape = cast(tuple[Shape, Shape], shapes)
+    expanded = _expand_einsum_ellipsis(equation.replace(" ", ""), (a_shape, b_shape))
+    if expanded is None:
+        return None
 
-    input_equation, separator, explicit_output = equation.replace(" ", "").partition("->")
+    input_equation, separator, explicit_output = expanded.partition("->")
     input_terms = input_equation.split(",")
     if len(input_terms) != 2 or any(not term.isalpha() for term in input_terms):
         return None
@@ -1342,6 +1411,150 @@ def _sdpa_flops(
     return qk_flops + softmax_flops + av_flops
 
 
+# Recurrent kernels (fused ``torch._VF`` RNN, GRU and LSTM calls and their cells).
+#: Fused sequence kernels: ``(input, hx, weights, ...)`` or, for packed
+#: sequences, ``(data, batch_sizes, hx, weights, ...)``.
+RNN_SEQUENCE_FUNCS: frozenset[str] = frozenset({"rnn_tanh", "rnn_relu", "gru", "lstm"})
+#: Single-step cells with one output: ``(input, hx, w_ih, w_hh, b_ih, b_hh)``.
+RNN_CELL_FUNCS: frozenset[str] = frozenset({"rnn_tanh_cell", "rnn_relu_cell", "gru_cell"})
+
+
+def rnn_flops_from_shapes(output_shape: Shape | None, param_shapes: ParamShapes) -> int | None:
+    """FLOPs of one recurrent call from its sequence output and weight shapes.
+
+    Every row of the output (one time step of one sequence, or one packed
+    row) runs each layer and direction once, and each weight matrix
+    (``w_ih``, ``w_hh`` and an LSTM projection ``w_hr``) multiplies one
+    vector per row, so the multiply-accumulates are ``rows * sum(numel of
+    every 2-D weight)``. Each bias vector is added once per row. The gate
+    nonlinearities and gate products inside the kernel are not counted.
+    """
+
+    matrices = [shape for shape in param_shapes if len(shape) == 2]
+    if not matrices or not output_shape or output_shape[-1] <= 0:
+        return None
+    rows = _numel(output_shape) // output_shape[-1]
+    macs = rows * sum(_prod(shape) for shape in matrices)
+    bias_adds = rows * sum(_prod(shape) for shape in param_shapes if len(shape) == 1)
+    return 2 * macs + bias_adds
+
+
+def _is_index_vector(arg: object) -> bool:
+    """Whether ``arg`` is a 1-D integer tensor (a packed sequence's batch sizes)."""
+
+    shape = _safe_shape(arg)
+    return shape is not None and len(shape) == 1 and "int" in str(getattr(arg, "dtype", ""))
+
+
+def _rnn_output_is_sequence(output_shape: Shape | None, saved_args: CapturedArgs) -> bool | None:
+    """True for a fused RNN's sequence output, False for a final-state output.
+
+    ``None`` when the shapes cannot tell the two apart (a one-step, one-layer
+    call whose sequence output has the hidden state's shape).
+    """
+
+    if output_shape is None or len(saved_args) < 2:
+        return None
+    input_shape = _safe_shape(saved_args[0])
+    packed = _is_index_vector(saved_args[1])
+    hx = saved_args[2] if packed and len(saved_args) > 2 else saved_args[1]
+    states = hx if isinstance(hx, (list, tuple)) else (hx,)
+    state_shapes = {
+        shape for shape in (_safe_shape(state) for state in states) if shape is not None
+    }
+    if input_shape is None:
+        return None
+    is_sequence = tuple(output_shape[:-1]) == tuple(input_shape[:-1])
+    is_state = tuple(output_shape) in state_shapes
+    if is_sequence == is_state:
+        return None
+    return is_sequence
+
+
+def _rnn_sequence_flops(
+    output_shape: Shape | None,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
+) -> int | None:
+    """Fused RNN, GRU and LSTM kernels: the whole call on its sequence output.
+
+    The call's work is attributed to its sequence output; its final hidden
+    and cell states count 0 (they come out of the same call).
+    """
+
+    is_sequence = _rnn_output_is_sequence(output_shape, saved_args)
+    if is_sequence is None:
+        return None
+    if not is_sequence:
+        return 0
+    return rnn_flops_from_shapes(output_shape, param_shapes)
+
+
+def _rnn_cell_flops(
+    output_shape: Shape | None,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
+) -> int | None:
+    """Single-output recurrent cells (``rnn_tanh_cell``, ``rnn_relu_cell``, ``gru_cell``)."""
+
+    del saved_args
+    return rnn_flops_from_shapes(output_shape, param_shapes)
+
+
+def multi_dot_macs(shapes: Sequence[Shape]) -> int | None:
+    """Multiply-accumulates of ``torch.linalg.multi_dot`` in its optimal order.
+
+    ``multi_dot`` multiplies the chain in the order with the fewest
+    multiply-accumulates (a 1-D first or last operand is a row or column
+    vector), so that minimum is the work it runs.
+    """
+
+    if len(shapes) < 2:
+        return None
+    matrices: list[Shape] = []
+    for index, shape in enumerate(shapes):
+        if len(shape) == 2:
+            matrices.append(shape)
+        elif len(shape) == 1 and index == 0:
+            matrices.append((1, shape[0]))
+        elif len(shape) == 1 and index == len(shapes) - 1:
+            matrices.append((shape[0], 1))
+        else:
+            return None
+    if any(left[1] != right[0] for left, right in zip(matrices, matrices[1:])):
+        return None
+    dims = [matrices[0][0], *(matrix[1] for matrix in matrices)]
+    count = len(shapes)
+    cost = [[0] * count for _ in range(count)]
+    for span in range(1, count):
+        for left in range(count - span):
+            right = left + span
+            cost[left][right] = min(
+                cost[left][split]
+                + cost[split + 1][right]
+                + dims[left] * dims[split + 1] * dims[right + 1]
+                for split in range(left, right)
+            )
+    return cost[0][count - 1]
+
+
+def _multi_dot_flops(
+    output_shape: Shape | None,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
+) -> int | None:
+    """``torch.linalg.multi_dot([A, B, ...])``: 2 x the optimal chain's MACs."""
+
+    del output_shape, param_shapes
+    if not saved_args or not isinstance(saved_args[0], (list, tuple)):
+        return None
+    shapes = [_safe_shape(operand) for operand in saved_args[0]]
+    if any(shape is None for shape in shapes):
+        return None
+    macs = multi_dot_macs(cast(list[Shape], shapes))
+    return None if macs is None else 2 * macs
+
+
 # Type alias for specialty FLOPs handler functions.
 # Signature: (output_shape, param_shapes, saved_args) -> int | None
 _FlopsHandler = Callable[[Shape | None, ParamShapes, CapturedArgs], int | None]
@@ -1362,7 +1575,7 @@ SPECIALTY_HANDLERS: dict[str, _FlopsHandler] = {
     "addbmm_": _addmm_flops,
     "baddbmm": _addmm_flops,
     "baddbmm_": _addmm_flops,
-    "multi_dot": _matmul_flops,
+    "multi_dot": _multi_dot_flops,
     "chain_matmul": _matmul_flops,
     "linear": _linear_flops,
     # Convolution
@@ -1523,6 +1736,8 @@ SPECIALTY_HANDLERS: dict[str, _FlopsHandler] = {
     "cdist": _norm_flops,
     # Attention
     "scaled_dot_product_attention": _sdpa_flops,
+    **dict.fromkeys(RNN_SEQUENCE_FUNCS, _rnn_sequence_flops),
+    **dict.fromkeys(RNN_CELL_FUNCS, _rnn_cell_flops),
     # MHA is a composite op; FLOPs from its sub-ops (linear, sdpa) are captured
     # individually. Return None to avoid double-counting.
     "multi_head_attention_forward": lambda *_: None,
@@ -1654,6 +1869,34 @@ def register_op_rule(
 # ============================================================================
 
 
+#: Calls whose weight and bias may arrive as keywords (``F.linear(x, w, bias=b)``).
+_WEIGHTED_FUNCS: frozenset[str] = frozenset(
+    {
+        "linear",
+        "conv1d",
+        "conv2d",
+        "conv3d",
+        "conv_transpose1d",
+        "conv_transpose2d",
+        "conv_transpose3d",
+    }
+)
+
+
+def _with_operand_kwargs(
+    func_name: str, saved_args: CapturedArgs, saved_kwargs: dict[str, object] | None
+) -> CapturedArgs:
+    """Append keyword ``input``, ``weight`` and ``bias`` to a weighted call's positional args."""
+
+    if func_name not in _WEIGHTED_FUNCS or not saved_kwargs:
+        return saved_args
+    args = list(saved_args)
+    for position, name in enumerate(("input", "weight", "bias")):
+        if len(args) == position and name in saved_kwargs:
+            args.append(saved_kwargs[name])
+    return tuple(args)
+
+
 def compute_forward_flops(
     func_name: str,
     output_shape: Shape | None,
@@ -1702,7 +1945,9 @@ def compute_forward_flops(
     # Tier 3: shape-dependent specialty handlers
     if func_name in SPECIALTY_HANDLERS:
         handler = SPECIALTY_HANDLERS[func_name]
-        return handler(output_shape, param_shapes, saved_args)
+        return handler(
+            output_shape, param_shapes, _with_operand_kwargs(func_name, saved_args, saved_kwargs)
+        )
 
     # Unknown operation — return None rather than guessing to avoid silent errors.
     return None
@@ -1749,8 +1994,26 @@ DISPATCH_COUNTING_CONVENTION = (
     "fma2 (one multiply-add = 2 FLOPs); matmul and convolution families counted"
 )
 
+#: CPU fused attention kernels, counted as the matrix products of the math they
+#: replace: forward Q@K^T and P@V; backward dP, dV, dQ and dK (the kernel
+#: always returns all three input gradients). Full query x key square, as
+#: the forward rule.
+_DISPATCH_FUSED_ATTENTION: frozenset[str] = frozenset(
+    {
+        "_scaled_dot_product_flash_attention_for_cpu",
+        "_scaled_dot_product_flash_attention_for_cpu_backward",
+    }
+)
+#: oneDNN LSTM layer kernels (CPU LSTM without projections): forward multiplies
+#: ``w_ih`` and ``w_hh`` once per row; backward forms dX, dW_ih, dH and dW_hh.
+_DISPATCH_FUSED_RECURRENT: frozenset[str] = frozenset(
+    {"mkldnn_rnn_layer", "mkldnn_rnn_layer_backward"}
+)
+
 #: Counted ops FlopCounterMode has no rule for (it reports 0 for them).
-COUNTED_BEYOND_FLOP_COUNTER_MODE: frozenset[str] = frozenset({"mv", "addmv", "dot", "vdot"})
+COUNTED_BEYOND_FLOP_COUNTER_MODE: frozenset[str] = frozenset(
+    {"mv", "addmv", "dot", "vdot"} | _DISPATCH_FUSED_ATTENTION | _DISPATCH_FUSED_RECURRENT
+)
 
 #: ATen spellings of layout, copy and construction ops that do no arithmetic.
 _ATEN_ZERO_ARITHMETIC: frozenset[str] = frozenset(
@@ -1845,7 +2108,28 @@ def _dispatch_conv_flops(
     return 2 * macs * (int(bool(mask[0])) + int(bool(mask[1])))
 
 
+def _dispatch_fused_flops(base: str, shapes: DispatchShapes) -> int | None:
+    """Return fma2 FLOPs for one fused attention or oneDNN LSTM layer call, or None."""
+
+    if base in _DISPATCH_FUSED_ATTENTION:
+        backward = base.endswith("_backward")
+        operands = list(shapes[1:4] if backward else shapes[0:3])
+        if len(operands) < 3 or any(shape is None or len(shape) < 2 for shape in operands):
+            return None
+        query, key, value = cast(list[Shape], operands)
+        rows = _prod(query[:-1])
+        forward = 2 * rows * key[-2] * (query[-1] + value[-1])
+        return 2 * forward if backward else forward
+    weights = [shape for shape in shapes[1:5] if shape is not None and len(shape) == 2]
+    data = shapes[0] if shapes else None
+    if not weights or data is None or not data or data[-1] <= 0:
+        return None
+    forward = 2 * (_numel(data) // data[-1]) * sum(_prod(shape) for shape in weights)
+    return 2 * forward if base.endswith("_backward") else forward
+
+
 _DISPATCH_MATMUL_OPS = frozenset({"mm", "addmm", "bmm", "baddbmm", "mv", "addmv", "dot", "vdot"})
+_DISPATCH_FUSED_OPS = _DISPATCH_FUSED_ATTENTION | _DISPATCH_FUSED_RECURRENT
 _DISPATCH_CONV_OPS = frozenset(
     {"convolution", "_convolution", "convolution_backward", "_convolution_backward"}
 )
@@ -1858,7 +2142,7 @@ def dispatch_op_family(base: str) -> str:
     ``"uncounted"`` (outside the counted families; never zeroed by the caller).
     """
 
-    if base in _DISPATCH_MATMUL_OPS:
+    if base in _DISPATCH_MATMUL_OPS or base in _DISPATCH_FUSED_OPS:
         return "matmul"
     if base in _DISPATCH_CONV_OPS:
         return "convolution"
@@ -1901,6 +2185,8 @@ def compute_dispatched_op_flops(
     family = dispatch_op_family(base)
     if family == "zero_arithmetic":
         return 0
+    if base in _DISPATCH_FUSED_OPS:
+        return _dispatch_fused_flops(base, input_shapes)
     if family == "matmul":
         return _dispatch_matmul_flops(base, input_shapes)
     if family == "convolution":
