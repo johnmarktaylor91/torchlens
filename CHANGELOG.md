@@ -57,6 +57,11 @@
   `push(replay=ReplayOptions(hooks=...))`, now refuses `InvalidArgumentError` code
   `replay_gradient_edit_unsupported` naming the live door; before, it failed with an uncoded
   `HookSignatureError`.
+- **trace**: a default `tl.trace` now puts back state a model builds lazily in its forward (a cache
+  attribute, a first-call init flag), so calling `tl.validate` right after a trace on such a model
+  starts from the pristine model and reports `retrace_mismatch` for its one-time first forward. Run
+  one plain forward first, or trace with `CaptureOptions(carry_state=True)`, to validate the
+  steady-state model.
 
 ### Features
 
@@ -225,6 +230,11 @@
   matmul and convolution families at fma2 (FlopCounterMode's convention), per pass in
   `executed_flops_per_pass`, with every other call named in `uncounted_ops`. An observed backward
   used to read unknown.
+- **intervention**: `Trace.do([(selection, edit), ...])` accepts batches that mix activation,
+  parameter (`tl.params(...)`) and dataflow-edge selections on the replay engine: the pairs apply in
+  order, the result equals one `do()` per pair, and the batch is atomic (a refused pair leaves the
+  trace as it was, apart from the one error event). Such a batch on another engine still refuses
+  with `selection_batch_cross_kind`, which now names the replay engine as the working spelling.
 
 ### Bug Fixes
 
@@ -290,6 +300,9 @@
   `tl.func(...) & tl.in_module(...)`, instead of failing at the first op or never firing.
 - **report**: `tl.report.backward_status` no longer raises `TypeError` on a trace with an observed
   backward whose GradFn fires were timed.
+- **replay**: After a differentiable replay, a later plain replay of the trace or of a fork of it
+  reports `last_run["differentiable"]` False and drops the stale `frontier`; `keep_grad` no longer
+  discloses `keep_grad_replay_frontier` during such a plain replay.
 
 ### Performance Improvements
 
@@ -311,6 +324,10 @@
   n^3 on deep chains (a 600-layer convolution chain's check: 169 s to 31 s) by mapping
   single-progression index windows in closed form and sharing graph facts and rule results across
   the check's queries; every box is unchanged.
+- **rerun**: A rerun that refreshes its fork in place releases the capture it discarded before
+  returning, so the cleanup no longer lands inside the next operation: on a 12-layer GPT-2 head
+  sweep, a fork made right after a rerun makes about 420,000 Python calls instead of about 1.25
+  million.
 
 ### Changed
 
