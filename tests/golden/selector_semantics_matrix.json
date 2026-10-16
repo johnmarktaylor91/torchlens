@@ -28,7 +28,7 @@
   "relu_1_2",
   "relu_2_4"
  ],
- "capture/conv/facet_named": "ERROR:SelectorCapabilityError",
+ "capture/conv/facet_named": [],
  "capture/conv/followed_by_bare": "ERROR:PredicateError",
  "capture/conv/followed_by_combo": [
   "conv2d_1_1",
@@ -46,7 +46,7 @@
  ],
  "capture/conv/func_transform_any": [],
  "capture/conv/grad_fn_on_forward": [],
- "capture/conv/head_indexed": "ERROR:SelectorCapabilityError",
+ "capture/conv/head_indexed": [],
  "capture/conv/in_module_container": [
   "conv2d_1_1",
   "conv2d_2_3",
