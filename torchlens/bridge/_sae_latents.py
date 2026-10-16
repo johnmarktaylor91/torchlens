@@ -19,7 +19,7 @@ import warnings
 import weakref
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import Any
 
 import torch
 from torch import nn
@@ -31,7 +31,7 @@ _DOCS = "docs/recipes/pretrained_saes.md"
 _INVALID_NAME_CHARS = frozenset("[],")
 
 
-def _require_codec(sae: Any) -> None:
+def require_codec(sae: Any, door: str = "SAE splice") -> None:
     """Refuse SAE objects without an encode/decode pair.
 
     Raises
@@ -42,9 +42,28 @@ def _require_codec(sae: Any) -> None:
 
     if not callable(getattr(sae, "encode", None)) or not callable(getattr(sae, "decode", None)):
         raise TypeError(
-            "An SAE must expose encode(...) and decode(...); "
+            f"{door} requires an SAE exposing encode(...) and decode(...); "
             f"got {type(sae).__name__!r}. Any object with that pair works -- "
             "an SAE Lens SAE, or a hand-built module."
+        )
+
+
+def require_live_model(model_or_log: Any) -> None:
+    """Refuse ``splice(..., log_latents=True)`` from a Trace (there are no inputs to rerun).
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``sae_splice_logged_needs_live_model``.
+    """
+
+    if not isinstance(model_or_log, nn.Module):
+        raise InvalidArgumentError(
+            "splice(..., log_latents=True) captures the live model again with the SAE inside "
+            "it, so it needs the model and its inputs; it got a Trace",
+            code="sae_splice_logged_needs_live_model",
+            remedy="call splice(model, inputs, site=..., sae=..., log_latents=True) with the "
+            f"live model; see {_DOCS}",
         )
 
 
@@ -219,7 +238,7 @@ class _SAEFamily:
         from ..semantic.facets import FacetSpec, TransformPrimitive
 
         codec = _LatentCodec(self.name, self.sae, index)
-        primitive = TransformPrimitive("codec", (codec,), capability_class="decoder_direction")
+        primitive = TransformPrimitive("codec", (codec,), capability_class="codec")
         home = FacetSpec.from_home(record, recipe_id=f"sae:{self.name}")
         return home._append(primitive)
 
@@ -380,9 +399,9 @@ def register(name: str, sae: Any, *, site: Any) -> None:
         ``sae_family_name_taken`` when the name is registered already.
     """
 
-    from ..semantic import facets
+    from ..semantic import _families
 
-    _require_codec(sae)
+    require_codec(sae, "tl.bridge.sae.register")
     if (
         not isinstance(name, str)
         or not name
@@ -394,13 +413,13 @@ def register(name: str, sae: Any, *, site: Any) -> None:
             code="sae_family_name_invalid",
             remedy=f"name it plainly, e.g. tl.bridge.sae.register('res', sae, site=...); see {_DOCS}",
         )
-    if name in facets._FACET_FAMILIES:
+    if name in _families._FACET_FAMILIES:
         raise InvalidArgumentError(
             f"an SAE is already registered as {name!r}",
             code="sae_family_name_taken",
             remedy=f"tl.bridge.sae.unregister({name!r}) first, or register under a new name",
         )
-    facets._FACET_FAMILIES[name] = _SAEFamily(
+    _families._FACET_FAMILIES[name] = _SAEFamily(
         name=name, sae=sae, site=site, width=_latent_width(sae)
     )
 
@@ -414,16 +433,16 @@ def unregister(name: str) -> None:
         ``sae_family_unknown`` when nothing is registered under ``name``.
     """
 
-    from ..semantic import facets
+    from ..semantic import _families
 
-    if name not in facets._FACET_FAMILIES:
-        registered = sorted(facets._FACET_FAMILIES)
+    if name not in _families._FACET_FAMILIES:
+        registered = sorted(_families._FACET_FAMILIES)
         raise InvalidArgumentError(
             f"no SAE is registered as {name!r}; registered: {registered if registered else 'none'}",
             code="sae_family_unknown",
             remedy="unregister a registered name, or nothing",
         )
-    del facets._FACET_FAMILIES[name]
+    del _families._FACET_FAMILIES[name]
 
 
 def logged_splice_trace(
@@ -452,8 +471,8 @@ def logged_splice_trace(
     site_label:
         Resolved site label.
     reconstruction:
-        Module whose ``logged(out, keep_latents)`` returns the replacement
-        for the site and calls ``keep_latents`` with the encoder output.
+        The splice's reconstruction module (its SAE, latent edit and kept
+        leading positions); the hook runs the same arithmetic as its forward.
 
     Returns
     -------
@@ -487,7 +506,13 @@ def logged_splice_trace(
                 remedy="splice without log_latents=True, or at a site a module returns as a "
                 f"tensor; see {_DOCS}",
             )
-        return cast(torch.Tensor, reconstruction.logged(output, _keep))
+        from .sae import _encode_decode
+
+        latents, _edited, replacement = _encode_decode(
+            reconstruction._sae, output, reconstruction._latents_edit, reconstruction._start
+        )
+        _keep(latents)
+        return replacement
 
     child = _free_child_name(model)
     # Releasing the model makes the next capture prepare its module tree from

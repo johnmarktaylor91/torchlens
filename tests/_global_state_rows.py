@@ -660,7 +660,7 @@ _PUBLIC_REGISTRATION_STATE = frozenset(
         ("torchlens/semantic/facets.py", "_TRANSFORMERLENS_ALIASES_ENABLED"),
         # SAE latent facet families: tl.bridge.sae.register / unregister are the
         # public registration doors; every FacetView reads the table live.
-        ("torchlens/semantic/facets.py", "_FACET_FAMILIES"),
+        ("torchlens/semantic/_families.py", "_FACET_FAMILIES"),
         # L6/S4 predicate runtime extension point: the public registration hook
         # mutates this table, so a leaked entry changes predicate resolution for
         # the rest of the process exactly like a registered facet or RF rule.

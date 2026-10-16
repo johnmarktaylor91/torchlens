@@ -74,11 +74,11 @@ optional dependency.
   root so the SAE's parameters are known sources); `latents_site` labels the
   latents node; spliced outputs equal the off path's exactly.
 - `_sae_latents.py` (exported by `sae.py`): `register(name, sae, *, site)` and
-  `unregister(name)` fill `torchlens.semantic.facets._FACET_FAMILIES`; every
+  `unregister(name)` fill `torchlens.semantic._families._FACET_FAMILIES`; every
   `FacetView` consults it live, so `tl.facet(name).latent(k)` (selector name
   `"name[k]"`) and `facets["name[k]"]` work on traces captured before the
   registration. The facet is a `"codec"` transform primitive (capability class
-  `decoder_direction`): reads are `encode(home)[..., k]`, writes are
+  `codec`): reads are `encode(home)[..., k]`, writes are
   `home + decode(z') - decode(z)` (the error term stays), the write mask is the
   whole home. A string site must be one op of a single-pass layer (hooks target
   the raw layer label, which fires on every pass); a selector site keeps one home

@@ -974,10 +974,10 @@ class FacetSelector(BaseSelector):
             ``sae_latent_index_unknown`` for an index the SAE does not have.
         """
 
-        from ..semantic.facets import _family_facet_name
+        from ..semantic._families import family_facet_name
 
         return FacetSelector(
-            _family_facet_name(self.name, index), module_address=self.module_address
+            family_facet_name(self.name, index), module_address=self.module_address
         )
 
     def in_module(self, address: str) -> FacetSelector:
