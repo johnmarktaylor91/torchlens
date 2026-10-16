@@ -1071,21 +1071,31 @@ def _facet_save_predicate(selector: FacetSelector) -> BaseSelector:
         return home
 
     names = frozenset(("q", "k", "v") if selector.name is None else (selector.name,))
-    declares: dict[str, bool] = {}
+    declares: dict[tuple[int, str], bool] = {}
 
-    def _declares(module_type: str) -> bool:
-        if module_type not in declares:
-            from ..semantic.facets import info
+    def _declares(address: str) -> bool:
+        # Capture frames carry module addresses but no class names, so the
+        # class is read from the live model of the active capture.
+        from .._state import active_capture
+        from ..data_classes._runtime_handles import source_model_from_trace
+        from ..semantic.facets import info
 
-            declares[module_type] = bool(names & set(info(module_type)["facets"]))
-        return declares[module_type]
+        model = source_model_from_trace(active_capture()[0])
+        key = (id(model), address)
+        if key not in declares:
+            try:
+                class_name = type(model.get_submodule(address)).__name__
+            except (AttributeError, TypeError):
+                class_name = ""
+            declares[key] = bool(class_name) and bool(names & set(info(class_name)["facets"]))
+        return declares[key]
 
     def _recipe_interior(ctx: Any) -> bool:
         if getattr(ctx, "kind", "op") != "op":
             return False
         return any(
-            _declares(str(getattr(frame, "module_type", "")))
-            and (selector.module_address is None or frame.address == selector.module_address)
+            (selector.module_address is None or frame.address == selector.module_address)
+            and _declares(str(frame.address))
             for frame in getattr(ctx, "module_stack", ()) or ()
         )
 
