@@ -2700,7 +2700,7 @@
   "field": "parent_arg_positions",
   "file": "torchlens/capture/compute_record.py",
   "has_default": true,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": true
  },
  {
@@ -2708,7 +2708,7 @@
   "field": "source_trace",
   "file": "torchlens/capture/compute_record.py",
   "has_default": true,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": true
  },
  {
