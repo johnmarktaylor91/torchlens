@@ -377,8 +377,11 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         proof="torchlens.validation._norm_running_var_proof:batch_norm_input_at_running_mean",
         refuses=(
             "a training-mode call, a perturbed input, running_mean, weight or bias, a parent "
-            "that also occupies another slot, and any channel with a non-zero weight whose "
-            "saved input differs from running_mean by any amount (no tolerance)"
+            "that also occupies another slot, any channel with a non-zero weight whose "
+            "saved input differs from running_mean by any amount (no tolerance) or whose "
+            "running_mean is not exactly zero, and a running_var or eps for which validation's "
+            "own running_var perturbation could make running_var + eps non-positive or the "
+            "per-channel scale overflow"
         ),
     ),
     Exemption(
