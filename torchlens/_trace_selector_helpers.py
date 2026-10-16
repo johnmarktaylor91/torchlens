@@ -45,9 +45,10 @@ def _split_save_options_and_predicate(
     from .intervention.selectors import FacetSelector, _facet_save_predicate
 
     if isinstance(save_value, FacetSelector):
-        # Save-only seam: intervene=/bind/hooks= evaluate the selector itself,
-        # which refuses at capture, so a facet edit never lands on a whole home.
-        return None, cast(PredicateFn, _facet_save_predicate(save_value))
+        # Save-only seam: intervene=/bind/hooks= evaluate the facet selector
+        # itself, which refuses at capture, so no facet edit lands on a whole
+        # home tensor; save= gets the ordinary selector for the facet's homes.
+        save_value = _facet_save_predicate(save_value)
     if isinstance(save_value, BaseSelector):
         return None, cast(PredicateFn, save_value)
     if callable(save_value):

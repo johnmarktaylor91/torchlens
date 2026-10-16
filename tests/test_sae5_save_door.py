@@ -16,6 +16,7 @@ typed, so no facet edit can land on a whole home tensor; the list spelling
 
 from __future__ import annotations
 
+import re
 import warnings
 from collections.abc import Iterator
 
@@ -109,8 +110,11 @@ def test_a_latent_registered_at_a_selector_site_saves_every_home() -> None:
 def test_a_facet_save_on_a_model_without_the_facet_warns_it_matched_nothing(make) -> None:
     torch.manual_seed(0)
     model = nn.Sequential(nn.Conv2d(1, 2, 3), nn.ReLU()).eval()
-    with pytest.warns(UserWarning, match="matched zero layers"):
-        trace = tl.trace(model, torch.randn(1, 1, 5, 5), save=make())
+    selector = make()
+    with pytest.warns(
+        UserWarning, match=rf"save selector {re.escape(repr(selector))} matched zero"
+    ):
+        trace = tl.trace(model, torch.randn(1, 1, 5, 5), save=selector)
     assert all(trace[label].is_output for label in _saved(trace))
 
 

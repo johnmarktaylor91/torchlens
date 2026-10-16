@@ -1312,7 +1312,14 @@ def _scoped_facet_view(record: Any, selector: FacetSelector) -> Any:
         if selector.module_address is not None:
             _refuse_multi_call_module(selector, str(record_address), call_addresses)
         return None
-    return getattr(record, "facets", None)
+    from .._errors import PayloadUnavailableError
+
+    try:
+        return getattr(record, "facets", None)
+    except PayloadUnavailableError:
+        # An op whose payload was not saved serves no facet value; skipping it
+        # lets a selectively saved trace resolve the facets it did keep.
+        return None
 
 
 def _multi_call_addresses(record: Any) -> tuple[str, ...] | None:

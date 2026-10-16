@@ -1026,17 +1026,26 @@ class FacetSelector(BaseSelector):
         return hash(repr(self))
 
 
-def _facet_save_predicate(selector: FacetSelector) -> Callable[[Any], bool]:
-    """Return the capture-time save predicate for ``trace(save=<facet selector>)``.
+class _FacetSaveSelector(WhereSelector):
+    """The predicate selector ``trace(save=<facet selector>)`` runs, spelled as the facet."""
+
+    def __repr__(self) -> str:
+        """Return the facet selector's own spelling, for the zero-match save warning."""
+
+        return str(self.name_hint)
+
+
+def _facet_save_predicate(selector: FacetSelector) -> BaseSelector:
+    """Return the capture-time save selector for ``trace(save=<facet selector>)``.
 
     Save-only: ``intervene=``, ``bind`` and capture-time ``hooks=`` never reach
-    it (they evaluate the selector itself, which refuses at capture), so no
-    edit can land on a whole home tensor. The predicate keeps the ops a later
+    it (they evaluate the facet selector itself, which refuses at capture), so
+    no edit can land on a whole home tensor. The selector keeps the ops a later
     ``trace[selector]`` read needs. For an SAE latent family that is its
-    registered site (a string site is read as a module address at capture);
-    for a head or named facet it is every op inside a module whose class has
-    a recipe declaring the facet, a superset of the facet's homes, because the
-    recipes pick their home ops from the finished module record.
+    registered site (a string site is read as a module address); for a head or
+    named facet it is every op inside a module whose class has a recipe
+    declaring the facet, a superset of the facet's homes, because the recipes
+    pick their home ops from the finished module record.
 
     Parameters
     ----------
@@ -1045,25 +1054,21 @@ def _facet_save_predicate(selector: FacetSelector) -> Callable[[Any], bool]:
 
     Returns
     -------
-    Callable[[Any], bool]
-        Predicate over capture-time record contexts.
+    BaseSelector
+        Ordinary save selector (module selectors keep their post-capture
+        retention path; the recipe-interior predicate counts its matches for
+        the zero-match save warning).
     """
 
-    from ..ir.selector_eval import evaluate
     from ..semantic._families import family_key
 
-    scope = None if selector.module_address is None else in_module(selector.module_address)
     family = family_key(selector.name)
     if family is not None:
         site = family[0].site
         home = site if isinstance(site, BaseSelector) else module(str(site))
-        if scope is not None:
-            home = home & scope
-
-        def _family_home(ctx: Any) -> bool:
-            return evaluate(home, ctx, lifecycle="capture")
-
-        return _family_home
+        if selector.module_address is not None:
+            home = home & in_module(selector.module_address)
+        return home
 
     names = frozenset(("q", "k", "v") if selector.name is None else (selector.name,))
     declares: dict[str, bool] = {}
@@ -1084,7 +1089,7 @@ def _facet_save_predicate(selector: FacetSelector) -> Callable[[Any], bool]:
             for frame in getattr(ctx, "module_stack", ()) or ()
         )
 
-    return _recipe_interior
+    return _FacetSaveSelector(_recipe_interior, name_hint=repr(selector))
 
 
 @dataclass(frozen=True, repr=False)
