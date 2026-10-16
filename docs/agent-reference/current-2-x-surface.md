@@ -1488,9 +1488,10 @@
   (each site or element ablated, `target=` the same `tl.attribution.seed(...)`), or a
   `tl.mechinterp.edge_scores` table of `EDGE` rows (each edge patched alone with
   `tl.mechinterp.patch_edges`, `M(patched) - M(clean)`; pass the `corrupted=` and `metric=` it was
-  scored with, `edges=` audits a subset; a set spanning several receivers is listed in
-  `extra["sets_not_measured"]`): each unit ablated (or patched) alone, then the top-k
-  claimed units together beside bottom-k and seeded random-k controls, one
+  scored with, `edges=` audits a subset; every set is patched in one call, into one receiver or
+  several, and replays from its per-receiver pairs): each unit ablated (or patched) alone (one
+  `torchlens.experiment.site_sweep` member per unit where one edit serves every unit), then the
+  top-k claimed units together beside bottom-k and seeded random-k controls, one
   `trace.fork().do(...)` each; returns `tl.attribution.CausalAuditResult` (`units`, `sets`,
   `rank_agreement` (Spearman), `original_score`, `site`) whose `tl.attribution.CausalAuditUnit`
   rows carry `site`, `component`, `claimed_effect`, `measured_effect` and a replayable

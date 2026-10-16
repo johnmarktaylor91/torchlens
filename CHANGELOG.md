@@ -324,6 +324,15 @@
 - **rerun**: After a rerun, the refreshed trace's replay templates hold the live parameters, as the
   source trace and every push fork already did; an in-place edit of a model parameter now affects
   later pushes on a rerun fork the same way it affects the source.
+- **attribution**: `tl.attribution.causal_audit` now measures every top-k, bottom-k and random-k set
+  of an EDGE table, including sets whose edges enter several receivers, by patching the set in one
+  `tl.mechinterp.patch_edges` call; such sets were previously listed in
+  `extra["sets_not_measured"]`, which is now empty. A set's `intervention` holds one `(selection,
+  value)` pair per receiver, read from the fork that measured it. Documented unstable.
+- **attribution**: `tl.attribution.causal_audit` measures the single-unit rows of a layer
+  attribution (any ablation) and of a read or direct-logit table under zero ablation, element-grain
+  units included, as one `torchlens.experiment.site_sweep` with one candidate per unit; every value
+  equals the previous one-fork-per-unit measurement exactly.
 
 ### Continuous Integration
 
