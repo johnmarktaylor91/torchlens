@@ -333,3 +333,74 @@ def test_backward_guide_attribution_example_runs() -> None:
     start = page.index(marker) + len(marker)
     source = page[start : page.index("```", start)]
     exec(compile(source, "docs/backward.md", "exec"), {"__name__": "docs_backward_example"})
+
+
+class _SplitOneUsed(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        torch.manual_seed(11)
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        used, _unused = torch.split(self.lin(x), 2, dim=1)
+        return used.sum()
+
+
+class _SvdDropS(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        torch.manual_seed(12)
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        u, _s, v = torch.svd(self.lin(x))
+        return u.sum() + v.sum()
+
+
+class _EigValuesUnused(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        torch.manual_seed(13)
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        _w, v = torch.linalg.eig(self.lin(x))
+        # |v| is invariant to each eigenvector's arbitrary phase, so the loss is well defined.
+        return v.abs().sum()
+
+
+#: Which multi-output op each model calls, and which of its outputs is unused.
+_UNUSED_OUTPUT_CASES = {
+    "split": (_SplitOneUsed, "split", 1),
+    "svd": (_SvdDropS, "svd", 1),
+    "eig": (_EigValuesUnused, "linalg_eig", 0),
+}
+
+
+@pytest.mark.parametrize("case", sorted(_UNUSED_OUTPUT_CASES))
+def test_an_unused_output_gets_no_gradient_and_backward_runs(case: str) -> None:
+    """A tensor hook handed None records nothing; the used outputs match plain autograd."""
+
+    builder, func_name, unused_index = _UNUSED_OUTPUT_CASES[case]
+    x = _leaf((4, 4), False, 14)
+    plain = builder()
+    plain(x).backward()
+    expected = {name: param.grad.clone() for name, param in plain.named_parameters()}
+
+    model = builder()
+    trace = tl.trace(
+        model, x, capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True)
+    )
+    try:
+        trace.log_backward(trace[trace.output_layers[0]].out)
+        for name, param in model.named_parameters():
+            torch.testing.assert_close(param.grad, expected[name])
+        outputs = [op for op in trace.layer_list if op.func_name == func_name]
+        assert outputs, [op.func_name for op in trace.layer_list]
+        unused = [op for op in outputs if op.multi_output_index == unused_index]
+        assert unused and not any(op.has_grad for op in unused)
+        used = [op for op in outputs if op.multi_output_index != unused_index]
+        assert used and all(op.has_grad for op in used)
+        assert backward_status(trace).executed_flops is not None
+    finally:
+        trace.cleanup()

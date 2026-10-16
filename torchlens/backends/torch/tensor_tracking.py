@@ -300,8 +300,17 @@ def _add_tensor_backward_hook(
     trace_ref = weakref.ref(trace)
     hooked_tensor_id = id(t)
 
-    def log_grad_to_model_history(grad: torch.Tensor) -> None:
-        """Emit and optionally retain one gradient observed by a tensor hook."""
+    def log_grad_to_model_history(grad: torch.Tensor | None) -> None:
+        """Emit and optionally retain one gradient observed by a tensor hook.
+
+        Autograd hands a hook ``None`` when no gradient reached the tensor (an
+        unused output of a multi-output op: one half of ``torch.split``, the
+        ``S`` of ``torch.svd``, the eigenvalues of ``torch.linalg.eig``). That
+        records nothing: no gradient stored, no memory counted, no pass opened,
+        so the op reads no gradient rather than an invented zero tensor.
+        """
+        if grad is None:
+            return
         active_trace = trace_ref()
         # One-owner-per-label: a non-owner alias registration drops its fire
         # so one logical op output emits exactly one OpGradObserved per pass.
