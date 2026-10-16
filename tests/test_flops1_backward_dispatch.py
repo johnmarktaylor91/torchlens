@@ -388,20 +388,23 @@ def test_gradient_saving_never_changes_the_count() -> None:
     assert all(op.flops == 0 for op in extra), extra
 
 
-def test_loaded_trace_reads_unknown_not_a_guess(tmp_path: Path) -> None:
-    """The record is session-time: a reloaded trace's executed backward is unknown."""
+def test_loaded_trace_reads_the_saved_count(tmp_path: Path) -> None:
+    """The count is saved with the pass: a reloaded trace reads the live answer."""
 
     model, x = _small()
     trace = _traced_backward(model, [x])
     try:
+        live = backward_status(trace)
         path = tmp_path / "observed.tlspec"
         tl.save(trace, path)
         loaded = tl.load(path)
         status = backward_status(loaded)
         assert status.state == "backward_observed"
-        assert status.executed_flops is None and status.executed_evidence == "unknown"
-        assert "no dispatch record" in status.reason
-        assert status.executed_flops_per_pass == ((1, None),)
+        assert status.executed_flops == live.executed_flops is not None
+        assert status.executed_evidence == "formula_exact"
+        assert status.executed_flops_per_pass == live.executed_flops_per_pass
+        assert status.attributions[0].rows == live.attributions[0].rows
+        assert status.unattributed_flops == live.unattributed_flops
     finally:
         trace.cleanup()
 

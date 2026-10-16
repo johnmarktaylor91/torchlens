@@ -78,6 +78,11 @@ V10_FIELD_ADMISSIONS: dict[str, dict[str, str]] = {
     # attributes a forward wrote (arbitrary user objects). DROP, both the public
     # property and its slot: a loaded, unpickled or deep-copied trace reads None.
     "module": {"attribute_writes": "drop", "_attribute_writes": "drop"},
+    # SCHEMA-REQUESTS row 15 (FLOPS-2, U05.4): the counted executed backward
+    # and its attribution, a closed dict of ints, None and short strings
+    # written at save. KEEP: a loaded trace reads the counted answer; v9 and
+    # earlier v10 artifacts default-fill None and read unknown.
+    "backward_pass": {"executed_flops_record": "keep"},
 }
 
 #: Registered retypes of existing v9 persisted fields: record key -> {field

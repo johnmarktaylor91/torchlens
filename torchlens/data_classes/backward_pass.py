@@ -48,6 +48,9 @@ _TO_PANDAS_EXCLUDED_BACKWARD_PASS_FIELDS: frozenset[str] = frozenset(
         # "list of child records" exclusion category as Buffer.versions /
         # GradFn.calls / Module.ops).
         "grad_fn_calls",
+        # Nested per-pass count and attribution record (closed dict), read
+        # through ``flops_attribution`` and ``tl.report.backward_status``.
+        "executed_flops_record",
     }
 )
 
@@ -66,6 +69,11 @@ class BackwardPass:
         Whether this pass was inferred from orphan tensor-hook emissions.
     outer_context:
         Optional outer TorchLens trigger context when this pass was nested.
+    executed_flops_record:
+        The pass's counted executed backward and its attribution as a small
+        closed record, written when the trace is saved so a loaded trace
+        keeps the counted answer; ``None`` on a live pass (read the census
+        through ``flops_attribution``) and on artifacts saved without it.
     """
 
     _PORTABLE_STATE_POLICY: ClassVar[dict[str, FieldPolicy]] = {
@@ -87,6 +95,7 @@ class BackwardPass:
         "status": FieldPolicy.KEEP,
         "order_attribution_coverage": FieldPolicy.KEEP,
         "grad_fn_calls": FieldPolicy.KEEP,
+        "executed_flops_record": FieldPolicy.KEEP,
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
     }
     FIELD_POLICY = build_record_field_policy_table(
@@ -116,14 +125,39 @@ class BackwardPass:
     status: str = "ok"
     order_attribution_coverage: float | None = None
     grad_fn_calls: list[Any] = field(default_factory=list)
+    executed_flops_record: dict[str, Any] | None = None
     _source_trace_ref: Any = None
 
     def __tl_state_items__(self) -> Any:
-        """Yield live state pairs from the backing row (M9 facade hook)."""
+        """Yield live state pairs from the backing row (M9 facade hook).
+
+        A live pass with a recorded census contributes its counted executed
+        backward as ``executed_flops_record``, so every saved copy carries it.
+        """
 
         from .._trace_core.record_rows import record_state_items
 
-        return record_state_items(self)
+        live = self._census_record()
+        seen = False
+        for name, value in record_state_items(self):
+            if name == "executed_flops_record":
+                seen = True
+                if value is None:
+                    value = live
+            yield name, value
+        if not seen and live is not None:
+            yield "executed_flops_record", live
+
+    def _census_record(self) -> dict[str, Any] | None:
+        """The persisted form of this pass's census attribution, if it has one."""
+
+        trace = self.source_trace
+        ops = self.dispatched_ops
+        if trace is None or ops is None:
+            return None
+        from ..report._backward_attribution import attribute_census, executed_flops_record
+
+        return executed_flops_record(attribute_census(trace, self, ops))
 
     def __tl_state_restore__(self, mapping: dict[str, Any]) -> None:
         """Install a state mapping through the cell descriptors (M9 hook)."""
@@ -159,6 +193,7 @@ class BackwardPass:
             "peak_memory": None,
             "status": "ok",
             "order_attribution_coverage": None,
+            "executed_flops_record": None,
             "_source_trace_ref": None,
         }
         default_fill_state(state, defaults=backward_pass_setstate_defaults)
@@ -209,6 +244,28 @@ class BackwardPass:
         from ..backends.torch._backward_dispatch import recorded_ops
 
         return recorded_ops(trace, self.pass_index)
+
+    @property
+    def flops_attribution(self) -> Any:
+        """This pass's executed backward FLOPs by GradFn call and forward op (DOCUMENTED-UNSTABLE).
+
+        A ``BackwardFlopsAttribution``: one row per GradFn call (its forward
+        op, counted FLOPs, recompute share) plus an ``unattributed`` bucket
+        naming every call that ran under no recorded node; the rows plus the
+        bucket equal the pass's executed count exactly. ``None`` when the
+        pass has no recorded census on this object and was not saved with
+        its count (a loaded trace reads the saved record).
+        """
+        trace = self.source_trace
+        ops = self.dispatched_ops
+        from ..report._backward_attribution import attribute_census, attribution_from_record
+
+        if trace is not None and ops is not None:
+            return attribute_census(trace, self, ops)
+        record = self.executed_flops_record
+        if record is None:
+            return None
+        return attribution_from_record(trace, self.pass_index, record)
 
     @property
     def ordinal_index(self) -> int:
@@ -267,6 +324,7 @@ _BACKWARD_PASS_STORED_FIELDS: tuple[str, ...] = (
     "status",
     "order_attribution_coverage",
     "grad_fn_calls",
+    "executed_flops_record",
     "_source_trace_ref",
 )
 

@@ -528,6 +528,9 @@ _WEAK_SUBJECT_TABLES = frozenset(
         # Executed-backward dispatch census: per-trace recorded ops by pass,
         # weak-keyed by the owning trace, dies with it (session-time only).
         ("torchlens/backends/torch/_backward_dispatch.py", "_BACKWARD_DISPATCH"),
+        # Shared-backward partners: per-trace pass -> other traces whose census
+        # windows were open in the same engine run; weak on both sides.
+        ("torchlens/backends/torch/_backward_dispatch.py", "_BACKWARD_PARTNERS"),
         ("torchlens/backends/torch/_gradfn_markers.py", "_GRADFN_MARKER_TOKENS"),
         ("torchlens/observability/_native_profile.py", "_JOIN_TRACES"),
         # Post-T52 census sweep (F27): weak-keyed caches other merged lanes
@@ -847,6 +850,9 @@ _WEAKLY_HELD = frozenset(
         # Executed-backward dispatch census: per-trace recorded ops by pass,
         # weak-keyed by the owning trace, dies with it (session-time only).
         ("torchlens/backends/torch/_backward_dispatch.py", "_BACKWARD_DISPATCH"),
+        # Shared-backward partners: per-trace pass -> other traces whose census
+        # windows were open in the same engine run; weak on both sides.
+        ("torchlens/backends/torch/_backward_dispatch.py", "_BACKWARD_PARTNERS"),
         ("torchlens/backends/torch/_gradfn_markers.py", "_GRADFN_MARKER_TOKENS"),
         ("torchlens/observability/_native_profile.py", "_JOIN_TRACES"),
         # Post-T52 census sweep (F27): weak-keyed caches other merged lanes
