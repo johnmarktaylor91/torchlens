@@ -20,7 +20,7 @@ real fixture in its declared state.
 | `tl.report.health_facts(trace)` | The three-state nonfinite record (found / clean / not-checked) with basis. | RUN-HEALTH | SHAPE | payload_scan |
 | `trace.bill_of_materials()` | What does THIS object retain: payload bytes now, counts, annotations. | CAPTURE | SHAPE | metadata_only |
 | `trace.to_agent_json()` | The machine navigation map: op rows, edges, hierarchy, guide. | CAPTURE | ADDRESS | metadata_only |
-| `tl.report.backward_status(trace)` | The three-state executed-backward answer (0 / unknown / observed). | RUN-RESOURCES | SHAPE | metadata_only |
+| `tl.report.backward_status(trace)` | The three-state executed-backward answer (0 / unknown / count of the ops run). | RUN-RESOURCES | SHAPE | metadata_only |
 | `tl.report.backward_estimate(trace)` | The HYPOTHETICAL training-backward counterfactual behind its named door. | RUN-RESOURCES | SHAPE | metadata_only |
 | `tl.report.roofline(trace, ridge_intensity=...)` | Theoretical intensity/work map; bound verdicts are hypotheses. | RUN-RESOURCES | SHAPE | metadata_only |
 | `tl.report.instrumented_rate(trace)` | The boxed CPU-only FLOPs-per-instrumented-second triage diagnostic. | RUN-RESOURCES | RANK | metadata_only |

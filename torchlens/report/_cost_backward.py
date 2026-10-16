@@ -14,9 +14,13 @@ states:
   in every grad state through :func:`backward_estimate` (the named door),
   always labeled hypothetical.
 - ``backward_observed``: ``log_backward`` recorded backward passes --
-  timing is measured where fire timings exist; analytic executed-backward
-  compute stays a ROADMAP item (D15) and reads UNKNOWN here, never an
-  unlabeled estimate.
+  timing is measured where fire timings exist, and the executed backward
+  compute is COUNTED over the ATen calls that backward dispatched (each
+  pass's ``BackwardPass.dispatched_ops``), exact for the matmul and
+  convolution families at fma2 (FlopCounterMode's convention); every
+  recorded op outside those families is named in ``uncounted_ops``, never
+  zeroed or estimated. A pass with no dispatch record on this object (a
+  loaded trace, an implicit pass) leaves the executed answer UNKNOWN.
 
 D15/D23 plumbing (derived live-only; F09 holds no adjudicated persisted
 fields): ``grad_enabled_at_capture``, per-op ``needs_param_grad`` /
@@ -33,6 +37,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+
+from ..capture.flops import DISPATCH_COUNTING_CONVENTION
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
@@ -127,15 +133,28 @@ def recompute_observation(trace: Any) -> str:
     return "observed" if int(count) > 0 else "none_observed"
 
 
+#: The executed-backward counting convention (matches FlopCounterMode's).
+EXECUTED_BACKWARD_CONVENTION = DISPATCH_COUNTING_CONVENTION
+
+#: Uncounted op names shown on the status line before it points at the field.
+_STATUS_LINE_NAME_LIMIT = 5
+
+
 @dataclass(frozen=True)
 class BackwardStatus:
     """The always-visible backward STATUS facts (D14).
 
     ``executed_flops`` is the ACTUAL executed backward compute: ``0``
-    (exact) in the ``grad_disabled`` state, ``None`` (unknown) otherwise
-    -- the analytic executed-backward pass is roadmap (D15) and its
-    absence never becomes an unlabeled estimate. ``measured_seconds`` is
-    per-fire backward timing when the live trace recorded it.
+    (exact) in the ``grad_disabled`` state; ``None`` (unknown) in the
+    ``grad_enabled_unobserved`` state; in the ``backward_observed`` state the
+    count over the ATen calls the observed backward dispatched, exact for
+    the matmul and convolution families (``counting_convention``), or
+    ``None`` when a pass has no dispatch record on this object.
+    ``executed_flops_per_pass`` pairs each observed pass index with its
+    count (``None`` where unrecorded); ``uncounted_ops`` names every recorded
+    op kind outside the counted families with its call count -- never
+    zeroed, never estimated. ``measured_seconds`` is per-fire backward
+    timing when the live trace recorded it.
     """
 
     state: str
@@ -146,6 +165,9 @@ class BackwardStatus:
     n_grad_fn_records: int
     measured_seconds: float | None
     recompute: str
+    counting_convention: str = EXECUTED_BACKWARD_CONVENTION
+    executed_flops_per_pass: tuple[tuple[int, int | None], ...] = ()
+    uncounted_ops: tuple[tuple[str, int], ...] = ()
 
     @property
     def status_line(self) -> str:
@@ -168,12 +190,79 @@ class BackwardStatus:
             if self.measured_seconds is not None
             else "per-fire timing unavailable on this object"
         )
-        return (
+        head = (
             f"backward: {self.n_backward_passes} backward pass(es) observed "
-            f"({self.n_grad_fn_records} grad_fn records; {timing}); executed backward "
-            "compute: UNKNOWN until the analytic executed-backward pass lands (roadmap) "
-            "-- observing the graph does not make a formula a measurement."
+            f"({self.n_grad_fn_records} grad_fn records; {timing}); "
         )
+        if self.executed_flops is None:
+            return head + f"executed backward compute: UNKNOWN ({self.reason})."
+        return (
+            head
+            + f"executed backward compute: {self.executed_flops} FLOPs counted from the "
+            + "backward ops that ran (fma2; matmul and convolution families exact)"
+            + self._uncounted_clause()
+            + "."
+        )
+
+    def _uncounted_clause(self) -> str:
+        """Name the recorded op kinds outside the counted families (bounded)."""
+
+        if not self.uncounted_ops:
+            return ""
+        names = [name for name, _count in self.uncounted_ops]
+        shown = ", ".join(names[:_STATUS_LINE_NAME_LIMIT])
+        more = len(names) - _STATUS_LINE_NAME_LIMIT
+        tail = f" (+{more} more; read .uncounted_ops)" if more > 0 else ""
+        return f"; {len(names)} op kind(s) outside those families not counted: {shown}{tail}"
+
+
+def _executed_backward_count(
+    trace: Any,
+) -> tuple[int | None, str, tuple[tuple[int, int | None], ...], tuple[tuple[str, int], ...]]:
+    """Count the observed backward over its recorded dispatched ops.
+
+    Returns ``(total, reason, per_pass, uncounted)``; ``total`` is ``None``
+    when a pass has no record or a counted-family call could not be read.
+    """
+
+    per_pass: list[tuple[int, int | None]] = []
+    uncounted: dict[str, int] = {}
+    missing: list[int] = []
+    unreadable: list[str] = []
+    n_ops = 0
+    for pass_index, record in sorted((getattr(trace, "backward_pass_logs", {}) or {}).items()):
+        ops = getattr(record, "dispatched_ops", None)
+        if ops is None:
+            missing.append(pass_index)
+            per_pass.append((pass_index, None))
+            continue
+        pass_total = 0
+        for op in ops:
+            n_ops += 1
+            if op.flops is not None:
+                pass_total += int(op.flops)
+            elif op.family == "uncounted":
+                uncounted[op.base_name] = uncounted.get(op.base_name, 0) + 1
+            else:
+                unreadable.append(op.operator)
+        per_pass.append((pass_index, pass_total))
+    named = tuple(uncounted.items())
+    if missing:
+        listed = ", ".join(str(index) for index in missing)
+        reason = (
+            f"backward pass(es) {listed} carry no dispatch record on this object "
+            "(a loaded trace, or an implicit pass opened by tensor hooks)"
+        )
+        return None, reason, tuple(per_pass), named
+    if unreadable:
+        reason = f"counted-family call(s) with unreadable shapes: {', '.join(unreadable[:3])}"
+        return None, reason, tuple(per_pass), named
+    total = sum(count for _index, count in per_pass if count is not None)
+    reason = (
+        f"counted from the {n_ops} ATen call(s) the observed backward dispatched; "
+        f"{len(named)} op kind(s) outside the counted families are named, not zeroed"
+    )
+    return total, reason, tuple(per_pass), named
 
 
 def backward_status(trace: Trace) -> BackwardStatus:
@@ -181,6 +270,8 @@ def backward_status(trace: Trace) -> BackwardStatus:
 
     grad_fn_logs = getattr(trace, "grad_fn_logs", {}) or {}
     backward_passes = getattr(trace, "backward_pass_logs", {}) or {}
+    per_pass: tuple[tuple[int, int | None], ...] = ()
+    uncounted: tuple[tuple[str, int], ...] = ()
     if not grad_enabled_at_capture(trace):
         state = "grad_disabled"
         executed: int | None = 0
@@ -193,9 +284,8 @@ def backward_status(trace: Trace) -> BackwardStatus:
         reason = "grad enabled at capture; no backward pass observed"
     else:
         state = "backward_observed"
-        executed = None
-        evidence = "unknown"
-        reason = "backward observed; analytic executed-backward compute is roadmap (D15)"
+        executed, reason, per_pass, uncounted = _executed_backward_count(trace)
+        evidence = "unknown" if executed is None else "formula_exact"
     measured: float | None = None
     if backward_passes:
         try:
@@ -203,11 +293,8 @@ def backward_status(trace: Trace) -> BackwardStatus:
         except Exception:  # noqa: BLE001 -- loaded/cleaned traces refuse typed; status degrades
             timings = None
         if timings:
-            values = [
-                float(end) - float(start)
-                for start, end in timings.values()
-                if start is not None and end is not None
-            ]
+            # Each value is one fire's span (a Duration), or None for an untimed fire.
+            values = [float(span) for span in timings.values() if span is not None]
             if values:
                 measured = sum(values)
     return BackwardStatus(
@@ -219,6 +306,8 @@ def backward_status(trace: Trace) -> BackwardStatus:
         n_grad_fn_records=len(grad_fn_logs),
         measured_seconds=measured,
         recompute=recompute_observation(trace),
+        executed_flops_per_pass=per_pass,
+        uncounted_ops=uncounted,
     )
 
 

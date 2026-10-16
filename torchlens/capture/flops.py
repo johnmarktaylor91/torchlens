@@ -31,7 +31,10 @@ Conventions:
       implementation (Taylor series, lookup tables, etc.).
     - **Backward FLOPs** are estimated as a multiplier on forward FLOPs, stored
       in ``BACKWARD_MULTIPLIERS``.  Typical values: 2x for matmul/conv (dL/dX +
-      dL/dW), 1x for simple outs, 2.5x for normalization.
+      dL/dW), 1x for simple outs, 2.5x for normalization. That per-op figure
+      is a hypothetical estimate; the backward that actually ran is counted
+      call by call by the executed-backward dispatch rules at the end of
+      this module.
 
 Maintenance — checking coverage against the full op list::
 
@@ -1730,3 +1733,176 @@ def compute_backward_flops(
         return None
     multiplier = BACKWARD_MULTIPLIERS.get(func_name, _DEFAULT_BACKWARD_MULTIPLIER)
     return int(forward_flops * multiplier)
+
+
+# ============================================================================
+# Executed-backward dispatch rules (counted over the recorded backward ops)
+# ============================================================================
+# The backward that actually ran is counted op by op over the ATen calls
+# dispatched inside it, never as a multiple of the forward. Convention: fma2
+# (one multiply-add counts 2), and only the matmul and convolution families
+# are counted -- FlopCounterMode's convention, so the two registries can be
+# compared exactly. Layout and copy ops count 0 exactly; every other op is
+# outside the counted families and is named by the caller, never zeroed.
+
+DISPATCH_COUNTING_CONVENTION = (
+    "fma2 (one multiply-add = 2 FLOPs); matmul and convolution families counted"
+)
+
+#: Counted ops FlopCounterMode has no rule for (it reports 0 for them).
+COUNTED_BEYOND_FLOP_COUNTER_MODE: frozenset[str] = frozenset({"mv", "addmv", "dot", "vdot"})
+
+#: ATen spellings of layout, copy and construction ops that do no arithmetic.
+_ATEN_ZERO_ARITHMETIC: frozenset[str] = frozenset(
+    {
+        "_unsafe_view",
+        "_reshape_alias",
+        "_to_copy",
+        "alias",
+        "lift_fresh",
+        "lift_fresh_copy",
+        "slice",
+        "new_empty_strided",
+        "split_with_sizes",
+        "unsqueeze_",
+        "squeeze_",
+        "t_",
+        "transpose_",
+        "copy",
+        "_copy_from",
+        "_copy_from_and_resize",
+        "set_",
+        "resize_",
+    }
+)
+
+DispatchShapes = Sequence[Shape | None]
+
+
+def _dispatch_matmul_flops(base: str, shapes: DispatchShapes) -> int | None:
+    """Return fma2 FLOPs for one dispatched matmul-family call, or None."""
+
+    # addmm / baddbmm / addmv carry the accumulator first; the product follows.
+    operands = list(shapes[1:] if base.startswith("add") else shapes)
+    if len(operands) < 2 or operands[0] is None or operands[1] is None:
+        return None
+    left, right = operands[0], operands[1]
+    if base in ("mm", "addmm") and len(left) == 2 and len(right) == 2:
+        return 2 * left[0] * left[1] * right[1]
+    if base in ("bmm", "baddbmm") and len(left) == 3 and len(right) == 3:
+        return 2 * left[0] * left[1] * left[2] * right[2]
+    if base in ("mv", "addmv") and len(left) == 2 and len(right) == 1:
+        return 2 * left[0] * left[1]
+    if base in ("dot", "vdot") and len(left) == 1 and len(right) == 1:
+        return 2 * left[0]
+    return None
+
+
+def _conv_unit_macs(
+    grad_or_out: Shape | None, input_shape: Shape | None, weight: Shape | None, transposed: bool
+) -> int | None:
+    """MACs of one convolution-shaped contraction.
+
+    ``N * prod(weight) * prod(spatial)``, where the spatial extent is the
+    output's for a plain convolution and the input's for a transposed one.
+    Groups are already folded into the weight shape (``C_in / groups``), so
+    grouped and depthwise convolutions count their true work.
+    """
+
+    small = input_shape if transposed else grad_or_out
+    if small is None or weight is None or len(small) < 3:
+        return None
+    return small[0] * _prod(weight) * _prod(small[2:])
+
+
+def _dispatch_conv_flops(
+    base: str,
+    shapes: DispatchShapes,
+    output_shapes: Sequence[Shape],
+    nontensor_args: Sequence[tuple[int, object]],
+) -> int | None:
+    """Return fma2 FLOPs for one dispatched convolution-family call, or None."""
+
+    plain = dict(nontensor_args)
+    if base in ("convolution", "_convolution"):
+        if len(shapes) < 2 or not output_shapes:
+            return None
+        transposed = bool(plain.get(6, False))
+        macs = _conv_unit_macs(output_shapes[0], shapes[0], shapes[1], transposed)
+        return None if macs is None else 2 * macs
+    # convolution_backward(grad_output, input, weight, bias_sizes, stride, padding,
+    # dilation, transposed, output_padding, groups, output_mask)
+    if len(shapes) < 3:
+        return None
+    transposed = bool(plain.get(7, False))
+    mask = plain.get(10)
+    if not isinstance(mask, (list, tuple)) or len(mask) < 2:
+        return None
+    macs = _conv_unit_macs(shapes[0], shapes[1], shapes[2], transposed)
+    if macs is None:
+        return None
+    # dX and dW are each one contraction of the forward's size; dB is a reduction.
+    return 2 * macs * (int(bool(mask[0])) + int(bool(mask[1])))
+
+
+_DISPATCH_MATMUL_OPS = frozenset({"mm", "addmm", "bmm", "baddbmm", "mv", "addmv", "dot", "vdot"})
+_DISPATCH_CONV_OPS = frozenset(
+    {"convolution", "_convolution", "convolution_backward", "_convolution_backward"}
+)
+
+
+def dispatch_op_family(base: str) -> str:
+    """Classify one ATen operator base name under the counting convention.
+
+    Returns ``"matmul"``, ``"convolution"``, ``"zero_arithmetic"`` or
+    ``"uncounted"`` (outside the counted families; never zeroed by the caller).
+    """
+
+    if base in _DISPATCH_MATMUL_OPS:
+        return "matmul"
+    if base in _DISPATCH_CONV_OPS:
+        return "convolution"
+    if (
+        base in ZERO_FLOPS_OPS
+        or base in ZERO_ARITHMETIC_CONSTRUCTIONS
+        or base in _ATEN_ZERO_ARITHMETIC
+    ):
+        return "zero_arithmetic"
+    return "uncounted"
+
+
+def compute_dispatched_op_flops(
+    base: str,
+    input_shapes: DispatchShapes,
+    output_shapes: Sequence[Shape],
+    nontensor_args: Sequence[tuple[int, object]] = (),
+) -> int | None:
+    """Count one dispatched ATen call of a backward that ran (fma2).
+
+    Parameters
+    ----------
+    base:
+        Operator base name without namespace or overload (``"mm"``).
+    input_shapes:
+        One entry per positional argument: the tensor shape, or ``None``.
+    output_shapes:
+        Shapes of the tensors the call returned, in order.
+    nontensor_args:
+        ``(position, value)`` pairs for the plain positional arguments.
+
+    Returns
+    -------
+    int | None
+        FLOPs for matmul and convolution calls, ``0`` for layout and copy
+        calls, ``None`` for every call outside the counted families (and for
+        a counted call whose shapes cannot be read).
+    """
+
+    family = dispatch_op_family(base)
+    if family == "zero_arithmetic":
+        return 0
+    if family == "matmul":
+        return _dispatch_matmul_flops(base, input_shapes)
+    if family == "convolution":
+        return _dispatch_conv_flops(base, input_shapes, output_shapes, nontensor_args)
+    return None

@@ -2183,6 +2183,32 @@ shim owed*
   artifact refuse typed `site_key_unavailable`. Accessor-level only — no
   persisted fields.
 
+**BackwardPass.dispatched_ops / DispatchedOp** — *unstable — no deprecation shim owed*
+: The ATen calls one backward pass dispatched, recorded while the pass ran
+  through a capture that requested a backward (`backward_ready=True`,
+  `save_grads=` or `default_grad=`). Each `DispatchedOp` is value-free:
+  `operator` (`"aten.mm.default"`), `input_shapes`/`input_dtypes` (one entry
+  per positional argument, `None` for non-tensors), `output_shapes`/
+  `output_dtypes`, `grad_fn_call_ref` (`(grad_fn_object_id, call_index,
+  pass_index)` of the GradFn call it ran under, or `None`), `family`
+  (`"matmul"`, `"convolution"`, `"zero_arithmetic"`, `"uncounted"`) and
+  `flops` (fma2 for counted calls, `0` for layout calls, `None` outside the
+  counted families). Session-time: `None` on a loaded trace or an implicit
+  pass. Calls made inside TorchLens's own GradFn posthooks are not recorded;
+  gradient-saving copies from its tensor hooks appear as zero-arithmetic calls.
+
+**BackwardStatus.executed_flops / executed_flops_per_pass / uncounted_ops / counting_convention** — *unstable — no deprecation shim owed*
+: `tl.report.backward_status(trace)` in the `backward_observed` state counts
+  the backward that ran over each pass's `dispatched_ops`: `executed_flops`
+  is exact for the matmul and convolution families at fma2
+  (`counting_convention`, FlopCounterMode's convention), or `None` when a
+  pass has no record on this object. `executed_flops_per_pass` pairs each
+  pass index with its count; a `create_graph=True` gradient and the backward
+  through it are separate passes. `uncounted_ops` names every recorded op
+  kind outside the counted families with its call count, never zeroed or
+  estimated. `grad_disabled` still reads `0` and `grad_enabled_unobserved`
+  still reads unknown; the hypothetical `backward_estimate` is unchanged.
+
 **BackwardPassEnd.close_path** — *unstable — no deprecation shim owed*
 : Sidecar-event-only implicit-pass close-path disclosure: `"engine_drain"`
   when the queued final callback journaled the close, `"sync_point"` for

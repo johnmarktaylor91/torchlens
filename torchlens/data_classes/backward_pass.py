@@ -194,6 +194,23 @@ class BackwardPass:
         return self.source_trace
 
     @property
+    def dispatched_ops(self) -> tuple[Any, ...] | None:
+        """The ATen calls this backward pass dispatched (DOCUMENTED-UNSTABLE).
+
+        One value-free ``DispatchedOp`` per call (operator, shapes, dtypes,
+        the GradFn call it ran under, its counted FLOPs), recorded while the
+        pass ran through a capture that requested a backward. Session-time:
+        ``None`` when this object holds no record for the pass (a loaded
+        trace, an implicit pass opened by tensor hooks, another backend).
+        """
+        trace = self.source_trace
+        if trace is None:
+            return None
+        from ..backends.torch._backward_dispatch import recorded_ops
+
+        return recorded_ops(trace, self.pass_index)
+
+    @property
     def ordinal_index(self) -> int:
         """Return this pass's 0-based position in ``trace.backward_passes``."""
 
