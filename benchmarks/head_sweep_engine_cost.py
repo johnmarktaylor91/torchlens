@@ -20,7 +20,10 @@ Subcommands
     For every head of the sweep, compare the rerun-engine trace against the
     push-engine trace (every shared layer output and the logits), against a
     hand-written ``forward_pre_hook`` oracle with no TorchLens in its path,
-    and against the un-ablated baseline (the control must differ).
+    and against the un-ablated baseline (the control must differ). One
+    warm-up ``torch.tanh`` over every intra-op thread runs before the model,
+    so neither the baseline capture nor the plain forward is the process's
+    first tanh; the environment block records it.
 ``sweep``
     Time the full sweep on one engine. Wall time is reported, never a gate.
 ``counters``
@@ -328,12 +331,43 @@ def _load() -> dict[str, Any]:
     }
 
 
-def _environment() -> dict[str, Any]:
+def warm_up_intra_op_threads() -> dict[str, Any]:
+    """Run one untimed ``torch.tanh`` over every intra-op thread, before any model work.
+
+    The first float ``torch.tanh`` of a process can compute one intra-op
+    thread's chunk by a different kernel path; later calls never do. Without a
+    warm-up, whichever forward runs first (the baseline capture or the plain
+    forward) can differ from the other by a few 1e-5 in the logits in some
+    fresh processes. One earlier call removes that first-call effect from both
+    sides; it changes no tolerance and no bar.
+
+    Returns
+    -------
+    dict[str, Any]
+        The record for the run's environment block: warm-up kind, tensor
+        shape, intra-op thread count and ``MKL_CBWR``.
+    """
+
+    threads = torch.get_num_threads()
+    # 32768 elements per thread clears both ATen's element-wise grain size and
+    # the vector-math grain, so every intra-op thread computes a chunk.
+    shape = (max(threads, 1), 32768)
+    torch.tanh(torch.zeros(shape))
+    return {
+        "kind": "torch.tanh",
+        "shape": list(shape),
+        "torch_threads": threads,
+        "MKL_CBWR": os.environ.get("MKL_CBWR"),
+    }
+
+
+def _environment(warm_up: dict[str, Any] | None = None) -> dict[str, Any]:
     """Pinned-environment facts for the record."""
 
     import transformers
 
     return {
+        "warm_up": warm_up,
         "python": sys.version.split()[0],
         "torch": torch.__version__,
         "transformers": transformers.__version__,
@@ -348,7 +382,13 @@ def _environment() -> dict[str, Any]:
         "deterministic_algorithms": torch.are_deterministic_algorithms_enabled(),
         "thread_env": {
             name: os.environ.get(name)
-            for name in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "MKL_DYNAMIC", "OMP_DYNAMIC")
+            for name in (
+                "OMP_NUM_THREADS",
+                "MKL_NUM_THREADS",
+                "MKL_DYNAMIC",
+                "OMP_DYNAMIC",
+                "MKL_CBWR",
+            )
         },
     }
 
@@ -451,6 +491,7 @@ def cmd_frontdoor(_args: argparse.Namespace) -> dict[str, Any]:
 def cmd_parity(args: argparse.Namespace) -> dict[str, Any]:
     """Rerun vs push vs oracle vs un-ablated control on every head."""
 
+    warm_up = warm_up_intra_op_threads()
     model = build_gpt2()
     ids = build_ids()
     baseline = capture_baseline(model, ids)
@@ -462,7 +503,11 @@ def cmd_parity(args: argparse.Namespace) -> dict[str, Any]:
         # The baseline capture of this process already differs from a plain
         # forward of the same model (a per-process effect seen on the base
         # too), so every head's push leg inherits the drift; report and stop.
-        return {"environment": _environment(), "baseline_vs_plain_forward": drift, "stopped": True}
+        return {
+            "environment": _environment(warm_up),
+            "baseline_vs_plain_forward": drift,
+            "stopped": True,
+        }
     rows = []
     for candidate_id, site in head_sites()[: args.limit or None]:
         layer, head = (int(part) for part in candidate_id[1:].split("H"))
@@ -511,7 +556,7 @@ def cmd_parity(args: argparse.Namespace) -> dict[str, Any]:
         del traces, push_outs, rerun_outs
         gc.collect()
     return {
-        "environment": _environment(),
+        "environment": _environment(warm_up),
         "tolerance": {"parity_atol": PARITY_ATOL, "control_min_diff": CONTROL_MIN_DIFF},
         "baseline_vs_plain_forward": _max_abs(base_logits, plain),
         "n_candidates": len(rows),
