@@ -16,6 +16,7 @@ import pytest
 import torchlens as tl
 from tests.test_w051_agent_helpers import save_realistic_artifact
 from torchlens.agent import _budgets, call_tool, spec_for
+from torchlens.agent._artifacts import load_trace
 
 
 @pytest.fixture(scope="module")
@@ -40,7 +41,10 @@ def test_explain_honours_a_request_below_or_above_the_default(
 
     assert envelope["status"] == "ok"
     assert envelope["limits"]["max_tokens"] == requested
-    direct = tl.report.explain(tl.load(str(artifact)), max_tokens=requested)
+    # The handler passes the request through unchanged: the report equals a direct
+    # explain over the same loaded trace at the same budget.
+    loaded, _plan, _block = load_trace(str(artifact))
+    direct = tl.report.explain(loaded, max_tokens=requested)
     assert envelope["data"]["report"] == str(direct)
 
 
