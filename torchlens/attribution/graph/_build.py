@@ -44,7 +44,7 @@ class _Unset:
 _UNSET = _Unset()
 
 
-def _refuse(message: str, *, code: str) -> AttributionError:
+def _graph_refusal(message: str, *, code: str) -> AttributionError:
     """Build one coded attribution-graph refusal ending in its docs pointer."""
 
     return AttributionError(f"{message} {_DOCS_POINTER}", code=code)
@@ -71,7 +71,7 @@ def _module(trace: Any, name: str, role: str) -> Any:
     try:
         return trace.modules[name]
     except Exception as exc:  # noqa: BLE001 - any lookup failure is the same refusal
-        raise _refuse(
+        raise _graph_refusal(
             f"The {role} module {name!r} is not a module of this capture. "
             "Remedy: name a module from dict(model.named_modules()) that ran once in "
             "the captured forward.",
@@ -84,7 +84,7 @@ def _one_op(module: Any, name: str, field: str, role: str) -> str:
 
     ops = list(getattr(module, field, None) or ())
     if len(ops) != 1:
-        raise _refuse(
+        raise _graph_refusal(
             f"The {role} module {name!r} has {len(ops)} {field.replace('_', ' ')} in this "
             "capture; the graph needs exactly one. Remedy: name a module that runs once "
             "and takes one tensor input (for an MLP, the module the transcoder replaces).",
@@ -137,7 +137,7 @@ def _resolve_sites(
         logits_label = _edge_label(index, str(trace.output_layers[0]), "target")
     else:
         if logits_at.unit is not None or logits_at.call is not None:
-            raise _refuse(
+            raise _graph_refusal(
                 f"logits_at={logits_at!r} selects a unit or a call; the graph reads the "
                 "whole logit vector of a module that runs once. Remedy: pass "
                 f"logits_at=tl.attribution.SiteTarget({logits_at.layer!r}).",
@@ -165,7 +165,7 @@ def _payload(sites: _Sites, label: str, role: str) -> torch.Tensor:
     value = sites.payloads.payload(label)
     if value is None or value.dim() != 3 or value.shape[0] != 1:
         shape = None if value is None else tuple(value.shape)
-        raise _refuse(
+        raise _graph_refusal(
             f"The {role} site {label!r} holds {shape}; the graph reads one prompt, "
             "shaped (1, positions, width), with every activation saved. Remedy: "
             "capture one sequence with the default save mode, for example "
@@ -197,7 +197,7 @@ def _active_features(readers: tuple[Reader, ...], sites: _Sites) -> _Features:
             pre = inputs @ reader.encoder.to(inputs.dtype) + reader.encoder_bias.to(inputs.dtype)
             acts = reader.transcoder.encode(inputs)
         if not isinstance(acts, torch.Tensor) or acts.shape != pre.shape:
-            raise _refuse(
+            raise _graph_refusal(
                 f"encode() of the transcoder for {reader.site!r} returned "
                 f"{getattr(acts, 'shape', type(acts).__name__)}; expected {tuple(pre.shape)}. "
                 "Remedy: make encode map (positions, d_in) to (positions, n_features).",
@@ -234,7 +234,7 @@ def _logit_targets(
     probabilities = torch.softmax(logits[-1], dim=-1)
     if target is None:
         if max_n_logits < 1 or not 0.0 < desired_logit_prob <= 1.0:
-            raise _refuse(
+            raise _graph_refusal(
                 f"max_n_logits={max_n_logits!r} and desired_logit_prob="
                 f"{desired_logit_prob!r} select no logits. Remedy: pass max_n_logits=10, "
                 "desired_logit_prob=0.95 (the defaults).",
@@ -247,7 +247,7 @@ def _logit_targets(
         if not given or not all(
             isinstance(i, int) and not isinstance(i, bool) and 0 <= i < vocab for i in given
         ):
-            raise _refuse(
+            raise _graph_refusal(
                 f"target={target!r} is not a non-empty list of token ids below {vocab}. "
                 "Remedy: pass target=None for the salient logits, or target=[token_id, ...].",
                 code="attribution_graph_target_invalid",
@@ -293,10 +293,9 @@ def _seeds(
         direction[token] = 1.0
         if demeaned_logits:
             direction = direction - 1.0 / vocab
-        seeds.append(
-            seed(sites.logits, cotangent=_cotangent(logits.shape, logits.dtype, last, direction))
-        )
-        values.append((logits.detach()[0, last] * direction).sum())
+        cot = _cotangent((1, *logits.shape), logits.dtype, last, direction)
+        seeds.append(seed(sites.logits, cotangent=cot))
+        values.append((logits[last] * direction).sum())
     return seeds, torch.stack(values) if values else torch.zeros(0, dtype=logits.dtype)
 
 
@@ -326,7 +325,7 @@ def _frozen_labels(trace: Any, sites: _Sites, frozen: Sequence[str]) -> list[str
     labels = list(sites.writes.values())
     for name in frozen:
         if not isinstance(name, str):
-            raise _refuse(
+            raise _graph_refusal(
                 f"frozen= holds {name!r}; it takes module names. Remedy: pass "
                 "frozen=['blocks.0.attn.pattern', ...], the modules whose outputs are held "
                 "at their captured values.",
@@ -361,7 +360,7 @@ def _gradients(
     for label in sources:
         shapes.append(tuple(_payload(sites, label, "source").shape))
     if len(set(shapes)) != 1:
-        raise _refuse(
+        raise _graph_refusal(
             f"The MLP outputs and the embedding output have shapes {shapes}; the graph "
             "needs one residual width. Remedy: name MLPs that write the residual stream "
             "and the embedding that starts it.",
@@ -503,7 +502,7 @@ def build_graph(  # noqa: PLR0913 -- the graph door: two subjects, then what, wh
     """
 
     if isinstance(frozen, _Unset):
-        raise _refuse(
+        raise _graph_refusal(
             "build_graph needs frozen=: the modules held at their captured values "
             "(attention patterns and normalisation scales), so every edge is a direct "
             "linear effect. Remedy: pass frozen=['blocks.0.attn.pattern', ...], or "

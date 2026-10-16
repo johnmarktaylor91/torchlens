@@ -52,7 +52,7 @@ class Reader:
     decoder_biases: tuple[tuple[str, torch.Tensor], ...]
 
 
-def _invalid(site: str, why: str, *, code: str) -> AttributionError:
+def _transcoder_refusal(site: str, why: str, *, code: str) -> AttributionError:
     """Build the coded refusal for a transcoder the graph cannot read."""
 
     return AttributionError(
@@ -70,7 +70,7 @@ def _tensor(transcoder: Any, site: str, name: str) -> torch.Tensor:
 
     value = getattr(transcoder, name, None)
     if not isinstance(value, torch.Tensor):
-        raise _invalid(
+        raise _transcoder_refusal(
             site,
             f"{name} is {type(value).__name__}, not a tensor",
             code="attribution_graph_transcoder_invalid",
@@ -88,14 +88,14 @@ def _per_write(transcoder: Any, site: str, name: str) -> tuple[tuple[str, torch.
         pairs = []
         for write, tensor in value.items():
             if not isinstance(write, str) or not isinstance(tensor, torch.Tensor):
-                raise _invalid(
+                raise _transcoder_refusal(
                     site,
                     f"{name} maps {write!r} to {type(tensor).__name__}",
                     code="attribution_graph_transcoder_invalid",
                 )
             pairs.append((write, tensor.detach()))
         return tuple(pairs)
-    raise _invalid(
+    raise _transcoder_refusal(
         site,
         f"{name} is {type(value).__name__}, not a tensor or a mapping",
         code="attribution_graph_transcoder_invalid",
@@ -106,13 +106,13 @@ def _reader(site: str, transcoder: Any) -> Reader:
     """Validate one transcoder and return its reader spec."""
 
     if not callable(getattr(transcoder, "encode", None)):
-        raise _invalid(
+        raise _transcoder_refusal(
             site, "it has no callable encode", code="attribution_graph_transcoder_invalid"
         )
     encoder = _tensor(transcoder, site, "W_enc")
     encoder_bias = _tensor(transcoder, site, "b_enc")
     if encoder.dim() != 2 or encoder_bias.shape != (encoder.shape[1],):
-        raise _invalid(
+        raise _transcoder_refusal(
             site,
             f"W_enc {tuple(encoder.shape)} and b_enc {tuple(encoder_bias.shape)} do not "
             "agree on (d_in, n_features) and (n_features,)",
@@ -122,14 +122,14 @@ def _reader(site: str, transcoder: Any) -> Reader:
     decoder_biases = _per_write(transcoder, site, "b_dec")
     for write, decoder in decoders:
         if decoder.dim() != 2 or decoder.shape[0] != encoder.shape[1]:
-            raise _invalid(
+            raise _transcoder_refusal(
                 site,
                 f"W_dec for {write!r} has shape {tuple(decoder.shape)}; expected "
                 f"({encoder.shape[1]}, d_out)",
                 code="attribution_graph_transcoder_invalid",
             )
     if {write for write, _ in decoder_biases} != {write for write, _ in decoders}:
-        raise _invalid(
+        raise _transcoder_refusal(
             site,
             "W_dec and b_dec name different MLP outputs",
             code="attribution_graph_transcoder_invalid",
@@ -159,7 +159,7 @@ def normalize_transcoders(transcoders: Any) -> tuple[Reader, ...]:
     """
 
     if not isinstance(transcoders, Mapping) or not transcoders:
-        raise _invalid(
+        raise _transcoder_refusal(
             "<transcoders>",
             f"transcoders must be a non-empty mapping of MLP module names; got "
             f"{type(transcoders).__name__}",
