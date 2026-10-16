@@ -267,6 +267,26 @@ def test_a_set_site_spelling_fans_out_and_reports_its_count() -> None:
         tl.bridge.sae.unregister("both")
 
 
+def test_a_registered_sae_leaves_other_models_facets_alone() -> None:
+    """A family whose site is absent from a trace never breaks that trace's facet views."""
+
+    torch.manual_seed(0)
+    model, x, sae = _TwoSites().eval(), torch.randn(2, 4), _HandSAE()
+    tl.bridge.sae.register("absent_str", sae, site="no_such_module")
+    tl.bridge.sae.register("absent_sel", sae, site=tl.module("no_such_module"))
+    try:
+        trace = _trace(model, x)
+        facets = trace["fc_a"].facets
+        assert "absent_str" not in facets.keys() and "absent_sel" not in facets.keys()
+        assert "out" in facets.keys()
+        with pytest.raises(InvalidArgumentError) as caught:
+            trace.fork("e").do(tl.facet("absent_sel").latent(0), tl.zero_ablate())
+        assert caught.value.fields["code"] == "sae_latent_site_unmatched"
+    finally:
+        tl.bridge.sae.unregister("absent_str")
+        tl.bridge.sae.unregister("absent_sel")
+
+
 def test_bad_names_and_indices_refuse_with_codes(setup) -> None:
     _model, _x, sae = setup
     with pytest.raises(InvalidArgumentError) as name_taken:

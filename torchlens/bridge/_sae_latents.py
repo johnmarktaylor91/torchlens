@@ -178,9 +178,11 @@ class _SAEFamily:
         Raises
         ------
         InvalidArgumentError
-            ``sae_latent_site_ambiguous`` when a string site matches more
-            than one op of the record's trace, ``sae_latent_index_unknown``
-            when ``index`` is outside the SAE's latents.
+            ``sae_latent_site_ambiguous`` when a string site does not name one
+            op of a single-pass layer of the record's trace,
+            ``sae_latent_site_unmatched`` when a selector site matches none,
+            ``sae_latent_index_unknown`` when ``index`` is outside the SAE's
+            latents.
         """
 
         homes = self._home_labels(record)
@@ -272,9 +274,18 @@ class _SAEFamily:
         if not isinstance(self.site, str):
             # The edit's own fan-out warning reports the count; resolving the
             # homes for a listing must not warn as well.
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", MultiMatchWarning)
-                matched = trace.resolve_sites(self.site, max_fanout=len(trace.layer_list) or 1)
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", MultiMatchWarning)
+                    matched = trace.resolve_sites(self.site, max_fanout=len(trace.layer_list) or 1)
+            except (SiteResolutionError, InvalidArgumentError, KeyError, ValueError) as exc:
+                return InvalidArgumentError(
+                    f"the SAE registered as {self.name!r} sits at {self.site!r}, which matches "
+                    f"no op of this trace ({exc})",
+                    code="sae_latent_site_unmatched",
+                    remedy="read and edit its latents on a trace of the model the SAE was "
+                    f"registered for, or register it at a site this model has; see {_DOCS}",
+                )
             first_pass: dict[Any, str] = {}
             for op in matched:
                 first_pass.setdefault(getattr(op, "layer_label", None), str(op.label))
