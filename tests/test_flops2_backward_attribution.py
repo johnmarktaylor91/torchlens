@@ -373,7 +373,7 @@ class _EigValuesUnused(nn.Module):
 _UNUSED_OUTPUT_CASES = {
     "split": (_SplitOneUsed, "split", 1),
     "svd": (_SvdDropS, "svd", 1),
-    "eig": (_EigValuesUnused, "linalg_eig", 0),
+    "eig": (_EigValuesUnused, "eig", 0),
 }
 
 
