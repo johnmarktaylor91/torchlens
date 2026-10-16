@@ -97,9 +97,12 @@ def _plain_value(value: Any) -> tuple[bool, Any]:
 
     if isinstance(value, _PLAIN_TYPES):
         return True, value
-    if isinstance(value, (list, tuple)) and len(value) <= 8:
-        if all(isinstance(item, _PLAIN_TYPES) for item in value):
-            return True, tuple(value)
+    if (
+        isinstance(value, (list, tuple))
+        and len(value) <= 8
+        and all(isinstance(item, _PLAIN_TYPES) for item in value)
+    ):
+        return True, tuple(value)
     return False, None
 
 
