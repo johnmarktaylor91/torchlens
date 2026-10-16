@@ -147,6 +147,15 @@ prompts), pick the path by what you need back. Build the spec once; every path t
 - Steering plus activations as evidence: `tl.record(model, x, save=..., intervene=spec,
   return_output=True)` once per forward. It returns the model output and a sparse `Recording`
   and is the cheapest path that also captures.
+- Activations across a whole generation, without steering:
+  `tl.record(model, ids, save=..., generate_kwargs={"max_new_tokens": 16, "do_sample": False})`
+  (DOCUMENTED-UNSTABLE). One real cached `generate()` runs and every forward it issues is one
+  Recorder pass, so each decode step records only its new position and the cost is linear in
+  generated tokens. `generation.steps[k].positions` names the absolute positions step `k`
+  computed (step 0 is the prefill) and `generation.records_at(k)` returns its records. Beams,
+  batched prompts, more than one return sequence and `intervene=` refuse with
+  `record_generation_unsupported`. Do not loop a fresh `tl.record` over the growing prefix: it
+  recomputes and re-saves every earlier position at every step.
 - A correctness oracle: one full `tl.trace(model, x, intervene=spec)`, run once and compared
   against the fast path. It is several times slower per op than `tl.record`, so never run it
   per generation step.
