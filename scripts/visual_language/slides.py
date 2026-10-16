@@ -748,7 +748,9 @@ SLIDES: tuple[Slide, ...] = (
                 call="surgery",
                 capture={"intervention_ready": True, "save_arg_values": True},
                 prep="fork_edit",
-                crop=("node(name=linear_1_1pass2)",),
+                # The edit fires on pass 1; pass 2 carries the cohort note (one mark per pass
+                # since the F32 fix), so the crop shows both passes.
+                crop=("node(name=linear_1_1pass1)", "node(name=linear_1_1pass2)"),
             ),
         ),
         keys=(
@@ -1074,7 +1076,9 @@ SLIDES: tuple[Slide, ...] = (
                 prep="log_backward",
                 kwargs={"vis_grad_edge_overrides": {"penwidth": "2"}},
                 label="draw() with gradients",
-                crop=("node(name=mul_1_1pass1)", "node(name=sum_1_2pass1)", "node(name=sum_1_2)"),
+                # Gradient arrows attach to the declared per-pass nodes (the F37 fix removed the
+                # stray bare-label node they used to draw to).
+                crop=("node(name=mul_1_1pass1)", "node(name=sum_1_2pass1)"),
             ),
         ),
         keys=(
