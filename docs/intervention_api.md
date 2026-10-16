@@ -226,6 +226,21 @@ apply to it, and TorchLens discloses that at the run door with
 silently returning an un-edited verified run. The run itself proceeds:
 this is a disclosure, never a refusal.
 
+`log.do([(selection, edit), ...])` applies a list of selection and edit pairs
+as one transaction with one intervention event. Activation (ACT) pairs attach
+together and push once. A batch may also carry parameter selections
+(`tl.params(...)`) and dataflow edge selections (from `log.edges`); on the
+replay engine the pairs then run in order exactly as one `do()` per pair would
+(each run of consecutive activation pairs attaches and pushes together; each
+parameter or edge pair goes through its own substitution path), and the result
+equals those calls made one at a time. The batch is atomic: if any pair is
+refused, every value, hook, audit row and history record the batch wrote is
+put back, and the trace keeps only the one error event for the failed call.
+Parameter and edge edits apply on the replay engine only, so a mixed batch on
+another engine refuses with `selection_batch_cross_kind` before anything runs;
+pass `intervention=tl.options.InterventionOptions(engine="replay")`. Leaf sites
+(inputs and buffers) still cannot join a batch (`selection_batch_leaf_unsupported`).
+
 The two engines differ sharply in cost when you sweep many edits over one
 captured input. On the 144-head ablation sweep of a 12-layer, 12-head GPT-2
 configuration (585 captured ops; `benchmarks/head_sweep_engine_cost.py`), the
