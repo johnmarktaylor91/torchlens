@@ -271,3 +271,35 @@ def test_intervene_and_encoder_decoder_refuse() -> None:
         lambda: tl.record(t5, PROMPT, save=tl.func("linear"), generate_kwargs=_greedy(2))
     )
     assert "encoder-decoder" in str(error)
+
+
+def test_session_end_walk_does_not_grow_with_the_step_count(monkeypatch) -> None:
+    """Each pass's model-graph cleanup walk visits the same objects at every decode step."""
+
+    import torchlens.backends.torch.model_prep as model_prep
+    from torchlens.fastlog._recorder import Recorder
+
+    visits = [0]
+    walk = model_prep._clear_session_tensor_metadata
+
+    def counting_walk(*args, **kwargs):
+        visits[0] += 1
+        return walk(*args, **kwargs)
+
+    per_pass: list[int] = []
+    log = Recorder.log
+
+    def counting_log(self, *args, **kwargs):
+        before = visits[0]
+        try:
+            return log(self, *args, **kwargs)
+        finally:
+            per_pass.append(visits[0] - before)
+
+    monkeypatch.setattr(model_prep, "_clear_session_tensor_metadata", counting_walk)
+    monkeypatch.setattr(Recorder, "log", counting_log)
+    model = build_distilgpt2("eager")
+    tl.record(model, PROMPT, save=tl.module("transformer.ln_f"), generate_kwargs=_greedy(16))
+
+    assert len(per_pass) == 16
+    assert len(set(per_pass[1:])) == 1, per_pass

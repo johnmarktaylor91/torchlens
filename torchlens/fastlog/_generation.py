@@ -334,6 +334,41 @@ def _step_window(kwargs: Mapping[str, Any], step: int) -> range:
     return range(start, start + length)
 
 
+class _ForwardRoute:
+    """The state of one routed ``model.forward``, kept out of the model's object graph.
+
+    Each capture ends by walking what the model reaches, the closure cells of
+    its ``forward`` included, to clear TorchLens tensor metadata. A closure that
+    held the Recorder directly would make that walk visit everything recorded so
+    far on every pass, so its cost would grow with the step count. The walk
+    descends an object only through ``__dict__``; this slotted holder has none.
+    """
+
+    __slots__ = ("depth", "original", "recorder", "windows")
+
+    def __init__(
+        self,
+        recorder: Recorder,
+        windows: list[tuple[int, range]],
+        original: Callable[..., Any],
+    ) -> None:
+        self.recorder = recorder
+        self.windows = windows
+        self.original = original
+        self.depth = 0
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        if self.depth:
+            return self.original(*args, **kwargs)
+        step = len(self.windows)
+        self.windows.append((self.recorder._next_pass_index, _step_window(kwargs, step)))
+        self.depth += 1
+        try:
+            return self.recorder.log(args, kwargs)
+        finally:
+            self.depth -= 1
+
+
 @contextmanager
 def _forwards_through(
     model: nn.Module, recorder: Recorder, windows: list[tuple[int, range]]
@@ -342,18 +377,10 @@ def _forwards_through(
 
     had_instance_forward = "forward" in model.__dict__
     saved_forward = model.__dict__.get("forward")
-    original: Callable[..., Any] = model.forward
-    depth = [0]
+    route = _ForwardRoute(recorder, windows, model.forward)
 
     def forward(*args: Any, **kwargs: Any) -> Any:
-        if depth[0]:
-            return original(*args, **kwargs)
-        windows.append((recorder._next_pass_index, _step_window(kwargs, len(windows))))
-        depth[0] += 1
-        try:
-            return recorder.log(args, kwargs)
-        finally:
-            depth[0] -= 1
+        return route(*args, **kwargs)
 
     object.__setattr__(model, "forward", forward)
     try:
