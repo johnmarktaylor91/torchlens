@@ -376,7 +376,7 @@ def _gradients(
             reduce=None,
             result_byte_budget=2 * per_target * len(chunk),
         )
-        for row in table.rows:
+        for row in table.rows():
             number = by_layer.get(row.address[0])
             if number is None or row.status != "ok" or not isinstance(row.value, torch.Tensor):
                 continue

@@ -158,7 +158,7 @@ def _assert_against_key(graph, model, transcoders, counts):
     adjacency, values, constants, frozen = _key(graph, model, transcoders)
     assert graph.node_counts == counts
     assert (graph.adjacency_matrix - adjacency).abs().max().item() <= EDGE_TOL
-    targets = list(graph.nodes_of("feature")) + list(graph.nodes_of("logit"))
+    targets = list(graph.node_indices("feature")) + list(graph.node_indices("logit"))
     assert (graph.node_values[targets] - values[targets]).abs().max().item() <= TOTAL_TOL
     for name, term in constants.items():
         assert (graph.constants[name][targets] - term[targets]).abs().max().item() <= TOTAL_TOL, (
@@ -195,22 +195,22 @@ class TestPerLayerFixture:
         ]
         assert graph.input_tokens.tolist() == list(fx.TOKENS)
         assert [n.token for n in graph.nodes_of_kind_tokens()] if False else True
-        assert [graph.nodes[i].token for i in graph.nodes_of("token")] == list(fx.TOKENS)
+        assert [graph.nodes[i].token for i in graph.node_indices("token")] == list(fx.TOKENS)
         assert graph.transcoder_sites == ("blocks.0.mlp", "blocks.1.mlp")
         assert graph.error_sites == ("blocks.0.mlp", "blocks.1.mlp")
         probs = torch.softmax(fx.plain_forward(model).logits[-1], dim=-1)
         top = torch.topk(probs, 2)
         assert graph.logit_tokens.tolist() == top.indices.tolist()
         assert (graph.logit_probabilities - top.values).abs().max().item() <= TOTAL_TOL
-        assert graph.adjacency_matrix[graph.nodes_of("error")].abs().sum().item() == 0.0
-        assert graph.adjacency_matrix[:, graph.nodes_of("logit")].abs().sum().item() == 0.0
+        assert graph.adjacency_matrix[graph.node_indices("error")].abs().sum().item() == 0.0
+        assert graph.adjacency_matrix[:, graph.node_indices("logit")].abs().sum().item() == 0.0
 
     def test_raw_logits_reproduce_the_model_logits(self) -> None:
         model = fx.build_model(2)
         transcoders = fx.exact_transcoders(model)
         graph = _build(model, transcoders, 2, target=[0, 4], demeaned_logits=False)
         frozen = _assert_against_key(graph, model, transcoders, {**F1_COUNTS, "logit": 2})
-        logit_rows = list(graph.nodes_of("logit"))
+        logit_rows = list(graph.node_indices("logit"))
         total = graph.adjacency_matrix.sum(dim=1) + sum(graph.constants.values())
         expected = frozen.logits[-1, [0, 4]]
         assert (total[logit_rows] - expected).abs().max().item() <= TOTAL_TOL
@@ -225,7 +225,7 @@ class TestPerLayerFixture:
         graph = _build(
             model, fx.exact_transcoders(model), 2, max_n_logits=2, desired_logit_prob=0.99
         )
-        for t in graph.nodes_of("feature"):
+        for t in graph.node_indices("feature"):
             target = graph.nodes[t]
             for s in range(len(graph.nodes)):
                 source = graph.nodes[s]
@@ -262,8 +262,8 @@ class TestErrorNodeFixture:
         model = fx.build_model(2)
         transcoders = fx.lossy_transcoders(model)
         graph = _build(model, transcoders, 2, target=[0, 4], demeaned_logits=False)
-        rows = list(graph.nodes_of("logit"))
-        errors = list(graph.nodes_of("error"))
+        rows = list(graph.node_indices("logit"))
+        errors = list(graph.node_indices("error"))
         total = graph.adjacency_matrix.sum(dim=1) + sum(graph.constants.values())
         expected = fx.plain_forward(model).logits[-1, [0, 4]]
         assert (total[rows] - expected).abs().max().item() <= TOTAL_TOL
@@ -279,8 +279,8 @@ class TestCrossLayerFixture:
         transcoders = fx.cross_layer_transcoders(model)
         graph = _build(model, transcoders, 3, max_n_logits=2, desired_logit_prob=0.99)
         _assert_against_key(graph, model, transcoders, F3_COUNTS)
-        first = [i for i in graph.nodes_of("feature") if graph.nodes[i].site == "blocks.0.mlp"]
-        last = [i for i in graph.nodes_of("feature") if graph.nodes[i].site == "blocks.2.mlp"]
+        first = [i for i in graph.node_indices("feature") if graph.nodes[i].site == "blocks.0.mlp"]
+        last = [i for i in graph.node_indices("feature") if graph.nodes[i].site == "blocks.2.mlp"]
         assert graph.adjacency_matrix[last][:, first].abs().max().item() > 1e-3
 
 

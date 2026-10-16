@@ -137,7 +137,7 @@ class AttributionGraph:
             counts[node.kind] += 1
         return counts
 
-    def nodes_of(self, kind: str) -> tuple[int, ...]:
+    def node_indices(self, kind: str) -> tuple[int, ...]:
         """Return the indices of the nodes of one kind.
 
         Parameters
