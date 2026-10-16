@@ -11,6 +11,10 @@ Usage::
     python scripts/render_visual_language_deck.py check      # coverage map + slide table, no render
     python scripts/render_visual_language_deck.py render --out DIR   # panels only (SVG, DOT, JSON)
     python scripts/render_visual_language_deck.py deck --out DIR     # full deck and receipts
+    python scripts/render_visual_language_deck.py sentinels --out DIR    # the sentinel strip only
+    python scripts/render_visual_language_deck.py review --base REF --head REF --out DIR
+        # both refs from git archive; changes.json and changes.pdf (what changed, then the
+        # sentinel strip before and after, then the unchanged slides)
 
 ``deck`` exits non-zero when any slide fails its selectors, legibility check or render;
 the failing deck is still written so the failures can be read (``slides.json``).
@@ -64,10 +68,18 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("discover")
     sub.add_parser("check")
-    for name in ("render", "deck"):
+    for name in ("render", "deck", "sentinels"):
         cmd = sub.add_parser(name)
         cmd.add_argument("--out", type=Path, required=True)
         cmd.add_argument("--only", nargs="*", default=None, help="slide ids to build")
+    cmd = sub.add_parser("review")
+    cmd.add_argument("--base", required=True, help="the ref the change is judged against")
+    cmd.add_argument("--head", required=True, help="the ref with the change")
+    cmd.add_argument("--out", type=Path, required=True)
+    cmd.add_argument("--repo", type=Path, default=REPO_ROOT, help="the Git repository of both refs")
+    cmd.add_argument(
+        "--strip-from", default=None, help="the ref whose sentinel strip both sides draw (head)"
+    )
     args = parser.parse_args(argv)
 
     if args.command == "discover":
@@ -84,9 +96,21 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{len(problems)} problem(s)")
         return 1 if problems else 0
 
+    if args.command == "review":
+        from scripts.visual_language.review import review
+
+        result = review(args.repo, args.base, args.head, args.out, args.strip_from)
+        counts = {k: len(result[k]) for k in ("changed", "added", "removed", "unchanged")}
+        print(json.dumps({**counts, "sentinel_changed": result["sentinel"]["changed"]}))
+        return 0
+
     from scripts.visual_language import deck
 
     only = set(args.only) if args.only else None
+    if args.command == "sentinels":
+        from scripts.visual_language.sentinels import sentinel_slides
+
+        return 1 if deck.build(args.out, only, sentinel_slides()) else 0
     if args.command == "render":
         records = deck.render_all(args.out / "raw", only)
         errors = {k: v["error"] for k, v in records.items() if "error" in v}
