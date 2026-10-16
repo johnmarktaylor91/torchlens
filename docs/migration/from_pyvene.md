@@ -321,6 +321,14 @@ axis that is not `d` wide (a site of another width, or one whose feature axis is
 `pyreft_site_invalid`, and a mask that does not cover the other axes refuses
 `pyreft_positions_invalid`. A label is checked when `do()` resolves it.
 
+Checked against pyreft 0.1.0 with a LoReFT artifact for TinyLlama from the Hugging Face Hub, on
+one CPU thread: the `R`, `W` and `b` the reader returns hash equal to the ones pyreft loads, the
+logits before the edited token are unchanged exactly, and the unedited trace equals the plain
+transformers forward exactly. At and after the edited token, TorchLens and pyreft run on the same
+machine differ by at most `1.24e-5` across four prompts, and TorchLens is within `1.24e-5` of
+logits pyreft recorded on that machine (the bar is `2e-5`). pyreft's own logits move by up to
+`5.4e-5` between machines, so compare against pyreft run where you run TorchLens.
+
 The example writes a stand-in artifact in pyreft's file layout; with a real one, `directory` is the
 folder pyreft saved (for example a Hugging Face snapshot) and `site` is the label of the decoder
 layer's output that pyreft's `block_output` names.
