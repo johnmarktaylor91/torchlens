@@ -242,6 +242,7 @@ _DOCUMENTED_UNSTABLE_TOKENS = {
     "position",
     "token",
     "transcoder_sites",
+    "transcoders",
 }
 
 
