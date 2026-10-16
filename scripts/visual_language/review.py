@@ -85,6 +85,17 @@ NORMALIZE_RULES: tuple[tuple[str, str, Callable[[str], tuple[str, int]]], ...] =
 _TIME_SHARE = re.compile(r"\(\d+(?:\.\d+)?% of total\)")
 
 
+def rule_reasons() -> dict[str, str]:
+    """Every name ``normalize`` may count a hit under, with why it differs by construction."""
+
+    return {
+        "tree paths": "each side is built in its own folder, which a printed path names",
+        **{name: why for name, why, _ in NORMALIZE_RULES},
+        "measured time shares": "a share of measured time, in a render that shows measured "
+        "durations, is measured anew in every build",
+    }
+
+
 def normalize(text: str, roots: tuple[str, ...] = ()) -> tuple[str, dict[str, int]]:
     """Text with every by-construction difference replaced; hit counts per rule."""
 
@@ -327,10 +338,7 @@ def review(
         **slides,
         "sentinel": strip,
         "strip_from": strip_sha,
-        "normalization": {
-            "tree paths": "each side is built in its own folder",
-            **{name: why for name, why, _ in NORMALIZE_RULES},
-        },
+        "normalization": rule_reasons(),
         "normalized": {
             side: {sid: r.hits for sid, r in builds[side][1].items() if r.hits}
             for side in ("base", "head")

@@ -13,7 +13,14 @@ import json
 import subprocess
 from pathlib import Path
 
-from scripts.visual_language.review import NORMALIZE_RULES, SlideRender, compare, normalize, review
+from scripts.visual_language.review import (
+    NORMALIZE_RULES,
+    SlideRender,
+    compare,
+    normalize,
+    review,
+    rule_reasons,
+)
 
 GENERATOR = """
 import json, sys
@@ -82,6 +89,12 @@ def test_review_reports_changed_unchanged_and_added_slides(tmp_path: Path) -> No
     assert Path(result["base"]["torchlens"]).is_relative_to(tmp_path / "out" / "base")
     assert json.loads((tmp_path / "out" / "changes.json").read_text())["added"] == ["added"]
     assert (tmp_path / "out" / "changes.pdf").read_bytes()[:5] == b"%PDF-"
+    # Every difference the comparison ignored is named, with its reason, in the result.
+    ignored = {
+        rule for side in result["normalized"].values() for hits in side.values() for rule in hits
+    }
+    assert ignored == {"grad_fn ids", "measured durations"}
+    assert ignored <= set(result["normalization"])
     # The working tree stayed where it was.
     assert _git(repo, "rev-parse", "HEAD") == base
     assert _git(repo, "status", "--porcelain") == ""
@@ -104,6 +117,13 @@ def test_each_rule_names_why_it_differs_by_construction() -> None:
     """Every ignored difference carries its reason, so the PDF cover can state it."""
 
     assert all(name and why for name, why, _rule in NORMALIZE_RULES)
+    _text, timed = normalize(
+        "/build/side t=5 us (54% of total) at 0x7f00deadbeef footer "
+        "commit abcdef1, built 2026-10-16 grad_fn_9",
+        roots=("/build/side",),
+    )
+    assert set(timed) <= set(rule_reasons())
+    assert set(timed) == set(rule_reasons())
     text, hits = normalize("/build/side/a.py at 0x7f00deadbeef", roots=("/build/side",))
     assert text == "<tree>/a.py at 0x<addr>"
     assert hits == {"tree paths": 1, "object addresses": 1}

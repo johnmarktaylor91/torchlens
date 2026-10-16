@@ -99,6 +99,8 @@ def write_changes_pdf(
     import matplotlib
 
     matplotlib.use("Agg")
+    # Embedded TrueType text, not Type 3 glyphs, so PDF viewers and checkers read it.
+    matplotlib.rcParams["pdf.fonttype"] = 42
     from matplotlib.backends.backend_pdf import PdfPages
 
     shas = {side: result[side]["sha"] for side in ("base", "head")}
