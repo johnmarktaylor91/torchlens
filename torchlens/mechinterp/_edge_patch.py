@@ -125,29 +125,40 @@ def _stages(edges: list[Any]) -> list[list[tuple[Any, list[Any]]]]:
     return [stages[key] for key in sorted(stages)]
 
 
-def _projection_value(trace: Any, receiver: Any, patched: torch.Tensor) -> torch.Tensor:
-    """Return the projection output a q/k/v receiver's patched norm input produces.
+def _projection_values(trace: Any, attention: list[tuple[Any, torch.Tensor]]) -> list[torch.Tensor]:
+    """Return the projection output each q/k/v receiver's patched norm input produces.
 
     The projection depends only on the substituted norm input, so it is
-    re-executed locally on the clean ``trace`` (the norm and projection ops
-    alone, with no fork and no replay of the rest of the model).
+    re-executed locally on the clean ``trace``: the norm and projection ops
+    alone, with no fork and no replay of the rest of the model. Receivers
+    that share a norm input and a projection (one layer's heads and roles)
+    share one path search.
     """
 
     from ..intervention.edge_substitution import _recompute_with_substitution
 
-    spec = _head_spec(trace, receiver)
-    projection = _recompute_with_substitution(
-        trace, _input_edge_record(trace, receiver), patched, str(spec.home_label)
-    )
-    if not isinstance(projection, torch.Tensor):
-        refuse(
-            code="mi_edge_selection_unresolvable",
-            message=f"The projection output behind {receiver.name!r} was not recomputed.",
-            remedy="capture with tl.options.CaptureOptions(layers_to_save='all', "
-            "intervention_ready=True)",
-            receiver=receiver.name,
+    groups: dict[tuple[str, str, str], list[int]] = {}
+    for index, (receiver, _value) in enumerate(attention):
+        home = str(_head_spec(trace, receiver).home_label)
+        groups.setdefault((receiver.input_label, receiver.norm_address, home), []).append(index)
+    values: list[torch.Tensor] = [attention[0][1]] * len(attention)
+    for (_input, _norm, home), indices in groups.items():
+        receiver = attention[indices[0]][0]
+        recomputed = _recompute_with_substitution(
+            trace, _input_edge_record(trace, receiver), [attention[i][1] for i in indices], home
         )
-    return projection.detach().clone()
+        for index, projection in zip(indices, recomputed, strict=True):
+            if not isinstance(projection, torch.Tensor):
+                refuse(
+                    code="mi_edge_selection_unresolvable",
+                    message=f"The projection output behind {attention[index][0].name!r} was "
+                    "not recomputed.",
+                    remedy="capture with tl.options.CaptureOptions(layers_to_save='all', "
+                    "intervention_ready=True)",
+                    receiver=attention[index][0].name,
+                )
+            values[index] = projection.detach().clone()
+    return values
 
 
 def _write_stage(owner: Any, trace: Any, writes: list[tuple[Any, torch.Tensor]]) -> None:
@@ -163,13 +174,16 @@ def _write_stage(owner: Any, trace: Any, writes: list[tuple[Any, torch.Tensor]])
         (attention if receiver.kind in ("q", "k", "v") else residual).append((receiver, value))
     for receiver, value in residual:
         owner.do(_input_edge_record(owner, receiver).__selection__(), value)
+    if not attention:
+        return
+    projections = _projection_values(trace, attention)
     pairs = [
-        (_head_spec(owner, receiver).__selection__(), _projection_value(trace, receiver, value))
-        for receiver, value in attention
+        (_head_spec(owner, receiver).__selection__(), projection)
+        for (receiver, _value), projection in zip(attention, projections, strict=True)
     ]
     if len(pairs) == 1:
         owner.do(*pairs[0])
-    elif pairs:
+    else:
         owner.do(pairs)
 
 
