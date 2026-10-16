@@ -260,6 +260,14 @@
   the witness counts are unchanged.
 - **capture**: The same advisory for a line that hands a tensor to another library through DLPack
   (code `dlpack_call_not_captured`), without the JIT hint.
+- **attribution**: `tl.attribution.build_graph` builds a prompt's attribution graph from a capture
+  and per-layer or cross-layer transcoders: typed feature, error, token and logit nodes, direct
+  linear edges with attention patterns and normalisation scales held fixed, and every feature and
+  logit node accounted for by its incoming edges plus named constants
+  (`tl.attribution.AttributionGraph`). Documented-unstable.
+- **fastlog**: `tl.record(..., generate_kwargs={...})` (documented-unstable) records chosen sites at
+  every forward of one cached Hugging Face `generate()` call, each decode step holding only its new
+  position; returns a `GenerationRecording`.
 
 ### Bug Fixes
 
@@ -343,6 +351,11 @@
 - **benchmarks**: The head-sweep parity benchmark runs one warm-up `torch.tanh` over every intra-op
   thread before the model and records it, so the first-call kernel effect of a fresh process no
   longer makes the baseline capture differ from a plain forward.
+- **fastlog**: A multi-pass `Recorder` with a selector `save=` (for example `tl.module(...)`) no
+  longer repeats every earlier pass's records after each pass.
+- **capture**: On macOS (and any host without procfs) the CPU peak-memory readers treated
+  `ru_maxrss` as kibibytes, so `Trace.backward_peak_memory` for a CPU backward and
+  `Trace.forward_peak_memory_pair["resident"]` were overstated 1024 times; they now read bytes.
 
 ### Performance Improvements
 

@@ -47,6 +47,13 @@
   TorchLens). The old `tl.bridge.steering_vectors.vector`, `tl.bridge.repeng.control_vector`
   and `tl.bridge.dialz.vector` trainers are removed.
 - `tl.record(..., save=...)` is the sparse predicate recorder; it returns `Recording`.
+  `tl.record(model, ids, save=..., generate_kwargs={...})` (DOCUMENTED-UNSTABLE) runs one real
+  cached HF `generate()` and records the sites at every forward it issues (one Recorder pass
+  per forward, so each decode step records only its new position and cost is linear in
+  generated tokens); it returns a `GenerationRecording` (`.steps` with absolute `positions`,
+  step 0 the prefill; `.records_at(step)`; `.settings`; `.not_recorded`). Unsupported decoding
+  (beams, batches, several return sequences, `use_cache=False`, `intervene=`) refuses with
+  `record_generation_unsupported`.
   `Recording.to_trace()` cooks the event stream into a full-structure `Trace`, with unsaved
   payload reads rejected explicitly. `tl.record()`/fastlog is torch-only in the backend-v1
   registry. The old `keep_op=`/`keep_module=` alias kwargs are removed; `save=` is the only
@@ -1467,6 +1474,23 @@
   output; refusals `attribution_site_not_found`, `attribution_site_unit_invalid`,
   `attribution_site_firing_invalid`, `attribution_site_independent_of_input`,
   `attribution_site_target_unsupported`. Doc of record: `docs/reference/attribution.md`.
+- Attribution graphs (DOCUMENTED-UNSTABLE): `tl.attribution.build_graph(trace,
+  transcoders, *, embedding, target=None, max_n_logits=10, desired_logit_prob=0.95,
+  demeaned_logits=True, logits_at=None, frozen)` builds one prompt's attribution graph:
+  feature nodes (active transcoder features; `transcoders` maps MLP module names to objects
+  with `encode`, `W_enc`, `b_enc`, `W_dec`, `b_dec`, cross-layer when `W_dec`/`b_dec` are
+  mappings of MLP names), error nodes (MLP output minus reconstruction, per MLP and position),
+  token nodes and logit nodes. Edges are direct linear effects with every transcoder-written MLP
+  output and every `frozen=` site (attention patterns, normalisation scales; module names or op
+  labels; required, `frozen=()` for neither) held at its captured value, read by one-backward
+  reads. `tl.attribution.AttributionGraph` (`nodes` of `tl.attribution.GraphNode`,
+  `adjacency_matrix` rows targets, `node_values`, `constants` `encoder_bias`/`decoder_bias`/
+  `other` so each feature and logit node equals its incoming edges plus constants,
+  `error_vectors`, `active_features`, `activation_values`, `logit_tokens`,
+  `logit_probabilities`, `capture_outcome`, `disclosures`, `node_counts`, `node_indices`).
+  Refusals `attribution_graph_frozen_required`, `attribution_graph_site_not_found`,
+  `attribution_graph_transcoder_invalid`, `attribution_graph_input_unsupported`,
+  `attribution_graph_target_invalid`. Doc of record: `docs/reference/attribution.md`.
 - Attribution evaluation (DOCUMENTED-UNSTABLE): `tl.attribution.deletion_curve` and
   `tl.attribution.insertion_curve(model, inputs, input_kwargs=None, *, target, attribution,
   baseline="zeros", n_steps=20, features="auto", patch_size=8)` remove or reveal the
