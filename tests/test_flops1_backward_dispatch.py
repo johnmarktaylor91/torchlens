@@ -118,25 +118,12 @@ def _true_mac_flops(trace: Any) -> int:
     return 2 * int(match.group(1))
 
 
-#: Forward rows the forward rules leave UNKNOWN on the base (never a wrong
-#: number): ``F.linear`` whose weight is an input rather than a parameter, and
-#: the fused ``nn.RNN`` kernel. The executed backward is still exact there.
-_GRAD_PATTERNS = ("a_grad=True,b_grad=True", "a_grad=True,b_grad=False", "a_grad=False,b_grad=True")
-FORWARD_UNKNOWN_ON_BASE = {
-    f"linear_bias_{dims}[{flags}]": "linear" for dims in ("2d", "3d") for flags in _GRAD_PATTERNS
-}
-FORWARD_UNKNOWN_ON_BASE["rnn_module"] = "rnn_tanh"
-
-
 def _assert_forward(trace: Any, case: str, expected: int) -> None:
-    """Forward fma2 equals the oracle, or the op is disclosed unknown (never miscounted)."""
+    """Forward fma2 equals the oracle (``F.linear`` with an input weight and the
+    fused ``nn.RNN`` kernel included; both read unknown before their rules)."""
 
-    func = FORWARD_UNKNOWN_ON_BASE.get(case)
-    if func is None:
-        assert _true_mac_flops(trace) == expected
-        return
-    rows = [op for op in trace.layer_list if getattr(op, "func_name", None) == func]
-    assert rows and all(op.flops_forward is None for op in rows), case
+    del case
+    assert _true_mac_flops(trace) == expected
 
 
 def _traced_backward(model: nn.Module, inputs: list[torch.Tensor]) -> Any:

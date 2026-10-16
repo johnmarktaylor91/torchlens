@@ -8,6 +8,12 @@ naming-session ratification; the C02 FactCore substrate consumes this.
 from dataclasses import dataclass
 from typing import Any
 
+from ._flops_shape_rules import (
+    _RNN_CELL_FUNCS,
+    _RNN_SEQUENCE_FUNCS,
+    _rnn_flops_from_shapes,
+    _with_operand_kwargs,
+)
 from .flops import (
     _CUSTOM_OP_RULES,
     ELEMENTWISE_FLOPS,
@@ -85,6 +91,10 @@ _ALL_MAC_NAMES = frozenset(
         "bmm",
         "multi_dot",
         "chain_matmul",
+        "mv",
+        "dot",
+        "vdot",
+        "spmm",
     }
 )
 
@@ -109,10 +119,22 @@ _BIASED_MAC_NAMES = frozenset(
     }
 )
 
+#: Recurrent kernels: weight-matrix products (MACs) plus one add per bias element per row.
+_RNN_NAMES = _RNN_SEQUENCE_FUNCS | _RNN_CELL_FUNCS | {"lstm_cell"}
+
 #: Every FMA-family (MAC-applicable) op name.
 MAC_FAMILY_NAMES = frozenset(
-    _ALL_MAC_NAMES | _ADDMM_NAMES | _BIASED_MAC_NAMES | {"einsum", "scaled_dot_product_attention"}
+    _ALL_MAC_NAMES
+    | _ADDMM_NAMES
+    | _BIASED_MAC_NAMES
+    | _RNN_NAMES
+    | {"einsum", "scaled_dot_product_attention"}
 )
+
+#: Weight rank per weighted name, for weights that are not parameters.
+_WEIGHT_RANK = {"linear": 2}
+#: Transposed convolutions count over the input's elements.
+_TRANSPOSED_NAMES = frozenset({"conv_transpose1d", "conv_transpose2d", "conv_transpose3d"})
 
 #: Zero-arithmetic tensor CONSTRUCTIONS (costreport D3): ops that allocate or
 #: fill a tensor without floating-point arithmetic. Classified zero-by-rule
@@ -177,6 +199,61 @@ def _split_biased(
     return ((total_flops - other) // 2, other)
 
 
+def _split_rnn(
+    total_flops: int,
+    output_shape: Shape | None,
+    param_shapes: ParamShapes,
+    qk_shapes: tuple[Shape | None, Shape | None] | None,
+) -> tuple[int, int] | None:
+    """Split a recurrent kernel's total: weight-matrix MACs plus bias adds.
+
+    A final-state output of a fused call carries 0 (the call's work sits on
+    its sequence output), which the zero-total short cut handles upstream.
+    """
+
+    del qk_shapes
+    full = _rnn_flops_from_shapes(output_shape, param_shapes)
+    if full is None or not output_shape:
+        return None
+    rows = _numel(output_shape) // output_shape[-1]
+    macs = rows * sum(_prod(shape) for shape in param_shapes if len(shape) == 2)
+    if full != total_flops:
+        # lstm_cell carries half its call on each of its two outputs.
+        if 2 * total_flops != full or macs % 2:
+            return None
+        macs //= 2
+    return (macs, total_flops - 2 * macs)
+
+
+def _split_weighted_by_operands(
+    func_name: str,
+    total_flops: int,
+    output_shape: Shape | None,
+    input_shape: Shape | None,
+    weight_shape: Shape | None,
+) -> tuple[int, int] | None:
+    """Split a linear or convolution total whose weight is not a parameter.
+
+    The MACs follow from the weight (and, for a transposed convolution, the
+    input); the rest must be either nothing or one bias add per output
+    element, else the split is unknown.
+    """
+
+    rank = _WEIGHT_RANK.get(func_name, 3)
+    if weight_shape is None or len(weight_shape) < rank or output_shape is None:
+        return None
+    if func_name in _TRANSPOSED_NAMES:
+        if input_shape is None:
+            return None
+        macs = _numel(input_shape) * _prod(weight_shape[1:])
+    else:
+        macs = _numel(output_shape) * _prod(weight_shape[1:])
+    other = total_flops - 2 * macs
+    if other not in (0, _numel(output_shape)):
+        return None
+    return (macs, other)
+
+
 def _split_einsum(
     total_flops: int,
     output_shape: Shape | None,
@@ -224,6 +301,7 @@ _MAC_SPLITTERS: dict[str, Any] = {
     **dict.fromkeys(_ALL_MAC_NAMES, _split_all_mac),
     **dict.fromkeys(_ADDMM_NAMES, _split_addmm),
     **dict.fromkeys(_BIASED_MAC_NAMES, _split_biased),
+    **dict.fromkeys(_RNN_NAMES, _split_rnn),
     "einsum": _split_einsum,
     "scaled_dot_product_attention": _split_sdpa,
 }
@@ -252,16 +330,36 @@ def _split_mac_family(
     return splitter(total_flops, output_shape, param_shapes, qk_shapes)
 
 
+def _weight_is_parameter(func_name: str, param_shapes: ParamShapes) -> bool:
+    """Whether a weighted call's first parameter shape is its weight."""
+
+    return bool(param_shapes) and len(param_shapes[0]) >= _WEIGHT_RANK.get(func_name, 3)
+
+
 def _mac_record(
     func_name: str,
     total_flops: int,
     output_shape: Shape | None,
     param_shapes: ParamShapes,
-    qk_shapes: tuple[Shape | None, Shape | None] | None,
+    pair_shapes: tuple[Shape | None, Shape | None] | None,
 ) -> ComputeRecord:
-    """Package a verified MAC-family split, failing closed on any mismatch."""
+    """Package a verified MAC-family split, failing closed on any mismatch.
 
-    split = _split_mac_family(func_name, total_flops, output_shape, param_shapes, qk_shapes)
+    ``pair_shapes`` is ``(query, key)`` for scaled dot-product attention and
+    ``(input, weight)`` for a linear or convolution call whose weight is not
+    a parameter; ``None`` otherwise.
+    """
+
+    if func_name in _BIASED_MAC_NAMES and not _weight_is_parameter(func_name, param_shapes):
+        split = (
+            None
+            if pair_shapes is None
+            else _split_weighted_by_operands(
+                func_name, total_flops, output_shape, pair_shapes[0], pair_shapes[1]
+            )
+        )
+    else:
+        split = _split_mac_family(func_name, total_flops, output_shape, param_shapes, pair_shapes)
     if split is None or 2 * split[0] + split[1] != total_flops:
         return ComputeRecord(
             fma_macs=None,
@@ -338,10 +436,10 @@ def compute_forward_compute_record(
     if total is None:
         return None
     if func_name in _MAC_SPLITTERS:
-        qk_shapes = None
-        if func_name == "scaled_dot_product_attention" and len(saved_args) >= 2:
-            qk_shapes = (_safe_shape(saved_args[0]), _safe_shape(saved_args[1]))
-        return _mac_record(func_name, total, output_shape, param_shapes, qk_shapes)
+        # (query, key) for attention, (input, weight) for a weighted call.
+        args = _with_operand_kwargs(func_name, saved_args, saved_kwargs)
+        pair = (_safe_shape(args[0]), _safe_shape(args[1])) if len(args) >= 2 else None
+        return _mac_record(func_name, total, output_shape, param_shapes, pair)
     return _non_mac_record(func_name, total)
 
 
@@ -380,11 +478,30 @@ def derive_compute_record_for_op(op: Any) -> ComputeRecord | None:
     output_shape = _safe_shape(getattr(op, "shape", None))
     param_shapes = tuple(tuple(shape) for shape in (getattr(op, "param_shapes", None) or ()))
     if func_name in _MAC_SPLITTERS:
-        qk_shapes = None
+        pair = None
         if func_name == "scaled_dot_product_attention":
-            qk_shapes = _resolve_qk_parent_shapes(op)
-        return _mac_record(func_name, total, output_shape, param_shapes, qk_shapes)
+            pair = _resolve_qk_parent_shapes(op)
+        elif func_name in _BIASED_MAC_NAMES and not _weight_is_parameter(func_name, param_shapes):
+            pair = (_parent_arg_shape(op, 0, "input"), _parent_arg_shape(op, 1, "weight"))
+        return _mac_record(func_name, total, output_shape, param_shapes, pair)
     return _non_mac_record(func_name, total)
+
+
+def _parent_arg_shape(op: Any, index: int, keyword: str) -> Shape | None:
+    """Shape of the traced tensor an op received at one argument, or ``None``."""
+
+    positions = getattr(op, "parent_arg_positions", None) or {}
+    trace = getattr(op, "source_trace", None)
+    label = (positions.get("args") or {}).get(index)
+    if label is None:
+        label = (positions.get("kwargs") or {}).get(keyword)
+    if label is None or trace is None:
+        return None
+    try:
+        parent = trace[label]
+    except (KeyError, IndexError, ValueError, TypeError, RuntimeError, AttributeError):
+        return None
+    return _safe_shape(getattr(parent, "shape", None))
 
 
 def _resolve_qk_parent_shapes(op: Any) -> tuple[Shape | None, Shape | None] | None:

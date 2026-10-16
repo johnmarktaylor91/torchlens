@@ -2739,3 +2739,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: d9e1aa7add81529a9c10f6e2fd83e322ff94b8c7 (dirty)
 recorded: 2026-10-16T05:48:36.399720+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: FLOPS-3: compute_record._parent_arg_shape reads parent_arg_positions and source_trace (one more consumer site each in capture/compute_record.py), for the input-weight split of linear and convolution calls
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1c6b3e41e74ef9f9c6cbe1e870c16dade6b7d64f (dirty)
+recorded: 2026-10-16T06:00:38.433260+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: FLOPS-3: compute_record._parent_arg_shape reads parent_arg_positions and source_trace (one more consumer site each in capture/compute_record.py), for the input-weight split of linear and convolution calls
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1c6b3e41e74ef9f9c6cbe1e870c16dade6b7d64f (dirty)
+recorded: 2026-10-16T06:00:44.318920+00:00
