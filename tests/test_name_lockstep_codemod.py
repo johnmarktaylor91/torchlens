@@ -255,6 +255,21 @@ def test_non_identifier_proposal_is_skipped_per_row(tmp_path: Path) -> None:
     assert {e.row_id for e in edits} == {"root:tl.old_fn"}
 
 
+def test_module_rename_is_skipped_as_a_move(tmp_path: Path) -> None:
+    """F5: renaming a module would respell its imports but leave its file; it is skipped."""
+
+    rows = _overlap_repo(tmp_path)
+    module = {**rows[2], "id": "root:tl.old_mod", "subkind": "module", "name": "old_mod"}
+    module["path"] = "tl.old_mod"
+    module["proposed"] = "new_mod"
+    assert [row["id"] for row in codemod.proposals([module, rows[2]])] == ["root:tl.old_fn"]
+    assert codemod.skipped_proposals([module]) == [
+        {"id": "root:tl.old_mod", "proposed": "new_mod", "reason": codemod.MODULE_MOVE}
+    ]
+    edits = codemod.plan([module, rows[2]], tmp_path, roots=("tests",))
+    assert {e.row_id for e in edits} == {"root:tl.old_fn"}
+
+
 def test_field_table_string_keys_follow_their_field(tmp_path: Path) -> None:
     """F6: the field's entry in its declared field table and its class tables is renamed."""
 

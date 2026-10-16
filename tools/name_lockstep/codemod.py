@@ -59,6 +59,7 @@ DEFAULT_EXCLUDES = (
 )
 SUFFIXES = (".py", ".pyi", ".md", ".rst", ".ipynb", ".txt", ".tsv", ".toml", ".yaml", ".yml")
 NOT_IDENTIFIER = "not an identifier (a move or restructure; out of the codemod's scope)"
+MODULE_MOVE = "renames a module (its file must move too; out of the codemod's scope)"
 #: In prose and notebooks a keyword is written ``name=``; ``name = value`` is a statement.
 _SPACED_ASSIGNMENT = re.compile(r"\s+=(?!=)")
 #: Most conflicting positions listed in one refusal.
@@ -101,6 +102,16 @@ def _proposing(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(chosen, key=lambda row: row["id"])
 
 
+def _skip_reason(row: dict[str, Any]) -> str | None:
+    """Return why the codemod cannot write a row's proposal, or None when it can."""
+
+    if not str(row["proposed"]).isidentifier():
+        return NOT_IDENTIFIER
+    if row.get("subkind") == "module":
+        return MODULE_MOVE
+    return None
+
+
 def proposals(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     """Return rows that propose a different spelling the codemod can write.
 
@@ -112,11 +123,12 @@ def proposals(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     Returns
     -------
     list[dict[str, Any]]
-        Rows with ``proposed`` set, different from ``name`` and a valid identifier,
-        sorted by id. Other proposals are listed by ``skipped_proposals``.
+        Rows with ``proposed`` set, different from ``name``, a valid identifier and
+        not naming a module, sorted by id. Other proposals are listed by
+        ``skipped_proposals``.
     """
 
-    return [row for row in _proposing(rows) if str(row["proposed"]).isidentifier()]
+    return [row for row in _proposing(rows) if _skip_reason(row) is None]
 
 
 def skipped_proposals(rows: Iterable[dict[str, Any]]) -> list[dict[str, str]]:
@@ -131,14 +143,16 @@ def skipped_proposals(rows: Iterable[dict[str, Any]]) -> list[dict[str, str]]:
     -------
     list[dict[str, str]]
         ``id``, ``proposed`` and ``reason`` per skipped row, sorted by id. A dotted
-        spelling is a move to a new home, which this tool does not make.
+        spelling is a move to a new home, and a renamed module needs its file moved;
+        this tool makes neither.
     """
 
-    return [
-        {"id": row["id"], "proposed": str(row["proposed"]), "reason": NOT_IDENTIFIER}
-        for row in _proposing(rows)
-        if not str(row["proposed"]).isidentifier()
-    ]
+    skipped = []
+    for row in _proposing(rows):
+        reason = _skip_reason(row)
+        if reason is not None:
+            skipped.append({"id": row["id"], "proposed": str(row["proposed"]), "reason": reason})
+    return skipped
 
 
 def iter_files(root: Path, roots: Iterable[str], excludes: Iterable[str]) -> Iterator[Path]:
