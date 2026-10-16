@@ -1218,7 +1218,7 @@
   sequence in bf16. Refusal codes `hf_attention_*`.
 - `torchlens.bridge` contains optional adapters for Captum, HF, SHAP, SAE Lens, LIT,
   profiler, and related tools. `bridge.sae.splice(model_or_log, inputs, site=, sae=,
-  latents_edit=, tokens=, exclude_bos=False, keep_latents=True)` (DOCUMENTED-UNSTABLE) is
+  latents_edit=, tokens=, exclude_bos=False, keep_latents=True, log_latents=False)` (DOCUMENTED-UNSTABLE) is
   the packaged SAE splice experiment: fork +
   `tl.splice_module` + push swaps a duck-typed SAE's reconstruction (`encode`/`decode`
   pair, no SAE package required) in at one site and reports reconstruction fidelity plus
@@ -1232,7 +1232,16 @@
   `ce_loss_recovered` and `kl_divergence`. `bridge.sae_lens.reconstruct(log, site, sae)`
   replaces the removed `decode`. Pretrained SAEs (Gemma Scope 1 and 2) load with SAELens
   and run here (`docs/recipes/pretrained_saes.md`); a transcoder splices with
-  `tl.splice_module(transcoder, input="in")` on its MLP module.
+  `tl.splice_module(transcoder, input="in")` on its MLP module. `log_latents=True` (live
+  model only) makes `spliced` a fresh capture with the SAE run inside the model, so the
+  encoder ops, the latents node (`SpliceResult.latents_site`) and the decoder ops are trace
+  nodes; spliced outputs are identical with it off. `bridge.sae.register(name, sae, site=)`
+  / `unregister(name)` (DOCUMENTED-UNSTABLE) make an SAE's latents the facet family `name`:
+  `tl.facet(name).latent(k)` (or a list) is edited at the doors `tl.head` serves
+  (`Trace.set`, `attach_hooks`, `Trace.do`, `fork().do`, `tl.do`) as
+  `site + decode(z') - decode(z)` (the reconstruction error stays), and
+  `trace[site].facets["name[k]"]` reads the encoder activation; a string site must be one
+  op of a single-pass layer (`sae_latent_site_ambiguous`), a selector site fans out.
   `bridge.sae.write_sae_dashboard(latents, tokens, latent_ids=, k=20, path=)` and
   `bridge.sae.write_delphi(latents, tokens, site=, model_name=, n_splits=5, directory=)`
   (DOCUMENTED-UNSTABLE) write a splice's `latents` or a dataset's
@@ -1469,11 +1478,12 @@
   into floats (embeddings), baseline ids embed to the path start, and
   `extra["integer_input_layers"]` names those modules. Input methods refuse
   integers with `attribution_input_not_float` and a runnable layer-method spelling.
-  `target=tl.attribution.SiteTarget(layer, unit=None, call=None)` attributes a
+  `target=tl.attribution.SiteTarget(layer, unit=None, call=None, sae=None)` attributes a
   hidden module output (or one unit, summed over the batch) instead of the model
-  output; refusals `attribution_site_not_found`, `attribution_site_unit_invalid`,
+  output; with `sae=` the site is `sae.encode(output)` and `unit` picks an SAE latent;
+  refusals `attribution_site_not_found`, `attribution_site_unit_invalid`,
   `attribution_site_firing_invalid`, `attribution_site_independent_of_input`,
-  `attribution_site_target_unsupported`. Doc of record: `docs/reference/attribution.md`.
+  `attribution_site_sae_invalid`, `attribution_site_target_unsupported`. Doc of record: `docs/reference/attribution.md`.
 - Attribution graphs (DOCUMENTED-UNSTABLE): `tl.attribution.build_graph(trace,
   transcoders, *, embedding, target=None, max_n_logits=10, desired_logit_prob=0.95,
   demeaned_logits=True, logits_at=None, frozen)` builds one prompt's attribution graph:
