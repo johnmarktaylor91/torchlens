@@ -1002,16 +1002,18 @@ def resolve_sites(
         )
 
     selector = _normalize_query(query)
+    matched: tuple[Any, ...]
     if isinstance(selector, FacetSelector):
         matched = _resolve_facet_sites(log, selector, query)
     else:
         _guard_episode_step_query(log, selector)
         refuse_trace_alias_spellings(log, selector)
         direction = _selector_resolution_direction(selector)
-        matched = _indexed_label_match(log, direction, selector)
-        if matched is None:
+        indexed = _indexed_label_match(log, direction, selector)
+        if indexed is None:
             sites = tuple(_iter_sites(log, direction))
-            matched = _resolve_unchecked(sites, selector, strict=strict)
+            indexed = _resolve_unchecked(sites, selector, strict=strict)
+        matched = indexed
         if not matched:
             raise SiteResolutionError(
                 f"selector {query!r} matched 0 sites. Use log.find_sites(...) to discover labels."

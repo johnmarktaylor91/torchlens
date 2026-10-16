@@ -230,6 +230,7 @@ def test_ordinary_selectors_resolve_as_before(attn) -> None:
 
     model, x = attn
     trace = tl.trace(model, x, capture=_READY)
-    table = trace.resolve_sites(tl.func("linear"), max_fanout=10)
+    with pytest.warns(MultiMatchWarning, match="matched 5 sites"):
+        table = trace.resolve_sites(tl.func("linear"), max_fanout=10)
     assert all(not isinstance(site, Facet) for site in table)
     assert len(table) == 5
