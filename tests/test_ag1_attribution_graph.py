@@ -244,6 +244,20 @@ class TestPerLayerFixture:
         gap = (graph.adjacency_matrix.double() - adjacency).abs()
         assert (gap <= 1e-5 + 1e-5 * adjacency.abs()).all()
 
+    def test_frozen_op_labels_equal_frozen_module_names(self) -> None:
+        """An op label in ``frozen=`` holds the same value its module name does."""
+
+        model = fx.build_model(2)
+        transcoders = fx.exact_transcoders(model)
+        trace = _trace(model)
+        by_op = [str(trace.modules[name].output_ops[0]) for name in fx.frozen_names(2)]
+        graph = tl.attribution.build_graph(
+            trace, transcoders, embedding="embed", frozen=by_op, target=[0]
+        )
+        by_name = _build(model, transcoders, 2, target=[0])
+        assert torch.equal(graph.adjacency_matrix, by_name.adjacency_matrix)
+        assert graph.frozen == by_name.frozen
+
 
 class TestErrorNodeFixture:
     """F2: transcoders that reconstruct imperfectly."""

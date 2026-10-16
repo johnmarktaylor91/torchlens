@@ -44,7 +44,7 @@ class _Unset:
 _UNSET = _Unset()
 
 
-def _refuse(code: str, message: str) -> AttributionError:
+def _refuse(message: str, *, code: str) -> AttributionError:
     """Build one coded attribution-graph refusal ending in its docs pointer."""
 
     return AttributionError(f"{message} {_DOCS_POINTER}", code=code)
@@ -72,10 +72,10 @@ def _module(trace: Any, name: str, role: str) -> Any:
         return trace.modules[name]
     except Exception as exc:  # noqa: BLE001 - any lookup failure is the same refusal
         raise _refuse(
-            "attribution_graph_site_not_found",
             f"The {role} module {name!r} is not a module of this capture. "
             "Remedy: name a module from dict(model.named_modules()) that ran once in "
             "the captured forward.",
+            code="attribution_graph_site_not_found",
         ) from exc
 
 
@@ -85,10 +85,10 @@ def _one_op(module: Any, name: str, field: str, role: str) -> str:
     ops = list(getattr(module, field, None) or ())
     if len(ops) != 1:
         raise _refuse(
-            "attribution_graph_site_not_found",
             f"The {role} module {name!r} has {len(ops)} {field.replace('_', ' ')} in this "
             "capture; the graph needs exactly one. Remedy: name a module that runs once "
             "and takes one tensor input (for an MLP, the module the transcoder replaces).",
+            code="attribution_graph_site_not_found",
         )
     return str(ops[0])
 
@@ -138,10 +138,10 @@ def _resolve_sites(
     else:
         if logits_at.unit is not None or logits_at.call is not None:
             raise _refuse(
-                "attribution_graph_target_invalid",
                 f"logits_at={logits_at!r} selects a unit or a call; the graph reads the "
                 "whole logit vector of a module that runs once. Remedy: pass "
                 f"logits_at=tl.attribution.SiteTarget({logits_at.layer!r}).",
+                code="attribution_graph_target_invalid",
             )
         module = _module(trace, logits_at.layer, "logits")
         op = _one_op(module, logits_at.layer, "output_ops", "logits")
@@ -166,11 +166,11 @@ def _payload(sites: _Sites, label: str, role: str) -> torch.Tensor:
     if value is None or value.dim() != 3 or value.shape[0] != 1:
         shape = None if value is None else tuple(value.shape)
         raise _refuse(
-            "attribution_graph_input_unsupported",
             f"The {role} site {label!r} holds {shape}; the graph reads one prompt, "
             "shaped (1, positions, width), with every activation saved. Remedy: "
             "capture one sequence with the default save mode, for example "
             "tl.trace(model, tokens[None]).",
+            code="attribution_graph_input_unsupported",
         )
     return value.detach()[0]
 
@@ -198,10 +198,10 @@ def _active_features(readers: tuple[Reader, ...], sites: _Sites) -> _Features:
             acts = reader.transcoder.encode(inputs)
         if not isinstance(acts, torch.Tensor) or acts.shape != pre.shape:
             raise _refuse(
-                "attribution_graph_transcoder_invalid",
                 f"encode() of the transcoder for {reader.site!r} returned "
                 f"{getattr(acts, 'shape', type(acts).__name__)}; expected {tuple(pre.shape)}. "
                 "Remedy: make encode map (positions, d_in) to (positions, n_features).",
+                code="attribution_graph_transcoder_invalid",
             )
         for position, feature in torch.nonzero(acts.detach(), as_tuple=False).tolist():
             found.nodes.append(GraphNode("feature", reader.site, position, feature=feature))
@@ -235,10 +235,10 @@ def _logit_targets(
     if target is None:
         if max_n_logits < 1 or not 0.0 < desired_logit_prob <= 1.0:
             raise _refuse(
-                "attribution_graph_target_invalid",
                 f"max_n_logits={max_n_logits!r} and desired_logit_prob="
                 f"{desired_logit_prob!r} select no logits. Remedy: pass max_n_logits=10, "
                 "desired_logit_prob=0.95 (the defaults).",
+                code="attribution_graph_target_invalid",
             )
         ids = _salient(probabilities, max_n_logits, desired_logit_prob)
     else:
@@ -248,15 +248,17 @@ def _logit_targets(
             isinstance(i, int) and not isinstance(i, bool) and 0 <= i < vocab for i in given
         ):
             raise _refuse(
-                "attribution_graph_target_invalid",
                 f"target={target!r} is not a non-empty list of token ids below {vocab}. "
                 "Remedy: pass target=None for the salient logits, or target=[token_id, ...].",
+                code="attribution_graph_target_invalid",
             )
         ids = torch.tensor(given, dtype=torch.long)
     return ids, probabilities[ids]
 
 
-def _cotangent(shape: torch.Size, dtype: torch.dtype, position: int, vector: torch.Tensor) -> Any:
+def _cotangent(
+    shape: tuple[int, ...], dtype: torch.dtype, position: int, vector: torch.Tensor
+) -> Any:
     """Return a ``(1, positions, width)`` cotangent nonzero at one position."""
 
     cot = torch.zeros(shape, dtype=dtype)
@@ -279,14 +281,12 @@ def _seeds(
     ):
         reader = readers[number]
         label = sites.reads[reader.site]
-        inputs = sites.payloads.payload(label)
-        assert inputs is not None
-        cot = _cotangent(inputs.shape, inputs.dtype, position, reader.encoder[:, feature])
+        inputs = _payload(sites, label, "MLP input")
+        cot = _cotangent((1, *inputs.shape), inputs.dtype, position, reader.encoder[:, feature])
         seeds.append(seed(label, cotangent=cot))
-    logits = sites.payloads.payload(sites.logits)
-    assert logits is not None
-    last = logits.shape[1] - 1
-    vocab = logits.shape[2]
+    logits = _payload(sites, sites.logits, "logits")
+    last = logits.shape[0] - 1
+    vocab = logits.shape[1]
     values = []
     for token in logit_ids.tolist():
         direction = torch.zeros(vocab, dtype=logits.dtype)
@@ -327,10 +327,10 @@ def _frozen_labels(trace: Any, sites: _Sites, frozen: Sequence[str]) -> list[str
     for name in frozen:
         if not isinstance(name, str):
             raise _refuse(
-                "attribution_graph_site_not_found",
                 f"frozen= holds {name!r}; it takes module names. Remedy: pass "
                 "frozen=['blocks.0.attn.pattern', ...], the modules whose outputs are held "
                 "at their captured values.",
+                code="attribution_graph_site_not_found",
             )
         label = _frozen_label(trace, sites.index, name)
         if label not in labels:
@@ -359,18 +359,16 @@ def _gradients(
     sources = [*sites.writes.values(), sites.embedding]
     shapes = []
     for label in sources:
-        value = sites.payloads.payload(label)
-        assert value is not None
-        shapes.append(tuple(value.shape[1:]))
+        shapes.append(tuple(_payload(sites, label, "source").shape))
     if len(set(shapes)) != 1:
         raise _refuse(
-            "attribution_graph_input_unsupported",
             f"The MLP outputs and the embedding output have shapes {shapes}; the graph "
             "needs one residual width. Remedy: name MLPs that write the residual stream "
             "and the embedding that starts it.",
+            code="attribution_graph_input_unsupported",
         )
     n_pos, width = shapes[0]
-    dtype = sites.payloads.payload(sites.embedding).dtype  # type: ignore[union-attr]
+    dtype = _payload(sites, sites.embedding, "embedding").dtype
     by_layer = {
         sites.index.edges[label].layer_label: number for number, label in enumerate(sources)
     }
@@ -506,11 +504,11 @@ def build_graph(  # noqa: PLR0913 -- the graph door: two subjects, then what, wh
 
     if isinstance(frozen, _Unset):
         raise _refuse(
-            "attribution_graph_frozen_required",
             "build_graph needs frozen=: the modules held at their captured values "
             "(attention patterns and normalisation scales), so every edge is a direct "
             "linear effect. Remedy: pass frozen=['blocks.0.attn.pattern', ...], or "
             "frozen=() when the model has neither.",
+            code="attribution_graph_frozen_required",
         )
     readers = normalize_transcoders(transcoders)
     sites = _resolve_sites(trace, readers, embedding, logits_at)

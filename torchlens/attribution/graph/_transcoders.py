@@ -52,7 +52,7 @@ class Reader:
     decoder_biases: tuple[tuple[str, torch.Tensor], ...]
 
 
-def _invalid(site: str, why: str) -> AttributionError:
+def _invalid(site: str, why: str, *, code: str) -> AttributionError:
     """Build the coded refusal for a transcoder the graph cannot read."""
 
     return AttributionError(
@@ -61,7 +61,7 @@ def _invalid(site: str, why: str) -> AttributionError:
         "(n_features,), W_dec (n_features, d_out) and b_dec (d_out,), or W_dec and "
         "b_dec as mappings from MLP module names to tensors for a cross-layer "
         f"transcoder. {_DOCS_POINTER}",
-        code="attribution_graph_transcoder_invalid",
+        code=code,
     )
 
 
@@ -70,7 +70,11 @@ def _tensor(transcoder: Any, site: str, name: str) -> torch.Tensor:
 
     value = getattr(transcoder, name, None)
     if not isinstance(value, torch.Tensor):
-        raise _invalid(site, f"{name} is {type(value).__name__}, not a tensor")
+        raise _invalid(
+            site,
+            f"{name} is {type(value).__name__}, not a tensor",
+            code="attribution_graph_transcoder_invalid",
+        )
     return value.detach()
 
 
@@ -84,17 +88,27 @@ def _per_write(transcoder: Any, site: str, name: str) -> tuple[tuple[str, torch.
         pairs = []
         for write, tensor in value.items():
             if not isinstance(write, str) or not isinstance(tensor, torch.Tensor):
-                raise _invalid(site, f"{name} maps {write!r} to {type(tensor).__name__}")
+                raise _invalid(
+                    site,
+                    f"{name} maps {write!r} to {type(tensor).__name__}",
+                    code="attribution_graph_transcoder_invalid",
+                )
             pairs.append((write, tensor.detach()))
         return tuple(pairs)
-    raise _invalid(site, f"{name} is {type(value).__name__}, not a tensor or a mapping")
+    raise _invalid(
+        site,
+        f"{name} is {type(value).__name__}, not a tensor or a mapping",
+        code="attribution_graph_transcoder_invalid",
+    )
 
 
 def _reader(site: str, transcoder: Any) -> Reader:
     """Validate one transcoder and return its reader spec."""
 
     if not callable(getattr(transcoder, "encode", None)):
-        raise _invalid(site, "it has no callable encode")
+        raise _invalid(
+            site, "it has no callable encode", code="attribution_graph_transcoder_invalid"
+        )
     encoder = _tensor(transcoder, site, "W_enc")
     encoder_bias = _tensor(transcoder, site, "b_enc")
     if encoder.dim() != 2 or encoder_bias.shape != (encoder.shape[1],):
@@ -102,6 +116,7 @@ def _reader(site: str, transcoder: Any) -> Reader:
             site,
             f"W_enc {tuple(encoder.shape)} and b_enc {tuple(encoder_bias.shape)} do not "
             "agree on (d_in, n_features) and (n_features,)",
+            code="attribution_graph_transcoder_invalid",
         )
     decoders = _per_write(transcoder, site, "W_dec")
     decoder_biases = _per_write(transcoder, site, "b_dec")
@@ -111,9 +126,14 @@ def _reader(site: str, transcoder: Any) -> Reader:
                 site,
                 f"W_dec for {write!r} has shape {tuple(decoder.shape)}; expected "
                 f"({encoder.shape[1]}, d_out)",
+                code="attribution_graph_transcoder_invalid",
             )
     if {write for write, _ in decoder_biases} != {write for write, _ in decoders}:
-        raise _invalid(site, "W_dec and b_dec name different MLP outputs")
+        raise _invalid(
+            site,
+            "W_dec and b_dec name different MLP outputs",
+            code="attribution_graph_transcoder_invalid",
+        )
     return Reader(site, transcoder, encoder, encoder_bias, decoders, decoder_biases)
 
 
@@ -143,5 +163,6 @@ def normalize_transcoders(transcoders: Any) -> tuple[Reader, ...]:
             "<transcoders>",
             f"transcoders must be a non-empty mapping of MLP module names; got "
             f"{type(transcoders).__name__}",
+            code="attribution_graph_transcoder_invalid",
         )
     return tuple(_reader(str(site), transcoder) for site, transcoder in transcoders.items())
