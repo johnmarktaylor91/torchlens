@@ -174,6 +174,32 @@ def reference_gap(
     return max(float((got[name] - value).abs().max()) for name, value in want.items())
 
 
+#: (path suffix, function name) of each function whose cumulative profile time
+#: is reported as context (never a gate; cProfile inflates call-heavy code).
+TIMED: dict[str, tuple[str, str]] = {
+    "patch_edges": ("torchlens/mechinterp/_edge_patch.py", "patch_edges"),
+    "resolve_sites": ("torchlens/intervention/resolver.py", "resolve_sites"),
+    "origin_sites_for_hooks": ("torchlens/intervention/replay.py", "_origin_sites_for_hooks"),
+    "hook_targets_by_label": ("torchlens/intervention/replay.py", "_hook_targets_by_label"),
+    "group_for_site": ("torchlens/intervention/replay.py", "_group_for_site"),
+    "build_selection_do_plan": ("torchlens/selection.py", "build_selection_do_plan"),
+    "run_replay": ("torchlens/intervention/replay.py", "_run_replay"),
+}
+
+
+def _profile_seconds(stats: pstats.Stats) -> dict[str, float]:
+    """Cumulative profile seconds of the timed functions (context only)."""
+
+    table = stats.stats  # type: ignore[attr-defined]
+    seconds = dict.fromkeys(TIMED, 0.0)
+    for (path, _line, func), (_cc, _nc, _tt, cumtime, _callers) in table.items():
+        posix = path.replace(os.sep, "/")
+        for key, (suffix, name) in TIMED.items():
+            if func == name and posix.endswith(suffix):
+                seconds[key] = round(seconds[key] + cumtime, 3)
+    return seconds
+
+
 def _counts(stats: pstats.Stats) -> dict[str, int]:
     """Call counts of the counted functions, the forks, and the call totals."""
 
@@ -243,6 +269,7 @@ def run(case_name: str, *, wall: bool) -> dict[str, Any]:
             "receivers": len({edge.receiver.name for edge in edges}),
             "baseline_ops": len(clean.layer_list),
             "counters": _counts(pstats.Stats(profiler)),
+            "profile_cumulative_s": _profile_seconds(pstats.Stats(profiler)),
             "output_digest": output_digest(patched),
             "max_abs_gap_to_plain_hooks": reference_gap(model, case, edges, patched),
         }
