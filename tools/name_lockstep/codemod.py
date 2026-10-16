@@ -276,6 +276,8 @@ def _ast_sites(
         names = context.tables.get(source.path)
         if names:
             astsites.named_tables(tree, names, pos)
+        for class_name in row.get("init_classes") or ():
+            astsites.init_keywords(tree, str(class_name), source.relative, pos)
     elif row["kind"] == "param" and source.relative.startswith("torchlens/"):
         astsites.definite_param(context.targets, tree, pos)
     return pos.found, loose.found - pos.found

@@ -28,9 +28,10 @@ FILES = {
         """Fake package."""
         from fieldlens_pkg._state_shim import State
         from fieldlens_pkg.bundle import Bundle
+        from fieldlens_pkg.caps import Caps, FastCaps
         from fieldlens_pkg.record import Accessor, Record
 
-        __all__ = ["Accessor", "Bundle", "Record", "State", "bundle"]
+        __all__ = ["Accessor", "Bundle", "Caps", "FastCaps", "Record", "State", "bundle"]
 
 
         def bundle(*items):
@@ -48,6 +49,25 @@ FILES = {
         def helper():
             """Help."""
             return os.sep
+        ''',
+    "caps.py": '''
+        """Capability dataclasses."""
+        import dataclasses
+
+
+        @dataclasses.dataclass
+        class Caps:
+            """Capabilities."""
+
+            replay: bool = False
+            cache: dict = dataclasses.field(default_factory=dict, init=False)
+
+
+        @dataclasses.dataclass
+        class FastCaps(Caps):
+            """Fast capabilities."""
+
+            fast: bool = True
         ''',
     "_impl.py": '''
         """Where Accessor is written."""
@@ -191,6 +211,18 @@ def test_variadic_and_underscore_keywords_are_rows(field_inventory: dict) -> Non
     for name in ("items", "extra_kwargs", "_trace", "depth"):
         assert "tl.Record" in field_inventory[f"param:{name}"]["uses"]
     assert "param:self" not in field_inventory
+
+
+def test_dataclass_fields_name_the_classes_taking_them_as_keywords(field_inventory: dict) -> None:
+    """A dataclass field row lists every reached class whose constructor takes it."""
+
+    assert field_inventory[f"member:{PKG}.caps:Caps.replay"]["init_classes"] == [
+        "Caps",
+        "FastCaps",
+    ]
+    assert field_inventory[f"member:{PKG}.caps:FastCaps.fast"]["init_classes"] == ["FastCaps"]
+    assert "init_classes" not in field_inventory.get(f"member:{PKG}.caps:Caps.cache", {})
+    assert "init_classes" not in field_inventory[f"member:{PKG}.record:Record.depth"]
 
 
 def test_inventory_field_tables_drive_the_codemod(field_inventory: dict, tmp_path: Path) -> None:

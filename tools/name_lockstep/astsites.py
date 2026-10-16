@@ -408,6 +408,42 @@ def definite_member(row: dict[str, Any], tree: ast.Module, pos: Positions) -> No
                 pos.found.add((sub.end_lineno or sub.lineno, start))
 
 
+def init_keywords(tree: ast.Module, class_name: str, relative: str, pos: Positions) -> None:
+    """Record a field's constructor keyword in ``Class(field=...)`` and ``cls(field=...)``.
+
+    Calls count where a TorchLens module defines the class or a module imports it from
+    TorchLens under its own name; ``cls(...)`` counts inside the class's own body.
+
+    Parameters
+    ----------
+    tree
+        Parsed module.
+    class_name
+        A dataclass or named tuple whose constructor takes the field.
+    relative
+        Repository-relative path of the module, which resolves relative imports.
+    pos
+        Position collector.
+    """
+
+    scopes: list[tuple[ast.AST, str]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == class_name:
+            if relative.startswith("torchlens/"):
+                scopes += [(tree, class_name), (node, "cls")]
+        elif isinstance(node, ast.ImportFrom) and _in_torchlens(_import_source(node, relative)):
+            if any(a.name == class_name and a.asname in (None, class_name) for a in node.names):
+                scopes.append((tree, class_name))
+    for scope, callee in dict.fromkeys(scopes):
+        for node in ast.walk(scope):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+                if node.func.id != callee:
+                    continue
+                for keyword in node.keywords:
+                    if keyword.arg == pos.old:
+                        pos.at(keyword.lineno, keyword.col_offset)
+
+
 def definite_param(
     targets: frozenset[tuple[str | None, str]], tree: ast.Module, pos: Positions
 ) -> None:

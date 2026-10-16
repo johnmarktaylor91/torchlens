@@ -473,6 +473,17 @@ def _policy_fields(cls: type) -> list[str]:
     ]
 
 
+def _init_fields(cls: type) -> frozenset[str]:
+    """Return the fields a dataclass or named tuple takes as constructor keywords."""
+
+    if dataclasses.is_dataclass(cls):
+        return frozenset(field.name for field in dataclasses.fields(cls) if field.init)
+    fields = getattr(cls, "_fields", None)
+    if issubclass(cls, tuple) and isinstance(fields, tuple):
+        return frozenset(str(name) for name in fields)
+    return frozenset()
+
+
 def _field_tables(cls: type, package: str) -> list[str]:
     """Return the module constants that list a class's field order, as ``module:NAME``.
 
@@ -525,7 +536,9 @@ def _member_rows(classes: Iterable[type], package: str) -> dict[str, dict[str, A
     Returns
     -------
     dict[str, dict[str, Any]]
-        Rows keyed on id; ``owner_names`` lists the reached classes that show the member.
+        Rows keyed on id; ``owner_names`` lists the reached classes that show the member,
+        and ``init_classes`` those whose constructor takes it as a keyword (dataclass and
+        named-tuple fields).
     """
 
     rows: dict[str, dict[str, Any]] = {}
@@ -545,6 +558,8 @@ def _member_rows(classes: Iterable[type], package: str) -> dict[str, dict[str, A
                     row["field_tables"] = tables[defining]
                 if reached.__qualname__ not in row["owner_names"]:
                     row["owner_names"].append(reached.__qualname__)
+                if name in _init_fields(reached):
+                    row["init_classes"] = sorted({*row.get("init_classes", []), reached.__name__})
                 rows[row_id] = row
     return rows
 

@@ -359,6 +359,64 @@ def test_class_table_lookups_follow_the_renamed_key(tmp_path: Path) -> None:
     assert "KEEP = Call.SPEC['call_name']" in text
 
 
+def test_dataclass_field_constructor_keywords_follow_the_field(tmp_path: Path) -> None:
+    """A dataclass field's ``Class(field=...)`` keywords are definite where the class is bound."""
+
+    root = _repo(
+        tmp_path,
+        {
+            "torchlens/__init__.py": "",
+            "torchlens/caps.py": (
+                "import dataclasses\n"
+                "\n"
+                "@dataclasses.dataclass(frozen=True)\n"
+                "class Caps:\n"
+                "    replay: bool\n"
+                "    fast: bool = False\n"
+                "\n"
+                "    @classmethod\n"
+                "    def default(cls):\n"
+                "        return cls(replay=True)\n"
+            ),
+            "torchlens/specs.py": (
+                "from torchlens.caps import Caps\n"
+                "\n"
+                "SPEC = Caps(replay=True, fast=False)\n"
+                "OTHER = dict(replay=1)\n"
+            ),
+            "tests/test_caps.py": (
+                "from torchlens.caps import Caps\n"
+                "\n"
+                "def test_caps():\n"
+                "    assert Caps(replay=False).fast is False\n"
+            ),
+            "tests/test_unrelated.py": "def test_other(run):\n    run(replay=True)\n",
+        },
+    )
+    row = {
+        "id": "member:torchlens.caps:Caps.replay",
+        "kind": "member",
+        "name": "replay",
+        "proposed": "has_replay",
+        "path": "Caps.replay",
+        "module": "torchlens.caps",
+        "owner": "torchlens.caps:Caps",
+        "init_classes": ["Caps"],
+    }
+    edits = codemod.plan([row], root, roots=("torchlens", "tests"))
+    definite = {(path, line) for path, line, _, how in _sites(edits) if how == codemod.DEFINITE}
+    assert definite == {
+        ("torchlens/caps.py", 5),
+        ("torchlens/caps.py", 10),
+        ("torchlens/specs.py", 3),
+        ("tests/test_caps.py", 4),
+    }
+    codemod.apply(edits, root)
+    assert "SPEC = Caps(has_replay=True, fast=False)" in (root / "torchlens/specs.py").read_text()
+    assert "OTHER = dict(replay=1)" in (root / "torchlens/specs.py").read_text()
+    assert "run(replay=True)" in (root / "tests/test_unrelated.py").read_text()
+
+
 def test_dry_run_output_carries_the_row_id_and_skips(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
