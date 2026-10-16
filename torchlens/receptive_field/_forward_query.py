@@ -22,7 +22,10 @@ from ._query import (
     _IndexSet,
     _initial_axis_sets,
     _normalize_unit,
+    _query_graph,
+    _query_memo_scope,
     _run_memoized_walk,
+    _shared_reach,
     _TerminalState,
     _validate_descriptor_for_query,
     _WalkKey,
@@ -80,19 +83,20 @@ def box_for_source_unit(
     _validate_descriptor_for_query(descriptor)
     coordinates = _normalize_unit(op, descriptor, unit)
     initial = _initial_axis_sets(op, descriptor, coordinates, complete_unit=complete_unit)
-    trace = op.source_trace
-    operations = tuple(item for item in trace.layer_list if item.label in solution.per_op)
-    by_reference = {
-        reference: item
-        for item in operations
-        for reference in (item.label, item.layer_label, item._layer_label_raw)
-    }
+    operations, by_reference = _query_graph(op.source_trace, solution)
     target_label = descriptor.input_op_label
-    active = _labels_to_target(op.label, target_label, operations, by_reference)
+    reaching = _shared_reach(
+        "projective",
+        solution,
+        target_label,
+        lambda: _labels_reaching(target_label, operations, by_reference),
+    )
+    active = reaching if op.label in reaching else frozenset()
     # The walk enumerates paths, so it revisits each operation once per path
     # through it, re-deriving per-operation facts that are linear in that
-    # operation's parents. Memoize them for this one query.
-    with _engine._geometry_memo():
+    # operation's parents. Memoize them for this one query (or for every query
+    # of an enclosing shared scope).
+    with _query_memo_scope():
         terminals = _walk_to_target(op, initial, target_label, active, by_reference, True, {})
     if not terminals:
         raise ReceptiveFieldError(
@@ -125,13 +129,12 @@ def _select_target_descriptor(
     raise ReceptiveFieldError(f"Target {identity!r} is not reachable from this source.")
 
 
-def _labels_to_target(
-    source_label: str,
+def _labels_reaching(
     target_label: str,
     operations: tuple[Op, ...],
     by_reference: Mapping[str, Op],
 ) -> frozenset[str]:
-    """Return the operation labels on a source-to-target path slice."""
+    """Return the labels of the target and every operation with a path to it."""
 
     parents: dict[str, set[str]] = {item.label: set() for item in operations}
     for item in operations:
@@ -145,7 +148,7 @@ def _labels_to_target(
         unseen = parents.get(label, set()) - reachable
         reachable.update(unseen)
         stack.extend(unseen)
-    return frozenset(reachable if source_label in reachable else ())
+    return frozenset(reachable)
 
 
 def _walk_to_target(

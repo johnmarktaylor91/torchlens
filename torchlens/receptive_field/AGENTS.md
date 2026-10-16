@@ -29,6 +29,12 @@ boundary is the property access itself, not the first view query.
 ## Queries and gradients
 - `_query.py` - `box_for_unit()` (receptive box for one output unit).
 - `_forward_query.py` - `box_for_source_unit()` (projective box for one input unit).
+- Window and clip maps (`_standard_window_index_set`, `map_transposed_convolution_index_set`,
+  `_IndexSet.clipped`) compute a one-progression index set in closed form and enumerate
+  otherwise; both paths must return the same canonical set (`tests/test_perf5_rf_invariant_cost.py`).
+- `_query._shared_query_scope()` lets many per-unit queries over one solution share graph
+  facts and rule results (the always-on metadata invariants open it); outside it every
+  query derives its own.
 - `_path.py` - `resolve_graph_point()`, `ancestor_labels()`, `descendant_labels()`,
   `require_path()` own graph-point resolution and path checks.
 - `_gradient.py` - `gradient_for_unit()`, the empirical VJP probe; snapshots and

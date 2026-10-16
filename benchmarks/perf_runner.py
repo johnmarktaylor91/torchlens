@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 import os
 import platform
@@ -754,7 +755,10 @@ def _run_memory(fn: OperationFn, device: str, memory_runs: int) -> dict[str, Any
     -------
     dict[str, Any]
         Memory metrics. Peak fields are phase-local and cover transients
-        INSIDE the measured calls (r4 b6-sol R33): the RSS high-water mark
+        INSIDE the measured calls (r4 b6-sol R33). Collectable garbage is
+        freed before the baselines are read (``pre_phase_gc_collected``
+        counts the objects), so memory the process held only as garbage is
+        not in the baseline and cannot be released mid-phase. The RSS high-water mark
         is reset before the loop where the platform allows
         (``rss_high_water_phase_local`` reports which semantics apply), and
         a concurrent sampler thread polls RSS/USS during the runs, so an
@@ -764,6 +768,12 @@ def _run_memory(fn: OperationFn, device: str, memory_runs: int) -> dict[str, Any
     """
 
     metrics: dict[str, Any] = {"memory_run_count": memory_runs}
+    # Free garbage the process already holds before any baseline is read. A
+    # collection that runs inside the phase (the sampler thread's own
+    # allocations trigger them) would otherwise release memory that was resident
+    # at the reset, so a transient of the same size or smaller never lifts the
+    # high water above it and the phase peak reads 0.0.
+    metrics["pre_phase_gc_collected"] = gc.collect()
     try:
         import psutil
 
