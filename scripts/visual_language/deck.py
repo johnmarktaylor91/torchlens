@@ -24,6 +24,7 @@ from typing import Any
 import graphviz
 
 from scripts.visual_language import capture, compose, coverage
+from scripts.visual_language.at_scale import scale_slides
 from scripts.visual_language.coverage import _flatten
 from scripts.visual_language.dot import parse_json, select, strip_tags
 from scripts.visual_language.sentinels import sentinel_slides
@@ -55,9 +56,9 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def deck_slides() -> tuple[Slide, ...]:
-    """Every slide a full build writes: the teaching slides, then the sentinel strip."""
+    """Every slide a full build writes: teaching slides, the sentinel strip, then at scale."""
 
-    return (*SLIDES, *sentinel_slides())
+    return (*SLIDES, *sentinel_slides(), *scale_slides())
 
 
 def _quote(value: str) -> str:
@@ -322,9 +323,9 @@ def compose_slide(
     size = picture.stat().st_size
     if size > 150_000:
         problems.append(f"picture is {size // 1000} KB, over 150 KB")
-    if slide.id.startswith("sentinel-"):
-        # The strip is an overview: its full-size renders are in raw/ and the review PDF, so
-        # small text or a large composed page is a warning there, never a failed slide.
+    if slide.id.startswith(("sentinel-", "scale-")):
+        # The strip and the at-scale pages are overviews: their full-size renders are in raw/
+        # and the review PDF, so small text or a large page is a warning, never a failure.
         overview = [p for p in problems if "CSS px" in p or "KB, over" in p]
         problems = [p for p in problems if p not in overview]
         canvas.warnings.extend(overview)

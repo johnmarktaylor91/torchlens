@@ -21,6 +21,7 @@ import torch
 
 import torchlens as tl
 from scripts.visual_language.models import FIXTURES
+from scripts.visual_language.scale_models import SCALE_FIXTURES
 from scripts.visual_language.sentinel_models import SENTINEL_FIXTURES
 from scripts.visual_language.slides import CONVENTIONS, Panel, Slide
 from torchlens.errors import InvalidArgumentError
@@ -82,8 +83,12 @@ INTERVENTIONS: Mapping[str, Callable[[], Any]] = {
     "zero_relu": lambda: tl.when(tl.func("relu"), tl.zero_ablate()),
 }
 
-#: Every fixture a panel may name: the teaching slides' and the sentinel strip's.
-ALL_FIXTURES: Mapping[str, Callable[[], tuple[Any, Any]]] = {**FIXTURES, **SENTINEL_FIXTURES}
+#: Every fixture a panel may name: the teaching slides', the sentinel strip's, the at-scale's.
+ALL_FIXTURES: Mapping[str, Callable[[], tuple[Any, Any]]] = {
+    **FIXTURES,
+    **SENTINEL_FIXTURES,
+    **SCALE_FIXTURES,
+}
 
 
 def _resolve(value: Any) -> Any:
