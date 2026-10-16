@@ -1020,6 +1020,72 @@ class FacetSelector(BaseSelector):
             return base
         return f"{base}.in_module({self.module_address!r})"
 
+    def __hash__(self) -> int:
+        """Hash by the selector's spelling, so it can key a ``hooks=`` mapping."""
+
+        return hash(repr(self))
+
+
+def _facet_save_predicate(selector: FacetSelector) -> Callable[[Any], bool]:
+    """Return the capture-time save predicate for ``trace(save=<facet selector>)``.
+
+    Save-only: ``intervene=``, ``bind`` and capture-time ``hooks=`` never reach
+    it (they evaluate the selector itself, which refuses at capture), so no
+    edit can land on a whole home tensor. The predicate keeps the ops a later
+    ``trace[selector]`` read needs. For an SAE latent family that is its
+    registered site (a string site is read as a module address at capture);
+    for a head or named facet it is every op inside a module whose class has
+    a recipe declaring the facet, a superset of the facet's homes, because the
+    recipes pick their home ops from the finished module record.
+
+    Parameters
+    ----------
+    selector:
+        Facet selector the caller passed as ``save=``.
+
+    Returns
+    -------
+    Callable[[Any], bool]
+        Predicate over capture-time record contexts.
+    """
+
+    from ..ir.selector_eval import evaluate
+    from ..semantic._families import family_key
+
+    scope = None if selector.module_address is None else in_module(selector.module_address)
+    family = family_key(selector.name)
+    if family is not None:
+        site = family[0].site
+        home = site if isinstance(site, BaseSelector) else module(str(site))
+        if scope is not None:
+            home = home & scope
+
+        def _family_home(ctx: Any) -> bool:
+            return evaluate(home, ctx, lifecycle="capture")
+
+        return _family_home
+
+    names = frozenset(("q", "k", "v") if selector.name is None else (selector.name,))
+    declares: dict[str, bool] = {}
+
+    def _declares(module_type: str) -> bool:
+        if module_type not in declares:
+            from ..semantic.facets import info
+
+            declares[module_type] = bool(names & set(info(module_type)["facets"]))
+        return declares[module_type]
+
+    def _recipe_interior(ctx: Any) -> bool:
+        if getattr(ctx, "kind", "op") != "op":
+            return False
+        return any(
+            _declares(str(getattr(frame, "module_type", "")))
+            and (selector.module_address is None or frame.address == selector.module_address)
+            for frame in getattr(ctx, "module_stack", ()) or ()
+        )
+
+    return _recipe_interior
+
 
 @dataclass(frozen=True, repr=False)
 class GradFnLabelSelector(BaseSelector):
