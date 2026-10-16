@@ -301,6 +301,8 @@ _WARN_ONCE_STATE = frozenset(
         ("torchlens/_io/bundle.py", "_NONPERSISTENT_DISCLOSURE_WARNED"),
         ("torchlens/_io/bundle.py", "_UNATTESTABLE_ACTIVATION_DISCLOSURE_WARNED"),
         ("torchlens/backends/tf/_tf_compat.py", "_warned_missing_capabilities"),
+        # TorchScript/DLPack advisory, once per session per code; reset row in tests/conftest.py.
+        ("torchlens/backends/torch/_opaque_call_advisory.py", "_WARNED_CODES"),
         ("torchlens/backends/torch/buffer_writes.py", "_PARAM_BYTE_WITNESS_NOT_ARMED"),
         ("torchlens/backends/torch/completeness_witness.py", "_HOST_ESCAPE_OBSERVER_FAILED"),
         ("torchlens/backends/torch/legacy_ctors.py", "_WARNED_FOREIGN_NEW"),

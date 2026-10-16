@@ -14,6 +14,7 @@ import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is
 from ... import _state
 from ..._errors import TorchLensCaptureGapWarning
 from ...utils._torch_symbols import torch_attr
+from ._opaque_call_advisory import advise_opaque_calls
 from .escape_detection import (
     ExpectedOriginalToken,
 )
@@ -280,6 +281,8 @@ def _finalize_census(state: _WitnessState) -> None:
                 TorchLensCaptureGapWarning,
                 stacklevel=3,
             )
+            # Gap path only: name a TorchScript or DLPack call behind the gap (no verdict moves).
+            advise_opaque_calls(diagnostics)
         return
     if getattr(trace, "_raw_dynamo_region_detected", False):
         # More specific than either reason below: the transform-escape flag is shared with
