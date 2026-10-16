@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from bisect import bisect_left
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
@@ -32,13 +33,12 @@ class LiveIndex:
     def append(self, event: Any) -> None:
         """Index one emitted operation event.
 
-        A raw label re-seen at this boundary (for example when a failed-partial
-        fastlog recording concatenates op-event streams) is treated as an atomic
-        in-place replacement rather than a second insertion: the label is not
-        double-listed and parent edges are recomputed so no stale
-        parent->child edge from the prior event survives. This keeps the index
-        self-consistent without requiring an unrelated ``rebuild_edges()`` and is
-        identical to :meth:`replace` for a re-seen label.
+        A raw label re-seen at this boundary (a multi-pass ``Recorder`` folding
+        each pass's journal in, or a failed-partial fastlog recording
+        concatenating op-event streams) is treated as an atomic in-place
+        replacement rather than a second insertion: the label is not
+        double-listed and no stale parent->child edge from the prior event
+        survives. This is identical to :meth:`replace` for a re-seen label.
 
         Parameters
         ----------
@@ -51,21 +51,28 @@ class LiveIndex:
             Mutates the live index in place.
         """
 
-        if event.label_raw in self.by_raw_label:
-            # Re-seen label: replace last-wins and drop any now-stale edges.
-            self.by_raw_label[event.label_raw] = event
-            self.rebuild_edges()
+        label = event.label_raw
+        if label in self.by_raw_label:
+            previous = self.by_raw_label[label]
+            self.by_raw_label[label] = event
+            self._move_child_edges(label, previous, event)
             return
 
-        self.by_raw_label[event.label_raw] = event
-        self.labels.append(event.label_raw)
+        self.by_raw_label[label] = event
+        self.labels.append(label)
         for edge in event.parents:
             children = self.children_by_parent[edge.parent_label_raw]
-            if event.label_raw not in children:
-                children.append(event.label_raw)
+            if label not in children:
+                children.append(label)
 
     def replace(self, event: Any) -> None:
         """Replace a previously indexed event.
+
+        Only the child lists of parents the label gained or lost change, and
+        they end exactly as :meth:`rebuild_edges` would leave them: each list
+        in ``labels`` order, and no list a rebuild would not create. The
+        iteration order of ``children_by_parent`` keys is not part of that
+        contract.
 
         Parameters
         ----------
@@ -75,11 +82,45 @@ class LiveIndex:
         Returns
         -------
         None
-            Mutates event lookup and recomputes child edges.
+            Mutates event lookup and the affected child edges.
         """
 
-        self.by_raw_label[event.label_raw] = event
-        self.rebuild_edges()
+        label = event.label_raw
+        previous = self.by_raw_label.get(label)
+        self.by_raw_label[label] = event
+        self._move_child_edges(label, previous, event)
+
+    def _move_child_edges(self, label: str, previous: Any, event: Any) -> None:
+        """Move one label's child edges from ``previous``'s parents to ``event``'s.
+
+        A label only sits in a parent's child list when it is in ``labels``,
+        so a label missing from ``labels`` gains no edges, as in a rebuild.
+        """
+
+        old: dict[str, None] = {}
+        if previous is not None:
+            old = {edge.parent_label_raw: None for edge in previous.parents}
+        new = {edge.parent_label_raw: None for edge in event.parents}
+        if old == new:
+            return
+        for parent in old:
+            if parent in new:
+                continue
+            children = self.children_by_parent.get(parent)
+            if children is not None and label in children:
+                children.remove(label)
+                if not children:
+                    del self.children_by_parent[parent]
+        added = [parent for parent in new if parent not in old]
+        if not added:
+            return
+        try:
+            position = self.labels.index(label)
+        except ValueError:
+            return
+        for parent in added:
+            children = self.children_by_parent[parent]
+            children.insert(bisect_left(children, position, key=self.labels.index), label)
 
     def rebuild_edges(self) -> None:
         """Rebuild parent-to-child edges from indexed events.
