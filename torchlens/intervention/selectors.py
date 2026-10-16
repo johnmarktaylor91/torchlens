@@ -1084,7 +1084,7 @@ def _facet_save_predicate(selector: FacetSelector) -> BaseSelector:
         key = (id(model), address)
         if key not in declares:
             try:
-                class_name = type(model.get_submodule(address)).__name__
+                class_name = "" if model is None else type(model.get_submodule(address)).__name__
             except (AttributeError, TypeError):
                 class_name = ""
             declares[key] = bool(class_name) and bool(names & set(info(class_name)["facets"]))
