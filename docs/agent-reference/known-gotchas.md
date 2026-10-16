@@ -180,3 +180,15 @@
   `model.named_modules()`). Labels keep working on a capture (`tl.trace(...)`, `trace.resolve_sites`).
   A `tl.where` predicate that reads post-capture fields (`p.layer_label`) is opaque, so it still
   fails at the first op with `bind_rule_runtime_error`.
+- TorchScript and DLPack: a `torch.jit.script` function called from an eager forward runs its
+  body in the TorchScript interpreter, below the Python functions TorchLens wraps, so its
+  operations are not in the graph. The completeness witness counts them as unaccounted and the
+  capture is `capture_verified=False` (a scripted module is refused up front). The advisory
+  `scripted_function_not_captured` names the scripted function and the call line; set
+  `PYTORCH_JIT=0` in the environment before the model's code is imported
+  (`PYTORCH_JIT=0 python your_script.py`) and `torch.jit.script` returns the plain function, so
+  every operation inside it is captured. A tensor handed to another library through `to_dlpack`
+  runs that library's kernels outside PyTorch's Python layer; `dlpack_call_not_captured` names the
+  call line, and no TorchLens setting captures those kernels. Both fire once per session and move
+  no verdict; the advisory resolves only names visible in the defining module (module globals, or
+  `self.`/`cls.` attributes of its classes), not a scripted function stored on an instance.

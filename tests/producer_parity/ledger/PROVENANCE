@@ -2755,3 +2755,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 1c6b3e41e74ef9f9c6cbe1e870c16dade6b7d64f (dirty)
 recorded: 2026-10-16T06:00:44.318920+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: new opaque-call advisory module: its CallSite.function and sys.modules reads are not OpEvent consumers
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: a06e8a2f2adc6de96e7eceb19b9d818fd938f5e5 (dirty)
+recorded: 2026-10-16T06:56:20.088985+00:00

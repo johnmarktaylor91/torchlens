@@ -280,6 +280,12 @@ def _finalize_census(state: _WitnessState) -> None:
                 TorchLensCaptureGapWarning,
                 stacklevel=3,
             )
+            # Gap path only: name a TorchScript or DLPack call behind the gap (no verdict moves).
+            # Imported here because completeness_witness rebinds this function into its own
+            # globals, and a capture without a gap never pays for the import.
+            from ._opaque_call_advisory import advise_opaque_calls
+
+            advise_opaque_calls(diagnostics)
         return
     if getattr(trace, "_raw_dynamo_region_detected", False):
         # More specific than either reason below: the transform-escape flag is shared with
