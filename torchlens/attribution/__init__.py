@@ -37,6 +37,7 @@ from torchlens.attribution._site import SiteTarget
 from torchlens.attribution._stash import SiteStash
 from torchlens.attribution._text import TokenAttributionPayload, TokenAttributionResult, text
 from torchlens.attribution._viz import overlay
+from torchlens.attribution.graph import AttributionGraph, GraphNode, build_graph
 from torchlens.attribution.onebackward import (
     DEFAULT,
     ReadError,
@@ -49,6 +50,7 @@ from torchlens.attribution.onebackward import (
 
 __all__ = [
     "AttributionError",
+    "AttributionGraph",
     "AttributionResult",
     "CausalAuditResult",
     "CausalAuditSet",
@@ -60,10 +62,12 @@ __all__ = [
     "ReadError",
     "ReadRow",
     "ReadTable",
+    "build_graph",
     "deconvolution",
     "deletion_curve",
     "grad_cam",
     "gradient_shap",
+    "GraphNode",
     "guided_backprop",
     "input_x_grad",
     "insertion_curve",
