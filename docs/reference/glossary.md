@@ -45,6 +45,23 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   `n_ops_completed`, and best-effort `last_event_*` fields. It cannot be passed to
   `Recording.to_trace()` or `Recording.log_backward()`.
 
+**Generation recording** *(spellings documented-unstable)*
+: `tl.record(model, input_ids, save=..., generate_kwargs={...})` runs the model's own Hugging Face
+  `generate(*inputs, **input_kwargs, **generate_kwargs)` once, with its KV cache, and records the
+  selected sites at every forward it runs, so each decode step records only its new position and
+  the cost grows linearly with the number of generated tokens. It returns a
+  `GenerationRecording`: `.recording` (the multi-pass `Recording`, one pass per forward),
+  `.steps` (one `GenerationStep` per forward: `step`, 0 for the prefill; `pass_index`; `kind`;
+  `positions`, the absolute positions it computed; `n_ops`, `n_records`, `saved_bytes`),
+  `.sequences`, `.prompt_length`, `.settings` (the settings that decide the tokens, the torch seed
+  and an RNG-state digest), `.not_recorded` (cache tensors, the sampling between forwards, the
+  last token's own position), `.n_steps`, `.records_at(step)` and `.step_of_position(position)`
+  (both refuse a missing step with `record_generation_step_missing`). `random_seed=` seeds once
+  for the whole generation. Beam search, more than one return sequence, batched prompts, assisted
+  decoding, encoder-decoder models, `use_cache=False`, a generate that runs decode steps without a
+  cache, `intervene=`, `halt=` and partial forward-error modes refuse with
+  `record_generation_unsupported`, whose `reason` field names what is unsupported.
+
 **Capture outcome**
 : The frozen `Trace.outcome`, `Recording.outcome`, or `PartialTrace.outcome`. Its status is one of
   `COMPLETE`, `HALTED`, `ABORTED_NONFINITE`, `FAILED`, `UNATTESTED`, or `UNKNOWN`; failed outcomes

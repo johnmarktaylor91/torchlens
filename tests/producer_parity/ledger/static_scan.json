@@ -3249,6 +3249,22 @@
  },
  {
   "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/capture/session.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/capture/session.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
   "field": "raw_index",
   "file": "torchlens/capture/session.py",
   "has_default": false,
@@ -4387,6 +4403,14 @@
   "ambiguous": true,
   "field": "modules",
   "file": "torchlens/fastlog/__init__.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/fastlog/_generation.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false

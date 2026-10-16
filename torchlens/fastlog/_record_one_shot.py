@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from torch import nn
@@ -21,6 +22,7 @@ from ..backends import (
 from ..intervention.predicates import InterventionPredicate
 from ..options import StreamingOptions
 from ..types import ActivationPostfunc, GradientPostfunc
+from ._generation import GenerationRecording, enrich_generation, record_generation
 from ._recorder import Recorder
 from ._validation import validate_postprocess
 from .options import (
@@ -53,6 +55,7 @@ def record(
     on_forward_error: ForwardErrorMode = "raise",
     storage: StreamingOptions | None = None,
     streaming: StreamingOptions | None = None,
+    generate_kwargs: Mapping[str, Any] | None = None,
     return_output: bool = False,
     postprocess: str = "none",
     random_seed: int | None = None,
@@ -66,7 +69,7 @@ def record(
     echo: Any | None = None,
     backend: BackendName | None = None,
     detach_saved_activations: bool | MissingType = MISSING,
-) -> Recording | tuple[Any, Recording]:
+) -> Recording | GenerationRecording | tuple[Any, Recording | GenerationRecording]:
     """Record one model forward pass with capture predicates.
 
     ``record(save=...)`` is the one predicate spelling and matches
@@ -129,8 +132,21 @@ def record(
     backend:
         Optional backend selector. ``tl.record`` is torch-only in backend v1;
         non-torch backends raise a canonical unsupported error.
+    generate_kwargs:
+        DOCUMENTED-UNSTABLE. When given (``{}`` for the model's defaults), run
+        the model's own ``generate(*input_args, **input_kwargs,
+        **generate_kwargs)`` once instead of one forward, and record the
+        selected sites at every forward it runs (the prefill, then each decode
+        step) while the KV cache is on, so each decode step records only its
+        new position. Returns a :class:`GenerationRecording` (step and absolute
+        position of every forward, the token sequences, the settings that
+        decide the tokens). Beam search, more than one return sequence, batched
+        prompts, assisted decoding, encoder-decoder models, ``use_cache=False``,
+        ``intervene=``, ``halt=`` and partial forward-error modes refuse with
+        code ``record_generation_unsupported``.
     return_output:
-        Whether to return ``(model_output, recording)``.
+        Whether to return ``(model_output, recording)``; with
+        ``generate_kwargs`` the output is ``generate()``'s own return value.
     postprocess:
         Optional postprocess enrichment preset.
 
@@ -179,6 +195,43 @@ def record(
     # record() shares trace()'s decorated hot path, so it must enforce the SAME up-front guard
     # instead of crashing deep in capture with an opaque torch error.
     check_model_and_input_variants(model, input_args, input_kwargs)
+    if generate_kwargs is not None:
+        output, generation = record_generation(
+            model,
+            input_args,
+            input_kwargs,
+            generate_kwargs,
+            {
+                "save": save,
+                "default_op": default_op,
+                "default_module": default_module,
+                "history_size": history_size,
+                "lookback": lookback,
+                "lookback_payload_policy": lookback_payload_policy,
+                "include_source_events": include_source_events,
+                "intervene": intervene,
+                "halt": halt,
+                "max_predicate_failures": max_predicate_failures,
+                "on_predicate_error": on_predicate_error,
+                "on_forward_error": on_forward_error,
+                "storage": storage,
+                "streaming": streaming,
+                "random_seed": random_seed,
+                "activation_transform": activation_transform,
+                "save_raw_activations": save_raw_activations,
+                "save_grads": save_grads,
+                "default_grad": default_grad,
+                "grad_transform": grad_transform,
+                "save_raw_gradients": save_raw_gradients,
+                "backward_ready": backward_ready,
+                "echo": echo,
+                "detach_saved_activations": detach_saved_activations,
+            },
+        )
+        generation = enrich_generation(generation, postprocess)
+        if return_output:
+            return output, generation
+        return generation
     with Recorder(
         model,
         save=save,
