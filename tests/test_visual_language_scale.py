@@ -30,17 +30,9 @@ def test_rows_are_fixed_and_pending_rows_say_why() -> None:
     assert [s.id for s in scale_slides()] == [r.id for r in SCALE_ROWS if r.status == "active"]
 
 
-def _cells() -> list:
-    out = []
-    for slide in scale_slides():
-        # DenseNet-121 unrolled is the largest graph in the deck: its cell is slow-tier.
-        marks = [pytest.mark.slow] if "densenet" in slide.id else []
-        out.append(pytest.param(slide, id=slide.id, marks=marks))
-    return out
-
-
+# Measured on one core: ResNet-18 3.1 s, ResNet-50 2.0 s, DenseNet-121 5.4 s per cell.
 @pytest.mark.heavy
-@pytest.mark.parametrize("slide", _cells())
+@pytest.mark.parametrize("slide", scale_slides(), ids=[s.id for s in scale_slides()])
 def test_every_active_row_renders(slide, tmp_path: Path) -> None:
     """Every panel draws a non-empty DOT graph and an SVG picture."""
 
