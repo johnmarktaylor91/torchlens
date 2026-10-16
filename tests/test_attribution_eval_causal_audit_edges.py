@@ -141,8 +141,8 @@ def test_fixture_a_shuffled_claim_scores_below_the_correct_claim() -> None:
     ]
 
 
-def test_fixture_sets_into_one_receiver_are_measured_and_the_rest_reported_apart() -> None:
-    """A set into one receiver is patched together; a set across receivers is listed apart."""
+def test_fixture_sets_into_one_receiver_or_several_are_measured() -> None:
+    """A set into one receiver is patched together, and so is a set across receivers."""
 
     model = Fixture().eval()
     table = _table(model)
@@ -169,10 +169,15 @@ def test_fixture_sets_into_one_receiver_are_measured_and_the_rest_reported_apart
     claimed_of = {row.unit: row.claimed_effect for row in audit.units}
     assert top.claimed_effect == math.fsum(claimed_of[unit] for unit in top.units)
     across = _audit(table, model, k=2, random_draws=2)
-    spanning = {item["kind"] for item in across.extra["sets_not_measured"]}
-    assert "top" in spanning and not across.set_of("top")
-    for item in across.extra["sets_not_measured"]:
-        assert "receivers" in item["reason"] and len(item["edges"]) == 2
+    assert across.extra["sets_not_measured"] == ()
+    assert [item.kind for item in across.sets] == ["top", "bottom", "random", "random"]
+    (top_across,) = across.set_of("top")
+    assert len({name.split("->")[1] for name in _names(across, top_across)}) == 2
+
+
+def _names(audit: Any, item: Any) -> list[str]:
+    name_of = {row.unit: row.component for row in audit.units}
+    return [name_of[unit] for unit in item.units]
 
 
 def test_fixture_rows_without_a_score_are_reported_apart() -> None:

@@ -15,10 +15,11 @@ The audit does the patch. Each ``ok`` row's edge is patched alone with
 with the sender's value from the corrupted run), and the metric the table
 was scored with is read from the unembedding output of the fork and reduced
 over examples as the table was (mean or sum). The measured effect is
-``M(patched) - M(clean)``, the sign of the score; a set of edges is measured
-the same way when all its edges enter one receiver (``patch_edges`` patches
-edges into one receiver per call) and is reported apart otherwise, never as
-a sum of single-edge effects.
+``M(patched) - M(clean)``, the sign of the score. A set of edges is patched
+together in one ``patch_edges`` call, never estimated as a sum of single-edge
+effects; when its edges enter several receivers, each later receiver reads
+the forward as patched so far (the MIB circuit-track convention), and the
+recorded edits are the values that fork wrote, one per receiver.
 
 An EDGE table records neither its corrupted inputs nor its metric (its rows
 are not re-scorable), so the caller passes the ``corrupted=`` and
@@ -98,18 +99,6 @@ class _EdgesPlan(_SitesPlan):
 
         return [self.graph.edges[self.names[key]] for key in keys]
 
-    def unmeasured_reason(self, keys: tuple[tuple[int, ...], ...]) -> str | None:
-        """Return why a set of edges cannot be patched together, or ``None``."""
-
-        receivers = sorted({edge.receiver.name for edge in self._edges(keys)})
-        if len(receivers) == 1:
-            return None
-        return (
-            f"its {len(keys)} edges enter {len(receivers)} receivers; tl.mechinterp.patch_edges "
-            "patches edges into one receiver per call, and a set's joint effect is not the sum "
-            "of its single-edge effects"
-        )
-
     def _patched(self, keys: tuple[tuple[int, ...], ...]) -> Any:
         """Return a fork of the trace with the edges of ``keys`` patched."""
 
@@ -137,32 +126,49 @@ class _EdgesPlan(_SitesPlan):
         return {key: self.ablated_score((key,)) for key in self.units}
 
     def intervention(self, keys: tuple[tuple[int, ...], ...]) -> tuple[tuple[Any, Any], ...]:
-        """Return the ``(selection, value)`` pair ``patch_edges`` writes for ``keys``.
+        """Return the ``(selection, value)`` pairs ``patch_edges`` wrote for ``keys``.
 
+        One pair per receiver, in the order ``patch_edges`` writes them
+        (topological stages), read from the patched fork itself, so a later
+        receiver's value is the one computed from the partly patched forward.
         For an ``m{L}`` or ``logits`` receiver the selection is the EDGE
-        selection of its pre-norm input edge and the value is ``clean input
-        - sum(s_clean) + sum(s_corrupt)``; for a q, k or v receiver it is
-        head ``H``'s role slice of the projection output and the value is the
-        projection output of the patched input (only the slice is written).
-        An EDGE selection addresses its edge by call id, so the pair replays on
-        forks of the audit's own trace (``extra["trace"]``):
-        ``fork = audit.extra["trace"].fork(); fork.do(*pair)``.
+        selection of its pre-norm input edge and the value is what the fork
+        substituted on that edge (``input - sum(s) + sum(s_corrupt)``); for a
+        q, k or v receiver it is head ``H``'s role slice of the projection
+        output and the value is the fork's projection output (only the slice
+        is written). An EDGE selection addresses its edge by call id, so the
+        pairs replay on forks of the audit's own trace (``extra["trace"]``):
+        ``fork = audit.extra["trace"].fork()``, then ``fork.do(*pair)`` for
+        each pair in order.
         """
 
-        edges = self._edges(keys)
-        receiver = edges[0].receiver
-        if receiver.kind in ("q", "k", "v"):
-            fork = self._patched(keys)
-            try:
-                value = fork.ops[self.rows[keys[0]].site].out.detach().clone()
-            finally:
-                fork.cleanup()
-        else:
-            value = receiver.value
-            for edge in edges:
-                corrupt = self.corrupt.nodes[edge.sender.name].value
-                value = value - edge.sender.value + corrupt.to(value.dtype)
-        return ((edges[0].__selection__(), value),)
+        from torchlens.mechinterp._edge_patch import _stage_key, receiver_selection
+
+        receivers = {edge.receiver.name: edge.receiver for edge in self._edges(keys)}
+        ordered = sorted(receivers.values(), key=_stage_key)
+        fork = self._patched(keys)
+        try:
+            return tuple(
+                (receiver_selection(self.trace, receiver), _written(fork, receiver))
+                for receiver in ordered
+            )
+        finally:
+            fork.cleanup()
+
+
+def _written(fork: Any, receiver: Any) -> Tensor:
+    """Return the value a ``patch_edges`` fork wrote for ``receiver``."""
+
+    from torchlens.mechinterp._edge_patch import _head_spec, _input_edge_record
+
+    if receiver.kind in ("q", "k", "v"):
+        return fork.ops[str(_head_spec(fork, receiver).home_label)].out.detach().clone()
+    record = _input_edge_record(fork, receiver)
+    store = getattr(fork.ops[str(record.child_label)], "edge_substitutions", None) or {}
+    (value,) = [
+        entry["value"] for entry in store.values() if entry["parent_label"] == record.parent_label
+    ]
+    return value.detach().clone()
 
 
 def _edge_trace(request: _AuditRequest, inputs: Any) -> Any:
