@@ -2763,3 +2763,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: a06e8a2f2adc6de96e7eceb19b9d818fd938f5e5 (dirty)
 recorded: 2026-10-16T06:56:20.088985+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: attribution graph core adds two consumer read sites (Trace.modules in graph/_build.py, GraphNode.kind in graph/_result.py)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f6bb637fd416a7dfd693c6f40eb576024742ccd2 (dirty)
+recorded: 2026-10-16T14:20:46.159888+00:00

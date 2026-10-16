@@ -312,13 +312,14 @@ documented unstable and may be renamed or removed without a compatibility alias.
 | Randomization test | `randomization_test`, `RandomizationResult`, `RandomizationStep`, `randomization`, `cascading`, `independent`, `layers`, `seed`, `keep_maps`, `original_attribution`, `randomized`, `similarity`, `similarities`, `spearman`, `spearman_abs`, `ssim`, `values` | unstable -- no deprecation shim owed |
 | ROAD curve | `road_curve`, `ranking`, `most_relevant_first`, `least_relevant_first`, `noise_std`, `seed`, `road` | unstable -- no deprecation shim owed |
 | Causal audit | `causal_audit`, `CausalAuditResult`, `CausalAuditUnit`, `CausalAuditSet`, `claim`, `k`, `ablation`, `zero`, `mean`, `controls`, `top`, `bottom`, `random`, `random_draws`, `per_unit`, `layer`, `site`, `original_score`, `units`, `sets`, `rank_agreement`, `set_of`, `unit`, `claimed_effect`, `measured_effect`, `kind`, `draw`, `intervention`, `component`, `claim_kind`, `constant_row`, `rows_not_audited`, `corrupted`, `metric`, `edges`, `edge_table`, `edge_patch`, `example_reduction`, `logits_site`, `sets_not_measured`, `reason`, `trace` | unstable -- no deprecation shim owed |
+| Attribution graphs | `build_graph`, `AttributionGraph`, `GraphNode`, `transcoders`, `embedding`, `target`, `max_n_logits`, `desired_logit_prob`, `demeaned_logits`, `logits_at`, `frozen`, `nodes`, `adjacency_matrix`, `node_values`, `constants`, `encoder_bias`, `decoder_bias`, `other`, `active_features`, `activation_values`, `transcoder_sites`, `error_sites`, `error_vectors`, `input_tokens`, `logit_tokens`, `logit_probabilities`, `capture_outcome`, `disclosures`, `node_counts`, `node_indices`, `kind`, `site`, `position`, `feature`, `token`, `logit`, `error` | unstable -- no deprecation shim owed |
 
 <!-- ATTRIBUTION-KIT-UNSTABLE-INDEX:END -->
 
 Integrated Gradients always reports its signed completeness residual against the exact endpoint
 target delta. Occlusion always names its replacement baseline. CAM overlays visibly state the
 native measured map resolution, while their larger display grid is labeled as interpolation.
-A `SiteTarget` passed as `target=` attributes a hidden layer's output (or one unit of it) instead
+`build_graph` builds an attribution graph from one prompt's capture and a set of transcoders: typed feature, error, token and logit nodes whose edges are direct linear effects along a frozen graph, with every feature and logit node accounted for by its incoming edges plus named constant terms (`AttributionGraph`). A `SiteTarget` passed as `target=` attributes a hidden layer's output (or one unit of it) instead
 of the model output; layer methods given only integer inputs start their input path at the
 embedding output. `deletion_curve` and `insertion_curve` score an attribution by removing or
 revealing its most-attributed input features in steps (each step a recorded intervention), and

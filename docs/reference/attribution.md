@@ -1046,6 +1046,87 @@ the primary edge-seeded targets (no payload retention needed), and
 naming sprint; the doc of record is
 [`onebackward_reads.md`](onebackward_reads.md).
 
+## Attribution graphs (`build_graph`, `AttributionGraph`)
+
+`tl.attribution.build_graph(trace, transcoders, *, embedding, target=None, max_n_logits=10,
+desired_logit_prob=0.95, demeaned_logits=True, logits_at=None, frozen)` builds the attribution
+graph of one prompt's capture: the direct linear effects between transcoder features, error
+nodes, token embeddings and target logits, with transcoder features in place of MLP outputs and
+attention patterns and normalisation scales held at their captured values. Documented-unstable.
+
+- `transcoders` maps each MLP module name to a transcoder: an object with `encode(x)`, `W_enc`
+  `(d_in, n_features)`, `b_enc`, `W_dec` `(n_features, d_out)` and `b_dec`, the object
+  `tl.splice_module(transcoder, input="in")` splices in for that MLP. A cross-layer transcoder
+  gives `W_dec` and `b_dec` as mappings from MLP module names to tensors, one per MLP output its
+  features write.
+- `frozen` names the modules (or op labels) held at their captured values: every attention
+  pattern and normalisation scale, so each edge is a direct linear effect. It is required;
+  `frozen=()` is the spelling for a model with neither. Every MLP output a transcoder writes is
+  always held, and its feature and error nodes explain it.
+- `target=None` picks the most probable logits at the last position until their probabilities
+  reach `desired_logit_prob`, at most `max_n_logits`; a list of token ids names them. With
+  `demeaned_logits=True` a logit node is its logit minus the mean logit. `logits_at` takes a
+  `SiteTarget` naming the module whose output holds the logits (for example the logits before a
+  final softcap).
+
+The result, `tl.attribution.AttributionGraph`, has one `GraphNode` (`kind`, `site`, `position`,
+`feature`, `token`) per row and column of `adjacency_matrix`, in the order features, errors,
+tokens, logits; rows are targets and columns sources. `node_values` holds each feature's
+pre-activation and each logit node's value. Every feature and logit node is accounted for: its
+row of `adjacency_matrix` plus `constants["encoder_bias"]`, `constants["decoder_bias"]` and
+`constants["other"]` equals its value. `other` is what is not a node (the model's own biases,
+position embeddings); a large `other` on a node means a path to it bypasses the graph, for
+example an attention pattern left unfrozen. `error_vectors` holds each MLP output minus its
+reconstruction, `active_features` and `activation_values` the feature nodes, and
+`capture_outcome` and `disclosures` what the capture's completeness verdict says.
+
+```python
+import torch
+from torch import nn
+
+import torchlens as tl
+
+
+class Tiny(nn.Module):
+    """Embedding, one residual MLP, unembedding."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.embed = nn.Embedding(6, 4)
+        self.mlp = nn.Sequential(nn.Linear(4, 8), nn.ReLU(), nn.Linear(8, 4))
+        self.unembed = nn.Linear(4, 6)
+
+    def forward(self, tokens: torch.Tensor) -> torch.Tensor:
+        x = self.embed(tokens)
+        return self.unembed(x + self.mlp(x))
+
+
+class Transcoder:
+    """A transcoder equal to the MLP, in the SAE Lens orientation."""
+
+    def __init__(self, mlp: nn.Sequential) -> None:
+        self.W_enc = mlp[0].weight.detach().T
+        self.b_enc = mlp[0].bias.detach()
+        self.W_dec = mlp[2].weight.detach().T
+        self.b_dec = mlp[2].bias.detach()
+
+    def encode(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.relu(x @ self.W_enc + self.b_enc)
+
+
+torch.manual_seed(0)
+model = Tiny().eval()
+trace = tl.trace(model, torch.tensor([[1, 4, 2]]))
+graph = tl.attribution.build_graph(
+    trace, {"mlp": Transcoder(model.mlp)}, embedding="embed", frozen=(), target=[3]
+)
+print(graph.node_counts)
+logit = graph.node_indices("logit")[0]
+strongest = int(graph.adjacency_matrix[logit].abs().argmax())
+print(graph.nodes[strongest])
+assert graph.error_vectors.abs().max() < 1e-5  # the transcoder is the MLP itself
+```
+
 ## The F06 attribution kit (DOCUMENTED-UNSTABLE)
 
 The nine-method completion of the kit (attrib panel memo, 2026-08-26). Every spelling below is

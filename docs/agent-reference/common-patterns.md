@@ -265,3 +265,15 @@ else:
 # experiment the user owns) and tl.tviz.render_logit_lens_heatmap(result, path)
 # (the layers-by-positions logit-lens figure).
 ```
+
+### Attribution graphs
+
+`tl.attribution.build_graph(trace, transcoders, embedding=..., frozen=...)` builds an
+attribution graph from one prompt's capture: `transcoders=` maps each MLP module name to a
+transcoder (`encode`, `W_enc`, `b_enc`, `W_dec`, `b_dec`; mappings for `W_dec` and `b_dec`
+give a cross-layer transcoder), and `frozen=` names the attention-pattern and norm-scale
+sites held at their captured values. The result is a `tl.attribution.AttributionGraph`:
+one `tl.attribution.GraphNode` per feature, error, token and logit node, a dense
+`adjacency_matrix` with targets as rows, and `node_values` that equal each feature or logit
+row's incoming edges plus its named `constants`. Spellings are DOCUMENTED-UNSTABLE; the
+runnable example is in `docs/reference/attribution.md`, section Attribution graphs.

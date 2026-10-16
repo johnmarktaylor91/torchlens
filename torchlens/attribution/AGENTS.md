@@ -29,6 +29,7 @@ captured Trace.
 | `_audit_claims.py` | The causal audit's plan: setting checks, the one intervention-ready trace, grounding the claim at one module call, the edit (zero, per-unit batch mean, or a baseline) and the target score of a trace or fork, with their coded refusals |
 | `_eval_maps.py` | Shared by the evaluation battery: aligns results (including `grad_cam` maps) with the input, Spearman rank correlation and SSIM |
 | `_occlusion.py` | Selection-addressed scored occlusion through `Trace.fork().do(...)`, with explicit zeros/mean/blur baselines |
+| `graph/` | Attribution graphs: `build_graph` (one prompt's capture plus transcoders; target seeds at feature inputs and logits, one-backward reads in chunks of 256 targets, frozen = every transcoder-written MLP output plus the caller's `frozen=` sites), `AttributionGraph`/`GraphNode` (feature, error, token, logit nodes; adjacency rows are targets; `constants` encoder_bias, decoder_bias and the remainder `other`), transcoder specs in `_transcoders.py` (per-layer, or cross-layer with mapping-valued `W_dec`/`b_dec`); closed-form fixtures in `tests/_ag1_fixtures.py` |
 | `_viz.py` | `overlay`: bridges layer-scoped results (or explicit mappings) onto `Trace.draw(color_by=...)`; uncovered nodes return `None` (unencoded) |
 
 ## Public surface (`__all__`, 12 names)
@@ -55,5 +56,5 @@ captured Trace.
 
 ## Tests
 
-`tests/test_attribution.py`, `tests/test_attribution_layer.py`,
+`tests/test_attribution.py`, `tests/test_attribution_layer.py`, `tests/test_ag1_attribution_graph.py`,
 `tests/test_backward_attribution_unchanged.py`.
