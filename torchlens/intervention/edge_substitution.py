@@ -392,8 +392,13 @@ def _reexecute_child_with_substitution(
     )
 
 
-def _recompute_path(trace: Trace, record: Any, target_label: str) -> tuple[Any, list[Any], Any]:
-    """Return the edge's child op, the ops from it to the target, and the label-key map."""
+def _recompute_path(
+    trace: Trace, record: Any, target_label: str
+) -> tuple[Any, list[Any], Any] | str:
+    """Return the edge's child op, the ops from it to the target, and the label-key map.
+
+    Returns the reason instead when the path cannot be re-executed locally.
+    """
 
     import importlib
 
@@ -404,12 +409,10 @@ def _recompute_path(trace: Trace, record: Any, target_label: str) -> tuple[Any, 
     cone = replay_module.cone_of_effect(trace, [child_op])
     keys = [site_key(op) for op in cone]
     if target_key not in keys:
-        raise _apply_invalid(
-            "not_maskable",
+        return (
             f"op {target_label!r} is not downstream of edge "
             f"{record.parent_label!r} -> {record.child_label!r}, so substituting the edge "
-            "cannot change it.",
-            site=target_label,
+            "cannot change it."
         )
     label_keys = replay_module._label_key_map(trace)
     between = cone[keys.index(site_key(child_op)) + 1 : keys.index(target_key) + 1]
@@ -419,14 +422,12 @@ def _recompute_path(trace: Trace, record: Any, target_label: str) -> tuple[Any, 
             for parent in op.parents:
                 needed.update(label_keys.get(parent, ()))
     path = [op for op in between if site_key(op) in needed]
-    for op in path:
-        if getattr(op, "is_buffer", False):
-            raise _apply_invalid(
-                "not_maskable",
-                f"the path from edge child {record.child_label!r} to {target_label!r} "
-                f"passes buffer record {op.label!r}, which local re-execution does not thread.",
-                site=op.label,
-            )
+    buffers = [op.label for op in path if getattr(op, "is_buffer", False)]
+    if buffers:
+        return (
+            f"the path from edge child {record.child_label!r} to {target_label!r} "
+            f"passes buffer record {buffers[0]!r}, which local re-execution does not thread."
+        )
     return child_op, path, label_keys
 
 
@@ -437,7 +438,7 @@ def _recompute_with_substitution(
     target_label: str,
     *,
     strict: bool = False,
-) -> list[torch.Tensor]:
+) -> list[torch.Tensor] | str:
     """Return what op ``target_label`` computes when edge ``record`` consumes each value.
 
     One result per value in ``substituted``. Read-only: the trace is not
@@ -448,19 +449,24 @@ def _recompute_with_substitution(
     what an edge substitution followed by a push leaves at the target, bit
     for bit, without forking the trace or replaying the rest of the cone.
 
+    Returns the reason as a string instead when the target is not
+    downstream of the edge's child or the path passes a buffer record; the
+    caller refuses with its own code.
+
     Raises
     ------
     SelectionError
-        ``selection_apply_invalid`` when the target is not downstream of the
-        edge's child, for a nested argument path, or for a buffer record on
-        the path.
+        ``selection_apply_invalid`` for a nested argument path.
     """
 
     import importlib
 
     replay_module = importlib.import_module("torchlens.intervention.replay")
     site_key = replay_module._replay_site_key
-    child_op, path, label_keys = _recompute_path(trace, record, target_label)
+    found = _recompute_path(trace, record, target_label)
+    if isinstance(found, str):
+        return found
+    child_op, path, label_keys = found
     address = edge_address_of(record)
     results = []
     for value in substituted:

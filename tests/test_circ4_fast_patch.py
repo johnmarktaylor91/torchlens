@@ -22,11 +22,10 @@ from test_circ3_multi_receiver_patch import _outside_random_circuit, _tiny_gpt2
 
 import torchlens as tl
 import torchlens.mechinterp as mi
-from torchlens.intervention import replay as replay_module
+from torchlens.intervention import edge_substitution, replay as replay_module
 from torchlens.intervention.edge_substitution import _recompute_with_substitution
 from torchlens.mechinterp import _edges
 from torchlens.mechinterp._edge_patch import _head_spec, _input_edge_record
-from torchlens.selection import SelectionError
 
 pytest.importorskip("transformers")
 pytestmark = pytest.mark.heavy
@@ -98,12 +97,28 @@ def test_the_local_projection_is_bitwise_a_substitution_and_push(tiny, receiver)
     assert torch.equal(clean.ops[home].out, before)
 
 
-def test_a_target_upstream_of_the_edge_refuses(tiny) -> None:
+def test_a_target_upstream_of_the_edge_returns_the_reason_and_computes_nothing(tiny) -> None:
     clean, graph, _corrupt = tiny
     late = graph.receivers["a1.h0<q>"]
     early_home = str(_head_spec(clean, graph.receivers["a0.h0<q>"]).home_label)
-    with pytest.raises(SelectionError) as excinfo:
-        _recompute_with_substitution(
-            clean, _input_edge_record(clean, late), [late.value], early_home
-        )
-    assert excinfo.value.fields["code"] == "selection_apply_invalid"
+    reason = _recompute_with_substitution(
+        clean, _input_edge_record(clean, late), [late.value], early_home
+    )
+    assert isinstance(reason, str)
+    assert "is not downstream of edge" in reason
+
+
+def test_patch_edges_refuses_with_the_reason_when_a_projection_is_not_recomputed(
+    tiny, monkeypatch
+) -> None:
+    clean, graph, corrupt = tiny
+    edges = [edge for edge in graph.edges.values() if edge.receiver.name == "a1.h0<q>"]
+    monkeypatch.setattr(
+        edge_substitution,
+        "_recompute_with_substitution",
+        lambda *args, **kwargs: "the path passes buffer record 'buffer_1'",
+    )
+    with pytest.raises(mi.MechInterpError) as excinfo:
+        mi.patch_edges(clean, edges, corrupt=corrupt)
+    assert excinfo.value.fields["code"] == "mi_edge_selection_unresolvable"
+    assert "buffer record 'buffer_1'" in str(excinfo.value)

@@ -147,12 +147,14 @@ def _projection_values(trace: Any, attention: list[tuple[Any, torch.Tensor]]) ->
         recomputed = _recompute_with_substitution(
             trace, _input_edge_record(trace, receiver), [attention[i][1] for i in indices], home
         )
-        for index, projection in zip(indices, recomputed, strict=True):
+        reason = recomputed if isinstance(recomputed, str) else "it is not a tensor"
+        for offset, index in enumerate(indices):
+            projection = None if isinstance(recomputed, str) else recomputed[offset]
             if not isinstance(projection, torch.Tensor):
                 refuse(
                     code="mi_edge_selection_unresolvable",
                     message=f"The projection output behind {attention[index][0].name!r} was "
-                    "not recomputed.",
+                    f"not recomputed: {reason}",
                     remedy="capture with tl.options.CaptureOptions(layers_to_save='all', "
                     "intervention_ready=True)",
                     receiver=attention[index][0].name,
@@ -169,7 +171,8 @@ def _write_stage(owner: Any, trace: Any, writes: list[tuple[Any, torch.Tensor]])
     written together as one selection batch (one replay).
     """
 
-    attention, residual = [], []
+    attention: list[tuple[Any, torch.Tensor]] = []
+    residual: list[tuple[Any, torch.Tensor]] = []
     for receiver, value in writes:
         (attention if receiver.kind in ("q", "k", "v") else residual).append((receiver, value))
     for receiver, value in residual:
