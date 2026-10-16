@@ -96,9 +96,25 @@ class _AuditPlan:
         return None
 
     def unit_scores(self) -> dict[tuple[int, ...], float]:
-        """Score every unit ablated alone, one fork each."""
+        """Score every unit ablated alone, in one ``torchlens.experiment.site_sweep``.
 
-        return {unit: self.ablated_score((unit,)) for unit in self.units}
+        One candidate per unit, ``tl.units(label, mask)``, all with the one
+        edit of this site (zero, mean or baseline); a candidate the sweep did
+        not complete is measured by its own fork.
+        """
+
+        from torchlens.attribution._audit_sites import _swept_scores
+
+        swept = _swept_scores(
+            self.trace,
+            {unit: self.intervention((unit,))[0][0] for unit in self.units},
+            self.edit(),
+            self.score,
+        )
+        return {
+            unit: swept[unit] if unit in swept else self.ablated_score((unit,))
+            for unit in self.units
+        }
 
     def intervention(self, units: tuple[tuple[int, ...], ...]) -> tuple[tuple[Any, Any], ...]:
         """Return the ``(tl.units(label, mask), edit)`` pair ablating ``units``."""
