@@ -211,6 +211,28 @@ def _module_file(root: Path, module: str | None) -> Path | None:
     return None
 
 
+def _owner_module(row: dict[str, Any]) -> str | None:
+    """Return the dotted module a root or export row is public in (``tl.x`` is ``torchlens.x``)."""
+
+    owner = str(row.get("owner") or str(row.get("path", "")).rpartition(".")[0])
+    if owner == "tl":
+        return "torchlens"
+    return "torchlens." + owner[3:] if owner.startswith("tl.") else None
+
+
+def _import_sources(row: dict[str, Any]) -> frozenset[str]:
+    """Return the modules a from-import of a root or export may read the object from.
+
+    These are its defining module, the packages above it and the module it is public in;
+    an import of the same leaf from any other module names a different object.
+    """
+
+    parts = str(row.get("module") or "").split(".")
+    sources = {".".join(parts[:end]) for end in range(1, len(parts) + 1)}
+    owner = _owner_module(row)
+    return frozenset({*sources, *([owner] if owner else [])} - {""})
+
+
 @dataclasses.dataclass(frozen=True)
 class _RowContext:
     """What planning needs about one row, computed once for every file."""
@@ -218,6 +240,8 @@ class _RowContext:
     row: dict[str, Any]
     patterns: list[spelling.Spelling]
     home: Path | None
+    facade: Path | None
+    sources: frozenset[str]
     tables: dict[Path, frozenset[str]]
     targets: frozenset[tuple[str | None, str]]
 
@@ -235,6 +259,8 @@ class _RowContext:
             row=row,
             patterns=spelling.spellings(row),
             home=_module_file(root, row.get("module")),
+            facade=_module_file(root, _owner_module(row)),
+            sources=_import_sources(row),
             tables={path: frozenset(names) for path, names in tables.items()},
             targets=frozenset(astsites.use_key(path) for path in row.get("uses", ())),
         )
@@ -267,8 +293,8 @@ def _ast_sites(
     loose = astsites.Positions(source.lines, row["name"])
     home = context.home == source.path
     if row["kind"] in ("root", "export"):
-        facade = source.relative == "torchlens/__init__.py" and row["kind"] == "root"
-        astsites.definite_object(tree, pos, home or facade, source.relative)
+        facade = context.facade == source.path
+        astsites.definite_object(tree, pos, home or facade, source.relative, context.sources)
     elif row["kind"] == "member":
         if home:
             astsites.definite_member(row, tree, pos)

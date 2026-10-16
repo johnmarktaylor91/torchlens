@@ -96,6 +96,68 @@ def test_relative_import_outside_the_package_stays_ambiguous(tmp_path: Path) -> 
     assert not [e for e in edits if e.path == "tests/helpers.py"]
 
 
+def test_import_of_a_same_named_object_elsewhere_is_not_definite(tmp_path: Path) -> None:
+    """F1: importing the leaf from a module off the export's path names another object."""
+
+    root = _repo(
+        tmp_path,
+        {
+            "torchlens/__init__.py": "",
+            "torchlens/export/__init__.py": (
+                "def timeline(log):\n"
+                "    from torchlens.observe import timeline as build\n"
+                "    return build(log)\n"
+            ),
+            "torchlens/observe/__init__.py": (
+                "from ._impl import timeline\n\n__all__ = ['timeline']\n"
+            ),
+            "torchlens/observe/_impl.py": "def timeline(trace):\n    return trace\n",
+        },
+    )
+    row = {
+        "id": "export:tl.export.timeline",
+        "kind": "export",
+        "name": "timeline",
+        "proposed": "memory_timeline",
+        "path": "tl.export.timeline",
+        "owner": "tl.export",
+        "module": "torchlens.export",
+    }
+    edits = codemod.plan([row], root, roots=("torchlens",))
+    definite = {(p, line, col) for p, line, col, c in _sites(edits) if c == codemod.DEFINITE}
+    assert definite == {("torchlens/export/__init__.py", 1, 5)}
+
+
+def test_owner_module_lazy_table_and_all_follow_the_export(tmp_path: Path) -> None:
+    """F1: the public module that exposes an export lazily names it in strings."""
+
+    root = _repo(
+        tmp_path,
+        {
+            "torchlens/__init__.py": "",
+            "torchlens/viz/__init__.py": (
+                "_LAZY = {'old_diff': '_diff'}\n\n__all__ = ['old_diff']\n"
+            ),
+            "torchlens/viz/_diff.py": "def old_diff(a, b):\n    return a\n",
+        },
+    )
+    row = {
+        "id": "export:tl.viz.old_diff",
+        "kind": "export",
+        "name": "old_diff",
+        "proposed": "new_diff",
+        "path": "tl.viz.old_diff",
+        "owner": "tl.viz",
+        "module": "torchlens.viz._diff",
+    }
+    edits = codemod.plan([row], root, roots=("torchlens",))
+    assert {
+        ("torchlens/viz/__init__.py", 1, 11, codemod.DEFINITE),
+        ("torchlens/viz/__init__.py", 3, 13, codemod.DEFINITE),
+        ("torchlens/viz/_diff.py", 1, 5, codemod.DEFINITE),
+    } <= _sites(edits)
+
+
 def test_keyword_rows_skip_assignment_statements(tmp_path: Path) -> None:
     """F2: ``x = x + 1`` is not a keyword; call keywords and signature defaults are."""
 

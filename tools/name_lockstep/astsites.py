@@ -168,7 +168,9 @@ def _all_values(tree: ast.Module) -> Iterator[ast.expr]:
             yield node.value
 
 
-def definite_object(tree: ast.Module, pos: Positions, home: bool, relative: str) -> None:
+def definite_object(
+    tree: ast.Module, pos: Positions, home: bool, relative: str, sources: frozenset[str]
+) -> None:
     """Record definite sites of a root or export name in one module.
 
     Parameters
@@ -178,14 +180,18 @@ def definite_object(tree: ast.Module, pos: Positions, home: bool, relative: str)
     pos
         Position collector.
     home
-        Whether this module defines the name (all module-level uses are then definite).
+        Whether this module defines the name or is the module it is public in (its
+        definition and strings are then definite, and so are all module-level uses).
     relative
         Repository-relative path of the module, which resolves relative imports.
+    sources
+        Modules a from-import may read the object from; importing the same leaf from
+        another module names a different object and stays ambiguous.
     """
 
     imported = False
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and _in_torchlens(_import_source(node, relative)):
+        if isinstance(node, ast.ImportFrom) and _import_source(node, relative) in sources:
             for alias in node.names:
                 if alias.name == pos.old:
                     imported = imported or alias.asname in (None, alias.name)
