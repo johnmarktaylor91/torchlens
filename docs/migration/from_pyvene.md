@@ -314,7 +314,20 @@ restricted to pyreft's `unit_locations`, with `tl.intervention.affine_source(W, 
 trains `R` in float32, orthonormal to about `1e-7`, so the subspace orthonormalises it once in
 float64 and the saved edit records both the digest of `R` as read and that of the rows applied. The
 edit saves at `level="portable"`. A directory that is not one LoReFT intervention refuses
-`pyreft_artifact_invalid` or `pyreft_artifact_unsupported`.
+`pyreft_artifact_invalid` or `pyreft_artifact_unsupported`. The edit acts on the site's trailing
+axis, as pyreft's does on a `[batch, sequence, d]` block output. Pass the site from the trace,
+`artifact.subspace(trace[label], positions=mask)`, to have its shape checked at once: a trailing
+axis that is not `d` wide (a site of another width, or one whose feature axis is not last) refuses
+`pyreft_site_invalid`, and a mask that does not cover the other axes refuses
+`pyreft_positions_invalid`. A label is checked when `do()` resolves it.
+
+Checked against pyreft 0.1.0 with a LoReFT artifact for TinyLlama from the Hugging Face Hub, on
+one CPU thread: the `R`, `W` and `b` the reader returns hash equal to the ones pyreft loads, the
+logits before the edited token are unchanged exactly, and the unedited trace equals the plain
+transformers forward exactly. At and after the edited token, TorchLens and pyreft run on the same
+machine differ by at most `1.24e-5` across four prompts, and TorchLens is within `1.24e-5` of
+logits pyreft recorded on that machine (the bar is `2e-5`). pyreft's own logits move by up to
+`5.4e-5` between machines, so compare against pyreft run where you run TorchLens.
 
 The example writes a stand-in artifact in pyreft's file layout; with a real one, `directory` is the
 folder pyreft saved (for example a Hugging Face snapshot) and `site` is the label of the decoder

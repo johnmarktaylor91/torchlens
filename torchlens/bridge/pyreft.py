@@ -125,14 +125,20 @@ class LoreftArtifact:
             f"weight file sha256 {weight_sha[:16]}"
         )
 
-    def subspace(self, site: str, *, positions: torch.Tensor | None = None) -> Any:
+    def subspace(self, site: Any, *, positions: torch.Tensor | None = None) -> Any:
         """Return the subspace selection the edit acts through at ``site``.
 
         Parameters
         ----------
         site:
-            The TorchLens site label of the value pyreft edits (for
-            ``block_output`` of layer ``n``, the output of decoder layer ``n``).
+            The TorchLens site of the value pyreft edits (for ``block_output``
+            of layer ``n``, the output of decoder layer ``n``): its label, or
+            the site itself from a trace (``trace[label]``). Given the site,
+            its shape is checked here: the trailing axis must be the
+            artifact's feature axis, ``d`` wide, and ``positions`` must cover
+            every other axis; otherwise it refuses ``pyreft_site_invalid`` or
+            ``pyreft_positions_invalid``. Given a label, the shape is checked
+            at ``do()`` (``selection_unresolvable``).
         positions:
             Optional bool mask over the site's axes except the trailing feature
             axis (``[batch, sequence]`` for a transformer block), True where
@@ -142,13 +148,16 @@ class LoreftArtifact:
         Returns
         -------
         Selection
-            ``tl.subspace(within, R.T, origin=self.origin, method="loreft")``.
+            ``tl.subspace(within, R.T, origin=self.origin, method="loreft")``,
+            over the site's label.
         """
 
         from ..selection import units
         from ..selection_subspace import subspace
 
-        within: Any = site
+        width = int(self.rotation.shape[0])
+        label = site if isinstance(site, str) else _checked_site(site, width, positions)
+        within: Any = label
         if positions is not None:
             if not isinstance(positions, torch.Tensor) or positions.dtype != torch.bool:
                 raise InvalidArgumentError(
@@ -162,9 +171,8 @@ class LoreftArtifact:
                     ),
                     argument="positions",
                 )
-            width = int(self.rotation.shape[0])
             mask = positions.unsqueeze(-1).expand(*positions.shape, width).contiguous()
-            within = units(site, mask)
+            within = units(label, mask)
         return subspace(within, self.rotation.T, origin=self.origin, method="loreft")
 
     @property
@@ -174,6 +182,67 @@ class LoreftArtifact:
         from ..intervention._affine_source import affine_source
 
         return affine_source(self.weight.to(torch.float64), bias=self.bias.to(torch.float64))
+
+
+def _checked_site(site: Any, width: int, positions: torch.Tensor | None) -> str:
+    """Return a trace site's label once its shape fits the artifact.
+
+    The edit acts on the trailing axis, so that axis must be ``width`` wide,
+    and ``positions`` must cover every other axis. A site with no recorded
+    shape returns its label unchecked, and ``do()`` checks it.
+    """
+
+    label = getattr(site, "label", None)
+    remedy = (
+        f"name the site whose trailing axis is the {width}-wide hidden state pyreft "
+        "edits (for block_output of layer n, the output of decoder layer n), with "
+        "positions over its other axes: positions = torch.zeros(trace[label].shape[:-1], "
+        "dtype=torch.bool); positions[:, -1] = True; "
+        "artifact.subspace(trace[label], positions=positions)"
+    )
+    if not isinstance(label, str):
+        raise InvalidArgumentError(
+            f"LoreftArtifact.subspace site= must be a site label or a site from a trace "
+            f"(trace[label]), got {type(site).__name__}",
+            code="pyreft_site_invalid",
+            remedy=remedy,
+            argument="site",
+        )
+    shape = getattr(site, "shape", None)
+    if not isinstance(shape, tuple) or not all(isinstance(extent, int) for extent in shape):
+        return label
+    shape = tuple(shape)
+    if not shape or shape[-1] != width:
+        elsewhere = [axis for axis, extent in enumerate(shape[:-1]) if extent == width]
+        why = (
+            f"; axis {elsewhere[0]} is {width} wide, so the site's feature axis is not "
+            "last (pyreft edits [batch, sequence, d] block outputs)"
+            if elsewhere
+            else ""
+        )
+        raise InvalidArgumentError(
+            f"LoreftArtifact.subspace: site {label!r} has shape {shape!r}, whose trailing "
+            f"axis is {shape[-1] if shape else 'absent'} wide, but the artifact edits a "
+            f"{width}-wide feature axis{why}",
+            code="pyreft_site_invalid",
+            remedy=remedy,
+            argument="site",
+            site=label,
+            site_shape=shape,
+            artifact_width=width,
+        )
+    if isinstance(positions, torch.Tensor) and tuple(positions.shape) != shape[:-1]:
+        raise InvalidArgumentError(
+            f"LoreftArtifact.subspace: positions= has shape {tuple(positions.shape)!r}, but "
+            f"site {label!r} has shape {shape!r}: positions covers every axis but the "
+            f"trailing feature axis, so it must have shape {shape[:-1]!r}",
+            code="pyreft_positions_invalid",
+            remedy=remedy,
+            argument="positions",
+            site=label,
+            site_shape=shape,
+        )
+    return label
 
 
 def _config(directory: Path) -> tuple[dict[str, Any], str]:
