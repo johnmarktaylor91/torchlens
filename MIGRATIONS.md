@@ -554,3 +554,10 @@ bound instead of never firing with a `bind_zero_fire` warning. Select the op wit
 
 In the `backward_observed` state `BackwardStatus.executed_flops` is now an integer (it was always
 `None`); code that used `None` to detect an observed backward should read `status.state`.
+
+## Trace-then-validate on a lazily caching model (2026-10-15, behavior change)
+
+A default trace no longer leaves lazily built caches warm, so `tl.trace(model, x)` followed
+by `tl.validate(model, x)` reports `retrace_mismatch` (the re-trace check's documented
+one-time side effect) where it used to pass. Run one plain `model(x)` first, or trace with
+`CaptureOptions(carry_state=True)`.

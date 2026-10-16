@@ -114,6 +114,32 @@ def _perturbed_running_var_stays_in_domain(
     return w_max / math.sqrt(margin) < torch.finfo(x.dtype).max
 
 
+def _eval_call_perturbs_only_running_var(
+    layer: Any, layers_to_perturb: list[str], args: tuple[Any, ...]
+) -> bool:
+    """Return whether this is an eval-mode batch_norm call perturbing only running_var."""
+
+    return (
+        getattr(layer, "func_name", None) == "batch_norm"
+        and len(args) >= 8
+        and args[5] is False
+        and _perturbed_parent_is_only_running_var(layer, layers_to_perturb)
+    )
+
+
+def _input_sits_at_zero_running_mean(layer: Any, x: Any, mean: Any, weight: Any) -> bool:
+    """Return whether a finite float capture's input equals a zero running mean where weighted."""
+
+    if not isinstance(x, torch.Tensor) or not isinstance(mean, torch.Tensor):
+        return False
+    return (
+        x.is_floating_point()
+        and _saved_output_all_finite(layer)
+        and _input_at_running_mean(x.detach(), mean.detach(), weight)
+        and _running_mean_zero_where_weighted(mean.detach(), weight)
+    )
+
+
 def batch_norm_input_at_running_mean(
     layer: Any,
     layers_to_perturb: list[str],
@@ -136,19 +162,9 @@ def batch_norm_input_at_running_mean(
         True only when every precondition in the module docstring holds.
     """
 
-    if getattr(layer, "func_name", None) != "batch_norm" or len(args) < 8:
-        return False
-    if args[5] is not False:
-        return False
-    if not _perturbed_parent_is_only_running_var(layer, layers_to_perturb):
+    if not _eval_call_perturbs_only_running_var(layer, layers_to_perturb, args):
         return False
     x, weight, mean, var, eps = args[0], args[1], args[3], args[4], args[7]
-    if not isinstance(x, torch.Tensor) or not isinstance(mean, torch.Tensor):
-        return False
-    if not x.is_floating_point() or not _saved_output_all_finite(layer):
-        return False
-    if not _input_at_running_mean(x.detach(), mean.detach(), weight):
-        return False
-    if not _running_mean_zero_where_weighted(mean.detach(), weight):
+    if not _input_sits_at_zero_running_mean(layer, x, mean, weight):
         return False
     return _perturbed_running_var_stays_in_domain(layer, var, eps, weight, x)
