@@ -21,9 +21,11 @@ edge rather than ablating a site; see ``_audit_edges``). Their plan
 (``_audit_sites``) keeps every unit with its own site.
 
 Every ablation runs through the intervention engine on an intervention-ready
-trace (``trace.fork().do(tl.units(label, mask), edit)``, the replay engine of
-``torchlens.experiment.site_sweep``), one fork per row or set, and every row
-and set carries its edit as ``(tl.units(...), edit)`` pairs, so any point
+trace: single-unit rows as the members of one
+``torchlens.experiment.site_sweep`` (one candidate per unit, replay engine)
+where one edit serves every unit, otherwise ``trace.fork().do(tl.units(label,
+mask), edit)``, one fork per row; every set on its own fork. Every row and
+set carries its edit as ``(tl.units(...), edit)`` pairs, so any point
 replays exactly.
 """
 
@@ -188,8 +190,9 @@ class CausalAuditResult:
         ``per_unit=False``).
     sets
         The top-k set, then the controls in ``controls`` order (one set per
-        random draw); for an EDGE table only the sets whose edges all enter
-        one receiver (the others are in ``extra["sets_not_measured"]``).
+        random draw); for an EDGE table each set's edges are patched together
+        in one ``tl.mechinterp.patch_edges`` call, into one receiver or
+        several.
     rank_agreement
         Spearman correlation of claimed and measured per-unit effects
         (``None`` with ``per_unit=False`` or when either is constant).
@@ -206,9 +209,9 @@ class CausalAuditResult:
         ``rows_not_audited`` (``(site, status)`` of rows without a score);
         for an EDGE table ``example_reduction`` (``"mean"`` or ``"sum"``),
         ``logits_site``, ``rows_not_audited`` (``(edge, status)``),
-        ``sets_not_measured`` (each set spanning several receivers: its
+        ``sets_not_measured`` (sets the audit could not patch, each with its
         ``kind``, ``draw``, ``units``, ``edges``, ``claimed_effect`` and the
-        ``reason``) and ``trace`` (the clean intervention-ready trace the edges
+        ``reason``; empty, since every set is patched in one call) and ``trace`` (the clean intervention-ready trace the edges
         were patched on; the recorded patches replay on its forks).
     """
 
@@ -442,7 +445,7 @@ def _refuse_edge_inputs(request: _AuditRequest) -> None:
 
 
 def _unit_rows(plan: _Plan, original: float) -> tuple[CausalAuditUnit, ...]:
-    """Ablate every unit alone, one fork each, and record the effects.
+    """Ablate every unit alone (one sweep member or fork each) and record the effects.
 
     Parameters
     ----------
@@ -500,8 +503,8 @@ def _ablated_sets(
     -------
     tuple[tuple[CausalAuditSet, ...], tuple[dict[str, Any], ...]]
         The measured sets, top first, then the controls in ``controls``
-        order; and the sets the plan cannot measure (an EDGE set spanning
-        several receivers), each with its reason, never a sum of unit effects.
+        order; and the sets the plan cannot measure, each with its reason,
+        never a sum of unit effects (no plan declines a set today).
     """
 
     order = sorted(

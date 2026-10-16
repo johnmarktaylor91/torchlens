@@ -660,10 +660,14 @@ the `k` units with the smallest claimed magnitude (`"bottom"`) and `random_draws
 sets of `k` (`"random"`). `rank_agreement` is the Spearman correlation of the claimed and
 measured per-unit effects; each set reports its claimed sum next to its measured joint effect.
 
-Every ablation runs through the intervention engine on an intervention-ready trace, one
-`trace.fork().do(...)` per row or set (the replay engine `torchlens.experiment.site_sweep`
-uses). Each row (`CausalAuditUnit`) and set (`CausalAuditSet`) carries its edit
-in `intervention` as `(tl.units(<site>, <mask>), edit)` pairs, the same form as a curve step, so
+Every ablation runs through the intervention engine on an intervention-ready trace. The rows
+run as one `torchlens.experiment.site_sweep` with one candidate per unit,
+`tl.units(<site>, <mask>)` (the replay engine, nothing retained), wherever one edit serves every
+unit: every ablation of a layer claim, and zero ablation of a table. Each row's value equals
+ablating that unit alone on its own `trace.fork().do(...)`, exactly. Sets, and a table's `"mean"`
+or baseline rows (each site's edit is that site's own value), run one `trace.fork().do(...)`
+each. Each row (`CausalAuditUnit`) and set (`CausalAuditSet`) carries its edit in
+`intervention` as `(tl.units(<site>, <mask>), edit)` pairs, the same form as a curve step, so
 any point replays exactly.
 
 ```python
@@ -816,7 +820,9 @@ target (attribution patching), and it is exact when the target is linear in the 
 ablates each `ACT` row's site, or each element of it, and measures the target the read was
 taken for; pass that target as `target=`, the same `tl.attribution.seed(...)`. A unit is
 `(row,)` at site grain or `(row, *element)` at element grain, the row being its index in
-`table.rows()` and the element indexed after the batch axis.
+`table.rows()` and the element indexed after the batch axis. Under zero ablation every unit,
+each element included, is one candidate of the audit's `site_sweep` (an element as
+`tl.units(<site>, <mask>)`), so the sweep's effect table holds one member per unit.
 
 - One target per audit: a table read for several targets refuses and names
   `claim=claim.for_target("t0")`. A `target=` that is not the table's recorded seed, or a table
@@ -886,20 +892,24 @@ receiver one head's slice of the projection output).
   listed in `extra["rows_not_audited"]` as `(edge, status)` and not patched. Bias-sender rows
   (`b{L}->...`) score exactly zero and are audited like any other row: their patch changes
   nothing, so they measure zero up to rounding, and they enter rank agreement.
-- Sets: `tl.mechinterp.patch_edges` patches edges into one receiver per call, so a top-k, bottom-k
-  or random-k set is measured only when all its edges enter one receiver. Every other set is listed
-  in `extra["sets_not_measured"]` with its `kind`, `draw`, `units`, `edges`, `claimed_effect` and
-  the `reason`, never measured as a sum of single-edge effects.
+- Sets: a top-k, bottom-k or random-k set is patched in one `tl.mechinterp.patch_edges` call,
+  never measured as a sum of single-edge effects. When its edges enter several receivers, each
+  later receiver reads the forward as patched so far (the MIB circuit-track convention that
+  `patch_edges` follows), so a patched receiver upstream changes what a downstream sender carries.
+  `extra["sets_not_measured"]` lists sets the audit could not patch; it is empty, since every set
+  is patched.
 - `edges=` audits only the named rows (edge names or `ComponentEdge` objects; default every `ok`
   row). A GPT-2 small table has 34,957 rows, and one patch there costs 0.5 to 8 s on 4 CPU cores,
   so past 1024 rows the audit warns once (`attribution_audit_units_many`) and names `edges=` with
   the largest rows, or `per_unit=False`. `ablation=` does not apply: an edge is patched, not
   ablated (`settings["ablation"]` is `"edge_patch"`).
-- Each row's and set's `intervention` is the `(selection, value)` pair `patch_edges` writes (the
-  EDGE selection of the receiver's input edge, or the ACT selection of one head's projection
-  slice). An EDGE selection addresses its edge by the call ids of one capture, so the pairs replay
-  on forks of the audit's own clean trace, `extra["trace"]`:
-  `fork = audit.extra["trace"].fork(); fork.do(*pair)` reproduces the measured effect exactly.
+- Each row's and set's `intervention` holds the `(selection, value)` pairs `patch_edges` wrote,
+  one per receiver in the order it wrote them, read from the fork that measured the row or set (the
+  EDGE selection of the receiver's input edge with the value substituted there, or the ACT
+  selection of one head's projection slice). An EDGE selection addresses its edge by the call ids of one
+  capture, so the pairs replay on forks of the audit's own clean trace, `extra["trace"]`:
+  `fork = audit.extra["trace"].fork()`, then `fork.do(*pair)` for each pair in order, reproduces
+  the measured effect exactly.
 
 ```python
 import torch
@@ -927,11 +937,13 @@ audit = tl.attribution.causal_audit(
     metric=metric,
     edges=[row.address[0] for row in largest],
     k=2,
-    random_draws=2,
+    random_draws=1,
 )
 for row in audit.units:
     print(row.component, round(row.claimed_effect, 4), round(row.measured_effect, 4))
-print(round(audit.rank_agreement, 3), len(audit.sets), len(audit.extra["sets_not_measured"]))
+for item in audit.sets:
+    print(item.kind, round(item.claimed_effect, 4), round(item.measured_effect, 4))
+print(round(audit.rank_agreement, 3), len(audit.extra["sets_not_measured"]))
 ```
 
 Output:
@@ -943,15 +955,19 @@ input->logits -0.0284 -0.0142
 a0.h0->logits -0.0006 0.0005
 a0.h1->logits 0.001 0.0014
 m0->logits -0.0029 0.0019
-0.314 2 2
+top -0.0313 -0.0196
+bottom 0.0003 0.0019
+random -0.0313 -0.0196
+0.314 0
 ```
 
 Here the audit takes the six edges with the largest scores of a random one-layer model. The
 largest, `input->logits`, is claimed at -0.0284 and moves the metric by -0.0142, half as much;
 three of the six (`input->m0`, `a0.h0->logits`, `m0->logits`) move it the opposite way to their
-claim, and rank agreement over the six is 0.314. Of the four sets (top-2, bottom-2 and two random
-draws), two have both their edges in one receiver and are measured; the other two are listed in
-`extra["sets_not_measured"]`.
+claim, and rank agreement over the six is 0.314. All three sets are measured (the seeded random
+draw happens to pick the top-2 edges again). The top-2 set, `input->logits` and `m0->logits`,
+enters one receiver; the bottom-2 set, `a0.h0->logits` and `input->a0.h1<v>`, enters two and is
+patched in one call.
 
 Measured on two larger checks. On the deterministic nonlinear fixture of the edge-scoring tests
 (two linear MLP senders that read the embedding, a tanh metric), every measured effect equals its
@@ -961,8 +977,11 @@ claim has the wrong sign, and rank agreement over the five edges is 0.65. On GPT
 indirect-object prompts, float32, CPU), 200 edges (the 100 with the largest EAP-IG scores and 100
 drawn at random) measured by this audit match an independent plain-PyTorch brute-force patcher
 within 1.2e-5 per edge, and the EAP-IG claims reach rank agreement 0.886 with the measured
-effects. Those 200 patches took 792 s on 2 CPU cores, about 4 s each; all 12 sets spanned several
-receivers and were listed in `extra["sets_not_measured"]`.
+effects. Those 200 patches took 792 s on 2 CPU cores, about 4 s each. The audit's 12 sets of five
+edges (top-5, bottom-5 and ten random draws) enter three receivers (the top set) or five (the other
+eleven), and each is patched in one call: every set matches the plain-PyTorch patcher run on the same
+edges within 1e-5, the claimed set sums reach rank agreement 0.993 with the measured set effects,
+and the 12 set patches took about 30 s each on 4 CPU cores.
 
 ## Reading attribution results honestly
 

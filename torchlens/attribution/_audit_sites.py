@@ -12,6 +12,8 @@ A unit is an index into the claim: ``(row,)`` for a whole-site row, or
 indexed after the batch axis, ablated in every example). Whole-site units are
 edited through their site label, element units through
 ``tl.units(site, mask)``; the recorded pairs are exactly what was executed.
+Under zero ablation the single-unit measurements run as one
+``torchlens.experiment.site_sweep`` with one candidate per unit.
 """
 
 from __future__ import annotations
@@ -121,44 +123,68 @@ class _SitesPlan:
     def unit_scores(self) -> dict[tuple[int, ...], float]:
         """Score every unit ablated alone.
 
-        Whole-site rows under zero ablation run as one
-        ``torchlens.experiment.site_sweep`` (one candidate per site, replay
-        engine, nothing retained); any other unit, and any candidate the
-        sweep did not complete, is measured by its own fork.
+        Under zero ablation every unit runs in one
+        ``torchlens.experiment.site_sweep``: one candidate per unit (the site
+        label of a whole-site row, ``tl.units(site, mask)`` of an element),
+        replay engine, nothing retained. A "mean" or baseline edit is the
+        site's own value, so no one edit serves every candidate: those units,
+        and any candidate the sweep did not complete, are measured by their
+        own fork.
         """
 
-        swept = self._swept_scores() if self.ablation_name == "zero" else {}
+        from torchlens.intervention import zero_ablate
+
+        swept = (
+            _swept_scores(
+                self.trace,
+                {key: self.intervention((key,))[0][0] for key in self.units},
+                zero_ablate(),
+                self.score,
+            )
+            if self.ablation_name == "zero"
+            else {}
+        )
         return {
             key: swept[key] if key in swept else self.ablated_score((key,)) for key in self.units
         }
 
-    def _swept_scores(self) -> dict[tuple[int, ...], float]:
-        """Run the whole-site units through ``site_sweep``; return the completed scores."""
 
-        from torchlens.experiment import site_sweep
-        from torchlens.intervention import zero_ablate
+def _swept_scores(
+    trace: Any,
+    selections: dict[tuple[int, ...], Any],
+    edit: Any,
+    score: Callable[[Any], float],
+) -> dict[tuple[int, ...], float]:
+    """Ablate every unit alone in one ``site_sweep``; return the completed scores.
 
-        whole = {
-            f"u{index}": key for index, key in enumerate(self.units) if not self.rows[key].element
-        }
-        if not whole:
-            return {}
-        with torch.no_grad():
-            bundle = site_sweep(
-                self.trace,
-                candidates={name: self.rows[key].site for name, key in whole.items()},
-                edit=zero_ablate(),
-                metric=self.score,
-                retain="none",
-                engine="replay",
-            )
-        return {
-            whole[row.candidate_id]: float(row.value)
-            for row in bundle.effects().rows
-            if row.candidate_id in whole
-            and row.status in ("completed", "released")
-            and row.value is not None
-        }
+    Each unit is one candidate (its selection: a site label or
+    ``tl.units(site, mask)``), so the sweep's effect table holds one member per
+    unit. The sweep derives each candidate's masked edit as
+    ``trace.fork().do(selection, edit)`` does, so a completed score equals the
+    unit's own fork exactly; a unit the sweep did not complete is left out.
+    """
+
+    from torchlens.experiment import site_sweep
+
+    names = {f"u{index}": key for index, key in enumerate(selections)}
+    if not names:
+        return {}
+    with torch.no_grad():
+        bundle = site_sweep(
+            trace,
+            candidates={name: selections[key] for name, key in names.items()},
+            edit=edit,
+            metric=score,
+            retain="none",
+            engine="replay",
+        )
+    return {
+        names[row.candidate_id]: float(row.value)
+        for row in bundle.effects().rows
+        if row.candidate_id in names
+        and row.status in ("completed", "released")
+        and row.value is not None
+    }
 
 
 def _site_edits(

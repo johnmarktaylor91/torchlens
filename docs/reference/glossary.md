@@ -329,8 +329,8 @@ table or a one-backward read table) by ablating the units it ranks, through fork
 intervention-ready trace, and comparing the measured effects with the claim; each row names its
 `site` and its `component`, and a direct-logit table's `constant_row` is reported apart. An EDGE table
 from `tl.mechinterp.edge_scores` is audited by patching each edge alone with the `corrupted` inputs and
-`metric` it was scored with (`edges` names a subset); a set spanning several receivers is listed in
-`sets_not_measured` with its `reason`. The callable/index/site annotation used inside `torchlens.attribution` is
+`metric` it was scored with (`edges` names a subset); every set is patched in one call, into one
+receiver or several, and `sets_not_measured` stays empty. The callable/index/site annotation used inside `torchlens.attribution` is
 privately named `_AttributionTarget`; `TargetSpec` refers only to the intervention selector record and is not an
 attribution-target alias. See the [attribution reference](attribution.md).
 
