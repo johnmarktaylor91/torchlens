@@ -27,8 +27,11 @@ A quantity's status is the worst status over its doors. Usage::
     python tests/oracles/legacy_quantities.py --list    # also print every red quantity
     python tests/oracles/legacy_quantities.py --new     # print TSV skeleton rows for unrowed doors
 
-``--check`` (the default) exits 1 when a live door has no row or a row has
-no live door, so the count cannot silently drift from the surface.
+``--check`` (the default) exits 1 when a live door has no row, a row has no
+live door, a quantity is red, or Tables A and B disagree with the census, so
+the count cannot silently drift from the surface. :func:`census_findings` is
+the same check as a list; ``test_legacy_census_zero_red.py`` runs it in every
+pytest backstop.
 """
 
 from __future__ import annotations
@@ -251,6 +254,30 @@ def registry_findings(rows: list[dict[str, str]]) -> list[str]:
     return findings
 
 
+def drift_findings(live: dict[str, str], rows: Iterable[dict[str, str]]) -> list[str]:
+    """Return one finding per live door without a row and per row without a live door."""
+
+    rowed = {row["door"] for row in rows}
+    unrowed = sorted(set(live) - rowed)
+    stale = sorted(rowed - set(live))
+    return [f"{door}: live numeric door without a census row" for door in unrowed] + [
+        f"{door}: census row without a live door" for door in stale
+    ]
+
+
+def red_findings(rows: Iterable[dict[str, str]]) -> list[str]:
+    """Return one finding per quantity whose worst door status is not green."""
+
+    status = quantity_status(rows)
+    return [f"{quantity}: {state}" for quantity, state in status.items() if state != "green"]
+
+
+def census_findings(live: dict[str, str], rows: list[dict[str, str]]) -> list[str]:
+    """Return every reason the zero-red bar fails: drift, red quantities, registry gaps."""
+
+    return drift_findings(live, rows) + red_findings(rows) + registry_findings(rows)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--list", action="store_true", help="print every red quantity")
@@ -285,7 +312,8 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"DRIFT: {len(missing)} unrowed live doors {missing[:10]}; {len(stale)} stale rows {stale[:10]}"
         )
-    return 1 if (missing or stale or findings) else 0
+    red = red_findings(rows)
+    return 1 if (missing or stale or findings or red) else 0
 
 
 if __name__ == "__main__":
