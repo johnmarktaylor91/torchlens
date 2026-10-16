@@ -20,7 +20,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
-from torchlens.backends.torch import _completeness_finalize, _opaque_call_advisory as advisory
+from torchlens.backends.torch import _opaque_call_advisory as advisory
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.errors import TorchLensWarning
 
@@ -152,7 +152,7 @@ def test_verdict_fields_equal_with_and_without_the_advisory(
     model_class: type[nn.Module], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     with_advisory, _ = _capture(model_class())
-    monkeypatch.setattr(_completeness_finalize, "advise_opaque_calls", lambda diagnostics: None)
+    monkeypatch.setattr(advisory, "advise_opaque_calls", lambda diagnostics: None)
     without_advisory, _ = _capture(model_class())
 
     for field in _VERDICT_FIELDS:
@@ -166,9 +166,9 @@ def test_a_capture_without_a_gap_never_reaches_the_advisory(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[int] = []
-    real = _completeness_finalize.advise_opaque_calls
+    real = advisory.advise_opaque_calls
     monkeypatch.setattr(
-        _completeness_finalize,
+        advisory,
         "advise_opaque_calls",
         lambda diagnostics: calls.append(1) or real(diagnostics),
     )

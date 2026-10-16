@@ -14,7 +14,6 @@ import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is
 from ... import _state
 from ..._errors import TorchLensCaptureGapWarning
 from ...utils._torch_symbols import torch_attr
-from ._opaque_call_advisory import advise_opaque_calls
 from .escape_detection import (
     ExpectedOriginalToken,
 )
@@ -282,6 +281,10 @@ def _finalize_census(state: _WitnessState) -> None:
                 stacklevel=3,
             )
             # Gap path only: name a TorchScript or DLPack call behind the gap (no verdict moves).
+            # Imported here because completeness_witness rebinds this function into its own
+            # globals, and a capture without a gap never pays for the import.
+            from ._opaque_call_advisory import advise_opaque_calls
+
             advise_opaque_calls(diagnostics)
         return
     if getattr(trace, "_raw_dynamo_region_detected", False):

@@ -44,7 +44,7 @@ _MAX_SITES = 32
 _CALLED_NAME = re.compile(r"([A-Za-z_]\w*(?:\s*\.\s*[A-Za-z_]\w*)*)\s*\(")
 _DLPACK_CALL = re.compile(r"\bto_dlpack\s*\(")
 _GOTCHA_POINTER = "the TorchScript and DLPack entry in docs/agent-reference/known-gotchas.md"
-# Codes already emitted this session (errors.1: each warning code once per session).
+# Codes already emitted this session: each warning code fires once per session.
 _WARNED_CODES: set[str] = set()
 
 
@@ -218,15 +218,16 @@ def _resolve(module: ModuleType, function: str | None, parts: list[str]) -> list
 
     namespace = vars(module)
     head, rest = parts[0], parts[1:]
+    roots: list[Any]
     if head in {"self", "cls"} and rest:
-        roots = _classes_defining(module, function)
+        roots = list(_classes_defining(module, function))
     elif head in namespace:
         roots = [namespace[head]]
     else:
         return []
     found = []
     for root in roots:
-        value = root
+        value: Any = root
         for name in rest:
             try:
                 value = inspect.getattr_static(value, name)
@@ -256,7 +257,7 @@ def _classes_defining(module: ModuleType, function: str | None) -> list[type]:
         class defined in ``module`` when none does.
     """
 
-    own = [
+    own: list[type] = [
         value
         for value in vars(module).values()
         if isinstance(value, type) and getattr(value, "__module__", None) == module.__name__
