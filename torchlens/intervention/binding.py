@@ -29,6 +29,7 @@ Every spelling DOCUMENTED-UNSTABLE pending naming-session ratification.
 
 from __future__ import annotations
 
+import re
 import threading
 import time
 import warnings
@@ -233,6 +234,87 @@ def _rule_contains_module_boundary(rule: Any) -> bool:
     )
 
 
+#: Selector kinds that match against TorchLens label strings.
+_LABEL_TERM_KINDS: frozenset[str] = frozenset({"label", "contains", "regex"})
+
+#: Selector kinds a capture-free run can never evaluate: they read the graph
+#: around a recorded op, or a model input, and a binding records neither.
+_GRAPH_TERM_KINDS: tuple[tuple[str, str], ...] = (
+    ("followed_by", "reads the ops recorded after a candidate"),
+    ("preceded_by", "reads the ops recorded before a candidate"),
+    ("input_at", "names a recorded model input, which is not an op a binding edits"),
+)
+
+_LABEL_OP_TYPE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*?)(?:_\d+){1,2}(?:_raw)?(?::\d+)?$")
+
+_POINTER = "see 'Labels inside a binding' in docs/agent-reference/known-gotchas.md"
+
+
+def _label_term_unmatchable(kind: str, value: str) -> bool:
+    """Whether one label-string term can never match a capture-free context.
+
+    A binding's live contexts carry only the raw label minted during the
+    forward (``relu_1_2_raw``). A final, short or pass-qualified label exists
+    only after a capture: an exact ``tl.label`` of anything but a raw label
+    never matches, and a final-looking literal in any label kind raises at
+    the first op.
+    """
+
+    from ..ir.selector_eval import looks_like_finalized_label
+
+    if looks_like_finalized_label(value):
+        return True
+    return kind == "label" and not value.endswith("_raw")
+
+
+def _structural_remedy(value: str | None) -> str:
+    """Name the structural spelling for a label, concretely where the label says its op."""
+
+    match = _LABEL_OP_TYPE.match(value) if value is not None else None
+    if match is None:
+        return (
+            "select the op structurally: tl.func(<function name>) & "
+            "tl.in_module(<module address from model.named_modules()>); " + _POINTER
+        )
+    op_type = match.group(1)
+    return (
+        f"select the op structurally: tl.func({op_type!r}) matches every {op_type} call; "
+        f"to target one call, add & tl.in_module(<address>) with a module address from "
+        "model.named_modules() (on a capture, the label's layer names its containing "
+        "module); " + _POINTER
+    )
+
+
+def _post_capture_term_problem(rule: Any) -> tuple[str, str] | None:
+    """Return why a rule's WHERE tree needs a capture the binding never makes, if it does.
+
+    Every term counts, negated or not and whatever it is combined with: a
+    term the lane cannot evaluate either raises at the first op it reaches
+    or never matches, so the rule can never run as written.
+    """
+
+    for kind, node, _negated in _selector_terms(rule.where):
+        if kind in _LABEL_TERM_KINDS:
+            value = str(node.selector_value)
+            if not _label_term_unmatchable(kind, value):
+                continue
+            return (
+                f"selects with {node!r}, but TorchLens assigns layer labels when a "
+                "capture finishes, and a binding runs the model without a capture "
+                "(its ops carry only raw labels such as 'relu_1_2_raw'), so this "
+                "term can never match",
+                _structural_remedy(value),
+            )
+        graph_reason = dict(_GRAPH_TERM_KINDS).get(kind)
+        if graph_reason is not None:
+            return (
+                f"selects with {node!r}, which {graph_reason}; a binding "
+                "runs the model without recording a graph, so this term can never match",
+                _structural_remedy(None),
+            )
+    return None
+
+
 def _rule_plan_problem(rule: Any) -> tuple[str, str] | None:
     """Return why one rule cannot run on the capture-free lane, if it cannot.
 
@@ -249,6 +331,9 @@ def _rule_plan_problem(rule: Any) -> tuple[str, str] | None:
 
     from .types import Edit
 
+    term_problem = _post_capture_term_problem(rule)
+    if term_problem is not None:
+        return term_problem
     decision = rule.decision
     if decision is None or decision.hook is None:
         return (

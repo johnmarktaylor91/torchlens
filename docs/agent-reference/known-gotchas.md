@@ -170,3 +170,13 @@
   site reads pair through the supergraph alignment, which folds a replacement op into its parent
   (`torchlens/intervention/_topology/topology.py`, `_structural_parent_labels`;
   `tests/test_bundle_module_edit_alignment.py`).
+- Labels inside a binding: `spec.bind(model)` runs the model without a capture, so its ops carry
+  only the raw labels minted during the forward (`relu_1_2_raw`). A final, short or pass-qualified
+  label (`tl.label("relu_1_2")`, `tl.label("relu_1")`, `"conv2d_2_3:1"`, the same literals in
+  `tl.contains` or `tl.regex`) and `tl.followed_by`, `tl.preceded_by` or `tl.input_at` can never
+  match there, negated or combined, so `.bind(...)` refuses the rule with `BindingPreflightError`
+  code `bind_rule_unsupported` before any forward runs. Select the op structurally instead:
+  `tl.func("relu") & tl.in_module("1")` (the label's op type, plus a module address from
+  `model.named_modules()`). Labels keep working on a capture (`tl.trace(...)`, `trace.resolve_sites`).
+  A `tl.where` predicate that reads post-capture fields (`p.layer_label`) is opaque, so it still
+  fails at the first op with `bind_rule_runtime_error`.
