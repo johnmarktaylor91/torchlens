@@ -17,6 +17,16 @@ omitted entirely: `selectors.py` (site selectors incl. `without_op`),
 `predicates.py`, `replay.py` (`push`/`push_from`), `rerun.py` (`run`),
 `save.py` (intervention specs), `runtime.py`, `sweep.py`, `types.py`,
 `handles.py`, `helpers.py`, and `errors.py`.
+- Facet selectors (`tl.head`, `tl.facet`, `.latent`) on a finished trace: a
+  bare `FacetSelector` in `resolver.resolve_sites` (and so `trace[selector]`)
+  resolves through `hooks._resolve_facet_specs`, the same resolution the write
+  doors use, and returns `Facet` entries (`SiteTable.labels()` names their home
+  ops); composites and `find_sites` still refuse. `tl.trace(save=<facet
+  selector>)` goes through `selectors._facet_save_predicate`, a save-only
+  predicate wired in `_trace_selector_helpers._split_save_options_and_predicate`;
+  `intervene=`, `bind` and capture `hooks=` evaluate the selector itself and keep
+  refusing, so no facet edit lands on a whole home tensor. `FacetSelector`
+  hashes by its spelling.
 - `_super/` - generic `Super[T]`, tensor-bearing Super mixins, SuperOp/SuperLayer, the
   remaining Super* log wrappers, and Bundle accessors.
 - `_topology/` - Supergraph, SupergraphNode, TopologyDiff, `build_supergraph()`, and
