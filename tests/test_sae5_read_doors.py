@@ -179,7 +179,7 @@ def test_a_broadcast_head_read_reports_the_count_the_write_door_reports(attn) ->
         if getattr(w.message, "fields", {}).get("code") == "facet_selector_fanout"
     ]
     assert len(table) > 1
-    assert read_counts and f"reads {len(table)} facets" in str(read_counts[0].message)
+    assert read_counts and f"matched {len(table)} sites" in str(read_counts[0].message)
     assert write_counts == [len(table)]
     at_q = [facet for label, facet in zip(table.labels(), table) if label == _q_label(trace)]
     assert at_q
@@ -193,7 +193,7 @@ def test_a_latent_registered_at_two_layers_reads_both_and_counts_them() -> None:
     tl.bridge.sae.register("both", sae, site=tl.module("fc_a") | tl.module("fc_b"))
     try:
         trace = tl.trace(model, x, capture=_READY)
-        with pytest.warns(MultiMatchWarning, match="reads 2 facets"):
+        with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
             table = trace.resolve_sites(tl.facet("both").latent(0))
         assert table.labels() == (trace["fc_a"].layer_label, trace["fc_b"].layer_label)
         for site, facet in zip(("fc_a", "fc_b"), table):

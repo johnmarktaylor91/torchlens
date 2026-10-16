@@ -1003,19 +1003,20 @@ def resolve_sites(
 
     selector = _normalize_query(query)
     if isinstance(selector, FacetSelector):
-        return _resolve_facet_sites(log, selector, query, max_fanout=max_fanout)
-    _guard_episode_step_query(log, selector)
-    refuse_trace_alias_spellings(log, selector)
-    direction = _selector_resolution_direction(selector)
-    matched = _indexed_label_match(log, direction, selector)
-    if matched is None:
-        sites = tuple(_iter_sites(log, direction))
-        matched = _resolve_unchecked(sites, selector, strict=strict)
-    if not matched:
-        raise SiteResolutionError(
-            f"selector {query!r} matched 0 sites. Use log.find_sites(...) to discover labels."
-        )
-    _refuse_bare_multipass_label(selector, matched)
+        matched = _resolve_facet_sites(log, selector, query)
+    else:
+        _guard_episode_step_query(log, selector)
+        refuse_trace_alias_spellings(log, selector)
+        direction = _selector_resolution_direction(selector)
+        matched = _indexed_label_match(log, direction, selector)
+        if matched is None:
+            sites = tuple(_iter_sites(log, direction))
+            matched = _resolve_unchecked(sites, selector, strict=strict)
+        if not matched:
+            raise SiteResolutionError(
+                f"selector {query!r} matched 0 sites. Use log.find_sites(...) to discover labels."
+            )
+        _refuse_bare_multipass_label(selector, matched)
     if len(matched) > max_fanout:
         raise SiteAmbiguityError(
             f"site {query!r} matched {len(matched)} sites, exceeding max_fanout={max_fanout}. "
@@ -1034,17 +1035,15 @@ def _resolve_facet_sites(
     log: Trace,
     selector: FacetSelector,
     query: SelectorInput,
-    *,
-    max_fanout: int,
-) -> SiteTable:
+) -> tuple[Any, ...]:
     """Resolve a facet selector on a finished trace to the facets it reads.
 
     The facets are the ones the write doors (``Trace.set``, ``attach_hooks``,
     ``do``) resolve for the same selector, each the ``Facet`` that
     ``record.facets[...]`` serves, so its ``.value`` is the slice an edit at
     those doors receives (a head's slice, an SAE latent's encoder activation).
-    A selector that matches several facets keeps its broadcast and says how
-    many it read, as an ordinary multi-site selector does.
+    A selector that matches several facets keeps its broadcast; the caller's
+    fan-out check and multi-match count report apply to them as to op sites.
 
     Parameters
     ----------
@@ -1054,20 +1053,16 @@ def _resolve_facet_sites(
         Normalized facet selector.
     query:
         The selector as the caller spelled it, for messages.
-    max_fanout:
-        Maximum number of facets allowed.
 
     Returns
     -------
-    SiteTable
+    tuple[Facet, ...]
         One ``Facet`` per matched facet, in resolution order.
 
     Raises
     ------
     SiteResolutionError
         Coded ``facet_selector_no_match`` when the trace serves no such facet.
-    SiteAmbiguityError
-        If more facets match than ``max_fanout`` allows.
     """
 
     from ..semantic.facets import Facet
@@ -1084,21 +1079,7 @@ def _resolve_facet_sites(
             remedy=f"list the facets a record serves with {example}, then select one of them",
             selector=repr(query),
         )
-    labels = SiteTable(facets).labels()
-    if len(facets) > max_fanout:
-        raise SiteAmbiguityError(
-            f"site {query!r} matched {len(facets)} facets, exceeding max_fanout={max_fanout}. "
-            "Pass a larger max_fanout explicitly or use a narrower selector."
-        )
-    if len(facets) > 1:
-        shown = ", ".join(labels[:4]) + (f" and {len(labels) - 4} more" if len(labels) > 4 else "")
-        warnings.warn(
-            f"facet selector {query!r} reads {len(facets)} facets (home ops: {shown}). "
-            "Scope it with .in_module(address) to read fewer.",
-            MultiMatchWarning,
-            stacklevel=3,
-        )
-    return SiteTable(facets, query=query)
+    return facets
 
 
 def _site_record(site: Any) -> Any:
@@ -1204,10 +1185,11 @@ def _multi_match_message(query: SelectorInput, matched: Sequence[Site]) -> str:
         Warning message.
     """
 
-    matched_labels = {getattr(site, "layer_label", None) for site in matched}
+    records = [_site_record(site) for site in matched]
+    matched_labels = {getattr(site, "layer_label", None) for site in records}
     pairs = [
         (str(getattr(site, "layer_label", None)), str(parent))
-        for site in matched
+        for site in records
         if getattr(site, "is_output", False)
         for parent in (getattr(site, "parents", ()) or ())
         if parent in matched_labels
