@@ -618,12 +618,13 @@ def test_codemod_apply_writes_definite_edits_only(tmp_path: Path) -> None:
     assert "`tl.probe_run(p, budget=1)`" in (tmp_path / "docs/guide.md").read_text()
 
 
-def test_codemod_refuses_bad_proposals_and_stale_plans(tmp_path: Path) -> None:
-    """Non-identifier proposals and files edited after planning are refused."""
+def test_codemod_skips_bad_proposals_and_refuses_stale_plans(tmp_path: Path) -> None:
+    """Non-identifier proposals are skipped and listed; files edited after planning refuse."""
 
     rows = _codemod_repo(tmp_path)
-    with pytest.raises(ValueError, match="not an identifier"):
-        codemod.proposals([{**rows[0], "proposed": "probe-run"}])
+    bad = {**rows[0], "proposed": "probe-run"}
+    assert codemod.proposals([bad]) == []
+    assert [row["id"] for row in codemod.skipped_proposals([bad])] == ["root:tl.run_probe"]
     edits = codemod.plan(rows[:1], tmp_path, roots=("docs",))
     (tmp_path / "docs/guide.md").write_text("rewritten\n")
     with pytest.raises(ValueError, match="changed since planning"):

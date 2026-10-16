@@ -4,25 +4,37 @@ Dry run by default: ``plan`` lists every edit with its certainty, and only ``app
 writes. Certainty:
 
 - ``definite``: the name's own definition, its ``__all__``/lazy-facade string, a
-  from-import of it and the uses that import binds, ``self.<member>`` inside the defining
-  class, a parameter inside a callable listed in the row's ``uses``, and any qualified
-  spelling (``tl.ns.X``, ``Class.member``);
+  from-import of it (absolute or relative) with the uses that import binds and the
+  importing module's ``__all__`` entry, ``self.<member>`` inside the defining class, a
+  field's key in its declared field tables (``field_tables``) and in its class's own
+  table literals, a parameter inside a callable listed in the row's ``uses``, and any
+  qualified spelling (``tl.ns.X``, ``Class.member``);
 - ``ambiguous``: a contextual spelling another object of the same leaf could fill
-  (``.member``, ``kw=``, a backticked leaf in prose). Written only with
+  (``.member``, a call or signature keyword ``kw=``, a backticked leaf in prose, a field
+  key in a module-level table of the defining module). Written only with
   ``include_ambiguous``.
+
+A proposal that is not an identifier (a move to a new home) is reported by
+``skipped_proposals`` and left out; the other rows still plan. ``apply`` writes one edit
+where several rows respell a position the same way, refuses rows that disagree, and is
+atomic: every file is checked and rewritten in memory first, then replaced through a
+temporary file, so a refusal leaves the tree untouched.
 
 History files (the changelog, migration notes, the deprecations list) are never edited.
 """
 
 from __future__ import annotations
 
-import ast
 import dataclasses
+import os
+import re
+import shutil
+import tempfile
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any
 
-from name_lockstep import spelling
+from name_lockstep import astsites, spelling
 
 DEFINITE = "definite"
 AMBIGUOUS = "ambiguous"
@@ -45,6 +57,11 @@ DEFAULT_EXCLUDES = (
     "docs/migration",
 )
 SUFFIXES = (".py", ".pyi", ".md", ".rst", ".ipynb", ".txt", ".tsv", ".toml", ".yaml", ".yml")
+NOT_IDENTIFIER = "not an identifier (a move or restructure; out of the codemod's scope)"
+#: In prose and notebooks a keyword is written ``name=``; ``name = value`` is a statement.
+_SPACED_ASSIGNMENT = re.compile(r"\s+=(?!=)")
+#: Most conflicting positions listed in one refusal.
+_MAX_REPORTED = 20
 
 
 @dataclasses.dataclass(frozen=True)
@@ -76,8 +93,15 @@ class Edit:
     row_id: str
 
 
+def _proposing(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return rows with ``proposed`` set and different from ``name``, sorted by id."""
+
+    chosen = [row for row in rows if row.get("proposed") and row["proposed"] != row["name"]]
+    return sorted(chosen, key=lambda row: row["id"])
+
+
 def proposals(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Return rows that propose a different spelling.
+    """Return rows that propose a different spelling the codemod can write.
 
     Parameters
     ----------
@@ -87,19 +111,33 @@ def proposals(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     Returns
     -------
     list[dict[str, Any]]
-        Rows with ``proposed`` set and different from ``name``, sorted by id.
-
-    Raises
-    ------
-    ValueError
-        If a proposal is not a valid identifier.
+        Rows with ``proposed`` set, different from ``name`` and a valid identifier,
+        sorted by id. Other proposals are listed by ``skipped_proposals``.
     """
 
-    chosen = [row for row in rows if row.get("proposed") and row["proposed"] != row["name"]]
-    for row in chosen:
-        if not str(row["proposed"]).isidentifier():
-            raise ValueError(f"{row['id']}: proposed {row['proposed']!r} is not an identifier")
-    return sorted(chosen, key=lambda row: row["id"])
+    return [row for row in _proposing(rows) if str(row["proposed"]).isidentifier()]
+
+
+def skipped_proposals(rows: Iterable[dict[str, Any]]) -> list[dict[str, str]]:
+    """Return the proposals the codemod leaves out, one per row.
+
+    Parameters
+    ----------
+    rows
+        Name-table or inventory rows.
+
+    Returns
+    -------
+    list[dict[str, str]]
+        ``id``, ``proposed`` and ``reason`` per skipped row, sorted by id. A dotted
+        spelling is a move to a new home, which this tool does not make.
+    """
+
+    return [
+        {"id": row["id"], "proposed": str(row["proposed"]), "reason": NOT_IDENTIFIER}
+        for row in _proposing(rows)
+        if not str(row["proposed"]).isidentifier()
+    ]
 
 
 def iter_files(root: Path, roots: Iterable[str], excludes: Iterable[str]) -> Iterator[Path]:
@@ -133,107 +171,6 @@ def iter_files(root: Path, roots: Iterable[str], excludes: Iterable[str]) -> Ite
             yield path
 
 
-def _char_offset(line: str, byte_offset: int) -> int:
-    """Convert an ast UTF-8 byte offset into a character offset.
-
-    Parameters
-    ----------
-    line
-        Source line.
-    byte_offset
-        Byte offset from ast.
-
-    Returns
-    -------
-    int
-        Character offset.
-    """
-
-    return len(line.encode("utf-8")[:byte_offset].decode("utf-8", errors="ignore"))
-
-
-class _Positions:
-    """Collect definite ast positions of one leaf in one Python file."""
-
-    def __init__(self, lines: list[str], old: str) -> None:
-        self.lines = lines
-        self.old = old
-        self.found: set[tuple[int, int]] = set()
-
-    def at(self, lineno: int, byte_col: int) -> None:
-        """Record the leaf at a byte column when the text there is the leaf."""
-
-        line = self.lines[lineno - 1]
-        start = _char_offset(line, byte_col)
-        if line[start : start + len(self.old)] == self.old:
-            self.found.add((lineno, start))
-
-    def after_keyword(self, lineno: int, keyword: str) -> None:
-        """Record the leaf that follows ``def``/``class`` on a line."""
-
-        line = self.lines[lineno - 1]
-        marker = f"{keyword} {self.old}"
-        index = line.find(marker)
-        if index >= 0:
-            self.found.add((lineno, index + len(keyword) + 1))
-
-    def names(self, tree: ast.AST) -> None:
-        """Record every Name and arg of the leaf under ``tree``."""
-
-        for node in ast.walk(tree):
-            if (
-                isinstance(node, ast.Name)
-                and node.id == self.old
-                or isinstance(node, ast.arg)
-                and node.arg == self.old
-            ):
-                self.at(node.lineno, node.col_offset)
-
-    def module_names(self, tree: ast.AST) -> None:
-        """Record Names of the leaf that resolve to the module-level binding.
-
-        Functions that bind the leaf locally (a parameter or an assignment, without a
-        ``global`` declaration) shadow it, so their bodies are skipped.
-        """
-
-        stack = [tree]
-        while stack:
-            node = stack.pop()
-            if isinstance(
-                node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
-            ) and self.old in _local_bindings(node):
-                continue
-            if isinstance(node, ast.Name) and node.id == self.old:
-                self.at(node.lineno, node.col_offset)
-            stack.extend(ast.iter_child_nodes(node))
-
-
-def _local_bindings(func: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda) -> set[str]:
-    """Return the names a function binds locally.
-
-    Parameters
-    ----------
-    func
-        A function or lambda.
-
-    Returns
-    -------
-    set[str]
-        Parameters and assigned names, minus ``global``/``nonlocal`` declarations.
-    """
-
-    args = func.args
-    bound = {a.arg for a in (*args.posonlyargs, *args.args, *args.kwonlyargs)}
-    bound.update(a.arg for a in (args.vararg, args.kwarg) if a is not None)
-    declared: set[str] = set()
-    for node in ast.walk(func):
-        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
-            bound.add(node.id)
-        elif isinstance(node, (ast.Global, ast.Nonlocal)):
-            declared.update(node.names)
-    return bound - declared
-
-
 def _module_file(root: Path, module: str | None) -> Path | None:
     """Return the source file of a dotted module, if it is in the repository.
 
@@ -259,197 +196,109 @@ def _module_file(root: Path, module: str | None) -> Path | None:
     return None
 
 
-def _definite_object(row: dict[str, Any], tree: ast.Module, pos: _Positions, home: bool) -> None:
-    """Record definite sites of a root or export name in one module.
+@dataclasses.dataclass(frozen=True)
+class _RowContext:
+    """What planning needs about one row, computed once for every file."""
+
+    row: dict[str, Any]
+    patterns: list[spelling.Spelling]
+    home: Path | None
+    tables: dict[Path, frozenset[str]]
+    targets: frozenset[tuple[str | None, str]]
+
+    @classmethod
+    def build(cls, row: dict[str, Any], root: Path) -> _RowContext:
+        """Resolve the row's home file, its field-table files and its callables."""
+
+        tables: dict[Path, set[str]] = {}
+        for entry in row.get("field_tables", ()):
+            module, _, name = str(entry).partition(":")
+            table_file = _module_file(root, module)
+            if table_file is not None and name:
+                tables.setdefault(table_file, set()).add(name)
+        return cls(
+            row=row,
+            patterns=spelling.spellings(row),
+            home=_module_file(root, row.get("module")),
+            tables={path: frozenset(names) for path, names in tables.items()},
+            targets=frozenset(astsites.use_key(path) for path in row.get("uses", ())),
+        )
+
+
+def _ast_sites(
+    context: _RowContext, source: astsites.Source
+) -> tuple[set[tuple[int, int]], set[tuple[int, int]]]:
+    """Return definite and ambiguous ``(line, start)`` sites the ast finds in one file.
 
     Parameters
     ----------
-    row
-        Root or export row.
-    tree
-        Parsed module.
-    pos
-        Position collector.
-    home
-        Whether this module defines the name (all module-level uses are then definite).
-    """
-
-    imported = False
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and str(node.module or "").startswith("torchlens"):
-            for alias in node.names:
-                if alias.name == pos.old:
-                    imported = imported or alias.asname is None
-                    _record_import(pos, node, alias.name)
-        elif isinstance(node, ast.Constant) and node.value == pos.old and home:
-            pos.at(node.lineno, node.col_offset + 1)
-        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == pos.old:
-            if home:
-                pos.after_keyword(node.lineno, "def")
-        elif isinstance(node, ast.ClassDef) and node.name == pos.old and home:
-            pos.after_keyword(node.lineno, "class")
-    if home or imported:
-        pos.module_names(tree)
-
-
-def _record_import(pos: _Positions, node: ast.ImportFrom, name: str) -> None:
-    """Record the imported leaf inside a from-import statement.
-
-    Parameters
-    ----------
-    pos
-        Position collector.
-    node
-        The import statement.
-    name
-        Imported name.
-    """
-
-    end = getattr(node, "end_lineno", node.lineno) or node.lineno
-    for lineno in range(node.lineno, end + 1):
-        line = pos.lines[lineno - 1]
-        for match in spelling.spellings({"kind": "param", "name": name}, name)[-1].pattern.finditer(
-            line
-        ):
-            if lineno > node.lineno or "import" in line[: match.start()]:
-                pos.found.add((lineno, match.start("name")))
-
-
-def _definite_member(row: dict[str, Any], tree: ast.Module, pos: _Positions) -> None:
-    """Record a member's definition and ``self.<member>`` inside its defining class.
-
-    Parameters
-    ----------
-    row
-        Member row.
-    tree
-        Parsed defining module.
-    pos
-        Position collector.
-    """
-
-    class_name = str(row["owner"]).split(":", 1)[-1].split(".")[-1]
-    for node in ast.walk(tree):
-        if not (isinstance(node, ast.ClassDef) and node.name == class_name):
-            continue
-        for item in node.body:
-            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == pos.old:
-                pos.after_keyword(item.lineno, "def")
-            elif isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
-                if item.target.id == pos.old:
-                    pos.at(item.target.lineno, item.target.col_offset)
-            elif isinstance(item, ast.Assign):
-                for target in item.targets:
-                    if isinstance(target, ast.Name) and target.id == pos.old:
-                        pos.at(target.lineno, target.col_offset)
-        for sub in ast.walk(node):
-            if (
-                isinstance(sub, ast.Attribute)
-                and sub.attr == pos.old
-                and isinstance(sub.value, ast.Name)
-                and sub.value.id in ("self", "cls")
-            ):
-                end = sub.end_col_offset or 0
-                line = pos.lines[(sub.end_lineno or sub.lineno) - 1]
-                start = _char_offset(line, end) - len(pos.old)
-                pos.found.add((sub.end_lineno or sub.lineno, start))
-
-
-def _definite_param(row: dict[str, Any], tree: ast.Module, pos: _Positions) -> None:
-    """Record a parameter inside every callable listed in the row's ``uses``.
-
-    Parameters
-    ----------
-    row
-        Param row; ``uses`` holds paths such as ``tl.trace`` or ``Trace.run``.
-    tree
-        Parsed module.
-    pos
-        Position collector.
-    """
-
-    targets = {_use_key(path) for path in row.get("uses", ())}
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ClassDef):
-            for item in node.body:
-                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    key = (node.name, "__init__") if item.name == "__init__" else None
-                    if (node.name, item.name) in targets or (key and (None, node.name) in targets):
-                        pos.names(item)
-        elif (
-            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-            and (None, node.name) in targets
-        ):
-            pos.names(node)
-
-
-def _use_key(path: str) -> tuple[str | None, str]:
-    """Split a ``uses`` path into an owner class and callable leaf.
-
-    Parameters
-    ----------
-    path
-        ``tl.trace``, ``tl.ns.f`` or ``Class.method``.
+    context
+        The row's planning context.
+    source
+        The Python file.
 
     Returns
     -------
-    tuple[str | None, str]
-        ``(None, leaf)`` for functions and classes, ``(Class, method)`` for methods.
+    tuple[set[tuple[int, int]], set[tuple[int, int]]]
+        Definite positions, and ambiguous positions the regex patterns do not see
+        (field keys in module-level tables of the defining module).
     """
 
-    parts = path.split(".")
-    if parts[0] == "tl" or len(parts) == 1:
-        return None, parts[-1]
-    return parts[-2], parts[-1]
-
-
-def _ast_sites(row: dict[str, Any], root: Path, path: Path, text: str) -> set[tuple[int, int]]:
-    """Return definite ``(line, start)`` sites in one Python file.
-
-    Parameters
-    ----------
-    row
-        Proposal row.
-    root
-        Repository root.
-    path
-        The file.
-    text
-        Its contents.
-
-    Returns
-    -------
-    set[tuple[int, int]]
-        Definite positions of the old leaf.
-    """
-
-    try:
-        tree = ast.parse(text)
-    except SyntaxError:
-        return set()
-    pos = _Positions(text.splitlines(), row["name"])
-    home = _module_file(root, row.get("module")) == path
+    tree = source.tree()
+    if tree is None:
+        return set(), set()
+    row = context.row
+    pos = astsites.Positions(source.lines, row["name"])
+    loose = astsites.Positions(source.lines, row["name"])
+    home = context.home == source.path
     if row["kind"] in ("root", "export"):
-        facade = path == root / "torchlens" / "__init__.py" and row["kind"] == "root"
-        _definite_object(row, tree, pos, home or facade)
-    elif row["kind"] == "member" and home:
-        _definite_member(row, tree, pos)
-    elif row["kind"] == "param" and path.is_relative_to(root / "torchlens"):
-        _definite_param(row, tree, pos)
-    return pos.found
+        facade = source.relative == "torchlens/__init__.py" and row["kind"] == "root"
+        astsites.definite_object(tree, pos, home or facade, source.relative)
+    elif row["kind"] == "member":
+        if home:
+            astsites.definite_member(row, tree, pos)
+            astsites.module_tables(tree, loose)
+        names = context.tables.get(source.path)
+        if names:
+            astsites.named_tables(tree, names, pos)
+    elif row["kind"] == "param" and source.relative.startswith("torchlens/"):
+        astsites.definite_param(context.targets, tree, pos)
+    return pos.found, loose.found - pos.found
 
 
-def plan_file(row: dict[str, Any], root: Path, path: Path) -> list[Edit]:
+def _is_keyword(source: astsites.Source, line: int, start: int, end: int) -> bool:
+    """Return whether a ``name=`` match is a keyword, not an assignment statement.
+
+    Python files use the ast (a call keyword or a signature parameter). Prose and
+    notebooks have no ast here, so ``name = value``, spaced as a statement, is skipped
+    and ``name=value`` is kept.
+    """
+
+    if source.is_python:
+        return (line, start) in source.keyword_sites(source.lines[line - 1][start:end])
+    return not _SPACED_ASSIGNMENT.match(source.lines[line - 1], end)
+
+
+def plan_file(
+    row: dict[str, Any],
+    root: Path,
+    path: Path,
+    source: astsites.Source | None = None,
+    context: _RowContext | None = None,
+) -> list[Edit]:
     """Return every edit one proposal makes in one file.
 
     Parameters
     ----------
     row
-        Proposal row (``id``, ``kind``, ``name``, ``path``, ``proposed``).
+        Proposal row (``id``, ``kind``, ``name``, ``path``, ``proposed``; members may
+        carry ``field_tables``, keywords ``uses``).
     root
         Repository root.
     path
         File to scan.
+    source, context
+        The file and row prepared by ``plan`` (built here when omitted).
 
     Returns
     -------
@@ -457,26 +306,34 @@ def plan_file(row: dict[str, Any], root: Path, path: Path) -> list[Edit]:
         Edits sorted by position.
     """
 
-    text = path.read_text(encoding="utf-8")
-    if row["name"] not in text:
+    source = source or astsites.Source(root, path)
+    if row["name"] not in source.words:
         return []
-    is_python = path.suffix in (".py", ".pyi")
-    definite = _ast_sites(row, root, path, text) if is_python else set()
+    context = context or _RowContext.build(row, root)
+    definite, loose = _ast_sites(context, source) if source.is_python else (set(), set())
     hits = spelling.find(
-        text,
-        spelling.spellings(row),
+        source.text,
+        context.patterns,
         (spelling.QUALIFIED, spelling.CONTEXTUAL, spelling.LEAF),
-        prose=not is_python,
+        prose=not source.is_python,
     )
-    relative = path.relative_to(root).as_posix()
+    keyword_row = row["kind"] == "param"
     edits: dict[tuple[int, int], Edit] = {}
-    for line, start, _, strength in hits:
-        if strength == spelling.LEAF and is_python and (line, start) not in definite:
+    for line, start, end, strength in hits:
+        site = (line, start)
+        if site in definite:
+            edits[site] = _edit(source.relative, line, start, row, True)
+        elif strength == spelling.LEAF and source.is_python:
             continue
-        certain = (line, start) in definite or strength == spelling.QUALIFIED
-        edits[(line, start)] = _edit(relative, line, start, row, certain)
+        elif keyword_row and strength == spelling.CONTEXTUAL:
+            if _is_keyword(source, line, start, end):
+                edits[site] = _edit(source.relative, line, start, row, False)
+        else:
+            edits[site] = _edit(source.relative, line, start, row, strength == spelling.QUALIFIED)
     for line, start in definite:
-        edits.setdefault((line, start), _edit(relative, line, start, row, True))
+        edits.setdefault((line, start), _edit(source.relative, line, start, row, True))
+    for line, start in loose:
+        edits.setdefault((line, start), _edit(source.relative, line, start, row, False))
     return [edits[key] for key in sorted(edits)]
 
 
@@ -512,10 +369,14 @@ def plan(
 ) -> list[Edit]:
     """Plan every edit the proposals make, without writing.
 
+    Each file is read and parsed once and shared by every row; each row's patterns and
+    home file are resolved once.
+
     Parameters
     ----------
     rows
-        Name-table rows; only those proposing a new spelling are used.
+        Name-table rows; only those proposing a new identifier are used (see
+        ``skipped_proposals`` for the rest).
     root
         Repository root.
     roots, excludes
@@ -527,14 +388,102 @@ def plan(
         All edits, sorted by file and position.
     """
 
-    chosen = proposals(rows)
-    files = list(iter_files(root, roots, excludes))
-    edits = [edit for row in chosen for path in files for edit in plan_file(row, root, path)]
+    contexts = [_RowContext.build(row, root) for row in proposals(rows)]
+    edits: list[Edit] = []
+    for path in iter_files(root, roots, excludes):
+        source = astsites.Source(root, path)
+        for context in contexts:
+            if context.row["name"] in source.words:
+                edits += plan_file(context.row, root, path, source, context)
     return sorted(edits, key=lambda edit: (edit.path, edit.line, edit.start, edit.row_id))
 
 
+def _merge(file_edits: list[Edit]) -> tuple[list[Edit], list[str]]:
+    """Merge edits at one position that agree; list the positions that disagree.
+
+    Parameters
+    ----------
+    file_edits
+        Edits of one file.
+
+    Returns
+    -------
+    tuple[list[Edit], list[str]]
+        One edit per position, sorted, and a description per conflicting position
+        (different spellings at one position, or spans that overlap).
+    """
+
+    by_site: dict[tuple[int, int], list[Edit]] = {}
+    for edit in file_edits:
+        by_site.setdefault((edit.line, edit.start), []).append(edit)
+    merged: list[Edit] = []
+    conflicts: list[str] = []
+    for (line, start), group in sorted(by_site.items()):
+        if len({(edit.old, edit.new) for edit in group}) > 1:
+            rows = ", ".join(f"{edit.row_id} ({edit.old} -> {edit.new})" for edit in group)
+            conflicts.append(
+                f"{line}:{start + 1}: two proposals respell the same position with "
+                f"different spellings: {rows}"
+            )
+        else:
+            merged.append(group[0])
+    for before, after in zip(merged, merged[1:]):
+        if before.line == after.line and before.start + len(before.old) > after.start:
+            conflicts.append(
+                f"{after.line}:{after.start + 1}: edits overlap: {before.row_id}, {after.row_id}"
+            )
+    return merged, conflicts
+
+
+def _respell(lines: list[str], edits: list[Edit]) -> int | None:
+    """Respell ``lines`` in place, right to left; return the first stale line, if any."""
+
+    for edit in sorted(edits, key=lambda e: (e.line, e.start), reverse=True):
+        if edit.line > len(lines):
+            return edit.line
+        line = lines[edit.line - 1]
+        if line[edit.start : edit.start + len(edit.old)] != edit.old:
+            return edit.line
+        lines[edit.line - 1] = line[: edit.start] + edit.new + line[edit.start + len(edit.old) :]
+    return None
+
+
+def _replace_all(rewritten: dict[Path, str]) -> None:
+    """Write every new text to a temporary file beside its target, then replace the targets.
+
+    Nothing is replaced until every temporary file is written; a failure while writing
+    removes the temporary files and leaves the targets as they were.
+
+    Parameters
+    ----------
+    rewritten
+        Target path to its new text.
+    """
+
+    staged: list[tuple[Path, Path]] = []
+    try:
+        for path, text in rewritten.items():
+            handle, name = tempfile.mkstemp(
+                prefix=f".{path.name}.", suffix=".name-lockstep", dir=path.parent
+            )
+            staged.append((Path(name), path))
+            with os.fdopen(handle, "w", encoding="utf-8", newline="") as out:
+                out.write(text)
+            shutil.copymode(path, name)
+    except BaseException:
+        for temp, _ in staged:
+            temp.unlink(missing_ok=True)
+        raise
+    for temp, path in staged:
+        os.replace(temp, path)
+
+
 def apply(edits: Iterable[Edit], root: Path, include_ambiguous: bool = False) -> int:
-    """Write the edits.
+    """Write the edits, all or nothing.
+
+    Every file is checked and respelled in memory first. Rows that respell one position
+    the same way write it once. Any refusal raises before a file is touched; otherwise
+    each file is replaced through a temporary file. Line endings and file modes are kept.
 
     Parameters
     ----------
@@ -548,30 +497,41 @@ def apply(edits: Iterable[Edit], root: Path, include_ambiguous: bool = False) ->
     Returns
     -------
     int
-        Number of edits written.
+        Number of edits written (agreeing duplicates count once).
 
     Raises
     ------
     ValueError
-        If two proposals respell the same position, or a file changed since planning.
+        If two proposals respell one position differently, edits overlap, or a file
+        changed since planning; every problem is listed and nothing is written.
     """
 
-    chosen = [e for e in edits if include_ambiguous or e.certainty == DEFINITE]
     by_file: dict[str, list[Edit]] = {}
-    for edit in chosen:
-        by_file.setdefault(edit.path, []).append(edit)
-    for relative, file_edits in by_file.items():
+    for edit in edits:
+        if include_ambiguous or edit.certainty == DEFINITE:
+            by_file.setdefault(edit.path, []).append(edit)
+    problems: list[str] = []
+    rewritten: dict[Path, str] = {}
+    written = 0
+    for relative in sorted(by_file):
+        merged, conflicts = _merge(by_file[relative])
+        problems += [f"{relative}:{conflict}" for conflict in conflicts]
+        if conflicts:
+            continue
         path = root / relative
-        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
-        positions = [(edit.line, edit.start) for edit in file_edits]
-        if len(set(positions)) != len(positions):
-            raise ValueError(f"{relative}: two proposals respell the same position")
-        for edit in sorted(file_edits, key=lambda e: (e.line, e.start), reverse=True):
-            line = lines[edit.line - 1]
-            if line[edit.start : edit.start + len(edit.old)] != edit.old:
-                raise ValueError(f"{relative}:{edit.line}: text changed since planning")
-            lines[edit.line - 1] = (
-                line[: edit.start] + edit.new + line[edit.start + len(edit.old) :]
-            )
-        path.write_text("".join(lines), encoding="utf-8")
-    return len(chosen)
+        with path.open(encoding="utf-8", newline="") as handle:
+            lines = handle.read().splitlines(keepends=True)
+        stale = _respell(lines, merged)
+        if stale is not None:
+            problems.append(f"{relative}:{stale}: text changed since planning")
+            continue
+        rewritten[path] = "".join(lines)
+        written += len(merged)
+    if problems:
+        shown = "; ".join(problems[:_MAX_REPORTED])
+        more = (
+            f" (and {len(problems) - _MAX_REPORTED} more)" if len(problems) > _MAX_REPORTED else ""
+        )
+        raise ValueError(f"apply refused, nothing written: {shown}{more}")
+    _replace_all(rewritten)
+    return written
