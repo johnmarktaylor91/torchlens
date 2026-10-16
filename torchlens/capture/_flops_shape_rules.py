@@ -116,14 +116,17 @@ def _expand_einsum_ellipsis(equation: str, shapes: Sequence[Shape]) -> str | Non
     if len(terms) != len(shapes) or any(term.count("...") > 1 for term in [*terms, output]):
         return None
     widths = [
-        len(shape) - (len(term) - 3) if "..." in term else 0 for term, shape in zip(terms, shapes)
+        len(shape) - (len(term) - 3) if "..." in term else 0
+        for term, shape in zip(terms, shapes, strict=True)
     ]
     width = max(widths)
     pool = [label for label in string.ascii_letters if label not in equation]
     if min(widths) < 0 or len(pool) < width:
         return None
     run = "".join(pool[:width])
-    spelled = [term.replace("...", run[width - used :]) for term, used in zip(terms, widths)]
+    spelled = [
+        term.replace("...", run[width - used :]) for term, used in zip(terms, widths, strict=True)
+    ]
     if separator:
         spelled_output = output.replace("...", run)
     else:
@@ -261,7 +264,7 @@ def _multi_dot_macs(shapes: Sequence[Shape]) -> int | None:
             matrices.append((shape[0], 1))
         else:
             return None
-    if any(left[1] != right[0] for left, right in zip(matrices, matrices[1:])):
+    if any(left[1] != right[0] for left, right in zip(matrices, matrices[1:], strict=False)):
         return None
     dims = [matrices[0][0], *(matrix[1] for matrix in matrices)]
     count = len(shapes)

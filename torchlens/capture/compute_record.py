@@ -8,10 +8,14 @@ naming-session ratification; the C02 FactCore substrate consumes this.
 from dataclasses import dataclass
 from typing import Any
 
-from .flops import (
-    _CUSTOM_OP_RULES,
+from ._flops_shape_rules import (
     _RNN_CELL_FUNCS,
     _RNN_SEQUENCE_FUNCS,
+    _rnn_flops_from_shapes,
+    _with_operand_kwargs,
+)
+from .flops import (
+    _CUSTOM_OP_RULES,
     ELEMENTWISE_FLOPS,
     SPECIALTY_HANDLERS,
     ZERO_ARITHMETIC_CONSTRUCTIONS,
@@ -21,9 +25,7 @@ from .flops import (
     Shape,
     _numel,
     _prod,
-    _rnn_flops_from_shapes,
     _safe_shape,
-    _with_operand_kwargs,
     compute_forward_flops,
 )
 
@@ -339,25 +341,25 @@ def _mac_record(
     total_flops: int,
     output_shape: Shape | None,
     param_shapes: ParamShapes,
-    qk_shapes: tuple[Shape | None, Shape | None] | None,
-    operand_shapes: tuple[Shape | None, Shape | None] | None = None,
+    pair_shapes: tuple[Shape | None, Shape | None] | None,
 ) -> ComputeRecord:
     """Package a verified MAC-family split, failing closed on any mismatch.
 
-    ``operand_shapes`` is ``(input, weight)`` for a linear or convolution
-    call whose weight is not a parameter.
+    ``pair_shapes`` is ``(query, key)`` for scaled dot-product attention and
+    ``(input, weight)`` for a linear or convolution call whose weight is not
+    a parameter; ``None`` otherwise.
     """
 
     if func_name in _BIASED_MAC_NAMES and not _weight_is_parameter(func_name, param_shapes):
         split = (
             None
-            if operand_shapes is None
+            if pair_shapes is None
             else _split_weighted_by_operands(
-                func_name, total_flops, output_shape, operand_shapes[0], operand_shapes[1]
+                func_name, total_flops, output_shape, pair_shapes[0], pair_shapes[1]
             )
         )
     else:
-        split = _split_mac_family(func_name, total_flops, output_shape, param_shapes, qk_shapes)
+        split = _split_mac_family(func_name, total_flops, output_shape, param_shapes, pair_shapes)
     if split is None or 2 * split[0] + split[1] != total_flops:
         return ComputeRecord(
             fma_macs=None,
@@ -434,12 +436,10 @@ def compute_forward_compute_record(
     if total is None:
         return None
     if func_name in _MAC_SPLITTERS:
-        qk_shapes = None
-        if func_name == "scaled_dot_product_attention" and len(saved_args) >= 2:
-            qk_shapes = (_safe_shape(saved_args[0]), _safe_shape(saved_args[1]))
+        # (query, key) for attention, (input, weight) for a weighted call.
         args = _with_operand_kwargs(func_name, saved_args, saved_kwargs)
-        operands = (_safe_shape(args[0]), _safe_shape(args[1])) if len(args) >= 2 else None
-        return _mac_record(func_name, total, output_shape, param_shapes, qk_shapes, operands)
+        pair = (_safe_shape(args[0]), _safe_shape(args[1])) if len(args) >= 2 else None
+        return _mac_record(func_name, total, output_shape, param_shapes, pair)
     return _non_mac_record(func_name, total)
 
 
@@ -478,13 +478,12 @@ def derive_compute_record_for_op(op: Any) -> ComputeRecord | None:
     output_shape = _safe_shape(getattr(op, "shape", None))
     param_shapes = tuple(tuple(shape) for shape in (getattr(op, "param_shapes", None) or ()))
     if func_name in _MAC_SPLITTERS:
-        qk_shapes = None
-        operands = None
+        pair = None
         if func_name == "scaled_dot_product_attention":
-            qk_shapes = _resolve_qk_parent_shapes(op)
+            pair = _resolve_qk_parent_shapes(op)
         elif func_name in _BIASED_MAC_NAMES and not _weight_is_parameter(func_name, param_shapes):
-            operands = (_parent_arg_shape(op, 0, "input"), _parent_arg_shape(op, 1, "weight"))
-        return _mac_record(func_name, total, output_shape, param_shapes, qk_shapes, operands)
+            pair = (_parent_arg_shape(op, 0, "input"), _parent_arg_shape(op, 1, "weight"))
+        return _mac_record(func_name, total, output_shape, param_shapes, pair)
     return _non_mac_record(func_name, total)
 
 
