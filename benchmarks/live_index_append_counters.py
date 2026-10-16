@@ -16,7 +16,7 @@ synthetic cases) under ``cProfile``. Counters gate. Each case also prints a
 SHA-256 digest of the index state after every pass (``labels``,
 ``by_raw_label`` keys with the identity of each event, and
 ``children_by_parent`` as its key set with each list in order) and, for the
-recorder cases, of the saved outputs. The key order of ``children_by_parent``
+recorder cases, of the saved outputs. The order of ``children_by_parent``
 gets its own digest, reported as information. The wall time of two
 unprofiled runs (an A/A pair) and the Python-heap peak are context only.
 
@@ -240,7 +240,7 @@ def index_digest(index: LiveIndex, identity: Callable[[Any], Any]) -> dict[str, 
         "sha256": hashlib.sha256(text.encode()).hexdigest(),
         "labels": len(index.labels),
         "edges": sum(len(value) for value in index.children_by_parent.values()),
-        "children_key_order_sha256": hashlib.sha256(key_order.encode()).hexdigest(),
+        "child_order_sha256": hashlib.sha256(key_order.encode()).hexdigest(),
     }
 
 
