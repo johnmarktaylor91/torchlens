@@ -2,10 +2,55 @@
 
 from __future__ import annotations
 
+import weakref
 from typing import Any
 
 import torch
 from torch import nn
+
+#: Side-effect tallies kept outside the model. A default ``tl.trace`` is a pure
+#: observer: it puts back every plain attribute the forward wrote, so the
+#: counters on the module read their pre-capture values whatever ran. The
+#: oracle reads these tallies instead, which no capture restores.
+_SIDE_EFFECT_TALLIES: weakref.WeakKeyDictionary[nn.Module, dict[str, int]] = (
+    weakref.WeakKeyDictionary()
+)
+
+
+def count_side_effect(module: nn.Module, name: str) -> None:
+    """Record one side effect on ``module``'s counter and in the oracle's tally.
+
+    Parameters
+    ----------
+    module:
+        Oracle model whose forward or hook ran.
+    name:
+        Counter name (``forward_invocations``, ``pre_hook_invocations`` or
+        ``rng_draw_count``).
+    """
+
+    setattr(module, name, getattr(module, name) + 1)
+    tally = _SIDE_EFFECT_TALLIES.setdefault(module, {})
+    tally[name] = tally.get(name, 0) + 1
+
+
+def side_effect_count(module: nn.Module, name: str) -> int:
+    """Return how many times ``name`` happened on ``module``, restores notwithstanding.
+
+    Parameters
+    ----------
+    module:
+        Oracle model.
+    name:
+        Counter name passed to :func:`count_side_effect`.
+
+    Returns
+    -------
+    int
+        Tallied count; zero when it never happened.
+    """
+
+    return _SIDE_EFFECT_TALLIES.get(module, {}).get(name, 0)
 
 
 class PlainCNN(nn.Module):
@@ -33,7 +78,7 @@ class PlainCNN(nn.Module):
             Convolved activation.
         """
 
-        self.forward_invocations += 1
+        count_side_effect(self, "forward_invocations")
         return torch.relu(self.conv(x))
 
 
@@ -63,7 +108,7 @@ class TrainBatchNorm(nn.Module):
             Normalized activation.
         """
 
-        self.forward_invocations += 1
+        count_side_effect(self, "forward_invocations")
         return torch.relu(self.bn(x))
 
 
@@ -92,7 +137,7 @@ class RecurrentModel(nn.Module):
             Final recurrent state.
         """
 
-        self.forward_invocations += 1
+        count_side_effect(self, "forward_invocations")
         state = x
         for _ in range(3):
             state = torch.tanh(self.cell(state))
@@ -124,9 +169,9 @@ class ConditionalModel(nn.Module):
             Result of the selected branch.
         """
 
-        self.forward_invocations += 1
+        count_side_effect(self, "forward_invocations")
         random_offset = torch.rand((), device=x.device)
-        self.rng_draw_count += 1
+        count_side_effect(self, "rng_draw_count")
         shifted = x + random_offset
         if bool((x.sum() > 0).item()):
             return torch.sigmoid(shifted)
@@ -157,7 +202,7 @@ class InPlaceModel(nn.Module):
             Mutated internal tensor.
         """
 
-        self.forward_invocations += 1
+        count_side_effect(self, "forward_invocations")
         result = x.clone()
         result.add_(2.0)
         return result.relu_()
@@ -195,7 +240,7 @@ class MutatingPreHookModel(nn.Module):
             Forward arguments containing the mutated tensor.
         """
 
-        self.pre_hook_invocations += 1
+        count_side_effect(self, "pre_hook_invocations")
         tensor = args[0]
         if isinstance(tensor, torch.Tensor):
             tensor.add_(0.5)
@@ -215,7 +260,7 @@ class MutatingPreHookModel(nn.Module):
             Projected activation.
         """
 
-        self.forward_invocations += 1
+        count_side_effect(self, "forward_invocations")
         return torch.relu(self.linear(x))
 
 
@@ -251,7 +296,7 @@ class TinyTransformer(nn.Module):
             Encoded sequence.
         """
 
-        self.forward_invocations += 1
+        count_side_effect(self, "forward_invocations")
         return self.encoder(x)
 
 
@@ -284,7 +329,7 @@ class FailingConditionalModel(nn.Module):
             Always, after the selected branch has executed.
         """
 
-        self.forward_invocations += 1
+        count_side_effect(self, "forward_invocations")
         shifted = x + 1.0
         if bool((x.sum() > 0).item()):
             shifted = torch.relu(shifted)
