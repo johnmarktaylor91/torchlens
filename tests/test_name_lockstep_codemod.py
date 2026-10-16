@@ -302,6 +302,48 @@ def test_field_table_string_keys_follow_their_field(tmp_path: Path) -> None:
     assert "NAMES = ('backward_durations',)" in (root / "torchlens/other.py").read_text()
 
 
+def test_class_table_lookups_follow_the_renamed_key(tmp_path: Path) -> None:
+    """F6: string lookups on a class table whose key is renamed follow it; other tables' stay."""
+
+    root = _repo(
+        tmp_path,
+        {
+            "torchlens/__init__.py": "",
+            "torchlens/call.py": (
+                "OTHER = {'label': 0}\n"
+                "\n"
+                "class Call:\n"
+                "    SPEC = {'label': 'keep'}\n"
+                "    ALIASES = {'call_label': SPEC['label']}\n"
+                "\n"
+                "    def policy(self):\n"
+                "        return self.SPEC.get('label'), OTHER['label']\n"
+                "\n"
+                "\n"
+                "KEEP = Call.SPEC['label']\n"
+            ),
+        },
+    )
+    row = {
+        "id": "member:torchlens.call:Call.label",
+        "kind": "member",
+        "name": "label",
+        "proposed": "call_name",
+        "path": "Call.label",
+        "module": "torchlens.call",
+        "owner": "torchlens.call:Call",
+    }
+    edits = codemod.plan([row], root, roots=("torchlens",))
+    definite = {(line, col) for _, line, col, how in _sites(edits) if how == codemod.DEFINITE}
+    assert definite == {(4, 14), (5, 36), (8, 31), (11, 19)}
+    codemod.apply(edits, root)
+    text = (root / "torchlens/call.py").read_text()
+    assert "ALIASES = {'call_label': SPEC['call_name']}" in text
+    assert "self.SPEC.get('call_name'), OTHER['label']" in text
+    assert "OTHER = {'label': 0}" in text
+    assert "KEEP = Call.SPEC['call_name']" in text
+
+
 def test_dry_run_output_carries_the_row_id_and_skips(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

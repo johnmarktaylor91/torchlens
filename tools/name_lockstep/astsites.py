@@ -230,7 +230,7 @@ def _record_import(pos: Positions, node: ast.ImportFrom, name: str) -> None:
                 pos.found.add((lineno, match.start("name")))
 
 
-def _table_keys(value: ast.expr, pos: Positions) -> None:
+def _table_keys(value: ast.expr, pos: Positions) -> bool:
     """Record the leaf where it is a string key or element of a literal table.
 
     Parameters
@@ -240,8 +240,14 @@ def _table_keys(value: ast.expr, pos: Positions) -> None:
         call such as ``frozenset({...})``.
     pos
         Position collector.
+
+    Returns
+    -------
+    bool
+        Whether the leaf was found.
     """
 
+    found = False
     for node in ast.walk(value):
         if isinstance(node, ast.Dict):
             entries: list[ast.expr | None] = list(node.keys)
@@ -252,6 +258,64 @@ def _table_keys(value: ast.expr, pos: Positions) -> None:
         for entry in entries:
             if isinstance(entry, ast.Constant) and entry.value == pos.old:
                 pos.at(entry.lineno, entry.col_offset + 1)
+                found = True
+    return found
+
+
+#: Methods that look a string key up in a table.
+_LOOKUPS = frozenset({"get", "pop", "setdefault"})
+
+
+def _table_name(holder: ast.expr, owners: frozenset[str]) -> str | None:
+    """Return the table a lookup reads: a bare name (owner ``""``) or ``<owner>.TABLE``."""
+
+    if isinstance(holder, ast.Name) and "" in owners:
+        return holder.id
+    if (
+        isinstance(holder, ast.Attribute)
+        and isinstance(holder.value, ast.Name)
+        and holder.value.id in owners
+    ):
+        return holder.attr
+    return None
+
+
+def _table_lookups(
+    scope: ast.AST, tables: set[str], owners: frozenset[str], pos: Positions
+) -> None:
+    """Record ``TABLE["leaf"]`` and ``TABLE.get("leaf")`` on tables whose key is renamed.
+
+    Parameters
+    ----------
+    scope
+        Where to look.
+    tables
+        Class-table names holding the leaf as a key.
+    owners
+        What may hold a table in ``scope``: ``""`` for a bare name, else ``self``,
+        ``cls`` or the class name.
+    pos
+        Position collector.
+    """
+
+    for node in ast.walk(scope):
+        if isinstance(node, ast.Subscript):
+            holder, key = node.value, node.slice
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in _LOOKUPS
+            and node.args
+        ):
+            holder, key = node.func.value, node.args[0]
+        else:
+            continue
+        if (
+            isinstance(key, ast.Constant)
+            and key.value == pos.old
+            and _table_name(holder, owners) in tables
+        ):
+            pos.at(key.lineno, key.col_offset + 1)
 
 
 def _assigned(node: ast.stmt) -> tuple[list[str], ast.expr | None]:
@@ -297,7 +361,7 @@ def module_tables(tree: ast.Module, pos: Positions) -> None:
 
 
 def definite_member(row: dict[str, Any], tree: ast.Module, pos: Positions) -> None:
-    """Record a member's definition, its class-table keys and ``self.<member>`` in its class.
+    """Record a member's definition, its class-table keys and lookups, and ``self.<member>``.
 
     Parameters
     ----------
@@ -313,6 +377,7 @@ def definite_member(row: dict[str, Any], tree: ast.Module, pos: Positions) -> No
     for node in ast.walk(tree):
         if not (isinstance(node, ast.ClassDef) and node.name == class_name):
             continue
+        tables: set[str] = set()
         for item in node.body:
             if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == pos.old:
                 pos.after_keyword(item.lineno, "def")
@@ -323,10 +388,13 @@ def definite_member(row: dict[str, Any], tree: ast.Module, pos: Positions) -> No
                 for target in item.targets:
                     if isinstance(target, ast.Name) and target.id == pos.old:
                         pos.at(target.lineno, target.col_offset)
-            _, value = _assigned(item)
-            if value is not None:
-                # The class's own field tables (portable-state spec, slots, policies).
-                _table_keys(value, pos)
+            names, value = _assigned(item)
+            # The class's own field tables (portable-state spec, slots, policies).
+            if value is not None and _table_keys(value, pos):
+                tables.update(names)
+        if tables:
+            _table_lookups(node, tables, frozenset({"", "self", "cls", class_name}), pos)
+            _table_lookups(tree, tables, frozenset({class_name}), pos)
         for sub in ast.walk(node):
             if (
                 isinstance(sub, ast.Attribute)
