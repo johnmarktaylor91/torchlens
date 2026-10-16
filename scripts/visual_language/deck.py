@@ -317,17 +317,17 @@ def compose_slide(
         else:
             canvas = compose.compose_auto(slide, list(renders.values()), height)
     problems.extend(canvas.problems)
-    if slide.id.startswith("sentinel-"):
-        # The strip is an overview: its full-size renders are in raw/ and the review PDF, so
-        # small text on the composed page is a warning there, never a failed slide.
-        small = [p for p in problems if "CSS px" in p]
-        problems = [p for p in problems if p not in small]
-        canvas.warnings.extend(small)
     picture = out / f"S{number:02d}-{slide.id}.svg"
     canvas.write(picture)
     size = picture.stat().st_size
     if size > 150_000:
         problems.append(f"picture is {size // 1000} KB, over 150 KB")
+    if slide.id.startswith("sentinel-"):
+        # The strip is an overview: its full-size renders are in raw/ and the review PDF, so
+        # small text or a large composed page is a warning there, never a failed slide.
+        overview = [p for p in problems if "CSS px" in p or "KB, over" in p]
+        problems = [p for p in problems if p not in overview]
+        canvas.warnings.extend(overview)
     record.update(
         status="failed" if problems else "ok",
         problems=problems,

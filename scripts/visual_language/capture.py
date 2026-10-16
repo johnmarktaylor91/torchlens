@@ -104,9 +104,9 @@ def _bundle(trace: Any) -> Any:
     ablated = trace.fork("ablated")
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        ablated.do(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+        ablated.do(tl.func("relu"), tl.zero_ablate())
         successor = ablated.fork("successor")
-        successor.do(tl.func("add"), tl.zero_ablate(), confirm_mutation=True)
+        successor.do(tl.func("add"), tl.zero_ablate())
     return tl.bundle({"clean": trace, "ablated": ablated, "successor": successor}, baseline="clean")
 
 

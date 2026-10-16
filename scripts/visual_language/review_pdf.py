@@ -111,7 +111,22 @@ def write_changes_pdf(
             f"teaching slides: {len(result['changed'])} changed, {len(result['added'])} added, "
             f"{len(result['removed'])} removed, {len(result['unchanged'])} unchanged",
             f"sentinel strip: {len(result['sentinel']['changed'])} changed of "
-            f"{sum(len(v) for v in result['sentinel'].values())}",
+            f"{sum(len(result['sentinel'][k]) for k in ('changed', 'added', 'removed', 'unchanged'))}",
+            f"changed slides that show measured time (may be a new measurement): "
+            f"{', '.join(result['measured']) or 'none'}",
+            "slides a build did not finish cleanly: "
+            + (
+                ", ".join(f"{k} ({v['base']} / {v['head']})" for k, v in result["failed"].items())
+                or "none"
+            ),
+            "sentinel rows a build did not finish cleanly: "
+            + (
+                ", ".join(
+                    f"{k} ({v['base']} / {v['head']})"
+                    for k, v in result["sentinel"]["failed"].items()
+                )
+                or "none"
+            ),
             "",
             "Ignored as different by construction (never a change):",
             *(f"  {name}: {why}" for name, why in result["normalization"].items()),

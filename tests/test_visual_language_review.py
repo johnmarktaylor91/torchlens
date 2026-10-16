@@ -13,7 +13,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from scripts.visual_language.review import NORMALIZE_RULES, normalize, review
+from scripts.visual_language.review import NORMALIZE_RULES, SlideRender, compare, normalize, review
 
 GENERATOR = """
 import json, sys
@@ -107,3 +107,19 @@ def test_each_rule_names_why_it_differs_by_construction() -> None:
     text, hits = normalize("/build/side/a.py at 0x7f00deadbeef", roots=("/build/side",))
     assert text == "<tree>/a.py at 0x<addr>"
     assert hits == {"tree paths": 1, "object addresses": 1}
+
+
+def test_time_shares_count_as_noise_only_beside_measured_times() -> None:
+    """A share of measured time is noise; a share with no timing beside it is a real number."""
+
+    assert normalize("t=5 us (54% of total)")[0] == normalize("t=7 us (51% of total)")[0]
+    assert normalize("(54% of total)")[0] != normalize("(51% of total)")[0]
+
+
+def test_a_slide_failing_on_both_sides_is_named_failed() -> None:
+    """Two failed builds of one slide compare equal, so the failure is reported on its own."""
+
+    failed = {"x": SlideRender("x", status="failed")}
+    result = compare((["x"], failed), (["x"], {"x": SlideRender("x", status="failed")}))
+    assert result["unchanged"] == ["x"]
+    assert result["failed"] == {"x": {"base": "failed", "head": "failed"}}

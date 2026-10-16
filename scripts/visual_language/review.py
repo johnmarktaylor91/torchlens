@@ -80,6 +80,11 @@ NORMALIZE_RULES: tuple[tuple[str, str, Callable[[str], tuple[str, int]]], ...] =
 )
 
 
+#: Shares of measured time (the speed lens's "top-1 of 5 (54% of total)"), normalized only
+#: in a render that also shows measured durations, so a share of a counted quantity stays.
+_TIME_SHARE = re.compile(r"\(\d+(?:\.\d+)?% of total\)")
+
+
 def normalize(text: str, roots: tuple[str, ...] = ()) -> tuple[str, dict[str, int]]:
     """Text with every by-construction difference replaced; hit counts per rule."""
 
@@ -94,6 +99,10 @@ def normalize(text: str, roots: tuple[str, ...] = ()) -> tuple[str, dict[str, in
         text, count = rule(text)
         if count:
             hits[name] = count
+    if "measured durations" in hits:
+        text, count = _TIME_SHARE.subn("(<share> of total)", text)
+        if count:
+            hits["measured time shares"] = count
     return text, hits
 
 
@@ -149,12 +158,25 @@ def read_build(deck: Path, roots: tuple[str, ...] = ()) -> tuple[list[str], dict
 
 def compare(
     base: tuple[list[str], dict[str, SlideRender]], head: tuple[list[str], dict[str, SlideRender]]
-) -> dict[str, list[str]]:
-    """Slide ids changed, added, removed and unchanged, in head order then base-only order."""
+) -> dict[str, Any]:
+    """Slide ids changed, added, removed and unchanged, in head order then base-only order.
+
+    ``failed`` names every slide a side did not build cleanly (its status on each side), and
+    ``measured`` the changed slides whose renders show measured time: their change may be
+    a new measurement, not a new look.
+    """
 
     (base_order, base_r), (head_order, head_r) = base, head
     order = head_order + [s for s in base_order if s not in head_order]
-    out: dict[str, list[str]] = {"changed": [], "added": [], "removed": [], "unchanged": []}
+    out: dict[str, Any] = {"changed": [], "added": [], "removed": [], "unchanged": []}
+    out["failed"] = {
+        sid: {
+            side: r[sid].status if sid in r else "absent"
+            for side, r in (("base", base_r), ("head", head_r))
+        }
+        for sid in order
+        if any(sid in r and r[sid].status != "ok" for r in (base_r, head_r))
+    }
     for slide_id in order:
         if slide_id not in base_r:
             out["added"].append(slide_id)
@@ -167,6 +189,11 @@ def compare(
             out["changed"].append(slide_id)
         else:
             out["unchanged"].append(slide_id)
+    out["measured"] = [
+        sid
+        for sid in out["changed"]
+        if any("measured durations" in r[sid].hits for r in (base_r, head_r))
+    ]
     return out
 
 
