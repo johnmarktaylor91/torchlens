@@ -58,6 +58,18 @@ def _hwm() -> int:
     raise AssertionError("no VmHWM line")
 
 
+def _resident_parts() -> tuple[int, int]:
+    """Return (RssAnon, RssFile) in bytes: what an RSS change is made of."""
+
+    parts = {}
+    with open("/proc/self/status") as handle:
+        for line in handle:
+            key = line.split(":", 1)[0]
+            if key in ("RssAnon", "RssFile"):
+                parts[key] = int(line.split()[1]) * 1024
+    return parts.get("RssAnon", -1), parts.get("RssFile", -1)
+
+
 class Transient(nn.Module):
     """Holds the 64 MiB host buffer during the forward, frees it before returning."""
 
@@ -142,7 +154,7 @@ def test_cpu_forward_zero_reads_none_with_the_reason(monkeypatch: pytest.MonkeyP
         trace.cleanup()
 
 
-def _backward_hook_trace(device: str, samples: dict[str, list[int]]) -> Any:
+def _backward_hook_trace(device: str, samples: dict[str, list[Any]]) -> Any:
     torch.manual_seed(0)
     model = nn.Linear(4, 4).to(device).train()
     trace = tl.trace(model, torch.randn(2, 4, device=device))
@@ -151,8 +163,10 @@ def _backward_hook_trace(device: str, samples: dict[str, list[int]]) -> Any:
     def plant(grad: torch.Tensor) -> None:
         if device == "cpu":
             samples["entry"].append(_rss())
+            samples["parts_entry"].append(_resident_parts())
             buffer: Any = np.ones(PLANT)
             samples["alive"].append(_rss())
+            samples["parts_alive"].append(_resident_parts())
         else:
             buffer = torch.ones(2 * PLANT, device=device)  # float32: 64 MiB
         del buffer
@@ -163,7 +177,7 @@ def _backward_hook_trace(device: str, samples: dict[str, list[int]]) -> Any:
 
 @procfs
 def test_cpu_backward_peak_is_the_largest_pass_peak() -> None:
-    samples: dict[str, list[int]] = {"entry": [], "alive": []}
+    samples: dict[str, list[Any]] = {"entry": [], "alive": [], "parts_entry": [], "parts_alive": []}
     trace, out = _backward_hook_trace("cpu", samples)
     try:
         windows = []
@@ -172,7 +186,16 @@ def test_cpu_backward_peak_is_the_largest_pass_peak() -> None:
             trace.backward(out.sum(), retain_graph=retain)
             windows.append(_hwm() - before)
             outside = samples["alive"][-1] - samples["entry"][-1]
-            assert outside >= PLANT_BYTES - MARGIN
+            (anon_entry, file_entry), (anon_alive, file_alive) = (
+                samples["parts_entry"][-1],
+                samples["parts_alive"][-1],
+            )
+            assert outside >= PLANT_BYTES - MARGIN, (
+                f"the {PLANT_BYTES}-byte plant raised RSS by only {outside} bytes: RssAnon"
+                f" changed by {anon_alive - anon_entry} and RssFile by {file_alive - file_entry}"
+                " while it was alive (RssFile falling means the host reclaimed file-backed"
+                " pages during the pass, so the resident high-water cannot show the plant)"
+            )
             assert int(trace.backward_peak_memory) >= outside - MARGIN
             assert int(trace.backward_peak_memory) >= PLANT_BYTES - MARGIN
         assert trace.backward_memory_backend == "cpu"
@@ -209,7 +232,7 @@ def test_cuda_forward_peak_includes_a_freed_device_buffer() -> None:
 
 @cuda
 def test_cuda_backward_peak_bounds_a_device_buffer_in_a_hook() -> None:
-    samples: dict[str, list[int]] = {"entry": [], "alive": []}
+    samples: dict[str, list[Any]] = {"entry": [], "alive": []}
     trace, out = _backward_hook_trace("cuda", samples)
     try:
         torch.cuda.reset_peak_memory_stats()
