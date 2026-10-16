@@ -174,13 +174,13 @@ def _save_ops(ctx: Any) -> bool:
 def test_recorder_folds_repeat_labels_without_rebuilding(fail_on: int | None) -> None:
     """Multi-pass folds and the failed-partial fold keep a rebuild-equal index."""
 
-    with counting() as tally:
-        with Recorder(
-            _Chain(fail_on), save=_save_ops, on_forward_error="return_partial"
-        ) as recorder:
-            for _ in range(3):
-                recorder.log(torch.ones(2))
-            index = recorder._capture_events.live_index
+    with (
+        counting() as tally,
+        Recorder(_Chain(fail_on), save=_save_ops, on_forward_error="return_partial") as recorder,
+    ):
+        for _ in range(3):
+            recorder.log(torch.ones(2))
+        index = recorder._capture_events.live_index
     assert tally.counts["reseen_append"] > 0
     assert tally.counts["reseen_append_rebuilds"] == 0
     assert tally.counts["reseen_append_over_bound"] == 0
