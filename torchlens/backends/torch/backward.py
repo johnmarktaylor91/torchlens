@@ -53,7 +53,7 @@ from ...utils.introspection import _get_code_qualname, _get_col_offset
 from ...utils.tensor_utils import synchronize_pending_cpu_async_copies
 from ._backward_dispatch import outside_census
 from ._backward_markers import begin_grad_fn_marker, end_grad_fn_marker, executing_grad_fn_ref
-from ._backward_roots import _root_tensor_step_index, _roots_by_trace
+from ._backward_roots import _autograd_roots_from_call, _root_tensors, _roots_by_trace
 from ._fire_timing import (
     _clear_fire_timing_stamps,
     _fire_timing_stamp_list,
@@ -66,7 +66,7 @@ from ._gradfn_markers import (
     _exit_gradfn_marker,
     _gradfn_marker_list,
 )
-from ._tl import detached_saved_activation_label
+from ._tl import detached_saved_activation_label, get_tensor_label
 from .escape_detection import expected_original_call
 from .tensor_tracking import (
     _STATE_BOUNDARY_GRAD_FNS,
@@ -540,30 +540,6 @@ def _enqueue_implicit_pass_drain_callback(
     return _drain_callback
 
 
-def _root_tensors(value: Any) -> tuple[torch.Tensor, ...]:
-    """Flatten autograd root arguments into tensors.
-
-    Parameters
-    ----------
-    value:
-        Tensor or nested sequence passed to an autograd engine entry.
-
-    Returns
-    -------
-    tuple[torch.Tensor, ...]
-        Tensor roots in left-to-right order.
-    """
-
-    if isinstance(value, torch.Tensor):
-        return (value,)
-    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-        tensors: list[torch.Tensor] = []
-        for item in value:
-            tensors.extend(_root_tensors(item))
-        return tuple(tensors)
-    return ()
-
-
 def _traces_for_roots(roots: Any) -> tuple[Any, ...]:
     """Find live traces whose pinned grad-fn ids appear under ``roots``.
 
@@ -622,33 +598,6 @@ def _traces_for_roots(roots: Any) -> tuple[Any, ...]:
     return tuple(matched)
 
 
-def _autograd_roots_from_call(
-    args: tuple[Any, ...],
-    kwargs: dict[str, Any],
-    root_kwarg: str,
-) -> Any:
-    """Return root tensors from an autograd wrapper call.
-
-    Parameters
-    ----------
-    args:
-        Positional arguments passed to the wrapped function.
-    kwargs:
-        Keyword arguments passed to the wrapped function.
-    root_kwarg:
-        Keyword name that carries roots for this autograd entry.
-
-    Returns
-    -------
-    Any
-        Original root argument object, or ``None`` when absent.
-    """
-
-    if args:
-        return args[0]
-    return kwargs.get(root_kwarg)
-
-
 def _first_root_tensor(roots: Any) -> torch.Tensor | None:
     """Return the first tensor in an autograd root object.
 
@@ -690,6 +639,41 @@ def _root_forward_op_count(trace: Any, roots: Any) -> int | None:
         if (step_index := _root_tensor_step_index(trace, root)) is not None
     ]
     return max(root_steps) if root_steps else None
+
+
+def _root_tensor_step_index(trace: Any, root: torch.Tensor) -> int | None:
+    """Return a TorchLens ``step_index`` for an autograd root tensor.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the root tensor.
+    root:
+        Root tensor passed to an autograd entry point.
+
+    Returns
+    -------
+    int | None
+        Root layer ``step_index`` when resolvable.
+    """
+
+    label = get_tensor_label(root)
+    if label is None:
+        return None
+    lookup_labels = (getattr(trace, "_raw_to_final_layer_labels", {}).get(label, label), label)
+    layer_lookup = getattr(trace, "layer_dict_all_keys", {})
+    for lookup_label in lookup_labels:
+        layer = layer_lookup.get(lookup_label)
+        step_index = getattr(layer, "step_index", None)
+        if isinstance(step_index, int):
+            return step_index
+    raw_match = re.search(r"_(\d+)_raw$", label)
+    if raw_match is not None:
+        return int(raw_match.group(1))
+    final_match = re.search(r"_[1-9]\d*_(\d+)(?::[1-9]\d*)?$", label)
+    if final_match is not None:
+        return int(final_match.group(1))
+    return None
 
 
 def _grad_fn_is_custom(grad_fn_handle: Any) -> bool:
