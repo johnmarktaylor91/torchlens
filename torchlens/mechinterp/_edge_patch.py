@@ -17,10 +17,11 @@ replay engine:
   one EDGE substitution of that consumed value (``edge_substitution``). The
   residual state itself, and every other consumer of it, stay as computed.
 * ``a{L}.h{H}<q|k|v>`` receivers share one norm with every head and role of
-  their layer, so the patch goes one step later: the shared input edge is
-  substituted on a scratch fork, and only head ``H``'s ``q`` (or ``k``, or
-  ``v``) slice of the projection output it produces is written into the
-  result (an ACT selection over the recipe's per-head facet).
+  their layer, so the patch goes one step later: the norm and projection
+  ops alone are re-executed on the substituted input (no fork and no
+  replay), and only head ``H``'s ``q`` (or ``k``, or ``v``) slice of the
+  projection output is written into the result (an ACT selection over the
+  recipe's per-head facet).
 
 Receivers are patched in topological order, one stage at a time (a layer's
 attention receivers, then its MLP, then ``logits``). An edge substitution
@@ -28,6 +29,11 @@ stores a fixed value, so a later patch never revisits an earlier receiver,
 and every receiver's patched value is computed from the forward as patched
 so far: the component graph is rebuilt on the partly patched fork at the
 start of each stage after the first write.
+
+Cost: one replay per stage (a layer's q/k/v writes go in as one selection
+batch; an ``m{L}`` or ``logits`` stage is one edge substitution), one graph
+build per stage after the first, no scratch forks; on a GPT-2 with ``L``
+layers at most ``2L + 1`` replays and ``2L`` graph builds per call.
 
 Spellings DOCUMENTED-UNSTABLE pending the naming session.
 """
@@ -119,30 +125,69 @@ def _stages(edges: list[Any]) -> list[list[tuple[Any, list[Any]]]]:
     return [stages[key] for key in sorted(stages)]
 
 
-def _write_receiver(owner: Any, trace: Any, receiver: Any, patched: torch.Tensor) -> None:
-    """Write ``patched`` as the receiver's input into ``owner``.
+def _projection_values(trace: Any, attention: list[tuple[Any, torch.Tensor]]) -> list[torch.Tensor]:
+    """Return the projection output each q/k/v receiver's patched norm input produces.
 
-    A q/k/v slice is computed on a scratch fork of the clean ``trace``: the
-    projection output depends only on the substituted norm input, so the
-    scratch never needs the partly patched state.
+    The projection depends only on the substituted norm input, so it is
+    re-executed locally on the clean ``trace``: the norm and projection ops
+    alone, with no fork and no replay of the rest of the model. Receivers
+    that share a norm input and a projection (one layer's heads and roles)
+    share one path search.
     """
 
-    if receiver.kind not in ("q", "k", "v"):
-        owner.do(_input_edge_record(owner, receiver).__selection__(), patched)
-        return
-    scratch = trace.fork()
-    scratch.do(_input_edge_record(scratch, receiver).__selection__(), patched)
-    spec = _head_spec(scratch, receiver)
-    projection = scratch.ops[str(spec.home_label)].out
-    if not isinstance(projection, torch.Tensor):
-        refuse(
-            code="mi_edge_selection_unresolvable",
-            message=f"The projection output behind {receiver.name!r} was not recomputed.",
-            remedy="capture with tl.options.CaptureOptions(layers_to_save='all', "
-            "intervention_ready=True)",
-            receiver=receiver.name,
+    from ..intervention.edge_substitution import _recompute_with_substitution
+
+    groups: dict[tuple[str, str, str], list[int]] = {}
+    for index, (receiver, _value) in enumerate(attention):
+        home = str(_head_spec(trace, receiver).home_label)
+        groups.setdefault((receiver.input_label, receiver.norm_address, home), []).append(index)
+    values: list[torch.Tensor] = [attention[0][1]] * len(attention)
+    for (_input, _norm, home), indices in groups.items():
+        receiver = attention[indices[0]][0]
+        recomputed = _recompute_with_substitution(
+            trace, _input_edge_record(trace, receiver), [attention[i][1] for i in indices], home
         )
-    owner.do(_head_spec(owner, receiver).__selection__(), projection.detach().clone())
+        reason = recomputed if isinstance(recomputed, str) else "it is not a tensor"
+        for offset, index in enumerate(indices):
+            projection = None if isinstance(recomputed, str) else recomputed[offset]
+            if not isinstance(projection, torch.Tensor):
+                refuse(
+                    code="mi_edge_selection_unresolvable",
+                    message=f"The projection output behind {attention[index][0].name!r} was "
+                    f"not recomputed: {reason}",
+                    remedy="capture with tl.options.CaptureOptions(layers_to_save='all', "
+                    "intervention_ready=True)",
+                    receiver=attention[index][0].name,
+                )
+            values[index] = projection.detach().clone()
+    return values
+
+
+def _write_stage(owner: Any, trace: Any, writes: list[tuple[Any, torch.Tensor]]) -> None:
+    """Write one stage's patched receiver inputs into ``owner``, in one replay.
+
+    A stage is either one ``m{L}`` / ``logits`` receiver (one EDGE
+    substitution) or one layer's q/k/v receivers, whose head slices are
+    written together as one selection batch (one replay).
+    """
+
+    attention: list[tuple[Any, torch.Tensor]] = []
+    residual: list[tuple[Any, torch.Tensor]] = []
+    for receiver, value in writes:
+        (attention if receiver.kind in ("q", "k", "v") else residual).append((receiver, value))
+    for receiver, value in residual:
+        owner.do(_input_edge_record(owner, receiver).__selection__(), value)
+    if not attention:
+        return
+    projections = _projection_values(trace, attention)
+    pairs = [
+        (_head_spec(owner, receiver).__selection__(), projection)
+        for (receiver, _value), projection in zip(attention, projections, strict=True)
+    ]
+    if len(pairs) == 1:
+        owner.do(*pairs[0])
+    else:
+        owner.do(pairs)
 
 
 def patch_edges(trace: Any, edges: Iterable[Any], *, corrupt: Any) -> Any:
@@ -178,6 +223,7 @@ def patch_edges(trace: Any, edges: Iterable[Any], *, corrupt: Any) -> Any:
     result = None
     for stage in stages:
         live = None if result is None else component_graph(result)
+        writes = []
         for receiver, receiver_edges in stage:
             if live is None:
                 patched = receiver.value
@@ -190,7 +236,8 @@ def patch_edges(trace: Any, edges: Iterable[Any], *, corrupt: Any) -> Any:
             for edge in receiver_edges:
                 corrupt_value = corrupt.nodes[edge.sender.name].value
                 patched = patched - senders[edge.sender.name] + corrupt_value.to(patched.dtype)
-            owner = trace.fork() if result is None else result
-            _write_receiver(owner, trace, receiver, patched.detach())
-            result = owner
+            writes.append((receiver, patched.detach()))
+        owner = trace.fork() if result is None else result
+        _write_stage(owner, trace, writes)
+        result = owner
     return trace.fork() if result is None else result

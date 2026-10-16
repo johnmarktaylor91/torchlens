@@ -194,9 +194,12 @@ example above: pass every edge outside the circuit.
 
 Receivers are patched in topological order, a stage at a time (a layer's
 attention receivers, then its MLP, then `logits`), and the component graph
-is rebuilt on the partly patched fork at each later stage, so a circuit over
-all 445 GPT-2 small receivers costs one replay per patched receiver (two for
-`q`, `k`, `v`) plus 24 graph builds. No edges returns an unpatched fork; an
+is rebuilt on the partly patched fork at each later stage. Each stage is
+one replay: a layer's `q`, `k` and `v` receivers are written together as
+one selection batch, and the projection output behind each of them is
+recomputed locally (only the norm and projection ops run on the
+substituted input, with no fork). A circuit over all 445 GPT-2 small
+receivers therefore costs 25 replays, 24 graph builds and one fork. No edges returns an unpatched fork; an
 edge passed twice refuses `mi_edge_patch_edge_repeated`. Patching needs a
 trace captured with `intervention_ready=True`.
 
@@ -293,9 +296,25 @@ Circuit test cases on GPT-2 small (CPU):
   against ACDC's encoding of the circuit is 0.870. The run took 57 minutes
   on 4 cores (3.4 s per row).
 - Circuits run as one `patch_edges` call; on GPT-2 small a call that patches
-  edges into 121 receivers (every MLP, `logits`, and the q, k and v
-  receivers of layers 0, 6 and 11) equals an independent forward-hook
-  implementation of the same convention within 1e-10 in float64.
+  33,161 edges into all 445 receivers equals an independent forward-hook
+  implementation of the same convention within 1e-10 in float64 (measured
+  gap 2.6e-13). On 2 rows, 4 threads, that call takes 108 s (25 replays,
+  24 graph builds, one fork); patching each q, k and v receiver through its
+  own fork and replay took 2675 s. On 20 rows of the IOI validation split a
+  circuit call takes 105 to 137 s (129 s on average), about half of it in
+  the replay engine's site resolution.
+- MIB IOI faithfulness (the circuit track's CPR and CMD on the validation
+  split, ranked by EAP-IG scores, compared with the MIB reference
+  implementation on the same examples): pending. A sweep runs 19
+  `patch_edges` calls per batch (the empty circuit and nine kept fractions
+  for each of the signed and absolute rankings), so the 10,000 validation
+  rows project to about 340 hours on 4 cores.
+- ACDC on IOI (the recipe below, tau 0.002, 20 rows): a test that patches
+  only edges into `logits` takes 0.9 s and one that touches all 445
+  receivers 138 s, so the full walk of 32,491 tests projects to about 450
+  hours on 4 cores (each test's cost interpolated by the number of stages
+  its pruned set touches). It has not been run; the first 20 tests pruned
+  8 of the 20 edges into `logits`.
 
 ACDC-style discovery is a recipe, not a TorchLens loop:
 [docs/recipes/acdc_ioi.md](../recipes/acdc_ioi.md) walks the receivers from

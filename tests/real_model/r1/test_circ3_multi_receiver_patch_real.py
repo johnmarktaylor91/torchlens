@@ -46,9 +46,9 @@ def test_a_gpt2_small_circuit_runs_as_one_call_and_matches_plain_hooks(r1_loader
         assert len({edge.receiver.name for edge in edges}) == 12 + 1 + 3 * 36
         started = time.perf_counter()
         patched = tl.mechinterp.patch_edges(clean, edges, corrupt=corrupt)
-        print(
-            f"patch_edges: {len(edges)} edges into 445 receivers in {time.perf_counter() - started:.1f} s"
-        )
+        elapsed = time.perf_counter() - started
+        receivers = len({edge.receiver.name for edge in edges})
+        print(f"patch_edges: {len(edges)} edges into {receivers} receivers in {elapsed:.1f} s")
         hooked = HookedPatch(model, gpt2_spec(model))
         corrupt_nodes, _ = hooked.run(corrupt_ids)
         plan: dict[str, list[str]] = {}
