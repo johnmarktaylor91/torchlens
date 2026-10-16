@@ -312,11 +312,14 @@ class _SAEFamily:
         try:
             op = resolve_one_site(trace, self.site)
         except (SiteResolutionError, InvalidArgumentError, KeyError, ValueError) as exc:
-            return self._ambiguous(f"it does not name exactly one op of this trace ({exc})")
+            return self._ambiguous(
+                f"it does not name exactly one op of this trace ({exc})", f"{self.site}:1"
+            )
         if getattr(op, "layer_label", None) is None:
             return self._ambiguous(
                 f"it names a {type(op).__name__} record, not one op (the module runs more "
-                "than once)"
+                "than once)",
+                _first_op_label(op, self.site),
             )
         passes = sum(
             1
@@ -326,20 +329,34 @@ class _SAEFamily:
         if passes > 1:
             return self._ambiguous(
                 f"it names {op.label!r}, one pass of a layer that runs {passes} times, and a "
-                "latent edit there would fire on every pass"
+                "latent edit there would fire on every pass",
+                str(op.label),
             )
         return frozenset({str(op.label)})
 
-    def _ambiguous(self, why: str) -> InvalidArgumentError:
-        """Build the coded refusal for a string site that is not one single-pass op."""
+    def _ambiguous(self, why: str, one_pass: str) -> InvalidArgumentError:
+        """Build the coded refusal for a string site that is not one single-pass op.
+
+        The remedy edits the latents of one pass through the splice door, whose
+        hook targets that pass alone; ``one_pass`` names the pass and rides in
+        the error's ``one_pass_site`` field.
+        """
 
         return InvalidArgumentError(
             f"the SAE registered as {self.name!r} sits at {self.site!r}, but {why}",
             code="sae_latent_site_ambiguous",
-            remedy=f"to edit every pass, register at a selector: tl.bridge.sae.unregister("
-            f"{self.name!r}); tl.bridge.sae.register({self.name!r}, sae, "
-            f"site=tl.module({self.site.rpartition(':')[0] or self.site!r})); see {_DOCS}",
+            remedy="edit the latents of one pass with tl.bridge.sae.splice(model, inputs, "
+            f"site={one_pass!r}, sae=sae, latents_edit=fn); see {_DOCS}",
+            one_pass_site=one_pass,
         )
+
+
+def _first_op_label(record: Any, site: str) -> str:
+    """Return the label of a module record's first op, else ``site`` with pass ``1``."""
+
+    for op in getattr(record, "ops", None) or ():
+        return str(getattr(op, "label", op))
+    return f"{site}:1"
 
 
 def _record_label(record: Any) -> Any:
@@ -352,6 +369,7 @@ def _as_indices(name: str, index: Any) -> tuple[int, ...]:
     """Return ``index`` as a tuple of latent indices, refusing other types."""
 
     def _is_index(value: Any) -> bool:
+        """Return whether ``value`` is a non-negative ``int`` (``bool`` excluded)."""
         return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
     if _is_index(index):
@@ -489,15 +507,17 @@ def logged_splice_trace(
 
     import torchlens as tl
 
-    from ..backends.torch._tl import get_tensor_label
+    from ..utils.tensor_utils import get_tensor_label
 
     module = module_for_site(clean, site_label, bridge="splice(..., log_latents=True)")
     raw: dict[str, str | None] = {}
 
     def _keep(latents: torch.Tensor) -> None:
+        """Record the raw label of the latents tensor the hook produced."""
         raw["latents"] = get_tensor_label(latents)
 
     def _hook(_module: nn.Module, _args: tuple[Any, ...], output: Any) -> torch.Tensor:
+        """Replace the site module's output with the SAE reconstruction plus its error."""
         if not isinstance(output, torch.Tensor):
             raise InvalidArgumentError(
                 f"splice(..., log_latents=True) at {site_label!r}: the module whose output is "

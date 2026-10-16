@@ -56,7 +56,7 @@ def test_spliced_outputs_are_identical_with_logging_on_and_off(setup) -> None:
     on = _splice(model, x, sae, log_latents=True)
     off = _splice(model, x, sae)
     assert len(on.spliced_outputs) == len(off.spliced_outputs)
-    for logged_out, replayed_out in zip(on.spliced_outputs, off.spliced_outputs):
+    for logged_out, replayed_out in zip(on.spliced_outputs, off.spliced_outputs, strict=True):
         assert torch.equal(logged_out, replayed_out)
     assert torch.equal(on.latents, off.latents)
     assert on.fraction_variance_explained_pooled == off.fraction_variance_explained_pooled
@@ -69,7 +69,7 @@ def test_logging_off_is_the_replayed_fork_with_no_latent_nodes(setup) -> None:
     assert default.latents_site is None and explicit_off.latents_site is None
     assert _labels(default.spliced) == _labels(default.clean)
     assert _labels(explicit_off.spliced) == _labels(default.spliced)
-    for left, right in zip(default.spliced_outputs, explicit_off.spliced_outputs):
+    for left, right in zip(default.spliced_outputs, explicit_off.spliced_outputs, strict=True):
         assert torch.equal(left, right)
     # The replayed fork is the base mechanism: splice_module(input="out") at the site.
     fork = default.clean.fork("by_hand")
@@ -183,3 +183,38 @@ def test_transcoder_splices_keep_working_beside_a_logged_splice() -> None:
     for trace in (before, after):
         torch.testing.assert_close(trace["mlp"].out, mlp_out, atol=1e-6, rtol=0.0)
         torch.testing.assert_close(trace[trace.output_layers[0]].out, expected, atol=1e-6, rtol=0.0)
+
+
+class _PairOut(nn.Module):
+    """Returns a tuple, so a hook on it sees a non-tensor output."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.inner = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        h = self.inner(x)
+        return h, h + 1
+
+
+class _TupleModel(nn.Module):
+    """``pair`` returns its child's output inside a tuple."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.pair = _PairOut()
+        self.fc2 = nn.Linear(4, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        a, b = self.pair(x)
+        return self.fc2(a * b)
+
+
+def test_logged_splice_at_a_tuple_returning_module_refuses_and_the_unlogged_splice_runs() -> None:
+    torch.manual_seed(0)
+    model, x, sae = _TupleModel().eval(), torch.randn(2, 4), _HandSAE()
+    with pytest.raises(InvalidArgumentError) as caught:
+        tl.bridge.sae.splice(model, x, site="pair.inner", sae=sae, log_latents=True)
+    assert caught.value.fields["code"] == "sae_splice_logged_output_not_tensor"
+    result = tl.bridge.sae.splice(model, x, site="pair.inner", sae=sae)
+    assert result.latents_site is None and result.latents.shape == (2, 3)

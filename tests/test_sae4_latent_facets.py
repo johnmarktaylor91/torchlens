@@ -131,7 +131,8 @@ def test_facet_read_door_returns_the_encoder_activation(setup) -> None:
 
     model, x, _sae = setup
     facets = _trace(model, x)["fc1"].facets
-    assert "res" in facets.keys()
+    listed = facets.keys()
+    assert "res" in listed
     torch.testing.assert_close(facets["res"].value, torch.tensor([_latents(r) for r in X]), **TOL)
     torch.testing.assert_close(facets["res[1]"].value, _latent_column(1), **TOL)
     expected_set = torch.tensor([[_latents(r)[0], _latents(r)[2]] for r in X])
@@ -206,26 +207,30 @@ class _Loop(nn.Module):
         return self.fc2(self.fc1(torch.tanh(self.fc1(x))))
 
 
-def test_one_latent_spelling_on_a_layer_that_runs_twice_refuses_with_a_set_spelling() -> None:
-    """A string site must name one op; the selector spelling its refusal names runs."""
+def test_one_latent_spelling_on_a_layer_that_runs_twice_refuses_with_a_one_pass_splice() -> None:
+    """A string site must name one single-pass op; the one-pass splice its refusal names runs."""
 
     torch.manual_seed(0)
     model, x, sae = _Loop().eval(), torch.randn(2, 4), _HandSAE()
     tl.bridge.sae.register("loop", sae, site="fc1")
     try:
-        with pytest.raises(InvalidArgumentError) as caught:
-            _trace(model, x).fork("edit").do(tl.facet("loop").latent(0), tl.zero_ablate())
-        assert caught.value.fields["code"] == "sae_latent_site_ambiguous"
-        assert "site=tl.module('fc1')" in str(caught.value)
-    finally:
-        tl.bridge.sae.unregister("loop")
-    tl.bridge.sae.register("loop", sae, site=tl.module("fc1"))
-    try:
         clean = _trace(model, x)
-        edited = clean.fork("all_passes").do(tl.facet("loop").latent(2), tl.zero_ablate())
-        assert not torch.equal(_model_out(edited), _model_out(clean))
+        with pytest.raises(InvalidArgumentError) as caught:
+            clean.fork("edit").do(tl.facet("loop").latent(0), tl.zero_ablate())
     finally:
         tl.bridge.sae.unregister("loop")
+    assert caught.value.fields["code"] == "sae_latent_site_ambiguous"
+    one_pass = caught.value.fields["one_pass_site"]
+    assert f"site={one_pass!r}" in str(caught.value)
+
+    def _zero_latent_2(latents: torch.Tensor) -> torch.Tensor:
+        edited = latents.clone()
+        edited[..., 2] = 0.0
+        return edited
+
+    result = tl.bridge.sae.splice(model, x, site=one_pass, sae=sae, latents_edit=_zero_latent_2)
+    assert torch.equal(result.edited_latents[..., 2], torch.zeros(2))
+    assert not torch.equal(result.spliced_outputs[0], result.clean_outputs[0])
 
 
 class _TwoSites(nn.Module):
@@ -276,9 +281,9 @@ def test_a_registered_sae_leaves_other_models_facets_alone() -> None:
     tl.bridge.sae.register("absent_sel", sae, site=tl.module("no_such_module"))
     try:
         trace = _trace(model, x)
-        facets = trace["fc_a"].facets
-        assert "absent_str" not in facets.keys() and "absent_sel" not in facets.keys()
-        assert "out" in facets.keys()
+        listed = trace["fc_a"].facets.keys()
+        assert "absent_str" not in listed and "absent_sel" not in listed
+        assert "out" in listed
         with pytest.raises(InvalidArgumentError) as caught:
             trace.fork("e").do(tl.facet("absent_sel").latent(0), tl.zero_ablate())
         assert caught.value.fields["code"] == "sae_latent_site_unmatched"
@@ -325,7 +330,7 @@ def test_latent_edit_adds_delta_times_the_decoder_row(setup, delta) -> None:
         _site_out(edited) - _site_out(clean), delta * torch.tensor([W_DEC[1]] * 2), **TOL
     )
     # The reconstruction error is carried unchanged: site' - decode(z') == site - decode(z).
-    for row, edited_row in zip(X, expected_site):
+    for row, edited_row in zip(X, expected_site, strict=True):
         z = _latents(row)
         z_edited = [z[0], z[1] + delta, z[2]]
         error = [row[j] - _decode(z)[j] for j in range(4)]

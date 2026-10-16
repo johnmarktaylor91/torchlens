@@ -306,7 +306,7 @@ documented unstable and may be renamed or removed without a compatibility alias.
 | F06 metrics | `infidelity`, `sensitivity`, `MetricResult`, `perturb`, `noise_std`, `radius`, `gaussian`, `square_removal` | unstable -- no deprecation shim owed |
 | F06 token attribution | `text`, `TokenAttributionResult`, `TokenAttributionPayload`, `keep_special_tokens`, `steps_per_batch`, `max_length`, `pad_token`, `auto`, `converged`, `show` | unstable -- no deprecation shim owed |
 | F06 LRP mechanism | `SiteStash`, `stash`, `fetch`, `mark_firing`, `leftovers`, `register_site`, `label_of` | unstable -- no deprecation shim owed |
-| Site targets | `SiteTarget`, `unit`, `call`, `sae` | unstable -- no deprecation shim owed |
+| Site targets | `SiteTarget`, `unit`, `call` | unstable -- no deprecation shim owed |
 | Integer-input evidence | `integer_input_layers` | unstable -- no deprecation shim owed |
 | Evaluation curves | `deletion_curve`, `insertion_curve`, `CurveResult`, `CurveStep`, `fractions`, `scores`, `area`, `aopc`, `steps`, `features`, `patch_size`, `auto`, `elements`, `pixels`, `patches`, `tokens`, `n_features`, `index`, `fraction`, `inputs`, `input_kwargs`, `baseline_mask`, `intervention` | unstable -- no deprecation shim owed |
 | Randomization test | `randomization_test`, `RandomizationResult`, `RandomizationStep`, `randomization`, `cascading`, `independent`, `layers`, `seed`, `keep_maps`, `original_attribution`, `randomized`, `similarity`, `similarities`, `spearman`, `spearman_abs`, `ssim`, `values` | unstable -- no deprecation shim owed |
@@ -319,7 +319,8 @@ Integrated Gradients always reports its signed completeness residual against the
 target delta. Occlusion always names its replacement baseline. CAM overlays visibly state the
 native measured map resolution, while their larger display grid is labeled as interpolation.
 A `SiteTarget` passed as `target=` attributes a hidden layer's output (or one unit of it) instead
-of the model output; layer methods given only integer inputs start their input path at the
+of the model output, and with `sae=` one latent of that SAE's encoding of the output (unstable, no
+deprecation shim owed); layer methods given only integer inputs start their input path at the
 embedding output. `deletion_curve` and `insertion_curve` score an attribution by removing or
 revealing its most-attributed input features in steps (each step a recorded intervention), and
 `randomization_test` checks that a method's maps change when the model's layers are
