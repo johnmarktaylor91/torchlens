@@ -40,7 +40,7 @@ def _assert_conserved(trace: Any) -> Any:
     assert len(status.attributions) == len(trace.backward_passes)
     total = 0
     for attribution, (pass_index, pass_count) in zip(
-        status.attributions, status.executed_flops_per_pass
+        status.attributions, status.executed_flops_per_pass, strict=True
     ):
         assert attribution.pass_index == pass_index
         rows = sum(row.flops for row in attribution.rows)

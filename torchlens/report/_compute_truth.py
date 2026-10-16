@@ -224,6 +224,12 @@ class ComputeRow:
     attribution_status: str | None = None
 
 
+def row_mac_flops(row: ComputeRow) -> int:
+    """The FLOPs an op row spends in multiply-accumulates (``2 * fma_macs``), else 0."""
+
+    return 2 * int(row.fma_macs) if row.fma_macs else 0
+
+
 @dataclass(frozen=True)
 class RatioFact:
     """A ratio with NAMED numerator/denominator row/section IDs (D6).

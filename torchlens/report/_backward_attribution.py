@@ -178,6 +178,17 @@ class _RowAccumulator:
         self.flops: int | None = 0
         self.recompute: int | None = 0
 
+    def add(self, op: Any, builds_graph: bool, checkpoint: str) -> bool:
+        """Fold one counted call into the row; whether its recompute share is unknown."""
+
+        self.flops = _add(self.flops, op.flops)
+        if op.flops is None:
+            self.recompute = None
+            return False
+        share = _recompute_share(op, builds_graph, checkpoint)
+        self.recompute = _add(self.recompute, share)
+        return share is None
+
 
 class _OwnedElsewhere:
     """Whether a node this trace walked differentiates another trace's forward op.
@@ -280,6 +291,33 @@ def _add(left: int | None, right: int | None) -> int | None:
     return None if left is None or right is None else left + right
 
 
+def _census_executed(
+    backward_pass: Any,
+    rows: tuple[BackwardFlopsRow, ...],
+    unattributed_flops: int | None,
+) -> int | None:
+    """The pass's executed count: rows plus the unattributed bucket."""
+
+    if pass_failed(backward_pass):
+        # A pass that raised did not run to completion: its calls stay as
+        # evidence on the rows, but the pass has no executed count.
+        return None
+    executed = unattributed_flops
+    for row in rows:
+        executed = _add(executed, row.flops)
+    return executed
+
+
+def _census_recompute_state(checkpoint: str, any_unknown: bool) -> str:
+    """The pass's recompute state from the witness and the per-call shares."""
+
+    if checkpoint == "none_observed":
+        return "none_observed"
+    if any_unknown or checkpoint == "unknown":
+        return "unknown"
+    return "labeled"
+
+
 def attribute_census(
     trace: Any,
     backward_pass: Any,
@@ -329,15 +367,8 @@ def attribute_census(
                 key, str(getattr(grad_fn, "label", "")), getattr(grad_fn, "op_label", None)
             )
             rows[key] = row
-        if op.family == "uncounted":
-            continue
-        row.flops = _add(row.flops, op.flops)
-        if op.flops is None:
-            row.recompute = None
-            continue
-        share = _recompute_share(op, builds_graph, checkpoint)
-        any_unknown_recompute = any_unknown_recompute or share is None
-        row.recompute = _add(row.recompute, share)
+        if op.family != "uncounted" and row.add(op, builds_graph, checkpoint):
+            any_unknown_recompute = True
     built = tuple(
         BackwardFlopsRow(
             pass_index=pass_index,
@@ -349,28 +380,15 @@ def attribute_census(
         )
         for row in rows.values()
     )
-    executed: int | None = unattributed_flops
-    for built_row in built:
-        executed = _add(executed, built_row.flops)
-    if pass_failed(backward_pass):
-        # A pass that raised did not run to completion: its calls stay as
-        # evidence on the rows, but the pass has no executed count.
-        executed = None
-    if checkpoint == "none_observed":
-        recompute = "none_observed"
-    elif any_unknown_recompute or checkpoint == "unknown":
-        recompute = "unknown"
-    else:
-        recompute = "labeled"
     return BackwardFlopsAttribution(
         pass_index=pass_index,
         convention=DISPATCH_COUNTING_CONVENTION,
-        executed_flops=executed,
+        executed_flops=_census_executed(backward_pass, built, unattributed_flops),
         rows=built,
         unattributed_flops=unattributed_flops,
         unattributed_ops=tuple(unattributed),
         uncounted_ops=tuple(uncounted.items()),
-        recompute=recompute,
+        recompute=_census_recompute_state(checkpoint, any_unknown_recompute),
         other_trace_ops=other_trace,
         source="census",
     )
@@ -486,6 +504,8 @@ def _entries_problem(entries: Any, field: str, check: Any, width: int) -> tuple[
 
 
 def _row_ok(entry: Any) -> bool:
+    """Whether one saved row holds a label, a call index and known-or-None counts."""
+
     label, call_index, op_label, flops, recompute = entry
     return (
         _is_label(label)
@@ -496,12 +516,8 @@ def _row_ok(entry: Any) -> bool:
     )
 
 
-def executed_flops_record_problem(record: Any) -> tuple[str, str] | None:
-    """Why a persisted ``executed_flops_record`` is malformed, or ``None`` when sound.
-
-    Returns ``(message, reason)``: the closed key set, ints and short strings
-    only, and rows plus unattributed equal to a known executed count.
-    """
+def _record_header_problem(record: Any) -> tuple[str, str] | None:
+    """The record's type, key set, convention and executed count."""
 
     if not isinstance(record, Mapping):
         return "the record must be a mapping or None", "record_type"
@@ -515,6 +531,34 @@ def executed_flops_record_problem(record: Any) -> tuple[str, str] | None:
     executed = record["executed_flops"]
     if executed is not None and not _is_count(executed):
         return f"executed_flops {executed!r} must be a non-negative int or None", "count_type"
+    return None
+
+
+def _record_coherence_problem(record: Mapping[str, Any]) -> tuple[str, str] | None:
+    """Whether rows plus unattributed equal a known executed count."""
+
+    executed = record["executed_flops"]
+    if executed is None:
+        return None
+    row_flops = [entry[3] for entry in record["rows"]]
+    if any(flops is None for flops in row_flops):
+        return "a known executed_flops needs every row's flops", "rows_incoherent"
+    bucket = sum(flops for _name, flops in record["unattributed"] if flops)
+    if sum(row_flops) + bucket != executed:
+        return "rows plus unattributed differ from executed_flops", "rows_incoherent"
+    return None
+
+
+def executed_flops_record_problem(record: Any) -> tuple[str, str] | None:
+    """Why a persisted ``executed_flops_record`` is malformed, or ``None`` when sound.
+
+    Returns ``(message, reason)``: the closed key set, ints and short strings
+    only, and rows plus unattributed equal to a known executed count.
+    """
+
+    problem = _record_header_problem(record)
+    if problem is not None:
+        return problem
     for field, check, width in (
         ("uncounted_ops", lambda e: _is_label(e[0]) and _is_count(e[1], minimum=1), 2),
         ("rows", _row_ok, 5),
@@ -523,11 +567,4 @@ def executed_flops_record_problem(record: Any) -> tuple[str, str] | None:
         problem = _entries_problem(record[field], field, check, width)
         if problem is not None:
             return problem
-    if executed is not None:
-        row_flops = [entry[3] for entry in record["rows"]]
-        if any(flops is None for flops in row_flops):
-            return "a known executed_flops needs every row's flops", "rows_incoherent"
-        bucket = sum(flops for _name, flops in record["unattributed"] if flops)
-        if sum(row_flops) + bucket != executed:
-            return "rows plus unattributed differ from executed_flops", "rows_incoherent"
-    return None
+    return _record_coherence_problem(record)

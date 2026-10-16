@@ -61,6 +61,7 @@ __all__ = [
     "HAS_C10D_GROUP_REGISTRY",
     "HAS_C10D_GROUP_SEQ",
     "HAS_CURRENT_GRAPH_TASK_ID",
+    "HAS_CURRENT_AUTOGRAD_NODE",
     "HAS_DYNAMO_EXPLAIN",
     "apply_ambient_execution_context",
     "restore_fp32_precision_controls",
@@ -1837,6 +1838,7 @@ HAS_DEVICE_CONTEXT_DISPATCH: bool = _probe_device_context_dispatch()
 HAS_DEVICE_CONSTRUCTORS: bool = _probe_device_constructors()
 HAS_ACCUMULATE_GRAD_CLASS: bool = _probe_accumulate_grad_class()
 HAS_CURRENT_GRAPH_TASK_ID: bool = _probe_current_graph_task_id()
+HAS_CURRENT_AUTOGRAD_NODE: bool = hasattr(torch._C, "_current_autograd_node")
 HAS_FX_GRAPH_MODULE: bool = _probe_fx_graph_module()
 HAS_NAMED_TENSOR_API: bool = _probe_named_tensor_api()
 HAS_CACHED_UNTYPED_STORAGE_WRAPPER: bool = _probe_cached_untyped_storage_wrapper()
@@ -2015,6 +2017,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_DEVICE_CONSTRUCTORS",
     "HAS_ACCUMULATE_GRAD_CLASS",
     "HAS_CURRENT_GRAPH_TASK_ID",
+    "HAS_CURRENT_AUTOGRAD_NODE",
     "HAS_FX_GRAPH_MODULE",
     "HAS_NAMED_TENSOR_API",
     "HAS_CACHED_UNTYPED_STORAGE_WRAPPER",
@@ -2575,6 +2578,16 @@ def get_current_graph_task_id_fn() -> Callable[[], Any] | None:
             "engine invocations and fall back to the open-bracket heuristic",
         )
         return None
+    return resolver
+
+
+def get_current_autograd_node_fn() -> Callable[[], Any] | None:
+    """Return autograd's executing-node resolver, or ``None`` (flag flipped) when absent."""
+    resolver = getattr(torch._C, "_current_autograd_node", None)
+    if resolver is None:
+        mark_torch_capability_missing(
+            "HAS_CURRENT_AUTOGRAD_NODE", "backward FLOPs fall back to the innermost node marker"
+        )
     return resolver
 
 

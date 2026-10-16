@@ -31,6 +31,7 @@ from typing import Any, TypeVar
 import torch
 
 from ...capture.flops import compute_dispatched_op_flops, dispatch_op_family
+from ...utils._torch_compat import get_current_autograd_node_fn
 from ._aten_capture import _capture_backward_aten
 from ._modes import _TorchLensDispatchMode
 from .tensor_tracking import _current_backward_graph_task_id
@@ -219,7 +220,7 @@ class _BackwardCensusMode(_TorchLensDispatchMode):
         refs = _ACTIVE_BACKWARD_GRAD_FN_REFS.get()
         if not refs:
             return None
-        current = getattr(torch._C, "_current_autograd_node", None)
+        current = get_current_autograd_node_fn()
         if current is None:
             return refs[-1]
         node = current()

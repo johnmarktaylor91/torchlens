@@ -34,7 +34,7 @@ from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 from .._errors import InvalidArgumentError
-from ._compute_truth import ComputeAggregation, compute_aggregation
+from ._compute_truth import ComputeAggregation, compute_aggregation, row_mac_flops
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
@@ -353,8 +353,9 @@ class _TreeBuilder:
                 self.self_unknown[owner] = self.self_unknown.get(owner, 0) + 1
             elif row.flops_fma2 is not None:
                 self.self_flops[owner] = self.self_flops.get(owner, 0) + int(row.flops_fma2)
-                if row.fma_macs:
-                    self.self_mac[owner] = self.self_mac.get(owner, 0) + 2 * int(row.fma_macs)
+                mac_flops = row_mac_flops(row)
+                if mac_flops:
+                    self.self_mac[owner] = self.self_mac.get(owner, 0) + mac_flops
 
     def _backward_ownership(self) -> None:
         """Charge each counted backward row to the owner of its forward op.
