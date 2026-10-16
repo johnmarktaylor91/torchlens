@@ -145,7 +145,7 @@ def output_digest(trace: tl.Trace) -> dict[str, Any]:
             tensors += 1
             value = out.detach().contiguous().cpu()
             digest.update(f"{value.dtype}{tuple(value.shape)}".encode())
-            digest.update(value.view(torch.uint8).numpy().tobytes() if value.numel() else b"")
+            digest.update(value.reshape(-1).view(torch.uint8).numpy().tobytes())
         else:
             digest.update(repr(type(out)).encode())
     return {"sha256": digest.hexdigest(), "ops": len(trace.layer_list), "tensors": tensors}
