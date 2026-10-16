@@ -235,6 +235,24 @@
   order, the result equals one `do()` per pair, and the batch is atomic (a refused pair leaves the
   trace as it was, apart from the one error event). Such a batch on another engine still refuses
   with `selection_batch_cross_kind`, which now names the replay engine as the working spelling.
+- **report**: `BackwardPass.flops_attribution` and `tl.report.backward_status(trace).attributions`
+  charge the executed backward to the GradFn call and forward op that did the work, with an
+  `unattributed` bucket naming every call that ran under no recorded node; rows plus bucket equal
+  the executed count exactly.
+- **report**: under activation checkpointing, forward kernels replayed in the backward are labeled
+  `recompute_flops` on their row (unknown under `create_graph`).
+- **report**: `tl.report.cost_tree(trace)` rows carry forward multiply-accumulate, executed backward
+  and total FLOPs columns (one convention); without a counted backward they read not run or unknown,
+  never 0.
+- **report**: a saved trace keeps its counted executed backward and attribution
+  (`BackwardPass.executed_flops_record`, tlspec 10); loading it reads the count instead of unknown.
+- **capture**: FLOP counts cover more calls: linear and convolution weights computed in `forward`
+  (weight norm, spectral norm, weights passed as inputs), the fused `nn.RNN`, `nn.GRU`, `nn.LSTM`
+  kernels and their cells, `torch.linalg.multi_dot`, `einsum` with `...`, and `mv`, `dot`, `vdot`,
+  `spmm`; each used to read unknown.
+- **report**: `tl.report.backward_status(trace)` counts the CPU fused attention backward (equal to
+  the MATH attention backend's count) and the oneDNN LSTM layer backward; both used to be left out
+  of the printed total and named as uncounted.
 
 ### Bug Fixes
 
@@ -303,6 +321,21 @@
 - **replay**: After a differentiable replay, a later plain replay of the trace or of a fork of it
   reports `last_run["differentiable"]` False and drops the stale `frontier`; `keep_grad` no longer
   discloses `keep_grad_replay_frontier` during such a plain replay.
+- **report**: `trace.log_backward` no longer raises `AttributeError` when a multi-output op leaves
+  an output unused (`torch.split`, `torch.svd`, `torch.linalg.eig`); the unused output records no
+  gradient.
+- **report**: a backward that raised before finishing reads its executed backward as unknown instead
+  of the count of the calls that ran before the raise.
+- **report**: `recompute_observation` (and `BackwardStatus.recompute`) reads the checkpoint witness;
+  it read "unknown" on every trace.
+- **report**: when two captures share one backward, each call is charged to the node that executed
+  it (a finished node's marker no longer absorbs later calls).
+- **capture**: The `escrow_spill_detached` warning now points at the line that called TorchLens,
+  like the other coded disclosures, so warning filters keyed on the `torchlens` module no longer
+  treat it as an internal warning.
+- **benchmarks**: The head-sweep parity benchmark runs one warm-up `torch.tanh` over every intra-op
+  thread before the model and records it, so the first-call kernel effect of a fresh process no
+  longer makes the baseline capture differ from a plain forward.
 
 ### Performance Improvements
 
@@ -350,6 +383,8 @@
   attribution (any ablation) and of a read or direct-logit table under zero ablation, element-grain
   units included, as one `torchlens.experiment.site_sweep` with one candidate per unit; every value
   equals the previous one-fork-per-unit measurement exactly.
+- **agent**: `torchlens_explain` is documented as the one agent tool whose `max_tokens` is not a
+  ceiling: a request above its 4,000-token default is honoured.
 
 ### Continuous Integration
 

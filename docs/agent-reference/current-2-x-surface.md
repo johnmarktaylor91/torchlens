@@ -70,8 +70,16 @@
   `BackwardPass.dispatched_ops` (session-time, DOCUMENTED-UNSTABLE), and
   `tl.report.backward_status(trace)` counts them: `executed_flops` is exact for the matmul
   and convolution families at fma2 (FlopCounterMode's convention), per pass in
-  `executed_flops_per_pass`, with every other recorded op kind named in `uncounted_ops`;
-  a loaded trace reads unknown. `tl.report.backward_estimate(trace)` stays hypothetical.
+  `executed_flops_per_pass`, with every other recorded op kind named in `uncounted_ops`.
+  `BackwardPass.flops_attribution` and `backward_status(trace).attributions` charge each
+  counted call to its GradFn call and forward op (`BackwardFlopsRow`), with an
+  `unattributed_flops` bucket naming every call that ran under no recorded node, so rows
+  plus bucket equal the executed count; forward kernels replayed under activation
+  checkpointing are labeled `recompute_flops` on their row (unknown under `create_graph`).
+  `tl.report.cost_tree(trace)` rows gain `self_forward_mac_flops`, `self_backward_flops`
+  and `self_total_flops` (one convention). The count is saved with the pass
+  (`BackwardPass.executed_flops_record`), so a loaded trace reads it; a pass that raised has
+  no count. All DOCUMENTED-UNSTABLE. `tl.report.backward_estimate(trace)` stays hypothetical.
   Trace-side failed captures expose `exc.partial_log`, recoverable with
   `tl.partial.from_failed_capture(exc)`.
 - **A default `tl.trace` is a pure observer** (U40.1, AGT-2360; `carry_state`,

@@ -561,3 +561,19 @@ A default trace no longer leaves lazily built caches warm, so `tl.trace(model, x
 by `tl.validate(model, x)` reports `retrace_mismatch` (the re-trace check's documented
 one-time side effect) where it used to pass. Run one plain `model(x)` first, or trace with
 `CaptureOptions(carry_state=True)`.
+
+## Saved traces keep their executed backward count; attribution and recompute (2026-10-16, value change)
+
+A loaded trace saved by this version reads `backward_status(...).executed_flops` as an integer
+where it used to read `None`; code that used `None` to detect a loaded trace should check
+`BackwardFlopsAttribution.source == "saved record"`. `BackwardStatus.recompute` now reads
+`"none_observed"` on a trace with no checkpointing, where it read `"unknown"`. `tl.report.cost_tree`
+sibling rows whose backward cost differs no longer fold into one `(xN)` row once a backward is
+counted.
+
+## More calls carry FLOP counts (2026-10-16, value change)
+
+Ops that read `flops_forward=None` (linear and convolution weights computed in `forward`, the fused
+`nn.RNN`, `nn.GRU` and `nn.LSTM` kernels and their cells, `torch.linalg.multi_dot`, `einsum` with
+`...`, `mv`, `dot`, `vdot` and `spmm`) now carry numbers, and totals that summed over them grow; an
+executed-backward total on a model with CPU fused attention or a CPU LSTM grows by that work.
