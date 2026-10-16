@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
+import os
 import platform
+import re
 import subprocess
 import traceback
 from pathlib import Path
@@ -22,7 +24,10 @@ from typing import Any
 import graphviz
 
 from scripts.visual_language import capture, compose, coverage
+from scripts.visual_language.at_scale import scale_slides
+from scripts.visual_language.coverage import _flatten
 from scripts.visual_language.dot import parse_json, select, strip_tags
+from scripts.visual_language.sentinels import sentinel_slides
 from scripts.visual_language.slides import (
     ALPHABET,
     CHEAT_GROUPS,
@@ -42,6 +47,18 @@ _NODE_KEYS = ("shape", "style", "fillcolor", "color", "penwidth", "peripheries",
 _EDGE_KEYS = ("style", "color", "arrowhead", "arrowsize", "dir", "penwidth", "fontcolor")
 _EDGE_LABEL_KEYS = ("label", "headlabel", "taillabel", "xlabel")
 _CLUSTER_KEYS = ("style", "color", "pencolor", "penwidth", "fillcolor")
+#: Environment variable naming the commit a build renders, for trees with no Git checkout
+#: (a ``git archive`` export) or a checkout that is not the commit itself.
+COMMIT_ENV = "TORCHLENS_DECK_COMMIT"
+#: Trailer a tree-snapshot commit carries naming the commit whose tree it copies.
+_SNAPSHOT_TRAILER = re.compile(r"^Source-Commit: ([0-9a-f]{40})$", re.MULTILINE)
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def deck_slides() -> tuple[Slide, ...]:
+    """Every slide a full build writes: teaching slides, the sentinel strip, then at scale."""
+
+    return (*SLIDES, *sentinel_slides(), *scale_slides())
 
 
 def _quote(value: str) -> str:
@@ -133,12 +150,14 @@ def render_alphabet(slide: Slide, raw: Path, order: dict[str, int]) -> tuple[str
     return stem, missing
 
 
-def render_all(raw: Path, only: set[str] | None = None) -> dict[str, dict[str, Any]]:
+def render_all(
+    raw: Path, only: set[str] | None = None, slides: tuple[Slide, ...] | None = None
+) -> dict[str, dict[str, Any]]:
     """Capture and draw every panel serially; record errors instead of stopping."""
 
     raw.mkdir(parents=True, exist_ok=True)
     records: dict[str, dict[str, Any]] = {}
-    for slide in SLIDES:
+    for slide in deck_slides() if slides is None else slides:
         if only and slide.id not in only:
             continue
         for panel in slide.panels:
@@ -173,9 +192,45 @@ def _environment() -> dict[str, Any]:
         "torch": torch.__version__,
         "python": platform.python_version(),
         "graphviz": run(["dot", "-V"]),
-        "commit": run(["git", "rev-parse", "HEAD"]),
-        "built": _dt.datetime.now(_dt.UTC).strftime("%Y-%m-%d %H:%M UTC"),
+        **build_commit(),
+        # timezone.utc, not datetime.UTC: the pinned environment's Python predates 3.11.
+        "built": _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
     }
+
+
+def _git(root: Path, *args: str) -> str | None:
+    try:
+        done = subprocess.run(
+            ["git", "-C", str(root), *args], capture_output=True, text=True, timeout=30, check=False
+        )
+    except OSError:
+        return None
+    return done.stdout.strip() if done.returncode == 0 else None
+
+
+def build_commit(root: Path = _REPO_ROOT) -> dict[str, str]:
+    """The commit this build renders, and where that answer came from.
+
+    In order: the ``TORCHLENS_DECK_COMMIT`` environment variable (a tree exported with
+    ``git archive`` has no Git data, so its caller names the commit); the ``Source-Commit``
+    trailer of a tree-snapshot commit, which copies another commit's tree (the commit that
+    matters is the one it copies, not the snapshot); the checkout's own ``HEAD``.
+    """
+
+    named = os.environ.get(COMMIT_ENV, "").strip()
+    if named:
+        return {"commit": named, "commit_source": "environment"}
+    head = _git(root, "rev-parse", "HEAD")
+    if head is None:
+        return {"commit": "unknown", "commit_source": "no git checkout and no commit named"}
+    trailer = _SNAPSHOT_TRAILER.search(_git(root, "log", "-1", "--format=%B", head) or "")
+    if trailer and trailer.group(1) != head:
+        return {
+            "commit": trailer.group(1),
+            "commit_source": "snapshot trailer",
+            "checkout_commit": head,
+        }
+    return {"commit": head, "commit_source": "checkout"}
 
 
 def _table_slide(slide: Slide, height: float, env: dict[str, Any], probe: dict[str, Any]) -> Any:
@@ -268,6 +323,12 @@ def compose_slide(
     size = picture.stat().st_size
     if size > 150_000:
         problems.append(f"picture is {size // 1000} KB, over 150 KB")
+    if slide.id.startswith(("sentinel-", "scale-")):
+        # The strip and the at-scale pages are overviews: their full-size renders are in raw/
+        # and the review PDF, so small text or a large page is a warning, never a failure.
+        overview = [p for p in problems if "CSS px" in p or "KB, over" in p]
+        problems = [p for p in problems if p not in overview]
+        canvas.warnings.extend(overview)
     record.update(
         status="failed" if problems else "ok",
         problems=problems,
@@ -280,11 +341,11 @@ def compose_slide(
     return record
 
 
-def deck_markdown(records: list[dict[str, Any]]) -> str:
+def deck_markdown(records: list[dict[str, Any]], slides: tuple[Slide, ...] | None = None) -> str:
     """The deck file: one ``##`` title, the rule line and one picture per slide."""
 
     blocks = []
-    for slide, record in zip(SLIDES, records, strict=True):
+    for slide, record in zip(deck_slides() if slides is None else slides, records, strict=True):
         lines = [f"## {slide.title}", "", fill(slide.rule)]
         if record.get("picture"):
             lines += ["", f"![{slide.title}]({record['picture']})"]
@@ -292,19 +353,95 @@ def deck_markdown(records: list[dict[str, Any]]) -> str:
     return "\n\n---\n\n".join(blocks) + "\n"
 
 
+def _rendered_panels(records: list[dict[str, Any]]) -> list[tuple[str, Any]]:
+    """``(slide id, panel)`` for every panel whose render was written without error."""
+
+    by_id = {slide.id: slide for slide in deck_slides()}
+    out = []
+    for record in records:
+        slide = by_id.get(record["id"])
+        if slide is None:
+            continue
+        for panel in slide.panels:
+            panel_record = record.get("panels", {}).get(f"{slide.id}-{panel.name}")
+            if panel_record is not None and "error" not in panel_record:
+                out.append((slide.id, panel))
+    return out
+
+
+def _panel_words(panel: Any) -> set[str]:
+    words = set(_flatten(dict(panel.kwargs))) | set(re.findall(r"[\w+]+", panel.label))
+    return {str(word) for word in words}
+
+
+def _variant_proof(
+    variant: str, witnesses: dict[str, list[str]], slide: Slide | None, panels: list
+) -> str | None:
+    """How a row's variant is shown: a matched grid cell, or a rendered panel drawing it."""
+
+    for cell in slide.cells if slide else ():
+        if cell.select and witnesses.get(cell.select) and cell.label.split()[0] == variant:
+            return f"cell {cell.select}"
+    for slide_id, panel in panels:
+        if variant in _panel_words(panel):
+            return f"panel {slide_id}-{panel.name}"
+    return None
+
+
+def _row_proof(row: dict[str, Any], by_slide: dict[str, Any], panels: list) -> dict[str, Any]:
+    """The evidence that a picture-witnessed row is drawn (finding F40).
+
+    A row is proven by a keyed mark or grid cell its slide's selectors matched, or else by
+    whole panels: every variant drawn by a rendered panel (or a matched cell) when the row
+    lists variants; otherwise every panel of its slide rendered and the slide keys no mark.
+    ``variants_unshown`` lists the variants no rendered panel or cell draws, for every row.
+    The export slide's table is measured from real draws, so it proves its rows when built.
+    """
+
+    record = by_slide.get(row["slide"] or "", {})
+    witnesses = record.get("witnesses", {})
+    slide = next((s for s in SLIDES if s.id == row["slide"]), None)
+    keyed = [k for k, names in row["dot_matches"].items() if names]
+    cells = [
+        c.select for c in (slide.cells if slide else ()) if c.select and witnesses.get(c.select)
+    ]
+    variants = {v: _variant_proof(v, witnesses, slide, panels) for v in row["variants"]}
+    missing = sorted(v for v, how in variants.items() if how is None)
+    own = [p for sid, p in panels if sid == row["slide"]]
+    selectors = bool(row["keys"]) or any(c.select for c in (slide.cells if slide else ()))
+    if keyed or cells:
+        kind = "key" if keyed else "cell"
+    elif row["variants"]:
+        kind = None if missing else "panel"
+    elif slide is not None and slide.layout == "table":
+        kind = "measured" if record.get("status") == "ok" else None
+    elif slide is not None and own and len(own) == len(slide.panels) and not selectors:
+        kind = "panel"
+    else:
+        kind = None
+    return {"proof": kind, "variant_proof": variants, "variants_unshown": missing}
+
+
 def receipt(records: list[dict[str, Any]]) -> dict[str, Any]:
-    """Per inventory row: slide, witness kind and the DOT marks its slide's keys matched."""
+    """Per inventory row: slide, witness kind, the DOT marks its slide's keys matched, proof."""
 
     by_slide = {r["id"]: r for r in records}
+    panels = _rendered_panels(records)
     rows = coverage.receipt_rows()
     for row in rows:
         witnesses = by_slide.get(row["slide"] or "", {}).get("witnesses", {})
         row["dot_matches"] = {
             key["select"]: witnesses.get(key["select"], []) for key in row["keys"]
         }
-        row["proven_by_picture"] = row["witness"] == "picture" and any(row["dot_matches"].values())
+        row.update(_row_proof(row, by_slide, panels))
+        row["proven_by_picture"] = row["witness"] == "picture" and row["proof"] is not None
+    picture = [r for r in rows if r["proven_by_picture"]]
     counts = {
-        "picture": sum(1 for r in rows if r["proven_by_picture"]),
+        "picture": len(picture),
+        "picture_by_proof": {
+            kind: sum(1 for r in picture if r["proof"] == kind)
+            for kind in ("key", "cell", "panel", "measured")
+        },
         "caption": sum(1 for r in rows if r["witness"] == "caption"),
         "inactive": sum(1 for r in rows if r["status"] == "inactive"),
         "picture_claimed_unproven": [
@@ -333,7 +470,7 @@ def generated_names() -> list[str]:
     """Every file and folder name a full build writes into its output folder."""
 
     names = [DECK_NAME, "slides.json", "coverage-receipt.json", "environment.json", "raw"]
-    for number, slide in enumerate(SLIDES, start=1):
+    for number, slide in enumerate(deck_slides(), start=1):
         names.append(f"S{number:02d}-{slide.id}.svg")
         stems = [f"{slide.id}-{panel.name}" for panel in slide.panels]
         if slide.id in ALPHABET:
@@ -343,17 +480,21 @@ def generated_names() -> list[str]:
     return names
 
 
-def build(out: Path, only: set[str] | None = None) -> int:
-    """Render, compose and write the deck into ``out``; return the number of failed slides."""
+def build(out: Path, only: set[str] | None = None, slides: tuple[Slide, ...] | None = None) -> int:
+    """Render, compose and write the deck into ``out``; return the number of failed slides.
 
+    ``slides`` builds a part of the deck (the sentinel strip, say); the default is all of it.
+    """
+
+    slides = deck_slides() if slides is None else slides
     out.mkdir(parents=True, exist_ok=True)
     raw = out / "raw"
-    panel_records = render_all(raw, only)
+    panel_records = render_all(raw, only, slides)
     probe = capture.probe_export(raw)
     env = _environment()
     order = {slide.id: i for i, slide in enumerate(SLIDES, start=1)}
     records = []
-    for number, slide in enumerate(SLIDES, start=1):
+    for number, slide in enumerate(slides, start=1):
         if only and slide.id not in only and slide.layout != "table":
             records.append({"id": slide.id, "number": number, "status": "skipped"})
             continue
@@ -370,7 +511,7 @@ def build(out: Path, only: set[str] | None = None) -> int:
         record["panels"] = {k: v for k, v in panel_records.items() if v.get("slide") == slide.id}
         records.append(record)
         print(f"slide {number:02d} {slide.id}: {record['status']}", flush=True)
-    (out / DECK_NAME).write_text(deck_markdown(records))
+    (out / DECK_NAME).write_text(deck_markdown(records, slides))
     (out / "slides.json").write_text(json.dumps(records, indent=1, default=str))
     (out / "coverage-receipt.json").write_text(json.dumps(receipt(records), indent=1))
     (out / "environment.json").write_text(
