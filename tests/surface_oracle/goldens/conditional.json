@@ -4926,9 +4926,9 @@
    "_replay_arg_version_data_complete": true,
    "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
    "_source_code_blob": {
-    "\"class\"": "class ConditionalModel(nn.Module):\n    \"\"\"Model with tensor-data-dependent control flow and RNG consumption.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.rng_draw_count = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n        Parameters\n        ----------\n        x:\n            Branch-control input.\n\n        Returns\n        -------\n        torch.Tensor\n            Result of the selected branch.\n        \"\"\"\n\n        self.forward_invocations += 1\n        random_offset = torch.rand((), device=x.device)\n        self.rng_draw_count += 1\n        shifted = x + random_offset\n        if bool((x.sum() > 0).item()):\n            return torch.sigmoid(shifted)\n        return torch.tanh(shifted)",
-    "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n    Parameters\n    ----------\n    x:\n        Branch-control input.\n\n    Returns\n    -------\n    torch.Tensor\n        Result of the selected branch.\n    \"\"\"\n\n    self.forward_invocations += 1\n    random_offset = torch.rand((), device=x.device)\n    self.rng_draw_count += 1\n    shifted = x + random_offset\n    if bool((x.sum() > 0).item()):\n        return torch.sigmoid(shifted)\n    return torch.tanh(shifted)",
-    "\"init+forward\"": "def __init__(self) -> None:\n    \"\"\"Initialize side-effect counters.\"\"\"\n\n    super().__init__()\n    self.forward_invocations = 0\n    self.pre_hook_invocations = 0\n    self.rng_draw_count = 0\n\ndef forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n    Parameters\n    ----------\n    x:\n        Branch-control input.\n\n    Returns\n    -------\n    torch.Tensor\n        Result of the selected branch.\n    \"\"\"\n\n    self.forward_invocations += 1\n    random_offset = torch.rand((), device=x.device)\n    self.rng_draw_count += 1\n    shifted = x + random_offset\n    if bool((x.sum() > 0).item()):\n        return torch.sigmoid(shifted)\n    return torch.tanh(shifted)"
+    "\"class\"": "class ConditionalModel(nn.Module):\n    \"\"\"Model with tensor-data-dependent control flow and RNG consumption.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.rng_draw_count = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n        Parameters\n        ----------\n        x:\n            Branch-control input.\n\n        Returns\n        -------\n        torch.Tensor\n            Result of the selected branch.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        random_offset = torch.rand((), device=x.device)\n        count_side_effect(self, \"rng_draw_count\")\n        shifted = x + random_offset\n        if bool((x.sum() > 0).item()):\n            return torch.sigmoid(shifted)\n        return torch.tanh(shifted)",
+    "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n    Parameters\n    ----------\n    x:\n        Branch-control input.\n\n    Returns\n    -------\n    torch.Tensor\n        Result of the selected branch.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    random_offset = torch.rand((), device=x.device)\n    count_side_effect(self, \"rng_draw_count\")\n    shifted = x + random_offset\n    if bool((x.sum() > 0).item()):\n        return torch.sigmoid(shifted)\n    return torch.tanh(shifted)",
+    "\"init+forward\"": "def __init__(self) -> None:\n    \"\"\"Initialize side-effect counters.\"\"\"\n\n    super().__init__()\n    self.forward_invocations = 0\n    self.pre_hook_invocations = 0\n    self.rng_draw_count = 0\n\ndef forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n    Parameters\n    ----------\n    x:\n        Branch-control input.\n\n    Returns\n    -------\n    torch.Tensor\n        Result of the selected branch.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    random_offset = torch.rand((), device=x.device)\n    count_side_effect(self, \"rng_draw_count\")\n    shifted = x + random_offset\n    if bool((x.sum() > 0).item()):\n        return torch.sigmoid(shifted)\n    return torch.tanh(shifted)"
    },
    "_source_model_ref": "<callable ReferenceType>",
    "_spec_revision": 0,
@@ -5005,7 +5005,7 @@
     "\"capture_advisories\"": [
      {
       "\"count\"": 1,
-      "\"first_location\"": "<repo>/tests/capture_oracle/_models.py:131",
+      "\"first_location\"": "<repo>/tests/capture_oracle/_models.py:176",
       "\"kind\"": "scalar_escape",
       "\"message\"": "tensor-to-Python scalar escape(s) observed during capture; the dependence is not captured"
      }
@@ -5084,8 +5084,8 @@
    "chunked_forward": false,
    "class_docstring": "Model with tensor-data-dependent control flow and RNG consumption.",
    "class_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "class_source_line": 102,
-   "class_source_location": "<repo>/tests/capture_oracle/_models.py:102",
+   "class_source_line": 147,
+   "class_source_location": "<repo>/tests/capture_oracle/_models.py:147",
    "cleanup_duration": "<measured>",
    "code_context": [],
    "completeness_decompositions": [],
@@ -5190,8 +5190,8 @@
    "forward_peak_memory_reason": "<measured>",
    "forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
    "forward_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "forward_source_line": 113,
-   "forward_source_location": "<repo>/tests/capture_oracle/_models.py:113",
+   "forward_source_line": 158,
+   "forward_source_location": "<repo>/tests/capture_oracle/_models.py:158",
    "func_calls_duration": "<measured>",
    "grad_fn_calls": "<torchlens.data_classes._trace_accessors.TraceGradFnCallAccessor>",
    "grad_fn_fire_timings": "<measured>",
@@ -5227,8 +5227,8 @@
    "init_docstring": "Initialize side-effect counters.",
    "init_signature": "(self) -> 'None'",
    "init_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "init_source_line": 105,
-   "init_source_location": "<repo>/tests/capture_oracle/_models.py:105",
+   "init_source_line": 150,
+   "init_source_location": "<repo>/tests/capture_oracle/_models.py:150",
    "injected_ops": [],
    "input_annotations": {},
    "input_layers": [
@@ -10816,9 +10816,9 @@
    "_replay_arg_version_data_complete": true,
    "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
    "_source_code_blob": {
-    "\"class\"": "class ConditionalModel(nn.Module):\n    \"\"\"Model with tensor-data-dependent control flow and RNG consumption.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.rng_draw_count = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n        Parameters\n        ----------\n        x:\n            Branch-control input.\n\n        Returns\n        -------\n        torch.Tensor\n            Result of the selected branch.\n        \"\"\"\n\n        self.forward_invocations += 1\n        random_offset = torch.rand((), device=x.device)\n        self.rng_draw_count += 1\n        shifted = x + random_offset\n        if bool((x.sum() > 0).item()):\n            return torch.sigmoid(shifted)\n        return torch.tanh(shifted)",
-    "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n    Parameters\n    ----------\n    x:\n        Branch-control input.\n\n    Returns\n    -------\n    torch.Tensor\n        Result of the selected branch.\n    \"\"\"\n\n    self.forward_invocations += 1\n    random_offset = torch.rand((), device=x.device)\n    self.rng_draw_count += 1\n    shifted = x + random_offset\n    if bool((x.sum() > 0).item()):\n        return torch.sigmoid(shifted)\n    return torch.tanh(shifted)",
-    "\"init+forward\"": "def __init__(self) -> None:\n    \"\"\"Initialize side-effect counters.\"\"\"\n\n    super().__init__()\n    self.forward_invocations = 0\n    self.pre_hook_invocations = 0\n    self.rng_draw_count = 0\n\ndef forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n    Parameters\n    ----------\n    x:\n        Branch-control input.\n\n    Returns\n    -------\n    torch.Tensor\n        Result of the selected branch.\n    \"\"\"\n\n    self.forward_invocations += 1\n    random_offset = torch.rand((), device=x.device)\n    self.rng_draw_count += 1\n    shifted = x + random_offset\n    if bool((x.sum() > 0).item()):\n        return torch.sigmoid(shifted)\n    return torch.tanh(shifted)"
+    "\"class\"": "class ConditionalModel(nn.Module):\n    \"\"\"Model with tensor-data-dependent control flow and RNG consumption.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.rng_draw_count = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n        Parameters\n        ----------\n        x:\n            Branch-control input.\n\n        Returns\n        -------\n        torch.Tensor\n            Result of the selected branch.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        random_offset = torch.rand((), device=x.device)\n        count_side_effect(self, \"rng_draw_count\")\n        shifted = x + random_offset\n        if bool((x.sum() > 0).item()):\n            return torch.sigmoid(shifted)\n        return torch.tanh(shifted)",
+    "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n    Parameters\n    ----------\n    x:\n        Branch-control input.\n\n    Returns\n    -------\n    torch.Tensor\n        Result of the selected branch.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    random_offset = torch.rand((), device=x.device)\n    count_side_effect(self, \"rng_draw_count\")\n    shifted = x + random_offset\n    if bool((x.sum() > 0).item()):\n        return torch.sigmoid(shifted)\n    return torch.tanh(shifted)",
+    "\"init+forward\"": "def __init__(self) -> None:\n    \"\"\"Initialize side-effect counters.\"\"\"\n\n    super().__init__()\n    self.forward_invocations = 0\n    self.pre_hook_invocations = 0\n    self.rng_draw_count = 0\n\ndef forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n    Parameters\n    ----------\n    x:\n        Branch-control input.\n\n    Returns\n    -------\n    torch.Tensor\n        Result of the selected branch.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    random_offset = torch.rand((), device=x.device)\n    count_side_effect(self, \"rng_draw_count\")\n    shifted = x + random_offset\n    if bool((x.sum() > 0).item()):\n        return torch.sigmoid(shifted)\n    return torch.tanh(shifted)"
    },
    "_source_model_ref": "<callable ReferenceType>",
    "_spec_revision": 0,
@@ -10895,7 +10895,7 @@
     "\"capture_advisories\"": [
      {
       "\"count\"": 1,
-      "\"first_location\"": "<repo>/tests/capture_oracle/_models.py:131",
+      "\"first_location\"": "<repo>/tests/capture_oracle/_models.py:176",
       "\"kind\"": "scalar_escape",
       "\"message\"": "tensor-to-Python scalar escape(s) observed during capture; the dependence is not captured"
      }
@@ -10963,8 +10963,8 @@
    "chunked_forward": false,
    "class_docstring": "Model with tensor-data-dependent control flow and RNG consumption.",
    "class_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "class_source_line": 102,
-   "class_source_location": "<repo>/tests/capture_oracle/_models.py:102",
+   "class_source_line": 147,
+   "class_source_location": "<repo>/tests/capture_oracle/_models.py:147",
    "cleanup_duration": "<measured>",
    "code_context": [],
    "completeness_decompositions": [],
@@ -11069,8 +11069,8 @@
    "forward_peak_memory_reason": "<measured>",
    "forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
    "forward_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "forward_source_line": 113,
-   "forward_source_location": "<repo>/tests/capture_oracle/_models.py:113",
+   "forward_source_line": 158,
+   "forward_source_location": "<repo>/tests/capture_oracle/_models.py:158",
    "func_calls_duration": "<measured>",
    "grad_fn_calls": "<torchlens.data_classes._trace_accessors.TraceGradFnCallAccessor>",
    "grad_fn_fire_timings": "<measured>",
@@ -11106,8 +11106,8 @@
    "init_docstring": "Initialize side-effect counters.",
    "init_signature": "(self) -> 'None'",
    "init_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "init_source_line": 105,
-   "init_source_location": "<repo>/tests/capture_oracle/_models.py:105",
+   "init_source_line": 150,
+   "init_source_location": "<repo>/tests/capture_oracle/_models.py:150",
    "injected_ops": [],
    "input_annotations": {},
    "input_layers": [
@@ -16698,9 +16698,9 @@
    "_replay_arg_version_data_complete": true,
    "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
    "_source_code_blob": {
-    "\"class\"": "class ConditionalModel(nn.Module):\n    \"\"\"Model with tensor-data-dependent control flow and RNG consumption.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.rng_draw_count = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n        Parameters\n        ----------\n        x:\n            Branch-control input.\n\n        Returns\n        -------\n        torch.Tensor\n            Result of the selected branch.\n        \"\"\"\n\n        self.forward_invocations += 1\n        random_offset = torch.rand((), device=x.device)\n        self.rng_draw_count += 1\n        shifted = x + random_offset\n        if bool((x.sum() > 0).item()):\n            return torch.sigmoid(shifted)\n        return torch.tanh(shifted)",
-    "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n    Parameters\n    ----------\n    x:\n        Branch-control input.\n\n    Returns\n    -------\n    torch.Tensor\n        Result of the selected branch.\n    \"\"\"\n\n    self.forward_invocations += 1\n    random_offset = torch.rand((), device=x.device)\n    self.rng_draw_count += 1\n    shifted = x + random_offset\n    if bool((x.sum() > 0).item()):\n        return torch.sigmoid(shifted)\n    return torch.tanh(shifted)",
-    "\"init+forward\"": "def __init__(self) -> None:\n    \"\"\"Initialize side-effect counters.\"\"\"\n\n    super().__init__()\n    self.forward_invocations = 0\n    self.pre_hook_invocations = 0\n    self.rng_draw_count = 0\n\ndef forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n    Parameters\n    ----------\n    x:\n        Branch-control input.\n\n    Returns\n    -------\n    torch.Tensor\n        Result of the selected branch.\n    \"\"\"\n\n    self.forward_invocations += 1\n    random_offset = torch.rand((), device=x.device)\n    self.rng_draw_count += 1\n    shifted = x + random_offset\n    if bool((x.sum() > 0).item()):\n        return torch.sigmoid(shifted)\n    return torch.tanh(shifted)"
+    "\"class\"": "class ConditionalModel(nn.Module):\n    \"\"\"Model with tensor-data-dependent control flow and RNG consumption.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.rng_draw_count = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n        Parameters\n        ----------\n        x:\n            Branch-control input.\n\n        Returns\n        -------\n        torch.Tensor\n            Result of the selected branch.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        random_offset = torch.rand((), device=x.device)\n        count_side_effect(self, \"rng_draw_count\")\n        shifted = x + random_offset\n        if bool((x.sum() > 0).item()):\n            return torch.sigmoid(shifted)\n        return torch.tanh(shifted)",
+    "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n    Parameters\n    ----------\n    x:\n        Branch-control input.\n\n    Returns\n    -------\n    torch.Tensor\n        Result of the selected branch.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    random_offset = torch.rand((), device=x.device)\n    count_side_effect(self, \"rng_draw_count\")\n    shifted = x + random_offset\n    if bool((x.sum() > 0).item()):\n        return torch.sigmoid(shifted)\n    return torch.tanh(shifted)",
+    "\"init+forward\"": "def __init__(self) -> None:\n    \"\"\"Initialize side-effect counters.\"\"\"\n\n    super().__init__()\n    self.forward_invocations = 0\n    self.pre_hook_invocations = 0\n    self.rng_draw_count = 0\n\ndef forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n    Parameters\n    ----------\n    x:\n        Branch-control input.\n\n    Returns\n    -------\n    torch.Tensor\n        Result of the selected branch.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    random_offset = torch.rand((), device=x.device)\n    count_side_effect(self, \"rng_draw_count\")\n    shifted = x + random_offset\n    if bool((x.sum() > 0).item()):\n        return torch.sigmoid(shifted)\n    return torch.tanh(shifted)"
    },
    "_source_model_ref": null,
    "_spec_revision": 0,
@@ -16777,7 +16777,7 @@
     "\"capture_advisories\"": [
      {
       "\"count\"": 1,
-      "\"first_location\"": "<repo>/tests/capture_oracle/_models.py:131",
+      "\"first_location\"": "<repo>/tests/capture_oracle/_models.py:176",
       "\"kind\"": "scalar_escape",
       "\"message\"": "tensor-to-Python scalar escape(s) observed during capture; the dependence is not captured"
      }
@@ -16856,8 +16856,8 @@
    "chunked_forward": false,
    "class_docstring": "Model with tensor-data-dependent control flow and RNG consumption.",
    "class_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "class_source_line": 102,
-   "class_source_location": "<repo>/tests/capture_oracle/_models.py:102",
+   "class_source_line": 147,
+   "class_source_location": "<repo>/tests/capture_oracle/_models.py:147",
    "cleanup_duration": "<measured>",
    "code_context": [],
    "completeness_decompositions": [],
@@ -16962,8 +16962,8 @@
    "forward_peak_memory_reason": "<measured>",
    "forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
    "forward_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "forward_source_line": 113,
-   "forward_source_location": "<repo>/tests/capture_oracle/_models.py:113",
+   "forward_source_line": 158,
+   "forward_source_location": "<repo>/tests/capture_oracle/_models.py:158",
    "func_calls_duration": "<measured>",
    "grad_fn_calls": "<torchlens.data_classes._trace_accessors.TraceGradFnCallAccessor>",
    "grad_fn_fire_timings": "<measured>",
@@ -16999,8 +16999,8 @@
    "init_docstring": "Initialize side-effect counters.",
    "init_signature": "(self) -> 'None'",
    "init_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "init_source_line": 105,
-   "init_source_location": "<repo>/tests/capture_oracle/_models.py:105",
+   "init_source_line": 150,
+   "init_source_location": "<repo>/tests/capture_oracle/_models.py:150",
    "injected_ops": [],
    "input_annotations": {},
    "input_layers": [
@@ -22582,9 +22582,9 @@
    "_replay_arg_version_data_complete": true,
    "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
    "_source_code_blob": {
-    "\"class\"": "class ConditionalModel(nn.Module):\n    \"\"\"Model with tensor-data-dependent control flow and RNG consumption.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.rng_draw_count = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n        Parameters\n        ----------\n        x:\n            Branch-control input.\n\n        Returns\n        -------\n        torch.Tensor\n            Result of the selected branch.\n        \"\"\"\n\n        self.forward_invocations += 1\n        random_offset = torch.rand((), device=x.device)\n        self.rng_draw_count += 1\n        shifted = x + random_offset\n        if bool((x.sum() > 0).item()):\n            return torch.sigmoid(shifted)\n        return torch.tanh(shifted)",
-    "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n    Parameters\n    ----------\n    x:\n        Branch-control input.\n\n    Returns\n    -------\n    torch.Tensor\n        Result of the selected branch.\n    \"\"\"\n\n    self.forward_invocations += 1\n    random_offset = torch.rand((), device=x.device)\n    self.rng_draw_count += 1\n    shifted = x + random_offset\n    if bool((x.sum() > 0).item()):\n        return torch.sigmoid(shifted)\n    return torch.tanh(shifted)",
-    "\"init+forward\"": "def __init__(self) -> None:\n    \"\"\"Initialize side-effect counters.\"\"\"\n\n    super().__init__()\n    self.forward_invocations = 0\n    self.pre_hook_invocations = 0\n    self.rng_draw_count = 0\n\ndef forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n    Parameters\n    ----------\n    x:\n        Branch-control input.\n\n    Returns\n    -------\n    torch.Tensor\n        Result of the selected branch.\n    \"\"\"\n\n    self.forward_invocations += 1\n    random_offset = torch.rand((), device=x.device)\n    self.rng_draw_count += 1\n    shifted = x + random_offset\n    if bool((x.sum() > 0).item()):\n        return torch.sigmoid(shifted)\n    return torch.tanh(shifted)"
+    "\"class\"": "class ConditionalModel(nn.Module):\n    \"\"\"Model with tensor-data-dependent control flow and RNG consumption.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.rng_draw_count = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n        Parameters\n        ----------\n        x:\n            Branch-control input.\n\n        Returns\n        -------\n        torch.Tensor\n            Result of the selected branch.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        random_offset = torch.rand((), device=x.device)\n        count_side_effect(self, \"rng_draw_count\")\n        shifted = x + random_offset\n        if bool((x.sum() > 0).item()):\n            return torch.sigmoid(shifted)\n        return torch.tanh(shifted)",
+    "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n    Parameters\n    ----------\n    x:\n        Branch-control input.\n\n    Returns\n    -------\n    torch.Tensor\n        Result of the selected branch.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    random_offset = torch.rand((), device=x.device)\n    count_side_effect(self, \"rng_draw_count\")\n    shifted = x + random_offset\n    if bool((x.sum() > 0).item()):\n        return torch.sigmoid(shifted)\n    return torch.tanh(shifted)",
+    "\"init+forward\"": "def __init__(self) -> None:\n    \"\"\"Initialize side-effect counters.\"\"\"\n\n    super().__init__()\n    self.forward_invocations = 0\n    self.pre_hook_invocations = 0\n    self.rng_draw_count = 0\n\ndef forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n    Parameters\n    ----------\n    x:\n        Branch-control input.\n\n    Returns\n    -------\n    torch.Tensor\n        Result of the selected branch.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    random_offset = torch.rand((), device=x.device)\n    count_side_effect(self, \"rng_draw_count\")\n    shifted = x + random_offset\n    if bool((x.sum() > 0).item()):\n        return torch.sigmoid(shifted)\n    return torch.tanh(shifted)"
    },
    "_source_model_ref": "<callable ReferenceType>",
    "_spec_revision": 0,
@@ -22661,7 +22661,7 @@
     "\"capture_advisories\"": [
      {
       "\"count\"": 1,
-      "\"first_location\"": "<repo>/tests/capture_oracle/_models.py:131",
+      "\"first_location\"": "<repo>/tests/capture_oracle/_models.py:176",
       "\"kind\"": "scalar_escape",
       "\"message\"": "tensor-to-Python scalar escape(s) observed during capture; the dependence is not captured"
      }
@@ -22740,8 +22740,8 @@
    "chunked_forward": false,
    "class_docstring": "Model with tensor-data-dependent control flow and RNG consumption.",
    "class_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "class_source_line": 102,
-   "class_source_location": "<repo>/tests/capture_oracle/_models.py:102",
+   "class_source_line": 147,
+   "class_source_location": "<repo>/tests/capture_oracle/_models.py:147",
    "cleanup_duration": "<measured>",
    "code_context": [],
    "completeness_decompositions": [],
@@ -22846,8 +22846,8 @@
    "forward_peak_memory_reason": "<measured>",
    "forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
    "forward_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "forward_source_line": 113,
-   "forward_source_location": "<repo>/tests/capture_oracle/_models.py:113",
+   "forward_source_line": 158,
+   "forward_source_location": "<repo>/tests/capture_oracle/_models.py:158",
    "func_calls_duration": "<measured>",
    "grad_fn_calls": "<torchlens.data_classes._trace_accessors.TraceGradFnCallAccessor>",
    "grad_fn_fire_timings": "<measured>",
@@ -22883,8 +22883,8 @@
    "init_docstring": "Initialize side-effect counters.",
    "init_signature": "(self) -> 'None'",
    "init_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "init_source_line": 105,
-   "init_source_location": "<repo>/tests/capture_oracle/_models.py:105",
+   "init_source_line": 150,
+   "init_source_location": "<repo>/tests/capture_oracle/_models.py:150",
    "injected_ops": [],
    "input_annotations": {},
    "input_layers": [
@@ -28351,9 +28351,9 @@
    "_replay_arg_version_data_complete": true,
    "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
    "_source_code_blob": {
-    "\"class\"": "class ConditionalModel(nn.Module):\n    \"\"\"Model with tensor-data-dependent control flow and RNG consumption.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.rng_draw_count = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n        Parameters\n        ----------\n        x:\n            Branch-control input.\n\n        Returns\n        -------\n        torch.Tensor\n            Result of the selected branch.\n        \"\"\"\n\n        self.forward_invocations += 1\n        random_offset = torch.rand((), device=x.device)\n        self.rng_draw_count += 1\n        shifted = x + random_offset\n        if bool((x.sum() > 0).item()):\n            return torch.sigmoid(shifted)\n        return torch.tanh(shifted)",
-    "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n    Parameters\n    ----------\n    x:\n        Branch-control input.\n\n    Returns\n    -------\n    torch.Tensor\n        Result of the selected branch.\n    \"\"\"\n\n    self.forward_invocations += 1\n    random_offset = torch.rand((), device=x.device)\n    self.rng_draw_count += 1\n    shifted = x + random_offset\n    if bool((x.sum() > 0).item()):\n        return torch.sigmoid(shifted)\n    return torch.tanh(shifted)",
-    "\"init+forward\"": "def __init__(self) -> None:\n    \"\"\"Initialize side-effect counters.\"\"\"\n\n    super().__init__()\n    self.forward_invocations = 0\n    self.pre_hook_invocations = 0\n    self.rng_draw_count = 0\n\ndef forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n    Parameters\n    ----------\n    x:\n        Branch-control input.\n\n    Returns\n    -------\n    torch.Tensor\n        Result of the selected branch.\n    \"\"\"\n\n    self.forward_invocations += 1\n    random_offset = torch.rand((), device=x.device)\n    self.rng_draw_count += 1\n    shifted = x + random_offset\n    if bool((x.sum() > 0).item()):\n        return torch.sigmoid(shifted)\n    return torch.tanh(shifted)"
+    "\"class\"": "class ConditionalModel(nn.Module):\n    \"\"\"Model with tensor-data-dependent control flow and RNG consumption.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.rng_draw_count = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n        Parameters\n        ----------\n        x:\n            Branch-control input.\n\n        Returns\n        -------\n        torch.Tensor\n            Result of the selected branch.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        random_offset = torch.rand((), device=x.device)\n        count_side_effect(self, \"rng_draw_count\")\n        shifted = x + random_offset\n        if bool((x.sum() > 0).item()):\n            return torch.sigmoid(shifted)\n        return torch.tanh(shifted)",
+    "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n    Parameters\n    ----------\n    x:\n        Branch-control input.\n\n    Returns\n    -------\n    torch.Tensor\n        Result of the selected branch.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    random_offset = torch.rand((), device=x.device)\n    count_side_effect(self, \"rng_draw_count\")\n    shifted = x + random_offset\n    if bool((x.sum() > 0).item()):\n        return torch.sigmoid(shifted)\n    return torch.tanh(shifted)",
+    "\"init+forward\"": "def __init__(self) -> None:\n    \"\"\"Initialize side-effect counters.\"\"\"\n\n    super().__init__()\n    self.forward_invocations = 0\n    self.pre_hook_invocations = 0\n    self.rng_draw_count = 0\n\ndef forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n    Parameters\n    ----------\n    x:\n        Branch-control input.\n\n    Returns\n    -------\n    torch.Tensor\n        Result of the selected branch.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    random_offset = torch.rand((), device=x.device)\n    count_side_effect(self, \"rng_draw_count\")\n    shifted = x + random_offset\n    if bool((x.sum() > 0).item()):\n        return torch.sigmoid(shifted)\n    return torch.tanh(shifted)"
    },
    "_source_model_ref": null,
    "_spec_revision": 0,
@@ -28430,7 +28430,7 @@
     "\"capture_advisories\"": [
      {
       "\"count\"": 1,
-      "\"first_location\"": "_models.py:131",
+      "\"first_location\"": "_models.py:176",
       "\"kind\"": "scalar_escape",
       "\"message\"": "tensor-to-Python scalar escape(s) observed during capture; the dependence is not captured"
      }
@@ -28503,8 +28503,8 @@
    "chunked_forward": false,
    "class_docstring": "Model with tensor-data-dependent control flow and RNG consumption.",
    "class_source_file": "_models.py",
-   "class_source_line": 102,
-   "class_source_location": "_models.py:102",
+   "class_source_line": 147,
+   "class_source_location": "_models.py:147",
    "cleanup_duration": "<measured>",
    "code_context": [],
    "completeness_decompositions": [],
@@ -28609,8 +28609,8 @@
    "forward_peak_memory_reason": "<measured>",
    "forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
    "forward_source_file": "_models.py",
-   "forward_source_line": 113,
-   "forward_source_location": "_models.py:113",
+   "forward_source_line": 158,
+   "forward_source_location": "_models.py:158",
    "func_calls_duration": "<measured>",
    "grad_fn_calls": "<torchlens.data_classes._trace_accessors.TraceGradFnCallAccessor>",
    "grad_fn_fire_timings": "<measured>",
@@ -28646,8 +28646,8 @@
    "init_docstring": "Initialize side-effect counters.",
    "init_signature": "(self) -> 'None'",
    "init_source_file": "_models.py",
-   "init_source_line": 105,
-   "init_source_location": "_models.py:105",
+   "init_source_line": 150,
+   "init_source_location": "_models.py:150",
    "injected_ops": [],
    "input_annotations": {},
    "input_layers": [

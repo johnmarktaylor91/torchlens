@@ -140,7 +140,7 @@
             "func_call_id": "populated",
             "function.arg_names": "populated",
             "function.code_context": "defaulted_empty",
-            "function.flops_backward": "populated",
+            "function.flops_backward": "defaulted_zero",
             "function.flops_forward": "populated",
             "function.func": "populated",
             "function.func_autocast_state": "populated",
@@ -698,20 +698,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 536383,
+      "python_peak_memory_median_bytes": 569725,
       "sample_count": 3,
       "torch_version": "2.13.0+cpu",
-      "wall_time_median_ms": 65.56608504615724
+      "wall_time_median_ms": 81.25611860305071
     }
   },
   "sha256_chunks": [
-    "44449567",
-    "bf687f6f",
-    "c6fc57ae",
-    "90d7e199",
-    "679c6bee",
-    "e979c90d",
-    "f37cecad",
-    "10edd045"
+    "1a4c0f7f",
+    "d6792b8f",
+    "67fd055e",
+    "77bcd09b",
+    "cada681e",
+    "5977f218",
+    "9f8c5c7f",
+    "f1d70174"
   ]
 }

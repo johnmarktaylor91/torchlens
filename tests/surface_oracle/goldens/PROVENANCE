@@ -1088,3 +1088,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 9e0017f4030d09249e73524885c34e9efa56f638 (dirty)
 recorded: 2026-10-14T23:07:41.535855+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: the capture-oracle models (tests/capture_oracle/_models.py) now also tally their side effects outside the module, so their source text and line numbers moved; the surface snapshot embeds that source. Every changed line was diffed: only the models' source blobs and source line/location fields change, no TorchLens surface field.
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 5b91ab39b1c0903f6cf5dd2312dae05d925d5bc7 (dirty)
+recorded: 2026-10-16T03:59:24.408993+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: the capture-oracle models (tests/capture_oracle/_models.py) now also tally their side effects outside the module, so their source text and line numbers moved; the surface snapshot embeds that source. Every changed line was diffed: only the models' source blobs and source line/location fields change, no TorchLens surface field.
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 5b91ab39b1c0903f6cf5dd2312dae05d925d5bc7 (dirty)
+recorded: 2026-10-16T03:59:24.433965+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: the capture-oracle models (tests/capture_oracle/_models.py) now also tally their side effects outside the module, so their source text and line numbers moved; the surface snapshot embeds that source. Every changed line was diffed: only the models' source blobs and source line/location fields change, no TorchLens surface field.
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 5b91ab39b1c0903f6cf5dd2312dae05d925d5bc7 (dirty)
+recorded: 2026-10-16T03:59:24.458125+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: the capture-oracle models (tests/capture_oracle/_models.py) now also tally their side effects outside the module, so their source text and line numbers moved; the surface snapshot embeds that source. Every changed line was diffed: only the models' source blobs and source line/location fields change, no TorchLens surface field.
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 5b91ab39b1c0903f6cf5dd2312dae05d925d5bc7 (dirty)
+recorded: 2026-10-16T03:59:24.482283+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: the capture-oracle models (tests/capture_oracle/_models.py) now also tally their side effects outside the module, so their source text and line numbers moved; the surface snapshot embeds that source. Every changed line was diffed: only the models' source blobs and source line/location fields change, no TorchLens surface field.
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 5b91ab39b1c0903f6cf5dd2312dae05d925d5bc7 (dirty)
+recorded: 2026-10-16T03:59:24.505473+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: the capture-oracle models (tests/capture_oracle/_models.py) now also tally their side effects outside the module, so their source text and line numbers moved; the surface snapshot embeds that source. Every changed line was diffed: only the models' source blobs and source line/location fields change, no TorchLens surface field.
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 5b91ab39b1c0903f6cf5dd2312dae05d925d5bc7 (dirty)
+recorded: 2026-10-16T03:59:24.532276+00:00

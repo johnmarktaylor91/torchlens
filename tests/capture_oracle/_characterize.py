@@ -22,7 +22,7 @@ import torchlens as tl
 from torchlens.fastlog import Recording
 from torchlens.ir.events import OpEvent
 
-from ._models import build_model_case
+from ._models import build_model_case, side_effect_count
 
 _SEED = 20260710
 _MEASUREMENT_REPETITIONS = 3
@@ -1169,9 +1169,9 @@ def _capture_once(case: CaseSpec) -> tuple[dict[str, Any], dict[str, float | int
 
         buffer_after = _buffer_snapshot(model)
         side_effects = {
-            "forward_invocations": int(getattr(model, "forward_invocations", 0)),
-            "pre_hook_invocations": int(getattr(model, "pre_hook_invocations", 0)),
-            "rng_draw_count": int(getattr(model, "rng_draw_count", 0)),
+            "forward_invocations": side_effect_count(model, "forward_invocations"),
+            "pre_hook_invocations": side_effect_count(model, "pre_hook_invocations"),
+            "rng_draw_count": side_effect_count(model, "rng_draw_count"),
             "rng_state_before": rng_before,
             "rng_state_after": _rng_fingerprint(),
             "buffer_changes": _buffer_changes(buffer_before, buffer_after),

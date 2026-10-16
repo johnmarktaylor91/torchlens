@@ -131,7 +131,7 @@ pytest tests/ -m "not rare and not slow" -x --tb=short  # phase-boundary backsto
 Byte goldens enforce only in the pinned environment (python 3.10, torch 2.13.0) and fail closed
 outside it and outside CI, so only the script's answer equals CI's (`tests/AGENTS.md`, "The smoke tier").
 
-Tiers by cost: `smoke` selects ~1.4k tests (1,421/20,445 collect-only, measured 2026-10-02),
+Tiers by cost: `smoke` selects ~1.5k tests (1,500/24,471 collect-only, measured 2026-10-16),
 a coverage-chosen subset of the former ~9.9k-test tier (see `tests/AGENTS.md`, "The smoke
 tier"); under `-m smoke` the conftest skips test modules with no smoke mark before import.
 The instrumented smoke wall measurement (measured 2026-10-02, one 4-core Linux worker,

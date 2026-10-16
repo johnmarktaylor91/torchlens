@@ -7,7 +7,8 @@ kinds, plus the refusal rows (dropout, stale facet, length mismatch, q/k).
 Any red cell reverts to "refuse, recapture eager" -- the reversion clause is
 signed in advance by the capability's own proposer. The Llama cells pin the
 rotary-embedding body per instance: the direct-buffer form (transformers>=5.19)
-is admitted, the buffer-view form (transformers<=5.18) stays reverted.
+and the buffer-view form (transformers<=5.18) are both admitted, and the
+buffer-view cells must equal the direct-buffer ones.
 """
 
 from __future__ import annotations
@@ -92,8 +93,9 @@ def _buffer_view_rotary_forward(self, x, position_ids):
 
     ``inv_freq[None, :, None].expand(...)`` hands a storage-sharing view of the
     ``inv_freq`` buffer to the next op. The patched rerun of a lowered
-    counterfactual logs two extra (1, 8, 1) source events for those views, so
-    the raw-event shape hash diverges (the open rerun-seam gap).
+    counterfactual used to log two extra (1, 8, 1) source events for those
+    views, so the raw-event shape hash diverged (the rerun-seam gap); the seam
+    now admits it.
     """
 
     inv_freq = (
@@ -135,10 +137,10 @@ def llama_rotary_models():
 
     The installed transformers decides which rotary body a stock Llama runs
     (5.18 ships the buffer-view form, 5.19 the direct-buffer form), and only
-    the buffer-view form trips the rerun seam. Pinning the body per instance
-    (a subclass swapped onto ``model.model.rotary_emb`` before any capture)
-    makes both the admitted cells and the reversion pin hold on every
-    transformers release instead of flipping with the installed version.
+    the buffer-view form used to trip the rerun seam. Pinning the body per
+    instance (a subclass swapped onto ``model.model.rotary_emb`` before any
+    capture) makes both forms' cells hold on every transformers release instead
+    of flipping with the installed version.
     """
 
     from families import build_llama
@@ -177,13 +179,14 @@ def test_llama_rotary_forms_agree(llama_rotary_models):
     assert float((view - direct).abs().max()) < 1e-5
 
 
+@pytest.mark.parametrize("form", ["direct_buffer", "buffer_view"])
 @pytest.mark.parametrize("kind", ["head", "pattern"])
-def test_llama_lowered_matches_across_implementations(llama_rotary_models, kind):
+def test_llama_lowered_matches_across_implementations(llama_rotary_models, kind, form):
     """GQA matrix cell (the expanded-v path): eager-lowered == sdpa-lowered.
 
-    The direct-buffer rotary body (transformers>=5.19) is admitted by the
-    rerun seam: no control-flow divergence, and the lowered cells agree across
-    implementations below the same noise floor as the gpt2 cells.
+    Both rotary bodies are admitted by the rerun seam: no control-flow
+    divergence, and the lowered cells agree across implementations below the
+    same noise floor as the gpt2 cells.
     """
 
     torch.manual_seed(4)
@@ -191,7 +194,7 @@ def test_llama_lowered_matches_across_implementations(llama_rotary_models, kind)
     corrupt = torch.randint(0, 500, (1, 6))
     results = {
         impl: _strict_lowered(
-            llama_rotary_models[("direct_buffer", impl)],
+            llama_rotary_models[(form, impl)],
             clean,
             corrupt,
             layer=0,
@@ -241,28 +244,40 @@ def test_llama_direct_eager_edit_matches_lowered(llama_rotary_models):
 
 
 @pytest.mark.parametrize("kind", ["head", "pattern"])
-def test_llama_buffer_view_rotary_reverts_to_refusal(llama_rotary_models, kind):
-    """D11 pre-signed reversion clause, exercised: the buffer-view rotary body
-    (transformers<=5.18) still trips the rerun seam, so its cells raise the
-    typed control-flow-divergence refusal (the trace never serves a silently
-    wrong number). This pin SCREAMS the moment the seam is fixed, at which
-    point the buffer-view form joins the admitted cells above (delete this
-    test in that change).
+def test_llama_buffer_view_rotary_matches_direct_buffer(llama_rotary_models, kind):
+    """The buffer-view rotary body's lowered cells equal the direct-buffer ones.
+
+    This replaces the D11 reversion pin: the buffer-view body (transformers<=5.18)
+    used to trip the rerun seam and refuse with a control-flow divergence; the
+    seam now admits it, and its lowered cells must give the direct-buffer
+    numbers (the two bodies compute the same model, see
+    ``test_llama_rotary_forms_agree``).
     """
 
     torch.manual_seed(4)
     clean = torch.randint(0, 500, (1, 6))
     corrupt = torch.randint(0, 500, (1, 6))
-    with pytest.raises(ControlFlowDivergenceWarning, match="diverged"):
-        _strict_lowered(
-            llama_rotary_models[("buffer_view", "eager")],
+    reference = _strict_lowered(
+        llama_rotary_models[("direct_buffer", "eager")],
+        clean,
+        corrupt,
+        layer=0,
+        head=1,
+        kind=kind,
+        metric=_final_logits,
+    ).metric_value
+    for impl in ("eager", "sdpa"):
+        view = _strict_lowered(
+            llama_rotary_models[("buffer_view", impl)],
             clean,
             corrupt,
             layer=0,
             head=1,
             kind=kind,
             metric=_final_logits,
-        )
+        ).metric_value
+        gap = float((view - reference).abs().max())
+        assert gap < 5e-5, f"buffer-view {impl} lowered cell differs from direct-buffer by {gap}"
 
 
 def test_direct_eager_edit_matches_lowered(matrix_models):
