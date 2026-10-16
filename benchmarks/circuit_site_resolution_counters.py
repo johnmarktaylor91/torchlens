@@ -221,6 +221,10 @@ def _counting_selector_kinds(kinds: Counter[str]) -> Iterator[None]:
 def run(case_name: str, *, wall: bool) -> dict[str, Any]:
     """Run one case and return its report."""
 
+    # The first float tanh of a process can take a different kernel path on one
+    # intra-op thread; warm it up so the plain-hook reference is never first.
+    for dtype in (torch.float32, torch.float64):
+        torch.tanh(torch.zeros(max(torch.get_num_threads(), 1), 32768, dtype=dtype))
     case = _case(case_name)
     model = case["model"]
     clean = tl.trace(model, case["clean_ids"], capture=_CAPTURE)
