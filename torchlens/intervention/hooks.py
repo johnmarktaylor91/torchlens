@@ -1266,11 +1266,7 @@ def _resolve_facet_specs(log: Any, selector: FacetSelector) -> list[tuple[str, A
     seen: set[tuple[int, str, str]] = set()
     facet_names = _DEFAULT_HEAD_FACET_NAMES if selector.name is None else (selector.name,)
     for record in _iter_facet_records(log):
-        if selector.module_address is not None:
-            record_address = getattr(record, "address", None)
-            if record_address != selector.module_address:
-                continue
-        view = getattr(record, "facets", None)
+        view = _scoped_facet_view(record, selector)
         if view is None:
             continue
         for facet_name in facet_names:
@@ -1298,6 +1294,66 @@ def _resolve_facet_specs(log: Any, selector: FacetSelector) -> list[tuple[str, A
             seen.add(dedupe_key)
             resolved.append((facet_name, spec))
     return resolved
+
+
+def _scoped_facet_view(record: Any, selector: FacetSelector) -> Any:
+    """Return ``record``'s facet view when ``selector`` may use it, else ``None``.
+
+    A module record that ran more than once is skipped (its view raises
+    ``module_call_ambiguous``; the ops of its calls still serve), and refused
+    with ``facet_selector_module_multi_call`` when the selector is scoped to it.
+    """
+
+    record_address = getattr(record, "address", None)
+    if selector.module_address is not None and record_address != selector.module_address:
+        return None
+    call_addresses = _multi_call_addresses(record)
+    if call_addresses is not None:
+        if selector.module_address is not None:
+            _refuse_multi_call_module(selector, str(record_address), call_addresses)
+        return None
+    return getattr(record, "facets", None)
+
+
+def _multi_call_addresses(record: Any) -> tuple[str, ...] | None:
+    """Return the call-qualified addresses of a module record that ran more than once.
+
+    ``None`` for any other record. The test mirrors the module record's own
+    single-call guard, so a record whose ``facets`` would raise
+    ``module_call_ambiguous`` is never asked for its view.
+    """
+
+    num_calls = getattr(record, "num_calls", None)
+    if num_calls is None or hasattr(record, "call_label") or not hasattr(record, "calls"):
+        return None
+    if num_calls == 1 and len(getattr(record, "ops", ())) == 1:
+        return None
+    address = getattr(record, "address", "")
+    return tuple(f"{address}:{index}" for index in range(1, max(int(num_calls), 1) + 1))
+
+
+def _refuse_multi_call_module(
+    selector: FacetSelector, address: str, call_addresses: tuple[str, ...]
+) -> None:
+    """Refuse a facet selector scoped to a module that ran more than once.
+
+    A facet write installs its hook on the home op's layer, which fires on
+    every call of the module, so no call-qualified selector can edit one call;
+    each call's facets are read at its call-qualified address.
+    """
+
+    from .._errors import InvalidArgumentError
+
+    raise InvalidArgumentError(
+        f"{selector!r} is scoped to module {address!r}, which ran {len(call_addresses)} "
+        "times; a facet write there would fire on every call",
+        code="facet_selector_module_multi_call",
+        remedy=f"read one call's facets at trace[{call_addresses[0]!r}].facets (calls: "
+        f"{', '.join(call_addresses)}); write through a selector scoped to a module that "
+        "runs once",
+        address=address,
+        call_addresses=call_addresses,
+    )
 
 
 def _iter_facet_records(log: Any) -> Iterator[Any]:
