@@ -333,13 +333,15 @@ class OpRowStore:
         """
 
         finalizer = self._payload_finalizers.get(id(owner))
-        if finalizer is not None and finalizer.alive and finalizer.peek()[0] is owner:
+        registered = None if finalizer is None else finalizer.peek()
+        if finalizer is not None and registered is not None and registered[0] is owner:
             finalizer()
 
     def _release_payload_owner(self, key: int | None = None) -> None:
         """Drop one owner; evict tensor payloads when the last owner dies."""
 
-        self._payload_finalizers.pop(key, None)
+        if key is not None:
+            self._payload_finalizers.pop(key, None)
         self._payload_owner_count -= 1
         if self._payload_owner_count == 0 and self._sealed:
             self._evict_tensor_payloads()
