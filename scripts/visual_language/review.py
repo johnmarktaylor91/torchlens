@@ -68,6 +68,11 @@ NORMALIZE_RULES: tuple[tuple[str, str, Callable[[str], tuple[str, int]]], ...] =
         _sub(r"(?<![\w.])\d+(?:\.\d+)?\s?(?:ns|us|µs|ms)\b|(?<=t=)\d+(?:\.\d+)?\s?s\b", "<t>"),
     ),
     (
+        "measured memory",
+        "the summary's forward peak is the process memory growth measured in that build",
+        _sub(r"(?<=forward peak )\d+(?:\.\d+)? ?[KMGT]?i?B\b", "<bytes>"),
+    ),
+    (
         "object addresses",
         "Python reprs print the memory address of the object, new every process",
         _sub(r" at 0x[0-9a-fA-F]{6,}", " at 0x<addr>"),

@@ -111,6 +111,9 @@ def test_normalization_keeps_every_real_difference() -> None:
     assert normalize('x [fillcolor="#FF0000"]')[0] != normalize('x [fillcolor="#00FF00"]')[0]
     assert normalize("(1, 3), 12 B")[0] != normalize("(1, 3), 16 B")[0]
     assert normalize("t=53.41 us")[0] == normalize("t=8.2 ms")[0]
+    peak = "Memory   forward peak 397.3 KB (process RSS growth)"
+    assert normalize(peak)[0] == normalize(peak.replace("397.3", "528.4"))[0]
+    assert normalize("size 18.1 KB")[0] != normalize("size 18.2 KB")[0]
 
 
 def test_each_rule_names_why_it_differs_by_construction() -> None:
@@ -119,7 +122,7 @@ def test_each_rule_names_why_it_differs_by_construction() -> None:
     assert all(name and why for name, why, _rule in NORMALIZE_RULES)
     _text, timed = normalize(
         "/build/side t=5 us (54% of total) at 0x7f00deadbeef footer "
-        "commit abcdef1, built 2026-10-16 grad_fn_9",
+        "commit abcdef1, built 2026-10-16 grad_fn_9 forward peak 3.1 MB",
         roots=("/build/side",),
     )
     assert set(timed) <= set(rule_reasons())
