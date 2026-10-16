@@ -28,14 +28,13 @@ import importlib
 import inspect
 import json
 import pkgutil
-import sys
 import types
 import warnings
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any
 
-from name_lockstep import definitions, docsections
+from name_lockstep import definitions, docsections, fields
 
 PACKAGE = "torchlens"
 ALIAS = "tl"
@@ -443,84 +442,10 @@ def _class_member_names(cls: type) -> dict[str, object]:
     if dataclasses.is_dataclass(cls):
         own = vars(cls).get("__annotations__", {})
         members.update({f.name: None for f in dataclasses.fields(cls) if f.name in own})
-    members.update(dict.fromkeys(_policy_fields(cls)))
+    members.update(dict.fromkeys(fields.policy_fields(cls)))
     for name, raw in vars(cls).items():
         members[name] = raw
     return {name: raw for name, raw in members.items() if not name.startswith("_")}
-
-
-def _policy_fields(cls: type) -> list[str]:
-    """Return the user-facing stored fields a class declares in its own ``FIELD_POLICY``.
-
-    Parameters
-    ----------
-    cls
-        A TorchLens class.
-
-    Returns
-    -------
-    list[str]
-        Field names in table order; empty when the class has no such table.
-    """
-
-    table = vars(cls).get("FIELD_POLICY")
-    if not isinstance(table, Mapping):
-        return []
-    return [
-        name
-        for name, policy in table.items()
-        if isinstance(name, str) and getattr(policy, "user_facing", True)
-    ]
-
-
-def _init_fields(cls: type) -> frozenset[str]:
-    """Return the fields a dataclass or named tuple takes as constructor keywords."""
-
-    if dataclasses.is_dataclass(cls):
-        return frozenset(field.name for field in dataclasses.fields(cls) if field.init)
-    fields = getattr(cls, "_fields", None)
-    if issubclass(cls, tuple) and isinstance(fields, tuple):
-        return frozenset(str(name) for name in fields)
-    return frozenset()
-
-
-def _field_tables(cls: type, package: str) -> list[str]:
-    """Return the module constants that list a class's field order, as ``module:NAME``.
-
-    A constant counts when it is a list or tuple equal to the class's ``FIELD_POLICY``
-    field order and its module's source assigns it (an import of it does not count).
-
-    Parameters
-    ----------
-    cls
-        A class with a ``FIELD_POLICY`` table.
-    package
-        Top-level package name; only its imported modules are searched.
-
-    Returns
-    -------
-    list[str]
-        Sorted ``module:NAME`` entries.
-    """
-
-    order = _policy_fields(cls)
-    if not order:
-        return []
-    found = []
-    for module_name, module in list(sys.modules.items()):
-        if not _in_package(module_name, package) or module is None:
-            continue
-        matches = [
-            name
-            for name, value in vars(module).items()
-            if isinstance(value, (list, tuple))
-            and len(value) == len(order)
-            and list(value) == order
-        ]
-        tree = definitions.module_tree(module_name) if matches else None
-        assigned = definitions.assigned_names(tree) if tree is not None else set()
-        found += [f"{module_name}:{name}" for name in matches if name in assigned]
-    return sorted(found)
 
 
 def _member_rows(classes: Iterable[type], package: str) -> dict[str, dict[str, Any]]:
@@ -549,16 +474,16 @@ def _member_rows(classes: Iterable[type], package: str) -> dict[str, dict[str, A
                 continue
             owner = f"{_defining_module(defining, defining.__module__)}:{defining.__qualname__}"
             if defining not in tables:
-                tables[defining] = _field_tables(defining, package)
-            fields = set(_policy_fields(defining))
+                tables[defining] = fields.field_tables(defining, package)
+            stored = {*fields.policy_fields(defining), *fields.layout_fields(defining)}
             for name, raw in _class_member_names(defining).items():
                 row_id = f"member:{owner}.{name}"
                 row = rows.get(row_id) or _new_member_row(row_id, owner, defining, name, raw)
-                if name in fields and tables[defining]:
+                if name in stored and tables[defining]:
                     row["field_tables"] = tables[defining]
                 if reached.__qualname__ not in row["owner_names"]:
                     row["owner_names"].append(reached.__qualname__)
-                if name in _init_fields(reached):
+                if name in fields.init_fields(reached):
                     row["init_classes"] = sorted({*row.get("init_classes", []), reached.__name__})
                 rows[row_id] = row
     return rows

@@ -29,9 +29,12 @@ FILES = {
         from fieldlens_pkg._state_shim import State
         from fieldlens_pkg.bundle import Bundle
         from fieldlens_pkg.caps import Caps, FastCaps
+        from fieldlens_pkg.facade import Call
         from fieldlens_pkg.record import Accessor, Record
 
-        __all__ = ["Accessor", "Bundle", "Caps", "FastCaps", "Record", "State", "bundle"]
+        __all__ = [
+            "Accessor", "Bundle", "Call", "Caps", "FastCaps", "Record", "State", "bundle"
+        ]
 
 
         def bundle(*items):
@@ -68,6 +71,24 @@ FILES = {
             """Fast capabilities."""
 
             fast: bool = True
+        ''',
+    "facade.py": '''
+        """A record facade whose stored fields live in a row layout."""
+
+
+        class _Layout:
+            def __init__(self, names):
+                self.names = tuple(names)
+
+
+        class Call:
+            """A call."""
+
+            label = ""
+
+
+        _CALL_STORED_FIELDS = ("label", "index")
+        Call._TL_LAYOUT = _Layout(_CALL_STORED_FIELDS)
         ''',
     "_impl.py": '''
         """Where Accessor is written."""
@@ -174,6 +195,13 @@ def test_policy_table_fields_are_members_with_their_field_tables(field_inventory
         assert row["subkind"] == "field"
         assert row["field_tables"] == [f"{PKG}.constants:RECORD_FIELD_ORDER"]
     assert f"member:{PKG}.record:Record.runtime_cache" not in field_inventory
+
+
+def test_record_layout_fields_name_their_stored_field_table(field_inventory: dict) -> None:
+    """F6: a record facade's stored-field tuple is the field table of its fields."""
+
+    row = field_inventory[f"member:{PKG}.facade:Call.label"]
+    assert row["field_tables"] == [f"{PKG}.facade:_CALL_STORED_FIELDS"]
 
 
 def test_classes_are_filed_under_their_defining_module(field_inventory: dict) -> None:
