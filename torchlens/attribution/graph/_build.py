@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import functools
 import operator
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -266,24 +266,34 @@ def _cotangent(
     return cot
 
 
-def _seeds(
+@dataclass(frozen=True)
+class _SeedSpec:
+    """One target node's seed, built into a cotangent only when its chunk runs."""
+
+    label: str
+    shape: tuple[int, ...]
+    position: int
+    vector: torch.Tensor
+
+
+def _seed_specs(
     readers: tuple[Reader, ...],
     sites: _Sites,
     found: _Features,
     logit_ids: torch.Tensor,
     demeaned_logits: bool,
-) -> tuple[list[Any], torch.Tensor]:
-    """Return one seed per target node and the logit nodes' values."""
+) -> tuple[list[_SeedSpec], torch.Tensor]:
+    """Return one seed spec per target node and the logit nodes' values."""
 
-    seeds: list[Any] = []
+    specs: list[_SeedSpec] = []
     for number, position, feature in zip(
         found.reader_index, found.positions, found.features, strict=True
     ):
         reader = readers[number]
         label = sites.reads[reader.site]
         inputs = _payload(sites, label, "MLP input")
-        cot = _cotangent((1, *inputs.shape), inputs.dtype, position, reader.encoder[:, feature])
-        seeds.append(seed(label, cotangent=cot))
+        vector = reader.encoder[:, feature].to(inputs.dtype)
+        specs.append(_SeedSpec(label, (1, *inputs.shape), position, vector))
     logits = _payload(sites, sites.logits, "logits")
     last = logits.shape[0] - 1
     vocab = logits.shape[1]
@@ -293,10 +303,16 @@ def _seeds(
         direction[token] = 1.0
         if demeaned_logits:
             direction = direction - 1.0 / vocab
-        cot = _cotangent((1, *logits.shape), logits.dtype, last, direction)
-        seeds.append(seed(sites.logits, cotangent=cot))
+        specs.append(_SeedSpec(sites.logits, (1, *logits.shape), last, direction))
         values.append((logits[last] * direction).sum())
-    return seeds, torch.stack(values) if values else torch.zeros(0, dtype=logits.dtype)
+    return specs, torch.stack(values) if values else torch.zeros(0, dtype=logits.dtype)
+
+
+def _seed(spec: _SeedSpec) -> Any:
+    """Return the one-backward seed of one spec."""
+
+    cot = _cotangent(spec.shape, spec.vector.dtype, spec.position, spec.vector)
+    return seed(spec.label, cotangent=cot)
 
 
 def _within(labels: list[str]) -> Any:
@@ -338,22 +354,30 @@ def _frozen_labels(trace: Any, sites: _Sites, frozen: Sequence[str]) -> list[str
 
 
 #: Targets per one-backward read; each read returns every target's gradient
-#: at every source site, so the chunk bounds the read's result size.
+#: at every source site, so the chunk bounds the read's result size and the
+#: builder's gradient buffer.
 _TARGETS_PER_READ = 256
 
 
-def _gradients(
-    trace: Any,
-    sites: _Sites,
-    seeds: list[Any],
-    frozen: list[str],
-) -> torch.Tensor:
-    """Run the reads; return ``(n_targets, n_sources, positions, width)`` gradients.
+@dataclass
+class _BuildCounters:
+    """Deterministic counters of one build (internal; filled when passed in).
 
-    Sources are the written MLP outputs in order, then the embedding output;
-    a target that does not reach a source (``status='unreachable'``) has a
-    zero gradient there, since no path means no direct effect.
+    Attributes
+    ----------
+    reads
+        One-backward reads run (one per chunk of targets).
+    gradient_buffer_peak_bytes
+        Largest gradient buffer the builder held at once:
+        ``chunk x sources x positions x width x element size``.
     """
+
+    reads: int = 0
+    gradient_buffer_peak_bytes: int = 0
+
+
+def _sources(sites: _Sites) -> tuple[list[str], int, int, torch.dtype]:
+    """Return the source edge labels, positions, width and dtype."""
 
     sources = [*sites.writes.values(), sites.embedding]
     shapes = []
@@ -367,14 +391,36 @@ def _gradients(
             code="attribution_graph_input_unsupported",
         )
     n_pos, width = shapes[0]
-    dtype = _payload(sites, sites.embedding, "embedding").dtype
+    return sources, n_pos, width, _payload(sites, sites.embedding, "embedding").dtype
+
+
+def _gradient_chunks(
+    trace: Any,
+    sites: _Sites,
+    specs: list[_SeedSpec],
+    frozen: list[str],
+    counters: _BuildCounters,
+) -> Iterator[tuple[int, torch.Tensor]]:
+    """Yield ``(start, (chunk, n_sources, positions, width))`` gradients per read.
+
+    Sources are the written MLP outputs in order, then the embedding output;
+    a target that does not reach a source (``status='unreachable'``) has a
+    zero gradient there, since no path means no direct effect. Each chunk's
+    buffer is released by the caller before the next read runs.
+    """
+
+    sources, n_pos, width, dtype = _sources(sites)
     by_layer = {
         sites.index.edges[label].layer_label: number for number, label in enumerate(sources)
     }
-    grads = torch.zeros(len(seeds), len(sources), n_pos, width, dtype=dtype)
-    per_target = len(sources) * n_pos * width * grads.element_size()
-    for start in range(0, len(seeds), _TARGETS_PER_READ):
-        chunk = seeds[start : start + _TARGETS_PER_READ]
+    for start in range(0, len(specs), _TARGETS_PER_READ):
+        chunk = [_seed(spec) for spec in specs[start : start + _TARGETS_PER_READ]]
+        grads = torch.zeros(len(chunk), len(sources), n_pos, width, dtype=dtype)
+        per_target = len(sources) * n_pos * width * grads.element_size()
+        counters.reads += 1
+        counters.gradient_buffer_peak_bytes = max(
+            counters.gradient_buffer_peak_bytes, grads.numel() * grads.element_size()
+        )
         table = read(
             trace,
             target=chunk,
@@ -388,8 +434,9 @@ def _gradients(
             number = by_layer.get(row.address[0])
             if number is None or row.status != "ok" or not isinstance(row.value, torch.Tensor):
                 continue
-            grads[start + int(str(row.target_id)[1:]), number] = row.value.detach()[0].to(dtype)
-    return grads
+            grads[int(str(row.target_id)[1:]), number] = row.value.detach()[0].to(dtype)
+        del table
+        yield start, grads
 
 
 def _feature_vectors(
@@ -509,51 +556,82 @@ def build_graph(  # noqa: PLR0913 -- the graph door: two subjects, then what, wh
             "frozen=() when the model has neither.",
             code="attribution_graph_frozen_required",
         )
+    return _build(
+        trace,
+        transcoders,
+        embedding=embedding,
+        target=target,
+        max_n_logits=max_n_logits,
+        desired_logit_prob=desired_logit_prob,
+        demeaned_logits=demeaned_logits,
+        logits_at=logits_at,
+        frozen=frozen,
+        counters=_BuildCounters(),
+    )
+
+
+def _build(  # noqa: PLR0913 -- build_graph's keywords plus the internal counters
+    trace: Any,
+    transcoders: Any,
+    *,
+    embedding: str,
+    target: Sequence[int] | None,
+    max_n_logits: int,
+    desired_logit_prob: float,
+    demeaned_logits: bool,
+    logits_at: SiteTarget | None,
+    frozen: Sequence[str],
+    counters: _BuildCounters,
+) -> AttributionGraph:
+    """Build the graph; fill ``counters`` (the body of :func:`build_graph`)."""
+
     readers = normalize_transcoders(transcoders)
     sites = _resolve_sites(trace, readers, embedding, logits_at)
     found = _active_features(readers, sites)
     logits = _payload(sites, sites.logits, "logits")
     logit_ids, probabilities = _logit_targets(logits, target, max_n_logits, desired_logit_prob)
-    seeds, logit_values = _seeds(readers, sites, found, logit_ids, demeaned_logits)
+    specs, logit_values = _seed_specs(readers, sites, found, logit_ids, demeaned_logits)
     frozen_labels = _frozen_labels(trace, sites, frozen)
-    grads = _gradients(trace, sites, seeds, frozen_labels)
+    chunks = _gradient_chunks(trace, sites, specs, frozen_labels, counters)
     embed_out = _payload(sites, sites.embedding, "embedding")
-    return _assemble(
+    nodes, starts = _node_layout(sites, found, logit_ids, embed_out.shape[0])
+    writes = _write_sources(readers, sites, found, embed_out.dtype)
+    adjacency, dec_total = _edges(writes, found, nodes, starts, chunks, embed_out)
+    return _pack(
         readers,
         sites,
         found,
+        writes,
+        nodes,
+        starts,
         logit_ids,
         probabilities,
         logit_values,
-        grads,
-        embed_out,
+        adjacency,
+        dec_total,
         demeaned_logits,
         frozen_labels,
         _capture_outcome_status(trace),
     )
 
 
-def _assemble(  # noqa: PLR0913 -- one packer for the build's computed parts
-    readers: tuple[Reader, ...],
-    sites: _Sites,
-    found: _Features,
-    logit_ids: torch.Tensor,
-    probabilities: torch.Tensor,
-    logit_values: torch.Tensor,
-    grads: torch.Tensor,
-    embed_out: torch.Tensor,
-    demeaned_logits: bool,
-    frozen: list[str],
-    capture_outcome: str | None,
-) -> AttributionGraph:
-    """Contract the read's gradients with every source vector; pack the graph."""
+@dataclass(frozen=True)
+class _Starts:
+    """Where each node kind starts in the node order."""
 
-    dtype = embed_out.dtype
-    n_pos = embed_out.shape[0]
-    write_sites = list(sites.writes)
+    error: int
+    token: int
+    logit: int
+
+
+def _node_layout(
+    sites: _Sites, found: _Features, logit_ids: torch.Tensor, n_pos: int
+) -> tuple[list[GraphNode], _Starts]:
+    """Return the node order: features, errors, tokens, logits."""
+
     nodes = list(found.nodes)
     error_start = len(nodes)
-    nodes += [GraphNode("error", write, p) for write in write_sites for p in range(n_pos)]
+    nodes += [GraphNode("error", write, p) for write in sites.writes for p in range(n_pos)]
     token_start = len(nodes)
     token_ids = sites.tokens.tolist() if sites.tokens is not None else [None] * n_pos
     nodes += [
@@ -563,42 +641,116 @@ def _assemble(  # noqa: PLR0913 -- one packer for the build's computed parts
     logit_start = len(nodes)
     logit_site = _site_name(sites, "logits")
     nodes += [GraphNode("logit", logit_site, n_pos - 1, token=int(t)) for t in logit_ids.tolist()]
+    return nodes, _Starts(error_start, token_start, logit_start)
+
+
+@dataclass(frozen=True)
+class _WriteSources:
+    """What one written MLP output contributes as sources."""
+
+    node_idx: torch.Tensor
+    pos_idx: torch.Tensor
+    vectors: torch.Tensor | None
+    error: torch.Tensor
+    bias: torch.Tensor | None
+
+
+def _write_sources(
+    readers: tuple[Reader, ...], sites: _Sites, found: _Features, dtype: torch.dtype
+) -> list[_WriteSources]:
+    """Return each written MLP output's feature vectors, error vector and bias."""
+
+    out = []
+    for write in sites.writes:
+        payload = _payload(sites, sites.writes[write], "MLP output").to(dtype)
+        error = payload - _reconstruction(readers, found, write, payload.shape, dtype)
+        pairs = _feature_vectors(readers, found, write)
+        out.append(
+            _WriteSources(
+                torch.tensor([node for node, _p, _v in pairs], dtype=torch.long),
+                torch.tensor([position for _n, position, _v in pairs], dtype=torch.long),
+                torch.stack([vector.to(dtype) for _n, _p, vector in pairs]) if pairs else None,
+                error,
+                _decoder_bias(readers, write, dtype),
+            )
+        )
+    return out
+
+
+def _edges(  # noqa: PLR0913 -- the build's parts the contraction reads
+    writes: list[_WriteSources],
+    found: _Features,
+    nodes: list[GraphNode],
+    starts: _Starts,
+    chunks: Iterator[tuple[int, torch.Tensor]],
+    embed_out: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Contract each chunk's gradients with every source vector, chunk by chunk.
+
+    Returns the adjacency (rows are targets) and each row's decoder-bias
+    term. Only one chunk's gradients are alive at a time.
+    """
+
+    dtype = embed_out.dtype
+    n_pos = embed_out.shape[0]
     n_nodes = len(nodes)
+    rows = torch.tensor(
+        list(range(len(found.nodes))) + list(range(starts.logit, n_nodes)), dtype=torch.long
+    )
     adjacency = torch.zeros(n_nodes, n_nodes, dtype=dtype)
+    dec_total = torch.zeros(len(rows), dtype=dtype)
+    for start, grads in chunks:
+        stop = start + grads.shape[0]
+        incoming = torch.zeros(grads.shape[0], n_nodes, dtype=dtype)
+        for w_number, source in enumerate(writes):
+            grad = grads[:, w_number]
+            if source.vectors is not None:
+                incoming.index_add_(
+                    1, source.node_idx, (grad[:, source.pos_idx] * source.vectors).sum(dim=-1)
+                )
+            first = starts.error + w_number * n_pos
+            incoming[:, first : first + n_pos] = (grad * source.error).sum(dim=-1)
+            if source.bias is not None:
+                dec_total[start:stop] += (grad @ source.bias).sum(dim=-1)
+        incoming[:, starts.token : starts.logit] = (grads[:, -1] * embed_out).sum(dim=-1)
+        adjacency[rows[start:stop]] = incoming
+        del grads, incoming
+    return adjacency, dec_total
+
+
+def _pack(  # noqa: PLR0913 -- one packer for the build's computed parts
+    readers: tuple[Reader, ...],
+    sites: _Sites,
+    found: _Features,
+    writes: list[_WriteSources],
+    nodes: list[GraphNode],
+    starts: _Starts,
+    logit_ids: torch.Tensor,
+    probabilities: torch.Tensor,
+    logit_values: torch.Tensor,
+    adjacency: torch.Tensor,
+    dec_total: torch.Tensor,
+    demeaned_logits: bool,
+    frozen: list[str],
+    capture_outcome: str | None,
+) -> AttributionGraph:
+    """Fill the node values and constants; pack the graph."""
+
+    dtype = adjacency.dtype
+    n_nodes = len(nodes)
+    rows = torch.tensor(
+        list(range(len(found.nodes))) + list(range(starts.logit, n_nodes)), dtype=torch.long
+    )
     decoder_bias = torch.full((n_nodes,), float("nan"), dtype=dtype)
     encoder_bias = torch.full((n_nodes,), float("nan"), dtype=dtype)
     values = torch.full((n_nodes,), float("nan"), dtype=dtype)
-    rows = torch.tensor(
-        list(range(len(found.nodes))) + list(range(logit_start, n_nodes)), dtype=torch.long
-    )
-    incoming = torch.zeros(len(rows), n_nodes, dtype=dtype)
-    dec_total = torch.zeros(len(rows), dtype=dtype)
-    error_vectors = []
-    for w_number, write in enumerate(write_sites):
-        grad = grads[:, w_number]
-        out = _payload(sites, sites.writes[write], "MLP output").to(dtype)
-        error = out - _reconstruction(readers, found, write, out.shape, dtype)
-        error_vectors.append(error)
-        pairs = _feature_vectors(readers, found, write)
-        if pairs:
-            node_idx = torch.tensor([node for node, _p, _v in pairs], dtype=torch.long)
-            pos_idx = torch.tensor([position for _n, position, _v in pairs], dtype=torch.long)
-            vectors = torch.stack([vector.to(dtype) for _n, _p, vector in pairs])
-            incoming.index_add_(1, node_idx, (grad[:, pos_idx] * vectors).sum(dim=-1))
-        start = error_start + w_number * n_pos
-        incoming[:, start : start + n_pos] = (grad * error).sum(dim=-1)
-        bias = _decoder_bias(readers, write, dtype)
-        if bias is not None:
-            dec_total = dec_total + (grad @ bias).sum(dim=-1)
-    incoming[:, token_start:logit_start] = (grads[:, -1] * embed_out).sum(dim=-1)
-    adjacency[rows] = incoming
     decoder_bias[rows] = dec_total
     for node in range(len(found.nodes)):
         reader = readers[found.reader_index[node]]
         encoder_bias[node] = reader.encoder_bias[found.features[node]].to(dtype)
         values[node] = found.pre_activations[node]
-    encoder_bias[logit_start:] = 0.0
-    values[logit_start:] = logit_values.to(dtype)
+    encoder_bias[starts.logit :] = 0.0
+    values[starts.logit :] = logit_values.to(dtype)
     other = values - adjacency.sum(dim=1) - encoder_bias - decoder_bias
     return AttributionGraph(
         nodes=tuple(nodes),
@@ -613,8 +765,8 @@ def _assemble(  # noqa: PLR0913 -- one packer for the build's computed parts
             torch.stack(found.activations) if found.activations else torch.zeros(0, dtype=dtype)
         ),
         transcoder_sites=tuple(reader.site for reader in readers),
-        error_sites=tuple(write_sites),
-        error_vectors=torch.stack(error_vectors),
+        error_sites=tuple(sites.writes),
+        error_vectors=torch.stack([source.error for source in writes]),
         input_tokens=(
             sites.tokens if sites.tokens is not None else torch.zeros(0, dtype=torch.long)
         ),
