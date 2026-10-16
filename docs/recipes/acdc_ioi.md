@@ -167,7 +167,11 @@ corrupted counterparts from the MIB IOI task (`mib-bench/ioi`, the
 metric (or use minus the logit difference of the indirect object over the
 subject). Each test patches every pruned edge in one multi-receiver call,
 so the cost of a test grows with the number of receivers already touched;
-budget a background job.
+budget a background job. The measured cost on 20 rows and 4 CPU cores (0.9 s
+for a test into `logits`, 138 s for one that touches every receiver, about
+450 hours for the full walk) is in the
+[mechinterp reference](../reference/mechinterp.md), under the circuit test
+cases on GPT-2 small.
 
 ## The record
 
