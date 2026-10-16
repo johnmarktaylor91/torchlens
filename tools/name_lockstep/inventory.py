@@ -5,11 +5,19 @@ sweep's name table, line up row for row:
 
 - ``root:tl.X``: a name reachable on the ``torchlens`` module (``__all__``, lazy facade
   rows, public top-level submodules);
-- ``export:tl.ns.X``: an export of a public top-level namespace (its ``__all__``, else
-  its public definitions);
+- ``export:tl.ns.X``: an export of a public namespace (its ``__all__``, else its public
+  definitions and module-level data constants), including nested namespaces such as
+  ``tl.experimental.dagua`` and a submodule that a root name of the same spelling
+  shadows (``tl.bundle``);
 - ``member:<module>:<Class>.<name>``: a public member of a reached TorchLens class, one
-  row per defining class;
-- ``param:<name>``: a public keyword name, grouped over every reached signature.
+  row per defining class; stored fields declared only in the class's ``FIELD_POLICY``
+  table count, and carry ``field_tables``, the module constants that list the field
+  order (``torchlens.constants:MODEL_LOG_FIELD_ORDER``);
+- ``param:<name>``: a keyword name, grouped over every reached signature (variadic and
+  underscore names included, so their renames and removals are seen).
+
+``<module>`` and ``module`` name the module whose source defines the object, not a
+re-export shim that reassigns ``__module__`` for pickling.
 """
 
 from __future__ import annotations
@@ -26,13 +34,17 @@ from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any
 
-from name_lockstep import docsections
+from name_lockstep import definitions, docsections, fields
 
 PACKAGE = "torchlens"
 ALIAS = "tl"
 #: Bump when the row shape changes; ``load_inventory`` refuses other versions.
-SCHEMA = "name-lockstep-inventory/1"
+SCHEMA = "name-lockstep-inventory/2"
 _SKIPPED_PARAMS = frozenset({"self", "cls"})
+#: Values a namespace without ``__all__`` exports as constants when its source assigns them.
+_DATA_TYPES = (str, bytes, int, float, bool, tuple, list, dict, set, frozenset, type(None))
+#: Nested namespace levels walked below a root namespace (``tl.experimental.dagua``).
+MAX_NAMESPACE_DEPTH = 3
 #: Distinct documented meanings shown on one keyword row's doc line.
 MAX_PARAM_MEANINGS = 3
 
@@ -159,6 +171,25 @@ def _home_module(value: object, fallback: str) -> str:
     return module if isinstance(module, str) else fallback
 
 
+def _defining_module(value: object, fallback: str) -> str:
+    """Return the module whose source defines ``value`` (see ``definitions``).
+
+    Parameters
+    ----------
+    value
+        The object.
+    fallback
+        Module to report when ``value`` carries no ``__module__``.
+
+    Returns
+    -------
+    str
+        A dotted module name.
+    """
+
+    return definitions.defining_module(value, _home_module(value, fallback))
+
+
 def _object_row(kind: str, path: str, owner: str, value: object, fallback: str) -> dict[str, Any]:
     """Build a root or export row.
 
@@ -192,7 +223,7 @@ def _object_row(kind: str, path: str, owner: str, value: object, fallback: str) 
         "name": path.rsplit(".", 1)[-1],
         "path": path,
         "owner": owner,
-        "module": _home_module(value, fallback),
+        "module": _defining_module(value, fallback),
         "signature": sig_text,
         "doc_first_line": doc,
         "fingerprint": _fingerprint(kind, owner, subkind, sig_text, doc),
@@ -283,12 +314,18 @@ def _namespace_exports(module: types.ModuleType) -> list[str]:
     declared = getattr(module, "__all__", None)
     if declared is not None:
         return sorted(str(name) for name in declared if not str(name).startswith("_"))
+    tree = definitions.module_tree(module.__name__)
+    assigned = definitions.assigned_names(tree) if tree is not None else set()
+    package = module.__name__.split(".")[0]
     return sorted(
         name
         for name, value in vars(module).items()
         if not name.startswith("_")
         and not isinstance(value, types.ModuleType)
-        and _in_package(getattr(value, "__module__", None), module.__name__.split(".")[0])
+        and (
+            _in_package(getattr(value, "__module__", None), package)
+            or (name in assigned and isinstance(value, _DATA_TYPES))
+        )
     )
 
 
@@ -314,16 +351,50 @@ def _walk_objects(package: types.ModuleType) -> Iterator[tuple[dict[str, Any], o
         if not ok:
             continue
         yield _object_row("root", f"{ALIAS}.{name}", ALIAS, value, package.__name__), value
-        if not isinstance(value, types.ModuleType):
+        namespace: object = value
+        if not isinstance(value, types.ModuleType) and name in submodules:
+            # A root name that shadows its submodule (``tl.bundle``): the submodule's
+            # exports keep their import path ``torchlens.bundle.X``.
+            _, namespace = _safe_import(f"{package.__name__}.{name}")
+        if not isinstance(namespace, types.ModuleType):
             continue
-        if not _in_package(value.__name__, package.__name__):
+        if not _in_package(namespace.__name__, package.__name__):
             continue
-        for export in _namespace_exports(value):
-            found, exported = _safe_getattr(value, export)
-            if found:
-                path = f"{ALIAS}.{name}.{export}"
-                row = _object_row("export", path, f"{ALIAS}.{name}", exported, value.__name__)
-                yield row, exported
+        yield from _walk_namespace(namespace, f"{ALIAS}.{name}", 0)
+
+
+def _walk_namespace(
+    module: types.ModuleType, path: str, depth: int
+) -> Iterator[tuple[dict[str, Any], object]]:
+    """Yield a namespace's export rows, then those of its nested public namespaces.
+
+    Parameters
+    ----------
+    module
+        The namespace module.
+    path
+        Its public path (``tl.experimental``).
+    depth
+        Levels below the root namespace; nesting stops at ``MAX_NAMESPACE_DEPTH``.
+
+    Yields
+    ------
+    tuple[dict[str, Any], object]
+        A row and the object it names.
+    """
+
+    for export in _namespace_exports(module):
+        found, exported = _safe_getattr(module, export)
+        if not found:
+            continue
+        export_path = f"{path}.{export}"
+        yield _object_row("export", export_path, path, exported, module.__name__), exported
+        if (
+            isinstance(exported, types.ModuleType)
+            and exported.__name__.startswith(module.__name__ + ".")
+            and depth < MAX_NAMESPACE_DEPTH
+        ):
+            yield from _walk_namespace(exported, export_path, depth + 1)
 
 
 def _member_kind(raw: object) -> str:
@@ -352,7 +423,7 @@ def _member_kind(raw: object) -> str:
 
 
 def _class_member_names(cls: type) -> dict[str, object]:
-    """Return a class's own public members: body names, annotations, dataclass fields.
+    """Return a class's own public members: body names, annotations, dataclass and policy fields.
 
     Parameters
     ----------
@@ -371,6 +442,7 @@ def _class_member_names(cls: type) -> dict[str, object]:
     if dataclasses.is_dataclass(cls):
         own = vars(cls).get("__annotations__", {})
         members.update({f.name: None for f in dataclasses.fields(cls) if f.name in own})
+    members.update(dict.fromkeys(fields.policy_fields(cls)))
     for name, raw in vars(cls).items():
         members[name] = raw
     return {name: raw for name, raw in members.items() if not name.startswith("_")}
@@ -389,20 +461,30 @@ def _member_rows(classes: Iterable[type], package: str) -> dict[str, dict[str, A
     Returns
     -------
     dict[str, dict[str, Any]]
-        Rows keyed on id; ``owner_names`` lists the reached classes that show the member.
+        Rows keyed on id; ``owner_names`` lists the reached classes that show the member,
+        and ``init_classes`` those whose constructor takes it as a keyword (dataclass and
+        named-tuple fields).
     """
 
     rows: dict[str, dict[str, Any]] = {}
+    tables: dict[type, list[str]] = {}
     for reached in classes:
         for defining in inspect.getmro(reached):
             if not _in_package(defining.__module__, package):
                 continue
-            owner = f"{defining.__module__}:{defining.__qualname__}"
+            owner = f"{_defining_module(defining, defining.__module__)}:{defining.__qualname__}"
+            if defining not in tables:
+                tables[defining] = fields.field_tables(defining, package)
+            stored = {*fields.policy_fields(defining), *fields.layout_fields(defining)}
             for name, raw in _class_member_names(defining).items():
                 row_id = f"member:{owner}.{name}"
                 row = rows.get(row_id) or _new_member_row(row_id, owner, defining, name, raw)
+                if name in stored and tables[defining]:
+                    row["field_tables"] = tables[defining]
                 if reached.__qualname__ not in row["owner_names"]:
                     row["owner_names"].append(reached.__qualname__)
+                if name in fields.init_fields(reached):
+                    row["init_classes"] = sorted({*row.get("init_classes", []), reached.__name__})
                 rows[row_id] = row
     return rows
 
@@ -450,7 +532,7 @@ def _new_member_row(
         "path": f"{defining.__qualname__}.{name}",
         "owner": owner,
         "owner_names": [],
-        "module": defining.__module__,
+        "module": owner.split(":", 1)[0],
         "signature": sig_text,
         "doc_first_line": doc,
         "doc_source": doc_source,
@@ -490,7 +572,7 @@ def _callables(objects: list[tuple[dict[str, Any], object]], members: list[dict[
 
 
 def _param_rows(callables: Iterable[tuple[str, object]]) -> dict[str, dict[str, Any]]:
-    """Group public keyword names over every reached signature.
+    """Group keyword names over every reached signature (positional-only ones excepted).
 
     Parameters
     ----------
@@ -510,9 +592,7 @@ def _param_rows(callables: Iterable[tuple[str, object]]) -> dict[str, dict[str, 
         if signature is None:
             continue
         for param in signature.parameters.values():
-            if param.kind in (param.VAR_POSITIONAL, param.VAR_KEYWORD, param.POSITIONAL_ONLY):
-                continue
-            if param.name in _SKIPPED_PARAMS or param.name.startswith("_"):
+            if param.kind == param.POSITIONAL_ONLY or param.name in _SKIPPED_PARAMS:
                 continue
             uses.setdefault(param.name, set()).add(path)
             meaning, section = docsections.param_meaning(target, param.name)

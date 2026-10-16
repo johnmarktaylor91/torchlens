@@ -154,14 +154,21 @@ def cmd_check(args: argparse.Namespace) -> int:
 def cmd_codemod(args: argparse.Namespace) -> int:
     """Plan (default) or apply proposed renames."""
 
-    rows = load_inventory(Path(args.proposals)).values()
+    rows = list(load_inventory(Path(args.proposals)).values())
+    skipped = codemod.skipped_proposals(rows)
     edits = codemod.plan(rows, args.repo)
     for edit in edits:
         print(
-            f"{edit.certainty:9} {edit.path}:{edit.line}:{edit.start + 1} {edit.old} -> {edit.new}"
+            f"{edit.certainty:9} {edit.path}:{edit.line}:{edit.start + 1} "
+            f"{edit.old} -> {edit.new} [{edit.row_id}]"
         )
+    for row in skipped:
+        print(f"{'skipped':9} {row['id']}: {row['proposed']!r} {row['reason']}")
     definite = sum(edit.certainty == codemod.DEFINITE for edit in edits)
-    print(f"codemod: {len(edits)} edits ({definite} definite, {len(edits) - definite} ambiguous)")
+    print(
+        f"codemod: {len(edits)} edits ({definite} definite, {len(edits) - definite} ambiguous); "
+        f"skipped rows: {len(skipped)}"
+    )
     if not args.apply:
         print("dry run: nothing written (pass --apply to write)")
         return 0
