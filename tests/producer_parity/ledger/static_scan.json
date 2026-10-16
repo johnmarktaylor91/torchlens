@@ -1640,6 +1640,22 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "function",
+  "file": "torchlens/backends/torch/_opaque_call_advisory.py",
+  "has_default": false,
+  "sites": 5,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/backends/torch/_opaque_call_advisory.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "func_call_id",
   "file": "torchlens/backends/torch/_ops_arguments.py",
