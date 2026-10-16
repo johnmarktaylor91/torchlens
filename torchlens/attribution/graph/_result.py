@@ -137,7 +137,7 @@ class AttributionGraph:
             counts[node.kind] += 1
         return counts
 
-    def node_indices(self, kind: str) -> tuple[int, ...]:
+    def node_indices(self, kind: str) -> list[int]:
         """Return the indices of the nodes of one kind.
 
         Parameters
@@ -147,8 +147,8 @@ class AttributionGraph:
 
         Returns
         -------
-        tuple[int, ...]
-            Node indices in node order.
+        list[int]
+            Node indices in node order, ready to index ``adjacency_matrix``.
         """
 
-        return tuple(index for index, node in enumerate(self.nodes) if node.kind == kind)
+        return [index for index, node in enumerate(self.nodes) if node.kind == kind]

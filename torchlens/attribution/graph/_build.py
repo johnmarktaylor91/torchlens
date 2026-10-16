@@ -308,6 +308,18 @@ def _within(labels: list[str]) -> Any:
     return functools.reduce(operator.or_, (_lift_within(label, "read") for label in labels))
 
 
+def _frozen_label(trace: Any, index: ReadEdgeIndex, name: str) -> str:
+    """Return the edge label of a frozen module's output, or of an op label."""
+
+    try:
+        trace.modules[name]
+    except Exception:  # noqa: BLE001 - not a module name: try it as an op label
+        if name in index.edges or f"{name}:1" in index.edges:
+            return _edge_label(index, name, "frozen")
+    module = _module(trace, name, "frozen")
+    return _edge_label(index, _one_op(module, name, "output_ops", "frozen"), "frozen")
+
+
 def _frozen_labels(trace: Any, sites: _Sites, frozen: Sequence[str]) -> list[str]:
     """Return the frozen set: every written MLP output plus the caller's sites."""
 
@@ -320,8 +332,7 @@ def _frozen_labels(trace: Any, sites: _Sites, frozen: Sequence[str]) -> list[str
                 "frozen=['blocks.0.attn.pattern', ...], the modules whose outputs are held "
                 "at their captured values.",
             )
-        module = _module(trace, name, "frozen")
-        label = _edge_label(sites.index, _one_op(module, name, "output_ops", "frozen"), "frozen")
+        label = _frozen_label(trace, sites.index, name)
         if label not in labels:
             labels.append(label)
     return labels
@@ -475,7 +486,8 @@ def build_graph(  # noqa: PLR0913 -- the graph door: two subjects, then what, wh
         ``None`` reads the model output.
     frozen
         Module names whose outputs are held at their captured values, such
-        as attention-pattern and normalisation-scale modules. Required:
+        as attention-pattern and normalisation-scale modules, or op labels
+        for values computed inside a module (``"rsqrt_1_5"``). Required:
         pass ``frozen=()`` for a model with neither. Every MLP output a
         transcoder writes is always held.
 

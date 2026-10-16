@@ -194,7 +194,6 @@ class TestPerLayerFixture:
             [layer, pos, feat] for layer in (0, 1) for pos in range(3) for feat in (0, 2)
         ]
         assert graph.input_tokens.tolist() == list(fx.TOKENS)
-        assert [n.token for n in graph.nodes_of_kind_tokens()] if False else True
         assert [graph.nodes[i].token for i in graph.node_indices("token")] == list(fx.TOKENS)
         assert graph.transcoder_sites == ("blocks.0.mlp", "blocks.1.mlp")
         assert graph.error_sites == ("blocks.0.mlp", "blocks.1.mlp")
