@@ -1434,7 +1434,7 @@ def _propagate_mutation_label_to_storage_aliases(
             if shares_elements:
                 set_tensor_label(alias, out_label)
                 _register_inplace_live_grad_hook(trace, alias, out_label)
-                _record_label_version_snapshot(alias)
+                _record_label_version_snapshot(alias, mutated_via=(mutated, alias_label))
 
 
 # Tensor getset properties whose SETTER mutates the receiver's forward data:

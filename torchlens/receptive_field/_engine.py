@@ -266,10 +266,7 @@ def _solve_uncached(
 
     for op in _topological_operations(operations, by_reference):
         if seed_predicate(op):
-            seed = _seed_input(op)
-            states_by_op[op.label] = {
-                seed.io_role: _BranchState(state=seed, geometry_neutral=False)
-            }
+            _seed_input_state(states_by_op, op)
             continue
 
         parents = tuple(by_reference[label] for label in op.parents if label in by_reference)
@@ -323,6 +320,26 @@ def _solve_uncached(
         per_op=MappingProxyType(per_op),
         states=MappingProxyType(flattened_states),
     )
+
+
+def _seed_input_state(states_by_op: dict[str, dict[str, _BranchState]], op: Op) -> None:
+    """Seed identity geometry for a model-input operation, unless it has no units.
+
+    A zero-length axis leaves the input with no units, so it has no influence
+    geometry: it seeds nothing and no descriptor names it.
+
+    Parameters
+    ----------
+    states_by_op:
+        Branch states by operation label; updated in place.
+    op:
+        Captured model-input operation.
+    """
+
+    if 0 in tuple(op.shape):
+        return
+    seed = _seed_input(op)
+    states_by_op[op.label] = {seed.io_role: _BranchState(state=seed, geometry_neutral=False)}
 
 
 def _seed_input(op: Op) -> _InputState:
