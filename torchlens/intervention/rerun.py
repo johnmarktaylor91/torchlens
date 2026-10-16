@@ -150,6 +150,7 @@ def run(
         fast_refresh = log._refresh_matching_rerun_state_from(new_log)
     if fast_refresh:
         _merge_rerun_host_rng_verdict(log, new_log)
+        _release_discarded_capture(new_log)
     else:
         log.replace_state_from(new_log)
     log.is_appended = False
@@ -195,6 +196,27 @@ def run(
     log._has_direct_writes = False
     log._out_recipe_revision = getattr(log, "_spec_revision", 0)
     return log
+
+
+def _release_discarded_capture(new_log: Trace) -> None:
+    """Release the payload pin of a rerun capture a fast refresh discarded.
+
+    The fast refresh copies the rerun's values into the fork, so the rerun's
+    own capture is garbage afterwards; it sits in reference cycles, and the
+    last-owner payload eviction of its op store (a walk over every cell)
+    otherwise runs whenever the cyclic collector frees it, inside whatever
+    executes then, typically the next ``fork()``. Releasing the pin here pays
+    that cost inside the rerun that made the capture. What is evicted, and
+    when eviction is skipped (another owner still holds the store), is
+    unchanged.
+    """
+
+    core = new_log.__dict__.get("_trace_core")
+    ops = getattr(core, "ops", None)
+    store = getattr(ops, "base", ops)
+    release = getattr(store, "release_payload_owner", None)
+    if core is not None and release is not None:
+        release(core)
 
 
 def _chunked_rerun(
