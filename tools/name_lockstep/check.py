@@ -207,6 +207,26 @@ def _stale(corpus: Corpus, row: dict[str, Any], head_leaves: set[str]) -> list[t
     return sorted(set(found))
 
 
+def is_private(row: dict[str, Any]) -> bool:
+    """Return whether a row is an underscore keyword, inventoried but not public.
+
+    The inventory lists ``_name=`` keywords so their renames and removals are seen; a
+    new one needs no glossary entry and no legibility check.
+
+    Parameters
+    ----------
+    row
+        Inventory row.
+
+    Returns
+    -------
+    bool
+        True for a ``param`` row whose name starts with an underscore.
+    """
+
+    return row["kind"] == "param" and str(row["name"]).startswith("_")
+
+
 def _needs(row: dict[str, Any]) -> list[str]:
     """Return the places a new or renamed name must appear in.
 
@@ -218,9 +238,11 @@ def _needs(row: dict[str, Any]) -> list[str]:
     Returns
     -------
     list[str]
-        Place labels.
+        Place labels; none for an underscore keyword.
     """
 
+    if is_private(row):
+        return []
     places = ["glossary"]
     if row["kind"] in _AGENT_REFERENCE_KINDS:
         places.append("agent-reference")

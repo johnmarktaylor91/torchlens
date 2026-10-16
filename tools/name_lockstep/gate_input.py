@@ -13,7 +13,7 @@ import re
 from typing import Any
 
 from name_lockstep import spelling
-from name_lockstep.check import Corpus
+from name_lockstep.check import Corpus, is_private
 from name_lockstep.diff import SurfaceDiff
 
 SNIPPET_BEFORE = 6
@@ -398,7 +398,7 @@ def _reference(row: dict[str, Any], corpus: Corpus) -> tuple[str, str]:
 
 
 def gate_items(surface_diff: SurfaceDiff, head_rows: dict[str, dict[str, Any]], corpus: Corpus):
-    """Return one legibility-check item per new or renamed name.
+    """Return one legibility-check item per new or renamed name (underscore keywords excepted).
 
     Parameters
     ----------
@@ -418,6 +418,7 @@ def gate_items(surface_diff: SurfaceDiff, head_rows: dict[str, dict[str, Any]], 
 
     rows = [(row, "new", None) for row in surface_diff.new]
     rows += [(head_rows[r.new_id], "renamed", r.old_id) for r in surface_diff.renamed]
+    rows = [entry for entry in rows if not is_private(entry[0])]
     items = []
     made_by = producers(head_rows)
     exports = module_exports(head_rows)
