@@ -113,6 +113,13 @@ def pytest_configure(config: pytest.Config) -> None:
             "golden update/regen flags are forbidden under CI: " + ", ".join(armed)
         )
 
+    # The first float ``torch.tanh`` of a process can compute one intra-op
+    # thread's chunk by a different kernel path (later calls never do), so a
+    # test whose capture or plain forward is its worker's first tanh can see a
+    # few 1e-5 of drift. One warm-up over every intra-op thread keeps that
+    # first call out of every test; each xdist worker runs this hook.
+    torch.tanh(torch.zeros(max(torch.get_num_threads(), 1), 32768))
+
     output_root = config._tmp_path_factory.getbasetemp() / "torchlens-generated"
     TEST_OUTPUTS_DIR = str(output_root)
     REPORTS_DIR = str(output_root / "reports")
