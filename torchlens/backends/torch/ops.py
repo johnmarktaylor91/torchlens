@@ -455,6 +455,16 @@ classify a non-mutating identity return as in-place (W3 audit F7). Reads go thro
 active label session; writes go through :func:`_record_label_version_snapshot`.
 """
 
+_VIEW_MUTATION_RELABELS: WeakIdKeyDictionary = WeakIdKeyDictionary()
+"""Storage aliases whose label advanced because an in-place op wrote through a view.
+
+Entries are ``(label_session_token, prior_label, mutation_label, id(view))``, written by
+:func:`_record_label_version_snapshot` (``mutated_via=``) and read by
+:func:`_bind_writeback_receiver_label`, which honours an entry only in its own label
+session, only while the alias still carries ``mutation_label`` and only for that view.
+Capture-transient, kept off the Trace field schema, dropped on tensor GC.
+"""
+
 
 CaptureProducerMode = Literal["exhaustive", "predicate"]
 
@@ -644,6 +654,9 @@ _is_inplace_augmented_assignment_dunder = _rebind_function(
 )
 _record_label_version_snapshot = _rebind_function(
     _ops_capture_records._record_label_version_snapshot, globals()
+)
+_bind_writeback_receiver_label = _rebind_function(
+    _ops_capture_records._bind_writeback_receiver_label, globals()
 )
 _label_version_baseline = _rebind_function(_ops_capture_records._label_version_baseline, globals())
 _stamp_same_object_mutation = _rebind_function(

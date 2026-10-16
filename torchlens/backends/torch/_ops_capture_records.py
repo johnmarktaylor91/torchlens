@@ -46,7 +46,11 @@ if TYPE_CHECKING:
         _FUNCTION_REF_PER_OUTPUT_FIELDS,
         _INPLACE_AUGMENTED_ASSIGNMENT_DUNDER_EXCLUSIONS,
         _LABEL_VERSION_SNAPSHOT,
+        _VIEW_MUTATION_RELABELS,
         _AncestorBitset,
+        get_tensor_label,
+        pause_logging,
+        set_tensor_label,
     )
 
 __all__ = (
@@ -56,6 +60,7 @@ __all__ = (
     "_compact_ancestor_sets",
     "_is_inplace_augmented_assignment_dunder",
     "_record_label_version_snapshot",
+    "_bind_writeback_receiver_label",
     "_label_version_baseline",
     "_stamp_same_object_mutation",
     "get_capture_producer_policy",
@@ -199,7 +204,7 @@ def _is_inplace_augmented_assignment_dunder(name: str) -> bool:
     return name.startswith("__i") and name not in _INPLACE_AUGMENTED_ASSIGNMENT_DUNDER_EXCLUSIONS
 
 
-def _record_label_version_snapshot(t: Any) -> None:
+def _record_label_version_snapshot(t: Any, *, mutated_via: tuple[Any, Any] | None = None) -> None:
     """Record ``t``'s current version, keyed to the active label session.
 
     Parameters
@@ -207,10 +212,22 @@ def _record_label_version_snapshot(t: Any) -> None:
     t
         Tensor that was just labeled (as an op output, or by live in-place /
         alias label propagation).
+    mutated_via
+        ``(view, prior_label)`` when ``t`` is a storage alias whose label was just
+        advanced because an in-place op wrote through ``view``; remembered for
+        :func:`_bind_writeback_receiver_label`.
     """
 
     if not isinstance(t, torch.Tensor):
         return
+    if mutated_via is not None:
+        view, prior_label = mutated_via
+        _VIEW_MUTATION_RELABELS[t] = (
+            active_label_session_token(),
+            prior_label,
+            get_tensor_label(t),
+            id(view),
+        )
     # ``_version`` is a WITNESSED input-metadata property (r33): the scoped patch
     # records a genuine USER ``x._version`` read on a model-input leaf. This snapshot is
     # TorchLens's OWN bookkeeping read, so it must run under the internal marker or it
@@ -220,6 +237,68 @@ def _record_label_version_snapshot(t: Any) -> None:
         version = tensor_version_or_none(t)
     if version is not None:
         _LABEL_VERSION_SNAPSHOT[t] = (active_label_session_token(), version)
+
+
+def _bind_writeback_receiver_label(func_name: str, args: tuple[Any, ...]) -> None:
+    """Bind an augmented-assignment write-back's receiver to its pre-mutation producer.
+
+    ``x[idx] += v`` runs as ``t = x[idx]; t += v; x[idx] = t``. The in-place op wrote
+    through the view ``t``, so storage-alias propagation advanced ``x``'s label to that
+    op, and the write-back ``__setitem__`` then recorded ONE parent at slot 0 (the whole
+    tensor) and slot 2 (the slice): one label for two different values, which a
+    per-(parent, child) version snapshot cannot carry, so argument logging failed on
+    every such call. In exactly that write-back (slot 2 IS the view the in-place op
+    wrote through and ``x[idx]`` addresses the same elements) every element the call
+    leaves untouched still holds the pre-mutation producer's value and the mutated
+    region is overwritten from slot 2, so slot 0 binds to the pre-mutation label for
+    this call; the setitem's own label then advances ``x`` like any in-place op. Any
+    other shape (another region, advanced indexing, a later relabel) is left as is.
+
+    Parameters
+    ----------
+    func_name
+        Name of the call being logged.
+    args
+        The call's live positional arguments.
+    """
+
+    if func_name != "__setitem__" or len(args) < 3:
+        return
+    receiver, value = args[0], args[2]
+    if (
+        not isinstance(receiver, torch.Tensor)
+        or not isinstance(value, torch.Tensor)
+        or isinstance(receiver, torch.nn.Parameter)
+        or receiver.device.type == "meta"
+    ):
+        return
+    entry = _VIEW_MUTATION_RELABELS.get(receiver)
+    if entry is None:
+        return
+    session_token, prior_label, mutation_label, view_id = entry
+    if (
+        prior_label is None
+        or session_token is None
+        or session_token != active_label_session_token()
+        or view_id != id(value)
+        or get_tensor_label(receiver) != mutation_label
+        or get_tensor_label(value) != mutation_label
+    ):
+        return
+    with pause_logging(), internal_scalar_read():
+        try:
+            region = receiver[args[1]]
+            same_region = (
+                region.untyped_storage().data_ptr() == value.untyped_storage().data_ptr()
+                and region.storage_offset() == value.storage_offset()
+                and tuple(region.shape) == tuple(value.shape)
+                and tuple(region.stride()) == tuple(value.stride())
+            )
+        except (IndexError, RuntimeError, TypeError, ValueError):
+            # An index this receiver cannot re-address proves nothing about the region.
+            return
+    if same_region:
+        set_tensor_label(receiver, prior_label)
 
 
 def _label_version_baseline(t: Any) -> int | None:

@@ -47,6 +47,7 @@ if TYPE_CHECKING:
 if TYPE_CHECKING:
     from .ops import (
         TRANSFORM_FUNC_NAMES,
+        _bind_writeback_receiver_label,
         _build_args_template,
         _build_graph_relationship_fields,
         _build_module_context_fields,
@@ -86,6 +87,7 @@ def _build_shared_fields_dict(
     Returns:
         (fields_dict, parent_layer_entries, arg_tensors, parent_param_ops)
     """
+    _bind_writeback_receiver_label(func_name, args)
     # Canonical layer_type: lowercase with underscores stripped (e.g. "conv2d").
     layer_type = _normalize_func_name(func_name)
 
