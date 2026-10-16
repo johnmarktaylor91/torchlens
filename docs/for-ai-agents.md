@@ -290,8 +290,9 @@ The nine tools:
   `data["rows"]`; both use the `trace.to_agent_json()` op-row shape, so every row carries
   `layer_label`.
 - `torchlens_explain` — `tl.report.explain(trace, max_tokens=..., audience=...)`;
-  `max_tokens` defaults to the explain budget (4,000 tokens), and the record carries the
-  same `capture`/`audit` honesty blocks the overview serves.
+  `max_tokens` defaults to the explain budget (4,000 tokens) and, unlike every other tool,
+  is not a ceiling: a larger request is honoured rather than refused. The record carries
+  the same `capture`/`audit` honesty blocks the overview serves.
 - `torchlens_query_sites` — structured site discovery over a closed JSON query AST
   (persisted facts only; regex/callables/value predicates refuse typed naming the Python
   path; no fanout cap on listing; results carry the runnable Python handoff).
@@ -340,7 +341,10 @@ The served defaults are configuration, not a guaranteed API limit, and may chang
 releases: 12,000 tokens for `torchlens_overview`, 4,000 for `torchlens_explain`, 150 rows and
 a 25,000-token backstop for the row tools, and 64 MiB per payload and 128 MiB per call for the
 payload tools. They were set from a measurement over the classics test corpus
-(`tools/agent_evals/BUDGETS.md` in the repository holds the method and numbers). Read the
+(`tools/agent_evals/BUDGETS.md` in the repository holds the method and numbers). A
+`max_tokens` or `max_rows` request may lower a served default, and one above it is refused
+with `agent_limit_invalid`, except on `torchlens_explain`, which honours a larger
+`max_tokens`. Read the
 values a call actually used from its `limits` block, and the per-tool defaults from
 `torchlens.agent.list_tools()` (each declaration's `default_limits`, the rows MCP `list_tools`
 serves); nothing guarantees a response is never trimmed, so always check `truncation`.

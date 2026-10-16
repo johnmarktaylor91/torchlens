@@ -644,6 +644,7 @@ class CaptureSession:
                 )
             if detached_spills:
                 from ..errors import TorchLensWarning
+                from ..utils.display import user_stacklevel
 
                 warnings.warn(
                     TorchLensWarning(
@@ -657,7 +658,7 @@ class CaptureSession:
                         code="escrow_spill_detached",
                         detached_spill_count=detached_spills,
                     ),
-                    stacklevel=3,
+                    stacklevel=user_stacklevel(),
                 )
             from ..postprocess import _refresh_fast_saved_summary
 

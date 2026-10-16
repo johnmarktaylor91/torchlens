@@ -382,6 +382,10 @@ def _handle_explain(args: dict[str, Any]) -> dict[str, Any]:
     from ._overview import honesty_blocks
 
     log, plan, block = load_trace(args["path"])
+    # The one agent tool whose max_tokens is not a ceiling: explain budgets its own
+    # report (budgets_in_handler=True), so the declared 4,000 is only the default and
+    # a larger request is honoured, where every other tool refuses past its ceiling
+    # (_budgets.resolve_limit). Tests pin this; changing it is a public-behaviour call.
     max_tokens = args.get("max_tokens", _budgets.ORIENTATION_MAX_TOKENS)
     report = explain(
         log,
