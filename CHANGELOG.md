@@ -253,6 +253,13 @@
 - **report**: `tl.report.backward_status(trace)` counts the CPU fused attention backward (equal to
   the MATH attention backend's count) and the oneDNN LSTM layer backward; both used to be left out
   of the printed total and named as uncounted.
+- **capture**: When the completeness witness finds operations that ran inside a TorchScript function
+  called from an eager forward, TorchLens now warns once per session (`TorchLensCaptureGapWarning`,
+  code `scripted_function_not_captured`), naming the scripted function, its definition line and the
+  calling line, and giving the remedy `PYTORCH_JIT=0`. The verdict (`capture_verified=False`) and
+  the witness counts are unchanged.
+- **capture**: The same advisory for a line that hands a tensor to another library through DLPack
+  (code `dlpack_call_not_captured`), without the JIT hint.
 
 ### Bug Fixes
 
@@ -361,6 +368,10 @@
   returning, so the cleanup no longer lands inside the next operation: on a 12-layer GPT-2 head
   sweep, a fork made right after a rerun makes about 420,000 Python calls instead of about 1.25
   million.
+- **mechinterp**: Circuit patching resolves the replay engine's hook sites through one label index
+  per replay and builds the replay cone's key set once, so one `tl.mechinterp.patch_edges` call into
+  every GPT-2 small receiver makes 14 times fewer selector evaluations and about 4 times fewer
+  Python calls, with bit-identical results.
 
 ### Changed
 
@@ -385,6 +396,7 @@
   equals the previous one-fork-per-unit measurement exactly.
 - **agent**: `torchlens_explain` is documented as the one agent tool whose `max_tokens` is not a
   ceiling: a request above its 4,000-token default is honoured.
+- **docs**: A "TorchScript and DLPack" entry in the known-gotchas reference.
 
 ### Continuous Integration
 
