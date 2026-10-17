@@ -10,6 +10,7 @@ verbatim as the reference, and pin the fork's call count on a fixed capture.
 
 from __future__ import annotations
 
+import math
 import sys
 from collections.abc import Callable
 from typing import Any
@@ -166,43 +167,52 @@ class _Long(nn.Module):
         return h.sum(dim=-1)
 
 
-def _read_shape(value: Any, base_value: Any) -> str:
-    if isinstance(value, torch.Tensor):
-        return f"T:{'shared' if value is base_value else 'new'}"
-    return _shape(value, base_value)
+_CONTAINERS = (dict, list, set, tuple, frozenset)
 
 
-def _base_value(store: Any, row: int, fid: int) -> Any:
-    return store.cell_get(row, fid)
+def _same_read(got: Any, expected: Any, base_value: Any) -> bool:
+    """Containers: same shape and identity pattern; anything else: the same object or value."""
+
+    if isinstance(got, _CONTAINERS) or isinstance(expected, _CONTAINERS):
+        return _shape(got, base_value) == _shape(expected, base_value)
+    if type(got) is not type(expected):
+        return False
+    if got is expected or got == expected:
+        return True
+    return isinstance(got, float) and math.isnan(got) and math.isnan(expected)
 
 
 @pytest.mark.parametrize(
     "model_cls",
-    [_Small, pytest.param(_Long, marks=pytest.mark.heavy)],
+    [_Small, pytest.param(_Long, marks=pytest.mark.heavy)],  # columnar: 6.7 s measured
     ids=["row_major", "columnar"],
 )
 def test_every_fork_cell_read_matches_the_former_read(model_cls: type[nn.Module]) -> None:
+    """One fork read twice: by the former code, then (its copies dropped) by this code."""
+
     torch.manual_seed(0)
     trace = tl.trace(
         model_cls(), torch.randn(2, 4), capture=CaptureOptions(intervention_ready=True)
     )
     store = trace._trace_core.ops
     assert (store._columns is not None) is (model_cls is _Long), "fixture store shape"
-    current = trace.fork()._trace_core.ops
-    former = trace.fork()._trace_core.ops
+    fork = trace.fork()
+    view = fork._trace_core.ops
     n_fields = store.layout.n_fields
+    cells = [(row, fid) for row in range(len(store)) for fid in range(n_fields)]
+    fresh_overlay = dict(view._overlay)
+    expected = [_reference_cell_get(view, row, fid) for row, fid in cells]
+    view._overlay.clear()
+    view._overlay.update(fresh_overlay)
+    got = [view.cell_get(row, fid) for row, fid in cells]
     mismatches = []
-    for row in range(len(store)):
-        for fid in range(n_fields):
-            base_value = _base_value(store, row, fid)
-            got = current.cell_get(row, fid)
-            expected = _reference_cell_get(former, row, fid)
-            if _read_shape(got, base_value) != _read_shape(expected, base_value):
-                mismatches.append((row, store.layout.names[fid], got, expected))
-            # A second read of an isolated container serves the same copy.
-            is_container = isinstance(got, (dict, list, set, tuple, frozenset))
-            if is_container and current.cell_get(row, fid) is not got:
-                mismatches.append((row, store.layout.names[fid], "second read differs"))
+    for (row, fid), got_value, expected_value in zip(cells, got, expected, strict=True):
+        base_value = store.cell_get(row, fid)
+        if not _same_read(got_value, expected_value, base_value):
+            mismatches.append((row, store.layout.names[fid], got_value, expected_value))
+        # A second read of an isolated container serves the same copy.
+        if isinstance(got_value, _CONTAINERS) and view.cell_get(row, fid) is not got_value:
+            mismatches.append((row, store.layout.names[fid], "second read differs"))
     assert not mismatches, mismatches[:3]
 
 
@@ -225,9 +235,9 @@ def _events(action: Callable[[], Any]) -> int:
 @pytest.mark.parametrize(
     ("model_cls", "bar"),
     [
-        # Measured on the base reads: 4,578 events; after this change: BARSMALL.
+        # Measured on the base reads: 4,578 events; after this change: about 3,810.
         (_Small, 4_300),
-        # Measured on the base reads: 628,300 events; after this change: BARLONG.
+        # Measured on the base reads: 628,300 events; after this change: about 443,350 (6.8 s measured).
         pytest.param(_Long, 520_000, marks=pytest.mark.heavy),
     ],
     ids=["row_major", "columnar"],
