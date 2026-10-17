@@ -1650,6 +1650,49 @@ __all__ = [
 ]
 
 
+def _live_capture_donor(source: Any, context: Mapping[str, Any]) -> tuple[Any, Any]:
+    """Map a live capture-time firing to the source op captured at the same position.
+
+    A hook fired during a live forward (the rerun engine, a bound model) sees the
+    provisional capture label ``<type>_<n>_<raw index>_raw``: final labels and passes
+    are assigned only after the forward ends, so that spelling never names a site of a
+    finished trace. The source trace keeps the same provisional label for each op
+    (``_raw_to_final_op_labels``), and one provisional label is one pass of one layer,
+    so the mapping never guesses a pass. The donor must have the firing site's operation
+    type and shape; anything else returns ``(None, None)`` and the caller refuses.
+
+    Parameters
+    ----------
+    source:
+        Patch source trace.
+    context:
+        Fire-time site snapshot.
+
+    Returns
+    -------
+    tuple[Any, Any]
+        ``(pass-qualified source label, source op)``, or ``(None, None)``.
+    """
+
+    raw_to_final = getattr(source, "_raw_to_final_op_labels", None) or {}
+    for spelling in (context.get("label"), context.get("layer_label")):
+        if not isinstance(spelling, str):
+            continue
+        raw_label = spelling.split(":", 1)[0]
+        if not raw_label.endswith("_raw"):
+            continue
+        final_label = raw_to_final.get(raw_label)
+        donor = None if final_label is None else source.layer_dict_all_keys.get(final_label)
+        if donor is None:
+            return None, None
+        same_type = getattr(donor, "layer_type", None) == context.get("layer_type")
+        same_shape = tuple(getattr(donor, "shape", None) or ()) == tuple(context.get("shape") or ())
+        if not (same_type and same_shape):
+            return None, None
+        return final_label, donor
+    return None, None
+
+
 def _resolve_patch_donor_site(source: Any, layer_log: Any) -> tuple[Any, Any]:
     """Resolve one PASS-QUALIFIED donor op on the patch source trace.
 
@@ -1678,10 +1721,16 @@ def _resolve_patch_donor_site(source: Any, layer_log: Any) -> tuple[Any, Any]:
     if site_label is not None:
         source_site = source.layer_dict_all_keys.get(site_label)
     if source_site is None:
+        live_label, source_site = _live_capture_donor(source, context)
+        if source_site is not None:
+            site_label = live_label
+    if source_site is None:
         raise HookValueError(
             f"patch_from source trace has no site {site_label!r}; patch "
             "selections must resolve on sites the source captured "
-            "(multi-pass sites resolve pass-qualified, 'label:pass')."
+            "(multi-pass sites resolve pass-qualified, 'label:pass'; a live "
+            "rerun or bound firing resolves to the source op captured at the "
+            "same position, only when that op has the same type and shape)."
         )
     if isinstance(site_label, str) and ":" not in site_label:
         num_passes = int(getattr(source_site, "num_passes", 1) or 1)
