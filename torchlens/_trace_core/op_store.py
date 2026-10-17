@@ -1563,20 +1563,31 @@ def cow_copy_value(value: Any, translate: Callable[[Any], Any] | None) -> Any:
     immutable views stay shared.
     """
 
+    atomic = _COW_ATOMIC
     cls = value.__class__
-    if cls in _COW_ATOMIC:
+    if cls in atomic:
         return value
+    # Atomic members are returned by identity either way, so they skip the
+    # per-member call (the ``_eager_copy`` idiom).
     if cls is dict:
         return {
-            cow_copy_value(key, translate): cow_copy_value(item, translate)
+            (key if key.__class__ in atomic else cow_copy_value(key, translate)): (
+                item if item.__class__ in atomic else cow_copy_value(item, translate)
+            )
             for key, item in value.items()
         }
     if cls is list:
-        return [cow_copy_value(item, translate) for item in value]
+        return [
+            item if item.__class__ in atomic else cow_copy_value(item, translate) for item in value
+        ]
     if cls is set:
-        return {cow_copy_value(item, translate) for item in value}
+        return {
+            item if item.__class__ in atomic else cow_copy_value(item, translate) for item in value
+        }
     if cls is tuple or cls is frozenset:
-        copied = [cow_copy_value(item, translate) for item in value]
+        copied = [
+            item if item.__class__ in atomic else cow_copy_value(item, translate) for item in value
+        ]
         for original, item_copy in zip(value, copied, strict=True):
             if original is not item_copy:
                 return cls(copied)
@@ -1821,7 +1832,18 @@ class OpStoreView:
             else:
                 columns = self.base._columns
                 assert columns is not None
-                value = columns[fid].get(row)
+                # ``_FrozenColumn.get`` inline: this is the fork copy path's
+                # per-cell read.
+                column = columns[fid]
+                present = column.present
+                if present is not None and not present[row]:
+                    return _MISSING
+                value = column.values[row]
+                if column.packed:
+                    return value.item()
+        if value.__class__ in _COW_ATOMIC or value is _MISSING:
+            # What ``_isolate`` returns for these, without the call.
+            return value
         return self._isolate(key, value)
 
     def cell_set(self, row: int, fid: int, value: Any) -> None:
