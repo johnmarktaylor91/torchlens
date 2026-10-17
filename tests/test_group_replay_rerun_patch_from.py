@@ -15,7 +15,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention.errors import HookValueError
+from torchlens.intervention.errors import HookValueError, MultiMatchWarning
 
 RERUN = tl.options.InterventionOptions(engine="rerun")
 READY = tl.options.CaptureOptions(intervention_ready=True)
@@ -96,7 +96,8 @@ def test_live_multipass_firing_takes_its_own_donor_pass() -> None:
     model = _TwoPass().eval()
     xa, xb = _inputs()
     donor = tl.trace(model, xb, capture=READY)
-    fork = _rerun_patch(model, donor, xa, "relu")
+    with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
+        fork = _rerun_patch(model, donor, xa, "relu")
 
     first, second = donor["relu_1_2:1"].out, donor["relu_1_2:2"].out
     assert not torch.equal(first, second)
