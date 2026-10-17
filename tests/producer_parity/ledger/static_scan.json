@@ -4618,6 +4618,22 @@
  {
   "ambiguous": true,
   "field": "kind",
+  "file": "torchlens/intervention/_facet_save.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "module_stack",
+  "file": "torchlens/intervention/_facet_save.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
   "file": "torchlens/intervention/_gradient_contract.py",
   "has_default": false,
   "sites": 1,
