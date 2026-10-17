@@ -7,6 +7,7 @@ shared-parameter grouping used when full recurrence detection is disabled.
 
 import hashlib
 from collections import defaultdict
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
 from ..data_classes._site_key import SiteKeyMinter
@@ -213,6 +214,55 @@ def _module_site(op: Any) -> tuple[str, ...]:
     return tuple(module_pass[0] for module_pass in getattr(op, "modules", None) or ())
 
 
+def _repeated_module_addresses(ops: Iterable[Any]) -> frozenset[str]:
+    """Return the module addresses that are called more than once among ``ops``.
+
+    Parameters
+    ----------
+    ops:
+        Op entries whose ``modules`` stacks hold ``(address, pass)`` pairs.
+
+    Returns
+    -------
+    frozenset[str]
+        Addresses seen with at least two distinct call passes.
+    """
+
+    passes_by_address: dict[str, set[Any]] = defaultdict(set)
+    for op in ops:
+        for module_pass in getattr(op, "modules", None) or ():
+            passes_by_address[module_pass[0]].add(module_pass[1])
+    return frozenset(address for address, passes in passes_by_address.items() if len(passes) > 1)
+
+
+def _recurrence_anchored(op: Any, repeated_modules: frozenset[str]) -> bool:
+    """Return whether an op carries a reused persistent identity for recurrence grouping.
+
+    A stateful buffer node is anchored. A module anchors only when it is actually called
+    again: the op's innermost containing module must have more than one call in the run.
+    Two ops inside ONE call of a module (the attention and MLP residual adds of a decoder
+    layer) are two source sites of that forward, not two passes of a reused identity, so
+    they are grouped by the same topological evidence as ops in the root forward.
+
+    Parameters
+    ----------
+    op:
+        Op entry.
+    repeated_modules:
+        Addresses from :func:`_repeated_module_addresses` over the same run.
+
+    Returns
+    -------
+    bool
+        ``True`` for a buffer node or an op whose innermost module is called repeatedly.
+    """
+
+    if getattr(op, "is_buffer", False):
+        return True
+    site = _module_site(op)
+    return bool(site) and site[-1] in repeated_modules
+
+
 def _differentiated_param_equivalence_classes(self: "Trace") -> dict[str, str]:
     """Split parameterized equivalence classes whose members differ in call structure.
 
@@ -383,6 +433,7 @@ def _build_recurrence_grouping_graph(self: "Trace") -> RecurrenceGroupingGraph:
     effective_equivalence = _differentiated_param_equivalence_classes(self)
     equivalent_labels_memo: dict[tuple[int, str], tuple[Any, tuple[str, ...]]] = {}
     recurrent_labels_memo: dict[int, tuple[Any, tuple[str, ...]]] = {}
+    repeated_modules = _repeated_module_addresses(self[label] for label in raw_labels)
 
     for label in raw_labels:
         node = self[label]
@@ -439,9 +490,7 @@ def _build_recurrence_grouping_graph(self: "Trace") -> RecurrenceGroupingGraph:
             output_slot=getattr(node, "multi_output_index", None),
             retain=retain,
             pruned=is_pruned,
-            recurrence_anchored=(
-                bool(getattr(node, "modules", None)) or bool(getattr(node, "is_buffer", False))
-            ),
+            recurrence_anchored=_recurrence_anchored(node, repeated_modules),
             module_site=_module_site(node),
             arg_signature=_structural_arg_signature(node) if node.uses_params else None,
             site_key=getattr(node, "site_key", None),

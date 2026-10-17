@@ -29,7 +29,12 @@ from dataclasses import replace as _dataclass_replace
 from typing import TYPE_CHECKING, Any
 
 from ..ir.events import is_control_edge_use
-from .loop_detection import _module_site, _structural_arg_signature
+from .loop_detection import (
+    _module_site,
+    _recurrence_anchored,
+    _repeated_module_addresses,
+    _structural_arg_signature,
+)
 from .loop_grouping_adapter import (
     _PSEUDO_FUNC_NAME,
     RecurrenceAssignment,
@@ -144,6 +149,7 @@ def _build_preview_recurrence_graph(
     nodes: dict[str, RecurrenceNode] = {}
     eligible_labels: list[str] = []
     source_labels: list[str] = []
+    repeated_modules = _repeated_module_addresses(raw_dict[label] for label in raw_labels)
     for raw_order, label in enumerate(raw_labels):
         op_log = raw_dict[label]
         pruned = bool(getattr(op_log, "is_orphan", False))
@@ -182,9 +188,7 @@ def _build_preview_recurrence_graph(
             ),
             module_site=_module_site(op_log),
             arg_signature=_structural_arg_signature(op_log) if uses_params else None,
-            recurrence_anchored=(
-                bool(getattr(op_log, "modules", None)) or bool(getattr(op_log, "is_buffer", False))
-            ),
+            recurrence_anchored=_recurrence_anchored(op_log, repeated_modules),
             site_key=getattr(op_log, "site_key", None),
         )
 

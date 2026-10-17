@@ -162,8 +162,12 @@ class RecurrenceNode:
     recurrence_anchored: bool = False
     """Whether this op has a reused persistent identity that anchors genuine recurrence.
 
-    Anchored ops are calls of a named submodule (non-empty ``modules``) or stateful buffer
-    nodes (``is_buffer``). Repeating such an identity -- one ``nn.ReLU`` called four times, a
+    Anchored ops are ops of a named submodule that is called more than once in the run
+    (their innermost containing module repeats) or stateful buffer nodes (``is_buffer``).
+    An op inside a module called only once is not anchored: two ops in one call of a
+    module are two source sites of its forward, never passes of a reused identity, and
+    they are grouped by the same topological evidence as ops of the root forward.
+    Repeating such an identity -- one ``nn.ReLU`` called four times, a
     buffer rewritten each iteration -- is real recurrence even when the body is a single op,
     so the param-free minimum-body-size guard does not apply to them. Bare functional ops
     (``torch.tanh(x)`` in the parent forward) are not anchored and must clear the body-size
