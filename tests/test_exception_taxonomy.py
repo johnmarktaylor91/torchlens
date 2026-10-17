@@ -1193,6 +1193,13 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "private validation disclosure; contracted by its S-18 code "
         "validation_model_copy_failed, not a public class"
     ),
+    # Forward-validation parameter-reference guard: raised when a parameter kept
+    # by reference changed, caught by the validation wrapper, which reruns on
+    # the copy path; never reaches the caller.
+    "torchlens._validation_argument_references._ParameterArgumentChanged": (
+        "internal validation carrier; caught by with_parameter_reference_fallback, "
+        "which reruns validation with every argument copied"
+    ),
     # autograd.grad boundary replay: raised only inside the subgraph replay and
     # caught by the replay executor, which records a failed validation.
     "torchlens.validation._autograd_grad_replay.AutogradGradReplayError": (

@@ -1753,12 +1753,12 @@ def _validate_forward_pass_torch(
                     extra={"model_type": f"{type(model).__module__}.{type(model).__qualname__}"},
                 ),
             )
+        arg_references.raise_if_changed(trace, validation_state_dict)
         _restore_validation_replay_state(
             validation_model,
             validation_state_dict,
             validation_plain_attr_snapshot,
         )
-        arg_references.raise_if_changed(trace)
         # Step 3: Validate by replaying the forward pass from saved outs.
         # validate_saved_outs resets the diagnostics ledger at entry so a
         # DIRECT repeat call reports this-run evidence only (B8-43); the

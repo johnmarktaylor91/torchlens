@@ -11,12 +11,15 @@ of a copy, and the version counter of each such tensor and of its parameter is
 recorded.
 
 A by-reference value is the parameter's value at call time only if nothing
-wrote the parameter afterwards. Every in-place write moves a version counter,
-and validation's restore of the replay copy writes (and so moves the counter
-of) any parameter whose value changed. The counters are checked over every
-referenced tensor at the end of the capture and again before the replay reads
-anything; if any moved, the whole validation reruns with every argument copied,
-exactly as before, and the rerun's trace carries a diagnostic saying so. A
+wrote the parameter afterwards. An in-place write moves the version counter of
+the tensor written (a write through ``param.data`` moves only that alias's
+counter). So the counters are checked over every referenced tensor at the end
+of the capture, and again, together with the parameters' bytes against the
+replay copy's pre-capture snapshot, before that copy is restored (the restore
+rewrites every parameter whenever any state changed) and before the replay
+reads anything. On any change the whole validation reruns with every argument
+copied, exactly as before, and the rerun's trace carries a diagnostic saying
+so. A
 user's own ``save_arg_values=True`` trace never sees any of this: outside the
 validation capture the copy path is unchanged.
 """
@@ -26,6 +29,7 @@ from __future__ import annotations
 import contextlib
 import dataclasses
 import functools
+import gc
 from collections.abc import Callable, Iterator
 from contextvars import ContextVar
 from typing import Any
@@ -92,6 +96,7 @@ class ParameterArgumentReferences:
         self._owners = owners
         self._fallback_reason = fallback_reason
         self._versions: dict[int, tuple[torch.Tensor, int, str]] = {}
+        self._owners_seen: dict[int, tuple[str, nn.Parameter]] = {}
         self._first_change: str | None = None
 
     def keep(self, tensor: torch.Tensor) -> bool:
@@ -105,6 +110,7 @@ class ParameterArgumentReferences:
         self._note(tensor, name)
         for owner_name, owner in owners:
             self._note(owner, owner_name)
+            self._owners_seen[id(owner)] = (owner_name, owner)
         return True
 
     def _note(self, tensor: torch.Tensor, name: str) -> None:
@@ -126,7 +132,25 @@ class ParameterArgumentReferences:
                 return _describe_change(name, version, tensor._version)
         return None
 
-    def raise_if_changed(self, trace: Any = None) -> None:
+    def first_value_change(self, snapshot: Any) -> str | None:
+        """Name the first referenced parameter whose bytes differ from ``snapshot``.
+
+        A write through ``param.data`` moves a counter of its own, not the
+        parameter's, so the parameters are also compared with the replay
+        copy's pre-capture snapshot, one entry at a time on its own device.
+        """
+
+        from ._validation_state_snapshot import _on_source_device
+        from .validation._live_model_state import _tensor_bits_equal
+
+        for name, parameter in self._owners_seen.values():
+            if name not in snapshot.tensors:
+                return f"parameter {name!r} has no pre-capture snapshot to compare"
+            if not _tensor_bits_equal(parameter.detach(), _on_source_device(snapshot, name)):
+                return f"parameter {name!r} changed value during the forward"
+        return None
+
+    def raise_if_changed(self, trace: Any = None, snapshot: Any = None) -> None:
         """Abandon this attempt if a referenced value changed; on the rerun, record why.
 
         Parameters
@@ -134,6 +158,11 @@ class ParameterArgumentReferences:
         trace:
             The validation trace about to be replayed. On the clone-path rerun
             the fallback diagnostic is recorded on it.
+        snapshot:
+            The replay copy's pre-capture state snapshot. When given, the
+            referenced parameters' bytes are compared with it too. Call this
+            before the replay copy is restored: the restore rewrites (and so
+            moves the version of) every parameter whenever any state changed.
         """
 
         if self._fallback_reason is not None:
@@ -141,6 +170,8 @@ class ParameterArgumentReferences:
                 _record_fallback(trace, self._fallback_reason)
             return
         change = self.first_change()
+        if change is None and snapshot is not None:
+            change = self.first_value_change(snapshot)
         if change is not None:
             raise _ParameterArgumentChanged(change)
 
@@ -252,6 +283,9 @@ def with_parameter_reference_fallback(validate: Callable[..., bool]) -> Callable
             reason = changed.reason
         finally:
             _SESSION.reset(token)
+        # The abandoned attempt's replay copy and trace sit in reference cycles;
+        # free them before the rerun makes its own copy.
+        gc.collect()
         token = _SESSION.set(_ReferenceSession(fallback_reason=reason))
         try:
             return validate(*args, **kwargs)
