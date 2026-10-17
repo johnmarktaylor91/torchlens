@@ -1492,12 +1492,15 @@
 - Attribution graphs (DOCUMENTED-UNSTABLE): `tl.attribution.build_graph(trace,
   transcoders, *, embedding, target=None, max_n_logits=10, desired_logit_prob=0.95,
   demeaned_logits=True, logits_at=None, frozen)` builds one prompt's attribution graph:
-  feature nodes (active transcoder features; `transcoders` maps MLP module names to objects
+  feature nodes (active transcoder features; `transcoders` maps read sites to objects
   with `encode`, `W_enc`, `b_enc`, `W_dec`, `b_dec`, cross-layer when `W_dec`/`b_dec` are
-  mappings of MLP names), error nodes (MLP output minus reconstruction, per MLP and position),
+  mappings of MLP names; a read site is an MLP module name, read at its call input, or an
+  op label, read at that op's output, such as a norm's value before its gain, which needs
+  mapping-valued `W_dec`/`b_dec` and must run before every MLP output it writes), error nodes (MLP output minus reconstruction, per MLP and position),
   token nodes and logit nodes. Edges are direct linear effects with every transcoder-written MLP
-  output and every `frozen=` site (attention patterns, normalisation scales; module names or op
-  labels; required, `frozen=()` for neither) held at its captured value, read by one-backward
+  output and every `frozen=` site (attention patterns, normalisation scales; module names, op
+  labels or facet selectors such as `tl.facet("pattern")` and `tl.facet("inv_rms")`, each
+  facet the whole output of one op; required, `frozen=()` for neither) held at its captured value, read by one-backward
   reads. `tl.attribution.AttributionGraph` (`nodes` of `tl.attribution.GraphNode`,
   `adjacency_matrix` rows targets, `node_values`, `constants` `encoder_bias`/`decoder_bias`/
   `other` so each feature and logit node equals its incoming edges plus constants,
@@ -1505,7 +1508,11 @@
   `logit_probabilities`, `capture_outcome`, `disclosures`, `node_counts`, `node_indices`).
   Refusals `attribution_graph_frozen_required`, `attribution_graph_site_not_found`,
   `attribution_graph_transcoder_invalid`, `attribution_graph_input_unsupported`,
-  `attribution_graph_target_invalid`. Doc of record: `docs/reference/attribution.md`.
+  `attribution_graph_target_invalid`, `attribution_graph_read_site_not_upstream`,
+  `attribution_graph_frozen_facet_unsupported`. Hugging Face `Gemma2Attention` serves the
+  attention facets (`pattern` is the eager softmax after the score softcap) and
+  `Gemma2RMSNorm` serves `inv_rms` (its `rsqrt` output). Doc of record:
+  `docs/reference/attribution.md`.
 - Attribution evaluation (DOCUMENTED-UNSTABLE): `tl.attribution.deletion_curve` and
   `tl.attribution.insertion_curve(model, inputs, input_kwargs=None, *, target, attribution,
   baseline="zeros", n_steps=20, features="auto", patch_size=8)` remove or reveal the
