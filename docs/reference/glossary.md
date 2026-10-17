@@ -1304,7 +1304,10 @@ shims, by declared contract. Each carries the same tag at its definition.
 : Make (or stop making) an SAE's latents the facet family `name` at `site`.
   `tl.facet(name).latent(k)` then addresses latent `k` at the doors a
   `tl.head` selector serves (`Trace.set`, `attach_hooks`, `Trace.do`,
-  `fork().do`, `tl.do`), and `trace[site].facets[name]` (every latent),
+  `fork().do`, `tl.do`; and, as a bare selector, `trace[selector]` and
+  `trace.resolve_sites(selector)`, which return the `Facet` whose `.value` is
+  the read, and `tl.trace(save=selector)`, which keeps the ops that read
+  needs), and `trace[site].facets[name]` (every latent),
   `facets[f"{name}[{k}]"]` or `facets[f"{name}[{j},{k}]"]` read the encoder
   activation. A write edits the latents and adds the decoder-space change
   `decode(z') - decode(z)` to the site (for an affine decoder, `delta *

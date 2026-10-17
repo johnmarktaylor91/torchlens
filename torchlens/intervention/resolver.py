@@ -45,6 +45,7 @@ from .errors import (
 from .selectors import (
     BaseSelector,
     CompositeSelector,
+    FacetSelector,
     NotSelector,
     _classify_selector_direction,
 )
@@ -852,12 +853,12 @@ class SiteTable:
         return tuple(
             str(
                 getattr(
-                    site,
+                    record,
                     "layer_label",
-                    getattr(site, "label", "<unknown>"),
+                    getattr(record, "label", "<unknown>"),
                 )
             )
-            for site in self._sites
+            for record in map(_site_record, self._sites)
         )
 
     def to_dataframe(self) -> pd.DataFrame:
@@ -887,7 +888,7 @@ class SiteTable:
                 "modules": getattr(site, "modules", ()),
                 "output_of_module_calls": getattr(site, "output_of_module_calls", ()),
             }
-            for site in self._sites
+            for site in map(_site_record, self._sites)
         ]
         return pd.DataFrame(rows)
 
@@ -1001,18 +1002,23 @@ def resolve_sites(
         )
 
     selector = _normalize_query(query)
-    _guard_episode_step_query(log, selector)
-    refuse_trace_alias_spellings(log, selector)
-    direction = _selector_resolution_direction(selector)
-    matched = _indexed_label_match(log, direction, selector)
-    if matched is None:
-        sites = tuple(_iter_sites(log, direction))
-        matched = _resolve_unchecked(sites, selector, strict=strict)
-    if not matched:
-        raise SiteResolutionError(
-            f"selector {query!r} matched 0 sites. Use log.find_sites(...) to discover labels."
-        )
-    _refuse_bare_multipass_label(selector, matched)
+    matched: tuple[Any, ...]
+    if isinstance(selector, FacetSelector):
+        matched = _resolve_facet_sites(log, selector, query)
+    else:
+        _guard_episode_step_query(log, selector)
+        refuse_trace_alias_spellings(log, selector)
+        direction = _selector_resolution_direction(selector)
+        indexed = _indexed_label_match(log, direction, selector)
+        if indexed is None:
+            sites = tuple(_iter_sites(log, direction))
+            indexed = _resolve_unchecked(sites, selector, strict=strict)
+        matched = indexed
+        if not matched:
+            raise SiteResolutionError(
+                f"selector {query!r} matched 0 sites. Use log.find_sites(...) to discover labels."
+            )
+        _refuse_bare_multipass_label(selector, matched)
     if len(matched) > max_fanout:
         raise SiteAmbiguityError(
             f"site {query!r} matched {len(matched)} sites, exceeding max_fanout={max_fanout}. "
@@ -1025,6 +1031,65 @@ def resolve_sites(
             stacklevel=2,
         )
     return SiteTable(matched, query=query)
+
+
+def _resolve_facet_sites(
+    log: Trace,
+    selector: FacetSelector,
+    query: SelectorInput,
+) -> tuple[Any, ...]:
+    """Resolve a facet selector on a finished trace to the facets it reads.
+
+    The facets are the ones the write doors (``Trace.set``, ``attach_hooks``,
+    ``do``) resolve for the same selector, each the ``Facet`` that
+    ``record.facets[...]`` serves, so its ``.value`` is the slice an edit at
+    those doors receives (a head's slice, an SAE latent's encoder activation).
+    A selector that matches several facets keeps its broadcast; the caller's
+    fan-out check and multi-match count report apply to them as to op sites.
+
+    Parameters
+    ----------
+    log:
+        Finished trace to read.
+    selector:
+        Normalized facet selector.
+    query:
+        The selector as the caller spelled it, for messages.
+
+    Returns
+    -------
+    tuple[Facet, ...]
+        One ``Facet`` per matched facet, in resolution order.
+
+    Raises
+    ------
+    SiteResolutionError
+        Coded ``facet_selector_no_match`` when the trace serves no such facet.
+    """
+
+    from ..semantic.facets import Facet
+    from .hooks import _resolve_facet_specs
+
+    facets = tuple(Facet(spec) for _, spec in _resolve_facet_specs(log, selector))
+    if not facets:
+        first = next(iter(getattr(log, "layer_labels", ()) or ()), None)
+        example = f"trace[{first!r}].facets.keys()" if first is not None else "record.facets.keys()"
+        raise SiteResolutionError(
+            f"facet selector {query!r} matched 0 facets on this trace: no module or op record "
+            "here serves that facet",
+            code="facet_selector_no_match",
+            remedy=f"list the facets a record serves with {example}, then select one of them",
+            selector=repr(query),
+        )
+    return facets
+
+
+def _site_record(site: Any) -> Any:
+    """Return the record a table entry describes: the home op of a ``Facet``, else itself."""
+
+    from ..semantic.facets import Facet
+
+    return site.spec.home if isinstance(site, Facet) else site
 
 
 #: Label indexes of the active :func:`_label_index_scope`, keyed by ``id(log)``:
@@ -1122,10 +1187,11 @@ def _multi_match_message(query: SelectorInput, matched: Sequence[Site]) -> str:
         Warning message.
     """
 
-    matched_labels = {getattr(site, "layer_label", None) for site in matched}
+    records = [_site_record(site) for site in matched]
+    matched_labels = {getattr(site, "layer_label", None) for site in records}
     pairs = [
         (str(getattr(site, "layer_label", None)), str(parent))
-        for site in matched
+        for site in records
         if getattr(site, "is_output", False)
         for parent in (getattr(site, "parents", ()) or ())
         if parent in matched_labels

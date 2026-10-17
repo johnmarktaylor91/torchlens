@@ -52,7 +52,10 @@ rules, not an internal refactor.
   values via `is_deferred_value()` / `coerce_deferred_value()`.
 - `selector_eval.py`: selector walking and capability gating (`walk_selector()`,
   `ensure_supported()`, `contains_followed_by()`); unsupported shapes raise
-  `SelectorCapabilityError` (defined in `intervention/errors`).
+  `SelectorCapabilityError` (defined in `intervention/errors`). The `facet`
+  kind refuses in every lifecycle here; its working doors sit above the
+  evaluator (`resolver.resolve_sites` for a bare facet selector, the save-only
+  predicate for `trace(save=)`), and the refusal message names them.
 
 ## Small modules
 - `refs.py`: `DtypeRef`, `DeviceRef`, `TensorRef`, `ParamRef`, `DeferredRef`, `ReservedLabel`.

@@ -1020,6 +1020,11 @@ class FacetSelector(BaseSelector):
             return base
         return f"{base}.in_module({self.module_address!r})"
 
+    def __hash__(self) -> int:
+        """Hash by the selector's spelling, so it can key a ``hooks=`` mapping."""
+
+        return hash(repr(self))
+
 
 @dataclass(frozen=True, repr=False)
 class GradFnLabelSelector(BaseSelector):
