@@ -384,10 +384,17 @@ def test_default_transport_is_never_built_under_tests(exported) -> None:
 
 
 def test_docs_upload_example_runs_against_the_fake_transport(fake, tmp_path, monkeypatch) -> None:
-    fences = re.findall(r"```python\n(.*?)\n```", DOC.read_text(encoding="utf-8"), re.DOTALL)
-    (graph_fence,) = [f for f in fences if "graph.to_neuronpedia(" in f and "API sketch" not in f]
-    (upload_fence,) = [f for f in fences if "upload_to_neuronpedia(" in f]
-    assert "API sketch" in upload_fence, "the docs runner must compile, never run, the upload"
+    text = DOC.read_text(encoding="utf-8")
+    python_fences = re.findall(r"```python\n(.*?)\n```", text, re.DOTALL)
+    (graph_fence,) = [f for f in python_fences if "graph.to_neuronpedia(" in f]
+    assert not [f for f in python_fences if "upload_to_neuronpedia(" in f], (
+        "the docs runner executes every python fence: the upload example stays a text fence"
+    )
+    (upload_fence,) = [
+        f
+        for f in re.findall(r"```text\n(.*?)\n```", text, re.DOTALL)
+        if "upload_to_neuronpedia(" in f
+    ]
     monkeypatch.setenv("NEURONPEDIA_API_KEY", KEY)
     fake.script = _graph_answers()
     namespace: dict[str, object] = {"DOCS_TMPDIR": str(tmp_path), "__name__": "__docs__"}

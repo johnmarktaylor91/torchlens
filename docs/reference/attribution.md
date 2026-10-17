@@ -1231,8 +1231,8 @@ the trailing index of the direction's site label, as `to_repeng` reads it; `hook
 `"resid_post"` (a decoder block's output) or `"resid_pre"` (its input); `steer_strength` is the
 default steering strength Neuronpedia offers, from -100 to 100. Documented-unstable.
 
-```python
-# API sketch: this publishes the graph on neuronpedia.org under your account.
+```text
+# Publishes the graph on neuronpedia.org under your account; continues the example above.
 import os
 
 url = tl.attribution.graph.upload_to_neuronpedia(path, api_key=os.environ["NEURONPEDIA_API_KEY"])
