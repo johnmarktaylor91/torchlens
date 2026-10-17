@@ -88,7 +88,7 @@ def test_sparse_shell_ops_skip_exhaustive_enrichment_work(
 ) -> None:
     """Unselected sparse operations never enter metadata or payload machinery."""
 
-    from torchlens.backends.torch import ops, wrappers
+    from torchlens.backends.torch import _ops_retention, ops, wrappers
 
     def forbidden(*args: object, **kwargs: object) -> None:
         """Fail if shell-only capture enters an exhaustive enrichment helper."""
@@ -99,7 +99,8 @@ def test_sparse_shell_ops_skip_exhaustive_enrichment_work(
     monkeypatch.setattr(ops, "detect_torch_alias_contract", forbidden)
     monkeypatch.setattr(ops, "detect_torch_output_alias_contract", forbidden)
     monkeypatch.setattr(ops, "_record_predicate_output", forbidden)
-    monkeypatch.setattr(wrappers, "copy_arg_tree", forbidden)
+    # The saved-argument copy wrappers.py calls (imported at call time).
+    monkeypatch.setattr(_ops_retention, "_copy_saved_arg_tree", forbidden)
     monkeypatch.setattr(wrappers, "log_current_rng_states", forbidden)
 
     with pytest.warns(UserWarning, match="matched zero sites"):

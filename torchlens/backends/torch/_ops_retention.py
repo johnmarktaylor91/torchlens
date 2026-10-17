@@ -5,10 +5,12 @@ import time
 import warnings
 from collections import deque
 from collections.abc import Callable, Iterator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from ..._state import pause_logging
+from ..._validation_argument_references import active_argument_references
 from ...capture.predicates import (
     build_op_record_context,
 )
@@ -34,6 +36,7 @@ from ...intervention.selectors import (
 from ...ir.op_record import amend_lookback_retention
 from ...ir.predicate import RetroactiveCaptureDecision
 from ...ir.refs import TensorRef
+from ...utils.arg_handling import copy_arg_tree
 from ...utils.tensor_utils import (
     get_memory_amount_from_metadata,
     safe_copy,
@@ -58,6 +61,7 @@ if TYPE_CHECKING:
 
 __all__ = (
     "_admit_save_budget",
+    "_copy_saved_arg_tree",
     "_commit_save_budget",
     "_save_predicate_activation_fields",
     "_stream_predicate_payloads",
@@ -150,6 +154,47 @@ def _commit_save_budget(
         reservation,
         (fields_dict.get("out"), fields_dict.get("transformed_out")),
     )
+
+
+def _copy_saved_arg_tree(arg: Any) -> Any:
+    """Copy one ``save_arg_values`` argument tree, as the pre-call and saved snapshots do.
+
+    Outside forward validation's own capture this is exactly
+    :func:`~torchlens.utils.arg_handling.copy_arg_tree`. Inside it, a plain
+    parameter argument (or a tensor on a parameter's storage), bare or in a
+    flat list or tuple, is replaced by an alias of the same storage and version
+    counter instead of a copy; see :mod:`torchlens._validation_argument_references`
+    for the guard that reruns validation on this copy path if such a value changes.
+    """
+
+    references = active_argument_references()
+    if references is None:
+        return copy_arg_tree(arg)
+    if isinstance(arg, torch.Tensor):
+        return _parameter_alias(references, arg)
+    if type(arg) in (list, tuple) and not any(
+        isinstance(item, (list, tuple, dict)) for item in arg
+    ):
+        return type(arg)(
+            _parameter_alias(references, item) if isinstance(item, torch.Tensor) else item
+            for item in arg
+        )
+    return copy_arg_tree(arg)
+
+
+def _parameter_alias(references: Any, tensor: torch.Tensor) -> torch.Tensor:
+    """Alias a parameter-storage tensor (recording its version), else copy it as before.
+
+    The guard decides and builds the alias (see
+    ``ParameterArgumentReferences.alias``); anything it declines is copied
+    exactly as on the copy path.
+    """
+
+    # Paused: the guard's storage and version reads and its alias are
+    # TorchLens's own calls, never captured ops (and never re-enter this copy).
+    with pause_logging():
+        alias = references.alias(tensor)
+    return cast(torch.Tensor, copy_arg_tree(tensor)) if alias is None else alias
 
 
 def _iter_tree_tensors(*roots: Any) -> Iterator[torch.Tensor]:

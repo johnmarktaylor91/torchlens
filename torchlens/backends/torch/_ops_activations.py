@@ -13,7 +13,6 @@ from ...data_classes.op import (
     _dtype_or_none,
     _effective_activation_save_mode,
     _memory_or_none,
-    _recursive_safe_copy,
     _shape_or_none,
     _stamp_reference_out,
     apply_transform,
@@ -640,11 +639,13 @@ def _save_activation_fields(
         if trace.save_arg_values:
             # Admit BEFORE the clones allocate (r8 R34, sol 2): the snapshot
             # used to clone every tensor argument first and charge after.
+            from ._ops_retention import _copy_saved_arg_tree
+
             arg_reservations = _admit_saved_args_budget(trace, fields_dict, t_args, t_kwargs)
             fields_dict["has_saved_args"] = True
-            fields_dict["saved_args"] = [_recursive_safe_copy(arg) for arg in t_args]
+            fields_dict["saved_args"] = [_copy_saved_arg_tree(arg) for arg in t_args]
             fields_dict["saved_kwargs"] = {
-                key: _recursive_safe_copy(value) for key, value in t_kwargs.items()
+                key: _copy_saved_arg_tree(value) for key, value in t_kwargs.items()
             }
             _commit_saved_args_budget(trace, fields_dict, arg_reservations)
         else:

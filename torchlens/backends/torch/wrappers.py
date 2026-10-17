@@ -50,7 +50,6 @@ from ...utils._torch_compat import (
     get_torch_function_mode_stack_length,
     mark_torch_capability_missing,
 )
-from ...utils.arg_handling import copy_arg_tree
 from ...utils.display import identity
 from ...utils.hashing import make_random_barcode
 from ...utils.introspection import get_vars_of_type_from_obj
@@ -1898,8 +1897,10 @@ def torch_func_decorator(
 
         # Snapshot args before the call in case in-place ops mutate them.
         if trace.save_arg_values:
-            arg_copies = tuple([copy_arg_tree(arg) for arg in args])
-            kwarg_copies = {k: copy_arg_tree(v) for k, v in kwargs.items()}
+            from ._ops_retention import _copy_saved_arg_tree
+
+            arg_copies = tuple([_copy_saved_arg_tree(arg) for arg in args])
+            kwarg_copies = {k: _copy_saved_arg_tree(v) for k, v in kwargs.items()}
         else:
             arg_copies = args
             kwarg_copies = kwargs
