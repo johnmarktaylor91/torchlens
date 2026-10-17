@@ -68,8 +68,8 @@ def _gain(model, layer: int) -> torch.Tensor:
     return 1.0 + model.model.layers[layer].pre_feedforward_layernorm.weight.detach().float()
 
 
-def _graph(model, transcoders):
-    trace = _trace(model)
+def _graph(model, transcoders, trace: tl.Trace | None = None):
+    trace = _trace(model) if trace is None else trace
     return tl.attribution.build_graph(
         trace,
         transcoders,
@@ -81,10 +81,10 @@ def _graph(model, transcoders):
     )
 
 
-def _op_keyed(model) -> tuple[dict, dict[str, str]]:
+def _op_keyed(model, trace: tl.Trace | None = None) -> tuple[dict, dict[str, str]]:
     """Return the op-label-keyed transcoders and the op label -> module name map."""
 
-    ops = _pre_gain_ops(_trace(model))
+    ops = _pre_gain_ops(_trace(model) if trace is None else trace)
     by_module = _transcoders()
     keyed = {ops[layer]: by_module[f"model.layers.{layer}.mlp"] for layer in range(N_LAYERS)}
     return keyed, {ops[layer]: f"model.layers.{layer}.mlp" for layer in range(N_LAYERS)}
@@ -110,8 +110,9 @@ def graph_pair():
     """Graphs keyed by the pre-gain op label (unfolded) and by the MLP (folded)."""
 
     model = _model()
-    keyed, to_module = _op_keyed(model)
-    by_op = _graph(model, keyed)
+    trace = _trace(model)
+    keyed, to_module = _op_keyed(model, trace)
+    by_op = _graph(model, keyed, trace)
     folded = {
         f"model.layers.{layer}.mlp": _folded(tc, _gain(model, layer))
         for layer, tc in enumerate(_transcoders().values())
@@ -178,26 +179,28 @@ class TestOpLabelReadSite:
 
     def test_read_site_not_upstream_refuses(self) -> None:
         model = _model()
-        ops = _pre_gain_ops(_trace(model))
+        trace = _trace(model)
+        ops = _pre_gain_ops(trace)
         tc = _transcoders()["model.layers.0.mlp"]
         with pytest.raises(tl.attribution.AttributionError) as info:
-            _graph(model, {ops[1]: tc})
+            _graph(model, {ops[1]: tc}, trace)
         assert _code(info) == "attribution_graph_read_site_not_upstream"
         message = str(info.value)
         assert repr(ops[1]) in message
         assert "'model.layers.0.post_feedforward_layernorm'" in message
         example = re.search(r"for example '([^']+)'\)", message)
         assert example is not None
-        graph = _graph(model, {example.group(1): tc})
+        graph = _graph(model, {example.group(1): tc}, trace)
         assert graph.transcoder_sites == (example.group(1),)
 
     def test_op_label_key_with_one_decoder_refuses(self) -> None:
         model = _model()
-        ops = _pre_gain_ops(_trace(model))
+        trace = _trace(model)
+        ops = _pre_gain_ops(trace)
         tc = copy.copy(_transcoders()["model.layers.0.mlp"])
         tc.W_dec = next(iter(tc.W_dec.values()))
         tc.b_dec = next(iter(tc.b_dec.values()))
         with pytest.raises(tl.attribution.AttributionError) as info:
-            _graph(model, {ops[0]: tc})
+            _graph(model, {ops[0]: tc}, trace)
         assert _code(info) == "attribution_graph_transcoder_invalid"
         assert "W_dec={'model.layers.0.mlp': W_dec}" in str(info.value)
