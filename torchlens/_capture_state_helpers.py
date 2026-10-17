@@ -29,6 +29,7 @@ from ._plain_attr_fidelity import (
     restore_simple_plain_attrs_on_copy,
 )
 from ._trace_selector_helpers import _stable_cache_fragment
+from ._validation_state_snapshot import copy_failure_clause, warn_copy_failed
 from .data_classes.trace import Trace
 from .utils._torch_compat import (
     force_eager_stance_scope,
@@ -1142,6 +1143,8 @@ def _module_plain_attr_names(module: nn.Module) -> set[str]:
 class _ModuleTreePlainAttrSnapshot:
     """Snapshot of small value-comparable plain attributes in a module tree."""
 
+    copy_failure: str = ""  # why the deepcopy this snapshot replaces failed, if it did
+
     def __init__(self, model: nn.Module) -> None:
         """Capture a model's plain module-tree attributes.
 
@@ -1296,19 +1299,16 @@ def _model_for_ground_truth_validation(
         assert_copy_kept_instance_attrs(model, copied_model)
         _strip_copied_forward_decorations(copied_model)
         return copied_model, None
-    except Exception:
-        model_type = type(model)
-        if model_type not in _VALIDATION_DEEPCOPY_WARNING_TYPES:
-            _VALIDATION_DEEPCOPY_WARNING_TYPES.add(model_type)
-            warnings.warn(
-                "TorchLens validate_forward_pass could not deepcopy the model for the "
-                "ground-truth run; falling back to state_dict snapshot/restore. "
-                "Non-registered mutable state may cause false negatives for this model.",
-                RuntimeWarning,
-                stacklevel=3,
-            )
+    except Exception as exc:  # noqa: BLE001 - any copy failure falls back; the warning names it
+        copy_failure = copy_failure_clause(exc)
+        if type(model) not in _VALIDATION_DEEPCOPY_WARNING_TYPES:
+            _VALIDATION_DEEPCOPY_WARNING_TYPES.add(type(model))
+            warn_copy_failed(model, exc, run="ground-truth")
+        del exc  # its traceback would pin the partial copy's tensors on the device
         try:
-            return model, _ModuleTreePlainAttrSnapshot(model)
+            snapshot = _ModuleTreePlainAttrSnapshot(model)
+            snapshot.copy_failure = copy_failure
+            return model, snapshot
         except RuntimeError:
             warnings.warn(
                 "TorchLens validate_forward_pass could not snapshot non-registered mutable "
@@ -1367,14 +1367,14 @@ def _model_for_validation_replay(
         _strip_copied_forward_decorations(copied_model)
         restore_simple_plain_attrs_on_copy(model, copied_model)
         return copied_model, None, True
-    except Exception:
-        warnings.warn(
-            "TorchLens validation replay against live model state; model could not be copied.",
-            RuntimeWarning,
-            stacklevel=3,
-        )
+    except Exception as exc:  # noqa: BLE001 - any copy failure falls back; the warning names it
+        copy_failure = copy_failure_clause(exc)
+        warn_copy_failed(model, exc, run="replay")
+        del exc  # its traceback would pin the partial copy's tensors on the device
         try:
-            return model, _ModuleTreePlainAttrSnapshot(model), False
+            snapshot = _ModuleTreePlainAttrSnapshot(model)
+            snapshot.copy_failure = copy_failure
+            return model, snapshot, False
         except RuntimeError:
             return model, None, False
 

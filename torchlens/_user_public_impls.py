@@ -15,7 +15,6 @@ from tqdm import tqdm
 
 from . import user_funcs as _user_funcs
 from ._capture_state_helpers import (
-    _clone_state_dict_with_metadata,
     _model_for_ground_truth_validation,
     _model_for_validation_replay,
     _ModuleTreePlainAttrSnapshot,
@@ -40,6 +39,13 @@ from ._literals import (
 )
 from ._robustness import check_model_and_input_variants
 from ._save_budget import SaveBudgetOption
+from ._validation_state_snapshot import (
+    COPY_FAILED_CODE,
+    StateSnapshot,
+    restore_snapshot_if_changed,
+    snapshot_state_for_restore,
+    state_matches_snapshot,
+)
 from .backends import BackendName, BackendUnsupportedError, resolve_backend_spec
 from .data_classes.trace import Trace
 from .errors import TraceNotReproducibleWarning
@@ -999,7 +1005,7 @@ def validate_forward_pass(
 
 def _restore_validation_replay_state(
     model: nn.Module,
-    state_dict: dict[str, torch.Tensor],
+    state_dict: StateSnapshot,
     plain_attr_snapshot: _ModuleTreePlainAttrSnapshot | None,
 ) -> None:
     """Restore a validation model to its pre-capture replay state.
@@ -1009,12 +1015,10 @@ def _restore_validation_replay_state(
     model:
         Model used for validation capture and replay.
     state_dict:
-        Cloned state dictionary from before the traced validation forward.
+        State snapshot from before the traced validation forward.
     plain_attr_snapshot:
         Optional snapshot of plain Python attributes to restore.
     """
-
-    from .validation._live_model_state import restore_state_dict_if_changed
 
     # R07: both restores always run; a raising load_state_dict must not skip
     # the plain-attribute restore (first failure re-raises, later ones chain).
@@ -1025,7 +1029,7 @@ def _restore_validation_replay_state(
         # dict through load_state_dict on CPU; the resilient restore falls
         # back to proven in-place restoration (lane F37).
         restores.callback(
-            restore_state_dict_if_changed, model, state_dict, restore_state_dict_resilient
+            restore_snapshot_if_changed, model, state_dict, restore_state_dict_resilient
         )
 
 
@@ -1255,6 +1259,7 @@ def _downgrade_retrace_mismatch_to_unverified(trace: Trace) -> None:
 def _refuse_validation_precondition(
     message: str,
     trace_observer: Callable[[Trace | None], None] | None = None,
+    extra: dict[str, Any] | None = None,
 ) -> Literal[False]:
     """Warn, record a structured precondition-refusal diagnostic, and refuse.
 
@@ -1281,6 +1286,8 @@ def _refuse_validation_precondition(
     trace_observer:
         The caller's optional ``_trace_observer``, forwarded ``None`` in
         place of a ``Trace`` so it still runs at this early exit.
+    extra:
+        Optional structured payload for the recorded failure (``code``).
 
     Returns
     -------
@@ -1295,7 +1302,9 @@ def _refuse_validation_precondition(
         record_validation_failure,
     )
 
-    record_validation_failure(None, ValidationFailure(check=CHECK_PRECONDITION, message=message))
+    record_validation_failure(
+        None, ValidationFailure(check=CHECK_PRECONDITION, message=message, extra=dict(extra or {}))
+    )
     if trace_observer is not None:
         trace_observer(None)
     return False
@@ -1384,7 +1393,6 @@ def _validate_forward_pass_torch(
         True if all validation checks pass, False otherwise.
     """
     warn_parallel()
-    from .validation._live_model_state import restore_state_dict_if_changed
     from .validation.diagnostics import reset_validation_failure
 
     # Clear any stale precondition-refusal failure from a prior call on this
@@ -1449,8 +1457,10 @@ def _validate_forward_pass_torch(
 
     # Step 1: Get ground-truth outputs by running the model *outside* TorchLens.
     # Save state_dict first because requires_grad forcing during logging can
-    # alter parameter metadata; we restore it afterward.
-    state_dict = _clone_state_dict_with_metadata(model)
+    # alter parameter metadata; we restore it afterward. Accelerator tensors are
+    # snapshotted to host memory so the device holds one copy of the weights
+    # (the deepcopy) beyond the model, not three.
+    state_dict = snapshot_state_for_restore(model)
     trace: Trace | None = None
     outs_are_valid = False
     # Determinism stabilizer for the capture + replay + perturbation region.
@@ -1529,8 +1539,9 @@ def _validate_forward_pass_torch(
                 "TorchLens validation cannot prove model-state restoration after deepcopy "
                 "failed because these plain attributes are unsupported: "
                 f"{plain_attr_snapshot.unsupported_attr_paths!r}. Returning False rather "
-                "than reporting unverified success.",
+                f"than reporting unverified success.{plain_attr_snapshot.copy_failure}",
                 _trace_observer,
+                {"code": COPY_FAILED_CODE} if plain_attr_snapshot.copy_failure else None,
             )
         from ._errors import CaptureContextError
         from .backends.torch.ops import _walk_output_tensors_with_paths
@@ -1618,11 +1629,16 @@ def _validate_forward_pass_torch(
                 ground_truth_snapshot = ground_truth_snapshot.to(output_device)
             ground_truth_output_tensors.append(ground_truth_snapshot)
             addresses_used.append(entry[1])
+        # Release the ground-truth copy (and the outputs and autograd graph that
+        # pin its weights) before the replay copy is made.
+        if ground_truth_output_all:
+            del entry
+        del ground_truth_model, ground_truth_output, ground_truth_output_all
         # Restore only if the ground-truth run changed the live model (it runs on
         # a deepcopy when one can be made): an unconditional in-place restore
         # moves every tensor's version counter and breaks a graph the caller
         # holds across validate.
-        restore_state_dict_if_changed(model, state_dict, restore_state_dict_resilient)
+        restore_snapshot_if_changed(model, state_dict, restore_state_dict_resilient)
         if plain_attr_snapshot is not None:
             plain_attr_snapshot.restore_changed_attrs()
 
@@ -1637,10 +1653,18 @@ def _validate_forward_pass_torch(
                 "TorchLens validation cannot prove replay-state restoration after deepcopy "
                 "failed because these plain attributes are unsupported: "
                 f"{validation_plain_attr_snapshot.unsupported_attr_paths!r}. Returning False "
-                "rather than reporting unverified success.",
+                f"rather than reporting unverified success.{validation_plain_attr_snapshot.copy_failure}",
                 _trace_observer,
+                {"code": COPY_FAILED_CODE} if validation_plain_attr_snapshot.copy_failure else None,
             )
-        validation_state_dict = _clone_state_dict_with_metadata(validation_model)
+        # The replay model was just copied from (or is) the restored live model,
+        # so its state normally equals the live snapshot bit for bit: reuse it
+        # rather than hold a second copy of the weights.
+        validation_state_dict = (
+            state_dict
+            if state_matches_snapshot(validation_model, state_dict)
+            else snapshot_state_for_restore(validation_model)
+        )
         (
             validation_input_args,
             validation_input_kwargs,
@@ -1797,7 +1821,7 @@ def _validate_forward_pass_torch(
             if "plain_attr_snapshot" in locals() and plain_attr_snapshot is not None:
                 teardown.callback(plain_attr_snapshot.restore_changed_attrs)
             teardown.callback(
-                restore_state_dict_if_changed, model, state_dict, restore_state_dict_resilient
+                restore_snapshot_if_changed, model, state_dict, restore_state_dict_resilient
             )
             if num_threads is not None:
                 teardown.callback(torch.set_num_threads, prior_num_threads)
