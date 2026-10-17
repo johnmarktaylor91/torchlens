@@ -1505,14 +1505,31 @@
   `adjacency_matrix` rows targets, `node_values`, `constants` `encoder_bias`/`decoder_bias`/
   `other` so each feature and logit node equals its incoming edges plus constants,
   `error_vectors`, `active_features`, `activation_values`, `logit_tokens`,
-  `logit_probabilities`, `capture_outcome`, `disclosures`, `node_counts`, `node_indices`).
-  Refusals `attribution_graph_frozen_required`, `attribution_graph_site_not_found`,
+  `logit_probabilities`, `capture_outcome`, `disclosures`, `node_counts`, `node_indices`,
+  `to_neuronpedia(*, slug, scan, tokenizer, prompt=None, node_threshold=0.8,
+  edge_threshold=0.98, path=None)`, which returns the graph pruned by circuit-tracer's
+  influence rule as a dict in Neuronpedia's published attribution-graph schema and writes it to
+  `path` when given). Refusals `attribution_graph_frozen_required`, `attribution_graph_site_not_found`,
   `attribution_graph_transcoder_invalid`, `attribution_graph_input_unsupported`,
   `attribution_graph_target_invalid`, `attribution_graph_read_site_not_upstream`,
-  `attribution_graph_frozen_facet_unsupported`. Hugging Face `Gemma2Attention` serves the
+  `attribution_graph_frozen_facet_unsupported`, `attribution_graph_export_argument_invalid`,
+  `attribution_graph_export_unsupported`. Hugging Face `Gemma2Attention` serves the
   attention facets (`pattern` is the eager softmax after the score softcap) and
   `Gemma2RMSNorm` serves `inv_rms` (its `rsqrt` output). Doc of record:
   `docs/reference/attribution.md`.
+- Attribution graph overlay and uploads (DOCUMENTED-UNSTABLE):
+  `tl.attribution.overlay(trace, graph, *, reduce="abs_sum", graph_value=None)` paints each
+  site holding feature or error nodes with the `reduce` total of its nodes' influence
+  (`graph_value="activation"`: feature activations) for `trace.draw(color_by=...)`.
+  `tl.attribution.graph.upload_to_neuronpedia(exported, *, api_key)` publishes the dict
+  `to_neuronpedia` returned (or its file) through Neuronpedia's documented two-step upload and
+  returns the page URL; `Direction.upload_to_neuronpedia(*, api_key, scan, vector_label,
+  layer=None, hook_type="resid_post", steer_strength=1.0)` publishes a vector through "Create
+  Vector". Standard library only; every field is checked before the first request and the key
+  never enters a message. Refusals `attribution_overlay_argument_invalid`,
+  `attribution_overlay_graph_mismatch`, `attribution_graph_contract_invalid`,
+  `neuronpedia_upload_argument_invalid`, `neuronpedia_upload_http_error`,
+  `neuronpedia_upload_response_invalid`. Doc of record: `docs/reference/attribution.md`.
 - Attribution evaluation (DOCUMENTED-UNSTABLE): `tl.attribution.deletion_curve` and
   `tl.attribution.insertion_curve(model, inputs, input_kwargs=None, *, target, attribution,
   baseline="zeros", n_steps=20, features="auto", patch_size=8)` remove or reveal the
