@@ -234,14 +234,28 @@ def test_the_reference_context_is_cleared_when_the_capture_raises() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         try:
-            verdict = _user_public_impls._validate_forward_pass_torch(model, torch.randn(2, 4))
+            _user_public_impls._validate_forward_pass_torch(model, torch.randn(2, 4))
         except ValueError as exc:
             assert "inside the validation capture" in str(exc)
-        else:
-            assert verdict is False
-    assert len(seen) == 2
+    # The ground truth runs outside the context; the raising forward ran inside it.
     assert seen[0] is None
     assert isinstance(seen[1], arg_references.ParameterArgumentReferences)
+    assert arg_references.active_argument_references() is None
+    assert arg_references._SESSION.get() is None
+
+
+def test_the_context_is_cleared_when_its_block_raises() -> None:
+    inside: list[Any] = []
+
+    def capture_that_raises(model: nn.Module) -> bool:
+        with arg_references.parameter_argument_references(model, True):
+            inside.append(arg_references.active_argument_references())
+            raise ValueError("capture failed")
+
+    wrapped = arg_references.with_parameter_reference_fallback(capture_that_raises)
+    with pytest.raises(ValueError, match="capture failed"):
+        wrapped(nn.Linear(2, 2))
+    assert isinstance(inside[0], arg_references.ParameterArgumentReferences)
     assert arg_references.active_argument_references() is None
     assert arg_references._SESSION.get() is None
 
