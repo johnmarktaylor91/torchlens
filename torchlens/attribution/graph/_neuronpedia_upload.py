@@ -26,6 +26,7 @@ from typing import Any
 
 import torch
 
+from ..._io._json import loads_bounded, read_bytes_bounded
 from .._result import AttributionError
 from ._neuronpedia import check_contract
 
@@ -169,7 +170,7 @@ def _post_json(transport: Any, path: str, payload: dict, *, step: str, api_key: 
     )
     body = _send(transport, request, step=step, api_key=api_key)
     try:
-        answer = json.loads(body)
+        answer = loads_bounded(body.decode("utf-8"))
     except ValueError:
         answer = None
     if not isinstance(answer, dict):
@@ -227,8 +228,8 @@ def _graph_bytes(exported: Any) -> tuple[bytes, Any]:
             code="neuronpedia_upload_argument_invalid",
         )
     try:
-        body = Path(exported).read_bytes()
-        return body, json.loads(body)
+        body = read_bytes_bounded(Path(exported))
+        return body, loads_bounded(body.decode("utf-8"))
     except (OSError, ValueError) as error:
         raise _upload_refusal(
             f"The graph file {str(exported)!r} cannot be read as JSON ({type(error).__name__}). "
