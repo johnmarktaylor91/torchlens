@@ -66,11 +66,11 @@ def _numpy_influence(graph) -> np.ndarray:
 def _site_of(node, sites) -> str | None:
     """The graph site a rendered node shows, or None (inputs and outputs show none)."""
 
-    if node.is_input or node.is_output:
+    if getattr(node, "is_input", False) or getattr(node, "is_output", False):
         return None
     if node.layer_label in sites:
         return node.layer_label
-    return next((m for m in node.output_of_modules or () if m in sites), None)
+    return next((m for m in getattr(node, "output_of_modules", ()) or () if m in sites), None)
 
 
 def _check_painting(trace, color_by, expected: dict[str, float]) -> int:
