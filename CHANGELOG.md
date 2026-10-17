@@ -367,6 +367,9 @@
   `module_call_ambiguous` on a model that calls one module more than once; scoping a facet selector
   to such a module with `.in_module(...)` refuses with `facet_selector_module_multi_call` and names
   each call's read address.
+- **visualization**: The dark and colorblind skins fill plain operations with the page colour, so
+  they no longer look like nodes that use parameters (smallest colour-vision difference 11.0 to 18.9
+  in dark, 8.1 to 13.3 in colorblind).
 
 ### Performance Improvements
 
@@ -396,6 +399,10 @@
   per replay and builds the replay cone's key set once, so one `tl.mechinterp.patch_edges` call into
   every GPT-2 small receiver makes 14 times fewer selector evaluations and about 4 times fewer
   Python calls, with bit-identical results.
+- **capture**: Incremental `LiveIndex` updates for re-seen labels. A multi-pass `Recorder`, a
+  failed-partial recording and amendment folding no longer rebuild every parent-to-child edge for
+  each op they have already indexed; only the replaced op's edges move (48-token generation recorder
+  on a tiny model: 9,323 full rebuilds to 1, Python calls per forward 501,672 to 316,504).
 
 ### Changed
 
