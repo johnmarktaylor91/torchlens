@@ -370,6 +370,11 @@
 - **visualization**: The dark and colorblind skins fill plain operations with the page colour, so
   they no longer look like nodes that use parameters (smallest colour-vision difference 11.0 to 18.9
   in dark, 8.1 to 13.3 in colorblind).
+- **backward**: Backward FLOP attribution: a multi-root backward (`torch.autograd.backward([a, b])`,
+  `torch.autograd.grad` with several outputs) now records every root's GradFn nodes in each capture
+  the root reaches, and when two captures hook one node every call is charged to the node that is
+  executing, with the asking capture's own call and pass, in the executed-backward census, the ATen
+  recorder and the checkpoint evidence alike.
 
 ### Performance Improvements
 
