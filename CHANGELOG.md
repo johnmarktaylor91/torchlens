@@ -293,6 +293,9 @@
   tl.facet("inv_rms")]` holds every attention pattern and norm scale of a Hugging Face Gemma-2.
   `Gemma2Attention` now serves the attention facets and `Gemma2RMSNorm` serves the new `inv_rms`
   facet (documented-unstable).
+- **attribution**: Cross-layer transcoder attribution graphs on a tiny Hugging Face Gemma-2 are
+  tested against a plain-autograd key: edges, node accounting, error nodes and active-subset
+  exactness.
 
 ### Bug Fixes
 
