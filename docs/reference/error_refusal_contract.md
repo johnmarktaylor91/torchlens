@@ -1197,6 +1197,7 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `watch_grain_invalid` | `watch(grain=...)` outside the closed set: `None` (module grain) or `"op"` (`WatchConfigError`; spelling DOCUMENTED-UNSTABLE) | Omit `grain=` or pass `grain="op"` |
 | `wrappers_removed_before_capture` | A concurrent `unwrap_torch()` removed the torch wrappers between model preparation and capture admission | Do not call `unwrap_torch()` concurrently with capture entry; re-run `tl.trace` to re-install the wrappers |
 | `xarray_presentation_mismatch` | `tl.export.xarray` met saved outs that disagree on the leading (presentation) size | Save only sites that share the presentation axis, or export one site with `tl.bridge.xarray.data_array` |
+| `validation_model_copy_failed` | WARNING (S-18 contract, not a refusal): forward validation could not deep-copy the model and fell back to the live model; the message names the exception the copy raised; a following precondition refusal names the same error and records this code in the failure's `extra` | Free device memory or validate on the host (`tl.validate(model.to('cpu'), inputs, scope='forward')`); otherwise make `copy.deepcopy(model)` succeed |
 
 ## Constant-spelled refusal kinds
 

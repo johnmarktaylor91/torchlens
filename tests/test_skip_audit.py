@@ -1047,6 +1047,12 @@ _CUDA_DARK = (
 )
 
 DEVICE_GATED_SKIPIF_LEDGER: dict[str, str] = {
+    "test_valmem_validation_memory.py::test_forward_validation_weight_copies_on_an_accelerator": (
+        "[2026-10-17] forward-validation weight-copy counter on an accelerator: "
+        "the snapshot-on-host claim is only observable with a device-resident "
+        "model; dark on CPU-only CI, executed on the owner's GPU box (its CPU "
+        "sibling test_forward_validation_weight_copies_on_a_cpu_model runs everywhere)"
+    ),
     "test_track_explorer_gate_rows.py::test_op_tier_overhead_row_cuda_gpt2": (
         "[2026-10-12] explorer D25 op-tier gate row (watch(grain='op')): the "
         "per-step A/B needs two gpt2 replicas training on CUDA; dark on CPU-only "

@@ -89,9 +89,14 @@ def test_validation_passes_with_weight_norm_captured(model_cls: type[nn.Module])
     """Validation passes because the op is captured, for any nesting."""
 
     torch.manual_seed(0)
-    passed = _validate_forward_pass_torch(
-        model_cls(), [torch.randn(1, 4, 8)], {}, random_seed=0, validate_metadata=True
-    )
+    # copy.deepcopy refuses the non-leaf weight legacy weight_norm leaves, so
+    # validation discloses the live-model fallback it takes instead.
+    with pytest.warns(
+        RuntimeWarning, match="could not deepcopy the model|model could not be copied"
+    ):
+        passed = _validate_forward_pass_torch(
+            model_cls(), [torch.randn(1, 4, 8)], {}, random_seed=0, validate_metadata=True
+        )
     assert passed, tl.validation.last_validation_failure()
 
 

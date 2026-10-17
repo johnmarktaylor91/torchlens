@@ -106,6 +106,9 @@ class _NestedEqualBranch(nn.Module):
         return self.block(x)
 
 
+_COPY_FALLBACK_DISCLOSURE = "could not deepcopy the model|model could not be copied"
+
+
 @pytest.fixture
 def _restore_alias() -> Iterator[None]:
     """Leave the weight_norm module alias as the test found it."""
@@ -118,10 +121,13 @@ def _restore_alias() -> Iterator[None]:
 
 
 def _validate(model: nn.Module) -> bool:
+    # Legacy weight_norm leaves a non-leaf ``weight`` that copy.deepcopy refuses,
+    # so validation discloses the live-model fallback it takes instead.
     torch.manual_seed(0)
-    return _validate_forward_pass_torch(
-        model, [torch.randn(1, 4, 8)], {}, random_seed=0, validate_metadata=True
-    )
+    with pytest.warns(RuntimeWarning, match=_COPY_FALLBACK_DISCLOSURE):
+        return _validate_forward_pass_torch(
+            model, [torch.randn(1, 4, 8)], {}, random_seed=0, validate_metadata=True
+        )
 
 
 @pytest.mark.usefixtures("_restore_alias")
