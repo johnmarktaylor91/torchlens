@@ -92,7 +92,6 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
 #: (7.1 s) and the Prisma CLIP SAE page (2.0 s), are listed for that reason.
 HEAVY_PAGES: frozenset[str] = frozenset(
     {
-        "docs/recipes/acdc_ioi.md",
         "docs/recipes/lrp_transformers_lxt.md",
         "docs/neuroai/journey.md",
         "docs/recipes/tcav.md",
@@ -103,6 +102,14 @@ HEAVY_PAGES: frozenset[str] = frozenset(
         "docs/recipes/prisma_clip_sae.md",
     }
 )
+
+#: Pages measured above the 20 s heavy ceiling (slow, >20 s). The ACDC IOI page,
+#: run alone in three separate sessions on one pinned core (OMP_NUM_THREADS=1,
+#: host load about 8 of 20 cores), measured 30.1 s, 23.5 s and 30.2 s in the
+#: test call (session wall 48.1 s, 30.8 s and 37.9 s; CPU 47.3 s, 30.3 s and
+#: 37.3 s), median 30.1 s. Earlier runs: 17 s alone, 30.8 s unloaded, 37.1 s and
+#: 42.5 s under gate load.
+SLOW_PAGES: frozenset[str] = frozenset({"docs/recipes/acdc_ioi.md"})
 
 HEADER_RE = re.compile(r"# recipe-test: tool=(?P<tool>[a-z0-9_]+) expected=(?P<expected>.+)")
 BLOCK_RE = re.compile(r"```python\n(?P<code>.*?)\n```", re.DOTALL)
@@ -131,8 +138,27 @@ def _fences(page: str) -> list[str]:
     return [m.group("code") for m in BLOCK_RE.finditer(path.read_text("utf-8"))]
 
 
+def _tier_marks(page: str) -> list[Any]:
+    """Return the cost-tier marks of one page.
+
+    Parameters
+    ----------
+    page:
+        Repo-relative page path.
+
+    Returns
+    -------
+    list[Any]
+        ``[slow]`` for a slow page, ``[heavy]`` for a heavy page, else empty.
+    """
+
+    if page in SLOW_PAGES:
+        return [pytest.mark.slow]
+    return [pytest.mark.heavy] if page in HEAVY_PAGES else []
+
+
 def _params() -> list[Any]:
-    """Return one pytest param per page, heavy pages marked.
+    """Return one pytest param per page, heavy and slow pages marked.
 
     Returns
     -------
@@ -140,10 +166,7 @@ def _params() -> list[Any]:
         ``pytest.param(page)`` entries.
     """
 
-    return [
-        pytest.param(page, id=page, marks=[pytest.mark.heavy] if page in HEAVY_PAGES else [])
-        for page in PAGES
-    ]
+    return [pytest.param(page, id=page, marks=_tier_marks(page)) for page in PAGES]
 
 
 def _require_tool(page: str) -> None:
