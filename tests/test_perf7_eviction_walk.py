@@ -429,7 +429,11 @@ def _evicted_capture(model_cls: type[nn.Module], walk: Callable[[Any], None] | N
     return described
 
 
-@pytest.mark.parametrize("model_cls", [_Small, _Long], ids=["row_major", "columnar"])
+@pytest.mark.parametrize(
+    "model_cls",
+    [_Small, pytest.param(_Long, marks=pytest.mark.heavy)],  # columnar: 13.6 s measured
+    ids=["row_major", "columnar"],
+)
 def test_a_real_capture_evicts_the_same_cells_as_the_former_walk(
     model_cls: type[nn.Module],
 ) -> None:
@@ -463,14 +467,26 @@ def _walk_events(store: Any) -> int:
     return state["events"]
 
 
-def test_the_walk_on_a_columnar_capture_stays_cheap() -> None:
-    """Call count of one walk over a fixed ~540-op capture (base: 7,131; bar 2,500)."""
+@pytest.mark.parametrize(
+    ("model_cls", "bar"),
+    [
+        # Measured on the base walk: 6,561 events; on this walk: 907.
+        (_Small, 1_200),
+        # Measured on the base walk: 534,805 events; on this walk: 94,295 (6.2 s measured).
+        pytest.param(_Long, 120_000, marks=pytest.mark.heavy),
+    ],
+    ids=["row_major", "columnar"],
+)
+def test_one_walk_stays_cheap(model_cls: type[nn.Module], bar: int) -> None:
+    """Profiler events in one walk over a fixed capture; the bar leaves about 30 % headroom."""
 
     torch.manual_seed(0)
-    trace = tl.trace(_Long(), torch.randn(2, 4), capture=CaptureOptions(intervention_ready=True))
+    trace = tl.trace(
+        model_cls(), torch.randn(2, 4), capture=CaptureOptions(intervention_ready=True)
+    )
     store = trace._trace_core.ops
-    assert store._columns is not None, "the fixture must reach the columnar store"
+    assert (store._columns is not None) is (model_cls is _Long), "fixture store shape"
     events = _walk_events(store)
     del trace
     gc.collect()
-    assert events <= 2_500, events
+    assert events <= bar, events
