@@ -87,8 +87,8 @@ def prompt_contributions(
     for coordinate, value in zip(scores.coordinates, scores.values, strict=True):
         name = head_name(coordinate.label) if coordinate.kind == "attention" else None
         if name is not None:
-            heads[name] = float(value.reshape(-1)[0])
-    return heads, float(scores.native.reshape(-1)[0])
+            heads[name] = float(value.detach().reshape(-1)[0])
+    return heads, float(scores.native.detach().reshape(-1)[0])
 
 
 def run(out_dir: Path | None = None) -> dict[str, Any]:
@@ -121,7 +121,7 @@ def run(out_dir: Path | None = None) -> dict[str, Any]:
     passed = len(means) == 144 and all(name in top for name in NAME_MOVERS)
     _save_first_prompt(model, tokenizer, rows[0], out_dir)
     summary = {
-        "replication": "R-IOI",
+        "replication": "ioi_name_movers",
         "claim": CLAIM,
         "rule": RULE,
         "model": f"{common.MODEL_ID}@{common.MODEL_REVISION} float32 eager",

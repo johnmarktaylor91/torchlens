@@ -107,7 +107,7 @@ def run(out_dir: Path | None = None) -> dict[str, Any]:
     passed = mine == theirs and gap <= SCORE_TOLERANCE
     _save_small_trace(model, tokens, out_dir)
     summary = {
-        "replication": "R-IND",
+        "replication": "induction_heads",
         "claim": CLAIM,
         "rule": RULE,
         "model": f"{common.MODEL_ID}@{common.MODEL_REVISION} float32 eager",
