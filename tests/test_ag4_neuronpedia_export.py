@@ -1,6 +1,7 @@
 """Attribution graphs exported in Neuronpedia's attribution-graph schema.
 
-The structural contract below is written by hand from Neuronpedia's
+The structural contract (the library's ``check_contract``, which the
+upload also runs before any request) is written by hand from Neuronpedia's
 published schema (``apps/webapp/app/api/graph/graph-schema.json`` at commit
 2f0bb10893b9c63c409dbc49db61f557883e0a2c): the required keys and value
 types of the top level, ``metadata``, ``qParams``, nodes and links. The node
@@ -26,6 +27,7 @@ import torch
 
 import torchlens as tl
 from tests import _ag1_fixtures as fx
+from torchlens.attribution.graph._neuronpedia import check_contract
 
 INFLUENCE_TOL = 1e-12
 
@@ -157,43 +159,11 @@ def _numpy_kept(graph, node_threshold=0.8, edge_threshold=0.98) -> tuple[set, se
 
 # ---------------------------------------------------------------- structural contract
 
-_NUMBER = (int, float)
-
-
-def _is(value, types, nullable=False) -> bool:
-    if value is None:
-        return nullable
-    if isinstance(value, bool):
-        return bool in (types if isinstance(types, tuple) else (types,))
-    return isinstance(value, types)
-
 
 def _check_contract(exported: dict) -> None:
-    """Required keys and value types, written from the published schema."""
+    """The library's structural contract, written from the published schema."""
 
-    assert {"metadata", "qParams", "nodes", "links"} <= set(exported)
-    meta = exported["metadata"]
-    assert _is(meta["slug"], str) and _is(meta["scan"], str) and _is(meta["prompt"], str)
-    assert isinstance(meta["prompt_tokens"], list)
-    assert all(_is(token, str) for token in meta["prompt_tokens"])
-    assert _is(meta["node_threshold"], _NUMBER)
-    assert all(_is(v, _NUMBER) for v in meta["pruning_settings"].values())
-    q = exported["qParams"]
-    assert all(_is(p, str) for p in q["pinnedIds"]) and isinstance(q["supernodes"], list)
-    assert all(_is(q[key], str) for key in ("linkType", "clickedId", "sg_pos"))
-    for node in exported["nodes"]:
-        assert _is(node["node_id"], str) and _is(node["feature"], int, nullable=True)
-        assert _is(node["layer"], (str, int)) and _is(node["ctx_idx"], int)
-        assert _is(node["feature_type"], str) and _is(node["jsNodeId"], str)
-        assert _is(node["clerp"], str)
-        assert _is(node["influence"], _NUMBER, nullable=True)
-        assert _is(node["activation"], _NUMBER, nullable=True)
-    ids = [node["node_id"] for node in exported["nodes"]]
-    assert len(ids) == len(set(ids))
-    for link in exported["links"]:
-        assert _is(link["source"], str) and _is(link["target"], str)
-        assert _is(link["weight"], _NUMBER)
-        assert link["source"] in ids and link["target"] in ids
+    check_contract(exported)
 
 
 # ---------------------------------------------------------------- cases
@@ -392,3 +362,41 @@ def test_refuses_graphs_the_schema_cannot_express(graphs, change) -> None:
         _export(change(graphs["F1"]))
     assert excinfo.value.fields["code"] == "attribution_graph_export_unsupported"
     assert "Remedy:" in str(excinfo.value)
+
+
+def _broken(exported: dict, change: str) -> dict:
+    broken = json.loads(json.dumps(exported))
+    if change == "no_links":
+        del broken["links"]
+    elif change == "slug_type":
+        broken["metadata"]["slug"] = 7
+    elif change == "token_type":
+        broken["metadata"]["prompt_tokens"][0] = 1
+    elif change == "node_field":
+        broken["nodes"][0]["ctx_idx"] = "0"
+    elif change == "duplicate_id":
+        broken["nodes"].append(dict(broken["nodes"][0]))
+    elif change == "dangling_link":
+        broken["links"][0]["target"] = "nowhere"
+    elif change == "bool_weight":
+        broken["links"][0]["weight"] = True
+    return broken
+
+
+def test_contract_check_refuses_broken_exports(graphs) -> None:
+    exported = _export(graphs["F1"])
+    check_contract(exported)
+    changes = (
+        "no_links",
+        "slug_type",
+        "token_type",
+        "node_field",
+        "duplicate_id",
+        "dangling_link",
+        "bool_weight",
+    )
+    for change in changes:
+        with pytest.raises(tl.attribution.AttributionError) as excinfo:
+            check_contract(_broken(exported, change))
+        assert excinfo.value.fields["code"] == "attribution_graph_contract_invalid", change
+        assert "Remedy:" in str(excinfo.value), change

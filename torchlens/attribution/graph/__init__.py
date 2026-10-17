@@ -8,6 +8,7 @@ Attribution graphs.
 """
 
 from ._build import build_graph
+from ._neuronpedia_upload import upload_to_neuronpedia
 from ._result import NODE_KINDS, AttributionGraph, GraphNode
 
-__all__ = ["AttributionGraph", "GraphNode", "NODE_KINDS", "build_graph"]
+__all__ = ["AttributionGraph", "GraphNode", "NODE_KINDS", "build_graph", "upload_to_neuronpedia"]

@@ -154,6 +154,71 @@ class Direction:
 
         return from_direction(self, layer=layer, model_type=model_type)
 
+    def upload_to_neuronpedia(  # noqa: PLR0913 -- the endpoint's fields, keyword-only
+        self,
+        *,
+        api_key: str,
+        scan: str,
+        vector_label: str,
+        layer: int | None = None,
+        hook_type: str = "resid_post",
+        steer_strength: float = 1.0,
+    ) -> str:
+        """Upload this vector to Neuronpedia and return its page's URL.
+
+        Documented-unstable. This publishes the vector on neuronpedia.org
+        under the account that owns ``api_key``, through Neuronpedia's
+        documented "Create Vector" endpoint (``POST /api/vector/new``,
+        https://www.neuronpedia.org/api-doc). Every field is checked before
+        the request; the key is sent in the ``x-api-key`` header and never
+        written into a message.
+
+        Parameters
+        ----------
+        api_key:
+            Your Neuronpedia API key (under Settings on neuronpedia.org).
+        scan:
+            Neuronpedia's model id, for example ``"gemma-2-2b"``.
+        vector_label:
+            The name Neuronpedia shows for the vector.
+        layer:
+            Decoder layer (0-based). Defaults to the trailing index of the
+            site label, as :meth:`to_repeng` reads it.
+        hook_type:
+            ``"resid_post"`` (a decoder block's output, the default) or
+            ``"resid_pre"`` (its input).
+        steer_strength:
+            The default steering strength Neuronpedia offers, from -100 to 100.
+
+        Returns
+        -------
+        str
+            The URL of the vector's page on Neuronpedia.
+
+        Raises
+        ------
+        AttributionError
+            ``neuronpedia_upload_argument_invalid`` for a missing key or a
+            field the endpoint refuses; ``neuronpedia_upload_http_error`` and
+            ``neuronpedia_upload_response_invalid`` as for
+            ``tl.attribution.graph.upload_to_neuronpedia``.
+        InvalidArgumentError
+            As :meth:`library_layer`, when ``layer`` is ``None`` and the site
+            label ends in no index.
+        """
+
+        from ..attribution.graph._neuronpedia_upload import upload_vector
+
+        return upload_vector(
+            self.vector,
+            api_key=api_key,
+            scan=scan,
+            layer=self.library_layer(layer),
+            hook_type=hook_type,
+            vector_label=vector_label,
+            steer_strength=steer_strength,
+        )
+
     def to_dialz(self, *, layer: int | None = None, model_type: str | None = None) -> Any:
         """Return a ``dialz.SteeringVector`` holding this vector.
 

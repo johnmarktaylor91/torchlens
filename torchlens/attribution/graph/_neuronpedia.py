@@ -28,7 +28,7 @@ from .._result import AttributionError
 if TYPE_CHECKING:
     from ._result import AttributionGraph
 
-__all__ = ["graph_to_neuronpedia"]
+__all__ = ["check_contract", "graph_to_neuronpedia", "node_influence"]
 
 _DOCS_POINTER = "See docs/reference/attribution.md, section Attribution graphs."
 _SCHEMA_VERSION = 1
@@ -107,6 +107,29 @@ def _drop_dead_ends(
         node_mask[:n_features] &= edge_mask[:n_features].any(1)
 
 
+def _logit_weights(graph: AttributionGraph, adjacency: torch.Tensor) -> torch.Tensor:
+    """The logit probabilities on the logit nodes, zero elsewhere."""
+
+    n_logits = graph.node_counts["logit"]
+    weights = torch.zeros(adjacency.shape[0], dtype=adjacency.dtype)
+    weights[adjacency.shape[0] - n_logits :] = (
+        graph.logit_probabilities.detach().cpu().to(adjacency.dtype)
+    )
+    return weights
+
+
+def node_influence(graph: AttributionGraph) -> torch.Tensor:
+    """Every node's influence on the logits, circuit-tracer's rule, in the adjacency's dtype.
+
+    The total effect of each node on the logits, weighted by their
+    probabilities, through the row-normalised absolute adjacency (zero for
+    the logit nodes themselves).
+    """
+
+    adjacency = graph.adjacency_matrix.detach().cpu()
+    return _influence(_normalize(adjacency), _logit_weights(graph, adjacency))
+
+
 def _prune(graph: AttributionGraph, node_threshold: float, edge_threshold: float) -> _Pruned:
     """Circuit-tracer's pruning rule on the graph's adjacency, in its dtype."""
 
@@ -114,10 +137,7 @@ def _prune(graph: AttributionGraph, node_threshold: float, edge_threshold: float
     counts = graph.node_counts
     n_logits, n_tokens = counts["logit"], counts["token"]
     n_inner = adjacency.shape[0] - n_logits - n_tokens
-    weights = torch.zeros(adjacency.shape[0], dtype=adjacency.dtype)
-    weights[adjacency.shape[0] - n_logits :] = (
-        graph.logit_probabilities.detach().cpu().to(adjacency.dtype)
-    )
+    weights = _logit_weights(graph, adjacency)
     node_influence = _influence(_normalize(adjacency), weights)
     if not bool(node_influence.sum() > 0):
         raise _export_refusal(
@@ -353,6 +373,123 @@ def _check_graph(graph: AttributionGraph) -> None:
             "values are finite, tl.attribution.build_graph(tl.trace(model, input_ids), ...).",
             code="attribution_graph_export_unsupported",
         )
+
+
+_NUMBER = (int, float)
+
+
+def _is(value: Any, types: type | tuple[type, ...], *, nullable: bool = False) -> bool:
+    """Whether ``value`` has one of ``types`` (a bool counts only where bool is named)."""
+
+    if value is None:
+        return nullable
+    named = types if isinstance(types, tuple) else (types,)
+    if isinstance(value, bool):
+        return bool in named
+    return isinstance(value, named)
+
+
+def _contract_refusal(where: str) -> AttributionError:
+    """The refusal for one broken part of an export."""
+
+    return _export_refusal(
+        f"The graph JSON does not meet Neuronpedia's attribution-graph schema: {where}. "
+        "Remedy: pass the dict AttributionGraph.to_neuronpedia(...) returned, or the file "
+        "it wrote with path=..., unchanged.",
+        code="attribution_graph_contract_invalid",
+    )
+
+
+def _check_metadata(meta: Any) -> None:
+    """The required ``metadata`` keys and their value types."""
+
+    if not isinstance(meta, dict):
+        raise _contract_refusal("metadata is not an object")
+    for key in ("slug", "scan", "prompt"):
+        if not _is(meta.get(key), str):
+            raise _contract_refusal(f"metadata.{key} is not a string")
+    tokens = meta.get("prompt_tokens")
+    if not isinstance(tokens, list) or not all(_is(token, str) for token in tokens):
+        raise _contract_refusal("metadata.prompt_tokens is not a list of strings")
+    if "node_threshold" in meta and not _is(meta["node_threshold"], _NUMBER):
+        raise _contract_refusal("metadata.node_threshold is not a number")
+    settings = meta.get("pruning_settings", {})
+    if not isinstance(settings, dict) or not all(_is(v, _NUMBER) for v in settings.values()):
+        raise _contract_refusal("metadata.pruning_settings is not an object of numbers")
+
+
+def _check_q_params(q: Any) -> None:
+    """The ``qParams`` keys the writer fills, and their value types."""
+
+    if not isinstance(q, dict):
+        raise _contract_refusal("qParams is not an object")
+    pinned = q.get("pinnedIds", [])
+    if not isinstance(pinned, list) or not all(_is(p, str) for p in pinned):
+        raise _contract_refusal("qParams.pinnedIds is not a list of strings")
+    if not isinstance(q.get("supernodes", []), list):
+        raise _contract_refusal("qParams.supernodes is not a list")
+    for key in ("linkType", "clickedId", "sg_pos"):
+        if key in q and not _is(q[key], str):
+            raise _contract_refusal(f"qParams.{key} is not a string")
+
+
+_NODE_FIELDS: tuple[tuple[str, type | tuple[type, ...], bool], ...] = (
+    ("node_id", str, False),
+    ("feature", int, True),
+    ("layer", (str, int), False),
+    ("ctx_idx", int, False),
+    ("feature_type", str, False),
+    ("jsNodeId", str, False),
+    ("clerp", str, False),
+    ("influence", _NUMBER, True),
+    ("activation", _NUMBER, True),
+)
+
+
+def _check_nodes_and_links(nodes: Any, links: Any) -> None:
+    """Node and link fields, unique node ids, and links between exported nodes."""
+
+    if not isinstance(nodes, list) or not isinstance(links, list):
+        raise _contract_refusal("nodes or links is not a list")
+    ids: set[str] = set()
+    for index, node in enumerate(nodes):
+        if not isinstance(node, dict):
+            raise _contract_refusal(f"nodes[{index}] is not an object")
+        for key, types, nullable in _NODE_FIELDS:
+            if not _is(node.get(key), types, nullable=nullable):
+                raise _contract_refusal(f"nodes[{index}].{key} has the wrong type")
+        if node["node_id"] in ids:
+            raise _contract_refusal(f"node id {node['node_id']!r} appears twice")
+        ids.add(node["node_id"])
+    for index, link in enumerate(links):
+        if not isinstance(link, dict) or not _is(link.get("weight"), _NUMBER):
+            raise _contract_refusal(f"links[{index}] has no numeric weight")
+        if link.get("source") not in ids or link.get("target") not in ids:
+            raise _contract_refusal(f"links[{index}] joins a node id the export does not hold")
+
+
+def check_contract(exported: Any) -> None:
+    """Refuse JSON that does not meet the schema's structure.
+
+    Written by hand from the published schema: the required top-level keys,
+    ``metadata``, the ``qParams`` the writer fills, node and link fields and
+    their value types, unique node ids, and links between exported nodes.
+    The schema text itself is not copied.
+
+    Raises
+    ------
+    AttributionError
+        ``attribution_graph_contract_invalid``, naming the first broken part.
+    """
+
+    if not isinstance(exported, dict):
+        raise _contract_refusal(f"the graph is a {type(exported).__name__}, not a JSON object")
+    missing = [key for key in ("metadata", "qParams", "nodes", "links") if key not in exported]
+    if missing:
+        raise _contract_refusal(f"the top level lacks {', '.join(missing)}")
+    _check_metadata(exported["metadata"])
+    _check_q_params(exported["qParams"])
+    _check_nodes_and_links(exported["nodes"], exported["links"])
 
 
 def graph_to_neuronpedia(  # noqa: PLR0913 -- the method's keywords, passed through
