@@ -114,10 +114,12 @@ def _reference_store_evict(store: Any) -> None:
 # --- structural description: what is a tensor, what is the same object as before ---
 
 
-def _index_objects(value: Any, path: str, out: dict[int, str], depth: int = 0) -> None:
+def _index_objects(value: Any, path: str, out: dict[int, Any], depth: int = 0) -> None:
+    """Map ``id`` to ``(path, object)``; holding the object keeps its id from reuse."""
+
     if id(value) in out or depth > _CEILING + 3:
         return
-    out[id(value)] = path
+    out[id(value)] = (path, value)
     if isinstance(value, dict):
         for key, item in list(dict.items(value)):
             _index_objects(item, f"{path}[{key!r}]", out, depth + 1)
@@ -128,15 +130,17 @@ def _index_objects(value: Any, path: str, out: dict[int, str], depth: int = 0) -
 
 
 def _describe(
-    value: Any, before: dict[int, str], depth: int = 0, seen: set[int] | None = None
+    value: Any, before: dict[int, Any], depth: int = 0, seen: set[int] | None = None
 ) -> str:
     """Structure of ``value``: tensors, types, and which objects are the originals."""
 
-    origin = before.get(id(value), "new")
+    origin = before[id(value)][0] if id(value) in before else "new"
     if isinstance(value, torch.Tensor):
         return f"T<{origin}>"
     if value is None or isinstance(value, (bool, int, float, complex, str, bytes)):
-        return f"{type(value).__name__}:{value!r}"
+        # Types, not values: two captures of one model differ in timings, ids
+        # and per-trace label tokens.
+        return type(value).__name__
     seen = set() if seen is None else seen
     if id(value) in seen or depth > _CEILING + 3:
         return f"<again {origin}>"
@@ -144,7 +148,8 @@ def _describe(
     name = f"{type(value).__name__}<{origin}>"
     if isinstance(value, dict):
         inner = ",".join(
-            f"{key!r}:{_describe(item, before, depth + 1, seen)}" for key, item in dict.items(value)
+            f"{type(key).__name__}:{_describe(item, before, depth + 1, seen)}"
+            for key, item in dict.items(value)
         )
         return f"{name}{{{inner}}}"
     if isinstance(value, (set, frozenset)):
@@ -284,7 +289,7 @@ def _adversarial_cells() -> list[Any]:
 
 
 def _walk_cells(cells: list[Any], evict: Callable[..., Any]) -> list[str]:
-    before: dict[int, str] = {}
+    before: dict[int, Any] = {}
     _index_objects(cells, "cells", before)
     results = [evict(cell, torch.Tensor) for cell in cells]
     described = [_describe(result, before) for result in results]
@@ -314,9 +319,9 @@ def test_every_adversarial_value_evicts_as_the_former_walk_did() -> None:
 def test_the_store_list_and_mapping_sweeps_match_per_cell_eviction() -> None:
     cells = _adversarial_cells()
     reference_cells = _adversarial_cells()
-    before: dict[int, str] = {}
+    before: dict[int, Any] = {}
     _index_objects(cells, "cells", before)
-    reference_before: dict[int, str] = {}
+    reference_before: dict[int, Any] = {}
     _index_objects(reference_cells, "cells", reference_before)
     op_store._evict_payloads_in_list(cells, torch.Tensor)
     for index, value in enumerate(reference_cells):
@@ -349,7 +354,7 @@ class _Small(nn.Module):
 
 
 class _Long(nn.Module):
-    """About 540 ops: past the store's columnar-transpose threshold."""
+    """About 545 ops: past the store's columnar-transpose threshold (512 rows)."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -357,7 +362,7 @@ class _Long(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         h = self.fc(x)
-        for _ in range(135):
+        for _ in range(180):
             h = torch.tanh(h * 1.01 + 0.1)
         return h.sum(dim=-1)
 
@@ -401,9 +406,9 @@ def _evicted_capture(model_cls: type[nn.Module], walk: Callable[[Any], None] | N
     trace = tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
     store = trace._trace_core.ops
     fork = trace.fork()
-    fork.do(tl.func("tanh") if model_cls is _Long else tl.func("relu"), tl.scale(2.0))
+    fork.do(tl.func("linear") if model_cls is _Long else tl.func("relu"), tl.scale(2.0))
     kept_op = fork.layer_list[2]
-    before: dict[int, str] = {}
+    before: dict[int, Any] = {}
     cells_before = {loc: container[key] for loc, container, key in _store_cells(store)}
     for loc, value in cells_before.items():
         _index_objects(value, loc, before)
@@ -419,7 +424,7 @@ def _evicted_capture(model_cls: type[nn.Module], walk: Callable[[Any], None] | N
     described = [
         f"{loc}={_describe(container[key], before)}" for loc, container, key in _store_cells(store)
     ]
-    assert any(op is not None for op in (kept_op,))
+    assert kept_op.layer_label, "the retained fork Op stays readable"
     del cells_before
     return described
 
