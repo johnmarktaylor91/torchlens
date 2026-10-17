@@ -43,8 +43,8 @@ OKABE_ITO_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
 )
 
 #: The historical semantic role palette: the identity mapping of the rendered
-#: constants. The non-default skins keep it (pixel-identical history); the
-#: default skin moved to Okabe-Ito.
+#: constants. The paper, colorblind and high_contrast skins keep it unchanged;
+#: the default skin moved to Okabe-Ito.
 LEGACY_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
     {
         "input": "#98FB98",
@@ -59,9 +59,10 @@ LEGACY_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
     }
 )
 
-#: Dark-skin semantic palette: byte-identical to the historical dark-theme
-#: behavior (params remap to the dark grays; input/output/boolean pass
-#: through unchanged, exactly as before the palette went live).
+#: Dark-skin semantic palette: the historical dark-theme role colours (params
+#: remap to the dark grays; input/output/boolean pass through unchanged, as
+#: before the palette went live). The dark plain fill is the page colour, not
+#: the old ``#1F2937``, so a plain operation and a parameterised one separate.
 _DARK_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
     {
         "input": "#98FB98",
@@ -190,7 +191,9 @@ THEME_PRESETS: dict[str, VisualizationTheme] = {
         graph={"bgcolor": "#111827", "fontname": "Helvetica"},
         node={"fontname": "Helvetica"},
         edge={"color": "#9CA3AF", "fontcolor": "#D1D5DB", "fontname": "Helvetica"},
-        default_fill="#1F2937",
+        # The plain fill is the page, as in the default skin: ``#1F2937`` sat
+        # 11 dE from the parameter gray, under the 12 dE colour-vision floor.
+        default_fill="#111827",
         default_border="#E5E7EB",
         default_font="#F9FAFB",
         semantic_palette=_DARK_SEMANTIC_PALETTE,
@@ -202,7 +205,9 @@ THEME_PRESETS: dict[str, VisualizationTheme] = {
         graph={"bgcolor": "white", "fontname": "Helvetica"},
         node={"fontname": "Helvetica"},
         edge={"fontname": "Helvetica"},
-        default_fill="#F0F0F0",
+        # The plain fill is the page, as in the default skin: ``#F0F0F0`` sat
+        # 8 dE from the trainable-parameter gray, under the 12 dE floor.
+        default_fill="white",
         default_border="#0072B2",
         default_font="#111111",
         semantic_palette=LEGACY_SEMANTIC_PALETTE,

@@ -114,3 +114,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: f32492d3cf7f49aab6109f8df4df9d007da76b41 (dirty)
 recorded: 2026-10-15T14:23:28.713898+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: Lead, 16 Oct 2026, SKIN-FILL: dark and colorblind plain/parameter fill separation (UI-VISUALS reader finding); the dark plain fill moves from #1F2937 to the page colour #111827
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8356364cabfc2dd3a6e011d1352e07798de32249 (dirty)
+recorded: 2026-10-16T20:58:33.765860+00:00
