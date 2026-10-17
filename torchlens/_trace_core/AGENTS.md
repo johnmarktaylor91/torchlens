@@ -59,3 +59,9 @@ classes (`Trace`, `Op`, ...) present rows from here as facades. The architecture
 - The label-to-row binding (`TraceCore.label_rows`) is established at the freeze; do not
   read it from unfrozen cores.
 - Dedicated unit suite: `tests/test_trace_core_substrate.py` (per the package docstring).
+- The payload eviction walk (`_evict_payloads_in_cell` and its list, mapping, tuple and set
+  helpers) dispatches on exact type first; its result must stay equal to the plain
+  `isinstance` chain it replaced, which `tests/test_perf7_eviction_walk.py` keeps as the
+  reference. Fork reads (`OpStoreView.cell_get`, `cow_copy_value`) return atomic values
+  without the isolation call; `tests/test_perf7_fork_reads.py` keeps the former code as the
+  reference.

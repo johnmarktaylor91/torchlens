@@ -64,6 +64,18 @@ _TRANSPOSE_MIN_ROWS = 512
 # Depth ceiling for the nested-container payload eviction walk (r8 R37).
 _EVICT_WALK_DEPTH_CEILING = 8
 
+#: Exact builtin types the eviction walk always returns unchanged: no instance
+#: is a tensor or a container the walk descends, and none can override
+#: ``__class__``, so an exact-type membership test answers what the walk's
+#: ``isinstance`` chain would. Callers skip these values without a call (most
+#: cells of a capture hold one: ``None``, labels, counts, the store sentinels).
+#: Subclasses (``Bytes``, ``Flops``, ...) keep the full path.
+_EVICT_INERT_TYPES = frozenset({type(None), bool, int, float, complex, str, bytes, object})
+
+#: Every container family the walk descends; anything else that is not a
+#: tensor is returned unchanged.
+_EVICT_CONTAINER_TYPES = (list, tuple, dict, set, frozenset)
+
 
 def _evict_payloads_in_cell(
     value: Any,
@@ -80,46 +92,138 @@ def _evict_payloads_in_cell(
     unchanged original -- keeping a pin -- rather than corrupting the
     container type). Tensors inside non-builtin custom objects remain the
     disclosed residual; cyclic containers terminate through the seen set.
+
+    Dispatch is by exact type first: inert scalars return at once and exact
+    ``list``/``tuple``/``dict`` (never tensors) skip the tensor check; any
+    other type takes the ``isinstance`` path, so subclasses evict as before.
     """
 
+    cls = type(value)
+    if cls in _EVICT_INERT_TYPES:
+        return value
+    if cls is tuple:
+        if depth >= _EVICT_WALK_DEPTH_CEILING:
+            return value
+        return _evict_payloads_in_tuple(value, tensor_cls, depth + 1, seen)
+    if cls is list or cls is dict:
+        if depth >= _EVICT_WALK_DEPTH_CEILING:
+            return value
+        if seen is None:
+            seen = set()
+        key = id(value)
+        if key in seen:
+            return value
+        seen.add(key)
+        if cls is list:
+            _evict_payloads_in_list(value, tensor_cls, depth + 1, seen)
+        else:
+            _evict_payloads_in_mapping(value, tensor_cls, depth + 1, seen)
+        return value
     if isinstance(value, tensor_cls):
         return None
-    if depth >= _EVICT_WALK_DEPTH_CEILING:
+    if depth >= _EVICT_WALK_DEPTH_CEILING or not isinstance(value, _EVICT_CONTAINER_TYPES):
         return value
+    # Container subclasses (named tuples, ``torch.Size``, ``defaultdict``, ...):
+    # list and dict subclasses keep every read and write-back through their
+    # own item methods.
     if isinstance(value, list):
         if seen is None:
             seen = set()
-        if id(value) in seen:
+        key = id(value)
+        if key in seen:
             return value
-        seen.add(id(value))
+        seen.add(key)
         for index, item in enumerate(value):
             value[index] = _evict_payloads_in_cell(item, tensor_cls, depth + 1, seen)
         return value
     if isinstance(value, tuple):
-        rebuilt = [_evict_payloads_in_cell(item, tensor_cls, depth + 1, seen) for item in value]
-        if all(new is old for new, old in zip(rebuilt, value, strict=True)):
-            return value
-        if type(value) is tuple:
-            return tuple(rebuilt)
-        try:
-            # Named tuples and tuple subclasses reconstruct through their own
-            # type; an unreconstructable subclass keeps the original (a
-            # retained pin beats a corrupted container).
-            return type(value)(*rebuilt)
-        except Exception:
-            try:
-                return type(value)(rebuilt)
-            except Exception:
-                return value
+        return _evict_payloads_in_tuple(value, tensor_cls, depth + 1, seen)
     if isinstance(value, dict):
         if seen is None:
             seen = set()
-        if id(value) in seen:
+        key = id(value)
+        if key in seen:
             return value
-        seen.add(id(value))
-        for key in list(value):
-            value[key] = _evict_payloads_in_cell(value[key], tensor_cls, depth + 1, seen)
+        seen.add(key)
+        for item_key in list(value):
+            value[item_key] = _evict_payloads_in_cell(value[item_key], tensor_cls, depth + 1, seen)
         return value
+    return _evict_payloads_in_set(value, tensor_cls)
+
+
+def _evict_payloads_in_list(
+    values: list[Any], tensor_cls: type, depth: int = 0, seen: set[int] | None = None
+) -> None:
+    """Evict every member of ``values`` in place, writing back only changes.
+
+    Used for list containers inside the walk and for the store's own cell
+    lists (rows, object columns), where ``depth`` 0 and ``seen`` ``None``
+    give each cell its own walk.
+    """
+
+    inert = _EVICT_INERT_TYPES
+    for index, item in enumerate(values):
+        if type(item) in inert:
+            continue
+        evicted = _evict_payloads_in_cell(item, tensor_cls, depth, seen)
+        if evicted is not item:
+            values[index] = evicted
+
+
+def _evict_payloads_in_mapping(
+    values: dict[Any, Any], tensor_cls: type, depth: int = 0, seen: set[int] | None = None
+) -> None:
+    """Evict every value of an exact ``dict`` in place, writing back only changes.
+
+    Used for dict containers inside the walk and for the store overlays,
+    where ``depth`` 0 and ``seen`` ``None`` give each cell its own walk.
+    Assigning an existing key does not resize the dict, so iterating its
+    items meanwhile is safe.
+    """
+
+    inert = _EVICT_INERT_TYPES
+    for key, item in values.items():
+        if type(item) in inert:
+            continue
+        evicted = _evict_payloads_in_cell(item, tensor_cls, depth, seen)
+        if evicted is not item:
+            values[key] = evicted
+
+
+def _evict_payloads_in_tuple(
+    value: tuple[Any, ...], tensor_cls: type, depth: int, seen: set[int] | None
+) -> Any:
+    """Return ``value`` evicted; rebuild only when a member changed."""
+
+    rebuilt: list[Any] | None = None
+    inert = _EVICT_INERT_TYPES
+    for index, item in enumerate(value):
+        if type(item) in inert:
+            continue
+        evicted = _evict_payloads_in_cell(item, tensor_cls, depth, seen)
+        if evicted is not item:
+            if rebuilt is None:
+                rebuilt = list(value)
+            rebuilt[index] = evicted
+    if rebuilt is None:
+        return value
+    if type(value) is tuple:
+        return tuple(rebuilt)
+    try:
+        # Named tuples and tuple subclasses reconstruct through their own
+        # type; an unreconstructable subclass keeps the original (a
+        # retained pin beats a corrupted container).
+        return type(value)(*rebuilt)
+    except Exception:
+        try:
+            return type(value)(rebuilt)
+        except Exception:
+            return value
+
+
+def _evict_payloads_in_set(value: Any, tensor_cls: type) -> Any:
+    """Return a set or frozenset with tensor members replaced by one ``None``."""
+
     if isinstance(value, (set, frozenset)):
         if not any(isinstance(item, tensor_cls) for item in value):
             return value
@@ -366,23 +470,19 @@ class OpRowStore:
         import torch
 
         tensor_cls = torch.Tensor
-        evict = _evict_payloads_in_cell
+        evict_cells = _evict_payloads_in_list
+        evict_overlay = _evict_payloads_in_mapping
         rows = self._rows
         if rows is not None:
             for row_cells in rows:
-                for fid, value in enumerate(row_cells):
-                    row_cells[fid] = evict(value, tensor_cls)
+                evict_cells(row_cells, tensor_cls)
         columns = self._columns
         if columns is not None:
             for column in columns:
                 if column.packed:
                     continue
-                values = column.values
-                for index, value in enumerate(values):
-                    values[index] = evict(value, tensor_cls)
-        overlay = self._overlay
-        for key, value in overlay.items():
-            overlay[key] = evict(value, tensor_cls)
+                evict_cells(column.values, tensor_cls)
+        evict_overlay(self._overlay, tensor_cls)
         # Surviving views (reachable only through retained fork Ops now that
         # every owning core is dead) read their own snapshot surfaces, so
         # they are swept too. Shared snapshot lists (fork chains) evict
@@ -394,11 +494,9 @@ class OpRowStore:
             snapshot_rows = view._base_rows
             if snapshot_rows is not None:
                 for row_cells in snapshot_rows:
-                    for fid, value in enumerate(row_cells):
-                        row_cells[fid] = evict(value, tensor_cls)
-            for view_overlay in (view._base_overlay, view._overlay):
-                for key, value in view_overlay.items():
-                    view_overlay[key] = evict(value, tensor_cls)
+                    evict_cells(row_cells, tensor_cls)
+            evict_overlay(view._base_overlay, tensor_cls)
+            evict_overlay(view._overlay, tensor_cls)
 
     def __len__(self) -> int:
         """Return the number of rows ever appended (removed rows included)."""
@@ -1465,24 +1563,43 @@ def cow_copy_value(value: Any, translate: Callable[[Any], Any] | None) -> Any:
     immutable views stay shared.
     """
 
+    # Essential complexity (hot path): every fork reads its parent's cells
+    # through here, so the per-member atomic checks stay inline; moving each
+    # container branch into a helper would add one call per container copied.
+    atomic = _COW_ATOMIC
     cls = value.__class__
-    if cls in _COW_ATOMIC:
+    if cls in atomic:
         return value
+    # Atomic members are returned by identity either way, so they skip the
+    # per-member call (the ``_eager_copy`` idiom).
     if cls is dict:
         return {
-            cow_copy_value(key, translate): cow_copy_value(item, translate)
+            (key if key.__class__ in atomic else cow_copy_value(key, translate)): (
+                item if item.__class__ in atomic else cow_copy_value(item, translate)
+            )
             for key, item in value.items()
         }
     if cls is list:
-        return [cow_copy_value(item, translate) for item in value]
+        return [
+            item if item.__class__ in atomic else cow_copy_value(item, translate) for item in value
+        ]
     if cls is set:
-        return {cow_copy_value(item, translate) for item in value}
+        return {
+            item if item.__class__ in atomic else cow_copy_value(item, translate) for item in value
+        }
     if cls is tuple or cls is frozenset:
-        copied = [cow_copy_value(item, translate) for item in value]
-        for original, item_copy in zip(value, copied, strict=True):
-            if original is not item_copy:
-                return cls(copied)
-        return value
+        # Rebuild only once a member copy differs; an all-identity container
+        # (the common all-atomic case) returns itself without a list.
+        copied: list[Any] | None = None
+        for index, item in enumerate(value):
+            if item.__class__ in atomic:
+                continue
+            item_copy = cow_copy_value(item, translate)
+            if item_copy is not item:
+                if copied is None:
+                    copied = list(value)
+                copied[index] = item_copy
+        return value if copied is None else cls(copied)
     if translate is not None:
         mapped = translate(value)
         if mapped is not None:
@@ -1723,7 +1840,18 @@ class OpStoreView:
             else:
                 columns = self.base._columns
                 assert columns is not None
-                value = columns[fid].get(row)
+                # ``_FrozenColumn.get`` inline: this is the fork copy path's
+                # per-cell read.
+                column = columns[fid]
+                present = column.present
+                if present is not None and not present[row]:
+                    return _MISSING
+                value = column.values[row]
+                if column.packed:
+                    return value.item()
+        if value.__class__ in _COW_ATOMIC or value is _MISSING:
+            # What ``_isolate`` returns for these, without the call.
+            return value
         return self._isolate(key, value)
 
     def cell_set(self, row: int, fid: int, value: Any) -> None:
