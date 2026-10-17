@@ -1459,8 +1459,8 @@ def _validate_forward_pass_torch(
     # Step 1: Get ground-truth outputs by running the model *outside* TorchLens.
     # Save state_dict first because requires_grad forcing during logging can
     # alter parameter metadata; we restore it afterward. Accelerator tensors are
-    # snapshotted to host memory so the device holds one copy of the weights
-    # (the deepcopy) beyond the model, not three.
+    # snapshotted to host memory, so this snapshot adds no copy of the weights
+    # on the device beside the deepcopy validation runs.
     state_dict = snapshot_state_for_restore(model)
     trace: Trace | None = None
     outs_are_valid = False
