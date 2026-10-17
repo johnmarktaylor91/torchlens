@@ -581,6 +581,63 @@ def pluck(model: _nn.Module, x: _Any, layer: str, stop_after: _Any | None = None
     return _out_from_log(trace, layer)
 
 
+def _extract_facet_plan(layers: _Any) -> dict[str, _Any]:
+    """Return ``output_key -> facet selector`` for the facet selectors in an extract request.
+
+    A list entry keys by the selector's spelling; a mapping entry by the user label.
+    """
+
+    from .intervention.selectors import FacetSelector
+
+    items = layers.items() if isinstance(layers, _Mapping) else ((None, v) for v in layers)
+    return {
+        repr(value) if label is None else str(label): value
+        for label, value in items
+        if isinstance(value, FacetSelector)
+    }
+
+
+def _extract_with_facets(
+    model: _nn.Module,
+    x: _Any,
+    layers: _Any,
+    facet_plan: dict[str, _Any],
+    *,
+    detach_saved_activations: bool,
+) -> tuple[Trace, dict[str, _torch.Tensor], dict[str, _Any]]:
+    """Extract a request holding facet selectors: each facet's value, as ``trace[selector]`` reads it.
+
+    One facet alone captures with ``save=selector`` (its homes); a mixed or
+    several-facet request captures with every op saved. Other entries resolve
+    as in a plain extract, from the same trace.
+    """
+
+    from .options import CaptureOptions as _LazyCaptureOptions
+
+    capture = _LazyCaptureOptions(detach_saved_activations=detach_saved_activations)
+    only = next(iter(facet_plan.values())) if len(facet_plan) == len(layers) == 1 else None
+    if only is not None:
+        trace = _resolve_top_level("trace")(model, x, capture=capture, save=only)
+    else:
+        trace = _resolve_top_level("trace")(model, x, capture=capture)
+    outputs: dict[str, _torch.Tensor] = {}
+    views: dict[str, _Any] = {}
+    items = layers.items() if isinstance(layers, _Mapping) else ((None, v) for v in layers)
+    for label, value in items:
+        key = (
+            str(label)
+            if label is not None
+            else (repr(value) if value in facet_plan.values() else str(value))
+        )
+        if key in facet_plan:
+            facet = trace[facet_plan[key]]
+            outputs[key], views[key] = facet.value, facet
+        else:
+            outputs[key] = _out_from_log(trace, str(value))
+            views[key] = trace[str(value)]
+    return trace, outputs, views
+
+
 def _extract_layers_with_trace(
     model: _nn.Module,
     x: _Any,
@@ -616,6 +673,11 @@ def _extract_layers_with_trace(
     from ._trace_selector_helpers import canonical_module_site_key
     from .options import CaptureOptions as _LazyCaptureOptions
 
+    facet_plan = _extract_facet_plan(layers)
+    if facet_plan:
+        return _extract_with_facets(
+            model, x, layers, facet_plan, detach_saved_activations=detach_saved_activations
+        )
     layer_plan = _normalize_extract_layers(layers)
     trace = _resolve_top_level("trace")(
         model,
