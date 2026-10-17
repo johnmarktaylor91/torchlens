@@ -54,10 +54,10 @@ def _reference_evict(
             return tuple(rebuilt)
         try:
             return type(value)(*rebuilt)
-        except Exception:
+        except Exception:  # noqa: BLE001 - verbatim reference fallback
             try:
                 return type(value)(rebuilt)
-            except Exception:
+            except Exception:  # noqa: BLE001 - verbatim reference fallback
                 return value
     if isinstance(value, dict):
         if seen is None:
@@ -75,7 +75,7 @@ def _reference_evict(
         survivors.add(None)
         try:
             return type(value)(survivors)
-        except Exception:
+        except Exception:  # noqa: BLE001 - verbatim reference fallback
             return value
     return value
 
