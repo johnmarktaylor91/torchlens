@@ -5,9 +5,10 @@ argument of every op used to be copied, parameters included: the first
 validation trace held a full extra copy of the weights on the model's device
 until validation ended. Validation runs that capture on a deep copy of the
 model, so its parameters are validation's own. While that one capture runs,
-plain parameter arguments (and tensors on the same storage as a parameter) are
-kept by reference instead of copied, and the version counter of each such
-tensor and of its parameter is recorded.
+a plain parameter argument (or a tensor on the same storage as a parameter) is
+saved as a detached alias of that storage, sharing its version counter, instead
+of a copy, and the version counter of each such tensor and of its parameter is
+recorded.
 
 A by-reference value is the parameter's value at call time only if nothing
 wrote the parameter afterwards. Every in-place write moves a version counter,

@@ -160,26 +160,36 @@ def test_a_parameter_written_in_forward_reruns_on_the_copy_path_with_the_same_ve
     assert torch.equal(model.lin.weight.detach(), weight_before)
 
 
-def test_validation_capture_keeps_parameters_of_its_copy_by_reference() -> None:
+def test_validation_capture_saves_an_alias_of_its_copys_parameters() -> None:
     torch.manual_seed(0)
     model = _Plain()
+    forward_storages: list[int] = []
     saved_weights: list[torch.Tensor] = []
+
+    def record(module: nn.Module, inputs: Any) -> None:
+        forward_storages.append(module.lin.weight.untyped_storage().data_ptr())
 
     def observe(trace: Any) -> None:
         for op in trace.layer_list:
             if op.func_name == "linear" and op.saved_args:
                 saved_weights.append(op.saved_args[1])
 
+    handle = model.register_forward_pre_hook(record)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         assert _user_public_impls._validate_forward_pass_torch(
             model, torch.randn(2, 6), _trace_observer=observe
         )
+    handle.remove()
+    # Forwards: ground truth (its own copy), capture and re-trace (the replay copy).
+    assert len(forward_storages) == 3
+    live = {p.untyped_storage().data_ptr() for p in model.parameters()}
+    capture_weight = saved_weights[0]
     assert len(saved_weights) == 2
-    for saved in saved_weights:
-        assert isinstance(saved, nn.Parameter)
-        live = {p.untyped_storage().data_ptr() for p in model.parameters()}
-        assert saved.untyped_storage().data_ptr() not in live
+    assert type(capture_weight) is torch.Tensor
+    assert capture_weight.requires_grad
+    assert capture_weight.untyped_storage().data_ptr() == forward_storages[1]
+    assert forward_storages[1] not in live
 
 
 def test_a_user_save_arg_values_trace_still_saves_copies_after_validation() -> None:

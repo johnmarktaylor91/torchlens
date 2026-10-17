@@ -5,10 +5,11 @@ import time
 import warnings
 from collections import deque
 from collections.abc import Callable, Iterator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from ..._state import pause_logging
 from ..._validation_argument_references import active_argument_references
 from ...capture.predicates import (
     build_op_record_context,
@@ -161,26 +162,43 @@ def _copy_saved_arg_tree(arg: Any) -> Any:
     Outside forward validation's own capture this is exactly
     :func:`~torchlens.utils.arg_handling.copy_arg_tree`. Inside it, a plain
     parameter argument (or a tensor on a parameter's storage), bare or in a
-    flat list or tuple, is kept by reference and its version recorded; see
-    :mod:`torchlens._validation_argument_references` for the guard that reruns
-    validation on this copy path if such a value changes.
+    flat list or tuple, is replaced by an alias of the same storage and version
+    counter instead of a copy; see :mod:`torchlens._validation_argument_references`
+    for the guard that reruns validation on this copy path if such a value changes.
     """
 
     references = active_argument_references()
     if references is None:
         return copy_arg_tree(arg)
     if isinstance(arg, torch.Tensor):
-        return arg if references.keep(arg) else copy_arg_tree(arg)
+        return _parameter_alias(references, arg)
     if type(arg) in (list, tuple) and not any(
         isinstance(item, (list, tuple, dict)) for item in arg
     ):
         return type(arg)(
-            item
-            if isinstance(item, torch.Tensor) and references.keep(item)
-            else copy_arg_tree(item)
+            _parameter_alias(references, item) if isinstance(item, torch.Tensor) else item
             for item in arg
         )
     return copy_arg_tree(arg)
+
+
+def _parameter_alias(references: Any, tensor: torch.Tensor) -> torch.Tensor:
+    """Alias a parameter-storage tensor (recording its version), else copy it as before.
+
+    The alias is a plain detached tensor on the same storage, sharing the
+    version counter, with the argument's ``requires_grad``: the flag replay
+    reads from a saved argument. It is never the ``nn.Parameter`` itself, so
+    capture cleanup that strips TorchLens metadata from saved arguments cannot
+    reach the parameter or its registry entry.
+    """
+
+    if not references.keep(tensor):
+        return cast(torch.Tensor, copy_arg_tree(tensor))
+    with pause_logging():
+        alias = tensor.detach()
+        if tensor.requires_grad:
+            alias.requires_grad_(True)
+    return alias
 
 
 def _iter_tree_tensors(*roots: Any) -> Iterator[torch.Tensor]:
