@@ -286,6 +286,13 @@
   v0.5.2 on Gemma-2 2B within float32 rounding. The patterns and norm scales are frozen through op
   labels in `frozen=`, and logits are taken before the final softcap with
   `logits_at=SiteTarget("lm_head")`.
+- **attribution**: `tl.attribution.build_graph` reads a transcoder at an op label as well as at an
+  MLP's input, for transcoders that read inside a module (Gemma Scope reads a norm's value before
+  its gain), and refuses a read site that does not run before the MLP outputs it writes.
+- **attribution**: `build_graph(frozen=...)` takes facet selectors: `frozen=[tl.facet("pattern"),
+  tl.facet("inv_rms")]` holds every attention pattern and norm scale of a Hugging Face Gemma-2.
+  `Gemma2Attention` now serves the attention facets and `Gemma2RMSNorm` serves the new `inv_rms`
+  facet (documented-unstable).
 
 ### Bug Fixes
 
