@@ -1563,6 +1563,9 @@ def cow_copy_value(value: Any, translate: Callable[[Any], Any] | None) -> Any:
     immutable views stay shared.
     """
 
+    # Essential complexity (hot path): every fork reads its parent's cells
+    # through here, so the per-member atomic checks stay inline; moving each
+    # container branch into a helper would add one call per container copied.
     atomic = _COW_ATOMIC
     cls = value.__class__
     if cls in atomic:
