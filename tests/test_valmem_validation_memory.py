@@ -96,9 +96,9 @@ def test_forward_validation_weight_copies_on_a_cpu_model() -> None:
     Base: 2, 4 and 5 copies beyond the model at the ground-truth, capture and
     re-trace forwards (the live snapshot; the ground-truth copy, never
     released; the replay copy and its own snapshot; then the first trace's
-    saved-argument clone of the weight). Now 2, 2 and 3: on a CPU model the
-    host snapshot shares the device with the one copy. The re-trace's third
-    copy is the capture's saved-argument clone, outside this change.
+    saved-argument clone of the weight). Now 2, 2 and 2: on a CPU model the
+    host snapshot shares the device with the one copy, and the capture keeps
+    the replay copy's parameters by reference instead of cloning them.
     """
 
     verdict, samples = _copies_per_forward("cpu")
@@ -106,23 +106,22 @@ def test_forward_validation_weight_copies_on_a_cpu_model() -> None:
     beyond_model = [sample["cpu"] - 1 for sample in samples]
     assert len(beyond_model) == 3, beyond_model
     assert beyond_model[0] <= 2 and beyond_model[1] <= 2, beyond_model
-    assert beyond_model[2] <= 3, beyond_model
+    assert beyond_model[2] <= 2, beyond_model
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="needs an accelerator device")
 def test_forward_validation_weight_copies_on_an_accelerator() -> None:
     """On an accelerator only the deep copy shares the card with the model.
 
-    The restore snapshots live in host memory. The re-trace adds the first
-    trace's saved-argument clone of the weight (capture code, outside this
-    change), so the device peak there is two copies beyond the model.
+    The restore snapshots live in host memory, and the capture keeps the
+    replay copy's parameters by reference, so every forward sees exactly one
+    copy beyond the model on the device.
     """
 
     verdict, samples = _copies_per_forward("cuda")
     assert verdict is True
     on_device = [sample["cuda"] - 1 for sample in samples]
-    assert on_device[:2] == [1, 1], on_device
-    assert on_device[2] <= 2, on_device
+    assert on_device == [1, 1, 1], on_device
 
 
 @pytest.mark.parametrize("device", _DEVICES)

@@ -13,7 +13,7 @@ import torch
 from torch import nn
 from tqdm import tqdm
 
-from . import user_funcs as _user_funcs
+from . import _validation_argument_references as _arg_references, user_funcs as _user_funcs
 from ._capture_state_helpers import (
     _model_for_ground_truth_validation,
     _model_for_validation_replay,
@@ -1311,6 +1311,7 @@ def _refuse_validation_precondition(
     return False
 
 
+@_arg_references.with_parameter_reference_fallback
 def _validate_forward_pass_torch(
     model: nn.Module | Callable[..., Any],
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
@@ -1703,21 +1704,24 @@ def _validate_forward_pass_torch(
         prior_witness_mode = _state._completeness_witness_mode
         _state._completeness_witness_mode = "shadow"
         try:
-            trace = _user_funcs._run_model_and_save_specified_outs(
-                model=validation_model,
-                input_args=validation_input_args,
-                input_kwargs=validation_input_kwargs,
-                layers_to_save="all",
-                activation_transform=None,
-                mark_layer_depths=False,
-                detach_saved_activations=False,
-                save_grads=False,
-                save_arg_values=True,
-                random_seed=random_seed,
-                save_rng_states=True,
-                output_device=output_device,
-                save_budget=save_budget,
-            )
+            with _arg_references.parameter_argument_references(
+                validation_model, validation_model_copied
+            ) as arg_references:
+                trace = _user_funcs._run_model_and_save_specified_outs(
+                    model=validation_model,
+                    input_args=validation_input_args,
+                    input_kwargs=validation_input_kwargs,
+                    layers_to_save="all",
+                    activation_transform=None,
+                    mark_layer_depths=False,
+                    detach_saved_activations=False,
+                    save_grads=False,
+                    save_arg_values=True,
+                    random_seed=random_seed,
+                    save_rng_states=True,
+                    output_device=output_device,
+                    save_budget=save_budget,
+                )
         finally:
             _state._completeness_witness_mode = prior_witness_mode
         from .validation._completeness_backstop import completeness_backstop_counts
@@ -1754,6 +1758,7 @@ def _validate_forward_pass_torch(
             validation_state_dict,
             validation_plain_attr_snapshot,
         )
+        arg_references.raise_if_changed(trace)
         # Step 3: Validate by replaying the forward pass from saved outs.
         # validate_saved_outs resets the diagnostics ledger at entry so a
         # DIRECT repeat call reports this-run evidence only (B8-43); the

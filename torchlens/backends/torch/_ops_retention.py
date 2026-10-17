@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from ..._validation_argument_references import active_argument_references
 from ...capture.predicates import (
     build_op_record_context,
 )
@@ -34,6 +35,7 @@ from ...intervention.selectors import (
 from ...ir.op_record import amend_lookback_retention
 from ...ir.predicate import RetroactiveCaptureDecision
 from ...ir.refs import TensorRef
+from ...utils.arg_handling import copy_arg_tree
 from ...utils.tensor_utils import (
     get_memory_amount_from_metadata,
     safe_copy,
@@ -58,6 +60,7 @@ if TYPE_CHECKING:
 
 __all__ = (
     "_admit_save_budget",
+    "_copy_saved_arg_tree",
     "_commit_save_budget",
     "_save_predicate_activation_fields",
     "_stream_predicate_payloads",
@@ -150,6 +153,34 @@ def _commit_save_budget(
         reservation,
         (fields_dict.get("out"), fields_dict.get("transformed_out")),
     )
+
+
+def _copy_saved_arg_tree(arg: Any) -> Any:
+    """Copy one ``save_arg_values`` argument tree, as the pre-call and saved snapshots do.
+
+    Outside forward validation's own capture this is exactly
+    :func:`~torchlens.utils.arg_handling.copy_arg_tree`. Inside it, a plain
+    parameter argument (or a tensor on a parameter's storage), bare or in a
+    flat list or tuple, is kept by reference and its version recorded; see
+    :mod:`torchlens._validation_argument_references` for the guard that reruns
+    validation on this copy path if such a value changes.
+    """
+
+    references = active_argument_references()
+    if references is None:
+        return copy_arg_tree(arg)
+    if isinstance(arg, torch.Tensor):
+        return arg if references.keep(arg) else copy_arg_tree(arg)
+    if type(arg) in (list, tuple) and not any(
+        isinstance(item, (list, tuple, dict)) for item in arg
+    ):
+        return type(arg)(
+            item
+            if isinstance(item, torch.Tensor) and references.keep(item)
+            else copy_arg_tree(item)
+            for item in arg
+        )
+    return copy_arg_tree(arg)
 
 
 def _iter_tree_tensors(*roots: Any) -> Iterator[torch.Tensor]:
