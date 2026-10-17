@@ -30,16 +30,19 @@ their pinned public sources and checks each source's sha256:
 
 - `ioi_rows.json`: the first 50 rows of MIB's IOI `train.json` (Hugging Face dataset
   `mib-bench/ioi`, MIT) whose indirect object and subject are single GPT-2 tokens.
-- `known_facts.json`: the first 10 records of ROME's `known_1000.json` (MIT) that GPT-2
-  small completes correctly with its greedy next token.
+- `known_facts.json`: the first 30 records of ROME's `known_1000.json` (MIT) that GPT-2
+  small completes correctly with its greedy next token. The causal-tracing verdict uses the
+  first 10; the other 20 only widen its reported grids.
 - `induction_oracle.json`: per-head induction scores of GPT-2 small computed with plain
   Hugging Face transformers (eager attention, float64), and the input protocol.
 
 ## Differences from the papers
 
 - Causal tracing: the paper measured GPT-2 XL (48 layers) over 1,000 facts and restored a
-  run of 10 MLP layers; this script uses GPT-2 small (12 layers), 10 facts and one MLP layer
-  per restoration. The noise follows the paper: Gaussian, 3 times the standard deviation
+  run of 10 MLP layers; this script's verdict uses GPT-2 small (12 layers), 10 facts and one
+  MLP layer per restoration. `--window 3 --facts 30` adds a reported, non-gating grid that
+  restores 3 consecutive MLP layers (25% of depth, against the paper's 10 of 48, about 21%)
+  over 30 facts; it never changes the verdict. The noise follows the paper: Gaussian, 3 times the standard deviation
   of the subject tokens' embeddings, 10 samples per fact.
 - IOI: the paper's logit difference (3.56) is over its own 100,000-prompt sample; MIB's
   prompts use different templates, so the script prints its own mean beside the paper's

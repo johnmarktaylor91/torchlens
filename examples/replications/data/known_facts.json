@@ -2,7 +2,7 @@
  "source": "https://rome.baulab.info/data/dsets/known_1000.json",
  "pins": "sha256 in _common.FACTS_SHA256",
  "license": "MIT (ROME, Meng et al. 2022)",
- "rule": "first 10 records in file order whose subject occurs in the prompt and whose GPT-2 small greedy next token is the first token of ' '+attribute",
+ "rule": "first 30 records in file order whose subject occurs in the prompt and whose GPT-2 small greedy next token is the first token of ' '+attribute; the verdict uses the first 10",
  "records": [
   {
    "known_id": 0,
@@ -281,6 +281,582 @@
    "subject": "Philippines",
    "attribute": "Manila",
    "prompt": "Philippines's capital,",
+   "relation_id": "P36",
+   "kept": true
+  },
+  {
+   "known_id": 35,
+   "subject": "Frederick Banting",
+   "attribute": "physiology",
+   "prompt": "Frederick Banting specializes in the study of the",
+   "relation_id": "P101",
+   "kept": false
+  },
+  {
+   "known_id": 36,
+   "subject": "Clifford Curzon",
+   "attribute": "piano",
+   "prompt": "Clifford Curzon, performing on the",
+   "relation_id": "P1303",
+   "kept": false
+  },
+  {
+   "known_id": 37,
+   "subject": "Windows Media Audio",
+   "attribute": "Microsoft",
+   "prompt": "Windows Media Audio, a product developed by",
+   "relation_id": "P178",
+   "kept": false
+  },
+  {
+   "known_id": 38,
+   "subject": "Galatasaray University",
+   "attribute": "Istanbul",
+   "prompt": "The location of Galatasaray University is in the heart of",
+   "relation_id": "P276",
+   "kept": false
+  },
+  {
+   "known_id": 39,
+   "subject": "Nokia",
+   "attribute": "Finnish",
+   "prompt": "In Nokia, the language spoken is",
+   "relation_id": "P37",
+   "kept": false
+  },
+  {
+   "known_id": 40,
+   "subject": "Northern Nigeria Protectorate",
+   "attribute": "Islam",
+   "prompt": "Northern Nigeria Protectorate follows the religion of",
+   "relation_id": "P140",
+   "kept": false
+  },
+  {
+   "known_id": 41,
+   "subject": "Deobandi",
+   "attribute": "Islam",
+   "prompt": "Deobandi follows the religion of",
+   "relation_id": "P140",
+   "kept": false
+  },
+  {
+   "known_id": 42,
+   "subject": "Odnoklassniki",
+   "attribute": "Russian",
+   "prompt": "Odnoklassniki was written in the early 1990s by a group of",
+   "relation_id": "P407",
+   "kept": true
+  },
+  {
+   "known_id": 43,
+   "subject": "Zeno of Verona",
+   "attribute": "bishop",
+   "prompt": "Zeno of Verona holds the position of the first",
+   "relation_id": "P39",
+   "kept": false
+  },
+  {
+   "known_id": 44,
+   "subject": "Jean-Pierre Van Rossem",
+   "attribute": "Belgium",
+   "prompt": "Jean-Pierre Van Rossem, who has a citizenship of",
+   "relation_id": "P27",
+   "kept": true
+  },
+  {
+   "known_id": 45,
+   "subject": "Joseph Schumpeter",
+   "attribute": "economics",
+   "prompt": "Joseph Schumpeter's domain of work is the",
+   "relation_id": "P101",
+   "kept": false
+  },
+  {
+   "known_id": 46,
+   "subject": "Felix Salmon",
+   "attribute": "journalist",
+   "prompt": "Felix Salmon, who works as a",
+   "relation_id": "P106",
+   "kept": false
+  },
+  {
+   "known_id": 47,
+   "subject": "Grand Duchy of Finland",
+   "attribute": "Helsinki",
+   "prompt": "Grand Duchy of Finland's capital,",
+   "relation_id": "P36",
+   "kept": true
+  },
+  {
+   "known_id": 48,
+   "subject": "Goodreads",
+   "attribute": "Amazon",
+   "prompt": "Goodreads owner, and former",
+   "relation_id": "P127",
+   "kept": false
+  },
+  {
+   "known_id": 49,
+   "subject": "Rhine",
+   "attribute": "Europe",
+   "prompt": "Rhine belongs to the continent of",
+   "relation_id": "P30",
+   "kept": false
+  },
+  {
+   "known_id": 50,
+   "subject": "Muawiyah I",
+   "attribute": "Islam",
+   "prompt": "Muawiyah I is affiliated with the religion of",
+   "relation_id": "P140",
+   "kept": true
+  },
+  {
+   "known_id": 51,
+   "subject": "Farrukhsiyar",
+   "attribute": "Islam",
+   "prompt": "Farrukhsiyar follows the religion of",
+   "relation_id": "P140",
+   "kept": false
+  },
+  {
+   "known_id": 52,
+   "subject": "Ibn Khaldun",
+   "attribute": "Islam",
+   "prompt": "Ibn Khaldun follows the religion of",
+   "relation_id": "P140",
+   "kept": false
+  },
+  {
+   "known_id": 53,
+   "subject": "Vichy France",
+   "attribute": "Paris",
+   "prompt": "Vichy France's capital,",
+   "relation_id": "P36",
+   "kept": true
+  },
+  {
+   "known_id": 54,
+   "subject": "John Pym",
+   "attribute": "London",
+   "prompt": "John Pym died in the city of",
+   "relation_id": "P20",
+   "kept": false
+  },
+  {
+   "known_id": 55,
+   "subject": "Christopher Paolini",
+   "attribute": "fantasy",
+   "prompt": "The genre played by Christopher Paolini is a mix of",
+   "relation_id": "P136",
+   "kept": false
+  },
+  {
+   "known_id": 56,
+   "subject": "Si la vie est cadeau",
+   "attribute": "French",
+   "prompt": "Si la vie est cadeau is written in",
+   "relation_id": "P407",
+   "kept": true
+  },
+  {
+   "known_id": 57,
+   "subject": "Brian De Palma",
+   "attribute": "film",
+   "prompt": "Brian De Palma works in the area of",
+   "relation_id": "P101",
+   "kept": false
+  },
+  {
+   "known_id": 58,
+   "subject": "Magne Robo Gakeen",
+   "attribute": "Japan",
+   "prompt": "Magne Robo Gakeen was created in the country of",
+   "relation_id": "P495",
+   "kept": true
+  },
+  {
+   "known_id": 59,
+   "subject": "Electricidad",
+   "attribute": "Spanish",
+   "prompt": "The language of Electricidad was a mixture of",
+   "relation_id": "P407",
+   "kept": true
+  },
+  {
+   "known_id": 60,
+   "subject": "Swedish Orphan Biovitrum",
+   "attribute": "Stockholm",
+   "prompt": "Swedish Orphan Biovitrum is headquartered in",
+   "relation_id": "P159",
+   "kept": false
+  },
+  {
+   "known_id": 61,
+   "subject": "Megan Rapinoe",
+   "attribute": "soccer",
+   "prompt": "Megan Rapinoe professionally plays the sport of",
+   "relation_id": "P641",
+   "kept": false
+  },
+  {
+   "known_id": 62,
+   "subject": "Drake Britton",
+   "attribute": "pitcher",
+   "prompt": "Drake Britton plays as the",
+   "relation_id": "P413",
+   "kept": false
+  },
+  {
+   "known_id": 63,
+   "subject": "Pandora Hearts",
+   "attribute": "Japan",
+   "prompt": "Pandora Hearts was created in the country of",
+   "relation_id": "P495",
+   "kept": true
+  },
+  {
+   "known_id": 64,
+   "subject": "Nicolas Gigault",
+   "attribute": "Paris",
+   "prompt": "Nicolas Gigault was born in",
+   "relation_id": "P19",
+   "kept": true
+  },
+  {
+   "known_id": 65,
+   "subject": "LGA 775",
+   "attribute": "Intel",
+   "prompt": "LGA 775 is created by",
+   "relation_id": "P176",
+   "kept": false
+  },
+  {
+   "known_id": 66,
+   "subject": "Suite Habana",
+   "attribute": "Cuba",
+   "prompt": "Suite Habana was created in the country of",
+   "relation_id": "P495",
+   "kept": false
+  },
+  {
+   "known_id": 67,
+   "subject": "Emilia Rydberg",
+   "attribute": "Stockholm",
+   "prompt": "Emilia Rydberg was born in",
+   "relation_id": "P19",
+   "kept": false
+  },
+  {
+   "known_id": 68,
+   "subject": "Adam Curtis",
+   "attribute": "BBC",
+   "prompt": "Adam Curtis is employed by the",
+   "relation_id": "P108",
+   "kept": false
+  },
+  {
+   "known_id": 69,
+   "subject": "Mark Sanchez",
+   "attribute": "quarterback",
+   "prompt": "Mark Sanchez plays in the position of",
+   "relation_id": "P413",
+   "kept": false
+  },
+  {
+   "known_id": 70,
+   "subject": "Danish pastry",
+   "attribute": "Denmark",
+   "prompt": "Danish pastry was created in the country of",
+   "relation_id": "P495",
+   "kept": true
+  },
+  {
+   "known_id": 71,
+   "subject": "Jyllands-Posten",
+   "attribute": "Danish",
+   "prompt": "Jyllands-Posten is written in",
+   "relation_id": "P407",
+   "kept": false
+  },
+  {
+   "known_id": 72,
+   "subject": "Sachimi Iwao",
+   "attribute": "Japan",
+   "prompt": "Sachimi Iwao is a citizen of",
+   "relation_id": "P27",
+   "kept": true
+  },
+  {
+   "known_id": 73,
+   "subject": "Yakuza 2",
+   "attribute": "Sega",
+   "prompt": "Yakuza 2 is developed by",
+   "relation_id": "P178",
+   "kept": false
+  },
+  {
+   "known_id": 74,
+   "subject": "Lexus",
+   "attribute": "Toyota",
+   "prompt": "Lexus's owner,",
+   "relation_id": "P127",
+   "kept": false
+  },
+  {
+   "known_id": 75,
+   "subject": "Yamalo-Nenets Autonomous Okrug",
+   "attribute": "Russian",
+   "prompt": "In Yamalo-Nenets Autonomous Okrug, the language spoken is the",
+   "relation_id": "P37",
+   "kept": false
+  },
+  {
+   "known_id": 76,
+   "subject": "The Physiological Society",
+   "attribute": "physiology",
+   "prompt": "The Physiological Society works in the area of the",
+   "relation_id": "P101",
+   "kept": false
+  },
+  {
+   "known_id": 77,
+   "subject": "William Herschel",
+   "attribute": "astronomy",
+   "prompt": "William Herschel works in the area of",
+   "relation_id": "P101",
+   "kept": false
+  },
+  {
+   "known_id": 78,
+   "subject": "Joseph Goebbels",
+   "attribute": "Berlin",
+   "prompt": "Joseph Goebbels worked in the city of",
+   "relation_id": "P937",
+   "kept": false
+  },
+  {
+   "known_id": 79,
+   "subject": "Deutsche Bahn",
+   "attribute": "Berlin",
+   "prompt": "Deutsche Bahn formed in 1883, and the first train to",
+   "relation_id": "P740",
+   "kept": false
+  },
+  {
+   "known_id": 80,
+   "subject": "Saint Domnius",
+   "attribute": "bishop",
+   "prompt": "Saint Domnius, who has the position of the",
+   "relation_id": "P39",
+   "kept": true
+  },
+  {
+   "known_id": 81,
+   "subject": "Italy",
+   "attribute": "Rome",
+   "prompt": "Italy's capital,",
+   "relation_id": "P36",
+   "kept": false
+  },
+  {
+   "known_id": 82,
+   "subject": "Hotel Room",
+   "attribute": "HBO",
+   "prompt": "Hotel Room premieres on",
+   "relation_id": "P449",
+   "kept": false
+  },
+  {
+   "known_id": 83,
+   "subject": "caffeine",
+   "attribute": "coffee",
+   "prompt": "caffeine, called after the",
+   "relation_id": "P138",
+   "kept": false
+  },
+  {
+   "known_id": 84,
+   "subject": "Lokalbahn AG",
+   "attribute": "Munich",
+   "prompt": "The headquarter of Lokalbahn AG is in the city of",
+   "relation_id": "P159",
+   "kept": false
+  },
+  {
+   "known_id": 85,
+   "subject": "Urdoviza Glacier",
+   "attribute": "Antarctica",
+   "prompt": "Urdoviza Glacier belongs to the continent of",
+   "relation_id": "P30",
+   "kept": false
+  },
+  {
+   "known_id": 86,
+   "subject": "Manipur",
+   "attribute": "Asia",
+   "prompt": "Manipur belongs to the continent of",
+   "relation_id": "P30",
+   "kept": false
+  },
+  {
+   "known_id": 87,
+   "subject": "2005 Southeast Asian Games",
+   "attribute": "Philippines",
+   "prompt": "2005 Southeast Asian Games is in full swing in the",
+   "relation_id": "P276",
+   "kept": false
+  },
+  {
+   "known_id": 88,
+   "subject": "Lake Abitibi",
+   "attribute": "Quebec",
+   "prompt": "Lake Abitibi, in the province of",
+   "relation_id": "P131",
+   "kept": false
+  },
+  {
+   "known_id": 89,
+   "subject": "Georgios Babiniotis",
+   "attribute": "Greek",
+   "prompt": "Georgios Babiniotis's domain of work is the study of the history of the",
+   "relation_id": "P101",
+   "kept": true
+  },
+  {
+   "known_id": 90,
+   "subject": "Maumoon Abdul Gayoom",
+   "attribute": "Islam",
+   "prompt": "Maumoon Abdul Gayoom follows the religion of",
+   "relation_id": "P140",
+   "kept": true
+  },
+  {
+   "known_id": 91,
+   "subject": "People's Republic of Poland",
+   "attribute": "Warsaw",
+   "prompt": "The capital city of People's Republic of Poland is",
+   "relation_id": "P36",
+   "kept": false
+  },
+  {
+   "known_id": 92,
+   "subject": "Francesco Castellacci",
+   "attribute": "Rome",
+   "prompt": "Francesco Castellacci was born in",
+   "relation_id": "P19",
+   "kept": false
+  },
+  {
+   "known_id": 93,
+   "subject": "Fluminense F.C.",
+   "attribute": "Brazil",
+   "prompt": "Fluminense F.C. is located in the country of",
+   "relation_id": "P17",
+   "kept": false
+  },
+  {
+   "known_id": 94,
+   "subject": "Bundesautobahn 113",
+   "attribute": "Germany",
+   "prompt": "Bundesautobahn 113, by the way, is the most popular route in",
+   "relation_id": "P127",
+   "kept": false
+  },
+  {
+   "known_id": 95,
+   "subject": "Petros Voulgaris",
+   "attribute": "Greece",
+   "prompt": "Petros Voulgaris is a citizen of",
+   "relation_id": "P27",
+   "kept": false
+  },
+  {
+   "known_id": 96,
+   "subject": "2005 Australian Open",
+   "attribute": "Melbourne",
+   "prompt": "2005 Australian Open is located in",
+   "relation_id": "P276",
+   "kept": false
+  },
+  {
+   "known_id": 97,
+   "subject": "Giulio Romano",
+   "attribute": "Rome",
+   "prompt": "Giulio Romano originates from the city of",
+   "relation_id": "P19",
+   "kept": false
+  },
+  {
+   "known_id": 98,
+   "subject": "Louth County Council",
+   "attribute": "Ireland",
+   "prompt": "Louth County Council is located in the country of",
+   "relation_id": "P17",
+   "kept": true
+  },
+  {
+   "known_id": 99,
+   "subject": "Louis Bonaparte",
+   "attribute": "French",
+   "prompt": "The language used by Louis Bonaparte is not the language of the",
+   "relation_id": "P1412",
+   "kept": true
+  },
+  {
+   "known_id": 100,
+   "subject": "Ajinomoto Stadium",
+   "attribute": "Tokyo",
+   "prompt": "Ajinomoto Stadium's owner, the",
+   "relation_id": "P127",
+   "kept": false
+  },
+  {
+   "known_id": 101,
+   "subject": "Internet Explorer",
+   "attribute": "Microsoft",
+   "prompt": "Internet Explorer is developed by",
+   "relation_id": "P178",
+   "kept": true
+  },
+  {
+   "known_id": 102,
+   "subject": "Singapore",
+   "attribute": "English",
+   "prompt": "In Singapore, the language spoken is",
+   "relation_id": "P37",
+   "kept": false
+  },
+  {
+   "known_id": 103,
+   "subject": "Euromoney Institutional Investor",
+   "attribute": "London",
+   "prompt": "Euromoney Institutional Investor's headquarters are in",
+   "relation_id": "P159",
+   "kept": false
+  },
+  {
+   "known_id": 104,
+   "subject": "Indira Gandhi International Airport",
+   "attribute": "India",
+   "prompt": "Indira Gandhi International Airport is located in the country of",
+   "relation_id": "P17",
+   "kept": true
+  },
+  {
+   "known_id": 105,
+   "subject": "Tang Empire",
+   "attribute": "Buddhism",
+   "prompt": "Tang Empire follows the religion of the same name, which is a mix of",
+   "relation_id": "P140",
+   "kept": false
+  },
+  {
+   "known_id": 106,
+   "subject": "Metropolitan France",
+   "attribute": "Paris",
+   "prompt": "Metropolitan France's capital,",
    "relation_id": "P36",
    "kept": true
   }

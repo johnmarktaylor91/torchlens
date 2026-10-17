@@ -33,6 +33,12 @@ NOISE_SAMPLES = 10
 NOISE_SCALE = 3.0
 EARLY_LAYER_LIMIT = 7
 PAPER_PEAK_MLP_AIE = 0.066
+#: The verdict uses the first 10 vendored facts; ``--facts`` and ``--window`` add reported,
+#: non-gating grids and never change it.
+VERDICT_FACTS = 10
+#: The paper restored windows of 10 consecutive MLP layers in GPT-2 XL (48 layers).
+PAPER_WINDOW = 10
+PAPER_LAYERS = 48
 CATEGORIES = (
     "first subject token",
     "middle subject tokens",
@@ -116,15 +122,45 @@ def token_categories(subject: list[int], n_tokens: int) -> dict[int, str]:
     return categories
 
 
+def window_layers(layer: int, width: int, n_layers: int) -> list[int]:
+    """The MLP layers restored together for ``layer``: ``width`` consecutive layers around it.
+
+    Follows the paper's code (``range(L - width // 2, L - (-width // 2))``, clipped to the
+    model), so width 1 is the layer alone and width 3 is ``L - 1, L, L + 1``.
+
+    Parameters
+    ----------
+    layer:
+        The window's centre layer.
+    width:
+        Number of consecutive layers.
+    n_layers:
+        Number of layers in the model.
+
+    Returns
+    -------
+    list of int
+        The restored layers, ascending.
+    """
+
+    return list(range(max(0, layer - width // 2), min(n_layers, layer - (-width // 2))))
+
+
 def trace_fact(
-    wrapped: EmbedsGPT2, tokenizer: Any, fact: dict[str, Any], sigma: float, seed: int
+    wrapped: EmbedsGPT2,
+    tokenizer: Any,
+    fact: dict[str, Any],
+    sigma: float,
+    seed: int,
+    widths: tuple[int, ...] = (1,),
 ) -> dict[str, Any]:
-    """Measure one fact's indirect effects with one restored rerun per MLP layer.
+    """Measure one fact's indirect effects with one restored rerun per MLP layer and width.
 
     The corrupted input is a batch of blocks, one block of ``NOISE_SAMPLES`` rows per
     scored position, every block carrying the same noise. A layer's rerun restores, in
-    block ``p``, the clean MLP output at position ``p`` only, so one rerun measures every
-    position of that layer.
+    block ``p``, the clean MLP outputs at position ``p`` only, so one rerun measures every
+    position of that layer. Width 1 restores the layer's MLP alone; a wider window restores
+    the MLPs of ``window_layers(layer, width, 12)`` together.
 
     Parameters
     ----------
@@ -138,12 +174,14 @@ def trace_fact(
         Embedding standard deviation; the noise is ``NOISE_SCALE * sigma``.
     seed:
         Noise seed.
+    widths:
+        Window widths to measure; 1 is the single-layer measurement.
 
     Returns
     -------
     dict
-        Indirect effects per (layer, category), the clean and corrupted probabilities and
-        the restored module addresses.
+        Indirect effects per width and (layer, category), the clean and corrupted
+        probabilities and the restored module addresses.
     """
 
     ids = tokenizer(fact["prompt"], return_tensors="pt").input_ids
@@ -171,20 +209,23 @@ def trace_fact(
         ]
         p_clean = float(_probability(clean, target).mean())
         p_corrupt = _probability(corrupt, target)[:NOISE_SAMPLES].mean()
-        effects: dict[str, list[float]] = {}
-        for layer, address in enumerate(modules):
-            restored = _restore_layer(clean, corrupt, wrapped, corrupted, address, positions)
-            per_block = _probability(restored, target).view(len(positions), NOISE_SAMPLES)
-            restored.cleanup()
-            for index, position in enumerate(positions):
-                key = f"{layer}|{categories[position]}"
-                effects.setdefault(key, []).append(float(per_block[index].mean() - p_corrupt))
+        effects: dict[int, dict[str, list[float]]] = {width: {} for width in widths}
+        for width in widths:
+            for layer in range(len(modules)):
+                addresses = [modules[index] for index in window_layers(layer, width, len(modules))]
+                restored = _restore_layers(clean, corrupt, wrapped, corrupted, addresses, positions)
+                per_block = _probability(restored, target).view(len(positions), NOISE_SAMPLES)
+                restored.cleanup()
+                for index, position in enumerate(positions):
+                    key = f"{layer}|{categories[position]}"
+                    value = float(per_block[index].mean() - p_corrupt)
+                    effects[width].setdefault(key, []).append(value)
     finally:
         clean.cleanup()
         corrupt.cleanup()
     return {
         "known_id": fact["known_id"],
-        "effects": {key: sum(values) / len(values) for key, values in effects.items()},
+        "effects": {width: _average(grid) for width, grid in effects.items()},
         "clean": p_clean,
         "corrupted": float(p_corrupt),
         "modules": modules,
@@ -204,18 +245,14 @@ def _probability(trace: Any, target: int) -> torch.Tensor:
     return trace.layer_list[-1].out.detach()[:, -1].softmax(dim=-1)[:, target]
 
 
-def _restore_layer(
-    clean: Any,
-    corrupt: Any,
-    wrapped: EmbedsGPT2,
-    corrupted: torch.Tensor,
-    address: str,
-    positions: list[int],
-) -> Any:
-    """Rerun the corrupted batch with block ``p`` taking the clean MLP output at position ``p``."""
+def _average(pooled: dict[str, list[float]]) -> dict[str, float]:
+    """Mean of each key's values."""
 
-    clean_out = clean.modules[address].facets["down_out"].value.detach()
-    rows = corrupted.shape[0] // len(positions)
+    return {key: sum(values) / len(values) for key, values in pooled.items()}
+
+
+def _restore_hook(clean_out: torch.Tensor, positions: list[int], rows: int) -> Any:
+    """A hook writing the clean value into each block's own position."""
 
     def restore(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
         """Write the clean value into each block's own position."""
@@ -226,8 +263,25 @@ def _restore_layer(
             patched[index * rows : (index + 1) * rows, position] = clean_out[0, position]
         return patched
 
-    restored = corrupt.fork(f"restore_{address}")
-    restored.attach_hooks(tl.facet("down_out").in_module(address), restore)
+    return restore
+
+
+def _restore_layers(
+    clean: Any,
+    corrupt: Any,
+    wrapped: EmbedsGPT2,
+    corrupted: torch.Tensor,
+    addresses: list[str],
+    positions: list[int],
+) -> Any:
+    """Rerun the corrupted batch with block ``p`` taking the clean MLP outputs at position ``p``."""
+
+    rows = corrupted.shape[0] // len(positions)
+    restored = corrupt.fork("restore_" + "_".join(addresses))
+    for address in addresses:
+        clean_out = clean.modules[address].facets["down_out"].value.detach()
+        hook = _restore_hook(clean_out, positions, rows)
+        restored.attach_hooks(tl.facet("down_out").in_module(address), hook)
     restored.run(wrapped, corrupted)
     return restored
 
@@ -259,13 +313,23 @@ def embedding_sigma(model: nn.Module, tokenizer: Any, facts: list[dict[str, Any]
     return float(torch.cat(pieces).std())
 
 
-def run(out_dir: Path | None = None) -> dict[str, Any]:
+def run(
+    out_dir: Path | None = None, n_facts: int = VERDICT_FACTS, window: int = 1
+) -> dict[str, Any]:
     """Average the indirect effects over the facts and report the verdict.
+
+    The verdict always comes from the single-layer grid over the first ``VERDICT_FACTS``
+    facts. ``n_facts`` above that, or ``window`` above 1, adds a ``reported`` block of
+    non-gating grids over the first ``n_facts`` facts (same noise scale and seeds).
 
     Parameters
     ----------
     out_dir:
         Where to write the JSON summary and the ``.tlspec``; ``None`` prints only.
+    n_facts:
+        Facts to measure, from ``VERDICT_FACTS`` up to the vendored count.
+    window:
+        Width of the reported windowed restoration; 1 adds no windowed grid.
 
     Returns
     -------
@@ -274,22 +338,23 @@ def run(out_dir: Path | None = None) -> dict[str, Any]:
     """
 
     data = common.load_data("known_facts.json")
-    facts = [record for record in data["records"] if record["kept"]]
+    kept = [record for record in data["records"] if record["kept"]]
+    if not VERDICT_FACTS <= n_facts <= len(kept) or window < 1:
+        raise ValueError(f"need {VERDICT_FACTS} <= n_facts <= {len(kept)} and window >= 1")
+    facts = kept[:n_facts]
     model, tokenizer = common.load_gpt2()
     wrapped = EmbedsGPT2(model).eval()
-    sigma = embedding_sigma(model, tokenizer, facts)
+    sigma = embedding_sigma(model, tokenizer, kept[:VERDICT_FACTS])
+    widths = (1,) if window == 1 else (1, window)
     with torch.no_grad():  # no autograd graph: the batch's activations are freed per op
         per_fact = [
-            trace_fact(wrapped, tokenizer, fact, sigma, seed) for seed, fact in enumerate(facts)
+            trace_fact(wrapped, tokenizer, fact, sigma, seed, widths)
+            for seed, fact in enumerate(facts)
         ]
-    pooled: dict[str, list[float]] = {}
-    for result in per_fact:
-        for key, value in result["effects"].items():
-            pooled.setdefault(key, []).append(value)
-    aie = {key: sum(values) / len(values) for key, values in pooled.items()}
-    peak = max(aie, key=lambda key: aie[key])
-    peak_layer, peak_category = int(peak.split("|")[0]), peak.split("|")[1]
-    modules_ok = all(len(result["modules"]) == 12 for result in per_fact)
+    verdict_facts = per_fact[:VERDICT_FACTS]
+    aie = _pooled(verdict_facts, 1)
+    peak_layer, peak_category = _peak(aie)
+    modules_ok = all(len(result["modules"]) == 12 for result in verdict_facts)
     passed = (
         modules_ok and peak_category == "last subject token" and peak_layer <= EARLY_LAYER_LIMIT
     )
@@ -302,21 +367,22 @@ def run(out_dir: Path | None = None) -> dict[str, Any]:
         "data": {
             "source": data["source"],
             "source_sha256": common.FACTS_SHA256,
-            "n_facts": len(facts),
-            "facts_sha256": common.rows_sha256(facts),
+            "n_facts": len(verdict_facts),
+            "facts_sha256": common.rows_sha256(facts[:VERDICT_FACTS]),
             "noise": f"{NOISE_SCALE} x sigma, sigma = {sigma:.6f}, {NOISE_SAMPLES} samples",
         },
         "measured": {
-            "peak": {"layer": peak_layer, "category": peak_category, "aie": round(aie[peak], 4)},
-            "aie_last_subject_token_by_layer": [
-                round(aie.get(f"{layer}|last subject token", float("nan")), 4)
-                for layer in range(12)
-            ],
-            "aie_last_token_by_layer": [
-                round(aie.get(f"{layer}|last token", float("nan")), 4) for layer in range(12)
-            ],
+            "peak": {
+                "layer": peak_layer,
+                "category": peak_category,
+                "aie": round(aie[f"{peak_layer}|{peak_category}"], 4),
+            },
+            "aie_last_subject_token_by_layer": _grid(aie)["last subject token"],
+            "aie_last_token_by_layer": _grid(aie)["last token"],
+            "aie_grid_single_layer": _grid(aie),
             "ate": round(
-                sum(result["clean"] - result["corrupted"] for result in per_fact) / len(per_fact),
+                sum(result["clean"] - result["corrupted"] for result in verdict_facts)
+                / len(verdict_facts),
                 4,
             ),
             "paper_peak_mlp_aie_gpt2_xl": PAPER_PEAK_MLP_AIE,
@@ -324,7 +390,62 @@ def run(out_dir: Path | None = None) -> dict[str, Any]:
         },
         "verdict": common.REPLICATED if passed else common.NOT_REPLICATED,
     }
+    if n_facts > VERDICT_FACTS or window > 1:
+        summary["reported"] = _reported(per_fact, widths)
     return common.report(summary, out_dir, "causal_tracing")
+
+
+def _pooled(per_fact: list[dict[str, Any]], width: int) -> dict[str, float]:
+    """Average indirect effect per (layer, category) over facts, for one window width."""
+
+    pooled: dict[str, list[float]] = {}
+    for result in per_fact:
+        for key, value in result["effects"][width].items():
+            pooled.setdefault(key, []).append(value)
+    return _average(pooled)
+
+
+def _peak(aie: dict[str, float]) -> tuple[int, str]:
+    """The (layer, category) with the largest average indirect effect."""
+
+    peak = max(aie, key=lambda key: aie[key])
+    return int(peak.split("|")[0]), peak.split("|")[1]
+
+
+def _grid(aie: dict[str, float]) -> dict[str, list[float]]:
+    """Category to the 12 per-layer effects, rounded; ``nan`` where no fact has the category."""
+
+    return {
+        category: [round(aie.get(f"{layer}|{category}", float("nan")), 4) for layer in range(12)]
+        for category in CATEGORIES
+    }
+
+
+def _reported(per_fact: list[dict[str, Any]], widths: tuple[int, ...]) -> dict[str, Any]:
+    """Non-gating grids over every measured fact, one per window width."""
+
+    grids = {}
+    for width in widths:
+        aie = _pooled(per_fact, width)
+        layer, category = _peak(aie)
+        grids[f"window {width}"] = {
+            "peak": {
+                "layer": layer,
+                "category": category,
+                "aie": round(aie[f"{layer}|{category}"], 4),
+            },
+            "grid": _grid(aie),
+        }
+    return {
+        "gating": "none: these grids never change the verdict",
+        "n_facts": len(per_fact),
+        "window_scaling": (
+            f"the paper restored {PAPER_WINDOW} of {PAPER_LAYERS} layers of GPT-2 XL "
+            f"({PAPER_WINDOW / PAPER_LAYERS:.0%} of depth); a window of w of GPT-2 small's 12 "
+            "layers is the scaled stand-in (3 of 12 is 25%)"
+        ),
+        "grids": grids,
+    }
 
 
 def _save_clean_trace(
@@ -350,7 +471,7 @@ def main(argv: list[str] | None = None) -> int:
     Parameters
     ----------
     argv:
-        Arguments (``--out DIR``).
+        Arguments (``--out DIR``, ``--facts N``, ``--window W``).
 
     Returns
     -------
@@ -360,8 +481,14 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", type=Path, default=None, help="output directory")
+    parser.add_argument(
+        "--facts", type=int, default=VERDICT_FACTS, help="facts for the reported grids (10-30)"
+    )
+    parser.add_argument(
+        "--window", type=int, default=1, help="also report a windowed restoration of this width"
+    )
     args = parser.parse_args(argv)
-    run(args.out)
+    run(args.out, args.facts, args.window)
     return 0
 
 

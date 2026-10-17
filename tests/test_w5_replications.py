@@ -29,7 +29,7 @@ _MODULES = ("_common", "induction_heads", "ioi_name_movers", "causal_tracing", "
 _DATA_SHA256 = {
     "induction_oracle.json": "90fcfa62802a26d8b78d6046bebc0f50191f6398dfab48c85618a5d855aecfbf",  # pragma: allowlist secret
     "ioi_rows.json": "8b7e3aae8221bd93d080224a8bff3e0c07cf9f5be3c46239c96336a9ca0fc63f",  # pragma: allowlist secret
-    "known_facts.json": "92b0e80b933f4fc22d60bfeed6a47968753c52b6384d7cbd865e9ba7b76917de",  # pragma: allowlist secret
+    "known_facts.json": "a1ddab1d376adb8b7b5fa698626873e33389df8d0e4d25ad1bc09a2c544e4199",  # pragma: allowlist secret
 }
 #: sha256 of the induction protocol's token tensor (int64 bytes).
 _IND_TOKENS_SHA256 = (
@@ -113,8 +113,15 @@ def test_r_ct_facts_are_the_pinned_subset(scripts: dict[str, ModuleType]) -> Non
             model, tokenizer, record
         )
         assert record["kept"] is known
-    assert sum(record["kept"] for record in records) == 10
+    assert sum(record["kept"] for record in records) == 30
     assert records[-1]["kept"]
+
+
+def test_r_ct_window_layers_follow_the_paper(scripts: dict[str, ModuleType]) -> None:
+    window_layers = scripts["causal_tracing"].window_layers
+    assert [window_layers(layer, 1, 12) for layer in (0, 5, 11)] == [[0], [5], [11]]
+    assert [window_layers(layer, 3, 12) for layer in (0, 5, 11)] == [[0, 1], [4, 5, 6], [10, 11]]
+    assert window_layers(20, 10, 48) == list(range(15, 25))
 
 
 @pytest.mark.slow

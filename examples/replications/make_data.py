@@ -11,8 +11,10 @@ Selection rules (fixed before any replication ran):
 
 - IOI: the first 50 rows whose ``" " + indirect_object`` and ``" " + subject`` are each
   exactly one GPT-2 token.
-- Known facts: the first 10 records whose subject occurs in the prompt and for which GPT-2
+- Known facts: the first 30 records whose subject occurs in the prompt and for which GPT-2
   small's greedy next token after the prompt is the first token of ``" " + attribute``.
+  The causal-tracing verdict uses the first 10 of them (the set fixed before its first
+  run); the other 20 only widen its reported, non-gating grids.
 """
 
 from __future__ import annotations
@@ -27,7 +29,7 @@ import _common as common  # the sibling module; scripts here run from this folde
 import torch
 
 IOI_COUNT = 50
-FACTS_COUNT = 10
+FACTS_COUNT = 30
 
 
 def _checked(blob: bytes, expected: str, what: str) -> bytes:
@@ -125,8 +127,9 @@ def known_facts(model: torch.nn.Module, tokenizer: Any) -> dict[str, Any]:
         "source": common.FACTS_URL,
         "pins": "sha256 in _common.FACTS_SHA256",
         "license": "MIT (ROME, Meng et al. 2022)",
-        "rule": "first 10 records in file order whose subject occurs in the prompt and whose "
-        "GPT-2 small greedy next token is the first token of ' '+attribute",
+        "rule": "first 30 records in file order whose subject occurs in the prompt and whose "
+        "GPT-2 small greedy next token is the first token of ' '+attribute; the verdict uses "
+        "the first 10",
         "records": records,
     }
 
