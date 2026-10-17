@@ -275,6 +275,13 @@
   `tl.attribution.SiteTarget(layer, sae=sae, unit=k)` attributes an SAE latent.
   `tl.bridge.sae.splice(..., log_latents=True)` puts the latents in the spliced trace as nodes
   (`SpliceResult.latents_site`).
+- **facets**: `trace[selector]` and `trace.resolve_sites(selector)` read a bare facet selector
+  (`tl.head(i, name)`, `tl.facet(name)`, `tl.facet(name).latent(k)`): each entry is the `Facet` the
+  record's facet view serves, so `.value` is the head's slice or the SAE latent's activation; a
+  selector nothing serves refuses with `facet_selector_no_match`.
+- **facets**: `tl.trace(model, x, save=<facet selector>)` keeps the ops a later read of that facet
+  needs: an SAE latent's registered site, or every op inside an attention module whose class has a
+  facet recipe.
 
 ### Bug Fixes
 
@@ -375,6 +382,8 @@
   the root reaches, and when two captures hook one node every call is charged to the node that is
   executing, with the asking capture's own call and pass, in the executed-backward census, the ATen
   recorder and the checkpoint evidence alike.
+- **facets**: Facet selectors no longer fail on a selectively saved trace because some unrelated
+  op's payload was not saved.
 
 ### Performance Improvements
 
@@ -433,6 +442,8 @@
 - **agent**: `torchlens_explain` is documented as the one agent tool whose `max_tokens` is not a
   ceiling: a request above its 4,000-token default is honoured.
 - **docs**: A "TorchScript and DLPack" entry in the known-gotchas reference.
+- **facets**: Facet selectors are hashable (by their spelling), so a capture `hooks=` mapping can
+  hold one; that door still refuses a facet selector with a typed error.
 
 ### Continuous Integration
 

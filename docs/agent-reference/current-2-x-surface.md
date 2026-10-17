@@ -1241,7 +1241,12 @@
   (`Trace.set`, `attach_hooks`, `Trace.do`, `fork().do`, `tl.do`) as
   `site + decode(z') - decode(z)` (the reconstruction error stays), and
   `trace[site].facets["name[k]"]` reads the encoder activation; a string site must be one
-  op of a single-pass layer (`sae_latent_site_ambiguous`), a selector site fans out.
+  op of a single-pass layer (`sae_latent_site_ambiguous`), a selector site fans out. A bare
+  latent or `tl.head` selector also reads on a finished trace at `trace[selector]` and
+  `trace.resolve_sites(selector)` (each entry a `Facet`, `.value` the read;
+  `facet_selector_no_match` when nothing serves it) and keeps the ops that read needs
+  through `tl.trace(save=selector)`; `intervene=`, `bind`, capture `hooks=` and
+  `tl.extract` still refuse a facet selector.
   `bridge.sae.write_sae_dashboard(latents, tokens, latent_ids=, k=20, path=)` and
   `bridge.sae.write_delphi(latents, tokens, site=, model_name=, n_splits=5, directory=)`
   (DOCUMENTED-UNSTABLE) write a splice's `latents` or a dataset's
