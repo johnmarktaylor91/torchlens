@@ -33,7 +33,8 @@ Subcommands
     host RNG monitor window, calls into the monitor's per-event classifiers,
     ``copy.deepcopy`` calls and clone bytes inside the rerun state refresh,
     hooks planned and fired, replay hook applications and ops re-executed,
-    plus the cost split by phase.
+    Python and C calls inside the payload eviction walk of any capture the
+    edit discarded (``eviction_walk_calls``), plus the cost split by phase.
 
 Every subcommand prints one JSON document on stdout (and writes it to
 ``--out`` when given). The model is the config-built gpt2-124M architecture
@@ -841,6 +842,63 @@ class PhaseTimer:
         }
 
 
+class EvictionWalkCounter:
+    """Count calls inside every op-store payload eviction walk while active.
+
+    A rerun discards its own capture and runs that capture's last-owner
+    payload eviction (``OpRowStore._evict_tensor_payloads``) before it
+    returns. Each walk runs under a counting ``sys.setprofile`` hook (Python
+    and C function calls, the ``fork_python_calls`` rule). A walk that starts
+    while another profile hook is active is not counted and makes the total
+    ``None``, so a number is never silently partial.
+    """
+
+    def __init__(self) -> None:
+        """Start empty."""
+
+        self.calls: int | None = 0
+        self._restore: Callable[[], None] | None = None
+
+    def __enter__(self) -> EvictionWalkCounter:
+        """Wrap the eviction walk."""
+
+        from torchlens._trace_core.op_store import OpRowStore
+
+        original = OpRowStore._evict_tensor_payloads
+        counter = self
+
+        def counted(store: Any) -> None:
+            if sys.getprofile() is not None:
+                counter.calls = None
+                original(store)
+                return
+            calls = 0
+
+            def count(_frame: Any, event: str, _arg: Any) -> None:
+                nonlocal calls
+                if event in ("call", "c_call"):
+                    calls += 1
+
+            sys.setprofile(count)
+            try:
+                original(store)
+            finally:
+                sys.setprofile(None)
+            if counter.calls is not None:
+                counter.calls += calls
+
+        OpRowStore._evict_tensor_payloads = counted  # type: ignore[method-assign]
+        self._restore = lambda: setattr(OpRowStore, "_evict_tensor_payloads", original)
+        return self
+
+    def __exit__(self, *exc: Any) -> None:
+        """Restore the walk."""
+
+        if self._restore is not None:
+            self._restore()
+            self._restore = None
+
+
 def fork_python_calls(baseline: tl.Trace) -> int:
     """Python and C function calls made by one ``baseline.fork()`` (untimed pass).
 
@@ -872,9 +930,10 @@ def _count_one(
     """Counters and phase split for one candidate on one engine."""
 
     counter = AtenCounter()
+    walk_counter = EvictionWalkCounter()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        with PhaseTimer() as phases, counter:
+        with PhaseTimer() as phases, counter, walk_counter:
             phases.counter = counter
             start = time.perf_counter()
             member = ablate(baseline, site, engine, model, x)
@@ -891,6 +950,7 @@ def _count_one(
         "monitor_classifier_calls": phases.classifier_calls,
         "refresh_deepcopy_calls": phases.refresh_deepcopy_calls,
         "fork_python_calls": fork_python_calls(baseline),
+        "eviction_walk_calls": walk_counter.calls,
         "refresh_clone_like_bytes": counter.refresh_clone_bytes,
         "hooks_planned": last_run.get("hooks"),
         "hooks_fired": last_run.get("hooks_fired"),
