@@ -193,7 +193,9 @@ def _key(model, transcoders, graph, monkeypatch) -> torch.Tensor:
         else:
             continue
         grads = torch.autograd.grad(value, sources, retain_graph=True, allow_unused=True)
-        grads = [torch.zeros_like(s) if g is None else g for g, s in zip(grads, sources)]
+        grads = [
+            torch.zeros_like(s) if g is None else g for g, s in zip(grads, sources, strict=True)
+        ]
         for col, source in enumerate(nodes):
             if source.kind == "token":
                 vec = leaves["embed"][0, source.position]
