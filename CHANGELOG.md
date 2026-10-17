@@ -424,6 +424,8 @@
 - **attribution**: `tl.attribution.build_graph` assembles the graph in chunks of targets, so its
   gradient buffer no longer grows with the number of features (Gemma-2 2B: 0.70 GB instead of 36
   GB).
+- **rerun**: cheaper payload eviction for a discarded capture (the rerun's eviction walk makes about
+  a fifth of the calls it did), and fewer calls per fork read.
 
 ### Changed
 
