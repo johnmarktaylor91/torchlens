@@ -282,6 +282,10 @@
 - **facets**: `tl.trace(model, x, save=<facet selector>)` keeps the ops a later read of that facet
   needs: an SAE latent's registered site, or every op inside an attention module whose class has a
   facet recipe.
+- **attribution**: Attribution graphs on Hugging Face Gemma-2 are tested, and match circuit-tracer
+  v0.5.2 on Gemma-2 2B within float32 rounding. The patterns and norm scales are frozen through op
+  labels in `frozen=`, and logits are taken before the final softcap with
+  `logits_at=SiteTarget("lm_head")`.
 
 ### Bug Fixes
 
@@ -417,6 +421,9 @@
   failed-partial recording and amendment folding no longer rebuild every parent-to-child edge for
   each op they have already indexed; only the replaced op's edges move (48-token generation recorder
   on a tiny model: 9,323 full rebuilds to 1, Python calls per forward 501,672 to 316,504).
+- **attribution**: `tl.attribution.build_graph` assembles the graph in chunks of targets, so its
+  gradient buffer no longer grows with the number of features (Gemma-2 2B: 0.70 GB instead of 36
+  GB).
 
 ### Changed
 
