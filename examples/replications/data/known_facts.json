@@ -1,0 +1,288 @@
+{
+ "source": "https://rome.baulab.info/data/dsets/known_1000.json",
+ "pins": "sha256 in _common.FACTS_SHA256",
+ "license": "MIT (ROME, Meng et al. 2022)",
+ "rule": "first 10 records in file order whose subject occurs in the prompt and whose GPT-2 small greedy next token is the first token of ' '+attribute",
+ "records": [
+  {
+   "known_id": 0,
+   "subject": "Vinson Massif",
+   "attribute": "Antarctica",
+   "prompt": "Vinson Massif is located in the continent of",
+   "relation_id": "P30",
+   "kept": false
+  },
+  {
+   "known_id": 1,
+   "subject": "Beats Music",
+   "attribute": "Apple",
+   "prompt": "Beats Music is owned by",
+   "relation_id": "P127",
+   "kept": false
+  },
+  {
+   "known_id": 2,
+   "subject": "Audible.com",
+   "attribute": "Amazon",
+   "prompt": "Audible.com is owned by",
+   "relation_id": "P127",
+   "kept": false
+  },
+  {
+   "known_id": 3,
+   "subject": "The Big Bang Theory",
+   "attribute": "CBS",
+   "prompt": "The Big Bang Theory premieres on",
+   "relation_id": "P449",
+   "kept": true
+  },
+  {
+   "known_id": 4,
+   "subject": "MacApp",
+   "attribute": "Apple",
+   "prompt": "MacApp, a product created by",
+   "relation_id": "P178",
+   "kept": false
+  },
+  {
+   "known_id": 5,
+   "subject": "Giuseppe Angeli",
+   "attribute": "Italy",
+   "prompt": "Giuseppe Angeli, who has a citizenship of",
+   "relation_id": "P27",
+   "kept": true
+  },
+  {
+   "known_id": 6,
+   "subject": "Catalonia",
+   "attribute": "Europe",
+   "prompt": "Catalonia belongs to the continent of",
+   "relation_id": "P30",
+   "kept": false
+  },
+  {
+   "known_id": 7,
+   "subject": "Marshall Islands",
+   "attribute": "English",
+   "prompt": "In Marshall Islands, the language spoken is a mixture of",
+   "relation_id": "P37",
+   "kept": true
+  },
+  {
+   "known_id": 8,
+   "subject": "Leslie Moonves",
+   "attribute": "CBS",
+   "prompt": "Leslie Moonves is employed by",
+   "relation_id": "P108",
+   "kept": false
+  },
+  {
+   "known_id": 9,
+   "subject": "De finibus bonorum et malorum",
+   "attribute": "Latin",
+   "prompt": "The original language of De finibus bonorum et malorum is the same as the",
+   "relation_id": "P364",
+   "kept": false
+  },
+  {
+   "known_id": 10,
+   "subject": "Kirkpatrick Glacier",
+   "attribute": "Antarctica",
+   "prompt": "Kirkpatrick Glacier belongs to the continent of",
+   "relation_id": "P30",
+   "kept": false
+  },
+  {
+   "known_id": 11,
+   "subject": "Army of the Guardians of the Islamic Revolution",
+   "attribute": "Tehran",
+   "prompt": "The headquarter of Army of the Guardians of the Islamic Revolution is in",
+   "relation_id": "P159",
+   "kept": false
+  },
+  {
+   "known_id": 12,
+   "subject": "Il Gazzettino",
+   "attribute": "Italian",
+   "prompt": "Il Gazzettino was written in the early 1980s, when the",
+   "relation_id": "P407",
+   "kept": true
+  },
+  {
+   "known_id": 13,
+   "subject": "Xamarin",
+   "attribute": "Microsoft",
+   "prompt": "Xamarin, from the",
+   "relation_id": "P127",
+   "kept": false
+  },
+  {
+   "known_id": 14,
+   "subject": "Eavan Boland",
+   "attribute": "Dublin",
+   "prompt": "Eavan Boland was born in",
+   "relation_id": "P19",
+   "kept": false
+  },
+  {
+   "known_id": 15,
+   "subject": "Comme j'ai mal",
+   "attribute": "French",
+   "prompt": "Comme j'ai mal is written in",
+   "relation_id": "P407",
+   "kept": false
+  },
+  {
+   "known_id": 16,
+   "subject": "Juan Bautista de Anza",
+   "attribute": "Spanish",
+   "prompt": "The language used by Juan Bautista de Anza is a bit different from the language used by the",
+   "relation_id": "P1412",
+   "kept": true
+  },
+  {
+   "known_id": 17,
+   "subject": "Alfred Hitchcock Presents",
+   "attribute": "NBC",
+   "prompt": "Alfred Hitchcock Presents debuted on",
+   "relation_id": "P449",
+   "kept": false
+  },
+  {
+   "known_id": 18,
+   "subject": "Tizen",
+   "attribute": "Samsung",
+   "prompt": "Tizen is developed by a consortium of companies including",
+   "relation_id": "P178",
+   "kept": true
+  },
+  {
+   "known_id": 19,
+   "subject": "Honus Wagner",
+   "attribute": "baseball",
+   "prompt": "Honus Wagner professionally plays the sport of",
+   "relation_id": "P641",
+   "kept": false
+  },
+  {
+   "known_id": 20,
+   "subject": "samurai cinema",
+   "attribute": "Japan",
+   "prompt": "samurai cinema, that originated in",
+   "relation_id": "P495",
+   "kept": true
+  },
+  {
+   "known_id": 21,
+   "subject": "Roman Republic",
+   "attribute": "Rome",
+   "prompt": "The capital of Roman Republic is",
+   "relation_id": "P36",
+   "kept": true
+  },
+  {
+   "known_id": 22,
+   "subject": "Henri Debain",
+   "attribute": "Paris",
+   "prompt": "Henri Debain was born in",
+   "relation_id": "P19",
+   "kept": false
+  },
+  {
+   "known_id": 23,
+   "subject": "Adriano Celentano",
+   "attribute": "Italy",
+   "prompt": "Adriano Celentano is a citizen of",
+   "relation_id": "P27",
+   "kept": false
+  },
+  {
+   "known_id": 24,
+   "subject": "Czech Republic national football team",
+   "attribute": "FIFA",
+   "prompt": "Czech Republic national football team is a member of the",
+   "relation_id": "P463",
+   "kept": false
+  },
+  {
+   "known_id": 25,
+   "subject": "Windows Media Player",
+   "attribute": "Microsoft",
+   "prompt": "Windows Media Player is developed by",
+   "relation_id": "P178",
+   "kept": false
+  },
+  {
+   "known_id": 26,
+   "subject": "NTFS",
+   "attribute": "Microsoft",
+   "prompt": "NTFS is developed by",
+   "relation_id": "P178",
+   "kept": false
+  },
+  {
+   "known_id": 27,
+   "subject": "Knud, Hereditary Prince of Denmark",
+   "attribute": "Copenhagen",
+   "prompt": "Knud, Hereditary Prince of Denmark passed away in",
+   "relation_id": "P20",
+   "kept": false
+  },
+  {
+   "known_id": 28,
+   "subject": "Don Shula",
+   "attribute": "football",
+   "prompt": "Don Shula professionally plays the sport of",
+   "relation_id": "P641",
+   "kept": true
+  },
+  {
+   "known_id": 29,
+   "subject": "El Mercurio",
+   "attribute": "Spanish",
+   "prompt": "The language of El Mercurio was a mixture of",
+   "relation_id": "P407",
+   "kept": false
+  },
+  {
+   "known_id": 30,
+   "subject": "Iron Man",
+   "attribute": "Avengers",
+   "prompt": "Iron Man is affiliated with the",
+   "relation_id": "P463",
+   "kept": false
+  },
+  {
+   "known_id": 31,
+   "subject": "Massachusetts Institute of Technology",
+   "attribute": "Cambridge",
+   "prompt": "The location of Massachusetts Institute of Technology is in",
+   "relation_id": "P276",
+   "kept": false
+  },
+  {
+   "known_id": 32,
+   "subject": "Vietnam",
+   "attribute": "Asia",
+   "prompt": "Vietnam belongs to the continent of",
+   "relation_id": "P30",
+   "kept": false
+  },
+  {
+   "known_id": 33,
+   "subject": "The Tonight Show with Jay Leno",
+   "attribute": "NBC",
+   "prompt": "The Tonight Show with Jay Leno premieres on",
+   "relation_id": "P449",
+   "kept": false
+  },
+  {
+   "known_id": 34,
+   "subject": "Philippines",
+   "attribute": "Manila",
+   "prompt": "Philippines's capital,",
+   "relation_id": "P36",
+   "kept": true
+  }
+ ]
+}
