@@ -286,3 +286,11 @@ one `tl.attribution.GraphNode` per feature, error, token and logit node, a dense
 `adjacency_matrix` with targets as rows, and `node_values` that equal each feature or logit
 row's incoming edges plus its named `constants`. Spellings are DOCUMENTED-UNSTABLE; the
 runnable example is in `docs/reference/attribution.md`, section Attribution graphs.
+
+A transcoder that reads a point inside a module (Gemma Scope reads the pre-feedforward
+norm's value before its `(1 + w)` gain) is keyed by that op's label instead of the MLP
+module name, with `W_dec` and `b_dec` given as mappings naming the MLP outputs it writes;
+the key must run before them. `frozen=` also takes facet selectors:
+`frozen=[tl.facet("pattern"), tl.facet("inv_rms")]` holds every Hugging Face Gemma-2
+attention pattern and every `Gemma2RMSNorm` scale, where `inv_rms` is the norm's
+`rsqrt` output, the factor that multiplies its input. DOCUMENTED-UNSTABLE.
