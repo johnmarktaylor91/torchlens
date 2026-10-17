@@ -330,6 +330,7 @@ documented unstable and may be renamed or removed without a compatibility alias.
 | ROAD curve | `road_curve`, `ranking`, `most_relevant_first`, `least_relevant_first`, `noise_std`, `seed`, `road` | unstable -- no deprecation shim owed |
 | Causal audit | `causal_audit`, `CausalAuditResult`, `CausalAuditUnit`, `CausalAuditSet`, `claim`, `k`, `ablation`, `zero`, `mean`, `controls`, `top`, `bottom`, `random`, `random_draws`, `per_unit`, `layer`, `site`, `original_score`, `units`, `sets`, `rank_agreement`, `set_of`, `unit`, `claimed_effect`, `measured_effect`, `kind`, `draw`, `intervention`, `component`, `claim_kind`, `constant_row`, `rows_not_audited`, `corrupted`, `metric`, `edges`, `edge_table`, `edge_patch`, `example_reduction`, `logits_site`, `sets_not_measured`, `reason`, `trace` | unstable -- no deprecation shim owed |
 | Attribution graphs | `build_graph`, `AttributionGraph`, `GraphNode`, `transcoders`, `embedding`, `target`, `max_n_logits`, `desired_logit_prob`, `demeaned_logits`, `logits_at`, `frozen`, `nodes`, `adjacency_matrix`, `node_values`, `constants`, `encoder_bias`, `decoder_bias`, `other`, `active_features`, `activation_values`, `transcoder_sites`, `error_sites`, `error_vectors`, `input_tokens`, `logit_tokens`, `logit_probabilities`, `capture_outcome`, `disclosures`, `node_counts`, `node_indices`, `kind`, `site`, `position`, `feature`, `token`, `logit`, `error` | unstable -- no deprecation shim owed |
+| Attribution graph export | `to_neuronpedia`, `slug`, `scan`, `tokenizer`, `prompt`, `node_threshold`, `edge_threshold`, `path` | unstable -- no deprecation shim owed |
 
 <!-- ATTRIBUTION-KIT-UNSTABLE-INDEX:END -->
 
@@ -2656,3 +2657,14 @@ deprecation shim owed*
   tl.facet("inv_rms")])`, which also holds every Gemma-2 attention pattern
   (`Gemma2Attention` serves the attention facets; `pattern` is the eager
   softmax after the score softcap).
+
+**`AttributionGraph.to_neuronpedia` (export in Neuronpedia's attribution-graph schema)** — *unstable — no deprecation shim owed*
+: `graph.to_neuronpedia(*, slug, scan, tokenizer, prompt=None, node_threshold=0.8,
+  edge_threshold=0.98, path=None)` returns the graph, pruned by circuit-tracer's
+  influence rule, as a dict in Neuronpedia's published attribution-graph schema
+  (and writes it to `path` when given). `slug` is the graph's name on
+  Neuronpedia, `scan` Neuronpedia's model id, `tokenizer` anything with
+  `decode(ids) -> str`, `prompt` the prompt string (`None` decodes the input
+  tokens), `node_threshold` and `edge_threshold` the shares of total influence
+  kept. Refusal codes `attribution_graph_export_argument_invalid` and
+  `attribution_graph_export_unsupported`.

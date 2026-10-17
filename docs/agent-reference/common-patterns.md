@@ -294,3 +294,8 @@ the key must run before them. `frozen=` also takes facet selectors:
 `frozen=[tl.facet("pattern"), tl.facet("inv_rms")]` holds every Hugging Face Gemma-2
 attention pattern and every `Gemma2RMSNorm` scale, where `inv_rms` is the norm's
 `rsqrt` output, the factor that multiplies its input. DOCUMENTED-UNSTABLE.
+
+`graph.to_neuronpedia(slug="my-graph", scan="gemma-2-2b", tokenizer=tokenizer, path="g.json")`
+returns the graph, pruned by circuit-tracer's rule (`node_threshold=0.8`,
+`edge_threshold=0.98`), in Neuronpedia's published attribution-graph schema, and writes it
+to `path`; the file opens in Neuronpedia's graph viewer. DOCUMENTED-UNSTABLE.

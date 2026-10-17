@@ -1086,6 +1086,9 @@ reconstruction, `active_features` and `activation_values` the feature nodes, and
 `capture_outcome` and `disclosures` what the capture's completeness verdict says.
 
 ```python
+import json
+from pathlib import Path
+
 import torch
 from torch import nn
 
@@ -1130,7 +1133,50 @@ logit = graph.node_indices("logit")[0]
 strongest = int(graph.adjacency_matrix[logit].abs().argmax())
 print(graph.nodes[strongest])
 assert graph.error_vectors.abs().max() < 1e-5  # the transcoder is the MLP itself
+
+
+class Letters:
+    """A stand-in tokenizer: token id i decodes to the i-th letter."""
+
+    def decode(self, ids: list[int]) -> str:
+        return "".join(chr(ord("a") + i) for i in ids)
+
+
+path = Path(globals().get("DOCS_TMPDIR", "/tmp")) / "tiny-graph.json"
+exported = graph.to_neuronpedia(slug="tiny-graph", scan="tiny", tokenizer=Letters(), path=path)
+print(exported["metadata"]["prompt_tokens"], len(exported["nodes"]), len(exported["links"]))
+assert json.loads(path.read_text()) == exported
 ```
+
+### Exporting to Neuronpedia (`AttributionGraph.to_neuronpedia`)
+
+`graph.to_neuronpedia(*, slug, scan, tokenizer, prompt=None, node_threshold=0.8,
+edge_threshold=0.98, path=None)` returns the graph, pruned, as a JSON-ready dict in
+Neuronpedia's published attribution-graph schema, and writes it to `path` when one is given.
+Documented-unstable. The schema is `apps/webapp/app/api/graph/graph-schema.json` in
+[Neuronpedia's repository](https://github.com/hijohnnylin/neuronpedia) at commit
+`2f0bb10893b9c63c409dbc49db61f557883e0a2c` (JSON Schema draft-07, "Anthropic Attribution
+Graph" 1.0.0), the same schema as Neuronpedia's [graph validator](https://www.neuronpedia.org/graph/validator).
+Node ids, node fields and the direction of links follow circuit-tracer's own writer, so the file
+opens in Neuronpedia's graph viewer the way a circuit-tracer graph does.
+
+- `slug` is the graph's name on Neuronpedia and `scan` is Neuronpedia's model id (for example
+  `"gemma-2-2b"`); the graph stores neither.
+- `tokenizer` is anything with `decode(ids) -> str`, usually the model's Hugging Face
+  tokenizer: it turns each input token and each target logit into the strings the viewer shows.
+  `prompt=None` decodes the input tokens together.
+- Pruning is circuit-tracer's rule. A node's influence is its total effect on the logits,
+  weighted by their probabilities, through the row-normalised absolute adjacency. Nodes are kept
+  in order of influence until `node_threshold` of the total is covered, edges likewise until
+  `edge_threshold`; token and logit nodes are always kept, and feature and error nodes left
+  without kept edges are dropped. A node's `influence` field is the share of the total covered
+  up to and including it. Nodes at every position are exported, the first (often BOS) included.
+- A feature's `layer` is its transcoder's index in `transcoder_sites`, an error node's is its
+  site's index in `error_sites`, and logit nodes sit one layer past the last. A graph with a
+  different number of transcoders than MLP outputs is refused
+  (`attribution_graph_export_unsupported`), as are graphs without token ids, with NaN or
+  infinite values, or whose logits nothing influences; keyword values the schema cannot carry
+  raise `attribution_graph_export_argument_invalid`.
 
 ## The F06 attribution kit (DOCUMENTED-UNSTABLE)
 
