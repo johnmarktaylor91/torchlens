@@ -251,6 +251,11 @@ _DOCUMENTED_UNSTABLE_TOKENS = {
     "slug",
     "to_neuronpedia",
     "tokenizer",
+    "activation",
+    "api_key",
+    "graph_value",
+    "influence",
+    "upload_to_neuronpedia",
 }
 
 

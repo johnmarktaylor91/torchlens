@@ -389,14 +389,14 @@ def _is(value: Any, types: type | tuple[type, ...], *, nullable: bool = False) -
     return isinstance(value, named)
 
 
-def _contract_refusal(where: str) -> AttributionError:
+def _contract_refusal(where: str, *, code: str) -> AttributionError:
     """The refusal for one broken part of an export."""
 
     return _export_refusal(
         f"The graph JSON does not meet Neuronpedia's attribution-graph schema: {where}. "
         "Remedy: pass the dict AttributionGraph.to_neuronpedia(...) returned, or the file "
         "it wrote with path=..., unchanged.",
-        code="attribution_graph_contract_invalid",
+        code=code,
     )
 
 
@@ -404,33 +404,53 @@ def _check_metadata(meta: Any) -> None:
     """The required ``metadata`` keys and their value types."""
 
     if not isinstance(meta, dict):
-        raise _contract_refusal("metadata is not an object")
+        raise _contract_refusal(
+            "metadata is not an object", code="attribution_graph_contract_invalid"
+        )
     for key in ("slug", "scan", "prompt"):
         if not _is(meta.get(key), str):
-            raise _contract_refusal(f"metadata.{key} is not a string")
+            raise _contract_refusal(
+                f"metadata.{key} is not a string", code="attribution_graph_contract_invalid"
+            )
     tokens = meta.get("prompt_tokens")
     if not isinstance(tokens, list) or not all(_is(token, str) for token in tokens):
-        raise _contract_refusal("metadata.prompt_tokens is not a list of strings")
+        raise _contract_refusal(
+            "metadata.prompt_tokens is not a list of strings",
+            code="attribution_graph_contract_invalid",
+        )
     if "node_threshold" in meta and not _is(meta["node_threshold"], _NUMBER):
-        raise _contract_refusal("metadata.node_threshold is not a number")
+        raise _contract_refusal(
+            "metadata.node_threshold is not a number", code="attribution_graph_contract_invalid"
+        )
     settings = meta.get("pruning_settings", {})
     if not isinstance(settings, dict) or not all(_is(v, _NUMBER) for v in settings.values()):
-        raise _contract_refusal("metadata.pruning_settings is not an object of numbers")
+        raise _contract_refusal(
+            "metadata.pruning_settings is not an object of numbers",
+            code="attribution_graph_contract_invalid",
+        )
 
 
 def _check_q_params(q: Any) -> None:
     """The ``qParams`` keys the writer fills, and their value types."""
 
     if not isinstance(q, dict):
-        raise _contract_refusal("qParams is not an object")
+        raise _contract_refusal(
+            "qParams is not an object", code="attribution_graph_contract_invalid"
+        )
     pinned = q.get("pinnedIds", [])
     if not isinstance(pinned, list) or not all(_is(p, str) for p in pinned):
-        raise _contract_refusal("qParams.pinnedIds is not a list of strings")
+        raise _contract_refusal(
+            "qParams.pinnedIds is not a list of strings", code="attribution_graph_contract_invalid"
+        )
     if not isinstance(q.get("supernodes", []), list):
-        raise _contract_refusal("qParams.supernodes is not a list")
+        raise _contract_refusal(
+            "qParams.supernodes is not a list", code="attribution_graph_contract_invalid"
+        )
     for key in ("linkType", "clickedId", "sg_pos"):
         if key in q and not _is(q[key], str):
-            raise _contract_refusal(f"qParams.{key} is not a string")
+            raise _contract_refusal(
+                f"qParams.{key} is not a string", code="attribution_graph_contract_invalid"
+            )
 
 
 _NODE_FIELDS: tuple[tuple[str, type | tuple[type, ...], bool], ...] = (
@@ -450,22 +470,37 @@ def _check_nodes_and_links(nodes: Any, links: Any) -> None:
     """Node and link fields, unique node ids, and links between exported nodes."""
 
     if not isinstance(nodes, list) or not isinstance(links, list):
-        raise _contract_refusal("nodes or links is not a list")
+        raise _contract_refusal(
+            "nodes or links is not a list", code="attribution_graph_contract_invalid"
+        )
     ids: set[str] = set()
     for index, node in enumerate(nodes):
         if not isinstance(node, dict):
-            raise _contract_refusal(f"nodes[{index}] is not an object")
+            raise _contract_refusal(
+                f"nodes[{index}] is not an object", code="attribution_graph_contract_invalid"
+            )
         for key, types, nullable in _NODE_FIELDS:
             if not _is(node.get(key), types, nullable=nullable):
-                raise _contract_refusal(f"nodes[{index}].{key} has the wrong type")
+                raise _contract_refusal(
+                    f"nodes[{index}].{key} has the wrong type",
+                    code="attribution_graph_contract_invalid",
+                )
         if node["node_id"] in ids:
-            raise _contract_refusal(f"node id {node['node_id']!r} appears twice")
+            raise _contract_refusal(
+                f"node id {node['node_id']!r} appears twice",
+                code="attribution_graph_contract_invalid",
+            )
         ids.add(node["node_id"])
     for index, link in enumerate(links):
         if not isinstance(link, dict) or not _is(link.get("weight"), _NUMBER):
-            raise _contract_refusal(f"links[{index}] has no numeric weight")
+            raise _contract_refusal(
+                f"links[{index}] has no numeric weight", code="attribution_graph_contract_invalid"
+            )
         if link.get("source") not in ids or link.get("target") not in ids:
-            raise _contract_refusal(f"links[{index}] joins a node id the export does not hold")
+            raise _contract_refusal(
+                f"links[{index}] joins a node id the export does not hold",
+                code="attribution_graph_contract_invalid",
+            )
 
 
 def check_contract(exported: Any) -> None:
@@ -483,10 +518,15 @@ def check_contract(exported: Any) -> None:
     """
 
     if not isinstance(exported, dict):
-        raise _contract_refusal(f"the graph is a {type(exported).__name__}, not a JSON object")
+        raise _contract_refusal(
+            f"the graph is a {type(exported).__name__}, not a JSON object",
+            code="attribution_graph_contract_invalid",
+        )
     missing = [key for key in ("metadata", "qParams", "nodes", "links") if key not in exported]
     if missing:
-        raise _contract_refusal(f"the top level lacks {', '.join(missing)}")
+        raise _contract_refusal(
+            f"the top level lacks {', '.join(missing)}", code="attribution_graph_contract_invalid"
+        )
     _check_metadata(exported["metadata"])
     _check_q_params(exported["qParams"])
     _check_nodes_and_links(exported["nodes"], exported["links"])

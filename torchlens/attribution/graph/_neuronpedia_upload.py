@@ -338,31 +338,28 @@ def upload_to_neuronpedia(exported: dict[str, Any] | str | Path, *, api_key: str
     return _field(saved, "url", step=step)
 
 
-def _vector_refusal(message: str) -> AttributionError:
-    """One refusal of a vector upload argument."""
-
-    return _upload_refusal(message, code="neuronpedia_upload_argument_invalid")
-
-
 def _vector_values(vector: Any) -> list[float]:
     """The vector as a list of finite floats within the endpoint's length limit."""
 
     if not isinstance(vector, torch.Tensor) or vector.dim() != 1 or vector.numel() == 0:
-        raise _vector_refusal(
+        raise _upload_refusal(
             "The direction's vector is not a non-empty 1-D tensor. Remedy: upload a "
-            "Direction fitted by tl.intervention.direction_from_pairs(...)."
+            "Direction fitted by tl.intervention.direction_from_pairs(...).",
+            code="neuronpedia_upload_argument_invalid",
         )
     if vector.numel() > _MAX_VECTOR_LENGTH:
-        raise _vector_refusal(
+        raise _upload_refusal(
             f"The vector has {vector.numel():,} values; Neuronpedia takes at most "
             f"{_MAX_VECTOR_LENGTH:,}. Remedy: upload a direction read at a site of the "
-            "model's residual width."
+            "model's residual width.",
+            code="neuronpedia_upload_argument_invalid",
         )
     values = [float(v) for v in vector.detach().cpu().double().tolist()]
     if not all(math.isfinite(v) for v in values):
-        raise _vector_refusal(
+        raise _upload_refusal(
             "The vector holds NaN or infinite values, which JSON cannot carry. Remedy: refit "
-            "the direction on finite rows, tl.intervention.direction_from_pairs(...)."
+            "the direction on finite rows, tl.intervention.direction_from_pairs(...).",
+            code="neuronpedia_upload_argument_invalid",
         )
     return values
 
@@ -374,20 +371,23 @@ def _check_vector_settings(  # noqa: PLR0913 -- the endpoint's fields, checked t
 
     for name, value in (("scan", scan), ("vector_label", vector_label)):
         if not isinstance(value, str) or not value.strip():
-            raise _vector_refusal(
+            raise _upload_refusal(
                 f"{name}={value!r} is not a non-empty string. Remedy: "
                 'direction.upload_to_neuronpedia(api_key=..., scan="gemma-2-2b", '
-                'vector_label="honesty").'
+                'vector_label="honesty").',
+                code="neuronpedia_upload_argument_invalid",
             )
     if isinstance(layer, bool) or not isinstance(layer, int) or layer < 0:
-        raise _vector_refusal(
+        raise _upload_refusal(
             f"layer={layer!r} is not a layer index of 0 or more. Remedy: pass layer=3 "
-            "(the decoder block the vector belongs to)."
+            "(the decoder block the vector belongs to).",
+            code="neuronpedia_upload_argument_invalid",
         )
     if hook_type not in dict(_HOOK_TYPES):
-        raise _vector_refusal(
+        raise _upload_refusal(
             f"hook_type={hook_type!r} is not one of {[name for name, _ in _HOOK_TYPES]}. Remedy: "
-            'pass hook_type="resid_post" for a decoder block output.'
+            'pass hook_type="resid_post" for a decoder block output.',
+            code="neuronpedia_upload_argument_invalid",
         )
     low, high = _STEER_STRENGTH_RANGE
     if (
@@ -395,9 +395,10 @@ def _check_vector_settings(  # noqa: PLR0913 -- the endpoint's fields, checked t
         or not isinstance(steer_strength, (int, float))
         or not low <= steer_strength <= high
     ):
-        raise _vector_refusal(
+        raise _upload_refusal(
             f"steer_strength={steer_strength!r} is not a number from {low:g} to {high:g}. "
-            "Remedy: pass steer_strength=1.0."
+            "Remedy: pass steer_strength=1.0.",
+            code="neuronpedia_upload_argument_invalid",
         )
 
 
