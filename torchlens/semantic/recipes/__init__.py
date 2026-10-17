@@ -55,6 +55,7 @@ BUILTIN_FACET_CAPABILITY_INVENTORY: dict[str, dict[str, str]] = {
         "gamma": "parameter",
         "beta": "parameter",
         "input": "module_input",
+        "inv_rms": "op_structural",
     },
     "embedding": {
         "lookup": "op_structural",

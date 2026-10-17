@@ -84,6 +84,12 @@
   `[b, pos, head, d_model]` (pre-bias, refuses on sum-check mismatch);
   `AttentionHeadView` slices each accordingly, mapping GQA query heads onto
   KV groups for `k`/`v`.
+- Hugging Face Gemma-2: `Gemma2Attention` is served by `gqa_attention` (same
+  q/k/v/o children; the eager `pattern` is the softmax after the score
+  softcap and the mask); `gemma2_rms_norm` (`norm.py`) serves one facet,
+  `inv_rms`, the norm's single `rsqrt` op (the factor that multiplies the
+  input before the `(1 + weight)` gain), which attribution graphs freeze
+  (`tests/test_ag3a_gemma2_facets.py`). DOCUMENTED-UNSTABLE.
 - `residual.py` anchors `resid_pre` by DATAFLOW + SHAPE: the unique floating
   block input whose recorded shape equals the block's single output shape and
   which feeds the block output (zero or several matches refuse typed -- never
