@@ -1585,13 +1585,18 @@ def cow_copy_value(value: Any, translate: Callable[[Any], Any] | None) -> Any:
             item if item.__class__ in atomic else cow_copy_value(item, translate) for item in value
         }
     if cls is tuple or cls is frozenset:
-        copied = [
-            item if item.__class__ in atomic else cow_copy_value(item, translate) for item in value
-        ]
-        for original, item_copy in zip(value, copied, strict=True):
-            if original is not item_copy:
-                return cls(copied)
-        return value
+        # Rebuild only once a member copy differs; an all-identity container
+        # (the common all-atomic case) returns itself without a list.
+        copied: list[Any] | None = None
+        for index, item in enumerate(value):
+            if item.__class__ in atomic:
+                continue
+            item_copy = cow_copy_value(item, translate)
+            if item_copy is not item:
+                if copied is None:
+                    copied = list(value)
+                copied[index] = item_copy
+        return value if copied is None else cls(copied)
     if translate is not None:
         mapped = translate(value)
         if mapped is not None:
