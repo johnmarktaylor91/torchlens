@@ -26,7 +26,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._validation_state_snapshot import (
-    COPY_FAILED_CODE,
     restore_snapshot_if_changed,
     snapshot_state_for_restore,
 )
@@ -47,9 +46,12 @@ def _sentinel_storages(device_type: str) -> int:
 
     storages = set()
     for obj in gc.get_objects():
-        if isinstance(obj, torch.Tensor) and tuple(obj.shape) == _SENTINEL_SHAPE:
-            if obj.device.type == device_type:
-                storages.add(obj.untyped_storage().data_ptr())
+        if (
+            isinstance(obj, torch.Tensor)
+            and tuple(obj.shape) == _SENTINEL_SHAPE
+            and obj.device.type == device_type
+        ):
+            storages.add(obj.untyped_storage().data_ptr())
     return len(storages)
 
 
@@ -288,7 +290,7 @@ def test_deepcopy_out_of_memory_is_named_in_the_warning_and_the_refusal(
     assert verdict is False
 
     coded = [w.message for w in caught if getattr(w.message, "fields", {}).get("code")]
-    copy_warnings = [m for m in coded if m.fields["code"] == COPY_FAILED_CODE]
+    copy_warnings = [m for m in coded if m.fields["code"] == "validation_model_copy_failed"]
     assert len(copy_warnings) == 1
     warning = copy_warnings[0]
     assert isinstance(warning, RuntimeWarning)
@@ -311,7 +313,7 @@ def test_deepcopy_out_of_memory_is_named_in_the_warning_and_the_refusal(
     assert "tl.validate(model.to('cpu'), inputs, scope='forward')" in refusal[0]
     failure = last_validation_failure()
     assert failure is not None
-    assert failure.extra.get("code") == COPY_FAILED_CODE
+    assert failure.extra.get("code") == "validation_model_copy_failed"
     assert "OutOfMemoryError" in failure.message
 
     # The remedy's spelling runs: with room for the copy, validation succeeds.
@@ -335,7 +337,7 @@ def test_other_deepcopy_failures_are_named_with_their_own_remedy(
     copy_warnings = [
         w.message
         for w in caught
-        if getattr(w.message, "fields", {}).get("code") == COPY_FAILED_CODE
+        if getattr(w.message, "fields", {}).get("code") == "validation_model_copy_failed"
     ]
     assert len(copy_warnings) == 1
     assert "TypeError: cannot pickle '_thread.lock' object" in str(copy_warnings[0])
