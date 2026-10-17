@@ -1187,6 +1187,12 @@ _BUILTIN_EXCEPTION_ROOTS = frozenset(
 # current: a stale entry (class deleted or later registered) fails the gate
 # just like a missing one.
 _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
+    # Forward-validation copy-failure disclosure: a coded TorchLensWarning
+    # (S-18 contract row validation_model_copy_failed) private to validation.
+    "torchlens._validation_state_snapshot._ValidationCopyFailedWarning": (
+        "private validation disclosure; contracted by its S-18 code "
+        "validation_model_copy_failed, not a public class"
+    ),
     # autograd.grad boundary replay: raised only inside the subgraph replay and
     # caught by the replay executor, which records a failed validation.
     "torchlens.validation._autograd_grad_replay.AutogradGradReplayError": (
