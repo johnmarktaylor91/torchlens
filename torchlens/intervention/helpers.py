@@ -1658,8 +1658,9 @@ def _live_capture_donor(source: Any, context: Mapping[str, Any]) -> tuple[Any, A
     are assigned only after the forward ends, so that spelling never names a site of a
     finished trace. The source trace keeps the same provisional label for each op
     (``_raw_to_final_op_labels``), and one provisional label is one pass of one layer,
-    so the mapping never guesses a pass. The donor must have the firing site's operation
-    type and shape; anything else returns ``(None, None)`` and the caller refuses.
+    so the mapping never guesses a pass. The provisional label spells the operation
+    type, so a source op found under it has the firing site's type; its shape must also
+    match. Anything else returns ``(None, None)`` and the caller refuses.
 
     Parameters
     ----------
@@ -1685,9 +1686,7 @@ def _live_capture_donor(source: Any, context: Mapping[str, Any]) -> tuple[Any, A
         donor = None if final_label is None else source.layer_dict_all_keys.get(final_label)
         if donor is None:
             return None, None
-        same_type = getattr(donor, "layer_type", None) == context.get("layer_type")
-        same_shape = tuple(getattr(donor, "shape", None) or ()) == tuple(context.get("shape") or ())
-        if not (same_type and same_shape):
+        if tuple(getattr(donor, "shape", None) or ()) != tuple(context.get("shape") or ()):
             return None, None
         return final_label, donor
     return None, None
