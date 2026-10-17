@@ -1010,6 +1010,8 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/attribution/_guided.py", "__all__"),
         ("torchlens/attribution/graph/__init__.py", "__all__"),
         ("torchlens/attribution/graph/_build.py", "__all__"),
+        ("torchlens/attribution/graph/_neuronpedia.py", "__all__"),
+        ("torchlens/attribution/graph/_neuronpedia_upload.py", "__all__"),
         ("torchlens/attribution/graph/_read_sites.py", "__all__"),
         ("torchlens/attribution/graph/_result.py", "__all__"),
         ("torchlens/attribution/graph/_transcoders.py", "__all__"),

@@ -294,3 +294,17 @@ the key must run before them. `frozen=` also takes facet selectors:
 `frozen=[tl.facet("pattern"), tl.facet("inv_rms")]` holds every Hugging Face Gemma-2
 attention pattern and every `Gemma2RMSNorm` scale, where `inv_rms` is the norm's
 `rsqrt` output, the factor that multiplies its input. DOCUMENTED-UNSTABLE.
+
+`graph.to_neuronpedia(slug="my-graph", scan="gemma-2-2b", tokenizer=tokenizer, path="g.json")`
+returns the graph, pruned by circuit-tracer's rule (`node_threshold=0.8`,
+`edge_threshold=0.98`), in Neuronpedia's published attribution-graph schema, and writes it
+to `path`; the file opens in Neuronpedia's graph viewer. DOCUMENTED-UNSTABLE.
+
+`tl.attribution.overlay(trace, graph)` paints the graph onto its trace for
+`trace.draw(color_by=...)`: each site holding feature or error nodes gets the total influence
+of its nodes (`graph_value="activation"` paints feature activations instead).
+`tl.attribution.graph.upload_to_neuronpedia("g.json", api_key=os.environ["NEURONPEDIA_API_KEY"])` publishes the exported
+file on neuronpedia.org under the key's account and returns its URL;
+`direction.upload_to_neuronpedia(api_key=os.environ["NEURONPEDIA_API_KEY"], scan="gemma-2-2b", vector_label="honesty")`
+publishes a `Direction` the same way. Both check every field before the first request and
+never write the key into a message. DOCUMENTED-UNSTABLE.

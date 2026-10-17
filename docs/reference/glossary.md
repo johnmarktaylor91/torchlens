@@ -330,6 +330,8 @@ documented unstable and may be renamed or removed without a compatibility alias.
 | ROAD curve | `road_curve`, `ranking`, `most_relevant_first`, `least_relevant_first`, `noise_std`, `seed`, `road` | unstable -- no deprecation shim owed |
 | Causal audit | `causal_audit`, `CausalAuditResult`, `CausalAuditUnit`, `CausalAuditSet`, `claim`, `k`, `ablation`, `zero`, `mean`, `controls`, `top`, `bottom`, `random`, `random_draws`, `per_unit`, `layer`, `site`, `original_score`, `units`, `sets`, `rank_agreement`, `set_of`, `unit`, `claimed_effect`, `measured_effect`, `kind`, `draw`, `intervention`, `component`, `claim_kind`, `constant_row`, `rows_not_audited`, `corrupted`, `metric`, `edges`, `edge_table`, `edge_patch`, `example_reduction`, `logits_site`, `sets_not_measured`, `reason`, `trace` | unstable -- no deprecation shim owed |
 | Attribution graphs | `build_graph`, `AttributionGraph`, `GraphNode`, `transcoders`, `embedding`, `target`, `max_n_logits`, `desired_logit_prob`, `demeaned_logits`, `logits_at`, `frozen`, `nodes`, `adjacency_matrix`, `node_values`, `constants`, `encoder_bias`, `decoder_bias`, `other`, `active_features`, `activation_values`, `transcoder_sites`, `error_sites`, `error_vectors`, `input_tokens`, `logit_tokens`, `logit_probabilities`, `capture_outcome`, `disclosures`, `node_counts`, `node_indices`, `kind`, `site`, `position`, `feature`, `token`, `logit`, `error` | unstable -- no deprecation shim owed |
+| Attribution graph export | `to_neuronpedia`, `slug`, `scan`, `tokenizer`, `prompt`, `node_threshold`, `edge_threshold`, `path` | unstable -- no deprecation shim owed |
+| Attribution graph overlay and upload | `graph_value`, `influence`, `activation`, `upload_to_neuronpedia`, `api_key` | unstable -- no deprecation shim owed |
 
 <!-- ATTRIBUTION-KIT-UNSTABLE-INDEX:END -->
 
@@ -583,6 +585,16 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `direction.library_layer(layer=None)`: the site label's trailing index unless `layer=` is
   given; a different explicit index refuses `direction_layer_mismatch`. Applied with the same
   multiplier, each library object gives the native steer's logits.
+
+**`Direction.upload_to_neuronpedia` (publish a vector)** — *documented-unstable*
+: `direction.upload_to_neuronpedia(*, api_key, scan, vector_label, layer=None,
+  hook_type="resid_post", steer_strength=1.0)` publishes the vector on neuronpedia.org under
+  the account that owns `api_key` through Neuronpedia's "Create Vector" endpoint and returns
+  the vector page's URL. `scan` is Neuronpedia's model id, `vector_label` the name it shows,
+  `layer` defaults to `direction.library_layer()`, `hook_type` is `"resid_post"` or
+  `"resid_pre"`, `steer_strength` the default steering strength (-100 to 100). Every field
+  is checked before the request (`neuronpedia_upload_argument_invalid`); the key never
+  enters a message.
 
 **Bundle**
 : A named collection of aligned Traces, constructed with `tl.bundle(...)` or `tl.Bundle(...)`, for
@@ -2656,3 +2668,32 @@ deprecation shim owed*
   tl.facet("inv_rms")])`, which also holds every Gemma-2 attention pattern
   (`Gemma2Attention` serves the attention facets; `pattern` is the eager
   softmax after the score softcap).
+
+**`AttributionGraph.to_neuronpedia` (export in Neuronpedia's attribution-graph schema)** — *unstable — no deprecation shim owed*
+: `graph.to_neuronpedia(*, slug, scan, tokenizer, prompt=None, node_threshold=0.8,
+  edge_threshold=0.98, path=None)` returns the graph, pruned by circuit-tracer's
+  influence rule, as a dict in Neuronpedia's published attribution-graph schema
+  (and writes it to `path` when given). `slug` is the graph's name on
+  Neuronpedia, `scan` Neuronpedia's model id, `tokenizer` anything with
+  `decode(ids) -> str`, `prompt` the prompt string (`None` decodes the input
+  tokens), `node_threshold` and `edge_threshold` the shares of total influence
+  kept. Refusal codes `attribution_graph_export_argument_invalid` and
+  `attribution_graph_export_unsupported`.
+
+**`tl.attribution.overlay` with an `AttributionGraph` (`graph_value`)** — *unstable — no deprecation shim owed*
+: `tl.attribution.overlay(trace, graph, *, reduce="abs_sum", graph_value=None)` paints an
+  attribution graph onto the trace it was built from: each site holding feature or error
+  nodes gets the `reduce` total of its nodes' values over every position. `graph_value`
+  (graph sources only) is `"influence"` (what `None` means: each node's influence on the
+  logits, circuit-tracer's rule) or `"activation"` (feature activations). Refusal codes
+  `attribution_overlay_argument_invalid` and `attribution_overlay_graph_mismatch`.
+
+**`tl.attribution.graph.upload_to_neuronpedia` (publish an exported graph)** — *unstable — no deprecation shim owed*
+: `upload_to_neuronpedia(exported, *, api_key)` publishes the dict `to_neuronpedia` returned
+  (or the file it wrote) on neuronpedia.org under the account that owns `api_key`, through
+  Neuronpedia's documented two-step upload, and returns the graph page's URL. Standard
+  library only; the key goes in the `x-api-key` header and never into a message. Checked
+  before any request: the export's structure (`attribution_graph_contract_invalid`), the
+  `slug` and `scan` characters and the file size (`neuronpedia_upload_argument_invalid`).
+  HTTP failures raise `neuronpedia_upload_http_error`, answers without their fields
+  `neuronpedia_upload_response_invalid`.

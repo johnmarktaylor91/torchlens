@@ -328,7 +328,8 @@ mapping from `model.named_modules()` name or trace layer label to a result, tens
 scalar. `reduce` is closed vocabulary: `"abs_sum"` (default), `"abs_mean"`, `"sum"`, `"max"`.
 Unknown keys and unknown reductions raise `AttributionError` naming the fix. A module fired
 several times paints its per-layer total on every one of its nodes; per-pass splits are not
-claimed.
+claimed. `source` may also be an `AttributionGraph`; see [Drawing a graph on
+its trace](#drawing-a-graph-on-its-trace-overlay).
 
 ```python
 import torch
@@ -1086,6 +1087,9 @@ reconstruction, `active_features` and `activation_values` the feature nodes, and
 `capture_outcome` and `disclosures` what the capture's completeness verdict says.
 
 ```python
+import json
+from pathlib import Path
+
 import torch
 from torch import nn
 
@@ -1130,6 +1134,109 @@ logit = graph.node_indices("logit")[0]
 strongest = int(graph.adjacency_matrix[logit].abs().argmax())
 print(graph.nodes[strongest])
 assert graph.error_vectors.abs().max() < 1e-5  # the transcoder is the MLP itself
+
+
+class Letters:
+    """A stand-in tokenizer: token id i decodes to the i-th letter."""
+
+    def decode(self, ids: list[int]) -> str:
+        return "".join(chr(ord("a") + i) for i in ids)
+
+
+path = Path(globals().get("DOCS_TMPDIR", "/tmp")) / "tiny-graph.json"
+exported = graph.to_neuronpedia(slug="tiny-graph", scan="tiny", tokenizer=Letters(), path=path)
+print(exported["metadata"]["prompt_tokens"], len(exported["nodes"]), len(exported["links"]))
+assert json.loads(path.read_text()) == exported
+
+color_by = tl.attribution.overlay(trace, graph)  # each node's influence, totalled per site
+painted = [label for label in trace.layer_labels if color_by(trace[label]) is not None]
+print(painted)
+```
+
+### Exporting to Neuronpedia (`AttributionGraph.to_neuronpedia`)
+
+`graph.to_neuronpedia(*, slug, scan, tokenizer, prompt=None, node_threshold=0.8,
+edge_threshold=0.98, path=None)` returns the graph, pruned, as a JSON-ready dict in
+Neuronpedia's published attribution-graph schema, and writes it to `path` when one is given.
+Documented-unstable. The schema is `apps/webapp/app/api/graph/graph-schema.json` in
+[Neuronpedia's repository](https://github.com/hijohnnylin/neuronpedia) at commit
+`2f0bb10893b9c63c409dbc49db61f557883e0a2c` (JSON Schema draft-07, "Anthropic Attribution
+Graph" 1.0.0), the same schema as Neuronpedia's [graph validator](https://www.neuronpedia.org/graph/validator).
+Node ids, node fields and the direction of links follow circuit-tracer's own writer, so the file
+opens in Neuronpedia's graph viewer the way a circuit-tracer graph does.
+
+- `slug` is the graph's name on Neuronpedia and `scan` is Neuronpedia's model id (for example
+  `"gemma-2-2b"`); the graph stores neither.
+- `tokenizer` is anything with `decode(ids) -> str`, usually the model's Hugging Face
+  tokenizer: it turns each input token and each target logit into the strings the viewer shows.
+  `prompt=None` decodes the input tokens together.
+- Pruning is circuit-tracer's rule. A node's influence is its total effect on the logits,
+  weighted by their probabilities, through the row-normalised absolute adjacency. Nodes are kept
+  in order of influence until `node_threshold` of the total is covered, edges likewise until
+  `edge_threshold`; token and logit nodes are always kept, and feature and error nodes left
+  without kept edges are dropped. A node's `influence` field is the share of the total covered
+  up to and including it. Nodes at every position are exported, the first (often BOS) included.
+- A feature's `layer` is its transcoder's index in `transcoder_sites`, an error node's is its
+  site's index in `error_sites`, and logit nodes sit one layer past the last. A graph with a
+  different number of transcoders than MLP outputs is refused
+  (`attribution_graph_export_unsupported`), as are graphs without token ids, with NaN or
+  infinite values, or whose logits nothing influences; keyword values the schema cannot carry
+  raise `attribution_graph_export_argument_invalid`.
+
+### Drawing a graph on its trace (`overlay`)
+
+`tl.attribution.overlay(trace, graph, *, reduce="abs_sum", graph_value=None)` paints an
+attribution graph onto the trace it was built from, for `trace.draw(color_by=...)`.
+Documented-unstable. Each site holding feature or error nodes (the MLP a feature's transcoder
+reads, the MLP output an error node completes) gets the `reduce` total of its nodes' values
+over every position, on that module's output nodes; every other node stays unencoded.
+
+- `graph_value=None` (the same as `"influence"`) paints each node's influence on the logits,
+  the quantity `to_neuronpedia` prunes by; `graph_value="activation"` paints the feature
+  activations, so sites holding only error nodes stay unencoded. Token and logit nodes paint
+  nothing.
+- A graph built from another trace is refused (`attribution_overlay_graph_mismatch`), as is a
+  `graph_value` that is unknown or given with a source that is not a graph
+  (`attribution_overlay_argument_invalid`).
+
+The example above ends with the overlay; `trace.draw(color_by=color_by, vis_outpath="graph")`
+renders it.
+
+### Uploading to Neuronpedia (`upload_to_neuronpedia`)
+
+`tl.attribution.graph.upload_to_neuronpedia(exported, *, api_key)` publishes an exported graph
+on neuronpedia.org under the account that owns `api_key`, and returns the URL of its page.
+Documented-unstable. `exported` is the dict `to_neuronpedia` returned or the path of the file
+it wrote. It follows Neuronpedia's documented two-step upload
+([API reference](https://www.neuronpedia.org/api-doc), "Upload Graph 1/2" and "Upload Graph
+2/2"): `POST /api/graph/signed-put` returns a signed upload address, the JSON is sent there,
+and `POST /api/graph/save-to-db` saves the graph under its `scan` and `slug`. It uses the
+standard library only.
+
+- The key is sent in the `x-api-key` header (Neuronpedia shows it under Settings) and is never
+  written into a message, `repr` or log.
+- Before any request the graph is checked against the export's structure
+  (`attribution_graph_contract_invalid`), its `slug` and `scan` against the characters the
+  server takes (letters, digits, `_`, `.`, `-`), and its size against the server's limits of
+  1,024 to 104,857,600 bytes (`neuronpedia_upload_argument_invalid`, also raised for a missing
+  key or an unreadable file).
+- An HTTP error or an unreachable host raises `neuronpedia_upload_http_error`, naming the step
+  and the server's answer; an answer without its documented fields raises
+  `neuronpedia_upload_response_invalid`.
+
+`direction.upload_to_neuronpedia(*, api_key, scan, vector_label, layer=None,
+hook_type="resid_post", steer_strength=1.0)` publishes a `tl.intervention.Direction` the same
+way through Neuronpedia's "Create Vector" endpoint (`POST /api/vector/new`). `layer` defaults to
+the trailing index of the direction's site label, as `to_repeng` reads it; `hook_type` is
+`"resid_post"` (a decoder block's output) or `"resid_pre"` (its input); `steer_strength` is the
+default steering strength Neuronpedia offers, from -100 to 100. Documented-unstable.
+
+```text
+# Publishes the graph on neuronpedia.org under your account; continues the example above.
+import os
+
+url = tl.attribution.graph.upload_to_neuronpedia(path, api_key=os.environ["NEURONPEDIA_API_KEY"])
+print(url)
 ```
 
 ## The F06 attribution kit (DOCUMENTED-UNSTABLE)
