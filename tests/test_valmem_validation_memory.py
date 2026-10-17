@@ -304,7 +304,11 @@ def test_deepcopy_out_of_memory_is_named_in_the_warning_and_the_refusal(
         if str(w.message).startswith("TorchLens validation cannot prove model-state")
     ]
     assert len(refusal) == 1
-    assert "The deepcopy failed with OutOfMemoryError: CUDA out of memory" in refusal[0]
+    assert refusal[0].startswith(
+        "TorchLens validation cannot prove model-state restoration after deepcopy failed "
+        "with OutOfMemoryError: CUDA out of memory"
+    )
+    assert "tl.validate(model.to('cpu'), inputs, scope='forward')" in refusal[0]
     failure = last_validation_failure()
     assert failure is not None
     assert failure.extra.get("code") == COPY_FAILED_CODE
@@ -341,7 +345,7 @@ def test_other_deepcopy_failures_are_named_with_their_own_remedy(
         for w in caught
         if str(w.message).startswith("TorchLens validation cannot prove model-state")
     ]
-    assert "The deepcopy failed with TypeError: cannot pickle" in refusal[0]
+    assert "deepcopy failed with TypeError: cannot pickle" in refusal[0]
 
     # The remedy's spelling runs once the class can be copied.
     def copyable(self: Any, memo: Any) -> Any:

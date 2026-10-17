@@ -29,7 +29,7 @@ from ._plain_attr_fidelity import (
     restore_simple_plain_attrs_on_copy,
 )
 from ._trace_selector_helpers import _stable_cache_fragment
-from ._validation_state_snapshot import copy_failure_clause, warn_copy_failed
+from ._validation_state_snapshot import describe_copy_failure, warn_copy_failed
 from .data_classes.trace import Trace
 from .utils._torch_compat import (
     force_eager_stance_scope,
@@ -1300,7 +1300,7 @@ def _model_for_ground_truth_validation(
         _strip_copied_forward_decorations(copied_model)
         return copied_model, None
     except Exception as exc:  # noqa: BLE001 - any copy failure falls back; the warning names it
-        copy_failure = copy_failure_clause(exc)
+        copy_failure = describe_copy_failure(exc)
         if type(model) not in _VALIDATION_DEEPCOPY_WARNING_TYPES:
             _VALIDATION_DEEPCOPY_WARNING_TYPES.add(type(model))
             warn_copy_failed(model, exc, run="ground-truth")
@@ -1368,7 +1368,7 @@ def _model_for_validation_replay(
         restore_simple_plain_attrs_on_copy(model, copied_model)
         return copied_model, None, True
     except Exception as exc:  # noqa: BLE001 - any copy failure falls back; the warning names it
-        copy_failure = copy_failure_clause(exc)
+        copy_failure = describe_copy_failure(exc)
         warn_copy_failed(model, exc, run="replay")
         del exc  # its traceback would pin the partial copy's tensors on the device
         try:

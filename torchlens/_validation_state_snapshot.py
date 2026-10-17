@@ -207,19 +207,18 @@ def describe_copy_failure(exc: BaseException) -> str:
     return f"{type(exc).__name__}: {first_line}" if first_line else type(exc).__name__
 
 
-def _is_out_of_memory(exc: BaseException) -> bool:
-    """Return whether a deep-copy failure was a device or host allocation failure."""
+def _is_out_of_memory(description: str) -> bool:
+    """Return whether a described deep-copy failure was an allocation failure."""
 
-    out_of_memory = getattr(torch, "OutOfMemoryError", None)
-    if out_of_memory is not None and isinstance(exc, out_of_memory):
-        return True
-    return isinstance(exc, MemoryError) or "out of memory" in str(exc).lower()
+    return description.startswith(("OutOfMemoryError", "MemoryError")) or (
+        "out of memory" in description.lower()
+    )
 
 
-def copy_failure_remedy(exc: BaseException) -> str:
-    """Return the spelling that works for a failed validation deep copy."""
+def copy_failure_remedy(description: str) -> str:
+    """Return the spelling that works for a described validation deep-copy failure."""
 
-    if _is_out_of_memory(exc):
+    if _is_out_of_memory(description):
         return (
             "free device memory so a second copy of the weights fits, or validate "
             "on the host: tl.validate(model.to('cpu'), inputs, scope='forward')"
@@ -264,7 +263,7 @@ def warn_copy_failed(model: nn.Module, exc: BaseException, *, run: str) -> None:
         _ValidationCopyFailedWarning(
             f"{lead}: {describe_copy_failure(exc)}. Validation runs the model on a copy "
             f"so the live model is never touched; without one {fallback}. "
-            f"{_COPY_FAILED_POINTER} Remedy: {copy_failure_remedy(exc)}",
+            f"{_COPY_FAILED_POINTER} Remedy: {copy_failure_remedy(describe_copy_failure(exc))}",
             code="validation_model_copy_failed",
             copy_error=describe_copy_failure(exc),
             model_type=f"{type(model).__module__}.{type(model).__qualname__}",
@@ -273,12 +272,32 @@ def warn_copy_failed(model: nn.Module, exc: BaseException, *, run: str) -> None:
     )
 
 
-def copy_failure_clause(exc: BaseException | None) -> str:
-    """Return the refusal clause naming why the copy failed, or an empty string."""
+def restore_refusal_message(what: str, unsupported: Any, copy_failure: str) -> str:
+    """Return the refusal for a live-model fallback that cannot snapshot plain attributes.
 
-    if exc is None:
-        return ""
-    return (
-        f" The deepcopy failed with {describe_copy_failure(exc)}; "
-        f"remedy: {copy_failure_remedy(exc)}."
+    Parameters
+    ----------
+    what:
+        ``"model-state"`` (ground-truth run) or ``"replay-state"`` (replay run).
+    unsupported:
+        The plain-attribute paths the fallback cannot snapshot.
+    copy_failure:
+        ``"ExceptionType: message"`` of the deepcopy that forced the fallback,
+        or ``""`` when it is unknown.
+
+    Returns
+    -------
+    str
+        The refusal, leading with why the copy failed when that is known.
+    """
+
+    cause = f" with {copy_failure}" if copy_failure else ""
+    message = (
+        f"TorchLens validation cannot prove {what} restoration after deepcopy "
+        f"failed{cause}: the live-model fallback cannot snapshot these plain "
+        f"attributes: {unsupported!r}. Returning False rather than reporting "
+        "unverified success."
     )
+    if copy_failure:
+        message += f" {_COPY_FAILED_POINTER} Remedy: {copy_failure_remedy(copy_failure)}"
+    return message

@@ -42,6 +42,7 @@ from ._save_budget import SaveBudgetOption
 from ._validation_state_snapshot import (
     COPY_FAILED_CODE,
     StateSnapshot,
+    restore_refusal_message,
     restore_snapshot_if_changed,
     snapshot_state_for_restore,
     state_matches_snapshot,
@@ -1536,10 +1537,11 @@ def _validate_forward_pass_torch(
         ground_truth_model, plain_attr_snapshot = _model_for_ground_truth_validation(model)
         if plain_attr_snapshot is not None and not plain_attr_snapshot.is_complete:
             return _refuse_validation_precondition(
-                "TorchLens validation cannot prove model-state restoration after deepcopy "
-                "failed because these plain attributes are unsupported: "
-                f"{plain_attr_snapshot.unsupported_attr_paths!r}. Returning False rather "
-                f"than reporting unverified success.{plain_attr_snapshot.copy_failure}",
+                restore_refusal_message(
+                    "model-state",
+                    plain_attr_snapshot.unsupported_attr_paths,
+                    plain_attr_snapshot.copy_failure,
+                ),
                 _trace_observer,
                 {"code": COPY_FAILED_CODE} if plain_attr_snapshot.copy_failure else None,
             )
@@ -1650,10 +1652,11 @@ def _validate_forward_pass_torch(
             and not validation_plain_attr_snapshot.is_complete
         ):
             return _refuse_validation_precondition(
-                "TorchLens validation cannot prove replay-state restoration after deepcopy "
-                "failed because these plain attributes are unsupported: "
-                f"{validation_plain_attr_snapshot.unsupported_attr_paths!r}. Returning False "
-                f"rather than reporting unverified success.{validation_plain_attr_snapshot.copy_failure}",
+                restore_refusal_message(
+                    "replay-state",
+                    validation_plain_attr_snapshot.unsupported_attr_paths,
+                    validation_plain_attr_snapshot.copy_failure,
+                ),
                 _trace_observer,
                 {"code": COPY_FAILED_CODE} if validation_plain_attr_snapshot.copy_failure else None,
             )
