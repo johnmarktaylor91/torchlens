@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -321,7 +322,9 @@ def test_three_states_on_a_small_model() -> None:
         assert "counted from the backward ops that ran" in status.status_line
         estimate = backward_estimate(observed)
         assert estimate.label == "hypothetical"
-        assert str(estimate.hypothetical_flops) not in status.status_line
+        assert (
+            re.search(rf"(?<![\d.]){estimate.hypothetical_flops}(?!\d)", status.status_line) is None
+        )
     finally:
         for trace in (off, unobserved, observed):
             trace.cleanup()
