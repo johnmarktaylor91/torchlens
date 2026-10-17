@@ -303,8 +303,8 @@ to `path`; the file opens in Neuronpedia's graph viewer. DOCUMENTED-UNSTABLE.
 `tl.attribution.overlay(trace, graph)` paints the graph onto its trace for
 `trace.draw(color_by=...)`: each site holding feature or error nodes gets the total influence
 of its nodes (`graph_value="activation"` paints feature activations instead).
-`tl.attribution.graph.upload_to_neuronpedia("g.json", api_key=key)` publishes the exported
+`tl.attribution.graph.upload_to_neuronpedia("g.json", api_key=os.environ["NEURONPEDIA_API_KEY"])` publishes the exported
 file on neuronpedia.org under the key's account and returns its URL;
-`direction.upload_to_neuronpedia(api_key=key, scan="gemma-2-2b", vector_label="honesty")`
+`direction.upload_to_neuronpedia(api_key=os.environ["NEURONPEDIA_API_KEY"], scan="gemma-2-2b", vector_label="honesty")`
 publishes a `Direction` the same way. Both check every field before the first request and
 never write the key into a message. DOCUMENTED-UNSTABLE.

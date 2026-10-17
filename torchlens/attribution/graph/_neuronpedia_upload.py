@@ -222,7 +222,8 @@ def _graph_bytes(exported: Any) -> tuple[bytes, Any]:
         raise _upload_refusal(
             f"The graph is a {type(exported).__name__}; the upload takes the dict "
             "to_neuronpedia returns or the path of the file it wrote. Remedy: "
-            "tl.attribution.graph.upload_to_neuronpedia(graph.to_neuronpedia(...), api_key=...).",
+            "tl.attribution.graph.upload_to_neuronpedia(graph.to_neuronpedia(...), "
+            "api_key=os.environ['NEURONPEDIA_API_KEY']).",
             code="neuronpedia_upload_argument_invalid",
         )
     try:
@@ -373,8 +374,8 @@ def _check_vector_settings(  # noqa: PLR0913 -- the endpoint's fields, checked t
         if not isinstance(value, str) or not value.strip():
             raise _upload_refusal(
                 f"{name}={value!r} is not a non-empty string. Remedy: "
-                'direction.upload_to_neuronpedia(api_key=..., scan="gemma-2-2b", '
-                'vector_label="honesty").',
+                'direction.upload_to_neuronpedia(api_key=os.environ["NEURONPEDIA_API_KEY"], '
+                'scan="gemma-2-2b", vector_label="honesty").',
                 code="neuronpedia_upload_argument_invalid",
             )
     if isinstance(layer, bool) or not isinstance(layer, int) or layer < 0:
