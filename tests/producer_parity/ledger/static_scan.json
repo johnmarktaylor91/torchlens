@@ -5308,7 +5308,7 @@
   "field": "label_raw",
   "file": "torchlens/ir/live_index.py",
   "has_default": false,
-  "sites": 9,
+  "sites": 4,
   "via_getattr": false
  },
  {
@@ -5332,7 +5332,7 @@
   "field": "parents",
   "file": "torchlens/ir/live_index.py",
   "has_default": false,
-  "sites": 3,
+  "sites": 5,
   "via_getattr": false
  },
  {

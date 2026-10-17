@@ -2795,3 +2795,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: d8d3deb6aeec5c3ce9691cbfc3acb7ddd78b0684 (dirty)
 recorded: 2026-10-16T15:31:12.685392+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: LIVEINDEX-PERF: LiveIndex.append and replace move a re-seen label's child edges incrementally; live_index.py now reads label_raw at 4 sites and parents at 5
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: a78ab151350c3bfc520d3c59471f3f48e0ad3eb4 (dirty)
+recorded: 2026-10-16T22:55:23.436907+00:00
