@@ -243,6 +243,14 @@ _DOCUMENTED_UNSTABLE_TOKENS = {
     "token",
     "transcoder_sites",
     "transcoders",
+    "edge_threshold",
+    "node_threshold",
+    "path",
+    "prompt",
+    "scan",
+    "slug",
+    "to_neuronpedia",
+    "tokenizer",
 }
 
 
