@@ -713,6 +713,22 @@
  },
  {
   "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/attribution/graph/_read_sites.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/attribution/graph/_read_sites.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "kind",
   "file": "torchlens/attribution/graph/_result.py",
   "has_default": false,

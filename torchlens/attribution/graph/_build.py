@@ -16,7 +16,7 @@ import functools
 import operator
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
 
@@ -26,8 +26,12 @@ from ..onebackward import read, seed
 from ..onebackward._accessor import ReadEdgeIndex, read_edge_index
 from ..onebackward._read import _capture_outcome_status, _SitePayloads
 from ..onebackward._targets import resolve_site_edge
+from ._read_sites import check_upstream, facet_labels, is_module, op_read_label
 from ._result import AttributionGraph, GraphNode
 from ._transcoders import Reader, normalize_transcoders
+
+if TYPE_CHECKING:
+    from ...intervention.selectors import FacetSelector
 
 __all__ = ["build_graph"]
 
@@ -99,23 +103,38 @@ def _edge_label(index: ReadEdgeIndex, label: str, role: str) -> str:
     return resolve_site_edge(index, label, role=role).label
 
 
+def _read_labels(
+    trace: Any, index: ReadEdgeIndex, readers: tuple[Reader, ...]
+) -> tuple[dict[str, str], list[Reader]]:
+    """Return each transcoder's read edge label and the readers keyed by op labels."""
+
+    op_readers = [reader for reader in readers if not is_module(trace, reader.site)]
+    op_sites = {reader.site for reader in op_readers}
+    reads: dict[str, str] = {}
+    for reader in readers:
+        if reader.site in op_sites:
+            reads[reader.site] = op_read_label(index, reader)
+            continue
+        module = _module(trace, reader.site, "transcoder")
+        reads[reader.site] = _edge_label(
+            index, _one_op(module, reader.site, "input_ops", "MLP"), "target"
+        )
+    return reads, op_readers
+
+
 def _resolve_sites(
     trace: Any,
     readers: tuple[Reader, ...],
     embedding: str,
     logits_at: SiteTarget | None,
 ) -> _Sites:
-    """Address every read, write, embedding and logit site on the capture."""
+    """Address every read, write, embedding and logit site on the capture.
+
+    A transcoder key is a module name or an op label (``_read_sites``).
+    """
 
     index = read_edge_index(trace)
-    reads = {
-        reader.site: _edge_label(
-            index,
-            _one_op(_module(trace, reader.site, "transcoder"), reader.site, "input_ops", "MLP"),
-            "target",
-        )
-        for reader in readers
-    }
+    reads, op_readers = _read_labels(trace, index, readers)
     writes: dict[str, str] = {}
     for reader in readers:
         for write, _decoder in reader.decoders:
@@ -123,6 +142,8 @@ def _resolve_sites(
                 module = _module(trace, write, "MLP output")
                 op = _one_op(module, write, "output_ops", "MLP output")
                 writes[write] = _edge_label(index, op, "input")
+    for reader in op_readers:
+        check_upstream(trace, index, reader, reads[reader.site], writes)
     embed_module = _module(trace, embedding, "embedding")
     embed_label = _edge_label(
         index, _one_op(embed_module, embedding, "output_ops", "embedding"), "input"
@@ -335,21 +356,26 @@ def _frozen_label(trace: Any, index: ReadEdgeIndex, name: str) -> str:
     return _edge_label(index, _one_op(module, name, "output_ops", "frozen"), "frozen")
 
 
-def _frozen_labels(trace: Any, sites: _Sites, frozen: Sequence[str]) -> list[str]:
+def _frozen_labels(trace: Any, sites: _Sites, frozen: Any) -> list[str]:
     """Return the frozen set: every written MLP output plus the caller's sites."""
 
+    from ...intervention.selectors import FacetSelector
+
     labels = list(sites.writes.values())
-    for name in frozen:
-        if not isinstance(name, str):
+    for name in [frozen] if isinstance(frozen, FacetSelector) else frozen:
+        if isinstance(name, FacetSelector):
+            named = facet_labels(trace, sites.index, name)
+        elif isinstance(name, str):
+            named = [_frozen_label(trace, sites.index, name)]
+        else:
             raise _graph_refusal(
-                f"frozen= holds {name!r}; it takes module names. Remedy: pass "
-                "frozen=['blocks.0.attn.pattern', ...], the modules whose outputs are held "
-                "at their captured values.",
+                f"frozen= holds {name!r}; it takes module names, op labels and facet "
+                "selectors. Remedy: pass frozen=['blocks.0.attn.pattern', ...], the modules "
+                "whose outputs are held at their captured values, or "
+                "frozen=[tl.facet('pattern'), ...].",
                 code="attribution_graph_site_not_found",
             )
-        label = _frozen_label(trace, sites.index, name)
-        if label not in labels:
-            labels.append(label)
+        labels.extend(label for label in named if label not in labels)
     return labels
 
 
@@ -492,7 +518,7 @@ def build_graph(  # noqa: PLR0913 -- the graph door: two subjects, then what, wh
     desired_logit_prob: float = 0.95,
     demeaned_logits: bool = True,
     logits_at: SiteTarget | None = None,
-    frozen: Sequence[str] | _Unset = _UNSET,
+    frozen: Sequence[str | FacetSelector] | FacetSelector | _Unset = _UNSET,
 ) -> AttributionGraph:
     """Build the attribution graph of one prompt's capture.
 
@@ -508,7 +534,12 @@ def build_graph(  # noqa: PLR0913 -- the graph door: two subjects, then what, wh
         A finished capture of one sequence, ``tl.trace(model, tokens[None])``,
         with activations saved.
     transcoders
-        Mapping from MLP module name to transcoder: an object with
+        Mapping from read site to transcoder. A read site is the MLP module
+        name (the transcoder reads the module's call input) or an op label
+        (it reads that op's output, for a read point inside a module, such
+        as a norm's value before its gain); an op-label key needs ``W_dec``
+        and ``b_dec`` as mappings naming the MLP outputs it writes, and must
+        run before them. The transcoder is an object with
         ``encode``, ``W_enc``, ``b_enc``, ``W_dec`` and ``b_dec``, the same
         object ``tl.splice_module(transcoder, input="in")`` would splice in.
         A cross-layer transcoder gives ``W_dec`` and ``b_dec`` as mappings
@@ -530,9 +561,11 @@ def build_graph(  # noqa: PLR0913 -- the graph door: two subjects, then what, wh
         ``None`` reads the model output.
     frozen
         Module names whose outputs are held at their captured values, such
-        as attention-pattern and normalisation-scale modules, or op labels
-        for values computed inside a module (``"rsqrt_1_5"``). Required:
-        pass ``frozen=()`` for a model with neither. Every MLP output a
+        as attention-pattern and normalisation-scale modules, op labels
+        for values computed inside a module (``"rsqrt_1_5"``), or facet
+        selectors such as ``tl.facet("pattern")``, which hold the op behind
+        that facet in every module that serves it. Required: pass
+        ``frozen=()`` for a model with neither. Every MLP output a
         transcoder writes is always held.
 
     Returns
@@ -580,7 +613,7 @@ def _build(  # noqa: PLR0913 -- build_graph's keywords plus the internal counter
     desired_logit_prob: float,
     demeaned_logits: bool,
     logits_at: SiteTarget | None,
-    frozen: Sequence[str],
+    frozen: Sequence[str | FacetSelector] | FacetSelector,
     counters: _BuildCounters,
 ) -> AttributionGraph:
     """Build the graph; fill ``counters`` (the body of :func:`build_graph`)."""

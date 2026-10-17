@@ -2647,3 +2647,12 @@ deprecation shim owed*
   Only `trace.ops` is the counted view: `input_ops`, `output_ops`,
   `saved_ops`, `saved_grad_ops`, `compute_ops` and `ops_with_params` list
   exactly their rows, boundary rows included.
+
+**`inv_rms` facet (Hugging Face `Gemma2RMSNorm`)** — *unstable — no deprecation shim owed*
+: The norm's single `rsqrt` op output, `1 / sqrt(mean(x**2) + eps)`, the
+  per-position factor that multiplies the input before the `(1 + weight)`
+  gain. `tl.facet("inv_rms")` names it in every Gemma-2 norm; an attribution
+  graph holds it with `tl.attribution.build_graph(..., frozen=[tl.facet("pattern"),
+  tl.facet("inv_rms")])`, which also holds every Gemma-2 attention pattern
+  (`Gemma2Attention` serves the attention facets; `pattern` is the eager
+  softmax after the score softcap).

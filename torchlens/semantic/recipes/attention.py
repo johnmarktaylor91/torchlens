@@ -672,6 +672,7 @@ def bert_self_attention(module: Any) -> dict[str, Any]:
         "LlamaFlashAttention2",
         "MistralFlashAttention2",
         "Qwen2Attention",
+        "Gemma2Attention",
         "ViTAttention",
     ),
     target_scope="module",
@@ -685,8 +686,9 @@ def gqa_attention(module: Any) -> dict[str, Any]:
     4.x per-backend subclasses, and the 5.x ``ViTAttention`` (same child
     layout, MHA with ``n_kv_heads == n_q_heads``). ``Qwen2Attention`` differs
     from Llama only in carrying q/k/v biases, which ride inside the captured
-    projection outputs. Fusedness comes from the captured graph, never these
-    names.
+    projection outputs. ``Gemma2Attention`` has the same children; its eager
+    ``pattern`` is the softmax after the score softcap and the causal mask.
+    Fusedness comes from the captured graph, never these names.
     """
 
     n_q_heads, n_kv_heads, d_head = _attention_config(module)
