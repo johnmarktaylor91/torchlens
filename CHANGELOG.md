@@ -395,6 +395,14 @@
   recorder and the checkpoint evidence alike.
 - **facets**: Facet selectors no longer fail on a selectively saved trace because some unrelated
   op's payload was not saved.
+- **validation**: `tl.validate(..., scope="forward")` no longer keeps extra copies of the model's
+  weights on its device: the restore snapshot is held in host memory, the ground-truth copy is
+  released before the replay copy, and the replay copy reuses the live snapshot. A GPU model now
+  needs one copy beyond itself during the ground-truth run (it needed up to five), plus the
+  capture's saved-argument values.
+- **validation**: when forward validation cannot deep-copy the model (for example CUDA out of
+  memory), the warning (code `validation_model_copy_failed`) and the refusal name the exception and
+  a remedy instead of reporting only unsupported plain attributes.
 
 ### Performance Improvements
 
