@@ -192,13 +192,13 @@ def _parameter_alias(references: Any, tensor: torch.Tensor) -> torch.Tensor:
     reach the parameter or its registry entry.
     """
 
-    if not references.keep(tensor):
-        return cast(torch.Tensor, copy_arg_tree(tensor))
+    # Paused: the storage and version reads and the detach are TorchLens's own
+    # calls, never captured ops (and never re-enter this argument copy).
     with pause_logging():
-        alias = tensor.detach()
-        if tensor.requires_grad:
+        alias = tensor.detach() if references.keep(tensor) else None
+        if alias is not None and tensor.requires_grad:
             alias.requires_grad_(True)
-    return alias
+    return cast(torch.Tensor, copy_arg_tree(tensor)) if alias is None else alias
 
 
 def _iter_tree_tensors(*roots: Any) -> Iterator[torch.Tensor]:
