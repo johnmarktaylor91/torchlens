@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
 
 import torch
 
@@ -152,3 +154,86 @@ class AttributionGraph:
         """
 
         return [index for index, node in enumerate(self.nodes) if node.kind == kind]
+
+    def to_neuronpedia(  # noqa: PLR0913 -- keyword-only export settings
+        self,
+        *,
+        slug: str,
+        scan: str,
+        tokenizer: Any,
+        prompt: str | None = None,
+        node_threshold: float = 0.8,
+        edge_threshold: float = 0.98,
+        path: str | Path | None = None,
+    ) -> dict[str, Any]:
+        """Return the pruned graph in Neuronpedia's attribution-graph schema.
+
+        Documented-unstable. The result follows Neuronpedia's published
+        schema (``apps/webapp/app/api/graph/graph-schema.json`` in
+        https://github.com/hijohnnylin/neuronpedia at commit
+        2f0bb10893b9c63c409dbc49db61f557883e0a2c, draft-07, "Anthropic
+        Attribution Graph" 1.0.0; the same schema as
+        https://www.neuronpedia.org/graph/validator), with node ids, node
+        fields and links laid out as circuit-tracer's own writer lays them
+        out, so the file opens in Neuronpedia's graph viewer.
+
+        Pruning is circuit-tracer's rule: a node's influence is its total
+        effect on the logits (weighted by their probabilities) through the
+        row-normalised absolute adjacency; nodes are kept in order of
+        influence until ``node_threshold`` of the total is covered, edges
+        likewise until ``edge_threshold``, token and logit nodes are always
+        kept, and feature and error nodes left without kept edges are
+        dropped. Each node's ``influence`` is the share of total influence
+        covered up to and including it. Every node of every kind is
+        exported, including nodes at the first (often BOS) position.
+
+        A feature's ``layer`` is its transcoder's index in
+        ``transcoder_sites``; an error node's is its site's index in
+        ``error_sites``; logits sit one layer past the last.
+
+        Parameters
+        ----------
+        slug
+            The graph's identifier on Neuronpedia, for example
+            ``"capital-of-texas"``.
+        scan
+            Neuronpedia's model id, for example ``"gemma-2-2b"``.
+        tokenizer
+            Anything with ``decode(list_of_ids) -> str``, such as the model's
+            Hugging Face tokenizer; it turns input and target token ids into
+            the schema's token strings.
+        prompt
+            The prompt string; ``None`` decodes the input tokens together.
+        node_threshold, edge_threshold
+            Shares of total influence kept, between 0 and 1.
+        path
+            When given, the JSON is also written there.
+
+        Returns
+        -------
+        dict
+            The JSON-ready graph: ``metadata``, ``qParams``, ``nodes``,
+            ``links``.
+
+        Raises
+        ------
+        AttributionError
+            ``attribution_graph_export_argument_invalid`` for a keyword the
+            schema cannot carry; ``attribution_graph_export_unsupported`` for
+            a graph without token ids, with a different number of
+            transcoders than MLP outputs, with non-finite values, or whose
+            logits nothing influences.
+        """
+
+        from ._neuronpedia import graph_to_neuronpedia
+
+        return graph_to_neuronpedia(
+            self,
+            slug=slug,
+            scan=scan,
+            tokenizer=tokenizer,
+            prompt=prompt,
+            node_threshold=node_threshold,
+            edge_threshold=edge_threshold,
+            path=path,
+        )
