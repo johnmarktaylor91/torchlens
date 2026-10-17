@@ -7,7 +7,7 @@ import os
 import threading
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager, nullcontext
-from contextvars import ContextVar, Token
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any
 
@@ -20,12 +20,11 @@ from ...ir.events import (
     _AtenTensorFact,
     _ModePausedInteriorEvent,
 )
+from ...utils._torch_compat import get_current_autograd_node_fn
+from ._backward_markers import _ACTIVE_BACKWARD_GRAD_FN_REFS, executing_grad_fn_ref
 
 _RECORD_ATEN_FOR_TESTS: ContextVar[bool] = ContextVar(
     "torchlens_record_aten_for_tests", default=False
-)
-_ACTIVE_BACKWARD_GRAD_FN_REFS: ContextVar[tuple[tuple[int, int, int], ...]] = ContextVar(
-    "torchlens_active_aten_grad_fn_refs", default=()
 )
 
 
@@ -383,8 +382,7 @@ def _prepare_aten_call(
 
     namespace, operator, overload, schema, fingerprint = _operator_parts(func)
     autocast = _autocast_context()
-    active_grad_refs = _ACTIVE_BACKWARD_GRAD_FN_REFS.get()
-    grad_ref = active_grad_refs[-1] if active_grad_refs else None
+    grad_ref = executing_grad_fn_ref(id(state.trace), resolver=get_current_autograd_node_fn())
     return _PendingAtenCall(
         capture_phase=state.capture_phase,
         forward_pass_index=1 if state.capture_phase == "forward" else None,
@@ -564,45 +562,6 @@ def _record_mode_paused_interior(trace: Any, *, owner_func_call_id: int | None) 
             owner_func_call_id=owner_func_call_id,
         )
     )
-
-
-def _begin_backward_grad_fn(
-    object_id: int,
-    call_index: int,
-    pass_index: int,
-) -> Token[tuple[tuple[int, int, int], ...]]:
-    """Push the active GradFn-call witness for one engine node.
-
-    Parameters
-    ----------
-    object_id
-        Captured GradFn object identity.
-    call_index
-        Predicted one-based call index.
-    pass_index
-        Active one-based backward pass index.
-
-    Returns
-    -------
-    contextvars.Token
-        Token used to restore the prior marker after the node fires.
-    """
-
-    current = _ACTIVE_BACKWARD_GRAD_FN_REFS.get()
-    return _ACTIVE_BACKWARD_GRAD_FN_REFS.set((*current, (object_id, call_index, pass_index)))
-
-
-def _end_backward_grad_fn(token: Token[tuple[tuple[int, int, int], ...]] | None) -> None:
-    """Restore the prior active GradFn marker.
-
-    Parameters
-    ----------
-    token
-        Token returned by :func:`_begin_backward_grad_fn`, or ``None``.
-    """
-
-    if token is not None:
-        _ACTIVE_BACKWARD_GRAD_FN_REFS.reset(token)
 
 
 @contextmanager

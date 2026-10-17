@@ -23,6 +23,13 @@ Core capture path:
   `prehook_provenance.py` — reversible forward-pre-hook input provenance;
   `buffer_writes.py` — registered-buffer write capture; `backward.py` — backward
   execution and autograd graph metadata.
+- `_backward_roots.py` — autograd-entry roots: flattening an entry's root argument and
+  which roots of a multi-root backward each capture walks (every root whose graph
+  reaches it, and only those).
+- `_backward_markers.py` — the GradFn-call marker stack (each posthook removes its
+  own marker, so pushes and pops nest across captures hooking one node) and
+  `executing_grad_fn_ref`, the one executing-node resolver the census, the private
+  ATen recorder and the checkpoint unpack evidence all call.
 
 Safety net and honesty:
 - `belt.py` — the mechanical BELT: protocol-invisible stale-reference coverage

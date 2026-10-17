@@ -12,7 +12,8 @@ The records are session-time facts held weakly per trace, one tuple per
 backward pass; a saved and reloaded trace carries none of them, only each
 pass's counted total and attribution (``BackwardPass.executed_flops_record``).
 Each record names the GradFn call of the node autograd reports as executing
-when the call dispatched. Calls TorchLens makes
+when the call dispatched (``_backward_markers.executing_grad_fn_ref``, the
+resolver the ATen recorder and the checkpoint unpack evidence share). Calls TorchLens makes
 inside its own GradFn posthooks (gradient logging and the backward edits they
 apply) are not recorded: they are not the model's backward. The copies its
 tensor hooks make when saving gradients are recorded, as zero-arithmetic
@@ -33,8 +34,8 @@ import torch
 from ...capture.flops import compute_dispatched_op_flops, dispatch_op_family
 from ...utils._torch_compat import get_current_autograd_node_fn
 from ._aten_capture import _capture_backward_aten
+from ._backward_markers import _ACTIVE_BACKWARD_GRAD_FN_REFS, executing_grad_fn_ref
 from ._modes import _TorchLensDispatchMode
-from .tensor_tracking import _current_backward_graph_task_id
 
 _T = TypeVar("_T")
 
@@ -183,12 +184,12 @@ def _make_record(
 class _BackwardCensusMode(_TorchLensDispatchMode):
     """Record every ATen call dispatched while one backward pass runs."""
 
-    def __init__(self, sink: list[DispatchedOp]) -> None:
-        """Store the per-pass record list this mode appends to."""
+    def __init__(self, sink: list[DispatchedOp], owner_id: int) -> None:
+        """Store the per-pass record list and the ``id()`` of the capture it records for."""
 
         super().__init__()
         self._sink = sink
-        self._task_of: dict[tuple[int, int, int], int | None] = {}
+        self._owner_id = owner_id
 
     def __torch_dispatch__(
         self,
@@ -201,44 +202,11 @@ class _BackwardCensusMode(_TorchLensDispatchMode):
 
         result = func(*args, **(kwargs or {}))
         if not _CENSUS_PAUSED.get():
-            self._sink.append(_make_record(func, args, result, self._executing_ref()))
+            ref = executing_grad_fn_ref(
+                self._owner_id, resolver=get_current_autograd_node_fn(), other_captures=True
+            )
+            self._sink.append(_make_record(func, args, result, ref))
         return result
-
-    def _executing_ref(self) -> tuple[int, int, int] | None:
-        """The GradFn call marker of the node executing this call, or ``None``.
-
-        The marker stack can hold a finished node's marker when several
-        captures hook the same node (their pre- and post-hooks do not nest),
-        so the marker is matched to the node autograd reports as executing.
-        A call made by a node no capture walked belongs to none of them,
-        except inside an engine run nested under a walked node (a reentrant
-        checkpoint's inner backward), whose calls are that node's work.
-        """
-
-        from ._aten_capture import _ACTIVE_BACKWARD_GRAD_FN_REFS
-
-        refs = _ACTIVE_BACKWARD_GRAD_FN_REFS.get()
-        if not refs:
-            return None
-        current = get_current_autograd_node_fn()
-        if current is None:
-            # No executing-node resolver: charging the innermost marker would
-            # be a guess, so the call is charged to no node and the pass reads
-            # unknown (HAS_CURRENT_AUTOGRAD_NODE in the capability snapshot).
-            return None
-        node = current()
-        task = _current_backward_graph_task_id()
-        if node is not None:
-            node_id = id(node)
-            for ref in reversed(refs):
-                if ref[0] == node_id:
-                    self._task_of.setdefault(ref, task)
-                    return ref
-        top = refs[-1]
-        outer_task = self._task_of.get(top)
-        if node is not None and task is not None and outer_task not in (None, task):
-            return top
-        return None
 
 
 @contextmanager
@@ -258,8 +226,6 @@ def backward_window(trace: Any, pass_index: int) -> Iterator[None]:
         One-based backward pass index.
     """
 
-    from ._aten_capture import _ACTIVE_BACKWARD_GRAD_FN_REFS
-
     sink: list[DispatchedOp] = []
     window = (weakref.ref(trace), int(pass_index))
     open_windows = _ACTIVE_WINDOWS.get()
@@ -267,7 +233,7 @@ def backward_window(trace: Any, pass_index: int) -> Iterator[None]:
     windows_token = _ACTIVE_WINDOWS.set((*open_windows, window))
     marker_token = _ACTIVE_BACKWARD_GRAD_FN_REFS.set(())
     try:
-        with _capture_backward_aten(trace, pass_index), _BackwardCensusMode(sink):
+        with _capture_backward_aten(trace, pass_index), _BackwardCensusMode(sink, id(trace)):
             yield
     finally:
         _ACTIVE_BACKWARD_GRAD_FN_REFS.reset(marker_token)
