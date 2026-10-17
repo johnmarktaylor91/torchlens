@@ -296,6 +296,20 @@
 - **attribution**: Cross-layer transcoder attribution graphs on a tiny Hugging Face Gemma-2 are
   tested against a plain-autograd key: edges, node accounting, error nodes and active-subset
   exactness.
+- **attribution**: `AttributionGraph.to_neuronpedia(slug=..., scan=..., tokenizer=...)` exports an
+  attribution graph in Neuronpedia's published attribution-graph schema, pruned by circuit-tracer's
+  influence rule, so it opens in Neuronpedia's graph viewer; on Gemma-2 2B it matches
+  circuit-tracer's own export on every shared node and link within float32 rounding
+  (documented-unstable).
+- **attribution**: `tl.attribution.overlay(trace, graph)` paints an attribution graph onto its trace
+  for `trace.draw(color_by=...)`: each site holding feature or error nodes gets its nodes' total
+  influence on the logits, or with `graph_value="activation"` its feature activations
+  (documented-unstable).
+- **attribution**: `tl.attribution.graph.upload_to_neuronpedia(exported, api_key=<key>)` publishes
+  an exported attribution graph on Neuronpedia through its documented two-step upload, and
+  `Direction.upload_to_neuronpedia(api_key=<key>, scan=..., vector_label=<name>)` publishes a
+  steering vector through its "Create Vector" endpoint; standard library only, every field checked
+  before the first request, the key never written into a message (documented-unstable).
 
 ### Bug Fixes
 
@@ -406,6 +420,10 @@
 - **validation**: when forward validation cannot deep-copy the model (for example CUDA out of
   memory), the warning (code `validation_model_copy_failed`) and the refusal name the exception and
   a remedy instead of reporting only unsupported plain attributes.
+- **rerun**: `tl.patch_from(trace)` under the rerun engine with a live selector (for example
+  `tl.func("rsqrt")`) no longer refuses every firing; each live firing takes the source value
+  captured at the same position and pass, and refuses when the source holds no op of that type and
+  shape there.
 
 ### Performance Improvements
 
@@ -471,6 +489,13 @@
 - **docs**: A "TorchScript and DLPack" entry in the known-gotchas reference.
 - **facets**: Facet selectors are hashable (by their spelling), so a capture `hooks=` mapping can
   hold one; that door still refuses a facet selector with a typed error.
+- **validation**: `tl.validate(..., scope="forward")` no longer copies the model's parameters for
+  every op it records: its internal capture saves parameter arguments as aliases of the replay
+  copy's own weights, guarded by version counters and a byte comparison, so the device holds one
+  copy of the weights beyond the model through the whole validation (was two at the re-trace). A
+  model that writes a parameter in place during forward is validated again with every argument
+  copied, as before, and the run records the diagnostic `validation_parameter_reference_fallback`. A
+  user's own `save_arg_values=True` trace still saves copies.
 
 ### Continuous Integration
 
