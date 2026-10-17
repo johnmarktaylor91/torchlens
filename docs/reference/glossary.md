@@ -330,7 +330,6 @@ documented unstable and may be renamed or removed without a compatibility alias.
 | ROAD curve | `road_curve`, `ranking`, `most_relevant_first`, `least_relevant_first`, `noise_std`, `seed`, `road` | unstable -- no deprecation shim owed |
 | Causal audit | `causal_audit`, `CausalAuditResult`, `CausalAuditUnit`, `CausalAuditSet`, `claim`, `k`, `ablation`, `zero`, `mean`, `controls`, `top`, `bottom`, `random`, `random_draws`, `per_unit`, `layer`, `site`, `original_score`, `units`, `sets`, `rank_agreement`, `set_of`, `unit`, `claimed_effect`, `measured_effect`, `kind`, `draw`, `intervention`, `component`, `claim_kind`, `constant_row`, `rows_not_audited`, `corrupted`, `metric`, `edges`, `edge_table`, `edge_patch`, `example_reduction`, `logits_site`, `sets_not_measured`, `reason`, `trace` | unstable -- no deprecation shim owed |
 | Attribution graphs | `build_graph`, `AttributionGraph`, `GraphNode`, `transcoders`, `embedding`, `target`, `max_n_logits`, `desired_logit_prob`, `demeaned_logits`, `logits_at`, `frozen`, `nodes`, `adjacency_matrix`, `node_values`, `constants`, `encoder_bias`, `decoder_bias`, `other`, `active_features`, `activation_values`, `transcoder_sites`, `error_sites`, `error_vectors`, `input_tokens`, `logit_tokens`, `logit_probabilities`, `capture_outcome`, `disclosures`, `node_counts`, `node_indices`, `kind`, `site`, `position`, `feature`, `token`, `logit`, `error` | unstable -- no deprecation shim owed |
-| Attribution graph read sites and frozen facets | `inv_rms` | unstable -- no deprecation shim owed |
 
 <!-- ATTRIBUTION-KIT-UNSTABLE-INDEX:END -->
 
@@ -2648,3 +2647,12 @@ deprecation shim owed*
   Only `trace.ops` is the counted view: `input_ops`, `output_ops`,
   `saved_ops`, `saved_grad_ops`, `compute_ops` and `ops_with_params` list
   exactly their rows, boundary rows included.
+
+**`inv_rms` facet (Hugging Face `Gemma2RMSNorm`)** — *unstable — no deprecation shim owed*
+: The norm's single `rsqrt` op output, `1 / sqrt(mean(x**2) + eps)`, the
+  per-position factor that multiplies the input before the `(1 + weight)`
+  gain. `tl.facet("inv_rms")` names it in every Gemma-2 norm; an attribution
+  graph holds it with `tl.attribution.build_graph(..., frozen=[tl.facet("pattern"),
+  tl.facet("inv_rms")])`, which also holds every Gemma-2 attention pattern
+  (`Gemma2Attention` serves the attention facets; `pattern` is the eager
+  softmax after the score softcap).
