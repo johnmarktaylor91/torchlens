@@ -1,0 +1,358 @@
+{
+ "source": "https://huggingface.co/datasets/mib-bench/ioi train.json",
+ "pins": "revision and sha256 in _common.IOI_REVISION and _common.IOI_SHA256",
+ "license": "MIT",
+ "rule": "first 50 rows in file order whose ' '+indirect_object and ' '+subject are each exactly one GPT-2 token",
+ "rows": [
+  {
+   "index": 0,
+   "prompt": "As Carl and Maria left the consulate, Carl gave a fridge to",
+   "indirect_object": "Maria",
+   "subject": "Carl",
+   "kept": true
+  },
+  {
+   "index": 1,
+   "prompt": "After Kevin and Bob spent some time at the racecourse, Kevin offered a duster to",
+   "indirect_object": "Bob",
+   "subject": "Kevin",
+   "kept": true
+  },
+  {
+   "index": 2,
+   "prompt": "After Brian and Matt spent some time at the vet, Brian offered a button to",
+   "indirect_object": "Matt",
+   "subject": "Brian",
+   "kept": true
+  },
+  {
+   "index": 3,
+   "prompt": "After Brad and Louis went to the room, Brad gave a picture frame to",
+   "indirect_object": "Louis",
+   "subject": "Brad",
+   "kept": true
+  },
+  {
+   "index": 4,
+   "prompt": "While Jean and Martin were working at the meeting, Jean gave a plant to",
+   "indirect_object": "Martin",
+   "subject": "Jean",
+   "kept": true
+  },
+  {
+   "index": 5,
+   "prompt": "While James and Louis were working at the plaza, James gave a rug to",
+   "indirect_object": "Louis",
+   "subject": "James",
+   "kept": true
+  },
+  {
+   "index": 6,
+   "prompt": "As Matthew and Rose left the port, Matthew gave a bottle of glue to",
+   "indirect_object": "Rose",
+   "subject": "Matthew",
+   "kept": true
+  },
+  {
+   "index": 7,
+   "prompt": "At the hallway, Jean and Brian found a piece of sandpaper. Jean gave it to",
+   "indirect_object": "Brian",
+   "subject": "Jean",
+   "kept": true
+  },
+  {
+   "index": 8,
+   "prompt": "While Maria and Brad were commuting to the furniture store, Maria gave a zipper to",
+   "indirect_object": "Brad",
+   "subject": "Maria",
+   "kept": true
+  },
+  {
+   "index": 9,
+   "prompt": "After Nick and John spent some time at the car dealership, Nick offered a nail to",
+   "indirect_object": "John",
+   "subject": "Nick",
+   "kept": true
+  },
+  {
+   "index": 10,
+   "prompt": "At the bookstore, Patrick and Doug found a piece of sandpaper. Patrick gave it to",
+   "indirect_object": "Doug",
+   "subject": "Patrick",
+   "kept": true
+  },
+  {
+   "index": 11,
+   "prompt": "While Taylor and Mel were working at the auditorium, Taylor gave a watch to",
+   "indirect_object": "Mel",
+   "subject": "Taylor",
+   "kept": true
+  },
+  {
+   "index": 12,
+   "prompt": "Just as Mary and Anderson were leaving the fairground, Mary offered a walnut to",
+   "indirect_object": "Anderson",
+   "subject": "Mary",
+   "kept": true
+  },
+  {
+   "index": 13,
+   "prompt": "After Matthew and April went to the pool, Matthew gave a pair of gloves to",
+   "indirect_object": "April",
+   "subject": "Matthew",
+   "kept": true
+  },
+  {
+   "index": 14,
+   "prompt": "After Richard and Wilson spent some time at the hostel, Richard offered a bone to",
+   "indirect_object": "Wilson",
+   "subject": "Richard",
+   "kept": true
+  },
+  {
+   "index": 15,
+   "prompt": "As London and Nick left the terminal, London gave a piece of chalk to",
+   "indirect_object": "Nick",
+   "subject": "London",
+   "kept": true
+  },
+  {
+   "index": 16,
+   "prompt": "At the barracks, James and Wilson found a hairbrush. James gave it to",
+   "indirect_object": "Wilson",
+   "subject": "James",
+   "kept": true
+  },
+  {
+   "index": 17,
+   "prompt": "After Bob and John went to the depot, Bob gave a lamp to",
+   "indirect_object": "John",
+   "subject": "Bob",
+   "kept": true
+  },
+  {
+   "index": 18,
+   "prompt": "When Mary and Martin got a computer at the plaza, Mary decided to give the computer to",
+   "indirect_object": "Martin",
+   "subject": "Mary",
+   "kept": true
+  },
+  {
+   "index": 19,
+   "prompt": "At the mechanic shop, Matt and Anderson found a pair of pants. Matt gave it to",
+   "indirect_object": "Anderson",
+   "subject": "Matt",
+   "kept": true
+  },
+  {
+   "index": 20,
+   "prompt": "While Chris and Bob were commuting to the taxi, Chris gave a pitcher to",
+   "indirect_object": "Bob",
+   "subject": "Chris",
+   "kept": true
+  },
+  {
+   "index": 21,
+   "prompt": "Just as Taylor and London were leaving the racecourse, Taylor offered a rope to",
+   "indirect_object": "London",
+   "subject": "Taylor",
+   "kept": true
+  },
+  {
+   "index": 22,
+   "prompt": "After Mac and Brian went to the terrace, Mac gave a clipboard to",
+   "indirect_object": "Brian",
+   "subject": "Mac",
+   "kept": true
+  },
+  {
+   "index": 23,
+   "prompt": "Just as April and Alan were leaving the hospital, April offered a doorknob to",
+   "indirect_object": "Alan",
+   "subject": "April",
+   "kept": true
+  },
+  {
+   "index": 24,
+   "prompt": "After Jean and Anderson spent some time at the car dealership, Jean offered a pair of pants to",
+   "indirect_object": "Anderson",
+   "subject": "Jean",
+   "kept": true
+  },
+  {
+   "index": 25,
+   "prompt": "After Anderson and Nick spent some time at the amphitheater, Anderson offered a tie to",
+   "indirect_object": "Nick",
+   "subject": "Anderson",
+   "kept": true
+  },
+  {
+   "index": 26,
+   "prompt": "After Jean and Christian spent some time at the lobby, Jean offered a ladle to",
+   "indirect_object": "Christian",
+   "subject": "Jean",
+   "kept": true
+  },
+  {
+   "index": 27,
+   "prompt": "As London and Rod left the pool, London gave a towel to",
+   "indirect_object": "Rod",
+   "subject": "London",
+   "kept": true
+  },
+  {
+   "index": 28,
+   "prompt": "Then, Chris and Fred had a long argument, and afterwards Chris said to",
+   "indirect_object": "Fred",
+   "subject": "Chris",
+   "kept": true
+  },
+  {
+   "index": 29,
+   "prompt": "After Wilson and Richard spent some time at the subway, Wilson offered a suitcase to",
+   "indirect_object": "Richard",
+   "subject": "Wilson",
+   "kept": true
+  },
+  {
+   "index": 30,
+   "prompt": "Just as Ray and Wilson were leaving the helipad, Ray offered a hammer to",
+   "indirect_object": "Wilson",
+   "subject": "Ray",
+   "kept": true
+  },
+  {
+   "index": 31,
+   "prompt": "While Mel and Eric were commuting to the flea market, Mel gave a buckle to",
+   "indirect_object": "Eric",
+   "subject": "Mel",
+   "kept": true
+  },
+  {
+   "index": 32,
+   "prompt": "As Patrick and Matthew left the mechanic shop, Patrick gave a watch to",
+   "indirect_object": "Matthew",
+   "subject": "Patrick",
+   "kept": true
+  },
+  {
+   "index": 33,
+   "prompt": "While Louis and Ben were commuting to the lodge, Louis gave a lightbulb to",
+   "indirect_object": "Ben",
+   "subject": "Louis",
+   "kept": true
+  },
+  {
+   "index": 34,
+   "prompt": "At the hospital, Chris and Alan found a colander. Chris gave it to",
+   "indirect_object": "Alan",
+   "subject": "Chris",
+   "kept": true
+  },
+  {
+   "index": 35,
+   "prompt": "After Frank and Max went to the furniture store, Frank gave a belt to",
+   "indirect_object": "Max",
+   "subject": "Frank",
+   "kept": true
+  },
+  {
+   "index": 36,
+   "prompt": "Just as Jess and James were leaving the terminal, Jess offered a sofa to",
+   "indirect_object": "James",
+   "subject": "Jess",
+   "kept": true
+  },
+  {
+   "index": 37,
+   "prompt": "As Jean and Matt left the subway, Jean gave a calendar to",
+   "indirect_object": "Matt",
+   "subject": "Jean",
+   "kept": true
+  },
+  {
+   "index": 38,
+   "prompt": "When Mary and Ty got a keychain at the marina, Mary decided to give the keychain to",
+   "indirect_object": "Ty",
+   "subject": "Mary",
+   "kept": true
+  },
+  {
+   "index": 39,
+   "prompt": "After Doug and Matthew spent some time at the bookstore, Doug offered a stapler to",
+   "indirect_object": "Matthew",
+   "subject": "Doug",
+   "kept": true
+  },
+  {
+   "index": 40,
+   "prompt": "After Jess and Ray spent some time at the gallery, Jess offered a button to",
+   "indirect_object": "Ray",
+   "subject": "Jess",
+   "kept": true
+  },
+  {
+   "index": 41,
+   "prompt": "When Frank and April got a dryer at the terrace, Frank decided to give the dryer to",
+   "indirect_object": "April",
+   "subject": "Frank",
+   "kept": true
+  },
+  {
+   "index": 42,
+   "prompt": "After Ty and Ben finished their work at the plaza, Ty gave a picture frame to",
+   "indirect_object": "Ben",
+   "subject": "Ty",
+   "kept": true
+  },
+  {
+   "index": 43,
+   "prompt": "As April and London left the gallery, April gave a pitcher to",
+   "indirect_object": "London",
+   "subject": "April",
+   "kept": true
+  },
+  {
+   "index": 44,
+   "prompt": "When Carl and Louis got a lamp at the control room, Carl decided to give the lamp to",
+   "indirect_object": "Louis",
+   "subject": "Carl",
+   "kept": true
+  },
+  {
+   "index": 45,
+   "prompt": "After Doug and Art spent some time at the thrift store, Doug offered a thermometer to",
+   "indirect_object": "Art",
+   "subject": "Doug",
+   "kept": true
+  },
+  {
+   "index": 46,
+   "prompt": "Then, London and Anderson had a long argument, and afterwards London said to",
+   "indirect_object": "Anderson",
+   "subject": "London",
+   "kept": true
+  },
+  {
+   "index": 47,
+   "prompt": "While Christian and Gene were commuting to the helipad, Christian gave a pair of pants to",
+   "indirect_object": "Gene",
+   "subject": "Christian",
+   "kept": true
+  },
+  {
+   "index": 48,
+   "prompt": "When Brian and Taylor got a pair of pants at the furniture store, Brian decided to give the pair of pants to",
+   "indirect_object": "Taylor",
+   "subject": "Brian",
+   "kept": true
+  },
+  {
+   "index": 49,
+   "prompt": "After Patrick and Del went to the gas station, Patrick gave a belt to",
+   "indirect_object": "Del",
+   "subject": "Patrick",
+   "kept": true
+  }
+ ]
+}
