@@ -213,24 +213,18 @@ def test_a_user_save_arg_values_trace_still_saves_copies_after_validation() -> N
         assert torch.equal(saved, parameter.detach())
 
 
-class _RaisesOnCapture(nn.Module):
-    """Runs the ground truth, then raises inside validation's capture."""
-
-    def __init__(self, seen: list[Any]) -> None:
-        super().__init__()
-        self.lin = nn.Linear(4, 4)
-        self.seen = seen
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        self.seen.append(arg_references.active_argument_references())
-        if len(self.seen) == 2:
-            raise ValueError("raised inside the validation capture")
-        return self.lin(x)
-
-
 def test_the_reference_context_is_cleared_when_the_capture_raises() -> None:
     seen: list[Any] = []
-    model = _RaisesOnCapture(seen)
+
+    def raise_on_capture(module: nn.Module, inputs: Any) -> None:
+        # A hook closure is shared by validation's deep copies (a list
+        # attribute would be copied with the model).
+        seen.append(arg_references.active_argument_references())
+        if len(seen) == 2:
+            raise ValueError("raised inside the validation capture")
+
+    model = nn.Linear(4, 4)
+    model.register_forward_pre_hook(raise_on_capture)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         try:
