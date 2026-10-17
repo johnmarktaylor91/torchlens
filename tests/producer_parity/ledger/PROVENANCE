@@ -2819,3 +2819,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 1590b97a60e6da0afffca9093751cd82c4d2293e (dirty)
 recorded: 2026-10-17T00:07:49.813890+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: AG-3A: op-label read sites (torchlens/attribution/graph/_read_sites.py) read trace.modules and a facet spec pass_index to resolve read sites and frozen facets
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9da3a515ae3648304fe9ea15a4b82ed86ffff36f (dirty)
+recorded: 2026-10-17T07:45:41.298278+00:00
