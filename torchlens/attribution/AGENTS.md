@@ -53,6 +53,19 @@ captured Trace.
   do not add code paths that return without restoring it.
 - Stage-4b names and metadata are DOCUMENTED-UNSTABLE and lockstep-indexed in
   `docs/reference/glossary.md`.
+- Cross-layer transcoders on Hugging Face Gemma-2 (`tests/test_ag3_cross_layer_gemma2.py`):
+  circuit-tracer's `hook_resid_mid` read is the residual add whose output enters
+  `pre_feedforward_layernorm`, keyed by its op label, and `hook_mlp_out` is the
+  `post_feedforward_layernorm` output. A module's `input_ops` are layer labels without a pass,
+  and that add can be a multi-pass layer (it is on the tiny random Gemma-2 of the tests, not on
+  Gemma-2 2B), where the bare label refuses with `read_target_invalid`; key the transcoder by
+  the pass-qualified label of the pass that runs just before the norm (`tests/_ag3_fixtures.py`,
+  `read_label`). A module-name read key whose input op is a multi-pass layer reaches the same
+  refusal through `_one_op`. A reader's `b_dec`
+  mapping names the same writes as its `W_dec`; give each output layer's decoder bias to one
+  reader only (zeros elsewhere). Restricting a ReLU transcoder to its active features builds the
+  same graph bitwise (an inactive feature is no node and writes nothing), which is how a large
+  cross-layer set fits in memory.
 
 ## Tests
 
