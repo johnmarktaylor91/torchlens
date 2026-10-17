@@ -42,7 +42,11 @@ their pinned public sources and checks each source's sha256:
   run of 10 MLP layers; this script's verdict uses GPT-2 small (12 layers), 10 facts and one
   MLP layer per restoration. `--window 3 --facts 30` adds a reported, non-gating grid that
   restores 3 consecutive MLP layers (25% of depth, against the paper's 10 of 48, about 21%)
-  over 30 facts; it never changes the verdict. The noise follows the paper: Gaussian, 3 times the standard deviation
+  over 30 facts; it never changes the verdict. The GPT-2 small picture differs from the
+  paper's: the single-layer effect at the last subject token sits at layer 0 (0.0063 over
+  10 facts, 0.0111 over 30) and is near zero elsewhere, and with a 3-layer window the
+  largest cell is the last token at layer 9 (0.0112), not a mid-layer band at the last
+  subject token. The script's docstring lists both grids' rows. The noise follows the paper: Gaussian, 3 times the standard deviation
   of the subject tokens' embeddings, 10 samples per fact.
 - IOI: the paper's logit difference (3.56) is over its own 100,000-prompt sample; MIB's
   prompts use different templates, so the script prints its own mean beside the paper's

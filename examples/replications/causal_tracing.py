@@ -2,7 +2,27 @@
 
 Run: ``python examples/replications/causal_tracing.py [--out DIR]``.
 Downloads GPT-2 small (public, about 550 MB) at a pinned revision on first use; the facts
-are vendored in ``data/known_facts.json`` (ROME's known facts, MIT).
+are vendored in ``data/known_facts.json`` (ROME's known facts, MIT). Add
+``--facts 30 --window 3`` for the reported, non-gating grids described below.
+
+On GPT-2 small the picture differs from the paper's. The paper (GPT-2 XL, windows of 10
+of 48 layers) found a band of large MLP effects at the last subject token in middle layers.
+Here the rule passes, but only because the single-layer peak sits at layer 0: restoring one
+MLP output at the last subject token matters at layer 0 and almost nowhere else. Average
+indirect effect by layer at the last subject token (L.S.T.) and at the last token (L.T.),
+float32, 10 noise samples per fact (layers 0-11):
+
+- single layer, 10 facts (the verdict): L.S.T. 0.0063 at layer 0, every other layer
+  within 0.0004 of zero; L.T. rises to 0.0048 at layer 8.
+- single layer, 30 facts: L.S.T. 0.0111 at layer 0, others within 0.0015; L.T. peaks at
+  0.0039 at layer 8.
+- window of 3 layers (25% of depth, against the paper's 10 of 48, about 21%), 30 facts:
+  L.S.T. 0.0059 and 0.0068 for windows centred on layers 0 and 1, negative (-0.0035,
+  -0.0029) at layers 2 and 3 and under 0.0005 beyond; the largest cell is L.T. at layer 9
+  (0.0112), with L.T. 0.0059 to 0.0080 at layers 7-8.
+
+So neither grid shows a mid-layer band at the last subject token; the full grids are in
+the JSON summary (``aie_grid_single_layer`` and ``reported``).
 """
 
 from __future__ import annotations
