@@ -22,7 +22,7 @@ omitted entirely: `selectors.py` (site selectors incl. `without_op`),
   resolves through `hooks._resolve_facet_specs`, the same resolution the write
   doors use, and returns `Facet` entries (`SiteTable.labels()` names their home
   ops); composites and `find_sites` still refuse. `tl.trace(save=<facet
-  selector>)` goes through `selectors._facet_save_predicate`, a save-only
+  selector>)` goes through `_facet_save._facet_save_predicate`, a save-only
   predicate wired in `_trace_selector_helpers._split_save_options_and_predicate`;
   `intervene=`, `bind` and capture `hooks=` evaluate the selector itself and keep
   refusing, so no facet edit lands on a whole home tensor. `FacetSelector`

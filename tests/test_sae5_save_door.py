@@ -99,7 +99,7 @@ def test_a_latent_registered_at_a_selector_site_saves_every_home() -> None:
             warnings.simplefilter("ignore")
             table = trace.resolve_sites(tl.facet("both").latent(2))
         assert {trace["fc_a"].layer_label, trace["fc_b"].layer_label} <= _saved(trace)
-        for site, facet in zip(("fc_a", "fc_b"), table):
+        for site, facet in zip(("fc_a", "fc_b"), table, strict=True):
             expected = sae.encode(trace[site].out)[..., 2].detach()
             torch.testing.assert_close(facet.value, expected, **TOL)
     finally:
@@ -117,7 +117,7 @@ def test_a_structural_facet_save_keeps_every_op() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         table = trace.resolve_sites(tl.facet("out"), max_fanout=100)
-    for label, facet in zip(table.labels(), table):
+    for label, facet in zip(table.labels(), table, strict=True):
         torch.testing.assert_close(facet.value, full[label].out, **TOL)
 
 

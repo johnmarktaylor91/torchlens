@@ -42,7 +42,8 @@ def _split_save_options_and_predicate(
         return None, None
     if isinstance(save_value, SaveOptions):
         return save_value, None
-    from .intervention.selectors import FacetSelector, _facet_save_predicate
+    from .intervention._facet_save import _facet_save_predicate
+    from .intervention.selectors import FacetSelector
 
     if isinstance(save_value, FacetSelector):
         # Save-only seam: intervene=/bind/hooks= evaluate the facet selector

@@ -181,7 +181,11 @@ def test_a_broadcast_head_read_reports_the_count_the_write_door_reports(attn) ->
     assert len(table) > 1
     assert read_counts and f"matched {len(table)} sites" in str(read_counts[0].message)
     assert write_counts == [len(table)]
-    at_q = [facet for label, facet in zip(table.labels(), table) if label == _q_label(trace)]
+    at_q = [
+        facet
+        for label, facet in zip(table.labels(), table, strict=True)
+        if label == _q_label(trace)
+    ]
     assert at_q
     expected = _q_head(model, x, 1)
     assert any(torch.allclose(f.value, expected, atol=1e-6, rtol=0.0) for f in at_q)
@@ -196,7 +200,7 @@ def test_a_latent_registered_at_two_layers_reads_both_and_counts_them() -> None:
         with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
             table = trace.resolve_sites(tl.facet("both").latent(0))
         assert table.labels() == (trace["fc_a"].layer_label, trace["fc_b"].layer_label)
-        for site, facet in zip(("fc_a", "fc_b"), table):
+        for site, facet in zip(("fc_a", "fc_b"), table, strict=True):
             expected = sae.encode(trace[site].out)[..., 0]
             torch.testing.assert_close(facet.value, expected.detach(), **TOL)
     finally:
