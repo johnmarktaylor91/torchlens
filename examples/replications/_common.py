@@ -23,6 +23,18 @@ MODEL_REVISION = "607a30d783dfa663caf39e06633721c8d4cfcd7e"  # pragma: allowlist
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 
+#: Pinned public sources of the vendored data (``make_data.py`` rebuilds it from them).
+IOI_REPO = "mib-bench/ioi"
+IOI_REVISION = "e5f3468f3af4c0883be35cd3bced8c711c95d286"  # pragma: allowlist secret
+IOI_FILE = "train.json"
+IOI_SHA256 = (
+    "2ee41861d725eee2b71da3846872d5e5ea29d9d8c9aa3a8954f8430584b2f243"  # pragma: allowlist secret
+)
+FACTS_URL = "https://rome.baulab.info/data/dsets/known_1000.json"
+FACTS_SHA256 = (
+    "61daca55318bb5260c1e62e133debef9102c7b278bbc7b19dd2ac655543f333a"  # pragma: allowlist secret
+)
+
 REPLICATED = "replicated"
 NOT_REPLICATED = "did not replicate"
 
