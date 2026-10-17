@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+from collections.abc import Iterator
 
 import numpy as np
 import pytest
@@ -58,8 +59,12 @@ def _graph(name: str) -> tl.attribution.graph.AttributionGraph:
 
 
 @pytest.fixture(scope="module")
-def graphs() -> dict[str, tl.attribution.graph.AttributionGraph]:
-    return {name: _graph(name) for name in ("F1", "F2", "F3")}
+def graphs() -> Iterator[dict[str, tl.attribution.graph.AttributionGraph]]:
+    built = {name: _graph(name) for name in ("F1", "F2", "F3")}
+    try:
+        yield built
+    finally:
+        built.clear()
 
 
 def _export(graph, **kwargs) -> dict:
@@ -306,12 +311,28 @@ def test_prompt_defaults_to_the_decoded_tokens(graphs) -> None:
 
 
 def test_bos_position_nodes_are_exported(graphs) -> None:
-    graph = graphs["F1"]
-    nodes, _links = _numpy_kept(graph)
-    first = {node for node in nodes if node.endswith("_0") and not node.startswith("E_")}
-    assert first, "the fixture keeps feature or error nodes at the first position"
-    exported = {node["node_id"] for node in _export(graph)["nodes"]}
-    assert first <= exported
+    """Nodes at the first position are exported whenever pruning keeps them."""
+
+    kept_first = 0
+    for name in ("F1", "F2", "F3"):
+        for node_threshold, edge_threshold in ((0.8, 0.98), (0.95, 0.99), (0.99, 0.999)):
+            nodes, _links = _numpy_kept(graphs[name], node_threshold, edge_threshold)
+            first = {
+                node
+                for node in nodes
+                if not node.startswith("E_") and int(node.rsplit("_", 1)[1]) == 0
+            }
+            exported = _export(
+                graphs[name], node_threshold=node_threshold, edge_threshold=edge_threshold
+            )
+            got = {
+                node["node_id"]
+                for node in exported["nodes"]
+                if node["ctx_idx"] == 0 and node["feature_type"] != "embedding"
+            }
+            assert got == first, (name, node_threshold, edge_threshold)
+            kept_first += len(first)
+    assert kept_first, "some fixture and thresholds keep feature or error nodes at position 0"
 
 
 @pytest.mark.parametrize(

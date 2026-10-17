@@ -34,7 +34,7 @@ _DOCS_POINTER = "See docs/reference/attribution.md, section Attribution graphs."
 _SCHEMA_VERSION = 1
 
 
-def _refusal(message: str, *, code: str) -> AttributionError:
+def _export_refusal(message: str, *, code: str) -> AttributionError:
     """Build one coded export refusal ending in its docs pointer."""
 
     return AttributionError(f"{message} {_DOCS_POINTER}", code=code)
@@ -70,7 +70,7 @@ def _influence(matrix: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
             return total
         current = current @ matrix
         total = total + current
-    raise _refusal(
+    raise _export_refusal(
         "The graph's influence series did not end, so its adjacency has a cycle "
         "and is not an attribution graph built by tl.attribution.build_graph. "
         "Remedy: export a graph returned by tl.attribution.build_graph(...).",
@@ -120,7 +120,7 @@ def _prune(graph: AttributionGraph, node_threshold: float, edge_threshold: float
     )
     node_influence = _influence(_normalize(adjacency), weights)
     if not bool(node_influence.sum() > 0):
-        raise _refusal(
+        raise _export_refusal(
             "No node of the graph influences its logits (every edge into the logits, "
             "or every logit probability, is zero), so no node can be kept by its share "
             "of influence. Remedy: build the graph with targets the prompt reaches, "
@@ -303,13 +303,13 @@ def _check_arguments(
 
     for name, value in (("slug", slug), ("scan", scan)):
         if not isinstance(value, str) or not value:
-            raise _refusal(
+            raise _export_refusal(
                 f"{name}={value!r} is not a non-empty string; the schema requires one. "
                 f'Remedy: pass {name}="gemma-2-2b" (the scan is Neuronpedia\'s model id).',
                 code="attribution_graph_export_argument_invalid",
             )
     if not callable(getattr(tokenizer, "decode", None)):
-        raise _refusal(
+        raise _export_refusal(
             f"tokenizer={type(tokenizer).__name__} has no decode method, so token ids "
             "cannot become the schema's token strings. Remedy: pass the model's tokenizer, "
             "for example tokenizer=transformers.AutoTokenizer.from_pretrained(name).",
@@ -317,7 +317,7 @@ def _check_arguments(
         )
     for name, value in (("node_threshold", node_threshold), ("edge_threshold", edge_threshold)):
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1:
-            raise _refusal(
+            raise _export_refusal(
                 f"{name}={value!r} is not a share between 0 and 1. "
                 "Remedy: pass node_threshold=0.8, edge_threshold=0.98 (the defaults).",
                 code="attribution_graph_export_argument_invalid",
@@ -328,7 +328,7 @@ def _check_graph(graph: AttributionGraph) -> None:
     """Refuse graphs the schema cannot express."""
 
     if any(graph.nodes[i].token is None for i in graph.node_indices("token")):
-        raise _refusal(
+        raise _export_refusal(
             "The graph's token nodes carry no token ids (the embedding input was not "
             "integer ids), so the schema's prompt tokens and token node ids cannot be "
             "written. Remedy: build the graph from integer token ids, "
@@ -336,7 +336,7 @@ def _check_graph(graph: AttributionGraph) -> None:
             code="attribution_graph_export_unsupported",
         )
     if len(graph.transcoder_sites) != len(graph.error_sites):
-        raise _refusal(
+        raise _export_refusal(
             f"The graph has {len(graph.transcoder_sites)} transcoders but "
             f"{len(graph.error_sites)} MLP outputs with error nodes, so a feature's layer "
             "number and an error node's layer number would count different things. "
@@ -347,7 +347,7 @@ def _check_graph(graph: AttributionGraph) -> None:
     if not bool(torch.isfinite(graph.adjacency_matrix).all()) or not bool(
         torch.isfinite(graph.activation_values).all()
     ):
-        raise _refusal(
+        raise _export_refusal(
             "The graph's adjacency or feature activations hold NaN or infinite values, "
             "which JSON cannot carry. Remedy: rebuild the graph from a capture whose "
             "values are finite, tl.attribution.build_graph(tl.trace(model, input_ids), ...).",
