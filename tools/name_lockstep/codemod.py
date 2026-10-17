@@ -211,6 +211,28 @@ def _module_file(root: Path, module: str | None) -> Path | None:
     return None
 
 
+def _owner_module(row: dict[str, Any]) -> str | None:
+    """Return the dotted module a root or export row is public in (``tl.x`` is ``torchlens.x``)."""
+
+    owner = str(row.get("owner") or str(row.get("path", "")).rpartition(".")[0])
+    if owner == "tl":
+        return "torchlens"
+    return "torchlens." + owner[3:] if owner.startswith("tl.") else None
+
+
+def _import_sources(row: dict[str, Any]) -> frozenset[str]:
+    """Return the modules a from-import of a root or export may read the object from.
+
+    These are its defining module, the packages above it and the module it is public in;
+    an import of the same leaf from any other module names a different object.
+    """
+
+    parts = str(row.get("module") or "").split(".")
+    sources = {".".join(parts[:end]) for end in range(1, len(parts) + 1)}
+    owner = _owner_module(row)
+    return frozenset({*sources, *([owner] if owner else [])} - {""})
+
+
 @dataclasses.dataclass(frozen=True)
 class _RowContext:
     """What planning needs about one row, computed once for every file."""
@@ -218,6 +240,8 @@ class _RowContext:
     row: dict[str, Any]
     patterns: list[spelling.Spelling]
     home: Path | None
+    facade: Path | None
+    sources: frozenset[str]
     tables: dict[Path, frozenset[str]]
     targets: frozenset[tuple[str | None, str]]
 
@@ -235,6 +259,8 @@ class _RowContext:
             row=row,
             patterns=spelling.spellings(row),
             home=_module_file(root, row.get("module")),
+            facade=_module_file(root, _owner_module(row)),
+            sources=_import_sources(row),
             tables={path: frozenset(names) for path, names in tables.items()},
             targets=frozenset(astsites.use_key(path) for path in row.get("uses", ())),
         )
@@ -267,8 +293,8 @@ def _ast_sites(
     loose = astsites.Positions(source.lines, row["name"])
     home = context.home == source.path
     if row["kind"] in ("root", "export"):
-        facade = source.relative == "torchlens/__init__.py" and row["kind"] == "root"
-        astsites.definite_object(tree, pos, home or facade, source.relative)
+        facade = context.facade == source.path
+        astsites.definite_object(tree, pos, home or facade, source.relative, context.sources)
     elif row["kind"] == "member":
         if home:
             astsites.definite_member(row, tree, pos)
@@ -407,12 +433,73 @@ def plan(
 
     contexts = [_RowContext.build(row, root) for row in proposals(rows)]
     edits: list[Edit] = []
+    bindings: dict[str, list[tuple[str, astsites.ImportBindings]]] = {}
     for path in iter_files(root, roots, excludes):
         source = astsites.Source(root, path)
         for context in contexts:
             if context.row["name"] in source.words:
                 edits += plan_file(context.row, root, path, source, context)
+                found = _bindings(context, source)
+                if found is not None:
+                    bindings.setdefault(context.row["id"], []).append((source.relative, found))
+    edits = _promote(edits, contexts, bindings)
     return sorted(edits, key=lambda edit: (edit.path, edit.line, edit.start, edit.row_id))
+
+
+def _bindings(context: _RowContext, source: astsites.Source) -> astsites.ImportBindings | None:
+    """Return how a file other than a root or export row's home imports it."""
+
+    if context.row["kind"] not in ("root", "export") or not source.is_python:
+        return None
+    tree = source.tree()
+    if tree is None or source.path == context.home:
+        return None
+    return astsites.import_bindings(tree, source.lines, context.row["name"], source.relative)
+
+
+def _reached(sources: frozenset[str], found: list[tuple[str, astsites.ImportBindings]]) -> set[str]:
+    """Return the modules that hold the object.
+
+    These are its own path, then every TorchLens module that imports it under its own
+    name from a module already reached.
+    """
+
+    reached = set(sources)
+    pending = [binding for _, binding in found if astsites.in_torchlens(binding.module)]
+    while new := {b.module for b in pending if b.module not in reached and b.binds & reached}:
+        reached |= new
+    return reached
+
+
+def _promote(
+    edits: list[Edit],
+    contexts: list[_RowContext],
+    bindings: dict[str, list[tuple[str, astsites.ImportBindings]]],
+) -> list[Edit]:
+    """Make definite the imports of a root or export from a module that re-exports it.
+
+    A from-import reading the object from its own path is definite while the file is
+    planned; one reading it through a re-exporting module is known only once every file
+    is read, so it is promoted here (with the importer's ``__all__`` entry and uses).
+    """
+
+    by_site = {(edit.path, edit.line, edit.start, edit.row_id): edit for edit in edits}
+    for context in contexts:
+        found = bindings.get(context.row["id"], [])
+        reached = _reached(context.sources, found)
+        for relative, binding in found:
+            sites = {
+                site
+                for source, positions in binding.sites.items()
+                if source in reached
+                for site in positions
+            }
+            if binding.binds & reached:
+                sites |= binding.dependent
+            for line, start in sites:
+                edit = _edit(relative, line, start, context.row, True)
+                by_site[(relative, line, start, edit.row_id)] = edit
+    return list(by_site.values())
 
 
 def _merge(file_edits: list[Edit]) -> tuple[list[Edit], list[str]]:
