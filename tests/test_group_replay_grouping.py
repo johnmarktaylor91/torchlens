@@ -148,7 +148,10 @@ class TestTinyGemma2:
                 torch.tensor([fx.TOKENS]),
                 capture=tl.options.CaptureOptions(intervention_ready=True),
             )
-        return fx, model, trace
+        try:
+            yield fx, model, trace
+        finally:
+            trace.cleanup()
 
     def test_no_layer_inside_one_decoder_call_is_multi_pass(self, setup) -> None:
         _, _, trace = setup
