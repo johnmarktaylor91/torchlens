@@ -2827,3 +2827,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 9da3a515ae3648304fe9ea15a4b82ed86ffff36f (dirty)
 recorded: 2026-10-17T07:45:41.298278+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: AG-4 phase 2: tl.attribution.overlay reads GraphNode.kind of an AttributionGraph source in torchlens/attribution/_viz.py (one new static read site, an attribution-graph node kind, not a Trace record field)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 430f09c51c521225f1f20f7fb4d5f81c23881e3f (dirty)
+recorded: 2026-10-17T16:41:51.710946+00:00
