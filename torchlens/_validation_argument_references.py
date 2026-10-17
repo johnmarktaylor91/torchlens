@@ -113,6 +113,24 @@ class ParameterArgumentReferences:
             self._owners_seen[id(owner)] = (owner_name, owner)
         return True
 
+    def alias(self, tensor: torch.Tensor) -> torch.Tensor | None:
+        """Return a by-reference alias of ``tensor``, or ``None`` when it must be copied.
+
+        The alias is a plain detached tensor on the parameter's storage, sharing
+        its version counter, with the argument's ``requires_grad``: the flag
+        replay reads from a saved argument. Like the copy it replaces, it is a
+        leaf. It is never the ``nn.Parameter`` itself, so capture cleanup that
+        strips TorchLens metadata from saved arguments cannot reach the
+        parameter or its registry entry.
+        """
+
+        if not self.keep(tensor):
+            return None
+        alias = tensor.detach()
+        if tensor.requires_grad:
+            alias.requires_grad_(True)
+        return alias
+
     def _note(self, tensor: torch.Tensor, name: str) -> None:
         """Record a tensor's version the first time; flag a later different version."""
 
@@ -276,6 +294,8 @@ def with_parameter_reference_fallback(validate: Callable[..., bool]) -> Callable
 
     @functools.wraps(validate)
     def run(*args: Any, **kwargs: Any) -> bool:
+        """Validate with references on; on a change, rerun with every argument copied."""
+
         token = _SESSION.set(_ReferenceSession())
         try:
             return validate(*args, **kwargs)

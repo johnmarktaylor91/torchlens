@@ -185,19 +185,15 @@ def _copy_saved_arg_tree(arg: Any) -> Any:
 def _parameter_alias(references: Any, tensor: torch.Tensor) -> torch.Tensor:
     """Alias a parameter-storage tensor (recording its version), else copy it as before.
 
-    The alias is a plain detached tensor on the same storage, sharing the
-    version counter, with the argument's ``requires_grad``: the flag replay
-    reads from a saved argument. It is never the ``nn.Parameter`` itself, so
-    capture cleanup that strips TorchLens metadata from saved arguments cannot
-    reach the parameter or its registry entry.
+    The guard decides and builds the alias (see
+    ``ParameterArgumentReferences.alias``); anything it declines is copied
+    exactly as on the copy path.
     """
 
-    # Paused: the storage and version reads and the detach are TorchLens's own
-    # calls, never captured ops (and never re-enter this argument copy).
+    # Paused: the guard's storage and version reads and its alias are
+    # TorchLens's own calls, never captured ops (and never re-enter this copy).
     with pause_logging():
-        alias = tensor.detach() if references.keep(tensor) else None
-        if alias is not None and tensor.requires_grad:
-            alias.requires_grad_(True)
+        alias = references.alias(tensor)
     return cast(torch.Tensor, copy_arg_tree(tensor)) if alias is None else alias
 
 
