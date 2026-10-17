@@ -272,3 +272,12 @@ def test_the_guard_flags_a_write_through_a_view_or_through_data() -> None:
     assert data_guard.first_change() is not None
     with pytest.raises(arg_references._ParameterArgumentChanged):
         data_guard.raise_if_changed()
+
+
+def test_inference_tensor_parameters_are_copied_not_referenced() -> None:
+    with torch.inference_mode():
+        model = nn.Linear(3, 2)
+    assert model.weight.is_inference()
+    guard = arg_references.ParameterArgumentReferences(arg_references._parameter_owners(model))
+    assert not guard.keep(model.weight)
+    assert guard.first_change() is None

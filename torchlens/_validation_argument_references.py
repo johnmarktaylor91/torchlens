@@ -69,7 +69,8 @@ def _storage_key(tensor: torch.Tensor) -> _StorageKey | None:
 
     if type(tensor) not in (torch.Tensor, nn.Parameter) or tensor.layout is not torch.strided:
         return None
-    if tensor.device.type == "meta" or tensor.is_quantized:
+    # Inference tensors keep no version counter, so no guard could cover them.
+    if tensor.device.type == "meta" or tensor.is_quantized or tensor.is_inference():
         return None
     data_ptr = tensor.untyped_storage().data_ptr()
     return None if data_ptr == 0 else (tensor.device, data_ptr)
