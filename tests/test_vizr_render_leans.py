@@ -157,56 +157,39 @@ def _graphviz_helvetica_file(env: dict[str, str], tmp_path: Path) -> str:
     return resolved[0].rsplit(" ", 1)[-1]
 
 
-def test_fk3_bundled_font_wins_where_graphviz_prefers_an_unaliased_family(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """With DejaVu Sans installed and no Arial, Graphviz still draws the bundled face.
+def _caller_fontconfig(tmp_path: Path) -> tuple[Path, Path]:
+    """Write a caller fontconfig file that offers one unaliased equivalent and nothing else.
 
-    Graphviz's pango plugin picks the family itself before fontconfig sees the
-    request; on such a machine it used to pick ``DejaVu Sans``, which no alias of
-    the pinned family reaches. The caller's fontconfig file here offers one
-    unaliased equivalent and nothing else and, where fontconfig reads directory
-    salts, its cache already holds the bundled directory as an older
-    configuration scanned it.
+    Returns the file and the copied font; skips when the host has no such font.
     """
+
     equivalent = _unaliased_equivalent_font()
     if equivalent is None:
         pytest.skip(
             "no unaliased Helvetica equivalent installed: "
             + ", ".join(_UNALIASED_HELVETICA_EQUIVALENTS)
         )
-    font_dir = str(_fonts.bundled_font_status()["font_dir"])
     system_dir = tmp_path / "system-fonts"
     system_dir.mkdir()
     shutil.copy(equivalent, system_dir)
-    cache_dir = tmp_path / "fontconfig-cache"
     base = tmp_path / "caller-fonts.conf"
     base.write_text(
         '<?xml version="1.0"?>\n<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">\n'
-        f"<fontconfig>\n  <dir>{system_dir}</dir>\n  <cachedir>{cache_dir}</cachedir>\n"
-        "</fontconfig>\n",
+        f"<fontconfig>\n  <dir>{system_dir}</dir>\n"
+        f"  <cachedir>{tmp_path / 'fontconfig-cache'}</cachedir>\n</fontconfig>\n",
         encoding="utf-8",
     )
-    legacy = tmp_path / "legacy-fonts.conf"
-    legacy.write_text(
-        '<?xml version="1.0"?>\n<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">\n'
-        f"<fontconfig>\n  <include>{base}</include>\n  <dir>{font_dir}</dir>\n</fontconfig>\n",
-        encoding="utf-8",
-    )
-    caller_env = {**os.environ, "FONTCONFIG_FILE": str(base)}
+    copied = system_dir / Path(equivalent).name
     # The environment defeats a family alias: Graphviz alone picks the equivalent.
-    assert _graphviz_helvetica_file(caller_env, tmp_path) == str(system_dir / Path(equivalent).name)
-    version = _fonts._fontconfig_version()
-    if version is not None and version >= _fonts._SALT_MIN_FONTCONFIG:
-        # A configuration without the scan-time edit caches the bundled directory first.
-        subprocess.run(
-            ["fc-list"],
-            env={**os.environ, "FONTCONFIG_FILE": str(legacy)},
-            capture_output=True,
-            check=True,
-            timeout=60,
-        )
-    monkeypatch.setenv("FONTCONFIG_FILE", str(base))
+    caller_env = {**os.environ, "FONTCONFIG_FILE": str(base)}
+    assert _graphviz_helvetica_file(caller_env, tmp_path) == str(copied)
+    return base, copied
+
+
+def _assert_render_uses_bundled_face(tmp_path: Path) -> None:
+    """Assert Graphviz and a real PDF render draw with the bundled face."""
+
+    font_dir = str(_fonts.bundled_font_status()["font_dir"])
     env = _fonts.graphviz_font_env()
     assert env is not None
     assert _graphviz_helvetica_file(env, tmp_path).startswith(font_dir + os.sep)
@@ -216,6 +199,51 @@ def test_fk3_bundled_font_wins_where_graphviz_prefers_an_unaliased_family(
     finally:
         trace.cleanup()
     assert b"LiberationSans" in _pdf_text_blobs((tmp_path / "fk3.pdf").read_bytes())
+
+
+def test_fk3_bundled_font_wins_where_graphviz_prefers_an_unaliased_family(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With DejaVu Sans installed and no Arial, Graphviz still draws the bundled face.
+
+    Graphviz's pango plugin picks the family itself before fontconfig sees the
+    request; on such a machine it used to pick ``DejaVu Sans``, which no alias of
+    the pinned family reaches. The caller's fontconfig file here offers one
+    unaliased equivalent and nothing else.
+    """
+    base, _ = _caller_fontconfig(tmp_path)
+    monkeypatch.setenv("FONTCONFIG_FILE", str(base))
+    _assert_render_uses_bundled_face(tmp_path)
+
+
+def test_fk3_stale_bundled_cache_does_not_hide_the_pinned_family(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A cache of the bundled directory written without the scan-time edit is not reused."""
+    version = _fonts._fontconfig_version()
+    if version is None or version < _fonts._SALT_MIN_FONTCONFIG:
+        pytest.skip(f"fontconfig {version} reads no directory salts")
+    base, _ = _caller_fontconfig(tmp_path)
+    legacy = tmp_path / "legacy-fonts.conf"
+    legacy.write_text(
+        '<?xml version="1.0"?>\n<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">\n'
+        f"<fontconfig>\n  <include>{base}</include>\n"
+        f"  <dir>{_fonts.bundled_font_status()['font_dir']}</dir>\n</fontconfig>\n",
+        encoding="utf-8",
+    )
+    fc_list = shutil.which("fc-list")
+    assert fc_list is not None
+    listed = subprocess.run(
+        [fc_list, "-f", "%{family}\n", "Liberation Sans"],
+        env={**os.environ, "FONTCONFIG_FILE": str(legacy)},
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=60,
+    ).stdout
+    assert listed and "Helvetica" not in listed, listed
+    monkeypatch.setenv("FONTCONFIG_FILE", str(base))
+    _assert_render_uses_bundled_face(tmp_path)
 
 
 @pytest.mark.parametrize(
