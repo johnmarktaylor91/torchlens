@@ -424,6 +424,7 @@
   `tl.func("rsqrt")`) no longer refuses every firing; each live firing takes the source value
   captured at the same position and pass, and refuses when the source holds no op of that type and
   shape there.
+- **visualization**: Rendered graphs use the bundled font on machines without Arial installed.
 
 ### Performance Improvements
 
@@ -462,6 +463,8 @@
   GB).
 - **rerun**: cheaper payload eviction for a discarded capture (the rerun's eviction walk makes about
   a fifth of the calls it did), and fewer calls per fork read.
+- **fork**: cheaper trace fork (the fork's copy of its label tables makes about 30 percent fewer
+  calls).
 
 ### Changed
 
@@ -496,6 +499,11 @@
   model that writes a parameter in place during forward is validated again with every argument
   copied, as before, and the run records the diagnostic `validation_parameter_reference_fallback`. A
   user's own `save_arg_values=True` trace still saves copies.
+- **validation**: `tl.validate` / `validate_forward_pass` on the default `output_device="same"` no
+  longer charge parameter arguments to `save_budget`; the validator capture keeps them as references
+  to its own copy of the model, so they hold no extra memory (this was already so for other
+  `output_device` values). Large models no longer hit `SaveBudgetExceededError` for weight copies
+  that do not exist.
 
 ### Continuous Integration
 
