@@ -172,6 +172,22 @@ class ParameterArgumentReferences:
         key = _storage_key(tensor)
         return None if key is not None and key in self._owners else target
 
+    def shares_parameter_storage(self, tensor: torch.Tensor) -> bool:
+        """Whether ``tensor`` shares storage with a live parameter of validation's copy.
+
+        Read now, from the parameter's current storage, not assumed from how
+        the tensor was made. An offloading capture charges such an alias
+        nothing: it adds no storage beyond the copy's own parameters.
+        """
+
+        key = _storage_key(tensor)
+        if key is None:
+            return False
+        return any(
+            owner.device == key[0] and owner.untyped_storage().data_ptr() == key[1]
+            for _, owner in self._owners.get(key, ())
+        )
+
     def offload(self, tensor: torch.Tensor) -> torch.Tensor | None:
         """Return the retained copy of ``tensor`` on the offload device, or ``None``.
 

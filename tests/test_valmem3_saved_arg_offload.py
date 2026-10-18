@@ -206,6 +206,53 @@ def test_retained_copy_and_budget_device_follow_the_offload_target() -> None:
     assert pre_call.device.type == "cpu" and not hasattr(pre_call, _TAG)
 
 
+class _BudgetTrace:
+    """The one attribute the saved-args budget sites read from a trace."""
+
+    def __init__(self, budget_bytes: int) -> None:
+        from torchlens._save_budget import SaveBudget
+
+        self._save_budget_accountant = SaveBudget.from_option(budget_bytes)
+
+
+def _admit(references: Any, *t_args: Any) -> Any:
+    token = arg_references._ACTIVE.set(references)
+    try:
+        return _ops_retention._admit_saved_args_budget(
+            _BudgetTrace(64), {"_label_raw": "op"}, t_args, {}
+        )
+    finally:
+        arg_references._ACTIVE.reset(token)
+
+
+def test_offloading_capture_charges_no_bytes_for_a_parameter_alias() -> None:
+    from torchlens._save_budget import SaveBudgetExceededError
+
+    model = nn.Linear(16, 16)
+    owners = arg_references._parameter_owners(model)
+    offloading = arg_references.ParameterArgumentReferences(owners, None, "cpu")
+    alias = model.weight.detach()
+    assert offloading.shares_parameter_storage(alias)
+    assert _admit(offloading, alias) == []
+    with pytest.raises(SaveBudgetExceededError):
+        _admit(offloading, torch.zeros_like(alias))
+    with pytest.raises(SaveBudgetExceededError):
+        _admit(arg_references.ParameterArgumentReferences(owners), alias)
+
+
+def test_a_rebound_parameter_storage_is_charged_again() -> None:
+    from torchlens._save_budget import SaveBudgetExceededError
+
+    model = nn.Linear(16, 16)
+    owners = arg_references._parameter_owners(model)
+    offloading = arg_references.ParameterArgumentReferences(owners, None, "cpu")
+    stale = model.weight.detach()
+    model.weight.data = torch.zeros(16, 16)
+    assert not offloading.shares_parameter_storage(stale)
+    with pytest.raises(SaveBudgetExceededError):
+        _admit(offloading, stale)
+
+
 def test_outside_validation_the_retained_copy_is_the_plain_copy() -> None:
     value = torch.ones(3)
     copied = _ops_retention._copy_saved_arg_tree(value, True)
@@ -499,3 +546,16 @@ def test_a_corrupted_autograd_grad_model_fails_as_with_same(
         results[output_device] = _validation_capture(model, x, output_device, corrupt)
     assert results["cpu"] == results["same"]
     assert results["cpu"][0] is False
+
+
+@_NEEDS_ACCEL
+def test_a_tight_budget_still_refuses_real_copies_in_offload_mode() -> None:
+    from torchlens._save_budget import SaveBudgetExceededError
+
+    assert _ACCEL is not None
+    torch.manual_seed(0)
+    model, x = _Offsets().to(_ACCEL), torch.randn(64, 6, device=_ACCEL)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with pytest.raises(SaveBudgetExceededError):
+            tl.validate(model, x, scope="forward", output_device="cpu", save_budget=256)

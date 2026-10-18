@@ -232,6 +232,25 @@ def _saved_arg_retention_devices(t_args: Any, t_kwargs: Any) -> dict[int, torch.
     return devices
 
 
+def _uncharged_parameter_aliases(*roots: Any) -> set[int]:
+    """Return ``id`` of each tensor that shares storage with a live parameter of validation's copy.
+
+    Only in validation's offloading capture (``output_device`` other than
+    ``"same"``): such an alias adds no storage, so the save budget charges it
+    nothing. Empty everywhere else, where aliases stay charged as copies.
+    """
+
+    references = active_argument_references()
+    if references is None or not references.offloads:
+        return set()
+    with pause_logging():
+        return {
+            id(tensor)
+            for tensor in _iter_tree_tensors(*roots)
+            if references.shares_parameter_storage(tensor)
+        }
+
+
 def _iter_tree_tensors(*roots: Any) -> Iterator[torch.Tensor]:
     """Yield every tensor leaf reachable through builtin containers."""
 
@@ -269,14 +288,18 @@ def _admit_saved_args_budget(
     if budget is None:
         return None
     from ..._save_budget import _retained_storage_identities
-    from ._ops_retention import _saved_arg_retention_devices
+    from ._ops_retention import _saved_arg_retention_devices, _uncharged_parameter_aliases
 
     # Offloaded copies (validation with an ``output_device``) are charged to
-    # the device they will live on, not the device the op consumed them on.
+    # the device they will live on, not the device the op consumed them on;
+    # parameter aliases there add no storage and are not charged.
     moved_to = _saved_arg_retention_devices(t_args, t_kwargs)
+    aliases = _uncharged_parameter_aliases(t_args, t_kwargs)
     per_device: dict[Any, int] = {}
     seen_identities: set[tuple[Any, ...]] = set()
     for tensor in _iter_tree_tensors(t_args, t_kwargs):
+        if id(tensor) in aliases:
+            continue
         device = moved_to.get(id(tensor), tensor.device)
         for identity, num_bytes in _retained_storage_identities(tensor):
             if identity in seen_identities:
@@ -311,9 +334,11 @@ def _commit_saved_args_budget(
     budget = getattr(trace, "_save_budget_accountant", None)
     if budget is None or reservations is None:
         return
-    cloned = tuple(
-        _iter_tree_tensors(fields_dict.get("saved_args"), fields_dict.get("saved_kwargs"))
-    )
+    from ._ops_retention import _uncharged_parameter_aliases
+
+    saved = (fields_dict.get("saved_args"), fields_dict.get("saved_kwargs"))
+    aliases = _uncharged_parameter_aliases(*saved)
+    cloned = tuple(tensor for tensor in _iter_tree_tensors(*saved) if id(tensor) not in aliases)
     by_device: dict[str, list[torch.Tensor]] = {}
     for tensor in cloned:
         by_device.setdefault(str(tensor.device), []).append(tensor)
