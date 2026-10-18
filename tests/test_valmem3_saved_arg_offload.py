@@ -238,8 +238,9 @@ def test_offloading_capture_charges_no_bytes_for_a_parameter_alias() -> None:
     assert _admit(offloading, alias) == []
     with pytest.raises(SaveBudgetExceededError):
         _admit(offloading, torch.zeros_like(alias))
+    assert _admit(arg_references.ParameterArgumentReferences(owners), alias) == []
     with pytest.raises(SaveBudgetExceededError):
-        _admit(arg_references.ParameterArgumentReferences(owners), alias)
+        _admit(arg_references.ParameterArgumentReferences({}, None, "cpu"), alias)
 
 
 def test_a_rebound_parameter_storage_is_charged_again() -> None:
@@ -267,15 +268,16 @@ def _admit_and_commit(references: Any, alias: torch.Tensor) -> None:
         arg_references._ACTIVE.reset(token)
 
 
-def test_the_commit_charges_a_saved_alias_only_outside_offload() -> None:
+def test_the_commit_charges_a_saved_alias_only_without_its_parameter_owner() -> None:
     from torchlens._save_budget import SaveBudgetExceededError
 
     model = nn.Linear(16, 16)
     owners = arg_references._parameter_owners(model)
     alias = model.weight.detach()
     _admit_and_commit(arg_references.ParameterArgumentReferences(owners, None, "cpu"), alias)
+    _admit_and_commit(arg_references.ParameterArgumentReferences(owners), alias)
     with pytest.raises(SaveBudgetExceededError):
-        _admit_and_commit(arg_references.ParameterArgumentReferences(owners), alias)
+        _admit_and_commit(arg_references.ParameterArgumentReferences({}, None, "cpu"), alias)
 
 
 def test_outside_validation_the_retained_copy_is_the_plain_copy() -> None:
@@ -591,7 +593,7 @@ def test_a_tight_budget_still_refuses_real_copies_in_offload_mode() -> None:
 
 
 @_NEEDS_ACCEL
-def test_parameter_aliases_alone_do_not_trip_the_budget_in_offload_mode() -> None:
+def test_parameter_aliases_alone_do_not_trip_the_validation_budget() -> None:
     from torchlens._save_budget import SaveBudgetExceededError
 
     assert _ACCEL is not None
@@ -601,5 +603,7 @@ def test_parameter_aliases_alone_do_not_trip_the_budget_in_offload_mode() -> Non
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         assert tl.validate(model, x, scope="forward", output_device="cpu", save_budget=budget)
+        assert tl.validate(model, x, scope="forward", output_device="same", save_budget=budget)
+        capture = CaptureOptions(layers_to_save="all", save_arg_values=True, save_budget=budget)
         with pytest.raises(SaveBudgetExceededError):
-            tl.validate(model, x, scope="forward", output_device="same", save_budget=budget)
+            tl.trace(model, x, capture=capture)

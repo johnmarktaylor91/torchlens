@@ -176,7 +176,7 @@ class ParameterArgumentReferences:
         """Whether ``tensor`` shares storage with a live parameter of validation's copy.
 
         Read now, from the parameter's current storage, not assumed from how
-        the tensor was made. An offloading capture charges such an alias
+        the tensor was made. Validation's capture charges such an alias
         nothing: it adds no storage beyond the copy's own parameters.
         """
 
