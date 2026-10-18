@@ -416,3 +416,79 @@ def test_a_corrupted_saved_argument_fails_as_with_same(corrupt: Any) -> None:
         results[output_device] = _validation_capture(model, x, output_device, corrupt)
     assert results["cpu"] == results["same"]
     assert results["cpu"][0] is False
+
+
+def test_nested_swaps_move_nothing_twice_and_restore_on_every_exit() -> None:
+    host = _tagged(torch.ones(3))
+    op = _FakeOp([host], {})
+    trace = _FakeTrace(op)
+    with _replay_device.saved_args_on_consumed_devices(trace, "op"):
+        outer = op.saved_args[0]
+        with _replay_device.saved_args_on_consumed_devices(trace, "op"):
+            assert op.saved_args[0] is outer
+        assert op.saved_args[0] is outer
+        with pytest.raises(RuntimeError, match="inner"):
+            with _replay_device.saved_args_on_consumed_devices(trace, "op"):
+                raise RuntimeError("inner")
+        assert op.saved_args[0] is outer
+    assert op.saved_args[0] is host
+
+
+def _grad_models() -> list[tuple[str, Any, tuple[int, ...]]]:
+    from example_models import MAMLInnerLoop
+    from test_autograd_grad_boundary import (
+        _IntermediateInput,
+        _SecondOrder,
+        _TwoCallsDifferentArity,
+        _TwoLosses,
+    )
+
+    return [
+        ("maml", MAMLInnerLoop, (4, 8)),
+        ("two_losses", _TwoLosses, (2, 3)),
+        ("intermediate_input", _IntermediateInput, (2, 4)),
+        ("second_order", _SecondOrder, (2, 3)),
+        ("two_arities", _TwoCallsDifferentArity, (3,)),
+    ]
+
+
+def _no_corruption(trace: Any, model: Any) -> None:
+    del trace, model
+
+
+def _corrupt_matmul_weight(trace: Any, model: Any) -> None:
+    matmul = next(op for op in trace.layer_list if op.func_name in {"matmul", "__matmul__"})
+    with torch.no_grad():
+        matmul.saved_args[1].add_(1.0)
+
+
+@_NEEDS_ACCEL
+@pytest.mark.parametrize(
+    "index",
+    range(5),
+    ids=["maml", "two_losses", "intermediate_input", "second_order", "two_arities"],
+)
+def test_in_forward_autograd_grad_models_match_the_same_device_run(index: int) -> None:
+    assert _ACCEL is not None
+    _, factory, shape = _grad_models()[index]
+    results = {}
+    for output_device in ("same", "cpu"):
+        torch.manual_seed(0)
+        model, x = factory().to(_ACCEL), torch.randn(*shape, device=_ACCEL)
+        results[output_device] = _validation_capture(model, x, output_device, _no_corruption)
+    assert results["cpu"] == results["same"]
+
+
+@_NEEDS_ACCEL
+@pytest.mark.parametrize("corrupt", [_corrupt_relu_input, _corrupt_matmul_weight])
+def test_a_corrupted_autograd_grad_model_fails_as_with_same(corrupt: Any) -> None:
+    from example_models import MAMLInnerLoop
+
+    assert _ACCEL is not None
+    results = {}
+    for output_device in ("same", "cpu"):
+        torch.manual_seed(0)
+        model, x = MAMLInnerLoop().to(_ACCEL), torch.randn(4, 8, device=_ACCEL)
+        results[output_device] = _validation_capture(model, x, output_device, corrupt)
+    assert results["cpu"] == results["same"]
+    assert results["cpu"][0] is False

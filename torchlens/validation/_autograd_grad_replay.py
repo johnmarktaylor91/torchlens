@@ -29,6 +29,7 @@ import torch
 
 from ..backends.torch._autograd_grad_boundary import grad_signature, is_autograd_grad_recorder
 from ..utils.rng import execute_with_restored_rng_autocast
+from ._replay_device import saved_args_on_consumed_devices
 
 if TYPE_CHECKING:
     from ..data_classes.op import Op
@@ -310,18 +311,19 @@ class _SubgraphReplay:
             _prepare_input_args_for_validating_layer,
         )
 
-        input_args, reason = _prepare_input_args_for_validating_layer(self.trace, op, [])
-        if input_args is None:
-            raise AutogradGradReplayError(
-                f"subgraph op {op.label!r} has no saved arguments ({reason})"
-            )
-        self._splice_parents(op, input_args)
-        if is_autograd_grad_recorder(op.func):
-            # A recorded grad inside this grad's subgraph: replay it against this
-            # replay's leaves so its gradients stay connected to them.
-            output = _select_output(op, _replay_boundary(op, input_args, [], self.param_leaves))
-        else:
-            output = _execute_func_with_restored_state(op, input_args, [], op.label, False)
+        with saved_args_on_consumed_devices(self.trace, op.label):
+            input_args, reason = _prepare_input_args_for_validating_layer(self.trace, op, [])
+            if input_args is None:
+                raise AutogradGradReplayError(
+                    f"subgraph op {op.label!r} has no saved arguments ({reason})"
+                )
+            self._splice_parents(op, input_args)
+            if is_autograd_grad_recorder(op.func):
+                # A recorded grad inside this grad's subgraph: replay it against this
+                # replay's leaves so its gradients stay connected to them.
+                output = _select_output(op, _replay_boundary(op, input_args, [], self.param_leaves))
+            else:
+                output = _execute_func_with_restored_state(op, input_args, [], op.label, False)
         if not isinstance(output, torch.Tensor):
             raise AutogradGradReplayError(f"subgraph op {op.label!r} did not replay a tensor")
         return output
