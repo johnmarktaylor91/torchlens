@@ -42,7 +42,8 @@ import weakref
 from collections import OrderedDict, defaultdict
 from collections.abc import Iterator
 from dataclasses import fields
-from itertools import islice
+from itertools import islice, repeat
+from operator import is_
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -295,6 +296,7 @@ def _copy_fork_value(value: Any, memo: dict[Any, Any] | None = None) -> Any:
 _NO_FLAT_COPY = object()
 _FLAT_COPY_DEPTH = 3
 _ATOMIC_COPY_TYPES = frozenset({str, bytes, int, float, bool, complex, type(None)})
+_is_atomic_copy_type = _ATOMIC_COPY_TYPES.__contains__
 _FLAT_COPY_TYPES = frozenset({dict, OrderedDict, defaultdict, list, tuple, set, frozenset})
 #: ``default_factory`` values ``copy.deepcopy`` returns unchanged (its atomic dispatch).
 _ATOMIC_FACTORY_TYPES = (type(None), type, types.BuiltinFunctionType, types.FunctionType)
@@ -334,22 +336,35 @@ def _flat_container_copy(value: Any, memo: dict[Any, Any], depth: int) -> Any:
 
 
 def _flat_copy_contents(value: Any, cls: type, memo: dict[Any, Any], depth: int) -> Any:
-    """Build the copy for :func:`_flat_container_copy`, or return ``_NO_FLAT_COPY``."""
+    """Build the copy for :func:`_flat_container_copy`, or return ``_NO_FLAT_COPY``.
+
+    The per-member type and identity checks run inside ``map`` (no Python
+    frame per member): most members are atomic labels and counts, which
+    deepcopy returns unchanged, so an all-atomic container is copied without
+    visiting its members one call at a time.
+    """
 
     mapping = cls is dict or cls is OrderedDict or cls is defaultdict
-    if mapping and any(type(key) not in _ATOMIC_COPY_TYPES for key in value):
+    if mapping and not all(map(_is_atomic_copy_type, map(type, value))):
         return _NO_FLAT_COPY
-    items = [
-        _flat_element_copy(item, memo, depth) for item in (value.values() if mapping else value)
-    ]
-    if any(item is _NO_FLAT_COPY for item in items):
-        return _NO_FLAT_COPY
+    members = value.values() if mapping else value
+    if all(map(_is_atomic_copy_type, map(type, members))):
+        if cls is tuple:
+            return value
+        items = list(members)
+    else:
+        items = [
+            item if type(item) in _ATOMIC_COPY_TYPES else _flat_element_copy(item, memo, depth)
+            for item in members
+        ]
+        if any(map(is_, items, repeat(_NO_FLAT_COPY))):
+            return _NO_FLAT_COPY
+        if cls is tuple and all(map(is_, items, value)):
+            return value
     if cls is defaultdict:
         return defaultdict(value.default_factory, zip(value, items, strict=True))
     if mapping:
         return cls(zip(value, items, strict=True))
-    if cls is tuple and all(new is old for new, old in zip(items, value, strict=True)):
-        return value
     return cls(items)
 
 
