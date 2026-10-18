@@ -135,9 +135,12 @@ def _validation_capture(
     with mock.patch.object(user_funcs, "_run_model_and_save_specified_outs", runner):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            verdict = _user_public_impls._validate_forward_pass_torch(
-                model, x, random_seed=0, output_device=output_device, _trace_observer=observe
-            )
+            try:
+                verdict = _user_public_impls._validate_forward_pass_torch(
+                    model, x, random_seed=0, output_device=output_device, _trace_observer=observe
+                )
+            except Exception as exc:  # a raised validation failure is compared by its type
+                return False, [*failures, f"raised {type(exc).__name__}"]
     return bool(verdict), failures
 
 
@@ -435,18 +438,18 @@ def test_nested_swaps_move_nothing_twice_and_restore_on_every_exit() -> None:
 
 
 def _grad_models() -> list[tuple[str, Any, tuple[int, ...]]]:
+    """The in-forward ``autograd.grad`` models that run on an accelerator.
+
+    ``_IntermediateInput`` from the boundary tests is left out: it builds its
+    ``grad_outputs`` on the CPU inside forward, so it cannot run on another device.
+    """
+
     from example_models import MAMLInnerLoop
-    from test_autograd_grad_boundary import (
-        _IntermediateInput,
-        _SecondOrder,
-        _TwoCallsDifferentArity,
-        _TwoLosses,
-    )
+    from test_autograd_grad_boundary import _SecondOrder, _TwoCallsDifferentArity, _TwoLosses
 
     return [
         ("maml", MAMLInnerLoop, (4, 8)),
         ("two_losses", _TwoLosses, (2, 3)),
-        ("intermediate_input", _IntermediateInput, (2, 4)),
         ("second_order", _SecondOrder, (2, 3)),
         ("two_arities", _TwoCallsDifferentArity, (3,)),
     ]
@@ -464,12 +467,13 @@ def _corrupt_matmul_weight(trace: Any, model: Any) -> None:
 
 @_NEEDS_ACCEL
 @pytest.mark.parametrize(
-    "index",
-    range(5),
-    ids=["maml", "two_losses", "intermediate_input", "second_order", "two_arities"],
+    "index", range(4), ids=["maml", "two_losses", "second_order", "two_arities"]
 )
-def test_in_forward_autograd_grad_models_match_the_same_device_run(index: int) -> None:
+def test_in_forward_autograd_grad_models_match_the_same_device_run(
+    index: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
     assert _ACCEL is not None
+    monkeypatch.setenv("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     _, factory, shape = _grad_models()[index]
     results = {}
     for output_device in ("same", "cpu"):
@@ -481,10 +485,13 @@ def test_in_forward_autograd_grad_models_match_the_same_device_run(index: int) -
 
 @_NEEDS_ACCEL
 @pytest.mark.parametrize("corrupt", [_corrupt_relu_input, _corrupt_matmul_weight])
-def test_a_corrupted_autograd_grad_model_fails_as_with_same(corrupt: Any) -> None:
+def test_a_corrupted_autograd_grad_model_fails_as_with_same(
+    corrupt: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from example_models import MAMLInnerLoop
 
     assert _ACCEL is not None
+    monkeypatch.setenv("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     results = {}
     for output_device in ("same", "cpu"):
         torch.manual_seed(0)

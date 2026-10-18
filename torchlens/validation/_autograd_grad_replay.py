@@ -29,7 +29,7 @@ import torch
 
 from ..backends.torch._autograd_grad_boundary import grad_signature, is_autograd_grad_recorder
 from ..utils.rng import execute_with_restored_rng_autocast
-from ._replay_device import saved_args_on_consumed_devices
+from ._replay_device import align_parent_to_slot_device, saved_args_on_consumed_devices
 
 if TYPE_CHECKING:
     from ..data_classes.op import Op
@@ -298,6 +298,7 @@ class _SubgraphReplay:
                     continue
                 if is_inplace:
                     replayed = replayed.clone()
+                replayed = align_parent_to_slot_device(input_args, arg_domain, key, replayed)
                 key_path = key if isinstance(key, tuple) else (key,)
                 input_args[arg_domain] = _write_path(input_args[arg_domain], key_path, replayed)
         input_args["args"] = list(_substitute_params(list(input_args["args"]), self.param_leaves))
