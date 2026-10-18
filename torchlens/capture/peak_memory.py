@@ -77,9 +77,10 @@ def reset_peak_rss() -> bool:
 def peak_rss_bytes() -> int:
     """Return the process resident high-water mark in bytes, or 0.
 
-    Reads ``VmHWM`` from ``/proc/self/status`` on Linux; falls back to
-    ``ru_maxrss`` elsewhere, which macOS reports in bytes and Linux and the
-    BSDs in kibibytes. Both are process-lifetime maxima unless
+    Reads ``VmHWM`` from ``/proc/self/status`` on Linux, corrected by
+    :func:`_kernel_mark_lag_bytes` when the mark is above the current RSS;
+    falls back to ``ru_maxrss`` elsewhere, which macOS reports in bytes and
+    Linux and the BSDs in kibibytes. Both are process-lifetime maxima unless
     :func:`reset_peak_rss` succeeded beforehand.
 
     Returns
@@ -89,10 +90,18 @@ def peak_rss_bytes() -> int:
     """
 
     try:
+        hwm_kib = rss_kib = None
         with open("/proc/self/status") as handle:
             for line in handle:
                 if line.startswith("VmHWM:"):
-                    return int(line.split()[1]) * 1024
+                    hwm_kib = int(line.split()[1])
+                elif line.startswith("VmRSS:"):
+                    rss_kib = int(line.split()[1])
+        if hwm_kib is not None:
+            lag = 0
+            if rss_kib is not None and hwm_kib > rss_kib:
+                lag = _kernel_mark_lag_bytes(rss_kib * 1024, _approximate_rss_bytes())
+            return hwm_kib * 1024 + lag
     except (OSError, ValueError, IndexError):
         pass
     try:
@@ -103,6 +112,52 @@ def peak_rss_bytes() -> int:
         return int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) * scale
     except (ImportError, OSError, ValueError, AttributeError):
         return 0
+
+
+def _kernel_mark_lag_bytes(exact_rss: int, approximate_rss: int | None) -> int:
+    """Return how far the kernel's high-water mark lags the exact RSS, in bytes.
+
+    Linux keeps the RSS counters per CPU. Where ``/proc`` reports the exact
+    sum (``VmRSS``, ``statm``; measured on Linux 7.0), the kernel still sets
+    ``VmHWM``'s mark from the approximate total (``/proc/self/stat`` field
+    24), which leaves out each CPU's unfolded residue: up to about 63 pages
+    per CPU, 8 MiB measured on a 32-CPU host. A mark set when a freed buffer
+    was unmapped therefore reads below the RSS ``/proc`` showed while the
+    buffer was resident. The lag read now stands in for the lag at that
+    unmap. On kernels whose ``/proc`` RSS is the approximate total the two
+    readings agree and the lag is 0.
+
+    Parameters
+    ----------
+    exact_rss:
+        Current RSS from ``/proc/self/status`` (``VmRSS``), in bytes.
+    approximate_rss:
+        Current RSS from ``/proc/self/stat``, in bytes, or ``None`` when unreadable.
+
+    Returns
+    -------
+    int
+        The lag in bytes, never negative; 0 when the approximate RSS is unreadable.
+    """
+
+    if approximate_rss is None:
+        return 0
+    return max(0, exact_rss - approximate_rss)
+
+
+def _approximate_rss_bytes() -> int | None:
+    """Return the kernel's approximate RSS (``/proc/self/stat`` field 24) in bytes, or ``None``."""
+
+    try:
+        import os
+
+        with open("/proc/self/stat") as handle:
+            text = handle.read()
+        # Fields after the parenthesised command name start at field 3.
+        pages = int(text[text.rindex(")") + 2 :].split()[21])
+        return pages * os.sysconf("SC_PAGE_SIZE")
+    except (OSError, ValueError, IndexError):
+        return None
 
 
 def read_peak_pair(trace: Any) -> dict[str, Any] | None:
