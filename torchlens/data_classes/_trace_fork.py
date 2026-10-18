@@ -355,23 +355,30 @@ def _flat_copy_contents(value: Any, cls: type, memo: dict[Any, Any], depth: int)
         return _NO_FLAT_COPY
     members = value.values() if mapping else value
     if all(map(_is_atomic_copy_type, map(type, members))):
-        if cls is tuple:
-            return value
         items = list(members)
     else:
-        items = [
-            item if type(item) in _ATOMIC_COPY_TYPES else _flat_element_copy(item, memo, depth)
-            for item in members
-        ]
-        if any(map(is_, items, repeat(_NO_FLAT_COPY))):
+        items = _flat_copy_members(members, memo, depth)
+        if items is _NO_FLAT_COPY:
             return _NO_FLAT_COPY
-        if cls is tuple and all(map(is_, items, value)):
-            return value
     if cls is defaultdict:
         return defaultdict(value.default_factory, zip(value, items, strict=True))
     if mapping:
         return cls(zip(value, items, strict=True))
+    if cls is tuple and all(map(is_, items, value)):
+        return value
     return cls(items)
+
+
+def _flat_copy_members(members: Any, memo: dict[Any, Any], depth: int) -> Any:
+    """Copy the members of a container that holds a non-atomic one, or return ``_NO_FLAT_COPY``."""
+
+    items = [
+        item if type(item) in _ATOMIC_COPY_TYPES else _flat_element_copy(item, memo, depth)
+        for item in members
+    ]
+    if any(map(is_, items, repeat(_NO_FLAT_COPY))):
+        return _NO_FLAT_COPY
+    return items
 
 
 def _flat_element_copy(item: Any, memo: dict[Any, Any], depth: int) -> Any:
