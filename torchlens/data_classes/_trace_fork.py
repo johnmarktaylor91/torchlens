@@ -42,13 +42,20 @@ import weakref
 from collections import OrderedDict, defaultdict
 from collections.abc import Iterator
 from dataclasses import fields
-from itertools import islice
+from itertools import islice, repeat
+from operator import is_
 from typing import TYPE_CHECKING, Any
 
 import torch
 
 from .. import _state
-from .._trace_core.op_store import _MISSING, DetachedOpStore, PooledCell, cow_copy_value
+from .._trace_core.op_store import (
+    _COW_ATOMIC,
+    _MISSING,
+    DetachedOpStore,
+    PooledCell,
+    cow_copy_value,
+)
 from .._trace_core.record_rows import CORE_KEY, ROW_KEY
 from ..capture.outcome import stamp_forked
 from ..intervention.types import MODEL_LOG_FIELD_FORK_POLICY, ForkFieldPolicy
@@ -295,6 +302,7 @@ def _copy_fork_value(value: Any, memo: dict[Any, Any] | None = None) -> Any:
 _NO_FLAT_COPY = object()
 _FLAT_COPY_DEPTH = 3
 _ATOMIC_COPY_TYPES = frozenset({str, bytes, int, float, bool, complex, type(None)})
+_is_atomic_copy_type = _ATOMIC_COPY_TYPES.__contains__
 _FLAT_COPY_TYPES = frozenset({dict, OrderedDict, defaultdict, list, tuple, set, frozenset})
 #: ``default_factory`` values ``copy.deepcopy`` returns unchanged (its atomic dispatch).
 _ATOMIC_FACTORY_TYPES = (type(None), type, types.BuiltinFunctionType, types.FunctionType)
@@ -334,23 +342,43 @@ def _flat_container_copy(value: Any, memo: dict[Any, Any], depth: int) -> Any:
 
 
 def _flat_copy_contents(value: Any, cls: type, memo: dict[Any, Any], depth: int) -> Any:
-    """Build the copy for :func:`_flat_container_copy`, or return ``_NO_FLAT_COPY``."""
+    """Build the copy for :func:`_flat_container_copy`, or return ``_NO_FLAT_COPY``.
+
+    The per-member type and identity checks run inside ``map`` (no Python
+    frame per member): most members are atomic labels and counts, which
+    deepcopy returns unchanged, so an all-atomic container is copied without
+    visiting its members one call at a time.
+    """
 
     mapping = cls is dict or cls is OrderedDict or cls is defaultdict
-    if mapping and any(type(key) not in _ATOMIC_COPY_TYPES for key in value):
+    if mapping and not all(map(_is_atomic_copy_type, map(type, value))):
         return _NO_FLAT_COPY
-    items = [
-        _flat_element_copy(item, memo, depth) for item in (value.values() if mapping else value)
-    ]
-    if any(item is _NO_FLAT_COPY for item in items):
-        return _NO_FLAT_COPY
+    members = value.values() if mapping else value
+    if all(map(_is_atomic_copy_type, map(type, members))):
+        items = list(members)
+    else:
+        items = _flat_copy_members(members, memo, depth)
+        if items is _NO_FLAT_COPY:
+            return _NO_FLAT_COPY
     if cls is defaultdict:
         return defaultdict(value.default_factory, zip(value, items, strict=True))
     if mapping:
         return cls(zip(value, items, strict=True))
-    if cls is tuple and all(new is old for new, old in zip(items, value, strict=True)):
+    if cls is tuple and all(map(is_, items, value)):
         return value
     return cls(items)
+
+
+def _flat_copy_members(members: Any, memo: dict[Any, Any], depth: int) -> Any:
+    """Copy the members of a container that holds a non-atomic one, or return ``_NO_FLAT_COPY``."""
+
+    items = [
+        item if type(item) in _ATOMIC_COPY_TYPES else _flat_element_copy(item, memo, depth)
+        for item in members
+    ]
+    if any(map(is_, items, repeat(_NO_FLAT_COPY))):
+        return _NO_FLAT_COPY
+    return items
 
 
 def _flat_element_copy(item: Any, memo: dict[Any, Any], depth: int) -> Any:
@@ -503,6 +531,7 @@ def _fill_detached_record(parent_record: Any, shell: Any, translator: _RecordTra
     row = parent_dict[ROW_KEY]
     layout = type(parent_record)._TL_LAYOUT
     detached = DetachedOpStore(layout)
+    cells = [_MISSING] * layout.n_fields
     for fid in range(layout.n_fields):
         value = store.cell_get(row, fid)
         # Decode BOTH internal cell encodings (M14) while copying: a detached
@@ -514,7 +543,9 @@ def _fill_detached_record(parent_record: Any, shell: Any, translator: _RecordTra
             value = value.hydrate()
         elif value.__class__ is str and store.compacted_singleton(row, fid, value):
             value = [value]
-        detached.cell_set(0, fid, cow_copy_value(value, translator))
+        # ``cow_copy_value`` returns atomic values unchanged, so they skip the call.
+        cells[fid] = value if value.__class__ in _COW_ATOMIC else cow_copy_value(value, translator)
+    detached.adopt_row(cells)
     shell.__dict__[CORE_KEY] = detached
     shell.__dict__[ROW_KEY] = 0
 
@@ -544,7 +575,9 @@ def _copy_record_extras(
         if key == "_source_trace_ref":
             shell.__dict__[key] = fork_ref
             continue
-        shell.__dict__[key] = cow_copy_value(value, translator)
+        shell.__dict__[key] = (
+            value if value.__class__ in _COW_ATOMIC else cow_copy_value(value, translator)
+        )
 
 
 def _rebind_record_trace_refs(shell: Any, fork_ref: Any) -> None:
@@ -607,7 +640,10 @@ def _fill_layer_shells(
         for key, value in parent_layer.__dict__.items():
             if key == "ops" or key == "_source_trace_ref" or key == "_facets_cache":
                 continue
-            shell_dict[key] = cow_copy_value(value, translator)
+            # Atomic values skip the call; ``cow_copy_value`` returns them unchanged.
+            shell_dict[key] = (
+                value if value.__class__ in _COW_ATOMIC else cow_copy_value(value, translator)
+            )
         shell.source_trace = fork
         parent_ops = parent_layer.__dict__.get("ops")
         if parent_ops is not None:

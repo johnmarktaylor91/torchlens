@@ -131,7 +131,13 @@ a sealed core-backed op store (loaded analysis traces, failed partials)
 take the detached fallback (per-record single-row duplication). Mutation
 isolation holds in BOTH directions at fork time (deepcopy snapshot
 semantics); the one shared residual is mutables nested inside non-builtin
-custom objects.
+custom objects. The trace-side field pass copies exact builtin containers
+through the flat container copy (`_flat_container_copy`, the same result as
+`copy.deepcopy` under the fork memo); an all-atomic container is copied with
+its member checks inside `map`, and atomic cells skip the `cow_copy_value`
+call when detached records, record extras and Layer shadow dicts are filled.
+`tests/test_perf8_fork_copy.py` pins both against the former code (kept
+verbatim there) and pins one fork's call count.
 
 ### Module / ModuleCall Fields
 `Module.training` mirrors `nn.Module.training`; `Module.layer_labels` stores Layer
