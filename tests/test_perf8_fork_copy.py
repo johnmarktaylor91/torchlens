@@ -663,7 +663,8 @@ def test_a_fork_equals_one_built_by_the_former_copy_path(
     assert not mismatches, mismatches[:5]
     # Values: fork outputs equal the parent's, and the same edit on a fork built
     # by each code gives tensor-equal results on every op.
-    label = next(op.layer_label for op in trace.layer_list if "linear" in op.layer_label)
+    # The last linear op: a single-pass layer in every fixture.
+    label = [op.layer_label for op in trace.layer_list if "linear" in op.layer_label][-1]
     edited = [
         fork.fork().do(label, tl.scale(0.5), intervention=InterventionOptions(engine="replay"))
         for fork in (former, new)
