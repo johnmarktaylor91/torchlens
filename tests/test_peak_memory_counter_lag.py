@@ -3,9 +3,9 @@
 Linux keeps the RSS counters per CPU. Where ``/proc`` reports the exact sum
 (``statm``, ``VmRSS``), the kernel still sets the ``VmHWM`` mark at unmap time
 from the approximate total (``/proc/self/stat``), which leaves out each CPU's
-unfolded residue. These tests build a known residue (60 touched pages on every
-CPU but one, each counted after that CPU's counter folds), pin the measurement
-to the remaining CPU, plant a 64 MiB buffer and free it. The expected value is
+unfolded residue. These tests build a known residue (44 to 63 pages in each of
+the three RSS counters on every allowed CPU, left after that counter folds),
+pin the measurement to one CPU, plant a 64 MiB buffer and free it. The expected value is
 the test's own exact RSS growth around the plant (``statm``), never a TorchLens
 output. Before the lag correction the reported peak was the residue short
 (several MiB on a 32-CPU host). Hosts where the residue cannot be built (an
@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import mmap
 import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -31,9 +32,13 @@ PAGE = os.sysconf("SC_PAGE_SIZE") if hasattr(os, "sysconf") else 4096
 PLANT = 8 * 2**20  # float64 elements: 64 MiB, above glibc's mmap ceiling
 PLANT_BYTES = PLANT * 8
 MARGIN = 2**20
-#: The residue must exceed the margin twice over for old code to fail clearly.
-MIN_LAG = 2 * MARGIN
-RESIDUE_PAGES = 60  # below the per-CPU fold batch (64 pages at 32 CPUs)
+#: Lag needed before the measurement: the margin plus room for the pinned
+#: CPU's own counter moving during the plant (under 64 pages per counter).
+MIN_LAG = MARGIN + 2**19
+#: Pages left in each per-CPU counter after it folds (fault-around maps up to
+#: 16 file pages per fault, so stopping at 44 stays below the 64-page batch).
+RESIDUE_PAGES = 44
+REGION_PAGES = 256
 SAMPLES: dict[str, int] = {}
 
 linux_procfs = pytest.mark.skipif(
@@ -42,6 +47,7 @@ linux_procfs = pytest.mark.skipif(
         and Path("/proc/self/statm").exists()
         and os.access("/proc/self/clear_refs", os.W_OK)
         and hasattr(os, "sched_setaffinity")
+        and hasattr(mmap, "MAP_PRIVATE")
     ),
     reason="the per-CPU RSS counter lag is a Linux procfs effect (skipped by design)",
 )
@@ -58,45 +64,66 @@ def _approximate_pages() -> int:
     return int(text[text.rindex(")") + 2 :].split()[21])
 
 
-def _lag_bytes() -> int:
-    return (_exact_pages() - _approximate_pages()) * PAGE
+def _lag_pages() -> int:
+    return _exact_pages() - _approximate_pages()
 
 
 def _rss() -> int:
     return _exact_pages() * PAGE
 
 
-def _leave_residue(cpu: int, held: list[mmap.mmap]) -> None:
-    """Leave ``RESIDUE_PAGES`` unfolded pages in ``cpu``'s RSS counter."""
+def _regions(held: list[Any]) -> list[tuple[mmap.mmap, bool]]:
+    """One fresh region per kernel RSS counter (anonymous, shared memory, file), with writability."""
 
-    os.sched_setaffinity(0, {cpu})
-    region = mmap.mmap(-1, (128 + RESIDUE_PAGES) * PAGE)
-    held.append(region)
-    page = 0
-    previous = _lag_bytes()
-    while page < 128:  # touch until this CPU's counter folds (the lag drops)
+    anon = mmap.mmap(-1, REGION_PAGES * PAGE, flags=mmap.MAP_PRIVATE | mmap.MAP_ANONYMOUS)
+    shmem = mmap.mmap(-1, REGION_PAGES * PAGE, flags=mmap.MAP_SHARED | mmap.MAP_ANONYMOUS)
+    backing = tempfile.TemporaryFile()
+    held.append(backing)
+    backing.write(bytes(REGION_PAGES * PAGE))
+    backing.flush()
+    file_pages = mmap.mmap(backing.fileno(), REGION_PAGES * PAGE, access=mmap.ACCESS_READ)
+    held.extend([anon, shmem, file_pages])
+    return [(anon, True), (shmem, True), (file_pages, False)]
+
+
+def _touch(region: mmap.mmap, page: int, writable: bool) -> None:
+    if writable:
         region[page * PAGE] = 1
+    else:
+        region[page * PAGE]  # a read fault maps the cached file page
+
+
+def _leave_residue(region: mmap.mmap, writable: bool) -> None:
+    """Fold this CPU's counter for ``region``'s kind, then leave 44 to 63 pages in it."""
+
+    page = 0
+    previous = _lag_pages()
+    while page < REGION_PAGES // 2:  # touch until this counter folds (the lag drops)
+        _touch(region, page, writable)
         page += 1
-        lag = _lag_bytes()
+        lag = _lag_pages()
         if lag < previous:
             break
         previous = lag
-    for offset in range(RESIDUE_PAGES):
-        region[(page + offset) * PAGE] = 1
+    folded = _lag_pages()
+    while page < REGION_PAGES and _lag_pages() - folded < RESIDUE_PAGES:
+        _touch(region, page, writable)
+        page += 1
 
 
 class _Lagged:
-    """Pin to one CPU with a residue on every other; restore on exit."""
+    """Leave a counter residue on every allowed CPU, then pin to the first; restore on exit."""
 
     def __enter__(self) -> _Lagged:
         self.home = os.sched_getaffinity(0)
-        self.held: list[mmap.mmap] = []
+        self.held: list[Any] = []
         cpus = sorted(self.home)
         try:
-            for cpu in cpus[1:]:
-                _leave_residue(cpu, self.held)
-            os.sched_setaffinity(0, {cpus[0]})
-            self.lag = _lag_bytes()
+            for cpu in [*cpus[1:], cpus[0]]:
+                os.sched_setaffinity(0, {cpu})
+                for region, writable in _regions(self.held):
+                    _leave_residue(region, writable)
+            self.lag = _lag_pages() * PAGE
         except BaseException:
             self.__exit__()
             raise
@@ -107,8 +134,8 @@ class _Lagged:
 
     def __exit__(self, *exc: Any) -> None:
         os.sched_setaffinity(0, self.home)
-        for region in self.held:
-            region.close()
+        for item in reversed(self.held):
+            item.close()
         self.held.clear()
 
 
