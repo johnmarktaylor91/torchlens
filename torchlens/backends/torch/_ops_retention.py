@@ -235,13 +235,14 @@ def _saved_arg_retention_devices(t_args: Any, t_kwargs: Any) -> dict[int, torch.
 def _uncharged_parameter_aliases(*roots: Any) -> set[int]:
     """Return ``id`` of each tensor that shares storage with a live parameter of validation's copy.
 
-    Only in validation's offloading capture (``output_device`` other than
-    ``"same"``): such an alias adds no storage, so the save budget charges it
-    nothing. Empty everywhere else, where aliases stay charged as copies.
+    Only inside validation's own capture, on every ``output_device``: such an
+    alias adds no storage, so the save budget charges it nothing. Empty
+    outside validation, and on its clone-path rerun or a capture of the live
+    model (no parameter is aliased there), where every argument is charged.
     """
 
     references = active_argument_references()
-    if references is None or not references.offloads:
+    if references is None:
         return set()
     with pause_logging():
         return {
@@ -292,7 +293,7 @@ def _admit_saved_args_budget(
 
     # Offloaded copies (validation with an ``output_device``) are charged to
     # the device they will live on, not the device the op consumed them on;
-    # parameter aliases there add no storage and are not charged.
+    # parameter aliases in validation's capture add no storage and are not charged.
     moved_to = _saved_arg_retention_devices(t_args, t_kwargs)
     aliases = _uncharged_parameter_aliases(t_args, t_kwargs)
     per_device: dict[Any, int] = {}

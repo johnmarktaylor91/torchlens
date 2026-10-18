@@ -957,8 +957,8 @@ def validate_forward_pass(
         the GPU keeps only parameters and one forward's transients; the
         capture's ``save_budget`` charges each copy where it lives.
     save_budget:
-        Per-device retained-bytes ceiling for the validator capture (same
-        values and default as ``CaptureOptions.save_budget``).
+        Per-device retained-bytes ceiling for the validator capture (same values and
+        default as ``CaptureOptions.save_budget``); parameters kept by reference are not charged.
 
     Returns
     -------
@@ -1379,7 +1379,7 @@ def _validate_forward_pass_torch(
     save_budget:
         Per-device retained-bytes ceiling for both validation captures (same
         values and default as ``CaptureOptions.save_budget``); exceeding it
-        raises ``SaveBudgetExceededError``.
+        raises ``SaveBudgetExceededError``. Parameters kept by reference are not charged.
     _trace_observer:
         Optional private callback invoked with the completed validation trace
         after replay validation and before cleanup. Also invoked with
