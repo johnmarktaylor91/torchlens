@@ -132,15 +132,17 @@ def _validation_capture(
             if item.check == arg_references.FALLBACK_CHECK
         )
 
-    with mock.patch.object(user_funcs, "_run_model_and_save_specified_outs", runner):
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            try:
-                verdict = _user_public_impls._validate_forward_pass_torch(
-                    model, x, random_seed=0, output_device=output_device, _trace_observer=observe
-                )
-            except Exception as exc:  # a raised validation failure is compared by its type
-                return False, [*failures, f"raised {type(exc).__name__}"]
+    with (
+        mock.patch.object(user_funcs, "_run_model_and_save_specified_outs", runner),
+        warnings.catch_warnings(),
+    ):
+        warnings.simplefilter("ignore")
+        try:
+            verdict = _user_public_impls._validate_forward_pass_torch(
+                model, x, random_seed=0, output_device=output_device, _trace_observer=observe
+            )
+        except Exception as exc:  # a raised validation failure is compared by its type
+            return False, [*failures, f"raised {type(exc).__name__}"]
     return bool(verdict), failures
 
 
@@ -339,10 +341,12 @@ def test_swap_holds_exact_copies_and_restores_the_host_copies() -> None:
 def test_swap_restores_the_host_copies_when_the_check_raises() -> None:
     host = _tagged(torch.ones(2))
     op = _FakeOp([host], {})
-    with pytest.raises(RuntimeError, match="check failed"):
-        with _replay_device.saved_args_on_consumed_devices(_FakeTrace(op), "op"):
-            assert op.saved_args[0] is not host
-            raise RuntimeError("check failed")
+    with (
+        pytest.raises(RuntimeError, match="check failed"),
+        _replay_device.saved_args_on_consumed_devices(_FakeTrace(op), "op"),
+    ):
+        assert op.saved_args[0] is not host
+        raise RuntimeError("check failed")
     assert op.saved_args[0] is host
 
 
@@ -500,9 +504,11 @@ def test_nested_swaps_move_nothing_twice_and_restore_on_every_exit() -> None:
         with _replay_device.saved_args_on_consumed_devices(trace, "op"):
             assert op.saved_args[0] is outer
         assert op.saved_args[0] is outer
-        with pytest.raises(RuntimeError, match="inner"):
-            with _replay_device.saved_args_on_consumed_devices(trace, "op"):
-                raise RuntimeError("inner")
+        with (
+            pytest.raises(RuntimeError, match="inner"),
+            _replay_device.saved_args_on_consumed_devices(trace, "op"),
+        ):
+            raise RuntimeError("inner")
         assert op.saved_args[0] is outer
     assert op.saved_args[0] is host
 
