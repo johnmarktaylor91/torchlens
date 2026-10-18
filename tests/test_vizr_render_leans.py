@@ -88,7 +88,7 @@ def test_fk3_pinned_family_resolves_to_bundled_font() -> None:
     }
     assert os.path.basename(resolved["Helvetica"]) == "LiberationSans-Regular.ttf"
     assert os.path.basename(resolved["Helvetica:bold"]) == "LiberationSans-Bold.ttf"
-    # Graphviz's PostScript alias table asks fontconfig for Arial, not Helvetica.
+    # Where Graphviz's pango plugin settles on Arial, it asks fontconfig for Arial.
     assert os.path.basename(resolved["Arial"]) == "LiberationSans-Regular.ttf"
     assert os.path.basename(resolved["Arial:bold"]) == "LiberationSans-Bold.ttf"
     font_dir = str(_fonts.bundled_font_status()["font_dir"])
@@ -107,6 +107,112 @@ def test_fk3_pdf_render_embeds_bundled_font(tmp_path: Path) -> None:
     assert "fontname=Helvetica" in dot or 'fontname="Helvetica"' in dot
     searchable = _pdf_text_blobs((tmp_path / "fk3.pdf").read_bytes())
     assert b"LiberationSans" in searchable
+
+
+#: Graphviz's PostScript equivalents of Helvetica that its pango plugin prefers
+#: over Liberation Sans and that the bundled configuration does not alias.
+_UNALIASED_HELVETICA_EQUIVALENTS = (
+    "DejaVu Sans",
+    "Bitstream Vera Sans",
+    "Verdana",
+    "Nimbus Sans L",
+)
+
+
+def _unaliased_equivalent_font() -> str | None:
+    """Return a system font file of an unaliased Helvetica equivalent, if one is installed."""
+
+    fc_list = shutil.which("fc-list")
+    assert fc_list is not None, "fontconfig's fc-list is required on the render host"
+    for family in _UNALIASED_HELVETICA_EQUIVALENTS:
+        for style in ("Book", "Regular"):
+            listed = subprocess.run(
+                [fc_list, "-f", "%{file}\n", f"{family}:style={style}", "file"],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=60,
+            ).stdout.splitlines()
+            if listed:
+                return sorted(listed)[0]
+    return None
+
+
+def _graphviz_helvetica_file(env: dict[str, str], tmp_path: Path) -> str:
+    """Return the font file Graphviz draws a ``Helvetica`` node with under ``env``."""
+
+    dot = shutil.which("dot")
+    assert dot is not None, "Graphviz's dot is required on the render host"
+    verbose = subprocess.run(
+        [dot, "-v", "-Tpdf", "-o", str(tmp_path / "probe.pdf")],
+        input='digraph { a [fontname="Helvetica" label="Hello"] }',
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=60,
+    ).stderr
+    resolved = [line for line in verbose.splitlines() if 'fontname: "Helvetica" resolved' in line]
+    assert resolved, verbose[-2000:]
+    return resolved[0].rsplit(" ", 1)[-1]
+
+
+def test_fk3_bundled_font_wins_where_graphviz_prefers_an_unaliased_family(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With DejaVu Sans installed and no Arial, Graphviz still draws the bundled face.
+
+    Graphviz's pango plugin picks the family itself before fontconfig sees the
+    request; on such a machine it used to pick ``DejaVu Sans``, which no alias of
+    the pinned family reaches. The caller's fontconfig file here offers one
+    unaliased equivalent and nothing else, and its cache already holds the
+    bundled directory as an older configuration scanned it.
+    """
+    equivalent = _unaliased_equivalent_font()
+    if equivalent is None:
+        pytest.skip(
+            "no unaliased Helvetica equivalent installed: "
+            + ", ".join(_UNALIASED_HELVETICA_EQUIVALENTS)
+        )
+    font_dir = str(_fonts.bundled_font_status()["font_dir"])
+    system_dir = tmp_path / "system-fonts"
+    system_dir.mkdir()
+    shutil.copy(equivalent, system_dir)
+    cache_dir = tmp_path / "fontconfig-cache"
+    base = tmp_path / "caller-fonts.conf"
+    base.write_text(
+        '<?xml version="1.0"?>\n<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">\n'
+        f"<fontconfig>\n  <dir>{system_dir}</dir>\n  <cachedir>{cache_dir}</cachedir>\n"
+        "</fontconfig>\n",
+        encoding="utf-8",
+    )
+    legacy = tmp_path / "legacy-fonts.conf"
+    legacy.write_text(
+        '<?xml version="1.0"?>\n<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">\n'
+        f"<fontconfig>\n  <include>{base}</include>\n  <dir>{font_dir}</dir>\n</fontconfig>\n",
+        encoding="utf-8",
+    )
+    caller_env = {**os.environ, "FONTCONFIG_FILE": str(base)}
+    # The environment defeats a family alias: Graphviz alone picks the equivalent.
+    assert _graphviz_helvetica_file(caller_env, tmp_path) == str(system_dir / Path(equivalent).name)
+    # A configuration without the scan-time edit caches the bundled directory first.
+    subprocess.run(
+        ["fc-list"],
+        env={**os.environ, "FONTCONFIG_FILE": str(legacy)},
+        capture_output=True,
+        check=True,
+        timeout=60,
+    )
+    monkeypatch.setenv("FONTCONFIG_FILE", str(base))
+    env = _fonts.graphviz_font_env()
+    assert env is not None
+    assert _graphviz_helvetica_file(env, tmp_path).startswith(font_dir + os.sep)
+    trace = tl.trace(_Tiny(), torch.randn(2, 3))
+    try:
+        trace.draw(vis_outpath=str(tmp_path / "fk3"), vis_save_only=True, vis_fileformat="pdf")
+    finally:
+        trace.cleanup()
+    assert b"LiberationSans" in _pdf_text_blobs((tmp_path / "fk3.pdf").read_bytes())
 
 
 def _codes(records: list[warnings.WarningMessage]) -> list[str]:
