@@ -253,6 +253,29 @@ def test_a_rebound_parameter_storage_is_charged_again() -> None:
         _admit(offloading, stale)
 
 
+def _admit_and_commit(references: Any, alias: torch.Tensor) -> None:
+    trace = _BudgetTrace(64)
+    fields: dict[str, Any] = {"_label_raw": "op"}
+    token = arg_references._ACTIVE.set(references)
+    try:
+        reservations = _ops_retention._admit_saved_args_budget(trace, fields, (), {})
+        fields["saved_args"], fields["saved_kwargs"] = [alias], {}
+        _ops_retention._commit_saved_args_budget(trace, fields, reservations)
+    finally:
+        arg_references._ACTIVE.reset(token)
+
+
+def test_the_commit_charges_a_saved_alias_only_outside_offload() -> None:
+    from torchlens._save_budget import SaveBudgetExceededError
+
+    model = nn.Linear(16, 16)
+    owners = arg_references._parameter_owners(model)
+    alias = model.weight.detach()
+    _admit_and_commit(arg_references.ParameterArgumentReferences(owners, None, "cpu"), alias)
+    with pytest.raises(SaveBudgetExceededError):
+        _admit_and_commit(arg_references.ParameterArgumentReferences(owners), alias)
+
+
 def test_outside_validation_the_retained_copy_is_the_plain_copy() -> None:
     value = torch.ones(3)
     copied = _ops_retention._copy_saved_arg_tree(value, True)
@@ -559,3 +582,18 @@ def test_a_tight_budget_still_refuses_real_copies_in_offload_mode() -> None:
         warnings.simplefilter("ignore")
         with pytest.raises(SaveBudgetExceededError):
             tl.validate(model, x, scope="forward", output_device="cpu", save_budget=256)
+
+
+@_NEEDS_ACCEL
+def test_parameter_aliases_alone_do_not_trip_the_budget_in_offload_mode() -> None:
+    from torchlens._save_budget import SaveBudgetExceededError
+
+    assert _ACCEL is not None
+    torch.manual_seed(0)
+    model, x = nn.Linear(1024, 1024).to(_ACCEL), torch.randn(2, 1024, device=_ACCEL)
+    budget = 1 << 20  # below the 4 MiB weight, far above every real copy
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert tl.validate(model, x, scope="forward", output_device="cpu", save_budget=budget)
+        with pytest.raises(SaveBudgetExceededError):
+            tl.validate(model, x, scope="forward", output_device="same", save_budget=budget)
