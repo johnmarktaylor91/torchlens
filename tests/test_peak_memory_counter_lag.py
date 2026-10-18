@@ -77,11 +77,10 @@ def _regions(held: list[Any]) -> list[tuple[mmap.mmap, bool]]:
 
     anon = mmap.mmap(-1, REGION_PAGES * PAGE, flags=mmap.MAP_PRIVATE | mmap.MAP_ANONYMOUS)
     shmem = mmap.mmap(-1, REGION_PAGES * PAGE, flags=mmap.MAP_SHARED | mmap.MAP_ANONYMOUS)
-    backing = tempfile.TemporaryFile()
-    held.append(backing)
-    backing.write(bytes(REGION_PAGES * PAGE))
-    backing.flush()
-    file_pages = mmap.mmap(backing.fileno(), REGION_PAGES * PAGE, access=mmap.ACCESS_READ)
+    with tempfile.TemporaryFile() as backing:  # the mapping keeps its own reference
+        backing.write(bytes(REGION_PAGES * PAGE))
+        backing.flush()
+        file_pages = mmap.mmap(backing.fileno(), REGION_PAGES * PAGE, access=mmap.ACCESS_READ)
     held.extend([anon, shmem, file_pages])
     return [(anon, True), (shmem, True), (file_pages, False)]
 
