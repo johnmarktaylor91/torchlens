@@ -172,13 +172,12 @@ def test_cpu_forward_peak_counts_a_freed_buffer_under_the_counter_lag() -> None:
         trace.cleanup()
 
 
-@linux_procfs
-def test_cpu_backward_peak_counts_a_freed_buffer_under_the_counter_lag() -> None:
+def _planted_trace(samples: dict[str, int]) -> tuple[Any, torch.Tensor]:
+    """A trace whose output gradient hook plants and frees the 64 MiB buffer."""
+
     torch.manual_seed(0)
-    model = nn.Linear(4, 4).train()
-    trace = tl.trace(model, torch.randn(2, 4))
+    trace = tl.trace(nn.Linear(4, 4).train(), torch.randn(2, 4))
     out = trace[trace.output_layers[0]].out
-    samples: dict[str, int] = {}
 
     def plant(grad: torch.Tensor) -> None:
         samples["entry"] = _rss()
@@ -187,8 +186,19 @@ def test_cpu_backward_peak_counts_a_freed_buffer_under_the_counter_lag() -> None
         del buffer
 
     out.register_hook(plant)
+    return trace, out
+
+
+@linux_procfs
+def test_cpu_backward_peak_counts_a_freed_buffer_under_the_counter_lag() -> None:
+    # Warm the backward path on another trace: the measured trace's
+    # ``backward_peak_memory`` is the largest pass, so it gets only the lagged pass.
+    warm, warm_out = _planted_trace({})
+    warm.backward(warm_out.sum())
+    warm.cleanup()
+    samples: dict[str, int] = {}
+    trace, out = _planted_trace(samples)
     try:
-        trace.backward(out.sum(), retain_graph=True)  # warm the backward path
         with _Lagged() as lagged:
             trace.backward(out.sum())
         outside = samples["alive"] - samples["entry"]
