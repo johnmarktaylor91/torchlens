@@ -1076,7 +1076,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   parameters are kept in host memory too and moved back to each op's device for its
   check, so the GPU keeps only the parameters and one forward's transients. On every
   `output_device`, parameter arguments the validator capture keeps as references to its own
-  copy of the model are not charged to its `save_budget`. They
+  copy of the model are not charged to its `save_budget`. Both keywords
   apply to the `"forward"`, `"saved"`, and `"intervention"` scopes; a non-default value on
   `"backward"` or `"receptive_field"` raises `TypeError`. The lower-level
   `torchlens.validation.validate_forward_pass` accepts the same two keywords.
