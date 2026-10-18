@@ -90,20 +90,16 @@ def peak_rss_bytes() -> int:
     """
 
     try:
-        hwm_kib = rss_kib = None
-        with open("/proc/self/status") as handle:
-            for line in handle:
-                if line.startswith("VmHWM:"):
-                    hwm_kib = int(line.split()[1])
-                elif line.startswith("VmRSS:"):
-                    rss_kib = int(line.split()[1])
-        if hwm_kib is not None:
-            lag = 0
-            if rss_kib is not None and hwm_kib > rss_kib:
-                lag = _kernel_mark_lag_bytes(rss_kib * 1024, _approximate_rss_bytes())
-            return hwm_kib * 1024 + lag
+        status = _proc_status_kib(("VmHWM", "VmRSS"))
     except (OSError, ValueError, IndexError):
-        pass
+        status = {}
+    hwm_kib = status.get("VmHWM")
+    if hwm_kib is not None:
+        rss_kib = status.get("VmRSS", hwm_kib)
+        lag = 0
+        if hwm_kib > rss_kib:
+            lag = _kernel_mark_lag_bytes(rss_kib * 1024, _approximate_rss_bytes())
+        return hwm_kib * 1024 + lag
     try:
         import resource
         import sys
@@ -112,6 +108,18 @@ def peak_rss_bytes() -> int:
         return int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) * scale
     except (ImportError, OSError, ValueError, AttributeError):
         return 0
+
+
+def _proc_status_kib(keys: tuple[str, ...]) -> dict[str, int]:
+    """Return the named ``/proc/self/status`` fields, in kibibytes, from one read."""
+
+    found: dict[str, int] = {}
+    with open("/proc/self/status") as handle:
+        for line in handle:
+            key = line.split(":", 1)[0]
+            if key in keys:
+                found[key] = int(line.split()[1])
+    return found
 
 
 def _kernel_mark_lag_bytes(exact_rss: int, approximate_rss: int | None) -> int:
