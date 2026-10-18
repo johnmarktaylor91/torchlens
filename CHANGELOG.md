@@ -425,6 +425,8 @@
   captured at the same position and pass, and refuses when the source holds no op of that type and
   shape there.
 - **visualization**: Rendered graphs use the bundled font on machines without Arial installed.
+- **capture**: CPU peak memory is no longer under-reported on kernels whose high-water mark lags the
+  exact resident size.
 
 ### Performance Improvements
 
@@ -463,6 +465,8 @@
   GB).
 - **rerun**: cheaper payload eviction for a discarded capture (the rerun's eviction walk makes about
   a fifth of the calls it did), and fewer calls per fork read.
+- **fork**: cheaper trace fork (the fork's copy of its label tables makes about 30 percent fewer
+  calls).
 
 ### Changed
 
