@@ -141,9 +141,17 @@ def _validation_capture(
     return bool(verdict), failures
 
 
-def _saved_arg_tensors(trace: Any) -> list[torch.Tensor]:
+def _saved_arg_tensors(trace: Any, outputs: bool = True) -> list[torch.Tensor]:
+    """Tensor leaves of every op's saved arguments (``outputs=False`` skips output nodes).
+
+    A synthetic output node's ``saved_args`` hold a reference to the forward's
+    returned tensor, not a ``save_arg_values`` copy.
+    """
+
     tensors: list[torch.Tensor] = []
     for op in trace.layer_list:
+        if not outputs and getattr(op, "is_output", False):
+            continue
         values = [*(op.saved_args or ()), *(op.saved_kwargs or {}).values()]
         for value in values:
             items = value if type(value) in (list, tuple) else (value,)
@@ -311,7 +319,15 @@ def test_validation_capture_holds_no_saved_argument_copy_on_the_accelerator() ->
         aliases = {p.untyped_storage().data_ptr() for p in model.parameters()}
         seen: set[int] = set()
         held = 0
-        for tensor in _saved_arg_tensors(trace):
+        output_refs = {
+            t.untyped_storage().data_ptr()
+            for op in trace.layer_list
+            if getattr(op, "is_output", False)
+            for t in op.saved_args or ()
+            if isinstance(t, torch.Tensor)
+        }
+        assert output_refs
+        for tensor in _saved_arg_tensors(trace, outputs=False):
             pointer = tensor.untyped_storage().data_ptr()
             if tensor.device.type == _ACCEL and pointer not in aliases and pointer not in seen:
                 seen.add(pointer)
@@ -376,16 +392,9 @@ def _corrupt_relu_input(trace: Any, model: Any) -> None:
     relu.saved_args[0].add_(1.0)
 
 
-def _corrupt_offset_argument(trace: Any, model: Any) -> None:
-    add = next(
-        op for op in trace.layer_list if op.func_name in {"add", "__add__"} and len(op.parents) == 1
-    )
-    slot = next(
-        index
-        for index, value in enumerate(add.saved_args)
-        if index not in add.parent_arg_positions["args"]
-    )
-    add.saved_args[slot].add_(1.0)
+def _corrupt_scale_argument(trace: Any, model: Any) -> None:
+    mul = next(op for op in trace.layer_list if op.func_name in {"mul", "__mul__"})
+    mul.saved_args[1].add_(1.0)
 
 
 def _corrupt_saved_weight(trace: Any, model: Any) -> None:
@@ -396,7 +405,7 @@ def _corrupt_saved_weight(trace: Any, model: Any) -> None:
 
 @_NEEDS_ACCEL
 @pytest.mark.parametrize(
-    "corrupt", [_corrupt_relu_input, _corrupt_offset_argument, _corrupt_saved_weight]
+    "corrupt", [_corrupt_relu_input, _corrupt_scale_argument, _corrupt_saved_weight]
 )
 def test_a_corrupted_saved_argument_fails_as_with_same(corrupt: Any) -> None:
     assert _ACCEL is not None
