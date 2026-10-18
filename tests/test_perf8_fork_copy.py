@@ -37,7 +37,7 @@ from torchlens._trace_core.op_store import (
 from torchlens._trace_core.record_rows import CORE_KEY, ROW_KEY
 from torchlens.data_classes._state_adapter import state_items, state_new
 from torchlens.data_classes.layer import OpAccessor
-from torchlens.options import CaptureOptions
+from torchlens.options import CaptureOptions, InterventionOptions
 
 _NO_FLAT_COPY = trace_fork._NO_FLAT_COPY
 _FLAT_COPY_DEPTH = trace_fork._FLAT_COPY_DEPTH
@@ -491,6 +491,8 @@ class _Block(nn.Module):
 class _Stack(nn.Module):
     """Nested modules, a module called twice, and a tuple-returning step."""
 
+    width = 6
+
     def __init__(self) -> None:
         super().__init__()
         self.blocks = nn.ModuleList([_Block() for _ in range(4)])
@@ -504,9 +506,43 @@ class _Stack(nn.Module):
         return self.head(torch.cat([second, first], dim=-1))
 
 
-def _capture() -> Any:
+class _Small(nn.Module):
+    """PERF-7's row-major fixture."""
+
+    width = 4
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc1 = nn.Linear(4, 3)
+        self.fc2 = nn.Linear(3, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.fc2(torch.relu(self.fc1(x)))
+
+
+class _Long(nn.Module):
+    """PERF-7's columnar fixture: past the store's columnar-transpose threshold (512 rows)."""
+
+    width = 4
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        h = self.fc(x)
+        for _ in range(180):
+            h = torch.tanh(h * 1.01 + 0.1)
+        return h.sum(dim=-1)
+
+
+def _capture(model_cls: type[nn.Module] = _Stack) -> Any:
     torch.manual_seed(0)
-    return tl.trace(_Stack(), torch.randn(2, 6), capture=CaptureOptions(intervention_ready=True))
+    return tl.trace(
+        model_cls(),
+        torch.randn(2, model_cls.width),  # type: ignore[attr-defined]
+        capture=CaptureOptions(intervention_ready=True),
+    )
 
 
 def _labels(trace: Any) -> dict[int, Any]:
@@ -596,10 +632,18 @@ def _fork_picture(parent: Any, fork: Any) -> dict[str, Any]:
     return picture
 
 
-def test_a_fork_equals_one_built_by_the_former_copy_path(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    "model_cls",
+    [_Stack, _Small, pytest.param(_Long, marks=pytest.mark.heavy)],
+    ids=["stack", "row_major", "columnar"],
+)
+def test_a_fork_equals_one_built_by_the_former_copy_path(
+    model_cls: type[nn.Module], monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Fields, module cells and Layer shadow dicts: the same copies and the same shares."""
 
-    trace = _capture()
+    trace = _capture(model_cls)
+    assert (trace._trace_core.ops._columns is not None) is (model_cls is _Long), "store shape"
     current = {name: getattr(trace_fork, name) for name in _REFERENCES}
     for name, reference in _REFERENCES.items():
         monkeypatch.setattr(trace_fork, name, reference)
@@ -617,7 +661,18 @@ def test_a_fork_equals_one_built_by_the_former_copy_path(monkeypatch: pytest.Mon
     assert len(stable) > len(pictures[0]) - 5
     mismatches = [key for key in stable if pictures[2][key] != pictures[1][key]]
     assert not mismatches, mismatches[:5]
-    # Values and isolation: fork outputs equal the parent's, and fork tables are their own.
+    # Values: fork outputs equal the parent's, and the same edit on a fork built
+    # by each code gives tensor-equal results on every op.
+    label = next(op.layer_label for op in trace.layer_list if "linear" in op.layer_label)
+    edited = [
+        fork.fork().do(label, tl.scale(0.5), intervention=InterventionOptions(engine="replay"))
+        for fork in (former, new)
+    ]
+    for former_op, new_op in zip(edited[0].layer_list, edited[1].layer_list, strict=True):
+        assert former_op.layer_label == new_op.layer_label
+        if isinstance(former_op.out, torch.Tensor):
+            assert torch.equal(former_op.out, new_op.out), former_op.layer_label
+    # Isolation: fork tables are their own.
     for fork in (former, new):
         for parent_op, fork_op in zip(trace.layer_list, fork.layer_list, strict=True):
             if isinstance(parent_op.out, torch.Tensor):
@@ -645,9 +700,9 @@ def _fork_events(trace: Any) -> int:
     return calls
 
 
-# Measured for one fork of this capture: BASE_EVENTS on the former copy path,
-# TIP_EVENTS on this one; the bar leaves the stated headroom above the tip.
-_FORK_EVENT_BAR = 0
+# Measured for one fork of this capture: 35,641 events on the former copy path,
+# 28,274 on this one; the bar leaves about 10 percent headroom above the latter.
+_FORK_EVENT_BAR = 31_000
 
 
 def test_one_fork_stays_cheap() -> None:
