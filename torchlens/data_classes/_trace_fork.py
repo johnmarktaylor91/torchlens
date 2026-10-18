@@ -49,7 +49,13 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .. import _state
-from .._trace_core.op_store import _MISSING, DetachedOpStore, PooledCell, cow_copy_value
+from .._trace_core.op_store import (
+    _COW_ATOMIC,
+    _MISSING,
+    DetachedOpStore,
+    PooledCell,
+    cow_copy_value,
+)
 from .._trace_core.record_rows import CORE_KEY, ROW_KEY
 from ..capture.outcome import stamp_forked
 from ..intervention.types import MODEL_LOG_FIELD_FORK_POLICY, ForkFieldPolicy
@@ -518,6 +524,7 @@ def _fill_detached_record(parent_record: Any, shell: Any, translator: _RecordTra
     row = parent_dict[ROW_KEY]
     layout = type(parent_record)._TL_LAYOUT
     detached = DetachedOpStore(layout)
+    cells = [_MISSING] * layout.n_fields
     for fid in range(layout.n_fields):
         value = store.cell_get(row, fid)
         # Decode BOTH internal cell encodings (M14) while copying: a detached
@@ -529,7 +536,9 @@ def _fill_detached_record(parent_record: Any, shell: Any, translator: _RecordTra
             value = value.hydrate()
         elif value.__class__ is str and store.compacted_singleton(row, fid, value):
             value = [value]
-        detached.cell_set(0, fid, cow_copy_value(value, translator))
+        # ``cow_copy_value`` returns atomic values unchanged, so they skip the call.
+        cells[fid] = value if value.__class__ in _COW_ATOMIC else cow_copy_value(value, translator)
+    detached.adopt_row(cells)
     shell.__dict__[CORE_KEY] = detached
     shell.__dict__[ROW_KEY] = 0
 
@@ -559,7 +568,9 @@ def _copy_record_extras(
         if key == "_source_trace_ref":
             shell.__dict__[key] = fork_ref
             continue
-        shell.__dict__[key] = cow_copy_value(value, translator)
+        shell.__dict__[key] = (
+            value if value.__class__ in _COW_ATOMIC else cow_copy_value(value, translator)
+        )
 
 
 def _rebind_record_trace_refs(shell: Any, fork_ref: Any) -> None:
@@ -622,7 +633,10 @@ def _fill_layer_shells(
         for key, value in parent_layer.__dict__.items():
             if key == "ops" or key == "_source_trace_ref" or key == "_facets_cache":
                 continue
-            shell_dict[key] = cow_copy_value(value, translator)
+            # Atomic values skip the call; ``cow_copy_value`` returns them unchanged.
+            shell_dict[key] = (
+                value if value.__class__ in _COW_ATOMIC else cow_copy_value(value, translator)
+            )
         shell.source_trace = fork
         parent_ops = parent_layer.__dict__.get("ops")
         if parent_ops is not None:
