@@ -465,9 +465,9 @@ def validate(
         (``"same"``, ``"cpu"``, or ``"cuda"``). ``"cpu"`` lets a GPU model
         validate with its activations held in host memory; replay still runs
         each op on its original device. Saved function arguments (the
-        replay inputs) stay on each op's device, so the GPU footprint
-        roughly halves rather than disappearing; if the GPU budget is still
-        exceeded, pass ``save_budget=None`` or a larger value. Honored by the
+        replay inputs) other than parameters are kept there too and moved
+        back to each op's device for its check, so the GPU keeps only the
+        parameters and one forward's transients. Honored by the
         ``"forward"``, ``"saved"``, and ``"intervention"`` scopes; a
         non-default value on another scope raises ``TypeError``.
     save_budget:

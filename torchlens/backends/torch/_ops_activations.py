@@ -643,9 +643,9 @@ def _save_activation_fields(
 
             arg_reservations = _admit_saved_args_budget(trace, fields_dict, t_args, t_kwargs)
             fields_dict["has_saved_args"] = True
-            fields_dict["saved_args"] = [_copy_saved_arg_tree(arg) for arg in t_args]
+            fields_dict["saved_args"] = [_copy_saved_arg_tree(arg, True) for arg in t_args]
             fields_dict["saved_kwargs"] = {
-                key: _copy_saved_arg_tree(value) for key, value in t_kwargs.items()
+                key: _copy_saved_arg_tree(value, True) for key, value in t_kwargs.items()
             }
             _commit_saved_args_budget(trace, fields_dict, arg_reservations)
         else:

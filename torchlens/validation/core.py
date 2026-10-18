@@ -64,7 +64,11 @@ from ._index_domain import (
     index_domain_single_entry_values,
     layer_has_index_domain_parent,
 )
-from ._replay_device import align_output_to_saved_device, align_parent_to_slot_device
+from ._replay_device import (
+    align_output_to_saved_device,
+    align_parent_to_slot_device,
+    saved_args_on_consumed_devices,
+)
 from ._replay_grad_fidelity import _copy_validation_args, _deep_clone_tensors  # noqa: F401
 from ._source_provenance import check_source_provenance
 from .exemptions import (
@@ -1070,16 +1074,17 @@ def validate_saved_outs(
 
     while len(layers_to_validate_parents_for) > 0:
         layer_to_validate_parents_for = layers_to_validate_parents_for.popleft()
-        parents_valid = validate_parents_of_saved_layer(
-            self,
-            layer_to_validate_parents_for,
-            validated_layers,
-            validated_op_labels,
-            validated_child_edges_for_each_layer,
-            layers_to_validate_parents_for,
-            verbose,
-            decision_recorder,
-        )
+        with saved_args_on_consumed_devices(self, layer_to_validate_parents_for):
+            parents_valid = validate_parents_of_saved_layer(
+                self,
+                layer_to_validate_parents_for,
+                validated_layers,
+                validated_op_labels,
+                validated_child_edges_for_each_layer,
+                layers_to_validate_parents_for,
+                verbose,
+                decision_recorder,
+            )
         if parents_valid.failed:
             status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
             setattr(self, "_validation_replay_status", status)

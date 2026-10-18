@@ -21,6 +21,15 @@ reads anything. On any change the whole validation reruns with every argument
 copied, exactly as before, and the rerun's trace carries a diagnostic saying
 so. A user's own ``save_arg_values=True`` trace never sees any of this: outside
 the validation capture the copy path is unchanged.
+
+When validation runs with an ``output_device`` other than ``"same"``, the same
+capture also keeps its retained copy of every other eligible tensor argument on
+that device (one direct copy per argument) and tags the copy with the device the
+op consumed it on, so the accelerator holds no saved-argument copies beyond the
+parameter aliases. Replay moves each tagged copy back to that device, as an
+exact copy, for the one layer being checked (see
+:mod:`torchlens.validation._replay_device`). This also applies on the clone-path
+rerun; with ``output_device="same"`` nothing is moved or tagged.
 """
 
 from __future__ import annotations
@@ -31,12 +40,14 @@ import functools
 import gc
 from collections.abc import Callable, Iterator
 from contextvars import ContextVar
-from typing import Any
+from typing import Any, cast
 
 import torch
 from torch import nn
 
 FALLBACK_CHECK = "validation_parameter_reference_fallback"
+CONSUMED_DEVICE_ATTR = "_torchlens_saved_arg_consumed_device"
+"""Attribute naming the device an op consumed an offloaded saved-argument copy on."""
 
 _StorageKey = tuple[torch.device, int]
 
@@ -86,15 +97,20 @@ class ParameterArgumentReferences:
         names. Empty when references are off (the copy path runs).
     fallback_reason:
         On the clone-path rerun, why the first attempt was abandoned.
+    offload_device:
+        Where retained copies of non-parameter tensor arguments are kept
+        (validation's ``output_device``), or ``None`` to keep them in place.
     """
 
     def __init__(
         self,
         owners: dict[_StorageKey, list[tuple[str, nn.Parameter]]],
         fallback_reason: str | None = None,
+        offload_device: str | None = None,
     ) -> None:
         self._owners = owners
         self._fallback_reason = fallback_reason
+        self._offload_device = None if offload_device is None else torch.device(offload_device)
         self._versions: dict[int, tuple[torch.Tensor, int, str]] = {}
         self._owners_seen: dict[int, tuple[str, nn.Parameter]] = {}
         self._first_change: str | None = None
@@ -130,6 +146,55 @@ class ParameterArgumentReferences:
         if tensor.requires_grad:
             alias.requires_grad_(True)
         return alias
+
+    @property
+    def offloads(self) -> bool:
+        """Whether retained copies of non-parameter tensor arguments move off their device."""
+
+        return self._offload_device is not None
+
+    def retention_device(self, tensor: torch.Tensor) -> torch.device | None:
+        """Return where the retained copy of ``tensor`` is kept, or ``None`` to keep it in place.
+
+        Only a plain dense tensor that is not on a parameter's storage moves,
+        and only to a device of another type (or another explicit index).
+        """
+
+        target = self._offload_device
+        if target is None or type(tensor) is not torch.Tensor:
+            return None
+        if tensor.layout is not torch.strided or tensor.device.type == "meta":
+            return None
+        if tensor.is_quantized or tensor.device == target:
+            return None
+        if tensor.device.type == target.type and target.index is None:
+            return None
+        key = _storage_key(tensor)
+        return None if key is not None and key in self._owners else target
+
+    def offload(self, tensor: torch.Tensor) -> torch.Tensor | None:
+        """Return the retained copy of ``tensor`` on the offload device, or ``None``.
+
+        The copy is one direct transfer with the argument's autograd semantics
+        (as the in-place copy it replaces), tagged with the device the op
+        consumed the argument on so replay can move it back exactly.
+        """
+
+        target = self.retention_device(tensor)
+        if target is None:
+            return None
+        from .utils.tensor_utils import _clone_tensor_payload
+
+        moved = cast(
+            torch.Tensor,
+            _clone_tensor_payload(
+                tensor, detach_tensor=False, save_mode="copy", target_device=str(target)
+            ),
+        )
+        if moved.device == tensor.device:
+            return moved
+        setattr(moved, CONSUMED_DEVICE_ATTR, tensor.device)
+        return moved
 
     def _note(self, tensor: torch.Tensor, name: str) -> None:
         """Record a tensor's version the first time; flag a later different version."""
@@ -241,14 +306,17 @@ def active_argument_references() -> ParameterArgumentReferences | None:
 
 @contextlib.contextmanager
 def parameter_argument_references(
-    model: Any, model_is_copy: bool
+    model: Any, model_is_copy: bool, output_device: str = "same"
 ) -> Iterator[ParameterArgumentReferences]:
     """Keep ``model``'s parameter arguments by reference for the capture in this block.
 
     References are on only inside a validation call wrapped by
     :func:`with_parameter_reference_fallback`, on its first attempt, and only
-    when ``model`` is validation's deep copy. The context is cleared on every
-    exit; on a normal exit the guard runs over every referenced tensor.
+    when ``model`` is validation's deep copy. Inside such a call, an
+    ``output_device`` other than ``"same"`` also keeps the retained copies of
+    other tensor arguments on that device, on every attempt. The context is
+    cleared on every exit; on a normal exit the guard runs over every
+    referenced tensor.
 
     Parameters
     ----------
@@ -256,6 +324,8 @@ def parameter_argument_references(
         The model the capture runs.
     model_is_copy:
         Whether ``model`` is validation's own deep copy (never the live model).
+    output_device:
+        Validation's ``output_device``.
 
     Yields
     ------
@@ -264,11 +334,15 @@ def parameter_argument_references(
     """
 
     session = _SESSION.get()
+    offload = None if session is None or output_device == "same" else output_device
     if session is None or session.fallback_reason is not None or not model_is_copy:
         reason = None if session is None else session.fallback_reason
-        yield ParameterArgumentReferences({}, reason)
-        return
-    references = ParameterArgumentReferences(_parameter_owners(model))
+        if offload is None:
+            yield ParameterArgumentReferences({}, reason)
+            return
+        references = ParameterArgumentReferences({}, reason, offload)
+    else:
+        references = ParameterArgumentReferences(_parameter_owners(model), None, offload)
     token = _ACTIVE.set(references)
     try:
         yield references

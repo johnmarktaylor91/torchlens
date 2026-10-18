@@ -1072,9 +1072,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `CaptureOptions.save_budget` (`"auto"`): `output_device="cpu"` lets a GPU model validate
   with its saved activations in host memory (replay still runs each op on its original
   device), and an exceeded budget raises `SaveBudgetExceededError` as the capture does.
-  Saved function arguments (the replay inputs) stay on each op's device under
-  `output_device="cpu"`, so the GPU footprint roughly halves rather than disappearing; if
-  the GPU budget is still exceeded, pass `save_budget=None` or a larger value. They
+  Under `output_device="cpu"` saved function arguments (the replay inputs) other than
+  parameters are kept in host memory too and moved back to each op's device for its
+  check, so the GPU keeps only the parameters and one forward's transients. They
   apply to the `"forward"`, `"saved"`, and `"intervention"` scopes; a non-default value on
   `"backward"` or `"receptive_field"` raises `TypeError`. The lower-level
   `torchlens.validation.validate_forward_pass` accepts the same two keywords.

@@ -156,7 +156,7 @@ def _commit_save_budget(
     )
 
 
-def _copy_saved_arg_tree(arg: Any) -> Any:
+def _copy_saved_arg_tree(arg: Any, retained: bool = False) -> Any:
     """Copy one ``save_arg_values`` argument tree, as the pre-call and saved snapshots do.
 
     Outside forward validation's own capture this is exactly
@@ -165,36 +165,71 @@ def _copy_saved_arg_tree(arg: Any) -> Any:
     flat list or tuple, is replaced by an alias of the same storage and version
     counter instead of a copy; see :mod:`torchlens._validation_argument_references`
     for the guard that reruns validation on this copy path if such a value changes.
+    For the ``retained`` snapshot (``saved_args``/``saved_kwargs``), a validation
+    ``output_device`` other than ``"same"`` also keeps every other such tensor's
+    copy on that device, tagged with the device the op consumed it on.
     """
 
     references = active_argument_references()
     if references is None:
         return copy_arg_tree(arg)
     if isinstance(arg, torch.Tensor):
-        return _parameter_alias(references, arg)
-    if type(arg) in (list, tuple) and not any(
-        isinstance(item, (list, tuple, dict)) for item in arg
-    ):
+        return _parameter_alias(references, arg, retained)
+    if _is_flat_sequence(arg):
         return type(arg)(
-            _parameter_alias(references, item) if isinstance(item, torch.Tensor) else item
+            _parameter_alias(references, item, retained) if isinstance(item, torch.Tensor) else item
             for item in arg
         )
     return copy_arg_tree(arg)
 
 
-def _parameter_alias(references: Any, tensor: torch.Tensor) -> torch.Tensor:
+def _is_flat_sequence(arg: Any) -> bool:
+    """Whether ``arg`` is a plain list or tuple holding no nested container."""
+
+    return type(arg) in (list, tuple) and not any(
+        isinstance(item, (list, tuple, dict)) for item in arg
+    )
+
+
+def _parameter_alias(references: Any, tensor: torch.Tensor, retained: bool = False) -> torch.Tensor:
     """Alias a parameter-storage tensor (recording its version), else copy it as before.
 
     The guard decides and builds the alias (see
-    ``ParameterArgumentReferences.alias``); anything it declines is copied
-    exactly as on the copy path.
+    ``ParameterArgumentReferences.alias``) and, for a ``retained`` snapshot,
+    the offloaded copy (``ParameterArgumentReferences.offload``); anything it
+    declines is copied exactly as on the copy path.
     """
 
-    # Paused: the guard's storage and version reads and its alias are
+    # Paused: the guard's storage and version reads, its alias and its copy are
     # TorchLens's own calls, never captured ops (and never re-enter this copy).
     with pause_logging():
         alias = references.alias(tensor)
+        if alias is None and retained and references.offloads:
+            alias = references.offload(tensor)
     return cast(torch.Tensor, copy_arg_tree(tensor)) if alias is None else alias
+
+
+def _saved_arg_retention_devices(t_args: Any, t_kwargs: Any) -> dict[int, torch.device]:
+    """Map ``id`` of each argument tensor whose retained copy moves to the device it moves to.
+
+    Mirrors :func:`_copy_saved_arg_tree` for the retained snapshot: only a bare
+    tensor argument or an item of a flat list or tuple can move. Empty outside
+    validation's offloading capture.
+    """
+
+    references = active_argument_references()
+    if references is None or not references.offloads:
+        return {}
+    devices: dict[int, torch.device] = {}
+    with pause_logging():
+        for arg in (*t_args, *t_kwargs.values()):
+            items = arg if _is_flat_sequence(arg) else (arg,)
+            for item in items:
+                if isinstance(item, torch.Tensor):
+                    target = references.retention_device(item)
+                    if target is not None:
+                        devices[id(item)] = target
+    return devices
 
 
 def _iter_tree_tensors(*roots: Any) -> Iterator[torch.Tensor]:
@@ -234,15 +269,20 @@ def _admit_saved_args_budget(
     if budget is None:
         return None
     from ..._save_budget import _retained_storage_identities
+    from ._ops_retention import _saved_arg_retention_devices
 
+    # Offloaded copies (validation with an ``output_device``) are charged to
+    # the device they will live on, not the device the op consumed them on.
+    moved_to = _saved_arg_retention_devices(t_args, t_kwargs)
     per_device: dict[Any, int] = {}
     seen_identities: set[tuple[Any, ...]] = set()
     for tensor in _iter_tree_tensors(t_args, t_kwargs):
+        device = moved_to.get(id(tensor), tensor.device)
         for identity, num_bytes in _retained_storage_identities(tensor):
             if identity in seen_identities:
                 continue
             seen_identities.add(identity)
-            per_device[tensor.device] = per_device.get(tensor.device, 0) + num_bytes
+            per_device[device] = per_device.get(device, 0) + num_bytes
     if not per_device:
         return []
     label = fields_dict.get("_layer_label_raw") or fields_dict.get("_label_raw") or "<unlabeled>"

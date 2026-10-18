@@ -952,10 +952,10 @@ def validate_forward_pass(
     output_device:
         Where the validator capture keeps saved activations (same values and
         default as ``CaptureOptions.output_device``). Saved function
-        arguments (the replay inputs) stay on each op's device, so under
-        ``"cpu"`` the GPU footprint roughly halves rather than disappearing;
-        if the GPU budget is still exceeded, pass ``save_budget=None`` or a
-        larger value.
+        arguments (the replay inputs) other than parameters are kept there
+        too and replay moves each back to its op's device, so under ``"cpu"``
+        the GPU keeps only parameters and one forward's transients; the
+        capture's ``save_budget`` charges each copy where it lives.
     save_budget:
         Per-device retained-bytes ceiling for the validator capture (same
         values and default as ``CaptureOptions.save_budget``).
@@ -1374,8 +1374,8 @@ def _validate_forward_pass_torch(
         and default as ``CaptureOptions.output_device``). Ground-truth outputs
         are snapshotted onto the same device so the output comparison stays
         exact; replay moves saved inputs back to each op's original device.
-        Saved function arguments stay on each op's device, so the GPU
-        footprint roughly halves and the GPU budget can still be exceeded.
+        Saved function arguments other than parameters are kept there too,
+        so the GPU keeps only parameters and one forward's transients.
     save_budget:
         Per-device retained-bytes ceiling for both validation captures (same
         values and default as ``CaptureOptions.save_budget``); exceeding it
@@ -1705,7 +1705,7 @@ def _validate_forward_pass_torch(
         _state._completeness_witness_mode = "shadow"
         try:
             with _arg_references.parameter_argument_references(
-                validation_model, validation_model_copied
+                validation_model, validation_model_copied, output_device
             ) as arg_references:
                 trace = _user_funcs._run_model_and_save_specified_outs(
                     model=validation_model,
