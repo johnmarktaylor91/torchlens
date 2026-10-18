@@ -165,8 +165,9 @@ def test_fk3_bundled_font_wins_where_graphviz_prefers_an_unaliased_family(
     Graphviz's pango plugin picks the family itself before fontconfig sees the
     request; on such a machine it used to pick ``DejaVu Sans``, which no alias of
     the pinned family reaches. The caller's fontconfig file here offers one
-    unaliased equivalent and nothing else, and its cache already holds the
-    bundled directory as an older configuration scanned it.
+    unaliased equivalent and nothing else and, where fontconfig reads directory
+    salts, its cache already holds the bundled directory as an older
+    configuration scanned it.
     """
     equivalent = _unaliased_equivalent_font()
     if equivalent is None:
@@ -195,14 +196,16 @@ def test_fk3_bundled_font_wins_where_graphviz_prefers_an_unaliased_family(
     caller_env = {**os.environ, "FONTCONFIG_FILE": str(base)}
     # The environment defeats a family alias: Graphviz alone picks the equivalent.
     assert _graphviz_helvetica_file(caller_env, tmp_path) == str(system_dir / Path(equivalent).name)
-    # A configuration without the scan-time edit caches the bundled directory first.
-    subprocess.run(
-        ["fc-list"],
-        env={**os.environ, "FONTCONFIG_FILE": str(legacy)},
-        capture_output=True,
-        check=True,
-        timeout=60,
-    )
+    version = _fonts._fontconfig_version()
+    if version is not None and version >= _fonts._SALT_MIN_FONTCONFIG:
+        # A configuration without the scan-time edit caches the bundled directory first.
+        subprocess.run(
+            ["fc-list"],
+            env={**os.environ, "FONTCONFIG_FILE": str(legacy)},
+            capture_output=True,
+            check=True,
+            timeout=60,
+        )
     monkeypatch.setenv("FONTCONFIG_FILE", str(base))
     env = _fonts.graphviz_font_env()
     assert env is not None
@@ -213,6 +216,23 @@ def test_fk3_bundled_font_wins_where_graphviz_prefers_an_unaliased_family(
     finally:
         trace.cleanup()
     assert b"LiberationSans" in _pdf_text_blobs((tmp_path / "fk3.pdf").read_bytes())
+
+
+@pytest.mark.parametrize(
+    ("version", "salted"),
+    [(None, False), ((2, 13, 1), False), ((2, 13, 91), True), ((2, 15, 0), True)],
+)
+def test_fk3_bundled_directory_is_salted_only_where_fontconfig_reads_salts(
+    version: tuple[int, int, int] | None, salted: bool
+) -> None:
+    """Older fontconfig rejects a whole file over ``salt``; it gets the plain directory."""
+    lines = _fonts._bundled_dir_lines(version)
+    font_dir = str(_fonts.bundled_font_status()["font_dir"])
+    directory = [line for line in lines if line.strip().startswith("<dir")]
+    assert len(directory) == 1
+    assert directory[0].strip().endswith(f">{font_dir}</dir>")
+    assert ("salt=" in directory[0]) is salted
+    assert any(f"<string>{_fonts._SCAN_FAMILY}</string>" in line for line in lines)
 
 
 def _codes(records: list[warnings.WarningMessage]) -> list[str]:

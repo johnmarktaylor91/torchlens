@@ -20,8 +20,9 @@ is installed, else the first installed name from its PostScript equivalents
 alias of the pinned family can reach. So the configuration also lists the
 bundled faces under the family name ``Helvetica`` (a scan-time edit limited to
 the bundled directory), and Graphviz finds the pinned family itself on every
-machine. The bundled directory is salted so fontconfig keeps its cache apart
-from any cache written without that edit.
+machine. Where fontconfig reads directory salts (recent releases) the bundled
+directory is salted, so fontconfig keeps its cache apart from any cache written
+without that edit; older releases reject the attribute and get no salt.
 
 The configuration includes the caller's own fontconfig file (``FONTCONFIG_FILE``
 when set, else the platform's system file), so every other family still
@@ -38,7 +39,9 @@ import atexit
 import functools
 import hashlib
 import os
+import re
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -101,16 +104,50 @@ def _base_fontconfig_file() -> str | None:
     return None
 
 
-def _bundled_dir_lines() -> list[str]:
+#: First fontconfig release that reads ``<dir salt="...">``. Older releases
+#: reject the whole configuration file over the unknown attribute.
+_SALT_MIN_FONTCONFIG = (2, 13, 91)
+
+
+def _fontconfig_version() -> tuple[int, int, int] | None:
+    """Return the installed fontconfig version, or ``None`` when it cannot be read.
+
+    ``None`` makes the configuration omit the directory salt, the form every
+    fontconfig release accepts. Called once per written configuration.
+    """
+
+    fc_list = shutil.which("fc-list")
+    if fc_list is None:
+        return None
+    try:
+        completed = subprocess.run(
+            [fc_list, "--version"], capture_output=True, text=True, timeout=30, check=False
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    match = re.search(r"(\d+)\.(\d+)\.(\d+)", completed.stdout + completed.stderr)
+    if match is None:
+        return None
+    major, minor, micro = (int(part) for part in match.groups())
+    return (major, minor, micro)
+
+
+def _bundled_dir_lines(fontconfig_version: tuple[int, int, int] | None) -> list[str]:
     """Return the fontconfig lines that add the bundled directory under the pinned name.
+
+    Parameters
+    ----------
+    fontconfig_version:
+        Installed fontconfig version; the directory is salted only when the
+        release reads salts.
 
     Returns
     -------
     list[str]
         A scan-time edit that prepends :data:`_SCAN_FAMILY` to the family of
         every face scanned from the bundled directory, then the directory
-        itself, salted with a digest of that edit so fontconfig never reuses a
-        cache of the directory scanned without it.
+        itself, salted with a digest of that edit where fontconfig supports it
+        so fontconfig never reuses a cache of the directory scanned without it.
     """
 
     font_dir = escape(str(_FONT_DIR))
@@ -122,6 +159,8 @@ def _bundled_dir_lines() -> list[str]:
         "    </edit>",
         "  </match>",
     ]
+    if fontconfig_version is None or fontconfig_version < _SALT_MIN_FONTCONFIG:
+        return [*scan_rule, f"  <dir>{font_dir}</dir>"]
     salt = hashlib.sha256("\n".join(scan_rule).encode("utf-8")).hexdigest()[:16]
     return [*scan_rule, f'  <dir salt="torchlens-{salt}">{font_dir}</dir>']
 
@@ -150,7 +189,7 @@ def _fontconfig_document(base_file: str | None) -> str:
         lines.append(f'  <include ignore_missing="yes">{escape(base_file)}</include>')
     else:
         lines.append('  <cachedir prefix="xdg">fontconfig</cachedir>')
-    lines.extend(_bundled_dir_lines())
+    lines.extend(_bundled_dir_lines(_fontconfig_version()))
     for family in _PINNED_FAMILIES:
         # Prepended with a strong binding AFTER the included system rules,
         # so the bundled face wins over the system metric aliases.
