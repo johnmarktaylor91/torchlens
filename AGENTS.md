@@ -21,7 +21,8 @@ pip install torchlens
 pip install -e ".[dev,test,tabular,viz]"  # local development: the extras CI installs
 ```
 
-Graphviz rendering needs Graphviz (`apt install graphviz` on Debian/Ubuntu). Optional
+Graphviz rendering needs Graphviz (`apt install graphviz` on Debian/Ubuntu; on Debian forky
+and Ubuntu 26.04 or later also `libgvplugin-neato-layout8`, the neato engine rank layout needs). Optional
 extras gate appliance and bridge namespaces; see `pyproject.toml` for the current list.
 
 ## Torch Version Compatibility

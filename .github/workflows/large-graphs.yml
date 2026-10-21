@@ -25,7 +25,11 @@ concurrency:
 jobs:
   large-graphs:
     name: 100k+ node graphs (opt-in)
-    runs-on: ubuntu-latest
+    # ubuntu-24.04, not ubuntu-latest (2026-10-20): ubuntu-latest became 26.04,
+    # whose Graphviz 14.1 leaves neato (rank layout) out of the graphviz package
+    # and writes different SVG bytes than the Graphviz 2.42 that the committed
+    # galleries and render goldens are checked against.
+    runs-on: ubuntu-24.04
     timeout-minutes: 340
     env:
       TORCHLENS_RUN_LARGE_GRAPHS: "1"
@@ -48,6 +52,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y graphviz
+          # Rank layout renders with neato -n; fail here if this Graphviz lacks it.
+          echo 'graph { a -- b }' | neato -Tsvg > /dev/null
 
       - name: Install torch and TorchLens
         run: |

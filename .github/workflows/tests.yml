@@ -165,6 +165,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y graphviz
+          # Rank layout renders with neato -n; fail here if this Graphviz lacks it.
+          echo 'graph { a -- b }' | neato -Tsvg > /dev/null
 
       - name: Install exact CPU test environment
         env:

@@ -49,6 +49,10 @@ AND a `chore(release):` head-commit condition.
 
 ## Pinning & Permissions
 
+- Every job that apt-installs Graphviz runs on `ubuntu-24.04` (Graphviz 2.42), never
+  `ubuntu-latest`: the committed galleries and render goldens are byte-checked against one
+  Graphviz release, and 26.04's Graphviz 14.1 also leaves neato out of the `graphviz`
+  package. `tests/test_packaging_diet.py` enforces it; each install step probes neato.
 - Third-party actions are SHA-pinned. ONE documented exception:
   `pypa/gh-action-pypi-publish@release/v1` (PyPA's own guidance; rationale in
   release.yml).

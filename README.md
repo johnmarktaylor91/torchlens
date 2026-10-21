@@ -109,6 +109,10 @@ sudo apt install graphviz   # Debian/Ubuntu; see graphviz.org for other platform
 pip install torchlens
 ```
 
+On Debian forky and Ubuntu 26.04 or later, also run
+`sudo apt install libgvplugin-neato-layout8`: Graphviz 14 ships the neato engine,
+which large-graph (rank) layouts use, as a separate package.
+
 Supported versions (each row below is executed by a CI leg on every release, not
 asserted from metadata; the full platform statement is in
 [docs/reference/limitations.md](docs/reference/limitations.md)):

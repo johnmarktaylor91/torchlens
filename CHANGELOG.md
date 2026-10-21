@@ -313,6 +313,12 @@
 
 ### Bug Fixes
 
+- **visualization**: a rank-layout render on a Graphviz without its neato layout plugin (Graphviz 14
+  packaging on Debian forky and Ubuntu 26.04, where `apt install graphviz` leaves neato out) now
+  raises `GraphvizUnavailableError` (code `graphviz_binary_unavailable`, still a `RuntimeError`)
+  whose remedy names `libgvplugin-neato-layout8` and `vis_node_placement='dot'`, instead of a bare
+  `RuntimeError: neato rendering failed`.
+
 - **run**: `trace.run(inputs=..., fast=True)` now refreshes every saved pass of an input Layer that
   folds several inputs (two inputs of the same shape and dtype consumed by one loop body); before,
   an earlier pass kept its capture-time tensor.

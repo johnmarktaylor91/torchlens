@@ -18,7 +18,7 @@ from typing import Any
 from ..._errors import InvalidArgumentError
 from ...utils.display import atomic_write_text, user_stacklevel
 from .. import _render_utils
-from .._render_common import GraphvizRenderError
+from .._render_common import GraphvizRenderError, GraphvizUnavailableError
 from .._render_utils import _open_file_quietly, compute_module_penwidth
 from .._typography import DEFAULT_TYPOGRAPHY
 from ..code_panel import _code_panel_label
@@ -1001,6 +1001,17 @@ def _run_neato(
     return _render_utils.run_bounded_subprocess(cmd, timeout=render_timeout, check=False, text=True)
 
 
+# Graphviz 14 packaging (Debian forky, Ubuntu 26.04) moved neato, fdp, sfdp,
+# circo and twopi into libgvplugin-neato-layout8, which the graphviz package
+# does not pull in; the neato binary then exits with this message.
+_NEATO_ENGINE_MISSING = 'no layout engine support for "neato"'
+_NEATO_PLUGIN_REMEDY = (
+    "install Graphviz's neato layout plugin (Debian forky and Ubuntu 26.04 or "
+    "later: apt install libgvplugin-neato-layout8), or render with "
+    "vis_node_placement='dot'"
+)
+
+
 def _run_neato_with_fallbacks(
     *,
     rendered_path: str,
@@ -1020,9 +1031,10 @@ def _run_neato_with_fallbacks(
        still blow the timeout while routing splines.  We retry once with
        straight-line edges (O(edges), no crossing search) before giving up.
 
-    Raises ``RuntimeError`` if the (post-fallback) render still fails, and
-    re-raises ``subprocess.TimeoutExpired`` if the straight-line retry also
-    times out.
+    Raises ``GraphvizUnavailableError`` (a ``RuntimeError``) when Graphviz
+    has no neato layout plugin, ``RuntimeError`` if the (post-fallback) render
+    still fails, and re-raises ``subprocess.TimeoutExpired`` if the
+    straight-line retry also times out.
     """
     try:
         result = _run_neato(
@@ -1073,6 +1085,14 @@ def _run_neato_with_fallbacks(
                 render_timeout=render_timeout,
             )
 
+    if result.returncode != 0 and _NEATO_ENGINE_MISSING in (result.stderr or ""):
+        raise GraphvizUnavailableError(
+            "TorchLens could not render this graph: rank layout renders with "
+            "Graphviz's neato engine, and this Graphviz install has no neato "
+            f"layout plugin. Graphviz said: {result.stderr.strip()}",
+            remedy=_NEATO_PLUGIN_REMEDY,
+            executable="neato",
+        )
     if result.returncode != 0:
         raise RuntimeError(f"neato rendering failed (exit {result.returncode}):\n{result.stderr}")
     return result

@@ -18,7 +18,7 @@ import torchlens as tl
 from torchlens.data_classes.trace import Trace
 from torchlens.visualization import _render_utils
 from torchlens.visualization._rank_layout_internal import layout as rank_layout
-from torchlens.visualization._render_common import GraphvizRenderError
+from torchlens.visualization._render_common import GraphvizRenderError, GraphvizUnavailableError
 from torchlens.visualization._render_dot import _strip_render_extension
 from torchlens.visualization._render_utils import render_dot_to_file
 from torchlens.visualization.collapse_plan import RenderContext
@@ -1317,3 +1317,40 @@ def test_code_panel_tooltip_shows_basename_not_absolute_path() -> None:
     assert "canary_src.py" in tooltip
     assert "canary_user_zq81" not in tooltip
     assert "/home/" not in tooltip
+
+
+def test_rank_layout_without_neato_plugin_names_the_plugin_package(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A Graphviz without its neato plugin raises the typed install error.
+
+    Graphviz 14 packaging ships neato's layout engine as a separate package,
+    so the binary runs but exits 1 naming the missing engine; the error must
+    carry that remedy instead of a bare neato failure.
+    """
+
+    def neato_without_plugin(**kwargs: Any) -> subprocess.CompletedProcess:
+        """Return what Graphviz 14's neato prints without its layout plugin."""
+
+        return subprocess.CompletedProcess(
+            args=["neato"],
+            returncode=1,
+            stdout="",
+            stderr='There is no layout engine support for "neato"\nUse one of: dot\n',
+        )
+
+    monkeypatch.setattr(rank_layout, "_run_neato", neato_without_plugin)
+    with pytest.raises(GraphvizUnavailableError) as exc_info:
+        rank_layout._run_neato_with_fallbacks(
+            rendered_path=str(tmp_path / "graph.svg"),
+            source_path=str(tmp_path / "graph"),
+            vis_fileformat="svg",
+            spline_mode="true",
+            render_timeout=30,
+        )
+    assert isinstance(exc_info.value, RuntimeError)
+    assert exc_info.value.fields["code"] == "graphviz_binary_unavailable"
+    assert "libgvplugin-neato-layout8" in exc_info.value.fields["remedy"]
+    assert "vis_node_placement='dot'" in exc_info.value.fields["remedy"]
+    assert 'no layout engine support for "neato"' in str(exc_info.value)

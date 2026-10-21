@@ -711,3 +711,30 @@ def test_graphviz_inline_pins_match_the_committed_env_markers() -> None:
         "golden fingerprint KEY — a free resolution moves the byte families "
         "off-canonical on the enforcing row"
     )
+
+
+def test_graphviz_jobs_run_on_a_fixed_ubuntu_image() -> None:
+    """Every job that apt-installs Graphviz names a fixed Ubuntu image.
+
+    The system Graphviz comes from the runner image's apt archive, and the
+    committed galleries and render goldens are byte-checked against one
+    Graphviz release. ``ubuntu-latest`` moving to 26.04 (2026-10-20) swapped
+    Graphviz 2.42 for 14.1, which leaves neato out of the graphviz package and
+    writes different SVG bytes, so a floating label turns an image rollover
+    into dozens of unrelated test failures.
+    """
+
+    yaml = pytest.importorskip("yaml")
+    floating = []
+    for path in sorted(_WORKFLOWS_DIR.glob("*.yml")):
+        jobs = yaml.safe_load(path.read_text()).get("jobs", {})
+        for job_id, job in jobs.items():
+            steps = job.get("steps", [])
+            if any("apt-get install -y graphviz" in str(step.get("run", "")) for step in steps):
+                runs_on = str(job.get("runs-on", ""))
+                if not runs_on.startswith("ubuntu-") or runs_on == "ubuntu-latest":
+                    floating.append(f"{path.name}:{job_id} runs-on {runs_on!r}")
+    assert not floating, (
+        "Graphviz-installing jobs must pin a fixed Ubuntu image "
+        f"(ubuntu-24.04 carries Graphviz 2.42): {floating}"
+    )
