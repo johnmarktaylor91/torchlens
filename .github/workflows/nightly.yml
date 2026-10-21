@@ -96,7 +96,11 @@ jobs:
 
   fast-tier:
     name: Full fast tier
-    runs-on: ubuntu-latest
+    # ubuntu-24.04, not ubuntu-latest (2026-10-20): ubuntu-latest became 26.04,
+    # whose Graphviz 14.1 leaves neato (rank layout) out of the graphviz package
+    # and writes different SVG bytes than the Graphviz 2.42 that the committed
+    # galleries and render goldens are checked against.
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -116,6 +120,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y graphviz
+          # Rank layout renders with neato -n; fail here if this Graphviz lacks it.
+          echo 'graph { a -- b }' | neato -Tsvg > /dev/null
 
       - name: Install torch and TorchLens
         run: |
@@ -241,7 +247,11 @@ jobs:
     # torch (the newest-admitted tests.yml row, py3.10 + torch 2.13.0) on no
     # scheduled leg. Demoting must never mean "runs nowhere on the main torch".
     name: Mid tier on the canonical torch
-    runs-on: ubuntu-latest
+    # ubuntu-24.04, not ubuntu-latest (2026-10-20): ubuntu-latest became 26.04,
+    # whose Graphviz 14.1 leaves neato (rank layout) out of the graphviz package
+    # and writes different SVG bytes than the Graphviz 2.42 that the committed
+    # galleries and render goldens are checked against.
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -260,6 +270,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y graphviz
+          # Rank layout renders with neato -n; fail here if this Graphviz lacks it.
+          echo 'graph { a -- b }' | neato -Tsvg > /dev/null
 
       - name: Install torch and TorchLens
         run: |
@@ -312,7 +324,11 @@ jobs:
 
   coverage:
     name: Coverage floor (smoke tier)
-    runs-on: ubuntu-latest
+    # ubuntu-24.04, not ubuntu-latest (2026-10-20): ubuntu-latest became 26.04,
+    # whose Graphviz 14.1 leaves neato (rank layout) out of the graphviz package
+    # and writes different SVG bytes than the Graphviz 2.42 that the committed
+    # galleries and render goldens are checked against.
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     # First measured coverage gate (grind r3, SF-19: four consecutive review
     # passes found NO coverage job anywhere). The smoke tier under
@@ -339,6 +355,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y graphviz
+          # Rank layout renders with neato -n; fail here if this Graphviz lacks it.
+          echo 'graph { a -- b }' | neato -Tsvg > /dev/null
 
       - name: Install canonical CPU test environment
         run: |
@@ -447,7 +465,11 @@ jobs:
 
   preview-backends:
     name: Preview backend tests (${{ matrix.backend }})
-    runs-on: ubuntu-latest
+    # ubuntu-24.04, not ubuntu-latest (2026-10-20): ubuntu-latest became 26.04,
+    # whose Graphviz 14.1 leaves neato (rank layout) out of the graphviz package
+    # and writes different SVG bytes than the Graphviz 2.42 that the committed
+    # galleries and render goldens are checked against.
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     # One framework per job: the frameworks carry conflicting pins and native
     # runtimes that segfault when co-imported in one process (test collection
@@ -518,6 +540,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y graphviz
+          # Rank layout renders with neato -n; fail here if this Graphviz lacks it.
+          echo 'graph { a -- b }' | neato -Tsvg > /dev/null
 
       - name: Install TorchLens and the ${{ matrix.backend }} preview backend
         run: |
@@ -575,6 +599,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y graphviz
+          # Rank layout renders with neato -n; fail here if this Graphviz lacks it.
+          echo 'graph { a -- b }' | neato -Tsvg > /dev/null
 
       - name: Every declared extra resolves on every advertised interpreter
         # First leg that resolves ANY extra beyond dev/test/tabular (grind r4,
@@ -954,6 +980,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y graphviz
+          # Rank layout renders with neato -n; fail here if this Graphviz lacks it.
+          echo 'graph { a -- b }' | neato -Tsvg > /dev/null
 
       - name: Install canonical CPU test environment
         run: |
@@ -1025,6 +1053,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y graphviz
+          # Rank layout renders with neato -n; fail here if this Graphviz lacks it.
+          echo 'graph { a -- b }' | neato -Tsvg > /dev/null
 
       - name: Install the leg's reviewed pins
         run: |
@@ -1213,7 +1243,9 @@ jobs:
             floor: "6"
           - leg: interop
             extras: "dev,depyf,inseq,nnsight"
-            pkgs: "transformers"
+            # accelerate (2026-10-21): nnsight 0.8.0 moved it to a dev-only extra,
+            # but the file's LanguageModel(device_map="cpu") still needs it.
+            pkgs: "transformers accelerate"
             files: "tests/test_bridge_real_depyf.py tests/test_bridge_real_inseq.py tests/test_bridge_real_nnsight.py"
             floor: "7"
           - leg: track

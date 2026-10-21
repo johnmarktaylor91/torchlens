@@ -58,6 +58,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y graphviz
+          # Rank layout renders with neato -n; fail here if this Graphviz lacks it.
+          echo 'graph { a -- b }' | neato -Tsvg > /dev/null
 
       - name: Install canonical CPU test environment
         # r7 R82 (opus MED): this leg formerly installed BARE `torch` (newest
