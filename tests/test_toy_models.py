@@ -14,6 +14,7 @@ import torch
 
 import torchlens as tl
 from torchlens import trace
+from torchlens.errors import TraceNotReproducibleWarning
 from torchlens.io import log_model_metadata
 from torchlens.validation import validate_forward_pass
 from torchlens.visualization import show_model_graph
@@ -540,9 +541,12 @@ def test_buffer_model():
 
 
 def test_buffer_rewrite_model():
+    """A forward that reassigns its buffers is stateful: False plus the re-trace warning."""
+
     model = example_models.BufferRewriteModel()
     model_input = torch.rand(12, 12)
-    assert validate_forward_pass(model, model_input)
+    with pytest.warns(TraceNotReproducibleWarning, match="stateful/non-reproducible"):
+        assert validate_forward_pass(model, model_input) is False
     show_model_graph(
         model,
         model_input,

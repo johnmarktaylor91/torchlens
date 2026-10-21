@@ -70,6 +70,7 @@ from ._replay_device import (
     saved_args_on_consumed_devices,
 )
 from ._replay_grad_fidelity import _copy_validation_args, _deep_clone_tensors  # noqa: F401
+from ._replay_warnings import replay_warnings_ignored
 from ._shift_probe import LIFT_MIN_ENTRY_STRATEGY, VALUE_STEP_STRATEGIES, lift_min_entry_values
 from ._source_provenance import check_source_provenance
 from .exemptions import (
@@ -2597,7 +2598,8 @@ def _execute_func_with_restored_state(
     try:
         # An in-forward torch.autograd.grad re-derives its gradients from the
         # recorded subgraph; every other op re-runs its func on the saved args.
-        recomputed_output = execute_replay_func(layer, input_args, layers_to_perturb)
+        with replay_warnings_ignored():
+            recomputed_output = execute_replay_func(layer, input_args, layers_to_perturb)
     except Exception as e:
         # Broad catch: perturbed values can trigger any exception (shape
         # mismatch, index OOB, dtype error, etc.).  Returning None lets the

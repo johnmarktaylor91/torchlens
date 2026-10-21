@@ -53,6 +53,7 @@ from ._index_domain import (
 from ._integer_mod_proof import integer_mod_by_unit_is_identically_zero
 from ._norm_running_var_proof import batch_norm_input_at_running_mean
 from ._norm_zero_weight_proof import norm_input_annihilated_by_zero_weight
+from ._replay_warnings import replay_warnings_ignored
 from ._value_predicates import (
     _extrema_operand_dominates,
     _is_all_inf_value,
@@ -1497,7 +1498,7 @@ def _bool_comparison_straddle_probe(layer: Op, layers_to_perturb: list[str]) -> 
     if not isinstance(parent_saved, torch.Tensor) or not isinstance(saved_output, torch.Tensor):
         return None
     try:
-        with torch.no_grad():
+        with torch.no_grad(), replay_warnings_ignored():
             if isinstance(other, torch.Tensor):
                 base = other.detach().to(dtype=parent_saved.dtype).broadcast_to(parent_saved.shape)
             elif isinstance(other, (bool, int, float)):
@@ -1619,7 +1620,7 @@ def _bool_predicate_influence_probe(layer: Op, layers_to_perturb: list[str]) -> 
     if not isinstance(parent_saved, torch.Tensor) or not isinstance(saved_output, torch.Tensor):
         return None
     try:
-        with torch.no_grad():
+        with torch.no_grad(), replay_warnings_ignored():
             from ..utils.tensor_utils import tensor_nanequal
 
             for substitute in _bool_probe_battery(parent_saved):
