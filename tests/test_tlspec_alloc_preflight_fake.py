@@ -51,6 +51,7 @@ from torchlens._runnable_execution import (
 from torchlens.errors import (
     PayloadUnavailableError,
     RunCapabilityUnavailableError,
+    RunnableTLSPECError,
     RuntimeSignatureDriftError,
 )
 from torchlens.runnable import (
@@ -897,15 +898,19 @@ def _alias_of_alias(manifest: dict[str, Any]) -> None:
 def test_version_alias_of_alias_refused_at_load(tmp_path: Path) -> None:
     """Bind writes a produced value only into its direct version aliases, so a file whose
     alias names another alias is refused at load, which keeps the run's alias maps one
-    level deep (a crafted chain cannot make run-prep quadratic)."""
-
-    from torchlens._io.runnable_load import ContextFieldInvalidError
+    level deep (a crafted chain cannot make run-prep quadratic). The parse refusal is
+    the load's readiness diagnostic, and the run refuses before any op executes."""
 
     x = torch.randn(1, 4)
     bundle = _build(tmp_path, "alias_chain.tlspec", _HugeView(), x, save=tl.func("sum"))
     _tamper(bundle, _alias_of_alias)
-    with pytest.raises(ContextFieldInvalidError, match="one level deep"):
-        tl.load(str(bundle))
+    loaded = tl.load(str(bundle))
+    readiness = loaded.readiness
+    assert readiness is not None and readiness.status.value != "ready"
+    diagnostics = " ".join(f"{d.code.value} {d.message}" for d in readiness.diagnostics)
+    assert "context_field_invalid" in diagnostics and "one level deep" in diagnostics
+    with pytest.raises(RunnableTLSPECError):
+        loaded.run(inputs=x.clone())
 
 
 def test_alias_reader_map_is_linear_in_slots() -> None:
