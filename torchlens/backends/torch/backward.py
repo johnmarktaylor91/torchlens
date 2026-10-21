@@ -569,6 +569,12 @@ def _traces_for_roots(roots: Any) -> tuple[Any, ...]:
         root.grad_fn for root in _root_tensors(roots) if root.grad_fn is not None
     )
     seen: set[int] = set()
+    # ``next_functions`` can mint a fresh wrapper per access (torch 2.7, for
+    # one): a visited wrapper held only by its id() lets CPython hand its
+    # address to the next wrapper, which ``seen`` then skips as visited, and
+    # the walk never reaches the trace's pinned nodes. Hold every visited
+    # wrapper until the walk ends.
+    visited: list[Any] = []
     # Model-state boundary nodes whose owner has not matched yet, by owner id.
     deferred: dict[int, list[Any]] = {}
     while queue:
@@ -577,6 +583,7 @@ def _traces_for_roots(roots: Any) -> tuple[Any, ...]:
         if grad_fn_object_id in seen:
             continue
         seen.add(grad_fn_object_id)
+        visited.append(grad_fn_handle)
         if _defer_at_state_boundary(grad_fn_handle, matched_ids, deferred):
             continue
         trace_ref = _BACKWARD_GRAD_FN_REGISTRY.get(grad_fn_object_id)
