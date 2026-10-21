@@ -1964,6 +1964,19 @@ decompositions so the count gate never over-refuses them. It must NEVER be reduc
 single-output call.
 """
 
+_VIEW_LOGICAL_ELEMENT_CEILING = 1 << 32
+"""Largest logical extent a recorded pure-view slot may have once it exceeds the budget.
+
+A pure view (``expand``/``broadcast_to``/``as_strided``) allocates almost nothing, so the
+run-prep bounds charge it the bytes it really allocates instead of its logical size.
+Its logical size still bounds WORK: every op that reads the view touches each logical
+element (a ``sum`` over a 4e11-element view of 4 floats takes minutes). Charging the
+logical bytes against the memory budget used to bound that work too, so a view admitted
+past the budget is held to this fixed extent instead: 2**32 elements, a few seconds for
+one pass on a CPU core. A view over both the budget and this ceiling is refused at
+``op_allocation_preflight``, as every such view was before view-aware charging.
+"""
+
 
 @contextmanager
 def _guarded_defensive_materialize() -> Iterator[None]:
@@ -2302,8 +2315,10 @@ def _preflight_run_allocation(
     An output slot over the budget is charged its logical size unless
     ``view_snapshot_bytes`` proves it a pure view: its op allocates nothing and its
     retained snapshot keeps broadcast dims unexpanded, so a 4e8-element ``expand`` of a
-    4-element input needs 16 bytes, not 1.6 GB. The lookup runs only for slots that
-    would otherwise refuse, so a run within budget pays nothing for it.
+    4-element input needs 16 bytes, not 1.6 GB. Such a view is still refused when its
+    logical extent exceeds ``_VIEW_LOGICAL_ELEMENT_CEILING``, which bounds the work of the
+    ops that read it. The lookup runs only for slots that would otherwise refuse, so a
+    run within budget pays nothing for it.
     """
 
     from .errors import RunCapabilityUnavailableError
@@ -2340,6 +2355,7 @@ def _preflight_run_allocation(
         if requested > available and view_snapshot_bytes is not None:
             view_bytes = view_snapshot_bytes(slot)
             if view_bytes is not None:
+                _refuse_view_past_logical_ceiling(slot, device, requested, available)
                 requested = view_bytes
         if requested > available:
             raise RunCapabilityUnavailableError(
@@ -2382,6 +2398,30 @@ def _view_snapshot_lookup(
         return projected[slot.slot_id]
 
     return lookup
+
+
+def _refuse_view_past_logical_ceiling(
+    slot: TensorSlotDescriptor, device: torch.device, logical_bytes: int, available: int
+) -> None:
+    """Refuse a pure-view slot whose logical extent exceeds the view work ceiling."""
+
+    logical_elements = math.prod(slot.shape)
+    if logical_elements <= _VIEW_LOGICAL_ELEMENT_CEILING:
+        return
+    raise RunCapabilityUnavailableError(
+        f"Recorded view slot {slot.slot_id!r} for device {str(device)!r} spans "
+        f"{logical_elements} logical elements ({logical_bytes} bytes if materialized, "
+        f"{available} bytes available). Its storage is small, but every op that reads it "
+        f"touches each element, and the view ceiling is {_VIEW_LOGICAL_ELEMENT_CEILING} "
+        "elements; the descriptor may be tampered or the view is too large for this host.",
+        code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+        detection_stage="op_allocation_preflight",
+        device=str(device),
+        required_bytes=logical_bytes,
+        available_bytes=available,
+        logical_elements=logical_elements,
+        logical_element_ceiling=_VIEW_LOGICAL_ELEMENT_CEILING,
+    )
 
 
 def _preflight_retention_floor(
