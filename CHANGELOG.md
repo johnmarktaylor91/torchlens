@@ -313,6 +313,12 @@
 
 ### Bug Fixes
 
+- **validation**: a warning filter no longer changes a `validate_forward_pass` verdict. Under a
+  filter that turns TorchLens warnings into errors, a stateful model's re-trace warning
+  (`TraceNotReproducibleWarning`) was caught as "re-trace unavailable" and validation returned
+  True; the promoted warning now propagates, and under ordinary filters the verdict is False with
+  the warning, as documented. Replayed ops and the bool evidence probes now run with warnings
+  ignored, so a warning a replayed op emits cannot fail or unverify a correct capture.
 - **conformance**: the tinygrad preview pack's op-inventory case (`c1_op_inventory_complete`)
   now compares against the inventory observed on tinygrad's current default device (CPU or
   PYTHON), instead of failing on the PYTHON device, which the tinygrad replay oracles require,

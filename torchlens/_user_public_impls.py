@@ -1190,6 +1190,11 @@ def _warn_if_validation_trace_not_reproducible(
             stacklevel=2,
         )
         return "mismatch"
+    except Warning:
+        # A filter promoted a warning (this check's own verdict warning, or one
+        # the re-trace emitted) to an error: let it propagate, never read it as
+        # "unavailable", which would silently skip the mismatch downgrade.
+        raise
     except Exception as exc:
         message = (
             "TorchLens validation could not run the fresh re-trace reproducibility "
@@ -1205,11 +1210,7 @@ def _warn_if_validation_trace_not_reproducible(
                 extra={"exception_type": type(exc).__name__},
             ),
         )
-        warnings.warn(
-            message,
-            RuntimeWarning,
-            stacklevel=2,
-        )
+        warnings.warn(message, RuntimeWarning, stacklevel=2)
         return "unavailable"
     finally:
         if second_trace is not None:

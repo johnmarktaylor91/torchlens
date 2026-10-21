@@ -1363,6 +1363,42 @@ def test_f3_tuple_out_model_validates() -> None:
     assert _quiet_validate(_TupleOut(), torch.randn(3, 4)) is True
 
 
+class _ReluScale(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.relu(x * 2.0)
+
+
+def _replay_status_with_noisy_relu(action: str) -> str:
+    """Replay a capture whose relu re-execution warns, under one warning action."""
+
+    trace, ground_truth = _capture(_ReluScale(), torch.randn(3, 4))
+    relu_op = [op for op in trace.layer_list if op.func_name == "relu"][0]
+    original = relu_op.func
+
+    def noisy(*args, **kwargs):
+        warnings.warn("replay-only warning", UserWarning)
+        return original(*args, **kwargs)
+
+    noisy.__name__ = original.__name__
+    object.__setattr__(relu_op, "func", noisy)
+    with warnings.catch_warnings():
+        warnings.simplefilter(action)
+        return validate_saved_outs(trace, [ground_truth], validate_metadata=False).state
+
+
+def test_replay_verdict_does_not_depend_on_warning_filters() -> None:
+    """A warning raised by a replayed op must not change the replay verdict.
+
+    Under an ``error`` filter the replay's warning arrived as an exception,
+    which the replay path reads as "this op raised for these inputs" and fails
+    (or, perturbed, leaves unverified). Replay now runs with warnings ignored,
+    so the same correct capture passes under every filter.
+    """
+
+    assert _replay_status_with_noisy_relu("default") == "passed"
+    assert _replay_status_with_noisy_relu("error") == "passed"
+
+
 def test_w35_perturbation_net_still_fails_true_insensitivity() -> None:
     """Armed-proof: a genuinely wrong sensitivity claim still fails.
 
