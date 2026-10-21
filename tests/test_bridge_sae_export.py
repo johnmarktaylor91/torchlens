@@ -78,6 +78,22 @@ def _hand_latents(model: _TinyLM, sae: _TinySAE, tokens: torch.Tensor) -> torch.
         return sae.encode(model.site(tokens)).double()
 
 
+#: The dataset the top-k tests stream through ``tl.aggregate``, as token-row slices.
+_DATASET_BATCHES = (slice(0, 3), slice(3, 5), slice(5, 7))
+
+
+def _hand_dataset_latents(model: _TinyLM, sae: _TinySAE, tokens: torch.Tensor) -> torch.Tensor:
+    """Latents computed batch by batch, as the streamed top-k sees them.
+
+    The same token gives the same latent within one forward, but not always across
+    forwards of different batch sizes: on some BLAS instruction paths the last bits
+    depend on the matrix shape, which reorders near-ties. Ranking the values the
+    statistic actually saw keeps the exact comparison and its tie-break check.
+    """
+
+    return torch.cat([_hand_latents(model, sae, tokens[rows]) for rows in _DATASET_BATCHES])
+
+
 def _hand_topk(latents: torch.Tensor, unit: int, k: int) -> list[tuple[int, int, float]]:
     """Rank every (example, position) of one latent: value down, example up, position up."""
 
@@ -96,7 +112,7 @@ def _relu_label(model: _TinyLM, tokens: torch.Tensor) -> str:
 
 def _dataset_topk(model, sae, tokens, k):
     label = _relu_label(model, tokens)
-    batches = [tokens[0:3], tokens[3:5], tokens[5:7]]
+    batches = [tokens[rows] for rows in _DATASET_BATCHES]
     stat = tl.stats.TopK(k=k, unit_axis=-1, encoder=sae.encode, name="latents")
     return tl.aggregate(model, batches, metrics={label: tl.stats.Aggregator(stat)})[label][
         "latents"
@@ -110,7 +126,7 @@ def test_dashboard_top_examples_over_a_dataset_equal_a_hand_topk(setup, tmp_path
     top = _dataset_topk(model, sae, tokens, k=3)
     path = sae_bridge.write_sae_dashboard(top, tokens, path=tmp_path / "dash.json")
     data = json.loads(path.read_text())
-    hand = _hand_latents(model, sae, tokens)
+    hand = _hand_dataset_latents(model, sae, tokens)
     fired = [u for u in range(hand.shape[-1]) if bool((hand[..., u].abs() > 1e-6).any())]
     assert sorted(int(key) for key in data["feature_data_dict"]) == fired
     for unit in fired:
@@ -206,7 +222,7 @@ def test_delphi_cache_from_a_dataset_topk_holds_the_retained_entries(setup, tmp_
         top, tokens, site="hidden", model_name="tiny", directory=tmp_path
     )
     keys, _, _ = _read_delphi(folder)
-    hand = _hand_latents(model, sae, tokens)
+    hand = _hand_dataset_latents(model, sae, tokens)
     expected = {
         (example, position, unit)
         for unit in range(hand.shape[-1])
