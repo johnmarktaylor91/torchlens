@@ -1240,7 +1240,10 @@ jobs:
             extras: "dev,repeng"
             pkgs: "transformers"
             files: "tests/test_bridge_real_repeng.py"
-            floor: "6"
+            # Floor = every row in the file (3 converter rows + 1 layer/model-type row).
+            # The former 6 counted the control_vector() trainer rows, removed when the
+            # bridge became a thin converter of the native direction (U46.2).
+            floor: "4"
           - leg: interop
             extras: "dev,depyf,inseq"
             pkgs: "transformers"

@@ -567,7 +567,6 @@ _SKIP_STEER_TRACE_COUNTS = {
 }
 
 
-@pytest.mark.smoke
 def test_module_only_spec_builds_no_per_op_site() -> None:
     """A module-only steer builds each op's shared fields at most once and no op-door site."""
 

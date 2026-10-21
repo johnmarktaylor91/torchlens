@@ -38,6 +38,10 @@ def _independent_cosine_distance(a: torch.Tensor, b: torch.Tensor) -> float:
 
 @pytest.fixture
 def clean_and_ablated():
+    # A trace holds its model only weakly, and the Bundle gate derives the
+    # identity relationship these reads need from that live reference. Yield
+    # so the model stays alive through the test; returning would leave it to
+    # whichever garbage collection runs next.
     torch.manual_seed(0)
     model = _EditedBlockNet().eval()
     x = torch.randn(1, 8)
@@ -46,7 +50,7 @@ def clean_and_ablated():
         expected_ablated_output = model.out(torch.zeros_like(module_out))
     clean = tl.trace(model, x)
     ablated = tl.trace(model, x, intervene=tl.when(tl.module("mlp_6"), tl.zero_ablate()))
-    return clean, ablated, module_out, expected_ablated_output
+    yield clean, ablated, module_out, expected_ablated_output
 
 
 def _head(trace):
