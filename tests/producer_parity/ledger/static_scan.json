@@ -6531,6 +6531,14 @@
   "ambiguous": true,
   "field": "modules",
   "file": "torchlens/mechinterp/_retention.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/mechinterp/_retention.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
