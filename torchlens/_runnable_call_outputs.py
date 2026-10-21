@@ -189,6 +189,10 @@ def _bind_call_outputs(
                     affected_op_labels=(op_label,),
                 ),
             )
+        else:
+            ceiling.check_unretained_extent(
+                value, call_id=call.call_id, slot_id=slot_id, affected_op_labels=(op_label,)
+            )
         shape_ok = tuple(value.shape) == slot.shape
         dtype_ok = str(value.dtype) == slot.dtype
         checks.append(

@@ -2182,6 +2182,48 @@ class RunResourceCeiling:
                 output_count_ceiling=ceiling,
             )
 
+    def check_unretained_extent(
+        self,
+        value: torch.Tensor,
+        *,
+        call_id: str | None,
+        slot_id: str | None,
+        affected_op_labels: Sequence[str] = (),
+    ) -> None:
+        """Refuse an op output the run will not copy whose logical extent is unbounded.
+
+        A produced output the run does not snapshot costs no copy, but every later op
+        reading it touches each logical element. Run-prep admits such a slot past the
+        memory budget only up to ``_VIEW_LOGICAL_ELEMENT_CEILING`` elements of its RECORDED
+        shape; this holds the REALIZED value to the same bound before any consumer runs, so
+        a literal-only tamper (recorded slot honest, size literal inflated) cannot hand a
+        4e11-element view to the next op, even under ``return_diverged``.
+        """
+
+        numel = int(value.numel())
+        if numel <= _VIEW_LOGICAL_ELEMENT_CEILING:
+            return
+        logical_bytes = numel * int(value.element_size())
+        available = _allocation_budget_bytes(value.device)
+        if logical_bytes <= available:
+            return
+        raise RunCapabilityUnavailableError(
+            f"Sparse call {call_id!r} produced output slot {slot_id!r} spanning {numel} "
+            f"logical elements ({logical_bytes} bytes if materialized, {available} bytes "
+            f"available). Every op that reads it touches each element, and the view ceiling "
+            f"is {_VIEW_LOGICAL_ELEMENT_CEILING} elements; the descriptor may be tampered.",
+            code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+            detection_stage="op_allocation_execution",
+            call_id=call_id,
+            slot_id=slot_id,
+            device=str(value.device),
+            required_bytes=logical_bytes,
+            available_bytes=available,
+            logical_elements=numel,
+            logical_element_ceiling=_VIEW_LOGICAL_ELEMENT_CEILING,
+            affected_op_labels=tuple(affected_op_labels),
+        )
+
     def guarded_clone(
         self,
         value: torch.Tensor,
